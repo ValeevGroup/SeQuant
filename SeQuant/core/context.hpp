@@ -9,6 +9,7 @@
 #include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/context.hpp>
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -25,7 +26,11 @@ namespace sequant {
 /// SeQuant context contains the following information:
 /// - a IndexSpaceRegistry object: contains information about the known
 ///   IndexSpace objects and their attributes; managed by shared_ptr and
-///   can be shared by multiple contexts.
+///   shared by the copies of a context. A context owns its registry: it moves
+///   or copies in a registry it is given, and adopts a shared_ptr to one only
+///   if that is the registry's only owner, so the registry cannot change
+///   while any context uses it (short of what
+///   Context::set(std::shared_ptr<const IndexSpaceRegistry>) warns about).
 /// - `vacuum`: the vacuum state used to define normal ordering of
 /// `NormalOperator`s
 /// - `metric`: whether the plain basis of vector space (ket) modes are
@@ -100,9 +105,9 @@ class Context {
   /// see the Context documentation for detailed description
   struct Options {
     SEQUANT_DESIGNATED_INIT_ONLY;
-      /// a shared_ptr to an IndexSpaceRegistry object
-      std::shared_ptr<IndexSpaceRegistry> index_space_registry_shared_ptr = nullptr;
-      /// an IndexSpaceRegistry object; used if index_space_registry_shared_ptr is null and it is nonnull
+      /// a shared_ptr to an IndexSpaceRegistry object; the Context adopts it if it is the only owner of the object (e.g. a temporary or a moved-from shared_ptr), else copies the object; see the warning of Context::set(std::shared_ptr<const IndexSpaceRegistry>)
+      std::shared_ptr<const IndexSpaceRegistry> index_space_registry_shared_ptr = nullptr;
+      /// an IndexSpaceRegistry object, moved into the Context; used if index_space_registry_shared_ptr is null and it is nonnull
       std::optional<IndexSpaceRegistry> index_space_registry = std::nullopt;
       /// the Vacuum object
       Vacuum vacuum = Defaults::vacuum;
@@ -149,7 +154,7 @@ class Context {
   /// `this->index_space_registry()` will return nullptr
   /// Example:
   /// ```cpp
-  ///   Context ctx({.vacuum = Vacuum::SingleReference, .spbasis = SPBasis::Spinfree});
+  ///   Context ctx({.vacuum = Vacuum::SingleProduct, .spbasis = SPBasis::Spinfree});
   /// ```
   Context(Options options = make_default_options());
 
@@ -157,35 +162,30 @@ class Context {
 
   /// copy constructor
   /// @param[in] ctx a Context
-  /// @warning created Context uses the same index space registry as @p ctx
-  /// @sa clone()
+  /// @note created Context uses the same index space registry as @p ctx
   Context(const Context& ctx) = default;
 
   /// copy assignment
   /// @param[in] ctx a Context
-  /// @warning this object will use the same index space registry as @p ctx
-  /// @sa clone()
+  /// @note this object will use the same index space registry as @p ctx
   /// @return reference to this object
   Context& operator=(const Context& ctx) = default;
-
-  /// clones this object AND its index space registry
-  /// @note created Context does not use this object's index space registry
-  Context clone() const;
 
   // no move operations, so that an rvalue is copied: a copy is cheap (it
   // shares the registry and the canonicalizer configuration), and a moved-from
   // Context would lack them
 
-  /// @return the version of this context: a nonzero number, unique among all
-  /// versions ever assigned in this process, that changes whenever the context
-  /// is constructed, cloned or modified through a setter (including the
-  /// `Options` constructor); copies keep the version of their source
-  /// @note the version identifies a context and its copies, not its content:
-  /// contexts that compare equal may have different versions (e.g. two
-  /// default-constructed ones), so code that caches results keyed on the
-  /// version recomputes them more often than strictly necessary
-  /// @note the version does not track in-place mutation of an
-  /// IndexSpaceRegistry shared with other contexts, nor of a
+  /// @return the version of this context's canonicalization configuration: a
+  /// nonzero number that two contexts share if and only if canonicalization
+  /// sees the same configuration in both, i.e. they have the same index space
+  /// registry, tensor canonicalizers and index comparers (the same objects),
+  /// cardinal tensor labels, canonicalization options and SP basis (which
+  /// determines the symmetry of NormalOperator); a number is never reused for
+  /// another configuration
+  /// @note the other settings (vacuum, metric, first dummy index ordinal,
+  /// typesetting, deserialization defaults, strict bra-ket checks) do not
+  /// affect the version
+  /// @note the version does not track in-place mutation of a
   /// TensorCanonicalizer or comparer object that this context refers to
   std::uint64_t version() const;
 
@@ -194,10 +194,8 @@ class Context {
   /// @return a constant pointer to the IndexSpaceRegistry for this context
   /// @warning can be null when user did not provide one to Context (i.e., it
   /// was default constructed)
+  /// @note the registry does not change; to change it, set a modified copy
   std::shared_ptr<const IndexSpaceRegistry> index_space_registry() const;
-  /// @return a pointer to the IndexSpaceRegistry for this context.
-  /// @throw Exception if the IndexSpaceRegistry is null
-  std::shared_ptr<IndexSpaceRegistry> mutable_index_space_registry() const;
   /// \return IndexSpaceMetric of this context
   IndexSpaceMetric metric() const;
   /// \return true if strict bra-ket symmetry is asserted;
@@ -274,13 +272,23 @@ class Context {
   /// \return ref to `*this`, for chaining
   Context& set(Vacuum vacuum);
   /// sets the IndexSpaceRegistry for this context
-  /// \param ISR an IndexSpaceRegistry
+  /// \param ISR an IndexSpaceRegistry, moved into this context
   /// \return ref to '*this' for chaining
+  /// \sa the warning of set(std::shared_ptr<const IndexSpaceRegistry>)
   Context& set(IndexSpaceRegistry ISR);
   /// sets the IndexSpaceRegistry for this context
-  /// \param ISR a IndexSpaceRegistry shared_ptr
+  /// \param ISR a IndexSpaceRegistry shared_ptr; adopted if it is the only
+  /// owner of its object (e.g. a temporary or a moved-from shared_ptr), else
+  /// the object is copied
   /// \return ref to '*this' for chaining
-  Context& set(std::shared_ptr<IndexSpaceRegistry> ISR);
+  /// \warning a registry that is adopted or moved in is the caller's object,
+  /// and whatever else the caller kept that reaches it still does: a pointer
+  /// or reference to it or into it (e.g. from the non-const
+  /// IndexSpaceRegistry::retrieve_ptr()), a std::weak_ptr to it, or a
+  /// shared_ptr that does not own it (e.g. one with a no-op deleter), which
+  /// cannot be told from its only owner. Modifying the registry through any
+  /// of these goes unnoticed by the contexts that hold it.
+  Context& set(std::shared_ptr<const IndexSpaceRegistry> ISR);
   /// Sets the IndexSpaceMetric for this context, convenient for chaining
   /// \param metric IndexSpaceMetric
   /// \return ref to `*this`, for chaining
@@ -324,6 +332,10 @@ class Context {
   /// \param canonicalizer a nonnull TensorCanonicalizer
   /// \throw Exception if @p canonicalizer is null
   /// \return ref to `*this`, for chaining
+  /// \warning version() identifies the canonicalizer by the object the
+  /// shared_ptr owns, so a shared_ptr that does not own its object (e.g. one
+  /// with a no-op deleter) makes the version change when the shared_ptr, not
+  /// the object, dies
   Context& set_tensor_canonicalizer(
       std::wstring_view label, std::shared_ptr<TensorCanonicalizer> canonicalizer);
   /// Removes the TensorCanonicalizer for @p label , if any
@@ -337,6 +349,8 @@ class Context {
   /// \param comparer a nonnull pointer to a nonempty Index comparer, e.g.
   /// one obtained from index_comparer_ptr()
   /// \return ref to `*this`, for chaining
+  /// \warning see the warning of set_tensor_canonicalizer() about a
+  /// shared_ptr that does not own its object
   Context& set_index_comparer(
       std::shared_ptr<const tensor_index_comparer_t> comparer);
   /// Sets the Index pair comparer used by tensor canonicalizers
@@ -348,6 +362,8 @@ class Context {
   /// \param comparer a nonnull pointer to a nonempty Index pair comparer,
   /// e.g. one obtained from index_pair_comparer_ptr()
   /// \return ref to `*this`, for chaining
+  /// \warning see the warning of set_tensor_canonicalizer() about a
+  /// shared_ptr that does not own its object
   Context& set_index_pair_comparer(
       std::shared_ptr<const tensor_index_pair_comparer_t> comparer);
   /// Sets the cardinal Tensor labels
@@ -360,36 +376,57 @@ class Context {
   Context& set_cardinal_tensor_labels(container::vector<std::wstring> labels);
 
  private:
-  /// the tensor canonicalization state; comparers are held by shared_ptr so
-  /// that equality can be decided by identity
-  struct TensorCanonicalizers {
-    container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>> map;
+  /// the settings that control canonicalization (which also reads the index
+  /// space registry and the SP basis, settings not specific to it); these, the
+  /// registry and the SP basis define version(), so a setting that
+  /// canonicalization comes to read belongs here, and in the key of the
+  /// version table (CanonicalizationKey in context.cpp) that mirrors this;
+  /// comparers are held by shared_ptr so that equality can be decided by
+  /// identity
+  struct CanonicalizationConfig {
+    container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
+        tensor_canonicalizers;
     std::shared_ptr<const tensor_index_comparer_t> index_comparer;
     std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer;
     container::vector<std::wstring> cardinal_labels;
+    std::optional<CanonicalizeOptions> options;
 
-    /// canonicalizers and comparers compare by identity, labels by value
-    bool operator==(const TensorCanonicalizers&) const = default;
+    /// canonicalizers and comparers compare by identity, labels and options
+    /// by value
+    bool operator==(const CanonicalizationConfig&) const = default;
   };
 
   friend bool operator==(const Context& ctx1, const Context& ctx2);
 
-  /// replaces the tensor canonicalization state by a copy owned by this
+  /// replaces the canonicalization configuration by a copy owned by this
   /// @return the copy, for the caller to modify
-  TensorCanonicalizers& mutable_tensor_canonicalizers();
+  CanonicalizationConfig& mutable_canonicalization_config();
 
-  /// assigns a new, never before used version to this
-  void bump_version();
+  /// marks the cached version stale, to be recomputed by the next version()
+  void invalidate_version();
 
-  std::uint64_t version_ = 0;
+  /// the cached version(), 0 while stale; atomic because version() may be
+  /// called on a context that threads share (e.g. the process-wide default),
+  /// copyable so that Context stays copyable
+  struct CachedVersion {
+    std::atomic<std::uint64_t> value{0};
+    CachedVersion() = default;
+    CachedVersion(const CachedVersion& other)
+        : value(other.value.load(std::memory_order_relaxed)) {}
+    CachedVersion& operator=(const CachedVersion& other) {
+      value.store(other.value.load(std::memory_order_relaxed),
+                  std::memory_order_relaxed);
+      return *this;
+    }
+  };
+  mutable CachedVersion version_;
 
-  std::shared_ptr<IndexSpaceRegistry> idx_space_reg_ = nullptr;
+  std::shared_ptr<const IndexSpaceRegistry> idx_space_reg_ = nullptr;
   Vacuum vacuum_ = Defaults::vacuum;
   IndexSpaceMetric metric_ = Defaults::metric;
   bool assert_strict_braket_symmetry_ = Defaults::assert_strict_braket_symmetry;
   SPBasis spbasis_ = Defaults::spbasis;
   std::size_t first_dummy_index_ordinal_ = Defaults::first_dummy_index_ordinal;
-  std::optional<CanonicalizeOptions> canonicalization_options_ = std::nullopt;
   BraKetTypesetting braket_typesetting_ = Defaults::braket_typesetting;
   BraKetSlotTypesetting braket_slot_typesetting_ =
       Defaults::braket_slot_typesetting;
@@ -399,22 +436,23 @@ class Context {
   ColumnSymmetry deserialization_column_symmetry_ =
       Defaults::deserialization_column_symmetry;
   /// shared by copies of this context, hence never mutated in place
-  std::shared_ptr<const TensorCanonicalizers> tensor_canonicalizers_;
+  std::shared_ptr<const CanonicalizationConfig> canonicalization_config_;
 };
 
 /// Context object equality comparison
 /// \param ctx1
 /// \param ctx2
 /// \return true if \p ctx1 and \p ctx2 are equal
-/// \note index space registries are equal only if they share their set of
-/// index spaces, as copies of one registry do (registries with equal but
-/// separately created sets compare unequal); contexts without a registry are
-/// equal in that respect; cardinal tensor labels are compared by value;
+/// \note index space registries and cardinal tensor labels are compared by
+/// value (contexts without a registry are equal in that respect), the
+/// registries including the approximate sizes and fields of their spaces;
 /// tensor canonicalizers and index comparers by identity, hence
 /// a comparer replaced by a behaviourally identical one compares unequal
 /// (re-install a comparer through its shared pointer, e.g.
 /// Context::index_comparer_ptr(), to keep contexts equal)
-/// \note the versions of the contexts are ignored
+/// \note the versions of the contexts are ignored, and equal contexts may
+/// have different ones: Context::version() compares index space registries as
+/// objects, not by value
 bool operator==(const Context& ctx1, const Context& ctx2);
 
 /// Context object inequality comparison
@@ -442,7 +480,20 @@ bool default_context_manipulation_threadsafe();
 /// @param s Statistics
 /// @return `get_default_context(s).version()`, i.e. the version of the context
 /// in effect on the calling thread (see Context::version())
+/// @note canonicalization reads the SP basis, which determines the symmetry
+/// of NormalOperator<S>, from the context for the operator's Statistics `S`,
+/// and the rest from the context for Statistics::Arbitrary; a cache of
+/// canonicalization results is therefore keyed on the versions for all
+/// Statistics, not only the one for Statistics::Arbitrary
 std::uint64_t current_context_version(Statistics s = Statistics::Arbitrary);
+
+/// @return a value that changes whenever the canonicalization configuration
+/// of the effective context of any Statistics changes: the versions of the
+/// FermiDirac, BoseEinstein and
+/// Arbitrary contexts in effect on the calling thread (see
+/// current_context_version()) combined with hash::combine. The canonical mark
+/// (see Expr::is_canonical()) is keyed on it.
+std::uint64_t current_contexts_version();
 
 /// @brief access default Context for the given Statistics
 /// @param s Statistics
@@ -526,6 +577,19 @@ set_scoped_default_context(Context::Options ctx_options);
     container::map<Statistics, Context>>
 set_scoped_modified_default_context(
     const std::function<void(Context&)>& modify);
+
+/// @brief pins the default contexts in effect for the calling thread
+/// @return a move-only ContextResetter object that scopes a copy of the
+/// default contexts in effect, if the calling thread has none scoped yet, so
+/// that every read of the contexts during its lifetime sees the same ones even
+/// if another thread replaces the process-wide contexts meanwhile; a scoped
+/// context cannot change under the caller, so then nothing is installed and
+/// the object is empty
+/// @note the copies have the versions of the contexts in effect, so canonical
+/// marks made under one are valid under the other
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+pin_default_contexts();
 
 ///@}
 

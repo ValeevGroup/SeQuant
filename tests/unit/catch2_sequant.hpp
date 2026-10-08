@@ -5,11 +5,14 @@
 #include <catch2/matchers/catch_matchers_templated.hpp>
 
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/options.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
@@ -18,11 +21,17 @@
 #include <algorithm>
 #include <cassert>
 #include <concepts>
+#include <cstddef>
 #include <cstdlib>
+#include <initializer_list>
+#include <iostream>
+#include <map>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -79,6 +88,86 @@ class ScopedEnv {
 #endif
   }
 };
+
+/// a wide stream buffer that may be written to from several threads at once:
+/// each thread's output is collected line by line, and only complete lines are
+/// appended to the shared contents, so that lines do not interleave
+class LineAtomicWStreamBuf : public std::wstreambuf {
+ public:
+  /// @return the complete lines written so far
+  std::wstring str() const {
+    std::scoped_lock lock(mtx_);
+    return contents_;
+  }
+
+ protected:
+  int_type overflow(int_type ch) override {
+    if (!traits_type::eq_int_type(ch, traits_type::eof()))
+      put(traits_type::to_char_type(ch));
+    return traits_type::not_eof(ch);
+  }
+
+  std::streamsize xsputn(const char_type *s, std::streamsize n) override {
+    for (std::streamsize i = 0; i != n; ++i) put(s[i]);
+    return n;
+  }
+
+ private:
+  mutable std::mutex mtx_;
+  std::wstring contents_;
+  std::map<std::thread::id, std::wstring> lines_;
+
+  void put(char_type ch) {
+    std::scoped_lock lock(mtx_);
+    auto &line = lines_[std::this_thread::get_id()];
+    line.push_back(ch);
+    if (ch == L'\n') {
+      contents_ += line;
+      line.clear();
+    }
+  }
+};
+
+/// @return the number of Product canonicalizations performed by @p f , as
+/// reported by the canonicalization Logger
+/// @param methods the canonicalization methods to count
+/// @note @p f may canonicalize concurrently
+template <typename F>
+std::size_t count_product_canonicalizations(
+    F &&f, std::initializer_list<CanonicalizationMethod> methods = {
+               CanonicalizationMethod::Topological,
+               CanonicalizationMethod::Lexicographic,
+               CanonicalizationMethod::Complete}) {
+  struct Capture {
+    bool logged = Logger::instance().canonicalize;
+    LineAtomicWStreamBuf buf;
+    std::wstreambuf *wcout_buf = std::wcout.rdbuf(&buf);
+    Capture() { Logger::instance().canonicalize = true; }
+    ~Capture() {
+      std::wcout.rdbuf(wcout_buf);
+      Logger::instance().canonicalize = logged;
+    }
+  } capture;
+  std::forward<F>(f)();
+  const auto log = capture.buf.str();
+  std::size_t count = 0;
+  for (const auto method : methods) {
+    const auto key =
+        L"Product canonicalization(" + to_wstring(method) + L") input: ";
+    for (auto pos = log.find(key); pos != std::wstring::npos;
+         pos = log.find(key, pos + key.size()))
+      ++count;
+  }
+  return count;
+}
+/// @return a guard that scopes, for every Statistics, a copy of the default
+/// context in effect for it whose canonicalization options are @p opts
+[[nodiscard]] inline auto scoped_canonicalize_options(
+    CanonicalizeOptions opts) {
+  return set_scoped_modified_default_context(
+      [&opts](Context &ctx) { ctx.set(opts); });
+}
+
 }  // namespace sequant::tests
 
 namespace Catch {
@@ -353,9 +442,10 @@ struct EquivalentToMatcher : ExpressionMatcher<EquivalentToMatcher> {
   using ExpressionMatcher::ExpressionMatcher;
 
   static void pre_comparison(sequant::ExprPtr &expr) {
-    sequant::simplify(
-        expr, sequant::SimplifyOptions::default_options().copy_and_set(
-                  sequant::CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    auto scope = sequant::tests::scoped_canonicalize_options(
+        sequant::CanonicalizeOptions::default_options().copy_and_set(
+            sequant::CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    sequant::simplify(expr);
   }
 
   static std::string comparison_requirement() { return "Equivalent to"; }

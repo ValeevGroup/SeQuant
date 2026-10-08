@@ -74,9 +74,12 @@ int main() {
   using namespace sequant::mbpt;
 
   auto expr = op::H(2) * op::T(2) * op::T(2);
-  auto result = op::vac_av(op::P(2) * expr);
+  // connect the Hamiltonian with every t: H(2) is written in terms of f or h,
+  // depending on the vacuum, and default_op_connections() covers both
+  const EVOptions<std::wstring> opts{.connect = default_op_connections()};
+  auto result = op::vac_av(op::P(2) * expr, opts);
   // vac_av is equivalent to ref_av for single-determinant reference:
-  // auto result = op::ref_av(op::P(2) * expr);
+  // auto result = op::ref_av(op::P(2) * expr, opts);
 
   std::wcout << "Result: " << to_latex(result) << "\n";
   // end-snippet-4

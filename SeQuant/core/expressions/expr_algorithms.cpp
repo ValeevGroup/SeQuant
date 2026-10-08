@@ -1,3 +1,4 @@
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_operators.hpp>
@@ -89,31 +90,56 @@ std::size_t size(const ExprPtr& exprptr) {
   return 0;
 }
 
-ExprPtr& canonicalize(ExprPtr& expr, CanonicalizeOptions opts) {
+namespace {
+
+/// @return the term that @p expr stands for if it is a Sum of at most one
+/// summand or a Product of one factor with a unit scalar, else nullptr
+ExprPtr lone_term(const ExprPtr& expr) {
+  if (expr->is<Sum>()) {
+    const auto& sum = expr->as<Sum>();
+    if (sum.empty()) return ex<Constant>(0);
+    if (sum.size() == 1) return sum.summand(0);
+  } else if (expr->is<Product>()) {
+    const auto& product = expr->as<Product>();
+    if (product.size() == 1 && product.scalar() == 1) return product.factor(0);
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+ExprPtr& canonicalize(ExprPtr& expr) {
+  // the contexts are read at several points of this call and of the hooks
+  const auto contexts_in_effect = pin_default_contexts();
+  const auto opts = CanonicalizeOptions::default_options();
+  if (expr->is_canonical(opts)) return expr;
+  const auto contexts_version = current_contexts_version();
   const auto byproduct = expr->canonicalize(opts);
   if (byproduct && byproduct->is<Constant>()) {
     expr = byproduct * expr;
   }
+  // a Sum or Product left with a single term is that term, whose canonical
+  // form on its own may differ from its form as a summand or factor
+  if (auto term = lone_term(expr)) {
+    expr = std::move(term);
+    return canonicalize(expr);
+  }
+  expr->mark_canonical(opts, contexts_version);
   return expr;
 }
 
-ExprPtr canonicalize(ExprPtr&& expr_rv, CanonicalizeOptions opts) {
-  const auto byproduct = expr_rv->canonicalize(opts);
-  if (byproduct && byproduct->is<Constant>()) {
-    expr_rv = byproduct * expr_rv;
-  }
+ExprPtr canonicalize(ExprPtr&& expr_rv) {
+  canonicalize(expr_rv);
   return std::move(expr_rv);
 }
 
-ResultExpr& canonicalize(ResultExpr& expr, CanonicalizeOptions opts) {
-  expr.expression() = canonicalize(expr.expression(), std::move(opts));
+ResultExpr& canonicalize(ResultExpr& expr) {
+  expr.expression() = canonicalize(expr.expression());
 
   return expr;
 }
 
-ResultExpr& canonicalize(ResultExpr&& expr, CanonicalizeOptions opts) {
-  return canonicalize(expr, std::move(opts));
-}
+ResultExpr& canonicalize(ResultExpr&& expr) { return canonicalize(expr); }
 
 struct ExpandVisitor {
   void operator()(ExprPtr& expr) {
@@ -309,18 +335,12 @@ ResultExpr& flatten(ResultExpr& expr) {
 ResultExpr& flatten(ResultExpr&& expr) { return flatten(expr); }
 
 struct RapidSimplifyVisitor {
-  SimplifyOptions opts;
-
-  RapidSimplifyVisitor(SimplifyOptions opts) : opts(std::move(opts)) {
-    opts.method = CanonicalizationMethod::Rapid;
-  }
-
   void operator()(ExprPtr& expr) {
     if (Logger::instance().simplify)
       std::wcout << "rapid_simplify_visitor received "
                  << io::latex::to_string(expr) << std::endl;
     // apply simplify() iteratively until done
-    while (simplify(expr, opts)) {
+    while (simplify(expr)) {
       if (Logger::instance().simplify)
         std::wcout << "after 1 round of simplification have "
                    << io::latex::to_string(expr) << std::endl;
@@ -334,8 +354,7 @@ struct RapidSimplifyVisitor {
   /// - flattening subproducts
   /// - factoring in constants
   /// @param[in,out] expr (shared_ptr to ) a Product
-  bool simplify_product(ExprPtr& expr,
-                        SimplifyOptions = SimplifyOptions::default_options()) {
+  bool simplify_product(ExprPtr& expr) {
     auto& expr_ref = *expr;
 
     // need to rebuild if any factor is a constant or product
@@ -380,8 +399,7 @@ struct RapidSimplifyVisitor {
   /// simplifies a Sum ... generally Sum::{ap,pre}pend simplify automatically,
   /// but the user code may transform sums in a way that the same
   /// simplifications need to be applied here
-  bool simplify_sum(ExprPtr& expr,
-                    SimplifyOptions = SimplifyOptions::default_options()) {
+  bool simplify_sum(ExprPtr& expr) {
     bool mutated = false;
     const Sum& expr_sum = expr->as<Sum>();
 
@@ -422,57 +440,54 @@ struct RapidSimplifyVisitor {
   }
 
   // @return true if any simplifications were performed
-  bool simplify(ExprPtr& expr,
-                SimplifyOptions opts = SimplifyOptions::default_options()) {
+  bool simplify(ExprPtr& expr) {
     if (expr->is<Product>()) {
-      return simplify_product(expr, opts);
+      return simplify_product(expr);
     } else if (expr->is<Sum>()) {
-      return simplify_sum(expr, opts);
+      return simplify_sum(expr);
     } else
       return false;
   }
 };
 
-ExprPtr& rapid_simplify(ExprPtr& expr, SimplifyOptions opts) {
-  RapidSimplifyVisitor simplifier{opts};
+ExprPtr& rapid_simplify(ExprPtr& expr) {
+  RapidSimplifyVisitor simplifier;
   expr->visit(simplifier);
   simplifier(expr);
   return expr;
 }
 
-ResultExpr& rapid_simplify(ResultExpr& expr, SimplifyOptions opts) {
-  expr.expression() = rapid_simplify(expr.expression(), std::move(opts));
+ResultExpr& rapid_simplify(ResultExpr& expr) {
+  expr.expression() = rapid_simplify(expr.expression());
 
   return expr;
 }
 
-ResultExpr& rapid_simplify(ResultExpr&& expr, SimplifyOptions opts) {
-  return rapid_simplify(expr, std::move(opts));
-}
+ResultExpr& rapid_simplify(ResultExpr&& expr) { return rapid_simplify(expr); }
 
-ExprPtr& simplify(ExprPtr& expr, SimplifyOptions opts) {
+ExprPtr& simplify(ExprPtr& expr) {
+  // every stage reads the contexts
+  const auto contexts_in_effect = pin_default_contexts();
   expand(expr);
-  rapid_simplify(expr, opts);
-  canonicalize(expr, opts);
-  rapid_simplify(expr, opts);
+  rapid_simplify(expr);
+  canonicalize(expr);
+  rapid_simplify(expr);
   return expr;
 }
 
-ExprPtr simplify(ExprPtr&& expr_rv, SimplifyOptions opts) {
+ExprPtr simplify(ExprPtr&& expr_rv) {
   auto expr = std::move(expr_rv);
-  simplify(expr, opts);
+  simplify(expr);
   return expr;
 }
 
-ResultExpr& simplify(ResultExpr& expr, SimplifyOptions opts) {
-  expr.expression() = simplify(expr.expression(), std::move(opts));
+ResultExpr& simplify(ResultExpr& expr) {
+  expr.expression() = simplify(expr.expression());
 
   return expr;
 }
 
-ResultExpr& simplify(ResultExpr&& expr, SimplifyOptions opts) {
-  return simplify(expr, std::move(opts));
-}
+ResultExpr& simplify(ResultExpr&& expr) { return simplify(expr); }
 
 ExprPtr& non_canon_simplify(ExprPtr& expr) {
   expand(expr);

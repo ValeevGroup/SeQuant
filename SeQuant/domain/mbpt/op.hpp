@@ -45,6 +45,7 @@
 #include <iterator>
 #include <map>
 #include <optional>
+#include <source_location>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -253,7 +254,8 @@ class QuantumNumberChange
   std::size_t size() const {
     if (get_default_context().vacuum() == Vacuum::Physical) {
       return 2;
-    } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
+    } else if (get_default_context().vacuum() == Vacuum::SingleProduct ||
+               get_default_context().vacuum() == Vacuum::MultiProduct) {
       auto isr = get_default_context().index_space_registry();
       const auto& isr_base_spaces = isr->base_spaces();
       SEQUANT_ASSERT(isr_base_spaces.size() > 0);
@@ -523,15 +525,18 @@ using OpConnections = std::vector<std::pair<T, T>>;
 /// Defines the behavior of expectation value methods.
 /// The struct is used by both tensor and operator level methods, but there are
 /// parameters in here which are only meaningful at the operator level.
+/// @pre When used with ref_av and the reference differs from the Wick vacuum,
+///      connect and do_not_connect must both be empty.
 template <typename T>
 struct EVOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
-  /// List of pairs of operator labels to be connected; connections are defined
-  /// left-to-right, i.e., pair `{opL,opR}` declares that `opL` and `opR` are to
-  /// be connected when `opR` precedes `opL`, i.e. `opL` is to the left of `opR`
+  /// Pairs of operators that must be directly contracted. Operator-level calls
+  /// use labels: `{opL,opR}` applies to every matching pair with `opL` to the
+  /// left of `opR`. Tensor-level calls use zero-based normal-operator
+  /// positions.
   OpConnections<T> connect = {};
-  /// List of pairs of operator labels that should not be connected, defined
-  /// left-to-right.
+  /// Pairs of operators that must not be directly contracted, using the same
+  /// label or position convention as connect.
   OpConnections<T> do_not_connect = {};
   /// If true, expressions are screened before lowering to Tensor level and
   /// calling WickTheorem. Only valid in Operator level calls
@@ -546,16 +551,16 @@ namespace tensor {
 /// @brief computes the reference expectation value of a tensor-level expression
 /// @param expr input expression
 /// @param opts defines the behavior, @see EVOptions
-/// @note The default `EVOptions<int>{}` has empty connections, unlike the
-///       operator-level overload which defaults to `default_op_connections()`.
+/// @note Connectivity constraints are empty by default.
+/// @pre When the reference differs from the Wick vacuum, opts.connect and
+///      opts.do_not_connect must both be empty.
 ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts = {});
 
 /// @brief computes the vacuum expectation value of a tensor-level expression,
 /// forces full contractions in WickTheorem
 /// @param expr input expression
 /// @param opts defines the behavior, @see EVOptions
-/// @note The default `EVOptions<int>{}` has empty connections, unlike the
-///       operator-level overload which defaults to `default_op_connections()`.
+/// @note Connectivity constraints are empty by default.
 ExprPtr vac_av(ExprPtr expr, EVOptions<int> opts = {});
 }  // namespace tensor
 }  // namespace op
@@ -1397,6 +1402,48 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
                            const unsigned long k);
 
 }  // namespace op
+
+namespace detail {
+/// @return true if the reference occupied space is the Wick vacuum's
+inline bool reference_is_vacuum() {
+  const auto isr = get_default_context().index_space_registry();
+  SEQUANT_ASSERT(isr, "the default context has no IndexSpaceRegistry");
+  return isr->reference_occupied_space() == isr->vacuum_occupied_space();
+}
+
+/// @brief Enforces that the reference is the Wick vacuum
+/// @param location the location reported on failure; by default, the caller's
+/// @throw Exception (or aborts, per SEQUANT_ENFORCE) if the reference differs
+///        from the Wick vacuum
+inline void enforce_reference_is_vacuum(
+    std::source_location location = std::source_location::current()) {
+  if (!reference_is_vacuum())
+    enforce_failed("the reference must be the Wick vacuum", location);
+}
+
+/// @brief Rejects connectivity constraints that ref_av cannot honor
+/// @details The connectivity lists constrain direct contractions only. With
+/// partial contractions, operators can also be connected through the RDMs
+/// (cumulants) of the residual operators, which the lists cannot express, so
+/// they are rejected rather than given a partial meaning.
+/// @param opts the options passed to ref_av
+/// @param full_contractions true if the reference is the Wick vacuum
+/// @pre Called before any screening or operator-label lowering, so invalid
+///      requests are rejected regardless of the expression
+/// @throw Exception (or aborts, per SEQUANT_ENFORCE) if \p full_contractions
+///        is false and `opts.connect` or `opts.do_not_connect` is non-empty
+template <typename T>
+void validate_ref_av_connections(const EVOptions<T>& opts,
+                                 bool full_contractions) {
+  const bool connections_supported =
+      full_contractions ||
+      (opts.connect.empty() && opts.do_not_connect.empty());
+  SEQUANT_ENFORCE(connections_supported,
+                  "ref_av: connect and do_not_connect must be empty when the "
+                  "reference differs from the Wick vacuum");
+}
+}  // namespace detail
+
 }  // namespace mbpt
 }  // namespace sequant
 

@@ -19,6 +19,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -26,6 +27,7 @@
 #include <latch>
 #include <memory>
 #include <mutex>
+#include <new>
 #include <numeric>
 #include <set>
 #include <string>
@@ -62,7 +64,7 @@ TEST_CASE("context", "[runtime]") {
     // set distinct contexts for fermi and bose statistics
     auto [fermi_isr, bose_isr] = mbpt::make_fermi_and_bose_spaces();
     CHECK(fermi_isr->spaces() ==
-          bose_isr->spaces());  // fermi_isr and bose_isr share the space set
+          bose_isr->spaces());  // fermi_isr and bose_isr have the same spaces
     CHECK_NOTHROW(set_default_context(
         {{Statistics::FermiDirac,
           Context({.index_space_registry_shared_ptr = fermi_isr,
@@ -142,8 +144,7 @@ TEST_CASE("context", "[runtime]") {
     }
 
     // two default-constructed states compare equal
-    const Context ctx2({.index_space_registry_shared_ptr =
-                            ctx.mutable_index_space_registry()});
+    const Context ctx2({.index_space_registry = *ctx.index_space_registry()});
     CHECK(ctx == ctx2);
 
     // setters act on a copy only
@@ -209,7 +210,7 @@ TEST_CASE("context", "[runtime]") {
     ctx_same_cmp.set_index_comparer(ctx.index_comparer_ptr())
         .set_index_pair_comparer(ctx.index_pair_comparer_ptr());
     CHECK(ctx_same_cmp == ctx);
-    CHECK(ctx_same_cmp.version() != ctx.version());
+    CHECK(ctx_same_cmp.version() == ctx.version());
     CHECK(Context(ctx).set_index_comparer(ctx.index_comparer()) != ctx);
 
     // chaining
@@ -223,7 +224,7 @@ TEST_CASE("context", "[runtime]") {
 
     // named-parameter construction
     const Context ctx_opts(
-        {.index_space_registry_shared_ptr = ctx.mutable_index_space_registry(),
+        {.index_space_registry = *ctx.index_space_registry(),
          .tensor_canonicalizers =
              container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>{
                  {L"Q", null_canon}},
@@ -255,80 +256,218 @@ TEST_CASE("context", "[runtime]") {
                     Exception);
   }
 
+  SECTION("index space registry is owned") {
+    // a shared_ptr whose object has other owners is copied, so modifying the
+    // object does not affect the context
+    auto shared = mbpt::make_sr_spaces();
+    Context ctx({.index_space_registry_shared_ptr = shared});
+    CHECK(ctx.index_space_registry().get() != shared.get());
+    CHECK(*ctx.index_space_registry() == *shared);
+    shared->add(L"q", 0b10000);
+    CHECK(!ctx.index_space_registry()->contains(L"q"));
+    ctx.set(shared);
+    CHECK(ctx.index_space_registry().get() != shared.get());
+    CHECK(ctx.index_space_registry()->contains(L"q"));
+
+    // the only owner of its object is adopted, without a copy
+    {
+      auto unique = mbpt::make_sr_spaces();
+      const auto* object = unique.get();
+      const Context adopted(
+          {.index_space_registry_shared_ptr = std::move(unique)});
+      CHECK(adopted.index_space_registry().get() == object);
+      auto set_unique = mbpt::make_sr_spaces();
+      const auto* set_object = set_unique.get();
+      ctx.set(std::move(set_unique));
+      CHECK(ctx.index_space_registry().get() == set_object);
+    }
+
+    // a registry given by value is moved in, keeping its storage
+    {
+      IndexSpaceRegistry by_value = *mbpt::make_sr_spaces();
+      const auto* storage = &*by_value.begin();
+      const Context from_value({.index_space_registry = std::move(by_value)});
+      CHECK(&*from_value.index_space_registry()->begin() == storage);
+      IndexSpaceRegistry set_value = *mbpt::make_sr_spaces();
+      const auto* set_storage = &*set_value.begin();
+      ctx.set(std::move(set_value));
+      CHECK(&*ctx.index_space_registry()->begin() == set_storage);
+    }
+
+    // the Options given to set_default_context() and
+    // set_scoped_default_context() hand over their registry the same way
+    {
+      const Context initial_ctx = get_default_context_snapshot();
+      auto unique = mbpt::make_sr_spaces();
+      const auto* object = unique.get();
+      set_default_context(
+          {.index_space_registry_shared_ptr = std::move(unique)});
+      CHECK(get_default_context().index_space_registry().get() == object);
+      IndexSpaceRegistry by_value = *mbpt::make_sr_spaces();
+      const auto* storage = &*by_value.begin();
+      set_default_context({.index_space_registry = std::move(by_value)});
+      CHECK(&*get_default_context().index_space_registry()->begin() == storage);
+      set_default_context(initial_ctx);
+
+      auto scoped_unique = mbpt::make_sr_spaces();
+      const auto* scoped_object = scoped_unique.get();
+      const auto resetter = set_scoped_default_context(
+          {.index_space_registry_shared_ptr = std::move(scoped_unique)});
+      CHECK(get_default_context().index_space_registry().get() ==
+            scoped_object);
+    }
+
+    // copies of a context share its registry
+    const Context copy(ctx);
+    CHECK(copy.index_space_registry() == ctx.index_space_registry());
+
+    // to modify a context's registry, modify a copy and set it
+    IndexSpaceRegistry modified = *ctx.index_space_registry();
+    modified.add(L"q", 0b10000);
+    ctx.set(std::move(modified));
+    CHECK(ctx.index_space_registry()->contains(L"q"));
+  }
+
   SECTION("version") {
     Context ctx;
     const auto v0 = ctx.version();
     CHECK(v0 != 0);
-    CHECK(Context{}.version() != Context{}.version());
+    // the version identifies the canonicalization configuration
+    CHECK(Context{}.version() == v0);
+    CHECK(Context({.vacuum = Vacuum::SingleProduct}).version() == v0);
 
-    // copies keep the version, clones do not
+    // copies keep the version
     const Context copy(ctx);
     CHECK(copy.version() == v0);
     Context assigned;
     assigned = ctx;
     CHECK(assigned.version() == v0);
     const Context with_registry({.index_space_registry = IndexSpaceRegistry{}});
-    CHECK(with_registry.clone().version() != with_registry.version());
-    CHECK(Context({.vacuum = Vacuum::SingleProduct}).version() != 0);
-
-    // construction from Options assigns a single version, however many
-    // fields are given
-    {
-      const auto before = Context{}.version();
-      const Context from_options(
-          {.index_comparer = TensorCanonicalizer::default_index_comparer(),
-           .index_pair_comparer =
-               TensorCanonicalizer::default_index_pair_comparer(),
-           .cardinal_tensor_labels = container::vector<std::wstring>{L"Z"}});
-      CHECK(from_options.version() == before + 1);
-    }
-
-    // equality ignores the version
-    const Context same_registry(
-        {.index_space_registry_shared_ptr =
-             with_registry.mutable_index_space_registry()});
-    CHECK(with_registry.version() != same_registry.version());
-    CHECK(with_registry == same_registry);
-    // registries are equal only if they share their spaces; a context need
-    // not have one
-    CHECK(Context({.index_space_registry = IndexSpaceRegistry{}}) !=
+    CHECK(with_registry.version() != v0);
+    // contexts that share a registry, such as a copy with another vacuum, share
+    // the version
+    Context same_registry(with_registry);
+    same_registry.set(Vacuum::SingleProduct);
+    CHECK(same_registry.version() == with_registry.version());
+    // registries are compared by value, the version keys on the registry
+    // object; a context need not have one
+    CHECK(Context({.index_space_registry = IndexSpaceRegistry{}}) ==
           with_registry);
+    CHECK(Context({.index_space_registry = IndexSpaceRegistry{}}).version() !=
+          with_registry.version());
+    {
+      IndexSpaceRegistry other;
+      other.add(L"q", 0b01);
+      CHECK(Context({.index_space_registry = other}) != with_registry);
+      // including the approximate sizes of their spaces
+      IndexSpaceRegistry resized = other;
+      resized.retrieve_ptr(L"q")->approximate_size(
+          other.retrieve(L"q").approximate_size() + 1);
+      CHECK(Context({.index_space_registry = std::move(resized)}) !=
+            Context({.index_space_registry = std::move(other)}));
+    }
     CHECK(Context{} == Context{});
     CHECK(Context{} != with_registry);
 
-    // every setter assigns a new version
-    auto bumps = [&ctx](auto&& set) {
+    // the canonicalization options are compared in full, named indices
+    // included, as the version does
+    {
+      Context plain(with_registry);
+      plain.set(CanonicalizeOptions::default_options());
+      Context named(with_registry);
+      named.set(CanonicalizeOptions::default_options().copy_and_set(
+          std::optional<container::set<Index>>{container::set<Index>{}}));
+      CHECK(named != plain);
+      CHECK(named.version() != plain.version());
+    }
+    // the version of a configuration whose objects are gone is not reused,
+    // even if a new object takes the address of a dead one: the registries
+    // are constructed in one buffer, so the second has the address of the
+    // first; a sole-owner shared_ptr is adopted rather than copied
+    {
+      alignas(IndexSpaceRegistry) std::byte buffer[sizeof(IndexSpaceRegistry)];
+      auto registry_in_buffer = [&buffer] {
+        return std::shared_ptr<const IndexSpaceRegistry>(
+            new (buffer) IndexSpaceRegistry{},
+            [](const IndexSpaceRegistry* r) { r->~IndexSpaceRegistry(); });
+      };
+      std::uint64_t dead_version = 0;
+      {
+        const Context dead(
+            {.index_space_registry_shared_ptr = registry_in_buffer()});
+        REQUIRE(static_cast<const void*>(dead.index_space_registry().get()) ==
+                static_cast<const void*>(buffer));
+        dead_version = dead.version();
+      }
+      const Context reborn(
+          {.index_space_registry_shared_ptr = registry_in_buffer()});
+      REQUIRE(static_cast<const void*>(reborn.index_space_registry().get()) ==
+              static_cast<const void*>(buffer));
+      CHECK(reborn.version() != dead_version);
+    }
+
+    // the canonicalization settings change the version, the others do not
+    auto changes = [&ctx](auto&& set) {
       const auto before = ctx.version();
       set(ctx);
-      return ctx.version() > before;
+      return ctx.version() != before;
     };
-    CHECK(bumps([](Context& c) { c.set(Vacuum::SingleProduct); }));
-    CHECK(bumps([](Context& c) { c.set(IndexSpaceRegistry{}); }));
-    CHECK(bumps(
+    CHECK(!changes([](Context& c) { c.set(Vacuum::SingleProduct); }));
+    CHECK(!changes([](Context& c) { c.set(IndexSpaceMetric::General); }));
+    CHECK(!changes([](Context& c) { c.set(AssertStrictBraKetSymmetry::No); }));
+    CHECK(!changes([](Context& c) { c.set_first_dummy_index_ordinal(200); }));
+    CHECK(!changes([](Context& c) { c.set(BraKetTypesetting::KetSub); }));
+    CHECK(!changes([](Context& c) { c.set(BraKetSlotTypesetting::Naive); }));
+    CHECK(!changes([](Context& c) { c.set(Symmetry::Symm); }));
+    CHECK(!changes([](Context& c) { c.set(Hermiticity::Hermitian); }));
+    CHECK(!changes([](Context& c) { c.set(ColumnSymmetry::Symm); }));
+    CHECK(changes([](Context& c) { c.set(SPBasis::Spinfree); }));
+    CHECK(changes([](Context& c) { c.set(IndexSpaceRegistry{}); }));
+    CHECK(changes(
         [](Context& c) { c.set(std::make_shared<IndexSpaceRegistry>()); }));
-    CHECK(bumps([](Context& c) { c.set(IndexSpaceMetric::General); }));
-    CHECK(bumps([](Context& c) { c.set(AssertStrictBraKetSymmetry::No); }));
-    CHECK(bumps([](Context& c) { c.set(SPBasis::Spinfree); }));
-    CHECK(bumps([](Context& c) { c.set_first_dummy_index_ordinal(200); }));
-    CHECK(bumps([](Context& c) { c.set(CanonicalizeOptions{}); }));
-    CHECK(bumps([](Context& c) { c.set(BraKetTypesetting::KetSub); }));
-    CHECK(bumps([](Context& c) { c.set(BraKetSlotTypesetting::Naive); }));
-    CHECK(bumps([](Context& c) { c.set(Symmetry::Symm); }));
-    CHECK(bumps([](Context& c) { c.set(Hermiticity::Hermitian); }));
-    CHECK(bumps([](Context& c) { c.set(ColumnSymmetry::Symm); }));
-    CHECK(bumps([](Context& c) {
-      c.set_tensor_canonicalizer(L"Q",
-                                 std::make_shared<NullTensorCanonicalizer>());
+    CHECK(changes([](Context& c) { c.set(CanonicalizeOptions{}); }));
+    CHECK(changes([](Context& c) {
+      c.set(CanonicalizeOptions::default_options().copy_and_set(
+          CanonicalizeOptions::IgnoreNamedIndexLabel::No));
     }));
-    CHECK(bumps([](Context& c) { c.unset_tensor_canonicalizer(L"Q"); }));
-    CHECK(bumps([](Context& c) {
+    CHECK(changes([](Context& c) {
+      c.set(c.canonicalization_options()->copy_and_set(
+          std::optional<container::set<Index>>{container::set<Index>{}}));
+    }));
+    {
+      const auto before = ctx.version();
+      CHECK(changes([](Context& c) {
+        c.set_tensor_canonicalizer(L"Q",
+                                   std::make_shared<NullTensorCanonicalizer>());
+      }));
+      CHECK(changes([](Context& c) { c.unset_tensor_canonicalizer(L"Q"); }));
+      // undoing a change restores the version
+      CHECK(ctx.version() == before);
+    }
+    // the version is assigned when read, so the intermediate configurations
+    // of a chain of setters get none: versions are assigned in increasing
+    // order, and the intermediate one, read after the final one, is newer
+    {
+      const auto s = std::make_shared<NullTensorCanonicalizer>();
+      const auto t = std::make_shared<NullTensorCanonicalizer>();
+      Context chained(ctx);
+      chained.set_tensor_canonicalizer(L"S", s).set_tensor_canonicalizer(L"T",
+                                                                         t);
+      const auto final_version = chained.version();
+      Context intermediate(ctx);
+      intermediate.set_tensor_canonicalizer(L"S", s);
+      CHECK(intermediate.version() > final_version);
+    }
+    CHECK(changes([](Context& c) {
       c.set_index_comparer(TensorCanonicalizer::default_index_comparer());
     }));
-    CHECK(bumps([](Context& c) {
+    CHECK(changes([](Context& c) {
       c.set_index_pair_comparer(
           TensorCanonicalizer::default_index_pair_comparer());
     }));
-    CHECK(bumps([](Context& c) {
+    CHECK(!changes(
+        [](Context& c) { c.set_index_comparer(c.index_comparer_ptr()); }));
+    CHECK(changes([](Context& c) {
       c.set_cardinal_tensor_labels(container::vector<std::wstring>{L"Z"});
     }));
 
@@ -523,6 +662,22 @@ TEST_CASE("scoped contexts", "[runtime]") {
     CHECK(!q_canonicalizer());
   }
 
+  // e.g. the scopes of successive top-level WickTheorems, which map the
+  // normal operator labels to one shared NullTensorCanonicalizer
+  SECTION("equal modifications of a context scope equal versions") {
+    const auto& shared = NullTensorCanonicalizer::instance();
+    REQUIRE(shared == NullTensorCanonicalizer::instance());
+    auto scoped_version = [](std::shared_ptr<TensorCanonicalizer> c) {
+      auto modified = set_scoped_modified_default_context(
+          [&c](Context& ctx) { ctx.set_tensor_canonicalizer(L"Q", c); });
+      return current_context_version();
+    };
+    const auto v1 = scoped_version(shared);
+    CHECK(v1 != current_context_version());
+    CHECK(scoped_version(shared) == v1);
+    CHECK(scoped_version(std::make_shared<NullTensorCanonicalizer>()) != v1);
+  }
+
   SECTION("the current version follows the effective context") {
     const auto v0 = current_context_version();
     CHECK(v0 == get_default_context().version());
@@ -533,8 +688,9 @@ TEST_CASE("scoped contexts", "[runtime]") {
       CHECK(current_context_version() == other.version());
       CHECK(current_context_version() != v0);
       {
-        auto modified = set_scoped_modified_default_context(
-            [](Context& ctx) { ctx.set(Vacuum::SingleProduct); });
+        auto modified = set_scoped_modified_default_context([](Context& ctx) {
+          ctx.set_cardinal_tensor_labels(container::vector<std::wstring>{L"Z"});
+        });
         CHECK(current_context_version() != other.version());
         CHECK(current_context_version() != v0);
         CHECK(current_context_version(Statistics::FermiDirac) ==
@@ -656,4 +812,66 @@ TEST_CASE("parallel exceptions", "[runtime]") {
         CHECK(rethrown_item(e.exceptions()[k].second) == static_cast<int>(k));
     }
   }
+}
+
+// the helper changes the canonicalization options of the context in effect
+// for every Statistics and nothing else, i.e. a context specific to one
+// Statistics keeps its other settings
+TEST_CASE("scoped_canonicalize_options", "[runtime]") {
+  using namespace sequant;
+  auto fermi = get_default_context(Statistics::FermiDirac);
+  fermi.set(Vacuum::Physical);
+  auto arbitrary = get_default_context();
+  arbitrary.set(Vacuum::SingleProduct);
+  auto outer = set_scoped_default_context(container::map<Statistics, Context>{
+      {Statistics::FermiDirac, fermi}, {Statistics::Arbitrary, arbitrary}});
+  const auto opts = CanonicalizeOptions::default_options().copy_and_set(
+      container::set<Index>{Index{L"i_1"}});
+  REQUIRE(
+      get_default_context(Statistics::FermiDirac).canonicalization_options() !=
+      opts);
+  {
+    auto inner = tests::scoped_canonicalize_options(opts);
+    CHECK(get_default_context(Statistics::FermiDirac).vacuum() ==
+          Vacuum::Physical);
+    CHECK(get_default_context().vacuum() == Vacuum::SingleProduct);
+    CHECK(get_default_context(Statistics::FermiDirac)
+              .canonicalization_options() == opts);
+    CHECK(get_default_context().canonicalization_options() == opts);
+  }
+  CHECK(get_default_context(Statistics::FermiDirac).vacuum() ==
+        Vacuum::Physical);
+  CHECK(
+      get_default_context(Statistics::FermiDirac).canonicalization_options() !=
+      opts);
+}
+
+// a pin scopes a copy of the contexts in effect, with their versions, that a
+// change of the process-wide contexts made meanwhile does not reach; under a
+// scoped context it installs nothing
+TEST_CASE("pin_default_contexts", "[runtime]") {
+  using namespace sequant;
+  using Contexts = container::map<Statistics, Context>;
+  REQUIRE(detail::implicit_context_overlay<Contexts>() == nullptr);
+  const auto version = current_contexts_version();
+  const auto vacuum = get_default_context().vacuum();
+  const auto other_vacuum =
+      vacuum == Vacuum::Physical ? Vacuum::SingleProduct : Vacuum::Physical;
+  {
+    auto pin = pin_default_contexts();
+    const auto* overlay = detail::implicit_context_overlay<Contexts>();
+    REQUIRE(overlay != nullptr);
+    CHECK(current_contexts_version() == version);
+    auto changed = get_default_context();
+    changed.set(other_vacuum);
+    set_default_context(changed);
+    CHECK(get_default_context().vacuum() == vacuum);
+    auto inner = pin_default_contexts();
+    CHECK(detail::implicit_context_overlay<Contexts>() == overlay);
+  }
+  CHECK(get_default_context().vacuum() == other_vacuum);
+  auto restored = get_default_context();
+  restored.set(vacuum);
+  set_default_context(restored);
+  CHECK(current_contexts_version() == version);
 }

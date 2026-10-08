@@ -16,6 +16,8 @@
 #include <range/v3/view/take.hpp>
 #include <range/v3/view/zip.hpp>
 
+#include <memory>
+
 namespace sequant {
 
 /// @brief Base class for Tensor canonicalizers
@@ -58,6 +60,11 @@ class TensorCanonicalizer {
 class NullTensorCanonicalizer : public TensorCanonicalizer {
  public:
   virtual ~NullTensorCanonicalizer() = default;
+
+  /// @return the process-wide instance; Context::version() compares
+  /// canonicalizers by identity, so contexts that install this one rather than
+  /// a new one each share a version
+  static const std::shared_ptr<NullTensorCanonicalizer>& instance();
 
   ExprPtr apply(AbstractTensor&) const override;
 };

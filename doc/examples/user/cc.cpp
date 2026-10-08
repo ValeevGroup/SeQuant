@@ -98,5 +98,13 @@ int main() {
   }
   // end-snippet-5
 
+  // start-snippet-6
+  // Evaluate H̄ outside the class with the connectivity that matches its form
+  CC cc{2};
+  auto hbar = cc.hbar();
+  auto r2_eq =
+      op::ref_av(op::P(nₚ(2)) * hbar, {.connect = cc.hbar_connections()});
+  // end-snippet-6
+
   return 0;
 }

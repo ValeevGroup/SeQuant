@@ -34,13 +34,18 @@ normal-ordered operators) additionally requires choosing a consistent relabeling
 does this by building a colored graph representation of the product (a *tensor network*) and computing its canonical form using the
 bundled `bliss <https://users.aalto.fi/~tjunttil/bliss/>`_ `graph-automorphism <https://en.wikipedia.org/wiki/Graph_automorphism>`_ library. This machinery is what
 ``Expr::canonicalize()`` invokes internally, and what :func:`sequant::simplify` combines with cheap algebraic clean-up (flattening,
-dropping zeros, ...) to fully reduce an expression:
+dropping zeros, ...) to fully reduce an expression. The method it uses and the indices it treats as named (external) are the
+:class:`sequant::CanonicalizeOptions` of the current ``Context``; :func:`sequant::canonicalize` and :func:`sequant::simplify` take no
+options of their own, so to canonicalize under other options scope a context that carries them (see :doc:`context`):
 
 .. literalinclude:: /examples/user/canonicalization.cpp
    :language: cpp
    :start-after: start-snippet-2
    :end-before: end-snippet-2
    :dedent: 2
+
+A fully canonicalized expression remembers that it is in canonical form, so canonicalizing or simplifying it again before it is
+modified does no work.
 
 None of this needs to be invoked explicitly in typical use: the :doc:`mbpt operator machinery <operator>` and
 :doc:`CC equation generator <cc>` call ``simplify()``/canonicalization as needed while building up equations. Knowing that it happens —

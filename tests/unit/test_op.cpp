@@ -132,6 +132,22 @@ TEST_CASE("op", "[elements]") {
         {FNOperator(cre({L"i_1"}), ann({L"i_2"}), Vacuum::Physical),
          FNOperator(cre({L"i_3"}), ann({L"i_4"}), Vacuum::SingleProduct),
          FNOperator(cre({L"i_5"}), ann({L"i_6"}))}));
+    // ... also when appended: an empty sequence adopts the vacuum of the
+    // first operator, later ones must match
+    {
+      FNOperatorSeq appended;
+      REQUIRE_NOTHROW(appended.push_back(
+          FNOperator(cre({L"i_1"}), ann({L"i_2"}), Vacuum::Physical)));
+      REQUIRE(appended.vacuum() == Vacuum::Physical);
+      REQUIRE_THROWS_AS(
+          appended.push_back(
+              FNOperator(cre({L"i_3"}), ann({L"i_4"}), Vacuum::SingleProduct)),
+          Exception);
+      REQUIRE_THROWS_AS(appended.emplace_back(cre({L"i_3"}), ann({L"i_4"}),
+                                              Vacuum::SingleProduct),
+                        Exception);
+      REQUIRE(appended.size() == 1);
+    }
   }
 
   SECTION("equality") {
@@ -303,6 +319,70 @@ TEST_CASE("op", "[elements]") {
       REQUIRE(is_pure_qpannihilator(fann(L"a_1"), V));
       REQUIRE(is_pure_qpannihilator(fann(L"p_1"), V));
     }
+    {
+      // relative to a MultiProduct vacuum the hole space is the
+      // reference-occupied space M and the particle space the
+      // vacuum-unoccupied space E; an active (u) Op is both a (pure)
+      // quasiparticle creator and annihilator. The predicates compare space
+      // types, so a
+      // space whose intersection with M or E is not registered (Z ∩ E here)
+      // is classified rather than throwing
+      auto isr = std::make_shared<IndexSpaceRegistry>();
+      isr->add(L"o", 0b00001)
+          .add(L"i", 0b00010)
+          .add(L"u", 0b00100)
+          .add(L"a", 0b01000)
+          .add(L"g", 0b10000)
+          .add_union(L"O", {L"o", L"i"}, is_vacuum_occupied)
+          .add_union(L"M", {L"o", L"i", L"u"}, is_reference_occupied)
+          .add_union(L"E", {L"u", L"a", L"g"})
+          .add_union(L"Z", {L"i", L"u", L"a"})
+          .add_union(L"p", {L"M", L"E"}, is_complete);
+      auto ctx = get_default_context();
+      ctx.set(isr);
+      ctx.set(Vacuum::MultiProduct);
+      auto resetter = set_scoped_default_context(ctx);
+      constexpr const Vacuum V = Vacuum::MultiProduct;
+
+      REQUIRE(!is_qpcreator(fcre(L"i_1"), V));
+      REQUIRE(is_qpcreator(fcre(L"u_1"), V));
+      REQUIRE(is_qpcreator(fcre(L"a_1"), V));
+      REQUIRE(is_pure_qpcreator(fcre(L"u_1"), V));
+      REQUIRE(is_pure_qpcreator(fcre(L"a_1"), V));
+      REQUIRE(is_qpannihilator(fcre(L"i_1"), V));
+      REQUIRE(is_qpannihilator(fcre(L"u_1"), V));
+      REQUIRE(!is_qpannihilator(fcre(L"a_1"), V));
+      REQUIRE(is_pure_qpannihilator(fcre(L"i_1"), V));
+      REQUIRE(is_pure_qpannihilator(fcre(L"u_1"), V));
+
+      REQUIRE(is_qpcreator(fann(L"i_1"), V));
+      REQUIRE(is_qpcreator(fann(L"u_1"), V));
+      REQUIRE(!is_qpcreator(fann(L"a_1"), V));
+      REQUIRE(is_pure_qpcreator(fann(L"i_1"), V));
+      REQUIRE(is_pure_qpcreator(fann(L"u_1"), V));
+      REQUIRE(!is_qpannihilator(fann(L"i_1"), V));
+      REQUIRE(is_qpannihilator(fann(L"u_1"), V));
+      REQUIRE(is_qpannihilator(fann(L"a_1"), V));
+      REQUIRE(!is_pure_qpannihilator(fann(L"i_1"), V));
+      REQUIRE(is_pure_qpannihilator(fann(L"a_1"), V));
+
+      bool qpcre = false, qpann = false, pure_qpcre = true, pure_qpann = true;
+      REQUIRE_NOTHROW(qpcre = is_qpcreator(fcre(L"Z_1"), V));
+      REQUIRE_NOTHROW(qpann = is_qpannihilator(fcre(L"Z_1"), V));
+      REQUIRE_NOTHROW(pure_qpcre = is_pure_qpcreator(fcre(L"Z_1"), V));
+      REQUIRE_NOTHROW(pure_qpann = is_pure_qpannihilator(fcre(L"Z_1"), V));
+      REQUIRE(qpcre);
+      REQUIRE(qpann);
+      REQUIRE(!pure_qpcre);
+      REQUIRE(!pure_qpann);
+
+      REQUIRE(qpcreator_space(fcre(L"u_1"), V) == isr->retrieve(L"u"));
+      REQUIRE(qpannihilator_space(fcre(L"u_1"), V) == isr->retrieve(L"u"));
+      REQUIRE(qpcreator_space(fcre(L"p_1"), V) == isr->retrieve(L"E"));
+      REQUIRE(qpannihilator_space(fcre(L"p_1"), V) == isr->retrieve(L"M"));
+      REQUIRE(qpcreator_space(fann(L"p_1"), V) == isr->retrieve(L"M"));
+      REQUIRE(qpannihilator_space(fann(L"p_1"), V) == isr->retrieve(L"E"));
+    }
   }
 
   SECTION("hashing") {
@@ -331,6 +411,43 @@ TEST_CASE("op", "[elements]") {
     REQUIRE(hash_value(fa1) !=
             hash_value(ba1));  // hash is depends on statistics
     REQUIRE(hash_value(fc1) == hash_value(adjoint(fa1)));
+
+    // NormalOperator::erase() and NormalOperator::insert() invalidate the
+    // memoized hash
+    auto nop = FNOperator(cre({L"i_1"}), ann({L"a_1"}));
+    const auto nop_hash = nop.hash_value();
+    nop.erase(nop.begin());
+    REQUIRE(nop.hash_value() != nop_hash);
+    nop.insert(nop.begin(), fcre(L"i_1"));
+    REQUIRE(nop.hash_value() == nop_hash);
+
+    // so does mutable element access
+    nop[0] = fcre(L"i_2");
+    REQUIRE(nop.hash_value() != nop_hash);
+    *nop.begin() = fcre(L"i_1");
+    REQUIRE(nop.hash_value() == nop_hash);
+    *nop.rbegin() = fann(L"a_2");
+    REQUIRE(nop.hash_value() != nop_hash);
+    *nop.rbegin() = fann(L"a_1");
+    REQUIRE(nop.hash_value() == nop_hash);
+
+    // and the remaining mutators of the sequence
+    auto op = FOperator{fcre(L"i_1"), fann(L"a_1")};
+    const auto op_hash = op.hash_value();
+    op.pop_back();
+    REQUIRE(op.hash_value() != op_hash);
+    op.insert(op.end(), fann(L"a_1"));
+    REQUIRE(op.hash_value() == op_hash);
+    op.resize(1);
+    REQUIRE(op.hash_value() != op_hash);
+    op.push_back(fann(L"a_1"));
+    REQUIRE(op.hash_value() == op_hash);
+    op.erase(op.begin(), op.end());
+    REQUIRE(op.hash_value() != op_hash);
+    op.insert(op.end(), {fcre(L"i_1"), fann(L"a_1")});
+    REQUIRE(op.hash_value() == op_hash);
+    op.clear();
+    REQUIRE(op.hash_value() != op_hash);
   }
 
   SECTION("hug") {
@@ -469,6 +586,10 @@ TEST_CASE("op", "[elements]") {
         FNOperator(cre({L"i_2"}), ann({L"a_1", L"a_2"}), Vacuum::SingleProduct);
     auto nop5 = FNOperator(cre({L"i_1"}), ann({}), Vacuum::SingleProduct);
     auto nop6 = FNOperator(cre({}), ann({L"a_1"}), Vacuum::SingleProduct);
+    auto nop7 =
+        FNOperator(cre({L"i_1", L"i_2"}), ann({}), Vacuum::SingleProduct);
+    auto nop8 =
+        FNOperator(cre({}), ann({L"a_1", L"a_2"}), Vacuum::SingleProduct);
     auto nopseq1 = FNOperatorSeq({nop1, nop2});
 
     SECTION("default (brasub, naive) typesetting") {
@@ -537,6 +658,10 @@ TEST_CASE("op", "[elements]") {
               L"{\\tensor*{\\tilde{a}}{*^{}_{a_1}*^{i_2}_{a_2}}}");
       REQUIRE(to_latex(nop5) == L"{\\tensor*{\\tilde{a}}{*^{i_1}_{}}}");
       REQUIRE(to_latex(nop6) == L"{\\tensor*{\\tilde{a}}{*^{}_{a_1}}}");
+      REQUIRE(to_latex(nop7) ==
+              L"{\\tensor*{\\tilde{a}}{*^{i_1}_{}*^{i_2}_{}}}");
+      REQUIRE(to_latex(nop8) ==
+              L"{\\tensor*{\\tilde{a}}{*^{}_{a_1}*^{}_{a_2}}}");
       REQUIRE(to_latex(nopseq1) ==
               L"{{\\tensor*{\\tilde{a}}{*^{i_1}_{a_1}*^{i_2}_{a_2}}}{\\tensor*{"
               L"\\tilde{a}}{*^{i_1}_{a_1^{{i_1}{i_2}}}*^{i_2}_{a_2^{{i_1}{i_2}}"

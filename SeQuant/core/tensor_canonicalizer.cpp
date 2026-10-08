@@ -175,6 +175,12 @@ TensorCanonicalizer::default_index_pair_comparer() {
   return TensorIndexComparer{};
 }
 
+const std::shared_ptr<NullTensorCanonicalizer>&
+NullTensorCanonicalizer::instance() {
+  static const auto result = std::make_shared<NullTensorCanonicalizer>();
+  return result;
+}
+
 ExprPtr NullTensorCanonicalizer::apply(AbstractTensor&) const { return {}; }
 
 void DefaultTensorCanonicalizer::tag_indices(AbstractTensor& t) const {

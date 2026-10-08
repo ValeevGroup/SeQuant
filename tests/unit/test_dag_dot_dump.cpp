@@ -85,12 +85,14 @@ TEST_CASE(
   bool const collapse_sums =
       std::getenv("SEQUANT_DOT_COLLAPSE_SUMS") != nullptr;
 
-  auto ctx0 = get_default_context().clone();
+  auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx0.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
+  REQUIRE(ctx0.index_space_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
+      *ctx0.index_space_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  ctx0.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
 
   // The reference size regime (the same numbers the dry-run fixtures use), so

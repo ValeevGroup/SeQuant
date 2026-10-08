@@ -28,6 +28,10 @@
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <numeric>
+#include <utility>
+#include <vector>
+
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
 #endif
@@ -562,7 +566,7 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
     // update list of noncovariant indices every iteration
     container::set<Index> all_noncovariant_indices;
     if (have_noncovariant_indices) {
-      // see extract_indices
+      // see WickTheorem::noncovariant_indices
       all_noncovariant_indices =
           idx_counter |
           ranges::views::filter([&external_indices](const auto &v) {
@@ -654,48 +658,557 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
 }  // namespace detail
 
 template <Statistics S>
-void WickTheorem<S>::extract_indices(const Expr &expr,
-                                     bool force_external) const {
-  auto idx_counter = get_used_indices_with_counts(expr);
+void WickTheorem<S>::extract_indices(const Expr &expr) const {
+  input_index_counts_ = get_used_indices_with_counts(expr);
+}
 
-  all_indices_ =
-      idx_counter |
-      ranges::views::transform([](const auto &v) { return v.first; }) |
-      ranges::to<container::set<Index>>;
+template <Statistics S>
+void WickTheorem<S>::extract_indices() const {
+  if (input_index_counts_) return;
+  if (input_) return extract_indices(*input_);
+  SEQUANT_ASSERT(expr_input_);
+  // an expression input: its first Product summand if a Sum (every summand of
+  // an expanded Sum has the same external indices), else the expression itself
+  ExprPtr input = expr_input_;
+  if (input->is<Sum>()) {
+    const auto it = ranges::find_if(
+        *input, [](const ExprPtr &summand) { return summand->is<Product>(); });
+    if (it == ranges::end(*input))
+      throw Exception(
+          "WickTheorem::extract_indices: the expression input is a Sum without "
+          "a Product summand, its indices cannot be counted");
+    input = *it;
+  }
+  bool expanded = true;
+  input->visit([&expanded](const ExprPtr &subexpr) {
+    if (subexpr->is<Sum>()) expanded = false;
+  });
+  if (!expanded)
+    throw Exception(
+        "WickTheorem::extract_indices: the input must be expanded (contains a "
+        "Sum as a subexpression)");
+  extract_indices(*input);
+}
 
-  if (!user_defined_external_indices_) {
-    const auto &copts = get_default_context().canonicalization_options();
-    if (copts && copts->named_indices) {
-      external_indices_ = copts->named_indices.value();
-    } else {
-      // external indices either appears once in nonproto slot or is pure
-      // protoindex
-      external_indices_ =
-          idx_counter | ranges::views::filter([force_external](const auto &v) {
-            return v.second.nonproto() <= 1 || force_external;
-          }) |
-          ranges::views::transform([](const auto &v) { return v.first; }) |
-          ranges::to<container::set<Index>>;
+template <Statistics S>
+container::set<Index> WickTheorem<S>::external_indices() const {
+  const auto &copts = get_default_context().canonicalization_options();
+  if (copts && copts->named_indices) return *copts->named_indices;
+  SEQUANT_ASSERT(input_index_counts_);
+  return *input_index_counts_ | ranges::views::filter([](const auto &v) {
+    return v.second.nonproto() <= 1;
+  }) | ranges::views::transform([](const auto &v) { return v.first; }) |
+         ranges::to<container::set<Index>>;
+}
+
+template <Statistics S>
+container::set<Index> WickTheorem<S>::noncovariant_indices(
+    const container::set<Index> &external_indices) const {
+  SEQUANT_ASSERT(input_index_counts_);
+  return *input_index_counts_ |
+         ranges::views::filter([&external_indices](const auto &v) {
+           return (v.first.has_proto_indices() || v.second.proto != 0 ||
+                   v.second.nonproto() != 2) &&
+                  !external_indices.contains(v.first);
+         }) |
+         ranges::views::transform([](const auto &v) { return v.first; }) |
+         ranges::to<container::set<Index>>;
+}
+
+template <Statistics S>
+typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
+    const Product &product,
+    const container::set<Index> *declared_external_indices) {
+  NormalOperatorSequence<S> nopseq;
+  for (const auto &factor : product)
+    if (factor->template is<NormalOperator<S>>())
+      nopseq.push_back(factor->template as<NormalOperator<S>>());
+  TopologicalPartitions result;
+
+  if (Logger::instance().wick_topology)
+    std::wcout << "WickTheorem<S>::compute: input to topology computation = "
+               << io::latex::to_string(product) << std::endl;
+
+  // construct graph representation of the tensor product
+  using TN = TensorNetwork;
+  // index-free factors (e.g. Variable) are not tensors and cannot affect the
+  // graph
+  TN tn(product.factors() | ranges::views::filter([](const ExprPtr &factor) {
+          return factor->is<AbstractTensor>();
+        }) |
+        ranges::to<container::svector<ExprPtr>>);
+  // the declared external indices are the named indices of the graph (a
+  // declared one that appears twice is not a dummy); without a declaration
+  // the network deduces them
+  TN::NamedIndexSet declared_external;
+  if (declared_external_indices)
+    declared_external.insert(declared_external_indices->begin(),
+                             declared_external_indices->end());
+  auto g = tn.create_graph({.named_indices = declared_external_indices
+                                                 ? &declared_external
+                                                 : nullptr,
+                            .distinct_named_indices = true});
+  const auto &graph = g.bliss_graph;
+  const auto &vlabels = g.vertex_labels;
+  const auto &vcolors = g.vertex_colors;
+  const auto &vtypes = g.vertex_types;
+  const auto n = vtypes.size();
+  SEQUANT_ASSERT(vcolors.size() == n);
+  SEQUANT_ASSERT(vlabels.size() == n);
+  const auto &tn_edges = tn.edges();
+  const auto &tn_tensors = tn.tensors();
+  auto idx_vertex_to_edge_ptr = [&](const auto idx_vertex) -> const TN::Edge * {
+    SEQUANT_ASSERT(idx_vertex < n);
+    const auto edge_idx = g.vertex_to_index_idx(idx_vertex);
+    if (edge_idx < tn_edges.size())
+      return &tn_edges[edge_idx];
+    else  // indices without matching edges are pure protoindices
+      return nullptr;
+  };
+
+  if (Logger::instance().wick_topology) {
+    std::basic_ostringstream<wchar_t> oss;
+    graph->write_dot(oss, {.labels = vlabels});
+    std::wcout << "WickTheorem<S>::compute: colored graph produced from TN = "
+               << std::endl
+               << oss.str() << std::endl;
+  }
+
+  // identify vertex indices of NormalOperator objects and Indices
+  // 1. list of vertex indices corresponding to NormalOperator objects
+  //    on the TN graph and their ordinals in NormalOperatorSequence
+  //    N.B. for NormalOperators the vertex indices coincide with
+  //    the ordinals
+  container::map<size_t, size_t> nop_vidx_ord;
+  // 2. list of vertex indices corresponding to Index objects on the TN
+  //    graph that appear in NormalOperatorsSequence and
+  //    their ordinals therein
+  //    N.B. for Index objects the vertex indices do NOT coincide with
+  //         the ordinals
+  container::map<size_t, size_t> index_vidx_ord;
+  {
+    const auto &nop_labels = NormalOperator<S>::labels();
+    const auto nop_labels_begin = begin(nop_labels);
+    const auto nop_labels_end = end(nop_labels);
+
+    using opseq_view_type = flattened_rangenest<NormalOperatorSequence<S>>;
+    auto opseq_view = opseq_view_type(&nopseq);
+    const auto opseq_view_begin = ranges::begin(opseq_view);
+    const auto opseq_view_end = ranges::end(opseq_view);
+
+    // NormalOperators are not reordered by canonicalization, hence the
+    // ordinal can be computed by counting
+    std::size_t nop_ord = 0;
+    for (size_t v = 0; v != n; ++v) {
+      if (vtypes[v] == VertexType::TensorCore &&
+          (std::find(nop_labels_begin, nop_labels_end, vlabels[v]) !=
+           nop_labels_end)) {
+        [[maybe_unused]] auto insertion_result =
+            nop_vidx_ord.emplace(v, nop_ord++);
+        SEQUANT_ASSERT(insertion_result.second);
+      }
+      if (vtypes[v] == VertexType::Index && !nopseq.empty()) {
+        auto *edge_ptr = idx_vertex_to_edge_ptr(v);
+        if (edge_ptr) {  // do not consider pure protoindices
+          auto &idx = edge_ptr->idx();
+          auto idx_it_in_opseq = ranges::find_if(
+              opseq_view, [&idx](const auto &v) { return v.index() == idx; });
+          if (idx_it_in_opseq != opseq_view_end) {
+            const auto ord =
+                ranges::distance(opseq_view_begin, idx_it_in_opseq);
+            [[maybe_unused]] auto insertion_result =
+                index_vidx_ord.emplace(v, ord);
+            SEQUANT_ASSERT(insertion_result.second);
+          }
+        }
+      }
     }
   }
 
-  // covariant indices are indices that do not depend on other indices,
-  // are not protoindices for other indices, and are dummy, i.e. summed over by
-  // appearing twice in nonproto slots and not among external indices
-  // noncovariant indices are the rest
-  noncovariant_indices_ =
-      idx_counter | ranges::views::filter([this](const auto &v) {
-        return (v.first.has_proto_indices() == true || v.second.proto != 0 ||
-                v.second.nonproto() != 2) &&
-               !external_indices_->contains(v.first);
-      }) |
-      ranges::views::transform([](const auto &v) { return v.first; }) |
-      ranges::to<container::set<Index>>;
+  // compute and save graph automorphism generators
+  std::vector<std::vector<unsigned int>> aut_generators;
+  {
+    bliss::Stats stats;
+    graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
+
+    auto save_aut = [&aut_generators](const unsigned int n,
+                                      const unsigned int *aut) {
+      aut_generators.emplace_back(aut, aut + n);
+    };
+
+    graph->find_automorphisms(stats, &bliss::aut_hook<decltype(save_aut)>,
+                              &save_aut);
+
+    if (Logger::instance().wick_topology) {
+      std::basic_ostringstream<wchar_t> oss2;
+      bliss::print_auts(aut_generators, oss2, vlabels);
+      std::wcout << "WickTheorem<S>::compute: colored graph "
+                    "automorphism generators = \n"
+                 << oss2.str() << std::endl;
+    }
+  }
+
+  // the product is zero if it has an automorphism of phase -1. Declared
+  // external indices are not permuted (Graph::automorphism_phase also fixes the
+  // network's own external indices), even if contracted.
+  {
+    if (ranges::any_of(aut_generators, [&](const auto &aut) {
+          return g.automorphism_phase(aut.data(), &declared_external) == -1;
+        })) {
+      result.zero = true;
+      return result;
+    }
+  }
+
+  // Use automorphisms to determine groups of topologically equivalent
+  // NormalOperator and Op objects.
+  // @param vertices maps vertex indices of the objects to their
+  //        ordinals in the sequence of such objects within
+  //        the NormalOperatorSequence
+  // @param nontrivial_partitions_only if true, only partitions with
+  // more than one element, are reported, else even trivial
+  // partitions with a single partition will be reported
+  // @param vertex_pair_exclude a callable that accepts 2 vertex
+  // indices and returns true if the automorphism of this pair
+  // of indices is to be ignored; this is used to disregard
+  // automorphisms of Index objects unless connected to same bra/ket
+  // of an (anti)symmetric NormalOperator.
+  // @return the \c {vertex_to_partition_idx,npartitions} pair in
+  // which \c vertex_to_partition_idx maps vertex indices that are
+  // part of nontrivial partitions to their (1-based) partition indices
+  auto compute_partitions = [&aut_generators](
+                                const container::map<size_t, size_t> &vertices,
+                                bool nontrivial_partitions_only,
+                                auto &&vertex_pair_exclude) {
+    container::map<size_t, size_t> vertex_to_partition_idx;
+    int next_partition_idx = -1;
+
+    // using each automorphism generator
+    for (auto &&aut : aut_generators) {
+      // skip automorphism generators that do not involve vertices
+      // in `vertices` list
+      bool aut_contains_other_vertices = true;
+      for (auto &&[v, ord] : vertices) {
+        (void)ord;
+        const auto v_is_in_aut = v != aut[v];
+        if (v_is_in_aut) {
+          aut_contains_other_vertices = false;
+          break;
+        }
+      }
+      if (aut_contains_other_vertices) continue;
+
+      // update partitions
+      for (auto &&[v1, ord1] : vertices) {
+        const auto v2 = aut[v1];
+        if (v2 != v1 &&
+            !vertex_pair_exclude(v1, v2)) {  // if the automorphism maps this
+                                             // vertex to another ... they both
+                                             // must be in the same partition
+          SEQUANT_ASSERT(vertices.find(v2) != vertices.end());
+          auto v1_partition_it = vertex_to_partition_idx.find(v1);
+          auto v2_partition_it = vertex_to_partition_idx.find(v2);
+          const bool v1_has_partition =
+              v1_partition_it != vertex_to_partition_idx.end();
+          const bool v2_has_partition =
+              v2_partition_it != vertex_to_partition_idx.end();
+          if (v1_has_partition &&
+              v2_has_partition) {  // both are in partitions? make sure
+                                   // they are in the same partition.
+                                   // N.B. this may leave gaps in
+                                   // partition indices ... no biggie
+            const auto v1_part_idx = v1_partition_it->second;
+            const auto v2_part_idx = v2_partition_it->second;
+            if (v1_part_idx !=
+                v2_part_idx) {  // if they have different partition
+                                // indices, change the larger of the two
+                                // indices to match the lower
+              const auto target_part_idx = std::min(v1_part_idx, v2_part_idx);
+              for (auto &v : vertex_to_partition_idx) {
+                if (v.second == v1_part_idx || v.second == v2_part_idx)
+                  v.second = target_part_idx;
+              }
+            }
+          } else if (v1_has_partition) {  // only v1 is in a partition?
+                                          // place v2 in it
+            const auto v1_part_idx = v1_partition_it->second;
+            vertex_to_partition_idx.emplace(v2, v1_part_idx);
+          } else if (v2_has_partition) {  // only v2 is in a partition?
+                                          // place v1 in it
+            const auto v2_part_idx = v2_partition_it->second;
+            vertex_to_partition_idx.emplace(v1, v2_part_idx);
+          } else {  // neither is in a partition? place both in the next
+                    // available partition
+            const size_t target_part_idx = ++next_partition_idx;
+            vertex_to_partition_idx.emplace(v1, target_part_idx);
+            vertex_to_partition_idx.emplace(v2, target_part_idx);
+          }
+        }
+      }
+    }
+    if (!nontrivial_partitions_only) {
+      ranges::for_each(vertices, [&](const auto &vidx_ord) {
+        auto &&[vidx, ord] = vidx_ord;
+        if (vertex_to_partition_idx.find(vidx) ==
+            vertex_to_partition_idx.end()) {
+          vertex_to_partition_idx.emplace(vidx, ++next_partition_idx);
+        }
+      });
+    }
+    const auto npartitions = next_partition_idx + 1;
+    return std::make_tuple(vertex_to_partition_idx, npartitions);
+  };
+
+  // compute NormalOperator->partition map, convert to partition lists
+  // (if any), and register via set_nop_partitions to be used in full
+  // contractions
+  auto do_not_skip_elements = [](size_t, size_t) { return false; };
+  auto [nop_vidx2pidx, nop_npartitions] =
+      compute_partitions(nop_vidx_ord, /* nontrivial_partitions_only = */ true,
+                         do_not_skip_elements);
+
+  // converts vertex ordinal to partition key map into a sequence of
+  // partitions, each composed of the corresponding ordinals of the
+  // vertices in the vertex_list sequence
+  // @param vidx2pidx a map from vertex index (in TN) to its
+  //        (1-based) partition index
+  // @param npartitions the total number of partitions
+  // @param vidx_ord ordered sequence of vertex indices, object
+  // with vertex index `vidx` will be mapped to ordinal
+  // `vidx_ord[vidx]`
+  // @return sequence of partitions, sorted by the smallest ordinal
+  auto extract_partitions = [](const auto &vidx2pidx, const auto npartitions,
+                               const auto &vidx_ord) {
+    container::svector<container::svector<size_t>> partitions;
+
+    SEQUANT_ASSERT(npartitions > -1);
+    const size_t max_pidx = npartitions;
+    partitions.reserve(max_pidx);
+
+    // iterate over all partition indices ... note that there may be
+    // gaps so count the actual partitions
+    size_t partition_cnt = 0;
+    for (size_t p = 0; p <= max_pidx; ++p) {
+      bool p_found = false;
+      for (const auto &[vidx, pidx] : vidx2pidx) {
+        if (pidx == p) {
+          // !!remember to map the vertex index into the operator
+          // index!!
+          SEQUANT_ASSERT(vidx_ord.find(vidx) != vidx_ord.end());
+          const auto ordinal = vidx_ord.find(vidx)->second;
+          if (p_found == false) {  // first time this is found
+            partitions.emplace_back(
+                container::svector<size_t>{static_cast<size_t>(ordinal)});
+          } else
+            partitions[partition_cnt].emplace_back(ordinal);
+          p_found = true;
+        }
+      }
+      if (p_found) ++partition_cnt;
+    }
+
+    // sort each partition
+    for (auto &partition : partitions) {
+      ranges::sort(partition);
+    }
+
+    // sort partitions in the order of increasing first element
+    ranges::sort(partitions, [](const auto &p1, const auto &p2) {
+      return p1.front() < p2.front();
+    });
+
+    return partitions;
+  };
+
+  if (!nop_vidx2pidx.empty()) {
+    container::svector<container::svector<size_t>> nop_partitions;
+
+    nop_partitions =
+        extract_partitions(nop_vidx2pidx, nop_npartitions, nop_vidx_ord);
+
+    if (Logger::instance().wick_topology) {
+      std::wcout << "WickTheorem<S>::compute: topological nop partitions:{\n";
+      ranges::for_each(nop_partitions, [](auto &&part) {
+        std::wcout << "{";
+        ranges::for_each(part, [](auto &&p) { std::wcout << p << " "; });
+        std::wcout << "}";
+      });
+      std::wcout << "}" << std::endl;
+    }
+
+    result.nop_partitions = std::move(nop_partitions);
+  }
+
+  // compute Index->partition map, and convert to partition lists (if
+  // any), and check that use_topology_ is compatible with index
+  // partitions
+  // Index partitions are constructed to *only* include Index
+  // objects attached to the bra/ket of any NormalOperator! hence
+  // need to use filter in computing partitions
+  auto exclude_index_vertex_pair = [&tn_tensors, &idx_vertex_to_edge_ptr, &g,
+                                    &vcolors, &graph, n](size_t v1, size_t v2) {
+    const auto *edge1_ptr = idx_vertex_to_edge_ptr(v1);
+    const auto *edge2_ptr = idx_vertex_to_edge_ptr(v2);
+    if (!edge1_ptr || !edge2_ptr) return true;
+    const auto &edge1 = *edge1_ptr;
+    const auto &edge2 = *edge2_ptr;
+    auto connected_to_bra_or_ket_of_same_symmetric_nop =
+        [&tn_tensors](const auto &edge1, const auto &edge2) -> bool {
+      const auto nt1 = edge1.vertex_count();
+      SEQUANT_ASSERT(nt1 <= 2);
+      const auto nt2 = edge2.vertex_count();
+      SEQUANT_ASSERT(nt2 <= 2);
+      for (auto i1 = 0; i1 != nt1; ++i1) {
+        const auto tensor1_ord = edge1.vertex(i1).getTerminalIndex();
+        for (auto i2 = 0; i2 != nt2; ++i2) {
+          const auto tensor2_ord = edge2.vertex(i2).getTerminalIndex();
+
+          // do not skip if connected to same ...
+          if (tensor1_ord == tensor2_ord) {
+            auto tensor_ord = tensor1_ord;
+            const std::shared_ptr<AbstractTensor> &tensor_ptr =
+                tn_tensors.at(tensor_ord);
+
+            // ... (anti)symmetric ...
+            if (tensor_ptr->_symmetry() != Symmetry::Nonsymm) {
+              const auto tensor1_slot_type = edge1.vertex(i1).getOrigin();
+              const auto tensor2_slot_type = edge2.vertex(i2).getOrigin();
+
+              // ... bra/ket of ...
+              if (tensor1_slot_type == tensor2_slot_type) {
+                // ... NormalOperator!
+                if (std::dynamic_pointer_cast<NormalOperator<S>>(tensor_ptr)) {
+                  return true;
+                }
+              }
+            }
+          }
+        }
+      }
+      return false;
+    };
+    if (!connected_to_bra_or_ket_of_same_symmetric_nop(edge1, edge2))
+      return true;
+
+    // the pruning permutes the ops of a partition independently of anything
+    // else, so swapping the two ops alone must be a symmetry: each index must
+    // belong to that op only, and swapping the two index vertices together
+    // with the slots they occupy on each tensor, every other vertex fixed,
+    // must be an automorphism
+    auto nnop_slots = [&tn_tensors](const auto &edge) {
+      std::size_t count = 0;
+      for (auto i = 0; i != edge.vertex_count(); ++i)
+        if (std::dynamic_pointer_cast<NormalOperator<S>>(
+                tn_tensors.at(edge.vertex(i).getTerminalIndex())))
+          ++count;
+      return count;
+    };
+    if (nnop_slots(edge1) != 1 || nnop_slots(edge2) != 1) return true;
+    std::vector<unsigned int> swap(n);
+    std::iota(swap.begin(), swap.end(), 0u);
+    auto transpose = [&swap](unsigned int a, unsigned int b) {
+      swap[a] = b;
+      swap[b] = a;
+    };
+    transpose(v1, v2);
+    const auto &slots2 = graph->get_edges(v2);
+    for (const auto slot1 : graph->get_edges(v1)) {
+      const auto tensor = g.vertex_to_tensor_idx(slot1);
+      const auto slot2 = ranges::find_if(slots2, [&](const auto slot) {
+        return g.vertex_to_tensor_idx(slot) == tensor;
+      });
+      if (slot2 == ranges::end(slots2)) return true;
+      if (*slot2 != slot1) transpose(slot1, *slot2);
+    }
+    for (std::size_t v = 0; v != n; ++v)
+      if (vcolors[v] != vcolors[swap[v]]) return true;
+    return !graph->is_automorphism(swap);
+  };
+
+  // index_vidx2pidx maps vertex index (see
+  // index_vidx_ord) to partition index
+  container::map<size_t, size_t> index_vidx2pidx;
+  int index_npartitions = -1;
+  std::tie(index_vidx2pidx, index_npartitions) = compute_partitions(
+      index_vidx_ord, /* nontrivial_partitions_only = */ false,
+      /* this is to ensure that each index partition only involves
+         indices attached to bra or to ket of same
+         symmetric/antisymmetric nop.*/
+      exclude_index_vertex_pair);
+
+  if (!index_vidx2pidx.empty()) {
+    container::svector<container::svector<size_t>> index_partitions;
+
+    index_partitions =
+        extract_partitions(index_vidx2pidx, index_npartitions, index_vidx_ord);
+
+    if (Logger::instance().wick_topology) {
+      std::wcout << "WickTheorem<S>::compute: topological index "
+                    "partitions:{\n";
+      ranges::for_each(index_vidx2pidx,
+                       [&idx_vertex_to_edge_ptr](auto &&vidx_pidx) {
+                         auto &&[vidx, pidx] = vidx_pidx;
+                         auto *edge_ptr = idx_vertex_to_edge_ptr(vidx);
+                         // skip pure proto indices
+                         if (edge_ptr) {
+                           auto &idx = edge_ptr->idx();
+                           std::wcout << "Index " << idx.full_label()
+                                      << " -> partition " << pidx << "\n";
+                         }
+                       });
+      std::wcout << "}" << std::endl;
+    }
+
+    result.op_partitions = std::move(index_partitions);
+
+    // TODO determine partitions of braket index pairs to be able to
+    // exploit topology for spin-free WT note that right now indices
+    // attached to bra/ket of spin-free normal operators are excluded
+    // from index partitions above
+  }
+  return result;
 }
 
 template <Statistics S>
 ExprPtr WickTheorem<S>::compute(const bool count_only,
                                 const bool skip_input_canonicalization) {
+  // the canonicalization options are read from the context at several points
+  // of this call
+  const auto contexts_in_effect = pin_default_contexts();
+
+  if (get_default_context(S).vacuum() == Vacuum::MultiProduct) {
+    if (count_only)
+      throw Exception(
+          "WickTheorem<S>::compute: count_only is not supported under a "
+          "MultiProduct vacuum");
+    if (get_default_context(S).spbasis() == SPBasis::Spinfree)
+      throw Exception(
+          "WickTheorem<S>::compute: spin-free operators are not supported "
+          "under a MultiProduct vacuum");
+    if constexpr (S == Statistics::FermiDirac) {
+      return detail::extended_wick<S>(
+          expr_input_ ? expr_input_ : ExprPtr(input_),
+          {.full_contractions = full_contractions_,
+           .max_cumulant_rank = max_cumulant_rank_,
+           .eta_as_delta_minus_gamma = eta_as_delta_minus_gamma_,
+           .use_topology = use_topology_,
+           .nop_connections =
+               nop_pairs(nop_connections_, nop_connections_input_),
+           .nop_avoided_connections = nop_pairs(
+               nop_avoided_connections_, nop_avoided_connections_input_)},
+          *this);
+    } else {
+      throw Exception(
+          "WickTheorem<S>::compute: bosons are not supported under a "
+          "MultiProduct vacuum");
+    }
+  }
+  return compute_contractions(count_only, skip_input_canonicalization);
+}
+
+template <Statistics S>
+ExprPtr WickTheorem<S>::compute_contractions(
+    const bool count_only, const bool skip_input_canonicalization) {
   // canonicalization of the operators produced by WickTheorem would undo
   // what NormalOperator<S>::normalize did, so the returned object scopes a
   // context in which they are not canonicalized; it installs nothing if the
@@ -713,12 +1226,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
         }))
       return detail::ImplicitContextResetter<
           container::map<Statistics, Context>>{};
-    const auto null_canonicalizer = std::make_shared<NullTensorCanonicalizer>();
-    return set_scoped_modified_default_context(
-        [&nop_labels, &null_canonicalizer](Context &ctx) {
-          for (const auto &label : nop_labels)
-            ctx.set_tensor_canonicalizer(label, null_canonicalizer);
-        });
+    // the shared instance, so that the scopes of successive calls have the
+    // same canonicalization configuration, hence the same Context::version()
+    return set_scoped_modified_default_context([&nop_labels](Context &ctx) {
+      for (const auto &label : nop_labels)
+        ctx.set_tensor_canonicalizer(label,
+                                     NullTensorCanonicalizer::instance());
+    });
   };
 
   // have an Expr as input? Apply recursively ...
@@ -734,10 +1248,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
     // if sum, canonicalize and apply to each summand ...
     if (expr_input_->is<Sum>()) {
       if (!skip_input_canonicalization) {
-        // initial full canonicalization
+        // initial full canonicalization; it replaces a Sum of at most one
+        // summand by that summand, or by 0 if every summand canonicalized to
+        // zero
         canonicalize(expr_input_);
-        // every summand may have canonicalized to zero
-        if (expr_input_->as<Sum>().empty()) return ex<Constant>(0);
+        if (expr_input_->is<Constant>()) return expr_input_;
+        if (!expr_input_->is<Sum>())
+          expr_input_ = ex<Sum>(ExprPtrList{expr_input_});
       }
 
       // NOW disable canonicalization of normal operators
@@ -750,28 +1267,6 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       std::mutex result_mtx;  // serializes updates of result
       auto summands = expr_input_->as<Sum>().summands();
 
-      // find external_indices if don't have them
-      if (!external_indices_) {
-        const auto &copts = get_default_context().canonicalization_options();
-        if (copts && copts->named_indices) {
-          external_indices_ = copts->named_indices.value();
-        } else {
-          ranges::find_if(summands, [this](const auto &summand) {
-            if (summand.template is<Sum>())  // summands must not be a Sum
-              throw Exception(
-                  "WickTheorem<S>::compute(expr): expr is a Sum with one of "
-                  "the "
-                  "summands also a Sum, WickTheorem can only accept a fully "
-                  "expanded Sum");
-            else if (summand.template is<Product>()) {
-              extract_indices(*(summand.template as_shared_ptr<Product>()));
-              return true;
-            } else
-              return false;
-          });
-        }
-      }
-
       if (Logger::instance().wick_harness)
         std::wcout << "WickTheorem<S>::compute: input (after canonicalize) has "
                    << summands.size()
@@ -780,7 +1275,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       auto wick_task = [&result_acc, &result_mtx, this,
                         &count_only](const ExprPtr &input) {
         WickTheorem wt(input->clone(), *this);
-        auto task_result = wt.compute(
+        auto task_result = wt.compute_contractions(
             count_only, /* definitely skip input canonicalization */ true);
         stats() += wt.stats();
         if (task_result) {
@@ -798,19 +1293,22 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
     // ...
     else if (expr_input_->is<Product>()) {
       if (!skip_input_canonicalization) {  // canonicalize, unless told to skip
-        auto canon_byproduct = expr_input_->rapid_canonicalize();
-        SEQUANT_ASSERT(
-            canon_byproduct ==
-            nullptr);  // canonicalization of Product always returns nullptr
+        // canonicalization replaces a Product of one factor with a unit
+        // scalar by that factor
+        canonicalize(expr_input_);
+        if (!expr_input_->is<Product>())
+          expr_input_ = ex<Product>(1, ExprPtrList{expr_input_});
       }
       // NOW disable canonicalization of normal operators
       // N.B. even if skipped initial input canonicalization need to disable
       // subsequent nop canonicalization
       const auto nop_canonicalization_disabled = disable_nop_canonicalization();
 
-      if (!all_indices_) {
-        extract_indices(*(expr_input_.as_shared_ptr<Product>()));
-      }
+      // the input was expanded and may have been canonicalized, so counts
+      // taken by an earlier reduce() describe an input that is gone; counted
+      // from the product, since input_ holds the operator sequence that an
+      // earlier compute() split off from it
+      extract_indices(*expr_input_);
 
       // split off NormalOperators into input_
       auto first_nop_it = ranges::find_if(
@@ -835,418 +1333,16 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
         // compute and record/analyze topological NormalOperator and Index
         // partitions
         if (use_topology_) {
-          if (Logger::instance().wick_topology)
-            std::wcout
-                << "WickTheorem<S>::compute: input to topology computation = "
-                << io::latex::to_string(expr_input_) << std::endl;
-
-          // construct graph representation of the tensor product
-          using TN = TensorNetwork;
-          TN tn(expr_input_->as<Product>().factors());
-          auto g = tn.create_graph({.distinct_named_indices = true});
-          const auto &graph = g.bliss_graph;
-          const auto &vlabels = g.vertex_labels;
-          [[maybe_unused]] const auto &vcolors = g.vertex_colors;
-          const auto &vtypes = g.vertex_types;
-          const auto n = vtypes.size();
-          SEQUANT_ASSERT(vcolors.size() == n);
-          SEQUANT_ASSERT(vlabels.size() == n);
-          const auto &tn_edges = tn.edges();
-          const auto &tn_tensors = tn.tensors();
-          auto idx_vertex_to_edge_ptr =
-              [&](const auto idx_vertex) -> const TN::Edge * {
-            SEQUANT_ASSERT(idx_vertex < n);
-            const auto edge_idx = g.vertex_to_index_idx(idx_vertex);
-            if (edge_idx < tn_edges.size())
-              return &tn_edges[edge_idx];
-            else  // indices without matching edges are pure protoindices
-              return nullptr;
-          };
-
-          if (Logger::instance().wick_topology) {
-            std::basic_ostringstream<wchar_t> oss;
-            graph->write_dot(oss, {.labels = vlabels});
-            std::wcout
-                << "WickTheorem<S>::compute: colored graph produced from TN = "
-                << std::endl
-                << oss.str() << std::endl;
-          }
-
-          // identify vertex indices of NormalOperator objects and Indices
-          // 1. list of vertex indices corresponding to NormalOperator objects
-          //    on the TN graph and their ordinals in NormalOperatorSequence
-          //    N.B. for NormalOperators the vertex indices coincide with
-          //    the ordinals
-          container::map<size_t, size_t> nop_vidx_ord;
-          // 2. list of vertex indices corresponding to Index objects on the TN
-          //    graph that appear in NormalOperatorsSequence and
-          //    their ordinals therein
-          //    N.B. for Index objects the vertex indices do NOT coincide with
-          //         the ordinals
-          container::map<size_t, size_t> index_vidx_ord;
-          {
-            const auto &nop_labels = NormalOperator<S>::labels();
-            const auto nop_labels_begin = begin(nop_labels);
-            const auto nop_labels_end = end(nop_labels);
-
-            using opseq_view_type =
-                flattened_rangenest<NormalOperatorSequence<S>>;
-            auto opseq_view = opseq_view_type(input_.get());
-            const auto opseq_view_begin = ranges::begin(opseq_view);
-            const auto opseq_view_end = ranges::end(opseq_view);
-
-            // NormalOperators are not reordered by canonicalization, hence the
-            // ordinal can be computed by counting
-            std::size_t nop_ord = 0;
-            for (size_t v = 0; v != n; ++v) {
-              if (vtypes[v] == VertexType::TensorCore &&
-                  (std::find(nop_labels_begin, nop_labels_end, vlabels[v]) !=
-                   nop_labels_end)) {
-                [[maybe_unused]] auto insertion_result =
-                    nop_vidx_ord.emplace(v, nop_ord++);
-                SEQUANT_ASSERT(insertion_result.second);
-              }
-              if (vtypes[v] == VertexType::Index && !input_->empty()) {
-                auto *edge_ptr = idx_vertex_to_edge_ptr(v);
-                if (edge_ptr) {  // do not consider pure protoindices
-                  auto &idx = edge_ptr->idx();
-                  auto idx_it_in_opseq = ranges::find_if(
-                      opseq_view,
-                      [&idx](const auto &v) { return v.index() == idx; });
-                  if (idx_it_in_opseq != opseq_view_end) {
-                    const auto ord =
-                        ranges::distance(opseq_view_begin, idx_it_in_opseq);
-                    [[maybe_unused]] auto insertion_result =
-                        index_vidx_ord.emplace(v, ord);
-                    SEQUANT_ASSERT(insertion_result.second);
-                  }
-                }
-              }
-            }
-          }
-
-          // compute and save graph automorphism generators
-          std::vector<std::vector<unsigned int>> aut_generators;
-          {
-            bliss::Stats stats;
-            graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
-
-            auto save_aut = [&aut_generators](const unsigned int n,
-                                              const unsigned int *aut) {
-              aut_generators.emplace_back(aut, aut + n);
-            };
-
-            graph->find_automorphisms(
-                stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
-
-            if (Logger::instance().wick_topology) {
-              std::basic_ostringstream<wchar_t> oss2;
-              bliss::print_auts(aut_generators, oss2, vlabels);
-              std::wcout << "WickTheorem<S>::compute: colored graph "
-                            "automorphism generators = \n"
-                         << oss2.str() << std::endl;
-            }
-          }
-
-          // the input is zero if it has an automorphism of phase -1; pruning
-          // by its topology would not preserve that. Declared external
-          // indices are not permuted (Graph::automorphism_phase also fixes
-          // the network's own external indices), even if contracted.
-          {
-            TN::NamedIndexSet declared_external;
-            if (external_indices_)
-              declared_external.insert(external_indices_->begin(),
-                                       external_indices_->end());
-            if (ranges::any_of(aut_generators, [&](const auto &aut) {
-                  return g.automorphism_phase(aut.data(), &declared_external) ==
-                         -1;
-                }))
-              return ex<Constant>(0);
-          }
-
-          // Use automorphisms to determine groups of topologically equivalent
-          // NormalOperator and Op objects.
-          // @param vertices maps vertex indices of the objects to their
-          //        ordinals in the sequence of such objects within
-          //        the NormalOperatorSequence
-          // @param nontrivial_partitions_only if true, only partitions with
-          // more than one element, are reported, else even trivial
-          // partitions with a single partition will be reported
-          // @param vertex_pair_exclude a callable that accepts 2 vertex
-          // indices and returns true if the automorphism of this pair
-          // of indices is to be ignored; this is used to disregard
-          // automorphisms of Index objects unless connected to same bra/ket
-          // of an (anti)symmetric NormalOperator.
-          // @return the \c {vertex_to_partition_idx,npartitions} pair in
-          // which \c vertex_to_partition_idx maps vertex indices that are
-          // part of nontrivial partitions to their (1-based) partition indices
-          auto compute_partitions = [&aut_generators](
-                                        const container::map<size_t, size_t>
-                                            &vertices,
-                                        bool nontrivial_partitions_only,
-                                        auto &&vertex_pair_exclude) {
-            container::map<size_t, size_t> vertex_to_partition_idx;
-            int next_partition_idx = -1;
-
-            // using each automorphism generator
-            for (auto &&aut : aut_generators) {
-              // skip automorphism generators that do not involve vertices
-              // in `vertices` list
-              bool aut_contains_other_vertices = true;
-              for (auto &&[v, ord] : vertices) {
-                (void)ord;
-                const auto v_is_in_aut = v != aut[v];
-                if (v_is_in_aut) {
-                  aut_contains_other_vertices = false;
-                  break;
-                }
-              }
-              if (aut_contains_other_vertices) continue;
-
-              // update partitions
-              for (auto &&[v1, ord1] : vertices) {
-                const auto v2 = aut[v1];
-                if (v2 != v1 &&
-                    !vertex_pair_exclude(
-                        v1, v2)) {  // if the automorphism maps this vertex to
-                                    // another ... they both must be in the same
-                                    // partition
-                  SEQUANT_ASSERT(vertices.find(v2) != vertices.end());
-                  auto v1_partition_it = vertex_to_partition_idx.find(v1);
-                  auto v2_partition_it = vertex_to_partition_idx.find(v2);
-                  const bool v1_has_partition =
-                      v1_partition_it != vertex_to_partition_idx.end();
-                  const bool v2_has_partition =
-                      v2_partition_it != vertex_to_partition_idx.end();
-                  if (v1_has_partition &&
-                      v2_has_partition) {  // both are in partitions? make sure
-                                           // they are in the same partition.
-                                           // N.B. this may leave gaps in
-                                           // partition indices ... no biggie
-                    const auto v1_part_idx = v1_partition_it->second;
-                    const auto v2_part_idx = v2_partition_it->second;
-                    if (v1_part_idx !=
-                        v2_part_idx) {  // if they have different partition
-                                        // indices, change the larger of the two
-                                        // indices to match the lower
-                      const auto target_part_idx =
-                          std::min(v1_part_idx, v2_part_idx);
-                      for (auto &v : vertex_to_partition_idx) {
-                        if (v.second == v1_part_idx || v.second == v2_part_idx)
-                          v.second = target_part_idx;
-                      }
-                    }
-                  } else if (v1_has_partition) {  // only v1 is in a partition?
-                                                  // place v2 in it
-                    const auto v1_part_idx = v1_partition_it->second;
-                    vertex_to_partition_idx.emplace(v2, v1_part_idx);
-                  } else if (v2_has_partition) {  // only v2 is in a partition?
-                                                  // place v1 in it
-                    const auto v2_part_idx = v2_partition_it->second;
-                    vertex_to_partition_idx.emplace(v1, v2_part_idx);
-                  } else {  // neither is in a partition? place both in the next
-                            // available partition
-                    const size_t target_part_idx = ++next_partition_idx;
-                    vertex_to_partition_idx.emplace(v1, target_part_idx);
-                    vertex_to_partition_idx.emplace(v2, target_part_idx);
-                  }
-                }
-              }
-            }
-            if (!nontrivial_partitions_only) {
-              ranges::for_each(vertices, [&](const auto &vidx_ord) {
-                auto &&[vidx, ord] = vidx_ord;
-                if (vertex_to_partition_idx.find(vidx) ==
-                    vertex_to_partition_idx.end()) {
-                  vertex_to_partition_idx.emplace(vidx, ++next_partition_idx);
-                }
-              });
-            }
-            const auto npartitions = next_partition_idx + 1;
-            return std::make_tuple(vertex_to_partition_idx, npartitions);
-          };
-
-          // compute NormalOperator->partition map, convert to partition lists
-          // (if any), and register via set_nop_partitions to be used in full
-          // contractions
-          auto do_not_skip_elements = [](size_t, size_t) { return false; };
-          auto [nop_vidx2pidx, nop_npartitions] = compute_partitions(
-              nop_vidx_ord, /* nontrivial_partitions_only = */ true,
-              do_not_skip_elements);
-
-          // converts vertex ordinal to partition key map into a sequence of
-          // partitions, each composed of the corresponding ordinals of the
-          // vertices in the vertex_list sequence
-          // @param vidx2pidx a map from vertex index (in TN) to its
-          //        (1-based) partition index
-          // @param npartitions the total number of partitions
-          // @param vidx_ord ordered sequence of vertex indices, object
-          // with vertex index `vidx` will be mapped to ordinal
-          // `vidx_ord[vidx]`
-          // @return sequence of partitions, sorted by the smallest ordinal
-          auto extract_partitions = [](const auto &vidx2pidx,
-                                       const auto npartitions,
-                                       const auto &vidx_ord) {
-            container::svector<container::svector<size_t>> partitions;
-
-            SEQUANT_ASSERT(npartitions > -1);
-            const size_t max_pidx = npartitions;
-            partitions.reserve(max_pidx);
-
-            // iterate over all partition indices ... note that there may be
-            // gaps so count the actual partitions
-            size_t partition_cnt = 0;
-            for (size_t p = 0; p <= max_pidx; ++p) {
-              bool p_found = false;
-              for (const auto &[vidx, pidx] : vidx2pidx) {
-                if (pidx == p) {
-                  // !!remember to map the vertex index into the operator
-                  // index!!
-                  SEQUANT_ASSERT(vidx_ord.find(vidx) != vidx_ord.end());
-                  const auto ordinal = vidx_ord.find(vidx)->second;
-                  if (p_found == false) {  // first time this is found
-                    partitions.emplace_back(container::svector<size_t>{
-                        static_cast<size_t>(ordinal)});
-                  } else
-                    partitions[partition_cnt].emplace_back(ordinal);
-                  p_found = true;
-                }
-              }
-              if (p_found) ++partition_cnt;
-            }
-
-            // sort each partition
-            for (auto &partition : partitions) {
-              ranges::sort(partition);
-            }
-
-            // sort partitions in the order of increasing first element
-            ranges::sort(partitions, [](const auto &p1, const auto &p2) {
-              return p1.front() < p2.front();
-            });
-
-            return partitions;
-          };
-
-          if (!nop_vidx2pidx.empty()) {
-            container::svector<container::svector<size_t>> nop_partitions;
-
-            nop_partitions = extract_partitions(nop_vidx2pidx, nop_npartitions,
-                                                nop_vidx_ord);
-
-            if (Logger::instance().wick_topology) {
-              std::wcout
-                  << "WickTheorem<S>::compute: topological nop partitions:{\n";
-              ranges::for_each(nop_partitions, [](auto &&part) {
-                std::wcout << "{";
-                ranges::for_each(part,
-                                 [](auto &&p) { std::wcout << p << " "; });
-                std::wcout << "}";
-              });
-              std::wcout << "}" << std::endl;
-            }
-
-            this->set_nop_partitions(nop_partitions);
-          }
-
-          // compute Index->partition map, and convert to partition lists (if
-          // any), and check that use_topology_ is compatible with index
-          // partitions
-          // Index partitions are constructed to *only* include Index
-          // objects attached to the bra/ket of any NormalOperator! hence
-          // need to use filter in computing partitions
-          auto exclude_index_vertex_pair = [&tn_tensors,
-                                            &idx_vertex_to_edge_ptr](
-                                               size_t v1, size_t v2) {
-            const auto *edge1_ptr = idx_vertex_to_edge_ptr(v1);
-            const auto *edge2_ptr = idx_vertex_to_edge_ptr(v2);
-            if (!edge1_ptr || !edge2_ptr) return true;
-            const auto &edge1 = *edge1_ptr;
-            const auto &edge2 = *edge2_ptr;
-            auto connected_to_bra_or_ket_of_same_symmetric_nop =
-                [&tn_tensors](const auto &edge1, const auto &edge2) -> bool {
-              const auto nt1 = edge1.vertex_count();
-              SEQUANT_ASSERT(nt1 <= 2);
-              const auto nt2 = edge2.vertex_count();
-              SEQUANT_ASSERT(nt2 <= 2);
-              for (auto i1 = 0; i1 != nt1; ++i1) {
-                const auto tensor1_ord = edge1.vertex(i1).getTerminalIndex();
-                for (auto i2 = 0; i2 != nt2; ++i2) {
-                  const auto tensor2_ord = edge2.vertex(i2).getTerminalIndex();
-
-                  // do not skip if connected to same ...
-                  if (tensor1_ord == tensor2_ord) {
-                    auto tensor_ord = tensor1_ord;
-                    const std::shared_ptr<AbstractTensor> &tensor_ptr =
-                        tn_tensors.at(tensor_ord);
-
-                    // ... (anti)symmetric ...
-                    if (tensor_ptr->_symmetry() != Symmetry::Nonsymm) {
-                      const auto tensor1_slot_type =
-                          edge1.vertex(i1).getOrigin();
-                      const auto tensor2_slot_type =
-                          edge2.vertex(i2).getOrigin();
-
-                      // ... bra/ket of ...
-                      if (tensor1_slot_type == tensor2_slot_type) {
-                        // ... NormalOperator!
-                        if (std::dynamic_pointer_cast<NormalOperator<S>>(
-                                tensor_ptr)) {
-                          return true;
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-              return false;
-            };
-            const bool exclude =
-                !connected_to_bra_or_ket_of_same_symmetric_nop(edge1, edge2);
-            return exclude;
-          };
-
-          // index_vidx2pidx maps vertex index (see
-          // index_vidx_ord) to partition index
-          container::map<size_t, size_t> index_vidx2pidx;
-          int index_npartitions = -1;
-          std::tie(index_vidx2pidx, index_npartitions) = compute_partitions(
-              index_vidx_ord, /* nontrivial_partitions_only = */ false,
-              /* this is to ensure that each index partition only involves
-                 indices attached to bra or to ket of same
-                 symmetric/antisymmetric nop.*/
-              exclude_index_vertex_pair);
-
-          if (!index_vidx2pidx.empty()) {
-            container::svector<container::svector<size_t>> index_partitions;
-
-            index_partitions = extract_partitions(
-                index_vidx2pidx, index_npartitions, index_vidx_ord);
-
-            if (Logger::instance().wick_topology) {
-              std::wcout << "WickTheorem<S>::compute: topological index "
-                            "partitions:{\n";
-              ranges::for_each(
-                  index_vidx2pidx, [&idx_vertex_to_edge_ptr](auto &&vidx_pidx) {
-                    auto &&[vidx, pidx] = vidx_pidx;
-                    auto *edge_ptr = idx_vertex_to_edge_ptr(vidx);
-                    // skip pure proto indices
-                    if (edge_ptr) {
-                      auto &idx = edge_ptr->idx();
-                      std::wcout << "Index " << idx.full_label()
-                                 << " -> partition " << pidx << "\n";
-                    }
-                  });
-              std::wcout << "}" << std::endl;
-            }
-
-            this->set_op_partitions(index_partitions);
-
-            // TODO determine partitions of braket index pairs to be able to
-            // exploit topology for spin-free WT note that right now indices
-            // attached to bra/ket of spin-free normal operators are excluded
-            // from index partitions above
-          }
+          const auto external = external_indices();
+          const auto partitions =
+              analyze_topology(expr_input_->as<Product>(), &external);
+          // pruning by its topology would not preserve that the input is
+          // zero by symmetry
+          if (partitions.zero) return ex<Constant>(0);
+          if (!partitions.nop_partitions.empty())
+            this->set_nop_partitions(partitions.nop_partitions);
+          if (!partitions.op_partitions.empty())
+            this->set_op_partitions(partitions.op_partitions);
         }
 
         if (!input_->empty()) {
@@ -1300,24 +1396,30 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
 
 template <Statistics S>
 void WickTheorem<S>::reduce(ExprPtr &expr) const {
+  // see compute()
+  const auto contexts_in_effect = pin_default_contexts();
+
+  extract_indices();
+  const auto external = external_indices();
+  reduce(expr, external, noncovariant_indices(external),
+         get_default_context_snapshot(S));
+}
+
+template <Statistics S>
+void WickTheorem<S>::reduce(ExprPtr &expr,
+                            const container::set<Index> &external,
+                            const container::set<Index> &noncovariant,
+                            const Context &ctx) const {
   if (Logger::instance().wick_reduce) {
     std::wcout << "WickTheorem<S>::reduce: input = "
                << to_latex_align(expr, 20, 1) << std::endl;
   }
 
-  const bool extracted_indices = !all_indices_;
-  if (extracted_indices) {
-    extract_indices(*expr);
-  }
-
-  const auto ctx = get_default_context_snapshot(S);
   // there are 2 possibilities: expr is a single Product, or it's a Sum of
   // Products
   if (expr.is<Product>()) {
     auto expr_cast = std::static_pointer_cast<Product>(expr);
-    SEQUANT_ASSERT(external_indices_);
-    if (detail::reduce_wick_impl<S>(expr_cast, *external_indices_,
-                                    *external_indices_, ctx)) {
+    if (detail::reduce_wick_impl<S>(expr_cast, external, noncovariant, ctx)) {
       expr = expr_cast;
     } else {
       expr = std::make_shared<Constant>(0);
@@ -1326,9 +1428,8 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     for (auto &&subexpr : *expr) {
       SEQUANT_ASSERT(subexpr->is<Product>());
       auto subexpr_cast = std::static_pointer_cast<Product>(subexpr);
-      SEQUANT_ASSERT(external_indices_);
-      if (detail::reduce_wick_impl<S>(subexpr_cast, *external_indices_,
-                                      *noncovariant_indices_, ctx))
+      if (detail::reduce_wick_impl<S>(subexpr_cast, external, noncovariant,
+                                      ctx))
         subexpr = subexpr_cast;
       else
         subexpr = std::make_shared<Constant>(0);
@@ -1339,7 +1440,6 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     sequant::wprintf(
         "WickTheorem<S>::reduce: result = ", to_latex_align(expr, 20, 1), "\n");
   }
-  if (extracted_indices) reset_indices();
 }
 template <Statistics S>
 WickTheorem<S>::~WickTheorem() {}
