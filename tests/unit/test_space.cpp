@@ -105,6 +105,7 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(isr->resolve(IndexBasis{a, 2147483647}).space().approximate_size() ==
           120);
     CHECK(isr->resolve(IndexBasis{a, 7}) == IndexBasis{a, 7});
+    CHECK(isr->resolve(IndexBasis{a}) == IndexBasis{a});
     CHECK(isr->bases().find(std::wstring_view(L"μ̃"))->second == pao);
 
     // the space views do not see the name: the space a appears once, not also
