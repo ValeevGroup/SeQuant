@@ -154,7 +154,7 @@ class Context {
   /// `this->index_space_registry()` will return nullptr
   /// Example:
   /// ```cpp
-  ///   Context ctx({.vacuum = Vacuum::SingleReference, .spbasis = SPBasis::Spinfree});
+  ///   Context ctx({.vacuum = Vacuum::SingleProduct, .spbasis = SPBasis::Spinfree});
   /// ```
   Context(Options options = make_default_options());
 
@@ -391,8 +391,8 @@ class Context {
     container::vector<std::wstring> cardinal_labels;
     std::optional<CanonicalizeOptions> options;
 
-    /// canonicalizers and comparers compare by identity, labels by value,
-    /// options by CanonicalizeOptions::operator== (i.e. by method only)
+    /// canonicalizers and comparers compare by identity, labels and options
+    /// by value
     bool operator==(const CanonicalizationConfig&) const = default;
   };
 
@@ -451,8 +451,7 @@ class Context {
 /// (re-install a comparer through its shared pointer, e.g.
 /// Context::index_comparer_ptr(), to keep contexts equal)
 /// \note the versions of the contexts are ignored, and equal contexts may
-/// have different ones: Context::version() compares canonicalization options
-/// by all their members, not only by method, and index space registries as
+/// have different ones: Context::version() compares index space registries as
 /// objects, not by value
 bool operator==(const Context& ctx1, const Context& ctx2);
 
@@ -578,6 +577,19 @@ set_scoped_default_context(Context::Options ctx_options);
     container::map<Statistics, Context>>
 set_scoped_modified_default_context(
     const std::function<void(Context&)>& modify);
+
+/// @brief pins the default contexts in effect for the calling thread
+/// @return a move-only ContextResetter object that scopes a copy of the
+/// default contexts in effect, if the calling thread has none scoped yet, so
+/// that every read of the contexts during its lifetime sees the same ones even
+/// if another thread replaces the process-wide contexts meanwhile; a scoped
+/// context cannot change under the caller, so then nothing is installed and
+/// the object is empty
+/// @note the copies have the versions of the contexts in effect, so canonical
+/// marks made under one are valid under the other
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+pin_default_contexts();
 
 ///@}
 

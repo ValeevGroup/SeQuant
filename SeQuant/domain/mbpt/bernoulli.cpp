@@ -203,10 +203,9 @@ ExprPtr wick_reduce(const ExprPtr& expr_in) {
   auto expr = expr_in->clone();
   simplify(expr);
   FWickTheorem wick{expr};
-  // use_topology is on by default but only correct when every operator is
-  // contracted; here we want partial contractions, and it would silently
-  // rescale terms.
-  wick.use_topology(false).full_contractions(false);
+  // use_topology (on by default) is exact for partial contractions too: it only
+  // permutes ops whose stand-alone swap is a symmetry of the input
+  wick.full_contractions(false);
   auto result = wick.compute(/*count_only=*/false,
                              /*skip_input_canonicalization=*/true);
   simplify(result);

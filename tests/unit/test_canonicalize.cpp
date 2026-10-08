@@ -146,24 +146,19 @@ TEST_CASE("canonicalization", "[algorithms]") {
       // columns of its column-symmetric tensors; they canonicalize alike
       // whether or not named index labels are ignored
       for (auto ignore_named_index_labels : {true, false}) {
+        auto scope = scoped_canonicalize_options(
+            {.method = CanonicalizationMethod::Topological,
+             .ignore_named_index_labels =
+                 static_cast<CanonicalizeOptions::IgnoreNamedIndexLabel>(
+                     ignore_named_index_labels)});
         auto input1 =
             deserialize(L"1/2 t{a3,a1,a2;i4,i5,i2}:N-C-S g{i4,i5;i3,i1}:N-C-S");
         //      auto input1 = deserialize(L"1/2
         //      t{a1,a2,a3;i5,i2,i4}:N-C-S g{i4,i5;i3,i1}:N-C-S");
         auto input2 =
             deserialize(L"1/2 t{a1,a3,a2;i5,i4,i2}:N-C-S g{i5,i4;i1,i3}:N-C-S");
-        canonicalize(
-            input1,
-            {.method = CanonicalizationMethod::Topological,
-             .ignore_named_index_labels =
-                 static_cast<CanonicalizeOptions::IgnoreNamedIndexLabel>(
-                     ignore_named_index_labels)});
-        canonicalize(
-            input2,
-            {.method = CanonicalizationMethod::Topological,
-             .ignore_named_index_labels =
-                 static_cast<CanonicalizeOptions::IgnoreNamedIndexLabel>(
-                     ignore_named_index_labels)});
+        canonicalize(input1);
+        canonicalize(input2);
         REQUIRE(input1 == input2);
       }
     }
@@ -775,7 +770,10 @@ TEST_CASE("context_tensor_canonicalizers", "[algorithms]") {
     auto canonical_labels = [] {
       auto product = ex<Tensor>(L"Z", bra{L"i_1"}, ket{L"a_1"}) *
                      ex<Tensor>(L"Y", bra{L"a_1"}, ket{L"i_1"});
-      canonicalize(product, {.method = CanonicalizationMethod::Complete});
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              CanonicalizationMethod::Complete));
+      canonicalize(product);
       REQUIRE(product->is<Product>());
       std::vector<std::wstring> labels;
       for (const auto& factor : product->as<Product>().factors())
@@ -966,6 +964,7 @@ TEST_CASE("canonicalize_named_index_automorphisms", "[algorithms]") {
       .method = CanonicalizationMethod::Topological,
       .ignore_named_index_labels =
           CanonicalizeOptions::IgnoreNamedIndexLabel::Yes};
+  auto scope = scoped_canonicalize_options(opts);
   // pairs of spellings of one expression
   for (const auto& [x, y] :
        std::initializer_list<std::pair<std::wstring_view, std::wstring_view>>{
@@ -982,20 +981,98 @@ TEST_CASE("canonicalize_named_index_automorphisms", "[algorithms]") {
            {L"X{i_3,i_5;a_1,a_2}:N-N-S", L"X{i_5,i_3;a_2,a_1}:N-N-S"},
            {L"X{i_3,i_5,i_6;a_1,a_2,a_4}:A-N-S",
             L"X{i_6,i_3,i_5;a_4,a_1,a_2}:A-N-S"}}) {
-    auto canonicalized = [&opts](std::wstring_view input) {
+    auto canonicalized = [](std::wstring_view input) {
       ExprPtr e = deserialize(input);
       // a lone tensor is canonicalized as a network only within a Product
       if (!e->is<Product>()) e = ex<Product>(ExprPtrList{e});
-      canonicalize(e, opts);
+      canonicalize(e);
       return e;
     };
     const auto cx = canonicalized(x);
     CAPTURE(x, y, serialize(cx));
     REQUIRE(cx == canonicalized(y));
     auto again = cx->clone();
-    canonicalize(again, opts);
+    canonicalize(again);
     REQUIRE(again == cx);
   }
+}
+
+TEST_CASE("canonicalize_options_equality", "[algorithms]") {
+  using namespace sequant;
+  const CanonicalizeOptions opts{.method = CanonicalizationMethod::Complete};
+  REQUIRE(opts == CanonicalizeOptions{opts});
+  // every member takes part, not only the method
+  REQUIRE(!(opts == opts.copy_and_set(CanonicalizationMethod::Rapid)));
+  REQUIRE(!(opts == opts.copy_and_set(container::set<Index>{Index{L"i_1"}})));
+  REQUIRE(!(opts ==
+            opts.copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No)));
+  REQUIRE(opts.copy_and_set(container::set<Index>{Index{L"i_1"}}) ==
+          opts.copy_and_set(container::set<Index>{Index{L"i_1"}}));
+}
+
+// the hooks of a lone tensor with a repeated index (a tensor network) default
+// to the context's options; with no index named every index is a dummy, so
+// the once-occurring a_5 is relabeled, which the deduced named indices (a_5
+// among them) would not do
+TEST_CASE("canonicalize_hook_defaults", "[algorithms]") {
+  using namespace sequant;
+  auto make_tensor = [] {
+    return ex<Tensor>(L"t", bra{L"i_3"}, ket{L"i_3", L"a_5"});
+  };
+  const auto all_dummy = CanonicalizeOptions::default_options().copy_and_set(
+      container::set<Index>{});
+
+  SECTION("Tensor::canonicalize") {
+    auto expected = make_tensor();
+    expected->as<Tensor>().canonicalize(all_dummy);
+    auto deduced = make_tensor();
+    deduced->as<Tensor>().canonicalize(CanonicalizeOptions::default_options());
+    REQUIRE(*expected != *deduced);
+
+    auto scope = scoped_canonicalize_options(all_dummy);
+    auto t = make_tensor();
+    t->as<Tensor>().canonicalize();
+    REQUIRE(*t == *expected);
+  }
+
+  SECTION("Expr::rapid_canonicalize forwards its options") {
+    auto expected = make_tensor();
+    expected->canonicalize(
+        all_dummy.copy_and_set(CanonicalizationMethod::Rapid));
+    auto deduced = make_tensor();
+    deduced->canonicalize(CanonicalizeOptions::default_options().copy_and_set(
+        CanonicalizationMethod::Rapid));
+    REQUIRE(*expected != *deduced);
+
+    auto t = make_tensor();
+    t->rapid_canonicalize(all_dummy);
+    REQUIRE(*t == *expected);
+  }
+}
+
+// a named index that the network does not contain (e.g. one named for a
+// whole sum, or by the context for a whole computation) does not affect
+// the canonicalization of the network; the lexicographic pass relabels the
+// anonymous indices in the order of the tensors they connect
+TEST_CASE("canonicalize_named_index_absent", "[algorithms]") {
+  using namespace sequant;
+  const auto input = L"t{p_1;m_2} u{m_2;p_3} v{p_4;m_1} w{m_1;p_5}";
+  const auto named = container::set<Index>{Index{L"p_1"}, Index{L"p_3"},
+                                           Index{L"p_4"}, Index{L"p_5"}};
+  auto canonicalized = [&](container::set<Index> named_indices) {
+    auto scope = scoped_canonicalize_options(
+        {.method = CanonicalizationMethod::Lexicographic,
+         .named_indices = std::move(named_indices)});
+    auto e = deserialize(input);
+    canonicalize(e);
+    return e;
+  };
+  const auto expected =
+      deserialize(L"t{p_1;m_1} u{m_1;p_3} v{p_4;m_2} w{m_2;p_5}");
+  REQUIRE(canonicalized(named) == expected);
+  auto with_absent = named;
+  with_absent.emplace(L"p_2");
+  REQUIRE(canonicalized(with_absent) == expected);
 }
 
 TEST_CASE("current_contexts_version", "[algorithms]") {
@@ -1091,8 +1168,12 @@ TEST_CASE("canonicalize_canonical", "[algorithms]") {
 
   SECTION("rapid canonicalization does not mark") {
     auto e = make_sum();
-    canonicalize(e, opts.copy_and_set(CanonicalizationMethod::Rapid));
-    REQUIRE(!e->is_canonical());
+    {
+      auto scope = scoped_canonicalize_options(
+          opts.copy_and_set(CanonicalizationMethod::Rapid));
+      canonicalize(e);
+      REQUIRE(!e->is_canonical());
+    }
     e->rapid_canonicalize();
     REQUIRE(!e->is_canonical());
     // and invalidates the mark
@@ -1242,10 +1323,13 @@ TEST_CASE("canonicalize_canonical", "[algorithms]") {
     const auto other_opts =
         opts.copy_and_set(container::set<Index>{Index{L"i_1"}});
     REQUIRE(!e->is_canonical(other_opts));
-    REQUIRE(count_product_canonicalizations(
-                [&] { canonicalize(e, other_opts); }) > 0);
-    REQUIRE(e->is_canonical(other_opts));
-    REQUIRE(!e->is_canonical(opts));
+    {
+      auto scope = scoped_canonicalize_options(other_opts);
+      REQUIRE(!e->is_canonical());
+      REQUIRE(count_product_canonicalizations([&] { canonicalize(e); }) > 0);
+      REQUIRE(e->is_canonical());
+    }
+    REQUIRE(!e->is_canonical());
   }
 
   SECTION("a clone of a canonical expression is canonical") {

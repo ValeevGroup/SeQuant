@@ -486,6 +486,36 @@ TEST_CASE("export", "[export]") {
     }
   }
 
+  SECTION("reordering_context with densities") {
+    // a density is reordered into the aux-only layout like any other tensor
+    ReorderingContext ctx(MemoryLayout::ColumnMajor);
+    for (const auto &[density, like] :
+         {std::pair{L"γ{u1,a1;u2,i1}", L"t{u1,a1;u2,i1}:A-H-S"},
+          std::pair{L"Γ{u1,a1;u2,i1}", L"t{u1,a1;u2,i1}:N-H-S"}}) {
+      CAPTURE(toUtf8(density));
+      Tensor tensor = deserialize(density)->as<Tensor>();
+      Tensor reference = deserialize(like)->as<Tensor>();
+      bool rewritten = false;
+      REQUIRE_NOTHROW(rewritten = ctx.rewrite(tensor));
+      REQUIRE(rewritten == ctx.rewrite(reference));
+      REQUIRE(rewritten);
+      REQUIRE(tensor.bra_rank() == 0);
+      REQUIRE(tensor.ket_rank() == 0);
+      REQUIRE(tensor.aux() == reference.aux());
+    }
+
+    // ... also when exporting
+    JuliaTensorOperationsGenerator<> generator;
+    JuliaTensorOperationsGeneratorContext julia_ctx;
+    for (const auto *space : {"i", "a", "u"})
+      julia_ctx.set_tag(
+          get_default_context().index_space_registry()->retrieve(space), space);
+    REQUIRE_NOTHROW(export_expression(
+        to_export_tree(deserialize<ResultExpr>(
+            L"R{u1,a1;u2,i1} = γ{u1,a1;u2,i1} + Γ{u1,a1;u2,i1}")),
+        generator, julia_ctx));
+  }
+
   SECTION("generation_optimizer") {
     TextGenerator<TextGeneratorContext> textgen;
     GenerationOptimizer<TextGenerator<TextGeneratorContext>> generator(textgen);

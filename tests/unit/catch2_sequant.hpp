@@ -5,6 +5,7 @@
 #include <catch2/matchers/catch_matchers_templated.hpp>
 
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -159,6 +160,14 @@ std::size_t count_product_canonicalizations(
   }
   return count;
 }
+/// @return a guard that scopes, for every Statistics, a copy of the default
+/// context in effect for it whose canonicalization options are @p opts
+[[nodiscard]] inline auto scoped_canonicalize_options(
+    CanonicalizeOptions opts) {
+  return set_scoped_modified_default_context(
+      [&opts](Context &ctx) { ctx.set(opts); });
+}
+
 }  // namespace sequant::tests
 
 namespace Catch {
@@ -433,9 +442,10 @@ struct EquivalentToMatcher : ExpressionMatcher<EquivalentToMatcher> {
   using ExpressionMatcher::ExpressionMatcher;
 
   static void pre_comparison(sequant::ExprPtr &expr) {
-    sequant::simplify(
-        expr, sequant::SimplifyOptions::default_options().copy_and_set(
-                  sequant::CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    auto scope = sequant::tests::scoped_canonicalize_options(
+        sequant::CanonicalizeOptions::default_options().copy_and_set(
+            sequant::CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    sequant::simplify(expr);
   }
 
   static std::string comparison_requirement() { return "Equivalent to"; }

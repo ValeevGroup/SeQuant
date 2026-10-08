@@ -77,22 +77,18 @@ struct CanonicalizeOptions {
   CanonicalizeOptions copy_and_set(std::optional<container::set<Index>>) const;
   CanonicalizeOptions copy_and_set(IgnoreNamedIndexLabel) const;
 
-  friend constexpr bool operator==(const CanonicalizeOptions& a,
-                                   const CanonicalizeOptions& b) {
-    return a.method == b.method;
-  }
-};
-
-/// @brief options that control behavior of `simplify()`
-/// @note this is a superset of CanonicalizeOptions
-struct SimplifyOptions : public CanonicalizeOptions {
-  static SimplifyOptions default_options();
-  SimplifyOptions(CanonicalizeOptions opts);
-
-  friend constexpr bool operator==(const SimplifyOptions& a,
-                                   const SimplifyOptions& b) {
-    return static_cast<const CanonicalizeOptions&>(a) ==
-           static_cast<const CanonicalizeOptions&>(b);
+  /// @return true if @p a and @p b agree in every member
+  friend bool operator==(const CanonicalizeOptions& a,
+                         const CanonicalizeOptions& b) {
+    // the bindings name every member (guard is the SEQUANT_DESIGNATED_INIT_ONLY
+    // tag), so that a member added to CanonicalizeOptions fails to compile here
+    // until it is compared
+    const auto& [guard_a, method_a, named_indices_a, ignore_labels_a] = a;
+    const auto& [guard_b, method_b, named_indices_b, ignore_labels_b] = b;
+    (void)guard_a;
+    (void)guard_b;
+    return method_a == method_b && named_indices_a == named_indices_b &&
+           ignore_labels_a == ignore_labels_b;
   }
 };
 

@@ -12,10 +12,12 @@ The core ``Context``
 
 :class:`sequant::Context` bundles the settings that give meaning to an expression: the :class:`sequant::IndexSpaceRegistry` (the
 vocabulary of index spaces in use, e.g. occupied/virtual), the ``Vacuum`` relative to which operators are normal-ordered
-(``Vacuum::Physical`` — the true, particle-free vacuum — or ``Vacuum::SingleProduct`` — a single-determinant quasiparticle vacuum), the
-``IndexSpaceMetric`` (whether the single-particle basis is orthonormal), and the ``SPBasis`` (spin-orbital vs. spin-free). It also
-owns the :ref:`canonicalizer configuration <context-canonicalizer-configuration>`. It is accessed and replaced through
-:func:`sequant::get_default_context`, :func:`sequant::set_default_context`, and :func:`sequant::reset_default_context`.
+(``Vacuum::Physical`` — the true, particle-free vacuum —, ``Vacuum::SingleProduct`` — a single-determinant quasiparticle vacuum —, or
+``Vacuum::MultiProduct`` — a general reference state, for which :class:`sequant::WickTheorem` applies the *extended* form of Wick's
+theorem, with density cumulants), the ``IndexSpaceMetric`` (whether the single-particle basis is orthonormal), and the ``SPBasis``
+(spin-orbital vs. spin-free). It also owns the :ref:`canonicalizer configuration <context-canonicalizer-configuration>`. It is
+accessed and replaced through :func:`sequant::get_default_context`, :func:`sequant::set_default_context`, and
+:func:`sequant::reset_default_context`.
 
 A ``Context`` owns its registry, which its copies share and which cannot change while any context uses it: a registry given by value
 is moved or copied in, and one given by ``std::shared_ptr`` is adopted if that is its only owner (e.g. a temporary, such as the result
@@ -82,6 +84,24 @@ throws if the calling thread has a scoped context active, whose settings it woul
 for antisymmetrizers, symmetrizers and transpositions) are kept only if the list includes them, as the one returned by
 :func:`sequant::mbpt::cardinal_tensor_labels` does.
 
+.. _context-canonicalization-options:
+
+Canonicalization options
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``Context`` also carries the :class:`sequant::CanonicalizeOptions` that :func:`sequant::canonicalize`,
+:func:`sequant::simplify` and everything built on them use (``Context::Options::canonicalization_options``,
+``Context::set(CanonicalizeOptions)``, :func:`sequant::Context::canonicalization_options`): the canonicalization method, which
+indices are *named* (external), and whether the labels of the named indices affect the result. Like the rest of the configuration
+they are read from the ``Statistics::Arbitrary`` context only, by canonicalization and by the theorem machinery alike, whatever the
+statistics of the expression. By default the named indices of an
+expression are deduced as those that occur once in it; naming them explicitly makes an index that occurs more than once external,
+which is what the theorem machinery relies on as well: the named indices of the context are the external indices of a
+:class:`sequant::WickTheorem`, the ones it does not sum over (an operator sequence given to it directly follows the same rule: an
+index that appears in it twice is summed over unless the context names it). When the context names indices it names *every*
+external index of the expressions canonicalized under it, since any other index is then a dummy. There are no per-call options;
+to canonicalize under other options, scope a context that carries them (see :ref:`below <context-scoped>`).
+
 The MBPT ``Context``
 ----------------------
 
@@ -110,6 +130,8 @@ expands such CSV-dependent tensors into an explicit basis (standard unoccupieds,
    :start-after: start-snippet-4
    :end-before: end-snippet-4
    :dedent: 2
+
+.. _context-scoped:
 
 Scoped context changes
 ------------------------
@@ -145,6 +167,12 @@ reference. Code that keeps the context beyond a brief read, as the canonicalizer
 copy made by :func:`sequant::get_default_context_snapshot` instead. The copy reflects every change of the process-wide default
 completed before the call and is cheap: it shares the index space registry and the canonicalizer configuration with its source, and
 takes the lock that guards the process-wide default only if that changed since the previous snapshot on the same thread.
+
+Code that reads the contexts at several points of one operation, as :func:`sequant::canonicalize`, :func:`sequant::simplify` and
+``WickTheorem::compute()`` do, pins them instead with :func:`sequant::pin_default_contexts`: on a thread without scoped contexts the
+returned resetter scopes a copy of the contexts in effect, with their versions, so that a concurrent
+:func:`sequant::set_default_context` is seen only once the pin ends; under scoped contexts, which cannot change under the caller, it
+installs nothing.
 
 Detecting changes
 ----------------------

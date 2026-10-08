@@ -6,6 +6,7 @@
 #define SEQUANT_WICK_HPP
 
 #include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -13,8 +14,10 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/core/wick_extended.hpp>
 
 #include <range/v3/algorithm/adjacent_find.hpp>
 #include <range/v3/algorithm/any_of.hpp>
@@ -45,6 +48,14 @@ namespace sequant {
 
 /// Applies Wick's theorem to a sequence of normal-ordered operators.
 ///
+/// Under a Vacuum::MultiProduct default context the operators, which need
+/// not conserve particle number, are normal-ordered relative to a
+/// multideterminantal reference that commutes with the number operator (a
+/// state of definite particle number or an ensemble of such states) and
+/// compute() applies the extended (generalized-normal-order) theorem, whose
+/// result is expressed in terms of the reference's densities γ, η and
+/// cumulants κ.
+///
 /// @tparam S particle statistics
 template <Statistics S>
 class WickTheorem {
@@ -68,7 +79,11 @@ class WickTheorem {
 
  public:
   /// @param input normal operator sequence
-  /// @note assuming that all indices are external (not summed)
+  /// @note the external (nonsummed) indices are the named indices of the
+  /// CanonicalizeOptions of the context (for arbitrary statistics, as read by
+  /// canonicalization) in effect at each use, if it has them (name every index
+  /// that must survive, any other is a dummy), else the indices that appear
+  /// once in the input; see external_indices()
   explicit WickTheorem(
       const std::shared_ptr<NormalOperatorSequence<S>> &input) {
     init_input(input);
@@ -77,21 +92,19 @@ class WickTheorem {
       SEQUANT_ASSERT(input_->empty() || input_->vacuum() == Vacuum::Physical);
     }
 
-    // default computation may treat repeating indices as dummy
-    // override
-    extract_indices(*input, /* force_external = */ true);
+    extract_indices(*input);
   }
 
   /// @param input normal operator sequence
-  /// @note assuming that all indices are external (not summed)
+  /// @note see WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&)
+  /// for which indices are external
   explicit WickTheorem(NormalOperatorSequence<S> input)
       : WickTheorem(
             std::make_shared<NormalOperatorSequence<S>>(std::move(input))) {}
 
   /// @param expr_input input expression
-  /// @note if \p expr_input is a normal operator sequence, assume that all
-  /// indices are external (not summed), else duplicate indices are assumed
-  /// dummy
+  /// @note see WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&)
+  /// for which indices are external
   explicit WickTheorem(ExprPtr expr_input) {
     if (expr_input->is<NormalOperatorSequence<S>>()) {
       *this = WickTheorem(
@@ -101,7 +114,8 @@ class WickTheorem {
   }
 
   /// @param ops operator sequence
-  /// @note assuming that all indices are external (not summed)
+  /// @note see WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&)
+  /// for which indices are external
   explicit WickTheorem(const std::initializer_list<Op<S>> &ops)
       : WickTheorem(NormalOperatorSequence<S>{ops}) {}
 
@@ -112,6 +126,9 @@ class WickTheorem {
     input_ = {};  // reset input_ so that it is deduced from expr_input_
     // copy ctor does not do anything useful, so this is OK
     expr_input_ = expr_input;
+    // counted from expr_input_, not from other's input: its external indices
+    // are the same, but which of its dummies are noncovariant is not
+    input_index_counts_.reset();
     reset_stats();
   }
 
@@ -122,6 +139,29 @@ class WickTheorem {
   /// @return reference to @c *this , for daisy-chaining
   WickTheorem &full_contractions(bool fc) {
     full_contractions_ = fc;
+    return *this;
+  }
+
+  /// Controls the largest cumulant formed by the next call to compute();
+  /// only matters under a Vacuum::MultiProduct vacuum. By default cumulants of
+  /// every rank are formed.
+  /// @param rank the largest rank of a cumulant; std::nullopt means no bound,
+  /// 0 or 1 means that no cumulant is formed
+  /// @note without a bound, the number of cumulant blocks tried grows
+  /// combinatorially with the number of uncontracted active operators
+  /// @return reference to @c *this , for daisy-chaining
+  WickTheorem &max_cumulant_rank(std::optional<std::size_t> rank) {
+    max_cumulant_rank_ = rank;
+    return *this;
+  }
+
+  /// Controls whether the next call to compute() spells every one-body hole
+  /// density η as δ - γ; only matters under a Vacuum::MultiProduct vacuum. By
+  /// default η is kept. A multi-body η of the input is kept either way.
+  /// @param edmg if true, will rewrite every one-body η as δ - γ
+  /// @return reference to @c *this , for daisy-chaining
+  WickTheorem &eta_as_delta_minus_gamma(bool edmg) {
+    eta_as_delta_minus_gamma_ = edmg;
     return *this;
   }
 
@@ -157,51 +197,13 @@ class WickTheorem {
   /// This is useful to to eliminate the topologically-equivalent contractions
   /// when fully-contracted result (i.e. the vacuum average) is sought.
   /// By default the use of topology is enabled.
+  /// @note two Op objects are treated as equivalent only if swapping them
+  /// alone is a symmetry of the input
+  /// @note under a Vacuum::MultiProduct vacuum the equivalences are those of
+  /// each input term, in which an index shared by two operators is a dummy
   /// @param ut if true, will utilize the topology to minimize work.
   WickTheorem &use_topology(bool ut) {
     use_topology_ = ut;
-    return *this;
-  }
-
-  /// Specifies the external indices; by default assume all indices are summed
-  /// over
-  /// @param external_indices external (nonsummed) indices
-  /// @throw Exception if WickTheorem::set_external_indices or
-  /// WickTheorem::compute had already been invoked
-  template <typename IndexContainer>
-  WickTheorem &set_external_indices(IndexContainer &&external_indices) {
-    external_indices_.reset();
-
-    if constexpr (std::is_convertible_v<
-                      IndexContainer,
-                      typename decltype(external_indices_)::value_type>)
-      external_indices_ = std::forward<IndexContainer>(external_indices);
-    else {
-      external_indices_ = typename decltype(external_indices_)::value_type{};
-      ranges::for_each(
-          std::forward<IndexContainer>(external_indices), [this](auto &&v) {
-            auto [it, inserted] = this->external_indices_->emplace(v);
-            if (!inserted) {
-              std::wstringstream ss;
-              ss << L"WickTheorem::set_external_indices: "
-                    L"external index " +
-                        io::latex::to_string(Index(v)) + L" repeated";
-              throw Exception(toUtf8(ss.str()));
-            }
-          });
-    }
-
-    user_defined_external_indices_ = true;
-    return *this;
-  }
-
-  /// Resets the memoized (external, covariant) indices; will auto-deduce next
-  /// time reduce is called
-  const WickTheorem &reset_indices() const {
-    all_indices_.reset();
-    external_indices_.reset();
-    noncovariant_indices_.reset();
-    user_defined_external_indices_ = false;
     return *this;
   }
 
@@ -211,6 +213,12 @@ class WickTheorem {
   /// will not constrain connectivity
   /// @param op_index_pairs the list of pairs of op indices to be connected in
   /// the result
+  /// @note under a Vacuum::MultiProduct vacuum a cumulant connects every
+  /// operator its indices come from
+  /// @note the ordinals count the NormalOperator objects of each term of an
+  /// (expanded) expression input, so compute() throws on a term whose
+  /// operators are fewer than an ordinal names; a term without operators is
+  /// kept as it is, as under every vacuum
   /// @throw Exception if @p op_index_pairs contains duplicates
   ///@{
 
@@ -241,6 +249,8 @@ class WickTheorem {
   /// avoided pair is rejected.
   /// @param op_index_pairs the list of pairs of op indices that must not be
   /// directly contracted
+  /// @note under a Vacuum::MultiProduct vacuum a cumulant connects every
+  /// operator its indices come from
   /// @throw Exception if @p op_index_pairs contains duplicates
   ///@{
 
@@ -273,6 +283,8 @@ class WickTheorem {
   /// @param nop_partitions list of normal operator partitions
   /// @note if this partitions are not given, every operator is assumed to be in
   /// its own partition
+  /// @note not consulted under a Vacuum::MultiProduct vacuum: there the
+  /// partitions are those of each input term's topology (see use_topology())
   /// @internal this performs only the first phase of initialization of
   /// nop_topological_partition_
   ///           since the number of operators is not guaranteed to be known
@@ -325,6 +337,8 @@ class WickTheorem {
   /// @param op_partitions list of index partitions
   /// @note if this partitions are not given, every Index is assumed to be in
   /// its own partition
+  /// @note not consulted under a Vacuum::MultiProduct vacuum: there the
+  /// partitions are those of each input term's topology (see use_topology())
   ///
   ///@{
 
@@ -398,6 +412,8 @@ class WickTheorem {
   }
 
   /// makes a default set of partitions with each Op is in its own partition
+  /// @note not consulted under a Vacuum::MultiProduct vacuum, like
+  /// set_op_partitions()
   auto &make_default_op_partitions() const {
     return set_op_partitions(ranges::views::iota(0ul, input_->opsize()) |
                              ranges::views::transform([](const std::size_t v) {
@@ -416,8 +432,13 @@ class WickTheorem {
   /// Product, or a Sum
   /// @note the canonicalization method is controlled by the default Context
   /// @warning this is not reentrant, but is optionally threaded internally
+  /// @note under a Vacuum::MultiProduct vacuum the input is always
+  /// canonicalized
   /// @throw Exception if input's vacuum does not match the current
   /// context vacuum
+  /// @throw Exception under a Vacuum::MultiProduct vacuum if @p count_only is
+  /// true, @p S is Statistics::BoseEinstein or the context's SPBasis is
+  /// Spinfree
   ExprPtr compute(bool count_only = false,
                   bool skip_input_canonicalization = false);
 
@@ -475,17 +496,48 @@ class WickTheorem {
   mutable ExprPtr prefactor_;
   bool full_contractions_ = true;
   bool use_topology_ = true;
+  std::optional<std::size_t> max_cumulant_rank_;
+  bool eta_as_delta_minus_gamma_ = false;
   mutable Stats stats_;
 
-  mutable std::optional<container::set<Index>> all_indices_;
-  mutable bool user_defined_external_indices_ = false;
-  mutable std::optional<container::set<Index>> external_indices_;
-  // covariant indices (= dummy indices that appear twice in braket slots) can
-  // be "rotated" arbitrarily in reduce ... these are the ones that can't
-  // n.b. this list is computed using input expression and
-  // used to compute list in reduce because kronecker deltas propagate
-  // noncovariance
-  mutable std::optional<container::set<Index>> noncovariant_indices_;
+  // the standard theorem's contractions under any vacuum
+  ExprPtr compute_contractions(bool count_only,
+                               bool skip_input_canonicalization);
+
+  /// partitions of topologically equivalent objects, in the form
+  /// set_nop_partitions() and set_op_partitions() take
+  struct TopologicalPartitions {
+    /// true if the product is zero by symmetry, i.e. has an automorphism of
+    /// phase -1; the partitions are then not computed
+    bool zero = false;
+    /// partitions of NormalOperator ordinals; empty if none is nontrivial
+    container::svector<container::svector<size_t>> nop_partitions;
+    /// partitions of Op ordinals in the flattened operator sequence; empty
+    /// if there are none
+    container::svector<container::svector<size_t>> op_partitions;
+  };
+
+  /// @return the partitions of the topologically equivalent NormalOperator
+  /// and Op objects of @p product, deduced from the automorphisms of its
+  /// tensor network; an Op partition only holds Op objects of the bra or the
+  /// ket of one (anti)symmetric NormalOperator
+  /// @param declared_external_indices if non-null, the external indices of
+  /// the product, which no automorphism may permute even if contracted; if
+  /// null they are deduced as the indices that appear once
+  static TopologicalPartitions analyze_topology(
+      const Product &product,
+      const container::set<Index> *declared_external_indices = nullptr);
+
+  // the extended theorem runs the standard one on its operators
+  friend ExprPtr detail::extended_wick<S>(ExprPtr,
+                                          const detail::ExtendedWickOptions &,
+                                          WickTheorem &);
+
+  // the index counts of the input, see extract_indices(); the input, not a
+  // result, since the kronecker deltas of a result double every external
+  // index. external_indices() and noncovariant_indices() derive from them
+  mutable std::optional<container::map<Index, IndexSlotCounters>>
+      input_index_counts_;
   container::svector<std::pair<Index, Index>>
       input_partner_indices_;  //!< list of {cre,ann} pairs of Index objects in
                                //!< input_ whose corresponding Op<S> objects
@@ -570,6 +622,33 @@ class WickTheorem {
     }
   }
 
+  /// @return the pairs given to set_nop_connections (@p mask =
+  /// nop_connections_, @p cache = nop_connections_input_) or to
+  /// set_nop_avoided_connections, whether or not they were recorded in
+  /// @p mask yet; set_nop_pair_mask records a pair {i,j} by clearing bit j of
+  /// mask[i] and bit i of mask[j]
+  static container::svector<std::pair<std::size_t, std::size_t>> nop_pairs(
+      const container::svector<std::bitset<max_input_size>> &mask,
+      const container::svector<std::pair<size_t, size_t>> &cache) {
+    if (!cache.empty()) return cache;
+    container::svector<std::pair<std::size_t, std::size_t>> pairs;
+    for (std::size_t i = 0; i != mask.size(); ++i)
+      for (std::size_t j = i + 1; j != mask.size(); ++j)
+        if (!mask[i].test(j)) pairs.emplace_back(i, j);
+    return pairs;
+  }
+
+  /// @return whether the engine applies the required-connectivity filter
+  /// given by set_nop_connections; under a MultiProduct vacuum connectivity is
+  /// a property of the cumulant-expanded result (cumulant blocks connect
+  /// operators that no pair does), so the filter is applied by
+  /// cumulant_expand instead. Avoided pairs (set_nop_avoided_connections) are
+  /// rejected by the engine under every vacuum: a pair contraction between
+  /// them is fatal no matter what a cumulant adds later.
+  bool pairwise_connectivity() const {
+    return input_->vacuum() != Vacuum::MultiProduct;
+  }
+
   enum class TopologicalPartitionType { NormalOperator, Index };
 
   /// the number of partitions of the topologically equivalent NormalOperator's
@@ -593,18 +672,41 @@ class WickTheorem {
   friend class NontensorWickState;  // NontensorWickState needs to access
                                     // members of this
 
-  /// @brief extracts and memoizes all, external (if not already set) and
-  /// covariant indices
-
-  /// External indices appear only once in an expression
+  /// @brief counts the index occurrences of an input and memoizes them
   /// @param expr an expression
-  /// @param force_external if true, will treat all indices (even repeating) as
-  /// external
   /// @pre @p expr has been expanded (i.e. cannot contain a Sum as a
   /// subexpression)
-  /// @note protoindices of external indices are external
-  /// @throw Exception if any of @p expr subexpressions is a Sum
-  void extract_indices(const Expr &expr, bool force_external = false) const;
+  void extract_indices(const Expr &expr) const;
+
+  /// @brief counts the index occurrences of the input, if not done yet: of
+  /// the operator sequence, or of the expression (the first Product summand
+  /// of a Sum; every summand of an expanded Sum has the same external
+  /// indices)
+  /// @throw Exception if the expression input is not expanded, or is a Sum
+  /// without a Product summand
+  void extract_indices() const;
+
+  /// @return the external indices: the named indices of the context's
+  /// CanonicalizeOptions if it has them, else the indices of the input that
+  /// appear once in a nonproto slot or are pure protoindices
+  /// @pre the context names indices or extract_indices() has been called
+  container::set<Index> external_indices() const;
+
+  /// @return the noncovariant indices of the input with respect to
+  /// @p external_indices: those that have protoindices, are protoindices, or
+  /// do not appear exactly twice in nonproto slots, and are not external. A
+  /// covariant index (a dummy that appears exactly twice) can be relabeled
+  /// freely by reduce(), a noncovariant one cannot
+  /// @pre extract_indices() has been called
+  container::set<Index> noncovariant_indices(
+      const container::set<Index> &external_indices) const;
+
+  /// reduce() with the external indices, the noncovariant indices and the
+  /// context given, for the contraction engine, which derives them once per
+  /// compute() rather than once per term
+  void reduce(ExprPtr &expr, const container::set<Index> &external_indices,
+              const container::set<Index> &noncovariant_indices,
+              const Context &ctx) const;
 
   /// upsizes `{nop,index}_topological_partition_`, filling new entries with
   /// zeroes noop if current size > new_size
@@ -693,9 +795,7 @@ class WickTheorem {
           "WickTheorem::compute: spinfree=true supported only for physical "
           "vacuum and for Fermi vacuum");
 
-    if (!all_indices_) {
-      extract_indices(*input_);
-    }
+    extract_indices();
 
     // process cached nop_connections_input_, if needed
     if (!nop_connections_input_.empty())
@@ -782,6 +882,8 @@ class WickTheorem {
           nopseq(nopseq),
           nopseq_size(nopseq.opsize()),
           ctx(get_default_context_snapshot(S)),
+          external_indices(wt.external_indices()),
+          noncovariant_indices(wt.noncovariant_indices(external_indices)),
           level(0),
           left_op_offset(0),
           count_only(false),
@@ -801,8 +903,11 @@ class WickTheorem {
     NormalOperatorSequence<S> nopseq;  //!< current state of operator sequence
     std::size_t nopseq_size;           //!< current size of nopseq
     Context ctx;                       //!< current context
-    Product sp;                        //!< current prefactor
-    std::size_t sp_initial_size = 0;   //!< size of prefactor at the start
+    container::set<Index> external_indices;  //!< external indices of the input
+    container::set<Index>
+        noncovariant_indices;         //!< noncovariant indices of the input
+    Product sp;                       //!< current prefactor
+    std::size_t sp_initial_size = 0;  //!< size of prefactor at the start
     container::svector<std::pair<Op<S>, Op<S>>>
         contractions;  //!< current list of indices of contracted {qpann,qpcre}
                        //!< ops
@@ -1171,7 +1276,8 @@ class WickTheorem {
 
     // if computing everything, and the user does not insist on some
     // target contractions, include the contraction-free term
-    if (!full_contractions_ && nop_nconnections_total_ == 0) {
+    if (!full_contractions_ &&
+        (nop_nconnections_total_ == 0 || !pairwise_connectivity())) {
       if (count_only) {
         ++state.count;
       } else {
@@ -1216,6 +1322,11 @@ class WickTheorem {
 
     const auto &ctx = state.ctx;
     const auto &isr = ctx.index_space_registry();
+
+    static const container::svector<std::bitset<max_input_size>> unconstrained;
+    const auto &target_connections =
+        pairwise_connectivity() ? nop_connections_ : unconstrained;
+    const auto &avoided_connections = nop_avoided_connections_;
 
     // if full contractions needed, make contractions involving first index with
     // another index, else contract any index i with index j (i<j)
@@ -1440,7 +1551,7 @@ class WickTheorem {
                            ctx.index_space_registry())) {
             auto &&[is_unique, nop_top_degen] = is_topologically_unique();
             if (is_unique) {
-              if (state.connect(nop_connections_, nop_avoided_connections_,
+              if (state.connect(target_connections, avoided_connections,
                                 ranges::get_cursor(op_left_iter),
                                 ranges::get_cursor(op_right_iter))) {
                 if (Logger::instance().wick_contract) {
@@ -1515,7 +1626,8 @@ class WickTheorem {
                         auto prefactor = state.sp.clone();
                         prefactor.template as<Product>().scale(
                             std::move(scalar_prefactor));
-                        this->reduce(prefactor);
+                        this->reduce(prefactor, state.external_indices,
+                                     state.noncovariant_indices, state.ctx);
                         auto bp = prefactor->canonicalize();
                         prefactor *= bp;
 
@@ -1553,7 +1665,8 @@ class WickTheorem {
                             std::move(scalar_prefactor));
                         if (!op->empty()) summand *= std::move(op);
                         if (state.sp_initial_size > 0) {
-                          this->reduce(summand);
+                          this->reduce(summand, state.external_indices,
+                                       state.noncovariant_indices, state.ctx);
                           auto bp = summand->canonicalize();
                           summand *= bp;
                         }
@@ -1595,7 +1708,7 @@ class WickTheorem {
                 ++state.nopseq_size;
                 ranges::get_cursor(op_right_iter).insert(std::move(right));
                 ++state.nopseq_size;
-                state.disconnect(nop_connections_,
+                state.disconnect(target_connections,
                                  ranges::get_cursor(op_left_iter),
                                  ranges::get_cursor(op_right_iter));
                 //            std::wcout << "  restored nopseq = " <<
@@ -1621,6 +1734,17 @@ class WickTheorem {
     if constexpr (statistics == Statistics::BoseEinstein)
       SEQUANT_ASSERT(vacuum == Vacuum::Physical);
     return sequant::can_contract(left, right, vacuum, isr);
+  }
+
+  /// the value of a single contraction between @p bra (the annihilator's
+  /// index) and @p ket (the creator's index), both already projected onto
+  /// the common quasiparticle space; this is where a spin-free variant
+  /// would substitute its own tensors
+  static ExprPtr contraction_value(const Index &bra, const Index &ket,
+                                   bool left_is_annihilator, Vacuum vacuum) {
+    if (vacuum != Vacuum::MultiProduct) return make_overlap(bra, ket);
+    return left_is_annihilator ? density::make_hole_rdm(bra, ket)
+                               : density::make_rdm(bra, ket);
   }
 
   static ExprPtr contract(const Op<S> &left, const Op<S> &right,
@@ -1651,6 +1775,20 @@ class WickTheorem {
       qpspace_common = isr->intersection(qpspace_left, qpspace_right);
     }
 
+    if constexpr (S == Statistics::FermiDirac) {
+      if (vacuum == Vacuum::MultiProduct &&
+          (left.index().has_proto_indices() ||
+           right.index().has_proto_indices())) {
+        const auto &sp =
+            left_is_pure && right_is_pure
+                ? isr->intersection(left.index().space(), right.index().space())
+                : qpspace_common;
+        const auto qns = sp.qns();
+        SEQUANT_ASSERT(!isr->intersection(sp, isr->active_space(qns)) &&
+                       "protoindexed indices must not reach the active space");
+      }
+    }
+
     std::optional<Index> left_qp_idx;
     if (!left_is_pure) {
       left_qp_idx =
@@ -1674,13 +1812,14 @@ class WickTheorem {
     const auto &ket_qp_idx_opt = left_is_ann ? right_qp_idx : left_qp_idx;
 
     if (bra_is_pure && ket_is_pure) {
-      return make_overlap(bra_idx, ket_idx);
+      return contraction_value(bra_idx, ket_idx, left_is_ann, vacuum);
     } else {
       auto result = std::make_shared<Product>();
       SEQUANT_ASSERT(bra_is_pure || bra_qp_idx_opt);
       SEQUANT_ASSERT(ket_is_pure || ket_qp_idx_opt);
-      result->append(1, make_overlap(bra_qp_idx_opt.value_or(bra_idx),
-                                     ket_qp_idx_opt.value_or(ket_idx)));
+      result->append(1, contraction_value(bra_qp_idx_opt.value_or(bra_idx),
+                                          ket_qp_idx_opt.value_or(ket_idx),
+                                          left_is_ann, vacuum));
       if (!bra_is_pure)
         result->append(1, make_kronecker(bra_idx, *bra_qp_idx_opt));
       if (!ket_is_pure)

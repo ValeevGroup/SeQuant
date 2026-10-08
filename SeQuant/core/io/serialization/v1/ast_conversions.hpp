@@ -7,21 +7,26 @@
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/v1/ast.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <boost/variant.hpp>
 
+#include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/find.hpp>
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <variant>
 
 namespace sequant::io::serialization::v1::transform {
@@ -263,6 +268,13 @@ ExprPtr ast_to_expr(const io::serialization::v1::ast::Sum &sum,
                     const PositionCache &position_cache, const Iterator &begin,
                     const DefaultSymmetries &default_symms);
 
+/// the vacuum of a tilde-labelled NormalOperator: NormalOperator::label()
+/// is the tilde label for every non-Physical vacuum
+inline Vacuum tilde_vacuum(Statistics s) {
+  const auto vac = get_default_context(s).vacuum();
+  return vac == Vacuum::Physical ? Vacuum::SingleProduct : vac;
+}
+
 template <typename PositionCache, typename Iterator>
 struct Transformer {
   std::reference_wrapper<const PositionCache> position_cache;
@@ -301,7 +313,7 @@ struct Transformer {
                        tensor.symmetry.value().column_symm == 'S')));
       Vacuum vac = fit == ranges::begin(FNOperator::labels())
                        ? Vacuum::Physical
-                       : Vacuum::SingleProduct;
+                       : tilde_vacuum(Statistics::FermiDirac);
       return ex<FNOperator>(cre(std::move(ketIndices)),
                             ann(std::move(braIndices)), vac);
     }
@@ -318,7 +330,7 @@ struct Transformer {
                        tensor.symmetry.value().column_symm == 'S')));
       Vacuum vac = bit == ranges::begin(BNOperator::labels())
                        ? Vacuum::Physical
-                       : Vacuum::SingleProduct;
+                       : tilde_vacuum(Statistics::BoseEinstein);
       return ex<BNOperator>(cre(std::move(ketIndices)),
                             ann(std::move(braIndices)), vac);
     }
@@ -382,6 +394,30 @@ struct Transformer {
          tensor.name == reserved::kronecker_label()) &&
         !braket_symm_specified)
       braket_symm = Hermiticity::Hermitian;
+
+    // a reference density's symmetries are fixed by its label and rank (see
+    // density::symmetries()); supply them where none was spelled out, and let
+    // the Tensor ctor reject a spelled-out one that contradicts them. An
+    // aux-only tensor is a layout representation, not a density.
+    if (ranges::contains(reserved::density_labels(), tensor.name) &&
+        !(braIndices.empty() && ketIndices.empty())) {
+      auto syms = density::symmetries(tensor.name, braIndices.size());
+      if (perm_symm_specified) syms.perm = perm_symm;
+      if (column_symm_specified) syms.column = column_symm;
+      if (braket_symm_specified)
+        std::visit(
+            [&syms](auto symm) {
+              if constexpr (std::is_same_v<decltype(symm), BraKetSymmetry>) {
+                syms.braket = symm;
+                syms.hermiticity = std::nullopt;
+              } else
+                syms.hermiticity = symm;
+            },
+            braket_symm);
+      return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
+                        ket(std::move(ketIndices)), aux(std::move(auxiliaries)),
+                        syms);
+    }
 
     // Dispatch to correct Tensor constructor (taking either BraKetSymmetry or
     // Hermiticity)

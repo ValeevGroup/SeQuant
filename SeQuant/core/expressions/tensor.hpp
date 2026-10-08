@@ -700,8 +700,20 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
   /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
+  /// @throw Exception if @p label is a reserved density label (see
+  ///        reserved::density_labels()) and this lacks its defining symmetries
   void set_label(std::wstring label) override {
-    label_ = std::move(label);
+    if (ranges::contains(reserved::density_labels(), label)) {
+      const auto previous = std::exchange(label_, std::move(label));
+      try {
+        check_density_symmetries();
+      } catch (...) {
+        label_ = previous;
+        throw;
+      }
+    } else {
+      label_ = std::move(label);
+    }
     reset_hash_value();
   }
   /// @return the bra slot range (empty slots are occupied by null indices)
@@ -892,7 +904,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// included, is a tensor network and is canonicalized as one, with the
   /// given options; any other is canonicalized by the default tensor
   /// canonicalizer
-  ExprPtr canonicalize(CanonicalizeOptions = {}) override;
+  ExprPtr canonicalize(CanonicalizeOptions opts =
+                           CanonicalizeOptions::default_options()) override;
 
   /// @brief adjoint of a Tensor swaps its bra and ket
   virtual void adjoint() override;
@@ -1016,7 +1029,19 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             "symmetric");
       column_symmetry_ = ColumnSymmetry::Symm;
     }
+
+    if (ranges::contains(reserved::density_labels(), label_)) {
+      // the permutational symmetry of a 1-body density is void; normalizing
+      // it keeps every spelling of the same γ equal
+      if (bra_.size() == 1 && ket_.size() == 1) symmetry_ = Symmetry::Nonsymm;
+      check_density_symmetries();
+    }
   }
+
+  /// @throw Exception unless this reference density (see
+  ///        reserved::density_labels()) has the defining symmetries that
+  ///        density::symmetries() gives for its label and rank
+  void check_density_symmetries() const;
 
   hash_type memoizing_hash() const override {
     auto compute_hash = [this]() {

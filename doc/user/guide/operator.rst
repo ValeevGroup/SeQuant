@@ -223,6 +223,11 @@ Operator-level connection pairs use labels and apply to every matching pair with
 second. Tensor-level pairs use zero-based normal-operator positions. Both conventions apply to ``connect`` and
 ``do_not_connect`` in :class:`EVOptions <sequant::mbpt::op::EVOptions>`.
 
+Both fermions genuine (``Vacuum::Physical``), single-determinant (``Vacuum::SingleProduct``), and multiconfigurational (``Vacuum::MultiProduct``)
+states can be used as the vacuum state; for bosons only the genuine vacuum is currently supported. When the vacuum is ``Vacuum::MultiProduct``,
+``ref_av`` (and ``vac_av``) apply the extended Wick theorem instead, as :class:`sequant::WickTheorem` does under that vacuum; the operators
+are then normal-ordered relative to the reference itself (generalized normal order), and the result is expressed in densities and density cumulants.
+
 .. literalinclude:: /examples/user/operator.cpp
    :language: cpp
    :start-after: start-snippet-4

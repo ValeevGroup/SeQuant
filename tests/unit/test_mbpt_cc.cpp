@@ -7,6 +7,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/timer.hpp>
+#include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/bernoulli.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -86,6 +87,28 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE(bernoulli::detail::wick_commutator(V, T2) != ex<Constant>(0));
     REQUIRE_THAT(bernoulli::detail::wick_commutator(V, T2),
                  !EquivalentTo(simplify(V * T2 - T2 * V)));
+  }
+
+  SECTION("bernoulli_wick_topology") {
+    using namespace sequant;
+    using namespace sequant::mbpt;
+    // wick_reduce prunes partial contractions by topology; with two
+    // equivalent T2 that pruning permutes ops, and must agree with the
+    // exhaustive enumeration
+    auto X = op::tensor::h(2) * op::tensor::t(2) * op::tensor::t(2);
+    simplify(X);
+    FWickTheorem exhaustive{X};
+    exhaustive.use_topology(false).full_contractions(false);
+    auto reference = exhaustive.compute(/*count_only=*/false,
+                                        /*skip_input_canonicalization=*/true);
+    simplify(reference);
+    FWickTheorem pruned{X};
+    pruned.full_contractions(false);
+    pruned.compute(/*count_only=*/true, /*skip_input_canonicalization=*/true);
+    REQUIRE(pruned.stats().num_attempted_contractions.load() <
+            exhaustive.stats().num_attempted_contractions.load());
+    REQUIRE(simplify(bernoulli::detail::wick_reduce(X) - reference) ==
+            ex<Constant>(0));
   }
 
   SECTION("bernoulli_expand_to_blocks") {
