@@ -335,6 +335,10 @@ TEST_CASE("index-basis-annotation-and-hash", "[EvalExpr][basis]") {
   CHECK(csv_labels(ranges::views::single(
             Index(uocc, 1).replace_basis_instance(3))) == "a_1#3");
   CHECK(csv_labels(ranges::views::single(xg)) == "a_1i_1#5i_2#5#1");
+  CHECK(instance_qualified_label(Index(uocc, 1)) == L"a_1");
+  CHECK(instance_qualified_label(Index(uocc, 1).replace_basis_instance(3)) ==
+        L"a_1#3");
+  CHECK(instance_qualified_label(xg) == L"a_1#1");
 
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   const auto g0 = ex<Tensor>(L"g", bra{a1}, ket{a2});

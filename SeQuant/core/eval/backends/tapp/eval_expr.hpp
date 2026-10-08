@@ -8,6 +8,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 
 #include <range/v3/view/transform.hpp>
 
@@ -32,7 +33,8 @@ class EvalExprTAPP final : public EvalExpr {
   static auto index_hash(Iterable&& bk) {
     return ranges::views::transform(
         std::forward<Iterable>(bk), [](auto const& idx) {
-          return static_cast<int64_t>(sequant::hash::value(Index{idx}.label()));
+          return static_cast<int64_t>(
+              sequant::hash::value(instance_qualified_label(idx)));
         });
   }
 

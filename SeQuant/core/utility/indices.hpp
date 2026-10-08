@@ -463,6 +463,16 @@ inline bool ordinal_compare(Index const& idx1, Index const& idx2) {
   return idx1.ordinal() < idx2.ordinal();
 }
 
+/// @return the label of @p idx, followed by "#N" if it is in a basis instance
+/// N that is not registered under a name (a named one is part of the label),
+/// so that indices in different bases have different results
+inline std::wstring instance_qualified_label(Index const& idx) {
+  std::wstring result(idx.label());
+  if (auto instance = idx.unnamed_basis_instance())
+    result += L"#" + std::to_wstring(*instance);
+  return result;
+}
+
 ///
 /// Given a range of Index returns a comma-separated string of
 /// their full labels.
@@ -477,15 +487,13 @@ std::string csv_labels(meta::range_of<Index> auto&& idxs) {
   using ranges::views::join;
   using ranges::views::transform;
 
-  auto instance_suffix = [](Index const& i) {
-    auto instance = i.unnamed_basis_instance();
-    return instance ? L"#" + std::to_wstring(*instance) : std::wstring{};
-  };
-  auto str = [&instance_suffix](Index const& i) {
+  auto str = [](Index const& i) {
     std::wstring result(i.label());
     for (Index const& p : i.proto_indices())
-      result += std::wstring(p.label()) + instance_suffix(p);
-    return toUtf8(result + instance_suffix(i));
+      result += instance_qualified_label(p);
+    if (auto instance = i.unnamed_basis_instance())
+      result += L"#" + std::to_wstring(*instance);
+    return toUtf8(result);
   };
 
   return std::forward<decltype(idxs)>(idxs)  //

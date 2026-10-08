@@ -991,3 +991,16 @@ TEST_CASE("result_size_in_bytes_btas", "[eval_btas]") {
   ResultPtr r = eval_result<ResultTensorBTAS<BTensorD>>(std::move(t));
   REQUIRE(r->size_in_bytes() == 6 * sizeof(double));
 }
+
+TEST_CASE("eval_btas_annotation_tells_basis_instances_apart",
+          "[eval_btas][basis]") {
+  using namespace sequant;
+  const Index a1(L"a_1");
+  const std::vector<Index> idxs{a1, a1.replace_basis_instance(1),
+                                a1.replace_basis_instance(2)};
+  const auto annot =
+      sequant::EvalExprBTAS::index_hash(idxs) | ranges::to<std::vector<long>>;
+  CHECK(annot[0] != annot[1]);
+  CHECK(annot[0] != annot[2]);
+  CHECK(annot[1] != annot[2]);
+}
