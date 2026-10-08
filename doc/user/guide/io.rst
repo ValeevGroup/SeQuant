@@ -143,7 +143,7 @@ scaled by the constant ``1/2``:
    R1{u1;i1} = f{u1;i1} - Ym1{u1;u2} f{u2;i1} - Ym1{u3;u2} * g{u1,u2;u3,i1} + 1/2 Ym2{u1,u4;u_2,u_3} g{u2,u3;u4,i1}:A-C-S
 
 The following parses the real part of a fully contracted product, scaled by ``2`` -- the shape :func:`simplify() <sequant::simplify>`
-leaves a folded conjugate pair in:
+leaves a folded conjugate pair in when the context's ``CanonicalizeOptions::fold_conjugate_pairs`` is on:
 
 ::
 
