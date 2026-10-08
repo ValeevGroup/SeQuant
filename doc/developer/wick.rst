@@ -182,8 +182,9 @@ and eliminating deltas wherever the internal/external status of the indices they
 its indices is *covariant*, a dummy that appears exactly twice and neither has nor is a protoindex, since such an index can be rotated
 into the basis of the other; between two noncovariant indices it stands. The exception is an overlap that is itself a Kronecker delta
 (unit metric, both indices with the same protoindices, i.e. in one basis): it identifies its indices, through the indices they are
-protoindices of as well, so it is applied unless both are unpaired dummies (not appearing exactly twice), where it is a trace.
-The result is then, like any other
+protoindices of as well, so it is applied unless both are unpaired dummies (not appearing exactly twice); unlike a Kronecker
+delta between them, which is applied, it then stands. These rules apply only if the input of Wick's theorem has noncovariant
+indices; otherwise every overlap is applied. The result is then, like any other
 :class:`sequant::Product`/:class:`sequant::Sum`, put into canonical form by :doc:`the tensor-network canonicalizer <tnc>` so that like
 terms collect correctly — Wick's-theorem correctness therefore also rests on canonicalization being correct.
 

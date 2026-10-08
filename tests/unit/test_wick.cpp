@@ -1316,7 +1316,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
   // Kronecker delta (unit metric, same protoindices) between indices that
   // are not both unpaired: the delta identifies the indices, through the
   // protoindices they are, so it is applied; between two unpaired dummies
-  // (see the previous section) it is a trace and stands
+  // (see the previous section) it stands, unlike a Kronecker delta
   SECTION("reduce applies a Kronecker-equivalent overlap") {
     const Index i1{L"i_1"}, a1{L"a_1", {i1}}, a2{L"a_2", {i1}};
     // a_1<i_1> and a_2<i_1> are paired and noncovariant (they carry i_1, which
