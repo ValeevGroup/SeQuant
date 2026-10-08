@@ -156,9 +156,10 @@ Each commutator can be written in two ways, and ``use_connected_form`` selects b
 
 - ``true`` writes it as a connected product, :math:`(\hat{A}\hat{B})_c`. This gives fewer terms, but only reproduces the commutator once the same operators are connected downstream when taking the expectation value, using ``OpConnections``.
 
-The connectivity discussion below assumes the reference is the Wick vacuum. When the reference differs from the Wick
-vacuum, both overloads of ``ref_av`` require empty ``connect`` and ``do_not_connect`` lists; use explicit commutators in that
-case. Non-empty lists are rejected even when assertions are disabled.
+The connectivity discussion below assumes the reference is the Wick vacuum. Otherwise use explicit commutators: the
+reference average of :math:`\hat{B}\hat{A}` need not vanish, so the connected product need not reproduce the commutator
+under any connectivity. Unless the vacuum is ``Vacuum::MultiProduct``, ``ref_av`` then also rejects connectivity lists
+(see `Vacuum averaging and final expression`_), even when assertions are disabled.
 
 Both forms give the same equations, given the right connectivity. They differ in *where* the disconnected terms are removed: the commutator removes them algebraically, the connected product relies on the connectivity you supply to ``vac_av``/``ref_av``.
 
@@ -213,15 +214,18 @@ Vacuum averaging and final expression
 The ``sequant::mbpt::op::vac_av`` function can be used to compute the vacuum average of an operator level expression.
 If reference state differs from the Wick vacuum ``sequant::mbpt::op::ref_av`` function should be used instead to
 compute the reference average.
-In this case partial contractions leave residual operators that become RDMs, and both overloads of ``ref_av`` require
-empty ``connect`` and ``do_not_connect`` lists. These lists constrain direct contractions only, while partial
-contractions can also connect operators through the RDMs (cumulants) of the residual operators, which the lists cannot
-express. ``vac_av`` always computes full contractions and honors these options, but it computes the Wick vacuum
-average, which may differ from the reference average.
+In this case partial contractions leave residual operators that become RDMs after Wick's theorem has run, and both
+overloads of ``ref_av`` require empty ``connect`` and ``do_not_connect`` lists: an RDM of rank above one contains both
+connected and disconnected contributions, so whether the operators feeding it are connected is not a property of a term.
+``vac_av`` always computes full contractions and honors these options, but it computes the Wick vacuum average, which
+may differ from the reference average. Under ``Vacuum::MultiProduct`` (see below) ``ref_av`` takes full contractions and
+honors the lists too.
 
-Operator-level connection pairs use labels and apply to every matching pair with the first operator to the left of the
-second. Tensor-level pairs use zero-based normal-operator positions. Both conventions apply to ``connect`` and
-``do_not_connect`` in :class:`EVOptions <sequant::mbpt::op::EVOptions>`.
+Two operators are connected in a term if a factor that Wick's theorem produces carries indices of both: a contraction
+or, under ``Vacuum::MultiProduct``, also a density or a cumulant. Operator-level connection pairs use labels and apply
+to every matching pair with the first operator to the left of the second. Tensor-level pairs use zero-based
+normal-operator positions. Both conventions apply to ``connect`` and ``do_not_connect`` in
+:class:`EVOptions <sequant::mbpt::op::EVOptions>`.
 
 Both fermions genuine (``Vacuum::Physical``), single-determinant (``Vacuum::SingleProduct``), and multiconfigurational (``Vacuum::MultiProduct``)
 states can be used as the vacuum state; for bosons only the genuine vacuum is currently supported. When the vacuum is ``Vacuum::MultiProduct``,

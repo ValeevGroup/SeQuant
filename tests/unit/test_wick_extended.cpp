@@ -351,6 +351,45 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(simplify(eta_result - eta_coeff * ops_av) == ex<Constant>(0));
   }
 
+  SECTION("WickTheorem: a split density keeps the bases of its indices") {
+    // η{a_1<i_1>;a_2<i_2>}: its virtual block binds a_1 to an index in its
+    // basis, so the result keeps the overlap between the two bases and every
+    // δ is between indices of one basis
+    const Index i1(L"i_1"), i2(L"i_2"), a1(L"a_1", {i1}), a2(L"a_2", {i2});
+    auto in = density::make_hole_rdm(a1, a2) *
+              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
+              ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}));
+    ExprPtr result;
+    REQUIRE_NOTHROW(result = wick_mp(in));
+    std::size_t noverlaps = 0;
+    result->visit(
+        [&](const ExprPtr& e) {
+          if (!e->is<Tensor>()) return;
+          const auto& t = e->as<Tensor>();
+          INFO(toUtf8(to_latex(e)));
+          if (t.label() == reserved::kronecker_label())
+            REQUIRE(t.bra()[0].proto_indices() == t.ket()[0].proto_indices());
+          if (t.label() == reserved::overlap_label()) {
+            ++noverlaps;
+            REQUIRE(container::set<Index>{t.bra()[0], t.ket()[0]} ==
+                    container::set<Index>{a1, a2});
+          }
+        },
+        /* atoms_only = */ true);
+    REQUIRE(noverlaps > 0);
+
+    // as for an operator, a protoindexed index of a density must not reach
+    // the active space
+    if (assert_behavior() == AssertBehavior::Throw) {
+      const Index p1(L"p_1", {i1}), p2(L"p_2", {i2});
+      REQUIRE_THROWS_WITH(wick_mp(density::make_rdm(p1, p2) *
+                                  ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
+                                  ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}))),
+                          Catch::Matchers::ContainsSubstring(
+                              "must not reach the active space"));
+    }
+  }
+
   SECTION("WickTheorem: dummy indices keep their provenance") {
     // a one-body h summed against its operator's indices, times an active
     // one-body operator: every op index of the first factor is a dummy
@@ -854,6 +893,20 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     auto result = wick_mp(in);
     REQUIRE_THAT(result, EquivalentTo(L"3 γ{u_4;u_1} * η{u_2;u_3} "
                                       L"+ 3 κ{u_2,u_4;u_1,u_3}"));
+  }
+
+  SECTION("WickTheorem: η between two CSV bases is their overlap") {
+    // the virtual block of η is the identity on the virtuals; between
+    // cluster-specific virtuals of different pairs it is their overlap, as
+    // under a single-product vacuum
+    const Index i1(L"i_1"), i2(L"i_2");
+    const Index a1(L"a_1", {i1}), a2(L"a_2", {i2}), a3(L"a_3", {i1});
+    auto in =
+        ex<FNOperator>(cre({}), ann({a1})) * ex<FNOperator>(cre({a2}), ann({}));
+    REQUIRE_THAT(wick_mp(in), EquivalentTo(L"s{a_1<i_1>;a_2<i_2>}"));
+    in =
+        ex<FNOperator>(cre({}), ann({a1})) * ex<FNOperator>(cre({a3}), ann({}));
+    REQUIRE_THAT(wick_mp(in), EquivalentTo(L"δ{a_1<i_1>;a_3<i_1>}"));
   }
 
   SECTION("WickTheorem: η = δ - γ") {

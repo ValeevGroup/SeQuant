@@ -148,7 +148,7 @@ class CC {
   ///   ansatz and reference. See the "Using H̄ outside the CC class" section
   ///   of the user guide.
   /// @note ref_av requires empty connect and do_not_connect when the reference
-  ///   differs from the Wick vacuum.
+  ///   differs from the Wick vacuum and the vacuum is not MultiProduct.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 
@@ -319,7 +319,8 @@ class CC {
   /// to `mbpt::op::ref_av()`
   /// @param[in] expr input expression
   /// @param[in] connect list of operator label pairs to connect; must be empty
-  /// when the reference differs from the Wick vacuum
+  /// when the reference differs from the Wick vacuum and the vacuum is not
+  /// MultiProduct
   /// @note Uses use_topology() and screen() from the CC instance to set other
   /// EVOptions
   auto ref_av(const ExprPtr& expr,

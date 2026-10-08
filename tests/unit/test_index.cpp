@@ -97,6 +97,10 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(i5.proto_indices()[0] == i2);
       REQUIRE(i5.proto_indices()[1] == i1);
       REQUIRE(i5.full_label() == L"i_5<i_2, i_1>");
+      // a temporary index made from it keeps them nonsymmetric
+      const auto i5_tmp = IndexFactory{}.make(i5);
+      REQUIRE(!i5_tmp.symmetric_proto_indices());
+      REQUIRE(i5_tmp.proto_indices() == i5.proto_indices());
 
       // one of the proto indices is a proto index
       REQUIRE_NOTHROW(Index(L"i_6", {i1, i5}, false));

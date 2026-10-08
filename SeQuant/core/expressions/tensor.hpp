@@ -1240,6 +1240,16 @@ inline ExprPtr make_kronecker(const Index &bra_index, const Index &ket_index) {
                               .column = ColumnSymmetry::Symm}));
 }
 
+/// @return true if an overlap between @p bra and @p ket is a Kronecker delta:
+/// @p metric is unit and the indices are in one basis, i.e. have the same
+/// protoindices (compared in order, as by Index::operator==; symmetric ones
+/// are kept sorted)
+inline bool is_kronecker_equivalent(const Index &bra, const Index &ket,
+                                    IndexSpaceMetric metric) {
+  return metric == IndexSpaceMetric::Unit &&
+         bra.proto_indices() == ket.proto_indices();
+}
+
 /// @name (anti)symmetrization operator factories
 /// The reserved (anti)symmetrization operators Ŝ/Â have *defining* symmetries
 /// that are not free parameters: both are braket-Nonsymm (their bra<->ket

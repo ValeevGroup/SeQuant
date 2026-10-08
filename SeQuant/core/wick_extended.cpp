@@ -21,6 +21,15 @@
 
 namespace sequant::detail {
 
+void assert_protoindexed_not_active(
+    [[maybe_unused]] const IndexSpaceRegistry &isr,
+    [[maybe_unused]] const IndexSpace &sp, [[maybe_unused]] const Index &a,
+    [[maybe_unused]] const Index &b) {
+  SEQUANT_ASSERT(!(a.has_proto_indices() || b.has_proto_indices()) ||
+                     !isr.intersection(sp, isr.active_space(sp.qns())),
+                 "protoindexed indices must not reach the active space");
+}
+
 namespace {
 
 using Blocks = container::svector<container::svector<std::size_t>>;
@@ -35,6 +44,22 @@ IndexFactory fresh_index_factory(const Expr &expr) {
   return IndexFactory([labels = std::move(labels)](const Index &idx) {
     return !labels.contains(std::wstring(idx.label()));
   });
+}
+
+/// @return a fresh index in @p sp in the basis of @p idx, i.e. with its
+/// protoindices
+Index make_in_basis_of(IndexFactory &idxfac, const IndexSpace &sp,
+                       const Index &idx) {
+  return idxfac.make(
+      Index(sp, idx.proto_indices(), idx.symmetric_proto_indices()));
+}
+
+/// @return the identity between @p bra and @p ket: their Kronecker delta if
+/// their overlap is one, else their overlap
+ExprPtr make_identity(const Index &bra, const Index &ket,
+                      IndexSpaceMetric metric) {
+  return is_kronecker_equivalent(bra, ket, metric) ? make_kronecker(bra, ket)
+                                                   : make_overlap(bra, ket);
 }
 
 /// the core (R minus U), active (R ∩ U) and virtual (U minus R) parts of
@@ -257,25 +282,31 @@ container::svector<IndexSpace> registered_pieces(
 using Alternatives = container::svector<container::svector<ExprPtr>>;
 
 /// @return the split of a 1-body γ (@p is_gamma) or η {@p bra; @p ket} into
-/// a δ over its core (γ) or virtual (η) part and a γ/η over its active
-/// part, or nullopt if both indices are already active; the virtual part of
-/// a γ and the core part of an η vanish, so the indices may range over any
-/// space (e.g. an input γ over the complete space)
+/// a δ over its core (γ) or virtual (η) part, in the basis of @p bra and so an
+/// overlap if @p ket is in another (e.g. a cluster-specific virtual of another
+/// pair), and a γ/η over its active part, or nullopt if both indices are
+/// already active; the virtual part of a γ and the core part of an η vanish,
+/// so the indices may range over any space (e.g. an input γ over the complete
+/// space)
+/// @pre if @p bra or @p ket carries protoindices, their common space does not
+///      reach the active space (see assert_protoindexed_not_active())
 std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
+                                          IndexSpaceMetric metric,
                                           IndexFactory &idxfac,
                                           const Index &bra, const Index &ket,
                                           bool is_gamma) {
+  const auto &common = isr.intersection(bra.space(), ket.space());
+  assert_protoindexed_not_active(isr, common, bra, ket);
   const auto parts = space_parts(isr, bra.space().qns());
   if (parts.active.includes(bra.space().type()) &&
       parts.active.includes(ket.space().type()))
     return std::nullopt;
-  const auto &common = isr.intersection(bra.space(), ket.space());
   const auto inactive = is_gamma ? parts.core : parts.virt;
   Alternatives result;
   for (const auto &sp : registered_pieces(
            isr, common.type().intersection(inactive), common.qns())) {
-    const auto d = idxfac.make(sp);
-    result.push_back({make_kronecker(bra, d), make_kronecker(d, ket)});
+    const auto d = make_in_basis_of(idxfac, sp, bra);
+    result.push_back({make_kronecker(bra, d), make_identity(d, ket, metric)});
   }
   if (const auto active = common.type().intersection(parts.active)) {
     const auto &sp = isr.retrieve(active, common.qns());
@@ -321,7 +352,7 @@ Alternatives split_survivors(const IndexSpaceRegistry &isr,
         continue;
       }
       for (const auto &sp : targets) {
-        const auto j = idxfac.make(Index(sp, idx.proto_indices()));
+        const auto j = make_in_basis_of(idxfac, sp, idx);
         auto &[ops2, deltas2] = next.emplace_back(ops, deltas);
         ops2.emplace_back(j, op.action());
         deltas2.push_back(op.action() == Action::Create
@@ -345,7 +376,8 @@ Alternatives split_survivors(const IndexSpaceRegistry &isr,
 /// @return the rewritten term as a list of Products
 template <Statistics S>
 container::svector<std::shared_ptr<Product>> split_mixed_spaces(
-    const ExprPtr &term, const IndexSpaceRegistry &isr, bool full) {
+    const ExprPtr &term, const IndexSpaceRegistry &isr, IndexSpaceMetric metric,
+    bool full) {
   const auto product =
       term->is<Product>()
           ? std::static_pointer_cast<Product>(term->clone().as_shared_ptr())
@@ -360,8 +392,8 @@ container::svector<std::shared_ptr<Product>> split_mixed_spaces(
       const bool is_gamma = t.label() == density::rdm_label();
       if ((is_gamma || t.label() == density::hole_rdm_label()) &&
           t.bra_rank() == 1 && t.ket_rank() == 1)
-        alternatives =
-            split_density(isr, idxfac, t.bra()[0], t.ket()[0], is_gamma);
+        alternatives = split_density(isr, metric, idxfac, t.bra()[0],
+                                     t.ket()[0], is_gamma);
     } else if (f->is<NormalOperator<S>>()) {
       alternatives =
           split_survivors<S>(isr, idxfac, f->as<NormalOperator<S>>(), full);
@@ -657,7 +689,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
           });
       for (const auto &p :
            split_mixed_spaces<S>(ex<Product>(ExprPtrList{prefactor, t}), isr,
-                                 opts.full_contractions)) {
+                                 ctx.metric(), opts.full_contractions)) {
         ExprPtr reduced = p;
         WickTheorem<S> reducer{reduced};
         reducer.reduce(reduced);

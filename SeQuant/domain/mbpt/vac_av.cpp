@@ -158,7 +158,7 @@ ExprPtr expectation_value_impl(ExprPtr expr,
 }
 
 ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts) {
-  const bool full_contractions = detail::reference_is_vacuum();
+  const bool full_contractions = detail::ref_av_full_contractions();
   detail::validate_ref_av_connections(opts, full_contractions);
   return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
                                 opts.use_topology, opts.screen, opts.skip_clone,
