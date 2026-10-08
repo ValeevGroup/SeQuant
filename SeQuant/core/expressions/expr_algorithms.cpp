@@ -17,6 +17,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/algorithm/none_of.hpp>
 #include <range/v3/range/primitives.hpp>
 
 #include <iostream>
@@ -489,45 +490,58 @@ enum class ConjPairEmission {
 // different simplify passes -- or emitted by the pair fold itself -- may hold
 // conjugate-related inners. Bucket them by a canonical representative and
 // accumulate scalars; exact cancellations drop out.
+/// a Re/Im-wrapped summand taken apart: `kind` is 1 for Re, 2 for Im and 0
+/// for a summand that is not a wrapper (or a scaled wrapper)
+struct WrapInfo {
+  int kind = 0;
+  Constant::scalar_type scalar = 1;
+  ExprPtr inner;
+};
+
+/// @return the wrapper @p sm is, with a real scalar of the wrapped Product
+///         hoisted into `scalar` (Re and Im are real-linear, so the two
+///         spellings then share one representative)
+WrapInfo classify_wrapped(ExprPtr const& sm) {
+  auto info = [&sm]() -> WrapInfo {
+    if (sm->is<RealPart>()) return {1, 1, sm->as<RealPart>().inner()};
+    if (sm->is<ImagPart>()) return {2, 1, sm->as<ImagPart>().inner()};
+    if (sm->is<Product>()) {
+      auto const& p = sm->as<Product>();
+      if (p.factors().size() == 1) {
+        auto const& f = p.factor(0);
+        if (f->is<RealPart>())
+          return {1, p.scalar(), f->as<RealPart>().inner()};
+        if (f->is<ImagPart>())
+          return {2, p.scalar(), f->as<ImagPart>().inner()};
+      }
+    }
+    return {};
+  }();
+  if (info.kind != 0) {
+    if (info.inner->is<Product>()) {
+      auto const& p = info.inner->as<Product>();
+      auto const c = p.scalar();
+      if (c.imag() == 0 && c.real() != 1) {
+        info.inner = detail::strip_scalar(p);
+        info.scalar *= c;
+      }
+    }
+  }
+  return info;
+}
+
+/// @return whether @p sm is scalar-valued c-number content: what the pair
+///         fold pairs (see fold_conjugate_pairs_impl)
+bool is_closed_cnumber(ExprPtr const& sm) {
+  if (!sm->is_cnumber()) return false;
+  auto const ext = get_unique_indices(sm);
+  return ext.bra.empty() && ext.ket.empty() && ext.aux.empty();
+}
+
 template <typename SummandRange>
 container::svector<ExprPtr> merge_wrapped_summands(
     SummandRange const& in,
     std::function<ExprPtr(ExprPtr const&)> const& conjugate_op) {
-  struct WrapInfo {
-    int kind = 0;
-    Constant::scalar_type scalar = 1;
-    ExprPtr inner;
-  };
-  // Re and Im are real-linear (Re(c X) = c Re(X), Im(c X) = c Im(X) for a
-  // real c), so a real scalar belongs with the summand's scalar rather than
-  // inside the wrapper: the two spellings then share one representative
-  auto hoist_real_scalar = [](ExprPtr& e) -> Constant::scalar_type {
-    if (!e->is<Product>()) return 1;
-    auto const& p = e->as<Product>();
-    auto const c = p.scalar();
-    if (c.imag() != 0 || c.real() == 1) return 1;
-    e = detail::strip_scalar(p);
-    return c;
-  };
-  auto classify = [&hoist_real_scalar](ExprPtr const& sm) -> WrapInfo {
-    auto info = [&sm]() -> WrapInfo {
-      if (sm->is<RealPart>()) return {1, 1, sm->as<RealPart>().inner()};
-      if (sm->is<ImagPart>()) return {2, 1, sm->as<ImagPart>().inner()};
-      if (sm->is<Product>()) {
-        auto const& p = sm->as<Product>();
-        if (p.factors().size() == 1) {
-          auto const& f = p.factor(0);
-          if (f->is<RealPart>())
-            return {1, p.scalar(), f->as<RealPart>().inner()};
-          if (f->is<ImagPart>())
-            return {2, p.scalar(), f->as<ImagPart>().inner()};
-        }
-      }
-      return {};
-    }();
-    if (info.kind != 0) info.scalar *= hoist_real_scalar(info.inner);
-    return info;
-  };
   container::svector<ExprPtr> out;
   struct Bucket {
     int kind;
@@ -537,7 +551,7 @@ container::svector<ExprPtr> merge_wrapped_summands(
   container::map<std::size_t, container::svector<Bucket>> buckets;
   container::svector<std::pair<std::size_t, std::size_t>> order;
   for (auto const& sm : in) {
-    auto wi = classify(sm);
+    auto wi = classify_wrapped(sm);
     if (wi.kind == 0 || !wi.inner->is_cnumber()) {
       out.push_back(sm->clone());
       continue;
@@ -587,6 +601,13 @@ ExprPtr fold_conjugate_pairs_impl(
     ExprPtr const& expr, std::function<ExprPtr(ExprPtr const&)> conjugate_op,
     ConjPairEmission emission) {
   if (!expr || !expr->is<Sum>()) return expr;
+  // nothing to fold unless some summand is a wrapper to merge or a
+  // scalar-valued summand to pair; a tensor-valued sum (a residual) passes
+  // through untouched, without the copies the passes below make
+  if (ranges::none_of(expr->as<Sum>().summands(), [](ExprPtr const& sm) {
+        return classify_wrapped(sm).kind != 0 || is_closed_cnumber(sm);
+      }))
+    return expr;
   // cross-summand identity requires meaningful named (external) labels,
   // same reasoning as Sum::canonicalize_impl
   const auto named_labels_matter = scoped_canonicalize_options_with(
@@ -613,13 +634,8 @@ ExprPtr fold_conjugate_pairs_impl(
   // R{i;a}, a different tensor, so 2 Re would not be the sum's value), and
   // Re/Im are evaluated and exported for scalar results only.
   std::vector<bool> eligible(n);
-  for (std::size_t i = 0; i != n; ++i) {
-    eligible[i] = summands[i]->is_cnumber();
-    if (eligible[i]) {
-      auto const ext = get_unique_indices(summands[i]);
-      eligible[i] = ext.bra.empty() && ext.ket.empty() && ext.aux.empty();
-    }
-  }
+  for (std::size_t i = 0; i != n; ++i)
+    eligible[i] = is_closed_cnumber(summands[i]);
   std::vector<ExprPtr> canon(n), canon_conj(n), canon_negconj(n);
   container::map<std::size_t, container::svector<std::size_t>> buckets;
   for (std::size_t i = 0; i != n; ++i) {
