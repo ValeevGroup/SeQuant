@@ -1434,10 +1434,12 @@ inline void enforce_reference_is_vacuum(
 template <typename T>
 void validate_ref_av_connections(const EVOptions<T>& opts,
                                  bool full_contractions) {
-  SEQUANT_ENFORCE(
+  const bool connections_supported =
       full_contractions ||
-          (opts.connect.empty() && opts.do_not_connect.empty()),
-      "ref_av connectivity requires the reference to equal the Wick vacuum");
+      (opts.connect.empty() && opts.do_not_connect.empty());
+  SEQUANT_ENFORCE(connections_supported,
+                  "ref_av: connect and do_not_connect must be empty when the "
+                  "reference differs from the Wick vacuum");
 }
 }  // namespace detail
 
