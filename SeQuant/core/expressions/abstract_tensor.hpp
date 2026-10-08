@@ -444,9 +444,7 @@ inline std::wstring to_latex_tensor(
 
   // loop over left-aligned unpaired slots, if left_align==false
   if (!left_align && num_unpaired) {
-    auto* unpaired_indices = unpaired_type == SlotType::Bra
-                                 ? &bra[0]
-                                 : &ket[0];  // bra/ket are contiguous
+    auto& unpaired_indices = unpaired_type == SlotType::Bra ? bra : ket;
     for (; col != num_unpaired; ++col) {
       result += L"*^";
       if ((bkt == BraKetTypesetting::BraSuper &&
@@ -486,9 +484,7 @@ inline std::wstring to_latex_tensor(
 
   // loop over right-aligned unpaired slots, if left_align==true
   if (left_align && num_unpaired) {
-    auto* unpaired_indices = unpaired_type == SlotType::Bra
-                                 ? &bra[0]
-                                 : &ket[0];  // bra/ket are contiguous
+    auto& unpaired_indices = unpaired_type == SlotType::Bra ? bra : ket;
     for (; col != braket_rank_max; ++col) {
       result += L"*^";
       if ((bkt == BraKetTypesetting::BraSuper &&

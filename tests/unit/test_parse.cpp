@@ -280,6 +280,25 @@ TEST_CASE("serialization", "[serialization]") {
         REQUIRE(expr->as<NOp>().annihilators().size() == 0);
         REQUIRE(expr->as<NOp>().vacuum() == Vacuum::SingleProduct);
       }
+      {
+        // a tilde operator takes the Context's (non-Physical) vacuum
+        auto ctx_mp = get_default_context();
+        ctx_mp.set(Vacuum::MultiProduct);
+        auto resetter = set_scoped_default_context(ctx_mp);
+        REQUIRE(deserialize<ExprPtr>(L"ã{i1;i2}")->as<FNOperator>().vacuum() ==
+                Vacuum::MultiProduct);
+        REQUIRE(deserialize<ExprPtr>(L"b̃{i1;i2}")->as<BNOperator>().vacuum() ==
+                Vacuum::MultiProduct);
+      }
+      {
+        auto ctx_phys = get_default_context();
+        ctx_phys.set(Vacuum::Physical);
+        auto resetter = set_scoped_default_context(ctx_phys);
+        REQUIRE(deserialize<ExprPtr>(L"ã{i1;i2}")->as<FNOperator>().vacuum() ==
+                Vacuum::SingleProduct);
+        REQUIRE(deserialize<ExprPtr>(L"b̃{i1;i2}")->as<BNOperator>().vacuum() ==
+                Vacuum::SingleProduct);
+      }
     }
 
     SECTION("Constant") {

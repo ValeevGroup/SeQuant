@@ -8,6 +8,7 @@
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
@@ -15,6 +16,7 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tag.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -721,5 +723,116 @@ TEST_CASE("(anti)symmetrizer factories", "[elements]") {
     REQUIRE(S.column_symmetry() == ColumnSymmetry::Symm);
     REQUIRE(S == make_symmetrizer(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"})
                      ->as<Tensor>());
+  }
+}
+
+TEST_CASE("density labels", "[elements]") {
+  using namespace sequant;
+
+  SECTION("ctors reject a density without its defining symmetries") {
+    for (const auto& label : reserved::density_labels()) {
+      CAPTURE(toUtf8(label));
+      REQUIRE_THROWS_AS(ex<Tensor>(label, bra{L"i_1"}, ket{L"i_2"}), Exception);
+      REQUIRE_THROWS_AS(
+          ex<Tensor>(label, bra{L"i_1", L"i_3"}, ket{L"i_2", L"i_4"},
+                     Symmetry::Nonsymm, Hermiticity::NonHermitian,
+                     ColumnSymmetry::Symm),
+          Exception);
+      REQUIRE_THROWS_AS(
+          ex<Tensor>(label, bra{L"i_1", L"i_3"}, ket{L"i_2", L"i_4"},
+                     Symmetry::Symm, Hermiticity::Hermitian,
+                     ColumnSymmetry::Symm),
+          Exception);
+      // the bra-ket symmetry is pinned too: Hermitian derives Conjugate over
+      // the (default) complex field, not Symm
+      REQUIRE_THROWS_AS(
+          Tensor(label, bra{L"i_1"}, ket{L"i_2"}, aux{},
+                 TensorSymmetries{.braket = BraKetSymmetry::Symm,
+                                  .column = ColumnSymmetry::Symm}),
+          Exception);
+      // ... but accept one that has them, which is what the factory builds
+      const auto syms = density::symmetries(label, 1);
+      REQUIRE(*ex<Tensor>(label, bra{L"i_1"}, ket{L"i_2"}, syms) ==
+              *density::make_density(label, bra{L"i_1"}, ket{L"i_2"}));
+      // an aux-only tensor (e.g. an export layout) is not a density
+      REQUIRE_NOTHROW(Tensor(label, bra{}, ket{}, aux{L"i_1", L"i_2"}));
+    }
+    // the error says what is expected and how to build it
+    REQUIRE_THROWS_WITH(
+        ex<Tensor>(reserved::rdm_label(), bra{L"i_1"}, ket{L"i_2"}),
+        "Tensor: γ is a reserved density label; a rank-1 γ must have equal bra "
+        "and ket ranks, no aux indices and be perm-nonsymmetric, Hermitian "
+        "(bra-ket symmetric over a real field, conjugate over a complex one) "
+        "and column-symmetric; build it with density::make_rdm "
+        "(SeQuant/core/density.hpp)");
+    // a multi-body spin-orbital density is antisymmetric, or nonsymmetric as a
+    // spin component (what spin tracing produces); a spin-free one is
+    // nonsymmetric
+    for (const auto& label : {reserved::rdm_label(), reserved::hole_rdm_label(),
+                              reserved::cumulant_label()}) {
+      CAPTURE(toUtf8(label));
+      REQUIRE_NOTHROW(ex<Tensor>(label, bra{L"i_1", L"i_3"},
+                                 ket{L"i_2", L"i_4"}, density::rdm_symmetries));
+    }
+    REQUIRE_THROWS_AS(
+        ex<Tensor>(reserved::spinfree_rdm_label(), bra{L"i_1", L"i_3"},
+                   ket{L"i_2", L"i_4"}, density::cumulant_symmetries),
+        Exception);
+  }
+
+  SECTION("a rank-1 density's permutational symmetry is immaterial") {
+    // the perm symmetry of a rank-1 tensor is void, so a spelled-out one is
+    // accepted and normalized away rather than rejected: the γ{u1;u2}:A of
+    // old inputs still parses, and equals the factory's γ
+    const auto gamma = density::make_rdm(Index(L"i_1"), Index(L"i_2"));
+    REQUIRE(*deserialize<ExprPtr>(L"γ{i_1;i_2}:A") == *gamma);
+    REQUIRE(*deserialize<ExprPtr>(L"γ{i_1;i_2}:S") == *gamma);
+    REQUIRE(*ex<Tensor>(reserved::rdm_label(), bra{L"i_1"}, ket{L"i_2"},
+                        TensorSymmetries{.perm = Symmetry::Antisymm,
+                                         .hermiticity = Hermiticity::Hermitian,
+                                         .column = ColumnSymmetry::Symm}) ==
+            *gamma);
+    // the other defining symmetries are still required
+    REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"γ{i_1;i_2}:A-N-S"), Exception);
+  }
+
+  SECTION("relabeling a tensor to a density label checks its symmetries") {
+    auto h = Tensor(L"h", bra{L"i_1"}, ket{L"i_2"});
+    REQUIRE_THROWS_AS(h.set_label(reserved::rdm_label()), Exception);
+    auto gamma = density::make_rdm(Index(L"i_1"), Index(L"i_2"))->as<Tensor>();
+    REQUIRE_NOTHROW(gamma.set_label(reserved::hole_rdm_label()));
+    REQUIRE(gamma ==
+            density::make_hole_rdm(Index(L"i_1"), Index(L"i_2"))->as<Tensor>());
+    REQUIRE_NOTHROW(gamma.set_label(L"h"));
+  }
+
+  SECTION("deserialization gives a density its defining symmetries") {
+    // bra = annihilators = the first index group
+    REQUIRE(*deserialize<ExprPtr>(L"γ{i_1;i_2}") ==
+            *density::make_rdm(Index(L"i_1"), Index(L"i_2")));
+    REQUIRE(*deserialize<ExprPtr>(L"η{i_1;i_2}") ==
+            *density::make_hole_rdm(Index(L"i_1"), Index(L"i_2")));
+    REQUIRE(*deserialize<ExprPtr>(L"κ{i_1,i_3;i_2,i_4}") ==
+            *density::make_cumulant(bra{L"i_1", L"i_3"}, ket{L"i_2", L"i_4"}));
+    REQUIRE(*deserialize<ExprPtr>(L"Γ{i_1,i_3;i_2,i_4}") ==
+            *density::make_density(reserved::spinfree_rdm_label(),
+                                   bra{L"i_1", L"i_3"}, ket{L"i_2", L"i_4"}));
+    // a spelled-out symmetry may restate the defining one ...
+    REQUIRE(*deserialize<ExprPtr>(L"κ{i_1,i_3;i_2,i_4}:A-C-S") ==
+            *deserialize<ExprPtr>(L"κ{i_1,i_3;i_2,i_4}"));
+    // ... or spell a multi-body spin component ...
+    REQUIRE(deserialize<ExprPtr>(L"κ{i_1,i_3;i_2,i_4}:N")
+                ->as<Tensor>()
+                .symmetry() == Symmetry::Nonsymm);
+    // ... but not contradict it
+    REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"κ{i_1,i_3;i_2,i_4}:S"), Exception);
+    REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"γ{i_1;i_2}:N-N-S"), Exception);
+    REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"γ{i_1;i_2}:N-S-S"), Exception);
+    REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"η{i_1;i_2}:N-H-N"), Exception);
+    // ... and a factory-built density round-trips
+    for (const auto& d :
+         {density::make_rdm(Index(L"i_1"), Index(L"i_2")),
+          density::make_cumulant(bra{L"i_1", L"i_3"}, ket{L"i_2", L"i_4"})})
+      REQUIRE(*deserialize<ExprPtr>(serialize(d)) == *d);
   }
 }

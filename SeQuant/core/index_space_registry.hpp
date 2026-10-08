@@ -1197,6 +1197,14 @@ class IndexSpaceRegistry {
     return this->retrieve(vacuocc_type, qn);
   }
 
+  /// @return the space that is reference-occupied but vacuum-unoccupied: the
+  /// partially occupied space of a Vacuum::MultiProduct reference (null if
+  /// there is none)
+  const IndexSpace& active_space(IndexSpace::QuantumNumbers qn) const {
+    return this->intersection(this->reference_occupied_space(qn),
+                              this->vacuum_unoccupied_space(qn));
+  }
+
   /// @name specifies in which space holes can be created successfully from the
   /// reference wave function
   /// @note convenience for making operators

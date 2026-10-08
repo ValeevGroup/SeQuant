@@ -206,7 +206,9 @@ Vacuum averaging and final expression
 
 The ``sequant::mbpt::op::vac_av`` function can be used to compute the vacuum average of an operator level expression.
 If reference state differs from the Wick vacuum ``sequant::mbpt::op::ref_av`` function should be used instead to
-compute the reference average.
+compute the reference average. When the context's vacuum is ``Vacuum::MultiProduct``, ``ref_av`` (and ``vac_av``) apply the extended
+Wick theorem instead, as :class:`sequant::WickTheorem` does under that vacuum; the operators are then normal-ordered relative to the
+reference itself (generalized normal order), and the result is expressed in densities and density cumulants.
 
 .. literalinclude:: /examples/user/operator.cpp
    :language: cpp

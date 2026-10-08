@@ -2,7 +2,9 @@
 // Created by Eduard Valeyev on 2019-01-30.
 //
 
+#include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
@@ -12,8 +14,11 @@
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/algorithm/contains.hpp>
+
+#include <string>
 
 namespace sequant {
 
@@ -23,6 +28,42 @@ void Tensor::assert_nonreserved_label(
     [[maybe_unused]] std::wstring_view label) const {
   SEQUANT_ASSERT(!ranges::contains(FNOperator::labels(), label) &&
                  !ranges::contains(BNOperator::labels(), label));
+}
+
+void Tensor::check_density_symmetries() const {
+  // an aux-only tensor is a layout representation (e.g. for export), not a
+  // density
+  if (bra_.empty() && ket_.empty()) return;
+
+  const auto rank = bra_.size();
+  const auto syms = density::symmetries(label_, rank);
+  // a multi-body spin-orbital density is antisymmetric, or nonsymmetric when
+  // it is a spin component (as spin tracing produces)
+  const bool multibody_spinorbital =
+      rank > 1 && label_ != reserved::spinfree_rdm_label();
+  const bool perm_ok =
+      symmetry_ == Symmetry::Nonsymm ||
+      (multibody_spinorbital && symmetry_ == Symmetry::Antisymm);
+  if (bra_.size() != ket_.size() || !aux_.empty() || !perm_ok ||
+      hermiticity_ != syms.hermiticity ||
+      braket_symmetry_ != to_braket_symmetry(*syms.hermiticity, base_field()) ||
+      column_symmetry_ != syms.column) {
+    const auto factory =
+        label_ == reserved::rdm_label()        ? "density::make_rdm"
+        : label_ == reserved::hole_rdm_label() ? "density::make_hole_rdm"
+        : label_ == reserved::cumulant_label()
+            ? "density::make_cumulant"
+            : "density::make_density(reserved::spinfree_rdm_label(), ...)";
+    throw Exception(
+        "Tensor: " + toUtf8(label_) + " is a reserved density label; a rank-" +
+        std::to_string(rank) + " " + toUtf8(label_) +
+        " must have equal bra and ket ranks, no aux indices and be " +
+        (multibody_spinorbital ? "antisymmetric (or perm-nonsymmetric), "
+                               : "perm-nonsymmetric, ") +
+        "Hermitian (bra-ket symmetric over a real field, conjugate over a "
+        "complex one) and column-symmetric; build it with " +
+        factory + " (SeQuant/core/density.hpp)");
+  }
 }
 
 void Tensor::adjoint() {

@@ -253,7 +253,8 @@ class QuantumNumberChange
   std::size_t size() const {
     if (get_default_context().vacuum() == Vacuum::Physical) {
       return 2;
-    } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
+    } else if (get_default_context().vacuum() == Vacuum::SingleProduct ||
+               get_default_context().vacuum() == Vacuum::MultiProduct) {
       auto isr = get_default_context().index_space_registry();
       const auto& isr_base_spaces = isr->base_spaces();
       SEQUANT_ASSERT(isr_base_spaces.size() > 0);
