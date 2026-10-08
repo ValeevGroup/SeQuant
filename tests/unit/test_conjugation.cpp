@@ -174,6 +174,20 @@ TEST_CASE("variable_marks", "[conjugation]") {
   REQUIRE(w.conjugated());
 }
 
+TEST_CASE("re_im_cnumber_only", "[conjugation]") {
+  using namespace sequant;
+  // the wrappers are real-valued by convention, which operator content
+  // cannot be: the builders refuse it rather than wrap it
+  auto op = ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"}));
+  REQUIRE_THROWS_AS(real_part(op->clone()), Exception);
+  REQUIRE_THROWS_AS(imaginary_part(op->clone()), Exception);
+  REQUIRE_THROWS_AS(
+      real_part(ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) * op->clone()),
+      Exception);
+  REQUIRE_NOTHROW(real_part(ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
+                            ex<Tensor>(L"g", bra{L"i_1"}, ket{L"a_1"})));
+}
+
 TEST_CASE("re_im_composition_table", "[conjugation]") {
   // Re/Im are real-valued, so the four compositions collapse:
   //   Re(Re x) = Re x,  Re(Im x) = Im x,  Im(Re x) = 0,  Im(Im x) = 0
