@@ -193,14 +193,14 @@ namespace {
 CanonTransform decode_leaf_states(Tensor& t) {
   CanonTransform tr{};
   if (t.adjointed()) {
-    [[maybe_unused]] const auto sign = t.adjoint();
-    SEQUANT_ASSERT(sign == 1);
+    const auto sign = t.adjoint();
+    SEQUANT_ENFORCE(sign == 1, "a stored adjointed leaf consumes no sign");
     SEQUANT_ASSERT(!t.adjointed());
     tr = compose(tr, {.conj = true, .braket_swap = true});
   }
   if (t.kconjugated() && t.base_field() == Field::Real) {
-    [[maybe_unused]] const auto sign = t.set_states(false, false);
-    SEQUANT_ASSERT(sign == 1);
+    const auto sign = t.set_states(false, false);
+    SEQUANT_ENFORCE(sign == 1, "a stored K-conjugated leaf consumes no sign");
     tr = compose(tr, {.conj = true});
   }
   return tr;
@@ -464,9 +464,8 @@ ExprPtr EvalExpr::denoted_expr() const {
       // leaves the slots in place -- and the latter is produced by the
       // real-basis arm of the decoder alone
       SEQUANT_ASSERT(tr.braket_swap || t.base_field() == Field::Real);
-      [[maybe_unused]] const auto sign =
-          tr.braket_swap ? t.adjoint() : t.kconjugate();
-      SEQUANT_ASSERT(sign == 1);
+      const auto sign = tr.braket_swap ? t.adjoint() : t.kconjugate();
+      SEQUANT_ENFORCE(sign == 1, "re-marking a stored leaf consumes no sign");
     }
   return ex<Tensor>(std::move(t));
 }
@@ -946,9 +945,8 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
         for (auto& f : subfacs)
           if (hoistable(f.transform) && f.expr->is<Tensor>()) {
             auto& t = f.expr->as<Tensor>();
-            [[maybe_unused]] auto const sign =
-                t.set_states(t.adjointed(), false);
-            SEQUANT_ASSERT(sign == 1);
+            auto const sign = t.set_states(t.adjointed(), false);
+            SEQUANT_ENFORCE(sign == 1, "clearing a kept star consumes no sign");
           }
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
       IndexGroups<IndexVec> const target_indices = [&ts, &uncontracted_idxs]() {

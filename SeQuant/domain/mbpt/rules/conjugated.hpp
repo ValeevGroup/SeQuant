@@ -5,6 +5,7 @@
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <utility>
 
@@ -27,8 +28,8 @@ template <typename Rule>
   if (!tnsr.adjointed() && !tnsr.kconjugated())
     return std::forward<Rule>(rule)(tnsr);
   Tensor bare = tnsr;
-  [[maybe_unused]] const auto sign = bare.set_states(false, false);
-  SEQUANT_ASSERT(sign == 1);
+  const auto sign = bare.set_states(false, false);
+  SEQUANT_ENFORCE(sign == 1, "clearing the states consumes no sign");
   if (tnsr.adjointed()) static_cast<AbstractTensor &>(bare)._swap_bra_ket();
   ExprPtr fit = std::forward<Rule>(rule)(bare);
   if (tnsr.adjointed()) fit = sequant::adjoint(fit);

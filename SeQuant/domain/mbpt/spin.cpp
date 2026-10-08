@@ -394,9 +394,9 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
     // the rebuild keeps the source's traits and its slots' field, so its two
     // core states carry over as they stand: the normalization is the identity
     // here and consumes no sign, which a Tensor could not hold anyway
-    [[maybe_unused]] const auto sign =
+    const auto sign =
         new_tensor.set_states(tensor.adjointed(), tensor.kconjugated());
-    SEQUANT_ASSERT(sign == 1);
+    SEQUANT_ENFORCE(sign == 1, "a spin-labeled rebuild consumes no sign");
     return std::make_shared<Tensor>(new_tensor);
   }
 
@@ -434,9 +434,9 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
       // the permuted slots are the source's own, over the same field and
       // with the same traits, so its two core states carry over as they
       // stand: the normalization is the identity here and consumes no sign
-      [[maybe_unused]] const auto sign =
+      const auto sign =
           new_tensor.set_states(tensor.adjointed(), tensor.kconjugated());
-      SEQUANT_ASSERT(sign == 1);
+      SEQUANT_ENFORCE(sign == 1, "a spin-swapped rebuild consumes no sign");
 
       if (ms_conserving_columns(new_tensor)) {
         auto new_tensor_product = std::make_shared<Product>();
