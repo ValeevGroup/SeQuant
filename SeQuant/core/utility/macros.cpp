@@ -32,6 +32,15 @@ void assert_failed(const std::string &errmsg,
   }
 }
 
+[[noreturn]] void enforce_failed(const std::string &errmsg,
+                                 const std::source_location location) {
+#ifdef SEQUANT_ASSERT_ENABLED
+  assert_failed(errmsg, location);
+#else
+  throw_failure(errmsg, location);
+#endif
+}
+
 [[noreturn]] void abort_msg(const std::string &errmsg,
                             const std::source_location location) {
   std::cerr << errmsg << " at " << location.file_name() << ":"

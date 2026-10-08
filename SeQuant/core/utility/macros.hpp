@@ -119,6 +119,15 @@ void assert_failed(
 [[noreturn]] void throw_failure(
     const std::string &errmsg,
     std::source_location location = std::source_location::current());
+
+/// Reports a failed SEQUANT_ENFORCE check: via assert_failed() when assertions
+/// are enabled, else by throwing sequant::Exception. Call it directly to
+/// report a precondition failure at a location other than the current one.
+/// @param errmsg the failure message
+/// @param location the location to report; by default, the caller's
+[[noreturn]] void enforce_failed(
+    const std::string &errmsg,
+    std::source_location location = std::source_location::current());
 }  // namespace sequant
 
 // The optional message of SEQUANT_ASSERT and SEQUANT_ENFORCE must be a string
@@ -137,14 +146,10 @@ void assert_failed(
       sequant::assert_failed(SEQUANT_ASSERT_MESSAGE(EXPR, __VA_ARGS__)); \
     }                                                                    \
   } while (0)
-
-#define SEQUANT_ENFORCE_FAILED sequant::assert_failed
 #else
 #define SEQUANT_ASSERT(...) \
   do {                      \
   } while (0)
-
-#define SEQUANT_ENFORCE_FAILED sequant::throw_failure
 #endif
 
 /// Checks EXPR even when assertions are disabled. Uses the configured assertion
@@ -152,7 +157,7 @@ void assert_failed(
 #define SEQUANT_ENFORCE(EXPR, ...)                                    \
   do {                                                                \
     if (!(EXPR)) {                                                    \
-      SEQUANT_ENFORCE_FAILED(                                         \
+      sequant::enforce_failed(                                        \
           SEQUANT_CHECK_MESSAGE(SEQUANT_ENFORCE, EXPR, __VA_ARGS__)); \
     }                                                                 \
   } while (0)
