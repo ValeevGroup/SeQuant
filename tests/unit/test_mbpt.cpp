@@ -1893,6 +1893,38 @@ SECTION("MRSO-MultiProduct") {
     auto result_t = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
     REQUIRE(simplify(result_op - result_t) == ex<Constant>(0));
   }
+
+  SECTION("ref_av honors connectivity through densities and cumulants") {
+    // ⟨{a†_u1 a_u2}{a†_u3 a_u4}⟩ = γ η + κ: every term connects the two
+    // operators, through a density or a cumulant only
+    const auto x = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+                   ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    const auto all = t::ref_av(x);
+    REQUIRE(all != ex<Constant>(0));
+    REQUIRE(simplify(t::ref_av(x, {.connect = {{0, 1}}}) - all) ==
+            ex<Constant>(0));
+    REQUIRE(t::ref_av(x, {.do_not_connect = {{0, 1}}}) == ex<Constant>(0));
+  }
+
+  SECTION("ref_av connectivity partitions the terms") {
+    // h·t·t has terms with the two t connected and terms without; each list
+    // keeps one part, at the operator and the tensor level, and vac_av
+    // agrees with ref_av
+    const auto x = t::h(2) * t::t(1) * t::t(1);
+    const auto all = t::ref_av(x);
+    const auto connected = t::ref_av(x, {.connect = {{1, 2}}});
+    const auto disconnected = t::ref_av(x, {.do_not_connect = {{1, 2}}});
+    REQUIRE(connected != ex<Constant>(0));
+    REQUIRE(disconnected != ex<Constant>(0));
+    REQUIRE(simplify(connected + disconnected - all) == ex<Constant>(0));
+    REQUIRE(simplify(t::vac_av(x, {.connect = {{1, 2}}}) - connected) ==
+            ex<Constant>(0));
+    const auto x_op = o::h(2) * o::t(1) * o::t(1);
+    REQUIRE(simplify(o::ref_av(x_op, {.connect = {{L"t", L"t"}}}) -
+                     connected) == ex<Constant>(0));
+    REQUIRE(simplify(o::ref_av(x_op, {.do_not_connect = {{L"t", L"t"}}}) -
+                     disconnected) == ex<Constant>(0));
+  }
 }  // SECTION("MRSO-MultiProduct")
 
 SECTION("MRSF") {
