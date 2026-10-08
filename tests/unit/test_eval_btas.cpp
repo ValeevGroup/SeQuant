@@ -413,6 +413,23 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     REQUIRE(norm(eval2) == Catch::Approx(norm(man2)));
   }
 
+  SECTION("Antisymmetrization of a scalar-wrapped adjointed root") {
+    // the root is the scalar-wrap Product of t⁺{i;a,a}: its placeholder is
+    // spelled in the denoted orientation while its transform carries the
+    // leaf's bra/ket exchange, so the antisymmetrizer must act on the denoted
+    // bra rank 1, not on the ket rank of the stored t{a,a;i}
+    auto marked =
+        eval_antisymm(parse_antisymm(L"2 * t⁺{i1;a1,a2}"), tidxs(L"i1,a1,a2"));
+    // over real data the adjoint is the plain bra/ket exchange, so the same
+    // value is the antisymmetrized bare tensor laid out the other way round
+    auto bare =
+        eval_antisymm(parse_antisymm(L"2 * t{a1,a2;i1}"), tidxs(L"a1,a2,i1"));
+    auto expected = BTensorD{btas::permute(bare, {2, 0, 1})};
+    REQUIRE(expected.range() == marked.range());
+    expected -= marked;
+    REQUIRE(norm(expected) == Catch::Approx(0).margin(1e-12));
+  }
+
   SECTION("Summation and Product") {
     auto expr1 = parse_antisymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"

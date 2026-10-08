@@ -1700,9 +1700,12 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 
   ResultPtr result;
   auto time = detail::timed_eval_inplace([&]() {
-    result = pre->antisymmetrize((n0->canon_transform().braket_swap
-                                      ? n0->as_tensor().ket_rank()
-                                      : n0->as_tensor().bra_rank()));
+    // the bra rank of the value: a leaf's placeholder may be the stored
+    // spelling, which its transform exchanges, while an internal node's is
+    // already the denoted one; denoted_expr() gives the denoted spelling of
+    // both
+    result = pre->antisymmetrize(
+        n0->denoted_expr()->template as<Tensor>().bra_rank());
   });
 
   // logging
