@@ -134,12 +134,14 @@ ordinal) and passed to that run with ``set_nop_partitions()``/``set_op_partition
 dispatching ``WickTheorem``'s ``stats()``. The terms of a Sum input are handled one after another, each with its own topology
 analysis, where the standard path contracts them in parallel. Each resulting term then
 
-- has its mixed-space ``γ``/``η`` and surviving operators split into pure pieces: a ``γ`` into a core :math:`\delta` plus an active
-  ``γ``, an ``η`` into a virtual :math:`\delta` plus an active ``η`` (a one-body ``γ`` or ``η`` of the input is split the same way,
-  whatever space its indices range over; the :math:`\delta` binds the bra to a core or virtual index in its basis, so between
-  two bases, e.g. cluster-specific virtuals of different pairs, it is followed by an overlap; as for an operator, an index
-  with protoindices must not reach the active part), a survivor onto its active part and, with partial contractions, its core and virtual parts. A part that is not a registered space is split over its base spaces. The pieces are reduced with the
-  operator indices kept fixed, so each projected index stays :math:`\delta`-bound to an input index and inherits its provenance;
+- has its mixed-space ``γ``/``η`` and surviving operators split into pure pieces: a ``γ`` into a core :math:`\delta` plus an
+  active ``γ``, an ``η`` into a virtual :math:`\delta` plus an active ``η`` (a one-body ``γ`` or ``η`` of the input is split the
+  same way, whatever space its indices range over; the :math:`\delta` binds the bra to a core or virtual index in its basis, so
+  between two bases, e.g. cluster-specific virtuals of different pairs or two basis instances, it is followed by an overlap; as
+  for an operator, an index with protoindices must not reach the active part), a survivor onto its active part and, with partial
+  contractions, its core and virtual parts. A part that is not a registered space is split over its base spaces. The pieces are
+  reduced with the operator indices kept fixed, so each projected index stays :math:`\delta`-bound to an input index and
+  inherits its provenance;
 - is handed to ``detail::cumulant_expand``, which groups the surviving *active* operators into disjoint blocks of :math:`k`
   creators and :math:`k` annihilators, :math:`2 \le k \le` ``WickTheorem::max_cumulant_rank``, with legs from at least two
   input operators. Each block is valued :math:`\kappa_k` (``detail::block_value``), the term takes the parity of the permutation that

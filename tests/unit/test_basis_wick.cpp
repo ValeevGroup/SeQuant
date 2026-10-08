@@ -20,6 +20,7 @@
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/vac_av.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <map>
 #include <optional>
@@ -343,4 +344,41 @@ TEST_CASE("basis-wick-bernoulli-commutator", "[algorithms][wick][basis]") {
                                                              {3, 32}});
   REQUIRE(ab->is<Sum>());
   CHECK(ab->size() == 8);
+}
+
+TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
+  using namespace sequant;
+  using sequant::tests::csv::standing_metrics;
+  using sequant::tests::csv::tensors_labelled;
+
+  auto ctx = get_default_context();
+  ctx.set(mbpt::make_mr_spaces());
+  ctx.set(Vacuum::MultiProduct);
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  // a Kronecker delta between two indices in different basis instances
+  // identifies functions of different bases, which is meaningless
+  auto has_delta_across_instances = [](ExprPtr const& expr) {
+    return std::ranges::any_of(
+        tensors_labelled(expr, reserved::kronecker_label()), [](auto const* t) {
+          return different_instances(t->_bra()[0].basis(),
+                                     t->_ket()[0].basis());
+        });
+  };
+
+  SECTION("a contraction between two instances leaves an overlap standing") {
+    for (IndexBasis::instance_type ket_instance : {1, 2}) {
+      CAPTURE(ket_instance);
+      const auto p1 = Index(L"p_1").replace_basis_instance(1);
+      const auto p2 = Index(L"p_2").replace_basis_instance(ket_instance);
+      const auto expr = ex<Tensor>(L"h", bra{p1}, ket{p2}, Symmetry::Nonsymm) *
+                        ex<FNOperator>(cre{p1}, ann{}) *
+                        ex<FNOperator>(cre{}, ann{p2});
+      ExprPtr r;
+      REQUIRE_NOTHROW(r = FWickTheorem{expr}.compute());
+      CHECK(!has_delta_across_instances(r));
+      // the core term keeps one overlap between the two bases
+      CHECK(standing_metrics(r) == (ket_instance == 1 ? 0 : 1));
+    }
+  }
 }

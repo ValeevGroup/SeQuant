@@ -46,12 +46,12 @@ IndexFactory fresh_index_factory(const Expr &expr) {
   });
 }
 
-/// @return a fresh index in @p sp in the basis of @p idx, i.e. with its
-/// protoindices
+/// @return a fresh index in @p sp in the basis of @p idx, i.e. with its basis
+/// instance and protoindices
 Index make_in_basis_of(IndexFactory &idxfac, const IndexSpace &sp,
                        const Index &idx) {
-  return idxfac.make(
-      Index(sp, idx.proto_indices(), idx.symmetric_proto_indices()));
+  return idxfac.make(Index(IndexBasis(sp, idx.basis().basis_instance()),
+                           idx.proto_indices(), idx.symmetric_proto_indices()));
 }
 
 /// @return the identity between @p bra and @p ket: their Kronecker delta if
@@ -284,10 +284,10 @@ using Alternatives = container::svector<container::svector<ExprPtr>>;
 /// @return the split of a 1-body γ (@p is_gamma) or η {@p bra; @p ket} into
 /// a δ over its core (γ) or virtual (η) part, in the basis of @p bra and so an
 /// overlap if @p ket is in another (e.g. a cluster-specific virtual of another
-/// pair), and a γ/η over its active part, or nullopt if both indices are
-/// already active; the virtual part of a γ and the core part of an η vanish,
-/// so the indices may range over any space (e.g. an input γ over the complete
-/// space)
+/// pair, or another basis instance), and a γ/η over its active part, or
+/// nullopt if both indices are already active; the virtual part of a γ and the
+/// core part of an η vanish, so the indices may range over any space (e.g. an
+/// input γ over the complete space)
 /// @pre if @p bra or @p ket carries protoindices, their common space does not
 ///      reach the active space (see assert_protoindexed_not_active())
 std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
