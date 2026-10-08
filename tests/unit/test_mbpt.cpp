@@ -1217,6 +1217,15 @@ SECTION("SRSO-PNO") {
   auto mbpt_ctx = sequant::mbpt::set_scoped_default_mbpt_context(
       Context({.csv = CSV::Yes, .op_registry_ptr = make_minimal_registry()}));
 
+  // H2**T2 -> E
+  SECTION("wick(H2**T2 -> E)") {
+    // the contracted occupied indices of h and t are identified, including
+    // where they are protoindices of t's virtuals; their overlap must not stand
+    REQUIRE_THAT(t::vac_av(t::h(2) * t::t(2)),
+                 EquivalentTo(L"1/4 g{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:A-C-S "
+                              L"* t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S"));
+  }
+
   // H2**T2**T2 -> R2
   SECTION("wick(H2**T2**T2 -> R2)") {
     auto result = t::vac_av(t::A(nₚ(-2)) * t::h(2) * t::t(2) * t::t(2),
