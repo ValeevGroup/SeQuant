@@ -856,6 +856,20 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
                                       L"+ 3 κ{u_2,u_4;u_1,u_3}"));
   }
 
+  SECTION("WickTheorem: η between two CSV bases is their overlap") {
+    // the virtual block of η is the identity on the virtuals; between
+    // cluster-specific virtuals of different pairs it is their overlap, as
+    // under a single-product vacuum
+    const Index i1(L"i_1"), i2(L"i_2");
+    const Index a1(L"a_1", {i1}), a2(L"a_2", {i2}), a3(L"a_3", {i1});
+    auto in =
+        ex<FNOperator>(cre({}), ann({a1})) * ex<FNOperator>(cre({a2}), ann({}));
+    REQUIRE_THAT(wick_mp(in), EquivalentTo(L"s{a_1<i_1>;a_2<i_2>}"));
+    in =
+        ex<FNOperator>(cre({}), ann({a1})) * ex<FNOperator>(cre({a3}), ann({}));
+    REQUIRE_THAT(wick_mp(in), EquivalentTo(L"δ{a_1<i_1>;a_3<i_1>}"));
+  }
+
   SECTION("WickTheorem: η = δ - γ") {
     auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));

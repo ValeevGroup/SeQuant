@@ -37,6 +37,13 @@ IndexFactory fresh_index_factory(const Expr &expr) {
   });
 }
 
+/// @return the identity between @p bra and @p ket: their Kronecker delta if
+/// they are in one basis, else their overlap
+ExprPtr make_identity(const Index &bra, const Index &ket) {
+  return bra.proto_indices() == ket.proto_indices() ? make_kronecker(bra, ket)
+                                                    : make_overlap(bra, ket);
+}
+
 /// the core (R minus U), active (R ∩ U) and virtual (U minus R) parts of
 /// the space, where R is the reference-occupied and U the vacuum-unoccupied
 /// space
@@ -257,10 +264,12 @@ container::svector<IndexSpace> registered_pieces(
 using Alternatives = container::svector<container::svector<ExprPtr>>;
 
 /// @return the split of a 1-body γ (@p is_gamma) or η {@p bra; @p ket} into
-/// a δ over its core (γ) or virtual (η) part and a γ/η over its active
-/// part, or nullopt if both indices are already active; the virtual part of
-/// a γ and the core part of an η vanish, so the indices may range over any
-/// space (e.g. an input γ over the complete space)
+/// a δ over its core (γ) or virtual (η) part, in the basis of @p bra and so an
+/// overlap if @p ket is in another (e.g. a cluster-specific virtual of another
+/// pair), and a γ/η over its active part, or nullopt if both indices are
+/// already active; the virtual part of a γ and the core part of an η vanish, so
+/// the indices may range over any space (e.g. an input γ over the complete
+/// space)
 std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
                                           IndexFactory &idxfac,
                                           const Index &bra, const Index &ket,
@@ -274,8 +283,9 @@ std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
   Alternatives result;
   for (const auto &sp : registered_pieces(
            isr, common.type().intersection(inactive), common.qns())) {
-    const auto d = idxfac.make(sp);
-    result.push_back({make_kronecker(bra, d), make_kronecker(d, ket)});
+    const auto d = idxfac.make(
+        Index(sp, bra.proto_indices(), bra.symmetric_proto_indices()));
+    result.push_back({make_kronecker(bra, d), make_identity(d, ket)});
   }
   if (const auto active = common.type().intersection(parts.active)) {
     const auto &sp = isr.retrieve(active, common.qns());
