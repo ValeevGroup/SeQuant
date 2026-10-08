@@ -1095,6 +1095,18 @@ TEST_CASE("export-basis-instance", "[export][basis]") {
     CHECK_THAT(generator.represent(t_null, ctx),
                ContainsSubstring("t_vo[") && ContainsSubstring("a_7"));
   }
+  SECTION("Julia TensorKit") {
+    // the domain shows the extent the tensor is allocated with
+    JuliaTensorKitGeneratorContext ctx;
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    JuliaTensorKitGenerator<> generator;
+    generator.create(t, true, ctx);
+    const auto code = generator.get_generated_code();
+    const auto nv1 = ctx.get_dim(virt) + "_1";
+    CHECK_THAT(code, ContainsSubstring("zeros(Float64, " + nv1) &&
+                         ContainsSubstring("ℝ^" + nv1));
+  }
   SECTION("text") {
     const TextGenerator<TextGeneratorContext> generator;
     CHECK(generator.represent(t, TextGeneratorContext{}) == "t[a_7<;1>, i_1]");
