@@ -157,8 +157,9 @@ Each commutator can be written in two ways, and ``use_connected_form`` selects b
 - ``true`` writes it as a connected product, :math:`(\hat{A}\hat{B})_c`. This gives fewer terms, but only reproduces the commutator once the same operators are connected downstream when taking the expectation value, using ``OpConnections``.
 
 The connectivity discussion below assumes the reference is the Wick vacuum. When the reference differs from the Wick
-vacuum, both overloads of ``ref_av`` require empty ``connect`` and ``do_not_connect`` lists; use explicit commutators in that
-case. Non-empty lists are rejected even when assertions are disabled.
+vacuum and the vacuum is not ``Vacuum::MultiProduct`` (whose reference expectation values are full contractions, see
+below), both overloads of ``ref_av`` require empty ``connect`` and ``do_not_connect`` lists; use explicit commutators in
+that case. Non-empty lists are rejected even when assertions are disabled.
 
 Both forms give the same equations, given the right connectivity. They differ in *where* the disconnected terms are removed: the commutator removes them algebraically, the connected product relies on the connectivity you supply to ``vac_av``/``ref_av``.
 

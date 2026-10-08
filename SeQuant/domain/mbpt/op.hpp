@@ -1421,13 +1421,22 @@ inline void enforce_reference_is_vacuum(
     enforce_failed("the reference must be the Wick vacuum", location);
 }
 
+/// @return true if ref_av takes full contractions only: the reference is the
+/// Wick vacuum, or the vacuum is MultiProduct, relative to which WickTheorem
+/// expresses the reference expectation value in γ, η and κ
+inline bool ref_av_full_contractions() {
+  return reference_is_vacuum() ||
+         get_default_context().vacuum() == Vacuum::MultiProduct;
+}
+
 /// @brief Rejects connectivity constraints that ref_av cannot honor
 /// @details The connectivity lists constrain direct contractions only. With
 /// partial contractions, operators can also be connected through the RDMs
 /// (cumulants) of the residual operators, which the lists cannot express, so
 /// they are rejected rather than given a partial meaning.
 /// @param opts the options passed to ref_av
-/// @param full_contractions true if the reference is the Wick vacuum
+/// @param full_contractions true if ref_av takes full contractions only, see
+///        ref_av_full_contractions()
 /// @pre Called before any screening or operator-label lowering, so invalid
 ///      requests are rejected regardless of the expression
 /// @throw Exception (or aborts, per SEQUANT_ENFORCE) if \p full_contractions

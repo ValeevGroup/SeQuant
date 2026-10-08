@@ -158,8 +158,9 @@ Using :math:`\bar{H}` outside the CC class
 and on the reference. For a non-unitary ansatz with the reference equal to the Wick vacuum, each commutator is written as
 a connected product (see :ref:`mbpt-lst`), which equals the commutator only once the operators are connected when taking
 the expectation value; evaluated with empty connectivity it retains disconnected terms. For a unitary ansatz, or when the
-reference differs from the Wick vacuum (where ``ref_av`` requires empty ``connect`` and ``do_not_connect`` lists), H̄ is
-built from explicit commutators and is self-contained; imposing connectivity on it would drop terms that must survive.
+reference differs from the Wick vacuum (where ``ref_av`` requires empty ``connect`` and ``do_not_connect`` lists unless
+the vacuum is ``Vacuum::MultiProduct``), H̄ is built from explicit commutators and is self-contained; imposing
+connectivity on it would drop terms that must survive.
 
 :func:`CC::hbar_connections() <sequant::mbpt::CC::hbar_connections>` returns the connectivity that matches the form H̄
 was built with, ``default_op_connections()`` or empty, and the class uses it (or a superset) for its own equations. Pass
