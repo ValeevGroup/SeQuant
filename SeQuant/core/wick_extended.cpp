@@ -275,10 +275,10 @@ using Alternatives = container::svector<container::svector<ExprPtr>>;
 /// @return the split of a 1-body γ (@p is_gamma) or η {@p bra; @p ket} into
 /// a δ over its core (γ) or virtual (η) part, in the basis of @p bra and so an
 /// overlap if @p ket is in another (e.g. a cluster-specific virtual of another
-/// pair), and a γ/η over its active part, or nullopt if both indices are
-/// already active; the virtual part of a γ and the core part of an η vanish, so
-/// the indices may range over any space (e.g. an input γ over the complete
-/// space)
+/// pair), and a γ/η over its active part between indices in the bases of @p bra
+/// and @p ket, or nullopt if both indices are already active; the virtual part
+/// of a γ and the core part of an η vanish, so the indices may range over any
+/// space (e.g. an input γ over the complete space)
 std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
                                           IndexSpaceMetric metric,
                                           IndexFactory &idxfac,
@@ -298,8 +298,8 @@ std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
   }
   if (const auto active = common.type().intersection(parts.active)) {
     const auto &sp = isr.retrieve(active, common.qns());
-    const auto b = idxfac.make(sp);
-    const auto k = idxfac.make(sp);
+    const auto b = make_in_basis_of(idxfac, sp, bra);
+    const auto k = make_in_basis_of(idxfac, sp, ket);
     result.push_back(
         {make_kronecker(bra, b),
          is_gamma ? density::make_rdm(b, k) : density::make_hole_rdm(b, k),

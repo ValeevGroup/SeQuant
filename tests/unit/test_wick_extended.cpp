@@ -351,6 +351,29 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(simplify(eta_result - eta_coeff * ops_av) == ex<Constant>(0));
   }
 
+  SECTION("WickTheorem: a split density keeps the bases of its indices") {
+    // γ{p_1<i_1>;p_2<i_2>}: each block binds p_1 (p_2) to an index in its
+    // basis, so every δ of the result is between indices of one basis
+    const Index i1(L"i_1"), i2(L"i_2"), p1(L"p_1", {i1}), p2(L"p_2", {i2});
+    auto in = density::make_rdm(p1, p2) *
+              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
+              ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}));
+    ExprPtr result;
+    REQUIRE_NOTHROW(result = wick_mp(in));
+    std::size_t ndeltas = 0;
+    result->visit(
+        [&](const ExprPtr& e) {
+          if (!e->is<Tensor>()) return;
+          const auto& t = e->as<Tensor>();
+          if (t.label() != reserved::kronecker_label()) return;
+          ++ndeltas;
+          INFO(toUtf8(to_latex(e)));
+          REQUIRE(t.bra()[0].proto_indices() == t.ket()[0].proto_indices());
+        },
+        /* atoms_only = */ true);
+    REQUIRE(ndeltas > 0);
+  }
+
   SECTION("WickTheorem: dummy indices keep their provenance") {
     // a one-body h summed against its operator's indices, times an active
     // one-body operator: every op index of the first factor is a dummy
