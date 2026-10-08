@@ -33,7 +33,7 @@ namespace sequant::mbpt::bernoulli {
 /// @param N cluster/excitation rank (also the N/R rank cutoff)
 /// @param rank highest Bernoulli order @f$\bar{H}^{k}@f$ to include
 /// @param skip1 exclude singles from T
-/// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
+/// @pre the reference is the Wick vacuum (enforced in every build)
 /// @throw Exception if CSV is enabled
 ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1);
 

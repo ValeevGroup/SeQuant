@@ -186,7 +186,7 @@ class CC {
   ///   \rangle = 0 \f$ for `k` in
   /// the [1,N] range; element 0 contains the λ pseudoenergy, computed as the
   /// CC energy with \f$ \hat{T} \f$ replaced by \f$ \hat{\Lambda}^{\dagger} \f$
-  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
+  /// @pre the reference is the Wick vacuum (enforced in every build)
   [[nodiscard]] std::vector<ExprPtr> λ() const;
 
   // clang-format off
@@ -196,7 +196,7 @@ class CC {
   /// @param nbatch optional batching index rank for perturbation operators
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @throw Exception if `hbar_singles_comm_rank` is positive
-  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
+  /// @pre the reference is the Wick vacuum (enforced in every build)
   /// @return std::vector of perturbed t amplitude equations
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> tʼ(
@@ -209,7 +209,7 @@ class CC {
   /// @param order order of perturbation
   /// @param nbatch optional batching index rank for perturbation operators
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
-  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
+  /// @pre the reference is the Wick vacuum (enforced in every build)
   /// @return std::vector of perturbed λ amplitude equations
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> λʼ(
@@ -239,7 +239,7 @@ class CC {
   ///   - Empty uses the configured H̄ rank for every block.
   /// @note UCC always uses Hamiltonian-matrix assembly. Traditional CC uses
   ///   its connected H̄R product and does not support block ranks.
-  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
+  /// @pre the reference is the Wick vacuum (enforced in every build)
   /// @throw Exception if non-empty `block_ranks` is used with a traditional
   ///   ansatz, or if `block_ranks` is not `K`×`K`
   /// @return projected sigma equations in a vector of size `min(np, nh) + 1`,
@@ -256,7 +256,7 @@ class CC {
   /// @brief derives left-side sigma equations for EOM-CC
   /// @param np number of particle annihilators in L operator
   /// @param nh number of hole annihilators in L operator
-  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
+  /// @pre the reference is the Wick vacuum (enforced in every build)
   /// @return vector of left side sigma equations, element 0 is always null
   [[nodiscard]] std::vector<ExprPtr> eom_l(nₚ np, nₕ nh) const;
 
@@ -284,7 +284,7 @@ class CC {
   ///   `hbar_comm_rank` for the unitary ansatz (where it does not). Pass an
   ///   explicit value to truncate earlier.
   /// @throw Exception if `hbar_singles_comm_rank` is positive
-  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
+  /// @pre the reference is the Wick vacuum (enforced in every build)
   /// @return the RDM expression (Fermi-vacuum normal-ordered / correlation
   /// part)
   [[nodiscard]] ExprPtr rdm(

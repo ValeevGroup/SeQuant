@@ -45,6 +45,7 @@
 #include <iterator>
 #include <map>
 #include <optional>
+#include <source_location>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -1407,6 +1408,16 @@ inline bool reference_is_vacuum() {
   const auto isr = get_default_context().index_space_registry();
   SEQUANT_ASSERT(isr, "the default context has no IndexSpaceRegistry");
   return isr->reference_occupied_space() == isr->vacuum_occupied_space();
+}
+
+/// @brief Enforces that the reference is the Wick vacuum
+/// @param location the location reported on failure; by default, the caller's
+/// @throw Exception (or aborts, per SEQUANT_ENFORCE) if the reference differs
+///        from the Wick vacuum
+inline void enforce_reference_is_vacuum(
+    std::source_location location = std::source_location::current()) {
+  if (!reference_is_vacuum())
+    enforce_failed("the reference must be the Wick vacuum", location);
 }
 
 /// @brief Rejects connectivity constraints that ref_av cannot honor

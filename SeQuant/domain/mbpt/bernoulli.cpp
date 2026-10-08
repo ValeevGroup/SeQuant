@@ -352,8 +352,7 @@ ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff, std::size_t min_rank) {
 ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   if (get_default_mbpt_context().csv() == CSV::Yes)
     throw Exception("bernoulli::hbar: CSV is not supported");
-  SEQUANT_ENFORCE(mbpt::detail::reference_is_vacuum(),
-                  "bernoulli::hbar: the reference must be the Wick vacuum");
+  mbpt::detail::enforce_reference_is_vacuum();
 
   using namespace detail;
   // σ carries ranks [min_rank, cutoff]; V̄_N = 0 holds over exactly that range
