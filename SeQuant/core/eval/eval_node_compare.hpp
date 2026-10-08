@@ -9,21 +9,10 @@
 #include <compare>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <unordered_map>
 #include <utility>
 
 namespace sequant {
-
-namespace detail {
-/// @return true (the default) unless SEQUANT_EVAL_LAX_LAYOUT is set: the
-/// result mode layout is part of eval-node identity (see the use site in
-/// TreeNodeEqualityComparator)
-inline bool strict_layout_identity() {
-  static const bool lax = std::getenv("SEQUANT_EVAL_LAX_LAYOUT") != nullptr;
-  return !lax;
-}
-}  // namespace detail
 
 /// Functor to compute the hash of a given (evaluation) tree node.
 ///
@@ -209,8 +198,7 @@ struct TreeNodeEqualityComparator {
       // and the hash-keyed value maps of the ordered (DAG) executor must
       // agree with this comparator on what is one value.
 
-      // The two nodes must lay their result modes out the same way (default;
-      // SEQUANT_EVAL_LAX_LAYOUT=1 opts out).
+      // The two nodes must lay their result modes out the same way.
       //
       // The hash and the connectivity comparison identify nodes across index
       // renamings and across bra<->ket orientation -- that is what makes a
@@ -222,8 +210,7 @@ struct TreeNodeEqualityComparator {
       // other ordering is a transposed value (measured: a residual block's
       // product node C+.(g.C) laid out (i_1,i_2;..) served to its twin laid
       // out (i_2,i_1;..) put a PNS-MP1 energy 7 % off).
-      if (detail::strict_layout_identity() &&
-          lhs->layout_fingerprint() != rhs->layout_fingerprint()) {
+      if (lhs->layout_fingerprint() != rhs->layout_fingerprint()) {
         return false;
       }
 
