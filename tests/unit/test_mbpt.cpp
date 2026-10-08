@@ -59,14 +59,20 @@ namespace {
        .op_registry = std::move(reg)});
 }
 
+/// the first ordinal of the indices external_in_base() names: above those the
+/// tests spell, below those of temporary indices
+constexpr std::size_t external_in_base_ordinal = 50;
+
 /// @return the index that stands for @p idx, one of @p externals, in the base
-/// space @p base; its ordinal is below those of temporary indices and above
-/// those the tests spell
+/// space @p base
 sequant::Index external_in_base(
     const sequant::Index& idx, const sequant::IndexSpace& base,
     const sequant::container::set<sequant::Index>& externals) {
   const auto k = std::distance(externals.begin(), externals.find(idx));
-  return sequant::Index(base.base_key() + L"_" + std::to_wstring(50 + k), base);
+  REQUIRE(external_in_base_ordinal + k < sequant::Index::min_tmp_index());
+  return sequant::Index(
+      base.base_key() + L"_" + std::to_wstring(external_in_base_ordinal + k),
+      base);
 }
 
 /// @return @p expr spelled so that two reference expectation values that
@@ -1655,7 +1661,8 @@ SECTION("MRSO-MultiProduct") {
       }
       const auto mp = mbpt::decompositions::cumulants_to_densities(
           FWickTheorem{mp_input}.compute());
-      // all base-space assignments of the legs
+      // all base-space assignments of the legs; each union leg multiplies
+      // them by the number of its base spaces
       container::svector<container::svector<Legs>> assignments{strings};
       for (std::size_t s_i = 0; s_i != strings.size(); ++s_i)
         for (std::size_t l_i = 0; l_i != strings[s_i].size(); ++l_i) {
@@ -1704,8 +1711,8 @@ SECTION("MRSO-MultiProduct") {
                 active_only = active_only && idx.space() == isr->retrieve(L"u");
           },
           /*atoms_only=*/true);
-      CHECK(active_only);
       INFO("mp: " << toUtf8(to_latex(mp)));
+      CHECK(active_only);
       REQUIRE(simplify(in_base_spaces(mp, externals) -
                        in_base_spaces(sp, externals)) == ex<Constant>(0));
     };
