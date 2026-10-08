@@ -9,12 +9,11 @@ namespace sequant {
 ///
 /// \brief Canonicalization byproduct mapping a node's _cached_ canonical result
 ///        to the value the node denotes. Applied on retrieval
-///        (see apply_canon_transform in eval.hpp); excluded from the node's
-///        own (slot) hash, exactly as the former standalone canon_phase was.
-///        conj/braket_swap DO enter the parent's structural hash via
-///        structural_salt() -- see the design spec's uniform-conj-hoists /
-///        mixed-conj-salts rule
-///        (doc/dev/specs/2026-09-01-lazy-conj-eval-design.md).
+///        (see apply_canon_transform in eval.hpp) and excluded from the node's
+///        own (slot) hash, so that every transform of one canonical value
+///        shares its slot. conj/braket_swap do enter the parent's structural
+///        hash via structural_salt(): a uniform conjugation hoists, a mixed
+///        one salts (see doc/developer/conjugation.rst, "The eval boundary").
 struct CanonTransform {
   std::int8_t phase = 1;     ///< +/-1 linear byproduct (antisymmetric reorder)
   bool conj = false;         ///< elementwise complex conjugation
