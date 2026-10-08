@@ -1113,6 +1113,14 @@ EvalExprNode binarize_re_im(ExprPtr const& inner, EvalOp op,
     std::size_t inner_counter = 0;
     return impl::binarize(inner, uncontract, inner_opts, inner_counter);
   }();
+  // Result::real_part/imag_part exist for scalar results only, and the
+  // exporters have no form for the node either, so a tensor-valued wrapper is
+  // refused here rather than at evaluation
+  if (inner_node->is_tensor())
+    throw Exception(
+        "binarize: a Re/Im wrapper over a tensor-valued expression has no "
+        "evaluation; only the real or imaginary part of a scalar-valued "
+        "expression is evaluated");
   auto h = inner_node->hash_value();
   if (auto salt = inner_node->canon_transform().structural_salt(); salt != 0)
     hash::combine(h, salt);

@@ -76,6 +76,20 @@ TEST_CASE("eval_expr_sum_keeps_empty_slots", "[EvalExpr]") {
   REQUIRE(t.ket_net_rank() == 1);
 }
 
+// Re/Im are evaluated for scalar results only, so a wrapper over a
+// tensor-valued expression is refused where the eval node is built
+TEST_CASE("eval_expr_re_im_tensor_valued", "[EvalExpr][re-im]") {
+  using namespace sequant;
+  auto t = ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"});
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  REQUIRE_THROWS_AS(binarize(real_part(t->clone())), Exception);
+  REQUIRE_THROWS_AS(binarize(imaginary_part(t->clone())), Exception);
+  // a scalar-valued one is fine
+  auto s = ex<Tensor>(L"g", bra{L"i_1"}, ket{L"a_1"}) * t->clone();
+  REQUIRE_NOTHROW(binarize(real_part(s)));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+}
+
 TEST_CASE("eval_expr", "[EvalExpr]") {
   using namespace std::string_literals;
   using sequant::EvalExpr;
