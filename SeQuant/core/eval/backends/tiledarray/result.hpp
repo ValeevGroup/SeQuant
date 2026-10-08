@@ -723,17 +723,35 @@ class ResultTensorTA final : public Result {
     return f(arr(a));
   }
 
-  void ensure_materialized() const override {
-    if (!view_) return;
+  /// @return the pending view applied to the array, as an array of its own
+  /// @pre is_view()
+  [[nodiscard]] ArrayT materialized() const {
+    SEQUANT_ASSERT(view_);
     auto const rank = raw<ArrayT>().trange().rank();
     auto const ann = TA::detail::dummy_annotation(rank);
     ArrayT r;
     with_expr(ann, [&](auto&& e) { r(ann) = e; });
     ::sequant::detail::wait_for_lazy_cleanup(r);
     log_ta_tensor_host_memory_use();
-    reset_value(std::move(r));
+    return r;
+  }
+
+  void ensure_materialized() const override {
+    if (!view_) return;
+    reset_value(materialized());
     view_.reset();
     alias_ = false;  // the buffer is this result's own now
+  }
+
+  /// makes the array this result's own, for a mutation: a pending view is
+  /// materialized, and an alias of another result's tiles with no view left
+  /// (a transform that composed to the identity) is deep-copied
+  void ensure_owned() const {
+    ensure_materialized();
+    if (alias_) {
+      reset_value(TA::clone(raw<ArrayT>()));
+      alias_ = false;
+    }
   }
 
   /// the array in the view's logical layout: a pending view is
@@ -895,9 +913,11 @@ class ResultTensorTA final : public Result {
   /// Deep copy: \c TA::DistArray's own copy is a shallow (reference-counted)
   /// handle onto the same tiles, so an in-place accumulation into the copy
   /// would be seen by every other holder -- \c TA::clone allocates and copies
-  /// the tiles.
+  /// the tiles. A pending view is applied into the copy directly, which is
+  /// the one allocation either way.
   [[nodiscard]] ResultPtr clone() const override {
-    return eval_result<this_type>(TA::clone(get<ArrayT>()));
+    if (view_) return eval_result<this_type>(materialized());
+    return eval_result<this_type>(TA::clone(raw<ArrayT>()));
   }
 
   [[nodiscard]] ResultPtr permute(
@@ -924,11 +944,16 @@ class ResultTensorTA final : public Result {
                                   /*alias=*/true);
   }
 
+  /// @note `t(ann) += oe` evaluates the sum into a new array and reseats the
+  ///       handle, so on TiledArray the accumulation allocates a result-sized
+  ///       array rather than updating the tiles in place; the accumulator is
+  ///       made this result's own first, so neither the reseat nor a
+  ///       tile-level update can reach another result's tiles
   void add_inplace(Result const& other) override {
     SEQUANT_ASSERT(other.is<this_type>());
     auto const& o = static_cast<this_type const&>(other);
 
-    ensure_materialized();  // the target must be a real, unshared array
+    ensure_owned();
     auto& t = get<ArrayT>();
     // a relabeled view has a different stored mode order: materialize it;
     // a phase/conj-only view is consumed lazily

@@ -1427,6 +1427,10 @@ ResultPtr evaluate(Node const& node,           //
     result.post = perm ? result.pre->permute(
                              std::array<std::any, 2>{node->annot(), layout})
                        : result.pre;
+    // the engine passes lazy views around, but this entry point hands the
+    // caller a buffer of their own: a view onto a cache entry or a leaf
+    // evaluator's array is materialized here
+    if (result.post->is_buffer_alias()) result.post = result.post->clone();
   });
 
   SEQUANT_ASSERT(result.post);
@@ -1485,11 +1489,13 @@ ResultPtr evaluate(Nodes const& nodes,  //
 
   for (auto&& n : nodes) {
     if (!result) {
-      // The first summand's value may alias a cache entry or a leaf served by
-      // the leaf evaluator (a memoized amplitude, integral, ...); the
-      // add_inplace below mutates the accumulator, so it must be a private
-      // deep copy (Result::clone).
-      result = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache)->clone();
+      // the add_inplace below mutates the accumulator, so the first summand's
+      // value must be a private buffer: a leaf's belongs to the leaf
+      // evaluator (a memoized amplitude, integral, ...) and a cache entry to
+      // its other readers, so those are deep-copied; a freshly computed
+      // value held by nothing else is used as it is
+      result = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache);
+      if (n.leaf() || cache.chain_holds(result)) result = result->clone();
       continue;
     }
 

@@ -928,6 +928,21 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           result->get<TA::TArrayD>(), eval_node(expr)->as_tensor().bra_rank());
     };
 
+    SECTION("evaluate hands out an array of the caller's own") {
+      // inside the engine a relabeled read of a leaf is a lazy view onto the
+      // leaf evaluator's array; the entry point materializes it, so the
+      // caller may mutate the result without touching the leaf
+      auto result = evaluate(eval_node(parse_antisymm(L"t{a1;i1}")),
+                             std::string("i_1,a_1"), yield_);
+      REQUIRE_FALSE(result->is_buffer_alias());
+      auto const& leaf = yield(L"t{v;o}");
+      double const leaf_norm = TA::norm2(leaf);
+      TA::TArrayD arr = result->get<TA::TArrayD>();
+      TA::foreach_inplace(arr, [](auto& tile) { tile.scale_to(2.0); });
+      REQUIRE(TA::norm2(leaf) == Catch::Approx(leaf_norm));
+      REQUIRE(TA::norm2(arr) == Catch::Approx(2 * leaf_norm));
+    }
+
     SECTION("summation") {
       auto expr1 = parse_antisymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
 
