@@ -1,19 +1,32 @@
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <string>
 #include <string_view>
+#include <tuple>
 
 namespace sequant {
 
 Variable::Variable(std::wstring label)
-    : label_(std::move(label)), conjugated_(false) {}
+    : label_(std::move(label)), conjugated_(false) {
+  adopt_marks();
+}
 
 Variable::Variable(const std::string &label)
-    : label_(sequant::toUtf16(label)), conjugated_(false) {}
+    : label_(sequant::toUtf16(label)), conjugated_(false) {
+  adopt_marks();
+}
+
+void Variable::adopt_marks() {
+  const auto [adjointed, kconjugated] = split_state_marks(label_);
+  if (adjointed)
+    throw Exception("Variable: a variable name carries no adjoint mark");
+  if (kconjugated) conjugated_ = true;
+}
 
 Expr::type_id_type Variable::type_id() const { return get_type_id<Variable>(); }
 
@@ -43,7 +56,14 @@ bool Variable::static_equal(const Expr &that) const {
 std::wstring_view Variable::label() const { return label_; }
 
 void Variable::set_label(std::wstring label) {
+  auto before = std::tuple{std::move(label_), conjugated_};
   label_ = std::move(label);
+  try {
+    adopt_marks();
+  } catch (...) {
+    std::tie(label_, conjugated_) = std::move(before);
+    throw;
+  }
   reset_hash_value();
 }
 

@@ -153,6 +153,27 @@ TEST_CASE("set_label_marks", "[conjugation]") {
   REQUIRE_FALSE(n.kconjugated());
 }
 
+TEST_CASE("variable_marks", "[conjugation]") {
+  using namespace sequant;
+  // the printed name of a conjugated variable reads back as that variable
+  Variable x(L"x");
+  x.conjugate();
+  REQUIRE(x.decorated_label() == L"x꙳");
+  REQUIRE(Variable(x.decorated_label()) == x);
+  REQUIRE(Variable(L"y꙳").label() == L"y");
+  REQUIRE(Variable(L"y꙳").conjugated());
+  REQUIRE(*deserialize<ExprPtr>(serialize(ex<Variable>(x))) == x);
+  // a variable has no adjoint state
+  REQUIRE_THROWS_AS(Variable(L"z⁺"), Exception);
+  Variable w(L"w");
+  REQUIRE_THROWS_AS(w.set_label(L"v⁺"), Exception);
+  REQUIRE(w.label() == L"w");
+  REQUIRE_FALSE(w.conjugated());
+  w.set_label(L"v꙳");
+  REQUIRE(w.label() == L"v");
+  REQUIRE(w.conjugated());
+}
+
 TEST_CASE("re_im_composition_table", "[conjugation]") {
   // Re/Im are real-valued, so the four compositions collapse:
   //   Re(Re x) = Re x,  Re(Im x) = Im x,  Im(Re x) = 0,  Im(Im x) = 0

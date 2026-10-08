@@ -27,16 +27,28 @@ class Variable : public Expr, public MutatableLabeled {
              !Expr::is_shared_ptr_of_expr_or_derived<
                  std::remove_reference_t<U>>::value &&
              std::constructible_from<std::wstring, U>)
-  explicit Variable(U &&label) : label_(std::forward<U>(label)) {}
+  explicit Variable(U &&label) : label_(std::forward<U>(label)) {
+    adopt_marks();
+  }
 
+  /// @param label the name; a trailing `꙳` (sequant::conjugate_label) is
+  ///        adopted as the conjugated state, so that a printed name
+  ///        (decorated_label()) reads back as the variable it printed
+  /// @throw Exception if @p label ends in an adjoint mark `⁺`, which a
+  ///        variable has no state for, or repeats a mark
   Variable(std::wstring label);
 
+  /// @copydoc Variable(std::wstring)
   Variable(const std::string &label);
 
   /// @return variable label
   /// @warning conjugation does not change it
   std::wstring_view label() const override;
 
+  /// @param label the new label; a trailing `꙳` sets the conjugated state and
+  ///        a plain label keeps it, as in the constructors
+  /// @throw Exception as the constructors do, in which case the variable is
+  ///        left as the call found it
   void set_label(std::wstring label) override;
 
   /// complex-conjugates this
@@ -70,6 +82,9 @@ class Variable : public Expr, public MutatableLabeled {
   [[nodiscard]] std::int8_t kconjugate() override;
 
  private:
+  /// adopts a trailing `꙳` of label_ into conjugated_; refuses `⁺`
+  void adopt_marks();
+
   std::wstring label_;
   bool conjugated_ = false;
 
