@@ -343,7 +343,7 @@ struct ClosedShellCCTripletSpintraceOptions {
   bool compact = true;
   /// which residual variant to build; unset selects
   /// triplet_residual_kind of the projection rank
-  std::optional<TripletResidualKind> residual;
+  std::optional<TripletResidualKind> residual = std::nullopt;
 };
 
 // clang-format off
