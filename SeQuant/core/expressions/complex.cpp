@@ -14,141 +14,21 @@ ExprPtr hoist_real_scalar(ExprPtr& inner) {
   inner = strip_scalar(prod);
   return ex<Constant>(scalar);
 }
+
+ExprPtr canonicalize_projected(ExprPtr& inner, CanonicalizeOptions opts,
+                               bool rapid) {
+  // a Constant byproduct of the inner canonicalization multiplies the wrapped
+  // expression back, and the eager hoist then takes a real scalar out again:
+  // `Re(c X)` is `c Re(X)` for a real c, so that scalar leaves as the node's
+  // own byproduct and no canonical wrapper holds a scaled Product. A complex
+  // scalar stays inside, the wrapper not being linear over it
+  if (auto byproduct =
+          rapid ? inner->rapid_canonicalize(opts) : inner->canonicalize(opts);
+      byproduct && byproduct->is<Constant>())
+    inner = byproduct * inner;
+  return hoist_real_scalar(inner);
+}
 }  // namespace detail
-
-ExprPtr RealPart::clone() const { return ex<RealPart>(inner_->clone()); }
-
-std::wstring RealPart::to_latex() const {
-  return L"\\Re\\left[" + inner_->to_latex() + L"\\right]";
-}
-
-ExprPtr RealPart::canonicalize(CanonicalizeOptions opts) {
-  // a Constant byproduct of the inner canonicalization multiplies the wrapped
-  // expression back, and the eager hoist then takes a real scalar out again:
-  // `Re(c X)` is `c Re(X)` for a real c, so that scalar leaves as this node's
-  // own byproduct and no canonical wrapper holds a scaled Product. A complex
-  // scalar stays inside, the wrapper not being linear over it
-  if (auto byproduct = inner_->canonicalize(opts);
-      byproduct && byproduct->is<Constant>())
-    inner_ = byproduct * inner_;
-  ExprPtr hoisted = detail::hoist_real_scalar(inner_);
-  reset_hash_value();
-  return hoisted;
-}
-
-ExprPtr RealPart::rapid_canonicalize(CanonicalizeOptions opts) {
-  SEQUANT_ASSERT(opts.method == CanonicalizationMethod::Rapid);
-  if (auto byproduct = inner_->rapid_canonicalize(opts);
-      byproduct && byproduct->is<Constant>())
-    inner_ = byproduct * inner_;
-  ExprPtr hoisted = detail::hoist_real_scalar(inner_);
-  reset_hash_value();
-  return hoisted;
-}
-
-ExprIterator RealPart::begin_subexpr() {
-  // N.B. a mutable iterator into inner_ invalidates the memoized hash
-  reset_hash_value();
-  return ExprIterator{&inner_};
-}
-
-ExprIterator RealPart::end_subexpr() {
-  reset_hash_value();
-  return ExprIterator{&inner_ + 1};
-}
-
-ConstExprIterator RealPart::begin_subexpr() const {
-  return ConstExprIterator{&inner_};
-}
-
-ConstExprIterator RealPart::end_subexpr() const {
-  return ConstExprIterator{&inner_ + 1};
-}
-
-Expr::hash_type RealPart::memoizing_hash() const {
-  auto compute = [this]() {
-    auto v = hash::value(*inner_);
-    hash::combine(v, std::size_t{0xC0FFEE01ull});
-    return v;
-  };
-  if (!hash_value_) hash_value_ = compute();
-  return *hash_value_;
-}
-
-bool RealPart::static_equal(const Expr& that) const {
-  return *inner_ == *static_cast<const RealPart&>(that).inner_;
-}
-
-bool RealPart::static_less_than(const Expr& that) const {
-  return *inner_ < *static_cast<const RealPart&>(that).inner_;
-}
-
-ExprPtr ImagPart::clone() const { return ex<ImagPart>(inner_->clone()); }
-
-std::wstring ImagPart::to_latex() const {
-  return L"\\Im\\left[" + inner_->to_latex() + L"\\right]";
-}
-
-ExprPtr ImagPart::canonicalize(CanonicalizeOptions opts) {
-  // a Constant byproduct of the inner canonicalization multiplies the wrapped
-  // expression back, and the eager hoist then takes a real scalar out again:
-  // `Im(c X)` is `c Im(X)` for a real c, so that scalar leaves as this node's
-  // own byproduct and no canonical wrapper holds a scaled Product. A complex
-  // scalar stays inside, the wrapper not being linear over it
-  if (auto byproduct = inner_->canonicalize(opts);
-      byproduct && byproduct->is<Constant>())
-    inner_ = byproduct * inner_;
-  ExprPtr hoisted = detail::hoist_real_scalar(inner_);
-  reset_hash_value();
-  return hoisted;
-}
-
-ExprPtr ImagPart::rapid_canonicalize(CanonicalizeOptions opts) {
-  SEQUANT_ASSERT(opts.method == CanonicalizationMethod::Rapid);
-  if (auto byproduct = inner_->rapid_canonicalize(opts);
-      byproduct && byproduct->is<Constant>())
-    inner_ = byproduct * inner_;
-  ExprPtr hoisted = detail::hoist_real_scalar(inner_);
-  reset_hash_value();
-  return hoisted;
-}
-
-ExprIterator ImagPart::begin_subexpr() {
-  // N.B. a mutable iterator into inner_ invalidates the memoized hash
-  reset_hash_value();
-  return ExprIterator{&inner_};
-}
-
-ExprIterator ImagPart::end_subexpr() {
-  reset_hash_value();
-  return ExprIterator{&inner_ + 1};
-}
-
-ConstExprIterator ImagPart::begin_subexpr() const {
-  return ConstExprIterator{&inner_};
-}
-
-ConstExprIterator ImagPart::end_subexpr() const {
-  return ConstExprIterator{&inner_ + 1};
-}
-
-Expr::hash_type ImagPart::memoizing_hash() const {
-  auto compute = [this]() {
-    auto v = hash::value(*inner_);
-    hash::combine(v, std::size_t{0xC0FFEE02ull});
-    return v;
-  };
-  if (!hash_value_) hash_value_ = compute();
-  return *hash_value_;
-}
-
-bool ImagPart::static_equal(const Expr& that) const {
-  return *inner_ == *static_cast<const ImagPart&>(that).inner_;
-}
-
-bool ImagPart::static_less_than(const Expr& that) const {
-  return *inner_ < *static_cast<const ImagPart&>(that).inner_;
-}
 
 namespace detail {
 ExprPtr strip_scalar(const Product& prod) {
