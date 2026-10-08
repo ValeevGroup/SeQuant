@@ -92,7 +92,8 @@ extern template ExprPtr cumulant_expand<Statistics::FermiDirac>(
 /// @pre the default context's vacuum is MultiProduct
 /// @throw Exception if an ordinal of `opts.nop_connections` or
 ///        `opts.nop_avoided_connections` is not that of an input
-///        NormalOperator of a term
+///        NormalOperator of a term with operators; a term without operators
+///        is kept as it is
 template <Statistics S>
 ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
                       WickTheorem<S> &stats_sink);

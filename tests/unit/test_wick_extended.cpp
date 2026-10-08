@@ -837,6 +837,13 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE_THROWS_AS(wick_mp(in, {.nop_connections = {{0, 2}}}), Exception);
     REQUIRE_THROWS_AS(wick_mp(in, {.nop_avoided_connections = {{2, 1}}}),
                       Exception);
+    // a term without operators is kept, as under the other vacua
+    const auto c = ex<Constant>(2) *
+                   ex<Tensor>(L"h", bra{L"u_5"}, ket{L"u_6"}, Symmetry::Nonsymm,
+                              BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+    const detail::ExtendedWickOptions connected{.nop_connections = {{0, 1}}};
+    REQUIRE(simplify(wick_mp(in + c, connected) - wick_mp(in, connected) - c) ==
+            ex<Constant>(0));
   }
 
   SECTION("WickTheorem: Sum input") {

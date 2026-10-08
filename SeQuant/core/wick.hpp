@@ -216,8 +216,9 @@ class WickTheorem {
   /// @note under a Vacuum::MultiProduct vacuum a cumulant connects every
   /// operator its indices come from
   /// @note the ordinals count the NormalOperator objects of each term of an
-  /// (expanded) expression input, so compute() throws on a term with fewer
-  /// operators than an ordinal names
+  /// (expanded) expression input, so compute() throws on a term whose
+  /// operators are fewer than an ordinal names; a term without operators is
+  /// kept as it is, as under every vacuum
   /// @throw Exception if @p op_index_pairs contains duplicates
   ///@{
 
