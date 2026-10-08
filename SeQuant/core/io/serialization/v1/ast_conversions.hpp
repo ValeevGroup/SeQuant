@@ -24,6 +24,7 @@
 #include <range/v3/algorithm/find.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -242,7 +243,15 @@ ColumnSymmetry to_column_symmetry(char c, std::size_t offset, const Iterator &,
 
 template <typename PositionCache, typename Iterator>
 Constant to_constant(const io::serialization::v1::ast::Number &number,
-                     const PositionCache &, const Iterator &) {
+                     const PositionCache &position_cache,
+                     const Iterator &begin) {
+  if (!std::isfinite(number.numerator) || !std::isfinite(number.denominator) ||
+      number.denominator == 0) {
+    auto [offset, length] = get_pos(number, position_cache, begin);
+    throw SerializationError(offset, length,
+                             "a number must be finite with a nonzero "
+                             "denominator");
+  }
   const ::sequant::rational magnitude =
       (static_cast<std::int64_t>(number.numerator) == number.numerator &&
        static_cast<std::int64_t>(number.denominator) == number.denominator)
@@ -352,6 +361,28 @@ struct Transformer {
       throw_at(node, "an operator name carries no adjoint or conjugation mark");
   }
 
+  /// refuses what a normal operator cannot carry: aux indices, and a
+  /// symmetry annotation other than its defining one (@p perm within the
+  /// creators and annihilators, column-symmetric, bra-ket nonsymmetric, no
+  /// parity letter)
+  template <typename Aux>
+  void check_operator_spelling(const io::serialization::v1::ast::Tensor &node,
+                               const Aux &auxiliaries, char perm) const {
+    if (ranges::size(auxiliaries) != 0)
+      throw_at(node, "an operator carries no aux indices");
+    if (!node.symmetry.has_value()) return;
+    const auto &spec = node.symmetry.value();
+    constexpr auto unspecified = ast::SymmetrySpec::unspecified;
+    if ((spec.perm_symm != unspecified && spec.perm_symm != perm) ||
+        (spec.braket_symm != unspecified && spec.braket_symm != 'N') ||
+        (spec.column_symm != unspecified && spec.column_symm != 'S') ||
+        spec.conjugation_parity != unspecified)
+      throw_at(node,
+               "an operator's symmetries are fixed; its annotation may only "
+               "restate them (" +
+                   std::string(1, perm) + "-N-S)");
+  }
+
   ExprPtr operator()(const io::serialization::v1::ast::Tensor &tensor) const {
     auto [braIndices, ketIndices, auxiliaries] =
         make_indices(tensor.indices, position_cache.get(), begin.get());
@@ -373,14 +404,7 @@ struct Transformer {
       // an operator-valued tensor carries neither state: its bra<->ket swap
       // exchanges creators and annihilators
       refuse_marks(tensor, adjointed, kconjugated);
-      SEQUANT_ASSERT(ranges::size(auxiliaries) == 0);
-      SEQUANT_ASSERT(!tensor.symmetry.has_value() ||
-                     ((tensor.symmetry.value().perm_symm ==
-                           ast::SymmetrySpec::unspecified ||
-                       tensor.symmetry.value().perm_symm == 'A') &&
-                      (tensor.symmetry.value().column_symm ==
-                           ast::SymmetrySpec::unspecified ||
-                       tensor.symmetry.value().column_symm == 'S')));
+      check_operator_spelling(tensor, auxiliaries, 'A');
       Vacuum vac = fit == ranges::begin(FNOperator::labels())
                        ? Vacuum::Physical
                        : tilde_vacuum(Statistics::FermiDirac);
@@ -391,14 +415,7 @@ struct Transformer {
     if ((bit = ranges::find(BNOperator::labels(), name)) !=
         ranges::end(BNOperator::labels())) {
       refuse_marks(tensor, adjointed, kconjugated);
-      SEQUANT_ASSERT(ranges::size(auxiliaries) == 0);
-      SEQUANT_ASSERT(!tensor.symmetry.has_value() ||
-                     ((tensor.symmetry.value().perm_symm ==
-                           ast::SymmetrySpec::unspecified ||
-                       tensor.symmetry.value().perm_symm == 'S') &&
-                      (tensor.symmetry.value().column_symm ==
-                           ast::SymmetrySpec::unspecified ||
-                       tensor.symmetry.value().column_symm == 'S')));
+      check_operator_spelling(tensor, auxiliaries, 'S');
       Vacuum vac = bit == ranges::begin(BNOperator::labels())
                        ? Vacuum::Physical
                        : tilde_vacuum(Statistics::BoseEinstein);

@@ -1082,3 +1082,24 @@ TEST_CASE("serialization", "[serialization]") {
     REQUIRE(serialize(raw_respelled, {.annot_symm = true}) == raw_serialized);
   }
 }
+
+TEST_CASE("deserialize rejects what it cannot spell", "[parse]") {
+  using namespace sequant;
+  using sequant::io::serialization::SerializationError;
+  // an operator carries no aux indices and no annotation beyond its defining
+  // symmetries; neither is dropped silently
+  REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"ã{i_1;i_2;x_1}"),
+                    SerializationError);
+  REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"ã{i_1;i_2}:A-S-S-O"),
+                    SerializationError);
+  REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"ã{i_1;i_2}:S"), SerializationError);
+  REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"ã{i_1;i_2}:A-S"),
+                    SerializationError);
+  REQUIRE_NOTHROW(deserialize<ExprPtr>(L"ã{i_1;i_2}:A-N-S"));
+  // a number is finite with a nonzero denominator
+  REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"1/0 t{a_1;i_1}"),
+                    SerializationError);
+  REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"inf t{a_1;i_1}"),
+                    SerializationError);
+  REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"nan"), SerializationError);
+}
