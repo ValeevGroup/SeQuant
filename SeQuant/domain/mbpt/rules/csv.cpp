@@ -63,12 +63,9 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
                         toUtf8(end.space().base_key()) +
                         ", not in the target basis instance's space " +
                         toUtf8(csv_basis.space().base_key()));
-      auto dummy_idx =
-          csv_basis.has_basis_instance()
-              ? end.drop_proto_indices()
-                    .replace_space(csv_basis.space())
-                    .replace_basis_instance(csv_basis.basis_instance())
-              : end.drop_proto_indices().replace_basis_instance({});
+      // a fresh dummy: another overlap may share either leg
+      const auto dummy_idx = Index::make_tmp_index(
+          csv_basis.has_basis_instance() ? csv_basis : IndexBasis(end.space()));
 
       return ex<Product>(
           1,

@@ -183,11 +183,29 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
     CHECK(c2.ket().at(0) == s_ket);
     const Index dummy = c1.ket().at(0);
     CHECK(dummy == c2.bra().at(0));
-    CHECK(dummy.full_label() == L"a_1");
     CHECK(dummy.basis() == IndexBasis{uocc});
+    CHECK(!dummy.has_proto_indices());
   }
-  // ... also between temporary indices, e.g. fresh from Wick: the dummy keeps
-  // the temporary ordinal
+  // ... with a fresh dummy per overlap, also when two overlaps share a leg
+  {
+    const Index x1(uocc, 1, {i1, i2}), x2(uocc, 2, {i1}), x3(uocc, 3, {i2});
+    const auto ct =
+        mbpt::csv_transform(make_overlap(x2, x1) * make_overlap(x1, x3), uocc);
+    container::map<Index, int> counts;
+    ct->visit(
+        [&counts](const ExprPtr& e) {
+          if (e->is<Tensor>()) {
+            for (const auto& idx : e->as<Tensor>().bra()) ++counts[idx];
+            for (const auto& idx : e->as<Tensor>().ket()) ++counts[idx];
+          }
+        },
+        /*atoms_only=*/true);
+    for (const auto& [idx, n] : counts) {
+      CAPTURE(toUtf8(idx.full_label()));
+      CHECK(n <= 2);
+    }
+  }
+  // ... also between temporary indices, e.g. fresh from Wick
   {
     const Index s_bra = Index::make_tmp_index(IndexBasis{uocc, 1},
                                               container::vector<Index>{i1});
@@ -201,7 +219,7 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
     CHECK(dummy == ct->as<Product>().factor(1)->as<Tensor>().bra().at(0));
     CHECK(dummy.basis() == IndexBasis{uocc});
     CHECK(!dummy.has_proto_indices());
-    CHECK(dummy.ordinal() == s_bra.ordinal());
+    CHECK(dummy != s_bra.drop_proto_indices().replace_basis_instance({}));
   }
 
   // labels: label() never shows the instance
