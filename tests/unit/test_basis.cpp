@@ -379,3 +379,27 @@ TEST_CASE("index-basis-serialization", "[serialization][basis]") {
     }
   }
 }
+
+// moving an index with a memoized label into a spin space: the label follows
+// the new space
+TEST_CASE("index-move-into-space-resets-label", "[elements][index]") {
+  auto ctx = scoped_min_sr_context();
+  const auto& isr = get_default_context().index_space_registry();
+  const IndexSpace occ = isr->retrieve(L"i"), uocc = isr->retrieve(L"a"),
+                   uocc_alpha = isr->retrieve(L"a↑");
+  Index a3(uocc, 3);
+  (void)a3.label();
+  (void)a3.full_label();
+  const Index moved(std::move(a3), uocc_alpha);
+  CHECK(moved.space() == uocc_alpha);
+  CHECK(moved.label() == L"a↑_3");
+  CHECK(moved.full_label() == L"a↑_3");
+
+  // a PNO-style index memoizes full_label too
+  Index pno(uocc, 4, {Index(occ, 1)});
+  (void)pno.label();
+  (void)pno.full_label();
+  const Index moved_pno(std::move(pno), uocc_alpha);
+  CHECK(moved_pno.label() == L"a↑_4");
+  CHECK(moved_pno.full_label() == L"a↑_4<i_1>");
+}

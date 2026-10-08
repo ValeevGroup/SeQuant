@@ -447,6 +447,8 @@ class Index : public Taggable {
     if constexpr (std::is_same_v<std::decay_t<IndexOrIndexLabel>, Index>) {
       *this = std::forward<IndexOrIndexLabel>(index_or_index_label);
       basis_ = IndexBasis(std::move(space), basis_.basis_instance());
+      label_.reset();
+      full_label_.reset();
     } else {
       basis_ = IndexBasis(std::move(space));
       ordinal_ = to_ordinal(index_or_index_label);
