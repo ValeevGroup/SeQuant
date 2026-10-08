@@ -105,11 +105,13 @@ struct TensorSymmetries {
 ///
 /// Normalization against the traits runs at construction, in set_states(),
 /// adjoint(), kconjugate(), set_label()/adopt_marks(), with_slots(), and the
-/// slot-mutating APIs transform_indices(), set_bra(), set_ket() and set_aux()
+/// slot-mutating APIs transform_indices(), set_bra() and set_ket()
 /// (renormalize_after_slot_mutation(), which also derives #BraKetSymmetry and
 /// the elementwise #ConjugationSymmetry again from the traits and the new
 /// slots' #Field, so a mutated tensor is the tensor a construction over those
-/// slots would have given), so a state set through any of those always denotes
+/// slots would have given; a mutation that keeps the slots' field and leaves
+/// a bra or ket slot in place changes nothing and skips it), so a state set
+/// through any of those always denotes
 /// a genuinely distinct array. A mutation whose normalization would consume a
 /// sign is refused and leaves the tensor as the call found it, since no Tensor
 /// holds a sign. The AbstractTensor primitives _swap_bra_ket() and
@@ -882,11 +884,12 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ///        tensor is left as the call found it
   void set_bra(index_container_type indices) {
     auto before = slot_snapshot_if_stateful();
+    const auto key_before = slot_key();
     bra_ = sequant::bra(std::move(indices));
     bra_net_rank_ =
         ranges::count_if(bra_, [](const Index &idx) { return idx.nonnull(); });
     reset_hash_value();
-    renormalize_after_slot_mutation("set_bra", std::move(before));
+    renormalize_after_slot_mutation("set_bra", std::move(before), key_before);
   }
   /// @return the ket slot range (empty slots are occupied by null indices)
   const auto &ket() const { return ket_; }
@@ -897,25 +900,21 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ///        tensor is left as the call found it
   void set_ket(index_container_type indices) {
     auto before = slot_snapshot_if_stateful();
+    const auto key_before = slot_key();
     ket_ = sequant::ket(std::move(indices));
     ket_net_rank_ =
         ranges::count_if(ket_, [](const Index &idx) { return idx.nonnull(); });
     reset_hash_value();
-    renormalize_after_slot_mutation("set_ket", std::move(before));
+    renormalize_after_slot_mutation("set_ket", std::move(before), key_before);
   }
   /// @return the aux slot range (empty slots are occupied by null indices)
   const auto &aux() const { return aux_; }
-  /// @brief replaces the aux bundle, then reconciles the field-derived
-  /// symmetries and the states with the new slots (see
-  /// renormalize_after_slot_mutation()), which the aux bundle does not move:
-  /// it is no part of base_field() and no part of the net ranks
-  /// @throw Exception if the normalization consumes a sign, in which case the
-  ///        tensor is left as the call found it
+  /// @brief replaces the aux bundle; the field-derived symmetries and the
+  /// states stay as they are, since the aux bundle is no part of base_field()
+  /// and no part of the net ranks (see renormalize_after_slot_mutation())
   void set_aux(index_container_type indices) {
-    auto before = slot_snapshot_if_stateful();
     aux_ = sequant::aux(std::move(indices));
     reset_hash_value();
-    renormalize_after_slot_mutation("set_aux", std::move(before));
   }
   /// @return concatenated view of the bra and ket slot ranges
   auto braket() const { return ranges::views::concat(bra_, ket_); }
@@ -1247,13 +1246,15 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             typename... Args>
   bool transform_indices(const Map<Index, Index, Args...> &index_map) {
     auto before = slot_snapshot_if_stateful();
+    const auto key_before = slot_key();
     bool mutated = false;
     ranges::for_each(indices(), [&](auto &idx) {
       if (idx.transform(index_map)) mutated = true;
     });
     if (mutated) {
       this->reset_hash_value();
-      renormalize_after_slot_mutation("transform_indices", std::move(before));
+      renormalize_after_slot_mutation("transform_indices", std::move(before),
+                                      key_before);
     }
     return mutated;
   }
@@ -1371,15 +1372,27 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     reset_hash_value();
   }
 
+  /// what the field-derived symmetries and the state normalization depend on
+  /// besides the traits: the slots' #Field, and whether there is a bra or ket
+  /// slot at all (see conjugation_symmetry_of() and
+  /// kconjugation_is_the_adjoint())
+  using SlotKey = std::pair<Field, bool>;
+  SlotKey slot_key() const {
+    return {base_field(), bra_net_rank_ != 0 || ket_net_rank_ != 0};
+  }
+
   /// @brief brings the field-derived attributes and the two core states back in
   /// line with the slots after a mutation, so that a mutated tensor is the
   /// tensor a construction over the new slots would have given:
   /// #BraKetSymmetry and the elementwise #ConjugationSymmetry are derived again
   /// from the field-agnostic traits and the slots' #Field, and the states are
-  /// then normalized against them.
+  /// then normalized against them. A mutation that leaves slot_key() as it
+  /// was, e.g. a relabeling within one field, changes none of them and
+  /// returns at once.
   /// @param api the mutating member's name, for the exception message
   /// @param before the slot state as the call found it, from
   ///        slot_snapshot_if_stateful()
+  /// @param key_before slot_key() as the call found it
   /// @note a mutation can put the tensor on a basis of another field, where the
   ///       coset rule identifies `⁺` with `꙳` and a definite trait consumes the
   ///       mark outright, so a state left as written would name a different
@@ -1389,7 +1402,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ///        tensor is restored to what @p before recorded first, so a refused
   ///        mutation leaves it as the call found it, down to the slots' field.
   void renormalize_after_slot_mutation(std::string_view api,
-                                       std::optional<SlotSnapshot> &&before) {
+                                       std::optional<SlotSnapshot> &&before,
+                                       const SlotKey &key_before) {
+    if (slot_key() == key_before) return;
     braket_symmetry_ =
         resolve_symmetries(symmetries(), base_field()).braket_symmetry;
     conjugation_symmetry_ = derive_conjugation_symmetry();
