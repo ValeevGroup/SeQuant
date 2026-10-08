@@ -21,6 +21,15 @@
 
 namespace sequant::detail {
 
+void assert_protoindexed_not_active(
+    [[maybe_unused]] const IndexSpaceRegistry &isr,
+    [[maybe_unused]] const IndexSpace &sp, [[maybe_unused]] const Index &a,
+    [[maybe_unused]] const Index &b) {
+  SEQUANT_ASSERT(!(a.has_proto_indices() || b.has_proto_indices()) ||
+                     !isr.intersection(sp, isr.active_space(sp.qns())),
+                 "protoindexed indices must not reach the active space");
+}
+
 namespace {
 
 using Blocks = container::svector<container::svector<std::size_t>>;
