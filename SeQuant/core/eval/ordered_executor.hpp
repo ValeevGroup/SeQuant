@@ -585,13 +585,13 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
   return apply_op(node, std::move(left), right);
 }
 
-/// \return the IndexSpace base keys of the modes in \p modes, comma-joined
+/// \return the \c Index::basis_key() of the modes in \p modes, comma-joined
 ///         without a trailing comma (the dag-scope trace format)
 template <typename Modes>
 [[nodiscard]] std::string dag_scope(Modes&& modes) {
   return join_strings<std::string>(
       std::forward<Modes>(modes), ",",
-      [](Index const& m) { return toUtf8(m.space().base_key()); });
+      [](Index const& m) { return toUtf8(m.basis_key()); });
 }
 
 /// value id -> forest node: the node of \p vmap whose value key is that of
@@ -861,7 +861,7 @@ void run_ordered_contracted_block(
     log::log("BatchGroup", "Begin",
              std::format("{} steps over {} batches of {} {}",
                          block.steps.size(), batches.size(),
-                         toUtf8(std::wstring(block.axis.space().base_key())),
+                         toUtf8(std::wstring(block.axis.basis_key())),
                          log::scope_annot(s)));
   }
   {
@@ -1887,7 +1887,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
 /// \details Returns a callable, hash -> string, that annotates a value with its
 /// schedule properties the running per-op annotation cannot see: the value's
 /// home dag-scope and, for each of its use-sites, that use's dag-scope.
-/// A dag-scope is the comma-joined \c IndexSpace::base_key() list of a mode
+/// A dag-scope is the comma-joined \c Index::basis_key() list of a mode
 /// sequence (no trailing comma -- the same convention as \c log::scope_annot),
 /// so the produced string is
 ///   `home={<home dag-scope>} uses=[{<use dag-scope>},{<use dag-scope>},...]`.

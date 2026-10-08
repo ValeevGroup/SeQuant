@@ -39,7 +39,9 @@
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/batch_policy.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/ordered_executor.hpp>
@@ -73,6 +75,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <memory>
 #include <set>
@@ -154,6 +157,32 @@ TEST_CASE("dryrun size regime basic extents", "[dryrun-probe]") {
   auto a = Index{L"a_1"};
   CHECK(r.extent(a) == 1800);
   CHECK_THROWS_AS(r.extent(Index{L"x_1"}), std::out_of_range);
+}
+
+TEST_CASE("dryrun size regime keys a named basis by its label",
+          "[dryrun][sizing][basis]") {
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces();
+  const IndexSpace a = isr->retrieve(L"a");
+  constexpr IndexBasis::instance_type P =
+      std::numeric_limits<IndexBasis::instance_type>::max();
+  isr->add(L"μ̃", IndexBasis{a, P});  // before the Context adopts the registry
+  auto ctx = set_scoped_default_context(
+      Context({.index_space_registry_shared_ptr = std::move(isr),
+               .vacuum = Vacuum::SingleProduct}));
+  const auto& registry = *get_default_context().index_space_registry();
+  eval::dryrun::SizeRegime r;
+  r.space_extent[L"a"] = 40;
+  r.space_extent[L"μ̃"] = 300;
+  r.space_slice_extents[L"μ̃"] = {100, 100, 100};
+  const Index pao(registry.retrieve_basis(L"μ̃"), 1), virt(a, 1),
+      unnamed = Index(a, 2).replace_basis_instance(1);
+  CHECK(r.extent(pao) == 300);
+  CHECK(r.extent(virt) == 40);
+  // an unnamed instance is keyed as its space
+  CHECK(r.extent(unnamed) == 40);
+  CHECK(r.slice_extents(pao).size() == 3);
+  CHECK(r.slice_extents(virt).empty());
 }
 
 TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",

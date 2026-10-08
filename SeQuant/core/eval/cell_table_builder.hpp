@@ -90,7 +90,7 @@ template <typename Node>
     container::svector<std::wstring> const& path_spaces) {
   ValueCell const& c = rich.cells[vid];
   if (c.occurrences.empty() || p >= c.carried.size()) return std::nullopt;
-  std::wstring const space{c.carried[p].space().base_key()};
+  std::wstring const space{c.carried[p].basis_key()};
   for (std::size_t i = 0; i < path.size(); ++i) {
     if (path_spaces[i] != space) continue;
     for (OccurrenceRec const& occ : c.occurrences)
@@ -197,7 +197,7 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
     }
     auto const& child = std::get<ScopeBlock>(step.value);
     path.push_back({child.level.key(), child.latitude_ordinal});
-    path_spaces.push_back(std::wstring{child.axis.space().base_key()});
+    path_spaces.push_back(std::wstring{child.axis.basis_key()});
     block_stack.push_back(&child);
     emit_cells(in, child, path, path_spaces, block_stack, st);
     // The child's outputs assemble at this (the parent's) scope, while an

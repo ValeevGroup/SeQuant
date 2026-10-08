@@ -1,3 +1,4 @@
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
@@ -25,6 +26,7 @@
 #include <array>
 #include <cstdlib>
 #include <fstream>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -707,7 +709,7 @@ TEST_CASE(
 
 // ===========================================================================
 // SP2 Task 1: forced_split_types groups CellLegality::forced_split_axes by
-// axis SPACE TYPE (base_key()), collapsing multiple same-space Index
+// axis TYPE (Index::basis_key()), collapsing multiple same-space Index
 // INSTANCES (e.g. the Task-4 fixture's i_3/i_4 outer product, both
 // LoopCarried on occ) into the single loop (axis) they jointly force to
 // split.
@@ -743,6 +745,28 @@ TEST_CASE(
   mixed_cl.forced_split_axes = {Index{L"i_3"}, Index{L"i_4"}, Index{L"a_1"}};
   auto const mixed_types = forced_split_types(mixed_cl);
   REQUIRE(mixed_types.size() == 2);
+}
+
+TEST_CASE("forced_split_types keeps a named basis apart from its space",
+          "[legality][basis]") {
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces();
+  const IndexSpace a = isr->retrieve(L"a"), i = isr->retrieve(L"i");
+  isr->add(L"μ̃", IndexBasis{
+                     a, std::numeric_limits<IndexBasis::instance_type>::max()});
+  auto ctx = set_scoped_default_context(
+      Context({.index_space_registry_shared_ptr = std::move(isr),
+               .vacuum = Vacuum::SingleProduct}));
+  const Index pao(
+      get_default_context().index_space_registry()->retrieve_basis(L"μ̃"), 1);
+  const Index composite(a, 2, {Index(i, 1), Index(i, 2)});
+  eval::CellLegality cell;
+  cell.forced_split_axes = {composite, pao,
+                            Index(a, 3, {Index(i, 1), Index(i, 3)})};
+  const auto types = eval::forced_split_types(cell);
+  REQUIRE(types.size() == 2);  // a (the composites) and μ̃
+  CHECK(types[0] == composite);
+  CHECK(types[1] == pao);
 }
 
 // ===========================================================================

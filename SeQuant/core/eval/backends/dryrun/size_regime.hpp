@@ -21,7 +21,7 @@ struct SizeRegime {
   std::map<std::wstring, std::size_t> space_extent;
 
   /// Optional per-space batch partition: the element extent of each realized
-  /// batch slice along the space's batch axis, keyed by space base_key, in
+  /// batch slice along the space's batch axis, keyed by Index::basis_key(), in
   /// order. Empty (default) => the dry-run batches a mode into uniform
   /// target_batch_size blocks (backend-model-agnostic fallback). When present
   /// for a batch axis, ResultDryRun::mode_batches uses this partition directly
@@ -56,21 +56,20 @@ struct SizeRegime {
   // are not expected here (an entry for 1 or 2 is ignored by inner_pow()).
   std::map<std::size_t, std::array<double, 5>> csv_moment_by_rank;
 
-  /// \return the flat extent of \p ix's space; throws \c std::out_of_range
-  ///         if the space is not present in \c space_extent (fail loud rather
-  ///         than silently defaulting to 1).
+  /// \return the flat extent of \p ix's \c Index::basis_key(); throws
+  ///         \c std::out_of_range if the key is not present in
+  ///         \c space_extent (fail loud rather than silently defaulting to 1).
   [[nodiscard]] std::size_t extent(Index const& ix) const {
-    return space_extent.at(std::wstring{ix.space().base_key()});
+    return space_extent.at(std::wstring{ix.basis_key()});
   }
 
-  /// \return \p ix's space batch-slice-extent sequence, or an empty span if the
-  ///         space has no partition recorded (=> the caller falls back to
-  ///         uniform target_batch_size blocks). Never throws.
+  /// \return \p ix's \c Index::basis_key() batch-slice-extent sequence, or an
+  ///         empty span if the key has no partition recorded (=> the caller
+  ///         falls back to uniform target_batch_size blocks). Never throws.
   [[nodiscard]] container::svector<std::size_t> const& slice_extents(
       Index const& ix) const {
     static const container::svector<std::size_t> empty;
-    auto const it =
-        space_slice_extents.find(std::wstring{ix.space().base_key()});
+    auto const it = space_slice_extents.find(std::wstring{ix.basis_key()});
     return it != space_slice_extents.end() ? it->second : empty;
   }
 

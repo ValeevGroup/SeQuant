@@ -105,16 +105,16 @@ struct LegalitySchedule {
 };
 
 ///
-/// \brief Group \p cell's \c forced_split_axes by axis space type (\c
-/// base_key()), collapsing multiple same-type \c Index instances into the
-/// single loop (axis) they jointly force to split.
+/// \brief Group \p cell's \c forced_split_axes by axis type (\c
+/// Index::basis_key()), collapsing multiple same-type \c Index instances into
+/// the single loop (axis) they jointly force to split.
 ///
 /// \details \c forced_split_axes is recorded per \c Index instance (see its
 /// field doc): an outer product like \c A{;i_3}*A{;i_4} lists both \c i_3 and
 /// \c i_4, both \c LoopCarried on the occ space, but they name only one occ
 /// loop that must re-enter. This returns one representative \c Index per
-/// distinct \c base_key(), in \c forced_split_axes's discovery order, so a
-/// consumer that needs "which loops must split" (not "which indices are
+/// distinct \c Index::basis_key(), in \c forced_split_axes's discovery order,
+/// so a consumer that needs "which loops must split" (not "which indices are
 /// carried") gets a de-duplicated-by-type answer.
 ///
 [[nodiscard]] inline container::svector<Index> forced_split_types(
@@ -122,7 +122,7 @@ struct LegalitySchedule {
   container::svector<Index> out;
   for (Index const& ix : cell.forced_split_axes) {
     auto const same_type = [&](Index const& o) {
-      return o.space().base_key() == ix.space().base_key();
+      return o.basis_key() == ix.basis_key();
     };
     if (std::find_if(out.begin(), out.end(), same_type) == out.end())
       out.push_back(ix);
@@ -192,8 +192,8 @@ struct LegalitySchedule {
 /// every use-site \p occurrences of the value in the forest.
 ///
 /// \details The four-way decision tree:
-///   - Q1: does \p carried hold an index of \p axis's \c IndexSpace (compared
-///     by \c base_key(), i.e. Type not identity)?
+///   - Q1: does \p carried hold an index of \p axis's type (compared by
+///     \c Index::basis_key(), i.e. Type not identity)?
 ///     - no  -> Q2a: does \p contracted_below hold an index of that type
 ///       (the value reduces the axis at its own node)? -> \c Reduction;
 ///       otherwise the axis merely encloses the value without touching it
@@ -231,7 +231,7 @@ struct LegalitySchedule {
     std::function<int(OccurrenceRec const&, Index const&)> const&
         enclosing_slot = {}) {
   auto const same_type = [&](Index const& ix) {
-    return ix.space().base_key() == axis.space().base_key();
+    return ix.basis_key() == axis.basis_key();
   };
   // A carried same-space index is a batched loop mode (subject to the lockstep
   // test below) iff it is one of the value's sliced modes; otherwise it is a
