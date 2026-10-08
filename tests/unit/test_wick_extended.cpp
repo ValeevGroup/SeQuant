@@ -352,26 +352,42 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   }
 
   SECTION("WickTheorem: a split density keeps the bases of its indices") {
-    // γ{p_1<i_1>;p_2<i_2>}: each block binds p_1 (p_2) to an index in its
-    // basis, so every δ of the result is between indices of one basis
-    const Index i1(L"i_1"), i2(L"i_2"), p1(L"p_1", {i1}), p2(L"p_2", {i2});
-    auto in = density::make_rdm(p1, p2) *
+    // η{a_1<i_1>;a_2<i_2>}: its virtual block binds a_1 to an index in its
+    // basis, so the result keeps the overlap between the two bases and every
+    // δ is between indices of one basis
+    const Index i1(L"i_1"), i2(L"i_2"), a1(L"a_1", {i1}), a2(L"a_2", {i2});
+    auto in = density::make_hole_rdm(a1, a2) *
               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
               ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}));
     ExprPtr result;
     REQUIRE_NOTHROW(result = wick_mp(in));
-    std::size_t ndeltas = 0;
+    std::size_t noverlaps = 0;
     result->visit(
         [&](const ExprPtr& e) {
           if (!e->is<Tensor>()) return;
           const auto& t = e->as<Tensor>();
-          if (t.label() != reserved::kronecker_label()) return;
-          ++ndeltas;
           INFO(toUtf8(to_latex(e)));
-          REQUIRE(t.bra()[0].proto_indices() == t.ket()[0].proto_indices());
+          if (t.label() == reserved::kronecker_label())
+            REQUIRE(t.bra()[0].proto_indices() == t.ket()[0].proto_indices());
+          if (t.label() == reserved::overlap_label()) {
+            ++noverlaps;
+            REQUIRE(container::set<Index>{t.bra()[0], t.ket()[0]} ==
+                    container::set<Index>{a1, a2});
+          }
         },
         /* atoms_only = */ true);
-    REQUIRE(ndeltas > 0);
+    REQUIRE(noverlaps > 0);
+
+    // as for an operator, a protoindexed index of a density must not reach
+    // the active space
+    if (assert_behavior() == AssertBehavior::Throw) {
+      const Index p1(L"p_1", {i1}), p2(L"p_2", {i2});
+      REQUIRE_THROWS_WITH(wick_mp(density::make_rdm(p1, p2) *
+                                  ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
+                                  ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}))),
+                          Catch::Matchers::ContainsSubstring(
+                              "must not reach the active space"));
+    }
   }
 
   SECTION("WickTheorem: dummy indices keep their provenance") {

@@ -284,20 +284,23 @@ using Alternatives = container::svector<container::svector<ExprPtr>>;
 /// @return the split of a 1-body γ (@p is_gamma) or η {@p bra; @p ket} into
 /// a δ over its core (γ) or virtual (η) part, in the basis of @p bra and so an
 /// overlap if @p ket is in another (e.g. a cluster-specific virtual of another
-/// pair), and a γ/η over its active part between indices in the bases of @p bra
-/// and @p ket, or nullopt if both indices are already active; the virtual part
-/// of a γ and the core part of an η vanish, so the indices may range over any
-/// space (e.g. an input γ over the complete space)
+/// pair), and a γ/η over its active part, or nullopt if both indices are
+/// already active; the virtual part of a γ and the core part of an η vanish,
+/// so the indices may range over any space (e.g. an input γ over the complete
+/// space)
+/// @pre if @p bra or @p ket carries protoindices, their common space does not
+///      reach the active space (see assert_protoindexed_not_active())
 std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
                                           IndexSpaceMetric metric,
                                           IndexFactory &idxfac,
                                           const Index &bra, const Index &ket,
                                           bool is_gamma) {
+  const auto &common = isr.intersection(bra.space(), ket.space());
+  assert_protoindexed_not_active(isr, common, bra, ket);
   const auto parts = space_parts(isr, bra.space().qns());
   if (parts.active.includes(bra.space().type()) &&
       parts.active.includes(ket.space().type()))
     return std::nullopt;
-  const auto &common = isr.intersection(bra.space(), ket.space());
   const auto inactive = is_gamma ? parts.core : parts.virt;
   Alternatives result;
   for (const auto &sp : registered_pieces(
@@ -307,8 +310,8 @@ std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
   }
   if (const auto active = common.type().intersection(parts.active)) {
     const auto &sp = isr.retrieve(active, common.qns());
-    const auto b = make_in_basis_of(idxfac, sp, bra);
-    const auto k = make_in_basis_of(idxfac, sp, ket);
+    const auto b = idxfac.make(sp);
+    const auto k = idxfac.make(sp);
     result.push_back(
         {make_kronecker(bra, b),
          is_gamma ? density::make_rdm(b, k) : density::make_hole_rdm(b, k),
