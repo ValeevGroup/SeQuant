@@ -72,6 +72,11 @@ class IndexBasis {
 /// every instance of the space) or the same instance as @p subbasis
 bool includes(const IndexBasis& basis, const IndexBasis& subbasis);
 
+/// @return true if @p b1 and @p b2 are different basis instances, i.e. both
+/// have one and the two differ; an identity between functions of such bases
+/// is an overlap, not a Kronecker delta
+bool different_instances(const IndexBasis& b1, const IndexBasis& b2);
+
 /// what an Index runs over: an IndexSpace or an IndexBasis. An IndexSpace
 /// stands for the space's own basis, so an Index made from one is
 /// basis-generic (null basis instance); an IndexBasis names the basis exactly.

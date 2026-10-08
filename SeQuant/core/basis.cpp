@@ -15,4 +15,9 @@ bool includes(const IndexBasis& basis, const IndexBasis& subbasis) {
           basis.basis_instance() == subbasis.basis_instance());
 }
 
+bool different_instances(const IndexBasis& b1, const IndexBasis& b2) {
+  return b1.has_basis_instance() && b2.has_basis_instance() &&
+         b1.basis_instance() != b2.basis_instance();
+}
+
 }  // namespace sequant

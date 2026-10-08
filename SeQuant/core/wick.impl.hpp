@@ -183,8 +183,7 @@ compute_index_replacement_rules(
   // related by an identity, so the caller never asks for their intersection
   auto intersection = [&isr](const IndexBasis &b1,
                              const IndexBasis &b2) -> IndexBasis {
-    SEQUANT_ASSERT(!b1.has_basis_instance() || !b2.has_basis_instance() ||
-                   b1.basis_instance() == b2.basis_instance());
+    SEQUANT_ASSERT(!different_instances(b1, b2));
     return IndexBasis(
         b1.space() == b2.space() ? b1.space()
                                  : isr->intersection(b1.space(), b2.space()),
@@ -453,8 +452,7 @@ compute_index_replacement_rules(
     //   functions of different bases cannot be compared for equality
     const auto bra_basis = resolved_basis(bra);
     const auto ket_basis = resolved_basis(ket);
-    if (bra_basis.has_basis_instance() && ket_basis.has_basis_instance() &&
-        bra_basis.basis_instance() != ket_basis.basis_instance()) {
+    if (different_instances(bra_basis, ket_basis)) {
       if (is_kronecker)
         throw Exception("WickTheorem::reduce: Kronecker delta between " +
                         toUtf8(bra.full_label()) + " and " +
