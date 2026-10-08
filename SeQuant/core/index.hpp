@@ -817,7 +817,7 @@ class Index : public Taggable {
   /// this->tag().has_value() == true &&
   /// this->tag().value<int>() == 0
   /// \endcode
-  // clang-format off
+  // clang-format on
   template <template <typename, typename, typename... Args> class Map,
             typename... Args>
   bool transform(const Map<Index, Index, Args...> &index_map) noexcept {
@@ -943,8 +943,8 @@ class Index : public Taggable {
 
   /// validate protoindices
   /// @warning no-op unless SEQUANT_ASSERT_ENABLED is defined
-  /// @pre use SEQUANT_ASSERT to assert that there are no duplicate or null indices among
-  /// protoindices
+  /// @pre use SEQUANT_ASSERT to assert that there are no duplicate or null
+  /// indices among protoindices
   inline void validate_proto_indices() const;
 
   /// throws std::invalid_argument if the ordinal is among reserved for
@@ -963,31 +963,32 @@ class Index : public Taggable {
   }
 
   template <std::ranges::contiguous_range View>
-  requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>, char> ||
-           std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                        wchar_t>)
-  static std::optional<ordinal_type> to_ordinal(
-      View && label) noexcept {
-	  auto end = base_label_end(label);
+    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
+                          char> ||
+             std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
+                          wchar_t>)
+  static std::optional<ordinal_type> to_ordinal(View &&label) noexcept {
+    auto end = base_label_end(label);
 
-	  if (end == std::ranges::end(label)) {
-		  return std::nullopt;
-	  }
+    if (end == std::ranges::end(label)) {
+      return std::nullopt;
+    }
 
-	  if (*end == '_') {
-		  ++end;
-	  }
+    if (*end == '_') {
+      ++end;
+    }
 
-	  SEQUANT_ASSERT(end != std::ranges::end(label));
+    SEQUANT_ASSERT(end != std::ranges::end(label));
 
-	  std::basic_string_view<std::remove_cvref_t<std::ranges::range_value_t<View>>> view(&(*end),
-			  std::ranges::distance(end, std::ranges::end(label)));
-	  return string_to<ordinal_type>(view);
+    std::basic_string_view<
+        std::remove_cvref_t<std::ranges::range_value_t<View>>>
+        view(&(*end), std::ranges::distance(end, std::ranges::end(label)));
+    return string_to<ordinal_type>(view);
   }
 
-  template<typename CharT>
+  template <typename CharT>
   static std::optional<ordinal_type> to_ordinal(const CharT *label) noexcept {
-	  return to_ordinal(std::basic_string_view<CharT>{label});
+    return to_ordinal(std::basic_string_view<CharT>{label});
   }
 
   friend class IndexFactory;
@@ -1052,7 +1053,8 @@ class Index : public Taggable {
     return i1_Q < i2_Q ? SO::less : SO::greater;
   }
 
-  static std::shared_ptr<const IndexSpaceRegistry> obtain_default_index_registry();
+  static std::shared_ptr<const IndexSpaceRegistry>
+  obtain_default_index_registry();
 
 };  // class Index
 
@@ -1066,7 +1068,8 @@ inline const Index Index::null;
 void Index::validate_proto_indices() const {
   if constexpr (assert_enabled()) {
     if (!proto_indices_.empty()) {
-      SEQUANT_ASSERT(!ranges::contains(proto_indices_, null) && "Index ctor: null proto index detected");
+      SEQUANT_ASSERT(!ranges::contains(proto_indices_, null) &&
+                     "Index ctor: null proto index detected");
       if (!symmetric_proto_indices_) {  // if proto indices not symmetric, sort
         // via
         // ptrs
@@ -1077,14 +1080,15 @@ void Index::validate_proto_indices() const {
         std::sort(vp.begin(), vp.end(),
                   [](Index const *l, Index const *r) { return *l < *r; });
         SEQUANT_ASSERT(std::adjacent_find(vp.begin(), vp.end(),
-                               [](Index const *l, Index const *r) {
-                                 return *l == *r;
-                               }) == vp.end() &&
-              "Index ctor: duplicate proto indices detected");
+                                          [](Index const *l, Index const *r) {
+                                            return *l == *r;
+                                          }) == vp.end() &&
+                       "Index ctor: duplicate proto indices detected");
       } else {  // else search directly
-        SEQUANT_ASSERT(std::adjacent_find(begin(proto_indices_), end(proto_indices_)) ==
-            proto_indices_.end() &&
-              "Index ctor: duplicate proto indices detected");
+        SEQUANT_ASSERT(
+            std::adjacent_find(begin(proto_indices_), end(proto_indices_)) ==
+                proto_indices_.end() &&
+            "Index ctor: duplicate proto indices detected");
       }
     }
   }
@@ -1147,8 +1151,8 @@ class IndexFactory {
   }
 
   /// creates a temporary index that inherits the space and protoindices
-  /// (and whether they are symmetric) of @c idx . The label of the resulting index =
-  /// @c IndexSpace::base_key(space) + '_' + temporary counter.
+  /// (and whether they are symmetric) of @c idx . The label of the resulting
+  /// index = @c IndexSpace::base_key(space) + '_' + temporary counter.
   /// Each call increments the current tmp counter (see next_tmp_index() ) .
   /// @param idx an Index object
   /// @return a unique temporary index in space @c space with same protoindices
