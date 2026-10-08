@@ -138,6 +138,8 @@ the cluster-specific virtuals of the ground-state and of the perturbed amplitude
 can therefore carry an optional *basis instance*, an opaque integer written after its proto indices, ``a_1<i_1,i_2;1>``
 (``a_1<;1>`` without proto indices), unless the instance is registered under a name, which is then printed in place of
 the space's label (:doc:`../getting_started/index_spaces`); an index without one is in its space's own basis, as before.
+:func:`sequant::mbpt::add_pao_basis` registers the PAOs this way, as the named instance ``μ̃`` of the particle space
+(an index in it prints as ``μ̃_1``), an alternative to the separate PAO space of :func:`sequant::mbpt::add_pao_spaces`.
 Instances are granted per operator label and leg space with :func:`sequant::mbpt::OpRegistry::grant_basis`,
 :class:`sequant::mbpt::OpMaker` mints a granted operator's legs with them, and the projectors of the :doc:`CC <cc>`
 equations carry the grants of the amplitude being solved for. Integrals are never granted: in Wick's theorem their legs

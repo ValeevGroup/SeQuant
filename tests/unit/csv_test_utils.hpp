@@ -129,12 +129,28 @@ inline std::size_t term_count(ExprPtr const& expr) {
   return expr->is<Sum>() ? expr->size() : 1;
 }
 
-/// the Context CSV-CCSD is derived under: min SR spaces plus the DF and PAO
-/// spaces, Complete canonicalization, column-Symm deserialization
-inline sequant::Context csv_cc_context() {
+/// how the PAO basis is registered: as its own IndexSpace (μ̃, LCAOQNS::pao)
+/// or as a named basis instance of the particle space
+/// (μ̃ -> {a, default_pao_basis_instance})
+enum class PaoEncoding { Space, Basis };
+
+/// the registry CSV-CCSD is derived over: min SR spaces plus the DF and PAO
+/// spaces, the PAOs in the given encoding
+inline std::shared_ptr<IndexSpaceRegistry> csv_cc_registry(
+    PaoEncoding pao = PaoEncoding::Space) {
   auto isr = mbpt::make_min_sr_spaces();
   mbpt::add_df_spaces(isr);
-  mbpt::add_pao_spaces(isr, IndexSpace::QuantumNumbers{mbpt::Spin::any});
+  if (pao == PaoEncoding::Space)
+    mbpt::add_pao_spaces(isr, IndexSpace::QuantumNumbers{mbpt::Spin::any});
+  else
+    mbpt::add_pao_basis(isr, IndexSpace::QuantumNumbers{mbpt::Spin::any});
+  return isr;
+}
+
+/// the Context CSV-CCSD is derived under, over @p isr (adopted: pass the only
+/// owner), Complete canonicalization, column-Symm deserialization
+inline sequant::Context csv_cc_context(
+    std::shared_ptr<IndexSpaceRegistry> isr) {
   return Context({.index_space_registry_shared_ptr = std::move(isr),
                   .vacuum = Vacuum::SingleProduct,
                   .spbasis = SPBasis::Spinor,
@@ -142,6 +158,10 @@ inline sequant::Context csv_cc_context() {
                       CanonicalizeOptions::default_options().copy_and_set(
                           CanonicalizationMethod::Complete),
                   .deserialization_column_symmetry = ColumnSymmetry::Symm});
+}
+
+inline sequant::Context csv_cc_context(PaoEncoding pao = PaoEncoding::Space) {
+  return csv_cc_context(csv_cc_registry(pao));
 }
 
 /// every tensor of @p expr labelled @p label

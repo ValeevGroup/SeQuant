@@ -7,8 +7,12 @@
 
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
+
+#include <limits>
+#include <string_view>
 
 namespace sequant {
 namespace mbpt {
@@ -77,6 +81,29 @@ void add_thc_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
 ///        they carry it in the spin sector alongside the LCAOQNS::pao trait bit
 void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr,
                     IndexSpace::QuantumNumbers spin_any);
+
+/// the basis instance add_pao_basis registers by default: above every CSV
+/// instance, so a PAO basis sorts after every other basis of the particle
+/// space (IndexBasis orders by space, then instance)
+inline constexpr IndexBasis::instance_type default_pao_basis_instance =
+    std::numeric_limits<IndexBasis::instance_type>::max();
+
+/// @brief registers the PAO basis as a named instance of the particle space
+
+/// expects \p isr to have a defined particle space; the entry's size and
+/// field default to the particle space's (populate them with
+/// IndexBasisRegistry::approximate_size(label, n) before the registry is given
+/// to a Context, which holds it immutable)
+/// @param spin_any the quantum numbers of the spin-agnostic particle space
+/// @param instance the basis instance of the PAO basis
+/// @param label the label the PAO basis is registered under
+/// @throw Exception if \p label is already registered (e.g. by
+/// add_pao_spaces)
+void add_pao_basis(
+    std::shared_ptr<IndexSpaceRegistry>& isr,
+    IndexSpace::QuantumNumbers spin_any,
+    IndexBasis::instance_type instance = default_pao_basis_instance,
+    std::wstring_view label = L"μ̃");
 
 /// @brief add batching spaces to registry
 void add_batching_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);

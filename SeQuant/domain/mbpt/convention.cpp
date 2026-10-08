@@ -122,6 +122,15 @@ void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr,
       ;
 }
 
+void add_pao_basis(std::shared_ptr<IndexSpaceRegistry>& isr,
+                   IndexSpace::QuantumNumbers spin_any,
+                   IndexBasis::instance_type instance,
+                   std::wstring_view label) {
+  const auto& uocc =
+      isr->retrieve(isr->particle_space(/* nulltype_ok = */ false), spin_any);
+  isr->add(label, IndexBasis{uocc, instance});
+}
+
 void add_df_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
   // matches the MPQC layout, see spindex.h
   isr->add(IndexSpace{L"Κ", 0b00001, TensorFactorizationQNS::df});  // DFBS AO

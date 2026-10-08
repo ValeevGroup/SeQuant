@@ -104,6 +104,7 @@ set(mbpt_test_sources
     "test_csv_rules.cpp"
     "test_mbpt.cpp"
     "test_mbpt_cc.cpp"
+    "test_pao_basis.cpp"
     "test_spin.cpp"
 )
 

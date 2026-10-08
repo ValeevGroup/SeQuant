@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <string_view>
 #include <type_traits>
@@ -484,6 +485,32 @@ TEST_CASE("index_space", "[elements]") {
 
     // ordering
     REQUIRE(isr->retrieve(L"i") < isr->retrieve(L"μ̃"));
+  }
+
+  SECTION("PAO basis") {
+    auto isr = sequant::mbpt::make_min_sr_spaces();
+    REQUIRE_NOTHROW(mbpt::add_pao_basis(isr, mbpt::Spin::any));
+    const auto uocc = isr->retrieve(isr->particle_space(), mbpt::Spin::any);
+    REQUIRE(isr->contains(L"μ̃"));
+    CHECK(isr->retrieve_ptr(L"μ̃") == nullptr);
+    const IndexBasis pao = isr->retrieve_basis(L"μ̃");
+    CHECK(pao == IndexBasis{uocc, mbpt::default_pao_basis_instance});
+    CHECK(mbpt::default_pao_basis_instance ==
+          std::numeric_limits<IndexBasis::instance_type>::max());
+    CHECK(pao.space() == uocc);
+    CHECK(pao.space().approximate_size() == uocc.approximate_size());
+    CHECK(pao.space().field() == uocc.field());
+    // one entry: no spin variants
+    CHECK_FALSE(isr->contains(L"μ̃↑"));
+    // ordering: after every basis of a (I2), between i and Κ as before
+    CHECK((IndexBasis{uocc} < pao && IndexBasis{uocc, 0} < pao &&
+           IndexBasis{uocc, 10} < pao));
+    CHECK(Index(isr->retrieve(L"i"), 1) < Index(pao, 1));
+    // review-focus 2: a registry holds one encoding
+    CHECK_THROWS(mbpt::add_pao_spaces(isr, mbpt::Spin::any));
+    auto isr2 = sequant::mbpt::make_min_sr_spaces();
+    mbpt::add_pao_spaces(isr2, mbpt::Spin::any);
+    CHECK_THROWS(mbpt::add_pao_basis(isr2, mbpt::Spin::any));
   }
 
   SECTION("paper 1 example") {
