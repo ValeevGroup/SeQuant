@@ -21,8 +21,10 @@
 
 namespace sequant::detail {
 
-/// @return the basis instance of @p idx in decimal, to append to a block tag
-/// or dimension name of a mode in that basis; empty if @p idx is basis-generic
+/// @return the basis instance of @p idx in decimal, with `m` in place of the
+/// minus sign of a negative one (so it is valid in an identifier), to append
+/// to a block tag or dimension name of a mode in that basis; empty if @p idx
+/// is basis-generic
 std::string basis_instance_tag(const Index &idx);
 
 /// Formats a Power exponent for export framework
