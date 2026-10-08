@@ -14,6 +14,8 @@
 #include <SeQuant/domain/mbpt/op.hpp>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_exception.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include "catch2_sequant.hpp"
 
 #include <array>
@@ -404,24 +406,33 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       REQUIRE_THAT(screened.at(p), EquivalentTo(unscreened.at(p)));
 
     if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      // match the message: under THROW an unrelated SEQUANT_ASSERT throws
+      // the same type
+      const auto rejects_reference =
+          Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring(
+              "the reference must be the Wick vacuum"));
       const CC cc(1);
-      REQUIRE_THROWS_AS(cc.λ(), Exception);
-      REQUIRE_THROWS_AS(cc.λʼ(), Exception);
-      REQUIRE_THROWS_AS(cc.tʼ(), Exception);
-      REQUIRE_THROWS_AS(cc.rdm(), Exception);
-      REQUIRE_THROWS_AS(cc.eom_l(nₚ(1), nₕ(1)), Exception);
+      REQUIRE_THROWS_MATCHES(cc.λ(), Exception, rejects_reference);
+      REQUIRE_THROWS_MATCHES(cc.λʼ(), Exception, rejects_reference);
+      REQUIRE_THROWS_MATCHES(cc.tʼ(), Exception, rejects_reference);
+      REQUIRE_THROWS_MATCHES(cc.rdm(), Exception, rejects_reference);
+      REQUIRE_THROWS_MATCHES(cc.eom_l(nₚ(1), nₕ(1)), Exception,
+                             rejects_reference);
       const auto ucc = cc.with([](auto& o) {
         o.ansatz = CC::Ansatz::U;
         o.hbar_comm_rank = 1;
       });
       // the check precedes the dispatch to the UCC EOM path
-      REQUIRE_THROWS_AS(ucc.eom_r(nₚ(1), nₕ(1)), Exception);
-      REQUIRE_THROWS_AS(ucc.with([](auto& o) {
-                             o.hbar_expansion = CC::HbarExpansion::Bernoulli;
-                           })
-                            .energy(),
-                        Exception);
-      REQUIRE_THROWS_AS(bernoulli::hbar(1, 1, false), Exception);
+      REQUIRE_THROWS_MATCHES(ucc.eom_r(nₚ(1), nₕ(1)), Exception,
+                             rejects_reference);
+      REQUIRE_THROWS_MATCHES(ucc.with([](auto& o) {
+                                  o.hbar_expansion =
+                                      CC::HbarExpansion::Bernoulli;
+                                })
+                                 .energy(),
+                             Exception, rejects_reference);
+      REQUIRE_THROWS_MATCHES(bernoulli::hbar(1, 1, false), Exception,
+                             rejects_reference);
     }
   }  // SECTION("reference differs from vacuum")
 

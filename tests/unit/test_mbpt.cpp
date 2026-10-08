@@ -22,6 +22,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
+#include <catch2/matchers/catch_matchers_exception.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include "catch2_sequant.hpp"
 
 #include <iostream>
@@ -1186,15 +1188,22 @@ SECTION("MRSO") {
     const auto unconstrained = t::ref_av(expr);
     REQUIRE(unconstrained != ex<Constant>(0));
     if (assert_behavior() != AssertBehavior::Abort) {
-      REQUIRE_THROWS_AS(t::ref_av(expr, {.connect = {{0, 1}}}), Exception);
-      REQUIRE_THROWS_AS(t::ref_av(expr, {.do_not_connect = {{0, 1}}}),
-                        Exception);
+      // match the message: under THROW an unrelated SEQUANT_ASSERT throws
+      // the same type
+      const auto rejects_connections =
+          Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring(
+              "connect and do_not_connect must be empty"));
+      REQUIRE_THROWS_MATCHES(t::ref_av(expr, {.connect = {{0, 1}}}), Exception,
+                             rejects_connections);
+      REQUIRE_THROWS_MATCHES(t::ref_av(expr, {.do_not_connect = {{0, 1}}}),
+                             Exception, rejects_connections);
       // Operator requests must be rejected before screening or label lowering.
-      REQUIRE_THROWS_AS(o::ref_av(ex<Constant>(0), {.connect = {{L"f", L"t"}}}),
-                        Exception);
-      REQUIRE_THROWS_AS(
+      REQUIRE_THROWS_MATCHES(
+          o::ref_av(ex<Constant>(0), {.connect = {{L"f", L"t"}}}), Exception,
+          rejects_connections);
+      REQUIRE_THROWS_MATCHES(
           o::ref_av(o::h(1) * o::t(1), {.do_not_connect = {{L"f", L"t"}}}),
-          Exception);
+          Exception, rejects_connections);
     }
   }
 
