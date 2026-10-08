@@ -2303,6 +2303,27 @@ SECTION("ResultExpr") {
     }
   }
 }
+SECTION("triplet_residual_kind") {
+  REQUIRE(triplet_residual_kind(1) == TripletResidualKind::Combined);
+  REQUIRE(triplet_residual_kind(2) == TripletResidualKind::BareTE);
+  REQUIRE(triplet_residual_kind(3) == TripletResidualKind::Combined);
+  REQUIRE_THROWS(triplet_residual_kind(0));
+  REQUIRE_THROWS(triplet_residual_kind(4));
+
+  // toy 2h2p EOM-like residual term: f contracted with R2
+  auto expr = deserialize(
+      std::wstring(L"Â{i_1,i_2;a_1,a_2} * f{a_3;a_1} * R{i_1,i_2;a_3,a_2}"),
+      {.def_perm_symm = Symmetry::Nonsymm});
+
+  // the default doubles residual is the BareTE one
+  ExprPtr diff =
+      closed_shell_CC_triplet_spintrace(expr, {.compact = false}) -
+      closed_shell_CC_triplet_spintrace(
+          expr, {.compact = false, .residual = TripletResidualKind::BareTE});
+  canonicalize(diff);
+  simplify(diff);
+  REQUIRE(diff->size() == 0);
+}
 }
 
 TEST_CASE("triplet_doubles_compact", "[spin][triplet]") {

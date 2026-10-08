@@ -321,6 +321,11 @@ enum class TripletResidualKind {
   BareTE
 };
 
+/// @brief the triplet residual path built for the given
+///        particle rank: Combined for singles and triples, BareTE for doubles.
+/// @throw Exception if @p rank is not 1, 2 or 3
+TripletResidualKind triplet_residual_kind(std::size_t rank);
+
 /// controls behavior of closed-shell triplet EOM spin-tracing
 struct ClosedShellCCTripletSpintraceOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
@@ -336,8 +341,9 @@ struct ClosedShellCCTripletSpintraceOptions {
   /// On by default; false gives the full residual, which is used only as a
   /// reference in tests.
   bool compact = true;
-  /// which residual variant to build
-  TripletResidualKind residual = TripletResidualKind::Combined;
+  /// which residual variant to build; unset selects
+  /// triplet_residual_kind of the projection rank
+  std::optional<TripletResidualKind> residual;
 };
 
 // clang-format off
