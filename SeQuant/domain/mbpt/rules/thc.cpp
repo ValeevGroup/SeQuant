@@ -4,6 +4,8 @@
 
 #include <SeQuant/domain/mbpt/rules/thc.hpp>
 
+#include <SeQuant/domain/mbpt/rules/conjugated.hpp>
+
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -29,14 +31,13 @@ ExprPtr tensor_hypercontract_impl(Tensor const& tnsr, Index const& aux_idx_1,
   SEQUANT_ASSERT(tnsr.bra_rank() == 2     //
                  && tnsr.ket_rank() == 2  //
                  && tnsr.aux_rank() == 0);
-  // the factors below are built from tnsr's indices alone, so a tensor
-  // carrying either core state names a different array; refusing it is part
-  // of the rule's contract and must hold in every build type
+  // the factors below are built from tnsr's slots, so a tensor carrying a core
+  // state is factorized as the bare array and the factorization conjugated
   if (tnsr.adjointed() || tnsr.kconjugated())
-    throw Exception(
-        "tensor_hypercontract: a tensor carrying the adjointed or K-conjugated "
-        "state names a different array and is not factorized by this rule; "
-        "apply the rule before conjugating, or register the conjugated factor");
+    return detail::factorize_conjugated(tnsr, [&](const Tensor& bare) {
+      return tensor_hypercontract_impl(bare, aux_idx_1, aux_idx_2, factor_label,
+                                       aux_label);
+    });
 
   auto t1 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}), ket(),
                        aux({aux_idx_1}), particle_symmetric);

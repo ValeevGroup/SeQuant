@@ -475,6 +475,7 @@ set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/rules/csv.cpp
         SeQuant/domain/mbpt/rules/csv.hpp
         SeQuant/domain/mbpt/rules/df.cpp
+        SeQuant/domain/mbpt/rules/conjugated.hpp
         SeQuant/domain/mbpt/rules/df.hpp
         SeQuant/domain/mbpt/rules/thc.cpp
         SeQuant/domain/mbpt/rules/thc.hpp

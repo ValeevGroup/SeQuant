@@ -2060,10 +2060,10 @@ SECTION("rules") {
     }
   }
 
-  SECTION("df and thc refuse a marked tensor") {
-    // both rules rebuild their factors from the tensor's indices alone, so a
-    // tensor carrying a core state names a different array and is refused;
-    // the refusal is a throw, so it holds in every build type
+  SECTION("df and thc factorize a marked tensor as the conjugated fit") {
+    // both rules build their factors from the tensor's slots, so a tensor
+    // carrying a core state is factorized as the bare array and the
+    // factorization conjugated back
     using namespace sequant;
 
     auto isr = get_default_context().index_space_registry();
@@ -2082,9 +2082,28 @@ SECTION("rules") {
     REQUIRE(gk->as<Tensor>().kconjugated());
 
     const IndexSpace aux_space = isr->retrieve(L"x");
-    REQUIRE_THROWS_AS(mbpt::density_fit(gk, aux_space, L"g", L"B"), Exception);
-    REQUIRE_THROWS_AS(
-        mbpt::tensor_hypercontract(gk, aux_space, L"g", L"B", L"C"), Exception);
+    REQUIRE_THAT(mbpt::density_fit(gk, aux_space, L"g", L"B"),
+                 EquivalentTo(kconjugate(
+                     mbpt::density_fit(ex<Tensor>(g), aux_space, L"g", L"B"))));
+    REQUIRE_THAT(mbpt::tensor_hypercontract(gk, aux_space, L"g", L"B", L"C"),
+                 EquivalentTo(kconjugate(mbpt::tensor_hypercontract(
+                     ex<Tensor>(g), aux_space, L"g", L"B", L"C"))));
+
+    // over the default (complex) basis the adjoint of a non-Hermitian g is
+    // kept as a state; the fit of g⁺{a;i} is the adjoint of the fit of g{i;a},
+    // and the Hermitian DF factors just exchange their bundles under it, so
+    // it is the fit of the bare g{a;i}
+    auto gc = deserialize(L"g{i1,i2;a1,a2}");
+    REQUIRE(gc->as<Tensor>().hermiticity() == Hermiticity::NonHermitian);
+    auto ga = adjoint(gc);
+    REQUIRE(ga->as<Tensor>().adjointed());
+    REQUIRE_THAT(mbpt::density_fit(ga, aux_space, L"g", L"B"),
+                 EquivalentTo(mbpt::density_fit(deserialize(L"g{a1,a2;i1,i2}"),
+                                                aux_space, L"g", L"B")));
+    // the THC factors carry no hermiticity, so each takes the adjoint state
+    REQUIRE_THAT(mbpt::tensor_hypercontract(ga, aux_space, L"g", L"B", L"C"),
+                 EquivalentTo(adjoint(mbpt::tensor_hypercontract(
+                     gc, aux_space, L"g", L"B", L"C"))));
   }
 
   SECTION("csv: an odd-parity adjointed tensor onto a real basis") {

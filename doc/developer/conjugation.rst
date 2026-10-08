@@ -263,7 +263,11 @@ tensor form as ``sequant::adjoint(tensor form)``, which is where an anti-Hermiti
 Separately, ``OpMaker`` given an already-marked name (an operator registered as ``v⁺``) strips the mark, builds the
 tensor with the slots it computed and applies ``set_states(true, false)``, wrapping a −1 in a ``Product``. The
 ``spin`` and ``csv`` rebuild sites carry both states through ``with_slots()`` / ``set_states()``; a sign consumed by a
-rebuild across a field change lands on the term's scalar.
+rebuild across a field change lands on the term's scalar. The ``df`` and ``thc`` rules build their factors from the
+tensor's slots, so they factorize a marked tensor as the bare array (for ``⁺`` over the exchanged bundles) and
+conjugate the factorization back (``mbpt::detail::factorize_conjugated``); what the conjugation does to a factor is
+decided by the factor's own traits, so the Hermitian DF factors exchange their bundles where the THC factors take the
+state.
 
 What a user meets
 ---------------------
