@@ -427,8 +427,8 @@ std::string scope_annot(BatchContext const& active) {
 ///   as `p:basis_key` at each stamped mode's canonical position p.
 ///   Ordinal:basis-key only -- never a bare label (labels are tree-scoped;
 ///   ordinals are DAG-safe). This is the value's truthful batched set, not a
-///   space-match against the open loops (which would misleadingly flag every
-///   same-space mode, e.g. a spectator's contracted occ under an occ loop).
+///   key-match against the open loops (which would misleadingly flag every
+///   same-key mode, e.g. a spectator's contracted occ under an occ loop).
 /// - scope = the open loops, outer..inner (see scope_annot).
 template <meta::eval_node Node, typename BatchContext>
 std::string slice_home_annot(Node const& node, BatchContext const& active) {
@@ -2126,7 +2126,7 @@ template <Trace EvalTrace = Trace::Default, typename F,
     // push site below shares the same depth (`cache.batch_context().size() +
     // 1`, matching build_ordered_schedule's `d + 1` convention -- see
     // DagScopeLevel's doc comment) and differs only in the pushed axis's
-    // space. Plumbing only: nothing resolves by `level` on this path -- the
+    // basis key. Plumbing only: nothing resolves by `level` on this path -- the
     // forest evaluator resolves by exact axis (`exact_axis`, filled at each
     // push site below).
     auto const synth_level = [&cache](Index const& ax) -> DagScopeLevel {

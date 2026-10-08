@@ -17,7 +17,7 @@
 namespace sequant {
 
 /// \brief Build a \c BackendArrayOps for the TiledArray backend from a
-/// per-space tiling map.
+/// per-basis-key tiling map.
 ///
 /// \tparam FlatArray the flat (Tensor-of-Scalars) \c TA::DistArray type;
 /// \tparam ToTArray  the nested (Tensor-of-Tensor) \c TA::DistArray type.
@@ -30,8 +30,8 @@ namespace sequant {
 /// backend needs (see \c BackendArrayOps): \c make_zeros builds a zero
 /// destination -- flat or nested per the descriptor's proto structure, with a
 /// nested result's inner tiles left empty for the scatter writes to fill -- and
-/// \c axis_batches chunks an axis on its space's tile boundaries. Tiling is a
-/// property of the space, so both are sourced from \p tr1_of_base alone; no
+/// \c axis_batches chunks an axis on its basis' tile boundaries. Tiling is a
+/// property of the basis, so both are sourced from \p tr1_of_base alone; no
 /// array in the DAG is consulted. Both mpqc (from its orbital/basis registries)
 /// and unit tests (from the tranges they build their leaves with) supply the
 /// map and call this.

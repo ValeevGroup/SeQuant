@@ -222,12 +222,12 @@ inline bool ordered_schedule_block_well_formed(ScopeBlock const& block,
       if (!cj) continue;
       // Two sibling blocks are the same realized loop only when their full
       // loop identity collides: (depth, loop_slot) and the latitude (pass
-      // index). Keying on the axis space (a fusion color, not identity) would
-      // wrongly reject two distinct same-space sibling loops that the un-fuse
-      // legitimately emits at different (depth, loop_slot): two occupied
-      // (space "i") nests at (1,0) and (2,1), same latitude 0, are different
-      // loops, not a duplicate. (See LoopKey -- whose identity is the
-      // (depth, loop_slot) pair -- and the same space-vs-identity correction
+      // index). Keying on the axis basis key (a fusion color, not identity)
+      // would wrongly reject two distinct same-key sibling loops that the
+      // un-fuse legitimately emits at different (depth, loop_slot): two
+      // occupied (key "i") nests at (1,0) and (2,1), same latitude 0, are
+      // different loops, not a duplicate. (See LoopKey -- whose identity is the
+      // (depth, loop_slot) pair -- and the same key-vs-identity correction
       // in the home-scope coloring.)
       if (ci->level.depth == cj->level.depth &&
           ci->level.loop_slot == cj->level.loop_slot &&
@@ -565,16 +565,15 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 }
 
 ///
-/// \brief Pass levels, global over every batched space (design section 9.2):
-/// every value gets an integer pass such that a value that
-/// needs another value's completed form sits in a later pass than that
-/// other value.
+/// \brief Pass levels, global over every batched basis key (design
+/// section 9.2): every value gets an integer pass such that a value that needs
+/// another value's completed form sits in a later pass than that other value.
 ///
 /// Two kinds of dependency edge bump the reader's pass, both keyed on the
-/// operand (the "source") rather than the axis space:
-///   - the source is \c LoopCarried on some axis (any space): its full array
-///     exists only after its own loop closes, so every direct reader is
-///     bumped;
+/// operand (the "source") rather than the axis basis key:
+///   - the source is \c LoopCarried on some axis (any basis key): its
+///     full array exists only after its own loop closes, so every direct
+///     reader is bumped;
 ///   - the source is a \c Reduction on some instance (an \c AccumulateSum
 ///     escape) and the reader is produced inside that same instance (its
 ///     production site is at or below the reduction's depth, in the same
@@ -605,7 +604,7 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 /// reduce to a two-set partition: carried sources and everything else.
 ///
 struct ForcedSplitLevels {
-  std::unordered_set<std::size_t> carried;  //!< LoopCarried (any space) ids
+  std::unordered_set<std::size_t> carried;  //!< LoopCarried (any basis key) ids
   std::unordered_set<std::size_t>
       pinned;  //!< sources of a bumping edge (carried values, and Reduction
                //!< sources with at least one in-loop reader): the reverse lift
@@ -798,8 +797,8 @@ inline ForkedSubchain fork_subchain(
 /// static-point timeline) into an \c OrderedSchedule.
 ///
 /// The realized chain is per loop instance, not per axis type: one block per
-/// distinct fusion \c loop_slot appearing on a space across all cells, so a
-/// value carrying two same-space modes on different slots gets two nested
+/// distinct fusion \c loop_slot appearing on a basis key across all cells, so a
+/// value carrying two same-key modes on different slots gets two nested
 /// loops, not one. A nest holding members of more than one pass additionally
 /// emits one sibling block per pass (latitude = pass), run in schedule order
 /// (see step 2b and \c forced_split_levels). See the as-built design
@@ -814,9 +813,9 @@ inline ForkedSubchain fork_subchain(
 /// Reduction/\c LoopCarried-only axis must still get a block to host its
 /// escape output, even though no cell is homed inside it in that role), one
 /// realized depth per distinct fusion \c loop_slot on it (\c
-/// slots_of_space / \c type_slot, resolved through \c fusion_slot). Spaces
-/// are ordered by \p mode_order (most-significant/outermost first), ties/
-/// unlisted spaces alphabetical, slot-ascending within a space -- but that is
+/// slots_of_space / \c type_slot, resolved through \c fusion_slot). Basis
+/// keys are ordered by \p mode_order (most-significant/outermost first), ties/
+/// unlisted keys alphabetical, slot-ascending within a key -- but that is
 /// only a stable tie-break: the nesting actually satisfies every \c
 /// RichSchedule::loop_order pair, and a cycle among those is a builder error.
 /// Loop members that never co-occur (no value is home-sliced on both) are then
@@ -946,7 +945,7 @@ namespace detail {
 /// default-seeded \c consumer_point == its own \c point.
 ///
 /// Matches by type (\c Index::basis_key()) -- not by exact \c Index identity
-/// (\c Index::operator== compares space and ordinal). More than one physical \c
+/// (\c Index::operator== compares basis and ordinal). More than one physical \c
 /// Index label of the same type can appear across \p rich's cells (e.g. one
 /// occurrence's K_1 vs another's K_2), so an exact-Index match could miss a
 /// root occurrence that uses a different physical label of the very type
@@ -961,10 +960,10 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
                       return occ.point == occ.consumer_point;
                     });
     if (!is_root) continue;
-    // A batch axis (occ/aux) is external iff its space appears on a root's own
-    // result slots. Slots are matched as-is: batch axes are plain, and a root
-    // carrying a composite PAO leg a<i,j> always carries its occ pair i,j
-    // plainly too, so no space is reachable only through a proto.
+    // A batch axis (occ/aux) is external iff its basis key appears on a root's
+    // own result slots. Slots are matched as-is: batch axes are plain, and a
+    // root carrying a composite PAO leg a<i,j> always carries its occ pair i,j
+    // plainly too, so no basis key is reachable only through a proto.
     bool const has_type =
         std::any_of(cell.carried.begin(), cell.carried.end(),
                     [&](Index const& ix) { return ix.basis_key() == mode_bk; });
@@ -1010,7 +1009,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   };
 
   // The fusion-assigned loop_slot (compute_dag_boulevard) of a
-  // legality cell's per_axis[pos]: which member of its same-space loop group
+  // legality cell's per_axis[pos]: which member of its same-key loop group
   // slices it -- an occurrence-invariant identity, established by producer->
   // consumer connectivity, not a within-cell position. Read off a
   // representative occurrence in the value's own frame (per_axis modes match
@@ -1039,7 +1038,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       // operand's carried-mode node with a synthetic reduction node) or,
       // absent any home-sliced operand, by seeding that synthetic node
       // directly; read that slot so the reduction escape lands in the same
-      // same-space nest as the operand it reduces, instead of a different
+      // same-key nest as the operand it reduces, instead of a different
       // nest (the operand vanishes before the reduction reaches it) or,
       // absent a slot altogether, the hard-error throw above.
       for (auto const& [rm, rs] : occ.reduced_slot)
@@ -1053,22 +1052,22 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   // 1. The canonical chain: one representative Index per distinct axis type
   // present in any cell's per_axis (LoopLocal, Reduction, or LoopCarried --
   // not just home_floor; see the function doc comment's part 1).
-  // Per-instance loop chain (position-based): for each space, m_s = the max
-  // over cells of the number of same-space per_axis modes in one cell; emit
-  // m_s consecutive depths, one per within-space slot (loop_slot 0..m_s-1). A
-  // value carrying two same-space batched modes (a doubles amplitude's two occ
+  // Per-instance loop chain (position-based): for each basis key, m_s = the
+  // max over cells of the number of same-key per_axis modes in one cell; emit
+  // m_s consecutive depths, one per within-key slot (loop_slot 0..m_s-1). A
+  // value carrying two same-key batched modes (a doubles amplitude's two occ
   // externals) thus gets two distinct loops rather than one. `types[d]` is a
-  // representative Index of the depth's space; `type_slot[d]` is its
-  // within-space slot (the DagScopeLevel loop_slot). Same-space slots occupy
+  // representative Index of the depth's basis key; `type_slot[d]` is its
+  // within-key slot (the DagScopeLevel loop_slot). Same-key slots occupy
   // distinct depths here (the assembly is one loop per depth); depth carries
   // both group and member nesting.
-  // Members present per space = the distinct fusion loop_slots that
-  // appear on that space across all cells. Each distinct slot becomes one
+  // Members present per basis key = the distinct fusion loop_slots that
+  // appear on that key across all cells. Each distinct slot becomes one
   // realized loop. The fusion slot is the occurrence-invariant identity: a
-  // count of same-space per_axis modes with local 0..m-1 slots would be a
+  // count of same-key per_axis modes with local 0..m-1 slots would be a
   // per-position numbering the atlas cannot match to a value's own frame.
   std::map<std::wstring, std::set<int>> slots_of_space;
-  std::map<std::wstring, Index> rep;  // space -> representative axis
+  std::map<std::wstring, Index> rep;  // basis key -> representative axis
   for (CellLegality const& cl : legality.cells)
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       std::wstring const bk{cl.per_axis[pos].axis.basis_key()};
@@ -1102,7 +1101,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
 
   // Nest the chain as the DP realized it: RichSchedule::loop_order holds the
   // (outer, inner) instance pairs read off the occurrences' enclosing
-  // contexts. The space-major, slot-ascending order above is only the
+  // contexts. The key-major, slot-ascending order above is only the
   // tie-break (a stable topological order: among the ready instances the
   // earliest in that order goes first). A cycle means the loop identity fused
   // two physical loops that nest in opposite orders -- a builder error, not a
@@ -1170,7 +1169,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     detail::dump_loop_chain(rich.loop_order, types, type_slot);
 
   std::size_t const n = types.size();
-  // Depth of the loop for a given (space, within-space slot).
+  // Depth of the loop for a given (basis key, slot within that key).
   auto const depth_of_instance = [&](std::wstring const& bk,
                                      int slot) -> std::optional<std::size_t> {
     for (std::size_t d = 0; d < n; ++d)
@@ -1260,12 +1259,12 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
 
   // The LoopLocal home depth of a value: the innermost loop it is LoopLocal
   // on, resolved per-instance by fusion loop_slot -- not by shallowest
-  // same-space count. A value local to slots 2,3 (its own fusion nest) homes
-  // in that nest, not the first same-space nest a space-multiset cover would
-  // pick; picking the wrong same-space nest homes the value where its
+  // same-key count. A value local to slots 2,3 (its own fusion nest) homes
+  // in that nest, not the first same-key nest a key-multiset cover would
+  // pick; picking the wrong same-key nest homes the value where its
   // consumer's nest has not opened (or has already closed), so an
   // in-consumer-nest read misses and the value vanishes. Resolve each
-  // LoopLocal mode's (space, fusion slot) to its realized depth (exactly as
+  // LoopLocal mode's (basis key, fusion slot) to its realized depth (exactly as
   // the escape placement does), and home at the max such depth: within a
   // co-occurrence cluster larger depth nests inside smaller, so the innermost
   // of the value's own home slots is inside all of them. home_floor is the
@@ -1323,8 +1322,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   };
 
   // 2a. Pass levels (per-nest forced split design, sections 3.1 and 9.2).
-  // Global over every batched space: a bumping edge is either
-  // a LoopCarried source (any space, every direct reader bumped) or a
+  // Global over every batched basis key: a bumping edge is either
+  // a LoopCarried source (any basis key, every direct reader bumped) or a
   // Reduction source with a direct reader produced inside that same
   // reduced instance. \c inside resolves the second kind exactly as the
   // escape placement does: for each of the source's Reduction axes,
@@ -1333,7 +1332,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   // reader is "inside" when its own production_depth is at or below that
   // depth in the same nest (type_cluster equal). Defined here because it
   // needs production_depth and cl_by_vid. Computed unconditionally, no
-  // per-space loop, no "more than one forced space" throw: an empty
+  // per-key loop, no "more than one forced space" throw: an empty
   // carried and reduction-source set yields all-zero passes, so a schedule
   // with no forced-split axis at all is unaffected.
   auto const inside = [&](std::size_t reader_vid,
@@ -1473,7 +1472,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
               ? OutputKind::AccumulateSum
               : OutputKind::AccumulateScatter;  // LoopCarried
       // Each per-instance mode escapes to its own depth (distinct loop_slot),
-      // so same-space modes keep separate escapes; the dedup below
+      // so same-key modes keep separate escapes; the dedup below
       // only merges a genuine reduce+carry pair that lands at one depth.
       auto it = std::find_if(escapes.begin(), escapes.end(),
                              [&](auto const& e) { return e.first == *d; });
@@ -1483,9 +1482,9 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
         it->second = OutputKind::AccumulateScatter;
     }
 
-    // A value with >1 non-local mode of one space (a doubles amplitude / PPL
-    // product carrying two occ externals) has its distinct per-instance
-    // escapes collapsed to fewer escapes (one per depth == one per space).
+    // A value with >1 non-local mode of one basis key (a doubles amplitude /
+    // PPL product carrying two occ externals) has its distinct per-instance
+    // escapes collapsed to fewer escapes (one per depth == one per key).
     // Dump those cells (SEQUANT_DUMP_SCHEDULE) to expose the collapse.
     if (detail::dump_enabled("SEQUANT_DUMP_SCHEDULE")) {
       container::svector<std::pair<Index, wchar_t const*>> nonlocal;
@@ -1797,9 +1796,9 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
                                 .loop_slot = loop_slot,
                                 .latitude_ordinal = latitude_ordinal};
     // The block's kind is the kind of its loop instance (the open that
-    // created the (space, slot) component -- RichSchedule::loop_kind); a
-    // space can hold both a contracted-in-batches instance and an external
-    // one, so the per-space test (does the space appear on a root result?)
+    // created the (basis key, slot) component -- RichSchedule::loop_kind); a
+    // basis key can hold both a contracted-in-batches instance and an external
+    // one, so the per-key test (does the key appear on a root result?)
     // is only the fallback for an instance no open recorded.
     if (auto const kit =
             rich.loop_kind.find({std::wstring{axis.basis_key()}, loop_slot});
@@ -2412,13 +2411,14 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           sit->second;
       if (scope.empty()) continue;
       // The atlas: for each of the consumer's enclosing loops `scope[k]`
-      // (space S, loop_slot L), the mode of W it slices is W's carried position
-      // whose value-level component slot is L and whose space is S. A loop-
-      // identity match in W's own frame (occurrence-invariant), keyed off the
-      // value-level slot -- so a value produced whole in a mode is still sliced
-      // there when this consumer sits inside that mode's realized loop (the
-      // measured i_3-contracted case). Over-nested loops the value carries no
-      // mode of get no fact, correct (the value is invariant to them).
+      // (basis key S, loop_slot L), the mode of W it slices is W's carried
+      // position whose value-level component slot is L and whose basis key is
+      // S. A loop-identity match in W's own frame (occurrence-invariant),
+      // keyed off the value-level slot -- so a value produced whole in a mode
+      // is still sliced there when this consumer sits inside that mode's
+      // realized loop (the measured i_3-contracted case). Over-nested loops the
+      // value carries no mode of get no fact, correct (the value is invariant
+      // to them).
       auto const& vs = value_slot[w_vid];
       // This occurrence's leg at its consumer (left 0 / right 1).
       std::size_t leg = static_cast<std::size_t>(-1);
@@ -2455,8 +2455,8 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         }
         if (self_sliced) continue;
         // Use-induced slicing (Layer 2): W is whole-produced on this loop's
-        // space (no own sliced slot), but this consumer C is sliced on a mode M
-        // there. If M is a shared external W also carries, the C = ...*W
+        // basis key (no own sliced slot), but this consumer C is sliced on a
+        // mode M there. If M is a shared external W also carries, the C = ...*W
         // contraction binds W's M to C's sliced M -- so W must be sliced on M
         // at this loop for this fetch. Record it consumer-keyed in occ_facts,
         // never consumer-blind: W may be

@@ -14,14 +14,14 @@
 
 namespace sequant::eval::dryrun {
 
-/// Per-space extents and per-rank CSV moment tables that define one size
+/// Per-basis-key extents and per-rank CSV moment tables that define one size
 /// regime for a dry-run replay. Extents are element counts; CSV moments are
 /// power means over occupied pairs (PNO) or singles (OSV).
 struct SizeRegime {
   std::map<std::wstring, std::size_t> space_extent;
 
-  /// Optional per-space batch partition: the element extent of each realized
-  /// batch slice along the space's batch axis, keyed by Index::basis_key(), in
+  /// Optional per-key batch partition: the element extent of each realized
+  /// batch slice along the key's batch axis, keyed by Index::basis_key(), in
   /// order. Empty (default) => the dry-run batches a mode into uniform
   /// target_batch_size blocks (backend-model-agnostic fallback). When present
   /// for a batch axis, ResultDryRun::mode_batches uses this partition directly

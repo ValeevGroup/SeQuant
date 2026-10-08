@@ -49,7 +49,7 @@ namespace detail {
 /// enforces exactly that count at runtime). Keyed
 /// by the \c LoopKey itself (the loop's stable depth+loop_slot identity, not
 /// its canonical axis label, which a type-keyed count would collapse across
-/// distinct same-space instances) so it is exact per realized loop.
+/// distinct same-key instances) so it is exact per realized loop.
 ///
 [[nodiscard]] inline std::function<std::size_t(LoopKey const&)>
 ordered_n_batches_by_loop(
@@ -850,7 +850,7 @@ void run_ordered_contracted_block(
   auto bs_cache = Cache::empty();
   bs_cache.set_parent(&parent_cache);
 
-  // Batch chunks over the loop axis, sourced per-space by the backend (no
+  // Batch chunks over the loop axis, sourced per basis key by the backend (no
   // carrier array is consulted).
   container::svector<std::pair<std::size_t, std::size_t>> const batches =
       aops->axis_batches(block.axis, target(block.axis));

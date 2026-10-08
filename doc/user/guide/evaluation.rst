@@ -226,7 +226,7 @@ gains a trailer describing that operation's relationship to the active batch loo
 
 ::
 
-    canon=[<full labels of this node's own array layout>] sliced=[<pos>:<space> ...] scope={<space>,<space>,...}
+    canon=[<full labels of this node's own array layout>] sliced=[<pos>:<basis key> ...] scope={<basis key>,<basis key>,...}
 
 * ``canon=[...]`` — the full labels of this node's current array layout (its ``canon_indices()``), in the order the trace's other
   size/byte fields refer to.

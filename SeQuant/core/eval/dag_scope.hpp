@@ -61,7 +61,7 @@ struct LoopKey {
 /// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md, section 5.1.
 struct DagScopeLevel {
   std::size_t depth;   //!< which loop-group (identity)
-  std::wstring space;  //!< color only, not identity
+  std::wstring space;  //!< the axis' Index::basis_key(); color, not identity
   int loop_slot = 0;   //!< which member-slot within the group (identity)
   int altitude_ordinal =
       0;  //!< layout: nesting rank of the slot within its group
@@ -103,7 +103,7 @@ struct ModeToLevel {
 /// hash plus \c LoopKey::operator==. There is deliberately no packed
 /// single-\c size_t "color": packing \c loop_slot into a fixed bit field
 /// silently aliases two distinct loops once the slot numbering (an unbounded
-/// per-space counter in peak_profile.hpp) exceeds the field, and a
+/// per-basis-key counter in peak_profile.hpp) exceeds the field, and a
 /// hash+equality pair has no such bound.
 template <>
 struct std::hash<sequant::LoopKey> {

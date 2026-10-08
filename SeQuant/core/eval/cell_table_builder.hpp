@@ -72,18 +72,19 @@ template <typename Node>
   return out;
 }
 
-/// The loop instance among \p path (with its axis spaces) that slices carried
-/// position \p p of value \p vid: an enclosing entry whose index space is the
-/// position's own and whose slot is the fusion slot any occurrence of the
-/// value records for that position. Every occurrence is tested, not just the
-/// production one, because that is the runtime's own test: a value CSE-shared
-/// by several consumers is sliced on this loop if any of its occurrences was
-/// bound to that slot, and the first occurrence is not privileged.
+/// The loop instance among \p path (with its axis basis keys) that slices
+/// carried position \p p of value \p vid: an enclosing entry whose basis key
+/// (\c Index::basis_key()) is the position's own and whose slot is the fusion
+/// slot any occurrence of the value records for that position. Every occurrence
+/// is tested, not just the production one, because that is the runtime's own
+/// test: a value CSE-shared by several consumers is sliced on this loop if any
+/// of its occurrences was bound to that slot, and the first occurrence is not
+/// privileged.
 ///
-/// \note The match is on (space, slot), and so relies on fusion never giving
-/// two levels of the same space one slot -- were that to happen, a position
-/// could match the wrong level of its own space. Outermost enclosing entry
-/// wins (\p path is outermost-first).
+/// \note The match is on (basis key, slot), and so relies on fusion never
+/// giving two levels of the same basis key one slot -- were that to happen, a
+/// position could match the wrong level of its own basis key. Outermost
+/// enclosing entry wins (\p path is outermost-first).
 [[nodiscard]] inline std::optional<LoopKey> slicing_instance(
     RichSchedule const& rich, std::size_t vid, std::size_t p,
     container::svector<std::pair<LoopKey, int>> const& path,

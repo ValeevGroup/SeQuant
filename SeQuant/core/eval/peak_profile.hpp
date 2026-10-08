@@ -254,7 +254,7 @@ struct OccurrenceRec {
   /// RichSchedule::loop_kind once the loop slots are numbered.
   container::svector<std::pair<Index, BatchModeType>> opens;
   /// Loop identity: per \c carried position, the \c loop_slot of the
-  /// batch loop that slices it (which member of its same-space group), or -1
+  /// batch loop that slices it (which member of its same-key group), or -1
   /// where the position is not a batched (loop-sliced) mode. Assigned by the
   /// union-find over producer->consumer slot connectivity in \c
   /// compute_dag_boulevard (as-built design section 5.2; this file's header
@@ -279,9 +279,9 @@ struct OccurrenceRec {
   /// when no operand of the contraction is itself home-sliced on it (an
   /// all-input reduction): the union-find below seeds a component for every
   /// entry here that \c classify_axis would actually call \c Reduction (no
-  /// carried index of the same space as the mode), instead of relying
+  /// carried index of the same basis key as the mode), instead of relying
   /// solely on a home-sliced child to create one; an entry beside a
-  /// same-space carried index is \c classify_axis LoopLocal/LoopCarried, not
+  /// same-key carried index is \c classify_axis LoopLocal/LoopCarried, not
   /// Reduction, and is left to the ordinary carried-position path.
   container::svector<Index> contracted_batched;
 };
@@ -364,10 +364,10 @@ struct RichSchedule {
   /// The kind of every numbered loop instance, keyed by
   /// (Index::basis_key(), loop_slot): Contracted when the open that created the
   /// instance contracts the mode in batches at its node, External when it
-  /// introduces a carried mode's physical loop. A space may hold instances of
-  /// both kinds (an occupied pair contracted in batches beside an occupied
+  /// introduces a carried mode's physical loop. A basis key may hold instances
+  /// of both kinds (an occupied pair contracted in batches beside an occupied
   /// external pair), so the kind is a property of the instance, not of the
-  /// space; the ordered schedule builder reads a block's kind here.
+  /// key; the ordered schedule builder reads a block's kind here.
   std::map<std::pair<std::wstring, int>, BatchModeType> loop_kind;
   /// Loop nesting constraints read off the DP's realization: (outer, inner)
   /// pairs of loop instances, each (Index::basis_key(), loop_slot), such that
@@ -986,7 +986,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
     }
   }
 
-  // Number the components: one loop_slot per component, per space in
+  // Number the components: one loop_slot per component, per basis key in
   // first-seen order.
   std::unordered_map<std::size_t, int> root_slot;
   std::map<std::wstring, int> next_slot;

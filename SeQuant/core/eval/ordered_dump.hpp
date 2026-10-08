@@ -114,7 +114,7 @@ inline void dump_level_bump(std::size_t v, std::size_t o, bool carried,
 }
 
 /// \brief `[sched]`: the pairwise loop order the rich schedule witnesses, and
-/// the per-instance loop chain (depth -> space#slot) realized from it.
+/// the per-instance loop chain (depth -> key#slot) realized from it.
 template <typename LoopOrder, typename Types, typename Slots>
 void dump_loop_chain(LoopOrder const& loop_order, Types const& types,
                      Slots const& type_slot) {
@@ -130,9 +130,9 @@ void dump_loop_chain(LoopOrder const& loop_order, Types const& types,
 }
 
 /// \brief `[sched-collapse]`: a value with more than one non-local mode of one
-/// space has its distinct per-instance escapes collapsed to fewer escapes (one
-/// per depth == one per space). \p nonlocal is that value's non-LoopLocal axes
-/// with a one-character role tag each, \p escapes its (depth, kind) list.
+/// basis key has its distinct per-instance escapes collapsed to fewer escapes
+/// (one per depth == one per key). \p nonlocal is that value's non-LoopLocal
+/// axes with a one-character role tag each, \p escapes its (depth, kind) list.
 template <typename Nonlocal, typename Escapes>
 void dump_sched_collapse(std::size_t hash, Nonlocal const& nonlocal,
                          Escapes const& escapes) {
@@ -236,7 +236,7 @@ inline void dump_use_induced(std::size_t value_h, Index const& mode,
 
 /// \brief `[opens]`: the batch loops node \p n opens at its own node (the
 /// group nest structure the factorizer emits) with its carried modes -- which
-/// same-space modes open at one node (a multi-loop group) vs at different
+/// same-key modes open at one node (a multi-loop group) vs at different
 /// nodes (separate groups).
 template <typename Node>
 void dump_opens(Node const& n) {
