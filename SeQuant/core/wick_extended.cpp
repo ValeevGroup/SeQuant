@@ -646,17 +646,19 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
 
     auto result = std::make_shared<Sum>();
     auto process = [&](const ExprPtr &t) {
+      // the operator and coefficient indices are external to the reductions
+      // below and to the simplification inside cumulant_expand; only the
+      // final apply_dummy_deltas and simplify merge the dummies
+      const auto scope =
+          set_scoped_modified_default_context([&fixed_indices](Context &ctx) {
+            ctx.set(ctx.canonicalization_options()
+                        .value_or(CanonicalizeOptions{})
+                        .copy_and_set(fixed_indices));
+          });
       for (const auto &p :
            split_mixed_spaces<S>(ex<Product>(ExprPtrList{prefactor, t}), isr,
                                  opts.full_contractions)) {
         ExprPtr reduced = p;
-        // the operator and coefficient indices are external to this reduction
-        const auto scope =
-            set_scoped_modified_default_context([&fixed_indices](Context &ctx) {
-              ctx.set(ctx.canonicalization_options()
-                          .value_or(CanonicalizeOptions{})
-                          .copy_and_set(fixed_indices));
-            });
         WickTheorem<S> reducer{reduced};
         reducer.reduce(reduced);
         if (!reduced->is<Product>()) continue;  // vanished
