@@ -485,8 +485,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
              ? "the given traits"
              : "any hermiticity and conjugation parity") +
         " over a " + (base_fld == Field::Real ? "real" : "complex") +
-        " basis (a real array is declared through the basis field, "
-        "IndexSpace::field)");
+        " basis; declare the basis real (IndexSpace::field, Field::Real) if "
+        "the array is real, or declare the Hermiticity trait (the H/A letter "
+        "of a serialized symmetry annotation) instead of pinning the "
+        "exchange symmetry");
   }
 
   /// @return the elementwise ConjugationSymmetry an array of @p parity would
