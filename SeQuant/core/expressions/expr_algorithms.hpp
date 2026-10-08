@@ -366,14 +366,11 @@ fold_conjugate_pairs_of_real_sum(
 ///         network: its _value_ equals that of its adjoint (conjugate
 ///         transpose), decided by comparing canonical forms. For a closed
 ///         (fully contracted, scalar-valued) network this is reality
-///         recognition: N == conj(N). This derived recognition is what the
-///         time-reversal-symmetry folding builds on; subexpressions carry no
-///         first-class hermiticity tag today (a cached tag on subnetworks is
-///         a possible later extension). For an open network the comparison
-///         answers the strict expression-level question (adjoint exchanges
-///         the named bra/ket slots), not block hermiticity under a slot
-///         pairing -- that refinement also belongs to the time-reversal
-///         work.
+///         recognition: N == conj(N); subexpressions carry no hermiticity
+///         tag, so the answer is recomputed each time. For an open network
+///         the comparison answers the strict expression-level question (the
+///         adjoint exchanges the named bra/ket slots), not block hermiticity
+///         under a slot pairing.
 /// @pre `expr->is_cnumber()`
 [[nodiscard]] bool is_hermitian_network(ExprPtr const& expr);
 

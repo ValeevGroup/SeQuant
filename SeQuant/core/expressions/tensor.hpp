@@ -1205,8 +1205,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   }
 
   /// @brief rebuilds this tensor with new slot bundles, carrying every
-  /// non-slot attribute: label, #Symmetry, #BraKetSymmetry, #Hermiticity,
-  /// #ColumnSymmetry, and the two core states.
+  /// non-slot attribute: label, #Symmetry, #Hermiticity, #ConjugationParity,
+  /// #ColumnSymmetry, and the two core states; the field-dependent
+  /// #BraKetSymmetry and #ConjugationSymmetry are derived again over the new
+  /// slots.
   ///
   /// The sanctioned rebuild API for transforms that rewrite a tensor's slots
   /// (relabeling, expansion, factorization rules): rebuilding through a plain
@@ -1596,8 +1598,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       hash::combine(val, label_);
       hash::combine(val, symmetry_);
       hash::combine(val, braket_symmetry_);
-      // the default state adds nothing, so complex-field tensors keep their
-      // hash
+      // the conjugation symmetry enters where the tensor asserts one: over a
+      // real basis every tensor with a bra or ket slot does (Symm for the
+      // default parity), over a complex basis none does, so complex-field
+      // tensors keep their hash
       if (conjugation_symmetry_ != ConjugationSymmetry::Nonsymm)
         hash::combine(val, conjugation_symmetry_);
       hash::combine(val, column_symmetry_);

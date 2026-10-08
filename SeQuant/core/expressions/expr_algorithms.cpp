@@ -559,8 +559,7 @@ container::svector<ExprPtr> merge_wrapped_summands(
     // order the sum was written in. When the adjoint hands up a -1 the
     // representative may carry that scalar inside `rep`, and emission spells
     // the summand as e.g. -2 Re[d]; that is value-correct (an anti-Hermitian d
-    // with d⁺ = d꙳ has Re d = 0), and hoisting a real scalar out of `ci` and
-    // `cc` here is the change to make if a cleaner spelling is wanted
+    // with d⁺ = d꙳ has Re d = 0)
     bool use_conj = *cc < *ci;
     ExprPtr rep = use_conj ? cc : ci;
     auto sc = wi.scalar;
@@ -617,10 +616,9 @@ ExprPtr fold_conjugate_pairs_impl(
   auto const& summands = summands_v;
   const std::size_t n = summands.size();
   // the fold applies to scalar-valued summands only. Re/Im of
-  // operator-valued content is out of scope here (the operator analogue --
-  // anti-Hermitian splitting -- comes with the time-reversal work), and an
-  // operator string's adjoint reverses the operators, which is not this
-  // fold's elementwise conjugation. A tensor-valued summand (one with
+  // operator-valued content is out of scope here, and an operator string's
+  // adjoint reverses the operators, which is not this fold's elementwise
+  // conjugation. A tensor-valued summand (one with
   // external indices) stays out for two reasons: the pairing below compares
   // canonical forms, which identify a summand with its conjugate as a value
   // only when there are no externals to line up (the adjoint of R{a;i} is

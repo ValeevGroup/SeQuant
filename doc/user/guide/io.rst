@@ -115,10 +115,14 @@ written as its real part plus (or minus) its imaginary one — ``1 + 2i``, ``1 -
 expected, since juxtaposition binds tighter than ``+``: ``(1 + 2i) t{i_1;a_1}``. A purely real constant is spelled exactly as before.
 
 The single-letter codes in ``SymmetrySpec`` abbreviate the corresponding enumerators, one letter per field: ``[ASN]`` is the tensor's
-permutational :class:`Symmetry <sequant::Symmetry>` (``A`` = Antisymm, ``S`` = Symm, ``N`` = Nonsymm); ``[SCN]`` is its
-:class:`BraKetSymmetry <sequant::BraKetSymmetry>` (``S`` = Symm, ``C`` = Conjugate, ``N`` = Nonsymm); and the final ``[SN]`` is its
-:class:`ColumnSymmetry <sequant::ColumnSymmetry>` (``S`` = Symm, ``N`` = Nonsymm — this field has no Conjugate case). A tensor's trailing
-``:A-C-S`` in the example below therefore reads "antisymmetric, conjugate bra-ket symmetric, symmetric column".
+permutational :class:`Symmetry <sequant::Symmetry>` (``A`` = Antisymm, ``S`` = Symm, ``N`` = Nonsymm); ``[SCNHA]`` is either its
+:class:`BraKetSymmetry <sequant::BraKetSymmetry>` (``S`` = Symm, ``C`` = Conjugate, ``N`` = Nonsymm) or its
+:class:`Hermiticity <sequant::Hermiticity>` trait (``H`` = Hermitian, ``A`` = AntiHermitian), from which the bra-ket symmetry is derived
+over the indices' basis; ``[SN]`` is its :class:`ColumnSymmetry <sequant::ColumnSymmetry>` (``S`` = Symm, ``N`` = Nonsymm — this field
+has no Conjugate case); and the optional ``[EON]`` is its :class:`ConjugationParity <sequant::ConjugationParity>` (``E`` = Even,
+``O`` = Odd, ``N`` = None), which the serializer writes only where the parser would not back-fill it. A tensor's trailing ``:A-C-S`` in
+the example below therefore reads "antisymmetric, conjugate bra-ket symmetric, symmetric column"; a serializer writes the trait it holds,
+so a Hermitian tensor comes back as ``:A-H-S``.
 
 ``RealImagPart`` spells the :class:`RealPart <sequant::RealPart>` and :class:`ImagPart <sequant::ImagPart>` expression nodes, which
 :func:`simplify() <sequant::simplify>` emits when it folds a pair of complex-conjugate summands (``A + A*`` becomes ``2 Re[A]``,

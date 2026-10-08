@@ -1065,7 +1065,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     auto type = left->is_tensor() ? ResultType::Tensor : ResultType::Scalar;
 
     // a _real_ scalar commutes with conj, so a conj-hoisted subtree hoists
-    // through the wrap too (\mathcal{T}-partner terms carry real prefactors)
+    // through the wrap too
     bool const wrap_hoist = hoistable(left->canon_transform()) &&
                             right->is_constant() &&
                             right->as_constant().value().imag() == 0;
