@@ -108,6 +108,38 @@ TEST_CASE("conjugate_free_function_total", "[conjugation]") {
                     Exception);
 }
 
+TEST_CASE("set_label_marks", "[conjugation]") {
+  using namespace sequant;
+  // an anti-Hermitian core of indefinite parity over the (complex) default
+  // basis: `꙳` is kept, `⁺` names minus the tensor
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+           TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                            .conjugation_parity = ConjugationParity::None});
+  REQUIRE(t.kconjugate() == 1);
+  REQUIRE(t.kconjugated());
+  // a label without marks keeps the states
+  t.set_label(L"u");
+  REQUIRE(t.label() == L"u");
+  REQUIRE(t.kconjugated());
+  // a refused mark leaves the tensor as the call found it
+  const auto hash_before = t.hash_value();
+  REQUIRE_THROWS_AS(t.set_label(L"v⁺"), Exception);
+  REQUIRE(t.label() == L"u");
+  REQUIRE(t.kconjugated());
+  REQUIRE_FALSE(t.adjointed());
+  REQUIRE(t.hash_value() == hash_before);
+  // marks in the label replace the states
+  t.set_label(L"w");
+  REQUIRE(t.kconjugated());
+  Tensor n(L"n", bra{L"a_1"}, ket{L"i_1"},
+           TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+  REQUIRE(n.kconjugate() == 1);
+  n.set_label(L"m⁺");
+  REQUIRE(n.label() == L"m");
+  REQUIRE(n.adjointed());
+  REQUIRE_FALSE(n.kconjugated());
+}
+
 TEST_CASE("re_im_composition_table", "[conjugation]") {
   // Re/Im are real-valued, so the four compositions collapse:
   //   Re(Re x) = Re x,  Re(Im x) = Im x,  Im(Re x) = 0,  Im(Im x) = 0
