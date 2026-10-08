@@ -233,7 +233,7 @@ gains a trailer describing that operation's relationship to the active batch loo
 * ``sliced=[...]`` — which of *this node's own* modes are currently sliced, each written as ``<canonical position>:<basis key>``
   (``Index::basis_key()``: the index space's base key, or the registry name of a named basis instance such as ``μ̃``) — e.g.
   ``0:Κ`` means the mode at position 0 belongs to the auxiliary space ``Κ`` and is a slice, not the mode's full extent.
-* ``scope={...}`` — the basis keys of every batch loop currently open around this operation, outermost first (e.g. ``scope={Κ,}``
+* ``scope={...}`` — the basis keys of every batch loop currently open around this operation, outermost first (e.g. ``scope={Κ}``
   for one open loop over the ``Κ`` space).
 
 This trailer is appended to the *same* ``label`` field the earlier sections above already parse (it does not introduce new

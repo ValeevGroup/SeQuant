@@ -405,7 +405,7 @@ inline void release_after_op() {
 
 /// Scope annotation for the batch-loop enter/leave markers (and reused by
 /// slice_home_annot): the Index::basis_key()s of the currently-open batch
-/// loops, outermost-first, e.g. `scope={i,i,K,}`. \p active is a CacheManager
+/// loops, outermost-first, e.g. `scope={i,i,K}`. \p active is a CacheManager
 /// batch_context() -- a sequence of {Index mode, element-range} entries.
 template <typename BatchContext>
 std::string scope_annot(BatchContext const& active) {
