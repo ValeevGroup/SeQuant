@@ -523,8 +523,7 @@ size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   // twin with the same slots, so the two must not share a cache slot. The
   // default state adds nothing, so unmarked leaves keep their hash.
   if (tnsr.adjointed() || tnsr.kconjugated())
-    hash::combine(h, static_cast<std::uint8_t>((tnsr.adjointed() ? 1 : 0) |
-                                               (tnsr.kconjugated() ? 2 : 0)));
+    hash::combine(h, tnsr.states_code());
   // Over a real basis an Odd-parity array is imaginary while the Even one is
   // real, so the two must not share a cache slot. Even and None add nothing,
   // so the default keys stay.

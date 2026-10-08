@@ -337,23 +337,12 @@ struct Transformer {
   template <typename AST>
   std::tuple<std::wstring, bool, bool> split_marks(const AST &node) const {
     std::wstring name = node.name;
-    bool adjointed = false;
-    bool kconjugated = false;
-    while (!name.empty()) {
-      const wchar_t c = name.back();
-      if (c == sequant::adjoint_label) {
-        if (adjointed) throw_at(node, "repeated adjoint mark in the name");
-        adjointed = true;
-      } else if (c == sequant::conjugate_label) {
-        if (kconjugated)
-          throw_at(node, "repeated conjugation mark in the name");
-        kconjugated = true;
-      } else {
-        break;
-      }
-      name.pop_back();
+    try {
+      const auto [adjointed, kconjugated] = split_state_marks(name);
+      return {std::move(name), adjointed, kconjugated};
+    } catch (const Exception &e) {
+      throw_at(node, e.what());
     }
-    return {std::move(name), adjointed, kconjugated};
   }
 
   /// refuses a state on a name that admits none

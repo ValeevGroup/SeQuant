@@ -12,18 +12,6 @@
 
 namespace sequant {
 
-namespace detail {
-/// @return the tensor's two core states as one number,
-///         `adjointed | kconjugated << 1`
-/// @note the block comparators' key right after the label: `t`, `t⁺`, `t꙳` and
-///       `t⁺꙳` name four different arrays over the same slots, so they are
-///       four different blocks, ordered `t < t⁺ < t꙳ < t⁺꙳`
-inline std::uint8_t tensor_states_code(const Tensor &t) {
-  return static_cast<std::uint8_t>((t.adjointed() ? 1 : 0) |
-                                   (t.kconjugated() ? 2 : 0));
-}
-}  // namespace detail
-
 /// Comparator template that compares tensor blocks (slots). This means that it
 /// takes only the spaces of indices into account but not their concrete
 /// labeling (i.e. i1 and i2 are considered equal).
@@ -33,8 +21,9 @@ inline std::uint8_t tensor_states_code(const Tensor &t) {
 /// here is that the bra/ket/aux is not important at the level where tensor
 /// blocks are relevant (e.g. during numerical evaluation).
 /// The bare label alone does not name the array: the two core states are
-/// compared right after it (detail::tensor_states_code()), so a marked and an
-/// unmarked tensor over the same slots are different blocks.
+/// compared right after it (Tensor::states_code()), so a marked and an
+/// unmarked tensor over the same slots are different blocks: `t`, `t⁺`, `t꙳`
+/// and `t⁺꙳` are four, ordered `t < t⁺ < t꙳ < t⁺꙳`.
 template <template <class> class Comparator, template <class> class Selector,
           bool fallback>
 struct TensorBlockComparator {
@@ -44,8 +33,8 @@ struct TensorBlockComparator {
       return cmp(lhs.label(), rhs.label());
     }
 
-    const std::uint8_t lhs_states = detail::tensor_states_code(lhs);
-    const std::uint8_t rhs_states = detail::tensor_states_code(rhs);
+    const std::uint8_t lhs_states = lhs.states_code();
+    const std::uint8_t rhs_states = rhs.states_code();
     if (lhs_states != rhs_states) {
       Comparator<std::uint8_t> cmp;
       return cmp(lhs_states, rhs_states);

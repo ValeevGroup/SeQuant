@@ -517,16 +517,9 @@ WrapInfo classify_wrapped(ExprPtr const& sm) {
     }
     return {};
   }();
-  if (info.kind != 0) {
-    if (info.inner->is<Product>()) {
-      auto const& p = info.inner->as<Product>();
-      auto const c = p.scalar();
-      if (c.imag() == 0 && c.real() != 1) {
-        info.inner = detail::strip_scalar(p);
-        info.scalar *= c;
-      }
-    }
-  }
+  if (info.kind != 0)
+    if (auto c = detail::hoist_real_scalar(info.inner))
+      info.scalar *= c->as<Constant>().value();
   return info;
 }
 

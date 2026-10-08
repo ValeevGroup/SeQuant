@@ -6,6 +6,7 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/tree_index.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <boost/core/demangle.hpp>
@@ -49,6 +50,29 @@ inline void toggle_adjoint_label(std::wstring &label) {
     label.pop_back();
   else
     label.push_back(adjoint_label);
+}
+
+/// strips the trailing state marks off @p label: ::adjoint_label and
+/// ::conjugate_label, in either order and at most one of each
+/// @param[in,out] label the name; on return without its marks
+/// @return whether an adjoint mark and whether a conjugation mark was found
+/// @throw Exception if a mark is repeated
+inline std::pair<bool, bool> split_state_marks(std::wstring &label) {
+  bool adjointed = false, kconjugated = false;
+  while (!label.empty()) {
+    const wchar_t c = label.back();
+    if (c == adjoint_label) {
+      if (adjointed) throw Exception("repeated adjoint mark in the name");
+      adjointed = true;
+    } else if (c == conjugate_label) {
+      if (kconjugated) throw Exception("repeated conjugation mark in the name");
+      kconjugated = true;
+    } else {
+      break;
+    }
+    label.pop_back();
+  }
+  return {adjointed, kconjugated};
 }
 
 namespace detail {

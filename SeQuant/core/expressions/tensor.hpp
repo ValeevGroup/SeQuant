@@ -1136,6 +1136,14 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
   /// @return whether this is the adjoint of the array label() names
   bool adjointed() const { return adjointed_; }
+  /// @return the two states as one number, `adjointed | kconjugated << 1`:
+  ///         the hash term, the ordering key (`t < t⁺ < t꙳ < t⁺꙳`), the graph
+  ///         colour term and the block comparators' key after the label all
+  ///         read this one value, so they agree on what the states are
+  std::uint8_t states_code() const {
+    return static_cast<std::uint8_t>((adjointed_ ? 1 : 0) |
+                                     (kconjugated_ ? 2 : 0));
+  }
   /// @return whether this is the K-conjugate of the array label() names
   bool kconjugated() const { return kconjugated_; }
 
@@ -1317,13 +1325,6 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   bool adjointed_ = false;
   bool kconjugated_ = false;
 
-  /// @return the states as one number, `adjointed | kconjugated << 1`: the
-  ///         hash term and the ordering key (`t < t⁺ < t꙳ < t⁺꙳`)
-  std::uint8_t states_code() const {
-    return static_cast<std::uint8_t>((adjointed_ ? 1 : 0) |
-                                     (kconjugated_ ? 2 : 0));
-  }
-
   /// everything about a Tensor that its slots decide: the three bundles, the
   /// cached net ranks, the two core states and the two field-derived
   /// symmetries. Taken before a slot mutation (slot_snapshot_if_stateful()) so
@@ -1501,21 +1502,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @note on a throw the label has been stripped of its marks and the states
   ///       set; the caller restores what it needs
   void adopt_marks() {
-    bool adj = false, kconj = false;
-    while (!label_.empty()) {
-      const wchar_t c = label_.back();
-      if (c == sequant::adjoint_label) {
-        if (adj) throw Exception("Tensor: repeated adjoint mark in the label");
-        adj = true;
-      } else if (c == sequant::conjugate_label) {
-        if (kconj)
-          throw Exception("Tensor: repeated conjugation mark in the label");
-        kconj = true;
-      } else {
-        break;
-      }
-      label_.pop_back();
-    }
+    const auto [adj, kconj] = split_state_marks(label_);
     if (!adj && !kconj) return;
     adjointed_ = adj;
     kconjugated_ = kconj;
