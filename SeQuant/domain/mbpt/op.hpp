@@ -1448,8 +1448,10 @@ void validate_ref_av_connections(const EVOptions<T>& opts,
       full_contractions ||
       (opts.connect.empty() && opts.do_not_connect.empty());
   SEQUANT_ENFORCE(connections_supported,
-                  "ref_av: connect and do_not_connect must be empty when the "
-                  "reference differs from the Wick vacuum");
+                  "ref_av: connect and do_not_connect must be empty when "
+                  "ref_av takes partial contractions, i.e. the reference "
+                  "differs from the Wick vacuum and the vacuum is not "
+                  "MultiProduct");
 }
 }  // namespace detail
 
