@@ -203,10 +203,6 @@ class EvalExpr {
   [[nodiscard]] bool is_sum() const noexcept;
 
   ///
-  /// \return True if this expression is an adjoint (unary) node.
-  ///
-
-  ///
   /// \brief Calls to<Tensor>() on ExprPtr held by this object.
   ///
   /// \return Tensor const&
@@ -265,9 +261,7 @@ class EvalExpr {
   ///          bra-ket swap. What none of them carries is a _permutation_ of the
   ///          result modes, so a shared slot whose two users order their modes
   ///          differently hands one of them transposed data -- silently, since
-  ///          annotations are just labels (measured on h2o tpns=0 PNS-CCD,
-  ///          2026-09-03: a nested CSV intermediate whose two pair-basis inner
-  ///          modes were transposed shifted the correlation energy by 2.2e-6).
+  ///          annotations are just labels.
   ///
   ///          The fingerprint numbers the indices by first occurrence in
   ///          canon_indices() order and hashes (space, id, proto ids) per

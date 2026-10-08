@@ -71,9 +71,8 @@ template <typename T, typename... Ts>
                     static_cast<bool>(a);
                     a->size_in_bytes();
                   }) {
-      // Smart-pointer-like operand: tolerate null so callers (e.g. the
-      // former unary-op dispatchers) can
-      // pass an empty ResultPtr without an external guard.
+      // Smart-pointer-like operand: a null one counts as empty, so a caller
+      // can pass an unset ResultPtr without a guard of its own
       return a ? a->size_in_bytes() : size_t{0};
     } else if constexpr (requires { a->size_in_bytes(); })
       return a->size_in_bytes();

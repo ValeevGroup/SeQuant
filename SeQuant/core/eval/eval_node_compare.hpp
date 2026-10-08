@@ -207,9 +207,7 @@ struct TreeNodeEqualityComparator {
       // of the result modes. Two same-space external indices of an isomorphic
       // network can be ordered either way, since bliss breaks an automorphic
       // orbit by input vertex order, and a cached buffer served under the
-      // other ordering is a transposed value (measured: a residual block's
-      // product node C+.(g.C) laid out (i_1,i_2;..) served to its twin laid
-      // out (i_2,i_1;..) put a PNS-MP1 energy 7 % off).
+      // other ordering is a transposed value.
       if (lhs->layout_fingerprint() != rhs->layout_fingerprint()) {
         return false;
       }
