@@ -70,7 +70,11 @@ inline constexpr IndexBasis::instance_type default_ao_basis_instance =
 /// spans the union of all three. Every space a basis spans must be
 /// registered. The extents default to the spaces' dimensions (populate them
 /// with IndexBasisRegistry::extent(label, n) before the registry is
-/// given to a Context, which holds it immutable).
+/// given to a Context, which holds it immutable). No spin-cased counterparts
+/// (`μ↑`, `μ↓`, ...) are registered, unlike by add_pao_basis(): the AO bases
+/// are the target of csv_transform() after spin tracing, and spin-casing an
+/// index in one throws (see make_spinalpha()) unless they are registered by
+/// hand.
 /// @param isr the IndexBasisRegistry to which add the AO bases
 /// @param spin_any the quantum numbers of the spin-agnostic orbital spaces
 ///        in the target convention (Spin::null for SpinConvention::Legacy,
@@ -122,8 +126,11 @@ inline constexpr IndexBasis::instance_type default_pao_basis_instance =
 /// to a Context, which holds it immutable). The α- and β-spin PAO bases are
 /// registered alongside, as the same instance of the spin-cased particle
 /// spaces (if \p isr has them) under the spin-annotated label (`μ̃↑`,
-/// `μ̃↓`), so that a PAO index can be spin-cased (see make_spinalpha()); each
-/// has an extent of its own, to populate like the spin-agnostic one.
+/// `μ̃↓`), so that a PAO index can be spin-cased (see make_spinalpha()). Each
+/// is an entry of its own, whose extent defaults to the dimension of its
+/// spin-cased space: setting the extent of \p label does not reach them (as
+/// setting a space's does not reach the spin-cased spaces add_fermi_spin()
+/// derived from it), so populate all three.
 /// @param spin_any the quantum numbers of the spin-agnostic particle space
 /// @param instance the basis instance of the PAO basis
 /// @param label the label the PAO basis is registered under
