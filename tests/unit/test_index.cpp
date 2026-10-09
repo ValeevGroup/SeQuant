@@ -437,7 +437,7 @@ TEST_CASE("index", "[elements][index]") {
     IndexBasisRegistry registry = *get_default_context().index_basis_registry();
     if (!registry.contains(L"μ̃")) {
       // named bases of the particle space, with diacritics in their labels
-      const auto& uocc = registry.retrieve(
+      const IndexSpace uocc = registry.retrieve(
           registry.particle_space(/* nulltype_ok = */ false), mbpt::Spin::any);
       registry.add(L"μ̃", IndexBasis{uocc, 1});
       if (!registry.contains(L"f̌")) registry.add(L"f̌", IndexBasis{uocc, 2});
