@@ -2046,4 +2046,10 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   REQUIRE_NOTHROW(other_ordinal = spintrace(term(m2)));
   CHECK(*same_ordinal == *other_ordinal);
   CHECK(to_latex(same_ordinal).find(L"\\tilde{\\mu}") != std::wstring::npos);
+  // open-shell: the spin-cased named index keeps a label of its own, so it is
+  // not taken for the generic a↑_1 / a↓_1
+  const auto os = mbpt::open_shell_spintrace(term(m1), {});
+  REQUIRE(os.size() == 1);
+  CHECK(to_latex(os[0]).find(L"\\tilde{\\mu}") != std::wstring::npos);
+  CHECK(to_latex(os[0]) != to_latex(ex<Constant>(0)));
 }

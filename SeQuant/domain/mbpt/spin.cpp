@@ -1346,10 +1346,18 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
     return std::vector<ExprPtr>{expr};
   }
 
+  // Expand 'A' operator and 'antisymm' tensors; the indices are collected
+  // from the result, since simplify() renumbers the dummies
+  auto expanded_expr = expand_A_op(expr);
+  reset_tags(expanded_expr);
+  expand(expanded_expr);
+  simplify(expanded_expr);
+
   // Grand index list contains both internal and external indices
   container::set<Index, Index::FullLabelCompare> grand_idxlist =
       get_used_indices<decltype(grand_idxlist),
-                       SlotType::Bra | SlotType::Ket | SlotType::Proto>(expr);
+                       SlotType::Bra | SlotType::Ket | SlotType::Proto>(
+          expanded_expr);
 
   container::set<Index> ext_idxlist;
   for (const auto& idxgrp : ext_index_groups) {
@@ -1435,12 +1443,6 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
     e_rep.clear();
     e_rep.push_back(external_replacement_map);
   }
-
-  // Expand 'A' operator and 'antisymm' tensors
-  auto expanded_expr = expand_A_op(expr);
-  reset_tags(expanded_expr);
-  expand(expanded_expr);
-  simplify(expanded_expr);
 
   std::vector<ExprPtr> result{};
 
