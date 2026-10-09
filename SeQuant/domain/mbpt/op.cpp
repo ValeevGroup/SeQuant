@@ -2,6 +2,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
@@ -1397,33 +1398,44 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
             term.is<Product>()
                 ? term.as<Product>().clone().as_shared_ptr<Product>()
                 : std::make_shared<Product>(ExprPtrList{term->clone()});
-        // visit every index of every tensor in the TN
+        // visit every bra and ket index of every tensor in the TN
         auto for_each_index_in_tn = [](const auto& product_ptr,
                                        const auto& op) {
           ranges::for_each(product_ptr->factors(), [&](auto& factor) {
             auto tensor_ptr = std::dynamic_pointer_cast<AbstractTensor>(factor);
             if (tensor_ptr) {
-              ranges::for_each(tensor_ptr->_braket(),
-                               [&](auto& idx) { op(idx, *tensor_ptr); });
+              ranges::for_each(tensor_ptr->_bra(), [&](auto& idx) {
+                op(idx, *tensor_ptr, /* in_bra = */ true);
+              });
+              ranges::for_each(tensor_ptr->_ket(), [&](auto& idx) {
+                op(idx, *tensor_ptr, /* in_bra = */ false);
+              });
             }
           });
         };
 
-        // extract RDM-only and all indices
-        container::set<Index> rdm_indices;
+        // extract RDM-only (with their slot) and all indices
+        container::map<Index, bool> rdm_index_in_bra;
         std::set<Index, Index::LabelCompare> all_indices;
-        auto retrieve_rdm_and_all_indices = [&rdm_indices, &all_indices,
-                                             &rdm_label](const auto& idx,
-                                                         const auto& tensor) {
-          all_indices.insert(idx);
-          if (tensor._label() == rdm_label) {
-            rdm_indices.insert(idx);
-          }
-        };
+        auto retrieve_rdm_and_all_indices =
+            [&rdm_index_in_bra, &all_indices, &rdm_label](
+                const auto& idx, const auto& tensor, bool in_bra) {
+              all_indices.insert(idx);
+              if (tensor._label() == rdm_label) {
+                rdm_index_in_bra.emplace(idx, in_bra);
+              }
+            };
         for_each_index_in_tn(product_ptr, retrieve_rdm_and_all_indices);
-        if (rdm_indices.empty()) return product_ptr;
+        if (rdm_index_in_bra.empty()) return product_ptr;
 
-        // compute RDM->target replacement rules; external indices stay
+        // compute RDM->target replacement rules. An RDM index is external if
+        // it is named in the context or, without named indices, occurs once in
+        // the term. A dummy index is summed over the target space, so it is
+        // replaced by a target-space index. An external index keeps its label:
+        // the RDM vanishes outside the target space, so if the index's space
+        // extends beyond it the RDM gets a target-space index instead and a
+        // Kronecker delta ties the two (bra/ket placement as in WickTheorem's
+        // contractions)
         const auto index_counts =
             named_indices ? container::map<Index, IndexSlotCounters>{}
                           : get_used_indices_with_counts(product_ptr);
@@ -1434,20 +1446,26 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
           return count_it->second.nonproto() <= 1;
         };
         container::map<Index, Index> replacement_rules;
-        ranges::for_each(rdm_indices, [&](const Index& idx) {
-          if (is_external(idx)) return;
+        container::svector<ExprPtr> restrictions;
+        for (const auto& [idx, in_bra] : rdm_index_in_bra) {
           const auto target_type =
               isr->intersection(idx.space(), target_rdm_space_type);
-          if (target_type) {
-            Index target = Index::make_tmp_index(target_type);
-            replacement_rules.emplace(idx, target);
-          }
-        });
+          if (!target_type) continue;
+          const bool external = is_external(idx);
+          if (external && target_type == idx.space()) continue;
+          Index target = Index::make_tmp_index(target_type);
+          replacement_rules.emplace(idx, target);
+          if (external)
+            restrictions.emplace_back(in_bra ? make_kronecker(idx, target)
+                                             : make_kronecker(target, idx));
+        }
 
         if (!replacement_rules.empty()) {
           sequant::detail::apply_index_replacement_rules(
               product_ptr, replacement_rules, all_indices);
         }
+        for (auto& restriction : restrictions)
+          product_ptr->append(1, std::move(restriction));
         return product_ptr;
       };
 
