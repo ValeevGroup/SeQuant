@@ -73,7 +73,10 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
                                  bra({bra_idx}), ket({dummy_idx})),  //
                       ex<Tensor>(coeff_tensor_label,                 //
                                  bra({dummy_idx}), ket({ket_idx}))});
-    } else {
+    } else if ((bra_has_proto_indices ? ket_idx : bra_idx)
+                   .basis()
+                   .basis_instance() == csv_basis.basis_instance()) {
+      // the other leg is in the target basis
       return ex<Product>(
           1,
           ExprPtrList{ex<Tensor>(coeff_tensor_label,  //

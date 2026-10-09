@@ -205,6 +205,21 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
       CHECK(n <= 2);
     }
   }
+  // ... and a single C only if the leg without proto indices is in the
+  // target basis; else the overlap to that leg stays
+  {
+    const Index s_bra(uocc, 1, {i1, i2});
+    CHECK(mbpt::csv_transform(make_overlap(s_bra, Index(uocc, 2)), uocc)
+              ->size() == 1);
+    const auto ct =
+        mbpt::csv_transform(make_overlap(s_bra, I(Index(uocc, 2), 1)), uocc);
+    REQUIRE(ct->is<Product>());
+    CHECK(ct->size() == 2);
+    CHECK(std::ranges::count_if(ct->as<Product>().factors(), [](auto& f) {
+            return f->template as<Tensor>().label() ==
+                   reserved::overlap_label();
+          }) == 1);
+  }
   // ... also between temporary indices, e.g. fresh from Wick
   {
     const Index s_bra = Index::make_tmp_index(IndexBasis{uocc, 1},
