@@ -533,7 +533,7 @@ class IndexBasisRegistry {
   /// @param args optional arguments consisting of a mix of zero or more of
   /// the following:
   ///   - IndexSpace::QuantumNumbers
-  ///   - dimension of the space (unsigned long)
+  ///   - dimension of the space (an integer)
   ///   - any of { is_vacuum_occupied , is_reference_occupied , is_complete ,
   ///   is_hole , is_particle }
   /// @return reference to `this`
@@ -593,7 +593,7 @@ class IndexBasisRegistry {
   /// each of the following, each defaulting to what @p basis carries (for a
   /// basis built from a space and an instance: the dimension of the space,
   /// IndexSpaceMetric::Unit and the field of the space's own basis):
-  ///   - extent of the basis (unsigned long)
+  ///   - extent of the basis (an integer)
   ///   - IndexSpaceMetric
   ///   - Field
   /// @return reference to `this`
@@ -646,10 +646,9 @@ class IndexBasisRegistry {
       throw Exception("IndexBasisRegistry::add(label, basis): the basis of '" +
                       toUtf8(key) + "' is already named '" + toUtf8(*taken) +
                       "'");
-    IndexBasis named{
-        *space, basis.basis_instance(),
-        key,    extent ? std::optional<std::size_t>(*extent) : basis.extent_,
-        metric, field ? field : basis.field_};
+    IndexBasis named{*space, basis.basis_instance(),
+                     key,    extent ? extent : basis.extent_,
+                     metric, field ? field : basis.field_};
     bases_.emplace(std::move(key), std::move(named));
     ++named_count_;
     return clear_memoized_data_and_return_this();
@@ -1663,9 +1662,9 @@ class IndexBasisRegistry {
   /// basis's extent) and the Field among
   /// @p args, std::nullopt for each that is not given
   template <typename... Args>
-  static std::pair<std::optional<unsigned long>, std::optional<Field>>
+  static std::pair<std::optional<std::size_t>, std::optional<Field>>
   parse_extent_and_field(const Args&... args) {
-    std::pair<std::optional<unsigned long>, std::optional<Field>> result;
+    std::pair<std::optional<std::size_t>, std::optional<Field>> result;
     auto h_args = boost::hana::make_tuple(args...);
 
     auto h_ints = boost::hana::filter(h_args, [](auto arg) {
