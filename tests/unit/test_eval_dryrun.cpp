@@ -399,10 +399,11 @@ SizeRegime df_regime(ProblemSize const& p) {
 }
 
 // Batchable = the two modes mpqc's runtime batches on the CSV path: PAO (mu~)
-// and DF aux (K), both non-proto, keyed by Index::basis_key so that the PAOs
-// are batchable as the mu~ space and as the named basis instance mu~ alike.
+// and DF aux (K), both non-proto, keyed by IndexBasis::base_key so that the
+// PAOs are batchable as the mu~ space and as the named basis instance mu~
+// alike.
 bool is_df_batchable(Index const& ix) {
-  auto const k = ix.basis_key();
+  auto const k = ix.basis().base_key();
   return k == L"μ̃" || k == L"Κ";
 }
 
@@ -3532,7 +3533,7 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = is_df_batchable;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.basis_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
   };
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;

@@ -124,7 +124,7 @@ void dump_loop_chain(LoopOrder const& loop_order, Types const& types,
                << pair.second.second << L" by v" << witness << L"\n";
   std::wcerr << L"[sched] per-instance loop chain: ";
   for (std::size_t d = 0; d < types.size(); ++d)
-    std::wcerr << L"d" << d << L"=" << types[d].basis_key() << L"#slot"
+    std::wcerr << L"d" << d << L"=" << types[d].basis().base_key() << L"#slot"
                << type_slot[d] << L" ";
   std::wcerr << L"\n";
 }
@@ -242,7 +242,7 @@ template <typename Node>
 void dump_opens(Node const& n) {
   std::wcerr << L"[opens] hash=" << n->hash_value() << L" opened_here={";
   for (auto const& [ix, kind] : n->batch_loops_opened_here())
-    std::wcerr << ix.full_label() << L":" << ix.basis_key() << L":"
+    std::wcerr << ix.full_label() << L":" << ix.basis().base_key() << L":"
                << (kind == BatchModeType::Contracted ? L"C" : L"E") << L" ";
   std::wcerr << L"} carried={";
   for (auto const& c : n->canon_indices()) std::wcerr << c.full_label() << L" ";

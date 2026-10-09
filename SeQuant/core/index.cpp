@@ -22,7 +22,7 @@ void Index::reset_tmp_index() noexcept {
 
 std::wstring Index::to_latex() const noexcept {
   std::wstring protos{};
-  const auto instance = unnamed_basis_instance();
+  const auto instance = basis_.unnamed_instance();
   if (has_proto_indices() || instance) {
     protos += L"^{";
     for (auto&& pidx : proto_indices()) protos += pidx.to_latex();
@@ -34,8 +34,8 @@ std::wstring Index::to_latex() const noexcept {
     sfx =
         std::format(L"_{}", *ordinal_ < 10 ? std::to_wstring(*ordinal_)
                                            : std::format(L"{{{}}}", *ordinal_));
-  return std::format(L"{{{}{}{}}}", io::latex::utf_to_string(basis_key()), sfx,
-                     protos);
+  return std::format(L"{{{}{}{}}}", io::latex::utf_to_string(basis_.base_key()),
+                     sfx, protos);
 }
 
 std::string Index::ascii_label() const {

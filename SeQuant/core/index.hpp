@@ -79,7 +79,7 @@ concept range_of_castables_to_index =
 /// created from strings will use the same index space (see Index::default_space_attr)
 /// with the base label stored into its space's base_key (ordinal, if any, is used as usual).
 /// A basis instance registered under a name in that registry is printed by that name
-/// (Index::basis_key()) if the Index's IndexBasis carries it, as one obtained from the registry
+/// (IndexBasis::base_key()) if the Index's IndexBasis carries it, as one obtained from the registry
 /// does (see IndexBasis::name()); the label does not depend on the registry current when it is printed.
 ///
 /// @note Index and other SeQuant classes currently use wide characters to
@@ -500,7 +500,7 @@ class Index : public Taggable {
 
   /// creates a globally-unique temporary index in space @c space . The label of
   /// the resulting index =
-  /// basis_key() + '_' + temporary counter.
+  /// basis().base_key() + '_' + temporary counter.
   /// Each call increments the current tmp counter (see next_tmp_index() ) . To
   /// make neater temporary indices unique in a given scope (e.g. a single term
   /// in an expression) use IndexFactory.
@@ -517,7 +517,7 @@ class Index : public Taggable {
 
   /// creates a globaly-unique temporary index in space @c space . The label of
   /// the resulting index =
-  /// basis_key() + '_' + temporary counter.
+  /// basis().base_key() + '_' + temporary counter.
   /// Each call increments the current tmp counter (see next_tmp_index() ) . To
   /// make neater temporary indices unique in a given scope (e.g. a single term
   /// in an expression) use IndexFactory.
@@ -609,12 +609,13 @@ class Index : public Taggable {
   }
 
   /// @return the memoized label as a UTF-8 encoded wide-character string
-  /// @note label format is `base` or `base_ordinal`, `base` being basis_key()
+  /// @note label format is `base` or `base_ordinal`, `base` being
+  /// basis().base_key()
   /// @warning this does not include the proto index labels, use
   /// Index::full_label() instead
   std::wstring_view label() const {
     if (!label_) {
-      label_ = std::wstring(basis_key());
+      label_ = basis_.base_key();
       if (ordinal_) {
         *label_ += L'_';
         *label_ += std::to_wstring(*ordinal_);
@@ -646,7 +647,7 @@ class Index : public Taggable {
   /// @warning this includes the proto index labels (if any), use
   /// Index::label() instead if only want the label
   std::wstring_view full_label() const {
-    if (!has_proto_indices() && !unnamed_basis_instance()) return label();
+    if (!has_proto_indices() && !basis_.unnamed_instance()) return label();
     if (full_label_) return *full_label_;
     std::wstring result(label());
     result += L"<";
@@ -657,7 +658,7 @@ class Index : public Taggable {
                                    return idx.full_label();
                                  }) |
         ranges::views::join(L", "sv) | ranges::to<std::wstring>();
-    if (unnamed_basis_instance()) result += basis_.instance_suffix();
+    if (basis_.unnamed_instance()) result += basis_.instance_suffix();
     result += L">";
     full_label_ = result;
     return *full_label_;
@@ -766,24 +767,6 @@ class Index : public Taggable {
 
   /// @return the IndexBasis object (the space plus the basis instance, if any)
   const IndexBasis &basis() const noexcept { return basis_; }
-
-  /// @return the registry label of basis(): its name (IndexBasis::name()) if
-  /// it carries one, else space().base_key(); a view into this object, valid
-  /// as long as this Index is not transformed, assigned to, moved from, or
-  /// destroyed
-  /// @note evaluation keys extents, tiling and batching by this, so an
-  /// unnamed basis instance is evaluated at its space's extent (see
-  /// IndexBasis)
-  std::wstring_view basis_key() const {
-    return basis_.has_name() ? std::wstring_view(basis_.name())
-                             : space().base_key();
-  }
-
-  /// @return the basis instance unless the basis carries a name (then it is
-  /// part of label())
-  IndexBasis::optional_instance unnamed_basis_instance() const {
-    return basis_.has_name() ? std::nullopt : basis_.basis_instance();
-  }
 
   /// @return the entry @p basis is registered as in the effective default
   /// registry (see IndexBasisRegistry::resolve()), which carries a named
@@ -1218,7 +1201,7 @@ class IndexFactory {
   }
 
   /// creates a temporary index in @c space_or_basis . The label of the
-  /// resulting index = basis_key() + '_' + temporary
+  /// resulting index = basis().base_key() + '_' + temporary
   /// counter.
   /// Each call increments the current tmp counter (see next_tmp_index() ) .
   /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis (a
@@ -1257,7 +1240,7 @@ class IndexFactory {
 
   /// creates a temporary index that inherits the space, basis instance and
   /// protoindices (and whether they are symmetric) of @c idx . The label of
-  /// the resulting index = basis_key() + '_' + temporary
+  /// the resulting index = basis().base_key() + '_' + temporary
   /// counter.
   /// Each call increments the current tmp counter (see next_tmp_index() ) .
   /// @param idx an Index object

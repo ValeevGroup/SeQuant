@@ -180,7 +180,7 @@ TEST_CASE("pao-named-basis-equivalence", "[mbpt][csv][basis][valgrind_skip]") {
       CHECK(deserialize<ExprPtr>(serialize(e)) == e);
     CHECK(Index(L"μ̃_3") == Index(pao, 3));
     CHECK(Index(pao, 3).full_label() == L"μ̃_3");
-    CHECK(Index(pao, 3).basis_key() == L"μ̃");
+    CHECK(Index(pao, 3).basis().base_key() == L"μ̃");
     CHECK(Index(pao, 3).space().approximate_size() == n_pao);
     // a temporary minted from the bare (space, instance) pair, as operator
     // grants and the integral projection do, is the basis as registered
@@ -200,7 +200,7 @@ TEST_CASE("pao-named-basis-equivalence", "[mbpt][csv][basis][valgrind_skip]") {
     const ExprPtr fixture = deserialize<ExprPtr>(toUtf16(line));
     std::size_t n = 0;
     for (auto const& idx : get_used_indices(fixture))
-      if (idx.basis_key() == L"μ̃") {
+      if (idx.basis().base_key() == L"μ̃") {
         ++n;
         CHECK(idx.basis() == pao);
         CHECK_FALSE(idx.has_proto_indices());
@@ -221,7 +221,8 @@ TEST_CASE("pao-named-basis-equivalence", "[mbpt][csv][basis][valgrind_skip]") {
         const EvalExpr node(t);
         Layout layout;
         for (auto const& ix : node.canon_indices())
-          layout.emplace_back(ix.basis_key() == L"μ̃", ix.has_proto_indices());
+          layout.emplace_back(ix.basis().base_key() == L"μ̃",
+                              ix.has_proto_indices());
         layouts[text].push_back(layout);
       }
     }

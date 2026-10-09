@@ -18,12 +18,11 @@ namespace sequant {
 
 namespace {
 
-/// @return the symbol of @p basis in a cost: its name if it carries one, else
-/// the space's base key, followed by `<;N>` for an unnamed instance `N`
+/// @return the symbol of @p basis in a cost: its base key, followed by `<;N>`
+/// for an unnamed instance `N`
 std::string symbol(IndexBasis const &basis) {
-  if (basis.has_name()) return toUtf8(basis.name());
-  auto result = toUtf8(basis.space().base_key());
-  if (basis.has_basis_instance())
+  auto result = toUtf8(basis.base_key());
+  if (basis.unnamed_instance())
     result += "<" + toUtf8(basis.instance_suffix()) + ">";
   return result;
 }

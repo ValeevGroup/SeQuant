@@ -198,7 +198,7 @@ namespace detail {
 ///
 /// \brief \c well_formed's recursive worker: checks \p block's own steps and
 /// outputs, recurses into every child \c ScopeBlock step, and checks ordinal
-/// uniqueness among \p block's own same-axis (\c Index::basis_key())
+/// uniqueness among \p block's own same-axis (\c IndexBasis::base_key())
 /// sibling child blocks.
 ///
 inline bool ordered_schedule_block_well_formed(ScopeBlock const& block,
@@ -312,7 +312,7 @@ inline void collect_productions(ScopeBlock const& block,
 ///
 /// \brief Structural sanity check on \p sched (no sequencer logic):
 ///   - every \c BuildStep::value_id is < \c sched.num_values;
-///   - ordinals are unique among same-axis (\c Index::basis_key())
+///   - ordinals are unique among same-axis (\c IndexBasis::base_key())
 ///     sibling blocks within a parent;
 ///   - every \c ScopeBlock::outputs value_id is < \c sched.num_values;
 ///   - single-producer (SSA-like), with the multi-level escape chain allowed:
@@ -808,7 +808,7 @@ inline ForkedSubchain fork_subchain(
 /// \details Four-part algorithm, pure scheduling (no cost choice):
 ///
 /// \par 1. The canonical chain
-/// For each batch axis type (\c Index::basis_key()) appearing in any
+/// For each batch axis type (\c IndexBasis::base_key()) appearing in any
 /// cell's \c CellLegality::per_axis (not just \c home_floor -- a \c
 /// Reduction/\c LoopCarried-only axis must still get a block to host its
 /// escape output, even though no cell is homed inside it in that role), one
@@ -925,7 +925,7 @@ inline ForkedSubchain fork_subchain(
 namespace detail {
 
 ///
-/// \brief True iff \p mode's index type (\c Index::basis_key()) ever
+/// \brief True iff \p mode's index type (\c IndexBasis::base_key()) ever
 /// survives, un-summed, into a forest-root value's own carried slots.
 ///
 /// \details \c RichSchedule does not carry \c BatchModeType directly: the
@@ -944,7 +944,8 @@ namespace detail {
 /// anyone's child -- a top-level tree of the forest -- keeps its
 /// default-seeded \c consumer_point == its own \c point.
 ///
-/// Matches by type (\c Index::basis_key()) -- not by exact \c Index identity
+/// Matches by type (\c IndexBasis::base_key()) -- not by exact \c Index
+/// identity
 /// (\c Index::operator== compares basis and ordinal). More than one physical \c
 /// Index label of the same type can appear across \p rich's cells (e.g. one
 /// occurrence's K_1 vs another's K_2), so an exact-Index match could miss a
@@ -952,7 +953,7 @@ namespace detail {
 /// being classified, silently misclassifying an External mode as Contracted.
 ///
 inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
-  auto const& mode_bk = mode.basis_key();
+  auto const& mode_bk = mode.basis().base_key();
   for (auto const& cell : rich.cells) {
     bool const is_root =
         std::any_of(cell.occurrences.begin(), cell.occurrences.end(),
@@ -964,9 +965,9 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     // own result slots. Slots are matched as-is: batch axes are plain, and a
     // root carrying a composite PAO leg a<i,j> always carries its occ pair i,j
     // plainly too, so no basis key is reachable only through a proto.
-    bool const has_type =
-        std::any_of(cell.carried.begin(), cell.carried.end(),
-                    [&](Index const& ix) { return ix.basis_key() == mode_bk; });
+    bool const has_type = std::any_of(
+        cell.carried.begin(), cell.carried.end(),
+        [&](Index const& ix) { return ix.basis().base_key() == mode_bk; });
     if (has_type) return true;
   }
   return false;
@@ -982,7 +983,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
 /// \param policy accepted for interface symmetry with the rest of the
 ///        pipeline; the axis filtering it would provide is already baked into
 ///        \c CellLegality::per_axis
-/// \param mode_order optional outer-to-inner order of \c Index::basis_key()
+/// \param mode_order optional outer-to-inner order of \c IndexBasis::base_key()
 ///        keys, used to order the loop chain
 /// \return a schedule satisfying \c well_formed
 /// \throw Exception when a batched mode has no loop identity to place its
@@ -1070,7 +1071,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   std::map<std::wstring, Index> rep;  // basis key -> representative axis
   for (CellLegality const& cl : legality.cells)
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
-      std::wstring const bk{cl.per_axis[pos].axis.basis_key()};
+      std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
       rep.emplace(bk, cl.per_axis[pos].axis);
       int const s = fusion_slot(cl, pos);
       slots_of_space[bk].insert(s >= 0 ? s : 0);
@@ -1110,7 +1111,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     std::size_t const nn = types.size();
     std::map<std::pair<std::wstring, int>, std::size_t> item_of;
     for (std::size_t d = 0; d < nn; ++d)
-      item_of[{std::wstring{types[d].basis_key()}, type_slot[d]}] = d;
+      item_of[{std::wstring{types[d].basis().base_key()}, type_slot[d]}] = d;
     container::svector<container::svector<std::size_t>> succ(nn);
     container::svector<std::size_t> indeg(nn, 0);
     for (auto const& [pair, witness] : rich.loop_order) {
@@ -1173,7 +1174,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   auto const depth_of_instance = [&](std::wstring const& bk,
                                      int slot) -> std::optional<std::size_t> {
     for (std::size_t d = 0; d < n; ++d)
-      if (std::wstring(types[d].basis_key()) == bk && type_slot[d] == slot)
+      if (std::wstring(types[d].basis().base_key()) == bk &&
+          type_slot[d] == slot)
         return d;
     return std::nullopt;
   };
@@ -1202,7 +1204,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       int const fs = fusion_slot(cl, pos);
       if (fs < 0) continue;
       auto const dd = depth_of_instance(
-          std::wstring{cl.per_axis[pos].axis.basis_key()}, fs);
+          std::wstring{cl.per_axis[pos].axis.basis().base_key()}, fs);
       if (!dd) continue;
       if (anchor)
         mem_parent[mfind(*dd)] = mfind(*anchor);
@@ -1279,7 +1281,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     std::optional<std::size_t> target;
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       if (cl.per_axis[pos].role != LoopRole::LoopLocal) continue;
-      std::wstring const bk{cl.per_axis[pos].axis.basis_key()};
+      std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
       int const fs = fusion_slot(cl, pos);
       auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
       if (!d) continue;
@@ -1311,7 +1313,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       [&](CellLegality const& cl) -> std::optional<std::size_t> {
     std::optional<std::size_t> target;
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
-      std::wstring const bk{cl.per_axis[pos].axis.basis_key()};
+      std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
       int const fs = fusion_slot(cl, pos);
       if (fs < 0) continue;  // unresolved: never guess slot 0
       auto const d = depth_of_instance(bk, fs);
@@ -1346,7 +1348,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     if (!rd) return false;
     for (std::size_t pos = 0; pos < scl.per_axis.size(); ++pos) {
       if (scl.per_axis[pos].role != LoopRole::Reduction) continue;
-      std::wstring const bk{scl.per_axis[pos].axis.basis_key()};
+      std::wstring const bk{scl.per_axis[pos].axis.basis().base_key()};
       int const fs = fusion_slot(scl, pos);
       if (fs < 0) continue;
       auto const d = depth_of_instance(bk, fs);
@@ -1392,7 +1394,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
         std::wcerr << L"root";
       std::wcerr << L" axes={";
       for (std::size_t p2 = 0; p2 < c2.per_axis.size(); ++p2) {
-        std::wstring const bk2{c2.per_axis[p2].axis.basis_key()};
+        std::wstring const bk2{c2.per_axis[p2].axis.basis().base_key()};
         int const fs2 = fusion_slot(c2, p2);
         auto const d2 = depth_of_instance(bk2, fs2 >= 0 ? fs2 : 0);
         std::wcerr << c2.per_axis[p2].axis.full_label() << L":"
@@ -1449,7 +1451,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       AxisClass const& ac = cl.per_axis[pos];
       if (ac.role == LoopRole::LoopLocal) continue;
-      std::wstring const bk{ac.axis.basis_key()};
+      std::wstring const bk{ac.axis.basis().base_key()};
       int const fs = fusion_slot(cl, pos);
       // A Reduction mode with no fusion slot has no loop identity at all
       // (peak_profile's union-find never numbered a component for it) --
@@ -1495,7 +1497,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       bool collapse = false;
       for (std::size_t a = 0; a < nonlocal.size() && !collapse; ++a)
         for (std::size_t b = a + 1; b < nonlocal.size(); ++b)
-          if (nonlocal[a].first.basis_key() == nonlocal[b].first.basis_key()) {
+          if (nonlocal[a].first.basis().base_key() ==
+              nonlocal[b].first.basis().base_key()) {
             collapse = true;
             break;
           }
@@ -1531,7 +1534,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       std::size_t const home_nest = type_cluster[*home_depth];
       for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
         if (cl.per_axis[pos].role != LoopRole::LoopLocal) continue;
-        std::wstring const bk{cl.per_axis[pos].axis.basis_key()};
+        std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
         int const fs = fusion_slot(cl, pos);
         auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
         if (!d || type_cluster[*d] != home_nest) continue;
@@ -1579,7 +1582,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
         // completeness then falls out for free, since the value is sliced
         // by exactly the instances this loop escapes.
         for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
-          std::wstring const bk{cl.per_axis[pos].axis.basis_key()};
+          std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
           int const fs = fusion_slot(cl, pos);
           auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
           if (!d || type_cluster[*d] != nest) continue;
@@ -1792,7 +1795,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     block.axis = axis;
     block.latitude_ordinal = latitude_ordinal;
     block.level = DagScopeLevel{.depth = depth,
-                                .space = std::wstring{axis.basis_key()},
+                                .space = std::wstring{axis.basis().base_key()},
                                 .loop_slot = loop_slot,
                                 .latitude_ordinal = latitude_ordinal};
     // The block's kind is the kind of its loop instance (the open that
@@ -1800,8 +1803,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     // basis key can hold both a contracted-in-batches instance and an external
     // one, so the per-key test (does the key appear on a root result?)
     // is only the fallback for an instance no open recorded.
-    if (auto const kit =
-            rich.loop_kind.find({std::wstring{axis.basis_key()}, loop_slot});
+    if (auto const kit = rich.loop_kind.find(
+            {std::wstring{axis.basis().base_key()}, loop_slot});
         kit != rich.loop_kind.end())
       block.kind = kit->second;
     else
@@ -2336,7 +2339,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
   // frame, outermost first. Pairing them by nest position gives, per realized
   // enclosing loop, the occ-frame mode it slices; the physical slice position
   // is that mode's index in occ.carried. Everything is in occ's own frame: no
-  // basis_key, no cross-frame label match, no first-match guess. Divergent
+  // base_key, no cross-frame label match, no first-match guess. Divergent
   // (relabeled) occurrences and the symmetric case (one value sliced on
   // different positions by different consumers) are handled uniformly by the
   // consumer-keyed occ_facts. There is no consumer-blind (value, mode) ->
@@ -2447,7 +2450,8 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
                   ? occ.loop_slot[pos]
                   : vs[pos];
           if (occ_slot != lvl.loop_slot) continue;
-          if (std::wstring(occ.carried[pos].basis_key()) != lvl.space) continue;
+          if (std::wstring(occ.carried[pos].basis().base_key()) != lvl.space)
+            continue;
           result.occ_facts.push_back(
               std::make_tuple(w_vid, pos, id_of(lvl), oit->second, leg));
           self_sliced = true;
@@ -2487,7 +2491,8 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           else
             c_sliced = cvs[cp] == lvl.loop_slot;
           if (!c_sliced) continue;
-          if (std::wstring(c_carried[cp].basis_key()) != lvl.space) continue;
+          if (std::wstring(c_carried[cp].basis().base_key()) != lvl.space)
+            continue;
           Index const& M = c_carried[cp];  // the mode C is sliced on here
           // W carries M at some own-occurrence position (shared external,
           // canonical-label match for a direct operand)?
@@ -2525,7 +2530,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           for (auto const& cocc : rich.cells[c_vid].occurrences) {
             for (auto const& [rm, rs] : cocc.reduced_slot) {
               if (rs != lvl.loop_slot) continue;
-              if (std::wstring(rm.basis_key()) != lvl.space) continue;
+              if (std::wstring(rm.basis().base_key()) != lvl.space) continue;
               std::size_t pos_a = occ.carried.size();
               for (std::size_t pa = 0; pa < occ.carried.size(); ++pa)
                 if (occ.carried[pa] == rm) {

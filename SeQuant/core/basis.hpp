@@ -32,7 +32,7 @@ namespace sequant {
 ///
 /// An unnamed instance spans its space at the space's extent, as a rotation of
 /// it does (e.g. the cluster-specific virtuals): evaluation keys its axes by
-/// Index::basis_key(), which is the space's key for such an instance, and so
+/// base_key(), which is the space's key for such an instance, and so
 /// sizes, tiles and slices it as the space. A basis of a different extent (a
 /// truncated or an overcomplete set, such as the PAOs) must be registered
 /// under a name, which gives it a key and an extent of its own.
@@ -68,6 +68,18 @@ class IndexBasis {
   const std::wstring& name() const noexcept { return name_; }
 
   bool has_name() const noexcept { return !name_.empty(); }
+
+  /// @return name() if the basis carries a name, else space().base_key();
+  /// the unnamed instances of a space share its key
+  const std::wstring& base_key() const noexcept {
+    return has_name() ? name_ : space_.base_key();
+  }
+
+  /// @return the basis instance unless the basis carries a name, which then
+  /// stands for it
+  optional_instance unnamed_instance() const noexcept {
+    return has_name() ? std::nullopt : basis_instance_;
+  }
 
   /// @return `L";N"` for a non-null instance `N`, else an empty string
   std::wstring instance_suffix() const;

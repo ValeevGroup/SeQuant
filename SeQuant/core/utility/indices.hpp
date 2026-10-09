@@ -468,7 +468,7 @@ inline bool ordinal_compare(Index const& idx1, Index const& idx2) {
 /// so that indices in different bases have different results
 inline std::wstring instance_qualified_label(Index const& idx) {
   std::wstring result(idx.label());
-  if (auto instance = idx.unnamed_basis_instance())
+  if (auto instance = idx.basis().unnamed_instance())
     result += L"#" + std::to_wstring(*instance);
   return result;
 }
@@ -491,7 +491,7 @@ std::string csv_labels(meta::range_of<Index> auto&& idxs) {
     std::wstring result(i.label());
     for (Index const& p : i.proto_indices())
       result += instance_qualified_label(p);
-    if (auto instance = i.unnamed_basis_instance())
+    if (auto instance = i.basis().unnamed_instance())
       result += L"#" + std::to_wstring(*instance);
     return toUtf8(result);
   };

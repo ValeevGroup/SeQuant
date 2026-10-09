@@ -74,12 +74,12 @@ template <typename Node>
 
 /// The loop instance among \p path (with its axis basis keys) that slices
 /// carried position \p p of value \p vid: an enclosing entry whose basis key
-/// (\c Index::basis_key()) is the position's own and whose slot is the fusion
-/// slot any occurrence of the value records for that position. Every occurrence
-/// is tested, not just the production one, because that is the runtime's own
-/// test: a value CSE-shared by several consumers is sliced on this loop if any
-/// of its occurrences was bound to that slot, and the first occurrence is not
-/// privileged.
+/// (\c IndexBasis::base_key()) is the position's own and whose slot is the
+/// fusion slot any occurrence of the value records for that position. Every
+/// occurrence is tested, not just the production one, because that is the
+/// runtime's own test: a value CSE-shared by several consumers is sliced on
+/// this loop if any of its occurrences was bound to that slot, and the first
+/// occurrence is not privileged.
 ///
 /// \note The match is on (basis key, slot), and so relies on fusion never
 /// giving two levels of the same basis key one slot -- were that to happen, a
@@ -91,7 +91,7 @@ template <typename Node>
     container::svector<std::wstring> const& path_spaces) {
   ValueCell const& c = rich.cells[vid];
   if (c.occurrences.empty() || p >= c.carried.size()) return std::nullopt;
-  std::wstring const space{c.carried[p].basis_key()};
+  std::wstring const space{c.carried[p].basis().base_key()};
   for (std::size_t i = 0; i < path.size(); ++i) {
     if (path_spaces[i] != space) continue;
     for (OccurrenceRec const& occ : c.occurrences)
@@ -198,7 +198,7 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
     }
     auto const& child = std::get<ScopeBlock>(step.value);
     path.push_back({child.level.key(), child.latitude_ordinal});
-    path_spaces.push_back(std::wstring{child.axis.basis_key()});
+    path_spaces.push_back(std::wstring{child.axis.basis().base_key()});
     block_stack.push_back(&child);
     emit_cells(in, child, path, path_spaces, block_stack, st);
     // The child's outputs assemble at this (the parent's) scope, while an

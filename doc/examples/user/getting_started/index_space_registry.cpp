@@ -88,7 +88,7 @@ void v3() {
   // label, and constructed from it
   SEQUANT_ASSERT(Index(L"ĩ_1") == loc1);
   SEQUANT_ASSERT(loc1.full_label() == L"ĩ_1");  // not i_1<;1>
-  SEQUANT_ASSERT(loc1.basis_key() == L"ĩ");
+  SEQUANT_ASSERT(loc1.basis().base_key() == L"ĩ");
   SEQUANT_ASSERT(serialize(deserialize(L"t{ĩ_1;i_1}"), {.annot_symm = false}) ==
                  L"t{ĩ_1;i_1}");
   // end-snippet-3

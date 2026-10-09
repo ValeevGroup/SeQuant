@@ -231,7 +231,7 @@ gains a trailer describing that operation's relationship to the active batch loo
 * ``canon=[...]`` — the full labels of this node's current array layout (its ``canon_indices()``), in the order the trace's other
   size/byte fields refer to.
 * ``sliced=[...]`` — which of *this node's own* modes are currently sliced, each written as ``<canonical position>:<basis key>``
-  (``Index::basis_key()``: the index space's base key, or the registry name of a named basis instance such as ``μ̃``) — e.g.
+  (``IndexBasis::base_key()``: the index space's base key, or the registry name of a named basis instance such as ``μ̃``) — e.g.
   ``0:Κ`` means the mode at position 0 belongs to the auxiliary space ``Κ`` and is a slice, not the mode's full extent.
 * ``scope={...}`` — the basis keys of every batch loop currently open around this operation, outermost first (e.g. ``scope={Κ}``
   for one open loop over the ``Κ`` space).

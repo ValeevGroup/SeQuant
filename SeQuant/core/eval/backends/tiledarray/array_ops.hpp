@@ -22,8 +22,9 @@ namespace sequant {
 /// \tparam FlatArray the flat (Tensor-of-Scalars) \c TA::DistArray type;
 /// \tparam ToTArray  the nested (Tensor-of-Tensor) \c TA::DistArray type.
 ///
-/// \param tr1_of_base Index::basis_key() -> the basis' full \c TA::TiledRange1.
-/// \param world       the World the zero destinations are built in; it must
+/// \param tr1_of_base IndexBasis::base_key() -> the basis' full \c
+/// TA::TiledRange1. \param world       the World the zero destinations are
+/// built in; it must
 ///                    outlive the returned closures' use.
 ///
 /// \details The two closures are the TA realization of external-axis batching's
@@ -42,8 +43,8 @@ template <typename FlatArray, typename ToTArray = FlatArray>
       std::move(tr1_of_base));
   BackendArrayOps aops;
   aops.axis_batches = [map](Index const& axis, std::size_t target_batch_size) {
-    return mode_batches_of_trange1(map->at(std::wstring(axis.basis_key())),
-                                   target_batch_size);
+    return mode_batches_of_trange1(
+        map->at(std::wstring(axis.basis().base_key())), target_batch_size);
   };
   aops.make_zeros =
       [map, &world](container::vector<Index> const& descriptor) -> ResultPtr {
@@ -55,7 +56,7 @@ template <typename FlatArray, typename ToTArray = FlatArray>
         nested = true;  // an inner (nested) mode -- not an outer trange mode
         continue;
       }
-      outer.push_back(map->at(std::wstring(ix.basis_key())));
+      outer.push_back(map->at(std::wstring(ix.basis().base_key())));
     }
     TA::TiledRange otr(outer.begin(), outer.end());
     auto make_flat = [&]() -> ResultPtr {

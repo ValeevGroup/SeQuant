@@ -362,16 +362,16 @@ struct RichSchedule {
   container::svector<ValueCell> cells;
   std::size_t num_points = 0;  //!< one past the last static point
   /// The kind of every numbered loop instance, keyed by
-  /// (Index::basis_key(), loop_slot): Contracted when the open that created the
-  /// instance contracts the mode in batches at its node, External when it
+  /// (IndexBasis::base_key(), loop_slot): Contracted when the open that created
+  /// the instance contracts the mode in batches at its node, External when it
   /// introduces a carried mode's physical loop. A basis key may hold instances
   /// of both kinds (an occupied pair contracted in batches beside an occupied
   /// external pair), so the kind is a property of the instance, not of the
   /// key; the ordered schedule builder reads a block's kind here.
   std::map<std::pair<std::wstring, int>, BatchModeType> loop_kind;
   /// Loop nesting constraints read off the DP's realization: (outer, inner)
-  /// pairs of loop instances, each (Index::basis_key(), loop_slot), such that
-  /// some occurrence sits inside `outer` and `inner` is opened inside it
+  /// pairs of loop instances, each (IndexBasis::base_key(), loop_slot), such
+  /// that some occurrence sits inside `outer` and `inner` is opened inside it
   /// (a consecutive pair of its enclosing context, or its enclosing context
   /// and a loop it opens itself). The ordered schedule builder nests the
   /// realized chain to satisfy every pair (a contradiction is a builder
@@ -995,13 +995,13 @@ RichSchedule compute_dag_boulevard(R const& forest,
       if (!is_batched(recs[i], recs[i].carried[pV])) continue;
       std::size_t const root = find(encode(i, pV));
       if (root_slot.find(root) != root_slot.end()) continue;
-      std::wstring const sp{recs[i].carried[pV].basis_key()};
+      std::wstring const sp{recs[i].carried[pV].basis().base_key()};
       root_slot.emplace(root, next_slot[sp]++);
     }
   for (auto const& [idx, m] : reduction_stamps) {
     std::size_t const root = find(reduction_node(idx, m));
     if (root_slot.find(root) != root_slot.end()) continue;
-    std::wstring const sp{m.basis_key()};
+    std::wstring const sp{m.basis().base_key()};
     root_slot.emplace(root, next_slot[sp]++);
   }
 
@@ -1308,7 +1308,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
       if (!root) return std::nullopt;
       auto const rit = root_slot.find(*root);
       if (rit == root_slot.end()) return std::nullopt;
-      return std::make_pair(std::wstring{ix.basis_key()}, rit->second);
+      return std::make_pair(std::wstring{ix.basis().base_key()}, rit->second);
     };
     for (ValueCell const& c : out.cells)
       for (OccurrenceRec const& occ : c.occurrences)

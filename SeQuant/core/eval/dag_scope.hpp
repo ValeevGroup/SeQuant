@@ -60,9 +60,10 @@ struct LoopKey {
 /// fusion group-matching, never identity. See
 /// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md, section 5.1.
 struct DagScopeLevel {
-  std::size_t depth;   //!< which loop-group (identity)
-  std::wstring space;  //!< the axis' Index::basis_key(); color, not identity
-  int loop_slot = 0;   //!< which member-slot within the group (identity)
+  std::size_t depth;  //!< which loop-group (identity)
+  std::wstring
+      space;          //!< the axis' IndexBasis::base_key(); color, not identity
+  int loop_slot = 0;  //!< which member-slot within the group (identity)
   int altitude_ordinal =
       0;  //!< layout: nesting rank of the slot within its group
   int latitude_ordinal = 0;  //!< layout: pass index

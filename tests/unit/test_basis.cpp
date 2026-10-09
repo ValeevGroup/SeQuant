@@ -553,22 +553,21 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   CHECK(m3.full_label() == L"μ̃_3");
   CHECK(m3.to_latex() == L"{\\tilde{\\mu}_3}");
   CHECK(m3.to_string() == "μ̃_3");
-  CHECK(m3.basis_key() == L"μ̃");
-  CHECK_FALSE(m3.unnamed_basis_instance());
+  CHECK(m3.basis().base_key() == L"μ̃");
+  CHECK_FALSE(m3.basis().unnamed_instance());
   CHECK(csv_labels(ranges::views::single(m3)) == "μ̃_3");
   // an unnamed instance (a CSV::No-granted leg) prints as before
   const Index y = Index(uocc, 7).replace_basis_instance(1);
   CHECK(y.label() == L"a_7");
   CHECK(y.full_label() == L"a_7<;1>");
   CHECK(y.to_latex() == L"{a_7^{;1}}");
-  CHECK(y.basis_key() == L"a");
-  CHECK(y.unnamed_basis_instance() == 1);
+  CHECK(y.basis().base_key() == L"a");
+  CHECK(y.basis().unnamed_instance() == 1);
   CHECK(csv_labels(ranges::views::single(y)) == "a_7#1");
-  // a null instance is untouched, and its basis_key is the space key with no
-  // memo involved
-  CHECK(Index(uocc, 2).basis_key() == L"a");
-  CHECK(Index(L"a_2").basis_key() == L"a");
-  CHECK_FALSE(Index(uocc, 2).unnamed_basis_instance());
+  // a null instance is untouched, and its base key is the space key
+  CHECK(Index(uocc, 2).basis().base_key() == L"a");
+  CHECK(Index(L"a_2").basis().base_key() == L"a");
+  CHECK_FALSE(Index(uocc, 2).basis().unnamed_instance());
 
   // identity is untouched; the name is not part of it, and a bare instance
   // number carries none
@@ -609,7 +608,7 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
                  .vacuum = Vacuum::SingleProduct}));
     CHECK(Index(m3).label() == L"μ̃_3");
     CHECK(Index(pao, 3).full_label() == L"μ̃_3");
-    CHECK(Index(pao, 3).basis_key() == L"μ̃");
+    CHECK(Index(pao, 3).basis().base_key() == L"μ̃");
   }
 }
 
@@ -784,7 +783,7 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
     const Tensor ft = prod.factor(0)->as<Tensor>();
     for (const Index& idx : ft.const_braket_indices()) {
       CHECK(idx.basis() == IndexBasis{uocc, P});
-      CHECK(idx.basis_key() == L"μ̃");
+      CHECK(idx.basis().base_key() == L"μ̃");
       CHECK(idx.space().approximate_size() == 120);
       CHECK(idx.full_label().find(L'<') == std::wstring::npos);
     }
@@ -814,7 +813,7 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
     const Index dummy = s->as<Product>().factor(0)->as<Tensor>().ket().at(0);
     CHECK(dummy == s->as<Product>().factor(1)->as<Tensor>().bra().at(0));
     CHECK(dummy.basis() == IndexBasis{uocc, 2});
-    CHECK(dummy.basis_key() == L"ã");
+    CHECK(dummy.basis().base_key() == L"ã");
     CHECK(!dummy.has_proto_indices());
   }
   SECTION("spin-resolved legs, as an open-shell spintrace leaves them") {

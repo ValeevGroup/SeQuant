@@ -83,7 +83,7 @@ class TextGenerator : public Generator<Context> {
 
   std::string represent(const Index &idx, const Context &) const override {
     std::string result = toUtf8(idx.label());
-    if (idx.unnamed_basis_instance())
+    if (idx.basis().unnamed_instance())
       result += "<" + toUtf8(idx.basis().instance_suffix()) + ">";
     return result;
   }

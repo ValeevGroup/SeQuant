@@ -709,7 +709,7 @@ TEST_CASE(
 
 // ===========================================================================
 // SP2 Task 1: forced_split_types groups CellLegality::forced_split_axes by
-// axis TYPE (Index::basis_key()), collapsing multiple same-space Index
+// axis TYPE (IndexBasis::base_key()), collapsing multiple same-space Index
 // INSTANCES (e.g. the Task-4 fixture's i_3/i_4 outer product, both
 // LoopCarried on occ) into the single loop (axis) they jointly force to
 // split.
