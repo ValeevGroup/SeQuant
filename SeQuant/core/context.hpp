@@ -105,8 +105,6 @@ class Context {
 
   // the implicit special members of Options use its deprecated fields
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  // the implicit special members of Options use its deprecated fields
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   /// see the Context documentation for detailed description
   struct Options {
     SEQUANT_DESIGNATED_INIT_ONLY;
@@ -155,7 +153,6 @@ class Context {
       /// the cardinal Tensor labels; if not set, the reserved labels
       std::optional<container::vector<std::wstring>> cardinal_tensor_labels = std::nullopt;
   };
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   static Options make_default_options() { return {}; }
 
