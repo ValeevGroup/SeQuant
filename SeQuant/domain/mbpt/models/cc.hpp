@@ -128,6 +128,10 @@ class CC {
   /// `hbar_comm_rank`. If that is also not specified, will use 4 as the default
   /// value. If provided, will override all defaults. The optional singles-only
   /// transform is applied afterward regardless of this rank.
+  /// @note When the reference differs from the Wick vacuum the amplitude
+  /// operators do not commute with each other, so the expansion grows
+  /// exponentially with the rank and the default of 4 is impractical (CCSD
+  /// amplitudes at rank 4 exceed several GB); set a low rank explicitly.
   /// @note The returned expression depends on the ansatz and expansion:
   ///   - When the reference is the Wick vacuum, a non-unitary ansatz represents
   ///     each commutator as a connected product,

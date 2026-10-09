@@ -33,7 +33,9 @@ The :class:`CC <sequant::mbpt::CC>` class can be used to derive:
 Expressions are generated in spin-orbital basis and can be post-processed using SeQuant's spin-tracing capabilities. See :ref:`cc-spin-tracing` for more details.
 
 Multireference contexts are not fully supported yet: only ``hbar()``, ``energy()`` and ``t()`` are available, and only
-with the BCH expansion.
+with the BCH expansion. Because the amplitude operators do not commute with each other there, the expansion grows
+exponentially with the commutator rank; the default rank of 4 is impractical, so set ``hbar_comm_rank`` to a low value
+explicitly.
 
 
 Ansatz Options
