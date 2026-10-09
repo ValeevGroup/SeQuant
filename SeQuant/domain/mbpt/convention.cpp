@@ -88,7 +88,7 @@ namespace {
 /// in @p isr or @p instance of its space is named there
 void require_unregistered(
     const IndexBasisRegistry& isr, const char* caller,
-    const container::svector<std::pair<std::wstring_view, IndexSpace>>& bases,
+    const container::svector<std::pair<std::wstring, IndexSpace>>& bases,
     IndexBasis::instance_type instance) {
   for (const auto& [label, space] : bases) {
     if (isr.contains(label))
@@ -124,7 +124,7 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
                       ", which is not registered");
     return *space;
   };
-  container::svector<std::pair<std::wstring_view, IndexSpace>> bases;
+  container::svector<std::pair<std::wstring, IndexSpace>> bases;
   const IndexSpace obs = isr->retrieve(vbs ? L"m" : L"p");
   bases.emplace_back(L"μ", obs);  // OBS AO
   IndexSpace vbs_plus;
@@ -164,14 +164,11 @@ void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
   // so every PAO basis follows the OBS AO basis for its extent, metric and
   // field. The spaces are taken by value: add() may reallocate the table
   const auto uocc_type = isr->particle_space(/* nulltype_ok = */ false);
-  container::svector<std::pair<std::wstring_view, IndexSpace>> bases;
-  bases.emplace_back(label, isr->retrieve(uocc_type, spin_any));
-  container::svector<std::wstring> spin_labels;
+  container::svector<std::pair<std::wstring, IndexSpace>> bases;
+  bases.emplace_back(std::wstring(label), isr->retrieve(uocc_type, spin_any));
   for (const auto spin : {Spin::alpha, Spin::beta})
-    if (const auto* uocc_spin = isr->retrieve_ptr(uocc_type, spin)) {
-      spin_labels.emplace_back(spinannotation_add(label, spin));
-      bases.emplace_back(spin_labels.back(), *uocc_spin);
-    }
+    if (const auto* uocc_spin = isr->retrieve_ptr(uocc_type, spin))
+      bases.emplace_back(spinannotation_add(label, spin), *uocc_spin);
   require_unregistered(*isr, "add_pao_basis", bases, instance);
   if (!isr->contains(L"μ")) add_ao_basis(isr, spin_any);
   for (const auto& [l, space] : bases)
