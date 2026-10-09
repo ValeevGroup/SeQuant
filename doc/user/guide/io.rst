@@ -103,7 +103,7 @@ V1
    Index           IndexSpaceName '_'? Integer IndexDomain?
    IndexDomain     '<' (ProtoLabel (',' ProtoLabel)*)? (';' Integer)? '>'           ';Integer' (signed, 32-bit) names a non-default index basis instance; absent when IndexSpaceName is itself the label of a registered basis instance
    ProtoLabel      IndexSpaceName '_'? Integer ( '<' ';' Integer '>' )?             May carry only a domainless instance (no nested protos); same rule for a named basis
-   IndexSpaceName                                                                    Name but no underscore allowed; the label of a registered IndexSpace or of a registered basis instance
+   IndexSpaceName                                                                    Letters, ⁺, ⁻, combining diacritics, arrows (e.g. ↑, ↓) and primes; the label of a registered IndexSpace or of a registered basis instance
    SymmetrySpec    ':' ( [ASN] ( '-' [SCN] ( '-' [SN] )? )? )                        :<Symmetry>-<BraKetSymmetry>-<ColumnSymmetry>
    Variable        Name
    Name                                                                              Single word (may include Unicode chars)

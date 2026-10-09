@@ -513,6 +513,18 @@ TEST_CASE("serialization", "[serialization]") {
 
     SECTION("Empty input") { REQUIRE(deserialize<ExprPtr>(L"") == nullptr); }
 
+    // every registered space label is an index space name of the grammar
+    SECTION("Index in a primed space") {
+      auto f12 = get_default_context();
+      f12.set(mbpt::make_F12_sr_spaces());
+      auto f12_resetter = set_scoped_default_context(f12);
+      const auto expr = deserialize<ExprPtr>(L"t{α'_1;i_1}");
+      REQUIRE(expr->is<Tensor>());
+      REQUIRE(expr->as<Tensor>().bra().at(0).space() ==
+              get_default_context().index_space_registry()->retrieve(L"α'"));
+      REQUIRE(*deserialize<ExprPtr>(serialize(expr)) == *expr);
+    }
+
     SECTION("Error handling") {
       SECTION("Exception type") {
         std::vector<std::wstring> inputs = {L"t^",

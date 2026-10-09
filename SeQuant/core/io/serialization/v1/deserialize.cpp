@@ -96,8 +96,12 @@ auto number_def       = x3::double_ >> -('/' >> x3::double_);
 
 auto variable_def     = x3::lexeme[name >> -(x3::lit('^') >> '*' >> x3::attr(true))];
 
-auto index_name       = +(  x3::unicode::alpha | x3::unicode::char_(L'⁺') | x3::unicode::char_(L'⁻') | x3::unicode::char_(L'̃')
-                          | x3::unicode::char_(L'↑') | x3::unicode::char_(L'↓')
+// letters, ⁺/⁻, combining diacritics (e.g. μ̃, f̌), arrows (e.g. ↑/↓) and
+// primes (e.g. α')
+auto index_name       = +(  x3::unicode::alpha | x3::unicode::char_(L'⁺') | x3::unicode::char_(L'⁻')
+                          | x3::unicode::char_(to_char_type(0x0300), to_char_type(0x036F))
+                          | (x3::unicode::char_(to_char_type(0x2190), to_char_type(0x21FF)) - x3::unicode::unassigned)
+                          | x3::unicode::char_(L'\'')
                          );
 
 auto index_label_def  = x3::lexeme[
