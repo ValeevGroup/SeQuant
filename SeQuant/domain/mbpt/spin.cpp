@@ -1337,7 +1337,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
   }
 
   // Grand index list contains both internal and external indices
-  container::set<Index, Index::LabelCompare> grand_idxlist =
+  container::set<Index, Index::FullLabelCompare> grand_idxlist =
       get_used_indices<decltype(grand_idxlist),
                        SlotType::Bra | SlotType::Ket | SlotType::Proto>(expr);
 
@@ -1690,7 +1690,7 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
                         spinfree_index_spaces](const ProductPtr& product) {
     ExprPtr expr = product->clone();
     // List of all indices in the expression
-    container::set<Index, Index::LabelCompare> grand_idxlist =
+    container::set<Index, Index::FullLabelCompare> grand_idxlist =
         get_used_indices<decltype(grand_idxlist),
                          SlotType::Bra | SlotType::Ket | SlotType::Proto>(expr);
 

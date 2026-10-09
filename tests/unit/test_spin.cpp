@@ -1993,3 +1993,30 @@ TEST_CASE("spincase-index-keeps-basis-instance", "[spin][basis]") {
     }
   }
 }
+
+// a named basis instance and a generic index of the same ordinal are two
+// indices with one label up to the basis name; the index lists of the spin
+// tracers must keep both, else the named one is never assigned a spin
+TEST_CASE("spintrace-named-basis", "[spin][basis]") {
+  using namespace sequant;
+  using sequant::mbpt::spintrace;
+  auto isr = mbpt::make_sr_spaces();
+  const IndexSpace uocc = isr->retrieve(L"a");
+  isr->add(L"μ̃", IndexBasis{uocc, 77}, 120ul);
+  auto ctx = set_scoped_default_context(
+      Context({.index_basis_registry_shared_ptr = std::move(isr),
+               .vacuum = Vacuum::SingleProduct}));
+  const IndexBasis pao =
+      get_default_context().index_basis_registry()->retrieve_basis(L"μ̃");
+  const Index a1(uocc, 1), m1(pao, 1), m2(pao, 2);
+  const Index i1(L"i_1"), i2(L"i_2");
+  auto term = [&](const Index& m) {
+    return ex<Tensor>(L"g", bra{a1, m}, ket{i1, i2}, Symmetry::Antisymm) *
+           ex<Tensor>(L"t", bra{i1, i2}, ket{a1, m}, Symmetry::Antisymm);
+  };
+  ExprPtr same_ordinal, other_ordinal;
+  REQUIRE_NOTHROW(same_ordinal = spintrace(term(m1)));
+  REQUIRE_NOTHROW(other_ordinal = spintrace(term(m2)));
+  CHECK(*same_ordinal == *other_ordinal);
+  CHECK(to_latex(same_ordinal).find(L"\\tilde{\\mu}") != std::wstring::npos);
+}
