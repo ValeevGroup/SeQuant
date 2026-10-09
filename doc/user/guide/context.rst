@@ -143,10 +143,12 @@ from it or minted by SeQuant carries it, and so does one given the instance by n
 registry. An index built from an :class:`sequant::IndexBasis` with a bare instance number is in an unnamed basis of its
 own, which is not the named one (the two indices are different), unless that basis is first looked up with
 :func:`sequant::default_registry_resolved`.
-:func:`sequant::mbpt::add_pao_basis` registers the PAOs this way, as the named instance ``μ̃`` of the particle space
-(an index in it prints as ``μ̃_1``) with a general metric, together with its α- and β-spin counterparts ``μ̃↑`` and
-``μ̃↓`` of the spin-cased particle spaces, so that a PAO index can be spin-cased; :func:`sequant::mbpt::add_ao_basis`
-registers the AOs, as named instances of the orbital spaces they span.
+:func:`sequant::mbpt::add_ao_basis` registers the AOs this way, as named instances of the orbital spaces they span
+with a general metric; :func:`sequant::mbpt::add_pao_basis` registers the PAOs as the named instance ``μ̃`` of the
+particle space (an index in it prints as ``μ̃_1``), together with its α- and β-spin counterparts ``μ̃↑`` and ``μ̃↓``
+of the spin-cased particle spaces, so that a PAO index can be spin-cased. The PAOs are the AOs projected on the particle
+space, so the three follow the OBS AO basis ``μ`` (registered first if absent) for their extent, metric and field,
+which are set through ``μ``'s label.
 Instances are granted per operator label and leg space with :func:`sequant::mbpt::OpRegistry::grant_basis`,
 :class:`sequant::mbpt::OpMaker` mints a granted operator's legs with them, and the projectors of the :doc:`CC <cc>`
 equations carry the grants of the amplitude being solved for. Integrals are never granted: in Wick's theorem their legs

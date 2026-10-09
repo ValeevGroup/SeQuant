@@ -21,11 +21,11 @@
 namespace sequant::tests::pao {
 constexpr std::size_t n_pao = 300;
 
-/// the CSV-CCSD registry with the PAO extent set; sized before a Context
-/// adopts it, since a registry inside a Context is immutable
+/// the CSV-CCSD registry with the AO (and so the PAO) extent set; sized before
+/// a Context adopts it, since a registry inside a Context is immutable
 std::shared_ptr<IndexBasisRegistry> sized_registry() {
   auto isr = csv::csv_cc_registry();
-  isr->extent(L"μ̃", n_pao);
+  isr->extent(L"μ", n_pao);
   return isr;
 }
 

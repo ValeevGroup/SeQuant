@@ -82,6 +82,28 @@ void add_fermi_spin(IndexBasisRegistry& isr) {
   isr = std::move(result);
 }
 
+namespace {
+
+/// @throw Exception, naming @p caller, if a label of @p bases is registered
+/// in @p isr or @p instance of its space is named there
+void require_unregistered(
+    const IndexBasisRegistry& isr, const char* caller,
+    const container::svector<std::pair<std::wstring_view, IndexSpace>>& bases,
+    IndexBasis::instance_type instance) {
+  for (const auto& [label, space] : bases) {
+    if (isr.contains(label))
+      throw Exception(std::string(caller) + ": the label '" + toUtf8(label) +
+                      "' is already registered");
+    if (auto taken = isr.basis_label(IndexBasis{space, instance}))
+      throw Exception(std::string(caller) + ": instance " +
+                      std::to_string(instance) + " of space " +
+                      toUtf8(space.base_key()) + " is already named '" +
+                      toUtf8(*taken) + "'");
+  }
+}
+
+}  // namespace
+
 void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
                   IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs,
                   IndexBasis::instance_type instance) {
@@ -119,15 +141,7 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
     if (vbs)  // VABS+ = VBS+ + ABS
       bases.emplace_back(L"Ρ", union_space(L"Ρ", vbs_plus, abs_space));
   }
-  for (const auto& [label, space] : bases) {
-    if (isr->contains(label))
-      throw Exception("add_ao_basis: the label '" + toUtf8(label) +
-                      "' is already registered");
-    if (auto taken = isr->basis_label(IndexBasis{space, instance}))
-      throw Exception("add_ao_basis: instance " + std::to_string(instance) +
-                      " of space " + toUtf8(space.base_key()) +
-                      " is already named '" + toUtf8(*taken) + "'");
-  }
+  require_unregistered(*isr, "add_ao_basis", bases, instance);
   for (const auto& [label, space] : bases)
     isr->add(label, IndexBasis{space, instance}, IndexSpaceMetric::General);
 }
@@ -146,16 +160,22 @@ void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
                    IndexSpace::QuantumNumbers spin_any,
                    IndexBasis::instance_type instance,
                    std::wstring_view label) {
+  // the PAOs are the AOs projected on the particle space (of either spin),
+  // so every PAO basis follows the OBS AO basis for its extent, metric and
+  // field. The spaces are taken by value: add() may reallocate the table
   const auto uocc_type = isr->particle_space(/* nulltype_ok = */ false);
-  const IndexSpace uocc = isr->retrieve(uocc_type, spin_any);
-  isr->add(label, IndexBasis{uocc, instance}, IndexSpaceMetric::General);
-  for (const auto spin : {Spin::alpha, Spin::beta}) {
+  container::svector<std::pair<std::wstring_view, IndexSpace>> bases;
+  bases.emplace_back(label, isr->retrieve(uocc_type, spin_any));
+  container::svector<std::wstring> spin_labels;
+  for (const auto spin : {Spin::alpha, Spin::beta})
     if (const auto* uocc_spin = isr->retrieve_ptr(uocc_type, spin)) {
-      const IndexSpace space = *uocc_spin;
-      isr->add(spinannotation_add(label, spin), IndexBasis{space, instance},
-               IndexSpaceMetric::General);
+      spin_labels.emplace_back(spinannotation_add(label, spin));
+      bases.emplace_back(spin_labels.back(), *uocc_spin);
     }
-  }
+  require_unregistered(*isr, "add_pao_basis", bases, instance);
+  if (!isr->contains(L"μ")) add_ao_basis(isr, spin_any);
+  for (const auto& [l, space] : bases)
+    isr->add(l, IndexBasis{space, instance}).follow(l, L"μ");
 }
 
 void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& isr) {

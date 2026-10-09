@@ -620,10 +620,15 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(mbpt::default_pao_basis_instance ==
           std::numeric_limits<IndexBasis::instance_type>::max());
     CHECK(pao.space() == uocc);
-    CHECK(pao.extent() == uocc.dimension());
+    // the PAOs follow the OBS AO basis, registered on demand
+    REQUIRE(isr->contains(L"μ"));
+    const IndexBasis ao = isr->retrieve_basis(L"μ");
+    CHECK(isr->follows(L"μ̃") == std::optional<std::wstring_view>{L"μ"});
+    CHECK(pao.extent() == ao.extent());
+    CHECK(pao.extent() == isr->retrieve(L"p").dimension());
     CHECK(pao.metric() == IndexSpaceMetric::General);
-    CHECK(pao.field() == uocc.field());
-    // the spin-cased PAO bases: the same instance of a↑ and a↓
+    CHECK(pao.field() == ao.field());
+    // the spin-cased PAO bases: the same instance of a↑ and a↓, following μ
     for (const auto& [label, spin] :
          {std::pair{L"μ̃↑", mbpt::Spin::alpha}, {L"μ̃↓", mbpt::Spin::beta}}) {
       REQUIRE(isr->contains(label));
@@ -631,8 +636,23 @@ TEST_CASE("index_space", "[elements]") {
       CHECK(pao_spin.space() == isr->retrieve(isr->particle_space(), spin));
       CHECK(pao_spin.basis_instance() == pao.basis_instance());
       CHECK(pao_spin.metric() == IndexSpaceMetric::General);
-      CHECK(pao_spin.extent() == pao_spin.space().dimension());
+      CHECK(pao_spin.extent() == ao.extent());
+      CHECK(isr->follows(label) == std::optional<std::wstring_view>{L"μ"});
     }
+    // an existing μ is used as is
+    auto with_ao = sequant::mbpt::make_min_sr_spaces();
+    mbpt::add_ao_basis(with_ao, mbpt::Spin::any);
+    with_ao->extent(L"μ", 600);
+    REQUIRE_NOTHROW(mbpt::add_pao_basis(with_ao, mbpt::Spin::any));
+    CHECK(with_ao->retrieve_basis(L"μ̃").extent() == 600);
+    // a registry that cannot take the AO basis is left untouched
+    auto no_p = std::make_shared<IndexBasisRegistry>();
+    const IndexSpace::QuantumNumbers any{mbpt::Spin::any};
+    no_p->add(L"i", 0b01, any, is_hole).add(L"a", 0b10, any, is_particle);
+    CHECK_THROWS_AS(mbpt::add_pao_basis(no_p, mbpt::Spin::any),
+                    IndexSpace::bad_key);
+    CHECK_FALSE(no_p->contains(L"μ̃"));
+    CHECK_FALSE(no_p->contains(L"μ"));
     // ordering: after every basis of a (I2), between i and Κ as before
     CHECK((IndexBasis{uocc} < pao && IndexBasis{uocc, 0} < pao &&
            IndexBasis{uocc, 10} < pao));
@@ -646,15 +666,26 @@ TEST_CASE("index_space", "[elements]") {
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     CHECK(isr2->retrieve_basis(L"μ̃") == pao);
     CHECK(*isr2 == *isr);
+    // sized through μ, all three at once; not through their own labels
+    isr->extent(L"μ", 500);
+    for (const auto* label : {L"μ̃", L"μ̃↑", L"μ̃↓"}) {
+      CAPTURE(label);
+      CHECK(isr->retrieve_basis(label).extent() == 500);
+      CHECK_THROWS_WITH(isr->extent(label, 1),
+                        Catch::Matchers::ContainsSubstring("follows"));
+    }
+    CHECK_FALSE(*isr2 == *isr);  // equality sees the extent
 
-    // a basis given to add() under another registry keeps its metadata ...
-    isr->extent(L"μ̃", 1234).field(L"μ̃", Field::Real);
+    // a basis given to add() under another registry keeps its metadata (as
+    // values of its own: the new registry has no μ to follow) ...
+    isr->extent(L"μ", 1234).field(L"μ", Field::Real);
     auto isr3 = sequant::mbpt::make_min_sr_spaces();
     isr3->add(L"μ̃", isr->retrieve_basis(L"μ̃"));
     CHECK(isr3->retrieve_basis(L"μ̃") == pao);
     CHECK(isr3->retrieve_basis(L"μ̃").extent() == 1234);
     CHECK(isr3->retrieve_basis(L"μ̃").metric() == IndexSpaceMetric::General);
     CHECK(isr3->retrieve_basis(L"μ̃").field() == Field::Real);
+    CHECK_FALSE(isr3->follows(L"μ̃"));
     // ... unless overridden by the arguments, and under the label given
     auto isr4 = sequant::mbpt::make_min_sr_spaces();
     isr4->add(L"ν̃", isr->retrieve_basis(L"μ̃"), 56ul, IndexSpaceMetric::Unit,

@@ -119,23 +119,24 @@ inline constexpr IndexBasis::instance_type default_pao_basis_instance =
 
 /// @brief registers the PAO basis as a named instance of the particle space
 
-/// expects \p isr to have a defined particle space; the entry is registered
-/// with a general metric (the PAOs are not orthonormal), and its extent and
-/// field default to the particle space's (populate them with
-/// IndexBasisRegistry::extent(label, n) before the registry is given
-/// to a Context, which holds it immutable). The α- and β-spin PAO bases are
+/// expects \p isr to have a defined particle space. The PAOs are the AOs
+/// projected on the particle space, so the entry follows the OBS AO basis
+/// `μ` (IndexBasisRegistry::follow()), which add_ao_basis() registers first
+/// if \p isr has no `μ`: its extent, metric (general) and field are those
+/// of `μ`, set through `μ`'s label (populate the extent with
+/// IndexBasisRegistry::extent(L"μ", n) before the registry is given to a
+/// Context, which holds it immutable). The α- and β-spin PAO bases are
 /// registered alongside, as the same instance of the spin-cased particle
 /// spaces (if \p isr has them) under the spin-annotated label (`μ̃↑`,
-/// `μ̃↓`), so that a PAO index can be spin-cased (see make_spinalpha()). Each
-/// is an entry of its own, whose extent defaults to the dimension of its
-/// spin-cased space: setting the extent of \p label does not reach them (as
-/// setting a space's does not reach the spin-cased spaces add_fermi_spin()
-/// derived from it), so populate all three.
+/// `μ̃↓`), so that a PAO index can be spin-cased (see make_spinalpha());
+/// they follow `μ` too, since the AOs do not depend on spin.
 /// @param spin_any the quantum numbers of the spin-agnostic particle space
 /// @param instance the basis instance of the PAO basis
 /// @param label the label the PAO basis is registered under
 /// @throw Exception if \p label or a spin-annotated version of it is already
-///        registered
+///        registered, if \p instance of a particle space is already named,
+///        or if `μ` is missing and cannot be registered (see
+///        add_ao_basis()); the registry is then left untouched
 void add_pao_basis(
     std::shared_ptr<IndexBasisRegistry>& isr,
     IndexSpace::QuantumNumbers spin_any,

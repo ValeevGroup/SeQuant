@@ -1202,15 +1202,15 @@ TEST_CASE("optimize", "[optimize]") {
     auto reg = std::make_shared<IndexBasisRegistry>(
         *get_default_context().index_basis_registry());
     mbpt::add_df_spaces(reg);
-    mbpt::add_pao_basis(reg, mbpt::Spin::any);
     mbpt::add_ao_basis(reg, mbpt::Spin::any);
+    mbpt::add_pao_basis(reg, mbpt::Spin::any);
     // i 10
     // a 40
     // μ̃ 50
     // Κ 90
     for (auto&& [k, v] :
          std::initializer_list<std::pair<std::wstring_view, size_t>>{
-             {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}}) {
+             {L"i", 10}, {L"a", 40}, {L"μ", 50}, {L"Κ", 90}}) {
       reg->extent(k, v);
     }
     auto ctx_resetter =
@@ -1586,11 +1586,11 @@ TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}}) {
+           {L"i", 10}, {L"a", 40}, {L"μ", 50}, {L"Κ", 90}}) {
     reg->extent(k, v);
   }
   auto ctx_resetter =
@@ -1644,11 +1644,11 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 56}, {L"a", 12}, {L"μ̃", 602}, {L"Κ", 1652}}) {
+           {L"i", 56}, {L"a", 12}, {L"μ", 602}, {L"Κ", 1652}}) {
     reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
@@ -1706,11 +1706,11 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 16}, {L"a", 12}, {L"μ̃", 170}, {L"Κ", 472}}) {
+           {L"i", 16}, {L"a", 12}, {L"μ", 170}, {L"Κ", 472}}) {
     reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
@@ -1970,13 +1970,13 @@ TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   // C60 cc-pVDZ-F12-ish extents: active occ 120, PNO domain 42, PAO 1800,
   // DF aux 6000 (sliced to batch 30 by the batched objective).
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 120}, {L"a", 42}, {L"μ̃", 1800}, {L"Κ", 6000}}) {
+           {L"i", 120}, {L"a", 42}, {L"μ", 1800}, {L"Κ", 6000}}) {
     reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
@@ -2105,11 +2105,11 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 16}, {L"a", 12}, {L"μ̃", 170}, {L"Κ", 472}})
+           {L"i", 16}, {L"a", 12}, {L"μ", 170}, {L"Κ", 472}})
     reg->extent(k, v);
   auto aux = reg->retrieve(L"Κ");
   auto ctx_resetter =
@@ -2306,12 +2306,12 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   // water-20-scale extents (≈ water-14 OSV extents scaled by 20/14).
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 80}, {L"a", 12}, {L"μ̃", 860}, {L"Κ", 2360}}) {
+           {L"i", 80}, {L"a", 12}, {L"μ", 860}, {L"Κ", 2360}}) {
     reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
@@ -2534,12 +2534,12 @@ TEST_CASE(
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   // water-20-scale extents (matches the "quadratic bubble" test above).
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 80}, {L"a", 12}, {L"μ̃", 860}, {L"Κ", 2360}}) {
+           {L"i", 80}, {L"a", 12}, {L"μ", 860}, {L"Κ", 2360}}) {
     reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
@@ -2684,11 +2684,11 @@ TEST_CASE("batched DP peak matches oracle with two modes and accumulation",
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 20}, {L"a", 20}, {L"μ̃", 200}, {L"Κ", 300}}) {
+           {L"i", 20}, {L"a", 20}, {L"μ", 200}, {L"Κ", 300}}) {
     reg->extent(k, v);
   }
   auto aux = reg->retrieve(L"Κ");
@@ -3376,12 +3376,12 @@ TEST_CASE("select_root_perf_first_ceiling", "[optimize][batch]") {
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   // water-20-scale extents (matches the "threshold gates batching" test).
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 80}, {L"a", 12}, {L"μ̃", 860}, {L"Κ", 2360}})
+           {L"i", 80}, {L"a", 12}, {L"μ", 860}, {L"Κ", 2360}})
     reg->extent(k, v);
   auto aux_space = reg->retrieve(L"Κ");
   auto ctx_resetter =
@@ -3713,11 +3713,11 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}})
+           {L"i", 10}, {L"a", 40}, {L"μ", 50}, {L"Κ", 90}})
     reg->extent(k, v);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
