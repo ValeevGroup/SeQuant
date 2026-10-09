@@ -146,12 +146,12 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
       const IndexBasis same_identity{uocc, 1, b.name()};
       CHECK(b == same_identity);
       CHECK(hash_value(b) == hash_value(same_identity));
-      CHECK((b <=> same_identity) == 0);
+      CHECK(std::is_eq(b <=> same_identity));
       CHECK(same_instance(b, IndexBasis{uocc, 1}));
       CHECK((b == IndexBasis{uocc, 1}) == !b.has_name());
       CHECK((hash_value(b) == hash_value(IndexBasis{uocc, 1})) ==
             !b.has_name());
-      CHECK(((b <=> IndexBasis{uocc, 1}) == 0) == !b.has_name());
+      CHECK(std::is_eq(b <=> IndexBasis{uocc, 1}) == !b.has_name());
       CHECK(IndexBasis{uocc, 1} <= b);  // unnamed first
     }
   }
