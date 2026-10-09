@@ -47,10 +47,10 @@ int main() {
 
   // start-snippet-6
   // several bases of one space can meet in one expression, e.g. canonical and
-  // localized occupied orbitals. An Index made from an IndexSpace is
-  // basis-generic (it runs over the space's own basis); one made from an
-  // IndexBasis with a basis instance runs over that basis of the space. The
-  // instance is written after the proto indices: i_1<;1>
+  // localized occupied orbitals. An Index made from an IndexSpace runs over
+  // the space's own basis; one made from an IndexBasis with a basis instance
+  // runs over that basis of the space. The instance is written after the
+  // proto indices: i_1<;1>
   const auto& isr = get_default_context().index_basis_registry();
   const IndexSpace occ = isr->retrieve(L"i");
   const Index i_canonical(occ, 1);

@@ -9,7 +9,15 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/reserved.hpp>
 
+#include <concepts>
+
 namespace sequant::mbpt {
+
+namespace detail {
+ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
+                      bool orthonormal, std::wstring const& coeff_tensor_label,
+                      container::svector<std::wstring> const& tensor_labels);
+}  // namespace detail
 
 ///
 /// expands CSVs in an expression in terms of a basis (standard unoccupieds,
@@ -29,15 +37,21 @@ namespace sequant::mbpt {
 ///         expression itself.
 /// \throw Exception if @p csv_basis has a basis instance that the default
 ///        context's registry does not name
-ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
+/// \note takes an IndexBasis only; an IndexSpace selects the overload below,
+///       which deduces @p orthonormal
+template <std::same_as<IndexBasis> Basis>
+ExprPtr csv_transform(ExprPtr const& expr, const Basis& csv_basis,
                       bool orthonormal,
                       std::wstring const& coeff_tensor_label = L"C",
                       container::svector<std::wstring> const& tensor_labels = {
-                          L"f", L"g", sequant::reserved::overlap_label()});
+                          L"f", L"g", sequant::reserved::overlap_label()}) {
+  return detail::csv_transform(expr, csv_basis, orthonormal, coeff_tensor_label,
+                               tensor_labels);
+}
 
 /// a coefficient label in place of @p orthonormal would convert to true
-template <typename Char, typename... Args>
-ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
+template <std::same_as<IndexBasis> Basis, typename Char, typename... Args>
+ExprPtr csv_transform(ExprPtr const& expr, const Basis& csv_basis,
                       const Char* coeff_tensor_label, Args&&...) = delete;
 
 ///

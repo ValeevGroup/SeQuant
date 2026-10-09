@@ -25,6 +25,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -723,6 +724,13 @@ concept csv_transform_callable = requires(ExprPtr e, Basis b, Args... args) {
 template <typename Basis>
 concept csv_transform_takes_label_literal =
     requires(ExprPtr e, Basis b) { mbpt::csv_transform(e, b, L"C"); };
+
+// a space, or a braced initializer of one, is its own basis; a label alone is
+// not
+static_assert(std::is_convertible_v<IndexSpace, IndexBasis>);
+static_assert(std::is_constructible_v<IndexBasis, const wchar_t*, int>);
+static_assert(!std::is_convertible_v<const wchar_t*, IndexBasis>);
+static_assert(!std::is_convertible_v<std::wstring, IndexBasis>);
 
 // a label in the orthonormal slot would convert to true
 static_assert(!csv_transform_takes_label_literal<IndexBasis>);

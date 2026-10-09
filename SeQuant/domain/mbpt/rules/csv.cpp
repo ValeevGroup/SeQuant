@@ -167,6 +167,8 @@ ExprPtr csv_transform_rec(
 
 }  // namespace
 
+namespace detail {
+
 ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
                       bool orthonormal, std::wstring const& coeff_tensor_label,
                       container::svector<std::wstring> const& tensor_labels) {
@@ -185,6 +187,8 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
   return csv_transform_rec(expr, csv_basis, orthonormal, coeff_tensor_label,
                            tensor_labels);
 }
+
+}  // namespace detail
 
 ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
                       std::wstring const& coeff_tensor_label,

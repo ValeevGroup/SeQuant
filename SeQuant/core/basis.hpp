@@ -5,11 +5,11 @@
 #include <SeQuant/core/space.hpp>
 
 #include <compare>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <type_traits>
 #include <utility>
 
 namespace sequant {
@@ -44,8 +44,20 @@ class IndexBasis {
   /// null space, null instance
   IndexBasis() noexcept = default;
 
+  /// the space's own basis (null instance)
+  IndexBasis(IndexSpace space) noexcept : space_(std::move(space)) {}
+
+  /// the own basis of the IndexSpace constructed from @p type_label and
+  /// @p args, so that a braced IndexSpace initializer also initializes an
+  /// IndexBasis
+  template <basic_string_convertible S, typename... Args>
+    requires(sizeof...(Args) > 0 &&
+             std::constructible_from<IndexSpace, S, Args...>)
+  IndexBasis(S&& type_label, Args&&... args)
+      : space_(std::forward<S>(type_label), std::forward<Args>(args)...) {}
+
   explicit IndexBasis(IndexSpace space,
-                      optional_instance basis_instance = std::nullopt) noexcept
+                      optional_instance basis_instance) noexcept
       : space_(std::move(space)), basis_instance_(basis_instance) {}
 
   /// @param name the label @p basis_instance is registered under
@@ -119,15 +131,6 @@ bool includes(const IndexBasis& basis, const IndexBasis& subbasis);
 /// have one and the two differ; an identity between functions of such bases
 /// is an overlap, not a Kronecker delta
 bool different_instances(const IndexBasis& b1, const IndexBasis& b2);
-
-/// what an Index runs over: an IndexSpace or an IndexBasis. An IndexSpace
-/// stands for the space's own basis, so an Index made from one is
-/// basis-generic (null basis instance); an IndexBasis names the basis exactly.
-/// Functions templated on this default it to IndexSpace, so a braced list in
-/// that position still initializes an IndexSpace
-template <typename T>
-concept space_or_basis = std::is_same_v<std::remove_cvref_t<T>, IndexSpace> ||
-                         std::is_same_v<std::remove_cvref_t<T>, IndexBasis>;
 
 }  // namespace sequant
 
