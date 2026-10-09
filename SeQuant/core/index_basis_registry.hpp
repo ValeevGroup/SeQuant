@@ -588,13 +588,14 @@ class IndexBasisRegistry {
   /// combining diacritics, arrows and primes, so no digits or `_`, which an
   /// index label reserves for the ordinal
   /// @param basis an IndexBasis with a basis instance whose space is
-  /// registered
+  /// registered; the entry is named @p label whatever @p basis is named
   /// @param args optional arguments consisting of a mix of zero or one of
-  /// each of the following:
-  ///   - extent of the basis (unsigned long; defaults to the dimension of the
-  ///   space)
-  ///   - IndexSpaceMetric (defaults to IndexSpaceMetric::Unit)
-  ///   - Field (defaults to that of the space's own basis)
+  /// each of the following, each defaulting to what @p basis carries (for a
+  /// basis built from a space and an instance: the dimension of the space,
+  /// IndexSpaceMetric::Unit and the field of the space's own basis):
+  ///   - extent of the basis (unsigned long)
+  ///   - IndexSpaceMetric
+  ///   - Field
   /// @return reference to `this`
   /// @throw Exception if @p label is not a valid label or is already
   /// registered, if @p basis has no basis instance, if its space is not
@@ -624,7 +625,7 @@ class IndexBasisRegistry {
             nmetrics == boost::hana::size_c<1>,
         "IndexBasisRegistry::add(label, basis): only one IndexSpaceMetric "
         "argument is allowed");
-    IndexSpaceMetric metric = IndexSpaceMetric::Unit;
+    IndexSpaceMetric metric = basis.metric_;
     if constexpr (nmetrics == boost::hana::size_c<1>) {
       metric = boost::hana::at_c<0>(h_metric);
     }
@@ -645,7 +646,10 @@ class IndexBasisRegistry {
       throw Exception("IndexBasisRegistry::add(label, basis): the basis of '" +
                       toUtf8(key) + "' is already named '" + toUtf8(*taken) +
                       "'");
-    IndexBasis named{*space, basis.basis_instance(), key, size, metric, field};
+    IndexBasis named{
+        *space, basis.basis_instance(),
+        key,    size ? std::optional<std::size_t>(*size) : basis.extent_,
+        metric, field ? field : basis.field_};
     bases_.emplace(std::move(key), std::move(named));
     ++named_count_;
     return clear_memoized_data_and_return_this();

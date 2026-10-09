@@ -605,6 +605,31 @@ TEST_CASE("index_space", "[elements]") {
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     CHECK(isr2->retrieve_basis(L"μ̃") == pao);
     CHECK(*isr2 == *isr);
+
+    // a basis given to add() under another registry keeps its metadata ...
+    isr->extent(L"μ̃", 1234).field(L"μ̃", Field::Real);
+    auto isr3 = sequant::mbpt::make_min_sr_spaces();
+    isr3->add(L"μ̃", isr->retrieve_basis(L"μ̃"));
+    CHECK(isr3->retrieve_basis(L"μ̃") == pao);
+    CHECK(isr3->retrieve_basis(L"μ̃").extent() == 1234);
+    CHECK(isr3->retrieve_basis(L"μ̃").metric() == IndexSpaceMetric::General);
+    CHECK(isr3->retrieve_basis(L"μ̃").field() == Field::Real);
+    // ... unless overridden by the arguments, and under the label given
+    auto isr4 = sequant::mbpt::make_min_sr_spaces();
+    isr4->add(L"ν̃", isr->retrieve_basis(L"μ̃"), 56ul, IndexSpaceMetric::Unit,
+              Field::Complex);
+    CHECK_FALSE(isr4->contains(L"μ̃"));
+    CHECK(isr4->retrieve_basis(L"ν̃").name() == L"ν̃");
+    CHECK(same_instance(isr4->retrieve_basis(L"ν̃"), pao));
+    CHECK(isr4->retrieve_basis(L"ν̃").extent() == 56);
+    CHECK(isr4->retrieve_basis(L"ν̃").metric() == IndexSpaceMetric::Unit);
+    CHECK(isr4->retrieve_basis(L"ν̃").field() == Field::Complex);
+    // a basis without metadata of its own takes that of this registry's space
+    auto isr5 = sequant::mbpt::make_min_sr_spaces();
+    isr5->extent(L"a", 99);
+    isr5->add(L"μ̃", IndexBasis{uocc, mbpt::default_pao_basis_instance});
+    CHECK(isr5->retrieve_basis(L"μ̃").extent() == 99);
+    CHECK(isr5->retrieve_basis(L"μ̃").metric() == IndexSpaceMetric::Unit);
   }
 
   SECTION("paper 1 example") {
