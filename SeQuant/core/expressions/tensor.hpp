@@ -1242,14 +1242,27 @@ inline ExprPtr make_kronecker(const Index &bra_index, const Index &ket_index) {
 }
 
 /// @return true if an overlap between @p bra and @p ket is a Kronecker delta:
-/// @p metric is unit and the indices are in one basis, i.e. have the same
-/// protoindices (compared in order, as by Index::operator==; symmetric ones
-/// are kept sorted) and are not in two different basis instances
-inline bool is_kronecker_equivalent(const Index &bra, const Index &ket,
-                                    IndexSpaceMetric metric) {
-  return metric == IndexSpaceMetric::Unit &&
-         bra.proto_indices() == ket.proto_indices() &&
-         !different_instances(bra.basis(), ket.basis());
+/// the indices are in one orthonormal basis, i.e. have the same protoindices
+/// (compared in order, as by Index::operator==; symmetric ones are kept
+/// sorted), are not in two different basis instances, and neither basis has
+/// a general metric (IndexBasis::metric())
+inline bool is_kronecker_equivalent(const Index &bra, const Index &ket) {
+  return bra.proto_indices() == ket.proto_indices() &&
+         !different_instances(bra.basis(), ket.basis()) &&
+         bra.basis().metric() == IndexSpaceMetric::Unit &&
+         ket.basis().metric() == IndexSpaceMetric::Unit;
+}
+
+/// @deprecated the metric is a property of each basis (IndexBasis::metric());
+/// use is_kronecker_equivalent(bra, ket)
+/// @return `metric == IndexSpaceMetric::Unit && is_kronecker_equivalent(bra,
+/// ket)`
+[[deprecated(
+    "the metric is per basis; use is_kronecker_equivalent(bra, "
+    "ket)")]] inline bool
+is_kronecker_equivalent(const Index &bra, const Index &ket,
+                        IndexSpaceMetric metric) {
+  return metric == IndexSpaceMetric::Unit && is_kronecker_equivalent(bra, ket);
 }
 
 /// @name (anti)symmetrization operator factories

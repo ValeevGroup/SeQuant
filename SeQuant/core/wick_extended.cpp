@@ -56,11 +56,13 @@ Index make_in_basis_of(IndexFactory &idxfac, const IndexSpace &sp,
 }
 
 /// @return the identity between @p bra and @p ket: their Kronecker delta if
-/// their overlap is one, else their overlap
+/// their overlap is one (and @p metric, the context's, is unit), else their
+/// overlap
 ExprPtr make_identity(const Index &bra, const Index &ket,
                       IndexSpaceMetric metric) {
-  return is_kronecker_equivalent(bra, ket, metric) ? make_kronecker(bra, ket)
-                                                   : make_overlap(bra, ket);
+  return metric == IndexSpaceMetric::Unit && is_kronecker_equivalent(bra, ket)
+             ? make_kronecker(bra, ket)
+             : make_overlap(bra, ket);
 }
 
 /// the core (R minus U), active (R ∩ U) and virtual (U minus R) parts of
