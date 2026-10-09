@@ -169,15 +169,20 @@ class IndexBasisRegistry {
   /// constructs an IndexBasisRegistry from an existing table (e.g. the
   /// bases() of another registry), spaces and named basis instances alike
   /// @note the table is taken as given, it is not validated against the
-  /// invariants that add() enforces, except that each named basis instance
+  /// invariants that add() enforces, except that each label is a valid base
+  /// key (the null space's empty key aside) and each named basis instance
   /// carries the label it is registered under
+  /// @throw Exception if a label is not a valid base key (see
+  /// io::serialization::v1::is_base_key())
   explicit IndexBasisRegistry(table_type bases)
       : bases_(std::move(bases)),
         named_count_(ranges::count_if(
             bases_, [](const auto& e) { return !is_space(e); })) {
-    for (auto& [label, basis] : bases_)
+    for (auto& [label, basis] : bases_) {
+      if (basis.space()) validate_label(label, "IndexBasisRegistry(table)");
       if (basis.has_basis_instance() && basis.name() != label)
         basis = IndexBasis(basis.space(), basis.basis_instance(), label);
+    }
   }
 
   /// copy constructor

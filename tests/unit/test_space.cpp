@@ -11,6 +11,8 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 #include "SeQuant/domain/mbpt/space_qns.hpp"
@@ -65,6 +67,20 @@ TEST_CASE("index_space", "[elements]") {
     // can use bytestrings too
     REQUIRE_NOTHROW(sr_isr->retrieve("a"));  // N.B. string
     REQUIRE_NOTHROW(sr_isr->remove('a'));    // N.B. char
+  }
+
+  // the table constructor takes the entries as given, but their labels must
+  // still be base keys, or indices in them could not be parsed back
+  SECTION("table constructor validates labels") {
+    auto isr = sequant::mbpt::make_min_sr_spaces();
+    CHECK_NOTHROW(IndexBasisRegistry{isr->bases()});  // the null space's
+                                                      // empty key is fine
+    auto table = isr->bases();
+    table.emplace(L"a1", IndexBasis{isr->retrieve(L"a"), 1});
+    CHECK_THROWS_AS(IndexBasisRegistry{table}, Exception);
+    auto table2 = isr->bases();
+    table2.emplace(L"x_1", IndexBasis{IndexSpace{L"x_1", 0b100000}});
+    CHECK_THROWS_AS(IndexBasisRegistry{table2}, Exception);
   }
 
   SECTION("named basis instances") {
