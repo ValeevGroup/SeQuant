@@ -55,7 +55,7 @@ IndexBasis to_basis(const LabelAST &label_ast, const std::wstring &label,
                     const boost::optional<IndexBasis::instance_type> &instance,
                     const PositionCache &position_cache,
                     const Iterator &begin) {
-  const auto registry = get_default_context().index_space_registry();
+  const auto registry = get_default_context().index_basis_registry();
   const IndexBasis &basis = registry->retrieve_basis(label);
   if (!instance) return basis;
   if (basis.has_basis_instance()) {

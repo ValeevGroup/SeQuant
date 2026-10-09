@@ -71,7 +71,7 @@ inline std::map<IndexBasis::optional_instance, std::size_t> instance_histogram(
 inline ExprPtr with_leg_instance(ExprPtr const& op,
                                  IndexBasis::optional_instance inst,
                                  bool occupied = false) {
-  auto const& isr = get_default_context().index_space_registry();
+  auto const& isr = get_default_context().index_basis_registry();
   container::map<Index, Index> m;
   for (auto const& idx : get_used_indices(op))
     if (occupied ? isr->is_pure_occupied(idx.space())
@@ -136,7 +136,7 @@ enum class PaoEncoding { Space, Basis };
 
 /// the registry CSV-CCSD is derived over: min SR spaces plus the DF and PAO
 /// spaces, the PAOs in the given encoding
-inline std::shared_ptr<IndexSpaceRegistry> csv_cc_registry(
+inline std::shared_ptr<IndexBasisRegistry> csv_cc_registry(
     PaoEncoding pao = PaoEncoding::Space) {
   auto isr = mbpt::make_min_sr_spaces();
   mbpt::add_df_spaces(isr);
@@ -150,8 +150,8 @@ inline std::shared_ptr<IndexSpaceRegistry> csv_cc_registry(
 /// the Context CSV-CCSD is derived under, over @p isr (adopted: pass the only
 /// owner), Complete canonicalization, column-Symm deserialization
 inline sequant::Context csv_cc_context(
-    std::shared_ptr<IndexSpaceRegistry> isr) {
-  return Context({.index_space_registry_shared_ptr = std::move(isr),
+    std::shared_ptr<IndexBasisRegistry> isr) {
+  return Context({.index_basis_registry_shared_ptr = std::move(isr),
                   .vacuum = Vacuum::SingleProduct,
                   .spbasis = SPBasis::Spinor,
                   .canonicalization_options =

@@ -15,7 +15,7 @@
 #include <SeQuant/core/export/python_einsum.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
-#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -117,7 +117,7 @@ std::set<std::string> known_format_names(std::tuple<Generator...>) {
 void configure_context_defaults(TextGeneratorContext &) {}
 
 void configure_context_defaults(ItfContext &ctx) {
-  auto registry = get_default_context().index_space_registry();
+  auto registry = get_default_context().index_basis_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
   IndexSpace aux = registry->retrieve("x");
@@ -135,7 +135,7 @@ void configure_context_defaults(ItfContext &ctx) {
 }
 
 void configure_context_defaults(JuliaTensorOperationsGeneratorContext &ctx) {
-  auto registry = get_default_context().index_space_registry();
+  auto registry = get_default_context().index_basis_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
   IndexSpace aux = registry->retrieve("x");
@@ -150,7 +150,7 @@ void configure_context_defaults(JuliaTensorOperationsGeneratorContext &ctx) {
 }
 
 void configure_context_defaults(NumPyEinsumGeneratorContext &ctx) {
-  auto registry = get_default_context().index_space_registry();
+  auto registry = get_default_context().index_basis_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
   IndexSpace aux = registry->retrieve("x");
@@ -165,7 +165,7 @@ void configure_context_defaults(NumPyEinsumGeneratorContext &ctx) {
 }
 
 void configure_context_defaults(PyTorchEinsumGeneratorContext &ctx) {
-  auto registry = get_default_context().index_space_registry();
+  auto registry = get_default_context().index_basis_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
   IndexSpace aux = registry->retrieve("x");
@@ -229,7 +229,7 @@ void add_to_context(JuliaTensorOperationsGeneratorContext &ctx,
     boost::trim(map);
 
     return std::make_pair(
-        get_default_context().index_space_registry()->retrieve(space),
+        get_default_context().index_basis_registry()->retrieve(space),
         std::string(map));
   };
 
@@ -509,7 +509,7 @@ TEST_CASE("export", "[export]") {
     JuliaTensorOperationsGeneratorContext julia_ctx;
     for (const auto *space : {"i", "a", "u"})
       julia_ctx.set_tag(
-          get_default_context().index_space_registry()->retrieve(space), space);
+          get_default_context().index_basis_registry()->retrieve(space), space);
     REQUIRE_NOTHROW(export_expression(
         to_export_tree(deserialize<ResultExpr>(
             L"R{u1,a1;u2,i1} = γ{u1,a1;u2,i1} + Γ{u1,a1;u2,i1}")),
@@ -940,7 +940,7 @@ TEST_CASE("JuliaTensorOperationsGenerator", "[export]") {
 TEST_CASE("PythonEinsumGenerator", "[export]") {
   auto resetter = to_export_context();
 
-  auto registry = get_default_context().index_space_registry();
+  auto registry = get_default_context().index_basis_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
 
@@ -1069,7 +1069,7 @@ TEST_CASE("export-basis-instance", "[export][basis]") {
   auto resetter = to_export_context();
   const Index y = Index(L"a_7").replace_basis_instance(1);
 
-  auto registry = get_default_context().index_space_registry();
+  auto registry = get_default_context().index_basis_registry();
   const IndexSpace occ = registry->retrieve("i");
   const IndexSpace virt = registry->retrieve("a");
   const Tensor t(L"t", bra{y}, ket{L"i_1"});

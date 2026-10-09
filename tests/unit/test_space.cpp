@@ -74,7 +74,7 @@ TEST_CASE("index_space", "[elements]") {
     const auto nbase = isr->base_spaces().size();
     const auto nentries = isr->bases().size();
     static_assert(std::is_same_v<decltype(isr->bases()),
-                                 const IndexSpaceRegistry::table_type&>);
+                                 const IndexBasisRegistry::table_type&>);
 
     // registration: label, basis, own size; the space keeps its own size
     CHECK_FALSE(isr->basis_label(pao));  // nothing named yet
@@ -197,7 +197,7 @@ TEST_CASE("index_space", "[elements]") {
     // ctor takes spaces and names together
     auto isr2 = sequant::mbpt::make_min_sr_spaces();
     isr2->add(L"μ̃", pao, 120ul);
-    IndexSpaceRegistry copy(*isr2);
+    IndexBasisRegistry copy(*isr2);
     CHECK(copy == *isr2);
     // the name and its count travel
     CHECK(copy.basis_label(pao) == std::optional<std::wstring_view>{L"μ̃"});
@@ -208,10 +208,10 @@ TEST_CASE("index_space", "[elements]") {
     copy.remove(L"μ̃");
     CHECK(isr2->contains(L"μ̃"));
     CHECK_FALSE(copy == *isr2);
-    IndexSpaceRegistry moved(std::move(copy));
+    IndexBasisRegistry moved(std::move(copy));
     CHECK_FALSE(moved.contains(L"μ̃"));
     // the table ctor copies spaces and names together ...
-    IndexSpaceRegistry from_table(isr2->bases());
+    IndexBasisRegistry from_table(isr2->bases());
     CHECK(from_table.contains(L"μ̃"));
     CHECK(from_table.contains(L"a"));
     // ... and recounts the names
@@ -219,7 +219,7 @@ TEST_CASE("index_space", "[elements]") {
           std::optional<std::wstring_view>{L"μ̃"});
     // the move members carry the count with the table and leave the source
     // naming nothing (its table is empty)
-    IndexSpaceRegistry moved_names(std::move(from_table));
+    IndexBasisRegistry moved_names(std::move(from_table));
     CHECK(moved_names.basis_label(pao) ==
           std::optional<std::wstring_view>{L"μ̃"});
     CHECK_FALSE(from_table.basis_label(pao));
@@ -246,16 +246,16 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(isr3->contains(L"μ̃"));
     // a registry inside a Context is immutable (#665): the context copies a
     // still-owned registry, equal by value
-    const Context ctx({.index_space_registry_shared_ptr = isr3});
-    CHECK(ctx.index_space_registry().get() != isr3.get());
-    CHECK(*ctx.index_space_registry() == *isr3);
-    CHECK(ctx.index_space_registry()->retrieve_basis(L"μ̃") == pao);
+    const Context ctx({.index_basis_registry_shared_ptr = isr3});
+    CHECK(ctx.index_basis_registry().get() != isr3.get());
+    CHECK(*ctx.index_basis_registry() == *isr3);
+    CHECK(ctx.index_basis_registry()->retrieve_basis(L"μ̃") == pao);
     isr3->approximate_size(L"μ̃", 5);
-    CHECK_FALSE(*ctx.index_space_registry() == *isr3);
+    CHECK_FALSE(*ctx.index_basis_registry() == *isr3);
   }
 
   SECTION("registry construction") {
-    auto isr = std::make_shared<IndexSpaceRegistry>();
+    auto isr = std::make_shared<IndexBasisRegistry>();
 
     // similar make_sr_spaces, but no spin AND occupied and unoccupied bits are
     // NOT contiguous!
@@ -310,22 +310,22 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(sr_isr->retrieve(L"i") != sr_isr->retrieve(L"a"));
 
     // registries compare their space specifications as well as their spaces
-    REQUIRE(*sr_isr == IndexSpaceRegistry(*sr_isr));
-    IndexSpaceRegistry other_hole = *sr_isr;
+    REQUIRE(*sr_isr == IndexBasisRegistry(*sr_isr));
+    IndexBasisRegistry other_hole = *sr_isr;
     other_hole.hole_space(L"o");
     REQUIRE(other_hole != *sr_isr);
-    IndexSpaceRegistry other_mask = *sr_isr;
+    IndexBasisRegistry other_mask = *sr_isr;
     other_mask.physical_particle_attribute_mask(bitset::null);
     REQUIRE(other_mask != *sr_isr);
 
     // ... and the approximate sizes and fields of their spaces, which
     // IndexSpace equality ignores
-    IndexSpaceRegistry other_size = *sr_isr;
+    IndexBasisRegistry other_size = *sr_isr;
     other_size.retrieve_ptr(L"i")->approximate_size(
         sr_isr->retrieve(L"i").approximate_size() + 1);
     REQUIRE(other_size.retrieve(L"i") == sr_isr->retrieve(L"i"));
     REQUIRE(other_size != *sr_isr);
-    IndexSpaceRegistry other_field = *sr_isr;
+    IndexBasisRegistry other_field = *sr_isr;
     other_field.retrieve_ptr(L"i")->field(Field::Real);
     REQUIRE(sr_isr->retrieve(L"i").field() == Field::Complex);
     REQUIRE(other_field != *sr_isr);
@@ -442,10 +442,10 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(isr->base_spaces().empty());
 
     // a registry that was moved from memoizes none of the spaces it gave up
-    IndexSpaceRegistry moved_from = *sequant::mbpt::make_sr_spaces();
+    IndexBasisRegistry moved_from = *sequant::mbpt::make_sr_spaces();
     REQUIRE(moved_from.base_space_types() == sr_base_space_types);
     REQUIRE(!moved_from.base_spaces().empty());
-    IndexSpaceRegistry moved_to = std::move(moved_from);
+    IndexBasisRegistry moved_to = std::move(moved_from);
     REQUIRE(moved_from.base_space_types().empty());
     REQUIRE(moved_from.base_spaces().empty());
     REQUIRE(moved_to.base_space_types() == sr_base_space_types);
@@ -521,7 +521,7 @@ TEST_CASE("index_space", "[elements]") {
   }
 
   SECTION("paper 1 example") {
-    IndexSpaceRegistry isr;
+    IndexBasisRegistry isr;
     using namespace sequant::mbpt;
     isr.add("i", 0b01,
             // fully occupied in vacuum state
@@ -540,7 +540,7 @@ TEST_CASE("index_space", "[elements]") {
 
     // to use ISR load into default context
     auto _ = set_scoped_default_context(
-        {.index_space_registry = isr, .vacuum = Vacuum::SingleProduct});
+        {.index_basis_registry = isr, .vacuum = Vacuum::SingleProduct});
     REQUIRE_NOTHROW(Index("a_1"));
     REQUIRE_NOTHROW(Index("p_1"));
     Index a1("a_1");
@@ -548,7 +548,7 @@ TEST_CASE("index_space", "[elements]") {
   }
 
   SECTION("paper 2 example") {
-    IndexSpaceRegistry isr;
+    IndexBasisRegistry isr;
     using namespace sequant::mbpt;
     const QuantumNumbersAttr spin_any = 0b0011;
     isr.add("i", 0b001, spin_any,
@@ -584,7 +584,7 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(isr.contains_unoccupied("p") == true);
 
     auto _ = set_scoped_default_context(
-        {.index_space_registry = isr, .vacuum = Vacuum::SingleProduct});
+        {.index_basis_registry = isr, .vacuum = Vacuum::SingleProduct});
     REQUIRE_NOTHROW(Index("A_1"));
     REQUIRE_NOTHROW(Index("μ̃_1"));
     REQUIRE_NOTHROW(Index("x_1"));

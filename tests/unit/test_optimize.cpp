@@ -186,8 +186,8 @@ TEST_CASE("optimize", "[optimize]") {
   // for optimization tests, need to specify index space sizes, so install a
   // context whose registry specifies them
   {
-    auto reg = std::make_shared<IndexSpaceRegistry>(
-        *get_default_context().index_space_registry());
+    auto reg = std::make_shared<IndexBasisRegistry>(
+        *get_default_context().index_basis_registry());
 
     {
       auto occ = reg->retrieve_ptr(L"i");
@@ -450,7 +450,7 @@ TEST_CASE("optimize", "[optimize]") {
       // penalizes that 4000-element intermediate (vs the 100-element one) and
       // flips the choice to (A*B)*C. Flip threshold here is footprint_weight >
       // ~5.2.
-      auto sized = std::make_shared<IndexSpaceRegistry>(*reg);
+      auto sized = std::make_shared<IndexBasisRegistry>(*reg);
       sized->retrieve_ptr(L"a")->approximate_size(4);     // virtual: SMALL
       sized->retrieve_ptr(L"x")->approximate_size(1000);  // aux: LARGE
       auto sized_resetter =
@@ -485,7 +485,7 @@ TEST_CASE("optimize", "[optimize]") {
     }
 
     SECTION("Non-covariant indices") {
-      auto sized = std::make_shared<IndexSpaceRegistry>(*reg);
+      auto sized = std::make_shared<IndexBasisRegistry>(*reg);
       sized->retrieve_ptr(L"x")->approximate_size(
           3 * reg->retrieve(L"a").approximate_size());
       auto sized_resetter =
@@ -576,7 +576,7 @@ TEST_CASE("optimize", "[optimize]") {
     SECTION("subset_footprints") {
       using namespace sequant;
       // i occ (size 2); a virt (size 4). Tensors: g{a1;i1}, g{a2;i2}.
-      auto sized = std::make_shared<IndexSpaceRegistry>(*reg);
+      auto sized = std::make_shared<IndexBasisRegistry>(*reg);
       sized->retrieve_ptr(L"i")->approximate_size(2);
       sized->retrieve_ptr(L"a")->approximate_size(4);
       auto sized_resetter =
@@ -710,7 +710,7 @@ TEST_CASE("optimize", "[optimize]") {
       // (0b10000) that does not overlap with the sr-spaces bits
       // (0b0001..0b1000).
       auto f_resetter = set_scoped_default_context(
-          get_default_context_snapshot().set(IndexSpaceRegistry(*reg).add(
+          get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
               L"F", IndexSpace::Type{0b10000}, 3ul)));
 
       auto idxsz = [](Index const& ix) -> std::size_t {
@@ -745,7 +745,7 @@ TEST_CASE("optimize", "[optimize]") {
       // Dedicated batchable "F" space (fresh type bit, no overlap with
       // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
       auto f_resetter = set_scoped_default_context(
-          get_default_context_snapshot().set(IndexSpaceRegistry(*reg).add(
+          get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
               L"F", IndexSpace::Type{0b10000}, 3ul)));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.space().approximate_size();
@@ -796,7 +796,7 @@ TEST_CASE("optimize", "[optimize]") {
     SECTION("DensePeakSizeBatched objective matches per-index oracle") {
       using namespace sequant;
       auto f_resetter = set_scoped_default_context(
-          get_default_context_snapshot().set(IndexSpaceRegistry(*reg).add(
+          get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
               L"F", IndexSpace::Type{0b10000}, 3ul)));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.space().approximate_size();
@@ -851,7 +851,7 @@ TEST_CASE("optimize", "[optimize]") {
       // Dedicated batchable "F" space (fresh type bit, no overlap with
       // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
       auto f_resetter = set_scoped_default_context(
-          get_default_context_snapshot().set(IndexSpaceRegistry(*reg).add(
+          get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
               L"F", IndexSpace::Type{0b10000}, 3ul)));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.space().approximate_size();
@@ -886,7 +886,7 @@ TEST_CASE("optimize", "[optimize]") {
       // opt_pure_product and fails; after Step 4 it returns a binarized
       // product over the 3 leaves.
       auto f_resetter = set_scoped_default_context(
-          get_default_context_snapshot().set(IndexSpaceRegistry(*reg).add(
+          get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
               L"F", IndexSpace::Type{0b10000}, 3ul)));
       auto expr = deserialize(L"g{a1;i1;F1} * g{a2;i1;F1} * g{a2;i2;F2}",
                               {.def_perm_symm = Symmetry::Nonsymm});
@@ -930,7 +930,7 @@ TEST_CASE("optimize", "[optimize]") {
       // Index::label() returns base_key + "_" + ordinal, so the F1 ordinal-1
       // index has label L"F_1" (not L"F1").
       auto f_resetter = set_scoped_default_context(
-          get_default_context_snapshot().set(IndexSpaceRegistry(*reg).add(
+          get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
               L"F", IndexSpace::Type{0b10000}, 3ul)));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.space().approximate_size();
@@ -1048,7 +1048,7 @@ TEST_CASE("optimize", "[optimize]") {
   }
 
   SECTION("CSE") {
-    IndexSpaceRegistry registry;
+    IndexBasisRegistry registry;
     registry.add("a", 0b001);
     registry.add("i", 0b010);
     registry.add("u", 0b100);
@@ -1212,8 +1212,8 @@ TEST_CASE("optimize", "[optimize]") {
   }
 
   SECTION("Single term optimization with CSE") {
-    auto reg = std::make_shared<IndexSpaceRegistry>(
-        *get_default_context().index_space_registry());
+    auto reg = std::make_shared<IndexBasisRegistry>(
+        *get_default_context().index_basis_registry());
     mbpt::add_df_spaces(reg);
     mbpt::add_pao_spaces(reg, mbpt::Spin::any);
     mbpt::add_ao_spaces(reg, mbpt::Spin::any);
@@ -1259,8 +1259,8 @@ TEST_CASE("optimize", "[optimize]") {
     REQUIRE(extract(res9_no_cse, {1, 1}) == prod9.at(2));
 
     SECTION("CSE effect on optimization result") {
-      auto reg = std::make_shared<IndexSpaceRegistry>(
-          *get_default_context().index_space_registry());
+      auto reg = std::make_shared<IndexBasisRegistry>(
+          *get_default_context().index_basis_registry());
       // Use sizes that make the unbalanced tree better without CSE,
       // but the balanced tree better with CSE.
       // Balanced: ( (X1 Y1) (X2 Y2) )
@@ -1307,8 +1307,8 @@ TEST_CASE("optimize", "[optimize]") {
     }
 
     SECTION("subnet_cse flows through OptimizeOptions") {
-      auto reg = std::make_shared<IndexSpaceRegistry>(
-          *get_default_context().index_space_registry());
+      auto reg = std::make_shared<IndexBasisRegistry>(
+          *get_default_context().index_basis_registry());
       // Same sizing trick as the section above: CSE prefers balanced,
       // no-CSE prefers unbalanced.
       reg->retrieve_ptr(L"i")->approximate_size(12);
@@ -1359,7 +1359,7 @@ TEST_CASE("optimize", "[optimize]") {
   }
 
   /// verify that space changes did not leak
-  auto reg_check = get_default_context().index_space_registry();
+  auto reg_check = get_default_context().index_basis_registry();
   auto uocc_check = reg_check->retrieve_ptr(L"a");
   REQUIRE(uocc_check);
   REQUIRE(uocc_check->approximate_size() == 10);
@@ -1428,8 +1428,8 @@ TEST_CASE(
     "batchable roles: external-only space keeps external, drops contracted",
     "[optimize][batch]") {
   using namespace sequant;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   {
     auto occ = reg->retrieve_ptr(L"i");
     auto uocc = reg->retrieve_ptr(L"a");
@@ -1504,7 +1504,7 @@ TEST_CASE("role filter: contracted mode sliced only in the contracted role",
   using namespace sequant;
   namespace o = sequant::opt::detail;
   auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexSpaceRegistry(*ctx_copy.index_space_registry())
+  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
                    .add(L"F", IndexSpace::Type{0b10000}, 8ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
@@ -1572,7 +1572,7 @@ TEST_CASE("role filter: external mode needs the external role, not a fallback",
   using namespace sequant;
   namespace o = sequant::opt::detail;
   auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexSpaceRegistry(*ctx_copy.index_space_registry())
+  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
                    .add(L"F", IndexSpace::Type{0b10000}, 8ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
@@ -1603,8 +1603,8 @@ TEST_CASE("role filter: external mode needs the external role, not a fallback",
 
 TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
   using namespace sequant;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   mbpt::add_pao_spaces(reg, mbpt::Spin::any);
   mbpt::add_ao_spaces(reg, mbpt::Spin::any);
@@ -1661,8 +1661,8 @@ TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
 TEST_CASE("OSV early-contraction reproducer (full term #1)",
           "[optimize][osv]") {
   using namespace sequant;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   mbpt::add_pao_spaces(reg, mbpt::Spin::any);
   mbpt::add_ao_spaces(reg, mbpt::Spin::any);
@@ -1723,8 +1723,8 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
 
 TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
   using namespace sequant;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   mbpt::add_pao_spaces(reg, mbpt::Spin::any);
   mbpt::add_ao_spaces(reg, mbpt::Spin::any);
@@ -1987,8 +1987,8 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
 //  (3) do the rejected brackets avoid it, i.e. does a cheaper schedule exist?
 TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
   using namespace sequant;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   mbpt::add_pao_spaces(reg, mbpt::Spin::any);
   mbpt::add_ao_spaces(reg, mbpt::Spin::any);
@@ -2122,8 +2122,8 @@ TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
 TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
           "[optimize][osv]") {
   using namespace sequant;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   mbpt::add_pao_spaces(reg, mbpt::Spin::any);
   mbpt::add_ao_spaces(reg, mbpt::Spin::any);
@@ -2323,8 +2323,8 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
 TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
           "[optimize][bubble]") {
   using namespace sequant;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   mbpt::add_pao_spaces(reg, mbpt::Spin::any);
   mbpt::add_ao_spaces(reg, mbpt::Spin::any);
@@ -2551,8 +2551,8 @@ TEST_CASE(
     "K_b; near-zero threshold falls back to min-peak",
     "[optimize][threshold]") {
   using namespace sequant;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   mbpt::add_pao_spaces(reg, mbpt::Spin::any);
   mbpt::add_ao_spaces(reg, mbpt::Spin::any);
@@ -2701,8 +2701,8 @@ TEST_CASE("batched DP peak matches oracle with two modes and accumulation",
   SKIP(
       "blocked-dp-cost-model: peak_cost_batched/reconstructed_batched_peak "
       "have no finite peak_threshold, so batching never engages here");
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   mbpt::add_pao_spaces(reg, mbpt::Spin::any);
   mbpt::add_ao_spaces(reg, mbpt::Spin::any);
@@ -2767,7 +2767,7 @@ TEST_CASE("ordered key prices the hoistable order (Carr != 0)",
           "[optimize][ordered-key]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexSpaceRegistry(*ctx_copy.index_space_registry())
+  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
                    .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
   auto idxsz = [](Index const& ix) { return ix.space().approximate_size(); };
@@ -2814,7 +2814,7 @@ TEST_CASE("ordered key prices the hoistable order (Carr != 0)",
 TEST_CASE("ordered cells exclude external modes", "[optimize][ext-place]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexSpaceRegistry(*ctx_copy.index_space_registry())
+  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
                    .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
   auto idxsz = [](Index const& ix) { return ix.space().approximate_size(); };
@@ -2862,7 +2862,7 @@ TEST_CASE("the DP opens an external batch loop on an over-budget node",
   namespace o = sequant::opt::detail;
   auto ctx_copy = get_default_context_snapshot();
   {
-    IndexSpaceRegistry reg = *ctx_copy.index_space_registry();
+    IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
     reg.add(L"F", IndexSpace::Type{0b10000}, 100ul);
     reg.retrieve_ptr(L"a")->approximate_size(3ul);
     ctx_copy.set(std::move(reg));
@@ -2934,8 +2934,8 @@ TEST_CASE("perf-first peak_threshold gates contracted aux slicing",
           "[optimize][threshold][gate]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
@@ -3017,8 +3017,8 @@ TEST_CASE("perf-first peak_threshold gates contracted aux slicing",
 TEST_CASE("binarize stamps per-node batch modes from optimize()",
           "[optimize][annotate]") {
   using namespace sequant;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
@@ -3097,8 +3097,8 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
 TEST_CASE("binarize applies batch_loops_opened_here from node annotation",
           "[optimize][annotate][loop-open]") {
   using namespace sequant;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
@@ -3216,8 +3216,8 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
       "blocked-dp-cost-model: external-mode batching candidates are "
       "Pareto-dominated by contracted-mode ones, so no per-node External "
       "annotation is ever emitted here");
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
@@ -3393,8 +3393,8 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
 TEST_CASE("select_root_perf_first_ceiling", "[optimize][batch]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   mbpt::add_pao_spaces(reg, mbpt::Spin::any);
   mbpt::add_ao_spaces(reg, mbpt::Spin::any);
@@ -3485,8 +3485,8 @@ TEST_CASE("select_root_perf_first_ceiling", "[optimize][batch]") {
 TEST_CASE("contractible_adjacency", "[optimize][pruning]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   reg->retrieve_ptr(L"i")->approximate_size(10);
   reg->retrieve_ptr(L"a")->approximate_size(100);
   reg->retrieve_ptr(L"x")->approximate_size(4);
@@ -3577,8 +3577,8 @@ TEST_CASE("connected_subsets and outer_product_connectivity",
   CHECK(cp[0b1111] == 0);  // full: disconnected product
 
   // outer_product_connectivity: env-disabled -> all ones.
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   reg->retrieve_ptr(L"i")->approximate_size(10);
   reg->retrieve_ptr(L"a")->approximate_size(100);
   reg->retrieve_ptr(L"x")->approximate_size(4);
@@ -3599,8 +3599,8 @@ TEST_CASE("connected_subsets and outer_product_connectivity",
 TEST_CASE("outer-product pruning parity (pruned == unpruned)",
           "[optimize][pruning]") {
   using namespace sequant;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   reg->retrieve_ptr(L"i")->approximate_size(10);
   reg->retrieve_ptr(L"a")->approximate_size(100);
   reg->retrieve_ptr(L"x")->approximate_size(4);
@@ -3689,8 +3689,8 @@ TEST_CASE("prune_outer_products option controls pruning (default on)",
   // The requirement: pruning is user-controllable and ON by default.
   CHECK(OptimizeOptions{}.prune_outer_products == true);
 
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   reg->retrieve_ptr(L"i")->approximate_size(10);
   reg->retrieve_ptr(L"a")->approximate_size(100);
   reg->retrieve_ptr(L"x")->approximate_size(4);
@@ -3730,8 +3730,8 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
           "[optimize][fast-flops-parity]") {
   using namespace sequant;
   namespace o = opt::detail;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   mbpt::add_pao_spaces(reg, mbpt::Spin::any);
   mbpt::add_ao_spaces(reg, mbpt::Spin::any);
@@ -3805,8 +3805,8 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
 TEST_CASE("outer-product pruning: large connected term optimizes quickly",
           "[optimize][pruning]") {
   using namespace sequant;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   reg->retrieve_ptr(L"i")->approximate_size(10);
   reg->retrieve_ptr(L"a")->approximate_size(100);
   reg->retrieve_ptr(L"x")->approximate_size(4);
@@ -3833,8 +3833,8 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
           "[optimize][pruning]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   reg->retrieve_ptr(L"i")->approximate_size(10);
   reg->retrieve_ptr(L"a")->approximate_size(100);
   reg->retrieve_ptr(L"x")->approximate_size(4);
@@ -3892,7 +3892,7 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   // Scoped context: these TEST_CASEs are file-scope, so adding F to the
   // default context's registry would make them collide on the second add.
   auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexSpaceRegistry(*ctx_copy.index_space_registry())
+  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
                    .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
@@ -4055,7 +4055,7 @@ TEST_CASE("loop-tree charge must not bill a free hoist", "[.][loop-tree]") {
   // Scoped context: these TEST_CASEs are file-scope, so adding F to the
   // default context's registry would make them collide on the second add.
   auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexSpaceRegistry(*ctx_copy.index_space_registry())
+  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
                    .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
@@ -4117,7 +4117,7 @@ TEST_CASE("loop-tree charge must not bill a free hoist", "[.][loop-tree]") {
 TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexSpaceRegistry(*ctx_copy.index_space_registry())
+  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
                    .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
@@ -4273,7 +4273,7 @@ TEST_CASE(
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   auto reg =
-      std::make_shared<IndexSpaceRegistry>(*ctx_copy.index_space_registry());
+      std::make_shared<IndexBasisRegistry>(*ctx_copy.index_basis_registry());
   reg->retrieve_ptr(L"i")->approximate_size(10);  // occupied, external, batched
   reg->retrieve_ptr(L"a")->approximate_size(
       20);  // virtual, contracted, batched
@@ -4351,7 +4351,7 @@ TEST_CASE("loop-tree probe: resident-scan peak of a hoisted node",
           "[.][loop-tree-peak]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexSpaceRegistry(*ctx_copy.index_space_registry())
+  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
                    .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
@@ -4407,7 +4407,7 @@ TEST_CASE("loop-tree probe: order-dependent Carr != 0 cells",
           "[.][loop-tree-order]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexSpaceRegistry(*ctx_copy.index_space_registry())
+  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
                    .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
@@ -4473,7 +4473,7 @@ TEST_CASE("loop-tree probe: resident-scan peak, nested",
           "[.][loop-tree-peak-nested]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexSpaceRegistry(*ctx_copy.index_space_registry())
+  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
                    .add(L"F", IndexSpace::Type{0b10000},
                         1000ul));  // large: dominates peak
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
@@ -4527,8 +4527,8 @@ TEST_CASE("loop-tree probe: resident-scan peak, nested",
 TEST_CASE("batchability role-split building-block predicates",
           "[optimize][role-api]") {
   using namespace sequant;
-  auto reg = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   {
     auto occ = reg->retrieve_ptr(L"i");
     auto uocc = reg->retrieve_ptr(L"a");

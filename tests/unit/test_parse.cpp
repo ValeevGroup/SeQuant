@@ -521,7 +521,7 @@ TEST_CASE("serialization", "[serialization]") {
       const auto expr = deserialize<ExprPtr>(L"t{α'_1;i_1}");
       REQUIRE(expr->is<Tensor>());
       REQUIRE(expr->as<Tensor>().bra().at(0).space() ==
-              get_default_context().index_space_registry()->retrieve(L"α'"));
+              get_default_context().index_basis_registry()->retrieve(L"α'"));
       REQUIRE(*deserialize<ExprPtr>(serialize(expr)) == *expr);
     }
 

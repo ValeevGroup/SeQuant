@@ -280,7 +280,7 @@ TEST_CASE("op", "[elements]") {
       REQUIRE(!is_pure_qpannihilator(fann(L"i_1"), V));
       REQUIRE(is_pure_qpannihilator(fann(L"a_1"), V));
       REQUIRE(!is_pure_qpannihilator(fann(L"p_1"), V));
-      auto isr = get_default_context().index_space_registry();
+      auto isr = get_default_context().index_basis_registry();
       REQUIRE(!qpannihilator_space(fann(L"i_1"), V));
       REQUIRE(qpannihilator_space(fcre(L"i_1"), V) == isr->retrieve(L"i_1"));
       REQUIRE(!qpannihilator_space(fcre(L"a_1"), V));
@@ -327,7 +327,7 @@ TEST_CASE("op", "[elements]") {
       // types, so a
       // space whose intersection with M or E is not registered (Z ∩ E here)
       // is classified rather than throwing
-      auto isr = std::make_shared<IndexSpaceRegistry>();
+      auto isr = std::make_shared<IndexBasisRegistry>();
       isr->add(L"o", 0b00001)
           .add(L"i", 0b00010)
           .add(L"u", 0b00100)

@@ -36,9 +36,9 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
     return nullptr;
 
   SEQUANT_ASSERT(ranges::none_of(tnsr.aux(), &Index::has_proto_indices));
-  SEQUANT_ASSERT(get_default_context().index_space_registry());
+  SEQUANT_ASSERT(get_default_context().index_basis_registry());
   SEQUANT_ASSERT(
-      get_default_context().index_space_registry()->contains(csv_basis));
+      get_default_context().index_basis_registry()->contains(csv_basis));
 
   // a basis instance is registered in one space, so an index minted in it
   // cannot keep a leg's space (e.g. its spin)
@@ -171,7 +171,7 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
                       bool orthonormal, std::wstring const& coeff_tensor_label,
                       container::svector<std::wstring> const& tensor_labels) {
   if (csv_basis.has_basis_instance()) {
-    const auto& registry = get_default_context().index_space_registry();
+    const auto& registry = get_default_context().index_basis_registry();
     if (!registry || !registry->basis_label(csv_basis))
       throw Exception(
           "csv_transform: the target basis instance " +

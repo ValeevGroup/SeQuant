@@ -109,7 +109,7 @@ inline Census census(ExprPtr const& eq) {
 /// slots) at @p expected and its occupied ones at none
 inline void check_externals(ExprPtr const& eq,
                             IndexBasis::optional_instance expected) {
-  auto const& isr = get_default_context().index_space_registry();
+  auto const& isr = get_default_context().index_basis_registry();
   REQUIRE(eq->is<Sum>());
   for (auto const& term : *eq) {
     Instances virt, occ;
@@ -157,7 +157,7 @@ inline ExprPtr first_tensor(std::vector<ExprPtr> const& eqs,
 
 /// the first pure-unoccupied bra/ket slot of @p tensor
 inline Index unoccupied_slot(ExprPtr const& tensor) {
-  auto const& isr = get_default_context().index_space_registry();
+  auto const& isr = get_default_context().index_basis_registry();
   for (Index const& idx : tensor->as<AbstractTensor>()._braket())
     if (isr->is_pure_unoccupied(idx.space())) return idx;
   throw Exception("unoccupied_slot: none");
@@ -171,7 +171,7 @@ TEST_CASE("basis-grants-registry", "[mbpt][csv]") {
   using sequant::tests::csv::message_contains;
 
   auto ctx = set_scoped_default_context(csv_cc_context());
-  auto const& isr = get_default_context().index_space_registry();
+  auto const& isr = get_default_context().index_basis_registry();
   const auto a = isr->retrieve(L"a");
   const auto i = isr->retrieve(L"i");
 
@@ -208,7 +208,7 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
   namespace t = op::tensor;
 
   auto ctx = set_scoped_default_context(csv_cc_context());
-  auto const& isr = get_default_context().index_space_registry();
+  auto const& isr = get_default_context().index_basis_registry();
   const auto a = isr->retrieve(L"a");
   const auto i = isr->retrieve(L"i");
 
@@ -530,7 +530,7 @@ TEST_CASE("basis-grants-decorated-labels", "[mbpt][csv][valgrind_skip]") {
   using namespace sequant::tests::csv_mbpt;
 
   auto ctx = set_scoped_default_context(csv_cc_context());
-  auto const& isr = get_default_context().index_space_registry();
+  auto const& isr = get_default_context().index_basis_registry();
   const auto a = get_particle_space(Spin::any);
 
   SECTION("a perturbation-order label stands for its base entry") {
@@ -602,7 +602,7 @@ TEST_CASE("basis-grants-cc-t", "[mbpt][csv][valgrind_skip]") {
   using namespace sequant::tests::csv_mbpt;
 
   auto ctx = set_scoped_default_context(csv_cc_context());
-  auto const& isr = get_default_context().index_space_registry();
+  auto const& isr = get_default_context().index_basis_registry();
 
   SECTION("a grant changes no term or metric count") {
     std::vector<std::size_t> terms, metrics;
@@ -772,7 +772,7 @@ TEST_CASE("basis-grants-linear-response", "[mbpt][csv][valgrind_skip]") {
     const auto pseudo = closed_shell_CC_spintrace_v2(
         op::vac_av(adjoint(op::Tʼ(2)) * h1_bar, {.connect = connect}));
     std::size_t n = 0;
-    auto const& isr = get_default_context().index_space_registry();
+    auto const& isr = get_default_context().index_basis_registry();
     for (auto const* tn :
          tensors_labelled(pseudo, std::wstring(L"t¹") + adjoint_label))
       for (Index const& idx : tn->_braket())

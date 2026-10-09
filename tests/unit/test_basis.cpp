@@ -37,7 +37,7 @@ namespace {
 auto scoped_min_sr_context(CanonicalizeOptions canonicalization_options =
                                CanonicalizeOptions::default_options()) {
   return set_scoped_default_context(
-      Context({.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
+      Context({.index_basis_registry_shared_ptr = mbpt::make_min_sr_spaces(),
                .vacuum = Vacuum::SingleProduct,
                .spbasis = SPBasis::Spinor,
                .canonicalization_options = canonicalization_options}));
@@ -52,7 +52,7 @@ auto scoped_pao_context() {
   isr->add(L"μ̃", IndexBasis{uocc, P},
            120ul);  // before the Context adopts the registry (#665)
   return set_scoped_default_context(
-      Context({.index_space_registry_shared_ptr = std::move(isr),
+      Context({.index_basis_registry_shared_ptr = std::move(isr),
                .vacuum = Vacuum::SingleProduct}));
 }
 
@@ -62,7 +62,7 @@ auto scoped_pao_context() {
 // y = a_7<;1> a CSV::No-granted leg, i_1<;5> an occupied leg under a grant
 TEST_CASE("index-basis", "[elements][index][basis]") {
   auto ctx = scoped_min_sr_context();
-  const auto& isr = get_default_context().index_space_registry();
+  const auto& isr = get_default_context().index_basis_registry();
   const IndexSpace occ = isr->retrieve(L"i");
   const IndexSpace uocc = isr->retrieve(L"a");
   const Index i1(occ, 1), i2(occ, 2), i3(occ, 3), i4(occ, 4);
@@ -268,7 +268,7 @@ TEST_CASE("index-basis-canonicalization", "[algorithms][canonicalize][basis]") {
     auto ctx = scoped_min_sr_context(
         CanonicalizeOptions::default_options().copy_and_set(
             CanonicalizationMethod::Complete));
-    const auto& isr = get_default_context().index_space_registry();
+    const auto& isr = get_default_context().index_basis_registry();
     const IndexSpace occ = isr->retrieve(L"i");
     const IndexSpace uocc = isr->retrieve(L"a");
     const Index i1(occ, 1), i2(occ, 2);
@@ -295,7 +295,7 @@ TEST_CASE("index-basis-canonicalization", "[algorithms][canonicalize][basis]") {
 
   SECTION("no dummy takes a named index's label in another basis") {
     auto ctx = scoped_min_sr_context();
-    const auto& isr = get_default_context().index_space_registry();
+    const auto& isr = get_default_context().index_basis_registry();
     const IndexSpace occ = isr->retrieve(L"i");
     const IndexSpace uocc = isr->retrieve(L"a");
     const Index i1(occ, 1), i2(occ, 2);
@@ -333,7 +333,7 @@ TEST_CASE("index-basis-canonicalization", "[algorithms][canonicalize][basis]") {
 
 TEST_CASE("index-basis-annotation-and-hash", "[EvalExpr][basis]") {
   auto ctx = scoped_min_sr_context();
-  const auto& isr = get_default_context().index_space_registry();
+  const auto& isr = get_default_context().index_basis_registry();
   const IndexSpace occ = isr->retrieve(L"i");
   const IndexSpace uocc = isr->retrieve(L"a");
   const Index i1(occ, 1), i2(occ, 2);
@@ -513,7 +513,7 @@ TEST_CASE("index-basis-serialization", "[serialization][basis]") {
 // the new space
 TEST_CASE("index-move-into-space-resets-label", "[elements][index]") {
   auto ctx = scoped_min_sr_context();
-  const auto& isr = get_default_context().index_space_registry();
+  const auto& isr = get_default_context().index_basis_registry();
   const IndexSpace occ = isr->retrieve(L"i"), uocc = isr->retrieve(L"a"),
                    uocc_alpha = isr->retrieve(L"a↑");
   Index a3(uocc, 3);
@@ -535,7 +535,7 @@ TEST_CASE("index-move-into-space-resets-label", "[elements][index]") {
 
 TEST_CASE("index-basis-named", "[elements][index][basis]") {
   auto ctx = scoped_pao_context();
-  const auto& isr = get_default_context().index_space_registry();
+  const auto& isr = get_default_context().index_basis_registry();
   const IndexSpace uocc = isr->retrieve(L"a");
   const IndexBasis pao = isr->retrieve_basis(L"μ̃");
   const IndexBasis::instance_type P = *pao.basis_instance();
@@ -604,7 +604,7 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   // index is printed (the nested scope is a thread-local overlay, #655)
   {
     auto plain = set_scoped_default_context(
-        Context({.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
+        Context({.index_basis_registry_shared_ptr = mbpt::make_min_sr_spaces(),
                  .vacuum = Vacuum::SingleProduct}));
     CHECK(Index(m3).label() == L"μ̃_3");
     CHECK(Index(pao, 3).full_label() == L"μ̃_3");
@@ -616,7 +616,7 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
 // after the context switched to a registry without the name still prints it
 TEST_CASE("index-basis-named-at-minting", "[elements][index][basis]") {
   auto ctx = scoped_pao_context();
-  const auto& isr = get_default_context().index_space_registry();
+  const auto& isr = get_default_context().index_basis_registry();
   const IndexSpace occ = isr->retrieve(L"i"), uocc = isr->retrieve(L"a");
   const IndexBasis pao = isr->retrieve_basis(L"μ̃");
   const Index i1(occ, 1), i2(occ, 2);
@@ -664,7 +664,7 @@ TEST_CASE("index-basis-named-at-minting", "[elements][index][basis]") {
 // what OpMaker mints, μ̃ the PAO basis
 TEST_CASE("index-basis-copy-while-labelling", "[elements][index][basis]") {
   auto ctx = scoped_pao_context();
-  const auto& isr = get_default_context().index_space_registry();
+  const auto& isr = get_default_context().index_basis_registry();
   const IndexSpace occ = isr->retrieve(L"i"), uocc = isr->retrieve(L"a");
   const IndexBasis pao = isr->retrieve_basis(L"μ̃");
   const Index i1(occ, 1), i2(occ, 2);
@@ -754,9 +754,9 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
   // localized virtuals
   isr->add(L"ã", IndexBasis{uocc, 2});
   auto ctx = set_scoped_default_context(
-      Context({.index_space_registry_shared_ptr = std::move(isr),
+      Context({.index_basis_registry_shared_ptr = std::move(isr),
                .vacuum = Vacuum::SingleProduct}));
-  const auto& registry = *get_default_context().index_space_registry();
+  const auto& registry = *get_default_context().index_basis_registry();
   const Index i1(occ, 1), i2(occ, 2);
   const Index x =
       Index(uocc, 1, {i1, i2})
@@ -849,7 +849,7 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
     const IndexSpace occ2 = isr2->retrieve(L"i"), uocc2 = isr2->retrieve(L"a"),
                      mu2 = isr2->retrieve(L"μ̃");
     auto ctx2 = set_scoped_default_context(
-        Context({.index_space_registry_shared_ptr = std::move(isr2),
+        Context({.index_basis_registry_shared_ptr = std::move(isr2),
                  .vacuum = Vacuum::SingleProduct}));
     const Index p(occ2, 1), q(occ2, 2);
     const Index xb = Index(uocc2, 1, {p, q}).replace_basis_instance(0);

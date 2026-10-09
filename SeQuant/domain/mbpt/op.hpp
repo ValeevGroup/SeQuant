@@ -87,7 +87,7 @@ bool is_vacuum(QuantumNumbers qns);
 
 /// converts an IndexSpace::Type to IndexSpace using default quantum number set
 inline IndexSpace make_space(const IndexSpace::Type& type) {
-  return get_default_context().index_space_registry()->retrieve(type,
+  return get_default_context().index_basis_registry()->retrieve(type,
                                                                 Spin::any);
 }
 
@@ -206,7 +206,7 @@ struct default_qns_tag {
 /// the number of quasiparticles, the number of ops (creators/annihilators) in each subspace, etc.
 /// For example, to operator products expressed in normal order with respect to physical vacuum it is sufficient to track
 /// the number of creators and annihilators; For the fermi vacuum case, the number of creators and annihilators in each
-/// subspace becomes important, hence the number of ops is tracked for each base space (determined by the IndexSpaceRegistry object in Context).
+/// subspace becomes important, hence the number of ops is tracked for each base space (determined by the IndexBasisRegistry object in Context).
 /// The interval representation is necessary to dictate how many creators or annihilators could be in each subspace.
 /// This is pertinent when user defined hole_space or particle_space are NOT base spaces.
 /// Since the choice of space partitioning is up to the user, the base class must be a dynamic container.
@@ -239,7 +239,7 @@ class QuantumNumberChange
       return 2;
     } else if (get_default_context().vacuum() == Vacuum::SingleProduct ||
                get_default_context().vacuum() == Vacuum::MultiProduct) {
-      auto isr = get_default_context().index_space_registry();
+      auto isr = get_default_context().index_basis_registry();
       const auto& isr_base_spaces = isr->base_spaces();
       SEQUANT_ASSERT(isr_base_spaces.size() > 0);
       return isr_base_spaces.size() * 2;
@@ -382,7 +382,7 @@ class QuantumNumberChange
   /// space defined in the current context
   interval_t count_in_active_space(bool particle, bool creators) {
     const auto& qnvec = this->base();
-    auto isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_basis_registry();
     const auto& base_spaces = isr->base_spaces();
     interval_t result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {
@@ -838,7 +838,7 @@ class OpMaker {
     mbpt::check_for_batching_space();
     SEQUANT_ASSERT(!batch_indices.empty());
     [[maybe_unused]] auto batch_space =
-        get_default_context().index_space_registry()->retrieve(L"z");
+        get_default_context().index_basis_registry()->retrieve(L"z");
     // assumes that there are no more than one type of batch space
     for ([[maybe_unused]] const auto& idx : batch_indices) {
       SEQUANT_ASSERT(idx.space() == batch_space);
@@ -1441,8 +1441,8 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 namespace detail {
 /// @return true if the reference occupied space is the Wick vacuum's
 inline bool reference_is_vacuum() {
-  const auto isr = get_default_context().index_space_registry();
-  SEQUANT_ASSERT(isr, "the default context has no IndexSpaceRegistry");
+  const auto isr = get_default_context().index_basis_registry();
+  SEQUANT_ASSERT(isr, "the default context has no IndexBasisRegistry");
   return isr->reference_occupied_space() == isr->vacuum_occupied_space();
 }
 

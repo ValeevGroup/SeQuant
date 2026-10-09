@@ -160,7 +160,7 @@ int main(int argc, char* argv[]) {
   std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
 
   sequant::set_default_context(
-      sequant::Context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
+      sequant::Context({.index_basis_registry_shared_ptr = make_min_sr_spaces(),
                         .vacuum = Vacuum::SingleProduct}));
   mbpt::set_default_mbpt_context(
       {.op_registry_ptr = mbpt::make_minimal_registry()});

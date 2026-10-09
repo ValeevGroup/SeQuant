@@ -469,7 +469,7 @@ TEST_CASE("csv-pno-projection-fixtures", "[mbpt][csv]") {
 
   // malformed input throws: density fitting already ran
   const IndexSpace aux =
-      get_default_context().index_space_registry()->retrieve(L"Κ");
+      get_default_context().index_basis_registry()->retrieve(L"Κ");
   REQUIRE_THROWS_MATCHES(
       project(mbpt::density_fit(deserialize(foreign), aux, L"g", L"g"),
               own_pair(All)),

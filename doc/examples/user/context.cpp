@@ -15,14 +15,14 @@ int main() {
 
   // start-snippet-1
   // the one-line way to configure SeQuant for standard single-reference
-  // quantum chemistry: populates the default IndexSpaceRegistry with the
+  // quantum chemistry: populates the default IndexBasisRegistry with the
   // usual occupied/virtual partitioning and switches the default Context to
   // the single-product (quasiparticle) vacuum
   mbpt::load(mbpt::Convention::SR, mbpt::SpinConvention::None);
 
   const Context& ctx = get_default_context();
   SEQUANT_ASSERT(ctx.vacuum() == Vacuum::SingleProduct);
-  SEQUANT_ASSERT(ctx.index_space_registry() != nullptr);
+  SEQUANT_ASSERT(ctx.index_basis_registry() != nullptr);
   // end-snippet-1
 
   // start-snippet-2
@@ -51,7 +51,7 @@ int main() {
   // basis-generic (it runs over the space's own basis); one made from an
   // IndexBasis with a basis instance runs over that basis of the space. The
   // instance is written after the proto indices: i_1<;1>
-  const auto& isr = get_default_context().index_space_registry();
+  const auto& isr = get_default_context().index_basis_registry();
   const IndexSpace occ = isr->retrieve(L"i");
   const Index i_canonical(occ, 1);
   const Index i_localized(IndexBasis(occ, 1), 1);

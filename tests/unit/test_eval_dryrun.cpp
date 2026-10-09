@@ -172,9 +172,9 @@ TEST_CASE("dryrun size regime keys a named basis by its label",
       std::numeric_limits<IndexBasis::instance_type>::max();
   isr->add(L"μ̃", IndexBasis{a, P});  // before the Context adopts the registry
   auto ctx = set_scoped_default_context(
-      Context({.index_space_registry_shared_ptr = std::move(isr),
+      Context({.index_basis_registry_shared_ptr = std::move(isr),
                .vacuum = Vacuum::SingleProduct}));
-  const auto& registry = *get_default_context().index_space_registry();
+  const auto& registry = *get_default_context().index_basis_registry();
   eval::dryrun::SizeRegime r;
   r.space_extent[L"a"] = 40;
   r.space_extent[L"μ̃"] = 300;
@@ -426,9 +426,9 @@ TEST_CASE("is_valid accepts a CSV proto-indexed residual",
   using namespace sequant;
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
+  REQUIRE(ctx0.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx0.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx0.set(isr);
@@ -468,9 +468,9 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
   using namespace sequant;
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
+  REQUIRE(ctx0.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx0.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx0.set(isr);
@@ -566,9 +566,9 @@ TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
   using namespace sequant;
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
+  REQUIRE(ctx0.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx0.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx0.set(isr);
@@ -640,9 +640,9 @@ TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
   using namespace sequant;
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
+  REQUIRE(ctx0.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx0.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
   ctx0.set(isr);
@@ -701,9 +701,9 @@ TEST_CASE("C60 residual peak per summand under the recommended batching",
   using namespace sequant;
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
+  REQUIRE(ctx0.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx0.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx0.set(isr);
@@ -805,9 +805,9 @@ TEST_CASE("no 4-PAO integral with correct composite sizing (C60 giant)",
   using namespace sequant;
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
+  REQUIRE(ctx0.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx0.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx0.set(isr);
@@ -879,9 +879,9 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
   // mpqc's high internal ordinals (mu~_1152, a_21674, ...).
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
   ctx.set(isr);
@@ -1863,7 +1863,7 @@ TEST_CASE(
   auto node = binarize<EvalExprDryRun>(expr);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
-  auto const occ = get_default_context().index_space_registry()->retrieve(L"i");
+  auto const occ = get_default_context().index_basis_registry()->retrieve(L"i");
   auto accept_occ = [occ](Index const& ix) {
     return ix.space() == occ && !ix.has_proto_indices();
   };
@@ -1967,9 +1967,9 @@ TEST_CASE(
     "[dryrun-eval]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
   ctx.set(isr);
@@ -2312,9 +2312,9 @@ TEST_CASE(
     "[dryrun-objective]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
   ctx.set(isr);
@@ -2614,9 +2614,9 @@ TEST_CASE(
     "[dryrun-extmode]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
   ctx.set(isr);
@@ -2771,9 +2771,9 @@ TEST_CASE(
     "[.][dryrun-occ-sizing]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
   ctx.set(isr);
@@ -2971,9 +2971,9 @@ TEST_CASE(
     "[.][dryrun-occ-recognize]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
   ctx.set(isr);
@@ -3144,9 +3144,9 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
           "[.][dryrun-c60-batchability-audit]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
   ctx.set(isr);
@@ -3495,9 +3495,9 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   CAPTURE(named_pao);
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   if (named_pao)
     sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   else
@@ -3702,7 +3702,7 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][peak]") {
   auto node = binarize<EvalExprDryRun>(expr);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
-  auto const occ = get_default_context().index_space_registry()->retrieve(L"i");
+  auto const occ = get_default_context().index_basis_registry()->retrieve(L"i");
   auto accept_occ = [occ](Index const& ix) {
     return ix.space() == occ && !ix.has_proto_indices();
   };
@@ -3833,9 +3833,9 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][peak]") {
 TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
   ctx.set(isr);
@@ -4028,9 +4028,9 @@ TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
           "[.][dryrun-water-frag]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -4137,9 +4137,9 @@ TEST_CASE("canon_indices preserves distinct composite proto pairs",
   using namespace sequant;
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);

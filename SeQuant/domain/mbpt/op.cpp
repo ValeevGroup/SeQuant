@@ -81,7 +81,7 @@ qns_t make_qp_qns(std::size_t particle_rank, std::size_t hole_rank,
     result[0] = {0ul, deexcitation ? particle_rank : hole_rank};
     result[1] = {0ul, deexcitation ? hole_rank : particle_rank};
   } else {
-    auto isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_basis_registry();
     const auto& base_spaces = isr->base_spaces();
     if (!particle_space) particle_space = isr->particle_space(SQN);
     if (!hole_space) hole_space = isr->hole_space(SQN);
@@ -181,7 +181,7 @@ qns_t combine(qns_t a, qns_t b) {
              get_default_context().vacuum() == Vacuum::MultiProduct) {
     const bool multiproduct =
         get_default_context().vacuum() == Vacuum::MultiProduct;
-    auto isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_basis_registry();
     const auto& base_spaces = isr->base_spaces();
     for (auto i = 0; i < base_spaces.size(); i++) {
       auto cre = i * 2;
@@ -461,7 +461,7 @@ OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
                    "OpMaker: batch_ordinals must be sorted");
     mbpt::check_for_batching_space();
     const auto batch_space =
-        get_default_context().index_space_registry()->retrieve(L"z");
+        get_default_context().index_basis_registry()->retrieve(L"z");
 
     container::svector<Index> batch_indices;
     for (const auto& ord : params.batch_ordinals) {
@@ -474,7 +474,7 @@ OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
                    "OpMaker: nbatch cannot be zero");
     mbpt::check_for_batching_space();
     const auto batch_space =
-        get_default_context().index_space_registry()->retrieve(L"z");
+        get_default_context().index_basis_registry()->retrieve(L"z");
     batch_indices_ = make_batch_indices(
         IndexSpaceContainer(params.nbatch.value(), batch_space));
   }
@@ -485,7 +485,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
                                std::optional<Symmetry> opsymm_opt,
                                std::optional<Normalization> normalization,
                                std::optional<std::wstring> grants_of) const {
-  auto isr = get_default_context(Statistics::FermiDirac).index_space_registry();
+  auto isr = get_default_context(Statistics::FermiDirac).index_basis_registry();
 
   // if not given dep, use mbpt::Context::CSV to determine whether to use
   // dependent indices for pure (de)excitation ops
@@ -622,7 +622,7 @@ ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
                               // without providing an occupied indexspace
     // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
     auto make_g_contribution = [](const auto& occ_space) {
-      auto isr = get_default_context().index_space_registry();
+      auto isr = get_default_context().index_basis_registry();
       return mbpt::OpMaker<Statistics::FermiDirac>::make(
           {isr->complete_space(Spin::any)}, {isr->complete_space(Spin::any)},
           [=](auto braidxs, auto ketidxs, Symmetry opsymm) {
@@ -659,7 +659,7 @@ ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
             }
           });
     };
-    auto isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_basis_registry();
     SEQUANT_ASSERT(registry->contains(L"h"));
     return OpMaker<Statistics::FermiDirac>(L"h", 1)() +
            make_g_contribution(reference_occupied);
@@ -1285,7 +1285,7 @@ std::shared_ptr<const tensor_index_comparer_t> active_first_index_comparer(
         [base](const Index& idx1, const Index& idx2) -> bool {
           // the registry of the context in effect, i.e. of the scope that
           // installs this comparer
-          const auto isr = get_default_context().index_space_registry();
+          const auto isr = get_default_context().index_basis_registry();
           auto active_space = isr->intersection(isr->particle_space(Spin::any),
                                                 isr->hole_space(Spin::any));
           const auto idx1_active = idx1.space().type() == active_space.type();
@@ -1336,7 +1336,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
   const bool multiproduct =
       get_default_context().vacuum() == Vacuum::MultiProduct;
 
-  auto isr = get_default_context().index_space_registry();
+  auto isr = get_default_context().index_basis_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
   // convention is to use different label for spin-orbital and spin-free RDM
   const auto& rdm_label =

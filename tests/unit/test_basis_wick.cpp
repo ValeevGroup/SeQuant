@@ -37,7 +37,7 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
   const auto csv = GENERATE(CSV::Yes, CSV::No);
   const bool yes = csv == CSV::Yes;
   auto ctx = set_scoped_default_context(
-      sequant::Context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
+      sequant::Context({.index_basis_registry_shared_ptr = make_min_sr_spaces(),
                         .vacuum = Vacuum::SingleProduct,
                         .spbasis = SPBasis::Spinor}));
   auto mbpt_ctx = set_scoped_default_mbpt_context(
@@ -161,7 +161,7 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
   using sequant::tests::csv::tensors_labelled;
 
   auto ctx = set_scoped_default_context(sequant::Context(
-      {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
+      {.index_basis_registry_shared_ptr = mbpt::make_min_sr_spaces(),
        .vacuum = Vacuum::SingleProduct,
        .spbasis = SPBasis::Spinor}));
 
@@ -332,12 +332,12 @@ TEST_CASE("basis-wick-bernoulli-commutator", "[algorithms][wick][basis]") {
   using sequant::tests::csv::with_leg_instance;
 
   auto ctx = set_scoped_default_context(
-      sequant::Context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
+      sequant::Context({.index_basis_registry_shared_ptr = make_min_sr_spaces(),
                         .vacuum = Vacuum::SingleProduct,
                         .spbasis = SPBasis::Spinor}));
   auto mbpt_ctx = set_scoped_default_mbpt_context(mbpt::Context(
       {.csv = CSV::No, .op_registry_ptr = make_minimal_registry()}));
-  const auto& isr = get_default_context().index_space_registry();
+  const auto& isr = get_default_context().index_basis_registry();
 
   // one commutator [V, σ] of the Bernoulli UCC derivation
   const auto ab = bernoulli::detail::wick_commutator(

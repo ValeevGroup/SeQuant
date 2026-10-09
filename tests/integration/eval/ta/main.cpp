@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
   auto& world = TA::initialize(argc, argv);
   using namespace sequant;
   sequant::set_default_context(
-      {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
+      {.index_basis_registry_shared_ptr = mbpt::make_min_sr_spaces(),
        .vacuum = Vacuum::SingleProduct,
        .canonicalization_options =
            CanonicalizeOptions::default_options().copy_and_set(
@@ -87,8 +87,8 @@ int main(int argc, char* argv[]) {
 
   // for optimization tests, set occupied and unoccupied index extents
   {
-    auto reg = std::make_shared<IndexSpaceRegistry>(
-        *get_default_context().index_space_registry());
+    auto reg = std::make_shared<IndexBasisRegistry>(
+        *get_default_context().index_basis_registry());
     auto occ = reg->retrieve_ptr(L"i");
     auto uocc = reg->retrieve_ptr(L"a");
     SEQUANT_ASSERT(occ);

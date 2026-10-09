@@ -14,7 +14,7 @@ reference state, respectively. To simplify symbolic manipulation of such express
 to define their set-theoretic relationships. The following example illustrates the full space denoted by :math:`p` partitioned into occupied :math:`i`
 and unoccupied :math:`a` base subspaces:
 
-.. literalinclude:: /examples/user/getting_started/index_space_registry.cpp
+.. literalinclude:: /examples/user/getting_started/index_basis_registry.cpp
    :language: cpp
    :start-after: start-snippet-1
    :end-before: end-snippet-1
@@ -22,7 +22,7 @@ and unoccupied :math:`a` base subspaces:
 
 This and other vocabularies commonly used in quantum many-body context are supported out-of-the-box by SeQuant; their definitions are in :code:`SeQuant/domain/mbpt/convention.hpp`. The previous example is equivalent to the following:
 
-.. literalinclude:: /examples/user/getting_started/index_space_registry.cpp
+.. literalinclude:: /examples/user/getting_started/index_basis_registry.cpp
    :language: cpp
    :start-after: start-snippet-2
    :end-before: end-snippet-2
@@ -48,7 +48,7 @@ key is its space's, so evaluation sizes, tiles and slices it as the space. That 
 such as the cluster-specific virtuals; a basis of a different extent, such as a truncated set or the PAOs, must be
 registered under a name.
 
-.. literalinclude:: /examples/user/getting_started/index_space_registry.cpp
+.. literalinclude:: /examples/user/getting_started/index_basis_registry.cpp
    :language: cpp
    :start-after: start-snippet-3
    :end-before: end-snippet-3

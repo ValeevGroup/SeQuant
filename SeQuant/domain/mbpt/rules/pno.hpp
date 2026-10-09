@@ -17,7 +17,7 @@
 namespace sequant::mbpt {
 
 /// @return true if @p idx sits in a pure-occupied space of the default
-/// context's index-space registry
+/// context's index-basis registry
 [[nodiscard]] bool is_occupied(Index const& idx);
 
 /// (ov|ov): each Mulliken column (bra[k], ket[k]) holds exactly one occupied

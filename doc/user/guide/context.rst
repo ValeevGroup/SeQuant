@@ -77,7 +77,7 @@ separately):
 The canonicalizer configuration is part of the ``Context`` value, so installing a new ``Context`` replaces it: one constructed from
 ``Context::Options`` or ``Context{}``, or the one :func:`sequant::reset_default_context` restores, carries the default configuration.
 Set the canonicalizers and labels on the ``Context`` you install, or derive it from the current one
-(``Context(get_default_context())``). :func:`sequant::mbpt::load` does the latter: it sets only the index space registry and the
+(``Context(get_default_context())``). :func:`sequant::mbpt::load` does the latter: it sets only the index basis registry and the
 vacuum on a copy of the current default context, so the rest of the configuration is kept. It installs the copy process-wide, hence
 throws if the calling thread has a scoped context active, whose settings it would otherwise make permanent.
 :func:`sequant::Context::set_cardinal_tensor_labels` takes the complete list of cardinal labels: the defaults (the reserved labels
@@ -197,9 +197,9 @@ Because it replaces the process-wide default, a call of :func:`sequant::set_defa
 that :func:`sequant::get_default_context` returns on a thread without scoped contexts, and anything obtained from that reference by
 reference. Code that keeps the context beyond a brief read, as the canonicalizers do for the duration of a canonicalization, holds a
 copy made by :func:`sequant::get_default_context_snapshot` instead. The copy reflects every change of the process-wide default
-completed before the call and is cheap: it shares the index space registry and the canonicalizer configuration with its source, and
+completed before the call and is cheap: it shares the index basis registry and the canonicalizer configuration with its source, and
 takes the lock that guards the process-wide default only if that changed since the previous snapshot on the same thread.
-:func:`sequant::get_default_index_space_registry` reads only the index space registry in the same way, without copying the context.
+:func:`sequant::get_default_index_basis_registry` reads only the index basis registry in the same way, without copying the context.
 
 Code that reads the contexts at several points of one operation, as :func:`sequant::canonicalize`, :func:`sequant::simplify` and
 ``WickTheorem::compute()`` do, pins them instead with :func:`sequant::pin_default_contexts`: on a thread without scoped contexts the

@@ -463,9 +463,9 @@ TEST_CASE(
 
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -1072,9 +1072,9 @@ TEST_CASE(
 
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -1110,7 +1110,7 @@ TEST_CASE(
     return ix.space().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    auto const reg = sequant::get_default_context().index_space_registry();
+    auto const reg = sequant::get_default_context().index_basis_registry();
     return reg && ix.space() && reg->is_pure_occupied(ix.space());
   };
   policy.batch_spectator_indices = true;
@@ -1580,9 +1580,9 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   // Same construction as the [w20-auxocc-walk] case up to the schedule.
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -1605,7 +1605,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
     return ix.space().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    auto const reg = sequant::get_default_context().index_space_registry();
+    auto const reg = sequant::get_default_context().index_basis_registry();
     return reg && ix.space() && reg->is_pure_occupied(ix.space());
   };
   policy.batch_spectator_indices = true;
@@ -1939,9 +1939,9 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
   using Node = EvalNodeDryRun;
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -1964,7 +1964,7 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
     return ix.space().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    auto const reg = sequant::get_default_context().index_space_registry();
+    auto const reg = sequant::get_default_context().index_basis_registry();
     return reg && ix.space() && reg->is_pure_occupied(ix.space());
   };
   policy.batch_spectator_indices = true;
@@ -2143,9 +2143,9 @@ TEST_CASE(
 
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -2181,7 +2181,7 @@ TEST_CASE(
     return ix.space().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    auto const reg = sequant::get_default_context().index_space_registry();
+    auto const reg = sequant::get_default_context().index_basis_registry();
     return reg && ix.space() && reg->is_pure_occupied(ix.space());
   };
   policy.batch_spectator_indices = true;
@@ -2344,9 +2344,9 @@ TEST_CASE(
 
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -2631,9 +2631,9 @@ TEST_CASE(
 
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -3198,9 +3198,9 @@ TEST_CASE(
 
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -3394,9 +3394,9 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
 
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -4259,9 +4259,9 @@ TEST_CASE(
   using Node = EvalNodeDryRun;
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -4284,7 +4284,7 @@ TEST_CASE(
     return ix.space().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    auto const reg = sequant::get_default_context().index_space_registry();
+    auto const reg = sequant::get_default_context().index_basis_registry();
     return reg && ix.space() && reg->is_pure_occupied(ix.space());
   };
   policy.batch_spectator_indices = true;
@@ -4394,9 +4394,9 @@ TEST_CASE(
 
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -4423,7 +4423,7 @@ TEST_CASE(
     return ix.space().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    auto const reg = sequant::get_default_context().index_space_registry();
+    auto const reg = sequant::get_default_context().index_basis_registry();
     return reg && ix.space() && reg->is_pure_occupied(ix.space());
   };
   policy.batch_spectator_indices = true;
@@ -4714,9 +4714,9 @@ TEST_CASE(
 
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -4746,7 +4746,7 @@ TEST_CASE(
     return ix.space().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    auto const reg = sequant::get_default_context().index_space_registry();
+    auto const reg = sequant::get_default_context().index_basis_registry();
     return reg && ix.space() && reg->is_pure_occupied(ix.space());
   };
   policy.batch_spectator_indices = true;
@@ -4910,9 +4910,9 @@ TEST_CASE(
 
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -4935,7 +4935,7 @@ TEST_CASE(
     return ix.space().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    auto const reg = sequant::get_default_context().index_space_registry();
+    auto const reg = sequant::get_default_context().index_basis_registry();
     return reg && ix.space() && reg->is_pure_occupied(ix.space());
   };
   policy.batch_spectator_indices = true;
@@ -5212,9 +5212,9 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
 
     auto ctx = sequant::get_default_context_snapshot();
     ctx.set_first_dummy_index_ordinal(1000000);
-    REQUIRE(ctx.index_space_registry() != nullptr);
-    auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-        *ctx.index_space_registry());
+    REQUIRE(ctx.index_basis_registry() != nullptr);
+    auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+        *ctx.index_basis_registry());
     sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
     sequant::mbpt::add_df_spaces(isr);
     ctx.set(isr);
@@ -5241,7 +5241,7 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
       return ix.space().base_key() == L"Κ";
     };
     policy.is_batchable_external_index = [](sequant::Index const& ix) {
-      auto const reg = sequant::get_default_context().index_space_registry();
+      auto const reg = sequant::get_default_context().index_basis_registry();
       return reg && ix.space() && reg->is_pure_occupied(ix.space());
     };
     policy.batch_spectator_indices = true;

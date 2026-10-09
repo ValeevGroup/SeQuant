@@ -71,9 +71,9 @@ std::string Index::ascii_label() const {
 
 std::string Index::to_string() const { return toUtf8(this->label()); }
 
-std::shared_ptr<const IndexSpaceRegistry>
+std::shared_ptr<const IndexBasisRegistry>
 Index::obtain_default_index_registry() {
-  return get_default_context().index_space_registry();
+  return get_default_context().index_basis_registry();
 }
 
 }  // namespace sequant

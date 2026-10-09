@@ -6,7 +6,7 @@
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
-#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -22,7 +22,7 @@
 namespace sequant::detail {
 
 void assert_protoindexed_not_active(
-    [[maybe_unused]] const IndexSpaceRegistry &isr,
+    [[maybe_unused]] const IndexBasisRegistry &isr,
     [[maybe_unused]] const IndexSpace &sp, [[maybe_unused]] const Index &a,
     [[maybe_unused]] const Index &b) {
   SEQUANT_ASSERT(!(a.has_proto_indices() || b.has_proto_indices()) ||
@@ -70,7 +70,7 @@ struct SpaceParts {
   IndexSpace::Type core, active, virt;
 };
 
-SpaceParts space_parts(const IndexSpaceRegistry &isr,
+SpaceParts space_parts(const IndexBasisRegistry &isr,
                        IndexSpace::QuantumNumbers qns) {
   const auto r = isr.reference_occupied_space(qns).type();
   const auto u = isr.vacuum_unoccupied_space(qns).type();
@@ -95,7 +95,7 @@ void for_each_block_assignment(const NormalOperator<S> &survivors,
   auto is_cre = [&](std::size_t i) {
     return survivors[i].action() == Action::Create;
   };
-  const auto &isr = *get_default_context(S).index_space_registry();
+  const auto &isr = *get_default_context(S).index_basis_registry();
   // only active ops can be cumulant legs
   auto is_active = [&](std::size_t i) {
     const auto &sp = survivors[i].index().space();
@@ -266,7 +266,7 @@ container::svector<ExprPtr> separate_shared_indices(Expr &term) {
 /// @return registered spaces that partition @p type: the space of that type
 /// if registered, else its base spaces
 container::svector<IndexSpace> registered_pieces(
-    const IndexSpaceRegistry &isr, IndexSpace::Type type,
+    const IndexBasisRegistry &isr, IndexSpace::Type type,
     IndexSpace::QuantumNumbers qns) {
   container::svector<IndexSpace> result;
   if (!type) return result;
@@ -291,7 +291,7 @@ using Alternatives = container::svector<container::svector<ExprPtr>>;
 /// input γ over the complete space)
 /// @pre if @p bra or @p ket carries protoindices, their common space does not
 ///      reach the active space (see assert_protoindexed_not_active())
-std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
+std::optional<Alternatives> split_density(const IndexBasisRegistry &isr,
                                           IndexSpaceMetric metric,
                                           IndexFactory &idxfac,
                                           const Index &bra, const Index &ket,
@@ -325,7 +325,7 @@ std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
 /// @p full, pure core or pure virtual; each is the projected NormalOperator
 /// preceded by the δs binding projected indices to the original ones
 template <Statistics S>
-Alternatives split_survivors(const IndexSpaceRegistry &isr,
+Alternatives split_survivors(const IndexBasisRegistry &isr,
                              IndexFactory &idxfac, const NormalOperator<S> &nop,
                              bool full) {
   // the projections so far: their ops and the δs they need
@@ -377,7 +377,7 @@ Alternatives split_survivors(const IndexSpaceRegistry &isr,
 /// @return the rewritten term as a list of Products
 template <Statistics S>
 container::svector<std::shared_ptr<Product>> split_mixed_spaces(
-    const ExprPtr &term, const IndexSpaceRegistry &isr, IndexSpaceMetric metric,
+    const ExprPtr &term, const IndexBasisRegistry &isr, IndexSpaceMetric metric,
     bool full) {
   const auto product =
       term->is<Product>()
@@ -584,7 +584,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
                       WickTheorem<S> &stats_sink) {
   const auto &ctx = get_default_context(S);
   SEQUANT_ASSERT(ctx.vacuum() == Vacuum::MultiProduct);
-  const auto &isr = *ctx.index_space_registry();
+  const auto &isr = *ctx.index_basis_registry();
 
   // provenance is per input term
   auto per_term = [&](ExprPtr term) -> ExprPtr {

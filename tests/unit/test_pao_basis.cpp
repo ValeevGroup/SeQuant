@@ -27,7 +27,7 @@ constexpr std::size_t n_pao = 300;
 
 /// the CSV-CCSD registry in the given encoding with the PAO extent set; sized
 /// before a Context adopts it, since a registry inside a Context is immutable
-std::shared_ptr<IndexSpaceRegistry> sized_registry(PaoEncoding enc) {
+std::shared_ptr<IndexBasisRegistry> sized_registry(PaoEncoding enc) {
   auto isr = csv::csv_cc_registry(enc);
   // either kind of entry: the μ̃ space or the named {a, INT32_MAX}
   isr->approximate_size(L"μ̃", n_pao);
@@ -50,7 +50,7 @@ std::vector<ExprPtr> derive(PaoEncoding enc) {
   auto mbpt_ctx = mbpt::set_scoped_default_mbpt_context(
       mbpt::Context({.csv = mbpt::CSV::Yes,
                      .op_registry_ptr = csv::granted_registry({{L"t", 0}})}));
-  const auto& isr = get_default_context().index_space_registry();
+  const auto& isr = get_default_context().index_basis_registry();
   Index::reset_tmp_index();
   std::vector<ExprPtr> out;
   for (auto const& eq : mbpt::CC{2}.t(2, 0)) {
@@ -102,8 +102,8 @@ TEST_CASE("pao-named-basis-equivalence", "[mbpt][csv][basis][valgrind_skip]") {
 
   const Context ctx_old = gate_context(PaoEncoding::Space);
   const Context ctx_new = gate_context(PaoEncoding::Basis);
-  const IndexBasis pao = ctx_new.index_space_registry()->retrieve_basis(L"μ̃");
-  const IndexSpace mu_space = ctx_old.index_space_registry()->retrieve(L"μ̃");
+  const IndexBasis pao = ctx_new.index_basis_registry()->retrieve_basis(L"μ̃");
+  const IndexSpace mu_space = ctx_old.index_basis_registry()->retrieve(L"μ̃");
 
   SECTION("G1 canonical equivalence") {
     auto scoped = set_scoped_default_context(ctx_old);
@@ -184,13 +184,13 @@ TEST_CASE("pao-named-basis-equivalence", "[mbpt][csv][basis][valgrind_skip]") {
     CHECK(Index(pao, 3).space().approximate_size() == n_pao);
     // the bare (space, instance) pair that operator grants and the integral
     // projection build resolves to the basis as registered
-    const IndexBasis bare{ctx_new.index_space_registry()->retrieve(L"a"),
+    const IndexBasis bare{ctx_new.index_basis_registry()->retrieve(L"a"),
                           pao.basis_instance()};
     REQUIRE(bare.space().approximate_size() != n_pao);
     CHECK(default_registry_resolved(bare).space().approximate_size() == n_pao);
-    CHECK(ctx_new.index_space_registry()->retrieve(L"a").approximate_size() !=
+    CHECK(ctx_new.index_basis_registry()->retrieve(L"a").approximate_size() !=
           n_pao);
-    CHECK_THROWS_AS(ctx_new.index_space_registry()->retrieve(L"μ̃"),
+    CHECK_THROWS_AS(ctx_new.index_basis_registry()->retrieve(L"μ̃"),
                     IndexBasisRegistry::not_a_space);
     // the committed fixture: every former μ̃ index is the named basis
     std::ifstream in(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -231,7 +231,7 @@ TEST_CASE("pao-named-basis-equivalence", "[mbpt][csv][basis][valgrind_skip]") {
       REQUIRE(per_encoding.size() == 2);
       CHECK(per_encoding[0] == per_encoding[1]);
     }
-    const IndexSpace a = ctx_new.index_space_registry()->retrieve(L"a");
+    const IndexSpace a = ctx_new.index_basis_registry()->retrieve(L"a");
     CHECK((IndexBasis{a} < pao && IndexBasis{a, 0} < pao &&
            IndexBasis{a, 2} < pao && IndexBasis{a, 10} < pao));
   }

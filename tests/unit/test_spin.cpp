@@ -55,7 +55,7 @@ TEST_CASE("spin", "[spin]") {
   auto _ = set_scoped_default_context(ctx);
 
   SECTION("protoindices supported") {
-    auto isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_basis_registry();
     Index i1(L"i_1");
     Index a1(L"a_1", {i1});
 

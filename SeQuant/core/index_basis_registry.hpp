@@ -1883,7 +1883,8 @@ class IndexBasisRegistry {
   }
 };  // class IndexBasisRegistry
 
-using IndexSpaceRegistry = IndexBasisRegistry;
+using IndexSpaceRegistry [[deprecated("use IndexBasisRegistry")]] =
+    IndexBasisRegistry;
 
 }  // namespace sequant
 #endif  // SEQUANT_INDEX_BASIS_REGISTRY_HPP

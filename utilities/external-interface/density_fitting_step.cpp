@@ -4,7 +4,7 @@
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
 
@@ -32,7 +32,7 @@ void DensityFittingStep::set_options(const nlohmann::json &options) {
                         " requires string argument");
       }
 
-      aux_space_ = get_default_context().index_space_registry()->retrieve(
+      aux_space_ = get_default_context().index_basis_registry()->retrieve(
           value.get<std::string_view>());
     } else if (key == "integral_label") {
       if (!value.is_string()) {

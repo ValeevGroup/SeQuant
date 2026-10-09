@@ -8,7 +8,7 @@
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
@@ -73,9 +73,9 @@ concept range_of_castables_to_index =
 /// index spaces or hierarchical nesting of spaces.
 ///
 /// Since Index objects are most of the time created from string representation,
-/// Index will use default Context's index space registry to map base labels to index spaces.
+/// Index will use default Context's index basis registry to map base labels to index spaces.
 /// Since SeQuant can still operate without explicit initialization of the default
-/// index space registry Index still supports this mode. In such mode all Index objects
+/// index basis registry Index still supports this mode. In such mode all Index objects
 /// created from strings will use the same index space (see Index::default_space_attr)
 /// with the base label stored into its space's base_key (ordinal, if any, is used as usual).
 /// A basis instance registered under a name in that registry is printed by that name
@@ -97,7 +97,7 @@ class Index : public Taggable {
   /// ordinals are represented by this type
   using ordinal_type = std::uint64_t;
 
-  /// With default context (i.e., in absence of an index space registry) will
+  /// With default context (i.e., in absence of an index basis registry) will
   /// use this attribute to generate IndexSpace of indices from their labels
   const static IndexSpace::Attr default_space_attr;
 
@@ -1109,7 +1109,7 @@ class Index : public Taggable {
     return i1_Q < i2_Q ? SO::less : SO::greater;
   }
 
-  static std::shared_ptr<const IndexSpaceRegistry>
+  static std::shared_ptr<const IndexBasisRegistry>
   obtain_default_index_registry();
 
 };  // class Index

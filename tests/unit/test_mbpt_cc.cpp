@@ -129,7 +129,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE_THAT(bernoulli::detail::expand_to_blocks(Vx),
                  EquivalentTo(Vx));  // idempotent
     // no general index survives: every residual index is occ or uocc
-    auto isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_basis_registry();
     Vx->visit(
         [&](const ExprPtr& n) {
           if (!n.is<NormalOperator<Statistics::FermiDirac>>()) return;
@@ -708,7 +708,7 @@ TEST_CASE("bernoulli-keeps-basis-instance", "[mbpt][basis]") {
   using sequant::tests::csv::instance_histogram;
 
   auto ctx = set_scoped_default_context(
-      sequant::Context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
+      sequant::Context({.index_basis_registry_shared_ptr = make_min_sr_spaces(),
                         .vacuum = Vacuum::SingleProduct,
                         .spbasis = SPBasis::Spinor}));
   auto mbpt_ctx = set_scoped_default_mbpt_context(mbpt::Context(
@@ -716,7 +716,7 @@ TEST_CASE("bernoulli-keeps-basis-instance", "[mbpt][basis]") {
 
   // t(2) as a grant of instance 3 on its virtual legs authors it, in one
   // commutator [V, σ] of the Bernoulli UCC derivation
-  const auto& isr = get_default_context().index_space_registry();
+  const auto& isr = get_default_context().index_basis_registry();
   const auto V = op::tensor::h(2);
   const auto T2raw = op::tensor::t(2);
   container::map<Index, Index> m;

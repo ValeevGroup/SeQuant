@@ -20,7 +20,7 @@ namespace sequant {
 /// own ordering (a space's own basis orders as the space), prints a space's
 /// own basis by its `base_key()`, a named basis instance by its name and an
 /// unnamed one as `base_key()<;N>`, and never consults an
-/// `IndexSpaceRegistry`.
+/// `IndexBasisRegistry`.
 ///
 /// Examples (with `I`, `A` denoting two index spaces):
 ///   - `AsyCost({{I, 2}, {A, 4}})` represents $I^2 A^4$.

@@ -63,7 +63,7 @@ struct ObjectRef {
 };
 
 /// what canonicalization reads from a Context: its CanonicalizationConfig, its
-/// index space registry and its SP basis, with the shared objects referred to
+/// index basis registry and its SP basis, with the shared objects referred to
 /// weakly and compared by identity (operator==(const Context&, const Context&)
 /// compares the registries by value); mirrors Context::CanonicalizationConfig
 /// in context.hpp, so a member added there is added here
@@ -109,10 +109,28 @@ std::uint64_t canonicalization_version(CanonicalizationKey key) {
 
 /// @return @p registry if it is the only owner of its object, else a copy of
 /// the object, so that a Context holds the only owners of its registry
-std::shared_ptr<const IndexSpaceRegistry> owned(
-    std::shared_ptr<const IndexSpaceRegistry> registry) {
+std::shared_ptr<const IndexBasisRegistry> owned(
+    std::shared_ptr<const IndexBasisRegistry> registry) {
   if (!registry || registry.use_count() == 1) return registry;
-  return std::make_shared<const IndexSpaceRegistry>(*registry);
+  return std::make_shared<const IndexBasisRegistry>(*registry);
+}
+
+/// @return the registry that @p options carries, moved out of it and owned
+/// (see owned()); the deprecated fields are read where the current ones are
+/// empty
+std::shared_ptr<const IndexBasisRegistry> take_registry(
+    Context::Options& options) {
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto& shared = options.index_basis_registry_shared_ptr
+                     ? options.index_basis_registry_shared_ptr
+                     : options.index_space_registry_shared_ptr;
+  auto& object = options.index_basis_registry ? options.index_basis_registry
+                                              : options.index_space_registry;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  if (shared) return owned(std::move(shared));
+  if (object)
+    return std::make_shared<const IndexBasisRegistry>(std::move(*object));
+  return nullptr;
 }
 
 void check_tensor_canonicalizer(
@@ -173,8 +191,8 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
            ctx1.deserialization_column_symmetry() ==
                ctx2.deserialization_column_symmetry() &&
            *ctx1.canonicalization_config_ == *ctx2.canonicalization_config_ &&
-           same_registry(ctx1.index_space_registry(),
-                         ctx2.index_space_registry());
+           same_registry(ctx1.index_basis_registry(),
+                         ctx2.index_basis_registry());
 }
 
 bool operator!=(const Context& ctx1, const Context& ctx2) {
@@ -266,21 +284,21 @@ Context get_default_context_snapshot(Statistics s) {
 #endif
 }
 
-std::shared_ptr<const IndexSpaceRegistry> get_default_index_space_registry(
+std::shared_ptr<const IndexBasisRegistry> get_default_index_basis_registry(
     Statistics s) {
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   // a scoped context is thread-local, hence needs no lock
   if (detail::implicit_context_overlay<container::map<Statistics, Context>>())
-    return get_default_context(s).index_space_registry();
-  return cached_default_context(s).index_space_registry();
+    return get_default_context(s).index_basis_registry();
+  return cached_default_context(s).index_basis_registry();
 #else
-  return get_default_context(s).index_space_registry();
+  return get_default_context(s).index_basis_registry();
 #endif
 }
 
 IndexBasis default_registry_resolved(const IndexBasis& basis) {
   if (!basis.has_basis_instance()) return basis;
-  if (auto registry = get_default_index_space_registry())
+  if (auto registry = get_default_index_basis_registry())
     return registry->resolve(basis);
   return basis;
 }
@@ -377,13 +395,7 @@ pin_default_contexts() {
 }
 
 Context::Context(Options options)
-    : idx_space_reg_(
-          options.index_space_registry_shared_ptr
-              ? owned(std::move(options.index_space_registry_shared_ptr))
-              : (options.index_space_registry.has_value()
-                     ? std::make_shared<const IndexSpaceRegistry>(
-                           std::move(options.index_space_registry.value()))
-                     : nullptr)),
+    : idx_basis_reg_(take_registry(options)),
       vacuum_(options.vacuum),
       metric_(options.metric),
       assert_strict_braket_symmetry_(options.assert_strict_braket_symmetry),
@@ -431,7 +443,7 @@ std::uint64_t Context::version() const {
   // fails to compile here until the key accounts for it
   const auto& [tensor_canonicalizers, index_comparer, index_pair_comparer,
                cardinal_labels, options] = *canonicalization_config_;
-  CanonicalizationKey key{.registry = ObjectRef(idx_space_reg_),
+  CanonicalizationKey key{.registry = ObjectRef(idx_basis_reg_),
                           .spbasis = spbasis_,
                           .canonicalizers = {},
                           .index_comparer = ObjectRef(index_comparer),
@@ -471,9 +483,9 @@ std::uint64_t current_contexts_version() {
 
 Vacuum Context::vacuum() const { return vacuum_; }
 
-std::shared_ptr<const IndexSpaceRegistry> Context::index_space_registry()
+std::shared_ptr<const IndexBasisRegistry> Context::index_basis_registry()
     const {
-  return idx_space_reg_;
+  return idx_basis_reg_;
 }
 
 IndexSpaceMetric Context::metric() const { return metric_; }
@@ -563,14 +575,14 @@ Context& Context::set(Vacuum vacuum) {
   return *this;
 }
 
-Context& Context::set(IndexSpaceRegistry ISR) {
-  idx_space_reg_ = std::make_shared<const IndexSpaceRegistry>(std::move(ISR));
+Context& Context::set(IndexBasisRegistry ISR) {
+  idx_basis_reg_ = std::make_shared<const IndexBasisRegistry>(std::move(ISR));
   invalidate_version();
   return *this;
 }
 
-Context& Context::set(std::shared_ptr<const IndexSpaceRegistry> ISR) {
-  idx_space_reg_ = owned(std::move(ISR));
+Context& Context::set(std::shared_ptr<const IndexBasisRegistry> ISR) {
+  idx_basis_reg_ = owned(std::move(ISR));
   invalidate_version();
   return *this;
 }
@@ -687,15 +699,15 @@ Context& Context::set_cardinal_tensor_labels(
 }
 
 IndexSpace get_particle_space(const IndexSpace::QuantumNumbers& qn) {
-  return get_default_context().index_space_registry()->particle_space(qn);
+  return get_default_context().index_basis_registry()->particle_space(qn);
 }
 
 IndexSpace get_hole_space(const IndexSpace::QuantumNumbers& qn) {
-  return get_default_context().index_space_registry()->hole_space(qn);
+  return get_default_context().index_basis_registry()->hole_space(qn);
 }
 
 IndexSpace get_complete_space(const IndexSpace::QuantumNumbers& qn) {
-  return get_default_context().index_space_registry()->complete_space(qn);
+  return get_default_context().index_basis_registry()->complete_space(qn);
 }
 
 }  // namespace sequant

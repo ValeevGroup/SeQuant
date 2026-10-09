@@ -2,7 +2,7 @@
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -81,7 +81,7 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
 bool is_N_term(const sequant::ExprPtr& term, std::size_t cutoff,
                std::size_t min_rank) {
   using namespace sequant;
-  auto isr = get_default_context().index_space_registry();
+  auto isr = get_default_context().index_basis_registry();
 
   const auto* nop = find_nop(term);
   if (!nop) return false;
@@ -228,7 +228,7 @@ namespace {
 /// Core of expand_to_blocks for input already in wick_reduce'd form; reducing
 /// again would be an identity. @p expr is not mutated.
 ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
-  auto isr = get_default_context().index_space_registry();
+  auto isr = get_default_context().index_basis_registry();
   const auto& bases = isr->base_spaces();
 
   auto is_base_space = [&](const IndexSpace& sp) {

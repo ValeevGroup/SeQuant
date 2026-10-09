@@ -133,7 +133,7 @@ compute_index_replacement_rules(
     const container::set<Index> &noncovariant_indices,
     const container::set<Index> &unpaired_indices,
     const std::set<Index, Index::LabelCompare> &all_indices,
-    const std::shared_ptr<const IndexSpaceRegistry> &isr,
+    const std::shared_ptr<const IndexBasisRegistry> &isr,
     IndexSpaceMetric metric) {
   bool zero_result_status = false;
   auto zero_result = [&zero_result_status]() -> void {
@@ -749,7 +749,7 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
 
     auto nonnull_result_opt = compute_index_replacement_rules<S>(
         expr, external_indices, all_noncovariant_indices, unpaired_indices,
-        all_indices, ctx.index_space_registry(), metric);
+        all_indices, ctx.index_basis_registry(), metric);
     if (!nonnull_result_opt) return false;
     const auto &[replacement_rules, found_kroneckers] = *nonnull_result_opt;
 

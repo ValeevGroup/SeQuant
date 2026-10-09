@@ -1321,7 +1321,7 @@ class WickTheorem {
     using std::end;
 
     const auto &ctx = state.ctx;
-    const auto &isr = ctx.index_space_registry();
+    const auto &isr = ctx.index_basis_registry();
 
     static const container::svector<std::bitset<max_input_size>> unconstrained;
     const auto &target_connections =
@@ -1548,7 +1548,7 @@ class WickTheorem {
           // check if can contract these indices and
           // check connectivity constraints (if needed)
           if (can_contract(*op_left_iter, *op_right_iter, ctx.vacuum(),
-                           ctx.index_space_registry())) {
+                           ctx.index_basis_registry())) {
             auto &&[is_unique, nop_top_degen] = is_topologically_unique();
             if (is_unique) {
               if (state.connect(target_connections, avoided_connections,
@@ -1580,7 +1580,7 @@ class WickTheorem {
                 state.sp.append(
                     static_cast<int64_t>(nop_top_degen) * phase,
                     contract(*op_left_iter, *op_right_iter, ctx.vacuum(),
-                             ctx.index_space_registry()));
+                             ctx.index_basis_registry()));
 
                 // update the stats
                 ++stats_.num_attempted_contractions;
@@ -1728,8 +1728,8 @@ class WickTheorem {
   static bool can_contract(
       const Op<S> &left, const Op<S> &right,
       Vacuum vacuum = get_default_context(S).vacuum(),
-      const std::shared_ptr<const IndexSpaceRegistry> &isr =
-          get_default_context(S).index_space_registry()) {
+      const std::shared_ptr<const IndexBasisRegistry> &isr =
+          get_default_context(S).index_basis_registry()) {
     // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
       SEQUANT_ASSERT(vacuum == Vacuum::Physical);
@@ -1749,8 +1749,8 @@ class WickTheorem {
 
   static ExprPtr contract(const Op<S> &left, const Op<S> &right,
                           Vacuum vacuum = get_default_context(S).vacuum(),
-                          const std::shared_ptr<const IndexSpaceRegistry> &isr =
-                              get_default_context(S).index_space_registry()) {
+                          const std::shared_ptr<const IndexBasisRegistry> &isr =
+                              get_default_context(S).index_basis_registry()) {
     SEQUANT_ASSERT(can_contract(left, right, vacuum, isr));
     // contraction result depends on whether the left/right (L, R) spaces
     // are pure qp annihilator (hole, H) or qp creator (particle, P) subspaces

@@ -50,7 +50,7 @@ for every statistics; a canonicalizer registered by the user for those labels is
 workers of the per-summand ``WickTheorem`` instances see that scope.
 
 A candidate pair ``(left, right)`` contracts (``can_contract``) iff ``left`` is a quasiparticle annihilator, ``right`` is a quasiparticle
-creator, and their quasiparticle spaces intersect (``is_qpannihilator``/``is_qpcreator``/``IndexSpaceRegistry::intersection``, from
+creator, and their quasiparticle spaces intersect (``is_qpannihilator``/``is_qpcreator``/``IndexBasisRegistry::intersection``, from
 ``SeQuant/core/op.hpp``); under ``Vacuum::MultiProduct`` their actions must also differ (see :ref:`below <wick-extended>`). The
 contraction *value* (``contract``) depends on whether those quasiparticle spaces are pure hole/particle subspaces or not:
 

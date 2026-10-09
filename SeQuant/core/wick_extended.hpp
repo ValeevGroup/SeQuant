@@ -19,14 +19,13 @@ template <Statistics S>
 class WickTheorem;
 
 class IndexBasisRegistry;
-using IndexSpaceRegistry = IndexBasisRegistry;
 
 namespace detail {
 
 /// asserts that @p a and @p b, which meet in @p sp, do not reach the active
 /// space if either carries protoindices: under a MultiProduct vacuum the
 /// active orbitals are shared by every basis
-void assert_protoindexed_not_active(const IndexSpaceRegistry &isr,
+void assert_protoindexed_not_active(const IndexBasisRegistry &isr,
                                     const IndexSpace &sp, const Index &a,
                                     const Index &b);
 

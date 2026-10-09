@@ -8,7 +8,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
@@ -27,7 +27,7 @@
 namespace sequant::mbpt {
 
 bool is_occupied(Index const& idx) {
-  return get_default_context().index_space_registry()->is_pure_occupied(
+  return get_default_context().index_basis_registry()->is_pure_occupied(
       idx.space());
 }
 

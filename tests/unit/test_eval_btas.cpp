@@ -74,7 +74,7 @@ class rand_tensor_yield {
     using ranges::views::repeat_n;
     using ranges::views::transform;
     using sequant::IndexSpace;
-    auto isr = sequant::get_default_context().index_space_registry();
+    auto isr = sequant::get_default_context().index_basis_registry();
 
     SEQUANT_ASSERT(
         ranges::all_of(tnsr.const_braket_indices(),
@@ -174,7 +174,7 @@ class aux_rand_tensor_yield {
   }
 
   size_t extent(sequant::Index const& idx) const {
-    auto isr = sequant::get_default_context().index_space_registry();
+    auto isr = sequant::get_default_context().index_basis_registry();
     if (idx.space() == isr->retrieve(L"i")) return nocc_;
     if (idx.space() == isr->retrieve(L"a")) return nvirt_;
     if (idx.space() == isr->retrieve(L"z")) return nz_;

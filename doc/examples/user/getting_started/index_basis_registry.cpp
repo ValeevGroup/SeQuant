@@ -12,7 +12,7 @@
 void v1() {
   // start-snippet-1
   using namespace sequant;
-  IndexSpaceRegistry isr;
+  IndexBasisRegistry isr;
 
   // base spaces
   isr.add(L"i", 0b01).add(L"a", 0b10);
@@ -26,7 +26,7 @@ void v1() {
 
   // to use the vocabulary defined by isr use it to make a Context object and
   // make it the default
-  set_default_context({.index_space_registry = std::move(isr)});
+  set_default_context({.index_basis_registry = std::move(isr)});
 
   // now can use space labels to construct Index objects representing said
   // spaces
@@ -46,7 +46,7 @@ void v2() {
 
   // makes 2 base spaces, i and a, and their union
   set_default_context(
-      {.index_space_registry_shared_ptr = make_min_sr_spaces()});
+      {.index_basis_registry_shared_ptr = make_min_sr_spaces()});
 
   // set theoretic operations on spaces
   auto i1 = Index(L"i_1");
@@ -69,8 +69,8 @@ void v3() {
   isr->add(L"ĩ", IndexBasis{i, 1});
   // a Context owns its registry: register everything first, then hand it over
   // (it is moved in)
-  set_default_context({.index_space_registry_shared_ptr = std::move(isr)});
-  const auto& registry = *get_default_context().index_space_registry();
+  set_default_context({.index_basis_registry_shared_ptr = std::move(isr)});
+  const auto& registry = *get_default_context().index_basis_registry();
   Index loc1(registry.retrieve_basis(L"ĩ"), 1);
   // same space ...
   SEQUANT_ASSERT(loc1.space() == i);
