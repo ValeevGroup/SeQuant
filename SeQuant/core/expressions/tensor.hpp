@@ -1246,6 +1246,9 @@ inline ExprPtr make_kronecker(const Index &bra_index, const Index &ket_index) {
 /// (compared in order, as by Index::operator==; symmetric ones are kept
 /// sorted), are not in two different basis instances, and neither basis has
 /// a general metric (IndexBasis::metric())
+/// @note until the deprecated Context::metric() is removed, WickTheorem ANDs
+/// it in: under IndexSpaceMetric::General every overlap stands, whatever this
+/// returns
 inline bool is_kronecker_equivalent(const Index &bra, const Index &ket) {
   return bra.proto_indices() == ket.proto_indices() &&
          !different_instances(bra.basis(), ket.basis()) &&
