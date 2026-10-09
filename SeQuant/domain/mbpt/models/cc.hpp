@@ -302,7 +302,7 @@ class CC {
 
   /// @brief assembles the right-hand UCC EOM equations
   /// @param block_ranks see `eom_r`; empty uses the configured H̄ rank
-  /// @pre a unitary ansatz
+  /// @pre a unitary ansatz and the Symmetric normalization convention
   /// @note under the Bernoulli expansion each block's H̄ has its N part removed.
   ///   Where a block's rank equals `hbar_comm_rank` the removed terms vanish at
   ///   converged amplitudes, so its equations change but its values do not;
