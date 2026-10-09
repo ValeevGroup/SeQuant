@@ -169,11 +169,16 @@ class IndexBasisRegistry {
   /// constructs an IndexBasisRegistry from an existing table (e.g. the
   /// bases() of another registry), spaces and named basis instances alike
   /// @note the table is taken as given, it is not validated against the
-  /// invariants that add() enforces
+  /// invariants that add() enforces, except that each named basis instance
+  /// carries the label it is registered under
   explicit IndexBasisRegistry(table_type bases)
       : bases_(std::move(bases)),
         named_count_(ranges::count_if(
-            bases_, [](const auto& e) { return !is_space(e); })) {}
+            bases_, [](const auto& e) { return !is_space(e); })) {
+    for (auto& [label, basis] : bases_)
+      if (basis.has_basis_instance() && basis.name() != label)
+        basis = IndexBasis(basis.space(), basis.basis_instance(), label);
+  }
 
   /// copy constructor
   IndexBasisRegistry(const IndexBasisRegistry& other)
@@ -276,7 +281,7 @@ class IndexBasisRegistry {
     return std::nullopt;
   }
 
-  /// @return the named entry equal to @p b, which carries the entry's
+  /// @return the named entry equal to @p b, which carries the entry's name,
   /// approximate size and field, if @p b has a basis instance registered
   /// under a name; otherwise @p b unchanged
   IndexBasis resolve(const IndexBasis& b) const {
@@ -590,8 +595,8 @@ class IndexBasisRegistry {
     IndexSpace copy(space->base_key(), space->type(), space->qns(),
                     size ? *size : space->approximate_size(),
                     field ? *field : space->field());
-    bases_.emplace(std::move(key),
-                   IndexBasis{std::move(copy), basis.basis_instance()});
+    IndexBasis named{std::move(copy), basis.basis_instance(), key};
+    bases_.emplace(std::move(key), std::move(named));
     ++named_count_;
     return clear_memoized_data_and_return_this();
   }

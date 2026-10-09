@@ -23,6 +23,12 @@ namespace sequant {
 /// of two amplitudes. A null instance (the default) is the IndexSpace's own
 /// basis; every integer, 0 and negative ones included, is an ordinary instance
 /// distinct from null.
+///
+/// A basis instance may carry the name it is registered under in an
+/// IndexBasisRegistry (see IndexBasisRegistry::add(label, basis)); a basis
+/// obtained from the registry carries it, one built from a space and an
+/// instance does not. The name is how the basis prints; it is not part of its
+/// identity, so equality, ordering and hashing ignore it.
 class IndexBasis {
  public:
   using instance_type = std::int32_t;
@@ -35,6 +41,11 @@ class IndexBasis {
                       optional_instance basis_instance = std::nullopt) noexcept
       : space_(std::move(space)), basis_instance_(basis_instance) {}
 
+  /// @param name the label @p basis_instance is registered under
+  /// @pre @p name is empty or @p basis_instance is non-null
+  IndexBasis(IndexSpace space, optional_instance basis_instance,
+             std::wstring name);
+
   const IndexSpace& space() const noexcept { return space_; }
 
   const optional_instance& basis_instance() const noexcept {
@@ -45,17 +56,29 @@ class IndexBasis {
     return basis_instance_.has_value();
   }
 
+  /// @return the name the basis instance is registered under, empty if it
+  /// carries none
+  const std::wstring& name() const noexcept { return name_; }
+
+  bool has_name() const noexcept { return !name_.empty(); }
+
   /// @return `L";N"` for a non-null instance `N`, else an empty string
   std::wstring instance_suffix() const;
 
-  friend bool operator==(const IndexBasis&,
-                         const IndexBasis&) noexcept = default;
+  /// compares space and instance; the name is ignored
+  friend bool operator==(const IndexBasis& b1, const IndexBasis& b2) noexcept {
+    return b1.space_ == b2.space_ && b1.basis_instance_ == b2.basis_instance_;
+  }
 
-  /// orders by space, then by instance (null first)
-  friend std::strong_ordering operator<=>(const IndexBasis&,
-                                          const IndexBasis&) noexcept = default;
+  /// orders by space, then by instance (null first); the name is ignored
+  friend std::strong_ordering operator<=>(const IndexBasis& b1,
+                                          const IndexBasis& b2) noexcept {
+    if (auto c = b1.space_ <=> b2.space_; c != 0) return c;
+    return b1.basis_instance_ <=> b2.basis_instance_;
+  }
 
-  /// @return `hash_value(b.space())` if @p b has no instance
+  /// @return `hash_value(b.space())` if @p b has no instance; the name is
+  /// ignored
   friend std::size_t hash_value(const IndexBasis& b) {
     std::size_t result = hash_value(b.space_);
     if (b.basis_instance_) hash::combine(result, *b.basis_instance_);
@@ -65,6 +88,7 @@ class IndexBasis {
  private:
   IndexSpace space_;
   optional_instance basis_instance_;
+  std::wstring name_;
 };
 
 /// @return true if @p basis includes @p subbasis, i.e. its space includes the

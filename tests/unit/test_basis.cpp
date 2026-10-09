@@ -540,6 +540,13 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   const IndexBasis pao = isr->retrieve_basis(L"μ̃");
   const IndexBasis::instance_type P = *pao.basis_instance();
 
+  // the registry's entry carries its name, which is not part of the identity
+  CHECK(pao.name() == L"μ̃");
+  CHECK_FALSE(IndexBasis(uocc, P).has_name());
+  CHECK(IndexBasis(uocc, P) == pao);
+  CHECK(hash_value(IndexBasis(uocc, P)) == hash_value(pao));
+  CHECK(isr->resolve(IndexBasis(uocc, P)).name() == L"μ̃");
+
   // labels: the name, no instance suffix anywhere
   const Index m3(pao, 3);
   CHECK(m3.label() == L"μ̃_3");
@@ -563,8 +570,11 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   CHECK(Index(L"a_2").basis_key() == L"a");
   CHECK_FALSE(Index(uocc, 2).unnamed_basis_instance());
 
-  // identity is untouched
+  // identity is untouched; the name is not part of it, and a bare instance
+  // number carries none
   CHECK(m3 == Index(uocc, 3).replace_basis_instance(P));
+  CHECK(Index(uocc, 3).replace_basis_instance(P).full_label() ==
+        L"a_3<;" + std::to_wstring(P) + L">");
   CHECK(m3 != Index(uocc, 3));
   CHECK(hash_value(m3) == hash_value(Index(uocc, 3).replace_basis_instance(P)));
   CHECK((Index(uocc, 3) < m3 && Index(uocc, 3).replace_basis_instance(0) < m3));
@@ -579,8 +589,7 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   CHECK(Index(L"a_3").space().approximate_size() == uocc.approximate_size());
   CHECK_THROWS_AS(IndexSpace(L"μ̃"), IndexBasisRegistry::not_a_space);
 
-  // copies of an instance-bearing index keep the memoized label; a basis change
-  // resets it
+  // copies of a named index print the name; a basis change drops it
   {
     Index memo(m3);
     (void)memo.full_label();
@@ -592,24 +601,20 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
     CHECK(memo.replace_basis_instance(1).full_label() == L"a_3<;1>");
   }
 
-  // review-focus 3: the name is the default registry's; a copy made after the
-  // context changed keeps the memoized name, a fresh index finds none (the
-  // nested scope is a thread-local overlay, #655)
+  // the name travels with the basis, whatever registry is current when the
+  // index is printed (the nested scope is a thread-local overlay, #655)
   {
-    Index memo(m3);
-    (void)memo.label();
     auto plain = set_scoped_default_context(
         Context({.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
                  .vacuum = Vacuum::SingleProduct}));
-    CHECK(Index(memo).label() == L"μ̃_3");
-    CHECK(Index(pao, 3).full_label() == L"a_3<;2147483647>");
-    CHECK(Index(pao, 3).basis_key() == L"a");
+    CHECK(Index(m3).label() == L"μ̃_3");
+    CHECK(Index(pao, 3).full_label() == L"μ̃_3");
+    CHECK(Index(pao, 3).basis_key() == L"μ̃");
   }
 }
 
-// a named basis is resolved when an index is minted or renamed (ibr-spec.md
-// §6.1): a copy made after the context switched to a registry without the name
-// still prints it
+// an index minted or renamed in a named basis carries the name: a copy made
+// after the context switched to a registry without the name still prints it
 TEST_CASE("index-basis-named-at-minting", "[elements][index][basis]") {
   auto ctx = scoped_pao_context();
   const auto& isr = get_default_context().index_space_registry();
@@ -622,6 +627,9 @@ TEST_CASE("index-basis-named-at-minting", "[elements][index][basis]") {
   const Index from_basis = factory.make(pao);
   const Index from_index = factory.make(Index(pao, 3));
   const Index tmp = Index::make_tmp_index(pao);
+  // from the bare instance number: the name is the registry's at minting
+  const Index from_number =
+      Index::make_tmp_index(IndexBasis{uocc, *pao.basis_instance()});
 
   // renamed by the canonicalizer: the PAO Fock coupling of a CSV R2 term,
   // C{a<i_1,i_2;0>;μ̃} f{μ̃;μ̃} C{μ̃;c<i_1,i_2;0>} t{c,b;i_1,i_2}, with the μ̃
@@ -647,8 +655,7 @@ TEST_CASE("index-basis-named-at-minting", "[elements][index][basis]") {
   CHECK(named(from_index));
   CHECK(named(tmp));
   for (const Index& idx : renamed) CHECK(named(idx));
-  // the check is meaningful: an unlabelled index resolves under this context
-  CHECK(Index(pao, 3).label() == L"a_3");
+  CHECK(named(from_number));
 }
 
 // several threads copy one index and read its label at once, each labelling its

@@ -178,16 +178,17 @@ compute_index_replacement_rules(
 
   // the basis of the index that a delta/overlap between indices in bases b1
   // and b2 reduces to: the intersection of their spaces (null if disjoint) in
-  // their basis instance. A null instance is the space's own basis and
+  // their basis instance, as registered (so a named one carries its name). A
+  // null instance is the space's own basis and
   // includes every instance of the space; two different instances are not
   // related by an identity, so the caller never asks for their intersection
   auto intersection = [&isr](const IndexBasis &b1,
                              const IndexBasis &b2) -> IndexBasis {
     SEQUANT_ASSERT(!different_instances(b1, b2));
-    return IndexBasis(
+    return isr->resolve(IndexBasis(
         b1.space() == b2.space() ? b1.space()
                                  : isr->intersection(b1.space(), b2.space()),
-        b1.has_basis_instance() ? b1.basis_instance() : b2.basis_instance());
+        b1.has_basis_instance() ? b1.basis_instance() : b2.basis_instance()));
   };
 
   // the basis of idx as far as the rules collected so far go: its own space,

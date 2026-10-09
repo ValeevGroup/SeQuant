@@ -76,14 +76,6 @@ Index::obtain_default_index_registry() {
   return get_default_context().index_space_registry();
 }
 
-std::wstring Index::registry_label_or_base_key(const IndexBasis& basis) {
-  // no Context copy on this hot path; the registry read locks only when the
-  // published contexts changed
-  if (auto registry = get_default_index_space_registry())
-    if (auto name = registry->basis_label(basis)) return std::wstring(*name);
-  return basis.space().base_key();
-}
-
 IndexBasis Index::registry_resolved(const IndexBasis& basis) {
   if (!basis.has_basis_instance()) return basis;
   if (auto registry = get_default_index_space_registry())

@@ -82,7 +82,8 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   }
   auto protoindices = idx.proto_indices();
   for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, s);
-  return Index{IndexBasis{std::move(space), idx.basis().basis_instance()},
+  return Index{Index::registry_resolved(
+                   IndexBasis{std::move(space), idx.basis().basis_instance()}),
                idx.ordinal(), protoindices, idx.symmetric_proto_indices()};
 }
 

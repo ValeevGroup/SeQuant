@@ -1,8 +1,17 @@
 #include <SeQuant/core/basis.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <string>
 
 namespace sequant {
+
+IndexBasis::IndexBasis(IndexSpace space, optional_instance basis_instance,
+                       std::wstring name)
+    : space_(std::move(space)),
+      basis_instance_(basis_instance),
+      name_(std::move(name)) {
+  SEQUANT_ASSERT(name_.empty() || basis_instance_);
+}
 
 std::wstring IndexBasis::instance_suffix() const {
   return basis_instance_ ? L";" + std::to_wstring(*basis_instance_)
