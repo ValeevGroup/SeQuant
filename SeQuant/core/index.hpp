@@ -509,7 +509,6 @@ class Index : public Taggable {
   template <space_or_basis SpaceOrBasis = IndexSpace>
   static Index make_tmp_index(const SpaceOrBasis &space_or_basis) {
     Index result(space_or_basis, next_tmp_index(), IndexFactoryTag{});
-    if (result.basis_.has_basis_instance()) (void)result.label();
     return result;
   }
 
@@ -541,7 +540,6 @@ class Index : public Taggable {
     result.symmetric_proto_indices_ = symmetric_proto_indices;
     result.canonicalize_proto_indices();
     result.validate_proto_indices();
-    if (result.basis_.has_basis_instance()) (void)result.label();
     return result;
   }
 
@@ -921,7 +919,6 @@ class Index : public Taggable {
     if (mutated) {
       label_.reset();
       full_label_.reset();
-      if (basis_.has_basis_instance()) (void)label();
     }
     return mutated;
   }
@@ -1214,7 +1211,6 @@ class IndexFactory {
                      Index::IndexFactoryTag{});
       valid = validator_ ? validator_(result) : true;
     } while (!valid);
-    if (result.basis_.has_basis_instance()) (void)result.label();
     return result;
   }
 
@@ -1246,7 +1242,6 @@ class IndexFactory {
           idx.proto_indices(), idx.symmetric_proto_indices());
       valid = validator_ ? validator_(result) : true;
     } while (!valid);
-    if (result.basis_.has_basis_instance()) (void)result.label();
     return result;
   }
 

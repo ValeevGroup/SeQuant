@@ -88,7 +88,6 @@ Index to_index(const io::serialization::v1::ast::Index &index,
       Index proto(to_basis(current.label, current.label.label, current.instance,
                            position_cache, begin),
                   current.label.id);
-      if (proto.basis().has_basis_instance()) (void)proto.label();
       protoIndices.push_back(std::move(proto));
     } catch (const SerializationError &) {
       throw;
@@ -111,7 +110,6 @@ Index to_index(const io::serialization::v1::ast::Index &index,
     Index idx(to_basis(index.label, index.label.label, domain.instance,
                        position_cache, begin),
               index.label.id, std::move(protoIndices));
-    if (idx.basis().has_basis_instance()) (void)idx.label();
     return idx;
   } catch (const SerializationError &) {
     throw;

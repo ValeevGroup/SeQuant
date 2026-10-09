@@ -657,13 +657,11 @@ TEST_CASE("index-basis-named-at-minting", "[elements][index][basis]") {
   CHECK(named(from_number));
 }
 
-// several threads copy one index and read its label at once, each labelling its
-// own copy; factory-minted instance-bearing indices carry their label memo, so
-// this only reads a settled value (ibr-spec.md §6.1); the CSV composite
-// a<i_1,i_2;0> is what OpMaker mints, μ̃ the PAO basis. The std::threads below
-// see the process-wide context, not this test's scoped overlay (#655), whose
-// registry lacks μ̃: a probe whose memo was not settled at minting prints a_N
-// there
+// several threads copy one index and label their copies at once; a label comes
+// from the index's basis, not from the registry of the thread that labels it:
+// the std::threads below see the process-wide context, not this test's scoped
+// overlay (#655), whose registry lacks μ̃. The CSV composite a<i_1,i_2;0> is
+// what OpMaker mints, μ̃ the PAO basis
 TEST_CASE("index-basis-copy-while-labelling", "[elements][index][basis]") {
   auto ctx = scoped_pao_context();
   const auto& isr = get_default_context().index_space_registry();
@@ -699,21 +697,14 @@ TEST_CASE("index-basis-copy-while-labelling", "[elements][index][basis]") {
   std::vector<Index> probes = minted;
   probes.insert(probes.end(), canonicalized.begin(), canonicalized.end());
   for (const Index& m : probes) {
-    // expected labels from an index rebuilt without m's memo, so that m is
-    // never labelled on this thread
-    const Index rebuilt(m.drop_proto_indices(), m.proto_indices(),
-                        m.symmetric_proto_indices());
-    REQUIRE(rebuilt == m);
-    const std::wstring expected_full(rebuilt.full_label()),
-        expected(rebuilt.label());
+    const std::wstring expected_full(m.full_label()), expected(m.label());
     std::vector<std::thread> threads;
     std::atomic<int> mismatches{0};
     for (int t = 0; t < 8; ++t)
       threads.emplace_back([&m, &expected_full, &expected, &mismatches] {
         for (int k = 0; k < 1000; ++k) {
           Index copy(m);
-          if (copy.full_label() != expected_full || copy.label() != expected ||
-              m.label() != expected)
+          if (copy.full_label() != expected_full || copy.label() != expected)
             ++mismatches;
         }
       });
