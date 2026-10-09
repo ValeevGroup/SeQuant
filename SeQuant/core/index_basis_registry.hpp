@@ -171,7 +171,9 @@ class IndexBasisRegistry {
   /// @note the table is taken as given, it is not validated against the
   /// invariants that add() enforces, except that each label is a valid base
   /// key (the null space's empty key aside) and each named basis instance
-  /// carries the label it is registered under
+  /// carries the label it is registered under. The table does not record
+  /// which entries follow which (see follow()), so none does here: a former
+  /// follower keeps the values it mirrored as its own
   /// @throw Exception if a label is not a valid base key (see
   /// io::serialization::v1::is_base_key())
   explicit IndexBasisRegistry(table_type bases)
