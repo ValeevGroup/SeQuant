@@ -190,14 +190,23 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
 
 }  // namespace detail
 
+ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
+                      std::wstring const& coeff_tensor_label,
+                      container::svector<std::wstring> const& tensor_labels) {
+  const auto resolved = default_registry_resolved(csv_basis);
+  return detail::csv_transform(expr, resolved,
+                               resolved.metric() == IndexSpaceMetric::Unit,
+                               coeff_tensor_label, tensor_labels);
+}
+
 ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
                       std::wstring const& coeff_tensor_label,
                       container::svector<std::wstring> const& tensor_labels) {
   const bool is_ao = bitset_t(csv_basis.qns()) & bitset_t(LCAOQNS::ao);
   const bool is_pao = bitset_t(csv_basis.qns()) & bitset_t(LCAOQNS::pao);
-  return csv_transform(expr, IndexBasis{csv_basis},
-                       /*orthonormal=*/!(is_ao || is_pao), coeff_tensor_label,
-                       tensor_labels);
+  return detail::csv_transform(expr, IndexBasis{csv_basis},
+                               /*orthonormal=*/!(is_ao || is_pao),
+                               coeff_tensor_label, tensor_labels);
 }
 
 }  // namespace sequant::mbpt

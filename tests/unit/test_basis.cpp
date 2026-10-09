@@ -771,10 +771,6 @@ concept csv_transform_callable = requires(ExprPtr e, Basis b, Args... args) {
   mbpt::csv_transform(e, b, args...);
 };
 
-template <typename Basis>
-concept csv_transform_takes_label_literal =
-    requires(ExprPtr e, Basis b) { mbpt::csv_transform(e, b, L"C"); };
-
 // a space, or a braced initializer of one, is its own basis; a label alone is
 // not
 static_assert(std::is_convertible_v<IndexSpace, IndexBasis>);
@@ -782,17 +778,15 @@ static_assert(std::is_constructible_v<IndexBasis, const wchar_t*, int>);
 static_assert(!std::is_convertible_v<const wchar_t*, IndexBasis>);
 static_assert(!std::is_convertible_v<std::wstring, IndexBasis>);
 
-// a label in the orthonormal slot would convert to true
-static_assert(!csv_transform_takes_label_literal<IndexBasis>);
-static_assert(csv_transform_takes_label_literal<IndexSpace>);
-static_assert(!csv_transform_callable<IndexBasis, const wchar_t*>);
-static_assert(!csv_transform_callable<IndexBasis, wchar_t*>);
-static_assert(!csv_transform_callable<IndexBasis, const char*>);
-static_assert(csv_transform_callable<IndexBasis, bool>);
-static_assert(csv_transform_callable<IndexBasis, bool, const wchar_t*>);
-static_assert(csv_transform_callable<IndexBasis, bool, wchar_t*>);
-static_assert(csv_transform_callable<IndexBasis, bool, std::wstring,
+// orthonormality is read off the basis, not passed; a bool in the label
+// slot does not convert
+static_assert(csv_transform_callable<IndexBasis>);
+static_assert(csv_transform_callable<IndexBasis, const wchar_t*>);
+static_assert(csv_transform_callable<IndexBasis, wchar_t*>);
+static_assert(csv_transform_callable<IndexBasis, std::wstring,
                                      container::svector<std::wstring>>);
+static_assert(!csv_transform_callable<IndexBasis, bool>);
+static_assert(!csv_transform_callable<IndexBasis, bool, const wchar_t*>);
 static_assert(csv_transform_callable<IndexSpace>);
 static_assert(csv_transform_callable<IndexSpace, const wchar_t*>);
 static_assert(csv_transform_callable<IndexSpace, wchar_t*>);
@@ -806,8 +800,9 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
   const IndexSpace occ = isr->retrieve(L"i"), uocc = isr->retrieve(L"a");
   constexpr IndexBasis::instance_type P =
       std::numeric_limits<IndexBasis::instance_type>::max();
-  isr->add(L"μ̃", IndexBasis{uocc, P},
-           120ul);  // before the Context adopts the registry (#665)
+  isr->add(L"μ̃", IndexBasis{uocc, P}, 120ul,
+           IndexSpaceMetric::General);  // before the Context adopts the
+                                        // registry (#665)
   // an orthonormal unoccupied basis other than the canonical one, e.g.
   // localized virtuals
   isr->add(L"ã", IndexBasis{uocc, 2});
@@ -824,8 +819,7 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
 
   SECTION("PAO target: non-orthonormal, minted from the registry entry") {
     Index::reset_tmp_index();
-    const ExprPtr out = mbpt::csv_transform(f, registry.retrieve_basis(L"μ̃"),
-                                            /*orthonormal=*/false);
+    const ExprPtr out = mbpt::csv_transform(f, registry.retrieve_basis(L"μ̃"));
     REQUIRE(out->is<Product>());
     const auto& prod = out->as<Product>();
     REQUIRE(prod.factors().size() == 3);  // f{μ̃;μ̃} C C
@@ -838,7 +832,7 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
     }
     // a hand-built basis equal to the entry is resolved to the entry too
     Index::reset_tmp_index();
-    const ExprPtr out2 = mbpt::csv_transform(f, IndexBasis{uocc, P}, false);
+    const ExprPtr out2 = mbpt::csv_transform(f, IndexBasis{uocc, P});
     CHECK(out2->as<Product>()
               .factor(0)
               ->as<Tensor>()
@@ -846,17 +840,28 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
               .at(0)
               .basis()
               .extent() == 120);
-    // the overlap stays (no orthonormal shortcut)
+    // the overlap stays (no orthonormal shortcut): the entry's metric is
+    // general, also when the basis is given by number
+    for (const IndexBasis& target :
+         {registry.retrieve_basis(L"μ̃"), IndexBasis{uocc, P}}) {
+      const ExprPtr s = mbpt::csv_transform(
+          make_overlap(x, Index(uocc, 3, {i1}).replace_basis_instance(0)),
+          target);
+      REQUIRE(s->is<Product>());
+      CHECK(s->as<Product>().factors().size() == 3);
+    }
+  }
+  SECTION("PAO target: the overlap stays") {
     const ExprPtr s = mbpt::csv_transform(
         make_overlap(x, Index(uocc, 3, {i1}).replace_basis_instance(0)),
-        registry.retrieve_basis(L"μ̃"), false);
+        registry.retrieve_basis(L"μ̃"));
     REQUIRE(s->is<Product>());
     CHECK(s->as<Product>().factors().size() == 3);
   }
   SECTION("named orthonormal target: the overlap's dummy is in that basis") {
     const ExprPtr s = mbpt::csv_transform(
         make_overlap(x, Index(uocc, 3, {i1}).replace_basis_instance(0)),
-        registry.retrieve_basis(L"ã"), /*orthonormal=*/true);
+        registry.retrieve_basis(L"ã"));
     REQUIRE(s->is<Product>());
     REQUIRE(s->as<Product>().factors().size() == 2);  // C C
     const Index dummy = s->as<Product>().factor(0)->as<Tensor>().ket().at(0);
@@ -881,22 +886,19 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
     CHECK(dummy.space() == uocc_a);
     CHECK(dummy.basis() == IndexBasis{uocc_a});
     // a named target in the spin-free space is not supported
-    CHECK_THROWS_AS(
-        mbpt::csv_transform(s_a, registry.retrieve_basis(L"ã"), true),
-        Exception);
+    CHECK_THROWS_AS(mbpt::csv_transform(s_a, registry.retrieve_basis(L"ã")),
+                    Exception);
     // ... on the general path, too
-    CHECK_THROWS_AS(
-        mbpt::csv_transform(s_a, registry.retrieve_basis(L"μ̃"), false),
-        Exception);
+    CHECK_THROWS_AS(mbpt::csv_transform(s_a, registry.retrieve_basis(L"μ̃")),
+                    Exception);
     CHECK_THROWS_AS(
         mbpt::csv_transform(
             ex<Tensor>(L"f", bra{Index(uocc_a, 1, {ia1, ia2})}, ket{ia1}),
-            registry.retrieve_basis(L"μ̃"), false),
+            registry.retrieve_basis(L"μ̃")),
         Exception);
   }
   SECTION("an unnamed instance basis as target throws") {
-    CHECK_THROWS_AS(mbpt::csv_transform(f, IndexBasis{uocc, 5}, false),
-                    Exception);
+    CHECK_THROWS_AS(mbpt::csv_transform(f, IndexBasis{uocc, 5}), Exception);
   }
   SECTION(
       "the IndexSpace overload forwards with orthonormality read from the qns "

@@ -90,7 +90,8 @@ inline constexpr IndexBasis::instance_type default_pao_basis_instance =
 
 /// @brief registers the PAO basis as a named instance of the particle space
 
-/// expects \p isr to have a defined particle space; the entry's size and
+/// expects \p isr to have a defined particle space; the entry is registered
+/// with a general metric (the PAOs are not orthonormal), and its extent and
 /// field default to the particle space's (populate them with
 /// IndexBasisRegistry::approximate_size(label, n) before the registry is given
 /// to a Context, which holds it immutable)

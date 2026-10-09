@@ -124,8 +124,8 @@ The other configurable field is ``CSV`` (default ``CSV::No``): when set to ``CSV
 :class:`sequant::mbpt::OpMaker` (e.g. cluster amplitudes ``t``) use cluster-specific virtuals — virtual-space indices that carry the
 operator's occupied indices as proto-indices — instead of plain, independent virtual indices. :func:`sequant::mbpt::csv_transform`
 expands such CSV-dependent tensors into an explicit basis (standard unoccupieds, PAOs, or AOs) when needed downstream; the
-basis is given as an :class:`sequant::IndexSpace`, or as an :class:`sequant::IndexBasis` registered under a name together
-with whether it is orthonormal.
+basis is given as an :class:`sequant::IndexSpace`, or as an :class:`sequant::IndexBasis` registered under a name, whose
+registry entry says whether it is orthonormal (:func:`sequant::IndexBasis::metric`).
 
 .. literalinclude:: /examples/user/context.cpp
    :language: cpp

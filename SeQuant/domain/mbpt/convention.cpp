@@ -128,7 +128,7 @@ void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
                    std::wstring_view label) {
   const auto& uocc =
       isr->retrieve(isr->particle_space(/* nulltype_ok = */ false), spin_any);
-  isr->add(label, IndexBasis{uocc, instance});
+  isr->add(label, IndexBasis{uocc, instance}, IndexSpaceMetric::General);
 }
 
 void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& isr) {

@@ -554,6 +554,7 @@ TEST_CASE("index_space", "[elements]") {
           std::numeric_limits<IndexBasis::instance_type>::max());
     CHECK(pao.space() == uocc);
     CHECK(pao.extent() == uocc.approximate_size());
+    CHECK(pao.metric() == IndexSpaceMetric::General);
     CHECK(pao.field() == uocc.field());
     // one entry: no spin variants
     CHECK_FALSE(isr->contains(L"μ̃↑"));

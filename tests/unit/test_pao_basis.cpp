@@ -56,8 +56,7 @@ std::vector<ExprPtr> derive(PaoEncoding enc) {
     e = mbpt::density_fit(e, isr->retrieve(L"Κ"), L"g", L"g");
     e = enc == PaoEncoding::Space
             ? mbpt::csv_transform(e, isr->retrieve(L"μ̃"))
-            : mbpt::csv_transform(e, isr->retrieve_basis(L"μ̃"),
-                                  /*orthonormal=*/false);
+            : mbpt::csv_transform(e, isr->retrieve_basis(L"μ̃"));
     flatten(e);
     out.push_back(e);
   }
