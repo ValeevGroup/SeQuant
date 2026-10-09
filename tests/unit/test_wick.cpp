@@ -35,6 +35,7 @@
 #include <array>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -1309,6 +1310,40 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(sum->is<Sum>());
     REQUIRE(sum->size() == 1);
     REQUIRE(*sum->begin() == product);
+  }
+
+  // an overlap between two noncovariant indices stands, unless it is a
+  // Kronecker delta (unit metric, same protoindices) between indices that
+  // are not both unpaired: the delta identifies the indices, through the
+  // protoindices they are, so it is applied; between two unpaired dummies
+  // (see the previous section) it stands, unlike a Kronecker delta
+  SECTION("reduce applies a Kronecker-equivalent overlap") {
+    const Index i1{L"i_1"}, a1{L"a_1", {i1}}, a2{L"a_2", {i1}};
+    // a_1<i_1> and a_2<i_1> are paired and noncovariant (they carry i_1, which
+    // is noncovariant as a protoindex): their overlap is applied
+    auto product = ex<Tensor>(L"f", bra{i1}, ket{a1}) * make_overlap(a1, a2) *
+                   ex<Tensor>(L"t", bra{a2}, ket{i1});
+    FWickTheorem{product}.reduce(product);
+    // the applied overlap is left as a factor 1
+    REQUIRE(product->is<Product>());
+    std::optional<Tensor> f, t;
+    for (const auto& factor : product->as<Product>().factors()) {
+      if (!factor->is<Tensor>()) continue;
+      const auto& tensor = factor->as<Tensor>();
+      REQUIRE(tensor.label() != reserved::overlap_label());
+      (tensor.label() == L"f" ? f : t) = tensor;
+    }
+    REQUIRE(f);
+    REQUIRE(t);
+    REQUIRE(f->ket()[0] == t->bra()[0]);
+    REQUIRE(f->ket()[0].proto_indices() == a1.proto_indices());
+    // the same between paired indices of disjoint spaces, i_3<i_1> and
+    // a_2<i_1>, is zero
+    const Index i3{L"i_3", {i1}};
+    product = ex<Tensor>(L"f", bra{i1}, ket{i3}) * make_overlap(i3, a2) *
+              ex<Tensor>(L"t", bra{a2}, ket{i1});
+    FWickTheorem{product}.reduce(product);
+    REQUIRE(product == ex<Constant>(0));
   }
 
   // the external indices are deduced from the input, never from the

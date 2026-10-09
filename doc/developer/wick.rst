@@ -136,8 +136,9 @@ analysis, where the standard path contracts them in parallel. Each resulting ter
 
 - has its mixed-space ``γ``/``η`` and surviving operators split into pure pieces: a ``γ`` into a core :math:`\delta` plus an active
   ``γ``, an ``η`` into a virtual :math:`\delta` plus an active ``η`` (a one-body ``γ`` or ``η`` of the input is split the same way,
-  whatever space its indices range over), a survivor onto its active part and, with partial contractions,
-  its core and virtual parts. A part that is not a registered space is split over its base spaces. The pieces are reduced with the
+  whatever space its indices range over; the :math:`\delta` binds the bra to a core or virtual index in its basis, so between
+  two bases, e.g. cluster-specific virtuals of different pairs, it is followed by an overlap; as for an operator, an index
+  with protoindices must not reach the active part), a survivor onto its active part and, with partial contractions, its core and virtual parts. A part that is not a registered space is split over its base spaces. The pieces are reduced with the
   operator indices kept fixed, so each projected index stays :math:`\delta`-bound to an input index and inherits its provenance;
 - is handed to ``detail::cumulant_expand``, which groups the surviving *active* operators into disjoint blocks of :math:`k`
   creators and :math:`k` annihilators, :math:`2 \le k \le` ``WickTheorem::max_cumulant_rank``, with legs from at least two
@@ -164,7 +165,8 @@ descends from exactly one partial-contraction term (the one carrying its pair co
 Spin-free evaluation is not supported for this vacuum (``WickTheorem::compute`` throws); the hooks for it are
 ``WickTheorem::contraction_value`` and ``detail::block_value``/``detail::term_weight`` in ``SeQuant/core/wick_extended.hpp``.
 
-``mbpt::ref_av`` has no branch of its own for this vacuum, only forcing full contractions. There the mbpt operators (``ã``) are
+``mbpt::ref_av`` has no branch of its own for this vacuum, only forcing full contractions and so accepting connectivity
+lists, under which a density or cumulant carrying indices of two operators connects them. There the mbpt operators (``ã``) are
 normal-ordered relative to the reference, so it evaluates a different quantity than the ``SingleProduct`` path, which
 normal-orders them relative to the core; the two agree for products of elementary operators, which the tests verify for results
 with cumulants up to :math:`\kappa_4`. :func:`sequant::mbpt::decompositions::cumulants_to_densities` converts cumulants of
@@ -176,7 +178,13 @@ Reducing the result
 
 Raw contraction output can contain chains of Kronecker deltas and overlaps introduced by the space-projection cases above.
 ``WickTheorem::reduce()`` turns these into an index-replacement map and substitutes it through the expression, collapsing delta chains
-and eliminating deltas wherever the internal/external status of the indices they bind allows it. The result is then, like any other
+and eliminating deltas wherever the internal/external status of the indices they bind allows it. An overlap is applied only if one of
+its indices is *covariant*, a dummy that appears exactly twice and neither has nor is a protoindex, since such an index can be rotated
+into the basis of the other; between two noncovariant indices it stands. The exception is an overlap that is itself a Kronecker delta
+(unit metric, both indices with the same protoindices, i.e. in one basis): it identifies its indices, through the indices they are
+protoindices of as well, so it is applied unless both are unpaired dummies (not appearing exactly twice); unlike a Kronecker
+delta between them, which is applied, it then stands. These rules apply only if the input of Wick's theorem has noncovariant
+indices; otherwise every overlap is applied. The result is then, like any other
 :class:`sequant::Product`/:class:`sequant::Sum`, put into canonical form by :doc:`the tensor-network canonicalizer <tnc>` so that like
 terms collect correctly — Wick's-theorem correctness therefore also rests on canonicalization being correct.
 

@@ -463,6 +463,17 @@ TEST_CASE("tensor", "[elements]") {
             L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
 
   }  // SECTION("adjoint")
+
+  SECTION("is_kronecker_equivalent") {
+    const Index i1(L"i_1"), i2(L"i_2");
+    // symmetric protoindices are kept sorted, ordered ones as given
+    const Index a1(L"a_1", {i2, i1}), a2(L"a_2", {i1, i2}, false),
+        a3(L"a_3", {i2, i1}, false);
+    REQUIRE(is_kronecker_equivalent(a1, a2, IndexSpaceMetric::Unit));
+    REQUIRE(!is_kronecker_equivalent(a1, a3, IndexSpaceMetric::Unit));
+    REQUIRE(!is_kronecker_equivalent(a2, a3, IndexSpaceMetric::Unit));
+    REQUIRE(!is_kronecker_equivalent(a1, a2, IndexSpaceMetric::General));
+  }
 }
 
 TEST_CASE("tensor_hermiticity", "[elements]") {

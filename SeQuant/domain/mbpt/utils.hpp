@@ -26,9 +26,10 @@ struct LSTOptions {
   bool unitary = false;
   /// If true, uses connected products [A,B] = (AB)_c; otherwise uses explicit
   /// commutators [A,B] = AB - BA. The connected-product form is only
-  /// equivalent if the caller supplies operator connectivity downstream, hence
-  /// the default is the explicit form.
-  /// ref_av rejects connectivity unless the reference is the Wick vacuum.
+  /// equivalent if the reference is the Wick vacuum and the caller supplies
+  /// operator connectivity downstream, hence the default is the explicit form.
+  /// Otherwise the reference average of BA need not vanish, so no
+  /// connectivity makes (AB)_c reproduce [A,B], under any vacuum.
   bool use_connected_form = false;
   /// If true, will not clone the input expression
   bool skip_clone = false;
@@ -47,7 +48,7 @@ struct LSTOptions {
 /// - If \p options.unitary is true, the ansatz uses B - B^+ instead of B.
 /// - By default commutators are computed explicitly: [A,B] = AB - BA
 /// - If \p options.use_connected_form is true, commutators are computed via connected products: [A,B] = (AB)_c ; this is only valid if the caller connects the operators (e.g. by passing OpConnections to vac_av/ref_av), so set it only if you do.
-///   ref_av requires empty connectivity when the reference differs from the Wick vacuum; use explicit commutators in that case.
+///   When the reference differs from the Wick vacuum use explicit commutators: the reference average of BA need not vanish, so (AB)_c need not reproduce [A,B] under any connectivity.
 /// @pre This function expects \p A and \p B to be composed of mbpt::Operators
 // clang-format on
 ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,

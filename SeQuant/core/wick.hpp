@@ -1776,16 +1776,13 @@ class WickTheorem {
     }
 
     if constexpr (S == Statistics::FermiDirac) {
-      if (vacuum == Vacuum::MultiProduct &&
-          (left.index().has_proto_indices() ||
-           right.index().has_proto_indices())) {
-        const auto &sp =
+      if (vacuum == Vacuum::MultiProduct) {
+        detail::assert_protoindexed_not_active(
+            *isr,
             left_is_pure && right_is_pure
                 ? isr->intersection(left.index().space(), right.index().space())
-                : qpspace_common;
-        const auto qns = sp.qns();
-        SEQUANT_ASSERT(!isr->intersection(sp, isr->active_space(qns)) &&
-                       "protoindexed indices must not reach the active space");
+                : qpspace_common,
+            left.index(), right.index());
       }
     }
 
