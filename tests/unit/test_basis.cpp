@@ -10,6 +10,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -367,6 +368,23 @@ TEST_CASE("index-basis-annotation-and-hash", "[EvalExpr][basis]") {
   const auto bare1 = ex<Tensor>(L"g", bra{y}, ket{i1});
   REQUIRE_NOTHROW(binarize(bare1));
   CHECK(binarize(bare0)->hash_value() != binarize(bare1)->hash_value());
+
+  // a named basis and the bare-number spelling of its instance are one index
+  // (the name is not part of the identity) but are annotated and sized by
+  // different keys, so a product may not mix them
+  {
+    auto pao_ctx = scoped_pao_context();
+    const IndexBasis pao =
+        get_default_context().index_basis_registry()->retrieve_basis(L"μ̃");
+    const Index named(pao, 1), bare(IndexBasis{uocc, *pao.basis_instance()}, 1);
+    REQUIRE(named == bare);
+    REQUIRE(named.basis().base_key() != bare.basis().base_key());
+    const auto t = ex<Tensor>(L"t", bra{named}, ket{i1});
+    CHECK_THROWS_AS(binarize(t * ex<Tensor>(L"s", bra{i2}, ket{bare})),
+                    Exception);
+    CHECK_NOTHROW(binarize(t * ex<Tensor>(L"s", bra{i2}, ket{named})));
+    CHECK_NOTHROW(binarize(t * ex<Tensor>(L"s", bra{i2}, ket{Index(uocc, 1)})));
+  }
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
