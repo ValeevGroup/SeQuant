@@ -418,13 +418,16 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     ctx.set(make_mr_spaces());
     auto ctx_resetter = set_scoped_default_context(ctx);
 
+    REQUIRE(simplify(CC(2).hbar() - op::H()) != ex<Constant>(0));
+
     // H̄ must use explicit commutators, since ref_av takes no connectivity here
     const auto expected = op::ref_av(lst(op::H(), op::T(1), 2), {});
     REQUIRE(simplify(CC(1).energy(2) - expected) == ex<Constant>(0));
 
     // screening must not change the result
-    const auto screened = CC(2).t();
-    const auto unscreened = CC(2, {.screen = false}).t();
+    const auto screened = CC(2, {.hbar_comm_rank = 1}).t();
+    const auto unscreened = CC(2, {.screen = false, .hbar_comm_rank = 1}).t();
+    REQUIRE(has_tensor(screened.at(1), L"t"));
     for (std::size_t p = 0; p != screened.size(); ++p)
       REQUIRE_THAT(screened.at(p), EquivalentTo(unscreened.at(p)));
 
