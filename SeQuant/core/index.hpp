@@ -509,7 +509,7 @@ class Index : public Taggable {
 
   /// creates a globally-unique temporary index in space @c space . The label of
   /// the resulting index =
-  /// @c IndexSpace::base_key(space) + '_' + temporary counter.
+  /// basis_key() + '_' + temporary counter.
   /// Each call increments the current tmp counter (see next_tmp_index() ) . To
   /// make neater temporary indices unique in a given scope (e.g. a single term
   /// in an expression) use IndexFactory.
@@ -526,7 +526,7 @@ class Index : public Taggable {
 
   /// creates a globaly-unique temporary index in space @c space . The label of
   /// the resulting index =
-  /// @c IndexSpace::base_key(space) + '_' + temporary counter.
+  /// basis_key() + '_' + temporary counter.
   /// Each call increments the current tmp counter (see next_tmp_index() ) . To
   /// make neater temporary indices unique in a given scope (e.g. a single term
   /// in an expression) use IndexFactory.
@@ -1234,7 +1234,7 @@ class IndexFactory {
   }
 
   /// creates a temporary index in @c space_or_basis . The label of the
-  /// resulting index = @c IndexSpace::base_key(space) + '_' + temporary
+  /// resulting index = basis_key() + '_' + temporary
   /// counter.
   /// Each call increments the current tmp counter (see next_tmp_index() ) .
   /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis (a
@@ -1273,7 +1273,7 @@ class IndexFactory {
 
   /// creates a temporary index that inherits the space, basis instance and
   /// protoindices (and whether they are symmetric) of @c idx . The label of
-  /// the resulting index = @c IndexSpace::base_key(space) + '_' + temporary
+  /// the resulting index = basis_key() + '_' + temporary
   /// counter.
   /// Each call increments the current tmp counter (see next_tmp_index() ) .
   /// @param idx an Index object

@@ -101,7 +101,7 @@ V1
                    | '_{' IndexList? '}^{' IndexList '}'                            | Meaning is _{<bra>}^{<ket>} (no aux)
    IndexList       Index ( ',' Index )?
    Index           IndexSpaceName '_'? Integer IndexDomain?
-   IndexDomain     '<' (ProtoLabel (',' ProtoLabel)*)? (';' Integer)? '>'           ';Integer' names a non-default index basis instance; absent when IndexSpaceName is itself the label of a registered basis instance
+   IndexDomain     '<' (ProtoLabel (',' ProtoLabel)*)? (';' Integer)? '>'           ';Integer' (signed, 32-bit) names a non-default index basis instance; absent when IndexSpaceName is itself the label of a registered basis instance
    ProtoLabel      IndexSpaceName '_'? Integer ( '<' ';' Integer '>' )?             May carry only a domainless instance (no nested protos); same rule for a named basis
    IndexSpaceName                                                                    Name but no underscore allowed; the label of a registered IndexSpace or of a registered basis instance
    SymmetrySpec    ':' ( [ASN] ( '-' [SCN] ( '-' [SN] )? )? )                        :<Symmetry>-<BraKetSymmetry>-<ColumnSymmetry>
@@ -128,4 +128,3 @@ scaled by the constant ``1/2``:
 ::
 
    R1{u1;i1} = f{u1;i1} - Ym1{u1;u2} f{u2;i1} - Ym1{u3;u2} * g{u1,u2;u3,i1} + 1/2 Ym2{u1,u4;u_2,u_3} g{u2,u3;u4,i1}:A-C-S
-
