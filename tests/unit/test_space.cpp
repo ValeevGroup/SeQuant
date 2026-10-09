@@ -209,6 +209,13 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE_NOTHROW(isr->add(L"â", IndexBasis{a, 6}, a.dimension(), a.field()));
     CHECK(isr->retrieve_basis(L"â").own_extent() == a.dimension());
     CHECK(isr->retrieve_basis(L"â").own_field() == a.field());
+    // a negative extent is rejected, for a basis and for a space alike
+    CHECK_THROWS_WITH(isr->add(L"ă", IndexBasis{a, 7}, -1),
+                      Catch::Matchers::ContainsSubstring("negative"));
+    CHECK_FALSE(isr->contains(L"ă"));
+    CHECK_THROWS_WITH(isr->add(L"q", 0b100, a.qns(), -5),
+                      Catch::Matchers::ContainsSubstring("negative"));
+    CHECK_FALSE(isr->contains(L"q"));
     isr->extent(L"a", 33);
     CHECK(isr->retrieve_basis(L"â").extent() == a.dimension());
     CHECK(isr->retrieve(L"a").dimension() == 33);

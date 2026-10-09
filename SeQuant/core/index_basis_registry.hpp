@@ -35,6 +35,7 @@
 #include <ranges>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 namespace sequant {
@@ -1766,7 +1767,12 @@ class IndexBasisRegistry {
         nints == boost::hana::size_c<0> || nints == boost::hana::size_c<1>,
         "IndexBasisRegistry::add: only one integral argument is allowed");
     if constexpr (nints == boost::hana::size_c<1>) {
-      result.first = boost::hana::at_c<0>(h_ints);
+      const auto& n = boost::hana::at_c<0>(h_ints);
+      if constexpr (std::is_signed_v<std::remove_cvref_t<decltype(n)>>)
+        if (n < 0)
+          throw Exception(
+              "IndexBasisRegistry::add: the extent must not be negative");
+      result.first = n;
     }
 
     auto h_field = boost::hana::filter(h_args, [](auto arg) {
