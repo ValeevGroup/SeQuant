@@ -87,12 +87,13 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
   // matches the MPQC layout, see spindex.h
   // this will not work for MR
   // the AOs of a basis set span an orbital space; the union of two AO bases
-  // spans the union of their spaces, which must be registered
+  // spans the union of their spaces, which must be registered. The spaces are
+  // taken by value: add() may reallocate the registry's table
   auto add = [&](std::wstring_view label, const IndexSpace& space) {
     isr->add(label, IndexBasis{space, instance}, IndexSpaceMetric::General);
   };
   auto union_space = [&](std::wstring_view label, const IndexSpace& s1,
-                         const IndexSpace& s2) -> const IndexSpace& {
+                         const IndexSpace& s2) -> IndexSpace {
     const auto* space = isr->retrieve_ptr(s1.type() | s2.type(), spin_any);
     if (!space)
       throw Exception("add_ao_basis: the AO basis '" + toUtf8(label) +
@@ -101,20 +102,21 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
                       ", which is not registered");
     return *space;
   };
-  const auto& obs = isr->retrieve(vbs ? L"m" : L"p");
+  const IndexSpace obs = isr->retrieve(vbs ? L"m" : L"p");
+  const IndexSpace vbs_space = vbs ? isr->retrieve(L"e") : IndexSpace{};
+  const IndexSpace vbs_plus =
+      vbs ? union_space(L"Γ", obs, vbs_space) : IndexSpace{};
   add(L"μ", obs);  // OBS AO
   if (vbs) {
-    const auto& vbs_space = isr->retrieve(L"e");
-    add(L"Α", vbs_space);                          // VBS AO
-    add(L"Γ", union_space(L"Γ", obs, vbs_space));  // VBS+ = OBS + VBS
+    add(L"Α", vbs_space);  // VBS AO
+    add(L"Γ", vbs_plus);   // VBS+ = OBS + VBS
   }
   if (abs) {
-    const auto& abs_space = isr->retrieve(L"α'");
+    const IndexSpace abs_space = isr->retrieve(L"α'");
     add(L"σ", abs_space);                          // ABS AO in F12 methods
     add(L"ρ", union_space(L"ρ", obs, abs_space));  // ABS+ = OBS + ABS
     if (vbs)                                       // VABS+ = VBS+ + ABS
-      add(L"Ρ", union_space(L"Ρ", union_space(L"Γ", obs, isr->retrieve(L"e")),
-                            abs_space));
+      add(L"Ρ", union_space(L"Ρ", vbs_plus, abs_space));
   }
 }
 
@@ -132,7 +134,7 @@ void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
                    IndexSpace::QuantumNumbers spin_any,
                    IndexBasis::instance_type instance,
                    std::wstring_view label) {
-  const auto& uocc =
+  const IndexSpace uocc =
       isr->retrieve(isr->particle_space(/* nulltype_ok = */ false), spin_any);
   isr->add(label, IndexBasis{uocc, instance}, IndexSpaceMetric::General);
 }
