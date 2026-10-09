@@ -453,10 +453,10 @@ container::svector<std::pair<std::int64_t, std::int64_t>> eom_manifolds(nₚ np,
 // that same scalar on the diagonal.
 std::vector<ExprPtr> CC::eom_r_ucc(
     nₚ np, nₕ nh, const std::vector<size_t>& block_ranks) const {
-  SEQUANT_ASSERT(get_default_mbpt_context().normalization_convention() ==
-                     NormalizationConvention::Symmetric,
-                 "UCC EOM needs the Symmetric normalization convention for a "
-                 "Hermitian block matrix");
+  SEQUANT_ENFORCE(get_default_mbpt_context().normalization_convention() ==
+                      NormalizationConvention::Symmetric,
+                  "UCC EOM needs the Symmetric normalization convention for a "
+                  "Hermitian block matrix");
   using std::min;
   const auto manifolds = eom_manifolds(np, nh);
   const auto K = manifolds.size();

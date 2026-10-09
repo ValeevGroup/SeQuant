@@ -6,6 +6,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/bernoulli.hpp>
@@ -331,7 +332,8 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     // commutator (Eq. 29), SD/DS at the single (Eqs. 41, 44), DD bare (Eq. 48).
     const std::vector<std::size_t> quccsd = {2, 1, 1, 0};
     // UCC EOM requires the Symmetric convention
-    REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), quccsd), Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort)
+      REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), quccsd), Exception);
     auto symmetric = set_scoped_default_mbpt_context(
         mbpt::Context{get_default_mbpt_context()}.set(
             NormalizationConvention::Symmetric));
