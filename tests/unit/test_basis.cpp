@@ -570,11 +570,20 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   CHECK(Index(L"a_2").basis().base_key() == L"a");
   CHECK_FALSE(Index(uocc, 2).basis().unnamed_instance());
 
-  // identity is untouched; the name is not part of it, and a bare instance
-  // number carries none
+  // identity is untouched; the name is not part of it. A bare instance number
+  // given to an index is resolved through the default registry, so the copy
+  // carries the name; a basis built from the number is taken as given
   CHECK(m3 == Index(uocc, 3).replace_basis_instance(P));
-  CHECK(Index(uocc, 3).replace_basis_instance(P).full_label() ==
+  CHECK(Index(uocc, 3).replace_basis_instance(P).full_label() == L"μ̃_3");
+  CHECK(Index(uocc, 3).replace_basis_instance(P).space().approximate_size() ==
+        120);
+  CHECK(Index(IndexBasis{uocc, P}, 3).full_label() ==
         L"a_3<;" + std::to_wstring(P) + L">");
+  // moved into another space the instance stays and is resolved there: P
+  // names nothing in the general space
+  CHECK(Index(m3, uocc).full_label() == L"μ̃_3");
+  CHECK(Index(m3, isr->retrieve(L"p")).full_label() ==
+        L"p_3<;" + std::to_wstring(P) + L">");
   CHECK(m3 != Index(uocc, 3));
   CHECK(hash_value(m3) == hash_value(Index(uocc, 3).replace_basis_instance(P)));
   CHECK((Index(uocc, 3) < m3 && Index(uocc, 3).replace_basis_instance(0) < m3));

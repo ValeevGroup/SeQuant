@@ -76,4 +76,26 @@ Index::obtain_default_index_registry() {
   return get_default_context().index_basis_registry();
 }
 
+Index Index::replace_basis_instance(
+    IndexBasis::optional_instance basis_instance) const {
+  Index result(*this);
+  result.basis_ =
+      default_registry_resolved(IndexBasis(space(), basis_instance));
+  result.label_.reset();
+  result.full_label_.reset();
+  return result;
+}
+
+void Index::rebase(IndexSpace space) {
+  // a name belongs to the instance of the old space; in another space the
+  // instance is whatever the default registry knows it as
+  basis_ =
+      space == basis_.space()
+          ? IndexBasis(std::move(space), basis_.basis_instance(), basis_.name())
+          : default_registry_resolved(
+                IndexBasis(std::move(space), basis_.basis_instance()));
+  label_.reset();
+  full_label_.reset();
+}
+
 }  // namespace sequant

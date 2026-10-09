@@ -436,12 +436,7 @@ class Index : public Taggable {
   Index(IndexOrIndexLabel &&index_or_index_label, IndexSpace space) {
     if constexpr (std::is_same_v<std::decay_t<IndexOrIndexLabel>, Index>) {
       *this = std::forward<IndexOrIndexLabel>(index_or_index_label);
-      // the name belongs to the instance of the old space
-      auto name = space == basis_.space() ? basis_.name() : std::wstring{};
-      basis_ = IndexBasis(std::move(space), basis_.basis_instance(),
-                          std::move(name));
-      label_.reset();
-      full_label_.reset();
+      rebase(std::move(space));
     } else {
       basis_ = IndexBasis(std::move(space));
       ordinal_ = to_ordinal(index_or_index_label);
@@ -748,16 +743,11 @@ class Index : public Taggable {
   const IndexBasis &basis() const noexcept { return basis_; }
 
   /// @return a copy of this Index (same label, proto indices and their
-  /// symmetry) with basis instance @p basis_instance, which carries no name
-  /// (see IndexBasis::name())
+  /// symmetry) with basis instance @p basis_instance as the default registry
+  /// knows it, so a registered instance carries its name and extent (see
+  /// IndexBasisRegistry::resolve())
   [[nodiscard]] Index replace_basis_instance(
-      IndexBasis::optional_instance basis_instance) const {
-    Index result(*this);
-    result.basis_ = IndexBasis(space(), basis_instance);
-    result.label_.reset();
-    result.full_label_.reset();
-    return result;
-  }
+      IndexBasis::optional_instance basis_instance) const;
 
   /// @return true if this index has proto indices
   bool has_proto_indices() const noexcept { return !proto_indices_.empty(); }
@@ -1093,6 +1083,10 @@ class Index : public Taggable {
 
   static std::shared_ptr<const IndexBasisRegistry>
   obtain_default_index_registry();
+
+  /// moves this index into @p space, keeping its basis instance; resets the
+  /// memoized labels
+  void rebase(IndexSpace space);
 
 };  // class Index
 
