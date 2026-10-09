@@ -91,7 +91,9 @@ struct ProjectionOptions {
 /// gets each virtual leg `x` that is not a residual external replaced by a
 /// fresh `x'` on the target pair and basis, times the overlap `s{x';x}`
 /// (`s{x;x'}` for a bra leg); a leg already there stays. An approximation,
-/// exact only at complete domains.
+/// exact only at complete domains, and opt-in: with the default
+/// ProjectionOptions::terms (`None`) nothing changes. Run it after spin
+/// tracing and before density fitting.
 /// @return @p expr itself if nothing changed
 /// @note the result holds fresh temporary indices: canonicalize it before
 /// serializing (deserialization rejects ordinals >= Index::min_tmp_index())

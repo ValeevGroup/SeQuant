@@ -154,15 +154,6 @@ take the instance of the leg they are contracted with.
    :end-before: end-snippet-6
    :dedent: 2
 
-Integral projection approximations (e.g. PNO pair-pair coupling) are a separate, opt-in rewrite; with them off nothing
-runs. :func:`sequant::mbpt::project_integral_domains` acts on R2 terms only, after spin tracing and before density
-fitting. The :enum:`sequant::mbpt::ProjectionTerms` cells select (ov|ov) exchange and (oo|vv) Coulomb integrals in
-linear or non-linear terms, singly or through the composites ``Exchange``, ``Coulomb``, ``Linear``, ``Nonlinear`` and
-``All``; each contracted virtual leg of a selected integral moves to its partner's pair or the integral's own pair
-(:enum:`sequant::mbpt::ProjectionDomain`), in its partner's or the cell's basis instance
-(:enum:`sequant::mbpt::ProjectionBasis`), and an overlap ``s{x';x}`` (``s{x;x'}`` for a bra leg) is inserted per moved
-leg.
-
 .. _context-scoped:
 
 Scoped context changes
