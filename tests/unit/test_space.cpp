@@ -200,7 +200,17 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE_NOTHROW(isr->add(L"ã", IndexBasis{a, 5}));
     REQUIRE(isr->retrieve_basis(L"ã").extent() == a.dimension());
     REQUIRE(isr->retrieve_basis(L"ã").field() == a.field());
+    CHECK_FALSE(isr->retrieve_basis(L"ã").own_extent());
+    CHECK_FALSE(isr->retrieve_basis(L"ã").own_field());
+    CHECK(isr->retrieve_basis(L"μ̃").own_extent() == 77);
+    CHECK(isr->retrieve_basis(L"μ̃").own_field() == Field::Real);
+    // â: registered with the space's current extent and field, which are
+    // then its own and do not follow the space
+    REQUIRE_NOTHROW(isr->add(L"â", IndexBasis{a, 6}, a.dimension(), a.field()));
+    CHECK(isr->retrieve_basis(L"â").own_extent() == a.dimension());
+    CHECK(isr->retrieve_basis(L"â").own_field() == a.field());
     isr->extent(L"a", 33);
+    CHECK(isr->retrieve_basis(L"â").extent() == a.dimension());
     CHECK(isr->retrieve(L"a").dimension() == 33);
     CHECK(std::ranges::find(isr->base_spaces(), a)->dimension() ==
           33);  // the memoized base spaces see the new size
@@ -214,11 +224,13 @@ TEST_CASE("index_space", "[elements]") {
     isr->field(L"a", other_field);
     CHECK(isr->retrieve_basis(L"ã").field() == other_field);
     CHECK(isr->retrieve_basis(L"μ̃").field() == Field::Real);  // its own
+    CHECK(isr->retrieve_basis(L"â").field() == a.field());    // its own
     isr->field(L"a", a.field());
     isr->extent(L"a", 34);
     CHECK(isr->retrieve(L"a").dimension() == 34);
     CHECK(isr->retrieve_basis(L"ã").extent() == 34);
     REQUIRE_NOTHROW(isr->remove(L"ã"));
+    REQUIRE_NOTHROW(isr->remove(L"â"));
     CHECK_THROWS_AS(isr->extent(L"ζ", 1), IndexSpace::bad_key);
     // the deprecated spellings
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN

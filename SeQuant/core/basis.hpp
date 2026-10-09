@@ -47,6 +47,10 @@ namespace sequant {
 /// that differs in any of these (a truncated or an overcomplete set, a
 /// non-orthonormal basis) must be registered under a name, which gives it a
 /// key and metadata of its own (see IndexBasisRegistry::add(label, basis)).
+/// A named basis registered without an extent or a field follows its space's
+/// (own_extent() and own_field() are null), and so sees the registry's
+/// setters for the space's label; one registered with them, even with the
+/// values the space has, does not.
 class IndexBasis {
  public:
   using instance_type = std::int32_t;
@@ -127,6 +131,18 @@ class IndexBasis {
   /// @return the scalar field of the basis: that of its space's own basis
   /// (IndexSpace::field()) unless registered with a field of its own
   Field field() const noexcept { return field_ ? *field_ : space_.field(); }
+
+  /// @return the extent the basis was registered with, null if extent()
+  /// follows the dimension of its space (which the registry's
+  /// IndexBasisRegistry::extent(label, n) for the space's label then sets)
+  const std::optional<std::size_t>& own_extent() const noexcept {
+    return extent_;
+  }
+
+  /// @return the field the basis was registered with, null if field()
+  /// follows that of its space's own basis (which the registry's
+  /// IndexBasisRegistry::field(label, f) for the space's label then sets)
+  const std::optional<Field>& own_field() const noexcept { return field_; }
 
   /// @return `L";N"` for a non-null instance `N`, else an empty string
   std::wstring instance_suffix() const;
