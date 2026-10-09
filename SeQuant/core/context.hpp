@@ -34,10 +34,11 @@ namespace sequant {
 ///   Context::set(std::shared_ptr<const IndexBasisRegistry>) warns about).
 /// - `vacuum`: the vacuum state used to define normal ordering of
 /// `NormalOperator`s
-/// - `metric`: whether the plain basis of vector space (ket) modes are
-/// orthonormal to their dual (bra) counterparts
-///   (`IndexSpaceMetric::Unit`) or not (`IndexSpaceMetric::General`);
-///    this affects the value of Wick contractions.
+/// - `metric` (deprecated): whether every basis is orthonormal
+///   (`IndexSpaceMetric::Unit`) or none is (`IndexSpaceMetric::General`);
+///   the metric is a property of each basis (IndexBasis::metric()), so this
+///   is only kept to make Wick's theorem keep every overlap standing when set
+///   to `IndexSpaceMetric::General`.
 /// - `deserialization_symmetry`, `deserialization_hermiticity`,
 ///    `deserialization_column_symmetry`: the symmetries given to a
 ///    *deserialized* tensor that does not specify them; the programmatic
@@ -118,8 +119,8 @@ class Context {
       [[deprecated("use index_basis_registry")]] std::optional<IndexBasisRegistry> index_space_registry = std::nullopt;
       /// the Vacuum object
       Vacuum vacuum = Defaults::vacuum;
-      /// the IndexSpaceMetric object
-      IndexSpaceMetric metric = Defaults::metric;
+      /// @deprecated the metric is per basis (IndexBasis::metric()); register a non-orthonormal basis with IndexBasisRegistry::add(label, basis, IndexSpaceMetric::General)
+      [[deprecated("the metric is per basis; register a non-orthonormal basis with IndexBasisRegistry::add(label, basis, IndexSpaceMetric::General)")]] IndexSpaceMetric metric = Defaults::metric;
       /// the flag that controls the strictness of bra-ket checks in
       /// tensor network construction
       bool assert_strict_braket_symmetry = Defaults::assert_strict_braket_symmetry;
@@ -210,7 +211,9 @@ class Context {
   index_space_registry() const {
     return index_basis_registry();
   }
+  /// @deprecated the metric is per basis, see IndexBasis::metric()
   /// \return IndexSpaceMetric of this context
+  [[deprecated("the metric is per basis, see IndexBasis::metric()")]]
   IndexSpaceMetric metric() const;
   /// \return true if strict bra-ket symmetry is asserted;
   /// setting this to false (via `Context::set(AssertStrictBraKetSymmetry::No)`)
@@ -303,9 +306,12 @@ class Context {
   /// cannot be told from its only owner. Modifying the registry through any
   /// of these goes unnoticed by the contexts that hold it.
   Context& set(std::shared_ptr<const IndexBasisRegistry> ISR);
+  /// @deprecated the metric is per basis; register a non-orthonormal basis
+  /// with IndexBasisRegistry::add(label, basis, IndexSpaceMetric::General)
   /// Sets the IndexSpaceMetric for this context, convenient for chaining
   /// \param metric IndexSpaceMetric
   /// \return ref to `*this`, for chaining
+  [[deprecated("the metric is per basis; register a non-orthonormal basis with IndexBasisRegistry::add(label, basis, IndexSpaceMetric::General)")]]
   Context& set(IndexSpaceMetric metric);
   /// Sets the bra-ket strict assertion flag for this context, convenient for chaining
   /// \param assert_strict_braket_symmetry AssertStrictBraKetSymmetry

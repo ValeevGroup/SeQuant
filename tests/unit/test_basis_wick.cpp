@@ -13,6 +13,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/bernoulli.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
@@ -421,6 +422,25 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
     auto metric_resetter = set_scoped_default_context(metric_ctx);
     const Index u1(L"ũ_1"), u2(L"ũ_2");
     REQUIRE(u1.basis().metric() == IndexSpaceMetric::General);
+    const auto expr =
+        ex<FNOperator>(cre{}, ann{u2}) * ex<FNOperator>(cre{u1}, ann{});
+    FWickTheorem wick{expr};
+    wick.eta_as_delta_minus_gamma(true);
+    ExprPtr r;
+    REQUIRE_NOTHROW(r = wick.compute());
+    CHECK(tensors_labelled(r, reserved::kronecker_label()).empty());
+    CHECK(tensors_labelled(r, reserved::overlap_label()).size() == 1);
+    CHECK(tensors_labelled(r, reserved::rdm_label()).size() == 1);
+  }
+
+  SECTION("the deprecated context metric still keeps every overlap") {
+    auto metric_ctx = get_default_context();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    metric_ctx.set(IndexSpaceMetric::General);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    auto metric_resetter = set_scoped_default_context(metric_ctx);
+    const Index u1(L"u_1"), u2(L"u_2");
+    REQUIRE(u1.basis().metric() == IndexSpaceMetric::Unit);
     const auto expr =
         ex<FNOperator>(cre{}, ann{u2}) * ex<FNOperator>(cre{u1}, ann{});
     FWickTheorem wick{expr};

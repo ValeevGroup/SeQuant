@@ -14,8 +14,8 @@ The core ``Context``
 vocabulary of index spaces in use, e.g. occupied/virtual), the ``Vacuum`` relative to which operators are normal-ordered
 (``Vacuum::Physical`` — the true, particle-free vacuum —, ``Vacuum::SingleProduct`` — a single-determinant quasiparticle vacuum —, or
 ``Vacuum::MultiProduct`` — a general reference state, for which :class:`sequant::WickTheorem` applies the *extended* form of Wick's
-theorem, with density cumulants), the ``IndexSpaceMetric`` (whether the single-particle basis is orthonormal), and the ``SPBasis``
-(spin-orbital vs. spin-free). It also owns the :ref:`canonicalizer configuration <context-canonicalizer-configuration>`. It is
+theorem, with density cumulants), and the ``SPBasis`` (spin-orbital vs. spin-free); whether a basis is orthonormal is a property
+of the basis (:func:`sequant::IndexBasis::metric`), not of the context. It also owns the :ref:`canonicalizer configuration <context-canonicalizer-configuration>`. It is
 accessed and replaced through :func:`sequant::get_default_context`, :func:`sequant::set_default_context`, and
 :func:`sequant::reset_default_context`.
 
@@ -205,7 +205,7 @@ Every ``Context`` has a version (:func:`sequant::Context::version`) that identif
 space registry, the tensor canonicalizers and index comparers (compared as objects, not by behavior), the cardinal tensor labels, the
 canonicalization options and the single-particle basis (which determines the symmetry of normal operators). Two contexts share a
 version if and only if canonicalization sees the same configuration in both; a version is never reused for another configuration. The
-other settings (vacuum, metric, first dummy index ordinal, typesetting, deserialization defaults) do not affect it.
+other settings (vacuum, first dummy index ordinal, typesetting, deserialization defaults) do not affect it.
 :func:`sequant::current_context_version` returns the version of the context in effect on the calling thread, which lets code that
 caches canonicalization results tell whether they are still valid. Such a cache is keyed on the versions for all statistics, since
 canonicalization reads the single-particle basis from the context for the statistics of the normal operator at hand and the rest

@@ -10,6 +10,7 @@
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/wick.hpp>
 
@@ -587,6 +588,10 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
   const auto &ctx = get_default_context(S);
   SEQUANT_ASSERT(ctx.vacuum() == Vacuum::MultiProduct);
   const auto &isr = *ctx.index_basis_registry();
+  // the deprecated context metric still makes every overlap stand
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  const auto metric = ctx.metric();
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
   // provenance is per input term
   auto per_term = [&](ExprPtr term) -> ExprPtr {
@@ -693,7 +698,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
           });
       for (const auto &p :
            split_mixed_spaces<S>(ex<Product>(ExprPtrList{prefactor, t}), isr,
-                                 ctx.metric(), opts.full_contractions)) {
+                                 metric, opts.full_contractions)) {
         ExprPtr reduced = p;
         WickTheorem<S> reducer{reduced};
         reducer.reduce(reduced);
@@ -727,7 +732,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
     result->append(per_term(input));
   }
   ExprPtr out = result;
-  if (opts.eta_as_delta_minus_gamma) rewrite_eta(out, ctx.metric());
+  if (opts.eta_as_delta_minus_gamma) rewrite_eta(out, metric);
   out = apply_dummy_deltas<S>(out);
   simplify(out);
   if (out->is<Sum>() && out->as<Sum>().empty()) return ex<Constant>(0);

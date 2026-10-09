@@ -49,10 +49,8 @@ TEST_CASE("context", "[runtime]") {
     CHECK_NOTHROW(set_default_context(
         {.index_basis_registry_shared_ptr = mbpt::make_sr_spaces(),
          .vacuum = Vacuum::SingleProduct,
-         .metric = IndexSpaceMetric::Unit,
          .spbasis = SPBasis::Spinfree}));
     CHECK(get_default_context().vacuum() == Vacuum::SingleProduct);
-    CHECK(get_default_context().metric() == IndexSpaceMetric::Unit);
     CHECK(get_default_context().spbasis() == SPBasis::Spinfree);
 
     // the version of the installed default context is the current version
@@ -84,7 +82,6 @@ TEST_CASE("context", "[runtime]") {
     // reset back to default
     CHECK_NOTHROW(reset_default_context());
     CHECK(get_default_context().vacuum() == Vacuum::Physical);
-    CHECK(get_default_context().metric() == IndexSpaceMetric::Unit);
     CHECK(get_default_context().spbasis() == SPBasis::Spinor);
 
     // reset back to initial context
@@ -99,7 +96,6 @@ TEST_CASE("context", "[runtime]") {
       CHECK_NOTHROW(set_scoped_default_context(
           {.index_basis_registry_shared_ptr = mbpt::make_sr_spaces(),
            .vacuum = Vacuum::SingleProduct,
-           .metric = IndexSpaceMetric::Unit,
            .spbasis = SPBasis::Spinfree}));
       CHECK(get_default_context() == initial_ctx);
 
@@ -436,7 +432,9 @@ TEST_CASE("context", "[runtime]") {
       return ctx.version() != before;
     };
     CHECK(!changes([](Context& c) { c.set(Vacuum::SingleProduct); }));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     CHECK(!changes([](Context& c) { c.set(IndexSpaceMetric::General); }));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     CHECK(!changes([](Context& c) { c.set(AssertStrictBraKetSymmetry::No); }));
     CHECK(!changes([](Context& c) { c.set_first_dummy_index_ordinal(200); }));
     CHECK(!changes([](Context& c) { c.set(BraKetTypesetting::KetSub); }));

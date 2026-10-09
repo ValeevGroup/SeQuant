@@ -651,7 +651,10 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
   // if have noncovariant indices, will need to update them at the beginning of
   // every pass
   const auto have_noncovariant_indices = !noncovariant_indices.empty();
+  // the deprecated context metric still makes every overlap stand
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   const auto metric = ctx.metric();
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
   using sequant::reserved::kronecker_label;
   using sequant::reserved::overlap_label;
