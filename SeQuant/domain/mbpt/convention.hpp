@@ -105,7 +105,9 @@ void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& isr);
 void add_thc_spaces(std::shared_ptr<IndexBasisRegistry>& isr);
 
 /// @deprecated the PAO basis is a named instance of the particle space, see
-/// add_pao_basis(), to which this forwards
+/// add_pao_basis(), to which this forwards; like it, this registers the OBS
+/// AO basis `μ` if \p isr has none, which add_ao_spaces() cannot then
+/// register, so call that one first
 [[deprecated(
     "the PAO basis is a named basis instance; use add_pao_basis")]] void
 add_pao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
@@ -122,7 +124,9 @@ inline constexpr IndexBasis::instance_type default_pao_basis_instance =
 /// expects \p isr to have a defined particle space. The PAOs are the AOs
 /// projected on the particle space, so the entry follows the OBS AO basis
 /// `μ` (IndexBasisRegistry::follow()), which add_ao_basis() registers first
-/// if \p isr has no `μ`: its extent, metric (general) and field are those
+/// if \p isr has no `μ`, as the OBS AO basis alone; for the VBS or ABS AO
+/// bases call add_ao_basis() first, since it cannot register `μ` twice. The
+/// PAO bases' extent, metric (general) and field are those
 /// of `μ`, set through `μ`'s label (populate the extent with
 /// IndexBasisRegistry::extent(L"μ", n) before the registry is given to a
 /// Context, which holds it immutable). The α- and β-spin PAO bases are
