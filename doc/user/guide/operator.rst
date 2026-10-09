@@ -217,6 +217,10 @@ compute the reference average.
 In this case partial contractions leave residual operators that become RDMs after Wick's theorem has run, and both
 overloads of ``ref_av`` require empty ``connect`` and ``do_not_connect`` lists: an RDM of rank above one contains both
 connected and disconnected contributions, so whether the operators feeding it are connected is not a property of a term.
+An RDM index is external if it belongs to the context's named indices (``CanonicalizeOptions::named_indices``) or, when
+no named indices are set, if it occurs once in its term. A dummy RDM index is summed over the active space and is
+relabeled into it; an external one keeps its label, and if its space extends beyond the active space the RDM takes an
+active-space index tied to the external one by a Kronecker delta.
 ``vac_av`` always computes full contractions and honors these options, but it computes the Wick vacuum average, which
 may differ from the reference average. Under ``Vacuum::MultiProduct`` (see below) ``ref_av`` takes full contractions and
 honors the lists too.
