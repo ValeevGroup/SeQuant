@@ -133,6 +133,13 @@ std::shared_ptr<const IndexBasisRegistry> take_registry(
   return nullptr;
 }
 
+/// @return the deprecated metric that @p options carries
+IndexSpaceMetric take_metric(const Context::Options& options) {
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  return options.metric;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+}
+
 void check_tensor_canonicalizer(
     const std::shared_ptr<TensorCanonicalizer>& canonicalizer) {
   if (!canonicalizer)
@@ -174,25 +181,25 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
     if (!r1 || !r2) return !r1 && !r2;
     return *r1 == *r2;
   };
-  if (&ctx1 == &ctx2)
-    return true;
-  else
-    return ctx1.vacuum() == ctx2.vacuum() && ctx1.metric() == ctx2.metric() &&
-           ctx1.assert_strict_braket_symmetry() ==
-               ctx2.assert_strict_braket_symmetry() &&
-           ctx1.spbasis() == ctx2.spbasis() &&
-           ctx1.first_dummy_index_ordinal() ==
-               ctx2.first_dummy_index_ordinal() &&
-           ctx1.braket_typesetting() == ctx2.braket_typesetting() &&
-           ctx1.braket_slot_typesetting() == ctx2.braket_slot_typesetting() &&
-           ctx1.deserialization_symmetry() == ctx2.deserialization_symmetry() &&
-           ctx1.deserialization_hermiticity() ==
-               ctx2.deserialization_hermiticity() &&
-           ctx1.deserialization_column_symmetry() ==
-               ctx2.deserialization_column_symmetry() &&
-           *ctx1.canonicalization_config_ == *ctx2.canonicalization_config_ &&
-           same_registry(ctx1.index_basis_registry(),
-                         ctx2.index_basis_registry());
+  if (&ctx1 == &ctx2) return true;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  const bool same_metric = ctx1.metric() == ctx2.metric();
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  return ctx1.vacuum() == ctx2.vacuum() && same_metric &&
+         ctx1.assert_strict_braket_symmetry() ==
+             ctx2.assert_strict_braket_symmetry() &&
+         ctx1.spbasis() == ctx2.spbasis() &&
+         ctx1.first_dummy_index_ordinal() == ctx2.first_dummy_index_ordinal() &&
+         ctx1.braket_typesetting() == ctx2.braket_typesetting() &&
+         ctx1.braket_slot_typesetting() == ctx2.braket_slot_typesetting() &&
+         ctx1.deserialization_symmetry() == ctx2.deserialization_symmetry() &&
+         ctx1.deserialization_hermiticity() ==
+             ctx2.deserialization_hermiticity() &&
+         ctx1.deserialization_column_symmetry() ==
+             ctx2.deserialization_column_symmetry() &&
+         *ctx1.canonicalization_config_ == *ctx2.canonicalization_config_ &&
+         same_registry(ctx1.index_basis_registry(),
+                       ctx2.index_basis_registry());
 }
 
 bool operator!=(const Context& ctx1, const Context& ctx2) {
@@ -397,7 +404,7 @@ pin_default_contexts() {
 Context::Context(Options options)
     : idx_basis_reg_(take_registry(options)),
       vacuum_(options.vacuum),
-      metric_(options.metric),
+      metric_(take_metric(options)),
       assert_strict_braket_symmetry_(options.assert_strict_braket_symmetry),
       spbasis_(options.spbasis),
       first_dummy_index_ordinal_(options.first_dummy_index_ordinal),

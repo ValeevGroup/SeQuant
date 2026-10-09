@@ -13,6 +13,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/bernoulli.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
@@ -259,10 +260,9 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
   }
 
   SECTION("an overlap between two instances is not a Kronecker delta") {
-    const auto unit = IndexSpaceMetric::Unit;
-    CHECK_FALSE(is_kronecker_equivalent(a1_1, a2_2, unit));
-    CHECK(is_kronecker_equivalent(a1_1, a2_1, unit));
-    CHECK(is_kronecker_equivalent(a1, a2_2, unit));
+    CHECK_FALSE(is_kronecker_equivalent(a1_1, a2_2));
+    CHECK(is_kronecker_equivalent(a1_1, a2_1));
+    CHECK(is_kronecker_equivalent(a1, a2_2));
     // f{i_1;a_1<;1>} s{a_1<;1>;a_2<;2>} t{a_2<;2>;i_1}: the overlap stands
     const auto r =
         reduce(ex<Tensor>(L"f", bra{i1}, ket{a1_1}) * make_overlap(a1_1, a2_2) *
@@ -412,11 +412,35 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
     }
   }
 
-  SECTION("η = δ - γ under a non-unit metric is an overlap minus γ") {
+  SECTION("η = δ - γ in a non-orthonormal basis is an overlap minus γ") {
+    // ũ: a basis of the active space with a general metric
+    auto isr = mbpt::make_mr_spaces();
+    isr->add(L"ũ", IndexBasis{isr->retrieve(L"u"), 1},
+             IndexSpaceMetric::General);
     auto metric_ctx = get_default_context();
+    metric_ctx.set(std::move(isr));
+    auto metric_resetter = set_scoped_default_context(metric_ctx);
+    const Index u1(L"ũ_1"), u2(L"ũ_2");
+    REQUIRE(u1.basis().metric() == IndexSpaceMetric::General);
+    const auto expr =
+        ex<FNOperator>(cre{}, ann{u2}) * ex<FNOperator>(cre{u1}, ann{});
+    FWickTheorem wick{expr};
+    wick.eta_as_delta_minus_gamma(true);
+    ExprPtr r;
+    REQUIRE_NOTHROW(r = wick.compute());
+    CHECK(tensors_labelled(r, reserved::kronecker_label()).empty());
+    CHECK(tensors_labelled(r, reserved::overlap_label()).size() == 1);
+    CHECK(tensors_labelled(r, reserved::rdm_label()).size() == 1);
+  }
+
+  SECTION("the deprecated context metric still keeps every overlap") {
+    auto metric_ctx = get_default_context();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     metric_ctx.set(IndexSpaceMetric::General);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     auto metric_resetter = set_scoped_default_context(metric_ctx);
     const Index u1(L"u_1"), u2(L"u_2");
+    REQUIRE(u1.basis().metric() == IndexSpaceMetric::Unit);
     const auto expr =
         ex<FNOperator>(cre{}, ann{u2}) * ex<FNOperator>(cre{u1}, ann{});
     FWickTheorem wick{expr};

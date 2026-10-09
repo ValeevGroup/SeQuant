@@ -151,8 +151,9 @@ analysis, where the standard path contracts them in parallel. Each resulting ter
   :math:`\delta` or overlap) connects all the input operators its indices came from, any other tensor (e.g. a coefficient) none.
 
 Finally every one-body ``η`` is optionally rewritten as :math:`\delta - \gamma` (``WickTheorem::eta_as_delta_minus_gamma``; a
-multi-body ``η`` of the input is kept, and the :math:`\delta` is an overlap unless that is a Kronecker delta: under a non-unit
-metric, or between indices with different protoindices or in different basis instances), the
+multi-body ``η`` of the input is kept, and the :math:`\delta` is an overlap unless that is a Kronecker delta: between indices
+with different protoindices, in different basis instances or in a non-orthonormal basis, see
+:func:`sequant::is_kronecker_equivalent`), the
 :math:`\delta`\ s over summed indices are applied, and the result is simplified. In it ``γ{ann;cre}`` and ``η{ann;cre}`` are
 one-body, Hermitian and column-symmetric, ``κ{ann…;cre…}`` is of rank :math:`\ge 2`, antisymmetric, Hermitian and
 column-symmetric, and all their indices are active. These symmetries take part in the tensor hash, so a density spelled
@@ -184,7 +185,8 @@ Raw contraction output can contain chains of Kronecker deltas and overlaps intro
 and eliminating deltas wherever the internal/external status of the indices they bind allows it. An overlap is applied only if one of
 its indices is *covariant*, a dummy that appears exactly twice and neither has nor is a protoindex, since such an index can be rotated
 into the basis of the other; between two noncovariant indices it stands. The exception is an overlap that is itself a Kronecker delta
-(unit metric, both indices with the same protoindices and not in two different basis instances, i.e. in one basis): it identifies
+(:func:`sequant::is_kronecker_equivalent`: both indices in one orthonormal basis, i.e. with the same protoindices, not in two
+different basis instances and neither in a basis of general metric): it identifies
 its indices, through the indices they are protoindices of as well, so it is applied unless both are unpaired dummies (not
 appearing exactly twice); unlike a Kronecker delta between them, which is applied, it then stands. These rules apply only if the
 input of Wick's theorem has noncovariant indices; otherwise every overlap is applied. The result is then, like any other

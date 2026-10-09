@@ -466,7 +466,7 @@ TEST_CASE(
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -495,7 +495,7 @@ TEST_CASE(
   // the only batchable mode, contracted role.
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const&) {
     return false;
@@ -559,7 +559,7 @@ TEST_CASE(
   // root-level BuildStep. Same identification as test_ordered_schedule.cpp's
   // water-20 acceptance test (Target 1 -> its structural parent).
   auto const is_K = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   auto const carries_type =
       [&](sequant::container::svector<sequant::Index> const& v,
@@ -572,7 +572,7 @@ TEST_CASE(
       return carried.size() == 2 &&
              std::all_of(carried.begin(), carried.end(),
                          [](sequant::Index const& ix) {
-                           return ix.space().base_key() == L"μ̃";
+                           return ix.basis().base_key() == L"μ̃";
                          });
     };
     for (bool const require_mu_mu : {true, false}) {
@@ -1075,7 +1075,7 @@ TEST_CASE(
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -1107,7 +1107,7 @@ TEST_CASE(
   // external occ loop per node.
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
     auto const reg = sequant::get_default_context().index_basis_registry();
@@ -1115,7 +1115,7 @@ TEST_CASE(
   };
   policy.batch_spectator_indices = true;
   policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   policy.is_volatile_leaf = [](sequant::Tensor const& t) {
     return t.label() == L"t";
@@ -1176,7 +1176,7 @@ TEST_CASE(
   REQUIRE(!forest.empty());
 
   auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
   REQUIRE(!rich.cells.empty());
@@ -1448,7 +1448,7 @@ TEST_CASE(
   sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
   std::function<std::size_t(sequant::Index const&)> const target =
       [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   std::function<bool(Node const&)> const is_volatile_node =
       [p = policy.is_volatile_leaf](Node const& n) -> bool {
@@ -1583,7 +1583,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -1602,7 +1602,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
     auto const reg = sequant::get_default_context().index_basis_registry();
@@ -1610,7 +1610,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   };
   policy.batch_spectator_indices = true;
   policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   policy.is_volatile_leaf = [](sequant::Tensor const& t) {
     return t.label() == L"t";
@@ -1650,7 +1650,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   }
   REQUIRE(!forest.empty());
   auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
   auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
@@ -1942,7 +1942,7 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -1961,7 +1961,7 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
     auto const reg = sequant::get_default_context().index_basis_registry();
@@ -1969,7 +1969,7 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
   };
   policy.batch_spectator_indices = true;
   policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   policy.is_volatile_leaf = [](sequant::Tensor const& t) {
     return t.label() == L"t";
@@ -2011,7 +2011,7 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
   }
   REQUIRE(!forest.empty());
   auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
   auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
@@ -2146,7 +2146,7 @@ TEST_CASE(
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -2178,7 +2178,7 @@ TEST_CASE(
   // external occ loop per node.
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
     auto const reg = sequant::get_default_context().index_basis_registry();
@@ -2186,7 +2186,7 @@ TEST_CASE(
   };
   policy.batch_spectator_indices = true;
   policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   policy.is_volatile_leaf = [](sequant::Tensor const& t) {
     return t.label() == L"t";
@@ -2247,7 +2247,7 @@ TEST_CASE(
   REQUIRE(!forest.empty());
 
   auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
   REQUIRE(!rich.cells.empty());
@@ -2347,7 +2347,7 @@ TEST_CASE(
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -2373,7 +2373,7 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const&) {
     return false;
@@ -2544,8 +2544,8 @@ TEST_CASE(
   {
     std::function<void(sequant::eval::ScopeBlock const&, bool)> scan =
         [&](sequant::eval::ScopeBlock const& b, bool inK) {
-          bool const here = inK || b.axis.space().base_key() == L"Κ";
-          if (b.axis.space().base_key() == L"Κ") ++n_Kblocks;
+          bool const here = inK || b.axis.basis().base_key() == L"Κ";
+          if (b.axis.basis().base_key() == L"Κ") ++n_Kblocks;
           if (here)
             for (auto const& s : b.steps)
               if (auto const* bs =
@@ -2634,7 +2634,7 @@ TEST_CASE(
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -2701,20 +2701,20 @@ TEST_CASE(
       batch_occ && std::getenv("SEQUANT_UT_DRYRUN_OCC_CONTRACTED") != nullptr;
   policy.is_batchable_contracted_index =
       [batch_aux, batch_pao, occ_contracted](sequant::Index const& ix) {
-        return (batch_aux && ix.space().base_key() == L"Κ") ||
-               (batch_pao && ix.space().base_key() == L"μ̃") ||
-               (occ_contracted && ix.space().base_key() == L"i");
+        return (batch_aux && ix.basis().base_key() == L"Κ") ||
+               (batch_pao && ix.basis().base_key() == L"μ̃") ||
+               (occ_contracted && ix.basis().base_key() == L"i");
       };
   policy.is_batchable_external_index = [batch_occ](sequant::Index const& ix) {
-    return batch_occ && ix.space().base_key() == L"i";
+    return batch_occ && ix.basis().base_key() == L"i";
   };
   policy.batch_spectator_indices = batch_occ;
   policy.batch_target_size =
       [batch_aux, batch_pao, batch_occ, kAuxBlock, kOccBlock,
        kPaoBlock](sequant::Index const& ix) -> std::size_t {
-    if (batch_aux && ix.space().base_key() == L"Κ") return kAuxBlock;
-    if (batch_pao && ix.space().base_key() == L"μ̃") return kPaoBlock;
-    if (batch_occ && ix.space().base_key() == L"i") return kOccBlock;
+    if (batch_aux && ix.basis().base_key() == L"Κ") return kAuxBlock;
+    if (batch_pao && ix.basis().base_key() == L"μ̃") return kPaoBlock;
+    if (batch_occ && ix.basis().base_key() == L"i") return kOccBlock;
     return 1;
   };
   policy.is_volatile_leaf = [](sequant::Tensor const& t) {
@@ -2830,7 +2830,7 @@ TEST_CASE(
   {
     std::function<void(sequant::eval::ScopeBlock const&)> cnt =
         [&](sequant::eval::ScopeBlock const& b) {
-          if (b.axis.space().base_key() == L"Κ") ++n_Kblocks;
+          if (b.axis.basis().base_key() == L"Κ") ++n_Kblocks;
           for (auto const& s : b.steps)
             if (auto const* ch =
                     std::get_if<sequant::eval::ScopeBlock>(&s.value))
@@ -2874,7 +2874,7 @@ TEST_CASE(
     std::wstring s;
     for (std::size_t i = 0; i < v.size(); ++i) {
       if (i) s += L",";
-      s += std::wstring(v[i].space().base_key());
+      s += std::wstring(v[i].basis().base_key());
     }
     return s;
   };
@@ -3041,7 +3041,7 @@ TEST_CASE(
     }
     std::function<void(sequant::eval::ScopeBlock const&, bool)> sc =
         [&](sequant::eval::ScopeBlock const& b, bool inK) {
-          bool const here = inK || b.axis.space().base_key() == L"Κ";
+          bool const here = inK || b.axis.basis().base_key() == L"Κ";
           if (here)
             for (auto const& s : b.steps)
               if (auto const* bs =
@@ -3201,7 +3201,7 @@ TEST_CASE(
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -3230,7 +3230,7 @@ TEST_CASE(
   // the b0 enum-based scheduler selection: BatchScheduler::ordered.
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const&) {
     return false;
@@ -3397,7 +3397,7 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -3422,7 +3422,7 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const&) {
     return false;
@@ -3495,14 +3495,14 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
   };
 
   auto const is_K = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   auto const space_sig =
       [](sequant::container::svector<sequant::Index> const& v) -> std::wstring {
     std::wstring s;
     for (std::size_t i = 0; i < v.size(); ++i) {
       if (i) s += L",";
-      s += std::wstring(v[i].space().base_key());
+      s += std::wstring(v[i].basis().base_key());
     }
     return s;
   };
@@ -4262,7 +4262,7 @@ TEST_CASE(
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -4281,7 +4281,7 @@ TEST_CASE(
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
     auto const reg = sequant::get_default_context().index_basis_registry();
@@ -4289,7 +4289,7 @@ TEST_CASE(
   };
   policy.batch_spectator_indices = true;
   policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   policy.is_volatile_leaf = [](sequant::Tensor const& t) {
     return t.label() == L"t";
@@ -4329,7 +4329,7 @@ TEST_CASE(
   }
   REQUIRE(!forest.empty());
   auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
   auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
@@ -4342,7 +4342,7 @@ TEST_CASE(
   sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
   std::function<std::size_t(sequant::Index const&)> const target =
       [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   std::function<bool(Node const&)> const is_volatile_node =
       [p = policy.is_volatile_leaf](Node const& n) -> bool {
@@ -4397,7 +4397,7 @@ TEST_CASE(
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -4420,7 +4420,7 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
     auto const reg = sequant::get_default_context().index_basis_registry();
@@ -4428,7 +4428,7 @@ TEST_CASE(
   };
   policy.batch_spectator_indices = true;
   policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   policy.is_volatile_leaf = [](sequant::Tensor const& t) {
     return t.label() == L"t";
@@ -4471,7 +4471,7 @@ TEST_CASE(
   REQUIRE(!forest.empty());
 
   auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
   auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
@@ -4484,7 +4484,7 @@ TEST_CASE(
   sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
   std::function<std::size_t(sequant::Index const&)> const target =
       [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   std::function<bool(Node const&)> const is_volatile_node =
       [p = policy.is_volatile_leaf](Node const& n) -> bool {
@@ -4717,7 +4717,7 @@ TEST_CASE(
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -4743,7 +4743,7 @@ TEST_CASE(
   // escape) possible at all.
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
     auto const reg = sequant::get_default_context().index_basis_registry();
@@ -4751,7 +4751,7 @@ TEST_CASE(
   };
   policy.batch_spectator_indices = true;
   policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   policy.is_volatile_leaf = [](sequant::Tensor const& t) {
     return t.label() == L"t";
@@ -4794,7 +4794,7 @@ TEST_CASE(
   REQUIRE(!forest.empty());
 
   auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
   auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
@@ -4807,7 +4807,7 @@ TEST_CASE(
   sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
   std::function<std::size_t(sequant::Index const&)> const target =
       [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   std::function<bool(Node const&)> const is_volatile_node =
       [p = policy.is_volatile_leaf](Node const& n) -> bool {
@@ -4913,7 +4913,7 @@ TEST_CASE(
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -4932,7 +4932,7 @@ TEST_CASE(
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
     auto const reg = sequant::get_default_context().index_basis_registry();
@@ -4940,7 +4940,7 @@ TEST_CASE(
   };
   policy.batch_spectator_indices = true;
   policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   policy.is_volatile_leaf = [](sequant::Tensor const& t) {
     return t.label() == L"t";
@@ -4981,7 +4981,7 @@ TEST_CASE(
   REQUIRE(!forest.empty());
 
   auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
   auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
@@ -4994,7 +4994,7 @@ TEST_CASE(
   sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
   std::function<std::size_t(sequant::Index const&)> const target =
       [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
   };
   std::function<bool(Node const&)> const is_volatile_node =
       [p = policy.is_volatile_leaf](Node const& n) -> bool {
@@ -5215,7 +5215,7 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     REQUIRE(ctx.index_basis_registry() != nullptr);
     auto isr = std::make_shared<sequant::IndexBasisRegistry>(
         *ctx.index_basis_registry());
-    sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+    sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
     sequant::mbpt::add_df_spaces(isr);
     ctx.set(isr);
     auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -5238,7 +5238,7 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
 
     sequant::BatchPolicy policy;
     policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-      return ix.space().base_key() == L"Κ";
+      return ix.basis().base_key() == L"Κ";
     };
     policy.is_batchable_external_index = [](sequant::Index const& ix) {
       auto const reg = sequant::get_default_context().index_basis_registry();
@@ -5246,7 +5246,7 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     };
     policy.batch_spectator_indices = true;
     policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-      return ix.space().base_key() == L"Κ" ? 256 : 16;
+      return ix.basis().base_key() == L"Κ" ? 256 : 16;
     };
     policy.is_volatile_leaf = [](sequant::Tensor const& t) {
       return t.label() == L"t";
@@ -5289,7 +5289,7 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     REQUIRE(!forest.empty());
 
     auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-      return ix.space().base_key() == L"Κ" ? 256 : 16;
+      return ix.basis().base_key() == L"Κ" ? 256 : 16;
     };
     auto const rich =
         sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
@@ -5311,7 +5311,7 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
     std::function<std::size_t(sequant::Index const&)> const target =
         [](sequant::Index const& ix) -> std::size_t {
-      return ix.space().base_key() == L"Κ" ? 256 : 16;
+      return ix.basis().base_key() == L"Κ" ? 256 : 16;
     };
     std::function<bool(Node const&)> const is_volatile_node =
         [p = policy.is_volatile_leaf](Node const& n) -> bool {

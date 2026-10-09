@@ -91,11 +91,10 @@ class index_repl_dst_t {
 /// @brief computes index replacement rules
 
 /// Kronecker deltas are translated into index replacement rules.
-/// If using orthonormal representation, overlaps between orthonormal spaces
-/// are Kronecker deltas, hence such overlaps are also used to produce
-/// replacement rules.
-/// (N.B. even if working in orthonormal representation, dependent spaces are
-/// not orthonormal if their protoindices differ).
+/// Overlaps between indices in one orthonormal basis are Kronecker deltas
+/// (see is_kronecker_equivalent), hence such overlaps are also used to
+/// produce replacement rules.
+/// (N.B. dependent bases are not one basis if their protoindices differ).
 /// Summations are then reduced by index replacements.
 /// Reducing sums over dummy
 /// (internal) indices uses 2 rules:
@@ -122,7 +121,8 @@ class index_repl_dst_t {
 /// so by a Kronecker delta (or an overlap equivalent to one) with another
 /// @param unpaired_indices the internal indices that do not appear exactly
 /// twice in nonproto slots, i.e. appear once or more than twice
-/// @param metric the metric of the index spaces
+/// @param metric the metric of the context, which if general makes every
+/// overlap stand
 /// @throw Exception if a Kronecker delta binds indices of intersecting spaces
 /// whose bases resolve to different basis instances
 template <Statistics S>
@@ -448,7 +448,7 @@ compute_index_replacement_rules(
       // Kronecker delta (its indices in one basis) is one, whatever makes
       // its indices noncovariant, so only unpaired indices keep it
       const bool kronecker_equivalent =
-          is_kronecker_equivalent(bra, ket, metric);
+          metric == IndexSpaceMetric::Unit && is_kronecker_equivalent(bra, ket);
       auto keeps_overlap = [&](const Index &idx) {
         return kronecker_equivalent ? unpaired_indices.contains(idx)
                                     : noncovariant_indices.contains(idx);
@@ -640,8 +640,8 @@ inline bool apply_index_replacement_rules(
   return mutated;
 }
 
-/// resolves Kronecker deltas (and, using orthonormal representation, overlaps
-/// between indices in orthonormal spaces) in summations
+/// resolves Kronecker deltas (and overlaps between indices in one
+/// orthonormal basis, see is_kronecker_equivalent) in summations
 /// @return false if @c expr is zero
 template <Statistics S>
 bool reduce_wick_impl(std::shared_ptr<Product> &expr,
@@ -651,7 +651,10 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
   // if have noncovariant indices, will need to update them at the beginning of
   // every pass
   const auto have_noncovariant_indices = !noncovariant_indices.empty();
+  // the deprecated context metric still makes every overlap stand
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   const auto metric = ctx.metric();
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
   using sequant::reserved::kronecker_label;
   using sequant::reserved::overlap_label;
@@ -717,8 +720,8 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
           const auto tlabel = t._label();
           const auto is_kronecker =
               tlabel == kronecker_label() ||
-              (tlabel == overlap_label() &&
-               is_kronecker_equivalent(t._bra()[0], t._ket()[0], metric));
+              (tlabel == overlap_label() && metric == IndexSpaceMetric::Unit &&
+               is_kronecker_equivalent(t._bra()[0], t._ket()[0]));
           if (is_kronecker) {
             SEQUANT_ASSERT(t._bra_rank() == 1);
             Index b = t._bra()[0];

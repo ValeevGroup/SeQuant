@@ -541,8 +541,8 @@ namespace detail {
 
 /// \brief A default mode to batch the subtree at \p node over: the contracted
 /// index (see contracted_indices) that satisfies \p accept, choosing the one
-/// with the largest IndexSpace approximate size -- typically the auxiliary/RI
-/// index, whose elimination most reduces the peak intermediate.
+/// with the largest extent (IndexBasis::extent()) -- typically the
+/// auxiliary/RI index, whose elimination most reduces the peak intermediate.
 ///
 /// \param accept a predicate `bool(Index const&)` selecting which contracted
 ///        indices are eligible to batch over (e.g. only those in a given
@@ -554,14 +554,12 @@ template <typename IndexPredicate>
   std::optional<Index> best;
   for (Index const& ix : contracted_indices(node)) {
     if (!accept(ix)) continue;
-    if (!best ||
-        best->space().approximate_size() < ix.space().approximate_size())
-      best = ix;
+    if (!best || best->basis().extent() < ix.basis().extent()) best = ix;
   }
   return best;
 }
 
-/// \overload Batches over any contracted index (largest approximate size).
+/// \overload Batches over any contracted index (largest extent).
 [[nodiscard]] inline std::optional<Index> batch_axis(
     meta::eval_node auto const& node) {
   return batch_axis(node, [](Index const&) { return true; });

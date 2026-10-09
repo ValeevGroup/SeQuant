@@ -189,25 +189,15 @@ TEST_CASE("optimize", "[optimize]") {
     auto reg = std::make_shared<IndexBasisRegistry>(
         *get_default_context().index_basis_registry());
 
-    {
-      auto occ = reg->retrieve_ptr(L"i");
-      auto uocc = reg->retrieve_ptr(L"a");
-      auto aux = reg->retrieve_ptr(L"x");
-      REQUIRE(occ);
-      REQUIRE(uocc);
-      REQUIRE(aux);
-      occ->approximate_size(10);
-      uocc->approximate_size(100);
-      aux->approximate_size(4);
-      REQUIRE(uocc->approximate_size() == 100);
-    }
+    reg->extent(L"i", 10).extent(L"a", 100).extent(L"x", 4);
+    REQUIRE(reg->retrieve(L"a").dimension() == 100);
     auto ctx_resetter =
         set_scoped_default_context(get_default_context_snapshot().set(reg));
 
     auto single_term_opt = [](Product const& prod) {
       return opt::single_term_opt(prod, [](Index const& ix) {
         // null space contributes x1 to the size
-        auto sz = ix.nonnull() ? ix.space().approximate_size() : 1;
+        auto sz = ix.nonnull() ? ix.basis().extent() : 1;
         return sz;
       });
     };
@@ -382,7 +372,7 @@ TEST_CASE("optimize", "[optimize]") {
       //               x10 term is the cheap O^2 V^2 final step)
       //               => t contracted LAST, persistent integral formed first.
       auto idxsz = [](Index const& ix) {
-        return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+        return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
       };
 
       auto prod = parse_expr_antisymm(
@@ -451,8 +441,8 @@ TEST_CASE("optimize", "[optimize]") {
       // flips the choice to (A*B)*C. Flip threshold here is footprint_weight >
       // ~5.2.
       auto sized = std::make_shared<IndexBasisRegistry>(*reg);
-      sized->retrieve_ptr(L"a")->approximate_size(4);     // virtual: SMALL
-      sized->retrieve_ptr(L"x")->approximate_size(1000);  // aux: LARGE
+      sized->extent(L"a", 4);     // virtual: SMALL
+      sized->extent(L"x", 1000);  // aux: LARGE
       auto sized_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(sized));
 
@@ -486,8 +476,7 @@ TEST_CASE("optimize", "[optimize]") {
 
     SECTION("Non-covariant indices") {
       auto sized = std::make_shared<IndexBasisRegistry>(*reg);
-      sized->retrieve_ptr(L"x")->approximate_size(
-          3 * reg->retrieve(L"a").approximate_size());
+      sized->extent(L"x", 3 * reg->retrieve(L"a").dimension());
       auto sized_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(sized));
 
@@ -577,13 +566,13 @@ TEST_CASE("optimize", "[optimize]") {
       using namespace sequant;
       // i occ (size 2); a virt (size 4). Tensors: g{a1;i1}, g{a2;i2}.
       auto sized = std::make_shared<IndexBasisRegistry>(*reg);
-      sized->retrieve_ptr(L"i")->approximate_size(2);
-      sized->retrieve_ptr(L"a")->approximate_size(4);
+      sized->extent(L"i", 2);
+      sized->extent(L"a", 4);
       auto sized_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(sized));
 
       auto idxsz = [](Index const& ix) -> std::size_t {
-        return ix.space().approximate_size();
+        return ix.basis().extent();
       };
       auto g1 = deserialize(L"g{a1;i1}", {.def_perm_symm = Symmetry::Nonsymm});
       auto g2 = deserialize(L"g{a2;i2}", {.def_perm_symm = Symmetry::Nonsymm});
@@ -602,7 +591,7 @@ TEST_CASE("optimize", "[optimize]") {
     SECTION("DensePeakSize DP matches brute-force oracle") {
       using namespace sequant;
       auto idxsz = [](Index const& ix) -> std::size_t {
-        return ix.space().approximate_size();
+        return ix.basis().extent();
       };
       // A 4-tensor chain whose intermediates differ in size by contraction
       // order.
@@ -622,7 +611,7 @@ TEST_CASE("optimize", "[optimize]") {
     SECTION("DensePeakSize matches oracle over a battery of small networks") {
       using namespace sequant;
       auto idxsz = [](Index const& ix) -> std::size_t {
-        return ix.space().approximate_size();
+        return ix.basis().extent();
       };
       std::vector<std::vector<std::wstring>> nets = {
           {L"g{a1;i1}", L"g{a1;a2}", L"g{a2;i2}"},
@@ -647,7 +636,7 @@ TEST_CASE("optimize", "[optimize]") {
     SECTION("DensePeakSize reconstructed sequence achieves the DP optimum") {
       using namespace sequant;
       auto idxsz = [](Index const& ix) -> std::size_t {
-        return ix.space().approximate_size();
+        return ix.basis().extent();
       };
       // Simulate the all-co-resident (model A) peak of a reconstructed
       // EvalSequence and confirm it EQUALS peak_cost (the DP's minimum).
@@ -714,10 +703,10 @@ TEST_CASE("optimize", "[optimize]") {
               L"F", IndexSpace::Type{0b10000}, 3ul)));
 
       auto idxsz = [](Index const& ix) -> std::size_t {
-        return ix.space().approximate_size();
+        return ix.basis().extent();
       };
       auto is_batchable = [](Index const& ix) {
-        return ix.space().base_key() == L"F";
+        return ix.basis().base_key() == L"F";
       };
       auto t0 =
           deserialize(L"g{a1;i1;F1}", {.def_perm_symm = Symmetry::Nonsymm});
@@ -748,10 +737,10 @@ TEST_CASE("optimize", "[optimize]") {
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
               L"F", IndexSpace::Type{0b10000}, 3ul)));
       auto idxsz = [](Index const& ix) -> std::size_t {
-        return ix.space().approximate_size();
+        return ix.basis().extent();
       };
       auto is_batchable = [](Index const& ix) {
-        return ix.space().base_key() == L"F";
+        return ix.basis().base_key() == L"F";
       };
       std::size_t const batch = 1;
       std::vector<ExprPtr> ts;
@@ -799,10 +788,10 @@ TEST_CASE("optimize", "[optimize]") {
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
               L"F", IndexSpace::Type{0b10000}, 3ul)));
       auto idxsz = [](Index const& ix) -> std::size_t {
-        return ix.space().approximate_size();
+        return ix.basis().extent();
       };
       auto is_batchable = [](Index const& ix) {
-        return ix.space().base_key() == L"F";
+        return ix.basis().base_key() == L"F";
       };
       std::size_t const batch = 1;
       std::vector<std::vector<std::wstring>> nets = {
@@ -854,10 +843,10 @@ TEST_CASE("optimize", "[optimize]") {
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
               L"F", IndexSpace::Type{0b10000}, 3ul)));
       auto idxsz = [](Index const& ix) -> std::size_t {
-        return ix.space().approximate_size();
+        return ix.basis().extent();
       };
       auto is_batchable = [](Index const& ix) {
-        return ix.space().base_key() == L"F";
+        return ix.basis().base_key() == L"F";
       };
       std::size_t const batch = 1;
       for (auto const& spec : std::vector<std::vector<std::wstring>>{
@@ -893,10 +882,10 @@ TEST_CASE("optimize", "[optimize]") {
       OptimizeOptions opts;
       opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
       opts.idx_to_extent = [](Index const& ix) -> std::size_t {
-        return ix.space().approximate_size();
+        return ix.basis().extent();
       };
       opts.batch_policy.is_batchable_contracted_index = [](Index const& ix) {
-        return ix.space().base_key() == L"F";
+        return ix.basis().base_key() == L"F";
       };
       opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
         return 1;
@@ -916,7 +905,7 @@ TEST_CASE("optimize", "[optimize]") {
       OptimizeOptions opts;
       opts.objective_function = ObjectiveFunction::DensePeakSize;
       opts.idx_to_extent = [](Index const& ix) -> std::size_t {
-        return ix.space().approximate_size();
+        return ix.basis().extent();
       };
       auto optimized = optimize(expr, opts);
       REQUIRE(optimized);
@@ -926,17 +915,17 @@ TEST_CASE("optimize", "[optimize]") {
 
     SECTION("per-index batch_target_size honored") {
       using namespace sequant;
-      // Register F with approximate_size=3; two distinct aux indices F_1, F_2.
+      // Register F with dimension=3; two distinct aux indices F_1, F_2.
       // Index::label() returns base_key + "_" + ordinal, so the F1 ordinal-1
       // index has label L"F_1" (not L"F1").
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
               L"F", IndexSpace::Type{0b10000}, 3ul)));
       auto idxsz = [](Index const& ix) -> std::size_t {
-        return ix.space().approximate_size();
+        return ix.basis().extent();
       };
       auto is_batchable = [](Index const& ix) {
-        return ix.space().base_key() == L"F";
+        return ix.basis().base_key() == L"F";
       };
       // 3-tensor network where the connector tensor t1 carries BOTH F_1 and
       // F_2: F_1 is contracted between t0 and t1, while F_2 propagates
@@ -986,10 +975,8 @@ TEST_CASE("optimize", "[optimize]") {
 
     SECTION("CostModel concept conformance + custom model") {
       using namespace sequant;
-      // idxsz lambda captures approximate_size() for each index space.
-      auto idxsz = [](Index const& ix) {
-        return ix.space().approximate_size();
-      };
+      // idxsz lambda captures dimension() for each index space.
+      auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
 
       // --- Static conformance checks ---
       // AdditiveModel (FLOPs variant): two template params (CostFn,
@@ -1215,16 +1202,16 @@ TEST_CASE("optimize", "[optimize]") {
     auto reg = std::make_shared<IndexBasisRegistry>(
         *get_default_context().index_basis_registry());
     mbpt::add_df_spaces(reg);
-    mbpt::add_pao_spaces(reg, mbpt::Spin::any);
-    mbpt::add_ao_spaces(reg, mbpt::Spin::any);
+    mbpt::add_ao_basis(reg, mbpt::Spin::any);
+    mbpt::add_pao_basis(reg, mbpt::Spin::any);
     // i 10
     // a 40
     // μ̃ 50
     // Κ 90
     for (auto&& [k, v] :
          std::initializer_list<std::pair<std::wstring_view, size_t>>{
-             {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}}) {
-      reg->retrieve_ptr(k)->approximate_size(v);
+             {L"i", 10}, {L"a", 40}, {L"μ", 50}, {L"Κ", 90}}) {
+      reg->extent(k, v);
     }
     auto ctx_resetter =
         set_scoped_default_context(get_default_context_snapshot().set(reg));
@@ -1234,7 +1221,7 @@ TEST_CASE("optimize", "[optimize]") {
           prod,
           [](Index const& ix) {
             // null space contributes x1 to the size
-            auto sz = ix.nonnull() ? ix.space().approximate_size() : 1;
+            auto sz = ix.nonnull() ? ix.basis().extent() : 1;
             return sz;
           },
           /*subnet_cse=*/cse);
@@ -1274,8 +1261,8 @@ TEST_CASE("optimize", "[optimize]") {
       // Cost(...) * Y2 = 12*10*12 = 1440.
       // Total Unbalanced: 1440 + 1440 + 1440 = 4320.
       // 3168 < 4320 < 4608.
-      reg->retrieve_ptr(L"i")->approximate_size(12);
-      reg->retrieve_ptr(L"a")->approximate_size(10);
+      reg->extent(L"i", 12);
+      reg->extent(L"a", 10);
       auto ctx_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -1283,7 +1270,7 @@ TEST_CASE("optimize", "[optimize]") {
         return opt::single_term_opt(
             prod,
             [](Index const& ix) {
-              return ix.nonnull() ? ix.space().approximate_size() : 1;
+              return ix.nonnull() ? ix.basis().extent() : 1;
             },
             cse);
       };
@@ -1311,13 +1298,13 @@ TEST_CASE("optimize", "[optimize]") {
           *get_default_context().index_basis_registry());
       // Same sizing trick as the section above: CSE prefers balanced,
       // no-CSE prefers unbalanced.
-      reg->retrieve_ptr(L"i")->approximate_size(12);
-      reg->retrieve_ptr(L"a")->approximate_size(10);
+      reg->extent(L"i", 12);
+      reg->extent(L"a", 10);
       auto ctx_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(reg));
 
       auto idx_to_extent = [](Index const& ix) -> std::size_t {
-        return ix.nonnull() ? ix.space().approximate_size() : 1;
+        return ix.nonnull() ? ix.basis().extent() : 1;
       };
 
       auto prod =
@@ -1362,7 +1349,7 @@ TEST_CASE("optimize", "[optimize]") {
   auto reg_check = get_default_context().index_basis_registry();
   auto uocc_check = reg_check->retrieve_ptr(L"a");
   REQUIRE(uocc_check);
-  REQUIRE(uocc_check->approximate_size() == 10);
+  REQUIRE(uocc_check->dimension() == 10);
 }
 
 // ---------------------------------------------------------------------------
@@ -1430,22 +1417,15 @@ TEST_CASE(
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  {
-    auto occ = reg->retrieve_ptr(L"i");
-    auto uocc = reg->retrieve_ptr(L"a");
-    REQUIRE(occ);
-    REQUIRE(uocc);
-    occ->approximate_size(10);
-    uocc->approximate_size(100);
-  }
+  reg->extent(L"i", 10).extent(L"a", 100);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
 
   auto is_batchable = [](Index const& ix) {
-    return ix.space().base_key() == L"a";
+    return ix.basis().base_key() == L"a";
   };
   std::function<bool(Index const&)> is_batchable_external =
-      [](Index const& ix) { return ix.space().base_key() == L"i"; };
+      [](Index const& ix) { return ix.basis().base_key() == L"i"; };
 
   auto f = deserialize(L"f{i_1;i_2}", {.def_perm_symm = Symmetry::Nonsymm});
   auto t = deserialize(L"t{i_2;a_1}", {.def_perm_symm = Symmetry::Nonsymm});
@@ -1462,7 +1442,7 @@ TEST_CASE(
 
   // build_context resolves each mode's role and applies the role filter.
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   auto batch_fn = [](Index const&) -> std::size_t { return 4; };
   opt::detail::PeakBatchedModel<decltype(idxsz)> model{idxsz, batch_fn, {}};
@@ -1508,10 +1488,10 @@ TEST_CASE("role filter: contracted mode sliced only in the contracted role",
                    .add(L"F", IndexSpace::Type{0b10000}, 8ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
-  auto idxsz = [](Index const& ix) { return ix.space().approximate_size(); };
+  auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto batch_fn = [](Index const&) -> std::size_t { return 2; };
   std::function<bool(Index const&)> is_F = [](Index const& ix) {
-    return ix.space().base_key() == L"F";
+    return ix.basis().base_key() == L"F";
   };
 
   std::vector<ExprPtr> ts;
@@ -1524,14 +1504,14 @@ TEST_CASE("role filter: contracted mode sliced only in the contracted role",
   auto count_F_modes = [](auto const& ctx) -> std::size_t {
     std::size_t n = 0;
     for (auto const& ix : ctx.batchable_modes)
-      if (ix.space().base_key() == L"F") ++n;
+      if (ix.basis().base_key() == L"F") ++n;
     return n;
   };
   // Number of DP cells whose sliced-set carries at least one "F" mode.
   auto n_F_sliced_cells = [](auto const& ctx) -> std::size_t {
     std::size_t mask = 0;
     for (std::size_t k = 0; k < ctx.m; ++k)
-      if (ctx.batchable_modes[k].space().base_key() == L"F")
+      if (ctx.batchable_modes[k].basis().base_key() == L"F")
         mask |= (std::size_t{1} << k);
     std::size_t count = 0;
     for (std::size_t id = 0; id < ctx.nCells; ++id)
@@ -1576,10 +1556,10 @@ TEST_CASE("role filter: external mode needs the external role, not a fallback",
                    .add(L"F", IndexSpace::Type{0b10000}, 8ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
-  auto idxsz = [](Index const& ix) { return ix.space().approximate_size(); };
+  auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto batch_fn = [](Index const&) -> std::size_t { return 2; };
   std::function<bool(Index const&)> is_F = [](Index const& ix) {
-    return ix.space().base_key() == L"F";
+    return ix.basis().base_key() == L"F";
   };
 
   // F1 occurs once (open on the root => EXTERNAL); a1 is shared (contracted).
@@ -1597,7 +1577,7 @@ TEST_CASE("role filter: external mode needs the external role, not a fallback",
   auto ctx = model.build_context(net, targets);
   std::size_t n_F = 0;
   for (auto const& ix : ctx.batchable_modes)
-    if (ix.space().base_key() == L"F") ++n_F;
+    if (ix.basis().base_key() == L"F") ++n_F;
   CHECK(n_F == 0);  // external F1 NOT admitted via a (now-removed) fallback
 }
 
@@ -1606,17 +1586,17 @@ TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
-  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}}) {
-    reg->retrieve_ptr(k)->approximate_size(v);
+           {L"i", 10}, {L"a", 40}, {L"μ", 50}, {L"Κ", 90}}) {
+    reg->extent(k, v);
   }
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
 
   // motif from intermediate #1: g(μ̃μ̃Κ) · C(a<i>;μ̃) · C(μ̃;b<i,j>) · t(a<i>;i)
@@ -1664,18 +1644,18 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
-  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 56}, {L"a", 12}, {L"μ̃", 602}, {L"Κ", 1652}}) {
-    reg->retrieve_ptr(k)->approximate_size(v);
+           {L"i", 56}, {L"a", 12}, {L"μ", 602}, {L"Κ", 1652}}) {
+    reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   // composite OSV/PNO domain ~ small (like MPQC's ~12-PNO/pair)
   auto ip = [](Index const&, std::size_t) -> double { return 12.0; };
@@ -1726,18 +1706,18 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
-  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 16}, {L"a", 12}, {L"μ̃", 170}, {L"Κ", 472}}) {
-    reg->retrieve_ptr(k)->approximate_size(v);
+           {L"i", 16}, {L"a", 12}, {L"μ", 170}, {L"Κ", 472}}) {
+    reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   auto ip = [](Index const&, std::size_t) -> double { return 12.0; };
   auto is_batch = [aux_space](Index const& ix) {
@@ -1990,20 +1970,20 @@ TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
-  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   // C60 cc-pVDZ-F12-ish extents: active occ 120, PNO domain 42, PAO 1800,
   // DF aux 6000 (sliced to batch 30 by the batched objective).
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 120}, {L"a", 42}, {L"μ̃", 1800}, {L"Κ", 6000}}) {
-    reg->retrieve_ptr(k)->approximate_size(v);
+           {L"i", 120}, {L"a", 42}, {L"μ", 1800}, {L"Κ", 6000}}) {
+    reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   // constant PNO domain 42 => all power means equal, neutralizing the
   // RMS-vs-mean magnitude question; here we test STRUCTURE (which tree, is the
@@ -2096,9 +2076,9 @@ TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
   // Experiment: make PAO (μ̃) batchable TOO (batch 100). Prediction: STO
   // switches away from the double-proto to a g·g-first tree whose worst
   // intermediate carries μ̃ and is now sliceable.
-  auto mu_space = reg->retrieve(L"μ̃");
-  auto is_batch2 = [aux_space, mu_space](Index const& ix) {
-    return ix.space() == aux_space || ix.space() == mu_space;
+  auto mu_basis = reg->retrieve_basis(L"μ̃");
+  auto is_batch2 = [aux_space, mu_basis](Index const& ix) {
+    return ix.space() == aux_space || ix.basis() == mu_basis;
   };
   std::function<std::size_t(Index const&)> bts2 = [aux_space](Index const& ix) {
     return ix.space() == aux_space ? std::size_t{30} : std::size_t{100};
@@ -2125,17 +2105,17 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
-  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 16}, {L"a", 12}, {L"μ̃", 170}, {L"Κ", 472}})
-    reg->retrieve_ptr(k)->approximate_size(v);
+           {L"i", 16}, {L"a", 12}, {L"μ", 170}, {L"Κ", 472}})
+    reg->extent(k, v);
   auto aux = reg->retrieve(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   auto ip = [](Index const&, std::size_t) -> double { return 12.0; };
   auto is_batch = [aux](Index const& ix) { return ix.space() == aux; };
@@ -2326,19 +2306,19 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
-  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   // water-20-scale extents (≈ water-14 OSV extents scaled by 20/14).
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 80}, {L"a", 12}, {L"μ̃", 860}, {L"Κ", 2360}}) {
-    reg->retrieve_ptr(k)->approximate_size(v);
+           {L"i", 80}, {L"a", 12}, {L"μ", 860}, {L"Κ", 2360}}) {
+    reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   // PNO domain per pair (composite inner extent). Crossover is K_b = p/2 = 6.
   double const p = 12.0;
@@ -2554,19 +2534,19 @@ TEST_CASE(
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
-  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   // water-20-scale extents (matches the "quadratic bubble" test above).
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 80}, {L"a", 12}, {L"μ̃", 860}, {L"Κ", 2360}}) {
-    reg->retrieve_ptr(k)->approximate_size(v);
+           {L"i", 80}, {L"a", 12}, {L"μ", 860}, {L"Κ", 2360}}) {
+    reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   double const p = 12.0;
   auto ip = [p](Index const&, std::size_t) -> double { return p; };
@@ -2704,25 +2684,25 @@ TEST_CASE("batched DP peak matches oracle with two modes and accumulation",
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
-  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 20}, {L"a", 20}, {L"μ̃", 200}, {L"Κ", 300}}) {
-    reg->retrieve_ptr(k)->approximate_size(v);
+           {L"i", 20}, {L"a", 20}, {L"μ", 200}, {L"Κ", 300}}) {
+    reg->extent(k, v);
   }
   auto aux = reg->retrieve(L"Κ");
-  auto pao = reg->retrieve(L"μ̃");
+  auto pao = reg->retrieve_basis(L"μ̃");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   auto is_batch = [aux, pao](Index const& ix) {
-    return ix.space() == aux || ix.space() == pao;
+    return ix.space() == aux || ix.basis() == pao;
   };
   auto is_batch_K = [aux](Index const& ix) { return ix.space() == aux; };
-  auto is_batch_mu = [pao](Index const& ix) { return ix.space() == pao; };
+  auto is_batch_mu = [pao](Index const& ix) { return ix.basis() == pao; };
   std::function<std::size_t(Index const&)> bts = [](Index const&) {
     return std::size_t{10};
   };
@@ -2770,9 +2750,9 @@ TEST_CASE("ordered key prices the hoistable order (Carr != 0)",
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
                    .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
-  auto idxsz = [](Index const& ix) { return ix.space().approximate_size(); };
+  auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto is_batchable = [](Index const& ix) {
-    return ix.space().base_key() == L"F";
+    return ix.basis().base_key() == L"F";
   };
   auto batch_fn = [](Index const&) -> std::size_t { return 1; };
   std::vector<ExprPtr> ts;
@@ -2817,9 +2797,9 @@ TEST_CASE("ordered cells exclude external modes", "[optimize][ext-place]") {
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
                    .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
-  auto idxsz = [](Index const& ix) { return ix.space().approximate_size(); };
+  auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto is_batchable = [](Index const& ix) {
-    return ix.space().base_key() == L"F";
+    return ix.basis().base_key() == L"F";
   };
   auto batch_fn = [](Index const&) -> std::size_t { return 1; };
   std::vector<ExprPtr> ts;
@@ -2864,13 +2844,13 @@ TEST_CASE("the DP opens an external batch loop on an over-budget node",
   {
     IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
     reg.add(L"F", IndexSpace::Type{0b10000}, 100ul);
-    reg.retrieve_ptr(L"a")->approximate_size(3ul);
+    reg.extent(L"a", 3ul);
     ctx_copy.set(std::move(reg));
   }
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
-  auto idxsz = [](Index const& ix) { return ix.space().approximate_size(); };
+  auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto is_batchable = [](Index const& ix) {
-    return ix.space().base_key() == L"F";
+    return ix.basis().base_key() == L"F";
   };
   auto batch_fn = [](Index const&) -> std::size_t { return 1; };
   std::vector<ExprPtr> ts;
@@ -2940,13 +2920,13 @@ TEST_CASE("perf-first peak_threshold gates contracted aux slicing",
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
-    reg->retrieve_ptr(k)->approximate_size(v);
+    reg->extent(k, v);
   }
   auto aux = reg->retrieve(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   auto is_batch = [aux](Index const& ix) { return ix.space() == aux; };
   auto batch_fn = [](Index const&) -> std::size_t { return 20; };
@@ -3023,13 +3003,13 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
-    reg->retrieve_ptr(k)->approximate_size(v);
+    reg->extent(k, v);
   }
   auto aux = reg->retrieve(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   auto is_batch = [aux](Index const& ix) { return ix.space() == aux; };
   std::function<std::size_t(Index const&)> bts = [](Index const&) {
@@ -3222,14 +3202,14 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 8}, {L"a", 8}, {L"Κ", 400}})
-    reg->retrieve_ptr(k)->approximate_size(v);
+    reg->extent(k, v);
   auto aux_space = reg->retrieve(L"Κ");
   auto occ_space = reg->retrieve(L"i");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
 
   // Chain network T1-T2-T3-T4: T1--(a_1,Kappa_1)--T2--(a_2)--T3--(a_4)--T4.
@@ -3254,7 +3234,7 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
   // such modes were auto-admitted by an occupancy-specific special case in
   // batchable_mode_list; batchability is now role-based and caller-declared.)
   opts.batch_policy.is_batchable_external_index = [](Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
   opts.batch_policy.batch_spectator_indices = true;
   opts.term_batch_axes = axes_map;
@@ -3396,18 +3376,18 @@ TEST_CASE("select_root_perf_first_ceiling", "[optimize][batch]") {
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
-  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   // water-20-scale extents (matches the "threshold gates batching" test).
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 80}, {L"a", 12}, {L"μ̃", 860}, {L"Κ", 2360}})
-    reg->retrieve_ptr(k)->approximate_size(v);
+           {L"i", 80}, {L"a", 12}, {L"μ", 860}, {L"Κ", 2360}})
+    reg->extent(k, v);
   auto aux_space = reg->retrieve(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   auto is_batch = [aux_space](Index const& ix) {
     return ix.space() == aux_space;
@@ -3487,9 +3467,9 @@ TEST_CASE("contractible_adjacency", "[optimize][pruning]") {
   namespace o = sequant::opt::detail;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->approximate_size(10);
-  reg->retrieve_ptr(L"a")->approximate_size(100);
-  reg->retrieve_ptr(L"x")->approximate_size(4);
+  reg->extent(L"i", 10);
+  reg->extent(L"a", 100);
+  reg->extent(L"x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto parse = [](auto const& s) {
@@ -3579,9 +3559,9 @@ TEST_CASE("connected_subsets and outer_product_connectivity",
   // outer_product_connectivity: env-disabled -> all ones.
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->approximate_size(10);
-  reg->retrieve_ptr(L"a")->approximate_size(100);
-  reg->retrieve_ptr(L"x")->approximate_size(4);
+  reg->extent(L"i", 10);
+  reg->extent(L"a", 100);
+  reg->extent(L"x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto prod_expr = deserialize(L"f_{i1}^{a1} g_{a1}^{i2}",
@@ -3601,9 +3581,9 @@ TEST_CASE("outer-product pruning parity (pruned == unpruned)",
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->approximate_size(10);
-  reg->retrieve_ptr(L"a")->approximate_size(100);
-  reg->retrieve_ptr(L"x")->approximate_size(4);
+  reg->extent(L"i", 10);
+  reg->extent(L"a", 100);
+  reg->extent(L"x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -3611,7 +3591,7 @@ TEST_CASE("outer-product pruning parity (pruned == unpruned)",
     OptimizeOptions o;
     o.objective_function = obj;
     o.idx_to_extent = [](Index const& ix) -> std::size_t {
-      return ix.nonnull() ? ix.space().approximate_size() : 1;
+      return ix.nonnull() ? ix.basis().extent() : 1;
     };
     o.batch_policy.is_batchable_contracted_index = [](Index const&) {
       return false;
@@ -3691,9 +3671,9 @@ TEST_CASE("prune_outer_products option controls pruning (default on)",
 
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->approximate_size(10);
-  reg->retrieve_ptr(L"a")->approximate_size(100);
-  reg->retrieve_ptr(L"x")->approximate_size(4);
+  reg->extent(L"i", 10);
+  reg->extent(L"a", 100);
+  reg->extent(L"x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   // "star" term: g bridges two mutually-disconnected t's, so the {t,t} subset
@@ -3704,7 +3684,7 @@ TEST_CASE("prune_outer_products option controls pruning (default on)",
     OptimizeOptions o;
     o.objective_function = ObjectiveFunction::DensePeakSize;
     o.idx_to_extent = [](Index const& ix) -> std::size_t {
-      return ix.nonnull() ? ix.space().approximate_size() : 1;
+      return ix.nonnull() ? ix.basis().extent() : 1;
     };
     o.prune_outer_products = prune;
     return o;
@@ -3733,19 +3713,19 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
-  mbpt::add_pao_spaces(reg, mbpt::Spin::any);
-  mbpt::add_ao_spaces(reg, mbpt::Spin::any);
+  mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}})
-    reg->retrieve_ptr(k)->approximate_size(v);
+           {L"i", 10}, {L"a", 40}, {L"μ", 50}, {L"Κ", 90}})
+    reg->extent(k, v);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   auto is_batchable = [](Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   auto batch = [](Index const&) -> std::size_t { return 30; };
 
@@ -3807,9 +3787,9 @@ TEST_CASE("outer-product pruning: large connected term optimizes quickly",
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->approximate_size(10);
-  reg->retrieve_ptr(L"a")->approximate_size(100);
-  reg->retrieve_ptr(L"x")->approximate_size(4);
+  reg->extent(L"i", 10);
+  reg->extent(L"a", 100);
+  reg->extent(L"x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   // A connected chain: each adjacent pair shares one summed index, so the whole
@@ -3822,7 +3802,7 @@ TEST_CASE("outer-product pruning: large connected term optimizes quickly",
   OptimizeOptions o;
   o.objective_function = ObjectiveFunction::DensePeakSize;
   o.idx_to_extent = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : 1;
+    return ix.nonnull() ? ix.basis().extent() : 1;
   };
   // Pruning ON (default): must complete (the assertion is that it returns).
   auto out = optimize(expr, o);
@@ -3835,9 +3815,9 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
   namespace o = sequant::opt::detail;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->approximate_size(10);
-  reg->retrieve_ptr(L"a")->approximate_size(100);
-  reg->retrieve_ptr(L"x")->approximate_size(4);
+  reg->extent(L"i", 10);
+  reg->extent(L"a", 100);
+  reg->extent(L"x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto net_of = [](ExprPtr const& p) {
@@ -3861,7 +3841,7 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
   OptimizeOptions opt;
   opt.objective_function = ObjectiveFunction::DenseFLOPs;
   opt.idx_to_extent = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : 1;
+    return ix.nonnull() ? ix.basis().extent() : 1;
   };
   auto with = to_latex(optimize(prod, opt));
   auto without = to_latex(
@@ -3897,15 +3877,15 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.space().approximate_size();
+    return ix.basis().extent();
   };
   // batch BOTH the aux-like F and the occupied i
   auto is_batchable = [](Index const& ix) {
-    auto const bk = ix.space().base_key();
+    auto const bk = ix.basis().base_key();
     return bk == L"F" || bk == L"i";
   };
   auto batch_fn = [](Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"F" ? std::size_t{1} : std::size_t{1};
+    return ix.basis().base_key() == L"F" ? std::size_t{1} : std::size_t{1};
   };
 
   std::vector<ExprPtr> ts;
@@ -4060,10 +4040,10 @@ TEST_CASE("loop-tree charge must not bill a free hoist", "[.][loop-tree]") {
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.space().approximate_size();
+    return ix.basis().extent();
   };
   auto is_batchable = [](Index const& ix) {
-    return ix.space().base_key() == L"F";
+    return ix.basis().base_key() == L"F";
   };
   auto batch_fn = [](Index const&) -> std::size_t { return 1; };
 
@@ -4122,12 +4102,12 @@ TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.space().approximate_size();
+    return ix.basis().extent();
   };
   // Both F1 and F2 are batchable and contracted (nestable) => two ordered
   // enclosing modes.
   auto is_batchable = [](Index const& ix) {
-    return ix.space().base_key() == L"F";
+    return ix.basis().base_key() == L"F";
   };
   auto batch_fn = [](Index const&) -> std::size_t {
     return 1;  // batch tile 1 => nbatches == extent (4) > 1
@@ -4274,19 +4254,18 @@ TEST_CASE(
   auto ctx_copy = get_default_context_snapshot();
   auto reg =
       std::make_shared<IndexBasisRegistry>(*ctx_copy.index_basis_registry());
-  reg->retrieve_ptr(L"i")->approximate_size(10);  // occupied, external, batched
-  reg->retrieve_ptr(L"a")->approximate_size(
-      20);  // virtual, contracted, batched
+  reg->extent(L"i", 10);  // occupied, external, batched
+  reg->extent(L"a", 20);  // virtual, contracted, batched
   ctx_copy.set(reg);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.space().approximate_size();
+    return ix.basis().extent();
   };
   // batch BOTH the external occupied i and the contracted virtual a, so the
   // co-carrying node emits an External axis (i) and a Contracted axis (a).
   auto is_batchable = [](Index const& ix) {
-    auto const key = ix.space().base_key();
+    auto const key = ix.basis().base_key();
     return key == L"i" || key == L"a";
   };
   auto batch_fn = [](Index const&) -> std::size_t {
@@ -4356,10 +4335,10 @@ TEST_CASE("loop-tree probe: resident-scan peak of a hoisted node",
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.space().approximate_size();
+    return ix.basis().extent();
   };
   auto is_batchable = [](Index const& ix) {
-    return ix.space().base_key() == L"F";
+    return ix.basis().base_key() == L"F";
   };
   auto batch_fn = [](Index const&) -> std::size_t { return 1; };
 
@@ -4412,10 +4391,10 @@ TEST_CASE("loop-tree probe: order-dependent Carr != 0 cells",
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.space().approximate_size();
+    return ix.basis().extent();
   };
   auto is_batchable = [](Index const& ix) {
-    return ix.space().base_key() == L"F";
+    return ix.basis().base_key() == L"F";
   };
   auto batch_fn = [](Index const&) -> std::size_t { return 1; };
 
@@ -4478,9 +4457,9 @@ TEST_CASE("loop-tree probe: resident-scan peak, nested",
                         1000ul));  // large: dominates peak
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
-  auto idxsz = [](Index const& ix) { return ix.space().approximate_size(); };
+  auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto is_batchable = [](Index const& ix) {
-    return ix.space().base_key() == L"F";
+    return ix.basis().base_key() == L"F";
   };
 
   std::vector<ExprPtr> ts;
@@ -4540,8 +4519,8 @@ TEST_CASE("batchability role-split building-block predicates",
   Index const a{L"a_1"};  // unoccupied space "a"
   Index const i{L"i_1"};  // occupied space "i"
 
-  auto is_a = [](Index const& ix) { return ix.space().base_key() == L"a"; };
-  auto is_i = [](Index const& ix) { return ix.space().base_key() == L"i"; };
+  auto is_a = [](Index const& ix) { return ix.basis().base_key() == L"a"; };
+  auto is_i = [](Index const& ix) { return ix.basis().base_key() == L"i"; };
 
   SECTION("BatchPolicy::is_batchable_index() is the union of both roles") {
     BatchPolicy p;
@@ -4560,7 +4539,7 @@ TEST_CASE("batchability role-split building-block predicates",
 
   SECTION("PeakBatchedModel::is_batchable(ix) == OR of both building blocks") {
     auto idxsz = [](Index const& ix) -> std::size_t {
-      return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+      return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
     };
     auto batch_fn = [](Index const&) -> std::size_t { return 4; };
     opt::detail::PeakBatchedModel<decltype(idxsz)> model{idxsz, batch_fn, {}};

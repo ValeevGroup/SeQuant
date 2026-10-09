@@ -19,16 +19,17 @@ enum class IndexSpaceMetric { Unit, General };
 
 /// describes the scalar field over which the vector spaces representing the
 /// bra/ket modes are defined. Physically this is a single global choice for a
-/// computation, but it is carried as per-IndexSpace metadata
-/// (IndexSpace::field()); a tensor's effective field is resolved from its
-/// bra/ket spaces (see sequant::base_field), so a global real/complex switch is
-/// expressed by setting the field uniformly on all spaces. It controls how the
+/// computation, but it is carried as per-basis metadata (IndexBasis::field(),
+/// which for the own basis of a space is IndexSpace::field()); a tensor's
+/// effective field is resolved from its bra/ket bases (see
+/// sequant::base_field), so a global real/complex switch is expressed by
+/// setting the field uniformly on all spaces. It controls how the
 /// bra<->ket (Riesz) dual pairing is realized -- linearly via a symmetric
 /// bilinear form (`Field::Real`, the adjoint is the transpose) or antilinearly
 /// via a Hermitian sesquilinear form (`Field::Complex`, the adjoint is the
 /// conjugate-transpose). Together with a tensor's #Hermiticity it determines
 /// the tensor's #BraKetSymmetry.
-/// @sa Hermiticity, BraKetSymmetry, to_braket_symmetry, IndexSpace::field,
+/// @sa Hermiticity, BraKetSymmetry, to_braket_symmetry, IndexBasis::field,
 ///     sequant::base_field
 enum class Field { Real, Complex };
 

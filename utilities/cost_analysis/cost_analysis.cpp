@@ -140,17 +140,17 @@ void setup_context(const Config& cfg) {
   // scoped_sequant_field does: bra<->ket symmetry must be consistent for all
   // used spaces, else a used-but-unsized space keeps the registry's default
   // (complex) and its tensors canonicalize wrongly over a real field. Collect
-  // keys first (iteration is const) then set via mutable lookup.
+  // keys first (iteration is const) then set by label.
   const Field field = cfg.real_field ? Field::Real : Field::Complex;
   std::vector<std::wstring> keys;
   for (const auto& sp : *isr) keys.push_back(sp.base_key());
   for (const auto& key : keys)
-    if (IndexSpace* sp = isr->retrieve_ptr(key)) sp->field(field);
+    if (!key.empty()) isr->field(key, field);
 
   for (const auto& [label, size] : cfg.sizes) {
-    IndexSpace* sp = isr->retrieve_ptr(toUtf16(label));
-    if (!sp) throw Exception("unknown index space: " + label);
-    sp->approximate_size(size);
+    if (!isr->retrieve_ptr(toUtf16(label)))
+      throw Exception("unknown index space: " + label);
+    isr->extent(toUtf16(label), size);
   }
 
   auto ctx = get_default_context_snapshot();

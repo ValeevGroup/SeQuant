@@ -406,10 +406,10 @@ TEST_CASE("export", "[export]") {
   auto resetter = to_export_context();
 
   SECTION("reordering_context") {
-    REQUIRE(Index(L"i_1").space().approximate_size() >
-            Index(L"u_1").space().approximate_size());
-    REQUIRE(Index(L"a_1").space().approximate_size() >
-            Index(L"i_1").space().approximate_size());
+    REQUIRE(Index(L"i_1").space().dimension() >
+            Index(L"u_1").space().dimension());
+    REQUIRE(Index(L"a_1").space().dimension() >
+            Index(L"i_1").space().dimension());
 
     std::vector<std::pair<std::wstring, std::array<std::string, 3>>> tests = {
         // Unchanged
@@ -482,6 +482,49 @@ TEST_CASE("export", "[export]") {
         bool rewritten = ctx.rewrite(tensor);
         REQUIRE_THAT(tensor, EquivalentTo(expected));
         REQUIRE(rewritten == (toUtf8(input) != expected));
+      }
+    }
+  }
+
+  SECTION("reordering_context with a named basis") {
+    // ã: a basis of a (extent 100) of extent 1000; the slot in ã, not the
+    // space, is the one moved to the fastest position
+    auto reg = *get_default_context().index_basis_registry();
+    const IndexSpace virt = reg.retrieve(L"a");
+    reg.add(L"ã", IndexBasis{virt, 1}, 1000ul);
+    auto ctx_resetter = set_scoped_default_context(
+        get_default_context_snapshot().set(std::move(reg)));
+    const Index a1(L"a_1"), ã1(L"ã_1");
+    REQUIRE(ã1.basis().extent() > a1.basis().extent());
+    REQUIRE(ã1.space() == a1.space());
+
+    auto symm = [](const Index &b, const Index &k) {
+      return Tensor(L"t", bra{b}, ket{k}, Symmetry::Nonsymm,
+                    BraKetSymmetry::Symm, ColumnSymmetry::Nonsymm);
+    };
+    auto flat = [](const Index &i1, const Index &i2) {
+      return Tensor(L"t", bra{}, ket{}, aux{i1, i2}, Symmetry::Nonsymm,
+                    BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    };
+    // {input, {RowMajor, ColumnMajor}}: the largest slot goes last (row
+    // major) or first (column major)
+    const std::vector<std::pair<Tensor, std::array<Tensor, 2>>> tests = {
+        {symm(a1, ã1), {symm(a1, ã1), flat(ã1, a1)}},
+        {symm(ã1, a1), {flat(a1, ã1), symm(ã1, a1)}},
+    };
+    ReorderingContext ctx(MemoryLayout::Unspecified);
+    for (MemoryLayout layout :
+         {MemoryLayout::RowMajor, MemoryLayout::ColumnMajor}) {
+      CAPTURE(layout);
+      ctx.set_memory_layout(layout);
+      for (const auto &[input, candidates] : tests) {
+        CAPTURE(to_latex(input));
+        const Tensor &expected =
+            candidates.at(static_cast<std::size_t>(layout));
+        Tensor tensor = input;
+        const bool rewritten = ctx.rewrite(tensor);
+        CHECK(tensor == expected);
+        CHECK(rewritten == (input != expected));
       }
     }
   }

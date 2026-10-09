@@ -421,7 +421,7 @@ class ItfGenerator : public Generator<Context> {
 
       SEQUANT_ASSERT(std::ranges::is_sorted(
           batchIndices, std::greater<>{},
-          [](const Index &idx) { return idx.space().approximate_size(); }));
+          [](const Index &idx) { return idx.basis().extent(); }));
 
       std::size_t num_shared = 0;
       for (std::size_t i = 0;

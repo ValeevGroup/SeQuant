@@ -35,6 +35,7 @@
 #include <ranges>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 namespace sequant {
@@ -171,7 +172,9 @@ class IndexBasisRegistry {
   /// @note the table is taken as given, it is not validated against the
   /// invariants that add() enforces, except that each label is a valid base
   /// key (the null space's empty key aside) and each named basis instance
-  /// carries the label it is registered under
+  /// carries the label it is registered under. The table does not record
+  /// which entries follow which (see follow()), so none does here: a former
+  /// follower keeps the values it mirrored as its own
   /// @throw Exception if a label is not a valid base key (see
   /// io::serialization::v1::is_base_key())
   explicit IndexBasisRegistry(table_type bases)
@@ -181,7 +184,8 @@ class IndexBasisRegistry {
     for (auto& [label, basis] : bases_) {
       if (basis.space()) validate_label(label, "IndexBasisRegistry(table)");
       if (basis.has_basis_instance() && basis.name() != label)
-        basis = IndexBasis(basis.space(), basis.basis_instance(), label);
+        basis = IndexBasis(basis.space(), basis.basis_instance(), label,
+                           basis.extent_, basis.metric_, basis.field_);
     }
   }
 
@@ -189,6 +193,7 @@ class IndexBasisRegistry {
   IndexBasisRegistry(const IndexBasisRegistry& other)
       : bases_(other.bases_),
         named_count_(other.named_count_),
+        follows_(other.follows_),
         physical_particle_attribute_mask_(
             other.physical_particle_attribute_mask_),
         vacocc_(other.vacocc_),
@@ -201,6 +206,7 @@ class IndexBasisRegistry {
   IndexBasisRegistry(IndexBasisRegistry&& other)
       : bases_(std::move(other.bases_)),
         named_count_(other.named_count_),
+        follows_(std::move(other.follows_)),
         physical_particle_attribute_mask_(
             std::move(other.physical_particle_attribute_mask_)),
         vacocc_(std::move(other.vacocc_)),
@@ -209,6 +215,7 @@ class IndexBasisRegistry {
         hole_space_(std::move(other.hole_space_)),
         particle_space_(std::move(other.particle_space_)) {
     other.named_count_ = 0;
+    other.follows_.clear();
     // what other has memoized describes the spaces it gave up
     other.clear_memoized_data_and_return_this();
   }
@@ -217,6 +224,7 @@ class IndexBasisRegistry {
   IndexBasisRegistry& operator=(const IndexBasisRegistry& other) {
     bases_ = other.bases_;
     named_count_ = other.named_count_;
+    follows_ = other.follows_;
     physical_particle_attribute_mask_ = other.physical_particle_attribute_mask_;
     vacocc_ = other.vacocc_;
     refocc_ = other.refocc_;
@@ -231,6 +239,7 @@ class IndexBasisRegistry {
     if (this == &other) return *this;
     bases_ = std::move(other.bases_);
     named_count_ = other.named_count_;
+    follows_ = std::move(other.follows_);
     physical_particle_attribute_mask_ =
         std::move(other.physical_particle_attribute_mask_);
     vacocc_ = std::move(other.vacocc_);
@@ -239,6 +248,7 @@ class IndexBasisRegistry {
     hole_space_ = std::move(other.hole_space_);
     particle_space_ = std::move(other.particle_space_);
     other.named_count_ = 0;
+    other.follows_.clear();
     // what other has memoized describes the spaces it gave up
     other.clear_memoized_data_and_return_this();
     return clear_memoized_data_and_return_this();
@@ -276,46 +286,141 @@ class IndexBasisRegistry {
     throw IndexSpace::bad_key(label);
   }
 
-  /// @return the label under which basis instance @p b is registered, or
-  /// std::nullopt if @p b has no basis instance or is not named
+  /// @return the label under which the space and instance of @p b are
+  /// registered (see same_instance()), or std::nullopt if @p b has no basis
+  /// instance or they are not named
   std::optional<std::wstring_view> basis_label(const IndexBasis& b) const {
     if (!b.has_basis_instance() || named_count_ == 0) return std::nullopt;
     for (auto const& [label, basis] : bases_)
-      if (basis.has_basis_instance() && basis == b)
+      if (basis.has_basis_instance() && same_instance(basis, b))
         return std::wstring_view(label);
     return std::nullopt;
   }
 
-  /// @return the named entry equal to @p b, which carries the entry's name,
-  /// approximate size and field, if @p b has a basis instance registered
-  /// under a name; otherwise @p b unchanged
+  /// @return the named entry of the space and instance of @p b (see
+  /// same_instance()), which carries the entry's name, extent, metric and
+  /// field, if they are registered under a name; otherwise @p b unchanged
   IndexBasis resolve(const IndexBasis& b) const {
     if (!b.has_basis_instance() || named_count_ == 0) return b;
     for (auto const& [label, basis] : bases_)
-      if (basis == b) return basis;
+      if (same_instance(basis, b)) return basis;
     return b;
   }
 
-  /// @brief sets the approximate size of the entry registered under a label
+  /// @brief sets the extent of the entry registered under a label: the
+  /// dimension of a space (the extent of its own basis, and of its named
+  /// basis instances registered without an extent of their own), or the
+  /// extent of a named basis instance
   /// @param label a label of a space or of a named basis instance
-  /// @param n the approximate size
+  /// @param n the extent
   /// @return reference to `this`
   /// @throw IndexSpace::bad_key if no entry is registered under @p label
   template <basic_string_convertible S>
-  IndexBasisRegistry& approximate_size(S&& label, std::size_t n) {
-    mutable_space(entry_or_throw(label)).approximate_size(n);
+  IndexBasisRegistry& extent(S&& label, std::size_t n) {
+    auto& entry = entry_or_throw(label);
+    if (entry.has_basis_instance()) {
+      throw_if_follower(entry, "extent");
+      entry.extent(n);
+    } else
+      for (IndexSpace& space : space_copies_of(entry)) space.dimension(n);
+    refresh_followers();
     return clear_memoized_data_and_return_this();
   }
 
-  /// @brief sets the Field of the entry registered under a label
+  /// @deprecated use extent(label, n)
+  template <basic_string_convertible S>
+  [[deprecated("use extent(label, n)")]] IndexBasisRegistry& approximate_size(
+      S&& label, std::size_t n) {
+    return extent(std::forward<S>(label), n);
+  }
+
+  /// @brief sets the Field of the entry registered under a label: of a
+  /// space's own basis (and of its named basis instances registered without
+  /// a field of their own), or of a named basis instance
   /// @param label a label of a space or of a named basis instance
   /// @param f the Field
   /// @return reference to `this`
   /// @throw IndexSpace::bad_key if no entry is registered under @p label
   template <basic_string_convertible S>
   IndexBasisRegistry& field(S&& label, Field f) {
-    mutable_space(entry_or_throw(label)).field(f);
+    auto& entry = entry_or_throw(label);
+    if (entry.has_basis_instance()) {
+      throw_if_follower(entry, "field");
+      entry.field(f);
+    } else
+      for (IndexSpace& space : space_copies_of(entry)) space.field(f);
+    refresh_followers();
     return clear_memoized_data_and_return_this();
+  }
+
+  /// @brief sets the metric of the named basis instance registered under a
+  /// label
+  /// @param label a label of a named basis instance
+  /// @param m the metric
+  /// @return reference to `this`
+  /// @throw IndexSpace::bad_key if no entry is registered under @p label
+  /// @throw Exception if @p label is that of a space: the own basis of a
+  /// space is orthonormal
+  template <basic_string_convertible S>
+  IndexBasisRegistry& metric(S&& label, IndexSpaceMetric m) {
+    auto& entry = entry_or_throw(label);
+    if (!entry.has_basis_instance())
+      throw Exception("IndexBasisRegistry::metric: '" + toUtf8(label) +
+                      "' is a space, whose own basis is orthonormal; register "
+                      "a non-orthonormal basis of it under a name");
+    throw_if_follower(entry, "metric");
+    entry.metric(m);
+    refresh_followers();
+    return clear_memoized_data_and_return_this();
+  }
+
+  /// @brief makes the named basis instance registered under @p label follow
+  /// the one registered under @p source: its extent, metric and field are
+  /// those of @p source, now and whenever they change (e.g. the PAO bases
+  /// follow the AO basis they are projected from), and cannot be set through
+  /// its own label
+  /// @param label the label of the follower
+  /// @param source the label of the entry to follow
+  /// @return reference to `this`
+  /// @throw IndexSpace::bad_key if no entry is registered under either label
+  /// @throw Exception if either entry is a space, if the two are one, if
+  ///        @p source follows an entry itself or if @p label is followed by
+  ///        one (an entry follows directly, not through another)
+  template <basic_string_convertible S1, basic_string_convertible S2>
+  IndexBasisRegistry& follow(S1&& label, S2&& source) {
+    const IndexBasis& follower = entry_or_throw(label);
+    const IndexBasis& followed = entry_or_throw(source);
+    if (!follower.has_basis_instance() || !followed.has_basis_instance())
+      throw Exception("IndexBasisRegistry::follow: '" + toUtf8(label) +
+                      "' and '" + toUtf8(source) +
+                      "' must both be named basis instances");
+    if (follower.name() == followed.name())
+      throw Exception("IndexBasisRegistry::follow: '" + toUtf8(label) +
+                      "' cannot follow itself");
+    if (auto it = follows_.find(followed.name()); it != follows_.end())
+      throw Exception("IndexBasisRegistry::follow: '" + toUtf8(source) +
+                      "' follows '" + toUtf8(it->second) +
+                      "' itself; follow that one instead");
+    for (const auto& [f, s] : follows_)
+      if (s == follower.name())
+        throw Exception("IndexBasisRegistry::follow: '" + toUtf8(label) +
+                        "' is followed by '" + toUtf8(f) +
+                        "'; make that one follow '" + toUtf8(source) +
+                        "' instead");
+    follows_.insert_or_assign(follower.name(), followed.name());
+    refresh_followers();
+    return clear_memoized_data_and_return_this();
+  }
+
+  /// @return a copy of the label of the entry the named basis instance
+  /// registered under @p label follows (see follow()), std::nullopt if it
+  /// follows none
+  template <basic_string_convertible S>
+  std::optional<std::wstring> follows(S&& label) const {
+    auto it =
+        follows_.find(IndexSpace::reduce_key(to_basic_string_view(label)));
+    if (it == follows_.end()) return std::nullopt;
+    return it->second;
   }
 
   /// @brief retrieve a pointer to IndexSpace from the registry by the label
@@ -323,23 +428,12 @@ class IndexBasisRegistry {
   /// Index::label() )
   /// @return pointer to IndexSpace associated with that key, or nullptr if not
   /// found or if the key names a basis instance
+  /// @note a space's metadata is written with extent(label, n) and
+  /// field(label, f), which also reach its named basis instances
   template <basic_string_convertible S>
   const IndexSpace* retrieve_ptr(S&& label) const {
     const auto* b = retrieve_basis_ptr(std::forward<S>(label));
     return b && !b->has_basis_instance() ? &b->space() : nullptr;
-  }
-
-  /// @brief retrieve a pointer to IndexSpace from the registry by the label
-  /// @param label a @c base_key of an IndexSpace, or a label of an Index (see
-  /// Index::label() )
-  /// @return pointer to IndexSpace associated with that key, or nullptr if not
-  /// found or if the key names a basis instance
-  template <basic_string_convertible S>
-  IndexSpace* retrieve_ptr(S&& label) {
-    auto it = bases_.find(IndexSpace::reduce_key(to_basic_string_view(label)));
-    return it != bases_.end() && !it->second.has_basis_instance()
-               ? &mutable_space(it->second)
-               : nullptr;
   }
 
   /// @brief retrieve an IndexSpace from the registry by the label
@@ -503,7 +597,7 @@ class IndexBasisRegistry {
   /// @param args optional arguments consisting of a mix of zero or more of
   /// the following:
   ///   - IndexSpace::QuantumNumbers
-  ///   - approximate size of the space (unsigned long)
+  ///   - dimension of the space (an integer)
   ///   - any of { is_vacuum_occupied , is_reference_occupied , is_complete ,
   ///   is_hole , is_particle }
   /// @return reference to `this`
@@ -530,12 +624,12 @@ class IndexBasisRegistry {
       qns = boost::hana::at_c<0>(h_qns);
     }
 
-    // process approximate_size and Field, set to defaults if not given
-    const auto [size, field] = parse_size_and_field(args...);
+    // process dimension and Field, set to defaults if not given
+    const auto [extent, field] = parse_extent_and_field(args...);
 
     // make space
-    IndexSpace space(std::forward<S>(type_label), type, qns, size.value_or(10),
-                     field.value_or(Field::Complex));
+    IndexSpace space(std::forward<S>(type_label), type, qns,
+                     extent.value_or(10), field.value_or(Field::Complex));
     this->add(space);
 
     // process attribute tags
@@ -558,12 +652,14 @@ class IndexBasisRegistry {
   /// combining diacritics, arrows and primes, so no digits or `_`, which an
   /// index label reserves for the ordinal
   /// @param basis an IndexBasis with a basis instance whose space is
-  /// registered
+  /// registered; the entry is named @p label whatever @p basis is named
   /// @param args optional arguments consisting of a mix of zero or one of
-  /// each of the following:
-  ///   - approximate size of the basis (unsigned long; defaults to that of the
-  ///   space)
-  ///   - Field (defaults to that of the space)
+  /// each of the following, each defaulting to what @p basis carries (for a
+  /// basis built from a space and an instance: the dimension of the space,
+  /// IndexSpaceMetric::Unit and the field of the space's own basis):
+  ///   - extent of the basis (an integer)
+  ///   - IndexSpaceMetric
+  ///   - Field
   /// @return reference to `this`
   /// @throw Exception if @p label is not a valid label or is already
   /// registered, if @p basis has no basis instance, if its space is not
@@ -574,13 +670,29 @@ class IndexBasisRegistry {
     auto h_tags = boost::hana::filter(h_args, [](auto arg) {
       return !boost::hana::traits::is_integral(
                  boost::hana::type_c<decltype(arg)>) &&
-             boost::hana::type_c<decltype(arg)> != boost::hana::type_c<Field>;
+             boost::hana::type_c<decltype(arg)> != boost::hana::type_c<Field> &&
+             boost::hana::type_c<decltype(arg)> !=
+                 boost::hana::type_c<IndexSpaceMetric>;
     });
     static_assert(boost::hana::size(h_tags) == boost::hana::size_c<0>,
                   "IndexBasisRegistry::add(label, basis): attribute tags are "
-                  "per space; only an integral approximate_size and a Field "
-                  "may be given for a basis instance");
-    const auto [size, field] = parse_size_and_field(args...);
+                  "per space; only an integral extent, an IndexSpaceMetric "
+                  "and a Field may be given for a basis instance");
+    const auto [extent, field] = parse_extent_and_field(args...);
+    auto h_metric = boost::hana::filter(h_args, [](auto arg) {
+      return boost::hana::type_c<decltype(arg)> ==
+             boost::hana::type_c<IndexSpaceMetric>;
+    });
+    constexpr auto nmetrics = boost::hana::size(h_metric);
+    static_assert(
+        nmetrics == boost::hana::size_c<0> ||
+            nmetrics == boost::hana::size_c<1>,
+        "IndexBasisRegistry::add(label, basis): only one IndexSpaceMetric "
+        "argument is allowed");
+    IndexSpaceMetric metric = basis.metric_;
+    if constexpr (nmetrics == boost::hana::size_c<1>) {
+      metric = boost::hana::at_c<0>(h_metric);
+    }
     std::wstring key = toUtf16(std::forward<S>(label));
     if (!basis.has_basis_instance())
       throw Exception("IndexBasisRegistry::add(label, basis): '" + toUtf8(key) +
@@ -598,10 +710,9 @@ class IndexBasisRegistry {
       throw Exception("IndexBasisRegistry::add(label, basis): the basis of '" +
                       toUtf8(key) + "' is already named '" + toUtf8(*taken) +
                       "'");
-    IndexSpace copy(space->base_key(), space->type(), space->qns(),
-                    size ? *size : space->approximate_size(),
-                    field ? *field : space->field());
-    IndexBasis named{std::move(copy), basis.basis_instance(), key};
+    IndexBasis named{*space, basis.basis_instance(),
+                     key,    extent ? extent : basis.extent_,
+                     metric, field ? field : basis.field_};
     bases_.emplace(std::move(key), std::move(named));
     ++named_count_;
     return clear_memoized_data_and_return_this();
@@ -646,11 +757,11 @@ class IndexBasisRegistry {
         space_attr = space_attr.unIon(component_ptr->attr());
       ++count;
     }
-    const auto approximate_size = compute_approximate_size(space_attr);
+    const auto dimension = compute_dimension(space_attr);
     const Field field = compute_field(space_attr);
 
     IndexSpace space(std::forward<S>(type_label), space_attr.type(),
-                     space_attr.qns(), approximate_size, field);
+                     space_attr.qns(), dimension, field);
     this->add(space);
     auto type = space.type();
 
@@ -716,10 +827,10 @@ class IndexBasisRegistry {
         space_attr = space_attr.intersection(component_ptr->attr());
       ++count;
     }
-    const auto approximate_size = compute_approximate_size(space_attr);
+    const auto dimension = compute_dimension(space_attr);
 
     IndexSpace space(std::forward<S>(type_label), space_attr.type(),
-                     space_attr.qns(), approximate_size);
+                     space_attr.qns(), dimension);
     this->add(space);
     auto type = space.type();
 
@@ -765,6 +876,11 @@ class IndexBasisRegistry {
   IndexBasisRegistry& remove(S&& label) {
     auto it = bases_.find(IndexSpace::reduce_key(to_basic_string_view(label)));
     if (it != bases_.end() && !is_space(*it)) {
+      // its followers keep the values they mirror and follow no more
+      const std::wstring name = it->first;
+      follows_.erase(name);
+      for (auto f = follows_.begin(); f != follows_.end();)
+        f = f->second == name ? follows_.erase(f) : std::next(f);
       bases_.erase(it);
       --named_count_;
       return clear_memoized_data_and_return_this();
@@ -1572,6 +1688,29 @@ class IndexBasisRegistry {
  private:
   table_type bases_;
   std::size_t named_count_ = 0;  // the number of named basis instances
+  // follower label -> label of the named basis instance it follows
+  container::map<std::wstring, std::wstring, std::less<>> follows_;
+
+  /// writes into every follower the extent, metric and field of the entry it
+  /// follows
+  void refresh_followers() {
+    for (const auto& [follower, source] : follows_) {
+      const IndexBasis& src = bases_.find(source)->second;
+      IndexBasis& dst = bases_.find(follower)->second;
+      dst.extent(src.extent());
+      dst.metric(src.metric());
+      dst.field(src.field());
+    }
+  }
+
+  /// @throw Exception if the named entry @p entry follows another, naming
+  /// the setter @p what
+  void throw_if_follower(const IndexBasis& entry, const char* what) const {
+    if (auto it = follows_.find(entry.name()); it != follows_.end())
+      throw Exception(std::string("IndexBasisRegistry::") + what + ": '" +
+                      toUtf8(it->first) + "' follows '" + toUtf8(it->second) +
+                      "'; set the " + what + " of that one");
+  }
 
   /// @throw Exception, naming @p caller, unless @p label is a valid label of
   /// a space or of a named basis instance, one that indices can be parsed
@@ -1589,6 +1728,19 @@ class IndexBasisRegistry {
     return const_cast<IndexSpace&>(b.space());
   }
 
+  /// @return the space of the space entry @p entry and the space copies of
+  /// every named basis instance of that space, for metadata writes
+  container::svector<std::reference_wrapper<IndexSpace>> space_copies_of(
+      IndexBasis& entry) {
+    SEQUANT_ASSERT(!entry.has_basis_instance());
+    container::svector<std::reference_wrapper<IndexSpace>> result;
+    result.emplace_back(mutable_space(entry));
+    for (auto& [label, basis] : bases_)
+      if (basis.has_basis_instance() && basis.space() == entry.space())
+        result.emplace_back(mutable_space(basis));
+    return result;
+  }
+
   /// @return the entry registered under @p label
   /// @throw IndexSpace::bad_key if no entry is registered under @p label
   template <basic_string_convertible S>
@@ -1598,12 +1750,13 @@ class IndexBasisRegistry {
     return it->second;
   }
 
-  /// @return the approximate size (the integral argument) and the Field among
+  /// @return the extent (the integral argument: a space's dimension or a
+  /// basis's extent) and the Field among
   /// @p args, std::nullopt for each that is not given
   template <typename... Args>
-  static std::pair<std::optional<unsigned long>, std::optional<Field>>
-  parse_size_and_field(const Args&... args) {
-    std::pair<std::optional<unsigned long>, std::optional<Field>> result;
+  static std::pair<std::optional<std::size_t>, std::optional<Field>>
+  parse_extent_and_field(const Args&... args) {
+    std::pair<std::optional<std::size_t>, std::optional<Field>> result;
     auto h_args = boost::hana::make_tuple(args...);
 
     auto h_ints = boost::hana::filter(h_args, [](auto arg) {
@@ -1614,7 +1767,12 @@ class IndexBasisRegistry {
         nints == boost::hana::size_c<0> || nints == boost::hana::size_c<1>,
         "IndexBasisRegistry::add: only one integral argument is allowed");
     if constexpr (nints == boost::hana::size_c<1>) {
-      result.first = boost::hana::at_c<0>(h_ints);
+      const auto& n = boost::hana::at_c<0>(h_ints);
+      if constexpr (std::is_signed_v<std::remove_cvref_t<decltype(n)>>)
+        if (n < 0)
+          throw Exception(
+              "IndexBasisRegistry::add: the extent must not be negative");
+      result.first = n;
     }
 
     auto h_field = boost::hana::filter(h_args, [](auto arg) {
@@ -1820,18 +1978,17 @@ class IndexBasisRegistry {
     });
   }
 
-  /// @brief computes the approximate size of the space
+  /// @brief computes the dimension of the space
 
   /// for a base space return its extent, for a composite space compute as a sum
   /// of extents of base subspaces
   /// @param space_attr the IndexSpace attribute
-  /// @return the approximate size of the space
-  unsigned long compute_approximate_size(
-      const IndexSpace::Attr& space_attr) const {
+  /// @return the dimension of the space
+  unsigned long compute_dimension(const IndexSpace::Attr& space_attr) const {
     if (is_base(space_attr.type())) {
-      return this->retrieve(space_attr).approximate_size();
+      return this->retrieve(space_attr).dimension();
     } else {
-      // compute_approximate_size is used when populating the registry
+      // compute_dimension is used when populating the registry
       // so don't use base_spaces() here
       const SpacesView space_entries = spaces();
       unsigned long size = ranges::accumulate(
@@ -1840,7 +1997,7 @@ class IndexBasisRegistry {
                    space_attr.type().intersection(s.type());
           }),
           0ul, [](unsigned long size, const IndexSpace& s) {
-            return size + s.approximate_size();
+            return size + s.dimension();
           });
       return size;
     }
@@ -1867,20 +2024,24 @@ class IndexBasisRegistry {
   }
 
   /// registries are equal if they have equal entries (spaces and named basis
-  /// instances, under equal labels), of equal approximate size and field, and
-  /// specify the same physical-particle attributes and vacuum-occupied,
+  /// instances, under equal labels), of equal dimension, extent, metric and
+  /// field, with the same entries following the same ones (see follow()),
+  /// and specify the same physical-particle attributes and vacuum-occupied,
   /// reference-occupied, complete, hole and particle spaces
   friend bool operator==(const IndexBasisRegistry& isr1,
                          const IndexBasisRegistry& isr2) {
-    // IndexBasis equality ignores the approximate size and the field
+    // IndexBasis equality ignores the metadata
     return std::ranges::equal(
                isr1.bases_, isr2.bases_,
                [](const auto& e1, const auto& e2) {
                  return e1.first == e2.first && e1.second == e2.second &&
-                        e1.second.space().approximate_size() ==
-                            e2.second.space().approximate_size() &&
-                        e1.second.space().field() == e2.second.space().field();
+                        e1.second.space().dimension() ==
+                            e2.second.space().dimension() &&
+                        e1.second.extent() == e2.second.extent() &&
+                        e1.second.metric() == e2.second.metric() &&
+                        e1.second.field() == e2.second.field();
                }) &&
+           isr1.follows_ == isr2.follows_ &&
            isr1.physical_particle_attribute_mask_ ==
                isr2.physical_particle_attribute_mask_ &&
            isr1.vacocc_ == isr2.vacocc_ && isr1.refocc_ == isr2.refocc_ &&

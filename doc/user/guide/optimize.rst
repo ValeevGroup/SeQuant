@@ -14,7 +14,7 @@ What it does
 Given an expression (or a :doc:`ResultExpr <expressions>`), :func:`sequant::optimize`:
 
 - picks a pairwise contraction order for every :class:`sequant::Product`, minimizing a cost metric (the total floating-point
-  operation count, by default) using :class:`sequant::IndexSpace`'s approximate size for each index's extent, and
+  operation count, by default) using each index's basis extent (:func:`sequant::IndexBasis::extent`), and
 - reorders the summands of every :class:`sequant::Sum` so that terms sharing common intermediates end up next to each other, which
   helps downstream common-subexpression elimination recognize them.
 

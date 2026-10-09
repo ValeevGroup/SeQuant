@@ -8,6 +8,7 @@
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
@@ -64,9 +65,9 @@ void add_fermi_spin(IndexBasisRegistry& isr) {
   for (auto&& space : isr) {
     if (space.base_key() != L"") {
       IndexSpace spin_up(spinannotation_add(space.base_key(), Spin::alpha),
-                         space.type(), Spin::alpha, space.approximate_size());
+                         space.type(), Spin::alpha, space.dimension());
       IndexSpace spin_down(spinannotation_add(space.base_key(), Spin::beta),
-                           space.type(), Spin::beta, space.approximate_size());
+                           space.type(), Spin::beta, space.dimension());
       result.add(spin_up);
       result.add(spin_down);
     }
@@ -81,54 +82,111 @@ void add_fermi_spin(IndexBasisRegistry& isr) {
   isr = std::move(result);
 }
 
-void add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
-                   IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs) {
+namespace {
+
+/// @throw Exception, naming @p caller, if a label of @p bases is registered
+/// in @p isr or @p instance of its space is named there
+void require_unregistered(
+    const IndexBasisRegistry& isr, const char* caller,
+    const container::svector<std::pair<std::wstring, IndexSpace>>& bases,
+    IndexBasis::instance_type instance) {
+  for (const auto& [label, space] : bases) {
+    if (isr.contains(label))
+      throw Exception(std::string(caller) + ": the label '" + toUtf8(label) +
+                      "' is already registered");
+    if (auto taken = isr.basis_label(IndexBasis{space, instance}))
+      throw Exception(std::string(caller) + ": instance " +
+                      std::to_string(instance) + " of space " +
+                      toUtf8(space.base_key()) + " is already named '" +
+                      toUtf8(*taken) + "'");
+  }
+}
+
+}  // namespace
+
+void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
+                  IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs,
+                  IndexBasis::instance_type instance) {
   // matches the MPQC layout, see spindex.h
   // this will not work for MR
-  // AO spaces are physical (spin-specific AOs can support particle states of a
-  // given spin), so they carry the convention's spin-agnostic quantum numbers
-  // (spin_any) in the physical (spin) sector alongside the LCAOQNS::ao trait
-  // bit; leaving the spin bits empty would make physical_particle_attributes()
-  // report no spin and break occupancy lookups (e.g. is_pure_occupied) that key
-  // on spin. spin_any matches how make_*_spaces sets the base spaces' spin.
-  auto const ao_qns = spin_any | LCAOQNS::ao;
-  auto obs_lcao = isr->retrieve(vbs ? L"m" : L"p");
-  isr->add(IndexSpace{L"μ", obs_lcao.type(), ao_qns});  // OBS AO
+  // the AOs of a basis set span an orbital space; the union of two AO bases
+  // spans the union of their spaces, which must be registered. Every space is
+  // looked up and every label checked before anything is registered, so a
+  // failure leaves the registry untouched. The spaces are taken by value:
+  // add() may reallocate the registry's table
+  auto union_space = [&](std::wstring_view label, const IndexSpace& s1,
+                         const IndexSpace& s2) -> IndexSpace {
+    const auto* space = isr->retrieve_ptr(s1.type() | s2.type(), spin_any);
+    if (!space)
+      throw Exception("add_ao_basis: the AO basis '" + toUtf8(label) +
+                      "' spans the union of the spaces " +
+                      toUtf8(s1.base_key()) + " and " + toUtf8(s2.base_key()) +
+                      ", which is not registered");
+    return *space;
+  };
+  container::svector<std::pair<std::wstring, IndexSpace>> bases;
+  const IndexSpace obs = isr->retrieve(vbs ? L"m" : L"p");
+  bases.emplace_back(L"μ", obs);  // OBS AO
+  IndexSpace vbs_plus;
   if (vbs) {
-    auto vbs_lcao = isr->retrieve(L"e");
-    isr->add(IndexSpace{L"Α", vbs_lcao.type(), ao_qns})  // VBS AO
-        .add_union(L"Γ", {L"μ", L"Α"});                  // VBS+ = OBS + VBS
+    const IndexSpace vbs_space = isr->retrieve(L"e");
+    vbs_plus = union_space(L"Γ", obs, vbs_space);
+    bases.emplace_back(L"Α", vbs_space);  // VBS AO
+    bases.emplace_back(L"Γ", vbs_plus);   // VBS+ = OBS + VBS
   }
   if (abs) {
-    auto abs_lcao = isr->retrieve(L"α'");
-    isr->add(
-           IndexSpace{L"σ", abs_lcao.type(), ao_qns})  // Abs AO in F12 methods
-        .add_union(L"ρ", {L"μ", L"σ"});
-    if (vbs)                               // ABS+ = OBS + ABS
-      isr->add_union(L"Ρ", {L"Γ", L"σ"});  // VABS+ = VBS+ + ABS
+    const IndexSpace abs_space = isr->retrieve(L"α'");
+    bases.emplace_back(L"σ", abs_space);  // ABS AO in F12 methods
+    bases.emplace_back(L"ρ", union_space(L"ρ", obs, abs_space));  // OBS + ABS
+    if (vbs)  // VABS+ = VBS+ + ABS
+      bases.emplace_back(L"Ρ", union_space(L"Ρ", vbs_plus, abs_space));
   }
+  require_unregistered(*isr, "add_ao_basis", bases, instance);
+  for (const auto& [label, space] : bases)
+    isr->add(label, IndexBasis{space, instance}, IndexSpaceMetric::General);
+}
+
+void add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
+                   IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs) {
+  add_ao_basis(isr, spin_any, vbs, abs);
 }
 
 void add_pao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
                     IndexSpace::QuantumNumbers spin_any) {
-  auto uocc_space = isr->particle_space(/* nulltype_ok = */ false);
-  // PAO states are physical (spin-independent, but still particle states), so
-  // they carry the convention's spin-agnostic quantum numbers (spin_any) in the
-  // physical (spin) sector alongside the LCAOQNS::pao trait bit; leaving the
-  // spin bits empty would make physical_particle_attributes() report no spin
-  // and break occupancy lookups (e.g. is_pure_occupied) that key on spin.
-  // spin_any matches how make_*_spaces sets the base spaces' spin.
-  isr->add(IndexSpace{L"μ̃", uocc_space, spin_any | LCAOQNS::pao})  // OBS PAO
-      ;
+  add_pao_basis(isr, spin_any);
 }
 
 void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
                    IndexSpace::QuantumNumbers spin_any,
                    IndexBasis::instance_type instance,
                    std::wstring_view label) {
-  const auto& uocc =
-      isr->retrieve(isr->particle_space(/* nulltype_ok = */ false), spin_any);
-  isr->add(label, IndexBasis{uocc, instance});
+  // the PAOs are the AOs projected on the particle space (of either spin),
+  // so every PAO basis follows the OBS AO basis for its extent, metric and
+  // field. Everything is checked before anything is registered, so a failure
+  // leaves the registry untouched. The spaces are taken by value: add() may
+  // reallocate the table
+  if (label == L"μ")
+    throw Exception(
+        "add_pao_basis: 'μ' is the label of the OBS AO basis the PAO bases "
+        "follow");
+  const auto uocc_type = isr->particle_space(/* nulltype_ok = */ false);
+  container::svector<std::pair<std::wstring, IndexSpace>> bases;
+  bases.emplace_back(std::wstring(label), isr->retrieve(uocc_type, spin_any));
+  for (const auto spin : {Spin::alpha, Spin::beta})
+    if (const auto* uocc_spin = isr->retrieve_ptr(uocc_type, spin))
+      bases.emplace_back(spinannotation_add(label, spin), *uocc_spin);
+  require_unregistered(*isr, "add_pao_basis", bases, instance);
+  if (!isr->contains(L"μ"))
+    add_ao_basis(isr, spin_any);
+  else if (!isr->retrieve_basis(L"μ").has_basis_instance())
+    throw Exception(
+        "add_pao_basis: 'μ' is a space, not the OBS AO basis the PAO bases "
+        "follow");
+  else if (auto source = isr->follows(L"μ"))
+    throw Exception("add_pao_basis: the OBS AO basis 'μ' follows '" +
+                    toUtf8(*source) + "', so the PAO bases cannot follow it");
+  for (const auto& [l, space] : bases)
+    isr->add(l, IndexBasis{space, instance}).follow(l, L"μ");
 }
 
 void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& isr) {

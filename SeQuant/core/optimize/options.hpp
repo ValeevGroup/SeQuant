@@ -232,7 +232,7 @@ struct OptimizeOptions {
   CSEOptions CSE = {};
 
   /// Caller-supplied Index to extent provider. If empty, defaults to
-  /// \c IndexSpace::approximate_size().
+  /// \c IndexBasis::extent() of the index's basis.
   index_to_extent_t idx_to_extent = {};
 
   /// Optional k-aware inner-composite extent for CSV/PNO tensor-of-tensor

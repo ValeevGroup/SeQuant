@@ -20,6 +20,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/overloads.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 
 #include <range/v3/algorithm/all_of.hpp>
@@ -79,19 +80,22 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   if (!space) {
     space = IndexSpace{label, idx.space().type(), qns,
                        // N.B. assume size does not depend on spin
-                       idx.space().approximate_size()};
+                       idx.space().dimension()};
   }
-  // the basis: the registry's entry for the instance in that space if it
-  // names one, else, as for the space, one derived from the index's own:
-  // its name with the spin annotation replaced, its extent
+  // the basis: the registry's entry for the instance in that space. A named
+  // basis is not derived from the index's own: its spin-cased counterparts
+  // are bases of their own (with extents of their own, e.g. in a
+  // spin-polarized state), so they must be registered
   IndexBasis basis = default_registry_resolved(
       IndexBasis{space, idx.basis().basis_instance()});
   if (idx.basis().has_name() && !basis.has_name())
-    basis = IndexBasis{
-        IndexSpace{space.base_key(), space.type(), space.qns(),
-                   idx.space().approximate_size(), idx.space().field()},
-        idx.basis().basis_instance(),
-        mbpt::spinannotation_replacе(idx.basis().name(), s)};
+    throw Exception(
+        "make_index_with_spincase: the basis " + toUtf8(idx.basis().name()) +
+        " of index " + toUtf8(idx.full_label()) +
+        " has no registered counterpart in space " + toUtf8(space.base_key()) +
+        "; register it (e.g. as " +
+        toUtf8(mbpt::spinannotation_replacе(idx.basis().name(), s)) +
+        ") before spin-casing");
   auto protoindices = idx.proto_indices();
   for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, s);
   return Index{std::move(basis), idx.ordinal(), protoindices,

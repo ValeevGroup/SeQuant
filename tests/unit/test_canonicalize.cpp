@@ -38,7 +38,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
   using namespace sequant;
 
   auto isr = sequant::mbpt::make_legacy_spaces();
-  mbpt::add_pao_spaces(isr, mbpt::Spin::null);
+  mbpt::add_pao_basis(isr, mbpt::Spin::any);
   auto ctx = get_default_context();
   ctx.set(isr);
   auto ctx_resetter = set_scoped_default_context(ctx);
@@ -252,7 +252,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
       std::vector<std::wstring> keys;
       for (auto const& s : *sr_reg) keys.push_back(s.base_key());
       for (auto const& k : keys)
-        if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
+        if (!k.empty()) sr_reg->field(k, Field::Real);
       // Disable strict bra↔ket-symmetry policy: this expression has a_3 in
       // g.bra and t.bra under one term's orientation (a bra-bra contraction,
       // legitimate for Symm-braket g), which the default-context Conjugate
@@ -314,12 +314,12 @@ TEST_CASE("canonicalization", "[algorithms]") {
     // intermediate.
     {
       auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
-      mbpt::add_pao_spaces(sr_reg, mbpt::Spin::any);  // μ̃ (PAO)
-      mbpt::add_df_spaces(sr_reg);                    // Κ  (DF aux)
+      mbpt::add_pao_basis(sr_reg, mbpt::Spin::any);  // μ̃ (PAO)
+      mbpt::add_df_spaces(sr_reg);                   // Κ  (DF aux)
       std::vector<std::wstring> keys;
       for (auto const& s : *sr_reg) keys.push_back(s.base_key());
       for (auto const& k : keys)
-        if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
+        if (!k.empty()) sr_reg->field(k, Field::Real);
       Context ctx = get_default_context();
       ctx.set(sr_reg);
       ctx.set(AssertStrictBraKetSymmetry::No);
@@ -381,7 +381,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
       std::vector<std::wstring> keys;
       for (auto const& s : *sr_reg) keys.push_back(s.base_key());
       for (auto const& k : keys)
-        if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
+        if (!k.empty()) sr_reg->field(k, Field::Real);
       auto srcc_resetter = set_scoped_default_context(
           Context({.index_basis_registry_shared_ptr = sr_reg,
                    .vacuum = Vacuum::SingleProduct,

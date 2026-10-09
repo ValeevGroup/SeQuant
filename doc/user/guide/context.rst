@@ -14,8 +14,8 @@ The core ``Context``
 vocabulary of index spaces in use, e.g. occupied/virtual), the ``Vacuum`` relative to which operators are normal-ordered
 (``Vacuum::Physical`` — the true, particle-free vacuum —, ``Vacuum::SingleProduct`` — a single-determinant quasiparticle vacuum —, or
 ``Vacuum::MultiProduct`` — a general reference state, for which :class:`sequant::WickTheorem` applies the *extended* form of Wick's
-theorem, with density cumulants), the ``IndexSpaceMetric`` (whether the single-particle basis is orthonormal), and the ``SPBasis``
-(spin-orbital vs. spin-free). It also owns the :ref:`canonicalizer configuration <context-canonicalizer-configuration>`. It is
+theorem, with density cumulants), and the ``SPBasis`` (spin-orbital vs. spin-free); whether a basis is orthonormal is a property
+of the basis (:func:`sequant::IndexBasis::metric`), not of the context. It also owns the :ref:`canonicalizer configuration <context-canonicalizer-configuration>`. It is
 accessed and replaced through :func:`sequant::get_default_context`, :func:`sequant::set_default_context`, and
 :func:`sequant::reset_default_context`.
 
@@ -124,8 +124,8 @@ The other configurable field is ``CSV`` (default ``CSV::No``): when set to ``CSV
 :class:`sequant::mbpt::OpMaker` (e.g. cluster amplitudes ``t``) use cluster-specific virtuals — virtual-space indices that carry the
 operator's occupied indices as proto-indices — instead of plain, independent virtual indices. :func:`sequant::mbpt::csv_transform`
 expands such CSV-dependent tensors into an explicit basis (standard unoccupieds, PAOs, or AOs) when needed downstream; the
-basis is given as an :class:`sequant::IndexSpace`, or as an :class:`sequant::IndexBasis` registered under a name together
-with whether it is orthonormal.
+basis is given as an :class:`sequant::IndexSpace` (its own, orthonormal basis), or as an :class:`sequant::IndexBasis`
+registered under a name, whose registry entry says whether it is orthonormal (:func:`sequant::IndexBasis::metric`).
 
 .. literalinclude:: /examples/user/context.cpp
    :language: cpp
@@ -138,11 +138,18 @@ the cluster-specific virtuals of the ground-state and of the perturbed amplitude
 can therefore carry an optional *basis instance*, an opaque integer written after its proto indices, ``a_1<i_1,i_2;1>``
 (``a_1<;1>`` without proto indices), unless the instance is registered under a name, which is then printed in place of
 the space's label (:doc:`../getting_started/index_spaces`); an index without one is in its space's own basis, as before.
-The name travels with the basis (:func:`sequant::IndexBasis::name`): an index parsed from it or minted by SeQuant carries
-it; an index built from a space and a bare instance number does not, unless that basis is first looked up with
-:func:`sequant::default_registry_resolved`, and the two compare equal.
-:func:`sequant::mbpt::add_pao_basis` registers the PAOs this way, as the named instance ``μ̃`` of the particle space
-(an index in it prints as ``μ̃_1``), an alternative to the separate PAO space of :func:`sequant::mbpt::add_pao_spaces`.
+The name is part of the basis (:func:`sequant::IndexBasis::name`), as a space's label is of the space: an index parsed
+from it or minted by SeQuant carries it, and so does one given the instance by number, which is resolved through the
+registry. An index built from an :class:`sequant::IndexBasis` with a bare instance number is in an unnamed basis of its
+own, which is not the named one (the two indices are different), unless that basis is first looked up with
+:func:`sequant::default_registry_resolved`.
+:func:`sequant::mbpt::add_ao_basis` registers the AOs this way, as named instances of the orbital spaces they span
+with a general metric; :func:`sequant::mbpt::add_pao_basis` registers the PAOs as the named instance ``μ̃`` of the
+particle space (an index in it prints as ``μ̃_1``), together with its α- and β-spin counterparts ``μ̃↑`` and ``μ̃↓``
+of the spin-cased particle spaces, so that a PAO index can be spin-cased. The PAOs are the AOs projected on the particle
+space, so the three follow the OBS AO basis ``μ`` for their extent, metric and field, which are set through ``μ``'s
+label; if ``μ`` is absent it is registered first, alone, so register the AO bases first when the VBS or ABS ones are
+wanted.
 Instances are granted per operator label and leg space with :func:`sequant::mbpt::OpRegistry::grant_basis`,
 :class:`sequant::mbpt::OpMaker` mints a granted operator's legs with them, and the projectors of the :doc:`CC <cc>`
 equations carry the grants of the amplitude being solved for. Integrals are never granted: in Wick's theorem their legs
@@ -205,7 +212,7 @@ Every ``Context`` has a version (:func:`sequant::Context::version`) that identif
 space registry, the tensor canonicalizers and index comparers (compared as objects, not by behavior), the cardinal tensor labels, the
 canonicalization options and the single-particle basis (which determines the symmetry of normal operators). Two contexts share a
 version if and only if canonicalization sees the same configuration in both; a version is never reused for another configuration. The
-other settings (vacuum, metric, first dummy index ordinal, typesetting, deserialization defaults) do not affect it.
+other settings (vacuum, first dummy index ordinal, typesetting, deserialization defaults) do not affect it.
 :func:`sequant::current_context_version` returns the version of the context in effect on the calling thread, which lets code that
 caches canonicalization results tell whether they are still valid. Such a cache is keyed on the versions for all statistics, since
 canonicalization reads the single-particle basis from the context for the statistics of the normal operator at hand and the rest

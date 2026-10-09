@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_BASIS_HPP
 #define SEQUANT_CORE_BASIS_HPP
 
+#include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/space.hpp>
 
@@ -26,15 +27,32 @@ namespace sequant {
 /// A basis instance may carry the name it is registered under in an
 /// IndexBasisRegistry (see IndexBasisRegistry::add(label, basis)); a basis
 /// obtained from the registry carries it, one built from a space and an
-/// instance does not. The name is how the basis prints; it is not part of its
-/// identity, so equality, ordering and hashing ignore it.
+/// instance does not. The name is part of the basis's identity, as a space's
+/// label is of the space's: equality, ordering and hashing see it, so a named
+/// basis and the unnamed basis of the same space and instance are two bases.
+/// The registry keeps an instance number and a name one-to-one within a
+/// space (see IndexBasisRegistry::resolve()), so an Index given an instance
+/// by number resolves it to the named basis; one given an IndexBasis takes it
+/// as given. Such an unnamed basis has no spelling of its own: an index in it
+/// prints with the bare instance number, which parses back to the named
+/// basis.
 ///
-/// An unnamed instance spans its space at the space's extent, as a rotation of
-/// it does (e.g. a localized basis): evaluation keys its axes by base_key(),
-/// which is the space's key for such an instance, and so sizes, tiles and
-/// slices it as the space. A basis of a different extent (a truncated or an
-/// overcomplete set) must be registered under a name, which gives it a key and
-/// an extent of its own.
+/// A basis has an extent (the number of functions in it), a metric (whether it
+/// is orthonormal) and a scalar field. Unlike the name, these describe the
+/// basis but are not part of its identity, so equality, ordering and hashing
+/// ignore them. An unnamed basis, whether the space's own basis or an unnamed
+/// instance, is the space's own basis up to an orthonormal rotation (e.g. a
+/// localized basis): its extent is the dimension of the space, its metric is
+/// unit and its field is that of the space's own basis (IndexSpace::field()),
+/// and evaluation keys its axes by base_key(), which is the space's key for
+/// such an instance, and so sizes, tiles and slices it as the space. A basis
+/// that differs in any of these (a truncated or an overcomplete set, a
+/// non-orthonormal basis) must be registered under a name, which gives it a
+/// key and metadata of its own (see IndexBasisRegistry::add(label, basis)).
+/// A named basis registered without an extent or a field follows its space's
+/// (own_extent() and own_field() are null), and so sees the registry's
+/// setters for the space's label; one registered with them, even with the
+/// values the space has, does not.
 class IndexBasis {
  public:
   using instance_type = std::int32_t;
@@ -60,9 +78,18 @@ class IndexBasis {
       : space_(std::move(space)), basis_instance_(basis_instance) {}
 
   /// @param name the label @p basis_instance is registered under
-  /// @pre @p name is empty or @p basis_instance is non-null
+  /// @param extent the number of functions in the basis; null for the
+  ///        dimension of @p space
+  /// @param metric whether the basis is orthonormal
+  /// @param field the scalar field of the basis; null for that of the own
+  ///        basis of @p space
+  /// @pre @p name is empty or @p basis_instance is non-null; @p name is
+  ///      non-empty or every other argument is at its default (an unnamed
+  ///      basis is the space's own basis up to an orthonormal rotation)
   IndexBasis(IndexSpace space, optional_instance basis_instance,
-             std::wstring name);
+             std::wstring name, std::optional<std::size_t> extent = {},
+             IndexSpaceMetric metric = IndexSpaceMetric::Unit,
+             std::optional<Field> field = {});
 
   const IndexSpace& space() const noexcept { return space_; }
 
@@ -92,26 +119,60 @@ class IndexBasis {
     return has_name() ? std::nullopt : basis_instance_;
   }
 
+  /// @return the number of functions in the basis: the dimension of its space
+  /// (IndexSpace::dimension()) unless registered with an extent of its
+  /// own
+  std::size_t extent() const noexcept {
+    return extent_ ? *extent_ : space_.dimension();
+  }
+
+  /// @return whether the basis is orthonormal (IndexSpaceMetric::Unit) or not;
+  /// unit unless registered otherwise
+  IndexSpaceMetric metric() const noexcept { return metric_; }
+
+  /// @return the scalar field of the basis: that of its space's own basis
+  /// (IndexSpace::field()) unless registered with a field of its own
+  Field field() const noexcept { return field_ ? *field_ : space_.field(); }
+
+  /// @return the extent the basis was registered with (or mirrors from the
+  /// entry it follows, see IndexBasisRegistry::follow()), null if extent()
+  /// follows the dimension of its space (which the registry's
+  /// IndexBasisRegistry::extent(label, n) for the space's label then sets)
+  const std::optional<std::size_t>& own_extent() const noexcept {
+    return extent_;
+  }
+
+  /// @return the field the basis was registered with (or mirrors from the
+  /// entry it follows, see IndexBasisRegistry::follow()), null if field()
+  /// follows that of its space's own basis (which the registry's
+  /// IndexBasisRegistry::field(label, f) for the space's label then sets)
+  const std::optional<Field>& own_field() const noexcept { return field_; }
+
   /// @return `L";N"` for a non-null instance `N`, else an empty string
   std::wstring instance_suffix() const;
 
-  /// compares space and instance; the name is ignored
+  /// compares space, instance and name; the extent, metric and field are
+  /// ignored
   friend bool operator==(const IndexBasis& b1, const IndexBasis& b2) noexcept {
-    return b1.space_ == b2.space_ && b1.basis_instance_ == b2.basis_instance_;
+    return b1.space_ == b2.space_ && b1.basis_instance_ == b2.basis_instance_ &&
+           b1.name_ == b2.name_;
   }
 
-  /// orders by space, then by instance (null first); the name is ignored
+  /// orders by space, then by instance (null first), then by name (unnamed
+  /// first); the extent, metric and field are ignored
   friend std::strong_ordering operator<=>(const IndexBasis& b1,
                                           const IndexBasis& b2) noexcept {
     if (auto c = b1.space_ <=> b2.space_; c != 0) return c;
-    return b1.basis_instance_ <=> b2.basis_instance_;
+    if (auto c = b1.basis_instance_ <=> b2.basis_instance_; c != 0) return c;
+    return b1.name_ <=> b2.name_;
   }
 
-  /// @return `hash_value(b.space())` if @p b has no instance; the name is
-  /// ignored
+  /// @return `hash_value(b.space())` if @p b has no instance; the extent,
+  /// metric and field are ignored
   friend std::size_t hash_value(const IndexBasis& b) {
     std::size_t result = hash_value(b.space_);
     if (b.basis_instance_) hash::combine(result, *b.basis_instance_);
+    if (b.has_name()) hash::combine(result, b.name_);
     return result;
   }
 
@@ -119,16 +180,31 @@ class IndexBasis {
   IndexSpace space_;
   optional_instance basis_instance_;
   std::wstring name_;
+  std::optional<std::size_t> extent_;
+  IndexSpaceMetric metric_ = IndexSpaceMetric::Unit;
+  std::optional<Field> field_;
+
+  // the registry writes the metadata of its named entries in place
+  friend class IndexBasisRegistry;
+  void extent(std::size_t n) noexcept { extent_ = n; }
+  void metric(IndexSpaceMetric m) noexcept { metric_ = m; }
+  void field(Field f) noexcept { field_ = f; }
 };
+
+/// @return true if @p b1 and @p b2 are of one space and instance, named or
+/// not: the relation the registry keeps one-to-one with a name (see
+/// IndexBasisRegistry::resolve())
+bool same_instance(const IndexBasis& b1, const IndexBasis& b2) noexcept;
 
 /// @return true if @p basis includes @p subbasis, i.e. its space includes the
 /// space of @p subbasis and it is either the space's own basis (which includes
-/// every instance of the space) or the same instance as @p subbasis
+/// every instance of the space) or the same instance, under the same name, as
+/// @p subbasis
 bool includes(const IndexBasis& basis, const IndexBasis& subbasis);
 
 /// @return true if @p b1 and @p b2 are different basis instances, i.e. both
-/// have one and the two differ; an identity between functions of such bases
-/// is an overlap, not a Kronecker delta
+/// have one and the two differ in instance or name; an identity between
+/// functions of such bases is an overlap, not a Kronecker delta
 bool different_instances(const IndexBasis& b1, const IndexBasis& b2);
 
 }  // namespace sequant
