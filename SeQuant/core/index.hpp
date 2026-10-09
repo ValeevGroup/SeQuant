@@ -802,8 +802,8 @@ class Index : public Taggable {
     return proto_indices_color(proto_indices_);
   }
 
-  /// Color of an Index = hashed IndexSpace + IndexSpace objects of the
-  /// protoindices + basis instances (if any) of this and of the protoindices
+  /// Color of an Index = hash of its basis and of the bases of its
+  /// protoindices
   /// @return the color of this object
   auto color() const {
     if (has_proto_indices()) {
