@@ -260,6 +260,12 @@ AST parse(const StartRule &start, std::wstring_view input,
 
 }  // namespace parse
 
+bool is_index_space_name(std::wstring_view label) {
+  auto begin = label.begin();
+  return x3::parse(begin, label.end(), parse::index_name) &&
+         begin == label.end();
+}
+
 transform::DefaultSymmetries to_default_symms(
     const DeserializationOptions &options) {
   // unspecified symmetries default to the active Context's; the Hermiticity is

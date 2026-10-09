@@ -130,6 +130,12 @@ SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprPtr);
 SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
 
 SEQUANT_DECLARE_SERIALIZATION_FUNC
+
+/// \return whether \p label is an IndexSpaceName of this grammar, i.e. a
+/// label that an index can be parsed with: nonempty, and made of letters,
+/// `⁺`, `⁻`, combining diacritics (U+0300 to U+036F, e.g. the tilde of `μ̃`),
+/// arrows (U+2190 to U+21FF, e.g. `↑`, `↓`) and primes (`'`) only
+bool is_index_space_name(std::wstring_view label);
 }  // namespace v1
 
 #undef SEQUANT_DECLARE_DESERIALIZATION_FUNC

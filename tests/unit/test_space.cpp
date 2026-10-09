@@ -167,6 +167,12 @@ TEST_CASE("index_space", "[elements]") {
         L"a2", IndexBasis{a, 1}));  // 6: digit after the first character
     CHECK_THROWS(isr->add(L"μ̃_x", IndexBasis{a, 1}));  // 6: underscore
     CHECK_THROWS(isr->add(L"", IndexBasis{a, 1}));     // 6: empty
+    // 6: no serializer syntax, for a name or a space alike
+    for (auto bad : {L"ν<", L"ν}", L"ν;", L"ν,", L"ν ν", L"2ν"}) {
+      CHECK_THROWS(isr->add(bad, IndexBasis{a, 1}));
+      CHECK_THROWS(isr->add(IndexSpace{bad, 0b100000000}));
+      CHECK_FALSE(isr->retrieve_basis_ptr(bad));
+    }
     // 7: a named instance remains
     CHECK_THROWS_WITH(isr->remove(L"a"),
                       Catch::Matchers::ContainsSubstring("μ̃"));

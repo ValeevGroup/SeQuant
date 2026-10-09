@@ -456,9 +456,12 @@ class IndexBasisRegistry {
   /// @brief add an IndexSpace to this registry.
   /// @param IS an IndexSpace
   /// @return reference to `this`
-  /// @throw Exception if `IS.base_key()` or `IS.attr()` matches
-  /// an already registered IndexSpace
+  /// @throw Exception if `IS.base_key()` is not a valid index space name
+  /// (see io::serialization::v1::is_index_space_name()), or if it or
+  /// `IS.attr()` matches an already registered IndexSpace
   IndexBasisRegistry& add(const IndexSpace& IS) {
+    if (IS)
+      validate_label(IS.base_key(), "IndexBasisRegistry::add(index_space)");
     auto it = bases_.find(IS.base_key());
     if (it != bases_.end()) {
       throw Exception(
@@ -545,8 +548,8 @@ class IndexBasisRegistry {
 
   /// @brief registers a basis instance of a registered space under its own
   /// label
-  /// @param label the label of the basis instance; must be nonempty and
-  /// contain no '_' and no digit after its first character
+  /// @param label the label of the basis instance; must be a valid index
+  /// space name (see io::serialization::v1::is_index_space_name())
   /// @param basis an IndexBasis with a basis instance whose space is
   /// registered
   /// @param args optional arguments consisting of a mix of zero or one of
@@ -576,11 +579,7 @@ class IndexBasisRegistry {
       throw Exception("IndexBasisRegistry::add(label, basis): '" + toUtf8(key) +
                       "' needs a basis instance; register a space with "
                       "add(IndexSpace)");
-    if (key.empty() || IndexSpace::reduce_key(key) != key)
-      throw Exception("IndexBasisRegistry::add(label, basis): label '" +
-                      toUtf8(key) +
-                      "' must contain no '_' and no digit after its first "
-                      "character");
+    validate_label(key, "IndexBasisRegistry::add(label, basis)");
     if (bases_.contains(key))
       throw Exception("IndexBasisRegistry::add(label, basis): label '" +
                       toUtf8(key) + "' is already registered");
@@ -1566,6 +1565,11 @@ class IndexBasisRegistry {
  private:
   table_type bases_;
   std::size_t named_count_ = 0;  // the number of named basis instances
+
+  /// @throw Exception, naming @p caller, unless @p label is a valid label of
+  /// a space or of a named basis instance, one that indices can be parsed
+  /// with (see io::serialization::v1::is_index_space_name())
+  static void validate_label(std::wstring_view label, std::string_view caller);
 
   static bool is_space(const table_type::value_type& e) {
     return !e.second.has_basis_instance();
