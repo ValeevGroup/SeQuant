@@ -132,12 +132,19 @@ bool Operator<QuantumNumbers, S>::commutes_with_atom(const Expr& that) const {
     // if this has annihilators/creators in same space as that has
     // creator/annihilators return false
 
-    auto delta_this = (*this)();
-    auto delta_that = (that_op)();
+    const auto delta_this = (*this)();
+    const auto delta_that = (that_op)();
 
-    SEQUANT_ASSERT(this->size() % 2 == 0 && that.size() == this->size());
+    SEQUANT_ASSERT(delta_this.size() % 2 == 0 &&
+                   delta_that.size() == delta_this.size());
 
-    return combine(delta_this, delta_that) == combine(delta_that, delta_this);
+    for (std::size_t cre = 0; cre != delta_this.size(); cre += 2) {
+      const auto ann = cre + 1;
+      if ((delta_this[cre].upper() > 0 && delta_that[ann].upper() > 0) ||
+          (delta_this[ann].upper() > 0 && delta_that[cre].upper() > 0))
+        return false;
+    }
+    return true;
   }
 }
 

@@ -179,6 +179,24 @@ TEST_CASE("mbpt multireference regressions", "[mbpt]") {
   ctx.set(make_mr_spaces());
   auto ctx_resetter = set_scoped_default_context(ctx);
 
+  SECTION("commutators retain active-space contractions") {
+    const auto f = op::h(1);
+    const auto t = op::t(1);
+    CHECK_FALSE(f->commutes_with(*t));
+    const auto commutator = simplify(f * t - t * f);
+    const auto expected = tensor::ref_av(tensor::h(1) * tensor::t(1) -
+                                         tensor::t(1) * tensor::h(1));
+    REQUIRE(expected != ex<Constant>(0));
+    CHECK_THAT(op::ref_av(commutator), EquivalentTo(expected));
+  }
+
+  SECTION("single-reference excitation operators still commute") {
+    auto sr_ctx = get_default_context();
+    sr_ctx.set(make_sr_spaces());
+    auto sr_scope = set_scoped_default_context(sr_ctx);
+    CHECK(op::t(1)->commutes_with(*op::t(2)));
+  }
+
   SECTION("RDM replacement preserves external indices") {
     for (const bool named : {false, true}) {
       auto opts = CanonicalizeOptions::default_options();
