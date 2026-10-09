@@ -76,8 +76,14 @@ CC::CC(size_t n, const Options& opts) : N(n), opts_(opts) {
     if (skip_singles())
       throw Exception("CC: hbar_singles_comm_rank requires singles amplitudes");
   }
-  if (unitary() && !opts_.hbar_comm_rank)
-    throw Exception("CC: hbar_comm_rank is required for unitary ansatz");
+  if (!opts_.hbar_comm_rank) {
+    if (unitary())
+      throw Exception("CC: hbar_comm_rank is required for unitary ansatz");
+    if (!detail::reference_is_vacuum())
+      throw Exception(
+          "CC: hbar_comm_rank is required when the reference differs from the "
+          "Wick vacuum");
+  }
   if ((opts_.ansatz == Ansatz::oT || opts_.ansatz == Ansatz::oU) &&
       !skip_singles())
     throw Exception(

@@ -55,8 +55,10 @@ class CC {
     bool screen = true;
     /// if true, uses topological optimizations in WickTheorem
     bool use_topology = true;
-    /// maximum order of nested commutators in H̄; must be specified if unitary
-    /// ansatz is used
+    /// maximum order of nested commutators in H̄; must be specified for a
+    /// unitary ansatz or when the reference differs from the Wick vacuum,
+    /// since the expansion does not terminate in either case. Otherwise
+    /// defaults to 4, which is exact for a two-body Hamiltonian.
     std::optional<size_t> hbar_comm_rank = std::nullopt;
     /// maximum order of the additional singles-only similarity transform
     /// applied to H̄ using \f$ \sigma_1 = T_1 - T_1^\dagger \f$.
@@ -80,8 +82,10 @@ class CC {
   /// @brief constructs CC engine with custom options
   /// @param n coupled cluster excitation rank
   /// @param opts configuration options @see CC::Options
-  /// @throw Exception if a unitary ansatz has no `hbar_comm_rank`, if an
-  /// orbital-optimized ansatz includes singles, if the Bernoulli expansion
+  /// @throw Exception if `hbar_comm_rank` is not set for a unitary ansatz or
+  /// when the reference differs from the Wick vacuum (the context at
+  /// construction decides), if an orbital-optimized ansatz includes singles,
+  /// if the Bernoulli expansion
   /// is requested with an ansatz other than `Ansatz::U`, or if a positive
   /// `hbar_singles_comm_rank` is used with a non-unitary ansatz, Bernoulli,
   /// or excluded singles
@@ -129,9 +133,10 @@ class CC {
   /// value. If provided, will override all defaults. The optional singles-only
   /// transform is applied afterward regardless of this rank.
   /// @note When the reference differs from the Wick vacuum the amplitude
-  /// operators do not commute with each other, so the expansion grows
-  /// exponentially with the rank and the default of 4 is impractical (CCSD
-  /// amplitudes at rank 4 exceed several GB); set a low rank explicitly.
+  /// operators do not commute with each other, so the expansion does not
+  /// terminate and grows exponentially with the rank (CCSD amplitudes at rank
+  /// 4 exceed several GB); the constructor therefore requires
+  /// `hbar_comm_rank` there, as for a unitary ansatz.
   /// @note The returned expression depends on the ansatz and expansion:
   ///   - When the reference is the Wick vacuum, a non-unitary ansatz represents
   ///     each commutator as a connected product,
