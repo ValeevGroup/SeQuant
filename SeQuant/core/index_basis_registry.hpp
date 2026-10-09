@@ -290,7 +290,7 @@ class IndexBasisRegistry {
   /// approximate size and field, if @p b has a basis instance registered
   /// under a name; otherwise @p b unchanged
   IndexBasis resolve(const IndexBasis& b) const {
-    if (!b.has_basis_instance()) return b;
+    if (!b.has_basis_instance() || named_count_ == 0) return b;
     for (auto const& [label, basis] : bases_)
       if (basis == b) return basis;
     return b;
