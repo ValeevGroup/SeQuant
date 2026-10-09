@@ -554,7 +554,9 @@ class IndexBasisRegistry {
   /// @brief registers a basis instance of a registered space under its own
   /// label
   /// @param label the label of the basis instance; must be a valid base
-  /// key (see io::serialization::v1::is_base_key())
+  /// key (see io::serialization::v1::is_base_key()): letters, ⁺, ⁻,
+  /// combining diacritics, arrows and primes, so no digits or `_`, which an
+  /// index label reserves for the ordinal
   /// @param basis an IndexBasis with a basis instance whose space is
   /// registered
   /// @param args optional arguments consisting of a mix of zero or one of
