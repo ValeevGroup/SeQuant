@@ -40,6 +40,16 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
   SEQUANT_ASSERT(
       get_default_context().index_space_registry()->contains(csv_basis));
 
+  // a basis instance is registered in one space, so an index minted in it
+  // cannot keep a leg's space (e.g. its spin)
+  auto require_in_basis_space = [&csv_basis](const Index& leg) {
+    if (csv_basis.has_basis_instance() && leg.space() != csv_basis.space())
+      throw Exception("csv_transform: a CSV leg is in space " +
+                      toUtf8(leg.space().base_key()) +
+                      ", not in the target basis instance's space " +
+                      toUtf8(csv_basis.space().base_key()));
+  };
+
   // shortcut for the CSV overlap if csv_basis is orthonormal
   if (orthonormal && tnsr.label() == overlap_label()) {
     SEQUANT_ASSERT(tnsr.bra_rank() == 1     //
@@ -56,13 +66,7 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
 
     if (bra_has_proto_indices && ket_has_proto_indices) {
       const Index& end = ordinal_compare(bra_idx, ket_idx) ? bra_idx : ket_idx;
-      // a basis instance is registered in one space, so a dummy in it cannot
-      // keep the legs' space (e.g. their spin)
-      if (csv_basis.has_basis_instance() && end.space() != csv_basis.space())
-        throw Exception("csv_transform: the CSV overlap's legs are in space " +
-                        toUtf8(end.space().base_key()) +
-                        ", not in the target basis instance's space " +
-                        toUtf8(csv_basis.space().base_key()));
+      require_in_basis_space(end);
       // a fresh dummy: another overlap may share either leg
       const auto dummy_idx = Index::make_tmp_index(
           csv_basis.has_basis_instance() ? csv_basis : IndexBasis(end.space()));
@@ -90,6 +94,7 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
   rbra.reserve(tnsr.bra_rank());
   for (auto&& idx : tnsr.bra()) {
     if (idx.has_proto_indices()) {
+      require_in_basis_space(idx);
       Index xidx = Index::make_tmp_index(csv_basis);
       result.append(
           1, ex<Tensor>(coeff_tensor_label, bra({idx}), ket({xidx}), aux({})));
@@ -101,6 +106,7 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
   rket.reserve(tnsr.ket_rank());
   for (auto&& idx : tnsr.ket()) {
     if (idx.has_proto_indices()) {
+      require_in_basis_space(idx);
       Index xidx = Index::make_tmp_index(csv_basis);
       result.append(
           1, ex<Tensor>(coeff_tensor_label, bra({xidx}), ket({idx}), aux({})));

@@ -829,6 +829,15 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
     CHECK_THROWS_AS(
         mbpt::csv_transform(s_a, registry.retrieve_basis(L"ã"), true),
         Exception);
+    // ... on the general path, too
+    CHECK_THROWS_AS(
+        mbpt::csv_transform(s_a, registry.retrieve_basis(L"μ̃"), false),
+        Exception);
+    CHECK_THROWS_AS(
+        mbpt::csv_transform(
+            ex<Tensor>(L"f", bra{Index(uocc_a, 1, {ia1, ia2})}, ket{ia1}),
+            registry.retrieve_basis(L"μ̃"), false),
+        Exception);
   }
   SECTION("an unnamed instance basis as target throws") {
     CHECK_THROWS_AS(mbpt::csv_transform(f, IndexBasis{uocc, 5}, false),
