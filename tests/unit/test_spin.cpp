@@ -3,6 +3,7 @@
 //
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/attr.hpp>
@@ -15,6 +16,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -2029,8 +2031,10 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   auto isr = mbpt::make_sr_spaces();
   const IndexSpace uocc = isr->retrieve(L"a");
   isr->add(L"μ̃", IndexBasis{uocc, 77}, 120ul);
-  // the α-spin counterpart is registered, the β-spin one is not
+  // the spin-cased counterparts are bases of their own, e.g. of different
+  // extents in a spin-polarized state
   isr->add(L"μ̃↑", IndexBasis{isr->retrieve(L"a↑"), 77}, 60ul);
+  isr->add(L"μ̃↓", IndexBasis{isr->retrieve(L"a↓"), 77}, 50ul);
   auto ctx = set_scoped_default_context(
       Context({.index_basis_registry_shared_ptr = std::move(isr),
                .vacuum = Vacuum::SingleProduct}));
@@ -2040,17 +2044,16 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   const Index i1(L"i_1"), i2(L"i_2");
 
   // spin-casing a named index: the registry's entry for the instance in the
-  // spin-cased space if it has one, else a basis named after the index's own,
-  // with its extent, as an unregistered spin-cased space is labelled
+  // spin-cased space, with its own metadata
   const Index m1a = make_spinalpha(m1), m1b = make_spinbeta(m1);
   CHECK(m1a.label() == L"μ̃↑_1");
   CHECK(m1a.basis().extent() == 60);
   CHECK(m1b.label() == L"μ̃↓_1");
   CHECK(m1b.basis().basis_instance() == 77);
-  CHECK(m1b.basis().extent() == 120);
+  CHECK(m1b.basis().extent() == 50);
   CHECK(m1b.space() == isr_space_of(m1b));  // sanity: a↓ with the same attr
   CHECK(make_spinfree(m1a) == m1);
-  CHECK(make_spinfree(m1b).label() == L"μ̃_1");
+  CHECK(make_spinfree(m1b) == m1);
   CHECK(make_spinfree(m1b).basis().extent() == 120);
 
   auto term = [&](const Index& m) {
@@ -2068,4 +2071,20 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   REQUIRE(os.size() == 1);
   CHECK(to_latex(os[0]).find(L"\\tilde{\\mu}") != std::wstring::npos);
   CHECK(to_latex(os[0]) != to_latex(ex<Constant>(0)));
+
+  // a missing counterpart is an error, not derived from the index's own basis
+  {
+    auto half = mbpt::make_sr_spaces();
+    half->add(L"μ̃", IndexBasis{uocc, 77}, 120ul);
+    half->add(L"μ̃↑", IndexBasis{half->retrieve(L"a↑"), 77}, 60ul);
+    auto half_ctx = set_scoped_default_context(
+        Context({.index_basis_registry_shared_ptr = std::move(half),
+                 .vacuum = Vacuum::SingleProduct}));
+    const Index m1_half(
+        get_default_context().index_basis_registry()->retrieve_basis(L"μ̃"), 1);
+    CHECK_NOTHROW(make_spinalpha(m1_half));
+    CHECK_THROWS_WITH(make_spinbeta(m1_half),
+                      Catch::Matchers::ContainsSubstring("μ̃↓"));
+    CHECK_THROWS_AS(spintrace(term(m1_half)), Exception);
+  }
 }
