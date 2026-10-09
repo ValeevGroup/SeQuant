@@ -6,11 +6,17 @@
 namespace sequant {
 
 IndexBasis::IndexBasis(IndexSpace space, optional_instance basis_instance,
-                       std::wstring name)
+                       std::wstring name, std::optional<std::size_t> extent,
+                       IndexSpaceMetric metric, std::optional<Field> field)
     : space_(std::move(space)),
       basis_instance_(basis_instance),
-      name_(std::move(name)) {
+      name_(std::move(name)),
+      extent_(extent),
+      metric_(metric),
+      field_(field) {
   SEQUANT_ASSERT(name_.empty() || basis_instance_);
+  SEQUANT_ASSERT(!name_.empty() ||
+                 (!extent_ && metric_ == IndexSpaceMetric::Unit && !field_));
 }
 
 std::wstring IndexBasis::instance_suffix() const {

@@ -124,6 +124,29 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
   CHECK((IndexBasis{uocc} < IndexBasis{uocc, 0} &&
          IndexBasis{uocc, 0} < IndexBasis{uocc, 1}));
 
+  // metadata: an unnamed basis is the space's own basis up to an orthonormal
+  // rotation, so its extent, metric and field are the space's; a named one
+  // carries its own unless registered without, which identity ignores
+  const std::vector<std::pair<IndexBasis, bool>> bases = {
+      {IndexBasis{uocc}, false},
+      {IndexBasis{uocc, 1}, false},
+      {IndexBasis{uocc, 1, L"ã"}, false},
+      {IndexBasis{uocc, 1, L"ã", 77, IndexSpaceMetric::General, Field::Real},
+       true}};
+  for (const auto& [b, is_custom] : bases) {
+    CHECK(b.extent() == (is_custom ? 77 : uocc.approximate_size()));
+    CHECK(b.metric() ==
+          (is_custom ? IndexSpaceMetric::General : IndexSpaceMetric::Unit));
+    CHECK(b.field() == (is_custom ? Field::Real : uocc.field()));
+    CHECK(b.space().approximate_size() == uocc.approximate_size());
+    CHECK(b.space().field() == uocc.field());
+    if (b.has_basis_instance()) {
+      CHECK(b == IndexBasis{uocc, 1});
+      CHECK(hash_value(b) == hash_value(IndexBasis{uocc, 1}));
+      CHECK((b <=> IndexBasis{uocc, 1}) == 0);
+    }
+  }
+
   // colour: sees the instance, of the index and of its proto indices, but not
   // which occupieds the proto indices are
   CHECK(x.color() != a1.color());
@@ -482,14 +505,14 @@ TEST_CASE("index-basis-serialization", "[serialization][basis]") {
     const ExprPtr c_named = deserialize<ExprPtr>(L"C{μ̃_1;a_1<i_1,i_2;0>}");
     const Index mu = c_named->as<Tensor>().bra().at(0);
     CHECK(mu.basis() == IndexBasis{a, P});
-    CHECK(mu.space().approximate_size() == 120);
+    CHECK(mu.basis().extent() == 120);
     // the generic spelling of the same basis parses to the named entry's
     // metadata and prints by name
     const ExprPtr c_generic =
         deserialize<ExprPtr>(L"C{a_1<;2147483647>;a_2<i_1,i_2;0>}");
     const Index generic = c_generic->as<Tensor>().bra().at(0);
     CHECK(generic == mu);
-    CHECK(generic.space().approximate_size() == 120);
+    CHECK(generic.basis().extent() == 120);
     CHECK(generic.full_label() == L"μ̃_1");
     // one spelling per basis: a name with an explicit instance is an error,
     // also as a proto, reported as such and not wrapped as an invalid index
@@ -593,8 +616,7 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   // carries the name; a basis built from the number is taken as given
   CHECK(m3 == Index(uocc, 3).replace_basis_instance(P));
   CHECK(Index(uocc, 3).replace_basis_instance(P).full_label() == L"μ̃_3");
-  CHECK(Index(uocc, 3).replace_basis_instance(P).space().approximate_size() ==
-        120);
+  CHECK(Index(uocc, 3).replace_basis_instance(P).basis().extent() == 120);
   CHECK(Index(IndexBasis{uocc, P}, 3).full_label() ==
         L"a_3<;" + std::to_wstring(P) + L">");
   // moved into another space the instance stays and is resolved there: P
@@ -610,10 +632,11 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   const Index parsed(L"μ̃_3");
   CHECK(parsed == m3);
   CHECK(parsed.basis() == pao);
-  CHECK(parsed.space().approximate_size() == 120);
+  CHECK(parsed.basis().extent() == 120);
   CHECK(parsed.label() == L"μ̃_3");
-  CHECK(m3.space().approximate_size() == 120);
-  CHECK(Index(L"a_3").space().approximate_size() == uocc.approximate_size());
+  CHECK(m3.basis().extent() == 120);
+  CHECK(m3.space().approximate_size() == uocc.approximate_size());
+  CHECK(Index(L"a_3").basis().extent() == uocc.approximate_size());
   CHECK_THROWS_AS(IndexSpace(L"μ̃"), IndexBasisRegistry::not_a_space);
 
   // copies of a named index print the name; a basis change drops it
@@ -810,7 +833,7 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
     for (const Index& idx : ft.const_braket_indices()) {
       CHECK(idx.basis() == IndexBasis{uocc, P});
       CHECK(idx.basis().base_key() == L"μ̃");
-      CHECK(idx.space().approximate_size() == 120);
+      CHECK(idx.basis().extent() == 120);
       CHECK(idx.full_label().find(L'<') == std::wstring::npos);
     }
     // a hand-built basis equal to the entry is resolved to the entry too
@@ -821,8 +844,8 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
               ->as<Tensor>()
               .bra()
               .at(0)
-              .space()
-              .approximate_size() == 120);
+              .basis()
+              .extent() == 120);
     // the overlap stays (no orthonormal shortcut)
     const ExprPtr s = mbpt::csv_transform(
         make_overlap(x, Index(uocc, 3, {i1}).replace_basis_instance(0)),

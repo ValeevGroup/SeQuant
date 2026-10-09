@@ -87,13 +87,11 @@ Index Index::replace_basis_instance(
 }
 
 void Index::rebase(IndexSpace space) {
-  // a name belongs to the instance of the old space; in another space the
-  // instance is whatever the default registry knows it as
-  basis_ =
-      space == basis_.space()
-          ? IndexBasis(std::move(space), basis_.basis_instance(), basis_.name())
-          : default_registry_resolved(
-                IndexBasis(std::move(space), basis_.basis_instance()));
+  // a name and the metadata belong to the instance of the old space; in
+  // another space the instance is whatever the default registry knows it as
+  if (space != basis_.space())
+    basis_ = default_registry_resolved(
+        IndexBasis(std::move(space), basis_.basis_instance()));
   label_.reset();
   full_label_.reset();
 }

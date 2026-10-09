@@ -2044,14 +2044,14 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   // with its extent, as an unregistered spin-cased space is labelled
   const Index m1a = make_spinalpha(m1), m1b = make_spinbeta(m1);
   CHECK(m1a.label() == L"μ̃↑_1");
-  CHECK(m1a.space().approximate_size() == 60);
+  CHECK(m1a.basis().extent() == 60);
   CHECK(m1b.label() == L"μ̃↓_1");
   CHECK(m1b.basis().basis_instance() == 77);
-  CHECK(m1b.space().approximate_size() == 120);
+  CHECK(m1b.basis().extent() == 120);
   CHECK(m1b.space() == isr_space_of(m1b));  // sanity: a↓ with the same attr
   CHECK(make_spinfree(m1a) == m1);
   CHECK(make_spinfree(m1b).label() == L"μ̃_1");
-  CHECK(make_spinfree(m1b).space().approximate_size() == 120);
+  CHECK(make_spinfree(m1b).basis().extent() == 120);
 
   auto term = [&](const Index& m) {
     return ex<Tensor>(L"g", bra{a1, m}, ket{i1, i2}, Symmetry::Antisymm) *

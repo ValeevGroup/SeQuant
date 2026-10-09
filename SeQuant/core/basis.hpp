@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_BASIS_HPP
 #define SEQUANT_CORE_BASIS_HPP
 
+#include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/space.hpp>
 
@@ -29,12 +30,18 @@ namespace sequant {
 /// instance does not. The name is how the basis prints; it is not part of its
 /// identity, so equality, ordering and hashing ignore it.
 ///
-/// An unnamed instance spans its space at the space's extent, as a rotation of
-/// it does (e.g. a localized basis): evaluation keys its axes by base_key(),
-/// which is the space's key for such an instance, and so sizes, tiles and
-/// slices it as the space. A basis of a different extent (a truncated or an
-/// overcomplete set) must be registered under a name, which gives it a key and
-/// an extent of its own.
+/// A basis has an extent (the number of functions in it), a metric (whether it
+/// is orthonormal) and a scalar field. Like the name, these describe the basis
+/// but are not part of its identity, so equality, ordering and hashing ignore
+/// them. An unnamed basis, whether the space's own basis or an unnamed
+/// instance, is the space's own basis up to an orthonormal rotation (e.g. a
+/// localized basis): its extent is the dimension of the space, its metric is
+/// unit and its field is that of the space's own basis (IndexSpace::field()),
+/// and evaluation keys its axes by base_key(), which is the space's key for
+/// such an instance, and so sizes, tiles and slices it as the space. A basis
+/// that differs in any of these (a truncated or an overcomplete set, a
+/// non-orthonormal basis) must be registered under a name, which gives it a
+/// key and metadata of its own (see IndexBasisRegistry::add(label, basis)).
 class IndexBasis {
  public:
   using instance_type = std::int32_t;
@@ -60,9 +67,18 @@ class IndexBasis {
       : space_(std::move(space)), basis_instance_(basis_instance) {}
 
   /// @param name the label @p basis_instance is registered under
-  /// @pre @p name is empty or @p basis_instance is non-null
+  /// @param extent the number of functions in the basis; null for the
+  ///        dimension of @p space
+  /// @param metric whether the basis is orthonormal
+  /// @param field the scalar field of the basis; null for that of the own
+  ///        basis of @p space
+  /// @pre @p name is empty or @p basis_instance is non-null; @p name is
+  ///      non-empty or every other argument is at its default (an unnamed
+  ///      basis is the space's own basis up to an orthonormal rotation)
   IndexBasis(IndexSpace space, optional_instance basis_instance,
-             std::wstring name);
+             std::wstring name, std::optional<std::size_t> extent = {},
+             IndexSpaceMetric metric = IndexSpaceMetric::Unit,
+             std::optional<Field> field = {});
 
   const IndexSpace& space() const noexcept { return space_; }
 
@@ -92,23 +108,40 @@ class IndexBasis {
     return has_name() ? std::nullopt : basis_instance_;
   }
 
+  /// @return the number of functions in the basis: the dimension of its space
+  /// (IndexSpace::approximate_size()) unless registered with an extent of its
+  /// own
+  std::size_t extent() const noexcept {
+    return extent_ ? *extent_ : space_.approximate_size();
+  }
+
+  /// @return whether the basis is orthonormal (IndexSpaceMetric::Unit) or not;
+  /// unit unless registered otherwise
+  IndexSpaceMetric metric() const noexcept { return metric_; }
+
+  /// @return the scalar field of the basis: that of its space's own basis
+  /// (IndexSpace::field()) unless registered with a field of its own
+  Field field() const noexcept { return field_ ? *field_ : space_.field(); }
+
   /// @return `L";N"` for a non-null instance `N`, else an empty string
   std::wstring instance_suffix() const;
 
-  /// compares space and instance; the name is ignored
+  /// compares space and instance; the name, extent, metric and field are
+  /// ignored
   friend bool operator==(const IndexBasis& b1, const IndexBasis& b2) noexcept {
     return b1.space_ == b2.space_ && b1.basis_instance_ == b2.basis_instance_;
   }
 
-  /// orders by space, then by instance (null first); the name is ignored
+  /// orders by space, then by instance (null first); the name, extent, metric
+  /// and field are ignored
   friend std::strong_ordering operator<=>(const IndexBasis& b1,
                                           const IndexBasis& b2) noexcept {
     if (auto c = b1.space_ <=> b2.space_; c != 0) return c;
     return b1.basis_instance_ <=> b2.basis_instance_;
   }
 
-  /// @return `hash_value(b.space())` if @p b has no instance; the name is
-  /// ignored
+  /// @return `hash_value(b.space())` if @p b has no instance; the name,
+  /// extent, metric and field are ignored
   friend std::size_t hash_value(const IndexBasis& b) {
     std::size_t result = hash_value(b.space_);
     if (b.basis_instance_) hash::combine(result, *b.basis_instance_);
@@ -119,6 +152,15 @@ class IndexBasis {
   IndexSpace space_;
   optional_instance basis_instance_;
   std::wstring name_;
+  std::optional<std::size_t> extent_;
+  IndexSpaceMetric metric_ = IndexSpaceMetric::Unit;
+  std::optional<Field> field_;
+
+  // the registry writes the metadata of its named entries in place
+  friend class IndexBasisRegistry;
+  void extent(std::size_t n) noexcept { extent_ = n; }
+  void metric(IndexSpaceMetric m) noexcept { metric_ = m; }
+  void field(Field f) noexcept { field_ = f; }
 };
 
 /// @return true if @p basis includes @p subbasis, i.e. its space includes the

@@ -134,14 +134,15 @@ TEST_CASE("index_space", "[elements]") {
     const IndexBasis got =
         isr->retrieve_basis(L"μ̃_3");  // an Index label reduces to its base key
     CHECK(got == pao);                // identity ignores metadata ...
-    CHECK(got.space().approximate_size() ==
-          120);  // ... which the entry carries
+    CHECK(got.extent() == 120);       // ... which the entry carries
+    CHECK(got.space().approximate_size() == a.approximate_size());
+    CHECK(got.metric() == IndexSpaceMetric::Unit);
+    CHECK(got.field() == a.field());
     CHECK(isr->retrieve(L"a").approximate_size() == a.approximate_size());
     CHECK(isr->basis_label(pao) == std::optional<std::wstring_view>{L"μ̃"});
     CHECK_FALSE(isr->basis_label(IndexBasis{a}));
     CHECK_FALSE(isr->basis_label(IndexBasis{a, 7}));
-    CHECK(isr->resolve(IndexBasis{a, 2147483647}).space().approximate_size() ==
-          120);
+    CHECK(isr->resolve(IndexBasis{a, 2147483647}).extent() == 120);
     CHECK(isr->resolve(IndexBasis{a, 7}) == IndexBasis{a, 7});
     CHECK(isr->resolve(IndexBasis{a}) == IndexBasis{a});
     CHECK(isr->bases().find(std::wstring_view(L"μ̃"))->second == pao);
@@ -177,17 +178,26 @@ TEST_CASE("index_space", "[elements]") {
 
     // metadata by label, either kind; the non-const space pointer still writes
     // space metadata
-    isr->approximate_size(L"μ̃", 77).field(L"μ̃", Field::Real);
-    CHECK(isr->retrieve_basis(L"μ̃").space().approximate_size() == 77);
-    CHECK(isr->retrieve_basis(L"μ̃").space().field() == Field::Real);
+    isr->approximate_size(L"μ̃", 77)
+        .field(L"μ̃", Field::Real)
+        .metric(L"μ̃", IndexSpaceMetric::General);
+    CHECK(isr->retrieve_basis(L"μ̃").extent() == 77);
+    CHECK(isr->retrieve_basis(L"μ̃").field() == Field::Real);
+    CHECK(isr->retrieve_basis(L"μ̃").metric() == IndexSpaceMetric::General);
+    // the basis's metadata is its own: the space is untouched
+    CHECK(isr->retrieve_basis(L"μ̃").space().approximate_size() ==
+          a.approximate_size());
+    CHECK(isr->retrieve_basis(L"μ̃").space().field() == a.field());
+    CHECK(isr->retrieve(L"a").field() == a.field());
+    // the own basis of a space is orthonormal
+    CHECK_THROWS_AS(isr->metric(L"a", IndexSpaceMetric::General), Exception);
     REQUIRE(std::ranges::find(isr->base_spaces(), a) !=
             isr->base_spaces().end());  // memoizes the base spaces
     isr->approximate_size(L"a", 33);
     CHECK(isr->retrieve(L"a").approximate_size() == 33);
     CHECK(std::ranges::find(isr->base_spaces(), a)->approximate_size() ==
           33);  // the memoized base spaces see the new size
-    CHECK(isr->retrieve_basis(L"μ̃").space().approximate_size() ==
-          77);  // entries are independent
+    CHECK(isr->retrieve_basis(L"μ̃").extent() == 77);  // entries are independent
     isr->retrieve_ptr(L"a")->approximate_size(34);
     CHECK(isr->retrieve(L"a").approximate_size() == 34);
     CHECK_THROWS_AS(isr->approximate_size(L"ζ", 1), IndexSpace::bad_key);
@@ -242,7 +252,7 @@ TEST_CASE("index_space", "[elements]") {
     copy.approximate_size(L"μ̃", 121);
     CHECK_FALSE(copy == *isr2);  // metadata of a named entry counts
     // ... and the copy is independent
-    CHECK(isr2->retrieve_basis(L"μ̃").space().approximate_size() == 120);
+    CHECK(isr2->retrieve_basis(L"μ̃").extent() == 120);
     copy.remove(L"μ̃");
     CHECK(isr2->contains(L"μ̃"));
     CHECK_FALSE(copy == *isr2);
@@ -543,8 +553,8 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(mbpt::default_pao_basis_instance ==
           std::numeric_limits<IndexBasis::instance_type>::max());
     CHECK(pao.space() == uocc);
-    CHECK(pao.space().approximate_size() == uocc.approximate_size());
-    CHECK(pao.space().field() == uocc.field());
+    CHECK(pao.extent() == uocc.approximate_size());
+    CHECK(pao.field() == uocc.field());
     // one entry: no spin variants
     CHECK_FALSE(isr->contains(L"μ̃↑"));
     // ordering: after every basis of a (I2), between i and Κ as before

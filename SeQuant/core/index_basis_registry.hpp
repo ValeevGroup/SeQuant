@@ -181,7 +181,8 @@ class IndexBasisRegistry {
     for (auto& [label, basis] : bases_) {
       if (basis.space()) validate_label(label, "IndexBasisRegistry(table)");
       if (basis.has_basis_instance() && basis.name() != label)
-        basis = IndexBasis(basis.space(), basis.basis_instance(), label);
+        basis = IndexBasis(basis.space(), basis.basis_instance(), label,
+                           basis.extent_, basis.metric_, basis.field_);
     }
   }
 
@@ -287,8 +288,8 @@ class IndexBasisRegistry {
   }
 
   /// @return the named entry equal to @p b, which carries the entry's name,
-  /// approximate size and field, if @p b has a basis instance registered
-  /// under a name; otherwise @p b unchanged
+  /// extent, metric and field, if @p b has a basis instance registered under
+  /// a name; otherwise @p b unchanged
   IndexBasis resolve(const IndexBasis& b) const {
     if (!b.has_basis_instance() || named_count_ == 0) return b;
     for (auto const& [label, basis] : bases_)
@@ -296,25 +297,54 @@ class IndexBasisRegistry {
     return b;
   }
 
-  /// @brief sets the approximate size of the entry registered under a label
+  /// @brief sets the approximate size of the entry registered under a label:
+  /// the dimension of a space, or the extent of a named basis instance
   /// @param label a label of a space or of a named basis instance
   /// @param n the approximate size
   /// @return reference to `this`
   /// @throw IndexSpace::bad_key if no entry is registered under @p label
   template <basic_string_convertible S>
   IndexBasisRegistry& approximate_size(S&& label, std::size_t n) {
-    mutable_space(entry_or_throw(label)).approximate_size(n);
+    auto& entry = entry_or_throw(label);
+    if (entry.has_basis_instance())
+      entry.extent(n);
+    else
+      mutable_space(entry).approximate_size(n);
     return clear_memoized_data_and_return_this();
   }
 
-  /// @brief sets the Field of the entry registered under a label
+  /// @brief sets the Field of the entry registered under a label: of a
+  /// space's own basis, or of a named basis instance
   /// @param label a label of a space or of a named basis instance
   /// @param f the Field
   /// @return reference to `this`
   /// @throw IndexSpace::bad_key if no entry is registered under @p label
   template <basic_string_convertible S>
   IndexBasisRegistry& field(S&& label, Field f) {
-    mutable_space(entry_or_throw(label)).field(f);
+    auto& entry = entry_or_throw(label);
+    if (entry.has_basis_instance())
+      entry.field(f);
+    else
+      mutable_space(entry).field(f);
+    return clear_memoized_data_and_return_this();
+  }
+
+  /// @brief sets the metric of the named basis instance registered under a
+  /// label
+  /// @param label a label of a named basis instance
+  /// @param m the metric
+  /// @return reference to `this`
+  /// @throw IndexSpace::bad_key if no entry is registered under @p label
+  /// @throw Exception if @p label is that of a space: the own basis of a
+  /// space is orthonormal
+  template <basic_string_convertible S>
+  IndexBasisRegistry& metric(S&& label, IndexSpaceMetric m) {
+    auto& entry = entry_or_throw(label);
+    if (!entry.has_basis_instance())
+      throw Exception("IndexBasisRegistry::metric: '" + toUtf8(label) +
+                      "' is a space, whose own basis is orthonormal; register "
+                      "a non-orthonormal basis of it under a name");
+    entry.metric(m);
     return clear_memoized_data_and_return_this();
   }
 
@@ -561,9 +591,10 @@ class IndexBasisRegistry {
   /// registered
   /// @param args optional arguments consisting of a mix of zero or one of
   /// each of the following:
-  ///   - approximate size of the basis (unsigned long; defaults to that of the
+  ///   - extent of the basis (unsigned long; defaults to the dimension of the
   ///   space)
-  ///   - Field (defaults to that of the space)
+  ///   - IndexSpaceMetric (defaults to IndexSpaceMetric::Unit)
+  ///   - Field (defaults to that of the space's own basis)
   /// @return reference to `this`
   /// @throw Exception if @p label is not a valid label or is already
   /// registered, if @p basis has no basis instance, if its space is not
@@ -574,13 +605,29 @@ class IndexBasisRegistry {
     auto h_tags = boost::hana::filter(h_args, [](auto arg) {
       return !boost::hana::traits::is_integral(
                  boost::hana::type_c<decltype(arg)>) &&
-             boost::hana::type_c<decltype(arg)> != boost::hana::type_c<Field>;
+             boost::hana::type_c<decltype(arg)> != boost::hana::type_c<Field> &&
+             boost::hana::type_c<decltype(arg)> !=
+                 boost::hana::type_c<IndexSpaceMetric>;
     });
     static_assert(boost::hana::size(h_tags) == boost::hana::size_c<0>,
                   "IndexBasisRegistry::add(label, basis): attribute tags are "
-                  "per space; only an integral approximate_size and a Field "
-                  "may be given for a basis instance");
+                  "per space; only an integral extent, an IndexSpaceMetric "
+                  "and a Field may be given for a basis instance");
     const auto [size, field] = parse_size_and_field(args...);
+    auto h_metric = boost::hana::filter(h_args, [](auto arg) {
+      return boost::hana::type_c<decltype(arg)> ==
+             boost::hana::type_c<IndexSpaceMetric>;
+    });
+    constexpr auto nmetrics = boost::hana::size(h_metric);
+    static_assert(
+        nmetrics == boost::hana::size_c<0> ||
+            nmetrics == boost::hana::size_c<1>,
+        "IndexBasisRegistry::add(label, basis): only one IndexSpaceMetric "
+        "argument is allowed");
+    IndexSpaceMetric metric = IndexSpaceMetric::Unit;
+    if constexpr (nmetrics == boost::hana::size_c<1>) {
+      metric = boost::hana::at_c<0>(h_metric);
+    }
     std::wstring key = toUtf16(std::forward<S>(label));
     if (!basis.has_basis_instance())
       throw Exception("IndexBasisRegistry::add(label, basis): '" + toUtf8(key) +
@@ -598,10 +645,7 @@ class IndexBasisRegistry {
       throw Exception("IndexBasisRegistry::add(label, basis): the basis of '" +
                       toUtf8(key) + "' is already named '" + toUtf8(*taken) +
                       "'");
-    IndexSpace copy(space->base_key(), space->type(), space->qns(),
-                    size ? *size : space->approximate_size(),
-                    field ? *field : space->field());
-    IndexBasis named{std::move(copy), basis.basis_instance(), key};
+    IndexBasis named{*space, basis.basis_instance(), key, size, metric, field};
     bases_.emplace(std::move(key), std::move(named));
     ++named_count_;
     return clear_memoized_data_and_return_this();
@@ -1867,19 +1911,22 @@ class IndexBasisRegistry {
   }
 
   /// registries are equal if they have equal entries (spaces and named basis
-  /// instances, under equal labels), of equal approximate size and field, and
-  /// specify the same physical-particle attributes and vacuum-occupied,
-  /// reference-occupied, complete, hole and particle spaces
+  /// instances, under equal labels), of equal approximate size (dimension or
+  /// extent), metric and field, and specify the same physical-particle
+  /// attributes and vacuum-occupied, reference-occupied, complete, hole and
+  /// particle spaces
   friend bool operator==(const IndexBasisRegistry& isr1,
                          const IndexBasisRegistry& isr2) {
-    // IndexBasis equality ignores the approximate size and the field
+    // IndexBasis equality ignores the metadata
     return std::ranges::equal(
                isr1.bases_, isr2.bases_,
                [](const auto& e1, const auto& e2) {
                  return e1.first == e2.first && e1.second == e2.second &&
                         e1.second.space().approximate_size() ==
                             e2.second.space().approximate_size() &&
-                        e1.second.space().field() == e2.second.space().field();
+                        e1.second.extent() == e2.second.extent() &&
+                        e1.second.metric() == e2.second.metric() &&
+                        e1.second.field() == e2.second.field();
                }) &&
            isr1.physical_particle_attribute_mask_ ==
                isr2.physical_particle_attribute_mask_ &&

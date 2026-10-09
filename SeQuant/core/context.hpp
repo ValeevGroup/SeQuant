@@ -550,7 +550,7 @@ get_default_index_space_registry(Statistics s = Statistics::Arbitrary) {
 
 /// @return the entry @p basis is registered as in the registry of
 /// get_default_index_basis_registry() (see IndexBasisRegistry::resolve()),
-/// which carries a named basis instance's name, approximate size and field;
+/// which carries a named basis instance's name, extent, metric and field;
 /// @p basis if there is no such registry
 IndexBasis default_registry_resolved(const IndexBasis& basis);
 

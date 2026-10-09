@@ -83,15 +83,16 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   }
   // the basis: the registry's entry for the instance in that space if it
   // names one, else, as for the space, one derived from the index's own:
-  // its name with the spin annotation replaced, its extent
+  // its name with the spin annotation replaced, its extent, metric and field
   IndexBasis basis = default_registry_resolved(
       IndexBasis{space, idx.basis().basis_instance()});
   if (idx.basis().has_name() && !basis.has_name())
-    basis = IndexBasis{
-        IndexSpace{space.base_key(), space.type(), space.qns(),
-                   idx.space().approximate_size(), idx.space().field()},
-        idx.basis().basis_instance(),
-        mbpt::spinannotation_replacе(idx.basis().name(), s)};
+    basis = IndexBasis{space,
+                       idx.basis().basis_instance(),
+                       mbpt::spinannotation_replacе(idx.basis().name(), s),
+                       idx.basis().extent(),
+                       idx.basis().metric(),
+                       idx.basis().field()};
   auto protoindices = idx.proto_indices();
   for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, s);
   return Index{std::move(basis), idx.ordinal(), protoindices,
