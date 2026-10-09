@@ -83,6 +83,28 @@ TEST_CASE("index_space", "[elements]") {
     CHECK_THROWS_AS(IndexBasisRegistry{table2}, Exception);
   }
 
+  // the pre-rename spellings compile and reach the same registry
+  SECTION("deprecated spellings") {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto isr = sequant::mbpt::make_min_sr_spaces();
+    Context by_shared_ptr({.index_space_registry_shared_ptr = isr});
+    CHECK(*by_shared_ptr.index_space_registry() == *isr);
+    CHECK(by_shared_ptr.index_space_registry() ==
+          by_shared_ptr.index_basis_registry());
+    Context by_value({.index_space_registry = IndexBasisRegistry(*isr)});
+    CHECK(*by_value.index_space_registry() == *isr);
+    auto scoped = set_scoped_default_context(by_shared_ptr);
+    CHECK(*get_default_index_space_registry() == *isr);
+    CHECK(get_default_index_space_registry() ==
+          get_default_index_basis_registry());
+    // the current spelling wins when both are given
+    auto other = sequant::mbpt::make_sr_spaces();
+    Context both({.index_basis_registry_shared_ptr = other,
+                  .index_space_registry_shared_ptr = isr});
+    CHECK(*both.index_basis_registry() == *other);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+
   SECTION("named basis instances") {
     auto isr = sequant::mbpt::make_min_sr_spaces();
     const IndexSpace a = isr->retrieve(L"a");
