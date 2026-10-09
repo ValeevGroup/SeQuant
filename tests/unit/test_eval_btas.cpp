@@ -508,6 +508,45 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
                                100 * std::numeric_limits<double>::epsilon()));
   }
 
+  SECTION("closed_shell_CC_nns_project") {
+    using mbpt::closed_shell_CC_nns_project;
+    using mbpt::ClosedShellCCSpintraceOptions;
+    using mbpt::SpinMultiplicity;
+
+    auto require_equal = [&norm](BTensorD const& lhs, BTensorD const& rhs) {
+      BTensorD diff = lhs - rhs;
+      REQUIRE(norm(diff) == Catch::Approx(0).margin(
+                                100 * std::numeric_limits<double>::epsilon()));
+    };
+    constexpr ClosedShellCCSpintraceOptions triplet{
+        .multiplicity = SpinMultiplicity::Triplet};
+    constexpr ClosedShellCCSpintraceOptions triplet_full{
+        .multiplicity = SpinMultiplicity::Triplet, .compact = false};
+
+    auto const r2 =
+        eval(parse_antisymm(L"R_{a1, a2}^{i1, i2}"), tidxs(L"a_1,a_2,i_1,i_2"));
+    auto const r3 = eval(parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}"),
+                         tidxs(L"a_1,a_2,a_3,i_1,i_2,i_3"));
+
+    require_equal(closed_shell_CC_nns_project(r3, 3),
+                  mbpt::biorthogonal_nns_project(r3, 3));
+    require_equal(closed_shell_CC_nns_project(r3, 3, {.compact = false}), r3);
+
+    require_equal(closed_shell_CC_nns_project(r2, 2, triplet),
+                  mbpt::triplet_nns_project(r2, 2));
+    require_equal(closed_shell_CC_nns_project(r3, 3, triplet),
+                  mbpt::triplet_nns_project(r3, 3));
+    require_equal(closed_shell_CC_nns_project(r3, 3, triplet_full), r3);
+    // BTAS has no triplet_te_reconstruct yet
+    REQUIRE_THROWS_AS(closed_shell_CC_nns_project(r2, 2, triplet_full),
+                      Exception);
+
+    REQUIRE_THROWS_AS(
+        closed_shell_CC_nns_project(
+            r2, 2, {.multiplicity = static_cast<SpinMultiplicity>(2)}),
+        Exception);
+  }
+
   SECTION("Others") {
     auto expr1 = parse_antisymm(
         L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"

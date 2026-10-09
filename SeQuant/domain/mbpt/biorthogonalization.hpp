@@ -9,6 +9,7 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/memoize.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #if defined(SEQUANT_HAS_TILEDARRAY)
 #include <SeQuant/core/eval/backends/tiledarray/eval_expr.hpp>
@@ -925,6 +926,40 @@ auto triplet_nullspace_project(btas::Tensor<Args...> const& arr,
 }
 
 #endif  // defined(SEQUANT_HAS_BTAS)
+
+// clang-format off
+/// @brief Rebuilds the full closed-shell residual from one evaluated from
+///        closed_shell_CC_spintrace with the same @p options; dispatches to
+///        biorthogonal_nns_project or triplet_nns_project for compact
+///        residuals. Non-compact residuals need no NNS projection, except
+///        that the bare-TE triplet doubles one is reconstructed by
+///        triplet_te_reconstruct.
+/// @param arr the evaluated residual
+/// @param bra_rank the particle rank of the residual
+/// @param options the options passed to closed_shell_CC_spintrace
+/// @throw Exception for an invalid multiplicity, or if the backend of @p arr
+///        does not implement the triplet path
+// clang-format on
+template <typename Array>
+Array closed_shell_CC_nns_project(Array const& arr, std::size_t bra_rank,
+                                  ClosedShellCCSpintraceOptions options = {}) {
+  switch (options.multiplicity) {
+    case SpinMultiplicity::Singlet:
+      if (options.compact) return biorthogonal_nns_project(arr, bra_rank);
+      return arr;
+    case SpinMultiplicity::Triplet:
+      if constexpr (requires { triplet_nns_project(arr, bra_rank); }) {
+        if (options.compact) return triplet_nns_project(arr, bra_rank);
+        if (!detail::triplet_bare_te(bra_rank)) return arr;
+        if constexpr (requires { triplet_te_reconstruct(arr, bra_rank); })
+          return triplet_te_reconstruct(arr, bra_rank);
+      }
+      throw Exception(
+          "closed_shell_CC_nns_project: the triplet path is not implemented "
+          "for this backend");
+  }
+  throw Exception("closed_shell_CC_nns_project: invalid multiplicity");
+}
 
 }  // namespace sequant::mbpt
 
