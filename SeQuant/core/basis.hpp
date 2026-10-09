@@ -33,7 +33,9 @@ namespace sequant {
 /// The registry keeps an instance number and a name one-to-one within a
 /// space (see IndexBasisRegistry::resolve()), so an Index given an instance
 /// by number resolves it to the named basis; one given an IndexBasis takes it
-/// as given.
+/// as given. Such an unnamed basis has no spelling of its own: an index in it
+/// prints with the bare instance number, which parses back to the named
+/// basis.
 ///
 /// A basis has an extent (the number of functions in it), a metric (whether it
 /// is orthonormal) and a scalar field. Unlike the name, these describe the

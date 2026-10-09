@@ -647,6 +647,16 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   CHECK(Index(uocc, 3).replace_basis_instance(P).basis().extent() == 120);
   CHECK(Index(IndexBasis{uocc, P}, 3).full_label() ==
         L"a_3<;" + std::to_wstring(P) + L">");
+  // ... and has no spelling of its own: its text deserializes to the named
+  // index
+  {
+    const Index i1(L"i_1");
+    const ExprPtr bare =
+        ex<Tensor>(L"t", bra{Index(IndexBasis{uocc, P}, 3)}, ket{i1});
+    const ExprPtr named = ex<Tensor>(L"t", bra{m3}, ket{i1});
+    CHECK_FALSE(bare == named);
+    CHECK(deserialize<ExprPtr>(serialize(bare)) == named);
+  }
   // moved into another space the instance stays and is resolved there: P
   // names nothing in the general space; moved into its own space the basis
   // stays, with its metadata
