@@ -1427,11 +1427,15 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
         const auto index_counts =
             named_indices ? container::map<Index, IndexSlotCounters>{}
                           : get_used_indices_with_counts(product_ptr);
+        auto is_external = [&](const Index& idx) {
+          if (named_indices) return named_indices->contains(idx);
+          const auto count_it = index_counts.find(idx);
+          SEQUANT_ASSERT(count_it != index_counts.end());
+          return count_it->second.nonproto() <= 1;
+        };
         container::map<Index, Index> replacement_rules;
         ranges::for_each(rdm_indices, [&](const Index& idx) {
-          if (named_indices ? named_indices->contains(idx)
-                            : index_counts.at(idx).nonproto() <= 1)
-            return;
+          if (is_external(idx)) return;
           const auto target_type =
               isr->intersection(idx.space(), target_rdm_space_type);
           if (target_type) {
