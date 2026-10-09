@@ -338,7 +338,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   /// @return the dimension variable of @p idx: the space's, suffixed by the
   /// basis instance (if any) since each basis has its own extent
   static std::string dim(const Index &idx, const Context &ctx) {
-    return ctx.get_dim(idx.space()) + instance_suffix(idx);
+    return detail::dim_name(ctx.get_dim(idx.space()), idx);
   }
 
   std::string tensor_name(const Tensor &tensor, const Context &ctx) const {

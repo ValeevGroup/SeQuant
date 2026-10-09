@@ -1134,6 +1134,36 @@ TEST_CASE("export-basis-instance", "[export][basis]") {
                            ContainsSubstring("R_v1o") &&
                            ContainsSubstring("(nvirt_1, nocc)"));
   }
+  // a tag ending in a digit or `_`, or a dimension name ending in `_`, would
+  // make an appended instance ambiguous (v1 + "" vs v + 1, nvirt_ + _1 vs
+  // nvirt + _ + 1), so an instance-bearing mode in such a space is refused
+  SECTION("ambiguous space tag") {
+    const Index z = Index(L"a_7").replace_basis_instance(1);
+    const Tensor tz(L"t", bra{z}, ket{L"i_1"});
+    const Tensor t0(L"t", bra{L"a_7"}, ket{L"i_1"});
+    ItfContext itf_ctx;
+    itf_ctx.set_tag(occ, "o");
+    itf_ctx.set_tag(virt, "v1");
+    const ItfGenerator<ItfContext> itf;
+    CHECK_NOTHROW(itf.represent(t0, itf_ctx));
+    CHECK_THROWS_AS(itf.represent(tz, itf_ctx), Exception);
+    itf_ctx.set_tag(virt, "v_");
+    CHECK_THROWS_AS(itf.represent(tz, itf_ctx), Exception);
+    JuliaTensorOperationsGeneratorContext julia_ctx;
+    julia_ctx.set_tag(occ, "o");
+    julia_ctx.set_tag(virt, "v");
+    julia_ctx.set_dim(occ, "nocc");
+    julia_ctx.set_dim(virt, "nvirt_");
+    JuliaTensorOperationsGenerator<JuliaTensorOperationsGeneratorContext> julia;
+    CHECK_NOTHROW(julia.create(t0, true, julia_ctx));
+    CHECK_THROWS_AS(julia.create(tz, true, julia_ctx), Exception);
+    NumPyEinsumGeneratorContext py_ctx;
+    py_ctx.set_shape(occ, "nocc");
+    py_ctx.set_shape(virt, "nvirt_");
+    CHECK_NOTHROW(py_ctx.get_shape_tuple(t0));
+    CHECK_THROWS_AS(py_ctx.get_shape_tuple(tz), Exception);
+  }
+
   // a negative instance is spelled with an `_` in place of the minus sign,
   // which no identifier may contain; a letter would read as the tag of a space
   SECTION("negative instance") {
