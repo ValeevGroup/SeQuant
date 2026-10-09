@@ -134,9 +134,16 @@ void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
                    IndexSpace::QuantumNumbers spin_any,
                    IndexBasis::instance_type instance,
                    std::wstring_view label) {
-  const IndexSpace uocc =
-      isr->retrieve(isr->particle_space(/* nulltype_ok = */ false), spin_any);
+  const auto uocc_type = isr->particle_space(/* nulltype_ok = */ false);
+  const IndexSpace uocc = isr->retrieve(uocc_type, spin_any);
   isr->add(label, IndexBasis{uocc, instance}, IndexSpaceMetric::General);
+  for (const auto spin : {Spin::alpha, Spin::beta}) {
+    if (const auto* uocc_spin = isr->retrieve_ptr(uocc_type, spin)) {
+      const IndexSpace space = *uocc_spin;
+      isr->add(spinannotation_add(label, spin), IndexBasis{space, instance},
+               IndexSpaceMetric::General);
+    }
+  }
 }
 
 void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& isr) {

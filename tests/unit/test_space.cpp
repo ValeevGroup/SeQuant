@@ -590,8 +590,16 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(pao.extent() == uocc.dimension());
     CHECK(pao.metric() == IndexSpaceMetric::General);
     CHECK(pao.field() == uocc.field());
-    // one entry: no spin variants
-    CHECK_FALSE(isr->contains(L"μ̃↑"));
+    // the spin-cased PAO bases: the same instance of a↑ and a↓
+    for (const auto [label, spin] :
+         {std::pair{L"μ̃↑", mbpt::Spin::alpha}, {L"μ̃↓", mbpt::Spin::beta}}) {
+      REQUIRE(isr->contains(label));
+      const IndexBasis pao_spin = isr->retrieve_basis(label);
+      CHECK(pao_spin.space() == isr->retrieve(isr->particle_space(), spin));
+      CHECK(pao_spin.basis_instance() == pao.basis_instance());
+      CHECK(pao_spin.metric() == IndexSpaceMetric::General);
+      CHECK(pao_spin.extent() == pao_spin.space().dimension());
+    }
     // ordering: after every basis of a (I2), between i and Κ as before
     CHECK((IndexBasis{uocc} < pao && IndexBasis{uocc, 0} < pao &&
            IndexBasis{uocc, 10} < pao));

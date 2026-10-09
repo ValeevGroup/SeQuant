@@ -117,11 +117,16 @@ inline constexpr IndexBasis::instance_type default_pao_basis_instance =
 /// with a general metric (the PAOs are not orthonormal), and its extent and
 /// field default to the particle space's (populate them with
 /// IndexBasisRegistry::extent(label, n) before the registry is given
-/// to a Context, which holds it immutable)
+/// to a Context, which holds it immutable). The α- and β-spin PAO bases are
+/// registered alongside, as the same instance of the spin-cased particle
+/// spaces (if \p isr has them) under the spin-annotated label (`μ̃↑`,
+/// `μ̃↓`), so that a PAO index can be spin-cased (see make_spinalpha()); each
+/// has an extent of its own, to populate like the spin-agnostic one.
 /// @param spin_any the quantum numbers of the spin-agnostic particle space
 /// @param instance the basis instance of the PAO basis
 /// @param label the label the PAO basis is registered under
-/// @throw Exception if \p label is already registered
+/// @throw Exception if \p label or a spin-annotated version of it is already
+///        registered
 void add_pao_basis(
     std::shared_ptr<IndexBasisRegistry>& isr,
     IndexSpace::QuantumNumbers spin_any,
