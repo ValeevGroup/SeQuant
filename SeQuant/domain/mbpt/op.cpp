@@ -81,7 +81,7 @@ qns_t make_qp_qns(std::size_t particle_rank, std::size_t hole_rank,
     result[0] = {0ul, deexcitation ? particle_rank : hole_rank};
     result[1] = {0ul, deexcitation ? hole_rank : particle_rank};
   } else {
-    auto isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_basis_registry();
     const auto& base_spaces = isr->base_spaces();
     if (!particle_space) particle_space = isr->particle_space(SQN);
     if (!hole_space) hole_space = isr->hole_space(SQN);
@@ -181,7 +181,7 @@ qns_t combine(qns_t a, qns_t b) {
              get_default_context().vacuum() == Vacuum::MultiProduct) {
     const bool multiproduct =
         get_default_context().vacuum() == Vacuum::MultiProduct;
-    auto isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_basis_registry();
     const auto& base_spaces = isr->base_spaces();
     for (auto i = 0; i < base_spaces.size(); i++) {
       auto cre = i * 2;
@@ -250,9 +250,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 
   // now remove perturbation order decoration if any
   SEQUANT_ASSERT(!base_lbl.empty());
-  if (ranges::contains(mbpt::detail::pert_superscripts, base_lbl.back())) {
-    base_lbl.pop_back();
-  }
+  base_lbl = std::wstring(mbpt::detail::strip_pert_order(base_lbl));
 
   auto registry = mbpt::get_default_mbpt_context().op_registry();
   // if it is not a reserved label, make sure it is registered
@@ -478,7 +476,7 @@ OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
                    "OpMaker: batch_ordinals must be sorted");
     mbpt::check_for_batching_space();
     const auto batch_space =
-        get_default_context().index_space_registry()->retrieve(L"z");
+        get_default_context().index_basis_registry()->retrieve(L"z");
 
     container::svector<Index> batch_indices;
     for (const auto& ord : params.batch_ordinals) {
@@ -491,7 +489,7 @@ OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
                    "OpMaker: nbatch cannot be zero");
     mbpt::check_for_batching_space();
     const auto batch_space =
-        get_default_context().index_space_registry()->retrieve(L"z");
+        get_default_context().index_basis_registry()->retrieve(L"z");
     batch_indices_ = make_batch_indices(
         IndexSpaceContainer(params.nbatch.value(), batch_space));
   }
@@ -499,8 +497,9 @@ OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
 
 template <Statistics S>
 ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
-                               std::optional<Symmetry> opsymm_opt) const {
-  auto isr = get_default_context(Statistics::FermiDirac).index_space_registry();
+                               std::optional<Symmetry> opsymm_opt,
+                               std::optional<std::wstring> grants_of) const {
+  auto isr = get_default_context(Statistics::FermiDirac).index_basis_registry();
 
   // if not given dep, use mbpt::Context::CSV to determine whether to use
   // dependent indices for pure (de)excitation ops
@@ -512,7 +511,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   // matrix elements of (anti-)Hermitian operators (Hermitian by default),
   // (de)excitation operators (cluster amplitudes etc.) are not. The concrete
   // BraKetSymmetry (Symm vs Conjugate) is derived from the bra/ket indices'
-  // IndexSpace::field() (see sequant::base_field) when the Tensor is built, so
+  // IndexBasis::field() (see sequant::base_field) when the Tensor is built, so
   // a real computation sees Hermitian integrals as bra<->ket symmetric while
   // amplitudes stay nonsymmetric.
   const auto op_herm = op_hermiticity(label_);
@@ -539,6 +538,17 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   const auto full_label = detail::decorate_with_pert_order(label_, order_);
   const auto normalization = detail::normalization(label_);
 
+  BasisGrant grant;
+  // only (de)excitation operators carry grants; a projector names one
+  if (grants_of || opclass != OpClass::Gen) {
+    const auto registry = get_default_mbpt_context().op_registry();
+    const std::wstring& grant_label = grants_of ? *grants_of : full_label;
+    if (registry->has_basis_grants(grant_label))
+      grant = [registry, grant_label](const IndexSpace& space) {
+        return registry->basis_grant(grant_label, space);
+      };
+  }
+
   // if batching indices are present, use them
   if (batch_indices_) {
     return make(
@@ -552,7 +562,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
                             aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm,
                             op_herm, ColumnSymmetry::Symm);
         },
-        dep ? *dep : UseDepIdx::None, normalization);
+        dep ? *dep : UseDepIdx::None, normalization, grant);
   }
   // else no batching
   return make(
@@ -565,7 +575,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
                           opsymm_opt ? *opsymm_opt : opsymm, op_herm,
                           ColumnSymmetry::Symm);
       },
-      dep ? *dep : UseDepIdx::None, normalization);
+      dep ? *dep : UseDepIdx::None, normalization, grant);
 }
 
 template class OpMaker<Statistics::FermiDirac>;
@@ -620,7 +630,7 @@ ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
                               // without providing an occupied indexspace
     // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
     auto make_g_contribution = [](const auto& occ_space) {
-      auto isr = get_default_context().index_space_registry();
+      auto isr = get_default_context().index_basis_registry();
       return mbpt::OpMaker<Statistics::FermiDirac>::make(
           L"f", {isr->complete_space(Spin::any)},
           {isr->complete_space(Spin::any)},
@@ -658,7 +668,7 @@ ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
             }
           });
     };
-    auto isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_basis_registry();
     SEQUANT_ASSERT(registry->contains(L"h"));
     return OpMaker<Statistics::FermiDirac>(L"h", 1)() +
            make_g_contribution(reference_occupied);
@@ -725,17 +735,17 @@ ExprPtr l(nₚ np, nₕ nh) {
                                          nann(np.value()))();
 }
 
-ExprPtr P(nₚ np, nₕ nh) {
+ExprPtr P(nₚ np, nₕ nh, std::optional<std::wstring> grants_of) {
   if (np != nh)
     SEQUANT_ASSERT(
         get_default_context().spbasis() != SPBasis::Spinfree &&
         "Spinfree basis does not support non-particle conserving projectors");
   return get_default_context().spbasis() == SPBasis::Spinfree
-             ? tensor::S(-nh /* nh == np */)
-             : tensor::A(-np, -nh);
+             ? tensor::S(-nh /* nh == np */, std::move(grants_of))
+             : tensor::A(-np, -nh, std::move(grants_of));
 }
 
-ExprPtr A(nₚ np, nₕ nh) {
+ExprPtr A(nₚ np, nₕ nh, std::optional<std::wstring> grants_of) {
   SEQUANT_ASSERT(!(np == 0 && nh == 0));
   // if one of them is not zero, nh and np should have the same sign
   if (np != 0 && nh != 0) {
@@ -764,10 +774,10 @@ ExprPtr A(nₚ np, nₕ nh) {
                              : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
   return OpMaker<Statistics::FermiDirac>(reserved::antisymm_label(),
                                          cre(creators), ann(annihilators))(
-      dep, {Symmetry::Antisymm});
+      dep, {Symmetry::Antisymm}, std::move(grants_of));
 }
 
-ExprPtr S(std::int64_t K) {
+ExprPtr S(std::int64_t K, std::optional<std::wstring> grants_of) {
   SEQUANT_ASSERT(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
@@ -790,7 +800,7 @@ ExprPtr S(std::int64_t K) {
                 : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
   return OpMaker<Statistics::FermiDirac>(reserved::symm_label(), cre(creators),
                                          ann(annihilators))(
-      dep, {Symmetry::Nonsymm});
+      dep, {Symmetry::Nonsymm}, std::move(grants_of));
 }
 
 ExprPtr Hʼ(std::size_t R, const OpParams& params) {
@@ -981,7 +991,7 @@ ExprPtr F(bool use_f_tensor, const IndexSpace& occupied_density) {
   }
 }
 
-ExprPtr A(nₚ np, nₕ nh) {
+ExprPtr A(nₚ np, nₕ nh, std::optional<std::wstring> grants_of) {
   SEQUANT_ASSERT(!(nh == 0 && np == 0));
   // if one of them is not zero, nh and np should have the same sign
   if (nh != 0 && np != 0) {
@@ -994,7 +1004,7 @@ ExprPtr A(nₚ np, nₕ nh) {
   auto hole_space = get_hole_space(Spin::any);
   return ex<op_t>(
       []() -> std::wstring_view { return reserved::antisymm_label(); },
-      [=]() -> ExprPtr { return tensor::A(np, nh); },
+      [=]() -> ExprPtr { return tensor::A(np, nh, grants_of); },
       [=](qnc_t& qns) {
         const std::size_t abs_nh = std::abs(nh);
         const std::size_t abs_np = std::abs(np);
@@ -1010,10 +1020,10 @@ ExprPtr A(nₚ np, nₕ nh) {
       });
 }
 
-ExprPtr S(std::int64_t K) {
+ExprPtr S(std::int64_t K, std::optional<std::wstring> grants_of) {
   SEQUANT_ASSERT(K != 0);
   return ex<op_t>([]() -> std::wstring_view { return reserved::symm_label(); },
-                  [=]() -> ExprPtr { return tensor::S(K); },
+                  [=]() -> ExprPtr { return tensor::S(K, grants_of); },
                   [=](qnc_t& qns) {
                     const std::size_t abs_K = std::abs(K);
                     if (K < 0) {
@@ -1026,17 +1036,17 @@ ExprPtr S(std::int64_t K) {
                   });
 }
 
-ExprPtr P(nₚ np, nₕ nh) {
+ExprPtr P(nₚ np, nₕ nh, std::optional<std::wstring> grants_of) {
   if (get_default_context().spbasis() == SPBasis::Spinfree) {
     SEQUANT_ASSERT(
         nh == np &&
         "Only particle number conserving cases are supported with spinfree "
         "basis for now");
     const auto K = np;  // K = np = nh
-    return S(-K);
+    return S(-K, std::move(grants_of));
   } else {
     SEQUANT_ASSERT(get_default_context().spbasis() == SPBasis::Spinor);
-    return A(-np, -nh);
+    return A(-np, -nh, std::move(grants_of));
   }
 }
 
@@ -1246,7 +1256,7 @@ std::shared_ptr<const tensor_index_comparer_t> active_first_index_comparer(
         [base](const Index& idx1, const Index& idx2) -> bool {
           // the registry of the context in effect, i.e. of the scope that
           // installs this comparer
-          const auto isr = get_default_context().index_space_registry();
+          const auto isr = get_default_context().index_basis_registry();
           auto active_space = isr->intersection(isr->particle_space(Spin::any),
                                                 isr->hole_space(Spin::any));
           const auto idx1_active = idx1.space().type() == active_space.type();
@@ -1297,7 +1307,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
   const bool multiproduct =
       get_default_context().vacuum() == Vacuum::MultiProduct;
 
-  auto isr = get_default_context().index_space_registry();
+  auto isr = get_default_context().index_basis_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
   // convention is to use different label for spin-orbital and spin-free RDM
   const auto& rdm_label =

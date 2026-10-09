@@ -83,8 +83,8 @@ std::size_t IndexBatchingStep::process(std::string_view id_prefix,
                                result.const_indices().end());
 
     std::ranges::sort(indices, [](const Index &lhs, const Index &rhs) {
-      if (lhs.space().approximate_size() != rhs.space().approximate_size()) {
-        return lhs.space().approximate_size() < rhs.space().approximate_size();
+      if (lhs.basis().extent() != rhs.basis().extent()) {
+        return lhs.basis().extent() < rhs.basis().extent();
       }
 
       return lhs < rhs;

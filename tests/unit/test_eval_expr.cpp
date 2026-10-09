@@ -20,6 +20,7 @@
 #include <string>
 #include <string_view>
 
+#include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 
@@ -603,4 +604,39 @@ TEST_CASE("Sum-node hash is sensitive to every summand",
   CHECK(first_a->hash_value() != first_b->hash_value());
   // (a*b)+c and c+(a*b) are the same multiset of summands -> same hash.
   CHECK(last_a->hash_value() == first_a->hash_value());
+}
+
+TEST_CASE("proto-index-liveness", "[eval]") {
+  using namespace sequant;
+
+  // an energy term with proto-carrying indices: past g, i_2 appears only in
+  // the proto tuples of a_3 and a_4, so it must stay live on the g * (...) node
+  auto const expr = deserialize<ExprPtr>(
+      L"(((("
+      L"g{a5,a6;i1,i2}"
+      L" * (C{a3<i1,i2>;a5}"
+      L"    * ((C{a1<i2>;a7} * t{a1<i2>;i2}) * C{a7;a3<i1,i2>})))"
+      L" * C{a4<i1,i2>;a6})"
+      L" * C{a8;a4<i1,i2>})"
+      L" * C{a2<i1>;a8})"
+      L" * t{a2<i1>;i1}",
+      // fixture contracts bra-with-bra, so tensors must be bra-ket symmetric
+      {.def_braket_symm = BraKetSymmetry::Symm});
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto const root = sequant::binarize(expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  // root = (((((g * B) * C) * C) * C) * t); descend to the g * B node.
+  auto const& g_node = root.left().left().left().left();
+  REQUIRE(g_node.left()->is_tensor());
+  CHECK(g_node.left()->as_tensor().label() == L"g");
+
+  auto const has_label = [](auto const& ixs, std::wstring_view lbl) {
+    return ranges::any_of(ixs,
+                          [lbl](auto const& ix) { return ix.label() == lbl; });
+  };
+  // i_1 is a slot index of the trailing t; i_2 is live only via proto tuples.
+  CHECK(has_label(g_node->canon_indices(), L"i_1"));
+  CHECK(has_label(g_node->canon_indices(), L"i_2"));
 }

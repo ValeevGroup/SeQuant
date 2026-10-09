@@ -133,14 +133,14 @@ class SubexpressionReplacer {
       if (tree->is_tensor()) {
         Index::index_vector indices = tree->canon_indices();
 
-        // Sort indices into distinct groups based on index space in order
-        // to create a deterministic set of indices.
+        // Sort indices into distinct groups based on index basis (space and
+        // basis instance) in order to create a deterministic set of indices.
         // Since there can't be any permutational symmetries between indices
-        // of different spaces, we can arrange them in arbitrary order as long
+        // of different bases, we can arrange them in arbitrary order as long
         // as we retain the relative order of indices that belong to the same
-        // space.
+        // basis.
         std::ranges::stable_sort(indices, std::less<>{},
-                                 [](const Index &idx) { return idx.space(); });
+                                 [](const Index &idx) { return idx.basis(); });
 
         return ex<Tensor>(label, bra(), ket(), aux(std::move(indices)),
                           Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,

@@ -19,12 +19,12 @@ int main() {
   // than the occupied/virtual spaces -- as in forming a density-fitted
   // 2-electron integral g[i,j;a,b] ≈ Σ_Κ B[i,a,Κ] B[j,b,Κ], where Κ ranges
   // over a large auxiliary fitting basis
-  auto isr = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
+  auto isr = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(isr);
-  isr->retrieve_ptr(L"i")->approximate_size(4);
-  isr->retrieve_ptr(L"a")->approximate_size(8);
-  isr->retrieve_ptr(L"Κ")->approximate_size(100'000);
+  isr->extent(L"i", 4);
+  isr->extent(L"a", 8);
+  isr->extent(L"Κ", 100'000);
   set_default_context(get_default_context_snapshot().set(isr));
 
   auto expr = ex<Tensor>(L"B", bra{L"i_1"}, ket{L"a_1", L"Κ_1"}) *

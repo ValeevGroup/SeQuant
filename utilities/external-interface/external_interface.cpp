@@ -597,9 +597,9 @@ void generateCode(const json &details, const IndexSpaceMeta &spaceMeta) {
 
 void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
                          std::size_t version) {
-  const auto registry_ptr = std::make_shared<IndexSpaceRegistry>(
-      *get_default_context().index_space_registry());
-  IndexSpaceRegistry &registry = *registry_ptr;
+  const auto registry_ptr = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
+  IndexBasisRegistry &registry = *registry_ptr;
 
   std::vector<std::pair<std::wstring, IndexSpaceMeta::Entry>> spaceList;
   spaceList.reserve(spaces.size());
@@ -679,7 +679,7 @@ void process(const json &driver, IndexSpaceMeta &spaceMeta) {
 int main(int argc, char **argv) {
   using namespace sequant;
   set_locale();
-  Context ctx({.index_space_registry = IndexSpaceRegistry(),
+  Context ctx({.index_basis_registry = IndexBasisRegistry(),
                .vacuum = Vacuum::SingleProduct});
   // TODO: This only hides a bug/issue in the processing code where SeQuant
   // assumes that it is okay to freely rename external indices while

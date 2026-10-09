@@ -17,21 +17,22 @@
 namespace sequant {
 
 /// \brief Build a \c BackendArrayOps for the TiledArray backend from a
-/// per-space tiling map.
+/// per-basis-key tiling map.
 ///
 /// \tparam FlatArray the flat (Tensor-of-Scalars) \c TA::DistArray type;
 /// \tparam ToTArray  the nested (Tensor-of-Tensor) \c TA::DistArray type.
 ///
-/// \param tr1_of_base space base_key -> the space's full \c TA::TiledRange1.
-/// \param world       the World the zero destinations are built in; it must
+/// \param tr1_of_base IndexBasis::base_key() -> the basis' full \c
+/// TA::TiledRange1. \param world       the World the zero destinations are
+/// built in; it must
 ///                    outlive the returned closures' use.
 ///
 /// \details The two closures are the TA realization of external-axis batching's
 /// backend needs (see \c BackendArrayOps): \c make_zeros builds a zero
 /// destination -- flat or nested per the descriptor's proto structure, with a
 /// nested result's inner tiles left empty for the scatter writes to fill -- and
-/// \c axis_batches chunks an axis on its space's tile boundaries. Tiling is a
-/// property of the space, so both are sourced from \p tr1_of_base alone; no
+/// \c axis_batches chunks an axis on its basis' tile boundaries. Tiling is a
+/// property of the basis, so both are sourced from \p tr1_of_base alone; no
 /// array in the DAG is consulted. Both mpqc (from its orbital/basis registries)
 /// and unit tests (from the tranges they build their leaves with) supply the
 /// map and call this.
@@ -43,7 +44,7 @@ template <typename FlatArray, typename ToTArray = FlatArray>
   BackendArrayOps aops;
   aops.axis_batches = [map](Index const& axis, std::size_t target_batch_size) {
     return mode_batches_of_trange1(
-        map->at(std::wstring(axis.space().base_key())), target_batch_size);
+        map->at(std::wstring(axis.basis().base_key())), target_batch_size);
   };
   aops.make_zeros =
       [map, &world](container::vector<Index> const& descriptor) -> ResultPtr {
@@ -55,7 +56,7 @@ template <typename FlatArray, typename ToTArray = FlatArray>
         nested = true;  // an inner (nested) mode -- not an outer trange mode
         continue;
       }
-      outer.push_back(map->at(std::wstring(ix.space().base_key())));
+      outer.push_back(map->at(std::wstring(ix.basis().base_key())));
     }
     TA::TiledRange otr(outer.begin(), outer.end());
     auto make_flat = [&]() -> ResultPtr {

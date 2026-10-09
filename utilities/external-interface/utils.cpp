@@ -17,11 +17,11 @@
 using namespace sequant;
 
 std::size_t IndexSpaceMeta::getSize(const IndexSpace &space) const {
-  return space.approximate_size();
+  return space.dimension();
 }
 
 std::size_t IndexSpaceMeta::getSize(const Index &index) const {
-  return getSize(index.space());
+  return index.basis().extent();
 }
 
 std::string IndexSpaceMeta::getName(const IndexSpace &space) const {

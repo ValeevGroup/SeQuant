@@ -41,7 +41,7 @@ void apply_field(auto& reg, Field f) {
   std::vector<std::wstring> keys;
   for (auto const& s : reg) keys.push_back(s.base_key());
   for (auto const& k : keys)
-    if (auto* s = reg.retrieve_ptr(k)) s->field(f);
+    if (!k.empty()) reg.field(k, f);
 }
 
 /// types of CC equations to solve
@@ -103,7 +103,7 @@ class compute_cceqvec {
                            : AssertStrictBraKetSymmetry::Yes;
       auto context_resetter = sequant::set_scoped_default_context(
           sequant::Context(
-              {.index_space_registry_shared_ptr = so_reg,
+              {.index_basis_registry_shared_ptr = so_reg,
                .vacuum = Vacuum::SingleProduct,
                // mbpt works with particle-symmetric tensors
                .deserialization_column_symmetry = ColumnSymmetry::Symm})
@@ -285,7 +285,7 @@ int main(int argc, char* argv[]) {
                                               : AssertStrictBraKetSymmetry::Yes;
   sequant::set_default_context(
       sequant::Context(
-          {.index_space_registry_shared_ptr = sr_reg,
+          {.index_basis_registry_shared_ptr = sr_reg,
            .vacuum = Vacuum::SingleProduct,
            .spbasis = spbasis,
            // mbpt works with particle-symmetric tensors

@@ -79,6 +79,17 @@ TEST_CASE("latex", "[util]") {
     std::wstring caron__f = L"f̌";
     REQUIRE(caron__f.size() == 2);
     REQUIRE(io::latex::diactrics_to_string(caron__f) == L"\\check{f}");
+    // characters after a replacement are kept, whether replaced or not
+    std::wstring tilde__f_g = L"f̃g";
+    REQUIRE(io::latex::diactrics_to_string(tilde__f_g) == L"\\tilde{f}g");
+    std::wstring tilde_a_arrow = L"ã→";
+    REQUIRE(io::latex::diactrics_to_string(tilde_a_arrow) == L"\\tilde{a}→");
+    // a non-ASCII character that follows a combined pair and ends the string
+    // (a spin-cased label) is not taken to carry the pair's diacritic
+    std::wstring tilde__mu_up = L"μ̃↑";
+    REQUIRE(tilde__mu_up.size() == 3);
+    REQUIRE(io::latex::diactrics_to_string(tilde__mu_up) == L"\\tilde{μ}↑");
+    REQUIRE(io::latex::utf_to_string(tilde__mu_up) == L"\\tilde{\\mu}↑");
 
     // notice the size is 1 since these are precomposed characters
     std::wstring hat_A = L"Â";

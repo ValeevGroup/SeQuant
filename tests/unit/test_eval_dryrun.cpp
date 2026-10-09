@@ -39,7 +39,9 @@
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/batch_policy.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/ordered_executor.hpp>
@@ -59,20 +61,25 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>  // is_valid
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <memory>
 #include <set>
@@ -154,6 +161,32 @@ TEST_CASE("dryrun size regime basic extents", "[dryrun-probe]") {
   auto a = Index{L"a_1"};
   CHECK(r.extent(a) == 1800);
   CHECK_THROWS_AS(r.extent(Index{L"x_1"}), std::out_of_range);
+}
+
+TEST_CASE("dryrun size regime keys a named basis by its label",
+          "[dryrun][sizing][basis]") {
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces();
+  const IndexSpace a = isr->retrieve(L"a");
+  constexpr IndexBasis::instance_type P =
+      std::numeric_limits<IndexBasis::instance_type>::max();
+  isr->add(L"μ̃", IndexBasis{a, P});  // before the Context adopts the registry
+  auto ctx = set_scoped_default_context(
+      Context({.index_basis_registry_shared_ptr = std::move(isr),
+               .vacuum = Vacuum::SingleProduct}));
+  const auto& registry = *get_default_context().index_basis_registry();
+  eval::dryrun::SizeRegime r;
+  r.space_extent[L"a"] = 40;
+  r.space_extent[L"μ̃"] = 300;
+  r.space_slice_extents[L"μ̃"] = {100, 100, 100};
+  const Index pao(registry.retrieve_basis(L"μ̃"), 1), virt(a, 1),
+      unnamed = Index(a, 2).replace_basis_instance(1);
+  CHECK(r.extent(pao) == 300);
+  CHECK(r.extent(virt) == 40);
+  // an unnamed instance is keyed as its space
+  CHECK(r.extent(unnamed) == 40);
+  CHECK(r.slice_extents(pao).size() == 3);
+  CHECK(r.slice_extents(virt).empty());
 }
 
 TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
@@ -280,7 +313,7 @@ TEST_CASE("dryrun rank-general CSV moment dispatch", "[dryrun][sizing]") {
 // (μ̃_NNNN) and DF-aux index "K" (Κ_N), the 3-center DF integrals
 // g{μ̃;i;Κ}, and the CSV coefficients C{a<i>;μ̃}. Standalone SeQuant's default
 // mbpt registry has neither mu~ nor K, so we augment a copy of its registry
-// with mbpt::add_pao_spaces (mu~) + mbpt::add_df_spaces (K).
+// with mbpt::add_pao_basis (mu~) + mbpt::add_df_spaces (K).
 //
 // This case reproduces, offline and in milliseconds, the batched-objective DP
 // decision that on the cluster left the free-mu~ giant un-sliced (single-mode
@@ -366,9 +399,11 @@ SizeRegime df_regime(ProblemSize const& p) {
 }
 
 // Batchable = the two modes mpqc's runtime batches on the CSV path: PAO (mu~)
-// and DF aux (K). Both are non-proto base spaces (mu~ = PAO, K = DFBS aux).
+// and DF aux (K), both non-proto, keyed by IndexBasis::base_key so that the
+// PAOs are batchable as the mu~ space and as the named basis instance mu~
+// alike.
 bool is_df_batchable(Index const& ix) {
-  auto const k = ix.space().base_key();
+  auto const k = ix.basis().base_key();
   return k == L"μ̃" || k == L"Κ";
 }
 
@@ -391,10 +426,10 @@ TEST_CASE("is_valid accepts a CSV proto-indexed residual",
   using namespace sequant;
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  REQUIRE(ctx0.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx0.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx0.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
@@ -433,10 +468,10 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
   using namespace sequant;
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  REQUIRE(ctx0.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx0.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx0.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
@@ -455,7 +490,7 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
   auto regime = df_regime(kWater20_pVDZF12);
   BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
@@ -531,10 +566,10 @@ TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
   using namespace sequant;
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  REQUIRE(ctx0.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx0.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx0.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
@@ -547,7 +582,7 @@ TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
   auto regime = df_regime(kWater20_pVDZF12);
   BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
@@ -605,11 +640,11 @@ TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
   using namespace sequant;
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
+  REQUIRE(ctx0.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx0.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);  // mu~
+  sequant::mbpt::add_df_spaces(isr);                            // K
   ctx0.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
 
@@ -635,7 +670,7 @@ TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
   auto regime = df_regime(kC60_pVDZF12);
   auto idxsz = regime.idx_to_extent();
   std::function<std::size_t(Index const&)> bts = [](Index const& ix) {
-    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
   };
   opt::detail::PeakBatchedModel model{idxsz, bts, {}, regime.inner_pow_fn()};
   model.is_batchable_contracted_index = is_df_batchable;
@@ -666,10 +701,10 @@ TEST_CASE("C60 residual peak per summand under the recommended batching",
   using namespace sequant;
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  REQUIRE(ctx0.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx0.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx0.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
@@ -693,15 +728,15 @@ TEST_CASE("C60 residual peak per summand under the recommended batching",
   };
   // aux + occ are contracted-batchable; PAOs are not batchable at all.
   auto is_batchable_contracted = [](Index const& ix) {
-    auto const k = ix.space().base_key();
+    auto const k = ix.basis().base_key();
     return k == L"Κ" || k == L"i";  // DF aux (Greek Kappa) + occupied
   };
   // occ is additionally batchable in the external (spectator) role.
   std::function<bool(Index const&)> is_batchable_external =
-      [](Index const& ix) { return ix.space().base_key() == L"i"; };
+      [](Index const& ix) { return ix.basis().base_key() == L"i"; };
   std::function<std::size_t(Index const&)> bts =
       [](Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"i" ? std::size_t{8} : std::size_t{72};
+    return ix.basis().base_key() == L"i" ? std::size_t{8} : std::size_t{72};
   };
 
   auto measure = [&](TensorNetwork const& net,
@@ -770,10 +805,10 @@ TEST_CASE("no 4-PAO integral with correct composite sizing (C60 giant)",
   using namespace sequant;
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  REQUIRE(ctx0.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx0.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx0.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
@@ -800,10 +835,10 @@ TEST_CASE("no 4-PAO integral with correct composite sizing (C60 giant)",
   auto regime = df_regime(kC60_pVDZF12);
   auto idxsz = regime.idx_to_extent();
   std::function<std::size_t(Index const&)> bts = [](Index const& ix) {
-    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
   };
   auto is_aux = [](Index const& ix) {
-    return ix.space().base_key() == L"Κ";  // K only; PAO NOT batchable
+    return ix.basis().base_key() == L"Κ";  // K only; PAO NOT batchable
   };
   std::function<bool(Tensor const&)> is_vol = [](Tensor const& t) {
     return t.label() == L"t";
@@ -844,11 +879,11 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
   // mpqc's high internal ordinals (mu~_1152, a_21674, ...).
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);  // mu~
+  sequant::mbpt::add_df_spaces(isr);                            // K
   ctx.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
@@ -940,7 +975,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
   // does NOT form the fully-sliceable 4-PAO integral.
   bool const aux_only = env_u("SEQUANT_UT_DRYRUN_AUX_ONLY", 0u) != 0;
   auto is_batchable = [aux_only](Index const& ix) {
-    auto const k = ix.space().base_key();
+    auto const k = ix.basis().base_key();
     return aux_only ? (k == L"Κ") : (k == L"μ̃" || k == L"Κ");
   };
   std::wcerr << L"[dryrun-df] config: occ=" << occ_ext << L" pno=" << pno_mom
@@ -977,7 +1012,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
                                                    regime.inner_pow_fn());
   auto has_free_mu_tilde = [](std::vector<Index> const& ixs) {
     for (auto const& ix : ixs)
-      if (ix.space().base_key() == L"μ̃") return true;
+      if (ix.basis().base_key() == L"μ̃") return true;
     return false;
   };
 
@@ -1029,7 +1064,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
     //   dflt)
     opts.batch_policy.batch_target_size =
         [pao_ts, aux_ts](Index const& ix) -> std::size_t {
-      return ix.space().base_key() == L"μ̃" ? pao_ts   // pao_target_size
+      return ix.basis().base_key() == L"μ̃" ? pao_ts   // pao_target_size
                                            : aux_ts;  // aux_target_size
     };
     opts.batch_policy.is_volatile_leaf = [](Tensor const& t) {
@@ -1068,13 +1103,13 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
     // different mu~_j).
     auto keyof = [](Index const& ix) { return std::wstring(ix.full_label()); };
     auto ext_of = [](Index const& ix) -> double {
-      auto bk = ix.space().base_key();
+      auto bk = ix.basis().base_key();
       if (bk == L"μ̃") return 1800.0;
       if (bk == L"Κ") return 4320.0;
       return 0.0;
     };
     auto tgt_of = [pao_ts, aux_ts](Index const& ix) -> double {
-      return ix.space().base_key() == L"μ̃" ? double(pao_ts) : double(aux_ts);
+      return ix.basis().base_key() == L"μ̃" ? double(pao_ts) : double(aux_ts);
     };
     double term_biggest = 0.0;  // max REALIZED bytes over free-mu~ nodes
     std::wstring term_biggest_desc, term_biggest_axes, term_biggest_sources;
@@ -1118,7 +1153,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
             std::vector<Index> escaped;  // batchable free ixs NOT sliced above
             std::wstring sources;        // per-free-batchable-index provenance
             for (auto const& ix : free_ixs) {
-              auto bk = ix.space().base_key();
+              auto bk = ix.basis().base_key();
               if (bk != L"μ̃" && bk != L"Κ") continue;
               auto it = active.find(keyof(ix));
               if (it != active.end()) {
@@ -1135,7 +1170,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
             double const realized = nominal * factor;
             bool mu_esc = false, k_esc = false;
             for (auto const& ix : escaped)
-              (ix.space().base_key() == L"μ̃" ? mu_esc : k_esc) = true;
+              (ix.basis().base_key() == L"μ̃" ? mu_esc : k_esc) = true;
             if (mu_esc) ++total_mu_nodes_with_mu_axis;  // repurposed: escaped
             if (k_esc && !mu_esc) ++total_mu_nodes_with_k_only;
             if (realized > 5e10) {
@@ -1183,7 +1218,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
             if (!n->node_slice_mask().empty()) ++term_batched_nodes;
             ++term_internal_nodes;
             for (auto const& ax : n->node_slice_mask())
-              term_axis_hist[std::wstring(ax.first.space().base_key())]++;
+              term_axis_hist[std::wstring(ax.first.basis().base_key())]++;
             // Forest-level CSE bookkeeping (see declarations above). The mode
             // signature includes the ancestor-sliced context, not just this
             // node's own modes: the same expression evaluated under a different
@@ -1828,7 +1863,7 @@ TEST_CASE(
   auto node = binarize<EvalExprDryRun>(expr);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
-  auto const occ = get_default_context().index_space_registry()->retrieve(L"i");
+  auto const occ = get_default_context().index_basis_registry()->retrieve(L"i");
   auto accept_occ = [occ](Index const& ix) {
     return ix.space() == occ && !ix.has_proto_indices();
   };
@@ -1932,11 +1967,11 @@ TEST_CASE(
     "[dryrun-eval]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);  // mu~
+  sequant::mbpt::add_df_spaces(isr);                            // K
   ctx.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
@@ -1996,7 +2031,7 @@ TEST_CASE(
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = is_df_batchable;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"μ̃" ? std::size_t{256}  // pao_target_size
+    return ix.basis().base_key() == L"μ̃" ? std::size_t{256}  // pao_target_size
                                          : std::size_t{72};  // aux_target_size
   };
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
@@ -2050,7 +2085,7 @@ TEST_CASE(
       regime.idx_to_extent(), regime.inner_pow_fn());
   auto has_free_mu_tilde = [](std::vector<Index> const& ixs) {
     for (auto const& ix : ixs)
-      if (ix.space().base_key() == L"μ̃") return true;
+      if (ix.basis().base_key() == L"μ̃") return true;
     return false;
   };
   double giant_nominal_bytes = 0.0;
@@ -2277,11 +2312,11 @@ TEST_CASE(
     "[dryrun-objective]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);  // mu~
+  sequant::mbpt::add_df_spaces(isr);                            // K
   ctx.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
@@ -2326,13 +2361,13 @@ TEST_CASE(
   auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
                                                        regime.inner_pow_fn());
   auto ext_of = [](Index const& ix) -> double {
-    auto bk = ix.space().base_key();
+    auto bk = ix.basis().base_key();
     if (bk == L"μ̃") return double(kC60_pVDZF12.mu_tilde);
     if (bk == L"Κ") return double(kC60_pVDZF12.aux);
     return 0.0;
   };
   auto tgt_of = [](Index const& ix) -> double {
-    return ix.space().base_key() == L"μ̃" ? 256.0 : 72.0;
+    return ix.basis().base_key() == L"μ̃" ? 256.0 : 72.0;
   };
   auto keyof = [](Index const& ix) { return std::wstring(ix.full_label()); };
 
@@ -2359,7 +2394,7 @@ TEST_CASE(
     sequant::BatchPolicy policy;
     policy.is_batchable_contracted_index = is_df_batchable;
     policy.batch_target_size = [](Index const& ix) -> std::size_t {
-      return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+      return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
     };
     policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
     policy.accumulation_factor = 1.0;
@@ -2413,8 +2448,8 @@ TEST_CASE(
                 batch_axes_indices(n->node_slice_mask());
             std::size_t nmu = 0, nk = 0, npno = 0, nosv = 0;
             for (auto const& ix : free) {
-              if (ix.space().base_key() == L"μ̃") ++nmu;
-              if (ix.space().base_key() == L"Κ") ++nk;
+              if (ix.basis().base_key() == L"μ̃") ++nmu;
+              if (ix.basis().base_key() == L"Κ") ++nk;
               if (ix.has_proto_indices()) {
                 if (ix.proto_indices().size() >= 2)
                   ++npno;  // 2-proto (or higher) = PNO composite
@@ -2442,7 +2477,7 @@ TEST_CASE(
           auto free_ixs = node_free_indices(*n);
           std::size_t nmu = 0;
           for (auto const& ix : free_ixs)
-            if (ix.space().base_key() == L"μ̃") ++nmu;
+            if (ix.basis().base_key() == L"μ̃") ++nmu;
           if (nmu > a.max_free_mu) a.max_free_mu = nmu;
           if (nmu > 0) {
             double nominal =
@@ -2450,7 +2485,7 @@ TEST_CASE(
                 8.0;
             double factor = 1.0;
             for (auto const& ix : free_ixs) {
-              auto bk = ix.space().base_key();
+              auto bk = ix.basis().base_key();
               if (bk != L"μ̃" && bk != L"Κ") continue;
               if (active.find(keyof(ix)) != active.end())
                 factor *= tgt_of(ix) / ext_of(ix);
@@ -2579,11 +2614,11 @@ TEST_CASE(
     "[dryrun-extmode]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);  // mu~
+  sequant::mbpt::add_df_spaces(isr);                            // K
   ctx.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
@@ -2619,7 +2654,7 @@ TEST_CASE(
   auto make_model = [&](bool spectator_on) {
     BModel m{regime.idx_to_extent(),
              [](Index const& ix) -> std::size_t {
-               auto const k = ix.space().base_key();
+               auto const k = ix.basis().base_key();
                if (k == L"μ̃") return std::size_t{256};  // pao_target_size
                if (k == L"i") return std::size_t{8};    // occ_target_size: occ
                // blocks are small; the aux value 72 must NOT leak to the occ.
@@ -2645,7 +2680,7 @@ TEST_CASE(
     // is_df_batchable alone (μ̃/Κ) would drop the external occ from
     // ctx.batchable_modes, leaving the spectator seed nothing to adopt.
     m.is_batchable_external_index = [](Index const& ix) {
-      auto const k = ix.space().base_key();
+      auto const k = ix.basis().base_key();
       return k == L"μ̃" || k == L"Κ" || k == L"i";
     };
     m.batch_spectator_indices = spectator_on;
@@ -2736,11 +2771,11 @@ TEST_CASE(
     "[.][dryrun-occ-sizing]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);  // mu~
+  sequant::mbpt::add_df_spaces(isr);                            // K
   ctx.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
@@ -2775,7 +2810,7 @@ TEST_CASE(
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = is_df_batchable;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
   };
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
@@ -2818,7 +2853,7 @@ TEST_CASE(
       regime.idx_to_extent(), regime.inner_pow_fn());
   auto free_has_bare = [](std::vector<Index> const& ixs, std::wstring_view bk) {
     for (auto const& ix : ixs)
-      if (ix.space().base_key() == bk) return true;
+      if (ix.basis().base_key() == bk) return true;
     return false;
   };
   auto count_pno = [](std::vector<Index> const& ixs) {
@@ -2851,7 +2886,7 @@ TEST_CASE(
   std::vector<Index> ext_occ;
   for (auto const& ix : giant_free)
     for (auto const& p : ix.proto_indices())
-      if (p.space().base_key() == L"i") {
+      if (p.basis().base_key() == L"i") {
         bool seen = false;
         for (auto const& e : ext_occ)
           if (e.full_label() == p.full_label()) seen = true;
@@ -2936,11 +2971,11 @@ TEST_CASE(
     "[.][dryrun-occ-recognize]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);  // mu~
+  sequant::mbpt::add_df_spaces(isr);                            // K
   ctx.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
@@ -2972,7 +3007,7 @@ TEST_CASE(
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = is_df_batchable;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
   };
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
@@ -3010,7 +3045,7 @@ TEST_CASE(
       regime.idx_to_extent(), regime.inner_pow_fn());
   auto free_has_bare = [](std::vector<Index> const& ixs, std::wstring_view bk) {
     for (auto const& ix : ixs)
-      if (ix.space().base_key() == bk) return true;
+      if (ix.basis().base_key() == bk) return true;
     return false;
   };
   auto count_pno = [](std::vector<Index> const& ixs) {
@@ -3043,7 +3078,7 @@ TEST_CASE(
   std::vector<Index> ext_occ;
   for (auto const& ix : giant_tensor->as<Tensor>().const_braketaux_indices())
     for (auto const& p : ix.proto_indices())
-      if (p.space().base_key() == L"i") {
+      if (p.basis().base_key() == L"i") {
         bool seen = false;
         for (auto const& e : ext_occ)
           if (e.full_label() == p.full_label()) seen = true;
@@ -3069,7 +3104,7 @@ TEST_CASE(
              << describe_indices(batchable_v) << L"}\n";
 
   auto is_active_occ = [](Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
   // The giant's external occ must now be a batchable mode, even though it has
   // no top-level slot on the node.
@@ -3109,11 +3144,11 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
           "[.][dryrun-c60-batchability-audit]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);  // mu~
+  sequant::mbpt::add_df_spaces(isr);                            // K
   ctx.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
@@ -3139,13 +3174,13 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
                                                        regime.inner_pow_fn());
   auto keyof = [](Index const& ix) { return std::wstring(ix.full_label()); };
   auto tgt_of = [](Index const& ix) -> double {
-    return ix.space().base_key() == L"μ̃" ? 256.0 : 72.0;
+    return ix.basis().base_key() == L"μ̃" ? 256.0 : 72.0;
   };
   auto ext_of = [&](Index const& ix) -> double {
     return double(regime.idx_to_extent()(ix));
   };
   auto batch_target = [](Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
   };
 
   // The over-budget threshold: peak_threshold (a node must batch to fit).
@@ -3163,7 +3198,7 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
   // batched-context degree is what makes the DP intractable.
   bool const no_pao = std::getenv("SEQUANT_UT_AUDIT_NO_PAO") != nullptr;
   auto audit_batchable = [no_pao](Index const& ix) -> bool {
-    auto const k = ix.space().base_key();
+    auto const k = ix.basis().base_key();
     return no_pao ? (k == L"Κ") : (k == L"μ̃" || k == L"Κ");
   };
 
@@ -3316,7 +3351,7 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
             double factor = 1.0;  // node-local mu~/K slicing already applied
             std::vector<Index> escaped;
             for (auto const& ix : free_ixs) {
-              auto bk = ix.space().base_key();
+              auto bk = ix.basis().base_key();
               if (bk != L"μ̃" && bk != L"Κ") continue;
               if (active.count(keyof(ix)))
                 factor *= tgt_of(ix) / ext_of(ix);
@@ -3333,7 +3368,7 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
               std::wstring occ_label;
               for (auto const& ix : free_ixs) {
                 for (auto const& p : ix.proto_indices())
-                  if (p.space().base_key() == L"i") {
+                  if (p.basis().base_key() == L"i") {
                     occ_label = std::wstring(p.full_label());
                     break;
                   }
@@ -3375,8 +3410,8 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
       v.biggest_desc = describe_indices(biggest_free);
       v.escaped_desc = describe_indices(biggest_escaped);
       for (auto const& ix : biggest_escaped) {
-        if (ix.space().base_key() == L"μ̃") v.biggest_escaped_mu = true;
-        if (ix.space().base_key() == L"Κ") v.biggest_escaped_k = true;
+        if (ix.basis().base_key() == L"μ̃") v.biggest_escaped_mu = true;
+        if (ix.basis().base_key() == L"Κ") v.biggest_escaped_k = true;
       }
     } catch (std::exception const&) {
       std::wcerr << L"[audit] term " << t << L": skipped (exception)\n";
@@ -3455,13 +3490,19 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
+  // the PAOs as the mu~ space or as the named basis instance {a, INT32_MAX}
+  const bool named_pao = GENERATE(false, true);
+  CAPTURE(named_pao);
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
+  if (named_pao)
+    sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
+  else
+    sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);  // K
   ctx.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
@@ -3492,7 +3533,7 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = is_df_batchable;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
   };
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
@@ -3565,6 +3606,53 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   // For this specifically-batched term the batched-inner transient dwarfs the
   // outer residency (458x measured); a 2x floor is safe and non-flaky.
   CHECK(global_peak > outer_hwmark * 2.0);
+
+  // the two PAO encodings size the term identically
+  struct Record {
+    std::vector<std::size_t> leaf_extents;  // proto-free leaf slots, sorted
+    // pre-order: (op type, -1 for a leaf; sorted extents of canon_indices())
+    std::vector<std::pair<int, std::vector<double>>> nodes;
+    std::wstring dump;  // nodes with their index labels
+    double peak = 0;
+  };
+  static std::map<bool, Record> records;
+  Record& rec = records[named_pao];
+  rec = {};
+  // a sized as the C60 virtuals (nAO - nocc = 1800 - 180), apart from mu~, so
+  // that a PAO keyed as a is told apart
+  SizeRegime probe = regime;
+  probe.space_extent[L"a"] = 1620;
+  for (auto const& f : giant->as<Product>().factors())
+    if (f->is<Tensor>())
+      for (auto const& ix : f->as<Tensor>().const_braket_indices())
+        if (!ix.has_proto_indices())
+          rec.leaf_extents.push_back(probe.extent(ix));
+  std::ranges::sort(rec.leaf_extents);
+  node.visit([&](auto const& n) {
+    const int op = n->op_type() ? static_cast<int>(*n->op_type()) : -1;
+    std::vector<double> extents;
+    rec.dump += std::to_wstring(op) + L":";
+    for (auto const& ix : n->canon_indices()) {
+      extents.push_back(ix.has_proto_indices() ? probe.inner_pow(ix, 1)
+                                               : double(probe.extent(ix)));
+      rec.dump += L" " + std::wstring(ix.full_label()) + L"=" +
+                  std::to_wstring(extents.back());
+    }
+    rec.dump += L"\n";
+    std::ranges::sort(extents);
+    rec.nodes.emplace_back(op, std::move(extents));
+  });
+  rec.peak = global_peak;
+  if (records.size() == 2) {
+    Record const& space = records.at(false);
+    Record const& basis = records.at(true);
+    CHECK(space.leaf_extents == basis.leaf_extents);
+    INFO("space encoding:\n"
+         << toUtf8(space.dump) << "basis encoding:\n"
+         << toUtf8(basis.dump));
+    CHECK(space.nodes == basis.nodes);
+    CHECK(space.peak == basis.peak);
+  }
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
@@ -3614,7 +3702,7 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][peak]") {
   auto node = binarize<EvalExprDryRun>(expr);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
-  auto const occ = get_default_context().index_space_registry()->retrieve(L"i");
+  auto const occ = get_default_context().index_basis_registry()->retrieve(L"i");
   auto accept_occ = [occ](Index const& ix) {
     return ix.space() == occ && !ix.has_proto_indices();
   };
@@ -3745,11 +3833,11 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][peak]") {
 TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);  // mu~
+  sequant::mbpt::add_df_spaces(isr);                            // K
   ctx.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
@@ -3781,7 +3869,7 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = is_df_batchable;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
   };
   policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
   policy.accumulation_factor = 1.0;
@@ -3940,10 +4028,10 @@ TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
           "[.][dryrun-water-frag]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
@@ -3973,7 +4061,7 @@ TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
   // pao_target=0, occ_target=0): K is the ONLY batchable mode, contracted role.
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](Index const&) { return false; };
   policy.batch_spectator_indices = false;
@@ -4016,7 +4104,7 @@ TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
     for (auto const& na : it->second)
       for (auto const& e : na.axes)
         if (e.second == sequant::BatchModeType::Contracted &&
-            e.first.space().base_key() == L"Κ")
+            e.first.basis().base_key() == L"Κ")
           ++n_kcon;
   }
   std::wcerr
@@ -4049,10 +4137,10 @@ TEST_CASE("canon_indices preserves distinct composite proto pairs",
   using namespace sequant;
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto resetter = set_scoped_default_context(std::move(ctx));
@@ -4395,7 +4483,7 @@ TEST_CASE(
 
   BatchPolicy policy;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"a" ? std::size_t{5} : std::size_t{1};
+    return ix.basis().base_key() == L"a" ? std::size_t{5} : std::size_t{1};
   };
 
   // ---- ordered: exercises the nested batch-scratch walk. ----

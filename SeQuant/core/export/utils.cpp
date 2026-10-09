@@ -8,11 +8,47 @@
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
+#include <cctype>
+#include <cstdint>
 #include <sstream>
+#include <string>
 #include <utility>
 
 namespace sequant::detail {
+
+std::string basis_instance_tag(const Index &idx) {
+  if (!idx.basis().has_basis_instance()) return {};
+  // widened so that the magnitude of the most negative instance fits
+  const std::int64_t instance = *idx.basis().basis_instance();
+  return instance < 0 ? "_" + std::to_string(-instance)
+                      : std::to_string(instance);
+}
+
+std::string block_tag(std::string space_tag, const Index &idx) {
+  const auto instance = basis_instance_tag(idx);
+  if (!instance.empty() && !space_tag.empty() &&
+      (std::isdigit(static_cast<unsigned char>(space_tag.back())) ||
+       space_tag.back() == '_'))
+    throw Exception("export: the tag '" + space_tag + "' of the space of " +
+                    toUtf8(idx.full_label()) +
+                    " ends in a digit or '_', so a basis instance appended to "
+                    "it cannot be told from the tag; tag the space otherwise");
+  return space_tag += instance;
+}
+
+std::string dim_name(std::string space_dim, const Index &idx) {
+  const auto instance = basis_instance_tag(idx);
+  if (instance.empty()) return space_dim;
+  if (!space_dim.empty() && space_dim.back() == '_')
+    throw Exception("export: the dimension name '" + space_dim +
+                    "' of the space of " + toUtf8(idx.full_label()) +
+                    " ends in '_', so the name of a basis instance appended "
+                    "to it is ambiguous; name the dimension otherwise");
+  return space_dim += "_" + instance;
+}
 
 std::string format_power_exponent(const Power::exponent_type &exponent,
                                   bool double_slash) {

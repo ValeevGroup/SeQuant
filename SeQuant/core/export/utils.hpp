@@ -21,6 +21,25 @@
 
 namespace sequant::detail {
 
+/// @return the basis instance of @p idx in decimal, with `_` in place of the
+/// minus sign of a negative one (so it is valid in an identifier and, unlike a
+/// letter, cannot be read as the tag of a space), to append to a block tag or
+/// dimension name of a mode in that basis; empty if @p idx has none
+std::string basis_instance_tag(const Index &idx);
+
+/// @return the block tag of the mode @p idx: @p space_tag followed by
+/// basis_instance_tag(idx)
+/// @throw Exception if @p idx has a basis instance and @p space_tag ends in a
+/// digit or `_`, which would make the instance indistinguishable from the tag
+std::string block_tag(std::string space_tag, const Index &idx);
+
+/// @return the dimension name of the mode @p idx: @p space_dim followed by
+/// `_` and basis_instance_tag(idx) if @p idx has a basis instance, since each
+/// basis has its own extent
+/// @throw Exception if @p idx has a basis instance and @p space_dim ends in
+/// `_`, which would make the name of a negative instance ambiguous
+std::string dim_name(std::string space_dim, const Index &idx);
+
 /// Formats a Power exponent for export framework
 /// @param exponent the rational exponent
 /// @param double_slash if true, use Julia's `//` rational syntax; otherwise

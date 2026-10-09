@@ -1595,7 +1595,7 @@ TEST_CASE("canonical_mark", "[elements]") {
     {
       // a copy given its own registry, which is a configuration of its own
       auto changed = get_default_context();
-      changed.set(IndexSpaceRegistry(*changed.index_space_registry()));
+      changed.set(IndexBasisRegistry(*changed.index_basis_registry()));
       auto resetter = set_scoped_default_context(changed);
       REQUIRE(!e->is_canonical(opts));
     }

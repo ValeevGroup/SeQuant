@@ -3,6 +3,7 @@
 //
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/attr.hpp>
@@ -15,6 +16,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -55,7 +57,7 @@ TEST_CASE("spin", "[spin]") {
   auto _ = set_scoped_default_context(ctx);
 
   SECTION("protoindices supported") {
-    auto isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_basis_registry();
     Index i1(L"i_1");
     Index a1(L"a_1", {i1});
 
@@ -1587,6 +1589,22 @@ SECTION("Open-shell spin-tracing") {
     REQUIRE_THAT(result[2], EquivalentTo("1/4 g{a↓1,a↓2;i↓1,i↓2}:A"));
   }
 
+  // an input that simplifies to zero gives zero in every spin case
+  {
+    auto g = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                        Symmetry::Antisymm);
+    auto input = ex<Sum>(ExprPtrList{g, ex<Constant>(-1) * g->clone()});
+    std::vector<ExprPtr> result;
+    REQUIRE_NOTHROW(
+        result = open_shell_spintrace(
+            input, IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}));
+    REQUIRE(result.size() == 3);
+    for (auto& r : result) {
+      simplify(r);
+      CHECK(r->is_zero());
+    }
+  }
+
   // f_oo * t2
   {
     auto input =
@@ -1967,5 +1985,106 @@ TEST_CASE("spin-traced densities", "[spin]") {
           },
           /*atoms_only=*/true);
     }
+  }
+}
+
+TEST_CASE("spincase-index-keeps-proto-symmetry", "[spin]") {
+  using namespace sequant;
+
+  Index a(L"a_1", {Index(L"i_1"), Index(L"i_2")}, /*symmetric=*/false);
+  auto b = mbpt::make_spinalpha(a);
+  CHECK_FALSE(b.symmetric_proto_indices());
+}
+
+TEST_CASE("spincase-index-keeps-basis-instance", "[spin][basis]") {
+  using namespace sequant;
+
+  for (bool symmetric : {false, true}) {
+    const Index x = Index(L"a_1", {Index(L"i_1"), Index(L"i_2")}, symmetric)
+                        .replace_basis_instance(1);
+    for (auto make :
+         {&mbpt::make_spinalpha, &mbpt::make_spinbeta, &mbpt::make_spinfree}) {
+      const Index s = make(x);
+      CHECK(s.basis().basis_instance() == 1);
+      CHECK(s.proto_indices().size() == 2);
+      CHECK(s.symmetric_proto_indices() == symmetric);
+    }
+  }
+}
+
+// a named basis instance and a generic index of the same ordinal are two
+// indices with one label up to the basis name; the index lists of the spin
+// tracers must keep both, else the named one is never assigned a spin
+namespace {
+sequant::IndexSpace isr_space_of(const sequant::Index& idx) {
+  return sequant::get_default_context().index_basis_registry()->retrieve(
+      idx.space().type(), idx.space().qns());
+}
+}  // namespace
+
+TEST_CASE("spintrace-named-basis", "[spin][basis]") {
+  using namespace sequant;
+  using sequant::mbpt::make_spinalpha;
+  using sequant::mbpt::make_spinbeta;
+  using sequant::mbpt::make_spinfree;
+  using sequant::mbpt::spintrace;
+  auto isr = mbpt::make_sr_spaces();
+  const IndexSpace uocc = isr->retrieve(L"a");
+  isr->add(L"μ̃", IndexBasis{uocc, 77}, 120ul);
+  // the spin-cased counterparts are bases of their own, e.g. of different
+  // extents in a spin-polarized state
+  isr->add(L"μ̃↑", IndexBasis{isr->retrieve(L"a↑"), 77}, 60ul);
+  isr->add(L"μ̃↓", IndexBasis{isr->retrieve(L"a↓"), 77}, 50ul);
+  auto ctx = set_scoped_default_context(
+      Context({.index_basis_registry_shared_ptr = std::move(isr),
+               .vacuum = Vacuum::SingleProduct}));
+  const IndexBasis pao =
+      get_default_context().index_basis_registry()->retrieve_basis(L"μ̃");
+  const Index a1(uocc, 1), m1(pao, 1), m2(pao, 2);
+  const Index i1(L"i_1"), i2(L"i_2");
+
+  // spin-casing a named index: the registry's entry for the instance in the
+  // spin-cased space, with its own metadata
+  const Index m1a = make_spinalpha(m1), m1b = make_spinbeta(m1);
+  CHECK(m1a.label() == L"μ̃↑_1");
+  CHECK(m1a.basis().extent() == 60);
+  CHECK(m1b.label() == L"μ̃↓_1");
+  CHECK(m1b.basis().basis_instance() == 77);
+  CHECK(m1b.basis().extent() == 50);
+  CHECK(m1b.space() == isr_space_of(m1b));  // sanity: a↓ with the same attr
+  CHECK(make_spinfree(m1a) == m1);
+  CHECK(make_spinfree(m1b) == m1);
+  CHECK(make_spinfree(m1b).basis().extent() == 120);
+
+  auto term = [&](const Index& m) {
+    return ex<Tensor>(L"g", bra{a1, m}, ket{i1, i2}, Symmetry::Antisymm) *
+           ex<Tensor>(L"t", bra{i1, i2}, ket{a1, m}, Symmetry::Antisymm);
+  };
+  ExprPtr same_ordinal, other_ordinal;
+  REQUIRE_NOTHROW(same_ordinal = spintrace(term(m1)));
+  REQUIRE_NOTHROW(other_ordinal = spintrace(term(m2)));
+  CHECK(*same_ordinal == *other_ordinal);
+  CHECK(to_latex(same_ordinal).find(L"\\tilde{\\mu}") != std::wstring::npos);
+  // open-shell: the spin-cased named index keeps a label of its own, so it is
+  // not taken for the generic a↑_1 / a↓_1
+  const auto os = mbpt::open_shell_spintrace(term(m1), {});
+  REQUIRE(os.size() == 1);
+  CHECK(to_latex(os[0]).find(L"\\tilde{\\mu}") != std::wstring::npos);
+  CHECK(to_latex(os[0]) != to_latex(ex<Constant>(0)));
+
+  // a missing counterpart is an error, not derived from the index's own basis
+  {
+    auto half = mbpt::make_sr_spaces();
+    half->add(L"μ̃", IndexBasis{uocc, 77}, 120ul);
+    half->add(L"μ̃↑", IndexBasis{half->retrieve(L"a↑"), 77}, 60ul);
+    auto half_ctx = set_scoped_default_context(
+        Context({.index_basis_registry_shared_ptr = std::move(half),
+                 .vacuum = Vacuum::SingleProduct}));
+    const Index m1_half(
+        get_default_context().index_basis_registry()->retrieve_basis(L"μ̃"), 1);
+    CHECK_NOTHROW(make_spinalpha(m1_half));
+    CHECK_THROWS_WITH(make_spinbeta(m1_half),
+                      Catch::Matchers::ContainsSubstring("μ̃↓"));
+    CHECK_THROWS_AS(spintrace(term(m1_half)), Exception);
   }
 }

@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_EXPORT_REORDERING_CONTEXT_HPP
 #define SEQUANT_CORE_EXPORT_REORDERING_CONTEXT_HPP
 
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/memory_layout.hpp>
 
@@ -13,7 +14,7 @@ class Tensor;
 /// will be held in memory and all elements will be iterated over.
 ///
 /// In other words, this class will use existing tensor symmetries to move the
-/// slot belonging to the largest index space into the slot with highest
+/// slot belonging to the basis of the largest extent into the slot with highest
 /// cache-locality (depending on the chosen memory layout).
 class ReorderingContext : public ExportContext {
  public:
@@ -33,9 +34,9 @@ class ReorderingContext : public ExportContext {
   bool m_rewrite = true;
 
  protected:
-  bool is_less(const IndexSpace &lhs, const IndexSpace &rhs) const;
-  bool is_ordered(const IndexSpace &lhs, const IndexSpace &rhs) const;
-  bool needs_swap(const IndexSpace &lhs, const IndexSpace &rhs) const;
+  bool is_less(const IndexBasis &lhs, const IndexBasis &rhs) const;
+  bool is_ordered(const IndexBasis &lhs, const IndexBasis &rhs) const;
+  bool needs_swap(const IndexBasis &lhs, const IndexBasis &rhs) const;
 };
 
 }  // namespace sequant

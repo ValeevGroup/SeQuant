@@ -6,6 +6,7 @@
 #define SEQUANT_DOMAIN_MBPT_OP_HPP
 
 #include <SeQuant/domain/mbpt/fwd.hpp>
+#include <SeQuant/domain/mbpt/op_registry.hpp>
 
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -68,24 +69,6 @@ enum class Normalization {
 /// @pre @p label is Â, Ŝ, or registered in the active OpRegistry
 Normalization normalization(const std::wstring& label);
 
-inline constexpr std::wstring_view pert_superscripts = L"⁰¹²³⁴⁵⁶⁷⁸⁹";
-
-/// @brief decorates a base label with perturbation order as superscript
-/// @param base_label the base label to decorate
-/// @param pert_order the perturbation order to decorate with
-/// @return the decorated label
-inline std::wstring decorate_with_pert_order(std::wstring_view base_label,
-                                             int pert_order = 0) {
-  if (pert_order == 0) return std::wstring(base_label);
-  SEQUANT_ASSERT(
-      pert_order >= 0 && pert_order <= 9,
-      "decorate_with_pert_order: perturbation order out of range [0,9]");
-
-  std::wstring result(base_label);
-  result += detail::pert_superscripts[pert_order];
-  return result;
-}
-
 /// @brief the rank pairs of a sum of operators truncated at ranks
 /// (@p n1, @p n2), highest first
 /// @return `(n1, n2), (n1-1, n2-1), ...`, stopping before `(0, 0)` and after
@@ -116,7 +99,7 @@ bool is_vacuum(QuantumNumbers qns);
 
 /// converts an IndexSpace::Type to IndexSpace using default quantum number set
 inline IndexSpace make_space(const IndexSpace::Type& type) {
-  return get_default_context().index_space_registry()->retrieve(type,
+  return get_default_context().index_basis_registry()->retrieve(type,
                                                                 Spin::any);
 }
 
@@ -235,7 +218,7 @@ struct default_qns_tag {
 /// the number of quasiparticles, the number of ops (creators/annihilators) in each subspace, etc.
 /// For example, to operator products expressed in normal order with respect to physical vacuum it is sufficient to track
 /// the number of creators and annihilators; For the fermi vacuum case, the number of creators and annihilators in each
-/// subspace becomes important, hence the number of ops is tracked for each base space (determined by the IndexSpaceRegistry object in Context).
+/// subspace becomes important, hence the number of ops is tracked for each base space (determined by the IndexBasisRegistry object in Context).
 /// The interval representation is necessary to dictate how many creators or annihilators could be in each subspace.
 /// This is pertinent when user defined hole_space or particle_space are NOT base spaces.
 /// Since the choice of space partitioning is up to the user, the base class must be a dynamic container.
@@ -268,7 +251,7 @@ class QuantumNumberChange
       return 2;
     } else if (get_default_context().vacuum() == Vacuum::SingleProduct ||
                get_default_context().vacuum() == Vacuum::MultiProduct) {
-      auto isr = get_default_context().index_space_registry();
+      auto isr = get_default_context().index_basis_registry();
       const auto& isr_base_spaces = isr->base_spaces();
       SEQUANT_ASSERT(isr_base_spaces.size() > 0);
       return isr_base_spaces.size() * 2;
@@ -411,7 +394,7 @@ class QuantumNumberChange
   /// space defined in the current context
   interval_t count_in_active_space(bool particle, bool creators) {
     const auto& qnvec = this->base();
-    auto isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_basis_registry();
     const auto& base_spaces = isr->base_spaces();
     interval_t result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {
@@ -589,6 +572,10 @@ mbpt::qns_t adjoint(mbpt::qns_t qns);
 
 namespace mbpt {
 
+/// the basis instance an operator's leg minted in the given IndexSpace
+/// carries; an empty BasisGrant mints every leg without one
+using BasisGrant =
+    std::function<IndexBasis::optional_instance(const IndexSpace&)>;
 // clang-format off
 /// @brief makes a tensor-level many-body operator
 
@@ -682,9 +669,12 @@ class OpMaker {
   /// @param[in] opsymm_opt if given, controls whether (anti)symmetric
   /// tensor is returned; if \p opsymm_opt is not given then the default is
   /// determined by the MBPT context.
+  /// @param[in] grants_of the operator label whose basis grants (see OpRegistry::grant_basis) the legs carry;
+  /// if not given, this operator's own (perturbation-order decorated) label
   // clang-format on
   ExprPtr operator()(std::optional<UseDepIdx> dep_opt = {},
-                     std::optional<Symmetry> opsymm_opt = {}) const;
+                     std::optional<Symmetry> opsymm_opt = {},
+                     std::optional<std::wstring> grants_of = {}) const;
 
   /// @brief Creates an OpInfo struct containing creator and annihilator
   /// indices, normalization factor, symmetry, and dependency information.
@@ -693,11 +683,13 @@ class OpMaker {
   /// @param ann_spaces A container of IndexSpace objects representing the
   /// annihilator indices
   /// @param dep An optional parameter specifying the dependency of indices.
+  /// @param grant the basis instance of each minted index, by its space
   /// @return An OpInfo struct containing the created indices, normalization
   /// factor, symmetry, and dependency information.
   static OpInfo build_op_info(const IndexSpaceContainer& cre_spaces,
                               const IndexSpaceContainer& ann_spaces,
-                              UseDepIdx dep = UseDepIdx::None) {
+                              UseDepIdx dep = UseDepIdx::None,
+                              const BasisGrant& grant = {}) {
     const bool symm = get_default_context().spbasis() ==
                       SPBasis::Spinor;  // antisymmetrize if spinor basis
     const auto dep_bra = dep == UseDepIdx::Bra;
@@ -707,18 +699,26 @@ class OpMaker {
     if (!symm)
       SEQUANT_ASSERT(ranges::size(cre_spaces) == ranges::size(ann_spaces));
 
-    auto make_idx_vector = [](const auto& spaces) {
-      return spaces | ranges::views::transform([](const IndexSpace& space) {
-               return Index::make_tmp_index(space);
+    auto make_idx_vector = [&grant](const auto& spaces) {
+      return spaces |
+             ranges::views::transform([&grant](const IndexSpace& space) {
+               return grant ? Index::make_tmp_index(default_registry_resolved(
+                                  IndexBasis{space, grant(space)}))
+                            : Index::make_tmp_index(space);
              }) |
              ranges::to<container::svector<Index>>();
     };
 
-    auto make_depidx_vector = [](const auto& spaces, auto&& protoidxs) {
+    auto make_depidx_vector = [&grant](const auto& spaces, auto&& protoidxs) {
       return spaces |
-             ranges::views::transform([&protoidxs](const IndexSpace& space) {
-               return Index::make_tmp_index(space, protoidxs, true);
-             }) |
+             ranges::views::transform(
+                 [&grant, &protoidxs](const IndexSpace& space) {
+                   return grant ? Index::make_tmp_index(
+                                      default_registry_resolved(
+                                          IndexBasis{space, grant(space)}),
+                                      protoidxs, true)
+                                : Index::make_tmp_index(space, protoidxs, true);
+                 }) |
              ranges::to<container::svector<Index>>();
     };
 
@@ -756,15 +756,18 @@ class OpMaker {
   /// @param[in] ann_spaces annihilator IndexSpaces
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] dep whether to use dependent indices
+  /// @param[in] grant the basis instance of each minted index, see
+  /// build_op_info
   template <typename TensorGenerator>
   static ExprPtr make(const std::wstring& label,
                       const IndexSpaceContainer& cre_spaces,
                       const IndexSpaceContainer& ann_spaces,
                       TensorGenerator&& tensor_generator,
-                      UseDepIdx dep = UseDepIdx::None) {
+                      UseDepIdx dep = UseDepIdx::None,
+                      const BasisGrant& grant = {}) {
     return make(cre_spaces, ann_spaces,
                 std::forward<TensorGenerator>(tensor_generator), dep,
-                detail::normalization(label));
+                detail::normalization(label), grant);
   }
 
  private:
@@ -795,12 +798,15 @@ class OpMaker {
   /// @param[in] ann_spaces annihilator IndexSpaces
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] dep whether to use dependent indices
+  /// @param[in] grant the basis instance of each minted index, see
+  /// build_op_info
   template <typename TensorGenerator>
   static ExprPtr make(const IndexSpaceContainer& cre_spaces,
                       const IndexSpaceContainer& ann_spaces,
                       TensorGenerator&& tensor_generator, UseDepIdx dep,
-                      Normalization normalization) {
-    const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
+                      Normalization normalization,
+                      const BasisGrant& grant = {}) {
+    const auto op_info = build_op_info(cre_spaces, ann_spaces, dep, grant);
 
     const auto t =
         tensor_generator(op_info.creidxs, op_info.annidxs, op_info.opsymm);
@@ -819,22 +825,25 @@ class OpMaker {
   /// @param[in] batch_indices batch indices
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] dep whether to use dependent indices
+  /// @param[in] grant the basis instance of each minted index, see
+  /// build_op_info
   template <typename TensorGenerator>
   static ExprPtr make(const IndexSpaceContainer& cre_spaces,
                       const IndexSpaceContainer& ann_spaces,
                       const IndexContainer& batch_indices,
                       TensorGenerator&& tensor_generator, UseDepIdx dep,
-                      Normalization normalization) {
+                      Normalization normalization,
+                      const BasisGrant& grant = {}) {
     mbpt::check_for_batching_space();
     SEQUANT_ASSERT(!batch_indices.empty());
     [[maybe_unused]] auto batch_space =
-        get_default_context().index_space_registry()->retrieve(L"z");
+        get_default_context().index_basis_registry()->retrieve(L"z");
     // assumes that there are no more than one type of batch space
     for ([[maybe_unused]] const auto& idx : batch_indices) {
       SEQUANT_ASSERT(idx.space() == batch_space);
     }
 
-    const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
+    const auto op_info = build_op_info(cre_spaces, ann_spaces, dep, grant);
     const auto t = tensor_generator(op_info.creidxs, op_info.annidxs,
                                     batch_indices, op_info.opsymm);
 
@@ -1041,10 +1050,12 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
 /// makes projector onto excited bra (if \p np > 0 && \p nh > 0) or ket (if \p np < 0 && \p nh <0) manifold
 /// @param np number of particle creators (if > 0) or annihilators (< 0)
 /// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
+/// @param grants_of if given, the operator label whose basis grants the projector's legs carry
+/// (the amplitude the projected equation is solved for); else the legs carry none
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
 /// else supports particle non-conserving operators and returns `A(-np, -nh)`
 // clang-format on
-ExprPtr P(nₚ np, nₕ nh);
+ExprPtr P(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 
 // clang-format off
@@ -1052,14 +1063,17 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 /// @param np number of particle creators (if > 0) or annihilators (< 0)
 /// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// (default is to set \p np to \p nh)
+/// @param grants_of if given, the operator label whose basis grants the legs carry
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(nₚ np, nₕ nh);
+ExprPtr A(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`
-ExprPtr S(std::int64_t K);
+/// @param grants_of if given, the operator label whose basis grants the legs
+/// carry
+ExprPtr S(std::int64_t K, std::optional<std::wstring> grants_of = {});
 
 /// @brief Makes perturbation operator
 /// @param R rank of the perturbation operator
@@ -1220,24 +1234,29 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L);
 /// makes projector onto excited bra (if \p np > 0 && \p nh > 0) or ket (if \p np < 0 && \p nh <0) manifold
 /// @param np number of particle creators (if > 0) or annihilators (< 0)
 /// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
+/// @param grants_of if given, the operator label whose basis grants the projector's legs carry
+/// (the amplitude the projected equation is solved for); else the legs carry none
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
 /// else supports particle non-conserving operators and returns `A(-np, -nh)`
 // clang-format on
-ExprPtr P(nₚ np, nₕ nh);
+ExprPtr P(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 
 // clang-format off
 /// @brief makes generic bra/ket-antisymmetric excitation (if \p nh > 0 && \p np > 0) or deexcitation (if \p nh < 0 && \p np < 0) operator
 /// @param np number of particle creators (if > 0) or annihilators (< 0)
 /// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
+/// @param grants_of if given, the operator label whose basis grants the legs carry
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(nₚ np, nₕ nh);
+ExprPtr A(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`
-ExprPtr S(std::int64_t K);
+/// @param grants_of if given, the operator label whose basis grants the legs
+/// carry
+ExprPtr S(std::int64_t K, std::optional<std::wstring> grants_of = {});
 
 /// @brief Makes perturbation operator
 /// @param R rank of the perturbation operator
@@ -1319,8 +1338,8 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 namespace detail {
 /// @return true if the reference occupied space is the Wick vacuum's
 inline bool reference_is_vacuum() {
-  const auto isr = get_default_context().index_space_registry();
-  SEQUANT_ASSERT(isr, "the default context has no IndexSpaceRegistry");
+  const auto isr = get_default_context().index_basis_registry();
+  SEQUANT_ASSERT(isr, "the default context has no IndexBasisRegistry");
   return isr->reference_occupied_space() == isr->vacuum_occupied_space();
 }
 

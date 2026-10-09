@@ -1,3 +1,4 @@
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
@@ -25,6 +26,7 @@
 #include <array>
 #include <cstdlib>
 #include <fstream>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -53,7 +55,7 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"a";
+    return ix.basis().base_key() == L"a";
   };
 
   // build_site_of now reads the DP's ACTUAL per-node decision (a Contracted
@@ -67,7 +69,7 @@ TEST_CASE(
 
   auto const contains = [&](std::wstring const& key) {
     return std::any_of(site.begin(), site.end(), [&](sequant::Index const& ix) {
-      return ix.space().base_key() == key;
+      return ix.basis().base_key() == key;
     });
   };
   CHECK(contains(L"a"));
@@ -177,10 +179,10 @@ TEST_CASE(
 
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
+  sequant::mbpt::add_pao_basis(
       isr, sequant::IndexSpace::QuantumNumbers{sequant::mbpt::Spin::any});
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -212,7 +214,7 @@ TEST_CASE(
   // the only batchable mode, contracted role.
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const&) {
     return false;
@@ -274,7 +276,7 @@ TEST_CASE(
   REQUIRE(legality.cells.size() == rich.cells.size());
 
   auto const is_K = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   auto const carries_type =
       [&](sequant::container::svector<sequant::Index> const& v,
@@ -303,7 +305,7 @@ TEST_CASE(
       return carried.size() == 2 &&
              std::all_of(carried.begin(), carried.end(),
                          [](sequant::Index const& ix) {
-                           return ix.space().base_key() == L"μ̃";
+                           return ix.basis().base_key() == L"μ̃";
                          });
     };
 
@@ -541,7 +543,7 @@ TEST_CASE(
   // occ ("i") batchable in the EXTERNAL role -> i_3/i_4 are batch axes.
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
 
   // Minimal DryRun cost model: compute_dag_boulevard prices no footprints, and
@@ -560,7 +562,7 @@ TEST_CASE(
   REQUIRE(legality.cells.size() == rich.cells.size());
 
   auto const is_i = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
   auto const has_i = [&](auto const& v) {
     return std::any_of(v.begin(), v.end(), is_i);
@@ -707,7 +709,7 @@ TEST_CASE(
 
 // ===========================================================================
 // SP2 Task 1: forced_split_types groups CellLegality::forced_split_axes by
-// axis SPACE TYPE (base_key()), collapsing multiple same-space Index
+// axis TYPE (IndexBasis::base_key()), collapsing multiple same-space Index
 // INSTANCES (e.g. the Task-4 fixture's i_3/i_4 outer product, both
 // LoopCarried on occ) into the single loop (axis) they jointly force to
 // split.
@@ -729,7 +731,7 @@ TEST_CASE(
 
   auto const types = forced_split_types(cl);
   REQUIRE(types.size() == 1);
-  CHECK(types.front().space().base_key() == L"i");
+  CHECK(types.front().basis().base_key() == L"i");
 
   // A cell with no forced splits collapses to an empty list.
   CellLegality const empty_cl;
@@ -743,6 +745,28 @@ TEST_CASE(
   mixed_cl.forced_split_axes = {Index{L"i_3"}, Index{L"i_4"}, Index{L"a_1"}};
   auto const mixed_types = forced_split_types(mixed_cl);
   REQUIRE(mixed_types.size() == 2);
+}
+
+TEST_CASE("forced_split_types keeps a named basis apart from its space",
+          "[legality][basis]") {
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces();
+  const IndexSpace a = isr->retrieve(L"a"), i = isr->retrieve(L"i");
+  isr->add(L"μ̃", IndexBasis{
+                     a, std::numeric_limits<IndexBasis::instance_type>::max()});
+  auto ctx = set_scoped_default_context(
+      Context({.index_basis_registry_shared_ptr = std::move(isr),
+               .vacuum = Vacuum::SingleProduct}));
+  const Index pao(
+      get_default_context().index_basis_registry()->retrieve_basis(L"μ̃"), 1);
+  const Index composite(a, 2, {Index(i, 1), Index(i, 2)});
+  eval::CellLegality cell;
+  cell.forced_split_axes = {composite, pao,
+                            Index(a, 3, {Index(i, 1), Index(i, 3)})};
+  const auto types = eval::forced_split_types(cell);
+  REQUIRE(types.size() == 2);  // a (the composites) and μ̃
+  CHECK(types[0] == composite);
+  CHECK(types[1] == pao);
 }
 
 // ===========================================================================
@@ -790,10 +814,10 @@ TEST_CASE(
 
     auto ctx = sequant::get_default_context_snapshot();
     ctx.set_first_dummy_index_ordinal(1000000);
-    REQUIRE(ctx.index_space_registry() != nullptr);
-    auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-        *ctx.index_space_registry());
-    sequant::mbpt::add_pao_spaces(
+    REQUIRE(ctx.index_basis_registry() != nullptr);
+    auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+        *ctx.index_basis_registry());
+    sequant::mbpt::add_pao_basis(
         isr, sequant::IndexSpace::QuantumNumbers{sequant::mbpt::Spin::any});
     sequant::mbpt::add_df_spaces(isr);
     ctx.set(isr);
@@ -821,7 +845,7 @@ TEST_CASE(
 
     sequant::BatchPolicy policy;
     policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-      return ix.space().base_key() == L"Κ";
+      return ix.basis().base_key() == L"Κ";
     };
     policy.is_batchable_external_index = [](sequant::Index const&) {
       return false;
@@ -888,7 +912,7 @@ TEST_CASE(
     }
 
     auto const is_K = [](sequant::Index const& ix) {
-      return ix.space().base_key() == L"Κ";
+      return ix.basis().base_key() == L"Κ";
     };
     auto const carries_K =
         [&](sequant::container::svector<sequant::Index> const& v) {
@@ -957,7 +981,7 @@ TEST_CASE(
 
     sequant::BatchPolicy policy;
     policy.is_batchable_external_index = [](sequant::Index const& ix) {
-      return ix.space().base_key() == L"i";
+      return ix.basis().base_key() == L"i";
     };
 
     sequant::eval::dryrun::SizeRegime regime;

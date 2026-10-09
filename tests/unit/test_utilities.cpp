@@ -491,6 +491,27 @@ TEST_CASE("utilities", "[utilities]") {
           transformed_result,
           EquivalentTo("- g{i1,a1;i2,a2} + 2 g{i1,a1;a2,i2} t{a2;i1}"));
     }
+    {  // nested Sum / Product factors are rewritten, and stay nested
+      container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
+                                             {Index{L"i_2"}, Index{L"i_1"}}};
+      auto nested_sum =
+          ex<Product>(ExprPtrList{deserialize(L"f{a1;i1}"),
+                                  deserialize(L"t{a2;i2} + s{a2;i2}")},
+                      Product::Flatten::No);
+      auto r1 = transform_expr(nested_sum, idxmap);
+      CHECK(r1->at(1)->is<Sum>());
+      REQUIRE_THAT(r1, EquivalentTo("f{a1;i2} (t{a2;i1} + s{a2;i1})"));
+
+      auto nested_prod = ex<Product>(
+          ExprPtrList{deserialize(L"f{a1;i1}"),
+                      ex<Product>(ExprPtrList{deserialize(L"t{a2;i2}"),
+                                              deserialize(L"s{a2;i1}")},
+                                  Product::Flatten::No)},
+          Product::Flatten::No);
+      auto r2 = transform_expr(nested_prod, idxmap);
+      CHECK(r2->at(1)->is<Product>());
+      CHECK(r2->at(1)->at(0)->as<Tensor>().ket().at(0).label() == L"i_1");
+    }
   }
 
   SECTION("TensorBlockComparator") {
@@ -557,6 +578,17 @@ TEST_CASE("utilities", "[utilities]") {
           REQUIRE(cmp(rhs_tensor, lhs_tensor) == !less);
         }
       }
+    }
+
+    SECTION("basis instance") {
+      const Index a1(L"a_1", {L"i_1", L"i_2"});
+      const auto t = [&a1](IndexBasis::instance_type inst) {
+        return Tensor(L"t", bra{a1.replace_basis_instance(inst)},
+                      ket{Index(L"i_1")});
+      };
+      CHECK_FALSE(TensorBlockEqualComparator{}(t(1), t(2)));
+      CHECK(TensorBlockLessThanComparator{}(t(1), t(2)));
+      CHECK_FALSE(TensorBlockLessThanComparator{}(t(2), t(1)));
     }
   }
 

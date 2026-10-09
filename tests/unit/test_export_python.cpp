@@ -5,7 +5,7 @@
 
 #include <SeQuant/core/export/export.hpp>
 #include <SeQuant/core/export/python_einsum.hpp>
-#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -414,7 +414,7 @@ bool run_pytorch_code_with_numpy_io(const std::string &pytorch_code,
 TEST_CASE("PythonEinsumGenerator - Memory Layout", "[export][python]") {
   auto resetter = to_export_context();
 
-  auto registry = get_default_context().index_space_registry();
+  auto registry = get_default_context().index_basis_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
 
@@ -527,7 +527,7 @@ TEST_CASE("PythonEinsumGenerator - Memory Layout", "[export][python]") {
 TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
   auto resetter = to_export_context();
 
-  auto registry = get_default_context().index_space_registry();
+  auto registry = get_default_context().index_basis_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
 
@@ -1381,7 +1381,7 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
 TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
   auto resetter = to_export_context();
 
-  auto registry = get_default_context().index_space_registry();
+  auto registry = get_default_context().index_basis_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
 
