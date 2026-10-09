@@ -1382,6 +1382,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
       }
     };
     result->visit(replace_nop_with_rdm, true);
+    replace_nop_with_rdm(result);
 
     // STEP 2: project RDM indices onto the target RDM subspace
     // since RDM indices only make sense within a single TN expand + flatten
@@ -1391,7 +1392,11 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
     auto project_rdm_indices_to_target = [&](ExprPtr& exptr) {
       const auto named_indices =
           CanonicalizeOptions::default_options().named_indices;
-      auto impl_for_single_tn = [&](ProductPtr& product_ptr) {
+      auto impl_for_single_tn = [&](const ExprPtr& term) {
+        auto product_ptr =
+            term.is<Product>()
+                ? term.as<Product>().clone().as_shared_ptr<Product>()
+                : std::make_shared<Product>(ExprPtrList{term->clone()});
         // visit every index of every tensor in the TN
         auto for_each_index_in_tn = [](const auto& product_ptr,
                                        const auto& op) {
@@ -1416,7 +1421,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
           }
         };
         for_each_index_in_tn(product_ptr, retrieve_rdm_and_all_indices);
-        if (rdm_indices.empty()) return;
+        if (rdm_indices.empty()) return product_ptr;
 
         // compute RDM->target replacement rules; external indices stay
         const auto index_counts =
@@ -1439,27 +1444,15 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
           sequant::detail::apply_index_replacement_rules(
               product_ptr, replacement_rules, all_indices);
         }
+        return product_ptr;
       };
 
-      if (exptr.template is<Product>()) {
-        auto product_ptr = exptr.template as_shared_ptr<Product>();
-        impl_for_single_tn(product_ptr);
-        exptr = product_ptr;
+      if (!exptr.template is<Sum>()) {
+        exptr = impl_for_single_tn(exptr);
       } else {
-        SEQUANT_ASSERT(exptr.template is<Sum>());
         auto result = std::make_shared<Sum>();
         for (auto& summand : exptr.template as<Sum>().summands()) {
-          // a summand may collapse to a single factor rather than a Product
-          // (e.g. a fully-contracted one-body term like h^O_O with unit
-          // coefficient); wrap it so it can be processed uniformly
-          auto product_ptr =
-              summand.template is<Product>()
-                  ? summand.template as<Product>()
-                        .clone()
-                        .as_shared_ptr<Product>()
-                  : std::make_shared<Product>(ExprPtrList{summand->clone()});
-          impl_for_single_tn(product_ptr);
-          result->append(product_ptr);
+          result->append(impl_for_single_tn(summand));
         }
         exptr = result;
       }
