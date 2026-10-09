@@ -138,8 +138,10 @@ bool Operator<QuantumNumbers, S>::commutes_with_atom(const Expr& that) const {
     SEQUANT_ASSERT(delta_this.size() % 2 == 0 &&
                    delta_that.size() == delta_this.size());
 
-    for (std::size_t cre = 0; cre != delta_this.size(); cre += 2) {
-      const auto ann = cre + 1;
+    const auto nspaces = delta_this.size() / 2;
+    for (std::size_t s = 0; s != nspaces; ++s) {
+      const auto cre = QuantumNumbers::cre_slot(s);
+      const auto ann = QuantumNumbers::ann_slot(s);
       if ((delta_this[cre].upper() > 0 && delta_that[ann].upper() > 0) ||
           (delta_this[ann].upper() > 0 && delta_that[cre].upper() > 0))
         return false;

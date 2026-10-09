@@ -92,21 +92,21 @@ qns_t make_qp_qns(std::size_t particle_rank, std::size_t hole_rank,
     const bool ahs_base = !interval && isr->is_base(isr->hole_space(SQN));
     // ex: creators in particle space, annihilators in hole space
     // deex: annihilators in particle space, creators in hole space
-    const std::size_t particle_offset = deexcitation ? 1 : 0;
-    const std::size_t hole_offset = 1 - particle_offset;
-
     for (std::size_t i = 0; i < base_spaces.size(); i++) {
       const auto& base_space = base_spaces[i];
-      result[i * 2] = {0ul, 0ul};
-      result[i * 2 + 1] = {0ul, 0ul};
+      const auto cre = qnc_t::cre_slot(i);
+      const auto ann = qnc_t::ann_slot(i);
+      result[cre] = {0ul, 0ul};
+      result[ann] = {0ul, 0ul};
       if (base_space.qns() != SQN) continue;
 
       if (includes(particle_space->type(), base_space.type())) {
-        result[i * 2 + particle_offset] = {aps_base ? particle_rank : 0ul,
-                                           particle_rank};
+        result[deexcitation ? ann : cre] = {aps_base ? particle_rank : 0ul,
+                                            particle_rank};
       }
       if (includes(hole_space->type(), base_space.type())) {
-        result[i * 2 + hole_offset] = {ahs_base ? hole_rank : 0ul, hole_rank};
+        result[deexcitation ? cre : ann] = {ahs_base ? hole_rank : 0ul,
+                                            hole_rank};
       }
     }
   }
@@ -186,8 +186,8 @@ qns_t combine(qns_t a, qns_t b) {
     auto isr = get_default_context().index_space_registry();
     const auto& base_spaces = isr->base_spaces();
     for (auto i = 0; i < base_spaces.size(); i++) {
-      auto cre = i * 2;
-      auto ann = (i * 2) + 1;
+      const auto cre = qns_t::cre_slot(i);
+      const auto ann = qns_t::ann_slot(i);
       const auto qns = base_spaces[i].qns();
       // an active space is both reference-occupied and vacuum-unoccupied; its
       // ops can also end up in cumulants, which take any equal number of
