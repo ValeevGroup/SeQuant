@@ -28,7 +28,7 @@ namespace sequant::io::latex {
 
 std::wstring to_string(const Expr& expr);
 
-/// @throws Exception if @p expr is null.
+/// @returns an empty string if @p expr is null.
 std::wstring to_string(const ExprPtr& expr);
 
 template <typename T>

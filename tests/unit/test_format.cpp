@@ -34,11 +34,11 @@ TEST_CASE("expression formatting defaults", "[format]") {
   REQUIRE(std::format("{}", variable) == "{x}");
   REQUIRE(std::format("{}", expr) == "{x}");
   REQUIRE(std::format("{}", ptr) == "{x}^{2}");
-  REQUIRE(std::format("{}", null) == "NULL");
+  REQUIRE(std::format("{}", null).empty());
   REQUIRE(std::format(L"{}", variable) == L"{x}");
   REQUIRE(std::format(L"{}", expr) == L"{x}");
   REQUIRE(std::format(L"{}", ptr) == L"{x}^{2}");
-  REQUIRE(std::format(L"{}", null) == L"NULL");
+  REQUIRE(std::format(L"{}", null).empty());
 }
 
 TEST_CASE("expression stream insertion", "[format]") {
@@ -50,11 +50,11 @@ TEST_CASE("expression stream insertion", "[format]") {
   const ExprPtr null;
   std::ostringstream narrow;
   narrow << variable << '|' << expr << '|' << ptr << '|' << null;
-  REQUIRE(narrow.str() == "{Ж}|{Ж}|{x}^{2}|NULL");
+  REQUIRE(narrow.str() == "{Ж}|{Ж}|{x}^{2}|");
 
   std::wostringstream wide;
   wide << variable << L'|' << expr << L'|' << ptr << L'|' << null;
-  REQUIRE(wide.str() == L"{Ж}|{Ж}|{x}^{2}|NULL");
+  REQUIRE(wide.str() == L"{Ж}|{Ж}|{x}^{2}|");
   REQUIRE(std::format("{}", variable) == "{Ж}");
   REQUIRE(std::format(L"{}", variable) == L"{Ж}");
   REQUIRE(std::format("{:s}", variable) == "Ж");
@@ -73,8 +73,14 @@ TEST_CASE("expression format selectors", "[format]") {
   REQUIRE(std::format("{:s}|{:serialize}", ptr, ptr) == "x^(2)|x^(2)");
   REQUIRE(std::format(L"{:l}|{:latex}", ptr, ptr) == L"{x}^{2}|{x}^{2}");
   REQUIRE(std::format(L"{:s}|{:serialize}", variable, expr) == L"x|x");
-  REQUIRE(std::format("{:s}|{:serialize}", null, null) == "NULL|NULL");
-  REQUIRE(std::format(L"{:s}|{:serialize}", null, null) == L"NULL|NULL");
+  REQUIRE(std::format("{:l}|{:latex}", null, null) == "|");
+  REQUIRE(std::format(L"{:l}|{:latex}", null, null) == L"|");
+  REQUIRE(std::format("{:s}|{:serialize}", null, null) == "|");
+  REQUIRE(std::format(L"{:s}|{:serialize}", null, null) == L"|");
+  REQUIRE(io::serialization::from_string<ExprPtr>(std::format("{:s}", null)) ==
+          nullptr);
+  REQUIRE(io::serialization::from_string<ExprPtr>(
+              std::format(L"{:serialize}", null)) == nullptr);
 
   for (const auto spec : {"{:bogus}", "{:latexx}", "{:ls}", "{:>20}"}) {
     REQUIRE_THROWS_AS(std::vformat(spec, std::make_format_args(ptr)),

@@ -22,7 +22,7 @@ template <typename Char>
 std::basic_string<Char> expression_string(const Expr* expr, bool serialize) {
   auto text = expr ? (serialize ? serialization::to_string(*expr)
                                 : latex::to_string(*expr))
-                   : L"NULL";
+                   : L"";
   if constexpr (std::same_as<Char, char>) {
     return toUtf8(text);
   } else {
@@ -44,7 +44,7 @@ std::basic_ostream<Char, Traits>& operator<<(
                                                         text.size());
 }
 
-/// Inserts LaTeX, or NULL for an empty expression pointer.
+/// Inserts LaTeX, or an empty string for an empty expression pointer.
 template <typename Char, typename Traits>
   requires(std::same_as<Char, char> || std::same_as<Char, wchar_t>)
 std::basic_ostream<Char, Traits>& operator<<(

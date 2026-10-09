@@ -26,7 +26,7 @@ std::wstring to_string(const Expr& expr) {
 }
 
 std::wstring to_string(const ExprPtr& expr) {
-  if (!expr) throw Exception("Cannot convert a null expression to LaTeX");
+  if (!expr) return {};
   return to_string(*expr);
 }
 

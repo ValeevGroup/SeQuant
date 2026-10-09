@@ -33,7 +33,9 @@ Formatting and streams
 
 Include :file:`SeQuant/core/io/format.hpp` to print :class:`sequant::Expr`, its subclasses, and
 :class:`sequant::ExprPtr` with ``std::format`` or stream insertion (``<<``). Both default to LaTeX and support
-narrow and wide characters; narrow output is UTF-8. An empty ``ExprPtr`` prints ``NULL`` in either representation.
+narrow and wide characters; narrow output is UTF-8. An empty ``ExprPtr`` produces an empty string in both modes
+and with stream insertion, matching the LaTeX and serialization converters. Deserializing that empty string
+returns an empty ``ExprPtr``.
 
 The format specifier selects the representation: ``l`` or ``latex`` for LaTeX, and ``s`` or ``serialize`` for
 serialization. An empty specifier selects LaTeX. These are the only supported specifiers; apply string formatting
