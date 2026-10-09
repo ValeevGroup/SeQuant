@@ -591,7 +591,7 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(pao.metric() == IndexSpaceMetric::General);
     CHECK(pao.field() == uocc.field());
     // the spin-cased PAO bases: the same instance of a↑ and a↓
-    for (const auto [label, spin] :
+    for (const auto& [label, spin] :
          {std::pair{L"μ̃↑", mbpt::Spin::alpha}, {L"μ̃↓", mbpt::Spin::beta}}) {
       REQUIRE(isr->contains(label));
       const IndexBasis pao_spin = isr->retrieve_basis(label);
