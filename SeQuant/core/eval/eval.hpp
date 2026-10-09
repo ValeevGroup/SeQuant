@@ -18,7 +18,6 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
-#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -1554,10 +1553,12 @@ ResultPtr evaluate(Nodes const& nodes,  //
 ///        (there being no per-tree fallback path to consult it on).
 /// \param cache The cache whose `multiroot_driver()` is consulted.
 /// \return One `ResultPtr` per element of \p roots, in \p roots' own order.
-/// \throws Exception if `cache.multiroot_driver()` is unset -- there
+/// \throws Exception (or aborts, per SEQUANT_ENFORCE) if
+/// `cache.multiroot_driver()` is unset -- there
 ///         is no per-root fallback; a multi-root caller must explicitly
 ///         install a driver that understands the cross-root CSE contract.
-/// \throws Exception if `layouts.size() != roots.size()`.
+/// \throws Exception (or aborts, per SEQUANT_ENFORCE) if
+/// `layouts.size() != roots.size()`.
 ///
 template <Trace EvalTrace = Trace::Default, typename node_t, typename F,
           typename N, bool FHC>
@@ -1570,18 +1571,18 @@ container::svector<ResultPtr> evaluate_multiroot(
       std::is_same_v<node_t, N>,
       "evaluate_multiroot: the roots' node type must match the cache's key "
       "type");
-  if (layouts.size() != roots.size())
-    throw Exception(
-        "evaluate_multiroot: layouts.size() must equal roots.size() -- one "
-        "layout per root is required");
+  SEQUANT_ENFORCE(
+      layouts.size() == roots.size(),
+      "evaluate_multiroot: layouts.size() must equal roots.size() -- one "
+      "layout per root is required");
   auto const& drv = cache.multiroot_driver();
-  if (!drv)
-    throw Exception(
-        "evaluate_multiroot: no multiroot driver installed on the cache -- "
-        "there is no per-root fallback; install one via "
-        "cache.set_multiroot_driver(...) (e.g. ordered_executor.hpp's "
-        "evaluate_ordered_multiroot, closed over an OrderedSchedule built "
-        "from the SAME roots)");
+  SEQUANT_ENFORCE(
+      drv,
+      "evaluate_multiroot: no multiroot driver installed on the cache -- "
+      "there is no per-root fallback; install one via "
+      "cache.set_multiroot_driver(...) (e.g. ordered_executor.hpp's "
+      "evaluate_ordered_multiroot, closed over an OrderedSchedule built "
+      "from the SAME roots)");
   return drv(roots, layouts, cache);
 }
 
@@ -2348,15 +2349,15 @@ template <Trace EvalTrace = Trace::Default, typename F,
             } else {
               // Release-safe guard (SEQUANT_ASSERT elides in release): never
               // walk the chain off its end and dereference a null parent.
-              if (rl > static_cast<int>(depth) - 1)
-                throw Exception(
-                    "hoist home level not strictly outer to this loop");
+              SEQUANT_ENFORCE(
+                  rl <= static_cast<int>(depth) - 1,
+                  "hoist home level not strictly outer to this loop");
               for (int lvl = static_cast<int>(depth) - 1; lvl > rl; --lvl) {
                 auto* const p = target->parent();
-                if (!p)
-                  throw Exception(
-                      "hoist walk-up exceeded the scope chain (a single-batch "
-                      "sliced mode may have shifted the runtime nest depth)");
+                SEQUANT_ENFORCE(
+                    p,
+                    "hoist walk-up exceeded the scope chain (a single-batch "
+                    "sliced mode may have shifted the runtime nest depth)");
                 target = p;
               }
             }

@@ -552,9 +552,9 @@ class Expr : public std::enable_shared_from_this<Expr> {
       typename E, typename Visitor,
       typename = std::enable_if_t<std::is_same_v<std::remove_cvref_t<E>, Expr>>>
   static bool visit_impl(E &&expr, Visitor &&visitor, const bool atoms_only) {
-    if (expr.weak_from_this().use_count() == 0)
-      throw Exception(
-          "Expr::visit: cannot visit expressions not managed by shared_ptr");
+    SEQUANT_ENFORCE(
+        expr.weak_from_this().use_count() != 0,
+        "Expr::visit: cannot visit expressions not managed by shared_ptr");
     for (auto &subexpr_ptr : expr.expr()) {
       const auto subexpr_is_an_atom = subexpr_ptr->is_atom();
       const auto need_to_visit_subexpr = !atoms_only || subexpr_is_an_atom;

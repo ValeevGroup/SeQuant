@@ -86,9 +86,8 @@ ExprPtr screen_vac_av(ExprPtr expr, bool skip_clone) {
   if (!skip_clone) expr = expr->clone();
 
   auto screen = [](const ExprPtr& term) {
-    if (!(term->is<op_t>() || term->is<Product>())) {
-      throw Exception("op::screen_terms: Unsupported term type");
-    }
+    SEQUANT_ENFORCE((term->is<op_t>() || term->is<Product>()),
+                    "op::screen_terms: Unsupported term type");
     return op::can_change_qns(term, qns_t{}) ? term : ex<Constant>(0);
   };
 

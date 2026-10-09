@@ -216,11 +216,15 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
 
       if (get_default_context().spbasis() == SPBasis::Spinor) {
         REQUIRE_NOTHROW(wick1.spinfree(false));
-        REQUIRE_THROWS_AS(wick1.spinfree(true), Exception);
+        if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+          REQUIRE_THROWS_AS(wick1.spinfree(true), Exception);
+        }
       }
       if (get_default_context().spbasis() == SPBasis::Spinfree) {
         REQUIRE_NOTHROW(wick1.spinfree(true));
-        REQUIRE_THROWS_AS(wick1.spinfree(false), Exception);
+        if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+          REQUIRE_THROWS_AS(wick1.spinfree(false), Exception);
+        }
       }
 
       SEQUANT_PRAGMA_GCC(diagnostic pop)
@@ -1174,14 +1178,16 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       auto physical =
           ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"}), Vacuum::Physical) *
           ex<FNOperator>(cre({L"a_2"}), ann({L"i_2"}), Vacuum::Physical);
-      REQUIRE_THROWS_AS(FWickTheorem{physical}.compute(), Exception);
-      REQUIRE_THROWS_AS(
-          FWickTheorem{
-              ex<FNOperatorSeq>(
-                  FNOperator(cre({L"i_1"}), ann({L"a_1"}), Vacuum::Physical),
-                  FNOperator(cre({L"a_2"}), ann({L"i_2"}), Vacuum::Physical))}
-              .compute(),
-          Exception);
+      if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+        REQUIRE_THROWS_AS(FWickTheorem{physical}.compute(), Exception);
+        REQUIRE_THROWS_AS(
+            FWickTheorem{
+                ex<FNOperatorSeq>(
+                    FNOperator(cre({L"i_1"}), ann({L"a_1"}), Vacuum::Physical),
+                    FNOperator(cre({L"a_2"}), ann({L"i_2"}), Vacuum::Physical))}
+                .compute(),
+            Exception);
+      }
     }
   }  // SECTION("fermi vacuum")
 
@@ -1371,13 +1377,17 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
                       (ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"})) +
                        ex<FNOperator>(cre({L"i_2"}), ann({L"a_1"})));
     auto term = make_term();
-    REQUIRE_THROWS_AS(FWickTheorem{unexpanded}.reduce(term), Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(FWickTheorem{unexpanded}.reduce(term), Exception);
+    }
     // nor can a Sum without a Product summand, which compute() accepts
     auto nops = ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"})) +
                 ex<FNOperator>(cre({L"i_2"}), ann({L"a_1"}));
-    REQUIRE_THROWS_WITH(
-        FWickTheorem{nops}.reduce(term),
-        Catch::Matchers::ContainsSubstring("without a Product summand"));
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_WITH(
+          FWickTheorem{nops}.reduce(term),
+          Catch::Matchers::ContainsSubstring("without a Product summand"));
+    }
     REQUIRE_NOTHROW(FWickTheorem{nops->clone()}.compute());
   }
   SECTION("multiproduct vacuum") {

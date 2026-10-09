@@ -1,4 +1,5 @@
 #include "executor.hpp"
+#include <SeQuant/core/utility/macros.hpp>
 #include "processing_step.hpp"
 #include "processing_step_factory.hpp"
 
@@ -13,9 +14,7 @@
 namespace sequant::util::extint {
 
 void Executor::execute(const nlohmann::json &steps) {
-  if (!steps.is_array()) {
-    throw Exception("Steps object must be an array");
-  }
+  SEQUANT_ENFORCE(steps.is_array(), "Steps object must be an array");
 
   std::size_t step_id_counter = 0;
 
@@ -30,9 +29,8 @@ void Executor::execute(const nlohmann::json &steps) {
         inputs.emplace_back(inps.get<std::string_view>());
       } else if (inps.is_array()) {
         for (const auto &current : inps) {
-          if (!current.is_string()) {
-            throw Exception("Entries in inputs array must be strings");
-          }
+          SEQUANT_ENFORCE(current.is_string(),
+                          "Entries in inputs array must be strings");
 
           inputs.emplace_back(current.get<std::string_view>());
         }
@@ -91,9 +89,7 @@ void Executor::execute(const nlohmann::json &steps) {
 
     if (step.contains("outputs")) {
       const nlohmann::json &outputs = step.at("outputs");
-      if (!outputs.is_object()) {
-        throw Exception("outputs field must be an object");
-      }
+      SEQUANT_ENFORCE(outputs.is_object(), "outputs field must be an object");
 
       for (const auto &[key, val] : outputs.items()) {
         context_.add_data_alias(step_id + "[" + val.get<std::string>() + "]",

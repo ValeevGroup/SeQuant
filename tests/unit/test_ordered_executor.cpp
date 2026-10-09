@@ -5438,18 +5438,8 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
 // ===========================================================================
 // SEMANTIC REFUSALS SURVIVE A NON-DEBUG BUILD.
 //
-// SEQUANT_ASSERT compiles to `do {} while(0)` unless the build sets
-// SEQUANT_ASSERT_BEHAVIOR to ABORT or THROW (CMakeLists.txt does so only for
-// CMAKE_BUILD_TYPE == Debug), so an assert is NOT a guard in the Release /
-// RelWithDebInfo builds that run production work. Every refusal of an input
-// the pipeline cannot express -- an unsupported step kind, an unsupported
-// escape kind, a multi-position Assemble scatter, a null Assemble result, a
-// missing backend -- is therefore a `throw sequant::Exception`, not an assert.
-//
-// This case pins one of them end to end in whatever build the suite is
-// compiled with: a batched schedule handed no BackendArrayOps has no way to
-// partition its axis, and must say so rather than proceed. If someone
-// converts it back to a SEQUANT_ASSERT, this test fails in Release.
+// A batched schedule without BackendArrayOps cannot partition its axis.
+// The rejection must remain active with assertions disabled.
 // ===========================================================================
 TEST_CASE("ordered executor refuses a batched schedule with no backend ops",
           "[ordered][ordered-executor][refuse]") {
@@ -5473,9 +5463,11 @@ TEST_CASE("ordered executor refuses a batched schedule with no backend ops",
       [](sequant::Index const&) -> std::size_t { return 4; };
 
   // No backend ops: a refusal, in EVERY build type.
-  REQUIRE_THROWS_AS(
-      sequant::eval::detail::ordered_n_batches_by_loop(sched, target, nullptr),
-      sequant::Exception);
+  if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+    REQUIRE_THROWS_AS(sequant::eval::detail::ordered_n_batches_by_loop(
+                          sched, target, nullptr),
+                      sequant::Exception);
+  }
 
   // The same schedule with the ops installed is accepted, so the throw above
   // is the refusal and not an unrelated failure of the fixture.

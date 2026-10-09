@@ -64,24 +64,23 @@ std::pair<std::shared_ptr<Sum>, std::shared_ptr<Sum>> screen_terms(
 CC::CC(size_t n) : CC(n, Options{}) {}
 
 CC::CC(size_t n, const Options& opts) : N(n), opts_(opts) {
-  if (opts_.hbar_expansion == HbarExpansion::Bernoulli &&
-      opts_.ansatz != Ansatz::U)
-    throw Exception("CC: Bernoulli expansion requires the U ansatz");
+  SEQUANT_ENFORCE(opts_.hbar_expansion != HbarExpansion::Bernoulli ||
+                      opts_.ansatz == Ansatz::U,
+                  "CC: Bernoulli expansion requires the U ansatz");
   if (opts_.hbar_singles_comm_rank > 0) {
-    if (!unitary())
-      throw Exception("CC: hbar_singles_comm_rank requires a unitary ansatz");
-    if (opts_.hbar_expansion == HbarExpansion::Bernoulli)
-      throw Exception(
-          "CC: hbar_singles_comm_rank is not supported with Bernoulli");
-    if (skip_singles())
-      throw Exception("CC: hbar_singles_comm_rank requires singles amplitudes");
+    SEQUANT_ENFORCE(unitary(),
+                    "CC: hbar_singles_comm_rank requires a unitary ansatz");
+    SEQUANT_ENFORCE(
+        opts_.hbar_expansion != HbarExpansion::Bernoulli,
+        "CC: hbar_singles_comm_rank is not supported with Bernoulli");
+    SEQUANT_ENFORCE(!skip_singles(),
+                    "CC: hbar_singles_comm_rank requires singles amplitudes");
   }
-  if (unitary() && !opts_.hbar_comm_rank)
-    throw Exception("CC: hbar_comm_rank is required for unitary ansatz");
-  if ((opts_.ansatz == Ansatz::oT || opts_.ansatz == Ansatz::oU) &&
-      !skip_singles())
-    throw Exception(
-        "CC: skip_singles must be true for orbital-optimized ansatz");
+  SEQUANT_ENFORCE(!unitary() || opts_.hbar_comm_rank,
+                  "CC: hbar_comm_rank is required for unitary ansatz");
+  SEQUANT_ENFORCE((opts_.ansatz != Ansatz::oT && opts_.ansatz != Ansatz::oU) ||
+                      skip_singles(),
+                  "CC: skip_singles must be true for orbital-optimized ansatz");
 }
 
 CC::Ansatz CC::ansatz() const { return opts_.ansatz; }
@@ -263,8 +262,8 @@ std::vector<ExprPtr> CC::λ() const {
 }
 
 ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
-  if (opts_.hbar_singles_comm_rank > 0)
-    throw Exception("CC::rdm: hbar_singles_comm_rank is not supported");
+  SEQUANT_ENFORCE(opts_.hbar_singles_comm_rank <= 0,
+                  "CC::rdm: hbar_singles_comm_rank is not supported");
   SEQUANT_ASSERT(opts_.hbar_expansion != HbarExpansion::Bernoulli,
                  "CC::rdm: the Bernoulli expansion is not supported yet");
   detail::enforce_reference_is_vacuum();
@@ -302,8 +301,8 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
 
 std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
                             std::optional<size_t> nbatch) const {
-  if (opts_.hbar_singles_comm_rank > 0)
-    throw Exception("CC::tʼ: hbar_singles_comm_rank is not supported");
+  SEQUANT_ENFORCE(opts_.hbar_singles_comm_rank <= 0,
+                  "CC::tʼ: hbar_singles_comm_rank is not supported");
   SEQUANT_ASSERT(order == 1,
                  "sequant::mbpt::CC::tʼ(): only first-order perturbation is "
                  "supported now");
@@ -464,10 +463,9 @@ std::vector<ExprPtr> CC::eom_r_ucc(
   const std::vector<size_t> ranks =
       block_ranks.empty() ? std::vector<size_t>(K * K, hbar_comm_rank().value())
                           : block_ranks;
-  if (ranks.size() != K * K)
-    throw Exception(
-        "CC::eom_r: block_ranks must be a K x K row-major matrix, "
-        "K = number of projection manifolds");
+  SEQUANT_ENFORCE(ranks.size() == K * K,
+                  "CC::eom_r: block_ranks must be a K x K row-major matrix, "
+                  "K = number of projection manifolds");
 
   // Bernoulli H̄ is tensor-level, BCH H̄ operator-level; the bra/ket/vev trio
   // below must match it. Connectivity is empty either way, as everywhere on the
@@ -533,8 +531,8 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
 
   if (unitary()) return eom_r_ucc(np, nh, block_ranks);
 
-  if (!block_ranks.empty())
-    throw Exception("CC::eom_r: block_ranks require a unitary ansatz");
+  SEQUANT_ENFORCE(block_ranks.empty(),
+                  "CC::eom_r: block_ranks require a unitary ansatz");
 
   const auto hbar = this->hbar();
   const auto hbar_R = hbar * R(np, nh, eom_norm);

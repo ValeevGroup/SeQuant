@@ -245,7 +245,8 @@ class Context {
   /// @param label a Tensor label
   /// @return the TensorCanonicalizer that `tensor_canonicalizer_ptr(label)`
   /// points to
-  /// @throw Exception if `tensor_canonicalizer_ptr(label)` is null
+  /// @throw Exception (or aborts, per SEQUANT_ENFORCE) if
+  /// `tensor_canonicalizer_ptr(label)` is null
   /// @warning the reference is valid only while the map entry that holds it
   /// exists in this context; use tensor_canonicalizer_ptr() if this context
   /// may change
@@ -330,7 +331,7 @@ class Context {
   /// replacing the existing one, if any; the empty label applies to Tensor
   /// objects without a label-specific canonicalizer
   /// \param canonicalizer a nonnull TensorCanonicalizer
-  /// \throw Exception if @p canonicalizer is null
+  /// \throw Exception (or aborts, per SEQUANT_ENFORCE) if @p canonicalizer is null
   /// \return ref to `*this`, for chaining
   /// \warning version() identifies the canonicalizer by the object the
   /// shared_ptr owns, so a shared_ptr that does not own its object (e.g. one

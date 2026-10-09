@@ -169,19 +169,18 @@ class WickTheorem {
   /// spin-orbital normal-ordered operators By default compute() assumes
   /// spin-orbital operators.
   /// @param sf if true, will complete full contractions only.
-  /// @throw Exception if @c sf does not match the contents of
-  /// get_default_context().spbasis()
+  /// @throw Exception (or aborts, per SEQUANT_ENFORCE) if @c sf does not
+  /// match get_default_context().spbasis()
   [[deprecated(
       "get_default_context().spbasis() should be used to specify spin-free "
       "basis")]] WickTheorem &
   spinfree(bool sf) {
-    if (!((sf && get_default_context(S).spbasis() == SPBasis::Spinfree) ||
-          (!sf && get_default_context(S).spbasis() == SPBasis::Spinor))) {
-      throw Exception(
-          "WickTheorem<S>::Spinfree(sf): sf must match the contents of "
-          "get_default_context(S).spbasis() (N.B. WickTheorem::Spinfree() is "
-          "deprecated, no longer should be used)");
-    }
+    SEQUANT_ENFORCE(
+        ((sf && get_default_context(S).spbasis() == SPBasis::Spinfree) ||
+         (!sf && get_default_context(S).spbasis() == SPBasis::Spinor)),
+        "WickTheorem<S>::Spinfree(sf): sf must match the contents of "
+        "get_default_context(S).spbasis() (N.B. WickTheorem::Spinfree() is "
+        "deprecated, no longer should be used)");
     return *this;
   }
 
@@ -434,11 +433,13 @@ class WickTheorem {
   /// @warning this is not reentrant, but is optionally threaded internally
   /// @note under a Vacuum::MultiProduct vacuum the input is always
   /// canonicalized
-  /// @throw Exception if input's vacuum does not match the current
-  /// context vacuum
-  /// @throw Exception under a Vacuum::MultiProduct vacuum if @p count_only is
-  /// true, @p S is Statistics::BoseEinstein or the context's SPBasis is
-  /// Spinfree
+  /// @throw Exception (or aborts, per SEQUANT_ENFORCE) if input's vacuum
+  /// does not match the current context vacuum
+  /// @throw Exception under a Vacuum::MultiProduct vacuum if @p S is
+  /// Statistics::BoseEinstein
+  /// @throw Exception (or aborts, per SEQUANT_ENFORCE) under a
+  /// Vacuum::MultiProduct vacuum if @p count_only is true or the context's
+  /// SPBasis is Spinfree
   ExprPtr compute(bool count_only = false,
                   bool skip_input_canonicalization = false);
 
@@ -682,8 +683,8 @@ class WickTheorem {
   /// the operator sequence, or of the expression (the first Product summand
   /// of a Sum; every summand of an expanded Sum has the same external
   /// indices)
-  /// @throw Exception if the expression input is not expanded, or is a Sum
-  /// without a Product summand
+  /// @throw Exception (or aborts, per SEQUANT_ENFORCE) if the expression input
+  /// is not expanded, or is a Sum without a Product summand
   void extract_indices() const;
 
   /// @return the external indices: the named indices of the context's
@@ -738,10 +739,9 @@ class WickTheorem {
       const std::shared_ptr<NormalOperatorSequence<S>> &nopseq) {
     input_ = nopseq;
 
-    if (input_->vacuum() != get_default_context(S).vacuum())
-      throw Exception(
-          "WickTheorem<S>::init_input(): input vacuum "
-          "must match the default context vacuum");
+    SEQUANT_ENFORCE(input_->vacuum() == get_default_context(S).vacuum(),
+                    "WickTheorem<S>::init_input(): input vacuum "
+                    "must match the default context vacuum");
 
     // need to be able to look up ordinals of ops in the input expression to
     // make index partitions usable
@@ -787,13 +787,13 @@ class WickTheorem {
   ExprPtr compute_nopseq(const bool count_only) const {
     // precondition 1: spin-free version only supported for physical and Fermi
     // vacua
-    if (get_default_context(S).spbasis() == SPBasis::Spinfree &&
-        !(get_default_context(S).vacuum() == Vacuum::Physical ||
-          (S == Statistics::FermiDirac &&
-           get_default_context(S).vacuum() == Vacuum::SingleProduct)))
-      throw Exception(
-          "WickTheorem::compute: spinfree=true supported only for physical "
-          "vacuum and for Fermi vacuum");
+    SEQUANT_ENFORCE(
+        get_default_context(S).spbasis() != SPBasis::Spinfree ||
+            get_default_context(S).vacuum() == Vacuum::Physical ||
+            (S == Statistics::FermiDirac &&
+             get_default_context(S).vacuum() == Vacuum::SingleProduct),
+        "WickTheorem::compute: spinfree=true supported only for physical "
+        "vacuum and for Fermi vacuum");
 
     extract_indices();
 

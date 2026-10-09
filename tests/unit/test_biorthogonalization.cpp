@@ -6,6 +6,7 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -111,9 +112,11 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
         expressions.push_back(deserialize<ResultExpr>(str));
       }
 
-      REQUIRE_THROWS_WITH(
-          mbpt::biorthogonal_transform(expressions),
-          Catch::Matchers::ContainsSubstring("Missing explicit expression"));
+      if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+        REQUIRE_THROWS_WITH(
+            mbpt::biorthogonal_transform(expressions),
+            Catch::Matchers::ContainsSubstring("Missing explicit expression"));
+      }
     }
   }
 }

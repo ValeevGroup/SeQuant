@@ -141,9 +141,8 @@ class ItfGenerator : public Generator<Context> {
   }
 
   std::string represent(const Index &idx, const Context &ctx) const override {
-    if (idx.has_proto_indices()) {
-      throw Exception("ITF doesn't support proto indices");
-    }
+    SEQUANT_ENFORCE(!idx.has_proto_indices(),
+                    "ITF doesn't support proto indices");
 
     const std::size_t ordinal = idx.ordinal().value();
 
@@ -234,9 +233,8 @@ class ItfGenerator : public Generator<Context> {
 
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
-    if (!zero_init) {
-      throw Exception("Can't create ITF tensor without setting it to zero");
-    }
+    SEQUANT_ENFORCE(zero_init,
+                    "Can't create ITF tensor without setting it to zero");
 
     append_line("alloc " + represent(tensor, ctx));
   }
@@ -270,9 +268,8 @@ class ItfGenerator : public Generator<Context> {
 
   void create(const Variable &variable, bool zero_init,
               const Context &ctx) override {
-    if (!zero_init) {
-      throw Exception("Can't create ITF variable without setting it to zero");
-    }
+    SEQUANT_ENFORCE(zero_init,
+                    "Can't create ITF variable without setting it to zero");
 
     append_line("alloc " + represent(variable, ctx));
   }
@@ -497,9 +494,8 @@ class ItfGenerator : public Generator<Context> {
     } else if (expr.is<Product>()) {
       const Product &product = expr.as<Product>();
 
-      if (product.factors().size() > 2) {
-        throw Exception("ITF can only handle binary contractions");
-      }
+      SEQUANT_ENFORCE(product.factors().size() <= 2,
+                      "ITF can only handle binary contractions");
 
       std::string repr;
 

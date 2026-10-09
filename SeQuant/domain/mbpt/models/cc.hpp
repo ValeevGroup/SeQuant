@@ -80,7 +80,8 @@ class CC {
   /// @brief constructs CC engine with custom options
   /// @param n coupled cluster excitation rank
   /// @param opts configuration options @see CC::Options
-  /// @throw Exception if a unitary ansatz has no `hbar_comm_rank`, if an
+  /// @throw Exception (or aborts, per SEQUANT_ENFORCE) if a unitary ansatz
+  /// has no `hbar_comm_rank`, if an
   /// orbital-optimized ansatz includes singles, if the Bernoulli expansion
   /// is requested with an ansatz other than `Ansatz::U`, or if a positive
   /// `hbar_singles_comm_rank` is used with a non-unitary ansatz, Bernoulli,
@@ -201,7 +202,8 @@ class CC {
   /// @param order order of perturbation
   /// @param nbatch optional batching index rank for perturbation operators
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
-  /// @throw Exception if `hbar_singles_comm_rank` is positive
+  /// @throw Exception (or aborts, per SEQUANT_ENFORCE) if
+  /// `hbar_singles_comm_rank` is positive
   /// @pre the reference is the Wick vacuum (enforced in every build)
   /// @return std::vector of perturbed t amplitude equations
   // clang-format on
@@ -246,7 +248,8 @@ class CC {
   /// @note UCC always uses Hamiltonian-matrix assembly. Traditional CC uses
   ///   its connected H̄R product and does not support block ranks.
   /// @pre the reference is the Wick vacuum (enforced in every build)
-  /// @throw Exception if non-empty `block_ranks` is used with a traditional
+  /// @throw Exception (or aborts, per SEQUANT_ENFORCE) if non-empty
+  /// `block_ranks` is used with a traditional
   ///   ansatz, or if `block_ranks` is not `K`×`K`
   /// @return projected sigma equations in a vector of size `min(np, nh) + 1`,
   ///   indexed by the smaller particle/hole count of each projection manifold:
@@ -289,7 +292,8 @@ class CC {
   ///   traditional ansatz (where the expansion terminates exactly) and to
   ///   `hbar_comm_rank` for the unitary ansatz (where it does not). Pass an
   ///   explicit value to truncate earlier.
-  /// @throw Exception if `hbar_singles_comm_rank` is positive
+  /// @throw Exception (or aborts, per SEQUANT_ENFORCE) if
+  /// `hbar_singles_comm_rank` is positive
   /// @pre the reference is the Wick vacuum (enforced in every build)
   /// @return the RDM expression (Fermi-vacuum normal-ordered / correlation
   /// part)

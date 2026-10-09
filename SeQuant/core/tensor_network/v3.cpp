@@ -985,11 +985,11 @@ TensorNetworkV3::canonicalize_slots(
               all_aux = false;
               break;
             }
-          if (!all_aux)
-            throw Exception(
-                "TensorNetworkV3::canonicalize_slots: high-order (shared among "
-                ">2 tensor slots) non-auxiliary hyperindices are not "
-                "supported");
+          SEQUANT_ENFORCE(
+              all_aux,
+              "TensorNetworkV3::canonicalize_slots: high-order (shared among "
+              ">2 tensor slots) non-auxiliary hyperindices are not "
+              "supported");
           slot_type = IndexSlotType::TensorAux;
         }
       } else
@@ -1785,9 +1785,9 @@ void TensorNetworkV3::init_edges() {
     // add proto indices to the grand list of proto indices
     for (auto &&proto_idx : current.idx().proto_indices()) {
       // for now no recursive proto indices
-      if (proto_idx.has_proto_indices())
-        throw Exception(
-            "TensorNetworkV3 does not support recursive protoindices");
+      SEQUANT_ENFORCE(
+          !(proto_idx.has_proto_indices()),
+          "TensorNetworkV3 does not support recursive protoindices");
       proto_indices.emplace(proto_idx);
     }
   }

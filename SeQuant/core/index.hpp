@@ -947,14 +947,13 @@ class Index : public Taggable {
   /// indices among protoindices
   inline void validate_proto_indices() const;
 
-  /// throws std::invalid_argument if the ordinal is among reserved for
-  /// generated Index objects
+  /// @throw Exception (or aborts, per SEQUANT_ENFORCE) if the ordinal is
+  /// reserved for generated Index objects
   inline void check_nonreserved() const {
-    if (ordinal_ && *ordinal_ >= min_tmp_index()) {
-      throw Exception(
-          "Index ctor: ordinal must be less than the value returned by "
-          "min_tmp_index()");
-    }
+    SEQUANT_ENFORCE(
+        !ordinal_ || *ordinal_ < min_tmp_index(),
+        "Index ctor: ordinal must be less than the value returned by "
+        "min_tmp_index()");
   }
 
   template <typename Char, typename = std::enable_if_t<meta::is_char_v<Char>>>

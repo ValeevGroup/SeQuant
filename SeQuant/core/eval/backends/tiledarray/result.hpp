@@ -10,6 +10,7 @@
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
 #include <tiledarray.h>
@@ -160,8 +161,8 @@ auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
   // ToT (equal-rank, validated above): total rank = outer + inner = 2*outer.
   size_t const total_rank = is_tot ? 2 * outer_rank : outer_rank;
 
-  if (total_rank % 2 != 0)
-    throw Exception("This function only supports even-ranked tensors");
+  SEQUANT_ENFORCE(total_rank % 2 == 0,
+                  "This function only supports even-ranked tensors");
 
   size_t const nparticles = total_rank / 2;
 

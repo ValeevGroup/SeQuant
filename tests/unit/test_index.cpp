@@ -8,6 +8,7 @@
 
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <iostream>
@@ -44,8 +45,10 @@ TEST_CASE("index", "[elements][index]") {
 
     REQUIRE_NOTHROW(Index(std::wstring(L"i_") +
                           std::to_wstring(Index::min_tmp_index() - 1)));
-    REQUIRE_THROWS(
-        Index(std::wstring(L"i_") + std::to_wstring(Index::min_tmp_index())));
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS(
+          Index(std::wstring(L"i_") + std::to_wstring(Index::min_tmp_index())));
+    }
 
     Index i1(L"i_1");
     REQUIRE(i1.label() == L"i_1");

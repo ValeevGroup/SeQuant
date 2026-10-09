@@ -6,6 +6,7 @@
 #define SEQUANT_CORE_UTILITY_SINGLETON_HPP
 
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <cassert>
 #include <memory>
 #include <mutex>
@@ -79,7 +80,8 @@ class Singleton {
   /// @tparam Args a parameter pack type
   /// @param args a parameter pack
   /// @return reference to the newly-created instance
-  /// @throw Exception if the instance has already been constructed
+  /// @throw Exception (or aborts, per SEQUANT_ENFORCE) if the instance has
+  /// already been constructed
   template <typename... Args>
   static Derived& set_instance(Args&&... args) {
     //    WARNING: can't check constructibility since the ctor may be private
@@ -87,10 +89,10 @@ class Singleton {
     //                  "sequant::Singleton::set_instance: Derived is not
     //                  constructible with Args");
     std::scoped_lock lock(instance_mutex());
-    if (instance_accessor() != nullptr)
-      throw Exception(
-          "sequant::Singleton::set_instance: instance has already been "
-          "constructed");
+    SEQUANT_ENFORCE(
+        instance_accessor() == nullptr,
+        "sequant::Singleton::set_instance: instance has already been "
+        "constructed");
     instance_accessor() = std::move(
         std::unique_ptr<Derived>(new Derived(std::forward<Args>(args)...)));
     return *instance_accessor();

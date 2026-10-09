@@ -164,14 +164,13 @@ ProcessingOptions extractProcessingOptions(
         options.max_batched_indices =
             batch.at("max_batched").get<std::size_t>();
       }
-      if ((options.min_unbatched_indices > 0 ||
-           options.max_batched_indices <
-               std::numeric_limits<std::size_t>::max()) &&
-          std::holds_alternative<std::vector<Index>>(options.batching)) {
-        throw Exception(
-            "Can't use the min_unbatched option in combination with an "
-            "explicit list of batching indices");
-      }
+      SEQUANT_ENFORCE(
+          !((options.min_unbatched_indices > 0 ||
+             options.max_batched_indices <
+                 std::numeric_limits<std::size_t>::max()) &&
+            std::holds_alternative<std::vector<Index>>(options.batching)),
+          "Can't use the min_unbatched option in combination with an "
+          "explicit list of batching indices");
     } else {
       handle_strategy(batch.get<std::string_view>());
     }
@@ -609,9 +608,7 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
     const IndexSpace::Type type(1 << i);
     const int size = current.at("size");
 
-    if (size <= 0) {
-      throw Exception("Index space sizes must be > 0");
-    }
+    SEQUANT_ENFORCE(size > 0, "Index space sizes must be > 0");
 
     std::wstring label = toUtf16(current.at("label").get<std::string>());
     Field field =
@@ -639,18 +636,16 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
 }
 
 void process(const json &driver, IndexSpaceMeta &spaceMeta) {
-  if (!driver.contains("index_spaces")) {
-    throw Exception("Missing index_spaces definition");
-  }
+  SEQUANT_ENFORCE(driver.contains("index_spaces"),
+                  "Missing index_spaces definition");
 
   std::size_t version = 1;
   if (driver.contains("driver_format_version")) {
     version = driver.at("driver_format_version").get<std::size_t>();
   }
 
-  if (version == 0) {
-    throw Exception("driver_format_version has a minimum value of 1");
-  }
+  SEQUANT_ENFORCE(version != 0,
+                  "driver_format_version has a minimum value of 1");
 
   registerIndexSpaces(driver.at("index_spaces"), spaceMeta, version);
 
@@ -661,9 +656,7 @@ void process(const json &driver, IndexSpaceMeta &spaceMeta) {
       generateCode(details, spaceMeta);
     }
   } else if (version == 2) {
-    if (!driver.contains("steps")) {
-      throw Exception("Missing steps specification");
-    }
+    SEQUANT_ENFORCE(driver.contains("steps"), "Missing steps specification");
 
     Executor executor;
     executor.execute(driver.at("steps"));

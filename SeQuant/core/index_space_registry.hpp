@@ -419,10 +419,9 @@ class IndexSpaceRegistry {
     // make space
     IndexSpace::Attr space_attr;
     long count = 0;
-    if (components.size() <= 1) {
-      throw Exception(
-          "IndexSpaceRegistry::add_unIon: must have at least two components");
-    }
+    SEQUANT_ENFORCE(
+        components.size() > 1,
+        "IndexSpaceRegistry::add_unIon: must have at least two components");
     for (auto&& component : components) {
       const IndexSpace* component_ptr;
       if constexpr (std::is_same_v<std::decay_t<IndexSpaceOrLabel>,
@@ -488,11 +487,10 @@ class IndexSpaceRegistry {
     // make space
     IndexSpace::Attr space_attr;
     long count = 0;
-    if (components.size() <= 1) {
-      throw Exception(
-          "IndexSpaceRegistry::add_intersection: must have at least two "
-          "components");
-    }
+    SEQUANT_ENFORCE(
+        components.size() > 1,
+        "IndexSpaceRegistry::add_intersection: must have at least two "
+        "components");
     for (auto&& component : components) {
       const IndexSpace* component_ptr;
       if constexpr (std::is_same_v<std::decay_t<IndexSpaceOrLabel>,

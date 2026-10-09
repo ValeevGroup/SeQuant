@@ -15,7 +15,6 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/reserved.hpp>
-#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/strong.hpp>
@@ -349,11 +348,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     // that gives both must give a consistent pair. N.B. the comparison is on
     // the *derived* braket symmetry, so pinning AntiHermitian (which
     // BraKetSymmetry cannot represent) alongside its Nonsymm braket is legal.
-    if (syms.braket.has_value() && syms.hermiticity.has_value() &&
-        to_braket_symmetry(*syms.hermiticity, base_fld) != *syms.braket)
-      throw Exception(
-          "Tensor: the given BraKetSymmetry and Hermiticity contradict each "
-          "other");
+    SEQUANT_ENFORCE(
+        !syms.braket.has_value() || !syms.hermiticity.has_value() ||
+            to_braket_symmetry(*syms.hermiticity, base_fld) == *syms.braket,
+        "Tensor: the given BraKetSymmetry and Hermiticity contradict each "
+        "other");
     // an explicit Hermiticity is reported verbatim, to preserve traits that
     // the BraKetSymmetry round-trip cannot represent (e.g. AntiHermitian)
     const Hermiticity hermiticity_resolved =
@@ -828,11 +827,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         slots(), [](const Index &idx) { return idx.nonnull(); });
   }
   /// @return number of indices in bra/ket
-  /// @throw Exception if bra and ket ranks do not match
+  /// @throw Exception (or aborts, per SEQUANT_ENFORCE) if bra and ket ranks
+  /// do not match
   std::size_t rank() const {
-    if (bra_rank() != ket_rank()) {
-      throw Exception("Tensor::rank(): bra rank != ket rank");
-    }
+    SEQUANT_ENFORCE(bra_rank() == ket_rank(),
+                    "Tensor::rank(): bra rank != ket rank");
     return bra_rank();
   }
 
@@ -990,10 +989,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       // *specified* value and supply the correct one otherwise.
       // N.B. must run before the reserved-label check below, which would
       // otherwise report the (Antisymm) antisymmetrizer as contradicting.
-      if (column_symmetry_specified && column_symmetry_ != ColumnSymmetry::Symm)
-        throw Exception(
-            "Tensor: (anti)symmetry in bra and ket implies column (particle) "
-            "symmetry, which the given ColumnSymmetry contradicts");
+      SEQUANT_ENFORCE(
+          !column_symmetry_specified ||
+              column_symmetry_ == ColumnSymmetry::Symm,
+          "Tensor: (anti)symmetry in bra and ket implies column (particle) "
+          "symmetry, which the given ColumnSymmetry contradicts");
       column_symmetry_ = ColumnSymmetry::Symm;
     }
 
@@ -1004,9 +1004,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     // extraction.
     if (label_ == reserved::antisymm_label() ||
         label_ == reserved::symm_label()) {
-      if (braket_symmetry_ != BraKetSymmetry::Nonsymm)
-        throw Exception(
-            "(Anti)symmetrization operators must not have braket symmetry");
+      SEQUANT_ENFORCE(
+          braket_symmetry_ == BraKetSymmetry::Nonsymm,
+          "(Anti)symmetrization operators must not have braket symmetry");
       // the defining bra/ket permutational symmetry is not a free parameter
       // either: Â antisymmetrizes within bra and within ket, Ŝ only across the
       // {bra,ket} particle columns. As for the column symmetry below, reject a
@@ -1014,19 +1014,20 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       const Symmetry defining_symmetry = label_ == reserved::antisymm_label()
                                              ? Symmetry::Antisymm
                                              : Symmetry::Nonsymm;
-      if (symmetry_specified && symmetry_ != defining_symmetry)
-        throw Exception(
-            "(Anti)symmetrization operators must have their defining bra/ket "
-            "permutational symmetry");
+      SEQUANT_ENFORCE(
+          !symmetry_specified || symmetry_ == defining_symmetry,
+          "(Anti)symmetrization operators must have their defining bra/ket "
+          "permutational symmetry");
       symmetry_ = defining_symmetry;
       // (Anti)symmetrization operators act on indistinguishable particles,
       // hence are always column-symmetric; supplying it when unspecified makes
       // them compare equal however they were built (a mismatch would silently
       // prevent otherwise-equal terms from cancelling).
-      if (column_symmetry_specified && column_symmetry_ != ColumnSymmetry::Symm)
-        throw Exception(
-            "(Anti)symmetrization operators must be column (particle) "
-            "symmetric");
+      SEQUANT_ENFORCE(
+          !column_symmetry_specified ||
+              column_symmetry_ == ColumnSymmetry::Symm,
+          "(Anti)symmetrization operators must be column (particle) "
+          "symmetric");
       column_symmetry_ = ColumnSymmetry::Symm;
     }
 

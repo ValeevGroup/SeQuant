@@ -543,8 +543,10 @@ TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
       "non-persistent: a re-store with NO intervening reset() throws under "
       "strict fill-once") {
     REQUIRE_NOTHROW(man.store_and_access(np, eval_result(1)));
-    REQUIRE_THROWS(
-        man.store_and_access(np, eval_result(2)));  // 2nd, no reset(): flagged
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS(man.store_and_access(
+          np, eval_result(2)));  // 2nd, no reset(): flagged
+    }
   }
 
   SECTION(
@@ -564,7 +566,7 @@ TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
       // Default build config (Release: IGNORE: no-op; Debug: ABORT: not
       // catchable) -- nothing to observe via REQUIRE_THROWS here. The
       // strict-fill-once sections above already exercise the guard's logic
-      // deterministically across build configs.
+      // under THROW and IGNORE.
       return;
     }
     (void)man.store_and_access(

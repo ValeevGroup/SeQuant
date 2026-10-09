@@ -113,10 +113,10 @@ ExprPtr Tensor::canonicalize(CanonicalizeOptions opts) {
     *this = *canonical;
   } else {
     const auto canonicalizer = ctx.tensor_canonicalizer_ptr(L"");
-    if (!canonicalizer)
-      throw Exception(
-          "Tensor::canonicalize: the current context has no default tensor "
-          "canonicalizer");
+    SEQUANT_ENFORCE(
+        canonicalizer,
+        "Tensor::canonicalize: the current context has no default tensor "
+        "canonicalizer");
     byproduct = canonicalizer->apply(*this);
   }
   mark_canonical(opts, contexts_version);

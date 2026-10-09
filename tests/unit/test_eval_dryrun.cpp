@@ -813,7 +813,9 @@ TEST_CASE("no 4-PAO integral with correct composite sizing (C60 giant)",
   {
     opt::detail::PeakBatchedModel bad{idxsz, bts, is_vol, {}};
     bad.is_batchable_contracted_index = is_aux;
-    CHECK_THROWS_AS(bad.build_context(net, targets), sequant::Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      CHECK_THROWS_AS(bad.build_context(net, targets), sequant::Exception);
+    }
   }
 
   // (2) With correct composite sizing, the DP forms NO 4-PAO integral.

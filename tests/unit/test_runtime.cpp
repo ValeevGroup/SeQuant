@@ -3,6 +3,8 @@
 //
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_exception.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
 
@@ -14,6 +16,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/scope.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -166,7 +169,9 @@ TEST_CASE("context", "[runtime]") {
     auto ctx_none = ctx;
     ctx_none.unset_tensor_canonicalizer(L"");
     CHECK(ctx_none.tensor_canonicalizer_ptr(L"anything") == nullptr);
-    CHECK_THROWS_AS(ctx_none.tensor_canonicalizer(L"anything"), Exception);
+    if (assert_behavior() != AssertBehavior::Abort) {
+      CHECK_THROWS_AS(ctx_none.tensor_canonicalizer(L"anything"), Exception);
+    }
     CHECK(ctx_none != ctx);
 
     // comparers compare by identity: a behaviourally identical replacement is
@@ -246,14 +251,21 @@ TEST_CASE("context", "[runtime]") {
     CHECK(ctx_opts != ctx);
 
     // null canonicalizers are rejected
-    CHECK_THROWS_AS(
-        Context({.tensor_canonicalizers =
-                     container::map<std::wstring,
-                                    std::shared_ptr<TensorCanonicalizer>>{
-                         {L"Q", nullptr}}}),
-        Exception);
-    CHECK_THROWS_AS(Context{}.set_tensor_canonicalizer(L"Q", nullptr),
-                    Exception);
+    if (assert_behavior() != AssertBehavior::Abort) {
+      CHECK_THROWS_AS(
+          Context({.tensor_canonicalizers =
+                       container::map<std::wstring,
+                                      std::shared_ptr<TensorCanonicalizer>>{
+                           {L"Q", nullptr}}}),
+          Exception);
+      CHECK_THROWS_MATCHES(
+          Context{}.set_tensor_canonicalizer(L"Q", nullptr), Exception,
+          Catch::Matchers::MessageMatches(
+              Catch::Matchers::ContainsSubstring(
+                  "Context: a tensor canonicalizer must not be null") &&
+              Catch::Matchers::ContainsSubstring("SEQUANT_ENFORCE(") &&
+              Catch::Matchers::ContainsSubstring("context.cpp:")));
+    }
   }
 
   SECTION("index space registry is owned") {
@@ -656,7 +668,9 @@ TEST_CASE("scoped contexts", "[runtime]") {
     {
       auto scoped = set_scoped_default_context(
           with_q_canonicalizer(std::make_shared<NullTensorCanonicalizer>()));
-      CHECK_THROWS_AS(mbpt::load(), Exception);
+      if (assert_behavior() != AssertBehavior::Abort) {
+        CHECK_THROWS_AS(mbpt::load(), Exception);
+      }
     }
     CHECK(current_context_version() == process_wide_version);
     CHECK(!q_canonicalizer());

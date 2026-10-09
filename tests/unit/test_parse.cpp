@@ -10,6 +10,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -547,8 +548,10 @@ TEST_CASE("serialization", "[serialization]") {
       SECTION("(anti)symmetrization operators reject braket symmetry") {
         // a reserved (anti)symmetrizer must be braket-Nonsymm; an explicit
         // non-Nonsymm braket spec is rejected by the Tensor ctor
-        REQUIRE_THROWS(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:N-C-S"));
-        REQUIRE_THROWS(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}:A-C-S"));
+        if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+          REQUIRE_THROWS(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:N-C-S"));
+          REQUIRE_THROWS(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}:A-C-S"));
+        }
         // the default (braket-Nonsymm) form is accepted
         REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}"));
         REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}"));
@@ -568,8 +571,10 @@ TEST_CASE("serialization", "[serialization]") {
         // an explicitly spelled perm symmetry that contradicts the reserved
         // label's defining one is rejected rather than silently overwritten,
         // as for the braket and column specs
-        REQUIRE_THROWS(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:A-N-S"));
-        REQUIRE_THROWS(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}:N-N-S"));
+        if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+          REQUIRE_THROWS(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:A-N-S"));
+          REQUIRE_THROWS(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}:N-N-S"));
+        }
         // the matching spellings stay accepted
         REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:N-N-S"));
         REQUIRE_NOTHROW(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}:A-N-S"));
@@ -610,8 +615,10 @@ TEST_CASE("serialization", "[serialization]") {
         // a *spelled-out* column symmetry that contradicts the defining one is
         // rejected, exactly as the equivalent programmatic ctor call is --
         // only a defaulted one is silently replaced above
-        REQUIRE_THROWS(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:N-N-N"));
-        REQUIRE_THROWS(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}:A-N-N"));
+        if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+          REQUIRE_THROWS(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:N-N-N"));
+          REQUIRE_THROWS(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}:A-N-N"));
+        }
       }
 
       SECTION("(anti)symmetric bra/ket implies column symmetry") {
@@ -626,8 +633,10 @@ TEST_CASE("serialization", "[serialization]") {
           REQUIRE(expr->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
         }
         // ... while a spelled-out one that contradicts it is rejected
-        REQUIRE_THROWS(deserialize<ExprPtr>(L"t{i1,i2;a1,a2}:A-N-N"));
-        REQUIRE_THROWS(deserialize<ExprPtr>(L"t{i1,i2;a1,a2}:S-N-N"));
+        if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+          REQUIRE_THROWS(deserialize<ExprPtr>(L"t{i1,i2;a1,a2}:A-N-N"));
+          REQUIRE_THROWS(deserialize<ExprPtr>(L"t{i1,i2;a1,a2}:S-N-N"));
+        }
         // a Nonsymm bra/ket implies nothing, so the Context default stands
         REQUIRE(deserialize<ExprPtr>(L"t{i1,i2;a1,a2}:N")
                     ->as<Tensor>()

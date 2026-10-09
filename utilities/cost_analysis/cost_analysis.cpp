@@ -22,6 +22,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>     // toUtf16
 #include <SeQuant/domain/mbpt/convention.hpp>  // make_min_sr_spaces
 
@@ -77,8 +78,8 @@ Config load_config(const json& d) {
     c.optimize.volatile_weight = o.value("volatile_weight", 10.0);
     // A volatile-contraction weight is conceptually a replay count, so it must
     // be positive
-    if (c.optimize.volatile_weight <= 0.0)
-      throw Exception("optimize.volatile_weight must be > 0");
+    SEQUANT_ENFORCE(!(c.optimize.volatile_weight <= 0.0),
+                    "optimize.volatile_weight must be > 0");
     c.optimize.machine_balance = o.value("machine_balance", 0.0);
     c.optimize.fast_mem_elems = o.value("fast_mem_elems", 0.0);
   }
@@ -88,18 +89,18 @@ Config load_config(const json& d) {
     // A negative min_repeats wraps to a huge size_t (JSON ints are signed) and
     // silently disables caching, so reject it.
     const long mr = ca.value("min_repeats", 2L);
-    if (mr < 0) throw Exception("cache.min_repeats must be >= 0");
+    SEQUANT_ENFORCE(mr >= 0, "cache.min_repeats must be >= 0");
     c.cache.min_repeats = static_cast<std::size_t>(mr);
     c.cache.max_footprint = ca.value("max_footprint", 0.0);
-    if (c.cache.max_footprint < 0.0)
-      throw Exception("cache.max_footprint must be >= 0");
+    SEQUANT_ENFORCE(!(c.cache.max_footprint < 0.0),
+                    "cache.max_footprint must be >= 0");
   }
   if (d.contains("output")) {
     const auto& ou = d.at("output");
     c.out.path = ou.value("path", std::string("cost_analysis.md"));
     // Read signed then guard: a negative top_n would wrap to a huge size_t.
     const long tn = ou.value("top_n", 20L);
-    if (tn < 0) throw Exception("output.top_n must be >= 0");
+    SEQUANT_ENFORCE(tn >= 0, "output.top_n must be >= 0");
     c.out.top_n = static_cast<std::size_t>(tn);
     c.out.dump_tree = ou.value("dump_tree", false);
   }

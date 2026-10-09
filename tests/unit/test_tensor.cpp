@@ -16,6 +16,7 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tag.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -82,7 +83,9 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t3.aux_rank() == 1);
     REQUIRE(t3.bra_net_rank() == 1);
     REQUIRE(t3.ket_net_rank() == 0);
-    REQUIRE_THROWS(t3.rank());
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS(t3.rank());
+    }
     REQUIRE(t3.const_braketaux().size() == 2);
     REQUIRE(t3.const_slots().size() == 2);
     REQUIRE(t3.num_slots() == 2);
@@ -593,11 +596,13 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
   SECTION("braket and hermiticity must agree when both are given") {
     // the two spell the same underlying trait, so a contradicting pair is a
     // caller error rather than something to silently resolve one way
-    REQUIRE_THROWS_AS(
-        Tensor(L"g", bra{L"i_1"}, ket{L"a_1"},
-               TensorSymmetries{.braket = BraKetSymmetry::Symm,
-                                .hermiticity = Hermiticity::NonHermitian}),
-        Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(
+          Tensor(L"g", bra{L"i_1"}, ket{L"a_1"},
+                 TensorSymmetries{.braket = BraKetSymmetry::Symm,
+                                  .hermiticity = Hermiticity::NonHermitian}),
+          Exception);
+    }
     // AntiHermitian is the one trait BraKetSymmetry cannot represent, so
     // pinning it alongside its (Nonsymm) braket must stay legal
     REQUIRE_NOTHROW(
@@ -642,11 +647,13 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
                   .column_symmetry() == ColumnSymmetry::Symm);
       // ... while a spelled-out one that contradicts it is rejected rather
       // than silently promoted
-      REQUIRE_THROWS_AS(
-          Tensor(
-              L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-              TensorSymmetries{.perm = s, .column = ColumnSymmetry::Nonsymm}),
-          Exception);
+      if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+        REQUIRE_THROWS_AS(
+            Tensor(
+                L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                TensorSymmetries{.perm = s, .column = ColumnSymmetry::Nonsymm}),
+            Exception);
+      }
     }
     // a Nonsymm bra/ket implies nothing, so an explicit Nonsymm column stands
     REQUIRE(Tensor(L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
@@ -686,41 +693,45 @@ TEST_CASE("(anti)symmetrizer factories", "[elements]") {
   SECTION("ctor rejects contradicting symmetries") {
     // braket symmetry, like column symmetry below, is a defining property of a
     // reserved (anti)symmetrizer, not a free parameter
-    REQUIRE_THROWS_AS(
-        Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-               TensorSymmetries{.braket = BraKetSymmetry::Symm}),
-        Exception);
-    REQUIRE_THROWS_AS(
-        Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-               TensorSymmetries{.column = ColumnSymmetry::Nonsymm}),
-        Exception);
-    // ... and Â is rejected too: Antisymm bra/ket permutational symmetry
-    // implies column symmetry for any tensor, reserved or not, so a spelled-out
-    // Nonsymm column contradicts the request either way
-    REQUIRE_THROWS_AS(
-        Tensor(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
-               ket{L"a_1", L"a_2"},
-               TensorSymmetries{.perm = Symmetry::Antisymm,
-                                .column = ColumnSymmetry::Nonsymm}),
-        Exception);
-    REQUIRE_THROWS_AS(
-        Tensor(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
-               ket{L"a_1", L"a_2"},
-               TensorSymmetries{.perm = Symmetry::Nonsymm,
-                                .column = ColumnSymmetry::Nonsymm}),
-        Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(
+          Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"},
+                 ket{L"a_1", L"a_2"},
+                 TensorSymmetries{.braket = BraKetSymmetry::Symm}),
+          Exception);
+      REQUIRE_THROWS_AS(
+          Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"},
+                 ket{L"a_1", L"a_2"},
+                 TensorSymmetries{.column = ColumnSymmetry::Nonsymm}),
+          Exception);
+      // ... and Â is rejected too: Antisymm bra/ket permutational symmetry
+      // implies column symmetry for any tensor, reserved or not, so a
+      // spelled-out Nonsymm column contradicts the request either way
+      REQUIRE_THROWS_AS(
+          Tensor(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                 ket{L"a_1", L"a_2"},
+                 TensorSymmetries{.perm = Symmetry::Antisymm,
+                                  .column = ColumnSymmetry::Nonsymm}),
+          Exception);
+      REQUIRE_THROWS_AS(
+          Tensor(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                 ket{L"a_1", L"a_2"},
+                 TensorSymmetries{.perm = Symmetry::Nonsymm,
+                                  .column = ColumnSymmetry::Nonsymm}),
+          Exception);
 
-    // the defining bra/ket permutational symmetry is likewise not a free
-    // parameter: Ŝ symmetrizes the {bra,ket} columns (so it is perm-Nonsymm),
-    // Â additionally antisymmetrizes within bra and within ket
-    REQUIRE_THROWS_AS(
-        Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-               TensorSymmetries{.perm = Symmetry::Antisymm}),
-        Exception);
-    REQUIRE_THROWS_AS(
-        Tensor(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
-               ket{L"a_1", L"a_2"}, TensorSymmetries{.perm = Symmetry::Symm}),
-        Exception);
+      // the defining bra/ket permutational symmetry is likewise not a free
+      // parameter: Ŝ symmetrizes the {bra,ket} columns (so it is perm-Nonsymm),
+      // Â additionally antisymmetrizes within bra and within ket
+      REQUIRE_THROWS_AS(Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"},
+                               ket{L"a_1", L"a_2"},
+                               TensorSymmetries{.perm = Symmetry::Antisymm}),
+                        Exception);
+      REQUIRE_THROWS_AS(
+          Tensor(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                 ket{L"a_1", L"a_2"}, TensorSymmetries{.perm = Symmetry::Symm}),
+          Exception);
+    }
     // an unspecified perm symmetry is supplied, as for column symmetry
     REQUIRE(Tensor(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
                    ket{L"a_1", L"a_2"})

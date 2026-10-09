@@ -38,7 +38,8 @@ enum class SpinConvention {
 ///
 /// Every other setting of the current default Context, including the
 /// canonicalizer configuration, is kept.
-/// @throw Exception if the calling thread has an active scoped context (see
+/// @throw Exception (or aborts, per SEQUANT_ENFORCE) if the calling thread
+/// has an active scoped context (see
 /// set_scoped_default_context()), whose settings would otherwise be
 /// installed process-wide
 void load(Convention conv = Convention::Minimal,

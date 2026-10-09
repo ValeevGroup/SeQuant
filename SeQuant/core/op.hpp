@@ -764,12 +764,12 @@ class NormalOperator : public Operator<S>,
   }
 
   /// @return number of creators/annihilators
-  /// @throw Exception if the operator is not particle number conserving
+  /// @throw Exception (or aborts, per SEQUANT_ENFORCE) if the operator is
+  /// not particle number conserving
   /// (i.e. if ncreators() != nannihilators() )
   auto rank() const {
-    if (ncreators() != nannihilators()) {
-      throw Exception("NormalOperator::rank(): ncreators != nannihilators");
-    }
+    SEQUANT_ENFORCE(ncreators() == nannihilators(),
+                    "NormalOperator::rank(): ncreators != nannihilators");
     return ncreators();
   }
 
@@ -1115,10 +1115,10 @@ class NormalOperator : public Operator<S>,
   AbstractTensor::any_view_randsz _aux_mutable() override final { return {}; }
 
   void _permute_aux(std::span<const std::size_t> perm) override final {
-    if (perm.size() != 0)
-      throw Exception(
-          "NormalOperator::_permute_aux(p): there are no aux indices, p must "
-          "be null");
+    SEQUANT_ENFORCE(
+        perm.size() == 0,
+        "NormalOperator::_permute_aux(p): there are no aux indices, p must "
+        "be null");
   }
 };
 

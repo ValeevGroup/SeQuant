@@ -34,7 +34,7 @@ namespace sequant::mbpt::bernoulli {
 /// @param rank highest Bernoulli order @f$\bar{H}^{k}@f$ to include
 /// @param skip1 exclude singles from T
 /// @pre the reference is the Wick vacuum (enforced in every build)
-/// @throw Exception if CSV is enabled
+/// @throw Exception (or aborts, per SEQUANT_ENFORCE) if CSV is enabled
 ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1);
 
 namespace detail {

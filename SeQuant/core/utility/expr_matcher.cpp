@@ -1,6 +1,6 @@
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
 #include <compare>
@@ -9,9 +9,8 @@ namespace sequant {
 
 ExprMatcher::ExprMatcher(const Expr &expr, ExprMatcherOptions opts)
     : expr_(expr.clone()), opts_(std::move(opts)) {
-  if (!expr.empty()) {
-    throw Exception("ExprMatcher does not (yet) support composite expressions");
-  }
+  SEQUANT_ENFORCE(expr.empty(),
+                  "ExprMatcher does not (yet) support composite expressions");
 }
 
 bool ExprMatcher::is_equal(const ExprPtr &expr) const {

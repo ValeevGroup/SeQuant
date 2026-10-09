@@ -369,8 +369,7 @@ class CellRegistry {
     bool filled_since_clear = false;
   };
   Slot& slot(CellId c) {
-    if (c >= slots_.size())
-      throw Exception("CellRegistry: cell id out of range");
+    SEQUANT_ENFORCE(c < slots_.size(), "CellRegistry: cell id out of range");
     return slots_[c];
   }
   Slot const& slot(CellId c) const {

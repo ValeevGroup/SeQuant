@@ -103,9 +103,8 @@ void apply_negate(ExpressionFilter::Rule &rule,
     return;
   }
 
-  if (!rule_json.at("negate").is_boolean()) {
-    throw Exception("\"negate\" requires a boolean argument");
-  }
+  SEQUANT_ENFORCE(rule_json.at("negate").is_boolean(),
+                  "\"negate\" requires a boolean argument");
 
   rule.negate = rule_json.at("negate").get<bool>();
 }
@@ -124,9 +123,8 @@ std::unique_ptr<ExpressionFilter::Rule> parse_contains_expr(
   if (spec.contains("tensor_equality_mode")) {
     const nlohmann::json &mode = spec.at("tensor_equality_mode");
 
-    if (!mode.is_string()) {
-      throw Exception("\"tensor_equality_mode\" requires a string argument");
-    }
+    SEQUANT_ENFORCE(mode.is_string(),
+                    "\"tensor_equality_mode\" requires a string argument");
 
     if (mode == "identity") {
       match_opts.tensor_cmp = TensorComparison::Identity;
@@ -153,9 +151,7 @@ std::unique_ptr<ExpressionFilter::Rule> parse_contains_label(
   std::vector<std::wregex> patterns;
 
   auto add_pattern = [&](const nlohmann::json &value) {
-    if (!value.is_string()) {
-      throw Exception("Entries in \"label\" must be strings");
-    }
+    SEQUANT_ENFORCE(value.is_string(), "Entries in \"label\" must be strings");
 
     try {
       patterns.emplace_back(toUtf16(value.get<std::string>()));
@@ -176,9 +172,8 @@ std::unique_ptr<ExpressionFilter::Rule> parse_contains_label(
     throw Exception("\"label\" must be either a string or an array of strings");
   }
 
-  if (patterns.empty()) {
-    throw Exception("\"label\" filter rule requires at least one label");
-  }
+  SEQUANT_ENFORCE(!patterns.empty(),
+                  "\"label\" filter rule requires at least one label");
 
   auto rule = std::make_unique<LabelRule>(std::move(patterns));
   apply_negate(*rule, spec);
@@ -200,18 +195,14 @@ ExpressionFilter parse_filter(const nlohmann::json &filter) {
   ExpressionFilter res;
   res.set_require_all(require_all);
 
-  if (!filter.contains("rules")) {
-    throw Exception("Filter is required to have rules");
-  }
+  SEQUANT_ENFORCE(filter.contains("rules"), "Filter is required to have rules");
 
-  if (!filter.at("rules").is_array()) {
-    throw Exception("rules is required to be an array");
-  }
+  SEQUANT_ENFORCE(filter.at("rules").is_array(),
+                  "rules is required to be an array");
 
   for (const nlohmann::json &current : filter.at("rules")) {
-    if (!current.contains("type")) {
-      throw Exception("Every filter rule must have a type");
-    }
+    SEQUANT_ENFORCE(current.contains("type"),
+                    "Every filter rule must have a type");
 
     if (current.at("type") == "contains") {
       if (current.contains("expr")) {

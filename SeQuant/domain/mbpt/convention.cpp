@@ -12,7 +12,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/context.hpp>
-#include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <cassert>
 #include <cstdlib>
@@ -26,11 +26,11 @@ namespace sequant {
 namespace mbpt {
 
 void load(Convention conv, SpinConvention spconv) {
-  if (sequant::detail::implicit_context_overlay<
-          container::map<Statistics, sequant::Context>>())
-    throw Exception(
-        "mbpt::load: cannot install a process-wide context while a scoped "
-        "context is active on this thread");
+  SEQUANT_ENFORCE(
+      !(sequant::detail::implicit_context_overlay<
+          container::map<Statistics, sequant::Context>>()),
+      "mbpt::load: cannot install a process-wide context while a scoped "
+      "context is active on this thread");
   std::shared_ptr<IndexSpaceRegistry> isr;
   switch (conv) {
     case Convention::Minimal:

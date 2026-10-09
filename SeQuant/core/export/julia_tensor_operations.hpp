@@ -81,9 +81,8 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   }
 
   std::string represent(const Index &idx, const Context &) const override {
-    if (idx.has_proto_indices()) {
-      throw Exception("Proto Indices are not (yet) supported!");
-    }
+    SEQUANT_ENFORCE(!idx.has_proto_indices(),
+                    "Proto Indices are not (yet) supported!");
 
     return toUtf8(idx.full_label());
   }
@@ -136,10 +135,9 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
-    if (!zero_init) {
-      throw Exception(
-          "In Julia tensors can't be created without being initialized");
-    }
+    SEQUANT_ENFORCE(
+        zero_init,
+        "In Julia tensors can't be created without being initialized");
 
     m_generated += zero_initialization(tensor, ctx) + "\n";
   }
@@ -180,10 +178,9 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
   void create(const Variable &variable, bool zero_init,
               const Context &ctx) override {
-    if (!zero_init) {
-      throw Exception(
-          "Julia doesn't support declaring a variable without initializing it");
-    }
+    SEQUANT_ENFORCE(
+        zero_init,
+        "Julia doesn't support declaring a variable without initializing it");
 
     m_generated += represent(variable, ctx) + " = 0.0\n";
   }
@@ -288,10 +285,9 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   /// emits `<name> = <wrapper>(zeros(Float64, <dims>...), <shape>)`
   void create_wrapped(const Tensor &tensor, bool zero_init, const Context &ctx,
                       std::string_view wrapper, const std::string &shape) {
-    if (!zero_init) {
-      throw Exception(
-          "In Julia tensors can't be created without being initialized");
-    }
+    SEQUANT_ENFORCE(
+        zero_init,
+        "In Julia tensors can't be created without being initialized");
 
     m_generated += tensor_name(tensor, ctx);
     m_generated += " = ";

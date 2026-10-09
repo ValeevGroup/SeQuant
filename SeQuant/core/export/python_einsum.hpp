@@ -145,9 +145,8 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
   }
 
   std::string represent(const Index &idx, const Context &) const override {
-    if (idx.has_proto_indices()) {
-      throw Exception("Proto Indices are not (yet) supported!");
-    }
+    SEQUANT_ENFORCE(!idx.has_proto_indices(),
+                    "Proto Indices are not (yet) supported!");
 
     // Convert index label to a single character for einsum notation
     // For einsum, we need single characters
@@ -156,9 +155,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     // Try to extract a single character representation
     // If the label is longer, use its first character (this may need
     // customization)
-    if (label.empty()) {
-      throw Exception("Empty index label");
-    }
+    SEQUANT_ENFORCE(!label.empty(), "Empty index label");
 
     // Return first character preserving case to avoid conflicts
     // between index spaces that differ only in case (e.g., 'I' vs 'i')
@@ -217,9 +214,8 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
   void create(const Variable &variable, bool zero_init,
               const Context &ctx) override {
-    if (!zero_init) {
-      throw Exception("Python variables must be initialized when created");
-    }
+    SEQUANT_ENFORCE(zero_init,
+                    "Python variables must be initialized when created");
 
     m_generated += m_indent + represent(variable, ctx) + " = 0.0\n";
   }
@@ -650,9 +646,8 @@ class NumPyEinsumGenerator
 
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
-    if (!zero_init) {
-      throw Exception("Python tensors must be initialized when created");
-    }
+    SEQUANT_ENFORCE(zero_init,
+                    "Python tensors must be initialized when created");
 
     m_generated += m_indent + represent(tensor, ctx) + " = " + module_prefix() +
                    "zeros(" + ctx.get_shape_tuple(tensor) + ", order='" +
@@ -755,9 +750,8 @@ class PyTorchEinsumGenerator
   // Override create to not use 'order' parameter (PyTorch doesn't support it)
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
-    if (!zero_init) {
-      throw Exception("PyTorch tensors must be initialized when created");
-    }
+    SEQUANT_ENFORCE(zero_init,
+                    "PyTorch tensors must be initialized when created");
 
     // PyTorch doesn't support the 'order' parameter - tensors are always
     // row-major Use float64 (double precision) to match C++ double type

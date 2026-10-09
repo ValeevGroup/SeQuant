@@ -5,7 +5,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/view/enumerate.hpp>
 
@@ -52,11 +52,10 @@ class JuliaTensorKitGenerator : public JuliaTensorOperationsGenerator<Context> {
     const std::size_t braRank = tensor.bra_rank();
     const std::size_t num_indices = tensor.num_indices();
 
-    if (braRank == 0 && num_indices > 0) {
-      throw Exception(
-          "It is not (yet) clear how to represent a zero-dimensional domain "
-          "for a tensor in TensorKit");
-    }
+    SEQUANT_ENFORCE(
+        braRank != 0 || num_indices == 0,
+        "It is not (yet) clear how to represent a zero-dimensional domain "
+        "for a tensor in TensorKit");
 
     for (const auto &[i, idx] : ranges::views::enumerate(tensor.indices())) {
       domain += "ℝ^";

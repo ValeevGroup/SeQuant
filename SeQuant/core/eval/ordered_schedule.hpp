@@ -2059,14 +2059,11 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
 
   if (detail::dump_enabled("SEQUANT_DUMP_SCHEDULE"))
     detail::dump_schedule_tree(out.root, 0);
-  // Refusal: the builder's own structural self-check. A throw, not a
-  // SEQUANT_ASSERT -- the latter is compiled out in non-Debug builds, which
-  // would hand an ill-formed schedule to the executor in exactly the builds
-  // that run production work.
-  if (!well_formed(out))
-    throw Exception(
-        "build_ordered_schedule: the schedule it built is not well-formed "
-        "(see OrderedSchedule::well_formed)");
+  // Reject an ill-formed schedule before handing it to the executor.
+  SEQUANT_ENFORCE(
+      well_formed(out),
+      "build_ordered_schedule: the schedule it built is not well-formed "
+      "(see OrderedSchedule::well_formed)");
   return out;
 }
 

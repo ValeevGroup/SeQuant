@@ -385,8 +385,10 @@ TEST_CASE("utilities", "[utilities]") {
       }
       for (auto&& thr : threads) thr.join();
       for (auto result : thread_results) CHECK(result == 0);
-      CHECK_THROWS_AS(Singleton<S<EnableDefaultCtor>>::set_instance(1),
-                      sequant::Exception);
+      if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+        CHECK_THROWS_AS(Singleton<S<EnableDefaultCtor>>::set_instance(1),
+                        sequant::Exception);
+      }
       CHECK(Singleton<S<EnableDefaultCtor>>::instance().s() == 0);
     }
     // non-default-constructible Singleton
@@ -563,8 +565,10 @@ TEST_CASE("utilities", "[utilities]") {
   SECTION("ExprMatcher") {
     SECTION("composite") {
       // Composite expressions not yet supported
-      REQUIRE_THROWS_AS(ExprMatcher(*deserialize("A + B")), Exception);
-      REQUIRE_THROWS_AS(ExprMatcher(*deserialize("A * B")), Exception);
+      if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+        REQUIRE_THROWS_AS(ExprMatcher(*deserialize("A + B")), Exception);
+        REQUIRE_THROWS_AS(ExprMatcher(*deserialize("A * B")), Exception);
+      }
     }
     SECTION("non-tensor") {
       Constant c1(1);
@@ -1340,7 +1344,9 @@ TEST_CASE("utilities", "[utilities]") {
         }
       };
 
-      REQUIRE_THROWS_AS(topological_order_indexed(2, get_deps), Exception);
+      if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+        REQUIRE_THROWS_AS(topological_order_indexed(2, get_deps), Exception);
+      }
     }
   }
 }

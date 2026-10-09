@@ -4,6 +4,7 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/core/wick_extended.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -221,14 +222,18 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     for (const auto vacuum : {Vacuum::Physical, Vacuum::SingleProduct}) {
       auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"}), vacuum) *
                 ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}), vacuum);
-      REQUIRE_THROWS_AS(FWickTheorem{in}.compute(), Exception);
-      REQUIRE_THROWS_AS(FWickTheorem{in}.full_contractions(false).compute(),
-                        Exception);
+      if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+        REQUIRE_THROWS_AS(FWickTheorem{in}.compute(), Exception);
+        REQUIRE_THROWS_AS(FWickTheorem{in}.full_contractions(false).compute(),
+                          Exception);
+      }
     }
     // the elementary-operator spelling of the parser is Physical
-    REQUIRE_THROWS_AS(
-        FWickTheorem{deserialize(L"a{u_1;u_2} a{u_3;u_4}")}.compute(),
-        Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(
+          FWickTheorem{deserialize(L"a{u_1;u_2} a{u_3;u_4}")}.compute(),
+          Exception);
+    }
   }
 
   SECTION("WickTheorem: bosons are not supported") {
@@ -242,10 +247,12 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   SECTION("WickTheorem: count_only is not supported") {
     auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
-    REQUIRE_THROWS_MATCHES(
-        FWickTheorem{in}.compute(/*count_only=*/true), Exception,
-        Catch::Matchers::MessageMatches(
-            Catch::Matchers::ContainsSubstring("count_only")));
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_MATCHES(
+          FWickTheorem{in}.compute(/*count_only=*/true), Exception,
+          Catch::Matchers::MessageMatches(
+              Catch::Matchers::ContainsSubstring("count_only")));
+    }
   }
 
   SECTION("WickTheorem: spin-free operators are not supported") {
@@ -254,10 +261,12 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     auto sf_resetter = set_scoped_default_context(sf_ctx);
     auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
-    REQUIRE_THROWS_MATCHES(
-        FWickTheorem{in}.compute(), Exception,
-        Catch::Matchers::MessageMatches(
-            Catch::Matchers::ContainsSubstring("spin-free")));
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_MATCHES(
+          FWickTheorem{in}.compute(), Exception,
+          Catch::Matchers::MessageMatches(
+              Catch::Matchers::ContainsSubstring("spin-free")));
+    }
   }
 
   SECTION("WickTheorem: the input is not modified") {

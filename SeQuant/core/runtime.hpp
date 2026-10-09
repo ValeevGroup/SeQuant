@@ -21,6 +21,7 @@
 #include <SeQuant/core/utility/context.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
@@ -136,7 +137,7 @@ class ParallelExceptionCollector {
 
 /// sets the number of threads to use for concurrent work
 inline void set_num_threads(int nt) {
-  if (nt < 1) throw Exception("set_num_threads(nthreads): invalid nthreads");
+  SEQUANT_ENFORCE(nt >= 1, "set_num_threads(nthreads): invalid nthreads");
   detail::nthreads_accessor() = nt;
 }
 

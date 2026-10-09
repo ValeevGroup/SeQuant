@@ -8,6 +8,7 @@
 
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <stdexcept>
 #include <string>
@@ -18,8 +19,10 @@ TEST_CASE("latex", "[util]") {
   SECTION("greek->latex") {
     using namespace std::string_literals;
     REQUIRE(io::latex::greek_characters_to_string("alpha"s) == "alpha");
-    REQUIRE_THROWS_AS(io::latex::greek_characters_to_string("α"s) == "\\alpha",
-                      Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(
+          io::latex::greek_characters_to_string("α"s) == "\\alpha", Exception);
+    }
 
     REQUIRE(io::latex::greek_characters_to_string(std::wstring(L"alpha")) ==
             L"alpha");
@@ -34,12 +37,14 @@ TEST_CASE("latex", "[util]") {
 
     REQUIRE(io::latex::greek_characters_to_string(std::u8string(u8"alpha")) ==
             u8"alpha");
-    REQUIRE_THROWS_AS(io::latex::greek_characters_to_string(
-                          std::u8string(u8"α")) == u8"\\alpha",
-                      Exception);
-    REQUIRE_THROWS_AS(io::latex::greek_characters_to_string(
-                          std::u8string(u8"Γ")) == u8"\\Gamma",
-                      Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(io::latex::greek_characters_to_string(
+                            std::u8string(u8"α")) == u8"\\alpha",
+                        Exception);
+      REQUIRE_THROWS_AS(io::latex::greek_characters_to_string(
+                            std::u8string(u8"Γ")) == u8"\\Gamma",
+                        Exception);
+    }
 
     REQUIRE(io::latex::greek_characters_to_string(std::u16string(u"alpha")) ==
             u"alpha");

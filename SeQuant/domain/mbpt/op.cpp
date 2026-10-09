@@ -330,12 +330,11 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
         is_adjoint ? op_qns.nann_particles() : op_qns.ncre_particles();
     auto nann_h = is_adjoint ? op_qns.ncre_holes() : op_qns.nann_holes();
 
-    if (!is_definite(nann_p) || !is_definite(ncre_h) || !is_definite(ncre_p) ||
-        !is_definite(nann_h)) {
-      throw Exception(
-          "to_latex(const Operator<qns_t, S>& op): "
-          "can only handle generic operators with definite cre/ann numbers");
-    }
+    SEQUANT_ENFORCE(
+        is_definite(nann_p) && is_definite(ncre_h) && is_definite(ncre_p) &&
+            is_definite(nann_h),
+        "to_latex(const Operator<qns_t, S>& op): "
+        "can only handle generic operators with definite cre/ann numbers");
 
     // check if the Op is a projector (A or S)
     // projectors can have negative ranks, need special handling
@@ -1327,13 +1326,12 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
       spinor ? density::rdm_label() : density::spinfree_rdm_label();
 
   // N.B. reference < vacuum is not yet supported
-  if (isr->reference_occupied_space().intersection(
-          isr->vacuum_occupied_space()) != isr->vacuum_occupied_space()) {
-    throw Exception(
-        "mbpt::tensor::expectation_value_impl: vacuum occupied orbitals must "
-        "be same as or "
-        "subset of the reference orbital set.");
-  }
+  SEQUANT_ENFORCE(
+      isr->reference_occupied_space().intersection(
+          isr->vacuum_occupied_space()) == isr->vacuum_occupied_space(),
+      "mbpt::tensor::expectation_value_impl: vacuum occupied orbitals must "
+      "be same as or "
+      "subset of the reference orbital set.");
 
   FWickTheorem wick{expr};
   wick.use_topology(use_top).set_nop_connections(connect);

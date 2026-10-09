@@ -6,7 +6,6 @@
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
-#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -43,7 +42,8 @@
 namespace {
 
 /// Returns the residual fermionic NormalOperator in @p term, if any.
-/// @throws Exception if @p term contains more than one.
+/// @throws Exception (or aborts, per SEQUANT_ENFORCE) if @p term contains
+/// more than one.
 const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
     const sequant::ExprPtr& term) {
   using namespace sequant;
@@ -54,8 +54,8 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
     const NormalOperator<Statistics::FermiDirac>* found = nullptr;
     for (const auto& f : term.as<Product>().factors())
       if (f.is<NormalOperator<Statistics::FermiDirac>>()) {
-        if (found)
-          throw Exception("find_nop: term contains multiple NormalOperators");
+        SEQUANT_ENFORCE(!found,
+                        "find_nop: term contains multiple NormalOperators");
         found = &f.as<NormalOperator<Statistics::FermiDirac>>();
       }
 
@@ -349,8 +349,8 @@ ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff, std::size_t min_rank) {
 }  // namespace detail
 
 ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
-  if (get_default_mbpt_context().csv() == CSV::Yes)
-    throw Exception("bernoulli::hbar: CSV is not supported");
+  SEQUANT_ENFORCE(get_default_mbpt_context().csv() != CSV::Yes,
+                  "bernoulli::hbar: CSV is not supported");
   mbpt::detail::enforce_reference_is_vacuum();
 
   using namespace detail;

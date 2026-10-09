@@ -13,6 +13,7 @@
 #include <utility>
 
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 TEST_CASE("op", "[elements]") {
@@ -558,7 +559,9 @@ TEST_CASE("op", "[elements]") {
     REQUIRE(hug1->group_at(5).second == group_idxs{1});
 
     // inserting past the end is no-no
-    REQUIRE_THROWS(hug1->insert(9, fcre({L"i_17"})));
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS(hug1->insert(9, fcre({L"i_17"})));
+    }
   }
 
   SECTION("latex") {

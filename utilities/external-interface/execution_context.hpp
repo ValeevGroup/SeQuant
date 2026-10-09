@@ -49,12 +49,10 @@ class ExecutionContext {
              std::same_as<std::ranges::range_value_t<Data>, ProcessingData>)
   void set_data(std::string_view prefix, CounterValues &&counters,
                 Data &&data) {
-    if (std::ranges::empty(counters)) {
-      throw Exception("Attempted to add data without specifying any counter");
-    }
-    if (std::ranges::empty(data)) {
-      throw Exception("Attempted to register empty dataset");
-    }
+    SEQUANT_ENFORCE(!(std::ranges::empty(counters)),
+                    "Attempted to add data without specifying any counter");
+    SEQUANT_ENFORCE(!(std::ranges::empty(data)),
+                    "Attempted to register empty dataset");
 
     std::vector<std::string> ids;
     ids.reserve(std::ranges::size(counters));

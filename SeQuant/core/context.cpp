@@ -7,7 +7,6 @@
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/context.hpp>
-#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
@@ -117,8 +116,8 @@ std::shared_ptr<const IndexSpaceRegistry> owned(
 
 void check_tensor_canonicalizer(
     const std::shared_ptr<TensorCanonicalizer>& canonicalizer) {
-  if (!canonicalizer)
-    throw Exception("Context: a tensor canonicalizer must not be null");
+  SEQUANT_ENFORCE(canonicalizer,
+                  "Context: a tensor canonicalizer must not be null");
 }
 
 template <typename Comparer>
@@ -499,10 +498,10 @@ Context::nondefault_tensor_canonicalizer_ptr(std::wstring_view label) const {
 const TensorCanonicalizer& Context::tensor_canonicalizer(
     std::wstring_view label) const {
   auto ptr = tensor_canonicalizer_ptr(label);
-  if (!ptr)
-    throw Exception(
-        "Context::tensor_canonicalizer: no canonicalizer for this label nor "
-        "for the empty label");
+  SEQUANT_ENFORCE(
+      ptr,
+      "Context::tensor_canonicalizer: no canonicalizer for this label nor "
+      "for the empty label");
   // the map entry keeps *ptr alive
   return *ptr;
 }

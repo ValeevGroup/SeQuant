@@ -27,8 +27,8 @@ an index that appears once in the input is external and a repeated one is a dumm
 
 ``compute(count_only, skip_input_canonicalization)`` then applies the theorem and returns a ``Constant``, ``Product``, or ``Sum``. It is
 **not reentrant, but is optionally threaded internally** (a ``Sum`` input has its summands processed concurrently, one ``WickTheorem``
-instance per summand, merged into a shared accumulator under a mutex — see below); it throws if the input's vacuum does not match the
-current :class:`sequant::Context`'s.
+instance per summand, merged into a shared accumulator under a mutex — see below); ``SEQUANT_ENFORCE`` checks that the input's
+vacuum matches the current :class:`sequant::Context`'s.
 
 The contraction algorithm
 ------------------------------
@@ -162,8 +162,9 @@ multi-body ``γ``, ``η`` or ``κ``, a spin component such as spin tracing produ
 
 The no-double-counting rule is that a block is only ever built from operators that survive the standard theorem: each extended term
 descends from exactly one partial-contraction term (the one carrying its pair contractions), so no :math:`1/k!` weights are needed.
-Spin-free evaluation is not supported for this vacuum (``WickTheorem::compute`` throws); the hooks for it are
-``WickTheorem::contraction_value`` and ``detail::block_value``/``detail::term_weight`` in ``SeQuant/core/wick_extended.hpp``.
+Spin-free evaluation is not supported for this vacuum (``WickTheorem::compute`` rejects it via ``SEQUANT_ENFORCE``); the hooks
+for it are ``WickTheorem::contraction_value`` and ``detail::block_value``/``detail::term_weight`` in
+``SeQuant/core/wick_extended.hpp``.
 
 ``mbpt::ref_av`` has no branch of its own for this vacuum, only forcing full contractions and so accepting connectivity
 lists, under which a density or cumulant carrying indices of two operators connects them. There the mbpt operators (``ã``) are

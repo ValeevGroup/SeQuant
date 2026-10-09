@@ -6,6 +6,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/bernoulli.hpp>
@@ -255,14 +256,18 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   SECTION("bernoulli_config_validation") {
     using namespace sequant;
     using namespace sequant::mbpt;
-    REQUIRE_THROWS_AS(CC(2, {.hbar_comm_rank = 2,
-                             .hbar_expansion = CC::HbarExpansion::Bernoulli}),
-                      Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(CC(2, {.hbar_comm_rank = 2,
+                               .hbar_expansion = CC::HbarExpansion::Bernoulli}),
+                        Exception);
+    }
 
     auto resetter = set_scoped_default_mbpt_context(
         mbpt::Context::Options{.csv = CSV::Yes});
     // Partial Wick contractions do not yet support CSV index dependencies.
-    REQUIRE_THROWS_AS(bernoulli::hbar(2, 0, false), Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(bernoulli::hbar(2, 0, false), Exception);
+    }
   }
 
   SECTION("bernoulli_quccsd") {
@@ -346,10 +351,12 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE(size(ip[1]) == 11);
 
     // block_ranks must be exactly a K x K matrix over the manifolds ...
-    REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), {2, 1, 0}), Exception);
-    REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), {2, 1, 1, 0, 2}), Exception);
-    // ... and the ansatz must be unitary
-    REQUIRE_THROWS_AS(CC(2).eom_r(nₚ(2), nₕ(2), quccsd), Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), {2, 1, 0}), Exception);
+      REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), {2, 1, 1, 0, 2}), Exception);
+      // ... and the ansatz must be unitary
+      REQUIRE_THROWS_AS(CC(2).eom_r(nₚ(2), nₕ(2), quccsd), Exception);
+    }
 
     // Explicit and default uniform ranks agree for Bernoulli too.
     const auto uniform = cc.eom_r(nₚ(2), nₕ(2));
@@ -389,25 +396,31 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
         bch2.with([](auto& o) { o.ansatz = CC::Ansatz::oU; }).skip_singles());
     // rank 0 is a valid truncation (H̄ = H); only CC::λ rejects it, since it
     // derives at rank - 1
-    REQUIRE_THROWS_AS(CC(N, {.ansatz = CC::Ansatz::U}), Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(CC(N, {.ansatz = CC::Ansatz::U}), Exception);
+    }
     REQUIRE(bch2.with([](auto& o) { o.hbar_comm_rank = 0; }).hbar_comm_rank() ==
             0);
-    REQUIRE_THROWS_AS(bch2.with([](auto& o) {
-      o.ansatz = CC::Ansatz::oU;
-      o.skip_singles = false;
-    }),
-                      Exception);
-    REQUIRE_THROWS_AS(CC(N, {.ansatz = CC::Ansatz::U,
-                             .hbar_comm_rank = 2,
-                             .hbar_singles_comm_rank = 1,
-                             .hbar_expansion = CC::HbarExpansion::Bernoulli}),
-                      Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(bch2.with([](auto& o) {
+        o.ansatz = CC::Ansatz::oU;
+        o.skip_singles = false;
+      }),
+                        Exception);
+      REQUIRE_THROWS_AS(CC(N, {.ansatz = CC::Ansatz::U,
+                               .hbar_comm_rank = 2,
+                               .hbar_singles_comm_rank = 1,
+                               .hbar_expansion = CC::HbarExpansion::Bernoulli}),
+                        Exception);
+    }
     const CC singles_wrapped(1, {.ansatz = CC::Ansatz::U,
                                  .hbar_comm_rank = 0,
                                  .hbar_singles_comm_rank = 1,
                                  .pertbar_comm_rank = 0});
-    REQUIRE_THROWS_AS(singles_wrapped.tʼ(), Exception);
-    REQUIRE_THROWS_AS(singles_wrapped.rdm(1, 0), Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(singles_wrapped.tʼ(), Exception);
+      REQUIRE_THROWS_AS(singles_wrapped.rdm(1, 0), Exception);
+    }
     if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
       REQUIRE_THROWS_AS(CC(N, {.hbar_comm_rank = 0}).λ(), Exception);
     }
@@ -626,7 +639,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     const auto ee_nh = nₕ(2);
     const std::vector<std::size_t> uniform_ranks = {2, 2, 2, 2};
 
-    REQUIRE_THROWS_AS(CC(2).eom_r(ee_np, ee_nh, uniform_ranks), Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(CC(2).eom_r(ee_np, ee_nh, uniform_ranks), Exception);
+    }
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
     const auto ucc = CC(2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2});

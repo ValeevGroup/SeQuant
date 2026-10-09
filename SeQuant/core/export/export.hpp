@@ -170,11 +170,9 @@ class GenerationVisitor {
       }
       return;
     }
-    if (!node->is_tensor() && !node->is_variable()) {
-      throw Exception(
-          "Unexpected expression type in "
-          "GenerationVisitor::load_or_create");
-    }
+    SEQUANT_ENFORCE(node->is_tensor() || node->is_variable(),
+                    "Unexpected expression type in "
+                    "GenerationVisitor::load_or_create");
 
     if (node->is_tensor()) {
       load_or_create<Tensor>(node->as_tensor(), node.leaf());
@@ -990,10 +988,9 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
     }
 
     for (const ExpressionGroup<T> &current : groups) {
-      if (!current.is_named()) {
-        throw Exception(
-            "Can't have unnamed groups when exporting multiple groups at once");
-      }
+      SEQUANT_ENFORCE(
+          current.is_named(),
+          "Can't have unnamed groups when exporting multiple groups at once");
     }
   }
 

@@ -654,10 +654,9 @@ std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression) {
 
 ExprPtr &replace(ExprPtr &expr, const ExprMatcher &target,
                  const Expr &replacement) {
-  if (!target.expr().is_atom()) {
-    throw Exception(
-        "Replacement of composite expressions is not yet implemented");
-  }
+  SEQUANT_ENFORCE(
+      target.expr().is_atom(),
+      "Replacement of composite expressions is not yet implemented");
 
   container::svector<std::size_t> index_mapping;
   if (target.expr().is<AbstractTensor>()) {

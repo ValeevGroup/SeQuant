@@ -374,10 +374,12 @@ TEST_CASE(
 
   SECTION("no driver installed: throws, no per-root fallback") {
     auto cache = sequant::CacheManager<ScalarNode>::empty();
-    CHECK_THROWS_AS(
-        sequant::evaluate_multiroot(roots, svector<std::string>(roots.size()),
-                                    yield, cache),
-        sequant::Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      CHECK_THROWS_AS(
+          sequant::evaluate_multiroot(roots, svector<std::string>(roots.size()),
+                                      yield, cache),
+          sequant::Exception);
+    }
   }
 
   SECTION("layouts.size() != roots.size(): throws (size-mismatch guard)") {
@@ -386,10 +388,12 @@ TEST_CASE(
     // truncating/padding. Checked before the driver lookup, so this fires
     // even with no driver installed.
     auto cache = sequant::CacheManager<ScalarNode>::empty();
-    CHECK_THROWS_AS(
-        sequant::evaluate_multiroot(
-            roots, svector<std::string>(roots.size() - 1), yield, cache),
-        sequant::Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      CHECK_THROWS_AS(
+          sequant::evaluate_multiroot(
+              roots, svector<std::string>(roots.size() - 1), yield, cache),
+          sequant::Exception);
+    }
   }
 
   SECTION("driver installed: routes to evaluate_ordered_multiroot") {

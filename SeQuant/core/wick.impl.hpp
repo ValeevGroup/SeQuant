@@ -697,20 +697,20 @@ void WickTheorem<S>::extract_indices() const {
   if (input->is<Sum>()) {
     const auto it = ranges::find_if(
         *input, [](const ExprPtr &summand) { return summand->is<Product>(); });
-    if (it == ranges::end(*input))
-      throw Exception(
-          "WickTheorem::extract_indices: the expression input is a Sum without "
-          "a Product summand, its indices cannot be counted");
+    SEQUANT_ENFORCE(
+        it != ranges::end(*input),
+        "WickTheorem::extract_indices: the expression input is a Sum without "
+        "a Product summand, its indices cannot be counted");
     input = *it;
   }
   bool expanded = true;
   input->visit([&expanded](const ExprPtr &subexpr) {
     if (subexpr->is<Sum>()) expanded = false;
   });
-  if (!expanded)
-    throw Exception(
-        "WickTheorem::extract_indices: the input must be expanded (contains a "
-        "Sum as a subexpression)");
+  SEQUANT_ENFORCE(
+      expanded,
+      "WickTheorem::extract_indices: the input must be expanded (contains a "
+      "Sum as a subexpression)");
   extract_indices(*input);
 }
 
@@ -1201,14 +1201,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
   const auto contexts_in_effect = pin_default_contexts();
 
   if (get_default_context(S).vacuum() == Vacuum::MultiProduct) {
-    if (count_only)
-      throw Exception(
-          "WickTheorem<S>::compute: count_only is not supported under a "
-          "MultiProduct vacuum");
-    if (get_default_context(S).spbasis() == SPBasis::Spinfree)
-      throw Exception(
-          "WickTheorem<S>::compute: spin-free operators are not supported "
-          "under a MultiProduct vacuum");
+    SEQUANT_ENFORCE(
+        !(count_only),
+        "WickTheorem<S>::compute: count_only is not supported under a "
+        "MultiProduct vacuum");
+    SEQUANT_ENFORCE(
+        get_default_context(S).spbasis() != SPBasis::Spinfree,
+        "WickTheorem<S>::compute: spin-free operators are not supported "
+        "under a MultiProduct vacuum");
     if constexpr (S == Statistics::FermiDirac) {
       return detail::extended_wick<S>(
           expr_input_ ? expr_input_ : ExprPtr(input_),

@@ -2,7 +2,6 @@
 #define SEQUANT_CORE_UTILITY_TOPOLOGICAL_HPP
 
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/view/enumerate.hpp>
@@ -79,10 +78,9 @@ std::vector<std::size_t> topological_order_indexed(
     }
   }
 
-  if (order.size() != n) {
-    throw Exception(
-        "Impossible dependencies encountered in topological_order_indexed()");
-  }
+  SEQUANT_ENFORCE(
+      order.size() == n,
+      "Impossible dependencies encountered in topological_order_indexed()");
 
   return order;
 }

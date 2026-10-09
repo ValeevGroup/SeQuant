@@ -150,14 +150,14 @@ class TensorNetworkV3 {
     const Index *index = nullptr;
 
     /// @param vertex a vertex to be added
-    /// @throw Exception if @p vertex is already connected by this
-    /// Edge
+    /// @throw Exception (or aborts, per SEQUANT_ENFORCE) if @p vertex is
+    /// already connected by this Edge
     void add_vertex(const Vertex &vertex) {
       auto [it, inserted] = this->vertices.emplace(vertex);
-      if (!inserted)
-        throw Exception(
-            "TensorNetworkV3::Edge::add_vertex(v): v is already connected by "
-            "this Edge");
+      SEQUANT_ENFORCE(
+          inserted,
+          "TensorNetworkV3::Edge::add_vertex(v): v is already connected by "
+          "this Edge");
     }
   };
 
@@ -220,14 +220,13 @@ class TensorNetworkV3 {
       // dummy labels; a Power; etc.) is not a tensor network -- treating its
       // subexpressions as factors would glue unrelated tensors together. Reject
       // up front with a clear diagnostic rather than deep inside create_graph.
-      if (!expr.is<Product>()) {
-        throw Exception(
-            "TensorNetworkV3::TensorNetworkV3: cannot construct a tensor "
-            "network "
-            "from a non-Product expression -- only a Product (network of "
-            "tensor "
-            "factors) or a single tensor is a tensor network");
-      }
+      SEQUANT_ENFORCE(
+          expr.is<Product>(),
+          "TensorNetworkV3::TensorNetworkV3: cannot construct a tensor "
+          "network "
+          "from a non-Product expression -- only a Product (network of "
+          "tensor "
+          "factors) or a single tensor is a tensor network");
       for (const ExprPtr &subexpr : expr) {
         add_expr(*subexpr);
       }
@@ -542,11 +541,10 @@ class TensorNetworkV3 {
     ExprPtr clone = expr.clone();
 
     auto tensor_ptr = std::dynamic_pointer_cast<AbstractTensor>(clone);
-    if (!tensor_ptr) {
-      throw Exception(
-          "TensorNetworkV3::TensorNetworkV3: tried to add non-tensor to "
-          "network");
-    }
+    SEQUANT_ENFORCE(
+        tensor_ptr,
+        "TensorNetworkV3::TensorNetworkV3: tried to add non-tensor to "
+        "network");
 
     tensors_.emplace_back(std::move(tensor_ptr));
     tensor_input_ordinals_.push_back(tensor_input_ordinals_.size());

@@ -1,6 +1,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <string_view>
 
@@ -13,10 +14,9 @@ template <typename StrView>
 IndexSpace retrieve(StrView label) {
   auto registry_ptr = get_default_context().index_space_registry();
 
-  if (!registry_ptr) {
-    throw Exception(
-        "Can't use IndexSpace(string) without an active index space registry");
-  }
+  SEQUANT_ENFORCE(
+      registry_ptr,
+      "Can't use IndexSpace(string) without an active index space registry");
 
   return registry_ptr->retrieve(label);
 }

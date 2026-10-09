@@ -5,6 +5,7 @@
 #include <SeQuant/core/eval/ordered_dump.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -356,11 +357,11 @@ inline void apply_persistence_frontier(
 /// positions that match no enclosing loop instance are reported in \c
 /// CellTable::unresolved.
 [[nodiscard]] inline CellTable build_cell_table(CellTableInputs const& in) {
-  if (!in.ordered || !in.rich || !in.sliced || !in.sliced_modes_of ||
-      !in.volatile_of)
-    throw Exception(
-        "build_cell_table: ordered, rich, sliced, sliced_modes_of and "
-        "volatile_of are all required");
+  SEQUANT_ENFORCE(
+      in.ordered && in.rich && in.sliced && in.sliced_modes_of &&
+          in.volatile_of,
+      "build_cell_table: ordered, rich, sliced, sliced_modes_of and "
+      "volatile_of are all required");
   detail::CellBuildState st;
   container::svector<std::pair<LoopKey, int>> path;
   container::svector<std::wstring> path_spaces;

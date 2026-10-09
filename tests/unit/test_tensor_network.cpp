@@ -430,8 +430,10 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
     Edge e4({v4, v6}, &dummy);
 
     // can't connect same vertex more than once
-    REQUIRE_THROWS_AS(Edge({v4, v6, v6}), Exception);
-    REQUIRE_THROWS_AS(e4.connect_to(v6), Exception);
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(Edge({v4, v6, v6}), Exception);
+      REQUIRE_THROWS_AS(e4.connect_to(v6), Exception);
+    }
 
     Edge e5(v8, &dummy);
     e5.connect_to(v6);
@@ -490,7 +492,9 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       REQUIRE_NOTHROW(TN(*t1_x_t2));
 
       auto t1_x_t2_p_t2 = t1 * (t2 + t2);  // can only use a flat tensor product
-      REQUIRE_THROWS_AS(TN(*t1_x_t2_p_t2), Exception);
+      if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+        REQUIRE_THROWS_AS(TN(*t1_x_t2_p_t2), Exception);
+      }
 
       // must be covariant: no bra to bra or ket to ket
       if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {

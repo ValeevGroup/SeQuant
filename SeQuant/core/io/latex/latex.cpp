@@ -8,6 +8,7 @@
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <map>
@@ -139,11 +140,11 @@ std::basic_string<Char, Traits, Alloc> greek_characters_to_string_impl(
     auto is_ascii = [](Char c) { return static_cast<unsigned int>(c) <= 0x7F; };
 
     const Char ch = *it;
-    if (sizeof(Char) == 1 && !is_ascii(ch))
-      throw Exception(
-          "greek_characters_to_string<Char,...>(str): currently only supports "
-          "non-ASCII characters in str if Char is a wide character (wchar_t, "
-          "char16_t, or char32_t)");
+    SEQUANT_ENFORCE(
+        sizeof(Char) != 1 || is_ascii(ch),
+        "greek_characters_to_string<Char,...>(str): currently only supports "
+        "non-ASCII characters in str if Char is a wide character (wchar_t, "
+        "char16_t, or char32_t)");
 
     // skip ASCII characters
     if (!is_ascii(ch)) {
@@ -194,13 +195,12 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
 
     const Char ch = *it;
     if (it + 1 != end) next_ch = *(it + 1);
-    if (sizeof(Char) == 1 &&
-        ((it == begin && !is_ascii(ch)) || (next_ch && !is_ascii(*next_ch)))) {
-      throw Exception(
-          "diactrics_to_string<Char,...>(str): currently only supports "
-          "non-ASCII characters in str if Char is a wide character (wchar_t, "
-          "char16_t, or char32_t)");
-    }
+    SEQUANT_ENFORCE(
+        !(sizeof(Char) == 1 &&
+          ((it == begin && !is_ascii(ch)) || (next_ch && !is_ascii(*next_ch)))),
+        "diactrics_to_string<Char,...>(str): currently only supports "
+        "non-ASCII characters in str if Char is a wide character (wchar_t, "
+        "char16_t, or char32_t)");
     // Combining diacritics:
     // https://www.ncbi.nlm.nih.gov/staff/beck/charents/accents.html
     if (next_ch && !is_ascii(*next_ch)) {

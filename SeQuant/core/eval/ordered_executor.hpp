@@ -60,14 +60,11 @@ ordered_n_batches_by_loop(
   auto const add = [&](auto&& self, ScopeBlock const& b) -> void {
     LoopKey const key = b.level.key();
     if (!by_loop->count(key)) {
-      // Refusal (not an invariant): the caller is required to install the
-      // backend array-ops before a batched schedule runs. A throw, not an
-      // assert -- SEQUANT_ASSERT is compiled out in non-Debug builds, and
-      // without the ops there is nothing to fall back on.
-      if (!aops)
-        throw Exception(
-            "ordered_n_batches_by_loop: a batched schedule requires backend "
-            "array-ops (CacheManager::set_array_ops)");
+      // A batched schedule requires backend array-ops; there is no fallback.
+      SEQUANT_ENFORCE(
+          aops,
+          "ordered_n_batches_by_loop: a batched schedule requires backend "
+          "array-ops (CacheManager::set_array_ops)");
       by_loop->emplace(key, aops->axis_batches(b.axis, target(b.axis)).size());
     }
     for (Step const& s : b.steps)
@@ -692,12 +689,11 @@ void run_ordered_contracted_block(
   (void)is_volatile;
   // Refusal: an ill-formed call -- every cell id below indexes `table` but is
   // resolved through `registry`, so two different tables silently address
-  // different cells. Throw (not SEQUANT_ASSERT, which is compiled out in
-  // non-Debug builds).
-  if (!table || &registry.table() != table)
-    throw Exception(
-        "run_ordered_contracted_block: the registry and the table passed here "
-        "must be the same table");
+  // different cells.
+  SEQUANT_ENFORCE(
+      table && &registry.table() == table,
+      "run_ordered_contracted_block: the registry and the table passed here "
+      "must be the same table");
 
   // Backend array-ops (zero destination + axis chunking), sourced from the
   // cache chain (the backend -- mpqc's registries or a test's leaf source --
@@ -705,23 +701,21 @@ void run_ordered_contracted_block(
   BackendArrayOps const* const aops = parent_cache.array_ops();
   // Refusal: unsupported input -- a batched block cannot be realized at all
   // without the backend ops.
-  if (!aops)
-    throw Exception(
-        "evaluate_ordered_schedule: batched eval requires backend array-ops "
-        "(CacheManager::set_array_ops)");
+  SEQUANT_ENFORCE(
+      aops,
+      "evaluate_ordered_schedule: batched eval requires backend array-ops "
+      "(CacheManager::set_array_ops)");
 
   // R4: loud guard on this block's batch-mode kind. The batch-loop primitive
   // below realizes Contracted and External blocks uniformly (their difference
   // is carried entirely by each Assemble cell's own kind), so both are
   // supported; any other BatchModeType value is a schedule this executor
   // cannot interpret and must refuse loudly rather than silently mis-run.
-  // Refusal, hence a throw: SEQUANT_ASSERT is compiled out in non-Debug
-  // builds, which would turn the refusal into a mis-run.
-  if (block.kind != BatchModeType::Contracted &&
-      block.kind != BatchModeType::External)
-    throw Exception(
-        "evaluate_ordered_schedule: unsupported ScopeBlock batch-mode kind -- "
-        "only Contracted/External are realizable");
+  SEQUANT_ENFORCE(
+      block.kind == BatchModeType::Contracted ||
+          block.kind == BatchModeType::External,
+      "evaluate_ordered_schedule: unsupported ScopeBlock batch-mode kind -- "
+      "only Contracted/External are realizable");
 
   auto const resolve = [&](std::size_t vid) -> node_t const& {
     return resolve_value_node(vmap, rich, vid, "loop-block value_id");
@@ -1673,9 +1667,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     // canonical->orientation return convention every production uses.
     auto const ph = (*roots[i])->canon_phase();
     pre_results[i] = (ph == 1) ? std::move(ptr) : ptr->mult_by_phase(ph);
-    if (!pre_results[i])
-      throw Exception(
-          "evaluate_ordered_schedule: forest root was never produced");
+    SEQUANT_ENFORCE(
+        pre_results[i],
+        "evaluate_ordered_schedule: forest root was never produced");
   }
 
   // Diagnostic: what the registry is still holding now that the walk is over
