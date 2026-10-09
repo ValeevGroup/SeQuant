@@ -203,6 +203,12 @@ TEST_CASE("mbpt multireference regressions", "[mbpt]") {
     CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1,u_3;u_2,u_4}")),
                EquivalentTo(L"γ{u_1,u_3;u_2,u_4}:A-C-S"));
   }
+
+  SECTION("bare abstract operators retain their reference average") {
+    const auto expected = tensor::ref_av(tensor::H(1));
+    REQUIRE(expected != ex<Constant>(0));
+    CHECK_THAT(op::ref_av(op::H(1)), EquivalentTo(expected));
+  }
 }
 
 TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
