@@ -6,6 +6,7 @@
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
@@ -1388,6 +1389,8 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
     expand(result);
     // flatten(result);  // TODO where is flatten?
     auto project_rdm_indices_to_target = [&](ExprPtr& exptr) {
+      const auto named_indices =
+          CanonicalizeOptions::default_options().named_indices;
       auto impl_for_single_tn = [&](ProductPtr& product_ptr) {
         // visit every index of every tensor in the TN
         auto for_each_index_in_tn = [](const auto& product_ptr,
@@ -1413,10 +1416,17 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
           }
         };
         for_each_index_in_tn(product_ptr, retrieve_rdm_and_all_indices);
+        if (rdm_indices.empty()) return;
 
-        // compute RDM->target replacement rules
+        // compute RDM->target replacement rules; external indices stay
+        const auto index_counts =
+            named_indices ? container::map<Index, IndexSlotCounters>{}
+                          : get_used_indices_with_counts(product_ptr);
         container::map<Index, Index> replacement_rules;
         ranges::for_each(rdm_indices, [&](const Index& idx) {
+          if (named_indices ? named_indices->contains(idx)
+                            : index_counts.at(idx).nonproto() <= 1)
+            return;
           const auto target_type =
               isr->intersection(idx.space(), target_rdm_space_type);
           if (target_type) {
