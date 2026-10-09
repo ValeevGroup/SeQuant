@@ -172,6 +172,32 @@ TEST_CASE("mbpt_operator_type_id", "[mbpt]") {
           "sequant::mbpt::default_qns_tag>,FermiDirac>");
 }
 
+TEST_CASE("mbpt multireference regressions", "[mbpt]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  auto ctx = get_default_context();
+  ctx.set(make_mr_spaces());
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  SECTION("RDM replacement preserves external indices") {
+    for (const bool named : {false, true}) {
+      auto opts = CanonicalizeOptions::default_options();
+      if (named)
+        opts.named_indices = container::set<Index>{
+            Index(L"u_1"), Index(L"u_2"), Index(L"u_3"), Index(L"u_4")};
+      auto scope = set_scoped_modified_default_context(
+          [&opts](sequant::Context& ctx) { ctx.set(opts); });
+      CAPTURE(named);
+      CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1;u_2} * ã{u_3;u_4}")),
+                 EquivalentTo(L"γ{u_1,u_3;u_2,u_4}:A-C-S + "
+                              L"s{u_1;u_4} * γ{u_3;u_2}"));
+      if (named)
+        CHECK_THAT(tensor::ref_av(deserialize(L"x{u_1;u_2} * ã{u_2;u_1}")),
+                   EquivalentTo(L"x{u_1;u_2} * γ{u_2;u_1}"));
+    }
+  }
+}
+
 TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
   SECTION("cardinal tensor labels") {
     // every reference density label sorts as a cardinal label
