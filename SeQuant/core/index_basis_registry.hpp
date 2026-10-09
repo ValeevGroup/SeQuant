@@ -561,11 +561,11 @@ class IndexBasisRegistry {
     }
 
     // process dimension and Field, set to defaults if not given
-    const auto [size, field] = parse_size_and_field(args...);
+    const auto [extent, field] = parse_extent_and_field(args...);
 
     // make space
-    IndexSpace space(std::forward<S>(type_label), type, qns, size.value_or(10),
-                     field.value_or(Field::Complex));
+    IndexSpace space(std::forward<S>(type_label), type, qns,
+                     extent.value_or(10), field.value_or(Field::Complex));
     this->add(space);
 
     // process attribute tags
@@ -614,7 +614,7 @@ class IndexBasisRegistry {
                   "IndexBasisRegistry::add(label, basis): attribute tags are "
                   "per space; only an integral extent, an IndexSpaceMetric "
                   "and a Field may be given for a basis instance");
-    const auto [size, field] = parse_size_and_field(args...);
+    const auto [extent, field] = parse_extent_and_field(args...);
     auto h_metric = boost::hana::filter(h_args, [](auto arg) {
       return boost::hana::type_c<decltype(arg)> ==
              boost::hana::type_c<IndexSpaceMetric>;
@@ -648,7 +648,7 @@ class IndexBasisRegistry {
                       "'");
     IndexBasis named{
         *space, basis.basis_instance(),
-        key,    size ? std::optional<std::size_t>(*size) : basis.extent_,
+        key,    extent ? std::optional<std::size_t>(*extent) : basis.extent_,
         metric, field ? field : basis.field_};
     bases_.emplace(std::move(key), std::move(named));
     ++named_count_;
@@ -1659,11 +1659,12 @@ class IndexBasisRegistry {
     return it->second;
   }
 
-  /// @return the dimension (the integral argument) and the Field among
+  /// @return the extent (the integral argument: a space's dimension or a
+  /// basis's extent) and the Field among
   /// @p args, std::nullopt for each that is not given
   template <typename... Args>
   static std::pair<std::optional<unsigned long>, std::optional<Field>>
-  parse_size_and_field(const Args&... args) {
+  parse_extent_and_field(const Args&... args) {
     std::pair<std::optional<unsigned long>, std::optional<Field>> result;
     auto h_args = boost::hana::make_tuple(args...);
 
