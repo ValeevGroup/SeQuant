@@ -190,6 +190,7 @@ class IndexBasisRegistry {
   IndexBasisRegistry(const IndexBasisRegistry& other)
       : bases_(other.bases_),
         named_count_(other.named_count_),
+        follows_(other.follows_),
         physical_particle_attribute_mask_(
             other.physical_particle_attribute_mask_),
         vacocc_(other.vacocc_),
@@ -202,6 +203,7 @@ class IndexBasisRegistry {
   IndexBasisRegistry(IndexBasisRegistry&& other)
       : bases_(std::move(other.bases_)),
         named_count_(other.named_count_),
+        follows_(std::move(other.follows_)),
         physical_particle_attribute_mask_(
             std::move(other.physical_particle_attribute_mask_)),
         vacocc_(std::move(other.vacocc_)),
@@ -210,6 +212,7 @@ class IndexBasisRegistry {
         hole_space_(std::move(other.hole_space_)),
         particle_space_(std::move(other.particle_space_)) {
     other.named_count_ = 0;
+    other.follows_.clear();
     // what other has memoized describes the spaces it gave up
     other.clear_memoized_data_and_return_this();
   }
@@ -218,6 +221,7 @@ class IndexBasisRegistry {
   IndexBasisRegistry& operator=(const IndexBasisRegistry& other) {
     bases_ = other.bases_;
     named_count_ = other.named_count_;
+    follows_ = other.follows_;
     physical_particle_attribute_mask_ = other.physical_particle_attribute_mask_;
     vacocc_ = other.vacocc_;
     refocc_ = other.refocc_;
@@ -232,6 +236,7 @@ class IndexBasisRegistry {
     if (this == &other) return *this;
     bases_ = std::move(other.bases_);
     named_count_ = other.named_count_;
+    follows_ = std::move(other.follows_);
     physical_particle_attribute_mask_ =
         std::move(other.physical_particle_attribute_mask_);
     vacocc_ = std::move(other.vacocc_);
@@ -240,6 +245,7 @@ class IndexBasisRegistry {
     hole_space_ = std::move(other.hole_space_);
     particle_space_ = std::move(other.particle_space_);
     other.named_count_ = 0;
+    other.follows_.clear();
     // what other has memoized describes the spaces it gave up
     other.clear_memoized_data_and_return_this();
     return clear_memoized_data_and_return_this();
@@ -309,10 +315,12 @@ class IndexBasisRegistry {
   template <basic_string_convertible S>
   IndexBasisRegistry& extent(S&& label, std::size_t n) {
     auto& entry = entry_or_throw(label);
-    if (entry.has_basis_instance())
+    if (entry.has_basis_instance()) {
+      throw_if_follower(entry, "extent");
       entry.extent(n);
-    else
+    } else
       for (IndexSpace& space : space_copies_of(entry)) space.dimension(n);
+    refresh_followers();
     return clear_memoized_data_and_return_this();
   }
 
@@ -333,10 +341,12 @@ class IndexBasisRegistry {
   template <basic_string_convertible S>
   IndexBasisRegistry& field(S&& label, Field f) {
     auto& entry = entry_or_throw(label);
-    if (entry.has_basis_instance())
+    if (entry.has_basis_instance()) {
+      throw_if_follower(entry, "field");
       entry.field(f);
-    else
+    } else
       for (IndexSpace& space : space_copies_of(entry)) space.field(f);
+    refresh_followers();
     return clear_memoized_data_and_return_this();
   }
 
@@ -355,8 +365,58 @@ class IndexBasisRegistry {
       throw Exception("IndexBasisRegistry::metric: '" + toUtf8(label) +
                       "' is a space, whose own basis is orthonormal; register "
                       "a non-orthonormal basis of it under a name");
+    throw_if_follower(entry, "metric");
     entry.metric(m);
+    refresh_followers();
     return clear_memoized_data_and_return_this();
+  }
+
+  /// @brief makes the named basis instance registered under @p label follow
+  /// the one registered under @p source: its extent, metric and field are
+  /// those of @p source, now and whenever they change (e.g. the PAO bases
+  /// follow the AO basis they are projected from), and cannot be set through
+  /// its own label
+  /// @param label the label of the follower
+  /// @param source the label of the entry to follow
+  /// @return reference to `this`
+  /// @throw IndexSpace::bad_key if no entry is registered under either label
+  /// @throw Exception if either entry is a space, if the two are one, if
+  ///        @p source follows an entry itself or if @p label is followed by
+  ///        one (an entry follows directly, not through another)
+  template <basic_string_convertible S1, basic_string_convertible S2>
+  IndexBasisRegistry& follow(S1&& label, S2&& source) {
+    const IndexBasis& follower = entry_or_throw(label);
+    const IndexBasis& followed = entry_or_throw(source);
+    if (!follower.has_basis_instance() || !followed.has_basis_instance())
+      throw Exception("IndexBasisRegistry::follow: '" + toUtf8(label) +
+                      "' and '" + toUtf8(source) +
+                      "' must both be named basis instances");
+    if (follower.name() == followed.name())
+      throw Exception("IndexBasisRegistry::follow: '" + toUtf8(label) +
+                      "' cannot follow itself");
+    if (auto it = follows_.find(followed.name()); it != follows_.end())
+      throw Exception("IndexBasisRegistry::follow: '" + toUtf8(source) +
+                      "' follows '" + toUtf8(it->second) +
+                      "' itself; follow that one instead");
+    for (const auto& [f, s] : follows_)
+      if (s == follower.name())
+        throw Exception("IndexBasisRegistry::follow: '" + toUtf8(label) +
+                        "' is followed by '" + toUtf8(f) +
+                        "'; make that one follow '" + toUtf8(source) +
+                        "' instead");
+    follows_.insert_or_assign(follower.name(), followed.name());
+    refresh_followers();
+    return clear_memoized_data_and_return_this();
+  }
+
+  /// @return the label of the entry the named basis instance registered
+  /// under @p label follows (see follow()), std::nullopt if it follows none
+  template <basic_string_convertible S>
+  std::optional<std::wstring_view> follows(S&& label) const {
+    auto it =
+        follows_.find(IndexSpace::reduce_key(to_basic_string_view(label)));
+    if (it == follows_.end()) return std::nullopt;
+    return std::wstring_view(it->second);
   }
 
   /// @brief retrieve a pointer to IndexSpace from the registry by the label
@@ -812,6 +872,11 @@ class IndexBasisRegistry {
   IndexBasisRegistry& remove(S&& label) {
     auto it = bases_.find(IndexSpace::reduce_key(to_basic_string_view(label)));
     if (it != bases_.end() && !is_space(*it)) {
+      // its followers keep the values they mirror and follow no more
+      const std::wstring name = it->first;
+      follows_.erase(name);
+      for (auto f = follows_.begin(); f != follows_.end();)
+        f = f->second == name ? follows_.erase(f) : std::next(f);
       bases_.erase(it);
       --named_count_;
       return clear_memoized_data_and_return_this();
@@ -1619,6 +1684,29 @@ class IndexBasisRegistry {
  private:
   table_type bases_;
   std::size_t named_count_ = 0;  // the number of named basis instances
+  // follower label -> label of the named basis instance it follows
+  container::map<std::wstring, std::wstring, std::less<>> follows_;
+
+  /// writes into every follower the extent, metric and field of the entry it
+  /// follows
+  void refresh_followers() {
+    for (const auto& [follower, source] : follows_) {
+      const IndexBasis& src = bases_.find(source)->second;
+      IndexBasis& dst = bases_.find(follower)->second;
+      dst.extent(src.extent());
+      dst.metric(src.metric());
+      dst.field(src.field());
+    }
+  }
+
+  /// @throw Exception if the named entry @p entry follows another, naming
+  /// the setter @p what
+  void throw_if_follower(const IndexBasis& entry, const char* what) const {
+    if (auto it = follows_.find(entry.name()); it != follows_.end())
+      throw Exception(std::string("IndexBasisRegistry::") + what + ": '" +
+                      toUtf8(it->first) + "' follows '" + toUtf8(it->second) +
+                      "'; set the " + what + " of that one");
+  }
 
   /// @throw Exception, naming @p caller, unless @p label is a valid label of
   /// a space or of a named basis instance, one that indices can be parsed
@@ -1928,9 +2016,9 @@ class IndexBasisRegistry {
 
   /// registries are equal if they have equal entries (spaces and named basis
   /// instances, under equal labels), of equal dimension, extent, metric and
-  /// field, and specify the same physical-particle
-  /// attributes and vacuum-occupied, reference-occupied, complete, hole and
-  /// particle spaces
+  /// field, with the same entries following the same ones (see follow()),
+  /// and specify the same physical-particle attributes and vacuum-occupied,
+  /// reference-occupied, complete, hole and particle spaces
   friend bool operator==(const IndexBasisRegistry& isr1,
                          const IndexBasisRegistry& isr2) {
     // IndexBasis equality ignores the metadata
@@ -1944,6 +2032,7 @@ class IndexBasisRegistry {
                         e1.second.metric() == e2.second.metric() &&
                         e1.second.field() == e2.second.field();
                }) &&
+           isr1.follows_ == isr2.follows_ &&
            isr1.physical_particle_attribute_mask_ ==
                isr2.physical_particle_attribute_mask_ &&
            isr1.vacocc_ == isr2.vacocc_ && isr1.refocc_ == isr2.refocc_ &&

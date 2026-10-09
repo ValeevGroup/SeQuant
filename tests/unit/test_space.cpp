@@ -673,6 +673,73 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(isr5->retrieve_basis(L"μ̃").metric() == IndexSpaceMetric::Unit);
   }
 
+  SECTION("basis follows basis") {
+    auto isr = sequant::mbpt::make_min_sr_spaces();
+    const IndexSpace p = isr->retrieve(L"p"), a = isr->retrieve(L"a");
+    isr->add(L"μ", IndexBasis{p, 7}, 500ul, IndexSpaceMetric::General)
+        .add(L"μ̃", IndexBasis{a, 7})
+        .add(L"ν̃", IndexBasis{a, 8});
+    REQUIRE(isr->retrieve_basis(L"μ̃").extent() == a.dimension());
+    CHECK_FALSE(isr->follows(L"μ̃"));
+    REQUIRE_NOTHROW(isr->follow(L"μ̃", L"μ"));
+    CHECK(isr->follows(L"μ̃") == std::optional<std::wstring_view>{L"μ"});
+    // the follower mirrors the source now and on every change of it
+    CHECK(isr->retrieve_basis(L"μ̃").extent() == 500);
+    CHECK(isr->retrieve_basis(L"μ̃").own_extent() == 500);
+    CHECK(isr->retrieve_basis(L"μ̃").metric() == IndexSpaceMetric::General);
+    CHECK(isr->retrieve_basis(L"μ̃").field() == p.field());
+    isr->extent(L"μ", 600).metric(L"μ", IndexSpaceMetric::Unit);
+    CHECK(isr->retrieve_basis(L"μ̃").extent() == 600);
+    CHECK(isr->retrieve_basis(L"μ̃").metric() == IndexSpaceMetric::Unit);
+    // ... also when the source follows its space
+    isr->add(L"κ", IndexBasis{p, 9}).follow(L"ν̃", L"κ");
+    CHECK(isr->retrieve_basis(L"ν̃").extent() == p.dimension());
+    isr->extent(L"p", 700);
+    CHECK(isr->retrieve_basis(L"κ").extent() == 700);
+    CHECK(isr->retrieve_basis(L"ν̃").extent() == 700);
+    const Field other = p.field() == Field::Real ? Field::Complex : Field::Real;
+    isr->field(L"p", other);
+    CHECK(isr->retrieve_basis(L"ν̃").field() == other);
+    // a follower's metadata is set through the source
+    CHECK_THROWS_WITH(isr->extent(L"μ̃", 1),
+                      Catch::Matchers::ContainsSubstring("follows"));
+    CHECK_THROWS_WITH(isr->field(L"μ̃", Field::Real),
+                      Catch::Matchers::ContainsSubstring("follows"));
+    CHECK_THROWS_WITH(isr->metric(L"μ̃", IndexSpaceMetric::General),
+                      Catch::Matchers::ContainsSubstring("follows"));
+    // no chains, no self, no spaces
+    CHECK_THROWS(isr->follow(L"κ", L"ν̃"));  // ν̃ follows κ
+    CHECK_THROWS(isr->follow(L"ν̃", L"μ̃"));  // μ̃ follows μ
+    CHECK_THROWS(isr->follow(L"μ", L"μ"));
+    CHECK_THROWS(isr->follow(L"μ̃", L"a"));
+    CHECK_THROWS(isr->follow(L"a", L"μ"));
+    CHECK_THROWS_AS(isr->follow(L"μ̃", L"ζ"), IndexSpace::bad_key);
+    // re-pointing a follower
+    REQUIRE_NOTHROW(isr->follow(L"μ̃", L"κ"));
+    CHECK(isr->retrieve_basis(L"μ̃").extent() == 700);
+    // copies follow alike, and equality sees who follows whom
+    IndexBasisRegistry copy = *isr;
+    CHECK(copy == *isr);
+    CHECK(copy.follows(L"μ̃") == std::optional<std::wstring_view>{L"κ"});
+    copy.extent(L"κ", 701);
+    CHECK(copy.retrieve_basis(L"μ̃").extent() == 701);
+    CHECK(isr->retrieve_basis(L"μ̃").extent() == 700);
+    copy.extent(L"κ", 700);
+    CHECK(copy == *isr);
+    copy.remove(L"ν̃").add(L"ν̃", IndexBasis{a, 8}, 700ul);
+    CHECK_FALSE(copy == *isr);  // same values, ν̃ no longer follows κ
+    // removing the source detaches the followers, which keep the values
+    isr->remove(L"κ");
+    CHECK_FALSE(isr->follows(L"μ̃"));
+    CHECK_FALSE(isr->follows(L"ν̃"));
+    CHECK(isr->retrieve_basis(L"μ̃").extent() == 700);
+    REQUIRE_NOTHROW(isr->extent(L"μ̃", 1));
+    // removing a follower forgets it
+    isr->follow(L"ν̃", L"μ").remove(L"ν̃");
+    isr->add(L"ν̃", IndexBasis{a, 8});
+    CHECK_FALSE(isr->follows(L"ν̃"));
+  }
+
   SECTION("paper 1 example") {
     IndexBasisRegistry isr;
     using namespace sequant::mbpt;

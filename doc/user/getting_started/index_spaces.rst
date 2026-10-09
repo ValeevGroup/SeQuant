@@ -49,7 +49,10 @@ label tells them apart from the space's own basis by :func:`sequant::IndexBasis:
 is the space's own basis up to an orthonormal rotation, so its extent is the dimension of the space, its metric is
 unit and its field is the space's, and its basis key is its space's, so evaluation sizes, tiles and slices it as the
 space. That is right for a rotation of the space, such as a localized basis; a basis of a different extent, such as a
-truncated or an overcomplete set, or a non-orthonormal one must be registered under a name.
+truncated or an overcomplete set, or a non-orthonormal one must be registered under a name. A named basis can also be
+made to follow another named basis (:func:`sequant::IndexBasisRegistry::follow`): its extent, metric and field are then
+those of the basis it follows, set through that one's label, as the PAO bases follow the AO basis they are projected
+from.
 
 .. literalinclude:: /examples/user/getting_started/index_basis_registry.cpp
    :language: cpp

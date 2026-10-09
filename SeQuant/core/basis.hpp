@@ -134,14 +134,16 @@ class IndexBasis {
   /// (IndexSpace::field()) unless registered with a field of its own
   Field field() const noexcept { return field_ ? *field_ : space_.field(); }
 
-  /// @return the extent the basis was registered with, null if extent()
+  /// @return the extent the basis was registered with (or mirrors from the
+  /// entry it follows, see IndexBasisRegistry::follow()), null if extent()
   /// follows the dimension of its space (which the registry's
   /// IndexBasisRegistry::extent(label, n) for the space's label then sets)
   const std::optional<std::size_t>& own_extent() const noexcept {
     return extent_;
   }
 
-  /// @return the field the basis was registered with, null if field()
+  /// @return the field the basis was registered with (or mirrors from the
+  /// entry it follows, see IndexBasisRegistry::follow()), null if field()
   /// follows that of its space's own basis (which the registry's
   /// IndexBasisRegistry::field(label, f) for the space's label then sets)
   const std::optional<Field>& own_field() const noexcept { return field_; }
