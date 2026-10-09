@@ -6,15 +6,12 @@
 
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
-#include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/rules/csv.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
-#include <algorithm>
-#include <cstdlib>
 #include <fstream>
 #include <map>
 #include <string>
@@ -84,12 +81,6 @@ std::pair<ExprPtr, std::size_t> to_space_encoding(ExprPtr const& e,
   return {m.empty() ? e->clone() : transform_expr(e, m), m.size()};
 }
 
-/// evidence files next to the ledger when SEQUANT_IBR_WORK is set; UTF-8
-/// through a byte stream
-void evidence(std::string const& name, std::wstring const& text) {
-  if (const char* work = std::getenv("SEQUANT_IBR_WORK"))
-    std::ofstream(std::string(work) + "/" + name) << toUtf8(text);
-}
 }  // namespace sequant::tests::pao
 
 TEST_CASE("pao-named-basis-equivalence", "[mbpt][csv][basis][valgrind_skip]") {
@@ -126,52 +117,10 @@ TEST_CASE("pao-named-basis-equivalence", "[mbpt][csv][basis][valgrind_skip]") {
       }
       auto [mapped_c, n_mapped_c] = to_space_encoding(named_c, pao, mu_space);
       CHECK(n_mapped_c > 0);
-      // (iv) evidence, not a gate: the named form's canonical form, mapped,
-      // against the μ̃-space one term for term
-      {
-        const bool same = *old_c == *mapped_c;
-        std::wstring text = same ? L"identical\n" : L"differ\n";
-        if (!same && old_c->is<Sum>() && mapped_c->is<Sum>()) {
-          auto const& x = old_c->as<Sum>().summands();
-          auto const& y = mapped_c->as<Sum>().summands();
-          for (std::size_t t = 0; t < std::min(x.size(), y.size()); ++t)
-            if (*x[t] != *y[t]) {
-              text += L"first differing term " + std::to_wstring(t) +
-                      L"\nspace: " + serialize(x[t]) + L"\nbasis: " +
-                      serialize(y[t]) + L"\n";
-              break;
-            }
-        }
-        if (!same)
-          text += L"space:\n" + serialize(old_c) + L"\nbasis:\n" +
-                  serialize(mapped_c) + L"\n";
-        evidence("g1-iv-eq" + std::to_string(k) + ".txt", text);
-        INFO("(iv) canonical forms " << (same ? "identical" : "differ"));
-        CHECK(true);
-      }
       simplify(mapped_c);
       CHECK(*old_c == *mapped_c);
       CHECK(tests::csv::term_count(old_eqs[k]) ==
             tests::csv::term_count(new_eqs[k]));
-    }
-  }
-  SECTION("G2 text (evidence, not a gate)") {
-    for (std::size_t k = 0; k < old_eqs.size(); ++k) {
-      std::wstring new_text, old_text;
-      {
-        auto s = set_scoped_default_context(ctx_new);
-        new_text = serialize(new_eqs[k]);
-      }
-      {
-        auto s = set_scoped_default_context(ctx_old);
-        old_text = serialize(old_eqs[k]);
-      }
-      evidence("g2-eq" + std::to_string(k) + "-space.txt", old_text);
-      evidence("g2-eq" + std::to_string(k) + "-basis.txt", new_text);
-      INFO("equation " << k << ": texts "
-                       << (old_text == new_text ? "identical"
-                                                : "differ (b1-b4)"));
-      CHECK(true);
     }
   }
   SECTION("G3 round trip") {
@@ -234,35 +183,5 @@ TEST_CASE("pao-named-basis-equivalence", "[mbpt][csv][basis][valgrind_skip]") {
     const IndexSpace a = ctx_new.index_basis_registry()->retrieve(L"a");
     CHECK((IndexBasis{a} < pao && IndexBasis{a, 0} < pao &&
            IndexBasis{a, 2} < pao && IndexBasis{a, 10} < pao));
-  }
-  SECTION("G6 optimizer node counts (evidence, not a gate)") {
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    std::wstring report;
-    for (std::size_t k = 0; k < old_eqs.size(); ++k) {
-      auto count = [](Context const& ctx, ExprPtr const& e) {
-        auto scoped = set_scoped_default_context(ctx);
-        const Sum::summands_type terms =
-            e->is<Sum>() ? e->as<Sum>().summands() : Sum::summands_type{e};
-        // extents: approximate_size; every CSV composite a domain of 12
-        const OptimizeOptions opts{
-            .inner_pow = [](Index const&, std::size_t) { return 12.0; }};
-        std::size_t nodes = 0;
-        for (auto const& term : terms)
-          binarize(optimize(term, opts)).visit([&nodes](auto const&) {
-            ++nodes;
-          });
-        return nodes;
-      };
-      const auto n_old = count(ctx_old, old_eqs[k]->clone()),
-                 n_new = count(ctx_new, new_eqs[k]->clone());
-      report += L"eq " + std::to_wstring(k) + L": space " +
-                std::to_wstring(n_old) + L" basis " + std::to_wstring(n_new) +
-                L"\n";
-      INFO("equation " << k << ": binary nodes space=" << n_old
-                       << " basis=" << n_new);
-      CHECK(true);
-    }
-    evidence("g6-node-counts.txt", report);
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   }
 }
