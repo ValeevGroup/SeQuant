@@ -299,8 +299,9 @@ class IndexBasisRegistry {
   }
 
   /// @brief sets the extent of the entry registered under a label: the
-  /// dimension of a space (the extent of its own basis), or the extent of a
-  /// named basis instance
+  /// dimension of a space (the extent of its own basis, and of its named
+  /// basis instances registered without an extent of their own), or the
+  /// extent of a named basis instance
   /// @param label a label of a space or of a named basis instance
   /// @param n the extent
   /// @return reference to `this`
@@ -311,7 +312,7 @@ class IndexBasisRegistry {
     if (entry.has_basis_instance())
       entry.extent(n);
     else
-      mutable_space(entry).dimension(n);
+      for (IndexSpace& space : space_copies_of(entry)) space.dimension(n);
     return clear_memoized_data_and_return_this();
   }
 
@@ -323,7 +324,8 @@ class IndexBasisRegistry {
   }
 
   /// @brief sets the Field of the entry registered under a label: of a
-  /// space's own basis, or of a named basis instance
+  /// space's own basis (and of its named basis instances registered without
+  /// a field of their own), or of a named basis instance
   /// @param label a label of a space or of a named basis instance
   /// @param f the Field
   /// @return reference to `this`
@@ -334,7 +336,7 @@ class IndexBasisRegistry {
     if (entry.has_basis_instance())
       entry.field(f);
     else
-      mutable_space(entry).field(f);
+      for (IndexSpace& space : space_copies_of(entry)) space.field(f);
     return clear_memoized_data_and_return_this();
   }
 
@@ -362,23 +364,12 @@ class IndexBasisRegistry {
   /// Index::label() )
   /// @return pointer to IndexSpace associated with that key, or nullptr if not
   /// found or if the key names a basis instance
+  /// @note a space's metadata is written with extent(label, n) and
+  /// field(label, f), which also reach its named basis instances
   template <basic_string_convertible S>
   const IndexSpace* retrieve_ptr(S&& label) const {
     const auto* b = retrieve_basis_ptr(std::forward<S>(label));
     return b && !b->has_basis_instance() ? &b->space() : nullptr;
-  }
-
-  /// @brief retrieve a pointer to IndexSpace from the registry by the label
-  /// @param label a @c base_key of an IndexSpace, or a label of an Index (see
-  /// Index::label() )
-  /// @return pointer to IndexSpace associated with that key, or nullptr if not
-  /// found or if the key names a basis instance
-  template <basic_string_convertible S>
-  IndexSpace* retrieve_ptr(S&& label) {
-    auto it = bases_.find(IndexSpace::reduce_key(to_basic_string_view(label)));
-    return it != bases_.end() && !it->second.has_basis_instance()
-               ? &mutable_space(it->second)
-               : nullptr;
   }
 
   /// @brief retrieve an IndexSpace from the registry by the label
@@ -1640,6 +1631,19 @@ class IndexBasisRegistry {
   /// from IndexBasis equality and from the table key)
   static IndexSpace& mutable_space(IndexBasis& b) {
     return const_cast<IndexSpace&>(b.space());
+  }
+
+  /// @return the space of the space entry @p entry and the space copies of
+  /// every named basis instance of that space, for metadata writes
+  container::svector<std::reference_wrapper<IndexSpace>> space_copies_of(
+      IndexBasis& entry) {
+    SEQUANT_ASSERT(!entry.has_basis_instance());
+    container::svector<std::reference_wrapper<IndexSpace>> result;
+    result.emplace_back(mutable_space(entry));
+    for (auto& [label, basis] : bases_)
+      if (basis.has_basis_instance() && basis.space() == entry.space())
+        result.emplace_back(mutable_space(basis));
+    return result;
   }
 
   /// @return the entry registered under @p label

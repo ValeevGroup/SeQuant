@@ -70,13 +70,8 @@ int main(int argc, char* argv[]) {
   {
     auto reg = std::make_shared<IndexBasisRegistry>(
         *get_default_context().index_basis_registry());
-    auto occ = reg->retrieve_ptr(L"i");
-    auto uocc = reg->retrieve_ptr(L"a");
-    SEQUANT_ASSERT(occ);
-    SEQUANT_ASSERT(uocc);
-    occ->dimension(10);
-    uocc->dimension(100);
-    SEQUANT_ASSERT(uocc->dimension() == 100);
+    reg->extent(L"i", 10).extent(L"a", 100);
+    SEQUANT_ASSERT(reg->retrieve(L"a").dimension() == 100);
     set_default_context(get_default_context_snapshot().set(reg));
   }
 

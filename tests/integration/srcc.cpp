@@ -41,7 +41,7 @@ void apply_field(auto& reg, Field f) {
   std::vector<std::wstring> keys;
   for (auto const& s : reg) keys.push_back(s.base_key());
   for (auto const& k : keys)
-    if (auto* s = reg.retrieve_ptr(k)) s->field(f);
+    if (!k.empty()) reg.field(k, f);
 }
 
 /// types of CC equations to solve

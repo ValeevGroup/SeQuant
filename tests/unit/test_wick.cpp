@@ -1912,7 +1912,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         std::vector<std::wstring> keys;
         for (auto const& s : *sr_reg) keys.push_back(s.base_key());
         for (auto const& k : keys)
-          if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
+          if (!k.empty()) sr_reg->field(k, Field::Real);
         auto resetter = sequant::set_scoped_default_context(
             Context(get_default_context())
                 .set(sr_reg)
@@ -1953,7 +1953,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         std::vector<std::wstring> keys;
         for (auto const& s : *sr_reg) keys.push_back(s.base_key());
         for (auto const& k : keys)
-          if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
+          if (!k.empty()) sr_reg->field(k, Field::Real);
         auto resetter = sequant::set_scoped_default_context(
             Context(get_default_context())
                 .set(sr_reg)

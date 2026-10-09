@@ -122,7 +122,8 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(isr->contains(pao));
     CHECK(isr->contains(IndexBasis{a}));
     CHECK_FALSE(isr->contains(IndexBasis{a, 7}));
-    CHECK(isr->retrieve_ptr(L"μ̃") == nullptr);  // a name is not a space
+    CHECK(std::as_const(*isr).retrieve_ptr(L"μ̃") ==
+          nullptr);  // a name is not a space
     CHECK_THROWS_AS(isr->retrieve(L"μ̃"), IndexBasisRegistry::not_a_space);
     CHECK_THROWS_AS(isr->retrieve(L"μ̃"),
                     IndexSpace::bad_key);  // not_a_space is a bad_key
@@ -159,9 +160,11 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(isr->base_spaces().size() == nbase);  // unchanged by the registration
     // type/qns and attr lookups return the space entry, never the named
     // entry's copy
-    REQUIRE(isr->retrieve_ptr(L"a") != nullptr);
-    CHECK(isr->retrieve_ptr(a.type(), a.qns()) == isr->retrieve_ptr(L"a"));
-    CHECK(isr->retrieve_ptr(a.attr()) == isr->retrieve_ptr(L"a"));
+    REQUIRE(std::as_const(*isr).retrieve_ptr(L"a") != nullptr);
+    CHECK(isr->retrieve_ptr(a.type(), a.qns()) ==
+          std::as_const(*isr).retrieve_ptr(L"a"));
+    CHECK(isr->retrieve_ptr(a.attr()) ==
+          std::as_const(*isr).retrieve_ptr(L"a"));
     // ... also when the name sorts before the space's key (Ĩ < i): localized
     // occupied orbitals as basis instance 1 of i, with a size of their own
     const IndexSpace i = isr->retrieve(L"i");
@@ -169,15 +172,16 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE_NOTHROW(isr->add(L"Ĩ", IndexBasis{i, 1}, 50ul));
     REQUIRE(isr->bases().find(std::wstring_view(L"Ĩ")) <
             isr->bases().find(std::wstring_view(L"i")));
-    REQUIRE(isr->retrieve_ptr(L"i") != nullptr);
-    CHECK(isr->retrieve_ptr(i.attr()) == isr->retrieve_ptr(L"i"));
-    CHECK(isr->retrieve_ptr(i.type(), i.qns()) == isr->retrieve_ptr(L"i"));
+    REQUIRE(std::as_const(*isr).retrieve_ptr(L"i") != nullptr);
+    CHECK(isr->retrieve_ptr(i.attr()) ==
+          std::as_const(*isr).retrieve_ptr(L"i"));
+    CHECK(isr->retrieve_ptr(i.type(), i.qns()) ==
+          std::as_const(*isr).retrieve_ptr(L"i"));
     CHECK(isr->retrieve_ptr(i.attr())->dimension() == i.dimension());
     CHECK(isr->retrieve_ptr(i.type(), i.qns())->dimension() == i.dimension());
     REQUIRE_NOTHROW(isr->remove(L"Ĩ"));
 
-    // metadata by label, either kind; the non-const space pointer still writes
-    // space metadata
+    // metadata by label, either kind
     isr->extent(L"μ̃", 77)
         .field(L"μ̃", Field::Real)
         .metric(L"μ̃", IndexSpaceMetric::General);
@@ -192,13 +196,29 @@ TEST_CASE("index_space", "[elements]") {
     CHECK_THROWS_AS(isr->metric(L"a", IndexSpaceMetric::General), Exception);
     REQUIRE(std::ranges::find(isr->base_spaces(), a) !=
             isr->base_spaces().end());  // memoizes the base spaces
+    // ã: a named basis of a with no extent or field of its own
+    REQUIRE_NOTHROW(isr->add(L"ã", IndexBasis{a, 5}));
+    REQUIRE(isr->retrieve_basis(L"ã").extent() == a.dimension());
+    REQUIRE(isr->retrieve_basis(L"ã").field() == a.field());
     isr->extent(L"a", 33);
     CHECK(isr->retrieve(L"a").dimension() == 33);
     CHECK(std::ranges::find(isr->base_spaces(), a)->dimension() ==
           33);  // the memoized base spaces see the new size
-    CHECK(isr->retrieve_basis(L"μ̃").extent() == 77);  // entries are independent
-    isr->retrieve_ptr(L"a")->dimension(34);
+    CHECK(isr->retrieve_basis(L"μ̃").extent() == 77);  // its own extent
+    // a basis without an extent of its own has the space's, as set now
+    CHECK(isr->retrieve_basis(L"ã").extent() == 33);
+    CHECK(isr->retrieve_basis(L"ã").space().dimension() == 33);
+    CHECK(isr->retrieve_basis(L"μ̃").space().dimension() == 33);
+    const Field other_field =
+        a.field() == Field::Real ? Field::Complex : Field::Real;
+    isr->field(L"a", other_field);
+    CHECK(isr->retrieve_basis(L"ã").field() == other_field);
+    CHECK(isr->retrieve_basis(L"μ̃").field() == Field::Real);  // its own
+    isr->field(L"a", a.field());
+    isr->extent(L"a", 34);
     CHECK(isr->retrieve(L"a").dimension() == 34);
+    CHECK(isr->retrieve_basis(L"ã").extent() == 34);
+    REQUIRE_NOTHROW(isr->remove(L"ã"));
     CHECK_THROWS_AS(isr->extent(L"ζ", 1), IndexSpace::bad_key);
     // the deprecated spellings
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
@@ -242,8 +262,8 @@ TEST_CASE("index_space", "[elements]") {
                       Catch::Matchers::ContainsSubstring("μ̃"));
     CHECK_THROWS_WITH(isr->replace(a_other),
                       Catch::Matchers::ContainsSubstring("μ̃"));
-    REQUIRE(isr->retrieve_ptr(L"a") != nullptr);
-    CHECK(*isr->retrieve_ptr(L"a") == a);
+    REQUIRE(std::as_const(*isr).retrieve_ptr(L"a") != nullptr);
+    CHECK(isr->retrieve(L"a") == a);
     CHECK(same_instance(isr->retrieve_basis(L"μ̃"), pao));
     REQUIRE_NOTHROW(isr->remove(L"μ̃"));
     CHECK_FALSE(isr->contains(L"μ̃"));
@@ -376,12 +396,11 @@ TEST_CASE("index_space", "[elements]") {
     // ... and the dimensions and fields of their spaces, which
     // IndexSpace equality ignores
     IndexBasisRegistry other_size = *sr_isr;
-    other_size.retrieve_ptr(L"i")->dimension(
-        sr_isr->retrieve(L"i").dimension() + 1);
+    other_size.extent(L"i", sr_isr->retrieve(L"i").dimension() + 1);
     REQUIRE(other_size.retrieve(L"i") == sr_isr->retrieve(L"i"));
     REQUIRE(other_size != *sr_isr);
     IndexBasisRegistry other_field = *sr_isr;
-    other_field.retrieve_ptr(L"i")->field(Field::Real);
+    other_field.field(L"i", Field::Real);
     REQUIRE(sr_isr->retrieve(L"i").field() == Field::Complex);
     REQUIRE(other_field != *sr_isr);
   }
@@ -516,7 +535,8 @@ TEST_CASE("index_space", "[elements]") {
 
     // the OBS AO basis spans the complete space, non-orthonormal
     REQUIRE(isr->contains(L"μ"));
-    CHECK(isr->retrieve_ptr(L"μ") == nullptr);  // a name is not a space
+    CHECK(std::as_const(*isr).retrieve_ptr(L"μ") ==
+          nullptr);  // a name is not a space
     const IndexBasis ao = isr->retrieve_basis(L"μ");
     const auto p = isr->retrieve(L"p");
     CHECK(ao == IndexBasis(p, mbpt::default_ao_basis_instance, L"μ"));
@@ -559,7 +579,7 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE_NOTHROW(mbpt::add_pao_basis(isr, mbpt::Spin::any));
     const auto uocc = isr->retrieve(isr->particle_space(), mbpt::Spin::any);
     REQUIRE(isr->contains(L"μ̃"));
-    CHECK(isr->retrieve_ptr(L"μ̃") == nullptr);
+    CHECK(std::as_const(*isr).retrieve_ptr(L"μ̃") == nullptr);
     const IndexBasis pao = isr->retrieve_basis(L"μ̃");
     CHECK(pao == IndexBasis(uocc, mbpt::default_pao_basis_instance, L"μ̃"));
     CHECK(

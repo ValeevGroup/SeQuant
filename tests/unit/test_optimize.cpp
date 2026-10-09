@@ -189,18 +189,8 @@ TEST_CASE("optimize", "[optimize]") {
     auto reg = std::make_shared<IndexBasisRegistry>(
         *get_default_context().index_basis_registry());
 
-    {
-      auto occ = reg->retrieve_ptr(L"i");
-      auto uocc = reg->retrieve_ptr(L"a");
-      auto aux = reg->retrieve_ptr(L"x");
-      REQUIRE(occ);
-      REQUIRE(uocc);
-      REQUIRE(aux);
-      occ->dimension(10);
-      uocc->dimension(100);
-      aux->dimension(4);
-      REQUIRE(uocc->dimension() == 100);
-    }
+    reg->extent(L"i", 10).extent(L"a", 100).extent(L"x", 4);
+    REQUIRE(reg->retrieve(L"a").dimension() == 100);
     auto ctx_resetter =
         set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -451,8 +441,8 @@ TEST_CASE("optimize", "[optimize]") {
       // flips the choice to (A*B)*C. Flip threshold here is footprint_weight >
       // ~5.2.
       auto sized = std::make_shared<IndexBasisRegistry>(*reg);
-      sized->retrieve_ptr(L"a")->dimension(4);     // virtual: SMALL
-      sized->retrieve_ptr(L"x")->dimension(1000);  // aux: LARGE
+      sized->extent(L"a", 4);     // virtual: SMALL
+      sized->extent(L"x", 1000);  // aux: LARGE
       auto sized_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(sized));
 
@@ -486,7 +476,7 @@ TEST_CASE("optimize", "[optimize]") {
 
     SECTION("Non-covariant indices") {
       auto sized = std::make_shared<IndexBasisRegistry>(*reg);
-      sized->retrieve_ptr(L"x")->dimension(3 * reg->retrieve(L"a").dimension());
+      sized->extent(L"x", 3 * reg->retrieve(L"a").dimension());
       auto sized_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(sized));
 
@@ -576,8 +566,8 @@ TEST_CASE("optimize", "[optimize]") {
       using namespace sequant;
       // i occ (size 2); a virt (size 4). Tensors: g{a1;i1}, g{a2;i2}.
       auto sized = std::make_shared<IndexBasisRegistry>(*reg);
-      sized->retrieve_ptr(L"i")->dimension(2);
-      sized->retrieve_ptr(L"a")->dimension(4);
+      sized->extent(L"i", 2);
+      sized->extent(L"a", 4);
       auto sized_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(sized));
 
@@ -1271,8 +1261,8 @@ TEST_CASE("optimize", "[optimize]") {
       // Cost(...) * Y2 = 12*10*12 = 1440.
       // Total Unbalanced: 1440 + 1440 + 1440 = 4320.
       // 3168 < 4320 < 4608.
-      reg->retrieve_ptr(L"i")->dimension(12);
-      reg->retrieve_ptr(L"a")->dimension(10);
+      reg->extent(L"i", 12);
+      reg->extent(L"a", 10);
       auto ctx_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -1308,8 +1298,8 @@ TEST_CASE("optimize", "[optimize]") {
           *get_default_context().index_basis_registry());
       // Same sizing trick as the section above: CSE prefers balanced,
       // no-CSE prefers unbalanced.
-      reg->retrieve_ptr(L"i")->dimension(12);
-      reg->retrieve_ptr(L"a")->dimension(10);
+      reg->extent(L"i", 12);
+      reg->extent(L"a", 10);
       auto ctx_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -1427,14 +1417,7 @@ TEST_CASE(
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  {
-    auto occ = reg->retrieve_ptr(L"i");
-    auto uocc = reg->retrieve_ptr(L"a");
-    REQUIRE(occ);
-    REQUIRE(uocc);
-    occ->dimension(10);
-    uocc->dimension(100);
-  }
+  reg->extent(L"i", 10).extent(L"a", 100);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -2861,7 +2844,7 @@ TEST_CASE("the DP opens an external batch loop on an over-budget node",
   {
     IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
     reg.add(L"F", IndexSpace::Type{0b10000}, 100ul);
-    reg.retrieve_ptr(L"a")->dimension(3ul);
+    reg.extent(L"a", 3ul);
     ctx_copy.set(std::move(reg));
   }
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
@@ -3484,9 +3467,9 @@ TEST_CASE("contractible_adjacency", "[optimize][pruning]") {
   namespace o = sequant::opt::detail;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->dimension(10);
-  reg->retrieve_ptr(L"a")->dimension(100);
-  reg->retrieve_ptr(L"x")->dimension(4);
+  reg->extent(L"i", 10);
+  reg->extent(L"a", 100);
+  reg->extent(L"x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto parse = [](auto const& s) {
@@ -3576,9 +3559,9 @@ TEST_CASE("connected_subsets and outer_product_connectivity",
   // outer_product_connectivity: env-disabled -> all ones.
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->dimension(10);
-  reg->retrieve_ptr(L"a")->dimension(100);
-  reg->retrieve_ptr(L"x")->dimension(4);
+  reg->extent(L"i", 10);
+  reg->extent(L"a", 100);
+  reg->extent(L"x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto prod_expr = deserialize(L"f_{i1}^{a1} g_{a1}^{i2}",
@@ -3598,9 +3581,9 @@ TEST_CASE("outer-product pruning parity (pruned == unpruned)",
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->dimension(10);
-  reg->retrieve_ptr(L"a")->dimension(100);
-  reg->retrieve_ptr(L"x")->dimension(4);
+  reg->extent(L"i", 10);
+  reg->extent(L"a", 100);
+  reg->extent(L"x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -3688,9 +3671,9 @@ TEST_CASE("prune_outer_products option controls pruning (default on)",
 
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->dimension(10);
-  reg->retrieve_ptr(L"a")->dimension(100);
-  reg->retrieve_ptr(L"x")->dimension(4);
+  reg->extent(L"i", 10);
+  reg->extent(L"a", 100);
+  reg->extent(L"x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   // "star" term: g bridges two mutually-disconnected t's, so the {t,t} subset
@@ -3804,9 +3787,9 @@ TEST_CASE("outer-product pruning: large connected term optimizes quickly",
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->dimension(10);
-  reg->retrieve_ptr(L"a")->dimension(100);
-  reg->retrieve_ptr(L"x")->dimension(4);
+  reg->extent(L"i", 10);
+  reg->extent(L"a", 100);
+  reg->extent(L"x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   // A connected chain: each adjacent pair shares one summed index, so the whole
@@ -3832,9 +3815,9 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
   namespace o = sequant::opt::detail;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->dimension(10);
-  reg->retrieve_ptr(L"a")->dimension(100);
-  reg->retrieve_ptr(L"x")->dimension(4);
+  reg->extent(L"i", 10);
+  reg->extent(L"a", 100);
+  reg->extent(L"x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto net_of = [](ExprPtr const& p) {
@@ -4271,8 +4254,8 @@ TEST_CASE(
   auto ctx_copy = get_default_context_snapshot();
   auto reg =
       std::make_shared<IndexBasisRegistry>(*ctx_copy.index_basis_registry());
-  reg->retrieve_ptr(L"i")->dimension(10);  // occupied, external, batched
-  reg->retrieve_ptr(L"a")->dimension(20);  // virtual, contracted, batched
+  reg->extent(L"i", 10);  // occupied, external, batched
+  reg->extent(L"a", 20);  // virtual, contracted, batched
   ctx_copy.set(reg);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
