@@ -558,7 +558,8 @@ struct PeakModel {
 /// batch contexts and costing" in doc/developer/cost_model.rst): each DP cell
 /// is indexed by both a subset \c n and an ordered batch-nest context \c B
 /// over the batchable indices, so a model State is the \c [B]-vector of
-/// per-context \ref BatchedRes. No CSE; persistence-gated batching.
+/// per-context \ref BatchedRes. No CSE; batching is persistence-gated only
+/// under \ref batch_persistent_only.
 ///
 /// \tparam IdxToSz A callable mapping an Index to its extent.
 template <typename IdxToSz>
