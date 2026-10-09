@@ -276,9 +276,10 @@ inline const QuantumNumbersAttr QuantumNumbersAttr::reserved =
 /// IndexSpace has a base_label, TypeAttr or interpretable bitset in the
 /// context of other spaces. IndexSpace may also have QuantumNumberAttr which
 /// differentiate spaces with different quanta, such as spin projection quantum
-/// numbers. IndexSpace may additionally have an approximate extent which is
-/// useful in symbolic manipulation of indexed expressions, such as
-/// tensor network evaluation.
+/// numbers. IndexSpace may additionally have a (nominal) dimension, which is
+/// useful in symbolic manipulation of indexed expressions, such as tensor
+/// network evaluation; a basis of the space may have an extent of its own
+/// (IndexBasis::extent()).
 class IndexSpace {
  public:
   /// @brief Attr describes all attributes of a space (occupancy + quantum
@@ -445,10 +446,10 @@ class IndexSpace {
   template <basic_string_convertible S>
   IndexSpace(S &&type_label, TypeAttr typeattr,
              QuantumNumbersAttr qnattr = QuantumNumbersAttr{0},
-             std::size_t approximate_size = 10, Field field = Field::Complex)
+             std::size_t dimension = 10, Field field = Field::Complex)
       : attr_(typeattr, qnattr),
         base_key_(toUtf16(std::forward<S>(type_label))),
-        approximate_size_(approximate_size),
+        dimension_(dimension),
         field_(field) {}
 
   explicit IndexSpace(std::string_view label);
@@ -461,7 +462,7 @@ class IndexSpace {
   IndexSpace(IndexSpace &&other) noexcept
       : attr_(std::move(other.attr_)),
         base_key_(std::move(other.base_key_)),
-        approximate_size_(std::move(other.approximate_size_)),
+        dimension_(std::move(other.dimension_)),
         field_(other.field_) {
     other = null;
   }
@@ -472,7 +473,7 @@ class IndexSpace {
   IndexSpace &operator=(IndexSpace &&other) {
     attr_ = std::move(other.attr_);
     base_key_ = std::move(other.base_key_);
-    approximate_size_ = std::move(other.approximate_size_);
+    dimension_ = std::move(other.dimension_);
     field_ = other.field_;
     other = null;
     return *this;
@@ -527,17 +528,29 @@ class IndexSpace {
     return reduce_key(std::basic_string_view<CharT>(key));
   }
 
-  /// @return approximate size of a space
-  std::size_t approximate_size() const { return approximate_size_; }
+  /// @return the (nominal) dimension of the space, the extent of its own
+  /// basis; a named basis instance of the space may have an extent of its own
+  /// (IndexBasis::extent())
+  std::size_t dimension() const { return dimension_; }
 
-  /// Set the approximate size of a space.
-  void approximate_size(std::size_t n) { approximate_size_ = n; }
+  /// Set the dimension of the space.
+  void dimension(std::size_t n) { dimension_ = n; }
+
+  /// @deprecated use dimension()
+  [[deprecated("use dimension()")]] std::size_t approximate_size() const {
+    return dimension_;
+  }
+
+  /// @deprecated use dimension(n)
+  [[deprecated("use dimension(n)")]] void approximate_size(std::size_t n) {
+    dimension_ = n;
+  }
 
   /// @return the scalar Field of the own basis of this space (a named basis
   /// instance of the space may have a field of its own, see
   /// IndexBasis::field()); controls whether the bra<->ket dual pairing
   /// involving that basis is real (symmetric bilinear) or complex (Hermitian
-  /// sesquilinear). Like approximate_size, this is non-identity metadata (does
+  /// sesquilinear). Like dimension, this is non-identity metadata (does
   /// not participate in attr()/hash/comparison). Defaults to Field::Complex.
   /// @sa IndexBasis::field, AbstractTensor::_base_field
   Field field() const { return field_; }
@@ -548,7 +561,7 @@ class IndexSpace {
  private:
   Attr attr_ = {};
   std::wstring base_key_ = {};
-  std::size_t approximate_size_ = {};
+  std::size_t dimension_ = {};
   Field field_ = Field::Complex;
 };  // class IndexSpace
 
@@ -560,7 +573,7 @@ inline const IndexSpace::Attr IndexSpace::Attr::reserved =
 inline auto hash_value(const IndexSpace &space) {
   auto result = hash_value(static_cast<std::int64_t>(space.attr()));
   hash::combine(result, space.base_key());
-  // approximate_size is an attribute that should not affect expression
+  // dimension is an attribute that should not affect expression
   // manipulation, so we do not include it in hash
   return result;
 }

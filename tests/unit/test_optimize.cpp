@@ -196,10 +196,10 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(occ);
       REQUIRE(uocc);
       REQUIRE(aux);
-      occ->approximate_size(10);
-      uocc->approximate_size(100);
-      aux->approximate_size(4);
-      REQUIRE(uocc->approximate_size() == 100);
+      occ->dimension(10);
+      uocc->dimension(100);
+      aux->dimension(4);
+      REQUIRE(uocc->dimension() == 100);
     }
     auto ctx_resetter =
         set_scoped_default_context(get_default_context_snapshot().set(reg));
@@ -451,8 +451,8 @@ TEST_CASE("optimize", "[optimize]") {
       // flips the choice to (A*B)*C. Flip threshold here is footprint_weight >
       // ~5.2.
       auto sized = std::make_shared<IndexBasisRegistry>(*reg);
-      sized->retrieve_ptr(L"a")->approximate_size(4);     // virtual: SMALL
-      sized->retrieve_ptr(L"x")->approximate_size(1000);  // aux: LARGE
+      sized->retrieve_ptr(L"a")->dimension(4);     // virtual: SMALL
+      sized->retrieve_ptr(L"x")->dimension(1000);  // aux: LARGE
       auto sized_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(sized));
 
@@ -486,8 +486,7 @@ TEST_CASE("optimize", "[optimize]") {
 
     SECTION("Non-covariant indices") {
       auto sized = std::make_shared<IndexBasisRegistry>(*reg);
-      sized->retrieve_ptr(L"x")->approximate_size(
-          3 * reg->retrieve(L"a").approximate_size());
+      sized->retrieve_ptr(L"x")->dimension(3 * reg->retrieve(L"a").dimension());
       auto sized_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(sized));
 
@@ -577,8 +576,8 @@ TEST_CASE("optimize", "[optimize]") {
       using namespace sequant;
       // i occ (size 2); a virt (size 4). Tensors: g{a1;i1}, g{a2;i2}.
       auto sized = std::make_shared<IndexBasisRegistry>(*reg);
-      sized->retrieve_ptr(L"i")->approximate_size(2);
-      sized->retrieve_ptr(L"a")->approximate_size(4);
+      sized->retrieve_ptr(L"i")->dimension(2);
+      sized->retrieve_ptr(L"a")->dimension(4);
       auto sized_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(sized));
 
@@ -926,7 +925,7 @@ TEST_CASE("optimize", "[optimize]") {
 
     SECTION("per-index batch_target_size honored") {
       using namespace sequant;
-      // Register F with approximate_size=3; two distinct aux indices F_1, F_2.
+      // Register F with dimension=3; two distinct aux indices F_1, F_2.
       // Index::label() returns base_key + "_" + ordinal, so the F1 ordinal-1
       // index has label L"F_1" (not L"F1").
       auto f_resetter = set_scoped_default_context(
@@ -986,7 +985,7 @@ TEST_CASE("optimize", "[optimize]") {
 
     SECTION("CostModel concept conformance + custom model") {
       using namespace sequant;
-      // idxsz lambda captures approximate_size() for each index space.
+      // idxsz lambda captures dimension() for each index space.
       auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
 
       // --- Static conformance checks ---
@@ -1222,7 +1221,7 @@ TEST_CASE("optimize", "[optimize]") {
     for (auto&& [k, v] :
          std::initializer_list<std::pair<std::wstring_view, size_t>>{
              {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}}) {
-      reg->approximate_size(k, v);
+      reg->extent(k, v);
     }
     auto ctx_resetter =
         set_scoped_default_context(get_default_context_snapshot().set(reg));
@@ -1272,8 +1271,8 @@ TEST_CASE("optimize", "[optimize]") {
       // Cost(...) * Y2 = 12*10*12 = 1440.
       // Total Unbalanced: 1440 + 1440 + 1440 = 4320.
       // 3168 < 4320 < 4608.
-      reg->retrieve_ptr(L"i")->approximate_size(12);
-      reg->retrieve_ptr(L"a")->approximate_size(10);
+      reg->retrieve_ptr(L"i")->dimension(12);
+      reg->retrieve_ptr(L"a")->dimension(10);
       auto ctx_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -1309,8 +1308,8 @@ TEST_CASE("optimize", "[optimize]") {
           *get_default_context().index_basis_registry());
       // Same sizing trick as the section above: CSE prefers balanced,
       // no-CSE prefers unbalanced.
-      reg->retrieve_ptr(L"i")->approximate_size(12);
-      reg->retrieve_ptr(L"a")->approximate_size(10);
+      reg->retrieve_ptr(L"i")->dimension(12);
+      reg->retrieve_ptr(L"a")->dimension(10);
       auto ctx_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -1360,7 +1359,7 @@ TEST_CASE("optimize", "[optimize]") {
   auto reg_check = get_default_context().index_basis_registry();
   auto uocc_check = reg_check->retrieve_ptr(L"a");
   REQUIRE(uocc_check);
-  REQUIRE(uocc_check->approximate_size() == 10);
+  REQUIRE(uocc_check->dimension() == 10);
 }
 
 // ---------------------------------------------------------------------------
@@ -1433,8 +1432,8 @@ TEST_CASE(
     auto uocc = reg->retrieve_ptr(L"a");
     REQUIRE(occ);
     REQUIRE(uocc);
-    occ->approximate_size(10);
-    uocc->approximate_size(100);
+    occ->dimension(10);
+    uocc->dimension(100);
   }
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
@@ -1609,7 +1608,7 @@ TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}}) {
-    reg->approximate_size(k, v);
+    reg->extent(k, v);
   }
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
@@ -1667,7 +1666,7 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 56}, {L"a", 12}, {L"μ̃", 602}, {L"Κ", 1652}}) {
-    reg->approximate_size(k, v);
+    reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
   auto ctx_resetter =
@@ -1729,7 +1728,7 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 16}, {L"a", 12}, {L"μ̃", 170}, {L"Κ", 472}}) {
-    reg->approximate_size(k, v);
+    reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
   auto ctx_resetter =
@@ -1995,7 +1994,7 @@ TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 120}, {L"a", 42}, {L"μ̃", 1800}, {L"Κ", 6000}}) {
-    reg->approximate_size(k, v);
+    reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
   auto ctx_resetter =
@@ -2128,7 +2127,7 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 16}, {L"a", 12}, {L"μ̃", 170}, {L"Κ", 472}})
-    reg->approximate_size(k, v);
+    reg->extent(k, v);
   auto aux = reg->retrieve(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
@@ -2330,7 +2329,7 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 80}, {L"a", 12}, {L"μ̃", 860}, {L"Κ", 2360}}) {
-    reg->approximate_size(k, v);
+    reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
   auto ctx_resetter =
@@ -2558,7 +2557,7 @@ TEST_CASE(
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 80}, {L"a", 12}, {L"μ̃", 860}, {L"Κ", 2360}}) {
-    reg->approximate_size(k, v);
+    reg->extent(k, v);
   }
   auto aux_space = reg->retrieve(L"Κ");
   auto ctx_resetter =
@@ -2707,7 +2706,7 @@ TEST_CASE("batched DP peak matches oracle with two modes and accumulation",
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 20}, {L"a", 20}, {L"μ̃", 200}, {L"Κ", 300}}) {
-    reg->approximate_size(k, v);
+    reg->extent(k, v);
   }
   auto aux = reg->retrieve(L"Κ");
   auto pao = reg->retrieve_basis(L"μ̃");
@@ -2862,7 +2861,7 @@ TEST_CASE("the DP opens an external batch loop on an over-budget node",
   {
     IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
     reg.add(L"F", IndexSpace::Type{0b10000}, 100ul);
-    reg.retrieve_ptr(L"a")->approximate_size(3ul);
+    reg.retrieve_ptr(L"a")->dimension(3ul);
     ctx_copy.set(std::move(reg));
   }
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
@@ -2938,7 +2937,7 @@ TEST_CASE("perf-first peak_threshold gates contracted aux slicing",
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
-    reg->approximate_size(k, v);
+    reg->extent(k, v);
   }
   auto aux = reg->retrieve(L"Κ");
   auto ctx_resetter =
@@ -3021,7 +3020,7 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
-    reg->approximate_size(k, v);
+    reg->extent(k, v);
   }
   auto aux = reg->retrieve(L"Κ");
   auto ctx_resetter =
@@ -3220,7 +3219,7 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 8}, {L"a", 8}, {L"Κ", 400}})
-    reg->approximate_size(k, v);
+    reg->extent(k, v);
   auto aux_space = reg->retrieve(L"Κ");
   auto occ_space = reg->retrieve(L"i");
   auto ctx_resetter =
@@ -3400,7 +3399,7 @@ TEST_CASE("select_root_perf_first_ceiling", "[optimize][batch]") {
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 80}, {L"a", 12}, {L"μ̃", 860}, {L"Κ", 2360}})
-    reg->approximate_size(k, v);
+    reg->extent(k, v);
   auto aux_space = reg->retrieve(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
@@ -3485,9 +3484,9 @@ TEST_CASE("contractible_adjacency", "[optimize][pruning]") {
   namespace o = sequant::opt::detail;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->approximate_size(10);
-  reg->retrieve_ptr(L"a")->approximate_size(100);
-  reg->retrieve_ptr(L"x")->approximate_size(4);
+  reg->retrieve_ptr(L"i")->dimension(10);
+  reg->retrieve_ptr(L"a")->dimension(100);
+  reg->retrieve_ptr(L"x")->dimension(4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto parse = [](auto const& s) {
@@ -3577,9 +3576,9 @@ TEST_CASE("connected_subsets and outer_product_connectivity",
   // outer_product_connectivity: env-disabled -> all ones.
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->approximate_size(10);
-  reg->retrieve_ptr(L"a")->approximate_size(100);
-  reg->retrieve_ptr(L"x")->approximate_size(4);
+  reg->retrieve_ptr(L"i")->dimension(10);
+  reg->retrieve_ptr(L"a")->dimension(100);
+  reg->retrieve_ptr(L"x")->dimension(4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto prod_expr = deserialize(L"f_{i1}^{a1} g_{a1}^{i2}",
@@ -3599,9 +3598,9 @@ TEST_CASE("outer-product pruning parity (pruned == unpruned)",
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->approximate_size(10);
-  reg->retrieve_ptr(L"a")->approximate_size(100);
-  reg->retrieve_ptr(L"x")->approximate_size(4);
+  reg->retrieve_ptr(L"i")->dimension(10);
+  reg->retrieve_ptr(L"a")->dimension(100);
+  reg->retrieve_ptr(L"x")->dimension(4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -3689,9 +3688,9 @@ TEST_CASE("prune_outer_products option controls pruning (default on)",
 
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->approximate_size(10);
-  reg->retrieve_ptr(L"a")->approximate_size(100);
-  reg->retrieve_ptr(L"x")->approximate_size(4);
+  reg->retrieve_ptr(L"i")->dimension(10);
+  reg->retrieve_ptr(L"a")->dimension(100);
+  reg->retrieve_ptr(L"x")->dimension(4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   // "star" term: g bridges two mutually-disconnected t's, so the {t,t} subset
@@ -3736,7 +3735,7 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 10}, {L"a", 40}, {L"μ̃", 50}, {L"Κ", 90}})
-    reg->approximate_size(k, v);
+    reg->extent(k, v);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -3805,9 +3804,9 @@ TEST_CASE("outer-product pruning: large connected term optimizes quickly",
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->approximate_size(10);
-  reg->retrieve_ptr(L"a")->approximate_size(100);
-  reg->retrieve_ptr(L"x")->approximate_size(4);
+  reg->retrieve_ptr(L"i")->dimension(10);
+  reg->retrieve_ptr(L"a")->dimension(100);
+  reg->retrieve_ptr(L"x")->dimension(4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   // A connected chain: each adjacent pair shares one summed index, so the whole
@@ -3833,9 +3832,9 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
   namespace o = sequant::opt::detail;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->retrieve_ptr(L"i")->approximate_size(10);
-  reg->retrieve_ptr(L"a")->approximate_size(100);
-  reg->retrieve_ptr(L"x")->approximate_size(4);
+  reg->retrieve_ptr(L"i")->dimension(10);
+  reg->retrieve_ptr(L"a")->dimension(100);
+  reg->retrieve_ptr(L"x")->dimension(4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto net_of = [](ExprPtr const& p) {
@@ -4272,9 +4271,8 @@ TEST_CASE(
   auto ctx_copy = get_default_context_snapshot();
   auto reg =
       std::make_shared<IndexBasisRegistry>(*ctx_copy.index_basis_registry());
-  reg->retrieve_ptr(L"i")->approximate_size(10);  // occupied, external, batched
-  reg->retrieve_ptr(L"a")->approximate_size(
-      20);  // virtual, contracted, batched
+  reg->retrieve_ptr(L"i")->dimension(10);  // occupied, external, batched
+  reg->retrieve_ptr(L"a")->dimension(20);  // virtual, contracted, batched
   ctx_copy.set(reg);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 

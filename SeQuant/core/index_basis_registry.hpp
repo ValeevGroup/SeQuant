@@ -298,20 +298,28 @@ class IndexBasisRegistry {
     return b;
   }
 
-  /// @brief sets the approximate size of the entry registered under a label:
-  /// the dimension of a space, or the extent of a named basis instance
+  /// @brief sets the extent of the entry registered under a label: the
+  /// dimension of a space (the extent of its own basis), or the extent of a
+  /// named basis instance
   /// @param label a label of a space or of a named basis instance
-  /// @param n the approximate size
+  /// @param n the extent
   /// @return reference to `this`
   /// @throw IndexSpace::bad_key if no entry is registered under @p label
   template <basic_string_convertible S>
-  IndexBasisRegistry& approximate_size(S&& label, std::size_t n) {
+  IndexBasisRegistry& extent(S&& label, std::size_t n) {
     auto& entry = entry_or_throw(label);
     if (entry.has_basis_instance())
       entry.extent(n);
     else
-      mutable_space(entry).approximate_size(n);
+      mutable_space(entry).dimension(n);
     return clear_memoized_data_and_return_this();
+  }
+
+  /// @deprecated use extent(label, n)
+  template <basic_string_convertible S>
+  [[deprecated("use extent(label, n)")]] IndexBasisRegistry& approximate_size(
+      S&& label, std::size_t n) {
+    return extent(std::forward<S>(label), n);
   }
 
   /// @brief sets the Field of the entry registered under a label: of a
@@ -534,7 +542,7 @@ class IndexBasisRegistry {
   /// @param args optional arguments consisting of a mix of zero or more of
   /// the following:
   ///   - IndexSpace::QuantumNumbers
-  ///   - approximate size of the space (unsigned long)
+  ///   - dimension of the space (unsigned long)
   ///   - any of { is_vacuum_occupied , is_reference_occupied , is_complete ,
   ///   is_hole , is_particle }
   /// @return reference to `this`
@@ -561,7 +569,7 @@ class IndexBasisRegistry {
       qns = boost::hana::at_c<0>(h_qns);
     }
 
-    // process approximate_size and Field, set to defaults if not given
+    // process dimension and Field, set to defaults if not given
     const auto [size, field] = parse_size_and_field(args...);
 
     // make space
@@ -691,11 +699,11 @@ class IndexBasisRegistry {
         space_attr = space_attr.unIon(component_ptr->attr());
       ++count;
     }
-    const auto approximate_size = compute_approximate_size(space_attr);
+    const auto dimension = compute_dimension(space_attr);
     const Field field = compute_field(space_attr);
 
     IndexSpace space(std::forward<S>(type_label), space_attr.type(),
-                     space_attr.qns(), approximate_size, field);
+                     space_attr.qns(), dimension, field);
     this->add(space);
     auto type = space.type();
 
@@ -761,10 +769,10 @@ class IndexBasisRegistry {
         space_attr = space_attr.intersection(component_ptr->attr());
       ++count;
     }
-    const auto approximate_size = compute_approximate_size(space_attr);
+    const auto dimension = compute_dimension(space_attr);
 
     IndexSpace space(std::forward<S>(type_label), space_attr.type(),
-                     space_attr.qns(), approximate_size);
+                     space_attr.qns(), dimension);
     this->add(space);
     auto type = space.type();
 
@@ -1643,7 +1651,7 @@ class IndexBasisRegistry {
     return it->second;
   }
 
-  /// @return the approximate size (the integral argument) and the Field among
+  /// @return the dimension (the integral argument) and the Field among
   /// @p args, std::nullopt for each that is not given
   template <typename... Args>
   static std::pair<std::optional<unsigned long>, std::optional<Field>>
@@ -1865,18 +1873,17 @@ class IndexBasisRegistry {
     });
   }
 
-  /// @brief computes the approximate size of the space
+  /// @brief computes the dimension of the space
 
   /// for a base space return its extent, for a composite space compute as a sum
   /// of extents of base subspaces
   /// @param space_attr the IndexSpace attribute
-  /// @return the approximate size of the space
-  unsigned long compute_approximate_size(
-      const IndexSpace::Attr& space_attr) const {
+  /// @return the dimension of the space
+  unsigned long compute_dimension(const IndexSpace::Attr& space_attr) const {
     if (is_base(space_attr.type())) {
-      return this->retrieve(space_attr).approximate_size();
+      return this->retrieve(space_attr).dimension();
     } else {
-      // compute_approximate_size is used when populating the registry
+      // compute_dimension is used when populating the registry
       // so don't use base_spaces() here
       const SpacesView space_entries = spaces();
       unsigned long size = ranges::accumulate(
@@ -1885,7 +1892,7 @@ class IndexBasisRegistry {
                    space_attr.type().intersection(s.type());
           }),
           0ul, [](unsigned long size, const IndexSpace& s) {
-            return size + s.approximate_size();
+            return size + s.dimension();
           });
       return size;
     }
@@ -1912,8 +1919,8 @@ class IndexBasisRegistry {
   }
 
   /// registries are equal if they have equal entries (spaces and named basis
-  /// instances, under equal labels), of equal approximate size (dimension or
-  /// extent), metric and field, and specify the same physical-particle
+  /// instances, under equal labels), of equal dimension, extent, metric and
+  /// field, and specify the same physical-particle
   /// attributes and vacuum-occupied, reference-occupied, complete, hole and
   /// particle spaces
   friend bool operator==(const IndexBasisRegistry& isr1,
@@ -1923,8 +1930,8 @@ class IndexBasisRegistry {
                isr1.bases_, isr2.bases_,
                [](const auto& e1, const auto& e2) {
                  return e1.first == e2.first && e1.second == e2.second &&
-                        e1.second.space().approximate_size() ==
-                            e2.second.space().approximate_size() &&
+                        e1.second.space().dimension() ==
+                            e2.second.space().dimension() &&
                         e1.second.extent() == e2.second.extent() &&
                         e1.second.metric() == e2.second.metric() &&
                         e1.second.field() == e2.second.field();

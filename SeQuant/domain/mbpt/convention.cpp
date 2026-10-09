@@ -64,9 +64,9 @@ void add_fermi_spin(IndexBasisRegistry& isr) {
   for (auto&& space : isr) {
     if (space.base_key() != L"") {
       IndexSpace spin_up(spinannotation_add(space.base_key(), Spin::alpha),
-                         space.type(), Spin::alpha, space.approximate_size());
+                         space.type(), Spin::alpha, space.dimension());
       IndexSpace spin_down(spinannotation_add(space.base_key(), Spin::beta),
-                           space.type(), Spin::beta, space.approximate_size());
+                           space.type(), Spin::beta, space.dimension());
       result.add(spin_up);
       result.add(spin_down);
     }

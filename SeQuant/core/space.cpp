@@ -50,8 +50,7 @@ std::string to_string(const IndexSpace& space) {
   if (space.base_key().empty() == false) {
     oss << ",base_key=" << toUtf8(space.base_key());
   }
-  oss << ",approximate_size=" << std::to_string(space.approximate_size())
-      << "}";
+  oss << ",dimension=" << std::to_string(space.dimension()) << "}";
   return oss.str();
 }
 

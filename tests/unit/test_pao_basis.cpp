@@ -25,7 +25,7 @@ constexpr std::size_t n_pao = 300;
 /// adopts it, since a registry inside a Context is immutable
 std::shared_ptr<IndexBasisRegistry> sized_registry() {
   auto isr = csv::csv_cc_registry();
-  isr->approximate_size(L"μ̃", n_pao);
+  isr->extent(L"μ̃", n_pao);
   return isr;
 }
 
@@ -83,8 +83,7 @@ TEST_CASE("pao-named-basis", "[mbpt][csv][basis][valgrind_skip]") {
     REQUIRE(bare.extent() != n_pao);
     CHECK(default_registry_resolved(bare) == pao);
     CHECK(default_registry_resolved(bare).extent() == n_pao);
-    CHECK(ctx.index_basis_registry()->retrieve(L"a").approximate_size() !=
-          n_pao);
+    CHECK(ctx.index_basis_registry()->retrieve(L"a").dimension() != n_pao);
     CHECK_THROWS_AS(ctx.index_basis_registry()->retrieve(L"μ̃"),
                     IndexBasisRegistry::not_a_space);
   }

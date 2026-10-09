@@ -136,11 +136,11 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
       {IndexBasis{uocc, 1, L"ã", 77, IndexSpaceMetric::General, Field::Real},
        true}};
   for (const auto& [b, is_custom] : bases) {
-    CHECK(b.extent() == (is_custom ? 77 : uocc.approximate_size()));
+    CHECK(b.extent() == (is_custom ? 77 : uocc.dimension()));
     CHECK(b.metric() ==
           (is_custom ? IndexSpaceMetric::General : IndexSpaceMetric::Unit));
     CHECK(b.field() == (is_custom ? Field::Real : uocc.field()));
-    CHECK(b.space().approximate_size() == uocc.approximate_size());
+    CHECK(b.space().dimension() == uocc.dimension());
     CHECK(b.space().field() == uocc.field());
     if (b.has_basis_instance()) {
       const IndexBasis same_identity{uocc, 1, b.name()};
@@ -656,11 +656,11 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   CHECK(Index(m3, isr->retrieve(L"p")).full_label() ==
         L"p_3<;" + std::to_wstring(P) + L">");
   CHECK(Index(m3, isr->retrieve(L"p")).basis().extent() ==
-        isr->retrieve(L"p").approximate_size());
+        isr->retrieve(L"p").dimension());
   // the instance dropped: the space's own basis, sized as the space
   CHECK(m3.replace_basis_instance(std::nullopt) == Index(uocc, 3));
   CHECK(m3.replace_basis_instance(std::nullopt).basis().extent() ==
-        uocc.approximate_size());
+        uocc.dimension());
   CHECK(m3 != Index(uocc, 3));
   CHECK(hash_value(m3) == hash_value(Index(uocc, 3).replace_basis_instance(P)));
   CHECK((Index(uocc, 3) < m3 && Index(uocc, 3).replace_basis_instance(0) < m3));
@@ -672,8 +672,8 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   CHECK(parsed.basis().extent() == 120);
   CHECK(parsed.label() == L"μ̃_3");
   CHECK(m3.basis().extent() == 120);
-  CHECK(m3.space().approximate_size() == uocc.approximate_size());
-  CHECK(Index(L"a_3").basis().extent() == uocc.approximate_size());
+  CHECK(m3.space().dimension() == uocc.dimension());
+  CHECK(Index(L"a_3").basis().extent() == uocc.dimension());
   CHECK_THROWS_AS(IndexSpace(L"μ̃"), IndexBasisRegistry::not_a_space);
 
   // copies of a named index print the name; a basis change drops it

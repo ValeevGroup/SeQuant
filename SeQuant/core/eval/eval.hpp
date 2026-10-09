@@ -559,7 +559,7 @@ template <typename IndexPredicate>
   return best;
 }
 
-/// \overload Batches over any contracted index (largest approximate size).
+/// \overload Batches over any contracted index (largest extent).
 [[nodiscard]] inline std::optional<Index> batch_axis(
     meta::eval_node auto const& node) {
   return batch_axis(node, [](Index const&) { return true; });

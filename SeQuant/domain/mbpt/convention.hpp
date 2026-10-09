@@ -69,7 +69,7 @@ inline constexpr IndexBasis::instance_type default_ao_basis_instance =
 /// spans the union of the OBS and `α'`, and with \p vbs also `Ρ` = `Γ` + `σ`
 /// spans the union of all three. Every space a basis spans must be
 /// registered. The extents default to the spaces' dimensions (populate them
-/// with IndexBasisRegistry::approximate_size(label, n) before the registry is
+/// with IndexBasisRegistry::extent(label, n) before the registry is
 /// given to a Context, which holds it immutable).
 /// @param isr the IndexBasisRegistry to which add the AO bases
 /// @param spin_any the quantum numbers of the spin-agnostic orbital spaces
@@ -116,7 +116,7 @@ inline constexpr IndexBasis::instance_type default_pao_basis_instance =
 /// expects \p isr to have a defined particle space; the entry is registered
 /// with a general metric (the PAOs are not orthonormal), and its extent and
 /// field default to the particle space's (populate them with
-/// IndexBasisRegistry::approximate_size(label, n) before the registry is given
+/// IndexBasisRegistry::extent(label, n) before the registry is given
 /// to a Context, which holds it immutable)
 /// @param spin_any the quantum numbers of the spin-agnostic particle space
 /// @param instance the basis instance of the PAO basis

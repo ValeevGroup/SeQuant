@@ -150,7 +150,7 @@ void setup_context(const Config& cfg) {
   for (const auto& [label, size] : cfg.sizes) {
     IndexSpace* sp = isr->retrieve_ptr(toUtf16(label));
     if (!sp) throw Exception("unknown index space: " + label);
-    sp->approximate_size(size);
+    sp->dimension(size);
   }
 
   auto ctx = get_default_context_snapshot();

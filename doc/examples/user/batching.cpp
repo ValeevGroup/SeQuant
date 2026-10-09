@@ -22,9 +22,9 @@ int main() {
   auto isr = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(isr);
-  isr->retrieve_ptr(L"i")->approximate_size(4);
-  isr->retrieve_ptr(L"a")->approximate_size(8);
-  isr->retrieve_ptr(L"Κ")->approximate_size(100'000);
+  isr->retrieve_ptr(L"i")->dimension(4);
+  isr->retrieve_ptr(L"a")->dimension(8);
+  isr->retrieve_ptr(L"Κ")->dimension(100'000);
   set_default_context(get_default_context_snapshot().set(isr));
 
   auto expr = ex<Tensor>(L"B", bra{L"i_1"}, ket{L"a_1", L"Κ_1"}) *

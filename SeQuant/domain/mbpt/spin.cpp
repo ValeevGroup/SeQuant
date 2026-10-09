@@ -79,7 +79,7 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   if (!space) {
     space = IndexSpace{label, idx.space().type(), qns,
                        // N.B. assume size does not depend on spin
-                       idx.space().approximate_size()};
+                       idx.space().dimension()};
   }
   // the basis: the registry's entry for the instance in that space if it
   // names one, else, as for the space, one derived from the index's own:

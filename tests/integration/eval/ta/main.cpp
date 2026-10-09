@@ -93,9 +93,9 @@ int main(int argc, char* argv[]) {
     auto uocc = reg->retrieve_ptr(L"a");
     SEQUANT_ASSERT(occ);
     SEQUANT_ASSERT(uocc);
-    occ->approximate_size(10);
-    uocc->approximate_size(100);
-    SEQUANT_ASSERT(uocc->approximate_size() == 100);
+    occ->dimension(10);
+    uocc->dimension(100);
+    SEQUANT_ASSERT(uocc->dimension() == 100);
     set_default_context(get_default_context_snapshot().set(reg));
   }
 

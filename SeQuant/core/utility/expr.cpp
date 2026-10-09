@@ -119,9 +119,9 @@ std::string diff_spaces(const IndexSpace &lhs, const IndexSpace &rhs) {
   } else if (lhs.base_key() != rhs.base_key()) {
     stream << "Base key differs: " << toUtf8(lhs.base_key()) << " vs. "
            << toUtf8(rhs.base_key());
-  } else if (lhs.approximate_size() != rhs.approximate_size()) {
-    stream << "Size differs: " << std::to_string(lhs.approximate_size())
-           << " vs. " << std::to_string(rhs.approximate_size());
+  } else if (lhs.dimension() != rhs.dimension()) {
+    stream << "Size differs: " << std::to_string(lhs.dimension()) << " vs. "
+           << std::to_string(rhs.dimension());
   } else {
     SEQUANT_UNREACHABLE;
   }

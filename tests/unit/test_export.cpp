@@ -406,10 +406,10 @@ TEST_CASE("export", "[export]") {
   auto resetter = to_export_context();
 
   SECTION("reordering_context") {
-    REQUIRE(Index(L"i_1").space().approximate_size() >
-            Index(L"u_1").space().approximate_size());
-    REQUIRE(Index(L"a_1").space().approximate_size() >
-            Index(L"i_1").space().approximate_size());
+    REQUIRE(Index(L"i_1").space().dimension() >
+            Index(L"u_1").space().dimension());
+    REQUIRE(Index(L"a_1").space().dimension() >
+            Index(L"i_1").space().dimension());
 
     std::vector<std::pair<std::wstring, std::array<std::string, 3>>> tests = {
         // Unchanged

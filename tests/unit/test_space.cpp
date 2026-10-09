@@ -49,7 +49,7 @@ TEST_CASE("index_space", "[elements]") {
     IndexSpace active_occupied(L"i", 0b0010, 20);
     REQUIRE_NOTHROW(to_string(active_occupied));
     const auto str = to_string(active_occupied);
-    REQUIRE(str == "{attr={type=0x2,qns=0x14},base_key=i,approximate_size=10}");
+    REQUIRE(str == "{attr={type=0x2,qns=0x14},base_key=i,dimension=10}");
   }
 
   SECTION("registry synopsis") {
@@ -137,10 +137,10 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(got != pao);                              // the unnamed pair is not
     CHECK(same_instance(got, pao));
     CHECK(got.extent() == 120);  // the entry carries the metadata
-    CHECK(got.space().approximate_size() == a.approximate_size());
+    CHECK(got.space().dimension() == a.dimension());
     CHECK(got.metric() == IndexSpaceMetric::Unit);
     CHECK(got.field() == a.field());
-    CHECK(isr->retrieve(L"a").approximate_size() == a.approximate_size());
+    CHECK(isr->retrieve(L"a").dimension() == a.dimension());
     CHECK(isr->basis_label(pao) == std::optional<std::wstring_view>{L"μ̃"});
     CHECK_FALSE(isr->basis_label(IndexBasis{a}));
     CHECK_FALSE(isr->basis_label(IndexBasis{a, 7}));
@@ -165,44 +165,52 @@ TEST_CASE("index_space", "[elements]") {
     // ... also when the name sorts before the space's key (Ĩ < i): localized
     // occupied orbitals as basis instance 1 of i, with a size of their own
     const IndexSpace i = isr->retrieve(L"i");
-    REQUIRE(i.approximate_size() != 50);
+    REQUIRE(i.dimension() != 50);
     REQUIRE_NOTHROW(isr->add(L"Ĩ", IndexBasis{i, 1}, 50ul));
     REQUIRE(isr->bases().find(std::wstring_view(L"Ĩ")) <
             isr->bases().find(std::wstring_view(L"i")));
     REQUIRE(isr->retrieve_ptr(L"i") != nullptr);
     CHECK(isr->retrieve_ptr(i.attr()) == isr->retrieve_ptr(L"i"));
     CHECK(isr->retrieve_ptr(i.type(), i.qns()) == isr->retrieve_ptr(L"i"));
-    CHECK(isr->retrieve_ptr(i.attr())->approximate_size() ==
-          i.approximate_size());
-    CHECK(isr->retrieve_ptr(i.type(), i.qns())->approximate_size() ==
-          i.approximate_size());
+    CHECK(isr->retrieve_ptr(i.attr())->dimension() == i.dimension());
+    CHECK(isr->retrieve_ptr(i.type(), i.qns())->dimension() == i.dimension());
     REQUIRE_NOTHROW(isr->remove(L"Ĩ"));
 
     // metadata by label, either kind; the non-const space pointer still writes
     // space metadata
-    isr->approximate_size(L"μ̃", 77)
+    isr->extent(L"μ̃", 77)
         .field(L"μ̃", Field::Real)
         .metric(L"μ̃", IndexSpaceMetric::General);
     CHECK(isr->retrieve_basis(L"μ̃").extent() == 77);
     CHECK(isr->retrieve_basis(L"μ̃").field() == Field::Real);
     CHECK(isr->retrieve_basis(L"μ̃").metric() == IndexSpaceMetric::General);
     // the basis's metadata is its own: the space is untouched
-    CHECK(isr->retrieve_basis(L"μ̃").space().approximate_size() ==
-          a.approximate_size());
+    CHECK(isr->retrieve_basis(L"μ̃").space().dimension() == a.dimension());
     CHECK(isr->retrieve_basis(L"μ̃").space().field() == a.field());
     CHECK(isr->retrieve(L"a").field() == a.field());
     // the own basis of a space is orthonormal
     CHECK_THROWS_AS(isr->metric(L"a", IndexSpaceMetric::General), Exception);
     REQUIRE(std::ranges::find(isr->base_spaces(), a) !=
             isr->base_spaces().end());  // memoizes the base spaces
-    isr->approximate_size(L"a", 33);
-    CHECK(isr->retrieve(L"a").approximate_size() == 33);
-    CHECK(std::ranges::find(isr->base_spaces(), a)->approximate_size() ==
+    isr->extent(L"a", 33);
+    CHECK(isr->retrieve(L"a").dimension() == 33);
+    CHECK(std::ranges::find(isr->base_spaces(), a)->dimension() ==
           33);  // the memoized base spaces see the new size
     CHECK(isr->retrieve_basis(L"μ̃").extent() == 77);  // entries are independent
-    isr->retrieve_ptr(L"a")->approximate_size(34);
-    CHECK(isr->retrieve(L"a").approximate_size() == 34);
-    CHECK_THROWS_AS(isr->approximate_size(L"ζ", 1), IndexSpace::bad_key);
+    isr->retrieve_ptr(L"a")->dimension(34);
+    CHECK(isr->retrieve(L"a").dimension() == 34);
+    CHECK_THROWS_AS(isr->extent(L"ζ", 1), IndexSpace::bad_key);
+    // the deprecated spellings
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    isr->approximate_size(L"μ̃", 78);
+    CHECK(isr->retrieve_basis(L"μ̃").extent() == 78);
+    CHECK(isr->retrieve(L"a").approximate_size() ==
+          isr->retrieve(L"a").dimension());
+    IndexSpace s = isr->retrieve(L"a");
+    s.approximate_size(44);
+    CHECK(s.dimension() == 44);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    isr->extent(L"μ̃", 77);
 
     // invariants
     CHECK_THROWS(isr->add(L"μ̃", IndexBasis{a, 5}));  // 1: label taken
@@ -251,7 +259,7 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(copy == *isr2);
     // the name and its count travel
     CHECK(copy.basis_label(pao) == std::optional<std::wstring_view>{L"μ̃"});
-    copy.approximate_size(L"μ̃", 121);
+    copy.extent(L"μ̃", 121);
     CHECK_FALSE(copy == *isr2);  // metadata of a named entry counts
     // ... and the copy is independent
     CHECK(isr2->retrieve_basis(L"μ̃").extent() == 120);
@@ -300,7 +308,7 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(ctx.index_basis_registry().get() != isr3.get());
     CHECK(*ctx.index_basis_registry() == *isr3);
     CHECK(same_instance(ctx.index_basis_registry()->retrieve_basis(L"μ̃"), pao));
-    isr3->approximate_size(L"μ̃", 5);
+    isr3->extent(L"μ̃", 5);
     CHECK_FALSE(*ctx.index_basis_registry() == *isr3);
   }
 
@@ -310,7 +318,7 @@ TEST_CASE("index_space", "[elements]") {
     // similar make_sr_spaces, but no spin AND occupied and unoccupied bits are
     // NOT contiguous!
     REQUIRE_NOTHROW(
-        isr->add(L"o", 0b0001, 3)       // approximate size
+        isr->add(L"o", 0b0001, 3)       // dimension
             .add("i", 0b0100, is_hole)  // N.B. narrow string
             .add(L'a', 0b0010, Field::Real, is_particle, QuantumNumbersAttr{},
                  50)  // N.B. wchar_t + explicit quantum numbers + size
@@ -320,27 +328,24 @@ TEST_CASE("index_space", "[elements]") {
             .add_union(L"e", {L"a", L"g"})
             .add_unIon(L"p", {L"m", L"e"}, is_complete)  // N.B. unIon
     );
-    REQUIRE(isr->retrieve(L"o").approximate_size() == 3);
+    REQUIRE(isr->retrieve(L"o").dimension() == 3);
     REQUIRE(isr->retrieve(L"o").field() == Field::Complex);
     REQUIRE(isr->retrieve(L"a").field() == Field::Real);
     REQUIRE(isr->retrieve(L"m").type().to_int32() == 0b0101);
     REQUIRE(isr->retrieve(L"m").field() == Field::Complex);
-    REQUIRE(isr->retrieve(L"m").approximate_size() ==
-            isr->retrieve(L"o").approximate_size() +
-                isr->retrieve(L"i").approximate_size());
+    REQUIRE(isr->retrieve(L"m").dimension() ==
+            isr->retrieve(L"o").dimension() + isr->retrieve(L"i").dimension());
     REQUIRE(isr->retrieve(L"p").type().to_int32() == 0b1111);
-    REQUIRE(isr->retrieve(L"p").approximate_size() ==
-            isr->retrieve(L"m").approximate_size() +
-                isr->retrieve(L"e").approximate_size());
-    REQUIRE(isr->retrieve(L"p").approximate_size() == 73);
+    REQUIRE(isr->retrieve(L"p").dimension() ==
+            isr->retrieve(L"m").dimension() + isr->retrieve(L"e").dimension());
+    REQUIRE(isr->retrieve(L"p").dimension() == 73);
     REQUIRE_NOTHROW(
         isr->add_union(L"iag", {L"i", L"a", L"g"})
             .add_union(L"oia", {"o", "i", "a"})  // N.B. narrow strings
             .add_intersection(L"x", {L"oia", L"iag"}));
     REQUIRE(isr->retrieve(L"x").type().to_int32() == 0b0110);
-    REQUIRE(isr->retrieve(L"x").approximate_size() ==
-            isr->retrieve(L"i").approximate_size() +
-                isr->retrieve(L"a").approximate_size());
+    REQUIRE(isr->retrieve(L"x").dimension() ==
+            isr->retrieve(L"i").dimension() + isr->retrieve(L"a").dimension());
     REQUIRE(isr->vacuum_occupied_space(IndexSpace::QuantumNumbers::null) ==
             isr->retrieve(L"m"));
     REQUIRE(isr->vacuum_unoccupied_space(IndexSpace::QuantumNumbers::null) ==
@@ -368,11 +373,11 @@ TEST_CASE("index_space", "[elements]") {
     other_mask.physical_particle_attribute_mask(bitset::null);
     REQUIRE(other_mask != *sr_isr);
 
-    // ... and the approximate sizes and fields of their spaces, which
+    // ... and the dimensions and fields of their spaces, which
     // IndexSpace equality ignores
     IndexBasisRegistry other_size = *sr_isr;
-    other_size.retrieve_ptr(L"i")->approximate_size(
-        sr_isr->retrieve(L"i").approximate_size() + 1);
+    other_size.retrieve_ptr(L"i")->dimension(
+        sr_isr->retrieve(L"i").dimension() + 1);
     REQUIRE(other_size.retrieve(L"i") == sr_isr->retrieve(L"i"));
     REQUIRE(other_size != *sr_isr);
     IndexBasisRegistry other_field = *sr_isr;
@@ -517,7 +522,7 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(ao == IndexBasis(p, mbpt::default_ao_basis_instance, L"μ"));
     CHECK(ao.space() == p);
     CHECK(ao.metric() == IndexSpaceMetric::General);
-    CHECK(ao.extent() == p.approximate_size());
+    CHECK(ao.extent() == p.dimension());
     CHECK(mbpt::default_ao_basis_instance < mbpt::default_pao_basis_instance);
 
     // ordering: after every other basis of p
@@ -562,7 +567,7 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(mbpt::default_pao_basis_instance ==
           std::numeric_limits<IndexBasis::instance_type>::max());
     CHECK(pao.space() == uocc);
-    CHECK(pao.extent() == uocc.approximate_size());
+    CHECK(pao.extent() == uocc.dimension());
     CHECK(pao.metric() == IndexSpaceMetric::General);
     CHECK(pao.field() == uocc.field());
     // one entry: no spin variants

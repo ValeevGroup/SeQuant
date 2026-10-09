@@ -114,10 +114,10 @@ class IndexBasis {
   }
 
   /// @return the number of functions in the basis: the dimension of its space
-  /// (IndexSpace::approximate_size()) unless registered with an extent of its
+  /// (IndexSpace::dimension()) unless registered with an extent of its
   /// own
   std::size_t extent() const noexcept {
-    return extent_ ? *extent_ : space_.approximate_size();
+    return extent_ ? *extent_ : space_.dimension();
   }
 
   /// @return whether the basis is orthonormal (IndexSpaceMetric::Unit) or not;
