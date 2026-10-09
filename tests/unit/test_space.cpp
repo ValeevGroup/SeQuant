@@ -623,7 +623,7 @@ TEST_CASE("index_space", "[elements]") {
     // the PAOs follow the OBS AO basis, registered on demand
     REQUIRE(isr->contains(L"μ"));
     const IndexBasis ao = isr->retrieve_basis(L"μ");
-    CHECK(isr->follows(L"μ̃") == std::optional<std::wstring_view>{L"μ"});
+    CHECK(isr->follows(L"μ̃") == std::optional<std::wstring>{L"μ"});
     CHECK(pao.extent() == ao.extent());
     CHECK(pao.extent() == isr->retrieve(L"p").dimension());
     CHECK(pao.metric() == IndexSpaceMetric::General);
@@ -637,7 +637,7 @@ TEST_CASE("index_space", "[elements]") {
       CHECK(pao_spin.basis_instance() == pao.basis_instance());
       CHECK(pao_spin.metric() == IndexSpaceMetric::General);
       CHECK(pao_spin.extent() == ao.extent());
-      CHECK(isr->follows(label) == std::optional<std::wstring_view>{L"μ"});
+      CHECK(isr->follows(label) == std::optional<std::wstring>{L"μ"});
     }
     // an existing μ is used as is
     auto with_ao = sequant::mbpt::make_min_sr_spaces();
@@ -736,7 +736,7 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(isr->retrieve_basis(L"μ̃").extent() == a.dimension());
     CHECK_FALSE(isr->follows(L"μ̃"));
     REQUIRE_NOTHROW(isr->follow(L"μ̃", L"μ"));
-    CHECK(isr->follows(L"μ̃") == std::optional<std::wstring_view>{L"μ"});
+    CHECK(isr->follows(L"μ̃") == std::optional<std::wstring>{L"μ"});
     // the follower mirrors the source now and on every change of it
     CHECK(isr->retrieve_basis(L"μ̃").extent() == 500);
     CHECK(isr->retrieve_basis(L"μ̃").own_extent() == 500);
@@ -774,7 +774,7 @@ TEST_CASE("index_space", "[elements]") {
     // copies follow alike, and equality sees who follows whom
     IndexBasisRegistry copy = *isr;
     CHECK(copy == *isr);
-    CHECK(copy.follows(L"μ̃") == std::optional<std::wstring_view>{L"κ"});
+    CHECK(copy.follows(L"μ̃") == std::optional<std::wstring>{L"κ"});
     copy.extent(L"κ", 701);
     CHECK(copy.retrieve_basis(L"μ̃").extent() == 701);
     CHECK(isr->retrieve_basis(L"μ̃").extent() == 700);

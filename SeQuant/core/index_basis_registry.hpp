@@ -409,14 +409,15 @@ class IndexBasisRegistry {
     return clear_memoized_data_and_return_this();
   }
 
-  /// @return the label of the entry the named basis instance registered
-  /// under @p label follows (see follow()), std::nullopt if it follows none
+  /// @return a copy of the label of the entry the named basis instance
+  /// registered under @p label follows (see follow()), std::nullopt if it
+  /// follows none
   template <basic_string_convertible S>
-  std::optional<std::wstring_view> follows(S&& label) const {
+  std::optional<std::wstring> follows(S&& label) const {
     auto it =
         follows_.find(IndexSpace::reduce_key(to_basic_string_view(label)));
     if (it == follows_.end()) return std::nullopt;
-    return std::wstring_view(it->second);
+    return it->second;
   }
 
   /// @brief retrieve a pointer to IndexSpace from the registry by the label
