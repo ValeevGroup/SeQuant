@@ -147,8 +147,8 @@ ExprPtr expectation_value_impl(ExprPtr expr,
     simplify(result);  // combine possible equivalent summands
     return result;
   } else if (expr.is<op_t>()) {
-    return ex<Constant>(
-        0);  // expectation value of a normal-ordered operator is 0
+    if (full_contractions) return ex<Constant>(0);
+    return vac_av_product(ex<Product>(ExprPtrList{expr}));
   } else if (expr->is_scalar()) {
     return expr;  // vacuum is normalized
   }
