@@ -55,7 +55,7 @@ sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
 
 // Build an IndexSpace-keyed ExponentMap over the SR test registry's hole
 // ("i") and particle ("a") spaces, matching the spaces that
-// `detail::space_counts` reads off the corresponding indices.
+// `detail::basis_counts` reads off the corresponding indices.
 sequant::AsyCost::ExponentMap occ_virt_map(std::size_t nocc,
                                            std::size_t nvirt) {
   auto const& isr = *sequant::get_default_context().index_space_registry();
@@ -404,15 +404,19 @@ TEST_CASE("eval_node", "[EvalNode]") {
       // flop count (one multiply + one add).
       auto const e1 = binarize(
           deserialize<ResultExpr>(L"R{a1;a2;z1} = A{a1;a3;z1} B{a3;a2;z1}"));
-      REQUIRE(sequant::asy_cost(e1) ==
-              AsyCost{AsyCost::ExponentMap{{a, 3}, {z, 1}}, 2});
+      REQUIRE(
+          sequant::asy_cost(e1) ==
+          AsyCost{AsyCost::ExponentMap{{IndexBasis{a}, 3}, {IndexBasis{z}, 1}},
+                  2});
 
       // Two batched indices z1,z2 (both in space z): the a^3 matmul is repeated
       // for every (z1,z2) pair, so the cost scales as a^3 · z^2.
       auto const e2 = binarize(deserialize<ResultExpr>(
           L"R{a1;a2;z1,z2} = A{a1;a3;z1,z2} B{a3;a2;z1,z2}"));
-      REQUIRE(sequant::asy_cost(e2) ==
-              AsyCost{AsyCost::ExponentMap{{a, 3}, {z, 2}}, 2});
+      REQUIRE(
+          sequant::asy_cost(e2) ==
+          AsyCost{AsyCost::ExponentMap{{IndexBasis{a}, 3}, {IndexBasis{z}, 2}},
+                  2});
     }
 
     SECTION("MRCC like example") {
@@ -426,8 +430,10 @@ TEST_CASE("eval_node", "[EvalNode]") {
       auto const a = reg.retrieve(L"a");  // virtual
 
       auto const n = eval_node(deserialize(L"g{u1,u2;a1,a2} t{a1,a2;u3,u4}"));
-      REQUIRE(sequant::asy_cost(n) ==
-              AsyCost{AsyCost::ExponentMap{{u, 4}, {a, 2}}, 2});  // 2 * u^4 a^2
+      REQUIRE(
+          sequant::asy_cost(n) ==
+          AsyCost{AsyCost::ExponentMap{{IndexBasis{u}, 4}, {IndexBasis{a}, 2}},
+                  2});  // 2 * u^4 a^2
     }
   }
 

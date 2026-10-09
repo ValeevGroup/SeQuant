@@ -44,18 +44,19 @@ namespace detail {
 
 enum NodePos { Left = 0, Right, This };
 
-/// Tally indices per IndexSpace appearing in the bra+ket+aux of `t`. The aux
+/// Tally indices per IndexBasis appearing in the bra+ket+aux of `t`. The aux
 /// slots are included so that auxiliary spaces (e.g. density-fitting/THC) show
-/// up in the cost. AsyCost is only used for analysis/reporting, so spaces are
+/// up in the cost. AsyCost is only used for analysis/reporting, so bases are
 /// taken verbatim from the indices, with no registry lookup.
 ///
-/// Cost is expressed in terms of whatever IndexSpace each index carries. A
+/// Cost is expressed in terms of whatever IndexBasis each index carries, so
+/// each basis instance of a space is a symbol of its own. A
 /// union-space index (e.g. MR hole `I=i∪u`) contributes its union dimension
 /// `|I|=|i|+|u|` as a single symbol: it is not decomposed into base-space (`i`,
 /// `u`, ...) block terms.
-inline AsyCost::ExponentMap space_counts(Tensor const& t) {
+inline AsyCost::ExponentMap basis_counts(Tensor const& t) {
   AsyCost::ExponentMap counts;
-  for (auto const& idx : t.const_braketaux_indices()) ++counts[idx.space()];
+  for (auto const& idx : t.const_braketaux_indices()) ++counts[idx.basis()];
   return counts;
 }
 
@@ -78,7 +79,7 @@ class ContractedIndexCount {
     container::set<Index> distinct;
     for (auto p : {L, R, T}) {
       auto const& t = (p == L ? n.left() : p == R ? n.right() : n)->as_tensor();
-      auto const counts = space_counts(t);
+      auto const counts = basis_counts(t);
       ranks_[p] = 0;
       for (auto const& [_, c] : counts) ranks_[p] += c;
       for (auto const& idx : t.const_braketaux_indices()) distinct.insert(idx);
@@ -88,13 +89,13 @@ class ContractedIndexCount {
     // indices and the ranks add up exactly.
     is_outerprod_ = ranks_[L] + ranks_[R] == ranks_[T];
 
-    // Cost exponent per space = number of distinct indices touching that space.
-    for (auto const& idx : distinct) ++unique_[idx.space()];
+    // Cost exponent per basis = number of distinct indices in that basis.
+    for (auto const& idx : distinct) ++unique_[idx.basis()];
   }
 
   [[nodiscard]] bool is_outerprod() const noexcept { return is_outerprod_; }
 
-  /// Per-space count of distinct indices participating in the contraction.
+  /// Per-basis count of distinct indices participating in the contraction.
   /// Each external, contracted, or batched index is counted once. For ordinary
   /// contractions (no batched index) this equals (L[s] + R[s] + T[s]) / 2.
   [[nodiscard]] Counts const& unique_counts() const { return unique_; }
@@ -116,7 +117,7 @@ class ContractedIndexCount {
 ///
 struct Flops {
   [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
-    using detail::space_counts;
+    using detail::basis_counts;
     if (n.leaf()) return AsyCost::zero();
     if (n->op_type() == EvalOp::Product  //
         && n.left()->is_tensor()         //
@@ -127,14 +128,14 @@ struct Flops {
         return idx_count.is_outerprod() ? c : 2 * c;
       } else {  // full contraction to scalar
         SEQUANT_ASSERT(n->is_scalar());
-        SEQUANT_ASSERT(space_counts(n.left()->as_tensor()) ==
-                       space_counts(n.right()->as_tensor()));
-        return 2 * AsyCost{space_counts(n.left()->as_tensor())};
+        SEQUANT_ASSERT(basis_counts(n.left()->as_tensor()) ==
+                       basis_counts(n.right()->as_tensor()));
+        return 2 * AsyCost{basis_counts(n.left()->as_tensor())};
       }
     } else if (n->is_tensor()) {
       // scalar times a tensor
       // or a tensor plus a tensor
-      return AsyCost{space_counts(n->as_tensor())};
+      return AsyCost{basis_counts(n->as_tensor())};
     } else /* scalar (+|*) scalar */
       return AsyCost::zero();
   }
@@ -154,7 +155,7 @@ struct Memory {
     AsyCost result;
     auto add_cost = [&result](ExprPtr const& expr) {
       result += expr.is<Tensor>()
-                    ? AsyCost{detail::space_counts(expr.as<Tensor>())}
+                    ? AsyCost{detail::basis_counts(expr.as<Tensor>())}
                     : AsyCost::zero();
     };
 
@@ -256,20 +257,20 @@ AsyCost asy_cost(Node const& node, F const& cost_fn = {}) {
 /// \return The minimum storage required for evaluating the given node.
 ///
 AsyCost min_storage(meta::eval_node auto const& node) {
-  using detail::space_counts;
+  using detail::basis_counts;
   auto result = AsyCost::zero();
   auto visitor = [&result](meta::eval_node auto const& n) {
     auto cost = AsyCost::zero();
     if (n.leaf() && n->is_tensor())
-      cost = AsyCost{space_counts(n->as_tensor())};
+      cost = AsyCost{basis_counts(n->as_tensor())};
     else if (!n.leaf()) {
       cost +=
-          (n.left()->is_tensor() ? AsyCost{space_counts(n.left()->as_tensor())}
+          (n.left()->is_tensor() ? AsyCost{basis_counts(n.left()->as_tensor())}
                                  : AsyCost::zero());
       cost += (n.right()->is_tensor()
-                   ? AsyCost{space_counts(n.right()->as_tensor())}
+                   ? AsyCost{basis_counts(n.right()->as_tensor())}
                    : AsyCost::zero());
-      cost += (n->is_tensor() ? AsyCost{space_counts(n->as_tensor())}
+      cost += (n->is_tensor() ? AsyCost{basis_counts(n->as_tensor())}
                               : AsyCost::zero());
     } else {
       // do nothing

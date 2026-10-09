@@ -206,7 +206,7 @@ AsyCost result_memory(const EvalExpr& ev) {
   AsyCost::ExponentMap exponents;
   // Include aux (braketaux, not braket) so auxiliary dimensions are counted in
   // the intermediate's memory/cost, consistent with space_signature.
-  for (const auto& idx : t.const_braketaux_indices()) ++exponents[idx.space()];
+  for (const auto& idx : t.const_braketaux_indices()) ++exponents[idx.basis()];
   return AsyCost{std::move(exponents)};
 }
 

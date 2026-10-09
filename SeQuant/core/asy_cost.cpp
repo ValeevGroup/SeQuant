@@ -16,6 +16,20 @@
 
 namespace sequant {
 
+namespace {
+
+/// @return the symbol of @p basis in a cost: its name if it carries one, else
+/// the space's base key, followed by `<;N>` for an unnamed instance `N`
+std::string symbol(IndexBasis const &basis) {
+  if (basis.has_name()) return toUtf8(basis.name());
+  auto result = toUtf8(basis.space().base_key());
+  if (basis.has_basis_instance())
+    result += "<" + toUtf8(basis.instance_suffix()) + ">";
+  return result;
+}
+
+}  // namespace
+
 AsyCost::AsyCostEntry::AsyCostEntry()
     : exponents_{}, prefactor_{0}, is_max_{false} {}
 
@@ -85,11 +99,11 @@ std::string AsyCost::AsyCostEntry::text() const {
       AsyCostEntry::stream_out_rational(oss, abs_c);
       oss << "*";
     }
-    // Spaces print in IndexSpace order (primarily by attr; base_key only
-    // breaks ties between reserved-attr spaces).
-    for (auto const &[space, exp] : exponents_) {
+    // Bases print in IndexBasis order: by space (primarily by attr; base_key
+    // only breaks ties between reserved-attr spaces), then by instance.
+    for (auto const &[basis, exp] : exponents_) {
       if (exp == 0) continue;
-      oss << toUtf8(space.base_key());
+      oss << symbol(basis);
       if (exp > 1) oss << "^" << exp;
     }
   }
@@ -115,9 +129,9 @@ std::string AsyCost::AsyCostEntry::to_latex() const {
           << "}{"                        //
           << denominator(prefactor_) << "}";
     }
-    for (auto const &[space, exp] : exponents_) {
+    for (auto const &[basis, exp] : exponents_) {
       if (exp == 0) continue;
-      oss << toUtf8(space.base_key());
+      oss << symbol(basis);
       if (exp > 1) {
         oss << "^{" << exp << "}";
       }
@@ -132,12 +146,12 @@ bool AsyCost::AsyCostEntry::operator<(const AsyCost::AsyCostEntry &rhs) const {
 
   // Order primarily by the sum of all exponents, i.e. the overall polynomial
   // degree (worst-case scaling). When two entries share the same total degree,
-  // break the tie by comparing exponents space by space, from the greatest
-  // IndexSpace (highest priority) down to the least, using IndexSpace's own
-  // ordering: the first space whose exponents differ decides, and a larger
-  // exponent on a higher-priority space makes the entry larger. Entries with
-  // identical exponents on every space are equivalent.
-  auto exp_for = [](ExponentMap const &m, IndexSpace const &s) {
+  // break the tie by comparing exponents basis by basis, from the greatest
+  // IndexBasis (highest priority) down to the least, using IndexBasis's own
+  // ordering: the first basis whose exponents differ decides, and a larger
+  // exponent on a higher-priority basis makes the entry larger. Entries with
+  // identical exponents on every basis are equivalent.
+  auto exp_for = [](ExponentMap const &m, IndexBasis const &s) {
     auto it = m.find(s);
     return it == m.end() ? std::size_t{0} : it->second;
   };
@@ -153,11 +167,11 @@ bool AsyCost::AsyCostEntry::operator<(const AsyCost::AsyCostEntry &rhs) const {
     if (l != r) return l < r;
   }
 
-  container::set<IndexSpace> spaces;
-  for (auto const &kv : exponents_) spaces.insert(kv.first);
-  for (auto const &kv : rhs.exponents_) spaces.insert(kv.first);
+  container::set<IndexBasis> bases;
+  for (auto const &kv : exponents_) bases.insert(kv.first);
+  for (auto const &kv : rhs.exponents_) bases.insert(kv.first);
 
-  for (auto it = spaces.rbegin(); it != spaces.rend(); ++it) {
+  for (auto it = bases.rbegin(); it != bases.rend(); ++it) {
     auto const l = exp_for(exponents_, *it);
     auto const r = exp_for(rhs.exponents_, *it);
     if (l != r) return l < r;
@@ -187,10 +201,10 @@ double AsyCost::ops(ExtentMap const &extents) const {
   for (auto const &c : cost_) {
     if (c.is_max()) return std::numeric_limits<double>::infinity();
     double temp = 1;
-    for (auto const &[space, exp] : c.exponents()) {
-      auto it = extents.find(space);
+    for (auto const &[basis, exp] : c.exponents()) {
+      auto it = extents.find(basis);
       auto const extent =
-          it != extents.end() ? it->second : space.approximate_size();
+          it != extents.end() ? it->second : basis.space().approximate_size();
       temp *= std::pow(static_cast<double>(extent), static_cast<double>(exp));
     }
     total += boost::numeric_cast<double>(c.prefactor()) * temp;
