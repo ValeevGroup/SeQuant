@@ -209,9 +209,8 @@ TEST_CASE("mbpt multireference regressions", "[mbpt]") {
       CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1;u_2} * ã{u_3;u_4}")),
                  EquivalentTo(L"γ{u_1,u_3;u_2,u_4}:A-C-S + "
                               L"s{u_1;u_4} * γ{u_3;u_2}"));
-      if (named)
-        CHECK_THAT(tensor::ref_av(deserialize(L"x{u_1;u_2} * ã{u_2;u_1}")),
-                   EquivalentTo(L"x{u_1;u_2} * γ{u_2;u_1}"));
+      CHECK_THAT(tensor::ref_av(deserialize(L"x{u_1;u_2} * ã{u_2;u_1}")),
+                 EquivalentTo(L"x{u_1;u_2} * γ{u_2;u_1}"));
     }
   }
 
