@@ -196,6 +196,13 @@ TEST_CASE("mbpt multireference regressions", "[mbpt]") {
                    EquivalentTo(L"x{u_1;u_2} * γ{u_2;u_1}"));
     }
   }
+
+  SECTION("a single normal operator becomes an RDM") {
+    CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1;u_2}")),
+               EquivalentTo(L"γ{u_1;u_2}"));
+    CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1,u_3;u_2,u_4}")),
+               EquivalentTo(L"γ{u_1,u_3;u_2,u_4}:A-C-S"));
+  }
 }
 
 TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
