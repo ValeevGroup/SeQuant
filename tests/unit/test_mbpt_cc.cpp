@@ -20,6 +20,8 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include "catch2_sequant.hpp"
 
+#include <range/v3/algorithm/any_of.hpp>
+
 #include <array>
 
 TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
@@ -606,6 +608,42 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 
     REQUIRE(size(eqs[1]) == 21);
     REQUIRE(size(eqs[2]) == 53);
+
+    // the bra-rank-I row's terms in the rank-J R carry 1/m_J under Default
+    // and 1/sqrt(m_I m_J) under Symmetric, with m_K = (K!)^2; t of rank > 1
+    // is rescaled as well, so only terms without it are compared
+    auto r_rank_part = [](const ExprPtr& eq, std::size_t rank) {
+      auto has = [](const ExprPtr& term, std::wstring_view label,
+                    auto&& rank_matches) {
+        return ranges::any_of(term->as<Product>().factors(), [&](auto& f) {
+          return f.template is<Tensor>() &&
+                 f.template as<Tensor>().label() == label &&
+                 rank_matches(f.template as<Tensor>().bra_rank());
+        });
+      };
+      ExprPtr result = ex<Constant>(0);
+      for (const auto& term : eq->as<Sum>().summands())
+        if (has(term, L"R", [rank](auto r) { return r == rank; }) &&
+            !has(term, L"t", [](auto r) { return r > 1; }))
+          result += term;
+      REQUIRE(!simplify(result)->is<Constant>());
+      return result;
+    };
+    const auto symmetric_eqs = [&cc] {
+      auto guard = set_scoped_default_mbpt_context(
+          mbpt::Context{get_default_mbpt_context()}.set(
+              NormalizationConvention::Symmetric));
+      return cc.eom_r(nₚ(2), nₕ(2));
+    }();
+    auto equal = [](const ExprPtr& a, const ExprPtr& b) {
+      return simplify(a - b) == ex<Constant>(0);
+    };
+    REQUIRE(equal(r_rank_part(symmetric_eqs[1], 1), r_rank_part(eqs[1], 1)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[1], 2),
+                  ex<Constant>(2) * r_rank_part(eqs[1], 2)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[2], 1),
+                  ex<Constant>(rational{1, 2}) * r_rank_part(eqs[2], 1)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[2], 2), r_rank_part(eqs[2], 2)));
   }
 
   SECTION("IP-EOM-CCSD R") {
