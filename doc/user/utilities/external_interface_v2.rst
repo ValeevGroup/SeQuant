@@ -13,6 +13,10 @@ file. Within this file, each processing step is represented as a JSON object wit
 * :code:`options` (Object): Set of options to tune the behavior of the step as needed. Some steps don't have options, whereas others require you to
   specify them. For most steps, options are optional. The properties of the options object depend on the step's kind - see
   :ref:`external_interface_step_kinds`.
+* :code:`inherit_options_from` (String): The :code:`id` of another step of the same kind (anywhere in the :code:`steps` array) whose options
+  shall be used as the base for this step's options. The local :code:`options` (if any) are applied on top as a
+  `JSON merge patch <https://datatracker.ietf.org/doc/html/rfc7396>`_: nested objects are merged recursively, all other values replace the
+  inherited ones and a value of :code:`null` removes the inherited option. The referenced step may itself inherit its options from yet another step.
 * :code:`outputs` (Object): This can be used to give human-readable names to individual outputs of the current step in form of name-output pairs. See
   :ref:`external_interface_outputs` - the step ID in this case is implicitly the current step's ID and must not be included explicitly. These names
   are automatically propagated through the processing chain (for most kinds of steps).
