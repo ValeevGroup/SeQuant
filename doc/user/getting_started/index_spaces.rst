@@ -45,7 +45,7 @@ see spaces only; :func:`sequant::IndexBasisRegistry::retrieve` throws on such a 
 by that label, and constructed from it; code that keys an axis by label tells them apart from the space's own
 basis by :func:`sequant::IndexBasis::base_key`. An unnamed basis instance has no entry and no extent of its own: its basis
 key is its space's, so evaluation sizes, tiles and slices it as the space. That is right for a rotation of the space,
-such as the cluster-specific virtuals; a basis of a different extent, such as a truncated set or the PAOs, must be
+such as a localized basis; a basis of a different extent, such as a truncated or an overcomplete set, must be
 registered under a name.
 
 .. literalinclude:: /examples/user/getting_started/index_basis_registry.cpp

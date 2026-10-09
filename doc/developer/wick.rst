@@ -137,7 +137,7 @@ analysis, where the standard path contracts them in parallel. Each resulting ter
 - has its mixed-space ``γ``/``η`` and surviving operators split into pure pieces: a ``γ`` into a core :math:`\delta` plus an
   active ``γ``, an ``η`` into a virtual :math:`\delta` plus an active ``η`` (a one-body ``γ`` or ``η`` of the input is split the
   same way, whatever space its indices range over; the :math:`\delta` binds the bra to a core or virtual index in its basis, so
-  between two bases, e.g. cluster-specific virtuals of different pairs or two basis instances, it is followed by an overlap; as
+  between two bases, e.g. indices with different protoindices or in two basis instances, it is followed by an overlap; as
   for an operator, an index with protoindices must not reach the active part), a survivor onto its active part and, with partial
   contractions, its core and virtual parts. A part that is not a registered space is split over its base spaces. The pieces are
   reduced with the operator indices kept fixed, so each projected index stays :math:`\delta`-bound to an input index and

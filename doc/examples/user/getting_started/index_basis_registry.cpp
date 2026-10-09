@@ -63,8 +63,7 @@ void v3() {
   using namespace sequant;
   auto isr = mbpt::make_min_sr_spaces();
   // a basis instance of a registered space can be registered under its own
-  // label: here the localized occupied orbitals as basis instance 1 of the
-  // occupied space i
+  // label: here a localized basis of the space i, as its basis instance 1
   const IndexSpace i = isr->retrieve(L"i");
   isr->add(L"ĩ", IndexBasis{i, 1});
   // a Context owns its registry: register everything first, then hand it over

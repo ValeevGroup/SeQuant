@@ -18,11 +18,10 @@ namespace sequant {
 /// instance
 
 /// The instance is an opaque integer that distinguishes several bases of the
-/// same IndexSpace that meet in one expression, e.g. the canonical and the
-/// localized orbitals of a perturbation theory, or the pair-specific virtuals
-/// of two amplitudes. A null instance (the default) is the IndexSpace's own
-/// basis; every integer, 0 and negative ones included, is an ordinary instance
-/// distinct from null.
+/// same IndexSpace that meet in one expression, e.g. an eigenbasis and a
+/// localized basis of the space, or bases specific to two different tensors.
+/// A null instance (the default) is the IndexSpace's own basis; every integer,
+/// 0 and negative ones included, is an ordinary instance distinct from null.
 ///
 /// A basis instance may carry the name it is registered under in an
 /// IndexBasisRegistry (see IndexBasisRegistry::add(label, basis)); a basis
@@ -31,11 +30,11 @@ namespace sequant {
 /// identity, so equality, ordering and hashing ignore it.
 ///
 /// An unnamed instance spans its space at the space's extent, as a rotation of
-/// it does (e.g. the cluster-specific virtuals): evaluation keys its axes by
-/// base_key(), which is the space's key for such an instance, and so
-/// sizes, tiles and slices it as the space. A basis of a different extent (a
-/// truncated or an overcomplete set, such as the PAOs) must be registered
-/// under a name, which gives it a key and an extent of its own.
+/// it does (e.g. a localized basis): evaluation keys its axes by base_key(),
+/// which is the space's key for such an instance, and so sizes, tiles and
+/// slices it as the space. A basis of a different extent (a truncated or an
+/// overcomplete set) must be registered under a name, which gives it a key and
+/// an extent of its own.
 class IndexBasis {
  public:
   using instance_type = std::int32_t;
