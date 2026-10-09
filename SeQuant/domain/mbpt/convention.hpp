@@ -79,14 +79,16 @@ inline constexpr IndexBasis::instance_type default_ao_basis_instance =
 /// @param abs if true, have an auxiliary (F12) basis
 /// @param instance the basis instance of the AO bases
 /// @throw Exception if a label is already registered or a space an AO basis
-///        spans is not
+///        spans is not; the registry is then left untouched
 void add_ao_basis(
     std::shared_ptr<IndexBasisRegistry>& isr,
     IndexSpace::QuantumNumbers spin_any, bool vbs = false, bool abs = false,
     IndexBasis::instance_type instance = default_ao_basis_instance);
 
 /// @deprecated the AO bases are named instances of the orbital spaces, see
-/// add_ao_basis(), to which this forwards
+/// add_ao_basis(), to which this forwards; unlike the AO spaces this used to
+/// register, the bases need every space they span registered (with \p vbs
+/// and \p abs together, also the union of the OBS and the ABS)
 [[deprecated("the AO bases are named basis instances; use add_ao_basis")]] void
 add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
               IndexSpace::QuantumNumbers spin_any, bool vbs = false,

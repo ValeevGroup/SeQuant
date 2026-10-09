@@ -8,6 +8,7 @@
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
@@ -87,11 +88,10 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
   // matches the MPQC layout, see spindex.h
   // this will not work for MR
   // the AOs of a basis set span an orbital space; the union of two AO bases
-  // spans the union of their spaces, which must be registered. The spaces are
-  // taken by value: add() may reallocate the registry's table
-  auto add = [&](std::wstring_view label, const IndexSpace& space) {
-    isr->add(label, IndexBasis{space, instance}, IndexSpaceMetric::General);
-  };
+  // spans the union of their spaces, which must be registered. Every space is
+  // looked up and every label checked before anything is registered, so a
+  // failure leaves the registry untouched. The spaces are taken by value:
+  // add() may reallocate the registry's table
   auto union_space = [&](std::wstring_view label, const IndexSpace& s1,
                          const IndexSpace& s2) -> IndexSpace {
     const auto* space = isr->retrieve_ptr(s1.type() | s2.type(), spin_any);
@@ -102,22 +102,34 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
                       ", which is not registered");
     return *space;
   };
+  container::svector<std::pair<std::wstring_view, IndexSpace>> bases;
   const IndexSpace obs = isr->retrieve(vbs ? L"m" : L"p");
-  const IndexSpace vbs_space = vbs ? isr->retrieve(L"e") : IndexSpace{};
-  const IndexSpace vbs_plus =
-      vbs ? union_space(L"Γ", obs, vbs_space) : IndexSpace{};
-  add(L"μ", obs);  // OBS AO
+  bases.emplace_back(L"μ", obs);  // OBS AO
+  IndexSpace vbs_plus;
   if (vbs) {
-    add(L"Α", vbs_space);  // VBS AO
-    add(L"Γ", vbs_plus);   // VBS+ = OBS + VBS
+    const IndexSpace vbs_space = isr->retrieve(L"e");
+    vbs_plus = union_space(L"Γ", obs, vbs_space);
+    bases.emplace_back(L"Α", vbs_space);  // VBS AO
+    bases.emplace_back(L"Γ", vbs_plus);   // VBS+ = OBS + VBS
   }
   if (abs) {
     const IndexSpace abs_space = isr->retrieve(L"α'");
-    add(L"σ", abs_space);                          // ABS AO in F12 methods
-    add(L"ρ", union_space(L"ρ", obs, abs_space));  // ABS+ = OBS + ABS
-    if (vbs)                                       // VABS+ = VBS+ + ABS
-      add(L"Ρ", union_space(L"Ρ", vbs_plus, abs_space));
+    bases.emplace_back(L"σ", abs_space);  // ABS AO in F12 methods
+    bases.emplace_back(L"ρ", union_space(L"ρ", obs, abs_space));  // OBS + ABS
+    if (vbs)  // VABS+ = VBS+ + ABS
+      bases.emplace_back(L"Ρ", union_space(L"Ρ", vbs_plus, abs_space));
   }
+  for (const auto& [label, space] : bases) {
+    if (isr->contains(label))
+      throw Exception("add_ao_basis: the label '" + toUtf8(label) +
+                      "' is already registered");
+    if (auto taken = isr->basis_label(IndexBasis{space, instance}))
+      throw Exception("add_ao_basis: instance " + std::to_string(instance) +
+                      " of space " + toUtf8(space.base_key()) +
+                      " is already named '" + toUtf8(*taken) + "'");
+  }
+  for (const auto& [label, space] : bases)
+    isr->add(label, IndexBasis{space, instance}, IndexSpaceMetric::General);
 }
 
 void add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,

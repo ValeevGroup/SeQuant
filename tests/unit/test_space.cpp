@@ -572,6 +572,27 @@ TEST_CASE("index_space", "[elements]") {
     auto both = sequant::mbpt::make_F12_sr_spaces();
     CHECK_THROWS_WITH(mbpt::add_ao_basis(both, mbpt::Spin::any, true, true),
                       Catch::Matchers::ContainsSubstring("ρ"));
+    // ... and a failure registers nothing, whether a space is missing or a
+    // label (or the instance) is taken
+    for (const auto* label : {L"μ", L"Α", L"Γ", L"σ", L"ρ", L"Ρ"}) {
+      CAPTURE(label);
+      CHECK_FALSE(both->contains(label));
+    }
+    auto taken = sequant::mbpt::make_F12_sr_spaces();
+    taken->add(L"ρ", IndexBasis{taken->retrieve(L"κ"), 3});
+    CHECK_THROWS_WITH(
+        mbpt::add_ao_basis(taken, mbpt::Spin::any, /*vbs=*/false, /*abs=*/true),
+        Catch::Matchers::ContainsSubstring("ρ"));
+    CHECK_FALSE(taken->contains(L"μ"));
+    CHECK_FALSE(taken->contains(L"σ"));
+    auto named = sequant::mbpt::make_F12_sr_spaces();
+    named->add(L"ν", IndexBasis{named->retrieve(L"α'"),
+                                mbpt::default_ao_basis_instance});
+    CHECK_THROWS_WITH(
+        mbpt::add_ao_basis(named, mbpt::Spin::any, /*vbs=*/false, /*abs=*/true),
+        Catch::Matchers::ContainsSubstring("ν"));
+    CHECK_FALSE(named->contains(L"μ"));
+    CHECK_FALSE(named->contains(L"σ"));
   }
 
   SECTION("PAO basis") {
