@@ -100,10 +100,10 @@ V1
                    | '^{' IndexList? '}_{' IndexList '}'                            | Meaning is ^{<ket>}_{<bra>} (no aux)
                    | '_{' IndexList? '}^{' IndexList '}'                            | Meaning is _{<bra>}^{<ket>} (no aux)
    IndexList       Index ( ',' Index )?
-   Index           IndexSpaceName '_'? Integer IndexDomain?
-   IndexDomain     '<' (ProtoLabel (',' ProtoLabel)*)? (';' Integer)? '>'           ';Integer' (signed, 32-bit) names a non-default index basis instance; absent when IndexSpaceName is itself the label of a registered basis instance
-   ProtoLabel      IndexSpaceName '_'? Integer ( '<' ';' Integer '>' )?             May carry only a domainless instance (no nested protos); same rule for a named basis
-   IndexSpaceName                                                                    Letters, ⁺, ⁻, combining diacritics, arrows (e.g. ↑, ↓) and primes; the label of a registered IndexSpace or of a registered basis instance
+   Index           BaseKey '_'? Integer IndexDomain?
+   IndexDomain     '<' (ProtoLabel (',' ProtoLabel)*)? (';' Integer)? '>'           ';Integer' (signed, 32-bit) names a non-default index basis instance; absent when BaseKey is itself the label of a registered basis instance
+   ProtoLabel      BaseKey '_'? Integer ( '<' ';' Integer '>' )?                    May carry only a domainless instance (no nested protos); same rule for a named basis
+   BaseKey                                                                          Letters, ⁺, ⁻, combining diacritics, arrows (e.g. ↑, ↓) and primes; the base key of a registered IndexSpace or the label of a registered basis instance (IndexBasis::base_key())
    SymmetrySpec    ':' ( [ASN] ( '-' [SCN] ( '-' [SN] )? )? )                        :<Symmetry>-<BraKetSymmetry>-<ColumnSymmetry>
    Variable        Name
    Name                                                                              Single word (may include Unicode chars)

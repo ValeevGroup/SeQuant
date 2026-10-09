@@ -98,14 +98,14 @@ auto variable_def     = x3::lexeme[name >> -(x3::lit('^') >> '*' >> x3::attr(tru
 
 // letters, ⁺/⁻, combining diacritics (e.g. μ̃, f̌), arrows (e.g. ↑/↓) and
 // primes (e.g. α')
-auto index_name       = +(  x3::unicode::alpha | x3::unicode::char_(L'⁺') | x3::unicode::char_(L'⁻')
+auto base_key         = +(  x3::unicode::alpha | x3::unicode::char_(L'⁺') | x3::unicode::char_(L'⁻')
                           | x3::unicode::char_(to_char_type(0x0300), to_char_type(0x036F))
                           | (x3::unicode::char_(to_char_type(0x2190), to_char_type(0x21FF)) - x3::unicode::unassigned)
                           | x3::unicode::char_(L'\'')
                          );
 
 auto index_label_def  = x3::lexeme[
-                               index_name >> -x3::lit('_') >> x3::uint_
+                               base_key >> -x3::lit('_') >> x3::uint_
                         ];
 
 // the basis instance suffix of a domain ("<protos;N>") or a domainless proto
@@ -260,10 +260,9 @@ AST parse(const StartRule &start, std::wstring_view input,
 
 }  // namespace parse
 
-bool is_index_space_name(std::wstring_view label) {
+bool is_base_key(std::wstring_view label) {
   auto begin = label.begin();
-  return x3::parse(begin, label.end(), parse::index_name) &&
-         begin == label.end();
+  return x3::parse(begin, label.end(), parse::base_key) && begin == label.end();
 }
 
 transform::DefaultSymmetries to_default_symms(

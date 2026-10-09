@@ -456,8 +456,8 @@ class IndexBasisRegistry {
   /// @brief add an IndexSpace to this registry.
   /// @param IS an IndexSpace
   /// @return reference to `this`
-  /// @throw Exception if `IS.base_key()` is not a valid index space name
-  /// (see io::serialization::v1::is_index_space_name()), or if it or
+  /// @throw Exception if `IS.base_key()` is not a valid base key
+  /// (see io::serialization::v1::is_base_key()), or if it or
   /// `IS.attr()` matches an already registered IndexSpace
   IndexBasisRegistry& add(const IndexSpace& IS) {
     if (IS)
@@ -548,8 +548,8 @@ class IndexBasisRegistry {
 
   /// @brief registers a basis instance of a registered space under its own
   /// label
-  /// @param label the label of the basis instance; must be a valid index
-  /// space name (see io::serialization::v1::is_index_space_name())
+  /// @param label the label of the basis instance; must be a valid base
+  /// key (see io::serialization::v1::is_base_key())
   /// @param basis an IndexBasis with a basis instance whose space is
   /// registered
   /// @param args optional arguments consisting of a mix of zero or one of
@@ -1568,7 +1568,7 @@ class IndexBasisRegistry {
 
   /// @throw Exception, naming @p caller, unless @p label is a valid label of
   /// a space or of a named basis instance, one that indices can be parsed
-  /// with (see io::serialization::v1::is_index_space_name())
+  /// with (see io::serialization::v1::is_base_key())
   static void validate_label(std::wstring_view label, std::string_view caller);
 
   static bool is_space(const table_type::value_type& e) {

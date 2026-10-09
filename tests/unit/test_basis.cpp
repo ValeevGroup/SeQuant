@@ -442,7 +442,7 @@ TEST_CASE("index-basis-serialization", "[serialization][basis]") {
         std::numeric_limits<IndexBasis::instance_type>::max();
     isr->add(L"μ̃", IndexBasis{a, P}, 120ul);
     // a named occupied basis (localized occupieds), so a proto can be named
-    // too; written with the combining tilde U+0303 the v1 index_name alphabet
+    // too; written with the combining tilde U+0303 the v1 BaseKey alphabet
     // admits
     isr->add(L"ĩ", IndexBasis{i, 1});
     // a copy shares the registry until set() moves the populated one in
