@@ -1997,12 +1997,24 @@ TEST_CASE("spincase-index-keeps-basis-instance", "[spin][basis]") {
 // a named basis instance and a generic index of the same ordinal are two
 // indices with one label up to the basis name; the index lists of the spin
 // tracers must keep both, else the named one is never assigned a spin
+namespace {
+sequant::IndexSpace isr_space_of(const sequant::Index& idx) {
+  return sequant::get_default_context().index_basis_registry()->retrieve(
+      idx.space().type(), idx.space().qns());
+}
+}  // namespace
+
 TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   using namespace sequant;
+  using sequant::mbpt::make_spinalpha;
+  using sequant::mbpt::make_spinbeta;
+  using sequant::mbpt::make_spinfree;
   using sequant::mbpt::spintrace;
   auto isr = mbpt::make_sr_spaces();
   const IndexSpace uocc = isr->retrieve(L"a");
   isr->add(L"μ̃", IndexBasis{uocc, 77}, 120ul);
+  // the α-spin counterpart is registered, the β-spin one is not
+  isr->add(L"μ̃↑", IndexBasis{isr->retrieve(L"a↑"), 77}, 60ul);
   auto ctx = set_scoped_default_context(
       Context({.index_basis_registry_shared_ptr = std::move(isr),
                .vacuum = Vacuum::SingleProduct}));
@@ -2010,6 +2022,21 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
       get_default_context().index_basis_registry()->retrieve_basis(L"μ̃");
   const Index a1(uocc, 1), m1(pao, 1), m2(pao, 2);
   const Index i1(L"i_1"), i2(L"i_2");
+
+  // spin-casing a named index: the registry's entry for the instance in the
+  // spin-cased space if it has one, else a basis named after the index's own,
+  // with its extent, as an unregistered spin-cased space is labelled
+  const Index m1a = make_spinalpha(m1), m1b = make_spinbeta(m1);
+  CHECK(m1a.label() == L"μ̃↑_1");
+  CHECK(m1a.space().approximate_size() == 60);
+  CHECK(m1b.label() == L"μ̃↓_1");
+  CHECK(m1b.basis().basis_instance() == 77);
+  CHECK(m1b.space().approximate_size() == 120);
+  CHECK(m1b.space() == isr_space_of(m1b));  // sanity: a↓ with the same attr
+  CHECK(make_spinfree(m1a) == m1);
+  CHECK(make_spinfree(m1b).label() == L"μ̃_1");
+  CHECK(make_spinfree(m1b).space().approximate_size() == 120);
+
   auto term = [&](const Index& m) {
     return ex<Tensor>(L"g", bra{a1, m}, ket{i1, i2}, Symmetry::Antisymm) *
            ex<Tensor>(L"t", bra{i1, i2}, ket{a1, m}, Symmetry::Antisymm);
