@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
   std::vector<ExprPtr> cc_st_r(cc_r.size());
   for (auto i = 1; i < cc_r.size(); ++i) {
     const auto tstart = std::chrono::high_resolution_clock::now();
-    cc_st_r[i] = mbpt::closed_shell_CC_spintrace(
+    cc_st_r[i] = mbpt::closed_shell_CC_singlet_spintrace(
         cc_r[i], {.method = biorthogonalization_method,
                   .naive_spintrace = naive_spintrace});
 

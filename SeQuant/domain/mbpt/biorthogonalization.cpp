@@ -26,6 +26,7 @@
 #include <range/v3/view/transform.hpp>
 
 #include <algorithm>
+#include <numeric>
 
 namespace sequant::mbpt {
 
@@ -715,6 +716,254 @@ container::svector<size_t> compute_permuted_indices(
     permuted_indices[i] = indices[perm_obj[i]];
   }
   return permuted_indices;
+}
+
+}  // namespace detail
+
+namespace {
+
+// clang-format off
+/// \brief Provides the closed-shell triplet residual assembly row over the
+/// (n!)^2 external slot permutations
+///
+/// A combination of T and E operators with their permutations
+/// [Kohn's triplet paper](http://dx.doi.org/10.1063/1.1457434).
+///
+/// \param n_particles The rank of external index pairs
+/// \param bare_te Provide the bare-TE row instead (n = 2 only)
+///
+/// \return Vector of rational weights in flat perm order
+///
+/// \throw Exception if the row is not available for \p n_particles
+// clang-format on
+std::vector<rational> hardcoded_triplet_residual_row(std::size_t n_particles,
+                                                     bool bare_te) {
+  if (bare_te) {
+    if (n_particles == 2)
+      return {ratio(0, 1), ratio(0, 1), ratio(0, 1), ratio(1, 4)};
+  } else {
+    switch (n_particles) {
+      case 1:
+        return {ratio(1, 2)};
+
+      case 2:
+        return {ratio(-1, 16), ratio(0, 1), ratio(0, 1), ratio(3, 16)};
+
+      case 3:
+        return {ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+                ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+                ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+                ratio(0, 1), ratio(0, 1),    ratio(-1, 160), ratio(0, 1),
+                ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+                ratio(0, 1), ratio(-1, 160), ratio(0, 1),    ratio(0, 1),
+                ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+                ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+                ratio(0, 1), ratio(0, 1),    ratio(1, 80),   ratio(3, 80)};
+    }
+  }
+  throw Exception(
+      "hardcoded triplet residual weights are not available for "
+      "n_particles = " +
+      std::to_string(n_particles));
+}
+
+// Returns weight * term with its external bra and ket indices relabeled by slot
+// permutation p; bra and ket are permuted independently because triplet
+// terms are not particle-symmetric
+ExprPtr triplet_expr_for(const ExprPtr& term,
+                         const container::svector<Index>& b,
+                         const container::svector<Index>& k, std::size_t p,
+                         const rational& w = 1) {
+  const std::size_t n_particles = b.size();
+  const auto ords = detail::compute_permuted_indices_bra_ket(p, n_particles);
+  container::map<Index, Index> replacements;
+  for (std::size_t i = 0; i != n_particles; ++i) {
+    if (ords[i] != i) replacements.emplace(b[i], b[ords[i]]);
+    if (ords[n_particles + i] != n_particles + i)
+      replacements.emplace(k[i], k[ords[n_particles + i] - n_particles]);
+  }
+  if (replacements.empty())
+    return w == 1 ? term->clone() : ex<Constant>(w) * term;
+  return transform_expr(term, replacements, w);
+}
+
+}  // namespace
+
+ExprPtr triplet_combined_residual(
+    const ExprPtr& V,
+    const container::svector<container::svector<Index>>& ext_idxs,
+    bool bare_te) {
+  const std::size_t n_particles = ext_idxs.size();
+  const auto weights = hardcoded_triplet_residual_row(n_particles, bare_te);
+
+  // the n bra slots and the n ket slots are permuted independently
+  SEQUANT_ASSERT(weights.size() ==
+                 factorial(n_particles) * factorial(n_particles));
+
+  const auto b = ext_idxs | ranges::views::transform([](const auto& group) {
+                   return get_bra_idx(group);
+                 }) |
+                 ranges::to<container::svector<Index>>();
+  const auto k = ext_idxs | ranges::views::transform([](const auto& group) {
+                   return get_ket_idx(group);
+                 }) |
+                 ranges::to<container::svector<Index>>();
+  const ExprPtr terms = V->is<Sum>() ? V : ex<Sum>(ExprPtrList{V});
+
+  Sum out;
+  for (const auto& term : *terms) {
+    SEQUANT_ASSERT(term->is<Product>());
+    if (!term->is<Product>()) {
+      out.append(term);
+      continue;
+    }
+    for (std::size_t p = 0; p != weights.size(); ++p) {
+      const auto& w = weights[p];
+      if (w == 0) continue;
+      out.append(triplet_expr_for(term, b, k, p, w));
+    }
+  }
+
+  auto result = ex<Sum>(out);
+  simplify(result);
+  return result;
+}
+
+ExprPtr triplet_maxcoeff_compact(
+    ExprPtr expr, const container::svector<container::svector<Index>>& ext_idxs,
+    bool bare_te) {
+  const std::size_t n_particles = ext_idxs.size();
+  if (n_particles <= 1) return expr;
+  const auto& numeric_weights =
+      bare_te ? detail::triplet_te_nns_projection_weights<double>(n_particles)
+              : detail::triplet_nns_projection_weights<double>(n_particles);
+  std::vector<rational> weights;
+  weights.reserve(numeric_weights.size());
+  for (const auto w : numeric_weights) weights.push_back(to_rational(w));
+  if (!expr->is<Sum>()) return expr;
+
+  auto work = expr->clone();
+  for (auto& term : *work) {
+    if (term->is<Product>())
+      term =
+          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
+  }
+  canonicalize(work);
+  simplify(work);
+
+  const auto b = ext_idxs | ranges::views::transform([](const auto& group) {
+                   return get_bra_idx(group);
+                 }) |
+                 ranges::to<container::svector<Index>>();
+  const auto k = ext_idxs | ranges::views::transform([](const auto& group) {
+                   return get_ket_idx(group);
+                 }) |
+                 ranges::to<container::svector<Index>>();
+
+  container::map<std::size_t, container::vector<ExprPtr>> groups;
+  const auto ctx = get_default_context_snapshot();
+  const auto& cardinal_tensor_labels = ctx.cardinal_tensor_labels();
+  for (const auto& term : *work) {
+    SEQUANT_ASSERT(term->is<Product>());
+    if (!term->is<Product>()) continue;
+    sequant::TensorNetwork tn(*term.as_shared_ptr<Product>());
+    const auto hash =
+        tn.canonicalize_slots(cardinal_tensor_labels).hash_value();
+    groups[hash].push_back(term);
+  }
+
+  // the sign the canonicalization produced is returned separately so the
+  // coefficients can be tracked
+  auto canonical_unit_product =
+      [](const ExprPtr& t) -> std::pair<ExprPtr, Product::scalar_type> {
+    auto out = t->clone();
+    out->as<Product>().scale(Product::scalar_type{1} /
+                             out->as<Product>().scalar());
+    canonicalize(out);
+    simplify(out);
+    const auto sign = out->as<Product>().scalar();
+    out->as<Product>().scale(Product::scalar_type{1} / sign);
+    return {std::move(out), sign};
+  };
+
+  Sum compact;
+  for (const auto& [_, terms] : groups) {
+    // the max-|coeff| member is an identity-perm representative
+    const ExprPtr* rep = &terms.front();
+    for (const auto& t : terms)
+      if (abs(t->as<Product>().scalar()) > abs((*rep)->as<Product>().scalar()))
+        rep = &t;
+    const auto [rep_unit, rep_sign] = canonical_unit_product(*rep);
+    const auto rep_coeff = (*rep)->as<Product>().scalar() * rep_sign;
+
+    container::map<std::size_t, Product::scalar_type> pred_weight;
+    for (std::size_t p = 0; p != weights.size(); ++p) {
+      auto [u, s] = canonical_unit_product(triplet_expr_for(rep_unit, b, k, p));
+      const auto w = Product::scalar_type(weights[p]) * s;
+      if (auto it = pred_weight.find(u->hash_value()); it != pred_weight.end())
+        it->second += w;
+      else
+        pred_weight.emplace(u->hash_value(), w);
+    }
+
+    const auto rep_weight = pred_weight.at(rep_unit->hash_value());
+    SEQUANT_ASSERT(rep_weight != Product::scalar_type(0));
+    const auto kept_coeff = rep_coeff / rep_weight;
+
+    std::size_t n_predicted_members = 0;
+    for (const auto& [h, w] : pred_weight)
+      if (w != Product::scalar_type(0)) ++n_predicted_members;
+    if (n_predicted_members != terms.size())
+      throw Exception(
+          "triplet_maxcoeff_compact: hash group does not match the "
+          "single-representative pattern; the residual cannot be "
+          "compacted losslessly");
+    for (const auto& t : terms) {
+      const auto [u, s] = canonical_unit_product(t);
+      const auto it = pred_weight.find(u->hash_value());
+      if (it == pred_weight.end() ||
+          t->as<Product>().scalar() * s != kept_coeff * it->second)
+        throw Exception(
+            "triplet_maxcoeff_compact: hash group does not match the "
+            "single-representative pattern; the residual cannot be "
+            "compacted losslessly");
+    }
+
+    auto kept = rep_unit->clone();
+    kept->as<Product>().scale(kept_coeff);
+    compact.append(std::move(kept));
+  }
+  return ex<Sum>(compact);
+}
+
+namespace detail {
+
+container::svector<size_t> compute_permuted_indices_bra_ket(
+    size_t perm_index, size_t n_particles) {
+  const auto num_perms = static_cast<size_t>(factorial(n_particles));
+  SEQUANT_ASSERT(perm_index < num_perms * num_perms);
+
+  container::svector<size_t> bra_slots(n_particles);
+  container::svector<size_t> ket_slots(n_particles);
+  for (size_t i = 0; i < n_particles; ++i) {
+    bra_slots[i] = i;
+    ket_slots[i] = n_particles + i;
+  }
+
+  container::svector<size_t> ords =
+      compute_permuted_indices(bra_slots, perm_index / num_perms, n_particles);
+  const auto permuted_ket =
+      compute_permuted_indices(ket_slots, perm_index % num_perms, n_particles);
+  ords.insert(ords.end(), permuted_ket.begin(), permuted_ket.end());
+  return ords;
+}
+
+bool triplet_bare_te(std::size_t n_particles) {
+  if (n_particles == 0 || n_particles > 3)
+    throw Exception(
+        "the closed-shell triplet residual is implemented for singles, "
+        "doubles and triples");
+  return n_particles == 2;
 }
 
 }  // namespace detail

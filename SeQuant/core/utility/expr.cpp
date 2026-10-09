@@ -542,7 +542,7 @@ ExprPtr transform_expr(const Expr &expr,
     for (auto &&term : product) {
       if (term->is<AbstractTensor>()) {
         result->append(1, transform_tensor(*term));
-      } else if (term->is<Variable>() || term->is<Constant>()) {
+      } else if (term->is_scalar()) {
         result->append(1, term->clone());
       } else {
         throw Exception("Invalid Expr type in transform_product");

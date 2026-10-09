@@ -17,11 +17,14 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <cassert>
+#include <cmath>
 #include <cstddef>
 #include <initializer_list>
 #include <memory>
@@ -852,7 +855,7 @@ SECTION("Closed-shell spintrace CCD") {
       const auto input =
           deserialize(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
                       {.def_perm_symm = Symmetry::Antisymm});
-      auto result = closed_shell_CC_spintrace_v1(input);
+      auto result = closed_shell_CC_singlet_spintrace_v1(input);
       REQUIRE_THAT(result,
                    EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
                                 L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
@@ -862,7 +865,7 @@ SECTION("Closed-shell spintrace CCD") {
           ExprPtrList{deserialize(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
                                   {.def_perm_symm = Symmetry::Antisymm})});
 
-      auto result = closed_shell_CC_spintrace_v2(input);
+      auto result = closed_shell_CC_singlet_spintrace_v2(input);
       REQUIRE_THAT(result,
                    EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
                                 L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
@@ -876,7 +879,7 @@ SECTION("Closed-shell spintrace CCD") {
       const auto pno_ccd_energy_so_as_sum =
           ex<Sum>(ExprPtrList{pno_ccd_energy_so});
       auto pno_ccd_energy_sf =
-          closed_shell_CC_spintrace_v1(pno_ccd_energy_so_as_sum);
+          closed_shell_CC_singlet_spintrace_v1(pno_ccd_energy_so_as_sum);
       REQUIRE_THAT(pno_ccd_energy_sf,
                    EquivalentTo("2 g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
                                 "t{i1,i2;a1<i1,i2>,a2<i1,i2>}:N-N - "
@@ -892,7 +895,7 @@ SECTION("Closed-shell spintrace CCD") {
       const auto pno_ccd_energy_so_as_sum =
           ex<Sum>(ExprPtrList{pno_ccd_energy_so});
       auto pno_ccd_energy_sf =
-          closed_shell_CC_spintrace_v2(pno_ccd_energy_so_as_sum);
+          closed_shell_CC_singlet_spintrace_v2(pno_ccd_energy_so_as_sum);
       REQUIRE_THAT(pno_ccd_energy_sf,
                    EquivalentTo("2 g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
                                 "t{i1,i2;a1<i1,i2>,a2<i1,i2>}:N-N - "
@@ -1113,40 +1116,40 @@ SECTION("Closed-shell CC spintrace for variable, constant, product") {
     auto expr1 = sequant::deserialize(L"-ω Â{i1,i2;a1,a2} t{a1,a2;i1,i2}",
                                       {.def_perm_symm = Symmetry::Antisymm});
 
-    auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
+    auto result_v1 = mbpt::closed_shell_CC_singlet_spintrace_v1(expr1);
     REQUIRE_THAT(result_v1, EquivalentTo(L"-ω Ŝ{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
 
-    auto result_v2 = mbpt::closed_shell_CC_spintrace_v2(expr1);
+    auto result_v2 = mbpt::closed_shell_CC_singlet_spintrace_v2(expr1);
     REQUIRE_THAT(result_v2, EquivalentTo(L"-ω Ŝ{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
   }
   {  // test a single variable
     auto expr1 = sequant::deserialize(L"ω");
 
-    auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
+    auto result_v1 = mbpt::closed_shell_CC_singlet_spintrace_v1(expr1);
     REQUIRE_THAT(result_v1, EquivalentTo(L"ω"));
 
-    auto result_v2 = mbpt::closed_shell_CC_spintrace_v2(expr1);
+    auto result_v2 = mbpt::closed_shell_CC_singlet_spintrace_v2(expr1);
     REQUIRE_THAT(result_v2, EquivalentTo(L"ω"));
   }
   {  // test a single constant
     auto expr1 = sequant::deserialize(L"1/4");
 
-    auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
+    auto result_v1 = mbpt::closed_shell_CC_singlet_spintrace_v1(expr1);
     REQUIRE_THAT(result_v1, EquivalentTo(L"1/4"));
 
-    auto result_v2 = mbpt::closed_shell_CC_spintrace_v2(expr1);
+    auto result_v2 = mbpt::closed_shell_CC_singlet_spintrace_v2(expr1);
     REQUIRE_THAT(result_v2, EquivalentTo(L"1/4"));
   }
   {  // test a product of tensors
     const auto input = deserialize(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
                                    {.def_perm_symm = Symmetry::Antisymm});
 
-    auto result_v1 = closed_shell_CC_spintrace_v1(input);
+    auto result_v1 = closed_shell_CC_singlet_spintrace_v1(input);
     REQUIRE_THAT(result_v1,
                  EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
                               L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
 
-    auto result_v2 = closed_shell_CC_spintrace_v2(input);
+    auto result_v2 = closed_shell_CC_singlet_spintrace_v2(input);
     REQUIRE_THAT(result_v2,
                  EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
                               L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
@@ -1226,7 +1229,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
 
     // the new efficient method, does spintracing with partial expansion, then
     // expanding by S_map (this method is used in
-    // closed_shell_CC_spintrace_v2)
+    // closed_shell_CC_singlet_spintrace_v2)
     auto result_2 = closed_shell_spintrace(
         input,
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
@@ -1264,7 +1267,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
                     L"g{a_1,a_2;a_4,a_5} * t{a_3,a_4,a_5;i_1,i_2,i_3}",
                     {.def_perm_symm = Symmetry::Antisymm})});
 
-    auto result = closed_shell_CC_spintrace_v2(input);
+    auto result = closed_shell_CC_singlet_spintrace_v2(input);
     REQUIRE_THAT(
         result,
         EquivalentTo(
@@ -1278,7 +1281,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
                     "t{a_3,a_4,a_5;i_1,i_2,i_3}",
                     {.def_perm_symm = Symmetry::Antisymm})});
 
-    auto result = closed_shell_CC_spintrace_v1(input);
+    auto result = closed_shell_CC_singlet_spintrace_v1(input);
     REQUIRE(result->size() == 4);
     REQUIRE_THAT(
         result,
@@ -1483,6 +1486,7 @@ SECTION("Relation in spin P operators") {
   simplify(p7_result);
 
   auto expanded_A = A3 * input;
+  auto expanded_A3 = A3 * input;
   expanded_A = expand_A_op(expanded_A);
   reset_tags(expanded_A);
   simplify(expanded_A);
@@ -1577,14 +1581,38 @@ SECTION("Open-shell spin-tracing") {
   //  g
   {
     auto input = ex<Constant>(rational{1, 4}) *
-                 ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                            Symmetry::Antisymm);
+                 ex<Tensor>(L"R", bra{L"a_1", L"a_2", L"a_3"},
+                            ket{L"i_1", L"i_2", L"i_3"}, Symmetry::Antisymm);
     auto result = open_shell_spintrace(
-        input, IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
-    REQUIRE(result.size() == 3);
-    REQUIRE_THAT(result[0], EquivalentTo("1/4 g{a↑1,a↑2;i↑1,i↑2}:A"));
-    REQUIRE_THAT(result[1], EquivalentTo("1/4 g{a↑1,a↓2;i↑1,i↓2}"));
-    REQUIRE_THAT(result[2], EquivalentTo("1/4 g{a↓1,a↓2;i↓1,i↓2}:A"));
+        input,
+        IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
+    REQUIRE(result.size() == 4);
+    // std::wcout << "os-st-NNC 3h2p: " << to_latex_align(result[1]) <<
+    // std::endl;
+
+    // REQUIRE_THAT(result[0], EquivalentTo("1/4 g{a↑1,a↑2;i↑1,i↑2}:A"));
+    // REQUIRE_THAT(result[1], EquivalentTo("1/4 g{a↑1,a↓2;i↑1,i↓2}"));
+    // REQUIRE_THAT(result[2], EquivalentTo("1/4 g{a↓1,a↓2;i↓1,i↓2}:A"));
+
+    // auto input2 = ex<Constant>(rational{1, 4}) *
+    //        ex<Tensor>(L"R", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2", L"i_3"},
+    //                   Symmetry::Antisymm);
+
+    auto input2 =
+        ex<Constant>(rational{1, 4}) *
+        ex<Tensor>(L"R", bra{L"a_1"}, ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
+
+    auto result2 =
+        open_shell_spintrace(input2, IdxGroupList{{L"i_1", L"a_1"}, {L"i_2"}});
+    REQUIRE(result2.size() == 4);
+    std::wcout << "fourth os-st-NNC 2h1p: " << to_latex_align(result2[3])
+               << std::endl;
+    // REQUIRE_THAT(result2[0], EquivalentTo("1/4 R{a↑1,a↑2;i↑1,i↑2,i↑3}:A"));
+    // REQUIRE_THAT(result2[1], EquivalentTo("1/4 R{a↑1,a↓2;i↑1,i↓2,i↑3}"));
+    // REQUIRE_THAT(result2[2], EquivalentTo("1/4 R{a↓1,a↓2;i↓1,i↓2,i↑3}"));
+    // REQUIRE_THAT(result2[3], EquivalentTo("1/4 R{a↑1,a↑2;i↑1,i↑2,i↓3}"));
+    // REQUIRE_THAT(result2[4], EquivalentTo("1/4 R{a↑1,a↓2;i↑1,i↓2,i↓3}"));
+    // REQUIRE_THAT(result2[5], EquivalentTo("1/4 R{a↓1,a↓2;i↓1,i↓2,i↓3}:A"));
   }
 
   // f_oo * t2
@@ -1626,6 +1654,175 @@ SECTION("Open-shell spin-tracing") {
             L"i↓_3}}_{{a↓_2}}}}");
   }
 
+  {  // Now working here NNC
+    // the ext indices of ft3:\n";
+    auto input = ex<Constant>(rational{1, 12}) *
+                 ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_4"}) *
+                 ex<Tensor>(L"t", bra{L"a_2", L"a_3", L"a_4"},
+                            ket{L"i_1", L"i_2", L"i_3"}, Symmetry::Antisymm);
+
+    // std::wcout << "1st os-st-NNC g t 2h1p: " << to_latex_align(input) <<
+    // std::endl;
+
+    auto ext_idx = external_indices(input);
+    for (auto& idx : ext_idx) {
+      for (auto& slotted : idx) {
+        std::wcout << "ext_group is: " << slotted.index().to_latex()
+                   << std::endl;
+      }
+    }
+
+    auto const ext_idxs = external_indices(input);
+    for (size_t g = 0; g < ext_idxs.size(); ++g) {
+      std::wcout << L"group[" << g << L"]: ";
+      for (auto& slotted : ext_idxs[g]) {
+        std::wcout << slotted.index().to_latex() << L" ";
+      }
+      std::wcout << L"\n";
+    }
+
+    auto result = open_shell_spintrace(
+        input,
+        IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
+
+    std::wcout << "1st os-st-NNC g t 2h1p: " << to_latex_align(result[1])
+               << std::endl;
+    // std::wcout << "2nd os-st-NNC g t 2h1p: " << to_latex_align(result[1]) <<
+    // std::endl; std::wcout << "3rd os-st-NNC g t 2h1p: " <<
+    // to_latex_align(result[2]) << std::endl; std::wcout << "4th os-st-NNC g t
+    // 2h1p: " << to_latex_align(result[3]) << std::endl; std::wcout << "5th
+    // os-st-NNC g t 2h1p: " << to_latex_align(result[4]) << std::endl;
+    // std::wcout << "6th os-st-NNC g t 2h1p: " << to_latex_align(result[5]) <<
+    // std::endl;
+
+    // REQUIRE(result.size() == 6);
+    // REQUIRE_THAT(result[0],
+    //              EquivalentTo("1/12 f{a↑1;a↑4}
+    //              t{a↑2,a↑3,a↑4;i↑1,i↑2,i↑3}:A"));
+    // REQUIRE_THAT(result[1],
+    //              EquivalentTo("-1/12 f{a↑1;a↑3} t{a↑2,a↑3,a↓3;i↑_1,i↑2,i↓3} +
+    //              "
+    //                  "1/12 f{a↑1;a↑3} t{a↑2,a↑3,a↓3;i↑2,i↑1,i↓3}"));
+    // REQUIRE_THAT(result[2],
+    //              EquivalentTo("-1/12 f{a↑1;a↑2} t{a↑2,a↓2,a↓3;i↑1,i↓3,i↓2} +
+    //              "
+    //                           "1/12 f{a↑1;a↑2} t{a↑2,a↓2,a↓3;i↑1,i↓2,i↓3}"));
+    // REQUIRE_THAT(result[3],
+    //              EquivalentTo("1/12 f{a↓1;a↓4}
+    //              t{a↓2,a↓3,a↓4;i↓1,i↓2,i↓3}:A"));
+
+    // Second test
+    auto input_2 =
+        ex<Constant>(rational{1, 1}) *
+        ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}) *
+        ex<Tensor>(L"R", bra{L"a_1"}, ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
+
+    auto result_2 = open_shell_spintrace(
+        input_2,
+        container::svector<container::svector<Index>>{{Index{L"i_2"}}});
+    // std::wcout << "check if R has nonsymm (0): " <<
+    // to_latex_align(result_2[0]) << std::endl; std::wcout << "check if R has
+    // nonsymm (1): " << to_latex_align(result_2[1]) << std::endl;
+
+    auto input_3 = ex<Constant>(rational{1, 12}) *
+                   ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_4"}) *
+                   ex<Tensor>(L"t", bra{L"a_2", L"a_3", L"a_4"},
+                              ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
+
+    auto const ext_idxs_3 = external_indices(input_3);
+    for (size_t g = 0; g < ext_idxs_3.size(); ++g) {
+      std::wcout << L"group[" << g << L"]: ";
+      for (auto& slotted : ext_idxs_3[g]) {
+        std::wcout << slotted.index().to_latex() << L" ";
+      }
+      std::wcout << L"\n";
+    }
+    auto result_3 = open_shell_spintrace(
+        input_3, IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"a_3"}});
+
+    // std::wcout << "1st os-st-NNC g t 2h1p: " << to_latex_align(result_3[1])
+    // << std::endl; std::wcout <<
+  }
+
+  {  // check for zero terms
+    auto input_1 =
+        ex<Constant>(rational{1, 12}) *
+        ex<Tensor>(L"R", bra{}, ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
+
+    auto input_2 =
+        ex<Constant>(rational{1, 12}) *
+        ex<Tensor>(L"R", bra{}, ket{L"i_4", L"i_3"}, Symmetry::Antisymm) *
+        ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_5"}) *
+        ex<Tensor>(L"g", bra{L"i_4", L"i_5"}, ket{L"i_1", L"i_2"},
+                   Symmetry::Antisymm);
+
+    auto const ext_idxs = external_indices(input_2);
+    for (size_t g = 0; g < ext_idxs.size(); ++g) {
+      std::wcout << L"group[" << g << L"]: ";
+      for (auto& slotted : ext_idxs[g]) {
+        std::wcout << slotted.index().to_latex() << L" ";
+      }
+      std::wcout << L"\n";
+    }
+
+    // auto os
+    auto expand_antisym_R2h = expand_antisymm(input_1);
+
+    auto result_1 =
+        open_shell_spintrace(input_1, IdxGroupList{{L"i_1"}, {L"i_2"}});
+
+    std::wcout << "expand antisymm R 2h: " << to_latex_align(expand_antisym_R2h)
+               << std::endl;
+    std::wcout << "1st os-st-NNC R 2h: " << to_latex_align(result_1[1])
+               << std::endl;
+  }
+
+  SECTION("open-shell 2h mixed-spin: R g t from spin-orbital") {
+    std::wcout << "here start zero term test:\n";
+
+    // Spin-orbital input: R^{i4 i3} ḡ^{i1}_{i4}{}^{i2}_{i5} t^{i5}_{a1}
+    auto input =
+        ex<Constant>(rational{1, 1}) *
+        ex<Tensor>(L"R", bra{}, ket{Index{L"i_4"}, Index{L"i_3"}},
+                   Symmetry::Antisymm) *
+        ex<Tensor>(L"g", bra{Index{L"i_1"}, Index{L"i_4"}},
+                   ket{Index{L"i_2"}, Index{L"i_5"}}, Symmetry::Antisymm) *
+        ex<Tensor>(L"t", bra{Index{L"i_5"}}, ket{Index{L"a_1"}});
+
+    auto const ext_idxs = external_indices(input);
+
+    for (size_t g = 0; g < ext_idxs.size(); ++g) {
+      std::wcout << L"group[" << g << L"]: ";
+      for (auto& slotted : ext_idxs[g]) {
+        std::wcout << slotted.index().to_latex() << L" ";
+      }
+      std::wcout << L"\n";
+    }
+
+    // Spintrace for a specific spin case that includes the mixed-spin 2h term.
+    // You can adjust target_spin_case if needed once you inspect the LaTeX.
+    auto os_vec = open_shell_spintrace(input, ext_idxs,
+                                       /*target_spin_case=*/1);
+    REQUIRE(os_vec.size() == 1);
+    auto os_expr = os_vec.front();
+
+    // before canonicalization
+    std::wcout << "After open_shell_spintrace (before canon): "
+               << to_latex_align(os_expr) << L"\n";
+
+    // detail::reset_idx_tags(os_expr);
+    canonicalize(os_expr);
+    simplify(os_expr);
+
+    std::wcout << "After open_shell_spintrace + canonicalize: "
+               << to_latex_align(os_expr) << L"\n";
+
+    // Regression: the mixed-spin 2h contribution must NOT collapse to pure
+    // zero. REQUIRE_FALSE(os_expr->is<Constant>() &&
+    //               os_expr->as<Constant>().value() == 0);
+    std::wcout << "here finish zero term test:\n";
+  }
+
   // f * t3
   {
     auto input =
@@ -1649,6 +1846,138 @@ SECTION("Open-shell spin-tracing") {
                  EquivalentTo("1/12 f{a↓1;a↓4} t{a↓2,a↓3,a↓4;i↓1,i↓2,i↓3}:A"));
   }
 
+  {  // ft2 , 2h1p
+
+    auto input =
+        ex<Constant>(rational{-2, 1}) *
+        ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"}, ket{},
+                   Symmetry::Antisymm) *
+        ex<Tensor>(L"R", bra{}, ket{L"i_1", L"i_3"}, Symmetry::Antisymm) *
+        ex<Tensor>(L"f", bra{L"i_3"}, ket{L"i_2"});
+    std::wcout << "input: -2ARf 2h0p: " << to_latex_align(input);
+
+    auto result = open_shell_spintrace(input, IdxGroupList{{L"i_1"}, {L"i_2"}});
+    canonicalize(result[1]);
+    // REQUIRE(result.size() == 4);
+
+    std::wcout << "-2ARf,result[0]: " << to_latex_align(result[0]) << std::endl;
+    std::wcout << "-2ARf, result[1]: " << to_latex_align(result[1])
+               << std::endl;
+    std::wcout << "-2ARf,result[2]: " << to_latex_align(result[2]) << std::endl;
+
+    // REQUIRE_THAT(result[0],
+    //              EquivalentTo("1/2 f{i↑3;i↑1} t{a↑1,a↑2;i↑2,i↑3}:A"));
+    // REQUIRE_THAT(result[1], EquivalentTo("-1/2 f{i↑2;i↑1}
+    // t{a↑1,a↓2;i↑2,i↓2}")); REQUIRE_THAT(result[2],
+    //              EquivalentTo("1/2 f{i↓3;i↓1} t{a↓1,a↓2;i↓2,i↓3}:A"));
+
+    // printed results, later set then as the required.
+    //  ext indices is: {i_2} result[0]: \begin{align}
+    //  & {{{\frac{1}{12}}}{f^{{i↑_2}}_{{i↑_1}}}{R^{{i↑_1}}_{}}}
+    //  \end{align}
+    //  result[1]: \begin{align}
+    //  & {{{\frac{1}{12}}}{f^{{i↓_2}}_{{i↓_1}}}{R^{{i↓_1}}_{}}}
+    //  \end{align}
+    //  fR1 finished
+  }
+
+  //     // f * R (NNC: 3h2p)
+  {
+    auto input =
+        ex<Constant>(rational{1, 1}) *
+        ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}) *
+        ex<Tensor>(L"R", bra{L"a_1"}, ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
+    // std::wcout << "input f R 2h1p: " << to_latex_align(input);
+    auto const ext_idxs = external_indices(input);
+    for (auto& group : ext_idxs) {
+      for (auto& slotted : group) {
+        std::wcout << "ext indices is: " << slotted.index().to_latex() << L" ";
+      }
+    }
+
+    auto result = open_shell_spintrace(
+        input, container::svector<container::svector<Index>>{{Index{L"i_2"}}});
+    REQUIRE(result.size() == 2);
+
+    //
+    for (std::size_t i = 0; i < result.size(); ++i) {
+      std::wcout << "I am here: result[" << i
+                 << "]: " << to_latex_align(result[i]) << std::endl;
+    }
+  }
+
+  {  // ft2 , 2h1p
+    auto input =
+        ex<Constant>(rational{1, 2}) *
+        ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                   Symmetry::Antisymm) *
+        ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
+
+    auto result =
+        open_shell_spintrace(input, IdxGroupList{{L"i_1", L"a_1"}, {L"i_2"}});
+    REQUIRE(result.size() == 4);
+
+    for (std::size_t i = 0; i < result.size(); ++i) {
+      std::wcout << "result[" << i << "]: " << to_latex_align(result[i])
+                 << std::endl;
+    }
+
+    // REQUIRE_THAT(result[0],
+    //              EquivalentTo("1/2 f{i↑3;i↑1} t{a↑1,a↑2;i↑2,i↑3}:A"));
+    // REQUIRE_THAT(result[1], EquivalentTo("-1/2 f{i↑2;i↑1}
+    // t{a↑1,a↓2;i↑2,i↓2}")); REQUIRE_THAT(result[2],
+    //              EquivalentTo("1/2 f{i↓3;i↓1} t{a↓1,a↓2;i↓2,i↓3}:A"));
+  }
+  {
+    auto A2_ab =
+        Tensor(antisymm_label(), bra{i1A, i2B}, ket{}, Symmetry::Antisymm);
+
+    auto R_1 = Tensor(L"R", bra{},
+                      ket{
+                          i3A,
+                          i2B,
+                      },
+                      Symmetry::Antisymm);
+    auto f_1 = Tensor(L"f", bra{i3A}, ket{i1A}, Symmetry::Nonsymm);
+    auto input_first_Rf = ex<Tensor>(R_1) * ex<Tensor>(f_1);
+    input_first_Rf = ex<Constant>(rational{-1, 1}) * input_first_Rf;
+    canonicalize(input_first_Rf);
+    std::wcout << "how it canonicalizes the first term? "
+               << to_latex_align(input_first_Rf) << std::endl;
+
+    auto R_2 = Tensor(L"R", bra{}, ket{i2B, i3A}, Symmetry::Nonsymm);
+    auto f_2 = Tensor(L"f", bra{i3A}, ket{i1A}, Symmetry::Nonsymm);
+    auto input_second_Rf = ex<Tensor>(R_2) * ex<Tensor>(f_2);
+    canonicalize(input_second_Rf);
+    std::wcout << "how it canonicalizes the second term? "
+               << to_latex_align(input_second_Rf) << std::endl;
+
+    auto input_12 = input_first_Rf + input_second_Rf;
+    canonicalize(input_12);
+    std::wcout << "how it canonicalizes the sum of first and second terms? "
+               << to_latex_align(input_12) << std::endl;
+
+    auto R_3 = Tensor(L"R", bra{}, ket{i1A, i3B}, Symmetry::Nonsymm);
+    auto f_3 = Tensor(L"f", bra{i3B}, ket{i2B}, Symmetry::Nonsymm);
+    auto input_third_Rf = ex<Tensor>(R_3) * ex<Tensor>(f_3);
+    input_third_Rf = ex<Constant>(rational{-1, 1}) * input_third_Rf;
+    canonicalize(input_third_Rf);
+    std::wcout << "how it canonicalizes the third term? "
+               << to_latex_align(input_third_Rf) << std::endl;
+
+    auto R_4 = Tensor(L"R", bra{}, ket{i3B, i1A}, Symmetry::Nonsymm);
+    auto f_4 = Tensor(L"f", bra{i3B}, ket{i2B}, Symmetry::Nonsymm);
+    auto input_fourth_Rf = ex<Tensor>(R_4) * ex<Tensor>(f_4);
+    canonicalize(input_fourth_Rf);
+    std::wcout << "how it canonicalizes the fourth term? "
+               << to_latex_align(input_fourth_Rf) << std::endl;
+
+    auto input_sum =
+        input_first_Rf + input_second_Rf + input_third_Rf + input_fourth_Rf;
+    canonicalize(input_sum);
+    std::wcout << "how it canonicalizes the sum? " << to_latex_align(input_sum)
+               << std::endl;
+  }
   // aab: g*t3 (CCSDT R3 4)
   {
     auto A2_aab = Tensor(antisymm_label(), bra{i1A, i2A}, ket{a1A, a2A},
@@ -1767,6 +2096,52 @@ SECTION("Open-shell spin-tracing") {
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     REQUIRE(result2[1]->size() == 24);
   }
+  SECTION("remove_spin relabel_collisions: external/internal collision") {
+    const auto i1A = Index(L"i↑_1");
+    const auto i2A = Index(L"i↑_2");
+    const auto i1B = Index(L"i↓_1");
+    const auto a1A = Index(L"a↑_1");
+    const auto a2A = Index(L"a↑_2");
+    const auto a1B = Index(L"a↓_1");
+
+    // -R{a↑1,a↑2;i↑2,i↑1} g{i↑2,i↓1;a↑2,a↓1} t{a↓1;i↓1}
+    auto input =
+        ex<Constant>(-1) *
+        ex<Tensor>(L"R", bra{a1A, a2A}, ket{i2A, i1A}, Symmetry::Nonsymm) *
+        ex<Tensor>(L"g", bra{i2A, i1B}, ket{a2A, a1B}, Symmetry::Nonsymm) *
+        ex<Tensor>(L"t", bra{a1B}, ket{i1B}, Symmetry::Nonsymm);
+
+    auto result = remove_spin(input, /*relabel_collisions=*/true);
+    canonicalize(result);
+
+    // a↓1 -> a3, i↓1 -> i3 to avoid clashing with external a↑1->a1, i↑1->i1
+    REQUIRE_THAT(result,
+                 EquivalentTo("-1 R{a1,a2;i2,i1}:N-N-N g{i2,i3;a2,a3}:N-N-N "
+                              "t{a3;i3}:N-N-N"));
+  }
+}
+SECTION("remove_spin relabel_collisions: internal relabeled, external kept") {
+  const auto i1A = Index(L"i↑_1");
+  const auto a1A = Index(L"a↑_1");
+  const auto i1B = Index(L"i↓_1");
+  const auto i2B = Index(L"i↓_2");
+  const auto i3B = Index(L"i↓_3");
+  const auto a1B = Index(L"a↓_1");
+  const auto a2B = Index(L"a↓_2");
+
+  // -2 R{a↑1;i↑1} g{i↑1,i↓3;a↑1,i↓1} t{a↓2,a↓1;i↓2,i↓3}
+  auto input =
+      ex<Constant>(-2) *
+      ex<Tensor>(L"R", bra{a1A}, ket{i1A}, Symmetry::Nonsymm) *
+      ex<Tensor>(L"g", bra{i1A, i3B}, ket{a1A, i1B}, Symmetry::Nonsymm) *
+      ex<Tensor>(L"t", bra{a2B, a1B}, ket{i2B, i3B}, Symmetry::Nonsymm);
+
+  auto result = remove_spin(input, /*relabel_collisions=*/true);
+  canonicalize(result);
+
+  // a↑1 -> a3, i↑1 -> i4 to avoid clashing with external a↓1->a1, i↓1->i1
+  REQUIRE_THAT(result, EquivalentTo("-2 R{a3;i4}:N-N-N g{i4,i3;a3,i1}:N-N-N "
+                                    "t{a2,a1;i2,i3}:N-N-N"));
 }
 
 SECTION("Open-shell CC spintrace energy") {
@@ -1802,6 +2177,18 @@ SECTION("Open-shell CC spintrace energy") {
         EquivalentTo(L"1/4 g{i↑1,i↑2;a↑1,a↑2}:A t{a↑1,a↑2;i↑1,i↑2}:A "
                      L"+ 1/4 g{i↓1,i↓2;a↓1,a↓2}:A t{a↓1,a↓2;i↓1,i↓2}:A "
                      L"+ g{i↑1,i↓2;a↑1,a↓2} t{a↑1,a↓2;i↑1,i↓2}"));
+  }
+  {
+    // spintracing gR3 to see the problem of openshell 3h3p
+    const auto input =
+        deserialize(L"1/4 g{i_1,i_2;a_1,a_2} R{a_1,a_2,a_3;i_1,i_2,i_3}",
+                    {.def_perm_symm = Symmetry::Antisymm});
+    REQUIRE(input->is<Product>());
+    std::wcout << " start gR3 test\n";
+    auto result = open_shell_CC_spintrace(input);
+    canonicalize(result[0]);
+    std::wcout << "gR3[0]: " << to_latex_align(result[0], 0, 4);
+    std::wcout << " finish gR3 test\n";
   }
 }
 
@@ -1917,6 +2304,348 @@ SECTION("ResultExpr") {
     }
   }
 }
+SECTION("triplet_bare_te") {
+  REQUIRE_FALSE(mbpt::detail::triplet_bare_te(1));
+  REQUIRE(mbpt::detail::triplet_bare_te(2));
+  REQUIRE_FALSE(mbpt::detail::triplet_bare_te(3));
+  REQUIRE_THROWS_AS(mbpt::detail::triplet_bare_te(0), Exception);
+  REQUIRE_THROWS_AS(mbpt::detail::triplet_bare_te(4), Exception);
+}
+SECTION("triplet_residual_nns_weights") {
+  using mbpt::detail::compute_permuted_indices_bra_ket;
+
+  // doubles: the bare-TE undo-compact followed by the reconstruction
+  const std::size_t n = 2;
+  const auto& te_nns =
+      mbpt::detail::triplet_te_nns_projection_weights<double>(n);
+  const auto& te_rec =
+      mbpt::detail::triplet_te_reconstruction_weights<double>(n);
+  auto index_of = [&](const container::svector<size_t>& perm) {
+    for (std::size_t r = 0; r != te_nns.size(); ++r)
+      if (compute_permuted_indices_bra_ket(r, n) == perm) return r;
+    FAIL("permutation not found");
+    return std::size_t{0};
+  };
+  std::vector<double> composed(te_nns.size(), 0.0);
+  for (std::size_t p = 0; p != te_nns.size(); ++p) {
+    for (std::size_t q = 0; q != te_rec.size(); ++q) {
+      const auto pp = compute_permuted_indices_bra_ket(p, n);
+      const auto pq = compute_permuted_indices_bra_ket(q, n);
+      container::svector<size_t> pr(pp.size());
+      for (std::size_t s = 0; s != pr.size(); ++s) pr[s] = pp[pq[s]];
+      composed[index_of(pr)] += te_nns[p] * te_rec[q];
+    }
+  }
+  const auto& doubles = mbpt::detail::triplet_residual_nns_weights<double>(n);
+  REQUIRE(doubles.size() == composed.size());
+  for (std::size_t p = 0; p != composed.size(); ++p) {
+    CAPTURE(p);
+    REQUIRE(std::abs(doubles[p] - composed[p]) < 1e-14);
+  }
+
+  // triples: the NNS row
+  REQUIRE(mbpt::detail::triplet_residual_nns_weights<double>(3) ==
+          mbpt::detail::triplet_nns_projection_weights<double>(3));
+}
+SECTION("closed_shell_CC_spintrace") {
+  // 2h2p EOM-like residual term: f contracted with R2
+  auto expr = deserialize(
+      std::wstring(L"Â{i_1,i_2;a_1,a_2} * f{a_1;a_3} * R{a_3,a_2;i_1,i_2}"),
+      {.def_perm_symm = Symmetry::Nonsymm});
+
+  auto require_equal = [](ExprPtr lhs, ExprPtr rhs) {
+    ExprPtr diff = lhs - rhs;
+    canonicalize(diff);
+    simplify(diff);
+    REQUIRE(diff->size() == 0);
+  };
+
+  require_equal(closed_shell_CC_spintrace(expr),
+                closed_shell_CC_singlet_spintrace_v2(expr));
+  require_equal(closed_shell_CC_spintrace(expr, {.compact = false}),
+                closed_shell_CC_singlet_spintrace_v1(expr));
+  require_equal(
+      closed_shell_CC_spintrace(
+          expr, {.multiplicity = SpinMultiplicity::Triplet, .compact = false}),
+      closed_shell_CC_triplet_spintrace(expr, {.compact = false}));
+  // a single term cannot be compacted, so compaction throws
+  REQUIRE_THROWS_AS(closed_shell_CC_spintrace(
+                        expr, {.multiplicity = SpinMultiplicity::Triplet}),
+                    Exception);
+
+  REQUIRE_THROWS_AS(
+      closed_shell_CC_spintrace(
+          expr, {.multiplicity = static_cast<SpinMultiplicity>(2)}),
+      Exception);
+}
+}
+
+TEST_CASE("triplet_doubles_compact", "[spin][triplet]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  using ords_t = container::svector<std::size_t>;
+  std::vector<ords_t> sorted;
+  for (std::size_t p = 0; p != 4; ++p)
+    sorted.push_back(mbpt::detail::compute_permuted_indices_bra_ket(p, 2));
+  std::sort(sorted.begin(), sorted.end());
+  REQUIRE(sorted ==
+          std::vector<ords_t>{
+              {0, 1, 2, 3}, {0, 1, 3, 2}, {1, 0, 2, 3}, {1, 0, 3, 2}});
+}
+
+TEST_CASE("triplet_doubles_maxcoeff_compact", "[spin][triplet]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  // four full {c, c, c, -3c} hash groups taken from the triplet R2
+  // residual
+  auto P = [](const wchar_t* s) {
+    return deserialize(std::wstring(s), {.def_perm_symm = Symmetry::Nonsymm});
+  };
+  auto term = [&](rational c, const wchar_t* s) -> ExprPtr {
+    return ex<Constant>(c) * P(s);
+  };
+
+  const ExprPtr full =
+      // --- group 0 ---
+      term(ratio(-3, 4),
+           L"R{i_1,i_2;a_3,a_4} * g{a_3,a_4;i_3,a_2} * t{i_3;a_1}") +
+      term(ratio(1, 4),
+           L"R{i_2,i_1;a_3,a_4} * g{a_3,a_4;i_3,a_2} * t{i_3;a_1}") +
+      term(ratio(1, 4),
+           L"R{i_2,i_1;a_3,a_4} * g{a_3,a_4;i_3,a_1} * t{i_3;a_2}") +
+      term(ratio(1, 4),
+           L"R{i_1,i_2;a_3,a_4} * g{a_3,a_4;i_3,a_1} * t{i_3;a_2}") +
+      // --- group 1 ---
+      term(ratio(1, 2),
+           L"R{i_1;a_3} * g{a_4,a_3;i_3,i_4} * t{i_4;a_2} * "
+           L"t{i_2,i_3;a_1,a_4}") +
+      term(ratio(-3, 2),
+           L"R{i_1;a_3} * g{a_4,a_3;i_3,i_4} * t{i_4;a_1} * "
+           L"t{i_2,i_3;a_2,a_4}") +
+      term(ratio(1, 2),
+           L"R{i_2;a_3} * g{a_4,a_3;i_3,i_4} * t{i_4;a_1} * "
+           L"t{i_1,i_3;a_2,a_4}") +
+      term(ratio(1, 2),
+           L"R{i_2;a_3} * g{a_4,a_3;i_3,i_4} * t{i_4;a_2} * "
+           L"t{i_1,i_3;a_1,a_4}") +
+      // --- group 2 ---
+      term(ratio(3, 4),
+           L"R{i_1;a_3} * g{a_3,a_4;i_3,i_4} * t{i_4;a_2} * "
+           L"t{i_3,i_2;a_1,a_4}") +
+      term(ratio(-1, 4),
+           L"R{i_2;a_3} * g{a_4,a_3;i_3,i_4} * t{i_3;a_1} * "
+           L"t{i_4,i_1;a_2,a_4}") +
+      term(ratio(-1, 4),
+           L"R{i_1;a_3} * g{a_4,a_3;i_3,i_4} * t{i_3;a_1} * "
+           L"t{i_4,i_2;a_2,a_4}") +
+      term(ratio(-1, 4),
+           L"R{i_2;a_3} * g{a_3,a_4;i_3,i_4} * t{i_4;a_2} * "
+           L"t{i_3,i_1;a_1,a_4}") +
+      // --- group 3 (kept term is +1/4 under layout-preferring filter) ---
+      term(ratio(1, 4),
+           L"R{i_1,i_3;a_2,a_3} * g{a_4,a_3;i_3,a_1} * t{i_2;a_4}") +
+      term(ratio(-3, 4),
+           L"R{i_1,i_3;a_1,a_3} * g{a_4,a_3;i_3,a_2} * t{i_2;a_4}") +
+      term(ratio(1, 4),
+           L"R{i_2,i_3;a_2,a_3} * g{a_4,a_3;i_3,a_1} * t{i_1;a_4}") +
+      term(ratio(1, 4),
+           L"R{i_2,i_3;a_1,a_3} * g{a_4,a_3;i_3,a_2} * t{i_1;a_4}");
+
+  const container::svector<container::svector<Index>> ext_idxs{
+      {Index(L"i_1"), Index(L"a_1")}, {Index(L"i_2"), Index(L"a_2")}};
+
+  // compaction keeps one (-3c) representative per group.
+  const ExprPtr compact = triplet_maxcoeff_compact(full, ext_idxs);
+  REQUIRE(compact->is<Sum>());
+  REQUIRE(compact->size() == 4);
+}
+
+TEST_CASE("triplet_triples_swap_layouts", "[spin][triplet]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  using ords_t = container::svector<std::size_t>;
+  std::vector<ords_t> all;
+  for (std::size_t p = 0; p != 36; ++p)
+    all.push_back(mbpt::detail::compute_permuted_indices_bra_ket(p, 3));
+  std::sort(all.begin(), all.end());
+  REQUIRE(std::adjacent_find(all.begin(), all.end()) == all.end());
+
+  auto contains = [&](const ords_t& ords) {
+    return std::binary_search(all.begin(), all.end(), ords);
+  };
+  REQUIRE(contains({0, 1, 2, 3, 4, 5}));  // identity
+  REQUIRE(contains({0, 2, 1, 3, 5, 4}));  // E-leg pair swap
+  REQUIRE(contains({1, 0, 2, 4, 3, 5}));  // whole-pair swap 0,1
+  REQUIRE(contains({0, 1, 2, 3, 5, 4}));  // ket-only swap 1,2
+}
+
+TEST_CASE("triplet_triples_spintrace", "[spin][triplet]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  // toy 3h3p EOM-like residual term: f contracted with R3;
+  auto expr =
+      deserialize(std::wstring(L"Â{i_1,i_2,i_3;a_1,a_2,a_3} * f{a_4;a_1} * "
+                               L"R{i_1,i_2,i_3;a_4,a_2,a_3}"),
+                  {.def_perm_symm = Symmetry::Nonsymm});
+
+  const auto st = closed_shell_CC_triplet_spintrace(expr, {.compact = false});
+  REQUIRE(st);
+  REQUIRE(st->is<Sum>());
+  REQUIRE(st->size() > 0);
+
+  REQUIRE_THROWS(closed_shell_CC_triplet_spintrace(expr));
+}
+
+TEST_CASE("triplet_doubles_te_maxcoeff_compact", "[spin][triplet]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  // Build two bare-TE {c, c, -2c} hash groups: the -2c representative on the
+  // identity layout, its bra-swap (i_1<->i_2) and ket-swap (a_1<->a_2) images
+  // each with c = -w/2, and NO pair-swap member (coefficient 0 in TE).
+  auto P = [](const wchar_t* s) {
+    return deserialize(std::wstring(s), {.def_perm_symm = Symmetry::Nonsymm});
+  };
+  auto term = [&](rational c, const wchar_t* s) -> ExprPtr {
+    return ex<Constant>(c) * P(s);
+  };
+
+  const ExprPtr full =
+      // --- group 0 ---
+      term(ratio(-1, 2),
+           L"R{i_1,i_2;a_3,a_4} * g{a_3,a_4;i_3,a_2} * t{i_3;a_1}") +
+      term(ratio(1, 4),
+           L"R{i_2,i_1;a_3,a_4} * g{a_3,a_4;i_3,a_2} * t{i_3;a_1}") +
+      term(ratio(1, 4),
+           L"R{i_1,i_2;a_3,a_4} * g{a_3,a_4;i_3,a_1} * t{i_3;a_2}") +
+      // --- group 1 ---
+      term(ratio(-1, 1),
+           L"R{i_1;a_3} * g{a_4,a_3;i_3,i_4} * t{i_4;a_1} * "
+           L"t{i_2,i_3;a_2,a_4}") +
+      term(ratio(1, 2),
+           L"R{i_2;a_3} * g{a_4,a_3;i_3,i_4} * t{i_4;a_1} * "
+           L"t{i_1,i_3;a_2,a_4}") +
+      term(ratio(1, 2),
+           L"R{i_1;a_3} * g{a_4,a_3;i_3,i_4} * t{i_4;a_2} * "
+           L"t{i_2,i_3;a_1,a_4}");
+
+  const container::svector<container::svector<Index>> ext_idxs{
+      {Index(L"i_1"), Index(L"a_1")}, {Index(L"i_2"), Index(L"a_2")}};
+
+  // compaction against the bare-TE row keeps the (-2c) representative per
+  // group.
+  const ExprPtr compact =
+      triplet_maxcoeff_compact(full, ext_idxs, /*bare_te=*/true);
+  REQUIRE(compact->is<Sum>());
+  REQUIRE(compact->size() == 2);
+}
+
+TEST_CASE("triplet_combined_residual_product", "[spin][triplet]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  auto P = [](const wchar_t* s) {
+    return deserialize(std::wstring(s), {.def_perm_symm = Symmetry::Nonsymm});
+  };
+
+  // a single-Product input
+  const ExprPtr V = P(L"R{i_1,i_2;a_3,a_4} * g{a_3,a_4;i_3,a_2} * t{i_3;a_1}");
+  const ExprPtr V_ps =
+      P(L"R{i_2,i_1;a_3,a_4} * g{a_3,a_4;i_3,a_1} * t{i_3;a_2}");
+
+  const container::svector<container::svector<Index>> ext_idxs{
+      {Index(L"i_1"), Index(L"a_1")}, {Index(L"i_2"), Index(L"a_2")}};
+
+  auto require_equal = [](ExprPtr lhs, ExprPtr rhs) {
+    ExprPtr diff = lhs - rhs;
+    canonicalize(diff);
+    simplify(diff);
+    REQUIRE(diff->size() == 0);
+  };
+
+  SECTION("combined") {
+    require_equal(
+        triplet_combined_residual(V, ext_idxs),
+        ex<Constant>(ratio(3, 16)) * V - ex<Constant>(ratio(1, 16)) * V_ps);
+  }
+
+  SECTION("bare_te") {
+    require_equal(triplet_combined_residual(V, ext_idxs, /*te_only=*/true),
+                  ex<Constant>(ratio(1, 4)) * V);
+  }
+}
+
+TEST_CASE("triplet_combined_residual_singles", "[spin][triplet]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  auto P = [](const wchar_t* s) {
+    return deserialize(std::wstring(s), {.def_perm_symm = Symmetry::Nonsymm});
+  };
+
+  const ExprPtr V =
+      P(L"f{a_2;a_1} * R{i_1;a_2}") - P(L"f{i_1;i_2} * R{i_2;a_1}");
+
+  const container::svector<container::svector<Index>> ext_idxs{
+      {Index(L"i_1"), Index(L"a_1")}};
+
+  // the rank-1 biorthogonal transform, without its symmetrizer
+  ExprPtr biorth = V->clone();
+  const ExprPtr expected = remove_tensor(
+      biorthogonal_transform_pre_nnsproject(biorth, ext_idxs,
+                                            /*factor_out_nns_projector=*/false),
+      reserved::symm_label());
+
+  ExprPtr diff = triplet_combined_residual(V, ext_idxs) - expected;
+  canonicalize(diff);
+  simplify(diff);
+  REQUIRE(diff->size() == 0);
+
+  REQUIRE_THROWS(triplet_combined_residual(V, ext_idxs, /*te_only=*/true));
+}
+
+TEST_CASE("triplet_generic_perms", "[spin][triplet]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  // weight rows: the NnsReconstruction row is the identity-normalized
+  // NullspaceProjector row
+  auto require_normalized = [](std::size_t n, double identity_weight) {
+    const auto& nullspace =
+        mbpt::detail::triplet_nullspace_projection_weights<double>(n);
+    const auto& nns = mbpt::detail::triplet_nns_projection_weights<double>(n);
+    REQUIRE(nullspace.size() == nns.size());
+    for (std::size_t p = 0; p != nns.size(); ++p) {
+      CAPTURE(n, p);
+      REQUIRE(std::abs(nns[p] - nullspace[p] / identity_weight) < 1e-14);
+    }
+  };
+  require_normalized(2, 3.0 / 4.0);  // {3/4, -1/4, -1/4, -1/4}
+  require_normalized(3, 1.0 / 4.0);  // w10[m]/20, identity op weight 5/20
 }
 
 TEST_CASE("spin-traced densities", "[spin]") {

@@ -129,8 +129,10 @@ ExprPtr append_spin(const ExprPtr& expr,
 
 /// @brief Removes spin label from all indices in an expression
 /// @param expr an ExprPtr with spin indices
+/// @param relabel_collisions whether to relabel internal indices that would
+/// collide once spin labels are removed
 /// @return expr an ExprPtr with spin labels removed
-ExprPtr remove_spin(const ExprPtr& expr);
+ExprPtr remove_spin(const ExprPtr& expr, bool relabel_collisions = false);
 
 /// @brief Checks that columns conserve Ms (azimuthal spin qn); only
 /// filled columns (with 2 non-null indices) are considered
@@ -256,8 +258,8 @@ enum class BiorthogonalizationMethod {
 };
 // clang-format on
 
-/// controls behavior of biorthogonal closed-shell spin-tracing
-struct ClosedShellCCSpintraceOptions {
+/// controls behavior of biorthogonal closed-shell singlet spin-tracing
+struct ClosedShellCCSingletSpintraceOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
   BiorthogonalizationMethod method = BiorthogonalizationMethod::V2;
   /// set to true to use sequant::spintrace which does not assume closed-shell
@@ -267,7 +269,7 @@ struct ClosedShellCCSpintraceOptions {
 };
 
 // clang-format off
-/// @brief like closed_shell_spintrace but transforms spin-free moments to biorthogonal form
+/// @brief like closed_shell_spintrace but transforms spin-free moments to biorthogonal form (singlet state)
 /// The algorithm (most steps are the same in V1 and V2):
 /// - factor out symmetrizer from the antisymmetrizer,
 ///   "set it aside" (remove from the expression), and
@@ -291,20 +293,70 @@ struct ClosedShellCCSpintraceOptions {
 ///                other traits; the default is to use
 ///                the V2 method
 // clang-format on
-ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
-                                  ClosedShellCCSpintraceOptions options = {});
+ExprPtr closed_shell_CC_singlet_spintrace(
+    ExprPtr const& expr, ClosedShellCCSingletSpintraceOptions options = {});
 
-/// @sa closed_shell_CC_spintrace
-ExprPtr closed_shell_CC_spintrace_v1(
+/// @sa closed_shell_CC_singlet_spintrace
+ExprPtr closed_shell_CC_singlet_spintrace_v1(
     ExprPtr const& expr,
-    ClosedShellCCSpintraceOptions options = {
+    ClosedShellCCSingletSpintraceOptions options = {
         .method = BiorthogonalizationMethod::V1, .naive_spintrace = false});
 
-/// @sa closed_shell_CC_spintrace
-ExprPtr closed_shell_CC_spintrace_v2(
+/// @sa closed_shell_CC_singlet_spintrace
+ExprPtr closed_shell_CC_singlet_spintrace_v2(
     ExprPtr const& expr,
-    ClosedShellCCSpintraceOptions options = {
+    ClosedShellCCSingletSpintraceOptions options = {
         .method = BiorthogonalizationMethod::V2, .naive_spintrace = false});
+
+/// controls behavior of closed-shell triplet EOM spin-tracing
+struct ClosedShellCCTripletSpintraceOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
+  /// compact the residual to one representative slot permutation per
+  /// tensor-network group via triplet_maxcoeff_compact (doubles: the -2c
+  /// member of each {c, c, -2c} group of the bare-TE residual, 405 -> 135
+  /// terms for 2h2p, recovered on evaluation by triplet_nns_project;
+  /// (doubles on the combined path, now unreachable directly: the -3c
+  /// member of each {c,c,c,-3c} group, 540 -> 135 terms);
+  /// triples: one stabilizer-scaled member per 36 slot perms, recovered on
+  /// evaluation by triplet_nns_project).
+  /// On by default; false gives the full residual, which is used only as a
+  /// reference in tests.
+  bool compact = true;
+};
+
+// clang-format off
+/// @brief Closed-shell triplet (M_S = 0) spin trace of EOM-CC equations
+/// @param expr spin-orbital EOM equation (from CC::eom_r or CC::eom_l) with
+///        one to three external index groups (singles, doubles or triples
+///        projection)
+/// @param options triplet spin-tracing options
+/// @return the triplet spin-trace residual (see triplet_combined_residual);
+///         the bare-TE for doubles (see detail::triplet_bare_te)
+/// @throw Exception for projection manifolds beyond triples, or if the
+///        equations contain amplitudes beyond triples
+// clang-format on
+ExprPtr closed_shell_CC_triplet_spintrace(
+    ExprPtr const& expr, ClosedShellCCTripletSpintraceOptions options = {});
+
+/// spin multiplicity of the closed-shell spin-tracing state
+enum class SpinMultiplicity { Singlet, Triplet };
+
+/// controls the behavior of closed_shell_CC_spintrace
+struct ClosedShellCCSpintraceOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
+  // set the default to singlet state
+  SpinMultiplicity multiplicity = SpinMultiplicity::Singlet;
+  /// singlet: true selects BiorthogonalizationMethod::V2, false V1;
+  /// triplet: see ClosedShellCCTripletSpintraceOptions::compact
+  bool compact = true;
+};
+
+/// @brief closed-shell spin trace of CC equations for the singlet or triplet
+///        state; dispatches to closed_shell_CC_singlet_spintrace or
+///        closed_shell_CC_triplet_spintrace
+/// @throw Exception if @p options has an invalid multiplicity
+ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
+                                  ClosedShellCCSpintraceOptions options = {});
 
 /// @brief Swap spin labels in a tensor
 Tensor swap_spin(const Tensor& t);
@@ -317,7 +369,11 @@ ExprPtr swap_spin(const ExprPtr& expr);
 ExprPtr merge_tensors(const Tensor& O1, const Tensor& O2);
 
 /// @brief Vector of Anti-symmetrizers for spin-traced open-shell expr
-std::vector<ExprPtr> open_shell_A_op(const Tensor& A);
+/// @param all_external_spin_assignments if true, one entry per external spin
+/// string (2^n groups, same as spintrace_by_sector); if false, legacy orbit
+/// encoding (n+1 or NPC grid).
+std::vector<ExprPtr> open_shell_A_op(
+    const Tensor& A, bool all_external_spin_assignments = false);
 
 /// @brief Generate a vector of permutation operators for partial expansion of
 /// antisymmstrizer
@@ -328,7 +384,8 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A);
 /// @return a vector of expression pointers containing permutation operators as
 /// a sum
 /// @warning This function assumes the antisymmetrizer (A) has a canonical form
-std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A);
+std::vector<ExprPtr> open_shell_P_op_vector(
+    const Tensor& A, bool all_external_spin_assignments = false);
 
 // clang-format off
 /// @brief Traces out spin degrees of freedom from fermionic operator moments
@@ -407,6 +464,25 @@ ExprPtr spintrace(
 container::svector<ResultExpr> spintrace(const ResultExpr& expr,
                                          bool spinfree_index_spaces = true);
 
+/// Particle-conserving spin trace that keeps external spin sectors separate.
+/// @param expr a spin-orbital expression (antisymmetrizer A is expanded
+///        internally if present)
+/// @param ext_index_groups external index groups; for particle-conserving
+///        input each group is the {bra, ket} pair of one external particle
+///        (as returned by `external_indices`)
+/// @param triplet_R if true, the EOM amplitude tensors (R) are spin-adapted
+///        to the explicitly spin-coupled triplet (M_S = 0) manifold instead
+///        of the singlet one (see closed_shell_CC_triplet_spintrace);
+///        supported for singles, doubles and triples R amplitudes only
+/// @return one (label, spin-free expression) pair per external spin string,
+///         ordered by the bit pattern over groups (αα.., βα.., .., ββ..).
+///         Summing all sectors reproduces generic `spintrace` (for
+///         triplet_R == false).
+[[nodiscard]] container::svector<std::pair<std::wstring, ExprPtr>>
+spintrace_by_sector(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    bool triplet_R = false);
 }  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_SPIN_HPP
