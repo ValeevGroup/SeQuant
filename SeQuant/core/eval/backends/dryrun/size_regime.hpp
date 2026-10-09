@@ -18,6 +18,8 @@ namespace sequant::eval::dryrun {
 /// regime for a dry-run replay. Extents are element counts; CSV moments are
 /// power means over occupied pairs (PNO) or singles (OSV).
 struct SizeRegime {
+  /// element extent per Index::basis_key(); an unnamed basis instance shares
+  /// its space's entry (see IndexBasis)
   std::map<std::wstring, std::size_t> space_extent;
 
   /// Optional per-key batch partition: the element extent of each realized

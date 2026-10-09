@@ -29,6 +29,13 @@ namespace sequant {
 /// obtained from the registry carries it, one built from a space and an
 /// instance does not. The name is how the basis prints; it is not part of its
 /// identity, so equality, ordering and hashing ignore it.
+///
+/// An unnamed instance spans its space at the space's extent, as a rotation of
+/// it does (e.g. the cluster-specific virtuals): evaluation keys its axes by
+/// Index::basis_key(), which is the space's key for such an instance, and so
+/// sizes, tiles and slices it as the space. A basis of a different extent (a
+/// truncated or an overcomplete set, such as the PAOs) must be registered
+/// under a name, which gives it a key and an extent of its own.
 class IndexBasis {
  public:
   using instance_type = std::int32_t;

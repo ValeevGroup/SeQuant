@@ -771,6 +771,9 @@ class Index : public Taggable {
   /// it carries one, else space().base_key(); a view into this object, valid
   /// as long as this Index is not transformed, assigned to, moved from, or
   /// destroyed
+  /// @note evaluation keys extents, tiling and batching by this, so an
+  /// unnamed basis instance is evaluated at its space's extent (see
+  /// IndexBasis)
   std::wstring_view basis_key() const {
     return basis_.has_name() ? std::wstring_view(basis_.name())
                              : space().base_key();
