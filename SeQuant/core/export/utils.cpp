@@ -20,7 +20,7 @@ std::string basis_instance_tag(const Index &idx) {
   if (!idx.basis().has_basis_instance()) return {};
   // widened so that the magnitude of the most negative instance fits
   const std::int64_t instance = *idx.basis().basis_instance();
-  return instance < 0 ? "m" + std::to_string(-instance)
+  return instance < 0 ? "_" + std::to_string(-instance)
                       : std::to_string(instance);
 }
 

@@ -1134,8 +1134,8 @@ TEST_CASE("export-basis-instance", "[export][basis]") {
                            ContainsSubstring("R_v1o") &&
                            ContainsSubstring("(nvirt_1, nocc)"));
   }
-  // a negative instance is spelled with an `m` in place of the minus sign,
-  // which no tag or identifier may contain
+  // a negative instance is spelled with an `_` in place of the minus sign,
+  // which no identifier may contain; a letter would read as the tag of a space
   SECTION("negative instance") {
     const Index z = Index(L"a_7").replace_basis_instance(-12);
     const Tensor tz(L"t", bra{z}, ket{L"i_1"});
@@ -1143,12 +1143,23 @@ TEST_CASE("export-basis-instance", "[export][basis]") {
     itf_ctx.set_tag(occ, "o");
     itf_ctx.set_tag(virt, "v");
     CHECK_THAT(ItfGenerator<ItfContext>{}.represent(tz, itf_ctx),
-               ContainsSubstring("t:vm12o["));
+               ContainsSubstring("t:v_12o["));
+    // with a space tagged `m`, a letter for the sign would make t{a<;-1>;i}
+    // and t{a,u<;1>;i} one block
+    const IndexSpace u = registry->retrieve("u");
+    itf_ctx.set_tag(u, "m");
+    const Tensor t_neg(L"t", bra{Index(L"a_1").replace_basis_instance(-1)},
+                       ket{L"i_1"});
+    const Tensor t_m(
+        L"t", bra{Index(L"a_1"), Index(L"u_1").replace_basis_instance(1)},
+        ket{L"i_1"});
+    const ItfGenerator<ItfContext> itf;
+    CHECK(itf.get_name(t_neg, itf_ctx) != itf.get_name(t_m, itf_ctx));
     JuliaTensorOperationsGeneratorContext julia_ctx;
     julia_ctx.set_tag(occ, "o");
     julia_ctx.set_tag(virt, "v");
     CHECK_THAT(JuliaTensorOperationsGenerator<>{}.represent(tz, julia_ctx),
-               ContainsSubstring("t_vm12o[") && ContainsSubstring("a_7_m12"));
+               ContainsSubstring("t_v_12o[") && ContainsSubstring("a_7__12"));
     NumPyEinsumGeneratorContext py_ctx;
     py_ctx.set_shape(occ, "nocc");
     py_ctx.set_shape(virt, "nvirt");
@@ -1160,8 +1171,8 @@ TEST_CASE("export-basis-instance", "[export][basis]") {
                           ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}));
     export_expression(to_export_tree(result), py, py_ctx);
     CHECK_THAT(py.get_generated_code(),
-               ContainsSubstring("R_vm12o") && ContainsSubstring("f_vm12v"));
+               ContainsSubstring("R_v_12o") && ContainsSubstring("f_v_12v"));
     CHECK_THAT(py.get_generated_code(), !ContainsSubstring("-12"));
-    CHECK(py_ctx.get_shape_tuple(tz) == "(nvirt_m12, nocc)");
+    CHECK(py_ctx.get_shape_tuple(tz) == "(nvirt__12, nocc)");
   }
 }
