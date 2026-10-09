@@ -22,7 +22,7 @@ int main() {
   // optimize() picks a pairwise contraction order (and, for a Sum, reorders
   // summands to share intermediates) that minimizes a cost metric -- by
   // default the total floating-point operation count, using
-  // IndexSpace::approximate_size() for index extents
+  // IndexBasis::extent() for index extents
   auto optimized = optimize(expr);
 
   std::wcout << to_latex(optimized) << std::endl;

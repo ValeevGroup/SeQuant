@@ -533,15 +533,16 @@ class IndexSpace {
   /// Set the approximate size of a space.
   void approximate_size(std::size_t n) { approximate_size_ = n; }
 
-  /// @return the scalar Field over which this space is defined; controls
-  /// whether the bra<->ket dual pairing involving this space is real
-  /// (symmetric bilinear) or complex (Hermitian sesquilinear). Like
-  /// approximate_size, this is non-identity metadata (does not participate in
-  /// attr()/hash/comparison). Defaults to Field::Complex.
-  /// @sa AbstractTensor::_base_field
+  /// @return the scalar Field of the own basis of this space (a named basis
+  /// instance of the space may have a field of its own, see
+  /// IndexBasis::field()); controls whether the bra<->ket dual pairing
+  /// involving that basis is real (symmetric bilinear) or complex (Hermitian
+  /// sesquilinear). Like approximate_size, this is non-identity metadata (does
+  /// not participate in attr()/hash/comparison). Defaults to Field::Complex.
+  /// @sa IndexBasis::field, AbstractTensor::_base_field
   Field field() const { return field_; }
 
-  /// Set the scalar Field of this space.
+  /// Set the scalar Field of the own basis of this space.
   void field(Field f) { field_ = f; }
 
  private:

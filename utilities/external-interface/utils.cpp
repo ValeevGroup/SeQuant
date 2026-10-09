@@ -21,7 +21,7 @@ std::size_t IndexSpaceMeta::getSize(const IndexSpace &space) const {
 }
 
 std::size_t IndexSpaceMeta::getSize(const Index &index) const {
-  return getSize(index.space());
+  return index.basis().extent();
 }
 
 std::string IndexSpaceMeta::getName(const IndexSpace &space) const {

@@ -39,7 +39,7 @@ namespace sequant {
 namespace {
 
 index_to_extent_t default_idx_to_size() {
-  return [](Index const& ix) { return ix.space().approximate_size(); };
+  return [](Index const& ix) { return ix.basis().extent(); };
 }
 
 /// Diagnostic (env SEQUANT_FACTORIZER_DEBUG): for the chosen factorization

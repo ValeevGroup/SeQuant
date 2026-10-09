@@ -1253,12 +1253,12 @@ auto make_indices(WstrList index_labels = {}) {
   return result;
 }
 
-/// @return the scalar Field obtained by OR-ing the IndexSpace::field() of the
+/// @return the scalar Field obtained by OR-ing the IndexBasis::field() of the
 /// (non-null) indices in @p bra and @p ket: Field::Complex if any of them is
-/// over a complex space, else Field::Real (Complex dominates, C v R = C). This
+/// over a complex basis, else Field::Real (Complex dominates, C v R = C). This
 /// is the "base field" of a tensor with those bra/ket indices -- the field over
 /// which its bra<->ket dual pairing is defined.
-/// @sa IndexSpace::field, AbstractTensor::_base_field, to_braket_symmetry
+/// @sa IndexBasis::field, AbstractTensor::_base_field, to_braket_symmetry
 template <typename BraRange, typename KetRange>
 Field base_field(BraRange bra, KetRange ket) {
   // taken by value: a type-erased any_view (as returned by _bra()/_ket()) is
@@ -1266,7 +1266,7 @@ Field base_field(BraRange bra, KetRange ket) {
   // and for the small index containers tensors carry).
   auto has_complex = [](auto &indices) {
     for (Index const &idx : indices)
-      if (idx && idx.space().field() == Field::Complex) return true;
+      if (idx && idx.basis().field() == Field::Complex) return true;
     return false;
   };
   return (has_complex(bra) || has_complex(ket)) ? Field::Complex : Field::Real;

@@ -146,11 +146,11 @@ class AsyCost {
   ///
   /// Substitute each basis in this cost by an extent and evaluate.
   /// \param extents Map from basis to extent (size). A basis appearing
-  ///                in this cost but absent from `extents` falls back to the
-  ///                `IndexSpace::approximate_size()` of its space (for a named
-  ///                basis instance obtained from the registry, the size it
-  ///                was registered with). Defaults to empty, in which case
-  ///                every basis uses that size.
+  ///                in this cost but absent from `extents` falls back to its
+  ///                `IndexBasis::extent()` (the dimension of its space, or
+  ///                for a named basis instance obtained from the registry the
+  ///                extent it was registered with). Defaults to empty, in
+  ///                which case every basis uses that extent.
   /// \return Numerical value of the cost.
   ///
   [[nodiscard]] double ops(ExtentMap const &extents = {}) const;

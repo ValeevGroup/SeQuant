@@ -576,7 +576,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @name field-agnostic constructors
   /// Specify the abstract #Hermiticity rather than the #BraKetSymmetry; the
   /// latter is *derived* by resolving the former against the tensor's
-  /// #base_field (the OR of its bra/ket index spaces' IndexSpace::field(); see
+  /// #base_field (the OR of its bra/ket indices' IndexBasis::field(); see
   /// to_braket_symmetry). Prefer these when the tensor's adjoint symmetry is a
   /// physical fact independent of whether the computation is real or complex
   /// (e.g. integrals are Hermitian, amplitudes are not).
@@ -797,10 +797,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// the abstract tensor under (Hermitian) adjoint.
   /// @sa braket_symmetry()
   Hermiticity hermiticity() const { return hermiticity_; }
-  /// @return the base scalar Field of this tensor: the OR of its bra/ket index
-  /// spaces' IndexSpace::field() (Complex dominates). Together with
+  /// @return the base scalar Field of this tensor: the OR of its bra/ket
+  /// indices' IndexBasis::field() (Complex dominates). Together with
   /// #hermiticity it determines #braket_symmetry.
-  /// @sa sequant::base_field, IndexSpace::field
+  /// @sa sequant::base_field, IndexBasis::field
   Field base_field() const { return sequant::base_field(bra_, ket_); }
   /// @return the ColumnSymmetry object describing the symmetry of the Tensor
   /// under exchange of _columns_ (i.e., pairs of matching {bra[i],ket[i]}

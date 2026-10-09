@@ -202,8 +202,7 @@ double AsyCost::ops(ExtentMap const &extents) const {
     double temp = 1;
     for (auto const &[basis, exp] : c.exponents()) {
       auto it = extents.find(basis);
-      auto const extent =
-          it != extents.end() ? it->second : basis.space().approximate_size();
+      auto const extent = it != extents.end() ? it->second : basis.extent();
       temp *= std::pow(static_cast<double>(extent), static_cast<double>(exp));
     }
     total += boost::numeric_cast<double>(c.prefactor()) * temp;
