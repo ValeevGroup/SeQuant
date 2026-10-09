@@ -1353,7 +1353,9 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
   expand(expanded_expr);
   simplify(expanded_expr);
 
-  // Grand index list contains both internal and external indices
+  // Grand index list contains both internal and external indices; the
+  // external ones are added explicitly, since an input that simplifies to
+  // zero uses none
   container::set<Index, Index::FullLabelCompare> grand_idxlist =
       get_used_indices<decltype(grand_idxlist),
                        SlotType::Bra | SlotType::Ket | SlotType::Proto>(
@@ -1367,6 +1369,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
       ext_idxlist.insert(std::move(idx));
     }
   }
+  grand_idxlist.insert(ext_idxlist.begin(), ext_idxlist.end());
 
   container::set<Index> int_idxlist;
   for (auto&& gidx : grand_idxlist) {

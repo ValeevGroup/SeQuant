@@ -1587,6 +1587,22 @@ SECTION("Open-shell spin-tracing") {
     REQUIRE_THAT(result[2], EquivalentTo("1/4 g{a↓1,a↓2;i↓1,i↓2}:A"));
   }
 
+  // an input that simplifies to zero gives zero in every spin case
+  {
+    auto g = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                        Symmetry::Antisymm);
+    auto input = ex<Sum>(ExprPtrList{g, ex<Constant>(-1) * g->clone()});
+    std::vector<ExprPtr> result;
+    REQUIRE_NOTHROW(
+        result = open_shell_spintrace(
+            input, IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}));
+    REQUIRE(result.size() == 3);
+    for (auto& r : result) {
+      simplify(r);
+      CHECK(r->is_zero());
+    }
+  }
+
   // f_oo * t2
   {
     auto input =
