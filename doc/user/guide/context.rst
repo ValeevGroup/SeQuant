@@ -10,7 +10,7 @@ index spaces is covered separately in :doc:`Getting started </user/getting_start
 The core ``Context``
 ---------------------
 
-:class:`sequant::Context` bundles the settings that give meaning to an expression: the :class:`sequant::IndexSpaceRegistry` (the
+:class:`sequant::Context` bundles the settings that give meaning to an expression: the :class:`sequant::IndexBasisRegistry` (the
 vocabulary of index spaces in use, e.g. occupied/virtual), the ``Vacuum`` relative to which operators are normal-ordered
 (``Vacuum::Physical`` — the true, particle-free vacuum —, ``Vacuum::SingleProduct`` — a single-determinant quasiparticle vacuum —, or
 ``Vacuum::MultiProduct`` — a general reference state, for which :class:`sequant::WickTheorem` applies the *extended* form of Wick's
@@ -29,7 +29,7 @@ registry, modify the copy and set it on a copy of the context.
 Constructing a ``Context`` from scratch and registering index spaces by hand, as shown in
 :doc:`/user/getting_started/index_spaces`, is the right approach when a custom vocabulary of index spaces is needed. For standard
 quantum-chemistry conventions, :func:`sequant::mbpt::load` is a one-line shortcut: it builds a ready-made
-:class:`sequant::IndexSpaceRegistry` for one of a few common conventions (:class:`sequant::mbpt::Convention` — minimal,
+:class:`sequant::IndexBasisRegistry` for one of a few common conventions (:class:`sequant::mbpt::Convention` — minimal,
 single-reference, multi-reference, F12, ...; :class:`sequant::mbpt::SpinConvention` controls whether/how spin is tracked), sets it
 and ``Vacuum::SingleProduct`` on a copy of the current default context, and installs that copy as the default context:
 
@@ -77,7 +77,7 @@ separately):
 The canonicalizer configuration is part of the ``Context`` value, so installing a new ``Context`` replaces it: one constructed from
 ``Context::Options`` or ``Context{}``, or the one :func:`sequant::reset_default_context` restores, carries the default configuration.
 Set the canonicalizers and labels on the ``Context`` you install, or derive it from the current one
-(``Context(get_default_context())``). :func:`sequant::mbpt::load` does the latter: it sets only the index space registry and the
+(``Context(get_default_context())``). :func:`sequant::mbpt::load` does the latter: it sets only the index basis registry and the
 vacuum on a copy of the current default context, so the rest of the configuration is kept. It installs the copy process-wide, hence
 throws if the calling thread has a scoped context active, whose settings it would otherwise make permanent.
 :func:`sequant::Context::set_cardinal_tensor_labels` takes the complete list of cardinal labels: the defaults (the reserved labels
@@ -123,12 +123,35 @@ when SeQuant code is first ported into a new program.
 The other configurable field is ``CSV`` (default ``CSV::No``): when set to ``CSV::Yes``, operator tensors built by
 :class:`sequant::mbpt::OpMaker` (e.g. cluster amplitudes ``t``) use cluster-specific virtuals — virtual-space indices that carry the
 operator's occupied indices as proto-indices — instead of plain, independent virtual indices. :func:`sequant::mbpt::csv_transform`
-expands such CSV-dependent tensors into an explicit basis (standard unoccupieds, PAOs, or AOs) when needed downstream.
+expands such CSV-dependent tensors into an explicit basis (standard unoccupieds, PAOs, or AOs) when needed downstream; the
+basis is given as an :class:`sequant::IndexSpace`, or as an :class:`sequant::IndexBasis` registered under a name together
+with whether it is orthonormal.
 
 .. literalinclude:: /examples/user/context.cpp
    :language: cpp
    :start-after: start-snippet-4
    :end-before: end-snippet-4
+   :dedent: 2
+
+Several bases of one space can meet in an expression: the canonical and the localized orbitals of a perturbation theory,
+the cluster-specific virtuals of the ground-state and of the perturbed amplitudes, and so on. An :class:`sequant::Index`
+can therefore carry an optional *basis instance*, an opaque integer written after its proto indices, ``a_1<i_1,i_2;1>``
+(``a_1<;1>`` without proto indices), unless the instance is registered under a name, which is then printed in place of
+the space's label (:doc:`../getting_started/index_spaces`); an index without one is in its space's own basis, as before.
+The name travels with the basis (:func:`sequant::IndexBasis::name`): an index parsed from it or minted by SeQuant carries
+it; an index built from a space and a bare instance number does not, unless that basis is first looked up with
+:func:`sequant::default_registry_resolved`, and the two compare equal.
+:func:`sequant::mbpt::add_pao_basis` registers the PAOs this way, as the named instance ``μ̃`` of the particle space
+(an index in it prints as ``μ̃_1``), an alternative to the separate PAO space of :func:`sequant::mbpt::add_pao_spaces`.
+Instances are granted per operator label and leg space with :func:`sequant::mbpt::OpRegistry::grant_basis`,
+:class:`sequant::mbpt::OpMaker` mints a granted operator's legs with them, and the projectors of the :doc:`CC <cc>`
+equations carry the grants of the amplitude being solved for. Integrals are never granted: in Wick's theorem their legs
+take the instance of the leg they are contracted with.
+
+.. literalinclude:: /examples/user/context.cpp
+   :language: cpp
+   :start-after: start-snippet-6
+   :end-before: end-snippet-6
    :dedent: 2
 
 .. _context-scoped:
@@ -165,8 +188,9 @@ Because it replaces the process-wide default, a call of :func:`sequant::set_defa
 that :func:`sequant::get_default_context` returns on a thread without scoped contexts, and anything obtained from that reference by
 reference. Code that keeps the context beyond a brief read, as the canonicalizers do for the duration of a canonicalization, holds a
 copy made by :func:`sequant::get_default_context_snapshot` instead. The copy reflects every change of the process-wide default
-completed before the call and is cheap: it shares the index space registry and the canonicalizer configuration with its source, and
+completed before the call and is cheap: it shares the index basis registry and the canonicalizer configuration with its source, and
 takes the lock that guards the process-wide default only if that changed since the previous snapshot on the same thread.
+:func:`sequant::get_default_index_basis_registry` reads only the index basis registry in the same way, without copying the context.
 
 Code that reads the contexts at several points of one operation, as :func:`sequant::canonicalize`, :func:`sequant::simplify` and
 ``WickTheorem::compute()`` do, pins them instead with :func:`sequant::pin_default_contexts`: on a thread without scoped contexts the

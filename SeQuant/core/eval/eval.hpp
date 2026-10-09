@@ -404,15 +404,15 @@ inline void release_after_op() {
 }
 
 /// Scope annotation for the batch-loop enter/leave markers (and reused by
-/// slice_home_annot): the base_keys of the currently-open batch loops,
-/// outermost-first, e.g. `scope={i,i,K,}`. \p active is a CacheManager
+/// slice_home_annot): the IndexBasis::base_key()s of the currently-open batch
+/// loops, outermost-first, e.g. `scope={i,i,K}`. \p active is a CacheManager
 /// batch_context() -- a sequence of {Index mode, element-range} entries.
 template <typename BatchContext>
 std::string scope_annot(BatchContext const& active) {
   std::string scope;
   for (auto const& e : active) {
     if (!scope.empty()) scope += ",";
-    scope += toUtf8(e.axis.space().base_key());
+    scope += toUtf8(e.axis.basis().base_key());
   }
   return std::format("scope={{{}}}", scope);
 }
@@ -425,10 +425,10 @@ std::string scope_annot(BatchContext const& active) {
 ///   (labels are valid here -- they identify the layout the ordinals index).
 /// - sliced = this node's own batched modes -- its \c sliced_modes() stamp --
 ///   as `p:base_key` at each stamped mode's canonical position p.
-///   Ordinal:base-space-key only -- never a bare label (labels are tree-scoped;
+///   Ordinal:basis-key only -- never a bare label (labels are tree-scoped;
 ///   ordinals are DAG-safe). This is the value's truthful batched set, not a
-///   space-match against the open loops (which would misleadingly flag every
-///   same-space mode, e.g. a spectator's contracted occ under an occ loop).
+///   key-match against the open loops (which would misleadingly flag every
+///   same-key mode, e.g. a spectator's contracted occ under an occ loop).
 /// - scope = the open loops, outer..inner (see scope_annot).
 template <meta::eval_node Node, typename BatchContext>
 std::string slice_home_annot(Node const& node, BatchContext const& active) {
@@ -446,7 +446,7 @@ std::string slice_home_annot(Node const& node, BatchContext const& active) {
   std::sort(spos.begin(), spos.end());
   for (auto const p : spos)
     sliced += std::format("{}:{} ", p,
-                          toUtf8(std::wstring(idxs[p].space().base_key())));
+                          toUtf8(std::wstring(idxs[p].basis().base_key())));
   auto annot = std::format("canon=[{}] sliced=[{}] {}", canon, sliced,
                            scope_annot(active));
   // Append any schedule-derived per-node metadata (e.g. the value's home
@@ -2126,12 +2126,12 @@ template <Trace EvalTrace = Trace::Default, typename F,
     // push site below shares the same depth (`cache.batch_context().size() +
     // 1`, matching build_ordered_schedule's `d + 1` convention -- see
     // DagScopeLevel's doc comment) and differs only in the pushed axis's
-    // space. Plumbing only: nothing resolves by `level` on this path -- the
+    // basis key. Plumbing only: nothing resolves by `level` on this path -- the
     // forest evaluator resolves by exact axis (`exact_axis`, filled at each
     // push site below).
     auto const synth_level = [&cache](Index const& ax) -> DagScopeLevel {
       return DagScopeLevel{.depth = cache.batch_context().size() + 1,
-                           .space = std::wstring(ax.space().base_key())};
+                           .space = std::wstring(ax.basis().base_key())};
     };
     // Mode selection is sliceability-aware and realizes the optimizer's
     // multi-mode nesting one mode per depth level. candidate_axes lists this

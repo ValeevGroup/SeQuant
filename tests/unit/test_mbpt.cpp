@@ -84,7 +84,7 @@ sequant::ExprPtr in_base_spaces(
     sequant::ExprPtr expr,
     const sequant::container::set<sequant::Index>& externals = {}) {
   using namespace sequant;
-  const auto isr = get_default_context().index_space_registry();
+  const auto isr = get_default_context().index_basis_registry();
   auto terms_of = [](const ExprPtr& e) {
     return e->is<Sum>() ? e->as<Sum>().summands() | ranges::to_vector
                         : std::vector<ExprPtr>{e};
@@ -1016,10 +1016,10 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto isr = sequant::mbpt::make_legacy_spaces();
       mbpt::add_batching_spaces(isr);
       auto ctx_resetter =
-          set_scoped_default_context({.index_space_registry_shared_ptr = isr,
+          set_scoped_default_context({.index_basis_registry_shared_ptr = isr,
                                       .vacuum = Vacuum::SingleProduct});
       REQUIRE_NOTHROW(
-          get_default_context().index_space_registry()->retrieve(L"z"));
+          get_default_context().index_basis_registry()->retrieve(L"z"));
 
       using namespace mbpt;
       REQUIRE_NOTHROW(op::Hʼ(1, {.order = 1, .nbatch = 1}));
@@ -1566,7 +1566,7 @@ SECTION("MRSO-MultiProduct") {
         string = string *
                  (l.action == Action::Create ? fcrex(l.index) : fannx(l.index));
       auto contracted = FWickTheorem{string}.full_contractions(false).compute();
-      const auto isr = get_default_context().index_space_registry();
+      const auto isr = get_default_context().index_basis_registry();
       const auto& active = isr->retrieve(L"u");
       auto average = [&](ExprPtr& f) {
         if (f->is<FNOperator>()) {
@@ -1642,7 +1642,7 @@ SECTION("MRSO-MultiProduct") {
     // a leg over a union of base spaces (e.g. I = i ∪ u) is split into them on
     // the core-vacuum side, whose averages take base-space legs; every density
     // leg of the MultiProduct result must be active
-    const auto isr = get_default_context().index_space_registry();
+    const auto isr = get_default_context().index_basis_registry();
     auto check = [&](std::initializer_list<Legs> strings_il) {
       container::svector<Legs> strings(strings_il);
       container::set<Index> externals;
@@ -1982,7 +1982,7 @@ SECTION("rules") {
       ExprPtr input_expr = deserialize(inputs.at(i));
 
       const IndexSpace aux_space =
-          get_default_context().index_space_registry()->retrieve(L"x");
+          get_default_context().index_basis_registry()->retrieve(L"x");
 
       ExprPtr actual = mbpt::density_fit(input_expr, aux_space, L"g", L"B");
 
@@ -2013,7 +2013,7 @@ SECTION("rules") {
       ExprPtr input_expr = deserialize(inputs.at(i));
 
       const IndexSpace aux_space =
-          get_default_context().index_space_registry()->retrieve(L"x");
+          get_default_context().index_basis_registry()->retrieve(L"x");
 
       ExprPtr actual =
           mbpt::tensor_hypercontract(input_expr, aux_space, L"g", L"B", L"C");
@@ -2234,7 +2234,7 @@ SECTION("rdm-decomposition symmetries") {
   // otherwise-equal terms stop merging. The symmetries take part in the tensor
   // hash, so a mismatch in either attribute is enough to break it.
   auto ctx_resetter = set_scoped_default_context(
-      Context({.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
+      Context({.index_basis_registry_shared_ptr = mbpt::make_sr_spaces(),
                .vacuum = Vacuum::SingleProduct}));
 
   const auto kappa =
@@ -2332,7 +2332,7 @@ SECTION("rdm-decomposition symmetries") {
 SECTION("cumulant-to-density decompositions") {
   using namespace sequant;
   auto ctx_resetter = set_scoped_default_context(
-      Context({.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
+      Context({.index_basis_registry_shared_ptr = mbpt::make_sr_spaces(),
                .vacuum = Vacuum::SingleProduct}));
   auto gamma = [](std::vector<Index> b, std::vector<Index> k) {
     return b.size() == 1

@@ -6,13 +6,18 @@
 
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/none_of.hpp>
 #include <range/v3/view/transform.hpp>
+
+#include <string>
 
 namespace sequant::mbpt {
 
@@ -20,7 +25,9 @@ namespace sequant::mbpt {
 /// AOs, etc.)
 /// @param tnsr a Tensor object
 /// @param csv_basis the basis in terms of which the CSVs are expanded
-ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
+/// @param orthonormal whether @p csv_basis is orthonormal
+ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
+                           bool orthonormal,
                            std::wstring_view coeff_tensor_label) {
   using ranges::views::transform;
   using sequant::reserved::overlap_label;
@@ -29,18 +36,22 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
     return nullptr;
 
   SEQUANT_ASSERT(ranges::none_of(tnsr.aux(), &Index::has_proto_indices));
-  SEQUANT_ASSERT(get_default_context().index_space_registry());
+  SEQUANT_ASSERT(get_default_context().index_basis_registry());
   SEQUANT_ASSERT(
-      get_default_context().index_space_registry()->contains(csv_basis));
+      get_default_context().index_basis_registry()->contains(csv_basis));
 
-  // shortcut for the CSV overlap if csv_basis is orthonormal (assume LCAO bases
-  // are orthonormal!)
-  const bool csv_basis_is_ao =
-      bitset_t(csv_basis.qns()) & bitset_t(LCAOQNS::ao);
-  const bool csv_basis_is_pao =
-      bitset_t(csv_basis.qns()) & bitset_t(LCAOQNS::pao);
-  const bool csv_basis_is_orthonormal = !(csv_basis_is_ao || csv_basis_is_pao);
-  if (csv_basis_is_orthonormal && tnsr.label() == overlap_label()) {
+  // a basis instance is registered in one space, so an index minted in it
+  // cannot keep a leg's space (e.g. its spin)
+  auto require_in_basis_space = [&csv_basis](const Index& leg) {
+    if (csv_basis.has_basis_instance() && leg.space() != csv_basis.space())
+      throw Exception("csv_transform: a CSV leg is in space " +
+                      toUtf8(leg.space().base_key()) +
+                      ", not in the target basis instance's space " +
+                      toUtf8(csv_basis.space().base_key()));
+  };
+
+  // shortcut for the CSV overlap if csv_basis is orthonormal
+  if (orthonormal && tnsr.label() == overlap_label()) {
     SEQUANT_ASSERT(tnsr.bra_rank() == 1     //
                    && tnsr.ket_rank() == 1  //
                    && tnsr.aux_rank() == 0);
@@ -54,9 +65,11 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
     SEQUANT_ASSERT(bra_has_proto_indices || ket_has_proto_indices);
 
     if (bra_has_proto_indices && ket_has_proto_indices) {
-      auto dummy_idx = ordinal_compare(bra_idx, ket_idx)   //
-                           ? bra_idx.drop_proto_indices()  //
-                           : ket_idx.drop_proto_indices();
+      const Index& end = ordinal_compare(bra_idx, ket_idx) ? bra_idx : ket_idx;
+      require_in_basis_space(end);
+      // a fresh dummy: another overlap may share either leg
+      const auto dummy_idx = Index::make_tmp_index(
+          csv_basis.has_basis_instance() ? csv_basis : IndexBasis(end.space()));
 
       return ex<Product>(
           1,
@@ -64,7 +77,10 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
                                  bra({bra_idx}), ket({dummy_idx})),  //
                       ex<Tensor>(coeff_tensor_label,                 //
                                  bra({dummy_idx}), ket({ket_idx}))});
-    } else {
+    } else if ((bra_has_proto_indices ? ket_idx : bra_idx)
+                   .basis()
+                   .basis_instance() == csv_basis.basis_instance()) {
+      // the other leg is in the target basis
       return ex<Product>(
           1,
           ExprPtrList{ex<Tensor>(coeff_tensor_label,  //
@@ -78,6 +94,7 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
   rbra.reserve(tnsr.bra_rank());
   for (auto&& idx : tnsr.bra()) {
     if (idx.has_proto_indices()) {
+      require_in_basis_space(idx);
       Index xidx = Index::make_tmp_index(csv_basis);
       result.append(
           1, ex<Tensor>(coeff_tensor_label, bra({idx}), ket({xidx}), aux({})));
@@ -89,6 +106,7 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
   rket.reserve(tnsr.ket_rank());
   for (auto&& idx : tnsr.ket()) {
     if (idx.has_proto_indices()) {
+      require_in_basis_space(idx);
       Index xidx = Index::make_tmp_index(csv_basis);
       result.append(
           1, ex<Tensor>(coeff_tensor_label, bra({xidx}), ket({idx}), aux({})));
@@ -105,22 +123,26 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
   return ex<Product>(std::move(result));
 }
 
-ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
-                      std::wstring const& coeff_tensor_label,
-                      container::svector<std::wstring> const& tensor_labels) {
+namespace {
+
+ExprPtr csv_transform_rec(
+    ExprPtr const& expr, const IndexBasis& csv_basis, bool orthonormal,
+    std::wstring const& coeff_tensor_label,
+    container::svector<std::wstring> const& tensor_labels) {
   using ranges::views::transform;
   if (expr->is<Sum>())
-    return ex<Sum>(*expr                                          //
-                   | transform([&csv_basis, &coeff_tensor_label,  //
-                                &tensor_labels](auto&& x) {
-                       return csv_transform(x, csv_basis, coeff_tensor_label,
-                                            tensor_labels);
-                     }));
+    return ex<Sum>(
+        *expr                                                       //
+        | transform([&csv_basis, orthonormal, &coeff_tensor_label,  //
+                     &tensor_labels](auto&& x) {
+            return csv_transform_rec(x, csv_basis, orthonormal,
+                                     coeff_tensor_label, tensor_labels);
+          }));
   else if (expr->is<Tensor>()) {
     auto const& tnsr = expr->as<Tensor>();
     if (!ranges::contains(tensor_labels, tnsr.label())) return expr;
     if (ranges::none_of(tnsr.indices(), &Index::has_proto_indices)) return expr;
-    return csv_transform_impl(tnsr, csv_basis, coeff_tensor_label);
+    return csv_transform_impl(tnsr, csv_basis, orthonormal, coeff_tensor_label);
   } else if (expr->is<Product>()) {
     auto const& prod = expr->as<Product>();
 
@@ -128,8 +150,8 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
     result.scale(prod.scalar());
 
     for (auto&& f : prod.factors()) {
-      auto trans =
-          csv_transform(f, csv_basis, coeff_tensor_label, tensor_labels);
+      auto trans = csv_transform_rec(f, csv_basis, orthonormal,
+                                     coeff_tensor_label, tensor_labels);
       // N.B. do not flatten the product to ensure that CSV transform of
       // each factor is performed before assembling the final product
       // this way for DF-factorized integrals each DF factor is transformed
@@ -141,6 +163,41 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
 
   } else
     return expr;
+}
+
+}  // namespace
+
+namespace detail {
+
+ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
+                      bool orthonormal, std::wstring const& coeff_tensor_label,
+                      container::svector<std::wstring> const& tensor_labels) {
+  if (csv_basis.has_basis_instance()) {
+    const auto& registry = get_default_context().index_basis_registry();
+    if (!registry || !registry->basis_label(csv_basis))
+      throw Exception(
+          "csv_transform: the target basis instance " +
+          toUtf8(csv_basis.space().base_key()) + ";" +
+          std::to_string(*csv_basis.basis_instance()) +
+          " is not registered under a name; indices minted in it would print "
+          "and be keyed as the space's own basis");
+    return csv_transform_rec(expr, registry->resolve(csv_basis), orthonormal,
+                             coeff_tensor_label, tensor_labels);
+  }
+  return csv_transform_rec(expr, csv_basis, orthonormal, coeff_tensor_label,
+                           tensor_labels);
+}
+
+}  // namespace detail
+
+ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
+                      std::wstring const& coeff_tensor_label,
+                      container::svector<std::wstring> const& tensor_labels) {
+  const bool is_ao = bitset_t(csv_basis.qns()) & bitset_t(LCAOQNS::ao);
+  const bool is_pao = bitset_t(csv_basis.qns()) & bitset_t(LCAOQNS::pao);
+  return csv_transform(expr, IndexBasis{csv_basis},
+                       /*orthonormal=*/!(is_ao || is_pao), coeff_tensor_label,
+                       tensor_labels);
 }
 
 }  // namespace sequant::mbpt

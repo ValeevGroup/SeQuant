@@ -163,7 +163,7 @@ class ItfGenerator : public Generator<Context> {
     if (tensor.num_indices() > 0) {
       name += ":";
       for (const Index &idx : tensor.const_indices()) {
-        name += ctx.get_tag(idx.space());
+        name += detail::block_tag(ctx.get_tag(idx.space()), idx);
       }
 
       if (name.back() == ':') {

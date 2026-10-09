@@ -6,7 +6,7 @@ int main() {
   using namespace sequant;
 
   set_default_context(
-      {.index_space_registry = IndexSpaceRegistry{}
+      {.index_basis_registry = IndexBasisRegistry{}
                                    .add(L"y", 0b01, is_vacuum_occupied)
                                    .add(L"z", 0b10)
                                    .add(L"p", 0b11, is_complete),

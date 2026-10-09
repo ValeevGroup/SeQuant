@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/math.hpp>
@@ -67,7 +68,7 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   IndexSpace space;
   // try looking up space in registry
   const auto label = mbpt::spinannotation_replacе(idx.space().base_key(), s);
-  if (auto isr = get_default_context().index_space_registry()) {
+  if (auto isr = get_default_context().index_basis_registry()) {
     auto* space_ptr = isr->retrieve_ptr(label);
     if (space_ptr && space_ptr->type() == idx.space().type() &&
         space_ptr->qns() == qns) {
@@ -80,9 +81,21 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
                        // N.B. assume size does not depend on spin
                        idx.space().approximate_size()};
   }
+  // the basis: the registry's entry for the instance in that space if it
+  // names one, else, as for the space, one derived from the index's own:
+  // its name with the spin annotation replaced, its extent
+  IndexBasis basis = default_registry_resolved(
+      IndexBasis{space, idx.basis().basis_instance()});
+  if (idx.basis().has_name() && !basis.has_name())
+    basis = IndexBasis{
+        IndexSpace{space.base_key(), space.type(), space.qns(),
+                   idx.space().approximate_size(), idx.space().field()},
+        idx.basis().basis_instance(),
+        mbpt::spinannotation_replacе(idx.basis().name(), s)};
   auto protoindices = idx.proto_indices();
   for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, s);
-  return Index{space, idx.ordinal(), protoindices};
+  return Index{std::move(basis), idx.ordinal(), protoindices,
+               idx.symmetric_proto_indices()};
 }
 
 template <typename Container, typename TraceFunction, typename... Args>
@@ -1333,10 +1346,20 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
     return std::vector<ExprPtr>{expr};
   }
 
-  // Grand index list contains both internal and external indices
-  container::set<Index, Index::LabelCompare> grand_idxlist =
+  // Expand 'A' operator and 'antisymm' tensors; the indices are collected
+  // from the result, since simplify() renumbers the dummies
+  auto expanded_expr = expand_A_op(expr);
+  reset_tags(expanded_expr);
+  expand(expanded_expr);
+  simplify(expanded_expr);
+
+  // Grand index list contains both internal and external indices; the
+  // external ones are added explicitly, since an input that simplifies to
+  // zero uses none
+  container::set<Index, Index::FullLabelCompare> grand_idxlist =
       get_used_indices<decltype(grand_idxlist),
-                       SlotType::Bra | SlotType::Ket | SlotType::Proto>(expr);
+                       SlotType::Bra | SlotType::Ket | SlotType::Proto>(
+          expanded_expr);
 
   container::set<Index> ext_idxlist;
   for (const auto& idxgrp : ext_index_groups) {
@@ -1346,6 +1369,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
       ext_idxlist.insert(std::move(idx));
     }
   }
+  grand_idxlist.insert(ext_idxlist.begin(), ext_idxlist.end());
 
   container::set<Index> int_idxlist;
   for (auto&& gidx : grand_idxlist) {
@@ -1422,12 +1446,6 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
     e_rep.clear();
     e_rep.push_back(external_replacement_map);
   }
-
-  // Expand 'A' operator and 'antisymm' tensors
-  auto expanded_expr = expand_A_op(expr);
-  reset_tags(expanded_expr);
-  expand(expanded_expr);
-  simplify(expanded_expr);
 
   std::vector<ExprPtr> result{};
 
@@ -1687,7 +1705,7 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
                         spinfree_index_spaces](const ProductPtr& product) {
     ExprPtr expr = product->clone();
     // List of all indices in the expression
-    container::set<Index, Index::LabelCompare> grand_idxlist =
+    container::set<Index, Index::FullLabelCompare> grand_idxlist =
         get_used_indices<decltype(grand_idxlist),
                          SlotType::Bra | SlotType::Ket | SlotType::Proto>(expr);
 

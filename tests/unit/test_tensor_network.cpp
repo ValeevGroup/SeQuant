@@ -239,7 +239,7 @@ TEST_CASE("tensor_network_shared", "[elements]") {
 
     SECTION("amazing hash collision") {
       auto _ = set_scoped_default_context(
-          {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
+          {.index_basis_registry_shared_ptr = mbpt::make_min_sr_spaces(),
            .vacuum = Vacuum::SingleProduct,
            .first_dummy_index_ordinal = 20000});
 

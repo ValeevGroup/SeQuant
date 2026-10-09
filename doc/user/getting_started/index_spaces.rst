@@ -14,7 +14,7 @@ reference state, respectively. To simplify symbolic manipulation of such express
 to define their set-theoretic relationships. The following example illustrates the full space denoted by :math:`p` partitioned into occupied :math:`i`
 and unoccupied :math:`a` base subspaces:
 
-.. literalinclude:: /examples/user/getting_started/index_space_registry.cpp
+.. literalinclude:: /examples/user/getting_started/index_basis_registry.cpp
    :language: cpp
    :start-after: start-snippet-1
    :end-before: end-snippet-1
@@ -22,7 +22,7 @@ and unoccupied :math:`a` base subspaces:
 
 This and other vocabularies commonly used in quantum many-body context are supported out-of-the-box by SeQuant; their definitions are in :code:`SeQuant/domain/mbpt/convention.hpp`. The previous example is equivalent to the following:
 
-.. literalinclude:: /examples/user/getting_started/index_space_registry.cpp
+.. literalinclude:: /examples/user/getting_started/index_basis_registry.cpp
    :language: cpp
    :start-after: start-snippet-2
    :end-before: end-snippet-2
@@ -31,7 +31,28 @@ This and other vocabularies commonly used in quantum many-body context are suppo
 Bitset representation of index spaces allows to define set-theoretic operations naturally. Bitset-based representation is used not only for index space *type* attribute (:code:`IndexSpace::Type`) but also for the *quantum numbers* attribute (:code:`IndexSpace::QuantumNumbers`). The latter can be used to represent spin `quantum numbers <https://en.wikipedia.org/wiki/Quantum_number>`_, particle types, etc.
 The main difference of the last example with the original example is that the :code:`make_min_sr_spaces()` factory changes the quantum numbers used by default (:code:`mbpt::Spin::any`) to make spin algebraic manipulations (like tracing out spin degrees of freedom) easier. Users can create their own definitions to suit their needs, but the vast majority of users will not need to venture outside of the predefined vocabularies.
 
-Notice that the set-theoretic operations are only partially automated. It is the user's responsibility to define any and all unions and intersections of base spaces that they may encounter in their context. For this reason :class:`sequant::IndexSpaceRegistry` has its own :code:`add_unIon()` and :code:`add_intersection()` methods that perform error checking to ensure that only registered spaces are defined.
+Notice that the set-theoretic operations are only partially automated. It is the user's responsibility to define any and all unions and intersections of base spaces that they may encounter in their context. For this reason :class:`sequant::IndexBasisRegistry` has its own :code:`add_unIon()` and :code:`add_intersection()` methods that perform error checking to ensure that only registered spaces are defined.
+
+Named basis instances
+~~~~~~~~~~~~~~~~~~~~~~
+
+An :class:`sequant::Index` can run over a specific *basis instance* of its space (see :doc:`../guide/context`). A
+basis instance can be registered under a label of its own with :func:`sequant::IndexBasisRegistry::add`; the entry
+carries its own extent and field. That label, like a space's, must be one that an index can be parsed with
+(:func:`sequant::io::serialization::v1::is_base_key`); registration throws otherwise. The space views (:func:`sequant::IndexBasisRegistry::spaces`) and the set algebra
+see spaces only; :func:`sequant::IndexBasisRegistry::retrieve` throws on such a label, use
+:func:`sequant::IndexBasisRegistry::retrieve_basis`. Indices in a named basis are printed, serialized and deserialized
+by that label, and constructed from it; code that keys an axis by label tells them apart from the space's own
+basis by :func:`sequant::IndexBasis::base_key`. An unnamed basis instance has no entry and no extent of its own: its basis
+key is its space's, so evaluation sizes, tiles and slices it as the space. That is right for a rotation of the space,
+such as a localized basis; a basis of a different extent, such as a truncated or an overcomplete set, must be
+registered under a name.
+
+.. literalinclude:: /examples/user/getting_started/index_basis_registry.cpp
+   :language: cpp
+   :start-after: start-snippet-3
+   :end-before: end-snippet-3
+   :dedent: 2
 
 Quasiparticles
 ~~~~~~~~~~~~~~~

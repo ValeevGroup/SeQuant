@@ -1,0 +1,39 @@
+//
+// Created by Eduard Valeyev on 3/9/25.
+//
+
+#include "SeQuant/core/index_basis_registry.hpp"
+
+#include <SeQuant/core/io/serialization/serialization.hpp>
+
+namespace sequant {
+
+void IndexBasisRegistry::validate_label(std::wstring_view label,
+                                        std::string_view caller) {
+  if (!io::serialization::v1::is_base_key(label))
+    throw Exception(std::string(caller) + ": label '" + toUtf8(label) +
+                    "' is not an index space name: it must be nonempty and "
+                    "made of letters, ⁺, ⁻, combining diacritics, arrows and "
+                    "primes only, so that indices in it can be printed and "
+                    "parsed");
+}
+
+void IndexBasisRegistry::physical_particle_attribute_mask(bitset_t m) {
+  physical_particle_attribute_mask_ = m;
+}
+
+bitset_t IndexBasisRegistry::physical_particle_attribute_mask() const {
+  return physical_particle_attribute_mask_;
+}
+
+IndexSpace::QuantumNumbers IndexBasisRegistry::physical_particle_attributes(
+    IndexSpace::QuantumNumbers qn) const {
+  return to_bitset(qn) & physical_particle_attribute_mask_;
+}
+
+IndexSpace::QuantumNumbers IndexBasisRegistry::other_attributes(
+    IndexSpace::QuantumNumbers qn) const {
+  return to_bitset(qn) & ~physical_particle_attribute_mask_;
+}
+
+}  // namespace sequant

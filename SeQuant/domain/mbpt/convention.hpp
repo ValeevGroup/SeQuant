@@ -7,8 +7,12 @@
 
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/context.hpp>
-#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
+
+#include <limits>
+#include <string_view>
 
 namespace sequant {
 namespace mbpt {
@@ -33,7 +37,7 @@ enum class SpinConvention {
   Legacy,  //!< all particles are assumed spin-free, spin bits set to Spin::null
 };
 
-/// @brief installs the index space registry of a convention and the
+/// @brief installs the index basis registry of a convention and the
 ///        single-product vacuum into the default Context
 ///
 /// Every other setting of the current default Context, including the
@@ -48,25 +52,25 @@ void load(Convention conv = Convention::Minimal,
 std::wstring decorate_label(std::wstring label, bool up);
 
 /// @brief add fermionic spin spaces to registry
-void add_fermi_spin(IndexSpaceRegistry& isr);
+void add_fermi_spin(IndexBasisRegistry& isr);
 
 /// @brief add AO spaces to registry
 
-/// @param isr the IndexSpaceRegistry to which add the AO spaces
+/// @param isr the IndexBasisRegistry to which add the AO spaces
 /// @param spin_any the quantum numbers carried by spin-agnostic physical
 ///        spaces in the target convention (Spin::null for
 ///        SpinConvention::Legacy, else Spin::any); AO spaces are physical, so
 ///        they carry it in the spin sector alongside the LCAOQNS::ao trait bit
 /// @param vbs if true, have separate virtual basis
-void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr,
+void add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
                    IndexSpace::QuantumNumbers spin_any, bool vbs = false,
                    bool abs = false);
 
 /// @brief add DF spaces to registry
-void add_df_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
+void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& isr);
 
 /// @brief add THC spaces to registry
-void add_thc_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
+void add_thc_spaces(std::shared_ptr<IndexBasisRegistry>& isr);
 
 /// @brief add PAO spaces to registry
 
@@ -75,11 +79,34 @@ void add_thc_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
 ///        spaces in the target convention (Spin::null for
 ///        SpinConvention::Legacy, else Spin::any); PAO spaces are physical, so
 ///        they carry it in the spin sector alongside the LCAOQNS::pao trait bit
-void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr,
+void add_pao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
                     IndexSpace::QuantumNumbers spin_any);
 
+/// the basis instance add_pao_basis registers by default: above every CSV
+/// instance, so a PAO basis sorts after every other basis of the particle
+/// space (IndexBasis orders by space, then instance)
+inline constexpr IndexBasis::instance_type default_pao_basis_instance =
+    std::numeric_limits<IndexBasis::instance_type>::max();
+
+/// @brief registers the PAO basis as a named instance of the particle space
+
+/// expects \p isr to have a defined particle space; the entry's size and
+/// field default to the particle space's (populate them with
+/// IndexBasisRegistry::approximate_size(label, n) before the registry is given
+/// to a Context, which holds it immutable)
+/// @param spin_any the quantum numbers of the spin-agnostic particle space
+/// @param instance the basis instance of the PAO basis
+/// @param label the label the PAO basis is registered under
+/// @throw Exception if \p label is already registered (e.g. by
+/// add_pao_spaces)
+void add_pao_basis(
+    std::shared_ptr<IndexBasisRegistry>& isr,
+    IndexSpace::QuantumNumbers spin_any,
+    IndexBasis::instance_type instance = default_pao_basis_instance,
+    std::wstring_view label = L"μ̃");
+
 /// @brief add batching spaces to registry
-void add_batching_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
+void add_batching_spaces(std::shared_ptr<IndexBasisRegistry>& isr);
 
 /// @name built-in definitions of IndexSpace
 /// @{
@@ -87,41 +114,41 @@ void add_batching_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
 /// Most standard models only need 2 base spaces, occupied and unoccupied.
 /// This is minimal partitioning sufficient for computing expectation values
 /// in context of single-reference MBPT.
-std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces(
+std::shared_ptr<IndexBasisRegistry> make_min_sr_spaces(
     SpinConvention scv = SpinConvention::Default);
 
 /// Common partitioning for single reference F12 calculations.
 /// notably, this set contains an other_unoccupied space, α', commonly used to
 /// construct an approximately complete representation
-std::shared_ptr<IndexSpaceRegistry> make_F12_sr_spaces(
+std::shared_ptr<IndexBasisRegistry> make_F12_sr_spaces(
     SpinConvention spconv = SpinConvention::Default);
 
 /// Multireference partitioning contains an active space, x, which is assumed to
 /// have partial occupancy although it is considered unoccupied with respect to
 /// a SingleProduct Vacuum. This leads to a variety of additional composite
 /// spaces with may or may not be occupied.
-std::shared_ptr<IndexSpaceRegistry> make_mr_spaces(
+std::shared_ptr<IndexBasisRegistry> make_mr_spaces(
     SpinConvention spconv = SpinConvention::Default);
 
 /// like make_mr_spaces, but without frozen orbitals
-std::shared_ptr<IndexSpaceRegistry> make_min_mr_spaces(
+std::shared_ptr<IndexBasisRegistry> make_min_mr_spaces(
     SpinConvention spconv = SpinConvention::Default);
 
 /// 'Standard' choice of partitioning orbitals in a single reference.
 /// Includes frozen_core, active_occupied, active_unoccupied, and
 /// inactive_unoccupied orbitals as base spaces.
-std::shared_ptr<IndexSpaceRegistry> make_sr_spaces(
+std::shared_ptr<IndexBasisRegistry> make_sr_spaces(
     SpinConvention spconv = SpinConvention::Default);
 
 /// Legacy partitioning similar to previous versions of SeQuant which had
 /// compile time hard coded partitioning. This is useful when verifying
 /// previously obtained results which have been canonicalized in this context.
-std::shared_ptr<IndexSpaceRegistry> make_legacy_spaces(
+std::shared_ptr<IndexBasisRegistry> make_legacy_spaces(
     SpinConvention spconv = SpinConvention::Default);
 
 /// make fermi and bose space registries for multicomponent models
-std::pair<std::shared_ptr<IndexSpaceRegistry>,
-          std::shared_ptr<IndexSpaceRegistry>>
+std::pair<std::shared_ptr<IndexBasisRegistry>,
+          std::shared_ptr<IndexBasisRegistry>>
 make_fermi_and_bose_spaces(SpinConvention spconv = SpinConvention::Default);
 
 /// @}
@@ -130,7 +157,7 @@ make_fermi_and_bose_spaces(SpinConvention spconv = SpinConvention::Default);
 /// @throws Assertion failure if batching space "z" is not found in the registry
 inline void check_for_batching_space() {
   SEQUANT_ASSERT(
-      sequant::get_default_context().index_space_registry()->contains(L"z"));
+      sequant::get_default_context().index_basis_registry()->contains(L"z"));
 }
 
 }  // namespace mbpt

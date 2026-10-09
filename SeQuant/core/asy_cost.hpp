@@ -1,6 +1,7 @@
 #ifndef SEQUANT_ASY_COST_HPP
 #define SEQUANT_ASY_COST_HPP
 
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
@@ -12,11 +13,14 @@ namespace sequant {
 
 ///
 /// Represents a symbolic asymptotic cost as a polynomial in the sizes of
-/// index spaces. A cost is a sum of terms, each of which is a rational
-/// multiplier times a product of space sizes raised to non-negative integer
-/// powers. Spaces are identified by `IndexSpace`; `AsyCost` orders and prints
-/// them using `IndexSpace`'s own ordering and `base_key()`, and never consults
-/// an `IndexSpaceRegistry`.
+/// bases of index spaces. A cost is a sum of terms, each of which is a rational
+/// multiplier times a product of basis sizes raised to non-negative integer
+/// powers. Bases are identified by `IndexBasis`, so each basis instance of a
+/// space is a symbol of its own; `AsyCost` orders them using `IndexBasis`'s
+/// own ordering (a space's own basis orders as the space), prints a space's
+/// own basis by its `base_key()`, a named basis instance by its name and an
+/// unnamed one as `base_key()<;N>`, and never consults an
+/// `IndexBasisRegistry`.
 ///
 /// Examples (with `I`, `A` denoting two index spaces):
 ///   - `AsyCost({{I, 2}, {A, 4}})` represents $I^2 A^4$.
@@ -25,15 +29,15 @@ namespace sequant {
 ///
 class AsyCost {
  public:
-  using ExponentMap = container::map<IndexSpace, std::size_t>;
-  using ExtentMap = container::map<IndexSpace, std::size_t>;
+  using ExponentMap = container::map<IndexBasis, std::size_t>;
+  using ExtentMap = container::map<IndexBasis, std::size_t>;
 
  private:
   /// A single term of an AsyCost: a rational prefactor times a
-  /// product of index-space sizes raised to per-space exponents, e.g.
+  /// product of basis sizes raised to per-basis exponents, e.g.
   /// `3/2 * O^2 V^4`.
   class AsyCostEntry {
-    ExponentMap exponents_;       // space -> power; zero exponents not stored
+    ExponentMap exponents_;       // basis -> power; zero exponents not stored
     mutable rational prefactor_;  // rational multiplier
     bool is_max_ = false;         // true for the AsyCost::max() sentinel
 
@@ -60,7 +64,7 @@ class AsyCost {
 
     AsyCostEntry(AsyCostEntry &&) = default;
 
-    /// \param exponents Map from index space to its exponent. Zero exponents
+    /// \param exponents Map from basis to its exponent. Zero exponents
     ///                  are dropped.
     /// \param prefactor Rational multiplier. If it is zero, or no exponents
     ///                  remain after dropping zeros, the entry collapses to
@@ -71,7 +75,7 @@ class AsyCost {
 
     AsyCostEntry &operator=(AsyCostEntry &&) = default;
 
-    /// \return The per-space exponents of this term.
+    /// \return The per-basis exponents of this term.
     [[nodiscard]] ExponentMap const &exponents() const;
 
     /// \return The rational multiplier (prefactor) of this term, e.g. `3/2`
@@ -89,8 +93,8 @@ class AsyCost {
     [[nodiscard]] bool is_max() const;
 
     /// Order by the \ref max() sentinel (greatest), then by total polynomial
-    /// degree (sum of exponents), then space by space from highest- to
-    /// lowest-priority IndexSpace. Independent of the prefactor.
+    /// degree (sum of exponents), then basis by basis from highest- to
+    /// lowest-priority IndexBasis. Independent of the prefactor.
     bool operator<(AsyCostEntry const &rhs) const;
 
     /// \return Whether two entries share the same monomial (same exponents and
@@ -125,7 +129,7 @@ class AsyCost {
   AsyCost();
 
   ///
-  /// \param exponents Map from index space to its exponent in this term.
+  /// \param exponents Map from basis to its exponent in this term.
   ///                  Zero exponents may be supplied; they are dropped.
   /// \param prefactor Rational multiplier; defaults to 1.
   ///
@@ -140,11 +144,13 @@ class AsyCost {
   AsyCost &operator=(AsyCost &&) = default;
 
   ///
-  /// Substitute each space in this cost by an extent and evaluate.
-  /// \param extents Map from index space to extent (size). A space appearing
-  ///                in this cost but absent from `extents` falls back to its
-  ///                `IndexSpace::approximate_size()`. Defaults to empty, in
-  ///                which case every space uses its `approximate_size()`.
+  /// Substitute each basis in this cost by an extent and evaluate.
+  /// \param extents Map from basis to extent (size). A basis appearing
+  ///                in this cost but absent from `extents` falls back to the
+  ///                `IndexSpace::approximate_size()` of its space (for a named
+  ///                basis instance obtained from the registry, the size it
+  ///                was registered with). Defaults to empty, in which case
+  ///                every basis uses that size.
   /// \return Numerical value of the cost.
   ///
   [[nodiscard]] double ops(ExtentMap const &extents = {}) const;

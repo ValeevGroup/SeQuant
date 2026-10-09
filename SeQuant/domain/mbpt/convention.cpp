@@ -31,7 +31,7 @@ void load(Convention conv, SpinConvention spconv) {
     throw Exception(
         "mbpt::load: cannot install a process-wide context while a scoped "
         "context is active on this thread");
-  std::shared_ptr<IndexSpaceRegistry> isr;
+  std::shared_ptr<IndexBasisRegistry> isr;
   switch (conv) {
     case Convention::Minimal:
       isr = make_min_sr_spaces(spconv);
@@ -58,8 +58,8 @@ void load(Convention conv, SpinConvention spconv) {
   set_default_context(std::move(ctx));
 }
 
-void add_fermi_spin(IndexSpaceRegistry& isr) {
-  IndexSpaceRegistry result = isr;
+void add_fermi_spin(IndexBasisRegistry& isr) {
+  IndexBasisRegistry result = isr;
 
   for (auto&& space : isr) {
     if (space.base_key() != L"") {
@@ -81,7 +81,7 @@ void add_fermi_spin(IndexSpaceRegistry& isr) {
   isr = std::move(result);
 }
 
-void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr,
+void add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
                    IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs) {
   // matches the MPQC layout, see spindex.h
   // this will not work for MR
@@ -109,7 +109,7 @@ void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr,
   }
 }
 
-void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr,
+void add_pao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
                     IndexSpace::QuantumNumbers spin_any) {
   auto uocc_space = isr->particle_space(/* nulltype_ok = */ false);
   // PAO states are physical (spin-independent, but still particle states), so
@@ -122,22 +122,31 @@ void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr,
       ;
 }
 
-void add_df_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
+void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
+                   IndexSpace::QuantumNumbers spin_any,
+                   IndexBasis::instance_type instance,
+                   std::wstring_view label) {
+  const auto& uocc =
+      isr->retrieve(isr->particle_space(/* nulltype_ok = */ false), spin_any);
+  isr->add(label, IndexBasis{uocc, instance});
+}
+
+void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& isr) {
   // matches the MPQC layout, see spindex.h
   isr->add(IndexSpace{L"Κ", 0b00001, TensorFactorizationQNS::df});  // DFBS AO
 }
 
-void add_batching_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
+void add_batching_spaces(std::shared_ptr<IndexBasisRegistry>& isr) {
   isr->add(IndexSpace{L"z", 0b100000, BatchingQNS::batch});  // Batching Space
 }
 
-void add_thc_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
+void add_thc_spaces(std::shared_ptr<IndexBasisRegistry>& isr) {
   isr->add(IndexSpace{L"L", 0b000001, TensorFactorizationQNS::thc})  // THC AO
       ;
 }
 
-std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces(SpinConvention spconv) {
-  auto isr = std::make_shared<IndexSpaceRegistry>();
+std::shared_ptr<IndexBasisRegistry> make_min_sr_spaces(SpinConvention spconv) {
+  auto isr = std::make_shared<IndexBasisRegistry>();
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
@@ -155,8 +164,8 @@ std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces(SpinConvention spconv) {
 // vacuum occupied subspace.
 //  this leaves an active space which is partially occupied/unoccupied. This
 //  definition is convenient when coupled with SR vacuum.
-std::shared_ptr<IndexSpaceRegistry> make_mr_spaces(SpinConvention spconv) {
-  auto isr = std::make_shared<IndexSpaceRegistry>();
+std::shared_ptr<IndexBasisRegistry> make_mr_spaces(SpinConvention spconv) {
+  auto isr = std::make_shared<IndexBasisRegistry>();
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
@@ -178,8 +187,8 @@ std::shared_ptr<IndexSpaceRegistry> make_mr_spaces(SpinConvention spconv) {
   return isr;
 }
 
-std::shared_ptr<IndexSpaceRegistry> make_min_mr_spaces(SpinConvention spconv) {
-  auto isr = std::make_shared<IndexSpaceRegistry>();
+std::shared_ptr<IndexBasisRegistry> make_min_mr_spaces(SpinConvention spconv) {
+  auto isr = std::make_shared<IndexBasisRegistry>();
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
@@ -196,8 +205,8 @@ std::shared_ptr<IndexSpaceRegistry> make_min_mr_spaces(SpinConvention spconv) {
   return isr;
 }
 
-std::shared_ptr<IndexSpaceRegistry> make_sr_spaces(SpinConvention spconv) {
-  auto isr = std::make_shared<IndexSpaceRegistry>();
+std::shared_ptr<IndexBasisRegistry> make_sr_spaces(SpinConvention spconv) {
+  auto isr = std::make_shared<IndexBasisRegistry>();
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
@@ -215,8 +224,8 @@ std::shared_ptr<IndexSpaceRegistry> make_sr_spaces(SpinConvention spconv) {
   return isr;
 }
 
-std::shared_ptr<IndexSpaceRegistry> make_F12_sr_spaces(SpinConvention spconv) {
-  auto isr = std::make_shared<IndexSpaceRegistry>();
+std::shared_ptr<IndexBasisRegistry> make_F12_sr_spaces(SpinConvention spconv) {
+  auto isr = std::make_shared<IndexBasisRegistry>();
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
@@ -240,8 +249,8 @@ std::shared_ptr<IndexSpaceRegistry> make_F12_sr_spaces(SpinConvention spconv) {
   return isr;
 }
 
-std::shared_ptr<IndexSpaceRegistry> make_legacy_spaces(SpinConvention spconv) {
-  auto isr = std::make_shared<IndexSpaceRegistry>();
+std::shared_ptr<IndexBasisRegistry> make_legacy_spaces(SpinConvention spconv) {
+  auto isr = std::make_shared<IndexBasisRegistry>();
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
@@ -267,10 +276,10 @@ std::shared_ptr<IndexSpaceRegistry> make_legacy_spaces(SpinConvention spconv) {
   return isr;
 }
 
-std::pair<std::shared_ptr<IndexSpaceRegistry>,
-          std::shared_ptr<IndexSpaceRegistry>>
+std::pair<std::shared_ptr<IndexBasisRegistry>,
+          std::shared_ptr<IndexBasisRegistry>>
 make_fermi_and_bose_spaces(SpinConvention spconv) {
-  auto isr = std::make_shared<IndexSpaceRegistry>();
+  auto isr = std::make_shared<IndexBasisRegistry>();
 
   const auto fspin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
@@ -282,7 +291,7 @@ make_fermi_and_bose_spaces(SpinConvention spconv) {
   const auto bspin_any = IndexSpace::QuantumNumbers{Spin::any};
   isr->add(L"β", 0b100, bspin_any);  // bose
 
-  auto fermi_isr = std::make_shared<IndexSpaceRegistry>(isr->spaces());
+  auto fermi_isr = std::make_shared<IndexBasisRegistry>(isr->bases());
   fermi_isr->vacuum_occupied_space(L"i");
   fermi_isr->reference_occupied_space(L"i");
   fermi_isr->hole_space(L"i");
@@ -290,7 +299,7 @@ make_fermi_and_bose_spaces(SpinConvention spconv) {
   fermi_isr->complete_space(L"p");
   fermi_isr->physical_particle_attribute_mask(bitset_t(fspin_any));
 
-  auto bose_isr = std::make_shared<IndexSpaceRegistry>(isr->spaces());
+  auto bose_isr = std::make_shared<IndexBasisRegistry>(isr->bases());
   bose_isr->vacuum_occupied_space(IndexSpace::null);
   bose_isr->reference_occupied_space(IndexSpace::null);
   bose_isr->hole_space(IndexSpace::null);

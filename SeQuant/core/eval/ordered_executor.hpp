@@ -49,7 +49,7 @@ namespace detail {
 /// enforces exactly that count at runtime). Keyed
 /// by the \c LoopKey itself (the loop's stable depth+loop_slot identity, not
 /// its canonical axis label, which a type-keyed count would collapse across
-/// distinct same-space instances) so it is exact per realized loop.
+/// distinct same-key instances) so it is exact per realized loop.
 ///
 [[nodiscard]] inline std::function<std::size_t(LoopKey const&)>
 ordered_n_batches_by_loop(
@@ -585,13 +585,13 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
   return apply_op(node, std::move(left), right);
 }
 
-/// \return the IndexSpace base keys of the modes in \p modes, comma-joined
+/// \return the \c IndexBasis::base_key() of the modes in \p modes, comma-joined
 ///         without a trailing comma (the dag-scope trace format)
 template <typename Modes>
 [[nodiscard]] std::string dag_scope(Modes&& modes) {
   return join_strings<std::string>(
       std::forward<Modes>(modes), ",",
-      [](Index const& m) { return toUtf8(m.space().base_key()); });
+      [](Index const& m) { return toUtf8(m.basis().base_key()); });
 }
 
 /// value id -> forest node: the node of \p vmap whose value key is that of
@@ -850,7 +850,7 @@ void run_ordered_contracted_block(
   auto bs_cache = Cache::empty();
   bs_cache.set_parent(&parent_cache);
 
-  // Batch chunks over the loop axis, sourced per-space by the backend (no
+  // Batch chunks over the loop axis, sourced per basis key by the backend (no
   // carrier array is consulted).
   container::svector<std::pair<std::size_t, std::size_t>> const batches =
       aops->axis_batches(block.axis, target(block.axis));
@@ -861,7 +861,7 @@ void run_ordered_contracted_block(
     log::log("BatchGroup", "Begin",
              std::format("{} steps over {} batches of {} {}",
                          block.steps.size(), batches.size(),
-                         toUtf8(std::wstring(block.axis.space().base_key())),
+                         toUtf8(std::wstring(block.axis.basis().base_key())),
                          log::scope_annot(s)));
   }
   {
@@ -1887,7 +1887,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
 /// \details Returns a callable, hash -> string, that annotates a value with its
 /// schedule properties the running per-op annotation cannot see: the value's
 /// home dag-scope and, for each of its use-sites, that use's dag-scope.
-/// A dag-scope is the comma-joined \c IndexSpace::base_key() list of a mode
+/// A dag-scope is the comma-joined \c IndexBasis::base_key() list of a mode
 /// sequence (no trailing comma -- the same convention as \c log::scope_annot),
 /// so the produced string is
 ///   `home={<home dag-scope>} uses=[{<use dag-scope>},{<use dag-scope>},...]`.

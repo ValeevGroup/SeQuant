@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
   sequant::set_default_context(
-      {.index_space_registry_shared_ptr = sequant::mbpt::make_sr_spaces(),
+      {.index_basis_registry_shared_ptr = sequant::mbpt::make_sr_spaces(),
        .vacuum = Vacuum::SingleProduct,
        .metric = IndexSpaceMetric::Unit,
        .spbasis = SPBasis::Spinor,

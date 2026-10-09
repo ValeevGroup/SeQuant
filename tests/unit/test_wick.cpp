@@ -151,7 +151,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       ctx.set(mbpt::make_mr_spaces());
       ctx.set(Vacuum::MultiProduct);
       auto ctx_resetter = set_scoped_default_context(ctx);
-      const auto isr = ctx.index_space_registry();
+      const auto isr = ctx.index_basis_registry();
       const auto MP = Vacuum::MultiProduct;
 
       // core behaves as in SingleProduct
@@ -1907,8 +1907,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         // vac_av's new intermediates inherited Symm from the Context. Putting
         // the t tensors themselves into Symm via `:A-C-S` overspecifies and
         // collapses canonical externals (i_1, i_2 internalize).
-        auto sr_reg = std::make_shared<sequant::IndexSpaceRegistry>(
-            *get_default_context().index_space_registry());
+        auto sr_reg = std::make_shared<sequant::IndexBasisRegistry>(
+            *get_default_context().index_basis_registry());
         std::vector<std::wstring> keys;
         for (auto const& s : *sr_reg) keys.push_back(s.base_key());
         for (auto const& k : keys)
@@ -1948,8 +1948,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       // triples variant of the previous case
       {
         // Field::Real preprocessing: see doubles variant above.
-        auto sr_reg = std::make_shared<sequant::IndexSpaceRegistry>(
-            *get_default_context().index_space_registry());
+        auto sr_reg = std::make_shared<sequant::IndexBasisRegistry>(
+            *get_default_context().index_basis_registry());
         std::vector<std::wstring> keys;
         for (auto const& s : *sr_reg) keys.push_back(s.base_key());
         for (auto const& k : keys)

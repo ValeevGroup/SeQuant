@@ -16,7 +16,7 @@ TEST_CASE("index", "[elements][index]") {
   using namespace sequant;
 
   SECTION("constructors") {
-    auto isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_basis_registry();
 
     // default
     REQUIRE_NOTHROW(Index{});
@@ -161,10 +161,10 @@ TEST_CASE("index", "[elements][index]") {
       ctx.set(Vacuum::Physical);
       auto ctx_resetter = set_scoped_default_context(ctx);
       Index α("α_2",
-              get_default_context().index_space_registry()->retrieve("α"));
+              get_default_context().index_basis_registry()->retrieve("α"));
       REQUIRE(α.label() == L"α_2");
       REQUIRE(α.space() ==
-              get_default_context().index_space_registry()->retrieve("α_1"));
+              get_default_context().index_basis_registry()->retrieve("α_1"));
     }
 
     SECTION("default Context label defines Index") {
@@ -387,7 +387,7 @@ TEST_CASE("index", "[elements][index]") {
     auto ctx = get_default_context();
     ctx.set(sequant::mbpt::make_F12_sr_spaces());
     auto context_resetter = set_scoped_default_context(ctx);
-    auto isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_basis_registry();
     Index alpha(L"α", isr->retrieve(L"α"));
     Index alpha1(L"α_1", isr->retrieve(L"α"));
     Index alpha_up(L"α↑", isr->retrieve(L"α"));
@@ -424,8 +424,8 @@ TEST_CASE("index", "[elements][index]") {
 
     // a good test of adding new indices to the registry
     {
-      IndexSpaceRegistry registry =
-          *get_default_context().index_space_registry();
+      IndexBasisRegistry registry =
+          *get_default_context().index_basis_registry();
       registry.add(IndexSpace(L"a→", registry.retrieve(L"a").type()));
       const auto ctx_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(std::move(registry)));
@@ -434,7 +434,7 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(a1_r_str == L"{a→_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
     }
 
-    IndexSpaceRegistry registry = *get_default_context().index_space_registry();
+    IndexBasisRegistry registry = *get_default_context().index_basis_registry();
     if (!registry.contains(L"μ̃")) {
       auto uocc_space = registry.particle_space(/* nulltype_ok = */ false);
       registry.add(IndexSpace{L"μ̃", uocc_space, mbpt::LCAOQNS::pao})  // OBS PAO

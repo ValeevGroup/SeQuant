@@ -6,6 +6,7 @@
 #define SEQUANT_EXPRESSIONS_TENSOR_HPP
 
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
@@ -1243,11 +1244,12 @@ inline ExprPtr make_kronecker(const Index &bra_index, const Index &ket_index) {
 /// @return true if an overlap between @p bra and @p ket is a Kronecker delta:
 /// @p metric is unit and the indices are in one basis, i.e. have the same
 /// protoindices (compared in order, as by Index::operator==; symmetric ones
-/// are kept sorted)
+/// are kept sorted) and are not in two different basis instances
 inline bool is_kronecker_equivalent(const Index &bra, const Index &ket,
                                     IndexSpaceMetric metric) {
   return metric == IndexSpaceMetric::Unit &&
-         bra.proto_indices() == ket.proto_indices();
+         bra.proto_indices() == ket.proto_indices() &&
+         !different_instances(bra.basis(), ket.basis());
 }
 
 /// @name (anti)symmetrization operator factories

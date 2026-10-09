@@ -45,6 +45,7 @@ struct SumRule;
 struct ExprRule;
 struct ResultExprRule;
 struct IndexLabelRule;
+struct ProtoLabelRule;
 struct IndexRule;
 struct IndexGroupRule;
 struct SymmetrySpecRule;
@@ -64,6 +65,7 @@ x3::rule<ResultExprRule, ast::ResultExpr> resultExpr{"ResultExpr"};
 // Auxiliaries
 x3::rule<struct NameRule, std::wstring> name{"Name"};
 x3::rule<IndexLabelRule, ast::IndexLabel> index_label{"IndexLabel"};
+x3::rule<ProtoLabelRule, ast::ProtoLabel> proto_label{"ProtoLabel"};
 x3::rule<IndexRule, ast::Index> index{"Index"};
 x3::rule<IndexGroupRule, ast::IndexGroups> index_groups{"IndexGroups"};
 x3::rule<SymmetrySpecRule, ast::SymmetrySpec> symmetry_spec{"SymmetrySpec"};
@@ -94,16 +96,28 @@ auto number_def       = x3::double_ >> -('/' >> x3::double_);
 
 auto variable_def     = x3::lexeme[name >> -(x3::lit('^') >> '*' >> x3::attr(true))];
 
-auto index_name       = +(  x3::unicode::alpha | x3::unicode::char_(L'⁺') | x3::unicode::char_(L'⁻') | x3::unicode::char_(L'̃')
-                          | x3::unicode::char_(L'↑') | x3::unicode::char_(L'↓')
+// letters, ⁺/⁻, combining diacritics (e.g. μ̃, f̌), arrows (e.g. ↑/↓) and
+// primes (e.g. α')
+auto base_key         = +(  x3::unicode::alpha | x3::unicode::char_(L'⁺') | x3::unicode::char_(L'⁻')
+                          | x3::unicode::char_(to_char_type(0x0300), to_char_type(0x036F))
+                          | (x3::unicode::char_(to_char_type(0x2190), to_char_type(0x21FF)) - x3::unicode::unassigned)
+                          | x3::unicode::char_(L'\'')
                          );
 
 auto index_label_def  = x3::lexeme[
-                               index_name >> -x3::lit('_') >> x3::uint_
+                               base_key >> -x3::lit('_') >> x3::uint_
                         ];
 
+// the basis instance suffix of a domain ("<protos;N>") or a domainless proto
+// ("i_1<;3>"); overflow fails the parse rather than silently wrapping
+auto inst              = x3::int_parser<IndexBasis::instance_type>();
+
+auto proto_label_def   = index_label >> -('<' >> x3::lit(';') >> inst >> '>');
+
+// a domain is <protos>, <protos;N> or <;N>; the empty domain <> is rejected
+// in to_index
 auto index_def        = x3::lexeme[
-                            index_label >> -x3::skip['<' >> index_label % ',' >> ">"]
+                            index_label >> -x3::skip['<' >> -(proto_label % ',') >> -(';' >> inst) >> '>']
                         ];
 
 const std::vector<ast::Index> noIndices;
@@ -143,9 +157,9 @@ auto expr_def         = -sum > x3::eoi;
 auto resultExpr_def       = (tensor | variable) > (L'=' | x3::lit(L"->")) >> expr;
 // clang-format on
 
-BOOST_SPIRIT_DEFINE(name, number, variable, index_label, index, index_groups,
-                    tensor, power, product, sum, expr, symmetry_spec,
-                    resultExpr);
+BOOST_SPIRIT_DEFINE(name, number, variable, index_label, proto_label, index,
+                    index_groups, tensor, power, product, sum, expr,
+                    symmetry_spec, resultExpr);
 
 struct position_cache_tag;
 struct error_handler_tag;
@@ -184,6 +198,7 @@ struct SumRule : helpers::annotate_position, helpers::error_handler {};
 struct ExprRule : helpers::annotate_position, helpers::error_handler {};
 struct ResultRule : helpers::annotate_position, helpers::error_handler {};
 struct IndexLabelRule : helpers::annotate_position, helpers::error_handler {};
+struct ProtoLabelRule : helpers::annotate_position, helpers::error_handler {};
 struct IndexRule : helpers::annotate_position, helpers::error_handler {};
 struct IndexGroupRule : helpers::annotate_position, helpers::error_handler {};
 struct SymmetrySpecRule : helpers::annotate_position, helpers::error_handler {};
@@ -244,6 +259,11 @@ AST parse(const StartRule &start, std::wstring_view input,
 }
 
 }  // namespace parse
+
+bool is_base_key(std::wstring_view label) {
+  auto begin = label.begin();
+  return x3::parse(begin, label.end(), parse::base_key) && begin == label.end();
+}
 
 transform::DefaultSymmetries to_default_symms(
     const DeserializationOptions &options) {

@@ -14,7 +14,7 @@
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
-#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>  // deserialize
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/reserved.hpp>
@@ -113,7 +113,7 @@ Config load_config(const json& d) {
   return c;
 }
 
-std::shared_ptr<IndexSpaceRegistry> make_registry(const std::string& conv) {
+std::shared_ptr<IndexBasisRegistry> make_registry(const std::string& conv) {
   if (conv == "min_sr") return make_min_sr_spaces();
   if (conv == "sr") return make_sr_spaces();
   if (conv == "mr") return make_mr_spaces();
@@ -183,7 +183,7 @@ ObjectiveFunction objective_of(const std::string& s) {
 std::string space_signature(const EvalExpr& ev) {
   if (!ev.is_tensor()) return "scalar";
   const auto& t = ev.as_tensor();
-  const auto reg_ptr = get_default_context().index_space_registry();
+  const auto reg_ptr = get_default_context().index_basis_registry();
   const auto& reg = *reg_ptr;
   const auto hole = reg.hole_space(/*nulltype_ok=*/true);
   const auto particle = reg.particle_space(/*nulltype_ok=*/true);
@@ -206,7 +206,7 @@ AsyCost result_memory(const EvalExpr& ev) {
   AsyCost::ExponentMap exponents;
   // Include aux (braketaux, not braket) so auxiliary dimensions are counted in
   // the intermediate's memory/cost, consistent with space_signature.
-  for (const auto& idx : t.const_braketaux_indices()) ++exponents[idx.space()];
+  for (const auto& idx : t.const_braketaux_indices()) ++exponents[idx.basis()];
   return AsyCost{std::move(exponents)};
 }
 

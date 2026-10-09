@@ -22,9 +22,11 @@ void Index::reset_tmp_index() noexcept {
 
 std::wstring Index::to_latex() const noexcept {
   std::wstring protos{};
-  if (has_proto_indices()) {
+  const auto instance = basis_.unnamed_instance();
+  if (has_proto_indices() || instance) {
     protos += L"^{";
     for (auto&& pidx : proto_indices()) protos += pidx.to_latex();
+    if (instance) protos += basis_.instance_suffix();
     protos += L"}";
   }
   std::wstring sfx;
@@ -32,8 +34,8 @@ std::wstring Index::to_latex() const noexcept {
     sfx =
         std::format(L"_{}", *ordinal_ < 10 ? std::to_wstring(*ordinal_)
                                            : std::format(L"{{{}}}", *ordinal_));
-  return std::format(L"{{{}{}{}}}",
-                     io::latex::utf_to_string(space().base_key()), sfx, protos);
+  return std::format(L"{{{}{}{}}}", io::latex::utf_to_string(basis_.base_key()),
+                     sfx, protos);
 }
 
 std::string Index::ascii_label() const {
@@ -69,9 +71,31 @@ std::string Index::ascii_label() const {
 
 std::string Index::to_string() const { return toUtf8(this->label()); }
 
-std::shared_ptr<const IndexSpaceRegistry>
+std::shared_ptr<const IndexBasisRegistry>
 Index::obtain_default_index_registry() {
-  return get_default_context().index_space_registry();
+  return get_default_context().index_basis_registry();
+}
+
+Index Index::replace_basis_instance(
+    IndexBasis::optional_instance basis_instance) const {
+  Index result(*this);
+  result.basis_ =
+      default_registry_resolved(IndexBasis(space(), basis_instance));
+  result.label_.reset();
+  result.full_label_.reset();
+  return result;
+}
+
+void Index::rebase(IndexSpace space) {
+  // a name belongs to the instance of the old space; in another space the
+  // instance is whatever the default registry knows it as
+  basis_ =
+      space == basis_.space()
+          ? IndexBasis(std::move(space), basis_.basis_instance(), basis_.name())
+          : default_registry_resolved(
+                IndexBasis(std::move(space), basis_.basis_instance()));
+  label_.reset();
+  full_label_.reset();
 }
 
 }  // namespace sequant

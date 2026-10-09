@@ -348,7 +348,7 @@ Each entry of :code:`rules` is an object with the following properties:
      - One of :code:`expr`/:code:`label`
    * - :code:`tensor_equality_mode`
      - Only used together with :code:`expr`. Controls how tensors are compared while matching: :code:`identity` requires exact index labels to match,
-       whereas :code:`block`/:code:`shape` (synonyms) only compare index spaces, ignoring concrete index labels.
+       whereas :code:`block`/:code:`shape` (synonyms) only compare index spaces (and basis instances, if any), ignoring concrete index labels.
      - :code:`identity`
      - No
    * - :code:`label`
@@ -564,7 +564,7 @@ on the result of the previous one.
      - Yes
    * - :code:`tensor_equality_mode`
      - Controls how tensors are compared while matching substitution targets: :code:`identity` requires exact index labels to match, whereas
-       :code:`block`/:code:`shape` (synonyms) only compare index spaces, ignoring concrete index labels.
+       :code:`block`/:code:`shape` (synonyms) only compare index spaces (and basis instances, if any), ignoring concrete index labels.
      - :code:`block`
      - No
    * - :code:`result_relabeling`

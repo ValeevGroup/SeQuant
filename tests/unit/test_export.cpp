@@ -15,7 +15,7 @@
 #include <SeQuant/core/export/python_einsum.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
-#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -117,7 +117,7 @@ std::set<std::string> known_format_names(std::tuple<Generator...>) {
 void configure_context_defaults(TextGeneratorContext &) {}
 
 void configure_context_defaults(ItfContext &ctx) {
-  auto registry = get_default_context().index_space_registry();
+  auto registry = get_default_context().index_basis_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
   IndexSpace aux = registry->retrieve("x");
@@ -135,7 +135,7 @@ void configure_context_defaults(ItfContext &ctx) {
 }
 
 void configure_context_defaults(JuliaTensorOperationsGeneratorContext &ctx) {
-  auto registry = get_default_context().index_space_registry();
+  auto registry = get_default_context().index_basis_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
   IndexSpace aux = registry->retrieve("x");
@@ -150,7 +150,7 @@ void configure_context_defaults(JuliaTensorOperationsGeneratorContext &ctx) {
 }
 
 void configure_context_defaults(NumPyEinsumGeneratorContext &ctx) {
-  auto registry = get_default_context().index_space_registry();
+  auto registry = get_default_context().index_basis_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
   IndexSpace aux = registry->retrieve("x");
@@ -165,7 +165,7 @@ void configure_context_defaults(NumPyEinsumGeneratorContext &ctx) {
 }
 
 void configure_context_defaults(PyTorchEinsumGeneratorContext &ctx) {
-  auto registry = get_default_context().index_space_registry();
+  auto registry = get_default_context().index_basis_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
   IndexSpace aux = registry->retrieve("x");
@@ -229,7 +229,7 @@ void add_to_context(JuliaTensorOperationsGeneratorContext &ctx,
     boost::trim(map);
 
     return std::make_pair(
-        get_default_context().index_space_registry()->retrieve(space),
+        get_default_context().index_basis_registry()->retrieve(space),
         std::string(map));
   };
 
@@ -509,7 +509,7 @@ TEST_CASE("export", "[export]") {
     JuliaTensorOperationsGeneratorContext julia_ctx;
     for (const auto *space : {"i", "a", "u"})
       julia_ctx.set_tag(
-          get_default_context().index_space_registry()->retrieve(space), space);
+          get_default_context().index_basis_registry()->retrieve(space), space);
     REQUIRE_NOTHROW(export_expression(
         to_export_tree(deserialize<ResultExpr>(
             L"R{u1,a1;u2,i1} = γ{u1,a1;u2,i1} + Γ{u1,a1;u2,i1}")),
@@ -940,7 +940,7 @@ TEST_CASE("JuliaTensorOperationsGenerator", "[export]") {
 TEST_CASE("PythonEinsumGenerator", "[export]") {
   auto resetter = to_export_context();
 
-  auto registry = get_default_context().index_space_registry();
+  auto registry = get_default_context().index_basis_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
 
@@ -1061,5 +1061,148 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("E +="));
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("->'"));
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(".einsum('"));
+  }
+}
+
+TEST_CASE("export-basis-instance", "[export][basis]") {
+  using Catch::Matchers::ContainsSubstring;
+  auto resetter = to_export_context();
+  const Index y = Index(L"a_7").replace_basis_instance(1);
+
+  auto registry = get_default_context().index_basis_registry();
+  const IndexSpace occ = registry->retrieve("i");
+  const IndexSpace virt = registry->retrieve("a");
+  const Tensor t(L"t", bra{y}, ket{L"i_1"});
+  const Tensor t_null(L"t", bra{L"a_7"}, ket{L"i_1"});
+
+  // a mode in a basis instance appends the instance to its block tag; the
+  // generic block is named as before
+  SECTION("ITF") {
+    ItfContext ctx;
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    const ItfGenerator<ItfContext> generator;
+    CHECK_THAT(generator.represent(t, ctx), ContainsSubstring("t:v1o["));
+    CHECK_THAT(generator.represent(t_null, ctx), ContainsSubstring("t:vo["));
+  }
+  SECTION("Julia") {
+    JuliaTensorOperationsGeneratorContext ctx;
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    const JuliaTensorOperationsGenerator<> generator;
+    CHECK_THAT(generator.represent(t, ctx),
+               ContainsSubstring("t_v1o[") && ContainsSubstring("a_7_1"));
+    CHECK_THAT(generator.represent(t_null, ctx),
+               ContainsSubstring("t_vo[") && ContainsSubstring("a_7"));
+  }
+  SECTION("Julia TensorKit") {
+    // the domain shows the extent the tensor is allocated with
+    JuliaTensorKitGeneratorContext ctx;
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    JuliaTensorKitGenerator<> generator;
+    generator.create(t, true, ctx);
+    const auto code = generator.get_generated_code();
+    const auto nv1 = ctx.get_dim(virt) + "_1";
+    CHECK_THAT(code, ContainsSubstring("zeros(Float64, " + nv1) &&
+                         ContainsSubstring("ℝ^" + nv1));
+  }
+  SECTION("text") {
+    const TextGenerator<TextGeneratorContext> generator;
+    CHECK(generator.represent(t, TextGeneratorContext{}) == "t[a_7<;1>, i_1]");
+    CHECK(generator.represent(t_null, TextGeneratorContext{}) == "t[a_7, i_1]");
+  }
+  // the einsum exporters name blocks and shapes per mode, too
+  SECTION("Python einsum") {
+    auto exported = [&](auto generator, auto ctx) {
+      ctx.set_shape(occ, "nocc");
+      ctx.set_shape(virt, "nvirt");
+      ctx.set_tag(occ, "o");
+      ctx.set_tag(virt, "v");
+      // the result is in basis 1, so its allocation shows the basis' extent
+      ResultExpr result(Tensor(L"R", bra{y}, ket{L"i_1"}),
+                        ex<Tensor>(L"f", bra{y}, ket{L"a_1"}) *
+                            ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}));
+      export_expression(to_export_tree(result), generator, ctx);
+      return generator.get_generated_code();
+    };
+    for (auto const &code :
+         {exported(NumPyEinsumGenerator{}, NumPyEinsumGeneratorContext{}),
+          exported(PyTorchEinsumGenerator{}, PyTorchEinsumGeneratorContext{})})
+      CHECK_THAT(code, ContainsSubstring("f_v1v") &&
+                           ContainsSubstring("t_vo") &&
+                           ContainsSubstring("R_v1o") &&
+                           ContainsSubstring("(nvirt_1, nocc)"));
+  }
+  // a tag ending in a digit or `_`, or a dimension name ending in `_`, would
+  // make an appended instance ambiguous (v1 + "" vs v + 1, nvirt_ + _1 vs
+  // nvirt + _ + 1), so an instance-bearing mode in such a space is refused
+  SECTION("ambiguous space tag") {
+    const Index z = Index(L"a_7").replace_basis_instance(1);
+    const Tensor tz(L"t", bra{z}, ket{L"i_1"});
+    const Tensor t0(L"t", bra{L"a_7"}, ket{L"i_1"});
+    ItfContext itf_ctx;
+    itf_ctx.set_tag(occ, "o");
+    itf_ctx.set_tag(virt, "v1");
+    const ItfGenerator<ItfContext> itf;
+    CHECK_NOTHROW(itf.represent(t0, itf_ctx));
+    CHECK_THROWS_AS(itf.represent(tz, itf_ctx), Exception);
+    itf_ctx.set_tag(virt, "v_");
+    CHECK_THROWS_AS(itf.represent(tz, itf_ctx), Exception);
+    JuliaTensorOperationsGeneratorContext julia_ctx;
+    julia_ctx.set_tag(occ, "o");
+    julia_ctx.set_tag(virt, "v");
+    julia_ctx.set_dim(occ, "nocc");
+    julia_ctx.set_dim(virt, "nvirt_");
+    JuliaTensorOperationsGenerator<JuliaTensorOperationsGeneratorContext> julia;
+    CHECK_NOTHROW(julia.create(t0, true, julia_ctx));
+    CHECK_THROWS_AS(julia.create(tz, true, julia_ctx), Exception);
+    NumPyEinsumGeneratorContext py_ctx;
+    py_ctx.set_shape(occ, "nocc");
+    py_ctx.set_shape(virt, "nvirt_");
+    CHECK_NOTHROW(py_ctx.get_shape_tuple(t0));
+    CHECK_THROWS_AS(py_ctx.get_shape_tuple(tz), Exception);
+  }
+
+  // a negative instance is spelled with an `_` in place of the minus sign,
+  // which no identifier may contain; a letter would read as the tag of a space
+  SECTION("negative instance") {
+    const Index z = Index(L"a_7").replace_basis_instance(-12);
+    const Tensor tz(L"t", bra{z}, ket{L"i_1"});
+    ItfContext itf_ctx;
+    itf_ctx.set_tag(occ, "o");
+    itf_ctx.set_tag(virt, "v");
+    CHECK_THAT(ItfGenerator<ItfContext>{}.represent(tz, itf_ctx),
+               ContainsSubstring("t:v_12o["));
+    // with a space tagged `m`, a letter for the sign would make t{a<;-1>;i}
+    // and t{a,u<;1>;i} one block
+    const IndexSpace u = registry->retrieve("u");
+    itf_ctx.set_tag(u, "m");
+    const Tensor t_neg(L"t", bra{Index(L"a_1").replace_basis_instance(-1)},
+                       ket{L"i_1"});
+    const Tensor t_m(
+        L"t", bra{Index(L"a_1"), Index(L"u_1").replace_basis_instance(1)},
+        ket{L"i_1"});
+    const ItfGenerator<ItfContext> itf;
+    CHECK(itf.get_name(t_neg, itf_ctx) != itf.get_name(t_m, itf_ctx));
+    JuliaTensorOperationsGeneratorContext julia_ctx;
+    julia_ctx.set_tag(occ, "o");
+    julia_ctx.set_tag(virt, "v");
+    CHECK_THAT(JuliaTensorOperationsGenerator<>{}.represent(tz, julia_ctx),
+               ContainsSubstring("t_v_12o[") && ContainsSubstring("a_7__12"));
+    NumPyEinsumGeneratorContext py_ctx;
+    py_ctx.set_shape(occ, "nocc");
+    py_ctx.set_shape(virt, "nvirt");
+    py_ctx.set_tag(occ, "o");
+    py_ctx.set_tag(virt, "v");
+    NumPyEinsumGenerator py;
+    ResultExpr result(Tensor(L"R", bra{z}, ket{L"i_1"}),
+                      ex<Tensor>(L"f", bra{z}, ket{L"a_1"}) *
+                          ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}));
+    export_expression(to_export_tree(result), py, py_ctx);
+    CHECK_THAT(py.get_generated_code(),
+               ContainsSubstring("R_v_12o") && ContainsSubstring("f_v_12v"));
+    CHECK_THAT(py.get_generated_code(), !ContainsSubstring("-12"));
+    CHECK(py_ctx.get_shape_tuple(tz) == "(nvirt__12, nocc)");
   }
 }

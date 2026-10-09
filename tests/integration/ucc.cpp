@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
   const std::size_t RANK = argc > 3 ? string_to<std::size_t>(argv[3]) : 2;
   const bool print = argc > 4 && std::string(argv[4]) == "print";
 
-  set_default_context({.index_space_registry_shared_ptr = make_sr_spaces(),
+  set_default_context({.index_basis_registry_shared_ptr = make_sr_spaces(),
                        .vacuum = Vacuum::SingleProduct,
                        .metric = IndexSpaceMetric::Unit,
                        .spbasis = SPBasis::Spinor,

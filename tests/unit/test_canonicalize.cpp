@@ -258,7 +258,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
       // legitimate for Symm-braket g), which the default-context Conjugate
       // policy would reject.
       auto srcc_resetter = set_scoped_default_context(
-          Context({.index_space_registry_shared_ptr = sr_reg,
+          Context({.index_basis_registry_shared_ptr = sr_reg,
                    .vacuum = Vacuum::SingleProduct,
                    .spbasis = SPBasis::Spinfree})
               .set(AssertStrictBraKetSymmetry::No));
@@ -383,7 +383,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
       for (auto const& k : keys)
         if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
       auto srcc_resetter = set_scoped_default_context(
-          Context({.index_space_registry_shared_ptr = sr_reg,
+          Context({.index_basis_registry_shared_ptr = sr_reg,
                    .vacuum = Vacuum::SingleProduct,
                    .spbasis = SPBasis::Spinfree})
               .set(AssertStrictBraKetSymmetry::No));
@@ -1120,7 +1120,7 @@ TEST_CASE("current_contexts_version", "[algorithms]") {
   const auto bose_einstein = get_default_context(Statistics::BoseEinstein);
   // a copy given its own registry, which is a configuration of its own
   auto changed = bose_einstein;
-  changed.set(IndexSpaceRegistry(*bose_einstein.index_space_registry()));
+  changed.set(IndexBasisRegistry(*bose_einstein.index_basis_registry()));
   set_default_context(changed, Statistics::BoseEinstein);
   CHECK(current_contexts_version() != version);
   set_default_context(bose_einstein, Statistics::BoseEinstein);

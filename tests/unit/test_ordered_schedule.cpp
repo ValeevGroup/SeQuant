@@ -823,9 +823,9 @@ TEST_CASE(
     "correct nesting depth (Task 3, DAG-scope runtime slicing)",
     "[ordered-schedule][sp2-noninner]") {
   auto ctx = sequant::get_default_context_snapshot();
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_df_spaces(isr);  // Κ (DF aux)
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -1039,9 +1039,9 @@ struct OrderedSchedFixture {
 
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
@@ -1076,7 +1076,7 @@ struct OrderedSchedFixture {
     return ix.space().base_key() == L"\x39a";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    auto const reg = sequant::get_default_context().index_space_registry();
+    auto const reg = sequant::get_default_context().index_basis_registry();
     return reg && ix.space() && reg->is_pure_occupied(ix.space());
   };
   // MATCH MPQC make_csv_batch_policy with occ_target>0: occ batching turns on
@@ -1185,9 +1185,9 @@ TEST_CASE(
     "build_ordered_schedule persists operand_vids (value/occurrence DAG edges)",
     "[ordered-schedule][value-id]") {
   auto ctx = sequant::get_default_context_snapshot();
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));

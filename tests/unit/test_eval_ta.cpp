@@ -268,7 +268,7 @@ class rand_tensor_yield {
 
   template <typename ToTArray = array_type>
   sequant::BackendArrayOps array_ops() const {
-    auto isr = sequant::get_default_context().index_space_registry();
+    auto isr = sequant::get_default_context().index_basis_registry();
     std::map<std::wstring, TA::TiledRange1> m;
     auto const bk = [&](wchar_t const* l) {
       return std::wstring(isr->retrieve(l).base_key());
@@ -444,7 +444,7 @@ class rand_tensor_yield {
     } nested{sl.outer, sl.inner};
 
     ResultPtr result{nullptr};
-    auto isr = get_default_context().index_space_registry();
+    auto isr = get_default_context().index_basis_registry();
 
     auto make_extents = [this, &isr](auto&& ixs) -> container::svector<size_t> {
       return ixs | transform([this, &isr](auto const& ix) -> size_t {
@@ -2196,7 +2196,7 @@ TEST_CASE("eval_batched_custom_evaluator_tot", "[eval]") {
   auto const ref = evaluate(node, target, yield)->get<ArrayToT>();
 
   auto const occ =
-      sequant::get_default_context().index_space_registry()->retrieve(L"i");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"i");
   auto accept_occ = [occ](sequant::Index const& ix) {
     return ix.space() == occ;
   };
@@ -2418,7 +2418,7 @@ TEST_CASE(
   rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
   yield_.set_max_tile(2);
   auto const occ =
-      sequant::get_default_context().index_space_registry()->retrieve(L"i");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"i");
 
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
       L"g{i_3;i_1} * t{a_1,a_2;i_3,i_2}");
@@ -2539,7 +2539,7 @@ TEST_CASE(
   rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
   yield_.set_max_tile(2);
   auto const occ =
-      sequant::get_default_context().index_space_registry()->retrieve(L"i");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"i");
 
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
       L"(g{i_3;i_1;x_1} * h{a_3;a_1;x_1}) * t{a_3,a_2;i_3,i_2}");
@@ -2572,7 +2572,7 @@ TEST_CASE(
                                           {i2, BatchModeType::External},
                                           {i3, BatchModeType::Contracted}});
   auto const aux =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
   forest[0].visit([&](node_t const& cn) {
     if (&cn == &forest[0]) return;
     auto& n = const_cast<node_t&>(cn);
@@ -2683,7 +2683,7 @@ TEST_CASE(
   rand_tensor_yield<double, TA::SparsePolicy> yield_{world, nocc, 6, naux};
   yield_.set_max_tile(tile);
   auto const occ =
-      sequant::get_default_context().index_space_registry()->retrieve(L"i");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"i");
 
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
       L"(g{i_3;i_1;x_1} * h{a_3;a_1;x_1}) * t{a_3,a_2;i_3,i_2}");
@@ -2716,7 +2716,7 @@ TEST_CASE(
                                           {i2, BatchModeType::External},
                                           {i3, BatchModeType::Contracted}});
   auto const aux =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
   forest[0].visit([&](node_t const& cn) {
     if (&cn == &forest[0]) return;
     auto& n = const_cast<node_t&>(cn);
@@ -2887,7 +2887,7 @@ TEST_CASE(
   // nocc 4 tiled by 2 -> two occ batches; aux 8 tiled by 4 -> two aux batches.
   rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 8};
   yield_.set_max_tile(2);
-  auto const isr = sequant::get_default_context().index_space_registry();
+  auto const isr = sequant::get_default_context().index_basis_registry();
   auto const occ = isr->retrieve(L"i");
   auto const aux = isr->retrieve(L"x");
 
@@ -3062,7 +3062,7 @@ TEST_CASE(
   yield_.set_max_tile(4);
 
   auto const aux =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
 
   // Two summable roots sharing S = g*h (carries aux x_1, free at the child,
   // contracted at each root -- an AccumulateSum output of the x_1 block):
@@ -3448,7 +3448,7 @@ TEST_CASE(
   rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
   yield_.set_max_tile(4);
   auto const aux =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
 
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
       L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (t{a_3;i_2;x_1} * q{i_4;a_3})");
@@ -3574,7 +3574,7 @@ TEST_CASE(
   yield_.set_max_tile(4);
 
   auto const occ =
-      sequant::get_default_context().index_space_registry()->retrieve(L"i");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"i");
 
   // S = g*h carries i_1 (free, LoopLocal under the loop F1/F2 realize) and a
   // virtual spectator a_3 (contracts a_2). T1/T2 are ALL-virtual (no occ
@@ -3876,7 +3876,7 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
   };
   // batch only over auxiliary indices (as a DF-batched application would)
   auto const aux_space =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -3952,7 +3952,7 @@ TEST_CASE("eval_batched_custom_evaluator nests inner mode", "[eval]") {
   auto node = eval_node(expr);  // mutable: batch modes are annotated below
 
   auto const aux_space =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -4056,7 +4056,7 @@ TEST_CASE("eval_batched_custom_evaluator nests two modes on one node",
   auto node = eval_node(expr);  // mutable: both batch modes annotated below
 
   auto const aux_space =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -4179,7 +4179,7 @@ TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
   auto node = eval_node(expr);
 
   auto const aux_space =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -4307,7 +4307,7 @@ TEST_CASE(
   auto node = eval_node(expr);
 
   auto const aux_space =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -4456,7 +4456,7 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
   std::string const target = node->annot();
 
   auto const aux_space =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -4592,7 +4592,7 @@ TEST_CASE(
   std::string const target = node->annot();
 
   auto const aux_space =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -4742,7 +4742,7 @@ TEST_CASE("batched cached intermediate is sliced to the batch block on use",
   std::string const target = node->annot();
 
   auto const aux_space =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
   // The external mode x_1 (a plain outer aux mode, no protos).
   sequant::Index mode;
   for (auto const& ix : node->canon_indices())
@@ -4884,7 +4884,7 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
 
   // the External mode carried by P (a plain aux outer mode)
   auto const aux_space =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
   Index x_ext;
   for (auto const& ix : P->canon_indices())
     if (ix.space() == aux_space && !ix.has_proto_indices()) {
@@ -5073,7 +5073,7 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
   std::string const target = node->annot();
 
   auto const occ =
-      sequant::get_default_context().index_space_registry()->retrieve(L"i");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"i");
   auto accept_occ = [occ](Index const& ix) {
     return ix.space() == occ && !ix.has_proto_indices();
   };
@@ -5220,7 +5220,7 @@ TEST_CASE("batched_eval_external_hadamard", "[eval][batched-external]") {
   std::string const target = node->annot();
 
   auto const occ =
-      sequant::get_default_context().index_space_registry()->retrieve(L"i");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"i");
   auto accept_occ = [occ](sequant::Index const& ix) {
     return ix.space() == occ;
   };
@@ -5331,7 +5331,7 @@ TEST_CASE("batched_eval_external_nested_contracted",
   std::string const target = node->annot();
 
   auto const aux_space =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -5468,7 +5468,7 @@ TEST_CASE(
   auto node = eval_node(expr);
 
   auto const aux_space =
-      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+      sequant::get_default_context().index_basis_registry()->retrieve(L"x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -6253,7 +6253,7 @@ TEST_CASE("dp_external_placement_correctness",
 
   auto& world = TA::get_default_world();
 
-  auto isr = get_default_context().index_space_registry();
+  auto isr = get_default_context().index_basis_registry();
   auto occ = isr->retrieve(L"i");
   auto virt = isr->retrieve(L"a");
   auto aux = isr->retrieve(L"x");
