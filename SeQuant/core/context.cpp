@@ -278,6 +278,13 @@ std::shared_ptr<const IndexSpaceRegistry> get_default_index_space_registry(
 #endif
 }
 
+IndexBasis default_registry_resolved(const IndexBasis& basis) {
+  if (!basis.has_basis_instance()) return basis;
+  if (auto registry = get_default_index_space_registry())
+    return registry->resolve(basis);
+  return basis;
+}
+
 void set_default_context(Context ctx, Statistics s) {
   // versioned before it is shared, so that no two threads compute its version
   ctx.version();

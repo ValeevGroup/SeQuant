@@ -145,7 +145,8 @@ ExprPtr projection_move_legs(ExprPtr const& node, projection_scope& scope) {
                        !scope.moved_here.contains(x);
     const Index replacement =
         reuse ? it->second
-              : Index::make_tmp_index(IndexBasis{x.space(), target_instance},
+              : Index::make_tmp_index(default_registry_resolved(IndexBasis{
+                                          x.space(), target_instance}),
                                       target_pair,
                                       own_pair || x.symmetric_proto_indices());
     if (it == scope.moved.end()) scope.moved.emplace(x, replacement);

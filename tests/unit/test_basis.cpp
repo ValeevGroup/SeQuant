@@ -626,9 +626,9 @@ TEST_CASE("index-basis-named-at-minting", "[elements][index][basis]") {
   const Index from_basis = factory.make(pao);
   const Index from_index = factory.make(Index(pao, 3));
   const Index tmp = Index::make_tmp_index(pao);
-  // from the bare instance number: the name is the registry's at minting
-  const Index from_number =
-      Index::make_tmp_index(IndexBasis{uocc, *pao.basis_instance()});
+  // from the bare instance number, resolved through the registry
+  const Index from_number = Index::make_tmp_index(
+      default_registry_resolved(IndexBasis{uocc, *pao.basis_instance()}));
 
   // renamed by the canonicalizer: the PAO Fock coupling of a CSV R2 term,
   // C{a<i_1,i_2;0>;μ̃} f{μ̃;μ̃} C{μ̃;c<i_1,i_2;0>} t{c,b;i_1,i_2}, with the μ̃

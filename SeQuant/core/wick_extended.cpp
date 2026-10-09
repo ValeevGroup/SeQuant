@@ -51,7 +51,7 @@ IndexFactory fresh_index_factory(const Expr &expr) {
 Index make_in_basis_of(IndexFactory &idxfac, const IndexSpace &sp,
                        const Index &idx) {
   return idxfac.make(Index(
-      Index::registry_resolved(IndexBasis(sp, idx.basis().basis_instance())),
+      default_registry_resolved(IndexBasis(sp, idx.basis().basis_instance())),
       idx.proto_indices(), idx.symmetric_proto_indices()));
 }
 

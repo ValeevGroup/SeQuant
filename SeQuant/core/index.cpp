@@ -76,11 +76,4 @@ Index::obtain_default_index_registry() {
   return get_default_context().index_space_registry();
 }
 
-IndexBasis Index::registry_resolved(const IndexBasis& basis) {
-  if (!basis.has_basis_instance()) return basis;
-  if (auto registry = get_default_index_space_registry())
-    return registry->resolve(basis);
-  return basis;
-}
-
 }  // namespace sequant

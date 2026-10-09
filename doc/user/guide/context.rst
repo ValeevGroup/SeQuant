@@ -139,7 +139,8 @@ can therefore carry an optional *basis instance*, an opaque integer written afte
 (``a_1<;1>`` without proto indices), unless the instance is registered under a name, which is then printed in place of
 the space's label (:doc:`../getting_started/index_spaces`); an index without one is in its space's own basis, as before.
 The name travels with the basis (:func:`sequant::IndexBasis::name`): an index parsed from it or minted by SeQuant carries
-it, an index given the bare instance number with ``Index::replace_basis_instance`` does not, and the two compare equal.
+it; an index built from a space and a bare instance number does not, unless that basis is first looked up with
+:func:`sequant::default_registry_resolved`, and the two compare equal.
 :func:`sequant::mbpt::add_pao_basis` registers the PAOs this way, as the named instance ``μ̃`` of the particle space
 (an index in it prints as ``μ̃_1``), an alternative to the separate PAO space of :func:`sequant::mbpt::add_pao_spaces`.
 Instances are granted per operator label and leg space with :func:`sequant::mbpt::OpRegistry::grant_basis`,

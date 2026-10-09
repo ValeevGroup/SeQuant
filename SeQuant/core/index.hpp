@@ -504,13 +504,11 @@ class Index : public Taggable {
   /// Each call increments the current tmp counter (see next_tmp_index() ) . To
   /// make neater temporary indices unique in a given scope (e.g. a single term
   /// in an expression) use IndexFactory.
-  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis (a
-  /// named basis instance is taken as registered, see registry_resolved())
+  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis
   /// @return a unique temporary index in @c space_or_basis
   template <space_or_basis SpaceOrBasis = IndexSpace>
   static Index make_tmp_index(const SpaceOrBasis &space_or_basis) {
-    Index result(registry_resolved_if_basis(space_or_basis), next_tmp_index(),
-                 IndexFactoryTag{});
+    Index result(space_or_basis, next_tmp_index(), IndexFactoryTag{});
     if (result.basis_.has_basis_instance()) (void)result.label();
     return result;
   }
@@ -533,8 +531,7 @@ class Index : public Taggable {
   static Index make_tmp_index(const SpaceOrBasis &space_or_basis,
                               IndexRange &&proto_indices,
                               bool symmetric_proto_indices = true) {
-    Index result(registry_resolved_if_basis(space_or_basis), next_tmp_index(),
-                 IndexFactoryTag{});
+    Index result(space_or_basis, next_tmp_index(), IndexFactoryTag{});
     if constexpr (std::is_convertible_v<std::remove_reference_t<IndexRange>,
                                         Index::index_vector>) {
       result.proto_indices_ = std::forward<IndexRange>(proto_indices);
@@ -767,11 +764,6 @@ class Index : public Taggable {
 
   /// @return the IndexBasis object (the space plus the basis instance, if any)
   const IndexBasis &basis() const noexcept { return basis_; }
-
-  /// @return the entry @p basis is registered as in the effective default
-  /// registry (see IndexBasisRegistry::resolve()), which carries a named
-  /// basis instance's name, approximate size and field, else @p basis
-  static IndexBasis registry_resolved(const IndexBasis &basis);
 
   /// @return a copy of this Index (same label, proto indices and their
   /// symmetry) with basis instance @p basis_instance, which carries no name
@@ -1123,17 +1115,6 @@ class Index : public Taggable {
   static std::shared_ptr<const IndexSpaceRegistry>
   obtain_default_index_registry();
 
-  /// @return @p space_or_basis, resolved through registry_resolved() if it is
-  /// an IndexBasis
-  template <space_or_basis SpaceOrBasis>
-  static SpaceOrBasis registry_resolved_if_basis(
-      const SpaceOrBasis &space_or_basis) {
-    if constexpr (std::same_as<SpaceOrBasis, IndexBasis>)
-      return registry_resolved(space_or_basis);
-    else
-      return space_or_basis;
-  }
-
 };  // class Index
 
 using IndexSet = container::set<Index, Index::FullLabelCompare>;
@@ -1204,8 +1185,7 @@ class IndexFactory {
   /// resulting index = basis().base_key() + '_' + temporary
   /// counter.
   /// Each call increments the current tmp counter (see next_tmp_index() ) .
-  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis (a
-  /// named basis instance is taken as registered, see registry_resolved())
+  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis
   /// @return a unique temporary index in @c space_or_basis
   template <space_or_basis SpaceOrBasis = IndexSpace>
   Index make(const SpaceOrBasis &space_or_basis) {

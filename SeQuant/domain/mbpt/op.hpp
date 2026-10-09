@@ -704,8 +704,8 @@ class OpMaker {
     auto make_idx_vector = [&grant](const auto& spaces) {
       return spaces |
              ranges::views::transform([&grant](const IndexSpace& space) {
-               return grant ? Index::make_tmp_index(
-                                  IndexBasis{space, grant(space)})
+               return grant ? Index::make_tmp_index(default_registry_resolved(
+                                  IndexBasis{space, grant(space)}))
                             : Index::make_tmp_index(space);
              }) |
              ranges::to<container::svector<Index>>();
@@ -716,7 +716,8 @@ class OpMaker {
              ranges::views::transform(
                  [&grant, &protoidxs](const IndexSpace& space) {
                    return grant ? Index::make_tmp_index(
-                                      IndexBasis{space, grant(space)},
+                                      default_registry_resolved(
+                                          IndexBasis{space, grant(space)}),
                                       protoidxs, true)
                                 : Index::make_tmp_index(space, protoidxs, true);
                  }) |
