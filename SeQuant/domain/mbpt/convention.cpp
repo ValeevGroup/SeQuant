@@ -81,45 +81,51 @@ void add_fermi_spin(IndexBasisRegistry& isr) {
   isr = std::move(result);
 }
 
-void add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
-                   IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs) {
+void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
+                  IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs,
+                  IndexBasis::instance_type instance) {
   // matches the MPQC layout, see spindex.h
   // this will not work for MR
-  // AO spaces are physical (spin-specific AOs can support particle states of a
-  // given spin), so they carry the convention's spin-agnostic quantum numbers
-  // (spin_any) in the physical (spin) sector alongside the LCAOQNS::ao trait
-  // bit; leaving the spin bits empty would make physical_particle_attributes()
-  // report no spin and break occupancy lookups (e.g. is_pure_occupied) that key
-  // on spin. spin_any matches how make_*_spaces sets the base spaces' spin.
-  auto const ao_qns = spin_any | LCAOQNS::ao;
-  auto obs_lcao = isr->retrieve(vbs ? L"m" : L"p");
-  isr->add(IndexSpace{L"μ", obs_lcao.type(), ao_qns});  // OBS AO
+  // the AOs of a basis set span an orbital space; the union of two AO bases
+  // spans the union of their spaces, which must be registered
+  auto add = [&](std::wstring_view label, const IndexSpace& space) {
+    isr->add(label, IndexBasis{space, instance}, IndexSpaceMetric::General);
+  };
+  auto union_space = [&](std::wstring_view label, const IndexSpace& s1,
+                         const IndexSpace& s2) -> const IndexSpace& {
+    const auto* space = isr->retrieve_ptr(s1.type() | s2.type(), spin_any);
+    if (!space)
+      throw Exception("add_ao_basis: the AO basis '" + toUtf8(label) +
+                      "' spans the union of the spaces " +
+                      toUtf8(s1.base_key()) + " and " + toUtf8(s2.base_key()) +
+                      ", which is not registered");
+    return *space;
+  };
+  const auto& obs = isr->retrieve(vbs ? L"m" : L"p");
+  add(L"μ", obs);  // OBS AO
   if (vbs) {
-    auto vbs_lcao = isr->retrieve(L"e");
-    isr->add(IndexSpace{L"Α", vbs_lcao.type(), ao_qns})  // VBS AO
-        .add_union(L"Γ", {L"μ", L"Α"});                  // VBS+ = OBS + VBS
+    const auto& vbs_space = isr->retrieve(L"e");
+    add(L"Α", vbs_space);                          // VBS AO
+    add(L"Γ", union_space(L"Γ", obs, vbs_space));  // VBS+ = OBS + VBS
   }
   if (abs) {
-    auto abs_lcao = isr->retrieve(L"α'");
-    isr->add(
-           IndexSpace{L"σ", abs_lcao.type(), ao_qns})  // Abs AO in F12 methods
-        .add_union(L"ρ", {L"μ", L"σ"});
-    if (vbs)                               // ABS+ = OBS + ABS
-      isr->add_union(L"Ρ", {L"Γ", L"σ"});  // VABS+ = VBS+ + ABS
+    const auto& abs_space = isr->retrieve(L"α'");
+    add(L"σ", abs_space);                          // ABS AO in F12 methods
+    add(L"ρ", union_space(L"ρ", obs, abs_space));  // ABS+ = OBS + ABS
+    if (vbs)                                       // VABS+ = VBS+ + ABS
+      add(L"Ρ", union_space(L"Ρ", union_space(L"Γ", obs, isr->retrieve(L"e")),
+                            abs_space));
   }
+}
+
+void add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
+                   IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs) {
+  add_ao_basis(isr, spin_any, vbs, abs);
 }
 
 void add_pao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
                     IndexSpace::QuantumNumbers spin_any) {
-  auto uocc_space = isr->particle_space(/* nulltype_ok = */ false);
-  // PAO states are physical (spin-independent, but still particle states), so
-  // they carry the convention's spin-agnostic quantum numbers (spin_any) in the
-  // physical (spin) sector alongside the LCAOQNS::pao trait bit; leaving the
-  // spin bits empty would make physical_particle_attributes() report no spin
-  // and break occupancy lookups (e.g. is_pure_occupied) that key on spin.
-  // spin_any matches how make_*_spaces sets the base spaces' spin.
-  isr->add(IndexSpace{L"μ̃", uocc_space, spin_any | LCAOQNS::pao})  // OBS PAO
-      ;
+  add_pao_basis(isr, spin_any);
 }
 
 void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& isr,

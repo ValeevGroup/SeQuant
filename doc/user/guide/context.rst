@@ -124,8 +124,8 @@ The other configurable field is ``CSV`` (default ``CSV::No``): when set to ``CSV
 :class:`sequant::mbpt::OpMaker` (e.g. cluster amplitudes ``t``) use cluster-specific virtuals — virtual-space indices that carry the
 operator's occupied indices as proto-indices — instead of plain, independent virtual indices. :func:`sequant::mbpt::csv_transform`
 expands such CSV-dependent tensors into an explicit basis (standard unoccupieds, PAOs, or AOs) when needed downstream; the
-basis is given as an :class:`sequant::IndexSpace`, or as an :class:`sequant::IndexBasis` registered under a name, whose
-registry entry says whether it is orthonormal (:func:`sequant::IndexBasis::metric`).
+basis is given as an :class:`sequant::IndexSpace` (its own, orthonormal basis), or as an :class:`sequant::IndexBasis`
+registered under a name, whose registry entry says whether it is orthonormal (:func:`sequant::IndexBasis::metric`).
 
 .. literalinclude:: /examples/user/context.cpp
    :language: cpp
@@ -144,7 +144,8 @@ registry. An index built from an :class:`sequant::IndexBasis` with a bare instan
 own, which is not the named one (the two indices are different), unless that basis is first looked up with
 :func:`sequant::default_registry_resolved`.
 :func:`sequant::mbpt::add_pao_basis` registers the PAOs this way, as the named instance ``μ̃`` of the particle space
-(an index in it prints as ``μ̃_1``), an alternative to the separate PAO space of :func:`sequant::mbpt::add_pao_spaces`.
+(an index in it prints as ``μ̃_1``) with a general metric, and :func:`sequant::mbpt::add_ao_basis` the AOs, as named
+instances of the orbital spaces they span.
 Instances are granted per operator label and leg space with :func:`sequant::mbpt::OpRegistry::grant_basis`,
 :class:`sequant::mbpt::OpMaker` mints a granted operator's legs with them, and the projectors of the :doc:`CC <cc>`
 equations carry the grants of the amplitude being solved for. Integrals are never granted: in Wick's theorem their legs

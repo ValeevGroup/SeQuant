@@ -937,25 +937,4 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
   SECTION("an unnamed instance basis as target throws") {
     CHECK_THROWS_AS(mbpt::csv_transform(f, IndexBasis{uocc, 5}), Exception);
   }
-  SECTION(
-      "the IndexSpace overload forwards with orthonormality read from the qns "
-      "bits") {
-    auto isr2 =
-        mbpt::make_min_sr_spaces();  // a fresh registry: μ̃ is a space here
-    mbpt::add_pao_spaces(isr2, IndexSpace::QuantumNumbers{mbpt::Spin::any});
-    const IndexSpace occ2 = isr2->retrieve(L"i"), uocc2 = isr2->retrieve(L"a"),
-                     mu2 = isr2->retrieve(L"μ̃");
-    auto ctx2 = set_scoped_default_context(
-        Context({.index_basis_registry_shared_ptr = std::move(isr2),
-                 .vacuum = Vacuum::SingleProduct}));
-    const Index p(occ2, 1), q(occ2, 2);
-    const Index xb = Index(uocc2, 1, {p, q}).replace_basis_instance(0);
-    const Index xk = Index(uocc2, 3, {p}).replace_basis_instance(0);
-    // PAO space: not orthonormal, the overlap stays (C s C); unoccupied MOs:
-    // the shortcut (C C)
-    const ExprPtr pao_out = mbpt::csv_transform(make_overlap(xb, xk), mu2);
-    const ExprPtr mo_out = mbpt::csv_transform(make_overlap(xb, xk), uocc2);
-    CHECK(pao_out->as<Product>().factors().size() == 3);
-    CHECK(mo_out->as<Product>().factors().size() == 2);
-  }
 }

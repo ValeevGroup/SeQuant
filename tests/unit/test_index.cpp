@@ -436,12 +436,11 @@ TEST_CASE("index", "[elements][index]") {
 
     IndexBasisRegistry registry = *get_default_context().index_basis_registry();
     if (!registry.contains(L"μ̃")) {
-      auto uocc_space = registry.particle_space(/* nulltype_ok = */ false);
-      registry.add(IndexSpace{L"μ̃", uocc_space, mbpt::LCAOQNS::pao})  // OBS PAO
-          ;
-      if (!registry.contains(L"f̌"))
-        registry.add(IndexSpace{L"f̌", registry.retrieve(L"μ̃").type(),
-                                mbpt::LCAOQNS::ao});
+      // named bases of the particle space, with diacritics in their labels
+      const auto& uocc = registry.retrieve(
+          registry.particle_space(/* nulltype_ok = */ false), mbpt::Spin::any);
+      registry.add(L"μ̃", IndexBasis{uocc, 1});
+      if (!registry.contains(L"f̌")) registry.add(L"f̌", IndexBasis{uocc, 2});
     }
     const auto ctx_resetter = set_scoped_default_context(
         get_default_context_snapshot().set(std::move(registry)));

@@ -367,7 +367,7 @@ std::optional<std::size_t> orderedsched_index_of_child_block(
     ScopeBlock const& block, std::wstring const& axis_key) {
   for (std::size_t i = 0; i < block.steps.size(); ++i) {
     if (auto const* child = std::get_if<ScopeBlock>(&block.steps[i].value))
-      if (child->axis.space().base_key() == axis_key) return i;
+      if (child->axis.basis().base_key() == axis_key) return i;
   }
   return std::nullopt;
 }
@@ -468,7 +468,7 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
 
   sequant::eval::dryrun::SizeRegime regime;
@@ -519,7 +519,7 @@ TEST_CASE(
   REQUIRE(i_child_idx.has_value());
   ScopeBlock const& i_block =
       std::get<ScopeBlock>(sched.root.steps[*i_child_idx].value);
-  CHECK(i_block.axis.space().base_key() == L"i");
+  CHECK(i_block.axis.basis().base_key() == L"i");
 
   auto const p_out_it =
       std::find_if(i_block.outputs.begin(), i_block.outputs.end(),
@@ -608,7 +608,7 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
 
   sequant::eval::dryrun::SizeRegime regime;
@@ -715,7 +715,7 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
 
   REQUIRE_THROWS_WITH(
@@ -741,10 +741,10 @@ void orderedsched_stamp_2axis(sequant::EvalNode<sequant::EvalExpr>& n) {
   using sequant::BatchModeType;
   sequant::container::svector<std::pair<Index, BatchModeType>> stamps;
   for (auto const& ix : n->canon_indices())
-    if (ix.space().base_key() == L"i")
+    if (ix.basis().base_key() == L"i")
       stamps.push_back({ix, BatchModeType::External});
   for (auto const& ix : sequant::contracted_indices(n))
-    if (ix.space().base_key() == L"Κ")
+    if (ix.basis().base_key() == L"Κ")
       stamps.push_back({ix, BatchModeType::Contracted});
   if (!stamps.empty()) n->set_node_slice_mask(stamps);
   // Loop-OPENS (peak_profile builds ectx from these): the aux (Κ) Contracted
@@ -774,7 +774,7 @@ void orderedsched_stamp_all(sequant::EvalNode<sequant::EvalExpr>& n) {
   sequant::container::svector<std::pair<Index, BatchModeType>> opens(
       n->batch_loops_opened_here().begin(), n->batch_loops_opened_here().end());
   for (auto const& ix : n->canon_indices())
-    if (ix.space().base_key() == L"i")
+    if (ix.basis().base_key() == L"i")
       opens.push_back({ix, BatchModeType::External});
   n->set_batch_loops_opened_here(opens);
 }
@@ -810,7 +810,7 @@ void orderedsched_check_levels(
   for (auto const& step : steps) {
     auto const* block = std::get_if<ScopeBlock>(&step.value);
     if (!block) continue;
-    CHECK(block->level.space == block->axis.space().base_key());
+    CHECK(block->level.space == block->axis.basis().base_key());
     CHECK(block->level.latitude_ordinal == block->latitude_ordinal);
     CHECK(block->level.depth == depth);
     orderedsched_check_levels(block->steps, depth + 1);
@@ -834,10 +834,10 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.basis().base_key() == L"Κ";
   };
   policy.is_batchable_external_index = [](Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
   policy.batch_spectator_indices = true;
 
@@ -1042,7 +1042,7 @@ struct OrderedSchedFixture {
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
@@ -1073,7 +1073,7 @@ struct OrderedSchedFixture {
   // AUX+OCC: Kappa batchable-contracted (aux), i batchable-EXTERNAL (occ).
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"\x39a";
+    return ix.basis().base_key() == L"\x39a";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
     auto const reg = sequant::get_default_context().index_basis_registry();
@@ -1084,7 +1084,7 @@ struct OrderedSchedFixture {
   // (which changes the schedule structure -- occ-outer hoisting).
   policy.batch_spectator_indices = true;
   policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"\x39a" ? 256 : 16;
+    return ix.basis().base_key() == L"\x39a" ? 256 : 16;
   };
   policy.is_volatile_leaf = [](sequant::Tensor const& t) {
     return t.label() == L"t";
@@ -1128,7 +1128,7 @@ struct OrderedSchedFixture {
   REQUIRE(!forest.empty());
 
   auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"\x39a" ? 256 : 16;
+    return ix.basis().base_key() == L"\x39a" ? 256 : 16;
   };
   auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
   REQUIRE(!rich.cells.empty());
@@ -1196,10 +1196,10 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.space().base_key() == L"\x39a";  // Kappa
+    return ix.basis().base_key() == L"\x39a";  // Kappa
   };
   policy.is_batchable_external_index = [](Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
   policy.batch_spectator_indices = true;
 
@@ -1275,7 +1275,7 @@ orderedsched_old_partition(
         std::any_of(cl.per_axis.begin(), cl.per_axis.end(),
                     [&](sequant::eval::AxisClass const& ac) {
                       return ac.role == sequant::eval::LoopRole::LoopCarried &&
-                             ac.axis.space().base_key() == axis_key;
+                             ac.axis.basis().base_key() == axis_key;
                     });
     if (!carried_here) continue;
     auto const it = g.value_id_of.find(cl.hash);
@@ -1408,7 +1408,7 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"i" || ix.space().base_key() == L"a";
+    return ix.basis().base_key() == L"i" || ix.basis().base_key() == L"a";
   };
 
   sequant::eval::OrderedSchedule sched;
@@ -1524,7 +1524,7 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
 
   REQUIRE_THROWS_WITH(
@@ -1701,7 +1701,7 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
   auto const sched = sequant::eval::build_ordered_schedule(fx.rich, fx.legality,
                                                            policy, {L"i"});
@@ -1790,7 +1790,7 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
   auto const sched =
       sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
@@ -1894,7 +1894,7 @@ TEST_CASE("per-nest split: a carried chain gives three pass blocks",
       orderedsched_nest_legality(3002, ab, LoopRole::LoopLocal));
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
   auto const sched =
       sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
@@ -1967,7 +1967,7 @@ TEST_CASE(
       orderedsched_nest_legality(4003, ab, LoopRole::LoopCarried));
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
   auto const sched =
       sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
@@ -2055,7 +2055,7 @@ TEST_CASE(
       orderedsched_nest_legality(5003, ab, LoopRole::LoopCarried));
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
   auto const sched =
       sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
@@ -2146,7 +2146,7 @@ TEST_CASE(
       orderedsched_nest_legality(6003, ab, LoopRole::LoopCarried));
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
   auto const sched =
       sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
@@ -2255,7 +2255,7 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
 
   REQUIRE_THROWS_WITH(
@@ -2313,7 +2313,7 @@ TEST_CASE(
       orderedsched_nest_legality(8003, {i3}, LoopRole::LoopLocal));
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.basis().base_key() == L"i";
   };
   REQUIRE_THROWS_WITH(
       sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"}),

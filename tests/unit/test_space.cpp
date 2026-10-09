@@ -505,43 +505,48 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(moved_from.base_space_types() == sr_base_space_types);
   }
 
-  SECTION("AO spaces") {
+  SECTION("AO basis") {
     auto isr = sequant::mbpt::make_min_sr_spaces();
-    REQUIRE_NOTHROW(mbpt::add_ao_spaces(isr, mbpt::Spin::any));
+    REQUIRE_NOTHROW(mbpt::add_ao_basis(isr, mbpt::Spin::any));
 
-    // OBS AO space ...
-    REQUIRE_NOTHROW(isr->retrieve(L"μ"));
-    auto μ = isr->retrieve(L"μ");
-    REQUIRE(bitset_t(μ.qns()) & bitset_t(mbpt::LCAOQNS::ao));
+    // the OBS AO basis spans the complete space, non-orthonormal
+    REQUIRE(isr->contains(L"μ"));
+    CHECK(isr->retrieve_ptr(L"μ") == nullptr);  // a name is not a space
+    const IndexBasis ao = isr->retrieve_basis(L"μ");
+    const auto p = isr->retrieve(L"p");
+    CHECK(ao == IndexBasis(p, mbpt::default_ao_basis_instance, L"μ"));
+    CHECK(ao.space() == p);
+    CHECK(ao.metric() == IndexSpaceMetric::General);
+    CHECK(ao.extent() == p.approximate_size());
+    CHECK(mbpt::default_ao_basis_instance < mbpt::default_pao_basis_instance);
 
-    /// has same type as p but differ by QNS
-    REQUIRE_NOTHROW(isr->retrieve(L"p"));
-    auto p = isr->retrieve(L"p");
-    REQUIRE(μ.type() == p.type());
-    REQUIRE(μ.qns() != p.qns());
-    REQUIRE(μ != p);
+    // ordering: after every other basis of p
+    CHECK((IndexBasis{p} < ao && IndexBasis{p, 0} < ao &&
+           IndexBasis{p, 10} < ao));
+    CHECK(Index(isr->retrieve(L"i"), 1) < Index(ao, 1));
 
-    // ordering
-    REQUIRE(isr->retrieve(L"i") < isr->retrieve(L"μ"));
-  }
-
-  SECTION("PAO spaces") {
-    auto isr = sequant::mbpt::make_min_sr_spaces();
-    REQUIRE_NOTHROW(mbpt::add_pao_spaces(isr, mbpt::Spin::any));
-
-    // OBS PAO space ...
-    REQUIRE_NOTHROW(isr->retrieve(L"μ̃"));
-    auto μtilde = isr->retrieve(L"μ̃");
-    REQUIRE(bitset_t(μtilde.qns()) & bitset_t(mbpt::LCAOQNS::pao));
-
-    /// has same type as unoccupied space but differ by QNS
-    auto obs_uocc = isr->retrieve(isr->particle_space(), mbpt::Spin::any);
-    REQUIRE(μtilde.type() == obs_uocc.type());
-    REQUIRE(μtilde.qns() != obs_uocc.qns());
-    REQUIRE(μtilde != obs_uocc);
-
-    // ordering
-    REQUIRE(isr->retrieve(L"i") < isr->retrieve(L"μ̃"));
+    // the VBS and ABS variants need the union spaces registered: the F12
+    // registry has p = m + e and κ = p + α' ...
+    auto vbs = sequant::mbpt::make_F12_sr_spaces();
+    REQUIRE_NOTHROW(mbpt::add_ao_basis(vbs, mbpt::Spin::any, /*vbs=*/true));
+    for (const auto* label : {L"μ", L"Α", L"Γ"}) {
+      CAPTURE(label);
+      REQUIRE(vbs->contains(label));
+      CHECK(vbs->retrieve_basis(label).metric() == IndexSpaceMetric::General);
+    }
+    CHECK(vbs->retrieve_basis(L"μ").space() == vbs->retrieve(L"m"));
+    CHECK(vbs->retrieve_basis(L"Α").space() == vbs->retrieve(L"e"));
+    CHECK(vbs->retrieve_basis(L"Γ").space() == vbs->retrieve(L"p"));
+    auto abs = sequant::mbpt::make_F12_sr_spaces();
+    REQUIRE_NOTHROW(mbpt::add_ao_basis(abs, mbpt::Spin::any, /*vbs=*/false,
+                                       /*abs=*/true));
+    CHECK(abs->retrieve_basis(L"μ").space() == abs->retrieve(L"p"));
+    CHECK(abs->retrieve_basis(L"σ").space() == abs->retrieve(L"α'"));
+    CHECK(abs->retrieve_basis(L"ρ").space() == abs->retrieve(L"κ"));
+    // ... but no m + α', which ρ spans with both
+    auto both = sequant::mbpt::make_F12_sr_spaces();
+    CHECK_THROWS_WITH(mbpt::add_ao_basis(both, mbpt::Spin::any, true, true),
+                      Catch::Matchers::ContainsSubstring("ρ"));
   }
 
   SECTION("PAO basis") {
@@ -566,11 +571,15 @@ TEST_CASE("index_space", "[elements]") {
     CHECK((IndexBasis{uocc} < pao && IndexBasis{uocc, 0} < pao &&
            IndexBasis{uocc, 10} < pao));
     CHECK(Index(isr->retrieve(L"i"), 1) < Index(pao, 1));
-    // review-focus 2: a registry holds one encoding
-    CHECK_THROWS(mbpt::add_pao_spaces(isr, mbpt::Spin::any));
+    // the label is taken
+    CHECK_THROWS(mbpt::add_pao_basis(isr, mbpt::Spin::any));
+    // the deprecated spelling registers the same entry
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto isr2 = sequant::mbpt::make_min_sr_spaces();
     mbpt::add_pao_spaces(isr2, mbpt::Spin::any);
-    CHECK_THROWS(mbpt::add_pao_basis(isr2, mbpt::Spin::any));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    CHECK(isr2->retrieve_basis(L"μ̃") == pao);
+    CHECK(*isr2 == *isr);
   }
 
   SECTION("paper 1 example") {

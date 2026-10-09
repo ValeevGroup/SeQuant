@@ -54,17 +54,43 @@ std::wstring decorate_label(std::wstring label, bool up);
 /// @brief add fermionic spin spaces to registry
 void add_fermi_spin(IndexBasisRegistry& isr);
 
-/// @brief add AO spaces to registry
+/// the basis instance add_ao_basis registers the AO bases as: above every CSV
+/// instance, below the PAO one, so an AO basis sorts after every other basis
+/// of its space (IndexBasis orders by space, then instance)
+inline constexpr IndexBasis::instance_type default_ao_basis_instance =
+    std::numeric_limits<IndexBasis::instance_type>::max() - 1;
 
-/// @param isr the IndexBasisRegistry to which add the AO spaces
-/// @param spin_any the quantum numbers carried by spin-agnostic physical
-///        spaces in the target convention (Spin::null for
-///        SpinConvention::Legacy, else Spin::any); AO spaces are physical, so
-///        they carry it in the spin sector alongside the LCAOQNS::ao trait bit
+/// @brief registers the AO bases as named instances of the orbital spaces
+/// they span, with a general metric (the AOs are not orthonormal)
+
+/// The OBS AO basis `μ` spans the complete space (`p`, or `m` with \p vbs);
+/// with \p vbs the VBS AO basis `Α` spans `e` and `Γ` = `μ` + `Α` spans their
+/// union; with \p abs the ABS AO basis `σ` spans `α'`, `ρ` = `μ` + `σ`
+/// spans the union of the OBS and `α'`, and with \p vbs also `Ρ` = `Γ` + `σ`
+/// spans the union of all three. Every space a basis spans must be
+/// registered. The extents default to the spaces' dimensions (populate them
+/// with IndexBasisRegistry::approximate_size(label, n) before the registry is
+/// given to a Context, which holds it immutable).
+/// @param isr the IndexBasisRegistry to which add the AO bases
+/// @param spin_any the quantum numbers of the spin-agnostic orbital spaces
+///        in the target convention (Spin::null for SpinConvention::Legacy,
+///        else Spin::any)
 /// @param vbs if true, have separate virtual basis
-void add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
-                   IndexSpace::QuantumNumbers spin_any, bool vbs = false,
-                   bool abs = false);
+/// @param abs if true, have an auxiliary (F12) basis
+/// @param instance the basis instance of the AO bases
+/// @throw Exception if a label is already registered or a space an AO basis
+///        spans is not
+void add_ao_basis(
+    std::shared_ptr<IndexBasisRegistry>& isr,
+    IndexSpace::QuantumNumbers spin_any, bool vbs = false, bool abs = false,
+    IndexBasis::instance_type instance = default_ao_basis_instance);
+
+/// @deprecated the AO bases are named instances of the orbital spaces, see
+/// add_ao_basis(), to which this forwards
+[[deprecated("the AO bases are named basis instances; use add_ao_basis")]] void
+add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
+              IndexSpace::QuantumNumbers spin_any, bool vbs = false,
+              bool abs = false);
 
 /// @brief add DF spaces to registry
 void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& isr);
@@ -72,15 +98,12 @@ void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& isr);
 /// @brief add THC spaces to registry
 void add_thc_spaces(std::shared_ptr<IndexBasisRegistry>& isr);
 
-/// @brief add PAO spaces to registry
-
-/// expects \p isr to have a defined particle space
-/// @param spin_any the quantum numbers carried by spin-agnostic physical
-///        spaces in the target convention (Spin::null for
-///        SpinConvention::Legacy, else Spin::any); PAO spaces are physical, so
-///        they carry it in the spin sector alongside the LCAOQNS::pao trait bit
-void add_pao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
-                    IndexSpace::QuantumNumbers spin_any);
+/// @deprecated the PAO basis is a named instance of the particle space, see
+/// add_pao_basis(), to which this forwards
+[[deprecated(
+    "the PAO basis is a named basis instance; use add_pao_basis")]] void
+add_pao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
+               IndexSpace::QuantumNumbers spin_any);
 
 /// the basis instance add_pao_basis registers by default: above every CSV
 /// instance, so a PAO basis sorts after every other basis of the particle
@@ -98,8 +121,7 @@ inline constexpr IndexBasis::instance_type default_pao_basis_instance =
 /// @param spin_any the quantum numbers of the spin-agnostic particle space
 /// @param instance the basis instance of the PAO basis
 /// @param label the label the PAO basis is registered under
-/// @throw Exception if \p label is already registered (e.g. by
-/// add_pao_spaces)
+/// @throw Exception if \p label is already registered
 void add_pao_basis(
     std::shared_ptr<IndexBasisRegistry>& isr,
     IndexSpace::QuantumNumbers spin_any,

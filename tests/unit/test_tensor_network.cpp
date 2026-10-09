@@ -58,7 +58,7 @@ using namespace std::literals;
 
 TEST_CASE("tensor_network_shared", "[elements]") {
   auto isr = sequant::mbpt::make_legacy_spaces();
-  mbpt::add_pao_spaces(isr, mbpt::Spin::null);
+  mbpt::add_pao_basis(isr, mbpt::Spin::any);
   auto ctx = get_default_context();
   ctx.set(isr);
   ctx.set(Vacuum::SingleProduct);

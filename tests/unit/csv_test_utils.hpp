@@ -129,21 +129,12 @@ inline std::size_t term_count(ExprPtr const& expr) {
   return expr->is<Sum>() ? expr->size() : 1;
 }
 
-/// how the PAO basis is registered: as its own IndexSpace (μ̃, LCAOQNS::pao)
-/// or as a named basis instance of the particle space
-/// (μ̃ -> {a, default_pao_basis_instance})
-enum class PaoEncoding { Space, Basis };
-
-/// the registry CSV-CCSD is derived over: min SR spaces plus the DF and PAO
-/// spaces, the PAOs in the given encoding
-inline std::shared_ptr<IndexBasisRegistry> csv_cc_registry(
-    PaoEncoding pao = PaoEncoding::Space) {
+/// the registry CSV-CCSD is derived over: min SR spaces plus the DF space and
+/// the PAO basis (μ̃ -> {a, default_pao_basis_instance})
+inline std::shared_ptr<IndexBasisRegistry> csv_cc_registry() {
   auto isr = mbpt::make_min_sr_spaces();
   mbpt::add_df_spaces(isr);
-  if (pao == PaoEncoding::Space)
-    mbpt::add_pao_spaces(isr, IndexSpace::QuantumNumbers{mbpt::Spin::any});
-  else
-    mbpt::add_pao_basis(isr, IndexSpace::QuantumNumbers{mbpt::Spin::any});
+  mbpt::add_pao_basis(isr, IndexSpace::QuantumNumbers{mbpt::Spin::any});
   return isr;
 }
 
@@ -160,8 +151,8 @@ inline sequant::Context csv_cc_context(
                   .deserialization_column_symmetry = ColumnSymmetry::Symm});
 }
 
-inline sequant::Context csv_cc_context(PaoEncoding pao = PaoEncoding::Space) {
-  return csv_cc_context(csv_cc_registry(pao));
+inline sequant::Context csv_cc_context() {
+  return csv_cc_context(csv_cc_registry());
 }
 
 /// every tensor of @p expr labelled @p label

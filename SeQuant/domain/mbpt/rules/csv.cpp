@@ -4,8 +4,6 @@
 
 #include <SeQuant/domain/mbpt/rules/csv.hpp>
 
-#include <SeQuant/domain/mbpt/space_qns.hpp>
-
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -168,46 +166,24 @@ ExprPtr csv_transform_rec(
 
 }  // namespace
 
-namespace detail {
-
 ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
-                      bool orthonormal, std::wstring const& coeff_tensor_label,
+                      std::wstring const& coeff_tensor_label,
                       container::svector<std::wstring> const& tensor_labels) {
-  if (csv_basis.has_basis_instance()) {
-    const auto& registry = get_default_context().index_basis_registry();
-    if (!registry || !registry->basis_label(csv_basis))
-      throw Exception(
-          "csv_transform: the target basis instance " +
-          toUtf8(csv_basis.space().base_key()) + ";" +
-          std::to_string(*csv_basis.basis_instance()) +
-          " is not registered under a name; indices minted in it would print "
-          "and be keyed as the space's own basis");
-    return csv_transform_rec(expr, registry->resolve(csv_basis), orthonormal,
+  if (!csv_basis.has_basis_instance())
+    return csv_transform_rec(expr, csv_basis, /*orthonormal=*/true,
                              coeff_tensor_label, tensor_labels);
-  }
-  return csv_transform_rec(expr, csv_basis, orthonormal, coeff_tensor_label,
-                           tensor_labels);
-}
-
-}  // namespace detail
-
-ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
-                      std::wstring const& coeff_tensor_label,
-                      container::svector<std::wstring> const& tensor_labels) {
-  const auto resolved = default_registry_resolved(csv_basis);
-  return detail::csv_transform(expr, resolved,
-                               resolved.metric() == IndexSpaceMetric::Unit,
-                               coeff_tensor_label, tensor_labels);
-}
-
-ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
-                      std::wstring const& coeff_tensor_label,
-                      container::svector<std::wstring> const& tensor_labels) {
-  const bool is_ao = bitset_t(csv_basis.qns()) & bitset_t(LCAOQNS::ao);
-  const bool is_pao = bitset_t(csv_basis.qns()) & bitset_t(LCAOQNS::pao);
-  return detail::csv_transform(expr, IndexBasis{csv_basis},
-                               /*orthonormal=*/!(is_ao || is_pao),
-                               coeff_tensor_label, tensor_labels);
+  const auto& registry = get_default_context().index_basis_registry();
+  if (!registry || !registry->basis_label(csv_basis))
+    throw Exception(
+        "csv_transform: the target basis instance " +
+        toUtf8(csv_basis.space().base_key()) + ";" +
+        std::to_string(*csv_basis.basis_instance()) +
+        " is not registered under a name; indices minted in it would print "
+        "and be keyed as the space's own basis");
+  const auto resolved = registry->resolve(csv_basis);
+  return csv_transform_rec(expr, resolved,
+                           resolved.metric() == IndexSpaceMetric::Unit,
+                           coeff_tensor_label, tensor_labels);
 }
 
 }  // namespace sequant::mbpt
