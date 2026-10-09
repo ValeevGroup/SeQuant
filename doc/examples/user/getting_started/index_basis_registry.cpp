@@ -73,8 +73,13 @@ void v3() {
   Index loc1(registry.retrieve_basis(L"ĩ"), 1);
   // same space ...
   SEQUANT_ASSERT(loc1.space() == i);
-  // ... a specific basis of it
-  SEQUANT_ASSERT(loc1.basis() == IndexBasis(i, 1));
+  // ... a specific basis of it, which carries its name: the name is part of
+  // the basis, as a space's label is of the space, so the registry's entry
+  // is the basis and a bare {space, instance} pair is another, unnamed one
+  SEQUANT_ASSERT(loc1.basis() == registry.retrieve_basis(L"ĩ"));
+  SEQUANT_ASSERT(loc1.basis() != IndexBasis(i, 1));
+  SEQUANT_ASSERT(same_instance(loc1.basis(), IndexBasis(i, 1)));
+  SEQUANT_ASSERT(registry.resolve(IndexBasis(i, 1)) == loc1.basis());
   // a name is not a space
   SEQUANT_ASSERT(registry.contains(L"ĩ") &&
                  registry.retrieve_ptr(L"ĩ") == nullptr);

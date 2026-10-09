@@ -289,7 +289,7 @@ namespace {
 /// \return combined hash values of the elements.
 ///
 /// @note An Index object's IndexSpace type and quantum numbers, and its basis
-///       instance (if any), contribute to the hash.
+///       instance and name (if any), contribute to the hash.
 ///
 template <typename T>
 size_t hash_indices(T const& indices) noexcept {
@@ -297,8 +297,11 @@ size_t hash_indices(T const& indices) noexcept {
   for (auto const& idx : indices) {
     hash::combine(h, hash::value(idx.space().type().to_int32()));
     hash::combine(h, hash::value(idx.space().qns().to_int32()));
-    if (idx.basis().has_basis_instance())
+    if (idx.basis().has_basis_instance()) {
       hash::combine(h, hash::value(*idx.basis().basis_instance()));
+      if (idx.basis().has_name())
+        hash::combine(h, hash::value(idx.basis().name()));
+    }
     if (idx.has_proto_indices()) {
       hash::combine(h, hash::value(idx.proto_indices().size()));
       for (auto&& i : idx.proto_indices())
@@ -487,27 +490,6 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
   return fold_left_to_node(summands | move, make_sum);
 }
 
-/// @throw Exception if an index of @p tensors appears with two bases: the name
-/// of a basis instance is not part of an index's identity, so a named index and
-/// the bare-number spelling of its instance are one index to the network but
-/// are annotated and sized by different keys (IndexBasis::base_key())
-void enforce_one_basis_per_index(meta::range_of<ExprPtr> auto const& tensors) {
-  container::map<Index, std::wstring_view> keys;
-  auto check = [&keys](auto& self, const Index& idx) -> void {
-    const std::wstring_view key = idx.basis().base_key();
-    auto [it, inserted] = keys.emplace(idx, key);
-    if (!inserted && it->second != key)
-      throw Exception("binarize: index " + toUtf8(idx.full_label()) +
-                      " appears in two bases, " + toUtf8(it->second) + " and " +
-                      toUtf8(key) +
-                      "; an instance given by number names the space's "
-                      "basis, the registry's entry a basis of its own");
-    for (const Index& p : idx.proto_indices()) self(self, p);
-  };
-  for (const ExprPtr& t : tensors)
-    for (const Index& idx : t->as<Tensor>().const_indices()) check(check, idx);
-}
-
 EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                       const BinarizationOptions& opts,
                       std::size_t& node_counter) {
@@ -590,7 +572,6 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
         return result;
       }();
 
-      enforce_one_basis_per_index(ts);
       auto tn = TensorNetwork(ts);
       auto named_indices = tn.ext_indices();
       for (auto&& ix : uncontracted_idxs) named_indices.emplace(ix);

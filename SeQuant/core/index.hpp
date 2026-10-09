@@ -781,8 +781,10 @@ class Index : public Taggable {
     auto result = hash::range(ranges::begin(space_attr_view),
                               ranges::end(space_attr_view));
     for (const Index &idx : protoindex_range)
-      if (idx.basis().has_basis_instance())
+      if (idx.basis().has_basis_instance()) {
         hash::combine(result, int64_t(*idx.basis().basis_instance()));
+        if (idx.basis().has_name()) hash::combine(result, idx.basis().name());
+      }
     return result;
   }
 
@@ -796,18 +798,14 @@ class Index : public Taggable {
   /// protoindices
   /// @return the color of this object
   auto color() const {
-    if (has_proto_indices()) {
-      auto result = proto_indices_color();
-      hash::combine(result, int64_t(space().attr()));
-      if (basis_.has_basis_instance())
-        hash::combine(result, int64_t(*basis_.basis_instance()));
-      return result;
-    } else {
-      auto result = hash::value(int64_t(space().attr()));
-      if (basis_.has_basis_instance())
-        hash::combine(result, int64_t(*basis_.basis_instance()));
-      return result;
+    auto result = has_proto_indices() ? proto_indices_color()
+                                      : hash::value(int64_t(space().attr()));
+    if (has_proto_indices()) hash::combine(result, int64_t(space().attr()));
+    if (basis_.has_basis_instance()) {
+      hash::combine(result, int64_t(*basis_.basis_instance()));
+      if (basis_.has_name()) hash::combine(result, basis_.name());
     }
+    return result;
   }
 
   /// @return the smallest index of a generated index
@@ -912,7 +910,7 @@ class Index : public Taggable {
 
   /// compares Index objects using full labels only
   /// @note since full label is defined by the space, ordinal,
-  /// protoindices and basis instance only (i.e. tags are ignored)
+  /// protoindices and basis only (i.e. tags are ignored)
   /// comparison uses them directly for efficiency
   /// @sa Index::full_label()
   struct FullLabelCompare {
@@ -925,12 +923,12 @@ class Index : public Taggable {
         return ranges::lexicographical_compare(
             first.proto_indices(), second.proto_indices(), FullLabelCompare{});
       else
-        return first.basis().basis_instance() < second.basis().basis_instance();
+        return first.basis() < second.basis();
     }
   };
 
   /// compares Index objects using type only (but since type is defined by the
-  /// *values* of proto indices those are not ignored); the basis instance last
+  /// *values* of proto indices those are not ignored); the basis last
   struct TypeCompare {
     bool operator()(const Index &first, const Index &second) const {
       if (first.space() != second.space())
@@ -939,7 +937,7 @@ class Index : public Taggable {
         return ranges::lexicographical_compare(
             first.proto_indices(), second.proto_indices(), FullLabelCompare{});
       else
-        return first.basis().basis_instance() < second.basis().basis_instance();
+        return first.basis() < second.basis();
     }
   };
 
@@ -1028,7 +1026,7 @@ class Index : public Taggable {
 
   /// @return true if @c index1 is identical to @c index2 , i.e. they belong to
   /// the same space, they have the same label, the same proto-indices (if
-  /// any), and the same basis instance (or none)
+  /// any), and the same basis (instance and name, or none)
   friend bool operator==(const Index &i1, const Index &i2) noexcept {
     return i1.basis() == i2.basis() &&
            (i1.space().attr() != default_space_attr ||
@@ -1039,7 +1037,7 @@ class Index : public Taggable {
 
   /// @return false if @c index1 is identical to @c index2 , i.e. they belong to
   /// different spaces or they have different labels or they have different
-  /// proto-indices (if any) or different basis instances
+  /// proto-indices (if any) or different bases
   friend bool operator!=(const Index &i1, const Index &i2) noexcept {
     return !(i1 == i2);
   }
@@ -1049,7 +1047,7 @@ class Index : public Taggable {
   /// The canonical order of Index objects is
   /// lexicographical, first by qns, followed by tags (if defined
   /// for both), then by space, then by ordinal, then by protoindices (if any),
-  /// then by basis instance (if any)
+  /// then by basis (instance, then name, if any)
   friend std::strong_ordering operator<=>(const Index &i1,
                                           const Index &i2) noexcept {
     using SO = std::strong_ordering;
@@ -1060,7 +1058,7 @@ class Index : public Taggable {
       if (i1.ordinal_ != i2.ordinal_) {
         return i1.ordinal_ < i2.ordinal_ ? SO::less : SO::greater;
       } else if (i1.proto_indices() == i2.proto_indices())
-        return i1.basis_.basis_instance() <=> i2.basis_.basis_instance();
+        return i1.basis_ <=> i2.basis_;
       else
         return i1.proto_indices() < i2.proto_indices() ? SO::less : SO::greater;
     };
@@ -1239,8 +1237,10 @@ inline auto hash_value(const Index &idx) {
   auto val = hash::range(begin(proto_indices), end(proto_indices));
   hash::combine(val, idx.space());
   if (idx.ordinal()) hash::combine(val, idx.ordinal().value());
-  if (idx.basis().has_basis_instance())
+  if (idx.basis().has_basis_instance()) {
     hash::combine(val, *idx.basis().basis_instance());
+    if (idx.basis().has_name()) hash::combine(val, idx.basis().name());
+  }
   return val;
 }
 

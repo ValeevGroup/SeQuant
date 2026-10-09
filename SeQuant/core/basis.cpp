@@ -24,15 +24,20 @@ std::wstring IndexBasis::instance_suffix() const {
                          : std::wstring{};
 }
 
+bool same_instance(const IndexBasis& b1, const IndexBasis& b2) noexcept {
+  return b1.space() == b2.space() && b1.basis_instance() == b2.basis_instance();
+}
+
 bool includes(const IndexBasis& basis, const IndexBasis& subbasis) {
   return includes(basis.space(), subbasis.space()) &&
          (!basis.has_basis_instance() ||
-          basis.basis_instance() == subbasis.basis_instance());
+          (basis.basis_instance() == subbasis.basis_instance() &&
+           basis.name() == subbasis.name()));
 }
 
 bool different_instances(const IndexBasis& b1, const IndexBasis& b2) {
   return b1.has_basis_instance() && b2.has_basis_instance() &&
-         b1.basis_instance() != b2.basis_instance();
+         (b1.basis_instance() != b2.basis_instance() || b1.name() != b2.name());
 }
 
 }  // namespace sequant

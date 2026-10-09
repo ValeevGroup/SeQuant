@@ -277,23 +277,24 @@ class IndexBasisRegistry {
     throw IndexSpace::bad_key(label);
   }
 
-  /// @return the label under which basis instance @p b is registered, or
-  /// std::nullopt if @p b has no basis instance or is not named
+  /// @return the label under which the space and instance of @p b are
+  /// registered (see same_instance()), or std::nullopt if @p b has no basis
+  /// instance or they are not named
   std::optional<std::wstring_view> basis_label(const IndexBasis& b) const {
     if (!b.has_basis_instance() || named_count_ == 0) return std::nullopt;
     for (auto const& [label, basis] : bases_)
-      if (basis.has_basis_instance() && basis == b)
+      if (basis.has_basis_instance() && same_instance(basis, b))
         return std::wstring_view(label);
     return std::nullopt;
   }
 
-  /// @return the named entry equal to @p b, which carries the entry's name,
-  /// extent, metric and field, if @p b has a basis instance registered under
-  /// a name; otherwise @p b unchanged
+  /// @return the named entry of the space and instance of @p b (see
+  /// same_instance()), which carries the entry's name, extent, metric and
+  /// field, if they are registered under a name; otherwise @p b unchanged
   IndexBasis resolve(const IndexBasis& b) const {
     if (!b.has_basis_instance() || named_count_ == 0) return b;
     for (auto const& [label, basis] : bases_)
-      if (basis == b) return basis;
+      if (same_instance(basis, b)) return basis;
     return b;
   }
 

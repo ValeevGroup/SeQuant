@@ -301,12 +301,11 @@ TEST_CASE("asy_cost", "[AsyCost]") {
     REQUIRE(AsyCost::max() > AsyCost::zero());
   }
 
-  // each basis of a space is a symbol of its own, sized by its own space copy
+  // each basis of a space is a symbol of its own, sized by its own extent
   SECTION("basis instances") {
     using sequant::IndexSpace;
     IndexSpace const V{L"V", 0b10, sequant::QuantumNumbersAttr{0}, 100};
-    IndexSpace const V_big{L"V", 0b10, sequant::QuantumNumbersAttr{0}, 400};
-    IndexBasis const own{V}, unnamed{V, 1}, named{V_big, 2, L"P"};
+    IndexBasis const own{V}, unnamed{V, 1}, named{V, 2, L"P", 400};
 
     AsyCost::ExponentMap m;
     m.emplace(own, 2);
@@ -318,8 +317,10 @@ TEST_CASE("asy_cost", "[AsyCost]") {
     REQUIRE(c.ops() == 100.0 * 100.0 * 100.0 * std::pow(400.0, 3));
     AsyCost::ExtentMap const ext{{named, 7}};
     REQUIRE(c.ops(ext) == 100.0 * 100.0 * 100.0 * std::pow(7.0, 3));
-    // the name is not part of the symbol's identity
-    REQUIRE(AsyCost{AsyCost::ExponentMap{{IndexBasis{V, 2}, 3}}} ==
+    // the name is part of the symbol's identity, the extent is not
+    REQUIRE(AsyCost{AsyCost::ExponentMap{{IndexBasis{V, 2}, 3}}} !=
+            AsyCost{AsyCost::ExponentMap{{named, 3}}});
+    REQUIRE(AsyCost{AsyCost::ExponentMap{{IndexBasis{V, 2, L"P"}, 3}}} ==
             AsyCost{AsyCost::ExponentMap{{named, 3}}});
   }
 }

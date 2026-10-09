@@ -126,7 +126,9 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
 
   // metadata: an unnamed basis is the space's own basis up to an orthonormal
   // rotation, so its extent, metric and field are the space's; a named one
-  // carries its own unless registered without, which identity ignores
+  // carries its own unless registered without, which identity ignores. The
+  // name is part of the identity, so a named basis is not the unnamed basis
+  // of its space and instance (same_instance() relates the two)
   const std::vector<std::pair<IndexBasis, bool>> bases = {
       {IndexBasis{uocc}, false},
       {IndexBasis{uocc, 1}, false},
@@ -141,11 +143,29 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
     CHECK(b.space().approximate_size() == uocc.approximate_size());
     CHECK(b.space().field() == uocc.field());
     if (b.has_basis_instance()) {
-      CHECK(b == IndexBasis{uocc, 1});
-      CHECK(hash_value(b) == hash_value(IndexBasis{uocc, 1}));
-      CHECK((b <=> IndexBasis{uocc, 1}) == 0);
+      const IndexBasis same_identity{uocc, 1, b.name()};
+      CHECK(b == same_identity);
+      CHECK(hash_value(b) == hash_value(same_identity));
+      CHECK((b <=> same_identity) == 0);
+      CHECK(same_instance(b, IndexBasis{uocc, 1}));
+      CHECK((b == IndexBasis{uocc, 1}) == !b.has_name());
+      CHECK((hash_value(b) == hash_value(IndexBasis{uocc, 1})) ==
+            !b.has_name());
+      CHECK(((b <=> IndexBasis{uocc, 1}) == 0) == !b.has_name());
+      CHECK(IndexBasis{uocc, 1} <= b);  // unnamed first
     }
   }
+  // the name tells two bases apart: an identity between their functions is
+  // an overlap, and neither includes the other
+  CHECK(different_instances(IndexBasis{uocc, 1}, IndexBasis{uocc, 1, L"ã"}));
+  CHECK_FALSE(different_instances(IndexBasis{uocc, 1}, IndexBasis{uocc, 1}));
+  CHECK_FALSE(different_instances(IndexBasis{uocc, 1, L"ã"},
+                                  IndexBasis{uocc, 1, L"ã"}));
+  CHECK_FALSE(different_instances(IndexBasis{uocc}, IndexBasis{uocc, 1, L"ã"}));
+  CHECK(includes(IndexBasis{uocc}, IndexBasis{uocc, 1, L"ã"}));
+  CHECK(includes(IndexBasis{uocc, 1, L"ã"}, IndexBasis{uocc, 1, L"ã"}));
+  CHECK_FALSE(includes(IndexBasis{uocc, 1, L"ã"}, IndexBasis{uocc, 1}));
+  CHECK_FALSE(includes(IndexBasis{uocc, 1}, IndexBasis{uocc, 1, L"ã"}));
 
   // colour: sees the instance, of the index and of its proto indices, but not
   // which occupieds the proto indices are
@@ -392,19 +412,21 @@ TEST_CASE("index-basis-annotation-and-hash", "[EvalExpr][basis]") {
   REQUIRE_NOTHROW(binarize(bare1));
   CHECK(binarize(bare0)->hash_value() != binarize(bare1)->hash_value());
 
-  // a named basis and the bare-number spelling of its instance are one index
-  // (the name is not part of the identity) but are annotated and sized by
-  // different keys, so a product may not mix them
+  // a named basis and the bare-number spelling of its instance are two
+  // indices (the name is part of the identity), annotated and sized by
+  // different keys; a product may mix them, as an outer product
   {
     auto pao_ctx = scoped_pao_context();
     const IndexBasis pao =
         get_default_context().index_basis_registry()->retrieve_basis(L"μ̃");
     const Index named(pao, 1), bare(IndexBasis{uocc, *pao.basis_instance()}, 1);
-    REQUIRE(named == bare);
+    REQUIRE(named != bare);
     REQUIRE(named.basis().base_key() != bare.basis().base_key());
     const auto t = ex<Tensor>(L"t", bra{named}, ket{i1});
-    CHECK_THROWS_AS(binarize(t * ex<Tensor>(L"s", bra{i2}, ket{bare})),
-                    Exception);
+    REQUIRE_NOTHROW(binarize(t * ex<Tensor>(L"s", bra{i2}, ket{bare})));
+    const auto mixed = binarize(t * ex<Tensor>(L"s", bra{i2}, ket{bare}));
+    CHECK(mixed->indices_annot().find("μ̃") != std::string::npos);
+    CHECK(mixed->indices_annot().find("a_1#") != std::string::npos);
     CHECK_NOTHROW(binarize(t * ex<Tensor>(L"s", bra{i2}, ket{named})));
     CHECK_NOTHROW(binarize(t * ex<Tensor>(L"s", bra{i2}, ket{Index(uocc, 1)})));
   }
@@ -504,7 +526,9 @@ TEST_CASE("index-basis-serialization", "[serialization][basis]") {
     }
     const ExprPtr c_named = deserialize<ExprPtr>(L"C{μ̃_1;a_1<i_1,i_2;0>}");
     const Index mu = c_named->as<Tensor>().bra().at(0);
-    CHECK(mu.basis() == IndexBasis{a, P});
+    CHECK(mu.basis() ==
+          get_default_context().index_basis_registry()->retrieve_basis(L"μ̃"));
+    CHECK(same_instance(mu.basis(), IndexBasis{a, P}));
     CHECK(mu.basis().extent() == 120);
     // the generic spelling of the same basis parses to the named entry's
     // metadata and prints by name
@@ -582,11 +606,15 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   const IndexBasis pao = isr->retrieve_basis(L"μ̃");
   const IndexBasis::instance_type P = *pao.basis_instance();
 
-  // the registry's entry carries its name, which is not part of the identity
+  // the registry's entry carries its name, which is part of the identity:
+  // the bare {space, instance} pair is an unnamed basis of its own, which
+  // the registry resolves to the entry
   CHECK(pao.name() == L"μ̃");
   CHECK_FALSE(IndexBasis(uocc, P).has_name());
-  CHECK(IndexBasis(uocc, P) == pao);
-  CHECK(hash_value(IndexBasis(uocc, P)) == hash_value(pao));
+  CHECK(IndexBasis(uocc, P) != pao);
+  CHECK(hash_value(IndexBasis(uocc, P)) != hash_value(pao));
+  CHECK(same_instance(IndexBasis(uocc, P), pao));
+  CHECK(isr->resolve(IndexBasis(uocc, P)) == pao);
   CHECK(isr->resolve(IndexBasis(uocc, P)).name() == L"μ̃");
 
   // labels: the name, no instance suffix anywhere
@@ -620,10 +648,19 @@ TEST_CASE("index-basis-named", "[elements][index][basis]") {
   CHECK(Index(IndexBasis{uocc, P}, 3).full_label() ==
         L"a_3<;" + std::to_wstring(P) + L">");
   // moved into another space the instance stays and is resolved there: P
-  // names nothing in the general space
+  // names nothing in the general space; moved into its own space the basis
+  // stays, with its metadata
   CHECK(Index(m3, uocc).full_label() == L"μ̃_3");
+  CHECK(Index(m3, uocc).basis() == pao);
+  CHECK(Index(m3, uocc).basis().extent() == 120);
   CHECK(Index(m3, isr->retrieve(L"p")).full_label() ==
         L"p_3<;" + std::to_wstring(P) + L">");
+  CHECK(Index(m3, isr->retrieve(L"p")).basis().extent() ==
+        isr->retrieve(L"p").approximate_size());
+  // the instance dropped: the space's own basis, sized as the space
+  CHECK(m3.replace_basis_instance(std::nullopt) == Index(uocc, 3));
+  CHECK(m3.replace_basis_instance(std::nullopt).basis().extent() ==
+        uocc.approximate_size());
   CHECK(m3 != Index(uocc, 3));
   CHECK(hash_value(m3) == hash_value(Index(uocc, 3).replace_basis_instance(P)));
   CHECK((Index(uocc, 3) < m3 && Index(uocc, 3).replace_basis_instance(0) < m3));
@@ -825,7 +862,7 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
     REQUIRE(prod.factors().size() == 3);  // f{μ̃;μ̃} C C
     const Tensor ft = prod.factor(0)->as<Tensor>();
     for (const Index& idx : ft.const_braket_indices()) {
-      CHECK(idx.basis() == IndexBasis{uocc, P});
+      CHECK(idx.basis() == registry.retrieve_basis(L"μ̃"));
       CHECK(idx.basis().base_key() == L"μ̃");
       CHECK(idx.basis().extent() == 120);
       CHECK(idx.full_label().find(L'<') == std::wstring::npos);
@@ -866,7 +903,7 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
     REQUIRE(s->as<Product>().factors().size() == 2);  // C C
     const Index dummy = s->as<Product>().factor(0)->as<Tensor>().ket().at(0);
     CHECK(dummy == s->as<Product>().factor(1)->as<Tensor>().bra().at(0));
-    CHECK(dummy.basis() == IndexBasis{uocc, 2});
+    CHECK(dummy.basis() == registry.retrieve_basis(L"ã"));
     CHECK(dummy.basis().base_key() == L"ã");
     CHECK(!dummy.has_proto_indices());
   }

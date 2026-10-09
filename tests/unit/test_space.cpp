@@ -133,8 +133,10 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(isr->retrieve_basis_ptr(L"ζ") == nullptr);
     const IndexBasis got =
         isr->retrieve_basis(L"μ̃_3");  // an Index label reduces to its base key
-    CHECK(got == pao);                // identity ignores metadata ...
-    CHECK(got.extent() == 120);       // ... which the entry carries
+    CHECK(got == IndexBasis(a, 2147483647, L"μ̃"));  // the name is identity,
+    CHECK(got != pao);                              // the unnamed pair is not
+    CHECK(same_instance(got, pao));
+    CHECK(got.extent() == 120);  // the entry carries the metadata
     CHECK(got.space().approximate_size() == a.approximate_size());
     CHECK(got.metric() == IndexSpaceMetric::Unit);
     CHECK(got.field() == a.field());
@@ -145,7 +147,7 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(isr->resolve(IndexBasis{a, 2147483647}).extent() == 120);
     CHECK(isr->resolve(IndexBasis{a, 7}) == IndexBasis{a, 7});
     CHECK(isr->resolve(IndexBasis{a}) == IndexBasis{a});
-    CHECK(isr->bases().find(std::wstring_view(L"μ̃"))->second == pao);
+    CHECK(isr->bases().find(std::wstring_view(L"μ̃"))->second == got);
 
     // the space views do not see the name: the space a appears once, not also
     // as the named entry's copy of it
@@ -234,7 +236,7 @@ TEST_CASE("index_space", "[elements]") {
                       Catch::Matchers::ContainsSubstring("μ̃"));
     REQUIRE(isr->retrieve_ptr(L"a") != nullptr);
     CHECK(*isr->retrieve_ptr(L"a") == a);
-    CHECK(isr->retrieve_basis(L"μ̃") == pao);
+    CHECK(same_instance(isr->retrieve_basis(L"μ̃"), pao));
     REQUIRE_NOTHROW(isr->remove(L"μ̃"));
     CHECK_FALSE(isr->contains(L"μ̃"));
     CHECK_FALSE(isr->basis_label(pao));  // early return, no scan
@@ -297,7 +299,7 @@ TEST_CASE("index_space", "[elements]") {
     const Context ctx({.index_basis_registry_shared_ptr = isr3});
     CHECK(ctx.index_basis_registry().get() != isr3.get());
     CHECK(*ctx.index_basis_registry() == *isr3);
-    CHECK(ctx.index_basis_registry()->retrieve_basis(L"μ̃") == pao);
+    CHECK(same_instance(ctx.index_basis_registry()->retrieve_basis(L"μ̃"), pao));
     isr3->approximate_size(L"μ̃", 5);
     CHECK_FALSE(*ctx.index_basis_registry() == *isr3);
   }
@@ -549,7 +551,9 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(isr->contains(L"μ̃"));
     CHECK(isr->retrieve_ptr(L"μ̃") == nullptr);
     const IndexBasis pao = isr->retrieve_basis(L"μ̃");
-    CHECK(pao == IndexBasis{uocc, mbpt::default_pao_basis_instance});
+    CHECK(pao == IndexBasis(uocc, mbpt::default_pao_basis_instance, L"μ̃"));
+    CHECK(
+        same_instance(pao, IndexBasis{uocc, mbpt::default_pao_basis_instance}));
     CHECK(mbpt::default_pao_basis_instance ==
           std::numeric_limits<IndexBasis::instance_type>::max());
     CHECK(pao.space() == uocc);
