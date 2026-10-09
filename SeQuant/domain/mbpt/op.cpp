@@ -611,8 +611,8 @@ ExprPtr H(std::size_t k) {
 ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
   auto registry = get_default_mbpt_context().op_registry();
   using sequant::reserved::kronecker_label;
+  SEQUANT_ASSERT(registry->contains(L"f"));
   if (use_tensor) {
-    SEQUANT_ASSERT(registry->contains(L"f"));
     return OpMaker<Statistics::FermiDirac>(L"f", 1)();
   } else {  // explicit density matrix construction
     SEQUANT_ASSERT(
