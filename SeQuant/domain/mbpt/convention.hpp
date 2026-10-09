@@ -133,10 +133,11 @@ inline constexpr IndexBasis::instance_type default_pao_basis_instance =
 /// @param spin_any the quantum numbers of the spin-agnostic particle space
 /// @param instance the basis instance of the PAO basis
 /// @param label the label the PAO basis is registered under
-/// @throw Exception if \p label or a spin-annotated version of it is already
-///        registered, if \p instance of a particle space is already named,
-///        or if `μ` is missing and cannot be registered (see
-///        add_ao_basis()); the registry is then left untouched
+/// @throw Exception if \p label is `μ` or it or a spin-annotated version of
+///        it is already registered, if \p instance of a particle space is
+///        already named, if `μ` is missing and cannot be registered (see
+///        add_ao_basis()) or is registered but is a space or follows an
+///        entry itself; the registry is then left untouched
 void add_pao_basis(
     std::shared_ptr<IndexBasisRegistry>& isr,
     IndexSpace::QuantumNumbers spin_any,

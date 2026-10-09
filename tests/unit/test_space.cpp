@@ -653,6 +653,29 @@ TEST_CASE("index_space", "[elements]") {
                     IndexSpace::bad_key);
     CHECK_FALSE(no_p->contains(L"μ̃"));
     CHECK_FALSE(no_p->contains(L"μ"));
+    // ... as is one whose μ is not a named basis instance the PAOs can
+    // follow: a space, or a follower itself
+    auto mu_space = sequant::mbpt::make_min_sr_spaces();
+    mu_space->add(L"μ", 0b100, any);
+    CHECK_THROWS_WITH(mbpt::add_pao_basis(mu_space, mbpt::Spin::any),
+                      Catch::Matchers::ContainsSubstring("space"));
+    CHECK_FALSE(mu_space->contains(L"μ̃"));
+    CHECK_FALSE(mu_space->contains(L"μ̃↑"));
+    auto mu_follows = sequant::mbpt::make_min_sr_spaces();
+    mbpt::add_ao_basis(mu_follows, mbpt::Spin::any);
+    mu_follows->add(L"κ", IndexBasis{mu_follows->retrieve(L"p"), 3})
+        .follow(L"μ", L"κ");
+    CHECK_THROWS_WITH(mbpt::add_pao_basis(mu_follows, mbpt::Spin::any),
+                      Catch::Matchers::ContainsSubstring("κ"));
+    CHECK_FALSE(mu_follows->contains(L"μ̃"));
+    CHECK_FALSE(mu_follows->contains(L"μ̃↑"));
+    // ... and the PAO bases cannot take the label of the basis they follow
+    auto mu_label = sequant::mbpt::make_min_sr_spaces();
+    CHECK_THROWS_WITH(
+        mbpt::add_pao_basis(mu_label, mbpt::Spin::any,
+                            mbpt::default_pao_basis_instance, L"μ"),
+        Catch::Matchers::ContainsSubstring("μ"));
+    CHECK_FALSE(mu_label->contains(L"μ"));
     // ordering: after every basis of a (I2), between i and Κ as before
     CHECK((IndexBasis{uocc} < pao && IndexBasis{uocc, 0} < pao &&
            IndexBasis{uocc, 10} < pao));

@@ -162,7 +162,13 @@ void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
                    std::wstring_view label) {
   // the PAOs are the AOs projected on the particle space (of either spin),
   // so every PAO basis follows the OBS AO basis for its extent, metric and
-  // field. The spaces are taken by value: add() may reallocate the table
+  // field. Everything is checked before anything is registered, so a failure
+  // leaves the registry untouched. The spaces are taken by value: add() may
+  // reallocate the table
+  if (label == L"μ")
+    throw Exception(
+        "add_pao_basis: 'μ' is the label of the OBS AO basis the PAO bases "
+        "follow");
   const auto uocc_type = isr->particle_space(/* nulltype_ok = */ false);
   container::svector<std::pair<std::wstring, IndexSpace>> bases;
   bases.emplace_back(std::wstring(label), isr->retrieve(uocc_type, spin_any));
@@ -170,7 +176,15 @@ void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
     if (const auto* uocc_spin = isr->retrieve_ptr(uocc_type, spin))
       bases.emplace_back(spinannotation_add(label, spin), *uocc_spin);
   require_unregistered(*isr, "add_pao_basis", bases, instance);
-  if (!isr->contains(L"μ")) add_ao_basis(isr, spin_any);
+  if (!isr->contains(L"μ"))
+    add_ao_basis(isr, spin_any);
+  else if (!isr->retrieve_basis(L"μ").has_basis_instance())
+    throw Exception(
+        "add_pao_basis: 'μ' is a space, not the OBS AO basis the PAO bases "
+        "follow");
+  else if (auto source = isr->follows(L"μ"))
+    throw Exception("add_pao_basis: the OBS AO basis 'μ' follows '" +
+                    toUtf8(*source) + "', so the PAO bases cannot follow it");
   for (const auto& [l, space] : bases)
     isr->add(l, IndexBasis{space, instance}).follow(l, L"μ");
 }
