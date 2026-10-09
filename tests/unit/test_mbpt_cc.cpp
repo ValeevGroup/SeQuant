@@ -9,6 +9,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/bernoulli.hpp>
@@ -334,6 +335,12 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     // qUCCSD block ranks, 10.1063/5.0062090 Sec. II C: SS at the double
     // commutator (Eq. 29), SD/DS at the single (Eqs. 41, 44), DD bare (Eq. 48).
     const std::vector<std::size_t> quccsd = {2, 1, 1, 0};
+    // UCC EOM requires the Symmetric convention
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort)
+      REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), quccsd), Exception);
+    auto symmetric = set_scoped_default_mbpt_context(
+        mbpt::Context{get_default_mbpt_context()}.set(
+            NormalizationConvention::Symmetric));
 
     const auto ee = cc.eom_r(nₚ(2), nₕ(2), quccsd);
     REQUIRE(ee.size() == 3);
@@ -633,6 +640,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE_THROWS_AS(CC(2).eom_r(ee_np, ee_nh, uniform_ranks), Exception);
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
+    auto symmetric = set_scoped_default_mbpt_context(
+        mbpt::Context{get_default_mbpt_context()}.set(
+            NormalizationConvention::Symmetric));
     const auto ucc = CC(2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2});
     const auto uniform = ucc.eom_r(ee_np, ee_nh);
     const auto blocked = ucc.eom_r(ee_np, ee_nh, uniform_ranks);
