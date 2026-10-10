@@ -82,7 +82,9 @@ template <typename FlatArray, typename ToTArray = FlatArray>
         if (dest.is_local(it.index())) *it = OuterT{it.make_range()};
       world.gop.fence();
       ::sequant::detail::note_fence();
-      return eval_result<ResultTensorOfTensorTA<ToTArray>>(std::move(dest));
+      auto r = eval_result<ResultTensorOfTensorTA<ToTArray>>(std::move(dest));
+      static_cast<ResultTensorOfTensorTA<ToTArray>&>(*r).note_inner_rank(0);
+      return r;
     }
   };
   return aops;

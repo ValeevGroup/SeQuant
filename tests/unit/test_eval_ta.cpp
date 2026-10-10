@@ -759,6 +759,129 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
   }
 }
 
+TEST_CASE("tot_inner_rank_memo", "[eval][tot]") {
+  // The inner rank of a nested result is a static property of its array (the
+  // annotation that produced it), carried on the Result so the annotation-free
+  // operations (accumulate, slice, scatter) do not re-derive it from the tiles
+  // -- a world-collective max -- on every call.
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultTensorOfTensorTA;
+  using sequant::detail::tot_inner_rank;
+  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+  using ResultToT = ResultTensorOfTensorTA<ToTArray>;
+
+  auto& world = TA::get_default_world();
+  TA::TiledRange1 const tr1{0, 3, 6};
+
+  auto build = [&](bool empty_inner) -> ToTArray {
+    TA::TiledRange outer_tr({tr1});
+    TA::Range inner_r(std::vector<std::size_t>{4});
+    auto tile_fn = [inner_r, empty_inner](TA::Range const& orng) {
+      TA::Tensor<TA::Tensor<double>> t{orng};
+      if (!empty_inner)
+        for (auto& inner : t) {
+          inner = TA::Tensor<double>{inner_r};
+          std::fill(inner.begin(), inner.end(), 1.0);
+        }
+      return t;
+    };
+    ToTArray arr{world, outer_tr};
+    for (auto it = arr.begin(); it != arr.end(); ++it)
+      if (arr.is_local(it.index()))
+        *it = world.taskq.add(tile_fn, it.make_range());
+    world.gop.fence();
+    return arr;
+  };
+  auto const memo_of = [](ResultPtr const& r) {
+    return r->as<ResultToT>().inner_rank();
+  };
+
+  SECTION("inner_rank() reads a populated array once and memoizes it") {
+    auto r = eval_result<ResultToT>(build(false));
+    REQUIRE(memo_of(r) == 1);
+    REQUIRE(memo_of(r) == 1);
+  }
+
+  SECTION("an all-empty array without a hint reports 0 and is not memoized") {
+    auto r = eval_result<ResultToT>(build(true));
+    REQUIRE(memo_of(r) == 0);
+    // it becomes populated behind the result's back: re-read, not stale
+    auto full = eval_result<ResultToT>(build(false));
+    r->add_inplace(*full);
+    REQUIRE(memo_of(r) == 1);
+  }
+
+  SECTION("a known-zero result slices to a zero ToT that is known zero") {
+    auto r = eval_result<ResultToT>(build(true));
+    r->as<ResultToT>().note_inner_rank(0);
+    auto sl = r->slice_mode(0, 0, 3);
+    REQUIRE(sl->is<ResultToT>());
+    REQUIRE(memo_of(sl) == 0);
+    REQUIRE(tot_inner_rank(sl->get<ToTArray>()) == 0);
+    REQUIRE(sl->get<ToTArray>().trange().dim(0).tile_extent() == 1);
+  }
+
+  SECTION("accumulating into a known-zero result adopts the addend's rank") {
+    auto acc = eval_result<ResultToT>(build(true));
+    acc->as<ResultToT>().note_inner_rank(0);
+    auto full = eval_result<ResultToT>(build(false));
+    acc->add_inplace(*full);
+    REQUIRE(memo_of(acc) == 1);
+    auto const& res = acc->get<ToTArray>();
+    REQUIRE(tot_inner_rank(res) == 1);
+    for (auto it = res.begin(); it != res.end(); ++it)
+      if (res.is_local(it.index()))
+        for (auto const& inner : it->get()) {
+          REQUIRE_FALSE(inner.empty());
+          for (auto const& x : inner) REQUIRE(x == 1.0);
+        }
+  }
+
+  SECTION("a scatter into a pre-sized zero destination records the rank") {
+    auto full = eval_result<ResultToT>(build(false));
+    auto dest = full->pre_sized_zeros_over_mode(0, *full, 0);
+    REQUIRE(memo_of(dest) == 0);
+    auto block = full->slice_mode(0, 3, 6);
+    REQUIRE(memo_of(block) == 1);
+    dest->write_into_slice(*block, 0, 3, 6);
+    REQUIRE(memo_of(dest) == 1);
+    REQUIRE(tot_inner_rank(dest->get<ToTArray>()) == 1);
+  }
+
+  SECTION("a scatter of a known-zero block leaves the destination known zero") {
+    auto full = eval_result<ResultToT>(build(false));
+    auto dest = full->pre_sized_zeros_over_mode(0, *full, 0);
+    auto zero = eval_result<ResultToT>(build(true));
+    zero->as<ResultToT>().note_inner_rank(0);
+    auto block = zero->slice_mode(0, 3, 6);
+    dest->write_into_slice(*block, 0, 3, 6);
+    REQUIRE(memo_of(dest) == 0);
+    REQUIRE(tot_inner_rank(dest->get<ToTArray>()) == 0);
+  }
+
+  SECTION("a sum and a product carry the annotation's inner rank") {
+    auto full = eval_result<ResultToT>(build(false));
+    auto s = full->sum(
+        *full, {std::string{"i;a"}, std::string{"i;a"}, std::string{"i;a"}});
+    REQUIRE(memo_of(s) == 1);
+    REQUIRE(tot_inner_rank(s->get<ToTArray>()) == 1);
+    auto p = full->prod(*eval_result<sequant::ResultScalar<double>>(2.0),
+                        {std::string{"i;a"}, std::string{}, std::string{"i;a"}},
+                        sequant::DeNest::False);
+    REQUIRE(memo_of(p) == 1);
+  }
+
+  SECTION("views and clones inherit the memo") {
+    auto full = eval_result<ResultToT>(build(false));
+    REQUIRE(memo_of(full) == 1);
+    REQUIRE(memo_of(full->clone()) == 1);
+    REQUIRE(memo_of(full->mult_by_phase(-1)) == 1);
+    REQUIRE(memo_of(full->permute({std::string{"i;a"}, std::string{"i;a"}})) ==
+            1);
+  }
+}
+
 TEST_CASE("eval_with_tiledarray", "[eval]") {
   // Reproducer for the mpqc4 cck real-field NaN regression. The eval-graph
   // head's bra/ket split is purely positional: each external index ends up in

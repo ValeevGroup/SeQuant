@@ -128,7 +128,9 @@ inline const bool phase_fence_installed_ = [] {
 /// non-empty inner tile. Needed to build a ToT-valid annotation ("outer;inner")
 /// in the annotation-free array operations (add_inplace,
 /// slice_array_over_mode), since a flat annotation trips DistArray's
-/// is_tot_index() check.
+/// is_tot_index() check. Being a collective, it is not for per-operation use:
+/// the backend's results record their inner rank once and serve it locally
+/// (ResultTensorOfTensorTA::inner_rank()).
 template <typename ArrayT>
 [[nodiscard]] std::size_t tot_inner_rank(ArrayT const& arr) {
   std::size_t r = 0;
@@ -563,7 +565,7 @@ inline void log_ta_tensor_host_memory_use() {
 template <typename... Args>
 [[nodiscard]] TA::DistArray<Args...> slice_array_over_mode(
     TA::DistArray<Args...> const& arr, std::size_t mode, std::size_t tile_lo,
-    std::size_t tile_hi);
+    std::size_t tile_hi, std::optional<std::size_t> inner_rank_hint = {});
 
 // defined below; declared here so the result classes' write_into_slice()
 // overrides can call it. The scatter inverse of slice_array_over_mode().
@@ -571,7 +573,8 @@ template <typename... Args>
 void write_array_into_mode(TA::DistArray<Args...>& dest,
                            TA::DistArray<Args...> const& block,
                            std::size_t mode, std::size_t tile_lo,
-                           std::size_t tile_hi);
+                           std::size_t tile_hi,
+                           std::optional<std::size_t> inner_rank_hint = {});
 
 /// Partition a TiledRange1 into contiguous, tile-aligned element-range batches,
 /// each covering at most \p target_batch_size elements: whole tiles are
@@ -1092,6 +1095,28 @@ class ResultTensorOfTensorTA final : public Result {
   ///         produced, including one whose pending transform composed away
   [[nodiscard]] bool is_buffer_alias() const override { return alias_; }
 
+  /// The inner (nested) rank of this result's array; 0 for an all-empty-inner
+  /// array (the zero a nested accumulator or a pre-sized scatter target starts
+  /// as). A static property of the array, fixed by the annotation that
+  /// produced it, so the backend records it on every value it creates
+  /// (products, sums, slices, clones, views, zeros) and the annotation-free
+  /// operations (add_inplace, slice_mode, write_into_slice, the
+  /// materialization of a view) read it here instead of re-deriving it from
+  /// the tiles on every call. Only a result whose array came from outside the
+  /// backend (a leaf) has no record: its rank is then read from the tiles by
+  /// detail::tot_inner_rank(), a world-collective reduction, and memoized once
+  /// nonzero (a populated array never loses its inner rank; an all-empty one
+  /// is re-read, since a leaf may be populated behind this result's back).
+  [[nodiscard]] std::size_t inner_rank() const {
+    if (inner_rank_) return *inner_rank_;
+    auto const r = detail::tot_inner_rank(raw<ArrayT>());
+    if (r > 0) inner_rank_ = r;
+    return r;
+  }
+  /// records the inner rank of this result's array (see inner_rank()); 0
+  /// declares a known all-empty-inner (zero) array
+  void note_inner_rank(std::size_t r) const noexcept { inner_rank_ = r; }
+
   [[nodiscard]] std::string trange_annot() const override {
     return detail::ta_trange_string(get<ArrayT>());
   }
@@ -1117,6 +1142,19 @@ class ResultTensorOfTensorTA final : public Result {
   mutable std::optional<View> view_;
   /// the array belongs to another result (see is_buffer_alias())
   mutable bool alias_ = false;
+  /// the array's inner rank once known (see inner_rank()): 0 = known
+  /// all-empty-inner; unset = not read from the tiles yet
+  mutable std::optional<std::size_t> inner_rank_;
+
+  /// inner-label count of a (possibly nested) annotation
+  static std::size_t inner_count(std::string const& annot) {
+    return tokens(annot).inner.size();
+  }
+  /// @p r, a this_type result, with its inner rank recorded as @p rank
+  static ResultPtr noted(ResultPtr r, std::optional<std::size_t> rank) {
+    static_cast<this_type&>(*r).inner_rank_ = rank;
+    return r;
+  }
 
   [[nodiscard]] id_t type_id() const noexcept override {
     return id_for_type<this_type>();
@@ -1252,9 +1290,8 @@ class ResultTensorOfTensorTA final : public Result {
   /// any tile (a zero stays a zero).
   [[nodiscard]] std::string dummy_annotation() const {
     auto const& arr = raw<ArrayT>();
-    return TA::detail::dummy_annotation(
-        arr.trange().rank(),
-        std::max<std::size_t>(1, detail::tot_inner_rank(arr)));
+    return TA::detail::dummy_annotation(arr.trange().rank(),
+                                        std::max<std::size_t>(1, inner_rank()));
   }
 
   void ensure_materialized() const override {
@@ -1400,7 +1437,8 @@ class ResultTensorOfTensorTA final : public Result {
     }
     ::sequant::detail::drain_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(result));
+    return noted(eval_result<this_type>(std::move(result)),
+                 inner_count(a.this_annot));
   }
 
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
@@ -1408,8 +1446,11 @@ class ResultTensorOfTensorTA final : public Result {
     ensure_materialized();
     auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
         get<ArrayT>().trange().dim(mode), elem_lo, elem_hi);
-    return eval_result<this_type>(
-        slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
+    // a slice has its source's inner rank (the slice of a zero is a zero)
+    auto const rank = inner_rank();
+    return noted(eval_result<this_type>(slice_array_over_mode(
+                     get<ArrayT>(), mode, tile_lo, tile_hi, rank)),
+                 rank);
   }
 
   [[nodiscard]] double norm2() const override {
@@ -1426,11 +1467,16 @@ class ResultTensorOfTensorTA final : public Result {
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     SEQUANT_ASSERT(block.is<this_type>());
+    auto const& b = static_cast<this_type const&>(block);
     ensure_materialized();
     auto& dest = get<ArrayT>();
     auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
         dest.trange().dim(mode), block_lo, block_hi);
-    write_array_into_mode(dest, block.get<ArrayT>(), mode, tile_lo, tile_hi);
+    auto const rank = b.inner_rank();
+    write_array_into_mode(dest, b.template get<ArrayT>(), mode, tile_lo,
+                          tile_hi, rank);
+    // a populated block populates the destination; a zero block leaves it
+    if (rank > 0) inner_rank_ = rank;
   }
 
   [[nodiscard]] ResultPtr pre_sized_zeros_over_mode(
@@ -1473,7 +1519,7 @@ class ResultTensorOfTensorTA final : public Result {
     dest.world().gop.fence();
     ::sequant::detail::note_fence();
     log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(dest));
+    return noted(eval_result<this_type>(std::move(dest)), std::size_t{0});
   }
 
   [[nodiscard]] ResultPtr prod(Result const& other,
@@ -1491,7 +1537,8 @@ class ResultTensorOfTensorTA final : public Result {
                 [&](auto&& le) { result(a.this_annot) = scalar * le; });
       ::sequant::detail::drain_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
-      return eval_result<this_type>(std::move(result));
+      return noted(eval_result<this_type>(std::move(result)),
+                   inner_count(a.this_annot));
     } else if (a.this_annot.empty()) {
       // DOT product: TA::dot takes plain tensor expressions
       SEQUANT_ASSERT(other.is<this_type>());
@@ -1538,7 +1585,9 @@ class ResultTensorOfTensorTA final : public Result {
         }
       }();
       log_ta_tensor_host_memory_use();
-      return eval_result<this_type>(std::move(result), View{.phase = l.phase});
+      return noted(
+          eval_result<this_type>(std::move(result), View{.phase = l.phase}),
+          inner_count(a.this_annot));
 
     } else if (other.is<this_type>() && DeNestFlag == DeNest::True) {
       // ToT * ToT -> T (einsum only)
@@ -1576,7 +1625,8 @@ class ResultTensorOfTensorTA final : public Result {
         });
         ::sequant::detail::drain_lazy_cleanup(result);
         log_ta_tensor_host_memory_use();
-        return eval_result<this_type>(std::move(result));
+        return noted(eval_result<this_type>(std::move(result)),
+                     inner_count(a.this_annot));
       }
       bool const both_conj = conjugated() && o.conjugated();
       auto const l = einsum_operand(a.lannot, both_conj);
@@ -1593,7 +1643,8 @@ class ResultTensorOfTensorTA final : public Result {
       View rv;
       rv.phase = static_cast<std::int8_t>(l.phase * r.phase);
       rv.conj = both_conj;
-      return eval_result<this_type>(std::move(result), std::move(rv));
+      return noted(eval_result<this_type>(std::move(result), std::move(rv)),
+                   inner_count(a.this_annot));
     } else {
       throw detail::invalid_operand();
     }
@@ -1602,14 +1653,17 @@ class ResultTensorOfTensorTA final : public Result {
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
     View v = view_.value_or(View{});
     v.phase = static_cast<std::int8_t>(v.phase * factor);
-    return eval_result<this_type>(raw<ArrayT>(), std::move(v), /*alias=*/true);
+    return noted(
+        eval_result<this_type>(raw<ArrayT>(), std::move(v), /*alias=*/true),
+        inner_rank_);
   }
 
   /// Deep copy; see \c ResultTensorTA::clone. \c TA::clone deep-copies the
   /// (nested) tiles too, so the copy shares no inner tensor with this one.
   [[nodiscard]] ResultPtr clone() const override {
     auto const t0 = std::chrono::steady_clock::now();
-    auto res = eval_result<this_type>(TA::clone(get<ArrayT>()));
+    auto res =
+        noted(eval_result<this_type>(TA::clone(get<ArrayT>())), inner_rank_);
     detail::log_batch_op("Clone", std::chrono::steady_clock::now() - t0,
                          get<ArrayT>(), "");
     return res;
@@ -1622,8 +1676,10 @@ class ResultTensorOfTensorTA final : public Result {
 
     detail::log_ta(pre_annot, " = ", post_annot, " (view)\n");
 
-    return eval_result<this_type>(
-        raw<ArrayT>(), composed_relabel(pre_annot, post_annot), /*alias=*/true);
+    return noted(eval_result<this_type>(raw<ArrayT>(),
+                                        composed_relabel(pre_annot, post_annot),
+                                        /*alias=*/true),
+                 inner_rank_);
   }
 
   [[nodiscard]] ResultPtr apply_transform(
@@ -1635,7 +1691,9 @@ class ResultTensorOfTensorTA final : public Result {
     v.phase = static_cast<std::int8_t>(v.phase * t.phase);
     if constexpr (TA::detail::is_complex_v<numeric_type>)
       if (t.conj) v.conj = !v.conj;
-    return eval_result<this_type>(raw<ArrayT>(), std::move(v), /*alias=*/true);
+    return noted(
+        eval_result<this_type>(raw<ArrayT>(), std::move(v), /*alias=*/true),
+        inner_rank_);
   }
 
   void add_inplace(Result const& other) override {
@@ -1652,13 +1710,11 @@ class ResultTensorOfTensorTA final : public Result {
     auto const& oarr = o.template raw<ArrayT>();
 
     SEQUANT_ASSERT(t.trange() == oarr.trange());
-    // ToT annotation needs an inner block ("outer;inner"); tot_inner_rank()
-    // reads it from a populated inner tile and is 0 when an operand's inner
-    // tiles are all empty. Take the rank from whichever operand has data; if
-    // both are empty the add is an identity no-op (t += 0), nothing to
-    // annotate.
-    auto const inner_rank =
-        std::max(detail::tot_inner_rank(t), detail::tot_inner_rank(oarr));
+    // ToT annotation needs an inner block ("outer;inner"); inner_rank() is 0
+    // for an operand whose inner tiles are all empty. Take the rank from
+    // whichever operand has data; if both are empty the add is an identity
+    // no-op (t += 0), nothing to annotate.
+    auto const inner_rank = std::max(this->inner_rank(), o.inner_rank());
     if (inner_rank == 0) return;
     auto ann = TA::detail::dummy_annotation(t.trange().rank(), inner_rank);
 
@@ -1667,6 +1723,7 @@ class ResultTensorOfTensorTA final : public Result {
     auto const t0 = std::chrono::steady_clock::now();
     o.with_expr(ann, [&](auto&& oe) { t(ann) += oe; });
     ::sequant::detail::drain_lazy_cleanup(t);
+    inner_rank_ = inner_rank;  // populated now, if it was not already
     detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0,
                          oarr, ann);
     log_ta_tensor_host_memory_use();
@@ -1674,7 +1731,9 @@ class ResultTensorOfTensorTA final : public Result {
 
   [[nodiscard]] ResultPtr symmetrize() const override {
     ensure_materialized();
-    return eval_result<this_type>(detail::column_symmetrize_ta(get<ArrayT>()));
+    return noted(
+        eval_result<this_type>(detail::column_symmetrize_ta(get<ArrayT>())),
+        inner_rank_);
   }
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t /*bra_rank*/) const override {
@@ -1709,10 +1768,15 @@ class ResultTensorOfTensorTA final : public Result {
 /// make_batched_custom_evaluator): slicing every leaf that carries the index
 /// to a tile range, evaluating, and summing reproduces the full contraction
 /// because `sum_K = sum_{blocks} sum_{K in block}`.
+///
+/// \param inner_rank_hint for a nested \p arr, its inner rank (0 for an
+///        all-empty-inner array) when the caller knows it (see
+///        ResultTensorOfTensorTA::inner_rank()); unset, it is read from the
+///        tiles with detail::tot_inner_rank(), a world-collective reduction.
 template <typename... Args>
 [[nodiscard]] TA::DistArray<Args...> slice_array_over_mode(
     TA::DistArray<Args...> const& arr, std::size_t mode, std::size_t tile_lo,
-    std::size_t tile_hi) {
+    std::size_t tile_hi, std::optional<std::size_t> inner_rank_hint) {
   using ranges::views::iota;
   auto const rank = arr.trange().rank();
   SEQUANT_ASSERT(mode < rank);
@@ -1729,7 +1793,8 @@ template <typename... Args>
   using value_type = typename TA::DistArray<Args...>::value_type;
   std::string annot;
   if constexpr (TA::detail::is_tensor_of_tensor_v<value_type>) {
-    auto const inner_rank = detail::tot_inner_rank(arr);
+    auto const inner_rank =
+        inner_rank_hint ? *inner_rank_hint : detail::tot_inner_rank(arr);
     if (inner_rank == 0) {
       // All-empty-inner ToT: tot_inner_rank() is 0, so there's no inner rank to
       // build the ToT annotation block() needs. The slice of zero is zero, so
@@ -1799,11 +1864,17 @@ template <typename... Args>
 /// offset rather than being rebased to 0. Reconstructs a whole result from a
 /// disjoint, gap-free tiling of one mode: scattering each block of a partition
 /// reproduces the array `slice_array_over_mode()` would gather back out.
+///
+/// \param inner_rank_hint for a nested \p block, its inner rank (0 for an
+///        all-empty-inner block) when the caller knows it; unset, it is read
+///        from the tiles with detail::tot_inner_rank() (a world-collective
+///        reduction), as in slice_array_over_mode().
 template <typename... Args>
 void write_array_into_mode(TA::DistArray<Args...>& dest,
                            TA::DistArray<Args...> const& block,
                            std::size_t mode, std::size_t tile_lo,
-                           std::size_t tile_hi) {
+                           std::size_t tile_hi,
+                           std::optional<std::size_t> inner_rank_hint) {
   using ranges::views::iota;
   auto const rank = dest.trange().rank();
   SEQUANT_ASSERT(mode < rank);
@@ -1820,7 +1891,8 @@ void write_array_into_mode(TA::DistArray<Args...>& dest,
   using value_type = typename TA::DistArray<Args...>::value_type;
   std::string annot;
   if constexpr (TA::detail::is_tensor_of_tensor_v<value_type>) {
-    auto const inner_rank = detail::tot_inner_rank(block);
+    auto const inner_rank =
+        inner_rank_hint ? *inner_rank_hint : detail::tot_inner_rank(block);
     if (inner_rank == 0) {
       // block has all-empty inner tiles (tot_inner_rank() == 0): it represents
       // zero and there is no inner rank to form the ToT annotation block()
