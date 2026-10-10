@@ -8,6 +8,10 @@ intermediates) by orders of magnitude for the large tensor contractions typical 
 :func:`sequant::optimize` chooses good orderings for both, turning a symbolic expression into one that is also efficient to evaluate
 or translate into code (see :doc:`export`).
 
+Each :class:`sequant::Product` is optimized on its own. The search does not consider the peak memory of evaluating
+several expressions together (e.g. all residual equations of a coupled-cluster method), nor the savings from an
+intermediate that several of them could share.
+
 What it does
 --------------
 
@@ -15,7 +19,7 @@ Given an expression (or a :doc:`ResultExpr <expressions>`), :func:`sequant::opti
 
 - picks a pairwise contraction order for every :class:`sequant::Product`, minimizing a cost metric (the total floating-point
   operation count, by default) using each index's basis extent (:func:`sequant::IndexBasis::extent`), and
-- reorders the summands of every :class:`sequant::Sum` so that terms sharing common intermediates end up next to each other, which
+- reorders the summands of every :class:`sequant::Sum` so that summands sharing common intermediates end up next to each other, which
   helps downstream common-subexpression elimination recognize them.
 
 .. literalinclude:: /examples/user/optimize.cpp
@@ -31,7 +35,21 @@ occupied and virtual spaces involved, so :func:`sequant::optimize` groups them i
 Tuning
 --------
 
-:func:`sequant::optimize` takes an ``OptimizeOptions`` struct exposing further, more advanced controls: alternative cost metrics
-(e.g. minimizing intermediate storage or peak memory instead of raw flop count). One such alternative cost metric — minimizing *peak memory* by
-slicing a large mode into blocks — is substantial enough to have its own page: see :doc:`batching`. For everything else, see the API reference for
-:class:`sequant::OptimizeOptions` for the full, current set of options.
+:func:`sequant::optimize` takes an ``OptimizeOptions`` struct exposing further, more advanced controls. Its full field
+list is API-reference material (see :class:`sequant::OptimizeOptions`), but a few matter for everyday use:
+
+- ``objective_function`` selects the cost metric. The default, ``DenseFLOPs``, minimizes the floating-point operation
+  count, the metric used throughout the literature on contraction ordering. ``DenseTimeSpace``, the objective intended
+  for production, minimizes a performance cost first — the operation count, or a roofline estimate that also charges
+  data movement (see ``roofline`` below) — and the peak size of all simultaneously live tensors second, so among
+  equally fast schedules it picks the one with the lowest peak memory. Its batched variant, ``DenseTimeSpaceBatched``,
+  additionally slices a large mode into blocks to bound peak memory under a budget — substantial enough to have its
+  own page: see :doc:`batching`.
+- ``volatile_weight`` makes operations that must be rebuilt every iteration (those depending on a leaf marked by
+  ``BatchPolicy::is_volatile_leaf``) count more than ones whose results can be cached.
+- The optional ``roofline`` parameters make the performance cost account for data movement as well as arithmetic;
+  see :ref:`cost-model-roofline`.
+- Common-subexpression elimination during the contraction search (``CSEOptions::subnet``) is supported only by
+  ``DenseFLOPs``; leave it disabled for ``DenseTimeSpace`` and ``DenseTimeSpaceBatched``. Enabling it with either
+  trips an assertion, and where assertions are compiled out (``SEQUANT_ASSERT_BEHAVIOR=IGNORE``) CSE is silently
+  skipped.

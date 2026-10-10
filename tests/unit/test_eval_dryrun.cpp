@@ -28,7 +28,7 @@
 // just Logger's runtime level) only fire if Trace::Default resolves to On.
 // Without this, working_set_hwmark() would reflect only the outermost
 // custom-evaluator interception and stay blind to everything the batched
-// replay does inside it -- exactly the visibility Task 6's witness needs.
+// replay does inside it -- exactly the visibility the replay witness needs.
 // mpqc's own C60 trace (614336.log, cited throughout this file) was captured
 // the same way (SEQUANT_EVAL_TRACE defined in that build).
 #define SEQUANT_EVAL_TRACE 1
@@ -132,7 +132,7 @@ std::vector<Index> node_free_indices(EvalExpr const& n) {
 }
 
 // Local shim: BatchModeType-tagging of EvalExpr::node_slice_mask() entries
-// (Task 1) strips this spike file's plain-Index reads down to the .first
+// strips this spike file's plain-Index reads down to the .first
 // projection; this test file is not committed, so keep the fix minimal rather
 // than threading BatchModeType through the trace/analysis helpers below.
 template <typename Range>
@@ -227,7 +227,7 @@ TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
   }
 }
 
-// Regression lock (Task 1, a1 verification): inner_pow() must return the
+// Regression lock: inner_pow() must return the
 // k-th POWER MEAN M_k, not the raw k-th MOMENT <d^k>, so that
 // inner_aware_volume's per-member product over a k-composite group
 // (M_k multiplied once per member) telescopes to mean(d^k) rather than
@@ -1351,7 +1351,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
 }
 
 // ===========================================================================
-// Task 2-6: DryRun eval BACKEND (zero-data Result + eval_expr) and the
+// DryRun eval BACKEND (zero-data Result + eval_expr) and the
 // end-to-end replay harness that WITNESSES the runtime's batch-mode
 // realization on the real post-transform giant term. The POST-TRANSFORM
 // VERDICT case above established the DP side of this story (the DP DOES
@@ -1827,8 +1827,8 @@ TEST_CASE(
   // the replay hit the base class's `throw
   // detail::unimplemented_method("pre_sized_zeros_over_mode")` the moment an
   // External mode was stamped -- the witness could not measure external
-  // batching at all (as-built design
-  // doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md, section 4.2).
+  // batching at all (doc/developer/cost_model.rst,
+  // "Ordered batch contexts and costing").
   // This test drives the SAME scatter branch the TA
   // regression `batched_eval_external_proto_occ_scatter` (test_eval_ta.cpp)
   // exercises, on the dry-run backend: a small forest carrying the occupied
@@ -1949,7 +1949,7 @@ TEST_CASE(
 }
 
 // ===========================================================================
-// Task 6: THE replay harness. Deserializes the real post-transform giant
+// THE replay harness. Deserializes the real post-transform giant
 // term (the FIRST summand of csv_ccsd_doubles_residual_df.txt -- see the
 // POST-TRANSFORM VERDICT case above, which already established this is the
 // ~13-tensor free-mu~ giant), optimizes it once under the SAME C60-scale
@@ -2025,7 +2025,7 @@ TEST_CASE(
   auto cm = std::make_shared<CostModel const>(regime);
 
   // ONE BatchPolicy object, reused verbatim for both optimize() and the
-  // runtime evaluator factory (make_evaluator) -- the plan's hard
+  // runtime evaluator factory (make_evaluator) -- a hard
   // constraint, so the DP's and the runtime's notion of "batchable" and
   // "target batch size" cannot drift apart.
   sequant::BatchPolicy policy;
@@ -2295,7 +2295,7 @@ TEST_CASE(
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
-// Task 6 (perf-first validation): optimize the C60 giant term (index 38) at
+// Perf-first validation: optimize the C60 giant term (index 38) at
 // the faithful real config and check the factorization the DP picks. The 4-PAO
 // signature is a contraction node carrying >= 4 free mu~ indices (the
 // (mu~ mu~|mu~ mu~) AO integral); perf-first is flops-primary and must NEVER
@@ -2389,7 +2389,7 @@ TEST_CASE(
   // accounting as the [dryrun-df] verdict case). Then call the single shared
   // metered replay (dryrun::meter) to get the modeled peak via
   // the gated-cache replay -- replacing the ad-hoc manual replay + hwmark read
-  // this case used before Task 5, so there is ONE peak/flops code path.
+  // this case used before, so there is ONE peak/flops code path.
   auto analyze = [&](ObjectiveFunction obj) -> Analysis {
     sequant::BatchPolicy policy;
     policy.is_batchable_contracted_index = is_df_batchable;
@@ -2728,7 +2728,9 @@ TEST_CASE(
   // whose four virtual legs are all protoindexed by the same occ pair (i1,i2),
   // so seeding the pair shrinks the footprint on every one of them. How far the
   // peak drops is not pinned here: the block/extent ratio 8/120 per mode bounds
-  // it, but the per-node external opens the DP performs (section 4.2) decide
+  // it, but the per-node external opens the DP performs (see
+  // "Ordered batch contexts and costing" in doc/developer/cost_model.rst)
+  // decide
   // which nodes carry the slice, so only the drop and the budget fit are.
   CHECK(peak_on < peak_off);
   // ...and the giant now FITS the 40 GB budget (~1874 GB -> ~33 GB): the DP
@@ -3479,7 +3481,7 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
   REQUIRE(verdicts.size() > 0);
 }
 
-// Task 3: the opt-in scratch-fold peak sink captures the batched-inner peak the
+// The opt-in scratch-fold peak sink captures the batched-inner peak the
 // OUTER cache.working_set_hwmark() misses. Reuse the [dryrun-objective]
 // peak-first (DenseSpaceTimeBatched) setup -- the objective whose batched-inner
 // transient (~38.9 GB, materialized INSIDE a make_batched_scratch cache)
@@ -3656,10 +3658,10 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
-// Phase 1 Task 2 regression guard: a metered replay's peak_bytes must be the
+// Regression guard: a metered replay's peak_bytes must be the
 // TRUE co-resident sum across the cache scope chain, not
 // max(scratch_hwmark, outer_hwmark). eval.hpp's 7 note_working_set() call
-// sites now add cache.parent()->chain_residency() (CacheManager, Task 1) to
+// sites now add cache.parent()->chain_residency() (CacheManager) to
 // the per-op hwmark, so a scratch cache chained (CacheManager::set_parent)
 // to an outer cache holding a PERSISTENT, ALIVE cross-term entry folds that
 // outer residency into its own working_set_hwmark(). Before this fix, a
@@ -3802,12 +3804,12 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][peak]") {
   // isolated local footprint PLUS the outer's live co-resident residency --
   // an exact sum, not a max.
   CHECK(hwmark_chained == hwmark_isolated + R);
-  // Equivalently, and matching the brief's robust form: strictly greater
+  // Equivalently, and more robustly: strictly greater
   // than what max(scratch, outer) alone would yield.
   CHECK(hwmark_chained > std::max(hwmark_isolated, R));
 }
 
-// Task 2: the FAITHFUL (gated) dry-run cache built by build_dryrun_cache must
+// The FAITHFUL (gated) dry-run cache built by build_dryrun_cache must
 // keep a free-batchable giant -- a node whose result carries a free mu~/K mode
 // -- out of the run-scope cache, exactly as the real batched eval loop does,
 // instead of materializing it whole. Two independent gates cooperate, and this
@@ -3962,7 +3964,7 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   task_cfg.max_footprint = 1e11;
   auto task_cache = build_dryrun_cache(nodes, task_cfg, regime);
 
-  // Phase 4b-1: with sliced_modes unified to the all-batched-modes
+  // With sliced_modes unified to the all-batched-modes
   // cross-occurrence meet, this giant's lifetime mask is now NON-empty -- it
   // carries a free batchable (aux) mode on its own result slots that is batched
   // above it, so its per-occurrence value differs per batch of that mode. The
@@ -4246,8 +4248,8 @@ TEST_CASE(
   // A minimal 3-node forest: two leaves (g, t) contracted into one product,
   // fully contracted (no external indices) so the whole tree is a scalar.
   // Small enough to hand-build directly rather than routing through
-  // sequant::optimize (see test-1 brief: a 2-3 node hand-built forest is
-  // acceptable for this cache-integration assertion).
+  // sequant::optimize (a 2-3 node hand-built forest is enough for this
+  // cache-integration assertion).
   auto expr = sequant::deserialize<sequant::ExprPtr>("g{i_1;a_3} * t{a_3;i_1}");
   REQUIRE(static_cast<bool>(expr));
 
@@ -4426,14 +4428,14 @@ TEST_CASE(
   CHECK(root_it->uses.empty());
 }
 
-// Task 3: meter() drives the REAL policy-selected executor (ordered or
+// meter() drives the REAL policy-selected executor (ordered or
 // forest descent, chosen by BatchPolicy::scheduler) through the sizing
 // backend with its own metered cache, rather than a hand-rolled proxy of one.
 // This forest carries a genuine Contracted batch axis (a_3, the "aux"-analog):
 // with scheduler == BatchScheduler::ordered, the driver entry
 // (ordered_executor.hpp) rebuilds a schedule with ONE realized batch loop
 // from that stamp and drives the executor's nested batch-scratch caches
-// (a Task-1 coverage gap -- no earlier [meter] test exercised a multi-level
+// (a coverage gap -- no other [meter] test exercised a multi-level
 // PeakMonitor parent-chain under a real batched walk); with it forest_descent,
 // the SAME forest runs through today's unbatched per-tree descent. Both modes
 // must report a positive peak/build count and the matching `scheduler` value.

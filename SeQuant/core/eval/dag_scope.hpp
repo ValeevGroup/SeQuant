@@ -31,8 +31,8 @@ using LoopId = std::size_t;
 /// \c latitude_ordinal on \c DagScopeLevel) never enters it. \c depth
 /// distinguishes even two groups of the same space (an "external" and a
 /// "contracted" group of one space); \c loop_slot distinguishes the members of
-/// one group. See doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md,
-/// section 5.1.
+/// one group. See doc/developer/batched_evaluation.rst,
+/// "Loop identity and value identity".
 struct LoopKey {
   std::size_t depth;  //!< which loop-group
   int loop_slot;      //!< which member-slot within the group (0-based)
@@ -58,7 +58,7 @@ struct LoopKey {
 /// sibling block per pass, and \c latitude_ordinal disambiguates them (see
 /// \c forced_split_levels, ordered_schedule.hpp). \c space is a color for
 /// fusion group-matching, never identity. See
-/// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md, section 5.1.
+/// doc/developer/batched_evaluation.rst, "Loop identity and value identity".
 struct DagScopeLevel {
   std::size_t depth;  //!< which loop-group (identity)
   std::wstring

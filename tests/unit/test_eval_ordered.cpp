@@ -1,5 +1,5 @@
-// MULTI-ROOT ordered evaluate (see the as-built design, section 8,
-// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md): one
+// MULTI-ROOT ordered evaluate (see the developer guide, "Executing the table",
+// doc/developer/batched_evaluation.rst): one
 // schedule built over SEVERAL INDEPENDENT root trees, returning one result
 // PER ROOT (a map, no cross-root summation), so a subexpression shared
 // across roots is built exactly once.
@@ -381,7 +381,7 @@ TEST_CASE(
   }
 
   SECTION("layouts.size() != roots.size(): throws (size-mismatch guard)") {
-    // Task 7's per-root widening: a caller that supplies the wrong number
+    // Per-root layouts: a caller that supplies the wrong number
     // of layouts (not one per root) must fail loudly rather than silently
     // truncating/padding. Checked before the driver lookup, so this fires
     // even with no driver installed.
@@ -428,10 +428,10 @@ TEST_CASE(
     "table-driven reads flip in-place eligibility: a homed value is shared "
     "while the table still has reads of it, and drained by its last one",
     "[eval][ordered]") {
-  // End-to-end pin for the Stage-3 ownership seam: the in-place gate in
+  // End-to-end pin for the table ownership seam: the in-place gate in
   // eval.hpp now asks eval::CellReadResolver::operand_drained() directly
   // (rather than the legacy CacheManager::chain_holds_shared(f.left), which
-  // Stage 2 already stopped keeping honest for table-served reads -- nothing
+  // is no longer kept honest for table-served reads -- nothing
   // decrements the legacy home entry's own life any more once a value is
   // read through the registry instead of access_at, so chain_holds_shared()
   // now reports EVERY table-homed value as permanently shared, which is
@@ -501,7 +501,7 @@ TEST_CASE(
   auto cache = sequant::CacheManager<ScalarNode>::empty();
 
   // A's OWN CELL: the whole fixture is unbatched, so every value has exactly
-  // one Build cell, at the root scope. Stage 3 moved storage onto the table,
+  // one Build cell, at the root scope. Storage lives on the table,
   // so this -- not the legacy cache's own map -- is where A's buffer lives.
   std::size_t const shared_hash = shared->hash_value();
   std::size_t shared_vid = rich.cells.size();
@@ -513,7 +513,7 @@ TEST_CASE(
   // of every non-leaf node with the live cache, and DECLINES (null return),
   // so it observes without changing what runs. Every invocation records
   // (a) the resolver's operand_drained(A) at that instant and (b) whether
-  // CacheManager::chain_residency() (Stage 3: fed by the registry's own live
+  // CacheManager::chain_residency() (fed by the registry's own live
   // bytes -- see ordered_executor.hpp's external-residency install) is at
   // least as large as A's own buffer while A is held -- a [meter]-style
   // sanity floor: the peak metering must never under-count a value known to

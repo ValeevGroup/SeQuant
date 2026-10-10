@@ -251,7 +251,7 @@ TEST_CASE("table_read spends one declared life and reports exhaustion once",
   // a resident home still owes the table that read). The two must not drift:
   // TableRead::exhausted is set on the read that spends the LAST life and on
   // no other, and never for a persistent cell -- the caller (not table_read
-  // itself, since Task 2) decides what to do with that flag.
+  // itself) decides what to do with that flag.
   auto const t = make_table();
   CellRegistry reg(t);
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(

@@ -24,10 +24,9 @@
 namespace sequant::eval {
 
 ///
-/// \brief Legality analysis output types of the ordered-scope batched-eval
-/// design: per-value classification of which batch-loop axes a value's
-/// computation depends on, and whether it is legal to home the value at each
-/// such axis.
+/// \brief Legality analysis output types of the ordered scheduler: per-value
+/// classification of which batch-loop axes a value's computation depends on,
+/// and whether it is legal to home the value at each such axis.
 ///
 
 ///
@@ -389,11 +388,11 @@ struct LegalitySchedule {
 /// \par No fixpoint: a value read across a forced split is not demoted here
 /// A value \c LoopLocal on a forced-split axis \c L that is read by a
 /// later-pass reader is handled entirely by the sequencer (\c
-/// build_ordered_schedule's per-nest pass placement, rule 4), which
-/// materializes such a value across the pass boundary at schedule-build time
-/// -- "used across the split" is a property of the ordered pass structure the
-/// sequencer builds, not of the DAG this function sees, so classification here
-/// needs to react to it. \c analyze_legality is therefore a single
+/// build_ordered_schedule's per-nest pass placement, materialization rule),
+/// which materializes such a value across the pass boundary at schedule-build
+/// time -- "used across the split" is a property of the ordered pass structure
+/// the sequencer builds, not of the DAG this function sees, so classification
+/// here needs to react to it. \c analyze_legality is therefore a single
 /// deterministic round: one classification per cell, with no re-derivation
 /// loop.
 ///
@@ -516,7 +515,7 @@ template <meta::eval_node_range R>
       auto const& dp_stamps = (*it->second)->node_slice_mask();
       // Positional: the representative node's home is labeled in its tree's
       // frame, vc.carried in the first occurrence's; positions are canonical
-      // across occurrences (explicit-cells design section 11), labels are
+      // across occurrences ("Loop identity and value identity"), labels are
       // not.
       {
         auto const& rep_carried = (*it->second)->canon_indices();

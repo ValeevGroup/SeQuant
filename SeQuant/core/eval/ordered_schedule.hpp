@@ -128,7 +128,7 @@ struct ScopeBlock {
 /// \brief One ordered step of a \c ScopeBlock: build a value at this scope,
 /// or enter a nested child loop block.
 ///
-/// \details The design brief's target shape is a bare alias, \c using Step =
+/// \details The natural shape is a bare alias, \c using Step =
 /// std::variant<BuildStep, ScopeBlock>. That is not directly expressible:
 /// \c ScopeBlock::steps must hold a sequence of \c Step (so a build
 /// interleaves with child blocks in one ordered list, per the class doc
@@ -154,7 +154,7 @@ struct ScopeBlock {
 /// ordered sequence of interleaved build/child-block steps the design
 /// requires, and preserves real \c std::variant semantics (\c
 /// std::holds_alternative / \c std::get_if / \c std::visit all work on \c
-/// Step::value) -- the only change from the brief's literal shape is the one
+/// Step::value) -- the only change from a bare alias is the one
 /// extra wrapping layer forced by the forward-declaration ordering.
 ///
 struct Step {
@@ -565,9 +565,9 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 }
 
 ///
-/// \brief Pass levels, global over every batched basis key (design
-/// section 9.2): every value gets an integer pass such that a value that needs
-/// another value's completed form sits in a later pass than that other value.
+/// \brief Pass levels, global over every batched basis key: every value gets
+/// an integer pass such that a value that needs another value's completed
+/// form sits in a later pass than that other value.
 ///
 /// Two kinds of dependency edge bump the reader's pass, both keyed on the
 /// operand (the "source") rather than the axis basis key:
@@ -578,8 +578,9 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 ///     escape) and the reader is produced inside that same instance (its
 ///     production site is at or below the reduction's depth, in the same
 ///     nest): such a reader would otherwise see the current batch's partial
-///     sum rather than the completed reduction (the finding pinned by the
-///     9.1 partial-sum check). A reader produced outside the reduced
+///     sum rather than the completed reduction (pinned by the
+///     "a reduction source read inside its own loop by a later pass gets two
+///     pass blocks" test). A reader produced outside the reduced
 ///     instance reads the completed sum from the escape's residency scope
 ///     as always and needs no bump. \p inside(reader_vid, source_vid)
 ///     decides this per (reader, source) pair -- the caller's lambda
@@ -597,7 +598,8 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 /// least one consumer is lifted to max(base, min over its direct consumers'
 /// passes), so a value whose readers all sit later is built with them; a
 /// value with readers in several passes keeps its base (and is materialized
-/// by the builder's rule 4 when a later same-nest reader needs it).
+/// by the builder's materialization rule when a later same-nest reader needs
+/// it).
 ///
 /// Every dependency edge points to an equal or earlier pass. With only
 /// LoopCarried bumps present (no Reduction-source bump fires) the passes
@@ -801,9 +803,9 @@ inline ForkedSubchain fork_subchain(
 /// value carrying two same-key modes on different slots gets two nested
 /// loops, not one. A nest holding members of more than one pass additionally
 /// emits one sibling block per pass (latitude = pass), run in schedule order
-/// (see step 2b and \c forced_split_levels). See the as-built design
-/// section 6.1, \c
-/// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md.
+/// (see step 2b and \c forced_split_levels). See "Placement, escapes, and pass
+/// splits" in \c
+/// doc/developer/batched_evaluation.rst.
 ///
 /// \details Four-part algorithm, pure scheduling (no cost choice):
 ///
@@ -836,7 +838,7 @@ inline ForkedSubchain fork_subchain(
 ///     equality (an unmatched/non-prefix \c home_floor falls back to
 ///     root). This value
 ///     gets no \c outputs entry anywhere (see \c well_formed's single-
-///     producer invariant): "Transient" (design point 4) is realized as
+///     producer invariant): "Transient" is realized as
 ///     "produced by a \c BuildStep and nothing else", not as an explicit
 ///     \c OutputKind::Transient \c outputs record, since \c
 ///     well_formed::detail::collect_production_ids counts every \c outputs
@@ -844,7 +846,7 @@ inline ForkedSubchain fork_subchain(
 ///     site -- a \c Transient \c outputs entry alongside the \c BuildStep
 ///     would be flagged as double-production.
 ///   - at least one \c per_axis entry is \c Reduction or \c LoopCarried
-///     ("escapes" that axis, per design point 4: \c Reduction ->
+///     ("escapes" that axis: \c Reduction ->
 ///     accumulate-summed out, \c LoopCarried -> accumulate-scattered out)
 ///     -- the value has no \c BuildStep anywhere; instead it is recorded as
 ///     an \c outputs entry (kind \c AccumulateSum / \c AccumulateScatter)
@@ -857,7 +859,8 @@ inline ForkedSubchain fork_subchain(
 ///     can close -- exactly consistent with an outer accumulator reading an
 ///     inner one. A chain may legitimately skip a level the value is
 ///     invariant on; that crossing is carried by residency plus \c
-///     produce_if_absent, not by an escape (as-built section 6.2).
+///     produce_if_absent, not by an escape ("Placement, escapes, and pass
+///     splits").
 ///
 /// \par 3. Topological order within a block -- a real topological sort
 /// Each block's own \c steps interleave its \c BuildStep's (one per value
@@ -1237,8 +1240,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       }
   }
 
-  // Legality record by value id, for reader lookups in rule 4 and (below)
-  // for the pass levels' \c inside predicate.
+  // Legality record by value id, for reader lookups in the materialization rule
+  // and (below) for the pass levels' \c inside predicate.
   std::unordered_map<std::size_t, CellLegality const*> cl_by_vid;
   cl_by_vid.reserve(legality.cells.size());
   for (CellLegality const& c2 : legality.cells) {
@@ -1290,21 +1293,21 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     return target;
   };
 
-  // The DAG-scope nest a value is produced inside, for rule-4 reader
-  // classification: the deepest depth any of its own per_axis modes (any
+  // The DAG-scope nest a value is produced inside, for materialization-rule
+  // reader classification: the deepest depth any of its own per_axis modes (any
   // role, not just LoopLocal) resolves to. A value with only carried/
   // reduction roles -- a forest root delivered in full, or a carried value
   // of a later pass -- is still produced per batch inside its own nest (its
   // production is the accumulation folded into its escape bucket), so
   // testing only LoopLocal modes (local_home_depth) would report such a
-  // value as homed at root: rule 4 would then neither fire the mixed-pass
-  // materialization for a value it reads, nor guard the tripwire against
-  // it. production_depth instead considers every per_axis mode regardless
-  // of role. A mode whose fusion slot does not resolve (\c fusion_slot
-  // returns -1) is skipped rather than guessed at slot 0 -- a guessed slot
-  // can land in the wrong nest (fusion_slot's own doc comment), and this
-  // result feeds the outside-its-nest tripwire below, where a wrong nest
-  // decides whether to throw. Nullopt = no mode resolves at all, whether
+  // value as homed at root: the materialization rule would then neither fire
+  // the mixed-pass materialization for a value it reads, nor guard the tripwire
+  // against it. production_depth instead considers every per_axis mode
+  // regardless of role. A mode whose fusion slot does not resolve (\c
+  // fusion_slot returns -1) is skipped rather than guessed at slot 0 -- a
+  // guessed slot can land in the wrong nest (fusion_slot's own doc comment),
+  // and this result feeds the outside-its-nest tripwire below, where a wrong
+  // nest decides whether to throw. Nullopt = no mode resolves at all, whether
   // because the value is genuinely unbatched (root) or because every one of
   // its modes has an unresolvable fusion slot -- the two are
   // indistinguishable here; the table validator's visibility rule is the
@@ -1521,10 +1524,10 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     bool materialized_across_split = false;
     std::optional<std::size_t> const home_depth = local_home_depth(cl);
     // Whether this value has a LoopLocal instance of its own nest that is
-    // not covered by a role-driven escape (before rule 4 adds anything) --
-    // the invariant the outside-nest tripwire below actually needs. A
-    // per-batch-only instance like that is never delivered to root, so a
-    // later-pass reader outside the nest contradicts legality regardless of
+    // not covered by a role-driven escape (before the materialization rule adds
+    // anything) -- the invariant the outside-nest tripwire below actually
+    // needs. A per-batch-only instance like that is never delivered to root, so
+    // a later-pass reader outside the nest contradicts legality regardless of
     // whether some other instance of this same value happens to be
     // role-escaped elsewhere, at a different depth (a coarser gate on
     // "any role escape at all" would miss exactly this two-different-depth
@@ -1569,7 +1572,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       std::size_t const nest = type_cluster[*home_depth];
       auto const readers = later_same_nest_readers(nest);
       if (!readers.empty()) {
-        // Rule 4 (section 7.3): escape every instance of this nest the
+        // Materialization rule: escape every instance of this nest the
         // value is loop-local on and not already escaped by a role as a
         // Scatter; a role escape already scattering (LoopCarried) that
         // instance is left as-is, a role escape summing it (Reduction) is
@@ -1610,21 +1613,20 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
           }
         }
       } else if (unescaped_local_instance) {
-        // Tripwire (controller ruling I3; reader test corrected by ruling
-        // I4): a value with an unescaped LoopLocal instance of its own nest
-        // (checked before rule 4 above ran, via unescaped_local_instance)
-        // has a per-batch-only form of that instance that is never
-        // delivered to root -- and there is no same-nest later-pass reader
-        // to trigger rule 4 above and fix it (this is the `readers.empty()`
-        // branch). A direct later-pass reader whose production site
-        // resolves to a nest other than this one is the reader's location,
-        // not this value's escapes: it cannot see the per-batch home form,
-        // and legality and the schedule disagree, regardless of whether
-        // some other instance of this value happens to be role-escaped
-        // elsewhere. A value whose every LoopLocal instance of its own nest
-        // is already role-escaped is exempt: each such escape already
-        // assembles a full form with root residency (rule 4's own
-        // scatter-dominance above ensures no instance is left half-summed),
+        // Tripwire: a value with an unescaped LoopLocal instance of its own
+        // nest (checked before the materialization rule above ran, via
+        // unescaped_local_instance) has a per-batch-only form of that instance
+        // that is never delivered to root -- and there is no same-nest
+        // later-pass reader to trigger the materialization rule above and fix
+        // it (this is the `readers.empty()` branch). A direct later-pass reader
+        // whose production site resolves to a nest other than this one is the
+        // reader's location, not this value's escapes: it cannot see the
+        // per-batch home form, and legality and the schedule disagree,
+        // regardless of whether some other instance of this value happens to be
+        // role-escaped elsewhere. A value whose every LoopLocal instance of its
+        // own nest is already role-escaped is exempt: each such escape already
+        // assembles a full form with root residency (the materialization rule's
+        // own scatter-dominance above ensures no instance is left half-summed),
         // which any later-pass reader, in any nest, can see.
         // "Produced outside this nest" is decided by production_depth, not
         // by local_home_depth: a reader with only carried/reduction roles --
@@ -1673,18 +1675,16 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     // (below) and its escape chain reaches deeper than that -- a role
     // escape nested inside the LoopLocal home (a Reduction axis, say) --
     // in which case the deepest site on that chain is the true production
-    // site and home's rule-4 escape is pure forwarding, like any other link
-    // in the chain.
-    // Completeness invariant (design section 9.2): a value
-    // reduced over a loop instance (an AccumulateSum escape at depth d) is
-    // complete only after that loop closes; a reader produced inside that
-    // instance (production depth at or below d in the same nest) in the
-    // same pass would be served the current batch's partial sum. The pass
-    // levels above (2a) now bump exactly such a reader to a later pass via
-    // the Reduction-source bumping edge, so this shape should never survive
-    // to here; this check stays as a loud tripwire on the levels
-    // themselves -- its firing means the levels failed to bump a read they
-    // should have, a builder defect, not an expected outcome.
+    // site and home's materialization escape is pure forwarding, like any other
+    // link in the chain. Completeness invariant: a value reduced over a loop
+    // instance (an AccumulateSum escape at depth d) is complete only after that
+    // loop closes; a reader produced inside that instance (production depth at
+    // or below d in the same nest) in the same pass would be served the current
+    // batch's partial sum. The pass levels above (2a) now bump exactly such a
+    // reader to a later pass via the Reduction-source bumping edge, so this
+    // shape should never survive to here; this check stays as a loud tripwire
+    // on the levels themselves -- its firing means the levels failed to bump a
+    // read they should have, a builder defect, not an expected outcome.
     for (auto const& [d, kind] : escapes) {
       if (kind != OutputKind::AccumulateSum) continue;
       auto const cons_it = g.consumers_of.find(vid);
@@ -1714,13 +1714,13 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       // production is the accumulation itself, at the deepest escape site
       // (the multi-level chain's bottom-up assembly: raw production at the
       // deepest site, pure forwarding at every shallower one). One
-      // materialized across the split by rule 4 above is different: it is
-      // produced, at the deepest site of its full chain (role escapes and
-      // the rule-4 scatter together), which same-pass consumers read inside
-      // its own nest, per batch. It keeps its BuildStep there, so that
-      // block both builds it (for its same-pass in-nest readers, and as the
-      // per-batch input of the rest of its chain) and lists it as an output
-      // (for the later-pass reader). `well_formed` admits exactly this
+      // materialized across the split by the materialization rule above is
+      // different: it is produced, at the deepest site of its full chain (role
+      // escapes and the materialization scatter together), which same-pass
+      // consumers read inside its own nest, per batch. It keeps its BuildStep
+      // there, so that block both builds it (for its same-pass in-nest readers,
+      // and as the per-batch input of the rest of its chain) and lists it as an
+      // output (for the later-pass reader). `well_formed` admits exactly this
       // shape: every block that lists a value in `outputs` either holds its
       // BuildStep or is an ancestor of the one that does -- always true
       // here since the BuildStep sits at the chain's deepest site and every
@@ -1837,7 +1837,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   container::vector<detail::OrderedScheduleStepMeta> finished_metas;
   std::optional<std::size_t> prev_cluster;
 
-  // Per-nest pass sets (design section 3.2): the passes of every build
+  // Per-nest pass sets: the passes of every build
   // homed at any of the nest's depths and of every escape output listed
   // there. A nest with one pass is one block (latitude = that pass); a nest
   // with several is one block per pass at its outermost depth.
@@ -1903,16 +1903,15 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     bool const outermost = d == cluster_min.at(nest);
     std::set<int> const& passes = nest_passes[nest];
     if (outermost && passes.size() > 1) {
-      // Several passes at this nest's outermost depth (per-nest forced split
-      // design, section 3.2): one block per pass, ascending, each holding the
-      // builds and outputs of that pass at this depth plus the inner
-      // sub-chain forked for that pass (fork_subchain applied once per pass;
-      // the fork's predicate-true "consumer" side is the pass's own steps).
-      // At the innermost axis pending is empty and fork_subchain returns an
-      // empty inner list, reducing to a childless per-pass block emission.
-      // The later pass's block reads the earlier pass's escaped (now-full)
-      // outputs, so its `requires_` names them and the outer topo-sort orders
-      // passes in ascending order.
+      // Several passes at this nest's outermost depth (per-nest forced split):
+      // one block per pass, ascending, each holding the builds and outputs of
+      // that pass at this depth plus the inner sub-chain forked for that pass
+      // (fork_subchain applied once per pass; the fork's predicate-true
+      // "consumer" side is the pass's own steps). At the innermost axis pending
+      // is empty and fork_subchain returns an empty inner list, reducing to a
+      // childless per-pass block emission. The later pass's block reads the
+      // earlier pass's escaped (now-full) outputs, so its `requires_` names
+      // them and the outer topo-sort orders passes in ascending order.
 
       // Recursive value_ids a forked child Step produces (builds + escape
       // outputs, through nested blocks), for its `requires_`/`tie_key` meta.
@@ -2178,8 +2177,8 @@ inline void assert_global_level_axis_uniqueness(
 /// including two of a nest's own pass blocks (one per pass, latitude =
 /// pass), which differ only in \c latitude_ordinal -- get distinct ids by
 /// construction: a nest's pass blocks must be distinguishable colors, not
-/// folded (as-built design section 5.1, \c
-/// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md).
+/// folded ("Placement, escapes, and pass splits", \c
+/// doc/developer/batched_evaluation.rst).
 ///
 /// \note Defined in \c dag_scope.hpp so the low-level DAG-scope types can be
 /// named without depending on this schedule header; re-exported here so the

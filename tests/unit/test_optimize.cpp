@@ -728,8 +728,8 @@ TEST_CASE("optimize", "[optimize]") {
     }
 
     SECTION(
-        "DensePeakSizeBatched all-sliced corner equals Phase-1 batched "
-        "peak") {
+        "DensePeakSizeBatched all-sliced corner equals peak_cost with "
+        "sliced extents") {
       using namespace sequant;
       // Dedicated batchable "F" space (fresh type bit, no overlap with
       // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
@@ -754,8 +754,7 @@ TEST_CASE("optimize", "[optimize]") {
       opt::detail::PeakBatchedModel model{idxsz, batch_fn,
                                           /*is_volatile_leaf=*/{}};
       model.is_batchable_contracted_index = is_batchable;
-      model.is_batchable_external_index =
-          is_batchable;  // external role (Task-4)
+      model.is_batchable_external_index = is_batchable;  // external role
       // F2 occurs on one tensor only, so it is an EXTERNAL mode: it is a
       // nestable cell mode only under spectator batching, and the all-sliced
       // corner needs every batchable mode in some cell.
@@ -772,14 +771,14 @@ TEST_CASE("optimize", "[optimize]") {
           for (auto const& fp : st[root][id])
             dp_allsliced = std::min(dp_allsliced, fp.peak);
       REQUIRE(dp_allsliced < std::numeric_limits<double>::max());
-      // Phase-1 peak with EVERY batchable index sliced: an extent wrapper that
+      // peak_cost with EVERY batchable index sliced: an extent wrapper that
       // slices iff the index is batchable (no batched_extent helper exists).
       auto be = [&](Index const& ix) -> std::size_t {
         std::size_t e = idxsz(ix);
         return is_batchable(ix) ? std::min(e, batch) : e;
       };
-      double phase1 = opt::detail::peak_cost(net, targets, be);
-      REQUIRE(dp_allsliced == phase1);
+      double sliced_peak = opt::detail::peak_cost(net, targets, be);
+      REQUIRE(dp_allsliced == sliced_peak);
     }
 
     SECTION("DensePeakSizeBatched objective matches per-index oracle") {
@@ -1534,7 +1533,7 @@ TEST_CASE("role filter: contracted mode sliced only in the contracted role",
   CHECK(n_F_sliced_cells(fctx) == 0);  // ... so NO cell slices an F mode
 }
 
-// Task 4 [role-filter]: the historical external->contracted fallback is GONE.
+// The historical external->contracted fallback is GONE.
 // A space admitted ONLY in the contracted role, whose mode occurs EXTERNALLY
 // (open on the term root), must NOT be batchable in the external role: with the
 // external building block at its default (decline) there is no fallback to the
@@ -2438,7 +2437,7 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
     // CostParams: {is_volatile_leaf, volatile_weight, footprint_weight,
     //              peak_flops_tolerance, roofline, accumulation_factor}.
     // peak_flops_tolerance is no longer consulted by DensePeakSizeBatched's
-    // final selection (Task 1.2: threshold-gated). This probe is inherently
+    // final selection (it is threshold-gated). This probe is inherently
     // about PEAK (which factorization is smaller in memory, not flops), so it
     // needs a near-zero peak_threshold to force the min-peak fallback path
     // (the default +inf would instead pick purely by flops, masking the
@@ -2480,7 +2479,7 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
   // +inf would instead pick purely by (replay-weighted) flops, which favor
   // forming the persistent, t-free, Kappa-free integral ONCE REGARDLESS of
   // K_b (flops do not depend on the aux batch size) -- exactly the behavior
-  // exercised by the "threshold gates batching" test (Task 1.2, below), which
+  // exercised by the "threshold gates batching" test (below), which
   // reuses this same motif. With peak_threshold forced near-zero (min-peak
   // fallback), this instead reproduces the peak-driven crossover: below the
   // crossover it stays late-K; above it flips to early-K -- the suspected
@@ -2510,7 +2509,7 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
 }
 #endif  // __OPTIMIZE__
 
-// Task 1.2: threshold-gated root selection in PeakBatchedModel::reconstruct.
+// Threshold-gated root selection in PeakBatchedModel::reconstruct.
 // Reuses the "quadratic bubble" motif (early-K integral vs late-K t.(gC),
 // above) since it is a proven, already-tuned case where the OLD
 // (peak-first, epsilon-tolerant) root selection and the flop-optimal choice
@@ -2653,7 +2652,7 @@ TEST_CASE(
   CHECK(integral_at_perf(/*Kb=*/2, /*peak_threshold(bytes)=*/1.0));
 }
 
-// Task 2.2: validate that the batched DP's accumulation_factor charge is
+// Validate that the batched DP's accumulation_factor charge is
 // priced correctly under NESTED accumulation -- i.e. more than one batchable
 // index, contracted at *different* nodes of the binarized tree -- and that
 // the ctx.m <= 1 restriction that used to guard accumulation_factor != 0 can
@@ -2811,7 +2810,7 @@ TEST_CASE("ordered cells exclude external modes", "[optimize][ext-place]") {
   opt::detail::PeakBatchedModel model{idxsz, batch_fn, {}};
 
   model.is_batchable_contracted_index = is_batchable;
-  model.is_batchable_external_index = is_batchable;  // external role (Task-4)
+  model.is_batchable_external_index = is_batchable;  // external role
   model.charge_batch_recompute = true;
   auto ctx = model.build_context(net, targets);
 
@@ -2865,7 +2864,7 @@ TEST_CASE("the DP opens an external batch loop on an over-budget node",
     o::PeakBatchedModel model{idxsz, batch_fn, {}};
     model.is_batchable_contracted_index = is_batchable;
     // F is external-only here; admit it in the external role explicitly so it
-    // survives the fallback removal (Task 4). Byte-identical to the fallback.
+    // survives the fallback removal. Byte-identical to the fallback.
     model.is_batchable_external_index = is_batchable;
     model.charge_batch_recompute = true;
     model.perf_first = true;
@@ -2987,7 +2986,7 @@ TEST_CASE("perf-first peak_threshold gates contracted aux slicing",
   CHECK(peak_min <= peak_lo);  // fallback is the min-peak realization
 }
 
-// Task 3.3: binarize() must stamp EvalExpr::node_slice_mask() from the
+// binarize() must stamp EvalExpr::node_slice_mask() from the
 // optimizer's per-node sliced-sets (OptimizeOptions::term_batch_axes ->
 // BinarizationOptions::node_batch_axes), and the two post-orders (the
 // optimizer's DP reconstruction and binarize's Product recursion) must line
@@ -3069,11 +3068,11 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
   CHECK(aux_found);
 }
 
-// Loop-open vs sliced-mask (2026-08-25, Task 1): binarize() must apply
+// Loop-open vs sliced-mask: binarize() must apply
 // NodeBatchAnnotation::opened_here onto EvalExpr::batch_loops_opened_here(),
 // independently of node_slice_mask() (axes). Hand-build node_batch_axes so the
 // single contraction node's opened_here carries one External mode while a leaf
-// stays empty -- isolates the binarize wiring from the DP emit (Task 2).
+// stays empty -- isolates the binarize wiring from the DP emit.
 TEST_CASE("binarize applies batch_loops_opened_here from node annotation",
           "[optimize][annotate][loop-open]") {
   using namespace sequant;
@@ -3121,7 +3120,7 @@ TEST_CASE("binarize applies batch_loops_opened_here from node annotation",
   CHECK(leaves_with_open == 0);
 }
 
-// Task 1 (multiroot-single-dag-eval): binarize() must mark the
+// binarize() must mark the
 // accumulation-chain Sum nodes produced when folding an N-ary Sum into
 // binary Sum nodes. fold_left_to_node (binary_node.hpp) always folds the
 // running accumulator in as the LEFT operand (`l` in `accumulate(rng | tail,
@@ -3167,7 +3166,7 @@ TEST_CASE("binarize marks accumulation Sum nodes in-place", "[binarize]") {
   REQUIRE(node2->accumulate_in_place());
 }
 
-// Task 3/4: reconstruct_batched_modes must emit BatchModeType::External entries
+// reconstruct_batched_modes must emit BatchModeType::External entries
 // for a genuine external (external, never-contracted) mode at every node whose
 // subset carries it, gated by BatchPolicy::batch_spectator_indices (without
 // which an external bit never enters a DP cell, so no loop is opened and
@@ -3333,7 +3332,7 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
   // Assertion 2: peak_threshold = +infinity (the term never "needs" batching
   // under any budget) with batch_spectator_indices still true => the
   // unseeded-peak-over-threshold gate fails => ZERO External entries
-  // anywhere. Before the Task 4 gate, reconstruct_batched_modes emitted
+  // anywhere. Before this gate, reconstruct_batched_modes emitted
   // External regardless of peak_threshold, so this assertion fails without the
   // fix and passes with it.
   axes_map->clear();
@@ -3849,18 +3848,18 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
   CHECK(with == without);
 }
 
-// A2 PROBE (Phase A, order-aware multilevel batching). Measures what the DP
+// PROBE (order-aware multilevel batching). Measures what the DP
 // charges TODAY for the gC/middle-gap shape, on a small hand-built network, so
 // the RED assertion is written against ground truth rather than a predicted
 // failure direction.
 //
-// Network (spec's example): R{i1,a2} = (g{i1;F1} * h{F1;a1}) * (s{a1;F2} *
+// Network: R{i1,a2} = (g{i1;F1} * h{F1;a1}) * (s{a1;F2} *
 // t{F2;a2}).  Batched set {F, i}. The right sub-intermediate carries F but NOT
 // i, so it is invariant to any i-loop -- the I2/gC class.
 //
-// NOTE the premise conflict this probe exists to settle: plan Task A2 asserts
-// "today's esc prices rf=1 (the phantom)" via the DP DROPPING a mode from B,
-// but Task A1 established B is tree-faithful (B at a node is exactly the set
+// NOTE the premise conflict this probe exists to settle: one hypothesis was
+// that "today's esc prices rf=1 (the phantom)" via the DP DROPPING a mode
+// from B, but B is tree-faithful (B at a node is exactly the set
 // of batched modes contracted at strict ancestors, by the C = B | aprime
 // descent), so that mechanism does not exist. If rf=1 shows up here it is for
 // a DIFFERENT reason -- i is EXTERNAL (free on the root, contracted nowhere),
@@ -3904,9 +3903,8 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   model.is_batchable_contracted_index = is_batchable;
   // The batchable mode occurs EXTERNALLY here (open on the term root); admit it
   // in the external role explicitly. Byte-identical to the old external->
-  // contracted fallback that Task 4 removed -- this hidden [.][loop-tree] test
-  // was a fallback-reliant caller missed by Task 4 (its migration ran
-  // [optimize], not [loop-tree]).
+  // contracted fallback, which has been removed; this hidden [.][loop-tree]
+  // test relied on it.
   model.is_batchable_external_index = is_batchable;
   model.charge_batch_recompute = true;
   // The external mode's loop is a nestable DP cell mode only under spectator
@@ -3977,7 +3975,7 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   {
     opt::detail::PeakBatchedModel m2{idxsz, batch_fn, {}};
     m2.is_batchable_contracted_index = is_batchable;
-    m2.is_batchable_external_index = is_batchable;  // external role (Task-4)
+    m2.is_batchable_external_index = is_batchable;  // external role
     m2.charge_batch_recompute = true;
     m2.batch_spectator_indices = true;
     m2.perf_first = true;
@@ -4013,7 +4011,7 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   }
 }
 
-// Phase A RED gate (Task A2, re-aimed per oamb-a0-note.md section 16).
+// RED gate for the free-hoist charge.
 //
 // The free-hoist / I2 shape: a subset that carries NO batchable mode, sitting
 // inside an enclosing loop over a CONTRACTED batchable mode. Such a node is
@@ -4024,8 +4022,7 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
 // Today's charge (cost_model.hpp ~909-913) is order-blind: it bills
 // nBatch(x) for EVERY x in `esc = B & ~open_modes[n]`, with no notion of where
 // the node sits relative to those loops. So it over-charges this node by
-// nBatch(F). A1 section 1.3 calls the Carr == 0 case "today's worst
-// over-charge".
+// nBatch(F). The Carr == 0 case is the worst over-charge.
 //
 // Asserted directly on the DP cell st[n][B] rather than on an emitted schedule,
 // so the test pins the CHARGE and does not depend on which tree the DP happens
@@ -4087,9 +4084,9 @@ TEST_CASE("loop-tree charge must not bill a free hoist", "[.][loop-tree]") {
   CHECK(inside == outside);  // FAILS today: inside == nBatch(F_1) * outside
 }
 
-// Task A4: reconstruct_batched_modes must emit, per contraction node, its
+// reconstruct_batched_modes must emit, per contraction node, its
 // effective use count (effective_count) alongside the batch axes, on the
-// order-aware path. The oracle is the note's formula evaluated straight from
+// order-aware path. The oracle is the formula evaluated straight from
 // the Context at each node's (n, B): effective count = the product of
 // nbatches over the escaped-outer set. We re-walk the SAME chosen
 // back-pointer tree the emit walks and cross-check every emitted node, so the
@@ -4283,7 +4280,7 @@ TEST_CASE(
   model.is_batchable_contracted_index = is_batchable;
   // i is external, a is contracted; both are admitted in both roles here, so
   // the role filter keeps i external and a contracted. Byte-identical to the
-  // fallback but survives its removal (Task 4).
+  // fallback but survives its removal.
   model.is_batchable_external_index = is_batchable;
   model.charge_batch_recompute = true;
   model.batch_spectator_indices = true;  // external batching
@@ -4496,7 +4493,7 @@ TEST_CASE("loop-tree probe: resident-scan peak, nested",
   }
 }
 
-// Task 1 [role-api]: the two batchability building-block predicates + their
+// The two batchability building-block predicates + their
 // derived "any role" accessors. BatchPolicy / CostParams / PeakBatchedModel
 // each expose is_batchable_contracted_index and is_batchable_external_index as
 // settable fields. The "batchable in any role" query is DERIVED, never a

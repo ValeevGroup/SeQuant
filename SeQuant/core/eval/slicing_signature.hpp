@@ -30,8 +30,8 @@ namespace sequant {
 /// identical across canonically-equal occurrences except where the modes bind
 /// different physical indices -- which is exactly the divergence the batched
 /// runtime must not share (see \c make_batched_scratch in eval.hpp, and the
-/// as-built design doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md,
-/// section 5). It is
+/// developer guide doc/developer/batched_evaluation.rst,
+/// "Loop identity and value identity"). It is
 /// the unified form of that path's per-node `sig` (the batch mode's position)
 /// plus `ext_sig` (the external modes' positions): pass `{batch_mode}` followed
 /// by the external axes as \p modes.

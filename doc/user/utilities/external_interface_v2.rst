@@ -382,8 +382,7 @@ tensor contractions, chosen so as to minimize the configured :code:`objective`.
      - Default
      - Required
    * - :code:`objective`
-     - Cost metric to minimize when factorizing contractions. One of :code:`DenseFLOPs`, :code:`DenseSize`, :code:`DensePeakSize` or
-       :code:`DensePeakSizeBatched`.
+     - Cost metric to minimize when factorizing contractions: :code:`DenseFLOPs` (the floating-point operation count).
      - :code:`DenseFLOPs`
      - No
    * - :code:`reorder_sums`

@@ -1,10 +1,10 @@
-// Task 2 of the ordered-scope batched-eval design (SP2): pins the
+// Pins the
 // OrderedSchedule IR (SeQuant/core/eval/ordered_schedule.hpp) -- an ORDERED
 // tree of loop blocks and build steps -- plus its well_formed structural
 // sanity check. No sequencer/executor here.
 //
-// Task 3 (below, "[ordered-schedule]" water-20 acceptance test) pins
-// build_ordered_schedule -- the deterministic sequencer that lowers SP1's
+// The "[ordered-schedule]" water-20 acceptance test below pins
+// build_ordered_schedule -- the deterministic sequencer that lowers the
 // LegalitySchedule + the RichSchedule into an OrderedSchedule for the
 // NON-SPLIT case.
 
@@ -83,7 +83,7 @@ TEST_CASE(
   CHECK(well_formed(sched));
 }
 
-// SP2 non-innermost forced split: fork_subchain partitions an already-built
+// Non-innermost forced split: fork_subchain partitions an already-built
 // inner sub-chain into a producer-side and a consumer-side copy by an
 // in_consumer(value_id) predicate. A BuildStep goes wholly to one side; a
 // nested loop block is forked (duplicated across both sides when its steps
@@ -174,7 +174,7 @@ TEST_CASE("fork_subchain drops the empty side of a one-sided nested loop",
   CHECK(forked.consumer.empty());  // empty side dropped, no stranded output
 }
 
-// SP2 multi-level escape chain: a value that reduces an inner axis AND is
+// Multi-level escape chain: a value that reduces an inner axis AND is
 // carried on an outer one escapes at BOTH -- AccumulateSum at the inner block,
 // AccumulateScatter at the outer block. well_formed accepts the same value_id
 // escaping at two blocks WHEN they nest (inner is a descendant of outer).
@@ -300,7 +300,7 @@ TEST_CASE(
 }
 
 // ===========================================================================
-// Task 3: build_ordered_schedule, validated on the real water-20 CSV-CCSD
+// build_ordered_schedule, validated on the real water-20 CSV-CCSD
 // doubles residual (DF/aux-only batching) -- the exact fixture test_legality.
 // cpp's "classify_axis / analyze_legality: four-way axis classification on
 // the water-20 aux-only residual" test already exercises (same recipe,
@@ -375,7 +375,7 @@ std::optional<std::size_t> orderedsched_index_of_child_block(
 }  // namespace
 
 // ===========================================================================
-// Fix round 1 (design review): a single scalar sort key can place a child
+// A single scalar sort key can place a child
 // block BEFORE every value that reads its output (the direction water-20
 // above already exercises), but it has NO corresponding guarantee that the
 // block sorts AFTER every value ITS OWN content reads as an input -- water-
@@ -432,7 +432,7 @@ sequant::EvalNode<sequant::EvalExpr> orderedsched_inode(
 }  // namespace
 
 // ===========================================================================
-// task-loopid (2026-09-08 amendment 8): a batched reduction always owns a
+// A batched reduction always owns a
 // loop identity, even when EVERY operand of the contraction is an INPUT --
 // a leaf, or (as here) a value that is never itself home-sliced on the
 // reduced mode -- so there is no home-sliced child for compute_dag_boulevard
@@ -578,7 +578,7 @@ TEST_CASE(
   CHECK(b_sliced);
 }
 
-// task-loopid fix round 1 (M1): the seeding loop above must be SCOPED to
+// The seeding loop above must be SCOPED to
 // modes legality::classify_axis would actually call Reduction for --
 // classify_axis reaches Reduction only via its Q1 test (the value carries
 // NO index of the SAME SPACE as the contracted mode). A value that
@@ -674,7 +674,7 @@ TEST_CASE(
   CHECK(found_sum);
 }
 
-// task-loopid fix round 1 (m2): the escape-placement throw added alongside
+// The escape-placement throw added alongside
 // the seeding fix above. Through the real pipeline a Reduction axis always
 // gets a reduced_slot now (that is the whole point of the fix), so this
 // shape has to be built by hand: a value V reducing i_1 at its own node
@@ -723,7 +723,7 @@ TEST_CASE(
       Catch::Matchers::ContainsSubstring("no loop identity"));
 }
 
-// SP2 non-innermost forced split (phase 3 gate): a 2-axis fixture with occ
+// Non-innermost forced split: a 2-axis fixture with occ
 // OUTER and aux INNER. B{;i_3,i_4} = A{;i_3} * A{;i_4} forces the occ split
 // (the outer product reads each A across occ-blocks); each A{;i} is itself
 // formed by an aux (Κ) contraction, so it is LoopCarried on occ AND Reduction
@@ -798,7 +798,7 @@ sequant::EvalNode<sequant::EvalExpr> orderedsched_2axis_forest_root() {
 
 namespace {
 ///
-/// \brief Task 3 (SP3): recurse through every non-root \c ScopeBlock reachable
+/// \brief Recurse through every non-root \c ScopeBlock reachable
 /// from \p steps (which start at \p depth, the nesting depth of \p steps'
 /// OWN blocks -- 1 for the root's direct children, 2 for their children,
 /// etc.), asserting each block's \c level mirrors its \c axis/\c ordinal at
@@ -820,7 +820,7 @@ void orderedsched_check_levels(
 
 TEST_CASE(
     "build_ordered_schedule: ScopeBlock::level mirrors axis/ordinal at the "
-    "correct nesting depth (Task 3, DAG-scope runtime slicing)",
+    "correct nesting depth (DAG-scope runtime slicing)",
     "[ordered-schedule][sp2-noninner]") {
   auto ctx = sequant::get_default_context_snapshot();
   REQUIRE(ctx.index_basis_registry() != nullptr);
@@ -1003,14 +1003,14 @@ TEST_CASE(
 }
 
 // ===========================================================================
-// Task 5: acceptance + executor-shape validation.
+// Acceptance + executor-shape validation.
 //
-// Both TEST_CASEs below reuse the SAME two real fixtures the Task 3 and
-// Task 4 tests above already build (water-20's aux-only residual and the
-// cross-iteration forced-split fixture), factored into two small builder
+// Both TEST_CASEs below reuse the SAME two real fixtures the water-20 and
+// cross-iteration tests above already build (water-20's aux-only residual and
+// the cross-iteration forced-split fixture), factored into two small builder
 // functions so the acceptance and executor-shape checks below run against
-// literally the same data rather than a re-derived copy. The existing Task
-// 3/4 TEST_CASEs above are left untouched (their own inline setup is not
+// literally the same data rather than a re-derived copy. The existing
+// TEST_CASEs above are left untouched (their own inline setup is not
 // replaced) to avoid disturbing already-pinned behavior; these builders are
 // net-new, consumed only by the two TEST_CASEs that follow them.
 // ===========================================================================
@@ -1233,7 +1233,7 @@ TEST_CASE(
   }
 }
 
-// Task 3 (w20 repro): the SAME real water-20 CSV-CCSD doubles residual, but
+// w20 repro: the SAME real water-20 CSV-CCSD doubles residual, but
 // with AUX+OCC batching (Κ contracted + i external) -- the config the MPQC w20
 // csv-cck run uses, which trips SEQUANT_ASSERT(well_formed(out)) INSIDE
 // build_ordered_schedule. This reproduces that schedule-build failure as a
@@ -1254,8 +1254,8 @@ TEST_CASE(
 namespace {
 
 // A test-local copy of the two-set producer/consumer partition function
-// ordered_schedule.hpp used to build before Task 4's per-nest pass-level
-// design superseded it (now deleted from production code): the
+// ordered_schedule.hpp used to build before the per-nest pass levels
+// superseded it (now deleted from production code): the
 // LoopCarried-on-axis set and its strict dependency-ancestor closure
 // (upward, then the downward LoopLocal-member closure), verbatim. Kept ONLY
 // to pin the equivalence this test checks -- that two pass levels (0 and 1)
@@ -1358,7 +1358,7 @@ TEST_CASE("forced_split_levels: two levels reproduce the two-set partition",
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
-// Fix round 1 (review-task-2.md, Important 2): the one-forced-space
+// The one-forced-space
 // assertion must count only GENUINE splits (a space whose levels reach
 // pass >= 1 somewhere), not every space some cell happens to be
 // LoopCarried on. Two spaces, "i" and "a", each carry exactly one value;
@@ -1418,7 +1418,7 @@ TEST_CASE(
 }
 
 // ===========================================================================
-// Fix round 1 (review-task-2.md, Important 3): a LoopLocal-only value (no
+// A LoopLocal-only value (no
 // role-driven escape) that STRADDLES passes -- read by a same-pass reader
 // (here, the carried value C it itself feeds) and by a LATER-pass reader
 // homed OUTSIDE its nest (root-homed X) -- is neither materialized (its
@@ -1435,7 +1435,7 @@ TEST_CASE(
 // CONFIDENTLY, and to a nest other than V's. (An earlier version of this
 // fixture gave X no per_axis roles at all, so its production site did not
 // resolve; production_depth now never guesses a nest for an unresolved
-// reader (ruling I1), so an unresolved reader can no longer trip this
+// reader, so an unresolved reader can no longer trip this
 // tripwire -- the fixture must give the offending reader a mode that
 // resolves, confidently, into a different nest, which is what this version
 // does.) Passes (by hand, mirroring the [levels] lift/straddle test): C = 0
@@ -1633,7 +1633,7 @@ struct OrderedSchedReductionInLoopFixture {
   sequant::eval::LegalitySchedule legality;
 };
 
-// Amendment 8 (design section 9.2): V (id 0) is Reduction on i_1 (reduced
+// V (id 0) is Reduction on i_1 (reduced
 // instance slot 0), read by u (id 1, also Reduction on the same instance --
 // produced inside it) and by w (id 2, a root reader with no per_axis at
 // all, outside the instance). V and u have empty carried/home (a Reduction
@@ -1722,7 +1722,7 @@ TEST_CASE(
 
   // Pass 0 lists V's AccumulateSum output; pass 1 holds u's production (also
   // an AccumulateSum output -- u has no BuildStep either, both values escape
-  // by their own Reduction role, section 3.2's per-nest realization is
+  // by their own Reduction role; the per-nest realization is
   // latitude-blind to which of build_ids/outputs supplies the pass).
   std::vector<std::pair<std::size_t, std::optional<OutputKind>>> p0, p1;
   orderedsched_collect_productions(*b0, p0);
@@ -1738,8 +1738,8 @@ TEST_CASE(
   CHECK_FALSE(has(p1, 0, OutputKind::AccumulateSum));
   CHECK_FALSE(has(p0, 1, OutputKind::AccumulateSum));
 
-  // Design section 4 / amendment 8's own gate: the derived cell table
-  // validates clean -- the 9.1 partial-sum check does not fire (it would
+  // The derived cell table
+  // validates clean -- the partial-sum check does not fire (it would
   // have thrown loudly inside build_ordered_schedule above, before this
   // point, had the levels failed to bump u).
   orderedsched_validated_table(fx.rich, sched);
@@ -1817,12 +1817,12 @@ TEST_CASE(
   CHECK(b_lats == std::vector<int>{0, 1});
 
   // V (id 3) is built in nest B's latitude-0 block (at its inner depth) and
-  // scattered at both of nest B's levels -- rule 4 fires because X (id 5),
-  // though it has no LoopLocal axis of its own (it is a fully LoopCarried
-  // forest root, like C), is still PRODUCED inside nest B in pass 1
+  // scattered at both of nest B's levels -- the materialization rule fires
+  // because X (id 5), though it has no LoopLocal axis of its own (it is a fully
+  // LoopCarried forest root, like C), is still PRODUCED inside nest B in pass 1
   // (production_depth, not local_home_depth, decides nest membership for a
-  // rule-4 reader). C (id 2) and P (id 4) are each scattered (no BuildStep)
-  // in latitude 0; X is scattered (no BuildStep) in latitude 1.
+  // materialization-rule reader). C (id 2) and P (id 4) are each scattered (no
+  // BuildStep) in latitude 0; X is scattered (no BuildStep) in latitude 1.
   sequant::eval::ScopeBlock const* b0 = nullptr;
   sequant::eval::ScopeBlock const* b1 = nullptr;
   for (std::size_t k = 0; k < roots.size(); ++k) {
@@ -1853,7 +1853,7 @@ TEST_CASE(
   CHECK_FALSE(has(p1, 5, std::nullopt));             // X has no BuildStep
   CHECK_FALSE(has(p1, 3, std::nullopt));             // V not rebuilt
 
-  // Design section 4: the derived cell table validates clean, with zero
+  // The derived cell table validates clean, with zero
   // unresolved positions. R (id 1), P (id 4) and X (id 5) are each true
   // forest roots (no consumer anywhere in this fixture) delivered in full
   // over their own external batched index, so each is LoopCarried like C
@@ -1918,7 +1918,7 @@ TEST_CASE("per-nest split: a carried chain gives three pass blocks",
   CHECK_FALSE(has(p[0], 1, OutputKind::AccumulateScatter));
 }
 
-// NOTE (fixture, not builder): the brief's literal 3-value shape (C, V, X)
+// NOTE (fixture, not builder): the literal 3-value shape (C, V, X)
 // gives V a SINGLE consumer X. forced_split_levels's reverse sweep lifts a
 // non-carried value with one consumer exactly to that consumer's own pass
 // (pass_of(v) = max(base(v), min over consumers' pass) with a one-element
@@ -1928,7 +1928,7 @@ TEST_CASE("per-nest split: a carried chain gives three pass blocks",
 // pass)" shape the two-nest test above uses for its V) is added so the
 // reverse-sweep min keeps V's pass strictly below X's, giving a genuine
 // later-pass reader while V itself (LoopLocal on i_2, slot 1 only) is
-// invariant to its nest's outer level (i_1, slot 0): rule 4 (section 7.3)
+// invariant to its nest's outer level (i_1, slot 0): the materialization rule
 // skips that level and scatters V only at the inner one it is loop-local on,
 // so V's assembled form still reaches root. X is LoopCarried on both axes
 // (not LoopLocal): it is a genuine forest root with no consumer of its own
@@ -2005,7 +2005,7 @@ TEST_CASE(
 // later-pass reader is ever detected. A same-pass second reader P is added
 // for the same reason as in the invariant-outer fixture above. V is
 // Reduction on i_2 (the inner instance, slot 1) and LoopLocal on i_1 (the
-// outer instance, slot 0): rule 4 (section 7.3) leaves the already-summed
+// outer instance, slot 0): the materialization rule leaves the already-summed
 // inner instance as-is and adds a scatter at the outer one, chaining a sum
 // then a scatter so V's assembled form reaches root. X is LoopCarried on
 // both axes (not LoopLocal), for the same zero-consumer/root-residency
@@ -2104,10 +2104,10 @@ TEST_CASE(
 // shape as the inner-escape fixture above, except V's Reduction mode (i_2)
 // resolves through reduced_slot to the SAME fusion slot as its own LoopLocal
 // mode (i_1, slot 0) instead of a distinct inner slot, so both land at ONE
-// depth. Rule 4 must upgrade that depth's escape from AccumulateSum (the
-// role loop's own reduction escape) to AccumulateScatter: the loop-local
-// mode's batches are disjoint, so summing them would silently combine
-// values that must stay separate.
+// depth. The materialization rule must upgrade that depth's escape from
+// AccumulateSum (the role loop's own reduction escape) to AccumulateScatter:
+// the loop-local mode's batches are disjoint, so summing them would silently
+// combine values that must stay separate.
 TEST_CASE(
     "per-nest split: a loop-local mode sharing a depth with a reduced mode "
     "upgrades the escape to a scatter",
@@ -2169,13 +2169,13 @@ TEST_CASE(
 }
 
 // Review fix round 1, Important 2: the outside-nest tripwire fires only when
-// the value has NO role-driven escape (checked BEFORE rule 4 runs); a value
-// that DOES have one is exempt, since that escape already assembles a full
-// form with root residency that any later-pass reader, in any nest, can see.
-// This pins the POSITIVE case (mirrors the existing [levels] "straddling
-// passes" fixture, but checks the exact throw message under this task's own
-// tag): V is LoopLocal only (no role escape) in nest A (i_4, i_5), feeds C
-// (LoopCarried on i_4, same pass -- makes "i" genuine) and is ALSO read
+// the value has NO role-driven escape (checked BEFORE the materialization rule
+// runs); a value that DOES have one is exempt, since that escape already
+// assembles a full form with root residency that any later-pass reader, in any
+// nest, can see. This pins the POSITIVE case (mirrors the existing [levels]
+// "straddling passes" fixture, but checks the exact throw message under this
+// task's own tag): V is LoopLocal only (no role escape) in nest A (i_4, i_5),
+// feeds C (LoopCarried on i_4, same pass -- makes "i" genuine) and is ALSO read
 // directly by X, LoopLocal on the disjoint i_6 (its own nest B), at a later
 // pass -- V's own nest never opens for X, so legality and the schedule
 // disagree.
@@ -2272,9 +2272,9 @@ TEST_CASE(
 // had no role escape at all. V has i_1 (LoopLocal, its own home) and i_2
 // (Reduction, escaped via reduced_slot) at TWO DIFFERENT depths of one nest;
 // X reads V from a disjoint nest at a later pass, with no same-nest later-
-// pass reader to trigger rule 4 for i_1's own instance -- so i_1's per-batch
-// form is never delivered to root, and legality and the schedule disagree,
-// even though i_2 IS role-escaped.
+// pass reader to trigger the materialization rule for i_1's own instance -- so
+// i_1's per-batch form is never delivered to root, and legality and the
+// schedule disagree, even though i_2 IS role-escaped.
 TEST_CASE(
     "per-nest split: a value with one escaped and one unescaped loop-local "
     "instance in one nest, read later from a different nest, throws",

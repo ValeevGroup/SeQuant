@@ -1,4 +1,4 @@
-// Phase 3b T1: tests for the static peak-profile sizing primitives
+// Tests for the static peak-profile sizing primitives
 // (SeQuant/core/eval/peak_profile.hpp). Two free functions are pinned here:
 //   - home_depth_of: resolve a residency mode-set to an enclosing-batch-
 //     context loop depth (mirrors the runtime rl-walk at eval.hpp:1776-1782).
@@ -333,7 +333,7 @@ TEST_CASE("compute_dag_boulevard threads the value hash onto each ValueCell",
 
 // =====================================================================
 // T3: the independent REPLAY ORACLE (peak_profile_replay) -- oracle ==
-// sweep on hand-built Schedules (design section 9.6).
+// sweep on hand-built Schedules.
 // =====================================================================
 
 TEST_CASE("peak_profile_replay agrees with the sweep on a hand-built Schedule",
@@ -364,7 +364,7 @@ TEST_CASE("peak_profile_replay agrees with the sweep on a hand-built Schedule",
   }
 }
 
-// ---- Step B: oracle == sweep on real linearized forests -------------
+// ---- oracle == sweep on real linearized forests ---------------------
 //
 // These run on forests linearized by the LIVE compute_dag_boulevard (via the
 // local `dag_path` projection above), not on hand-built Schedules, so they
@@ -444,7 +444,7 @@ TEST_CASE(
   CHECK(peak_profile_replay(s) == peak_profile_sweep(s).peak_bytes);
 }
 
-// ---- Step C: the Phase-1 anchor (non-demoted forest) ----------------
+// ---- the anchor (non-demoted forest) ---------------------------------
 
 // A small order-of-magnitude regime (occ i=10, virt a=20), matching
 // backend_test_regime() in test_eval_dryrun.cpp: same extents => the static
@@ -463,7 +463,7 @@ SizeRegime anchor_regime() {
 
 TEST_CASE("peak-profile anchor: static sweep vs metered replay co-resident sum",
           "[peak_profile]") {
-  // WHY this is gated to a NON-DEMOTED forest (design section 9.6): the static
+  // WHY this is gated to a NON-DEMOTED forest: the static
   // seed placement and the runtime External-only heuristic (sliced_modes)
   // diverge on a demoted value (empty cross-occurrence meet homes it at the
   // root while the heuristic would slice it in the occurrence that carries the
@@ -503,7 +503,7 @@ TEST_CASE("peak-profile anchor: static sweep vs metered replay co-resident sum",
   auto const sched = dag_path(forest, cm, block_of);
   auto const sweep = peak_profile_sweep(sched);
 
-  // Both static algorithms agree (Step B holds here too).
+  // Both static algorithms agree (oracle == sweep holds here too).
   CHECK(peak_profile_replay(sched) == sweep.peak_bytes);
 
   std::wcerr << L"\n[peak_profile-anchor] static sweep peak_bytes="

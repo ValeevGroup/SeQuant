@@ -262,11 +262,8 @@ class CostModel {
   // be (de)attached on a shared_ptr<CostModel const>; a raw non-owning pointer
   // to caller-owned state. nullptr (default) => tally_op is a no-op.
   mutable CostSink* sink_ = nullptr;
-  // sizeof(double); see the OptimizeOptions::numeric_size note in
-  // doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md, section 9
-  // (hardcoded here, matching the C60
-  // trace's real-only CSV-CCk path; complex CSV-CCk is out of scope, see the
-  // plan's carried-minor N4).
+  // sizeof(double); see "Dry runs and diagnostics" in
+  // doc/developer/batched_evaluation.rst.
   double numeric_size_ = 8.0;
 };
 

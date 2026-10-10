@@ -86,6 +86,16 @@ or new abstractions the change doesn't strictly require, even if the
 surrounding code looks like it could use it while you're in the area
 — propose that separately and let it be its own change.
 
+## Keep plans and specs out of the source tree
+
+Do not commit plans, specs, or design notes, including those a planning
+workflow writes into the working tree; keep them outside the repository or
+untracked.
+
+Before discarding a plan or spec, move its current, conceptual content into
+`doc/user/` or `doc/developer/` under the Documentation rules below; anything
+finer-grained belongs in source comments, if anywhere.
+
 ## Comments explain the present code; commit messages explain the change
 
 Keep comments brief, and only write one where the *why* isn't obvious from
@@ -265,12 +275,16 @@ top-level builds.
 Doxygen setup behind the API reference; see `doc/developer/documentation.rst`
 for how it's built. Conventions that hold across the existing pages:
 
+- **Document concepts, not implementation details.** `doc/user/` documents
+  the public API and how to use it. `doc/developer/` gives contributors a
+  high-level overview of what the implementation does: the important
+  concepts, algorithms, invariants, and design decisions they need in order
+  to make sense of the code. Leave implementation details to the code and
+  its comments.
 - **Scope a page relative to its companion, and don't repeat it.** A
-  `user/guide/` page covers the public API; a `developer/` page (if any)
-  covers the implementation for contributors, opens by naming its companion,
-  and states what it assumes rather than re-explaining it. Keep that split —
-  don't inline implementation detail into a user-facing page, and don't
-  re-teach usage in a developer one.
+  `developer/` page opens by naming its `user/guide/` companion (if any) and
+  states what it assumes rather than re-explaining it; it does not re-teach
+  usage.
 - **Every new page goes into a `toctree`.** A page that exists on disk but
   isn't linked from the relevant `index.rst` is orphaned; check `doc/*/index.rst`
   whenever a file is added. Order entries to mirror the conceptual order a

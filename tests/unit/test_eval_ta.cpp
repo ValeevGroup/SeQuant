@@ -2367,29 +2367,28 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
   }
 }
 
-// BLOCKED, hidden by default -- see .superpowers/sdd/oamb-a0-note.md sections
-// 10.4 and 11. This test batched an UNANNOTATED node via the runtime's depth-0
-// heuristic fallback, which has been removed (annotations are now
-// authoritative). Re-pointing it at an explicit annotation is NOT
+// BLOCKED, hidden by default. This test batched an UNANNOTATED node via the
+// runtime's depth-0 heuristic fallback, which has been removed (annotations are
+// now authoritative). Re-pointing it at an explicit annotation is NOT
 // behaviour-preserving: cache_manager vetoes caching for a node whose own
 // node_slice_mask() carries a sliced batchable mode, and the heuristic never
 // set node_slice_mask() -- so the same mode batched by the two routes gives
-// different CSE. The correct expectations depend on Phase B replacing that veto
+// different CSE. The correct expectations depend on replacing that veto
 // with per-context (per-slice) caching. Re-enable and re-derive the counts
 // then; do not "fix" the numbers against veto behaviour that is about to be
 // deleted.
 
-// SP3 Task 2 of the ordered-scope batched-eval design (see
-// ordered_schedule.hpp's own doc comments for the SP2 OrderedSchedule IR and
+// Ordered executor (see ordered_schedule.hpp's own doc comments for the
+// OrderedSchedule IR and
 // ordered_executor.hpp's detail::run_ordered_contracted_block for the
 // executor this test drives): EQUIVALENCE for a realized Contracted loop
 // block (AccumulateSum reduction). A two-root forest sharing an aux-carrying
 // composite S = g*h, both roots contracting the aux batch mode x_1 AT THEIR
 // OWN ROOT, so each root itself is the block's AccumulateSum output -- "a
-// reduction value consumed by a value built after the loop", per the SP3
-// brief, realized here as the shared per-root combine step that runs after
+// reduction value consumed by a value built after the loop",
+// realized here as the shared per-root combine step that runs after
 // evaluate_ordered_schedule's loop-block walk closes -- driven through the
-// SP1/SP2/SP3 pipeline (analyze_legality -> build_ordered_schedule ->
+// pipeline (analyze_legality -> build_ordered_schedule ->
 // evaluate_ordered_schedule). Real TA data at a small tractable size (the
 // DryRun backend is zero-data and cannot witness a dropped/mis-accumulated
 // batch).
@@ -3082,7 +3081,7 @@ TEST_CASE(
   // manifestly independent of the annotation.
   auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
 
-  // SP1's compute_dag_boulevard (peak_profile.hpp) builds each occurrence's
+  // compute_dag_boulevard (peak_profile.hpp) builds each occurrence's
   // enclosing-loop context (OccurrenceRec::ectx) off node_slice_mask() during
   // its descent -- the SAME annotation the runtime batched evaluator consults,
   // and the one build_ordered_schedule's own fixture
@@ -3111,8 +3110,8 @@ TEST_CASE(
   }
   REQUIRE(x1.space() == aux);
 
-  // SP1/SP2: x_1 (the aux space) is the only batchable Contracted axis; no
-  // External axis at all -- the natural fixture for a Contracted-only Task 2.
+  // x_1 (the aux space) is the only batchable Contracted axis; no
+  // External axis at all -- the natural fixture for a Contracted-only block.
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [aux](sequant::Index const& ix) {
     return ix.space() == aux;
@@ -3131,8 +3130,8 @@ TEST_CASE(
 
   // Precondition this test exists to exercise: a realized Contracted loop
   // block at the root, with at least one AccumulateSum output (the shared
-  // reduction each root's own build resolves to) -- the shape Task 1's own
-  // test explicitly does NOT produce.
+  // reduction each root's own build resolves to) -- the shape the unbatched
+  // tests do NOT produce.
   ScopeBlock const* x_block = nullptr;
   for (auto const& step : ordered.root.steps)
     if (auto const* b = std::get_if<ScopeBlock>(&step.value)) x_block = b;
@@ -3529,28 +3528,28 @@ TEST_CASE(
   CHECK(r2 < 1e-10);
 }
 
-// SP3 Task 3 of the ordered-scope batched-eval design (the sequel to Task 2
-// above -- see ordered_schedule.hpp's own doc comments for the SP2
+// Ordered executor, the External counterpart of the Contracted-block test
+// (see ordered_schedule.hpp's own doc comments for the
 // OrderedSchedule IR and ordered_executor.hpp's
 // detail::run_ordered_contracted_block for the executor this test drives):
 // EQUIVALENCE for a realized External loop block (AccumulateScatter,
-// loop-carried output). Mirrors the Task-2 aux-only test's harness almost
-// exactly (same shared-composite structure, same SP1/SP2/SP3 pipeline), but
+// loop-carried output). Mirrors the Contracted-block test's harness almost
+// exactly (same shared-composite structure, same pipeline), but
 // with the batch axis a SPECTATOR that survives into each root's own result
 // (occ i_1) instead of one both roots reduce away: F1/F2 = S ⊗ T_k, an OUTER
 // PRODUCT between the i_1-carrying shared composite S and an all-virtual
 // factor T_k that shares no index with S at all, so i_1 is never contracted
 // anywhere -- it is free on F1/F2's own result, which is exactly what makes
 // build_ordered_schedule classify it LoopCarried (escaping as
-// AccumulateScatter) rather than Reduction (AccumulateSum, Task 2's shape).
-// Every i-space index anywhere in the forest is the SAME literal i_1 (every
-// other free index is virtual, a different space entirely, deliberately kept
-// out of the "i" axis TYPE's bucket) so the single-physical-label
-// simplification run_ordered_contracted_block's own \note documents holds
-// throughout -- see that \note for why a forest naming the occ TYPE under
-// more than one physical Index in one block is out of scope here. Real TA
-// data at a small tractable size (the DryRun backend is zero-data and cannot
-// witness a dropped/double-written scatter slice).
+// AccumulateScatter) rather than Reduction (AccumulateSum, the Contracted-block
+// test's shape). Every i-space index anywhere in the forest is the SAME literal
+// i_1 (every other free index is virtual, a different space entirely,
+// deliberately kept out of the "i" axis TYPE's bucket) so the
+// single-physical-label simplification run_ordered_contracted_block's own \note
+// documents holds throughout -- see that \note for why a forest naming the occ
+// TYPE under more than one physical Index in one block is out of scope here.
+// Real TA data at a small tractable size (the DryRun backend is zero-data and
+// cannot witness a dropped/double-written scatter slice).
 TEST_CASE(
     "evaluate_ordered_schedule matches forest descent over one External "
     "loop block",
@@ -3598,16 +3597,16 @@ TEST_CASE(
   // manifestly independent of the annotation.
   auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
 
-  // SP1's compute_dag_boulevard (peak_profile.hpp) builds each occurrence's
+  // compute_dag_boulevard (peak_profile.hpp) builds each occurrence's
   // enclosing-loop context (OccurrenceRec::ectx) off node_slice_mask() during
-  // its descent (see the Task-2 test's own comment for the full mechanics).
-  // Both roots themselves realize the i_1 loop (mirroring the Task-2 test's
-  // own precedent of stamping node_slice_mask directly on each forest root):
-  // descendants below them (S, g, h) see an enclosing i_1 loop and lock-step
-  // to it (LoopLocal); the roots' OWN occurrences have no enclosing loop at
-  // all (nothing wraps a forest root) and still carry i_1 on their own
-  // result, which is exactly the LoopCarried (AccumulateScatter) shape this
-  // test exists to exercise.
+  // its descent (see the Contracted-block test's own comment for the full
+  // mechanics). Both roots themselves realize the i_1 loop (mirroring the
+  // Contracted-block test's own precedent of stamping node_slice_mask directly
+  // on each forest root): descendants below them (S, g, h) see an enclosing i_1
+  // loop and lock-step to it (LoopLocal); the roots' OWN occurrences have no
+  // enclosing loop at all (nothing wraps a forest root) and still carry i_1 on
+  // their own result, which is exactly the LoopCarried (AccumulateScatter)
+  // shape this test exists to exercise.
   sequant::Index const i1{L"i_1"};
   for (auto& nd : forest) {
     nd->set_node_slice_mask({{i1, sequant::BatchModeType::External}});
@@ -3615,9 +3614,9 @@ TEST_CASE(
     nd->set_batch_loops_opened_here({{i1, sequant::BatchModeType::External}});
   }
 
-  // SP1/SP2: i_1 (the occ space) is the only batchable index, marked
+  // i_1 (the occ space) is the only batchable index, marked
   // EXTERNAL (spectator) rather than contracted -- the natural fixture for
-  // an External-only Task 3 block.
+  // an External-only block.
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const&) {
     return false;
@@ -3649,7 +3648,8 @@ TEST_CASE(
   }
 
   // The i_1 block must home the shared composite S as a plain BuildStep
-  // (LoopLocal), exactly like the Task-2 test's n_build_ids > 0 check.
+  // (LoopLocal), exactly like the Contracted-block test's n_build_ids > 0
+  // check.
   std::size_t n_build_ids = 0;
   for (auto const& step : i_block->steps)
     if (std::holds_alternative<sequant::eval::BuildStep>(step.value))
@@ -3724,14 +3724,13 @@ TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
   CHECK(n_yield[L"h"] == n_b);
 }
 
-// BLOCKED, hidden by default -- see .superpowers/sdd/oamb-a0-note.md sections
-// 10.4 and 11. This test batched an UNANNOTATED node via the runtime's depth-0
-// heuristic fallback, which has been removed (annotations are now
-// authoritative). Re-pointing it at an explicit annotation is NOT
+// BLOCKED, hidden by default. This test batched an UNANNOTATED node via the
+// runtime's depth-0 heuristic fallback, which has been removed (annotations are
+// now authoritative). Re-pointing it at an explicit annotation is NOT
 // behaviour-preserving: cache_manager vetoes caching for a node whose own
 // node_slice_mask() carries a sliced batchable mode, and the heuristic never
 // set node_slice_mask() -- so the same mode batched by the two routes gives
-// different CSE. The correct expectations depend on Phase B replacing that veto
+// different CSE. The correct expectations depend on replacing that veto
 // with per-context (per-slice) caching. Re-enable and re-derive the counts
 // then; do not "fix" the numbers against veto behaviour that is about to be
 // deleted.
@@ -3816,14 +3815,13 @@ TEST_CASE("eval_batched_custom_evaluator group replay",
   CHECK(n_yield[L"t"] == 2);
 }
 
-// BLOCKED, hidden by default -- see .superpowers/sdd/oamb-a0-note.md sections
-// 10.4 and 11. This test batched an UNANNOTATED node via the runtime's depth-0
-// heuristic fallback, which has been removed (annotations are now
-// authoritative). Re-pointing it at an explicit annotation is NOT
+// BLOCKED, hidden by default. This test batched an UNANNOTATED node via the
+// runtime's depth-0 heuristic fallback, which has been removed (annotations are
+// now authoritative). Re-pointing it at an explicit annotation is NOT
 // behaviour-preserving: cache_manager vetoes caching for a node whose own
 // node_slice_mask() carries a sliced batchable mode, and the heuristic never
 // set node_slice_mask() -- so the same mode batched by the two routes gives
-// different CSE. The correct expectations depend on Phase B replacing that veto
+// different CSE. The correct expectations depend on replacing that veto
 // with per-context (per-slice) caching. Re-enable and re-derive the counts
 // then; do not "fix" the numbers against veto behaviour that is about to be
 // deleted.
@@ -3919,7 +3917,7 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
 }
 
 TEST_CASE("eval_batched_custom_evaluator nests inner mode", "[eval]") {
-  // Task 4.2 exactness gate: two batchable modes annotated at DIFFERENT nodes
+  // Exactness gate: two batchable modes annotated at DIFFERENT nodes
   // of one tree must batch by nesting -- the outer node slices mode A at the
   // top and, WITHIN each A batch, the evaluator re-enters on the per-batch
   // scratch to slice mode B at an inner node (`for A-batch: for B-batch:
@@ -4146,7 +4144,7 @@ TEST_CASE("eval_batched_custom_evaluator nests two modes on one node",
 
 TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
           "[eval]") {
-  // Task 4 (B2) hoisting gate: a network batched over an OUTER mode (x_1) whose
+  // Hoisting gate: a network batched over an OUTER mode (x_1) whose
   // subtree contains an intermediate INVARIANT to that mode (I2 = a*b contracts
   // x_2 and carries no x_1) must build the invariant ONCE at its emitted scope
   // level and reuse it across the x_1 batches -- NOT rebuild it per batch. The
@@ -4257,7 +4255,7 @@ TEST_CASE(
     "eval_batched_custom_evaluator hoists to an intermediate contracted-mode "
     "level",
     "[eval]") {
-  // Task 3 review Finding 2 witness: the runtime residency is sliced_modes(),
+  // The runtime residency is sliced_modes(),
   // the all-batched-modes cross-occurrence meet -- which carries a node's
   // enclosing CONTRACTED (aux) modes directly, since a node variant to an outer
   // aux loop carries that aux free on a result slot. The pre-existing hoist
@@ -4414,7 +4412,7 @@ TEST_CASE(
 }
 
 TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
-  // Task 5 exactness gate: a batch mode stamped EXTERNAL on a node is a
+  // Exactness gate: a batch mode stamped EXTERNAL on a node is a
   // external index that survives FREE onto the node's result (a Hadamard /
   // batched-matmul mode present on every operand and the result, contracted at
   // no node). The runtime must SCATTER the per-block partials into DISJOINT
@@ -4535,9 +4533,9 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
 
 TEST_CASE(
     "batched external-carrying intermediate hoists to its seed home; the "
-    "result stays exact via slice-on-use (Phase 4b-3: no demotion veto)",
+    "result stays exact via slice-on-use (no demotion veto)",
     "[eval][batched-external]") {
-  // Phase 4b-3 T1 re-baseline. This test used to pin the `has_demoted_external`
+  // This test used to pin the `has_demoted_external`
   // demotion veto: in an external SCATTER over a mode e, a DESCENDANT
   // intermediate M that itself CARRIES e free onto its result (an External
   // `node_slice_mask()` stamp absent from `sliced_modes()` -- a meet-demoted
@@ -4706,11 +4704,11 @@ TEST_CASE(
 
 TEST_CASE("batched cached intermediate is sliced to the batch block on use",
           "[eval][slice-on-use]") {
-  // Task 3 (slice-on-use) RED/GREEN witness for the LOAD-BEARING fix. A shared
+  // Slice-on-use RED/GREEN witness for the LOAD-BEARING fix. A shared
   // intermediate M that carries an external mode e can be cached FULL at an
   // OUTER scope (correct where it is used unbatched / peak-acceptable there)
   // and then consumed inside a NESTED e-external loop -- the C60 summand-46
-  // `s.C` pattern (design spec 2026-07-27 Sec 1.1: `I(mu~; a<i1,i2>)` stored
+  // `s.C` pattern (`I(mu~; a<i1,i2>)` stored
   // full at scope -1, served WHOLE to the external use, contracting the
   // full 8.7 GB into a 2930 GB giant). The fix: the Enter-stage slice-on-use
   // slices a value fetched from an ANCESTOR scope (access_at hops > 0) to the
@@ -4852,7 +4850,7 @@ TEST_CASE("batched cached intermediate is sliced to the batch block on use",
 }
 
 TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
-  // Task 6 (Part A) RED/GREEN witness for the SEED DECISION in
+  // RED/GREEN witness for the SEED DECISION in
   // make_batched_scratch. When an EXTERNAL mode is batched, a
   // persistent, alive intermediate that is INVARIANT under the batch's
   // *contracted* member mode but CARRIES that batched External mode must NOT be
@@ -4897,8 +4895,8 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
   // real cache: P classifies persistent (volatile head t); store a value so it
   // is ALIVE (the state that makes a node a seed candidate). Built with n's
   // node_slice_mask() still empty (no External stamp anywhere yet), so the
-  // gated cache_manager()'s own internal stamp_lifetime_masks() call (Task 2:
-  // it stamps every caller's forest, not just build_dryrun_cache's) sees no
+  // gated cache_manager()'s own internal stamp_lifetime_masks() call (which
+  // stamps every caller's forest, not just build_dryrun_cache's) sees no
   // External mode and leaves every mask all-full -- the mask veto stays inert
   // and P is persistent here exactly as before that change.
   auto is_volatile_t = [](node_t const& k) {
@@ -4947,10 +4945,10 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
 }
 
 TEST_CASE("batched_scratch_tot_presize_scatter", "[eval][batched-external]") {
-  // Task 6 (Part B): the ToT ResultTensorOfTensorTA::pre_sized_zeros_over_mode
+  // The ToT ResultTensorOfTensorTA::pre_sized_zeros_over_mode
   // must produce a destination that the ToT scatter primitives
   // (write_into_slice -> write_array_into_mode) reassemble EXACTLY. This is the
-  // ToT analog of the flat pre-size Task 5 added; CSV/PNO-CCSD residuals carry
+  // ToT analog of the flat pre-size; CSV/PNO-CCSD residuals carry
   // ToT tiles, so the external-mode scatter needs a ToT pre-size. Here we drive
   // the exact runtime sequence: pre-size from the FIRST block partial (widening
   // its OUTER mode to the carrier's FULL tiling), then write_into_slice
@@ -5178,7 +5176,7 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
 }
 
 TEST_CASE("batched_eval_external_hadamard", "[eval][batched-external]") {
-  // Task 9 (genuine Hadamard external): guards the "slice EVERY carrying
+  // Genuine Hadamard external: guards the "slice EVERY carrying
   // operand to the same block" contract. i_3 is shared ELEMENTWISE (not
   // summed) between BOTH operands of ONE product node and survives to the
   // result -- a true Hadamard mode, not merely a free index that happens to
@@ -5292,10 +5290,10 @@ TEST_CASE("batched_eval_external_hadamard", "[eval][batched-external]") {
 
 TEST_CASE("batched_eval_external_nested_contracted",
           "[eval][batched-external]") {
-  // Task 9 (bonus, carried from Task 5's review): an External mode on an
+  // An External mode on an
   // OUTER node nested with a Contracted mode on an INNER node -- the mirror
   // image of "eval_batched_custom_evaluator nests inner mode" (which nests
-  // Contracted-over-Contracted). Here the SCATTER branch (Task 5) at the
+  // Contracted-over-Contracted). Here the SCATTER branch at the
   // root must re-enter and let a plain accumulate (Contracted) fire WITHIN
   // each external block, i.e. "for external-block: for contracted-block:
   // accumulate, then scatter the block". This exercises the opposite
@@ -5409,8 +5407,7 @@ TEST_CASE("batched_eval_external_nested_contracted",
 
   // Depth-2 nesting engaged: the root fires once over x_1 (3 blocks) and,
   // per x_1 block, the inner fires once over x_2 (2 blocks) -- 1 + 3 = 4
-  // firings, counts a permutation of {3, 2, 2, 2}. Before Task 5/6 this
-  // composition (External outside Contracted) did not exist, so this is the
+  // firings, counts a permutation of {3, 2, 2, 2}. This is the
   // RED/GREEN witness that the scatter branch's per-block reinstall lets an
   // inner Contracted mode nest exactly as it does under an outer Contracted
   // mode.
@@ -5423,8 +5420,8 @@ TEST_CASE(
     "eval_batched_custom_evaluator nested scope guards compose "
     "multiplicatively",
     "[eval]") {
-  // Task 4.3: prove that screening relaxation composes over nested batch
-  // levels. The re-entrant inner evaluator (Task 4.2) is built by threading
+  // Prove that screening relaxation composes over nested batch
+  // levels. The re-entrant inner evaluator is built by threading
   // make_scope_guard (along with accept/is_volatile/persistent_only/
   // target_batch_size) INTO the nested make_batched_custom_evaluator call
   // unchanged -- so the inner level constructs its own guard via
@@ -5446,7 +5443,7 @@ TEST_CASE(
   // ever alive at once with the stack holding {outer_n, inner_n}, that is
   // exactly the multiplicative-composition invariant a real backend guard
   // would exploit. Numeric validation against an actual screening threshold
-  // is deferred to the Phase 6 end-to-end MPQC run, where a real
+  // is left to an end-to-end MPQC run, where a real
   // TiledArray-SparseShape-backed guard exists to relax.
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
@@ -5975,7 +5972,7 @@ TEST_CASE("shape_spike_ToT_inner_contraction_to_flat_T", "[shape-spike]") {
 }
 
 TEST_CASE("shape_provider_general_product", "[shape-provider]") {
-  // Task 2: a provider returning a REAL SparseShape for a ToT*ToT->ToT general
+  // A provider returning a REAL SparseShape for a ToT*ToT->ToT general
   // product (the `(lhs(la) * rhs(ra)).set_shape(s)` emission form) must
   // constrain the eval result: the zeroed outer tiles are is_zero and the
   // surviving tiles equal the unshaped (einsum) baseline. Also covers the
@@ -6096,7 +6093,7 @@ TEST_CASE("shape_provider_general_product", "[shape-provider]") {
 }
 
 TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
-  // Task 2: the DeNest::True path (ToT * ToT -> flat T), emitted as
+  // The DeNest::True path (ToT * ToT -> flat T), emitted as
   // `lhs(la).dot_inner(rhs(ra)).set_shape(s)`. A ResultExpr pins the flat head
   // (bare occ indices, no protos), so node->tot() is false while both operands
   // are ToT => de_nest == True at the binary site. A provider returning a real

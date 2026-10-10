@@ -699,7 +699,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
 ///        computed node carries.
 ///
 /// \details The compute half of a node's evaluation, shared by \c
-/// evaluate_impl's Phase-B and by the table-driven ordered executor (\c
+/// evaluate_impl's compute step and by the table-driven ordered executor (\c
 /// detail::compute_cell, ordered_executor.hpp), so both perform it the same
 /// way without re-entering the tree-walking engine: the shaped-product hook,
 /// the \c SEQUANT_UT_FORCE_SYNC / \c SEQUANT_UT_PROD_TR diagnostics, the
@@ -1145,7 +1145,7 @@ ResultPtr evaluate_impl(Node const& node,         //
     ResultPtr right = {};
   };
 
-  // Finalize a freshly computed Phase-B result: if this Checked node needs
+  // Finalize a freshly computed result: if this Checked node needs
   // storing, cache it (phase-applied) and hand back the phase-applied cached
   // pointer -- exactly the recursive Checked wrapper's store path. Otherwise
   // pass the raw result through unchanged.

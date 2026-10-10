@@ -327,7 +327,8 @@ inline std::size_t& ordered_last_block_skips_slot() {
 /// cleared per batch and stays unseedable. This is what lets a term's
 /// complete partial -- bound to the term's own outer loops, produced once in
 /// the first iteration of an interposed foreign loop -- skip the whole inner
-/// nest on that loop's later iterations (explicit-cells design section 12).
+/// nest on that loop's later iterations (see "Cell forms, reads, and
+/// lifetimes" in doc/developer/batched_evaluation.rst).
 [[nodiscard]] inline bool ordered_visit_skip_seedable(
     TableCell const& c, CellScope const& parent_scope) {
   if (!c.produce_if_absent) return false;
@@ -615,8 +616,7 @@ template <typename ValueMap, typename Rich>
 
 ///
 /// \brief Realize one \c ScopeBlock's batch loop against \p parent_cache,
-/// executed entirely on the cell table (the explicit-value-cells design,
-/// section 4).
+/// executed entirely on the cell table.
 ///
 /// \details \p block's own \c steps are a topologically ordered interleaving
 /// of \c BuildStep's (each one produces the value's Build cell at this
@@ -653,7 +653,7 @@ template <typename ValueMap, typename Rich>
 /// broken by first use), not simply ascending by pass -- a later pass's
 /// block is only guaranteed to follow an earlier pass's block of the same
 /// nest where it actually reads that earlier block's production (every case
-/// that matters: a rule-4 materialization, or a carried value's assembled
+/// that matters: a materialization-rule escape, or a carried value's assembled
 /// form); two pass blocks with no such dependency between them may come out
 /// in either order, which is harmless since their scopes and cells are
 /// distinct. A later pass's reads name an earlier pass's assembled cell
@@ -710,7 +710,7 @@ void run_ordered_contracted_block(
         "evaluate_ordered_schedule: batched eval requires backend array-ops "
         "(CacheManager::set_array_ops)");
 
-  // R4: loud guard on this block's batch-mode kind. The batch-loop primitive
+  // Loud guard on this block's batch-mode kind. The batch-loop primitive
   // below realizes Contracted and External blocks uniformly (their difference
   // is carried entirely by each Assemble cell's own kind), so both are
   // supported; any other BatchModeType value is a schedule this executor
@@ -838,7 +838,7 @@ void run_ordered_contracted_block(
     // (this block's parent loop), so the enclosing loop's later batches
     // re-enter this block and must reuse the assembled value rather than
     // assemble it a second time (the Build step's rule below, applied to the
-    // other production kind -- spec section 4 item 2).
+    // other production kind).
     out_skip[k] = vskip[*a] || (table->cells[*a].produce_if_absent &&
                                 registry.peek(*a) != nullptr);
   }
@@ -979,7 +979,7 @@ void run_ordered_contracted_block(
             built, is_volatile, table, registry, resolver, vskip, forgo_plan,
             make_scope_guard);
       } else {
-        // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives;
+        // The Step variant has exactly BuildStep/ScopeBlock alternatives;
         // a valueless-by-exception or future third alternative is a schedule
         // this executor cannot interpret. Refusal, hence a throw: an elided
         // assert would silently skip the step, dropping a production.
@@ -1488,7 +1488,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     detail::dump_cache_halt_skips(n_skip, skip.size());
   }
 
-  // R3: executor-side run-completeness ledger. Set to 1 at the exact site
+  // Executor-side run-completeness ledger. Set to 1 at the exact site
   // each scheduled value is produced -- a root-scope BuildStep below, a
   // block-local BuildStep, or a block's Assemble step at its close (see
   // run_ordered_contracted_block) -- or where the cache-halt skip set
@@ -1524,7 +1524,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
         throw Exception(
             "evaluate_ordered_schedule: no root Build cell for value " +
             std::to_string(vid) + " (cell table/schedule disagreement)");
-      built[vid] = 1;  // R3: produced, or deliberately skipped, either way
+      built[vid] = 1;  // produced, or deliberately skipped, either way
                        // accounted for.
       if (skip[*root_cell] || (cell_table.cells[*root_cell].produce_if_absent &&
                                registry.peek(*root_cell))) {
@@ -1560,7 +1560,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           built, is_volatile, &cell_table, registry, resolver, skip, forgo_plan,
           make_scope_guard);
     } else {
-      // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives; any
+      // The Step variant has exactly BuildStep/ScopeBlock alternatives; any
       // other state is a schedule this executor cannot interpret. Refusal,
       // hence a throw: an elided assert would silently drop the step.
       throw Exception(
@@ -1568,7 +1568,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     }
   }
 
-  // R3: run-completeness. Every value_id the schedule promises to produce --
+  // Run-completeness. Every value_id the schedule promises to produce --
   // every BuildStep (root-level or loop-local Transient) and every block escape
   // output, enumerated by collect_production_ids -- must have been actually
   // built by the walk above. Complements well_formed's static single-producer
@@ -1708,8 +1708,8 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
 }  // namespace detail
 
 ///
-/// \brief The ordered executor (as-built design section 8, \c
-/// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md).
+/// \brief The ordered executor ("Executing the table", \c
+/// doc/developer/batched_evaluation.rst).
 /// Walks \c ordered.root.steps in sequence, building one
 /// value per root-level \c BuildStep via \c detail::compute_cell (which reads
 /// every operand through the cell table, so a value an earlier step already

@@ -50,7 +50,7 @@ int main() {
       Expr const*, container::vector<NodeBatchAnnotation>>>();
 
   auto optimized = optimize(
-      expr, {.objective_function = ObjectiveFunction::DenseSpaceTimeBatched,
+      expr, {.objective_function = ObjectiveFunction::DenseTimeSpaceBatched,
              .batch_policy = policy,
              .term_batch_axes = batch_axes});
 

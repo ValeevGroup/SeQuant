@@ -329,7 +329,8 @@ int pareto_best(container::vector<FP> const& f) {
 /// \c beta (machine_balance) <= 0 this is exactly \c flops (pure-flop
 /// tie-break, no behavior change). \c traffic is the operand+result footprint
 /// (elements), \c M is fast_mem_elems, \c c0 is block_tiles, \c kappa is
-/// block_prefactor. See doc/dev/specs/2026-06-23-roofline-tiebreak-cost.md.
+/// block_prefactor. See doc/developer/cost_model.rst ("Roofline
+/// performance cost").
 inline double roofline_op_cost(double flops, double traffic,
                                double machine_balance, double fast_mem_elems,
                                double block_tiles,
@@ -553,11 +554,12 @@ struct PeakModel {
 /// (DenseSpaceTimeBatched objective).
 ///
 /// Implements the per-batchable-index all-co-resident pebble-game DP, factored
-/// into the CostModel hooks driven by \ref run_single_term_opt. Follows the
-/// batch-aware cost model design (section 6.2, model A): each DP cell is
-/// indexed by both a subset \c n and a sliced-set context \c B over the
-/// batchable indices, so a model State is the \c [B]-vector of per-context
-/// \ref BatchedRes. No CSE; persistence-gated batching.
+/// into the CostModel hooks driven by \ref run_single_term_opt (see "Ordered
+/// batch contexts and costing" in doc/developer/cost_model.rst): each DP cell
+/// is indexed by both a subset \c n and an ordered batch-nest context \c B
+/// over the batchable indices, so a model State is the \c [B]-vector of
+/// per-context \ref BatchedRes. No CSE; batching is persistence-gated only
+/// under \ref batch_persistent_only.
 ///
 /// \tparam IdxToSz A callable mapping an Index to its extent.
 template <typename IdxToSz>
@@ -632,7 +634,8 @@ struct PeakBatchedModel {
   /// closes it (the node contracting the mode in batches), so a non-volatile
   /// subtree sliced by a loop that a volatile node closes is rebuilt every
   /// replay -- it cannot persist across evaluations (the runtime's persistence
-  /// rule, explicit-cells design section 12) -- and takes \ref volatile_weight
+  /// rule; see "Cell forms, reads, and lifetimes" in
+  /// doc/developer/batched_evaluation.rst) -- and takes \ref volatile_weight
   /// exactly as an amplitude-dependent value does. A non-volatile nest closed
   /// by a non-volatile node (a persistent intermediate summed over the DF
   /// index from two persistent factors) runs once and is charged once, as
