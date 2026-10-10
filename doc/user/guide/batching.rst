@@ -60,9 +60,9 @@ matter for everyday use:
 Deciding what to batch
 -------------------------
 
-Passing a ``BatchPolicy`` to :func:`sequant::optimize` via ``OptimizeOptions::batch_policy``, together with one of the two *batched*
-objective functions (``ObjectiveFunction::DenseSpaceTimeBatched``, peak-first, or ``DenseTimeSpaceBatched``, performance-first), makes
-the cost-based search consider slicing as one more way to reduce cost, in addition to choosing contraction order:
+Passing a ``BatchPolicy`` to :func:`sequant::optimize` via ``OptimizeOptions::batch_policy``, together with the *batched*
+objective function ``ObjectiveFunction::DenseTimeSpaceBatched`` (performance first, peak memory second), makes the
+cost-based search consider slicing as one more way to reduce peak memory, in addition to choosing contraction order:
 
 .. literalinclude:: /examples/user/batching.cpp
    :language: cpp
@@ -70,25 +70,9 @@ the cost-based search consider slicing as one more way to reduce cost, in additi
    :end-before: end-snippet-2
    :dedent: 2
 
-.. note::
-   Older code or serialized input may reference ``ObjectiveFunction::DensePeakSize``/``DensePeakSizeBatched``; these are deprecated
-   aliases for ``DenseSpaceTime``/``DenseSpaceTimeBatched`` and behave identically.
-
-The finite ``peak_threshold`` is a ceiling on the **modeled** peak, with different fallbacks when no schedule fits:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 25 45 30
-
-   * - Objective
-     - Selection among schedules within the budget
-     - If none fits
-   * - ``DenseSpaceTimeBatched``
-     - Lowest performance cost, then lower peak
-     - Lowest peak
-   * - ``DenseTimeSpaceBatched``
-     - Lowest performance cost, then fewer sliced modes, then lower peak
-     - Lowest performance cost, then lower peak
+The finite ``peak_threshold`` is a ceiling on the **modeled** peak. Among the schedules that fit it, the optimizer picks
+the lowest performance cost, then the fewest sliced modes, then the lowest peak, so nothing is sliced unless slicing is
+needed to fit the budget. If no schedule fits, it picks the lowest performance cost, then the lowest peak.
 
 Exceeding the budget is not an error. The modeled peak is a per-term estimate from dense extents; backend workspace,
 tile sizes, and intermediates shared across equations can change the realized peak, so a finite budget does not

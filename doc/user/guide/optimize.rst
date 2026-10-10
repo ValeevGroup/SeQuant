@@ -37,19 +37,18 @@ Tuning
 :func:`sequant::optimize` takes an ``OptimizeOptions`` struct exposing further, more advanced controls. Its full field
 list is API-reference material (see :class:`sequant::OptimizeOptions`), but a few matter for everyday use:
 
-- ``objective_function`` selects the cost metric. ``DenseSize`` minimizes the total size of all intermediates, which
-  can favor a different contraction order from minimizing the peak size of all simultaneously live tensors
-  (``DenseSpaceTime``). ``DenseSpaceTime`` trades a small, bounded increase in peak (``peak_flops_tolerance``) for
-  lower performance cost; ``DenseTimeSpace`` puts performance first and peak second. The batched variants of these
-  two additionally slice a large mode into blocks to bound peak memory under a budget — substantial enough to have
-  its own page: see :doc:`batching`.
+- ``objective_function`` selects the cost metric. The default, ``DenseFLOPs``, minimizes the floating-point operation
+  count, the metric used throughout the literature on contraction ordering. ``DenseTimeSpace``, the objective intended
+  for production, minimizes a performance cost first — the operation count, or a roofline estimate that also charges
+  data movement (see ``roofline`` below) — and the peak size of all simultaneously live tensors second, so among
+  equally fast schedules it picks the one with the lowest peak memory. Its batched variant, ``DenseTimeSpaceBatched``,
+  additionally slices a large mode into blocks to bound peak memory under a budget — substantial enough to have its
+  own page: see :doc:`batching`.
 - ``volatile_weight`` makes operations that must be rebuilt every iteration (those depending on a leaf marked by
-  ``BatchPolicy::is_volatile_leaf``) count more than ones whose results can be cached. It is ignored by
-  ``DenseSize``; under ``DenseSpaceTime`` it only affects the choice among schedules within ``peak_flops_tolerance``
-  of the minimum peak.
+  ``BatchPolicy::is_volatile_leaf``) count more than ones whose results can be cached.
 - The optional ``roofline`` parameters make the performance cost account for data movement as well as arithmetic;
   see :ref:`cost-model-roofline`.
 - Common-subexpression elimination during the contraction search (``CSEOptions::subnet``) is supported only by
-  ``DenseFLOPs`` and ``DenseSize``; leave it disabled for the other objectives. Enabling it with another objective
+  ``DenseFLOPs``; leave it disabled for ``DenseTimeSpace`` and ``DenseTimeSpaceBatched``. Enabling it with either
   trips an assertion, and where assertions are compiled out (``SEQUANT_ASSERT_BEHAVIOR=IGNORE``) CSE is silently
   skipped.
