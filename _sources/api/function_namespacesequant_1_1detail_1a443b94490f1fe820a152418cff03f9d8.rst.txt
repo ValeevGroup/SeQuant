@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a443b94490f1fe820a152418cff03f9d8:
+
+Function sequant::detail::assert_protoindexed_not_active
+========================================================
+
+- Defined in :ref:`file_SeQuant_core_wick_extended.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::assert_protoindexed_not_active(const IndexBasisRegistry&, const IndexSpace&, const Index&, const Index&)
+   :project: SeQuant

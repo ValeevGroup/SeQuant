@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a03158c7d13fd7e3c714b834bf3492164:
+
+Enum IndexSpaceMetric
+=====================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::IndexSpaceMetric
+   :project: SeQuant

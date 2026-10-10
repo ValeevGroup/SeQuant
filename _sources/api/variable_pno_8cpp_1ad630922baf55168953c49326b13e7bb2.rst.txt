@@ -1,0 +1,14 @@
+.. _exhale_variable_pno_8cpp_1ad630922baf55168953c49326b13e7bb2:
+
+Variable order
+==============
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_rules_pno.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: order
+   :project: SeQuant

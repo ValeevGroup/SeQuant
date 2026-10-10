@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a2242e1e789f91059b843cf8a7525e421:
+
+Function sequant::different_instances
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_basis.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::different_instances(const IndexBasis&, const IndexBasis&)
+   :project: SeQuant

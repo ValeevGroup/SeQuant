@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1af89d64f68d1b5586ce2196b6bf598b25:
+
+Function sequant::toUtf16(std::string_view)
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_utility_string.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::toUtf16(std::string_view)
+   :project: SeQuant

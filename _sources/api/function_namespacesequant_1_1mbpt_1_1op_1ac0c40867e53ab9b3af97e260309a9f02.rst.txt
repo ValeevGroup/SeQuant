@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1op_1ac0c40867e53ab9b3af97e260309a9f02:
+
+Function sequant::mbpt::op::θ
+=============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::op::θ(std::size_t)
+   :project: SeQuant

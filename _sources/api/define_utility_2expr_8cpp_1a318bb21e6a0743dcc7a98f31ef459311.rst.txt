@@ -1,0 +1,14 @@
+.. _exhale_define_utility_2expr_8cpp_1a318bb21e6a0743dcc7a98f31ef459311:
+
+Define SEQUANT_EXPR_INVALID
+===========================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_EXPR_INVALID
+   :project: SeQuant

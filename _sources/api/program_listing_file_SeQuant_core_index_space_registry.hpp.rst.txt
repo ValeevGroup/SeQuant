@@ -1,0 +1,26 @@
+
+.. _program_listing_file_SeQuant_core_index_space_registry.hpp:
+
+Program Listing for File index_space_registry.hpp
+=================================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_index_space_registry.hpp>` (``SeQuant/core/index_space_registry.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_INDEX_SPACE_REGISTRY_HPP
+   #define SEQUANT_INDEX_SPACE_REGISTRY_HPP
+   
+   #if defined(_MSC_VER)
+   #pragma message( \
+       "SeQuant/core/index_space_registry.hpp is deprecated, include SeQuant/core/index_basis_registry.hpp")
+   #else
+   #warning \
+       "SeQuant/core/index_space_registry.hpp is deprecated, include SeQuant/core/index_basis_registry.hpp"
+   #endif
+   
+   #include <SeQuant/core/index_basis_registry.hpp>
+   
+   #endif  // SEQUANT_INDEX_SPACE_REGISTRY_HPP

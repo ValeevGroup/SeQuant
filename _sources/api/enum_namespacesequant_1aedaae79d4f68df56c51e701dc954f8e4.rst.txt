@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1aedaae79d4f68df56c51e701dc954f8e4:
+
+Enum ReorderSum
+===============
+
+- Defined in :ref:`file_SeQuant_core_optimize_options.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::ReorderSum
+   :project: SeQuant

@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1_taggable:
+
+Class Taggable
+==============
+
+- Defined in :ref:`file_SeQuant_core_tag.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Derived Type
+************
+
+- ``public sequant::Index`` (:ref:`exhale_class_classsequant_1_1_index`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Taggable
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

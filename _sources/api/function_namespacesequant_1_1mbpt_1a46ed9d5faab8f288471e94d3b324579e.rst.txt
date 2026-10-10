@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a46ed9d5faab8f288471e94d3b324579e:
+
+Template Function sequant::mbpt::spinannotation_replacе
+=======================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::spinannotation_replacе(WS&&, Spin)
+   :project: SeQuant

@@ -1,0 +1,55 @@
+
+.. _file_SeQuant_core_expressions_power.cpp:
+
+File power.cpp
+==============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_expressions>` (``SeQuant/core/expressions``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expressions/power.cpp``)
+---------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expressions_power.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expressions/expr_ptr.hpp`` (:ref:`file_SeQuant_core_expressions_expr_ptr.hpp`)
+
+- ``SeQuant/core/expressions/power.hpp`` (:ref:`file_SeQuant_core_expressions_power.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/io/latex/latex.hpp`` (:ref:`file_SeQuant_core_io_latex_latex.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+

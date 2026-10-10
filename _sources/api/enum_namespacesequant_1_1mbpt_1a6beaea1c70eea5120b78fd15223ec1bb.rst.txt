@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1mbpt_1a6beaea1c70eea5120b78fd15223ec1bb:
+
+Enum ProjectionTerms
+====================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_rules_pno.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::mbpt::ProjectionTerms
+   :project: SeQuant

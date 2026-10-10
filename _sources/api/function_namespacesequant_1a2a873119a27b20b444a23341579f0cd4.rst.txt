@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a2a873119a27b20b444a23341579f0cd4:
+
+Template Function sequant::permutation_parity
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_utility_permutation.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::permutation_parity(std::span<T>, bool)
+   :project: SeQuant

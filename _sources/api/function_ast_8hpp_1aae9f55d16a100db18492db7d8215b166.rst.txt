@@ -1,0 +1,14 @@
+.. _exhale_function_ast_8hpp_1aae9f55d16a100db18492db7d8215b166:
+
+Function BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Tensor, name, indices, symmetry)
+========================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_ast.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Tensor, name, indices, symmetry)
+   :project: SeQuant

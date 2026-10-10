@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a663081b1bebbfcc6accba38c5aa9651d:
+
+Function sequant::assert_behavior
+=================================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::assert_behavior()
+   :project: SeQuant

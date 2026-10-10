@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1af5be1bbfcc27d53e2ca030117f44d7a8:
+
+Enum AssertBehavior
+===================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::AssertBehavior
+   :project: SeQuant

@@ -1,0 +1,13 @@
+
+.. _namespace_sequant__mbpt__op__tensor__@224:
+
+Namespace sequant::mbpt::op::tensor::@224
+=========================================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+

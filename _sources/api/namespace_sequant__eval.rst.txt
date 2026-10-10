@@ -1,0 +1,216 @@
+
+.. _namespace_sequant__eval:
+
+Namespace sequant::eval
+=======================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+Detailed Description
+--------------------
+
+Lifetime-mask stamping: ``stamp_lifetime_masks`` and the detail helpers it alone depends on (``slot_modes_of`` is also read by ``stamp_occurrence_homes`` below, qualified as ``eval::detail::slot_modes_of``). 
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant__eval__detail`
+
+- :ref:`namespace_sequant__eval__dryrun`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_access_clock`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_axis_class`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_build_meter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_build_meter_1_1_reporter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_build_step`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_cached_value`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_cached_value_equal`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_cached_value_hasher`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_cell`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_cell_legality`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_cell_registry_1_1_slot`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_cell_registry_hooks`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_cell_scope`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_cell_table`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_cell_table_inputs`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_cell_violation`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_def_use_meter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_def_use_meter_1_1_reporter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_eval_impl_timeline`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_eval_impl_timeline_1_1_reporter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_eval_impl_timeline_1_1_scope`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_legality_schedule`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_lookup_meter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_lookup_meter_1_1_reporter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_occurrence_rec`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_ordered_schedule`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_peak_event`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_peak_live_entry`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_peak_monitor`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_peak_profile`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_phase_timer`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_phase_timer_1_1_reporter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_phase_timer_1_1_scope`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_production`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_read`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_rich_schedule`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_schedule`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_schedule_sink`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_scope_block`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_sliced_mode_assignment`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_step`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_table_cell`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_table_read`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_value_cell`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1_cell_read_resolver`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1_cell_registry`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1_persistent_value_store`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1_1eval_1aa186be115dd999fc458ac4ec015b9699`
+
+- :ref:`exhale_enum_namespacesequant_1_1eval_1ab02d0018a27f0198a32685125b01c0d6`
+
+- :ref:`exhale_enum_namespacesequant_1_1eval_1a5bbce777055971d77b8dbc5d061dc8d3`
+
+- :ref:`exhale_enum_namespacesequant_1_1eval_1a65373c5e21302e5f7b7b2acf5b336ac1`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1ad0e26bbc1cb71c18016189265c689663`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1ae92598782d2239a88884c2d09f8177d1`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a0bd825c7d1da07ea3b45b171aa8d5af9`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a486614a830de6eef27b9a318998ad4f8`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a9fa2cdfc6a04c8066f9dc4b68ab9f013`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a8031bf2da7005ab67d3633c4337315e6`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a9e5e1630f0e56ddebfb7954997f3501d`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a16f66ec7a766139be2785fbe5886a608`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1addf0b683656f192beee71d38f1440265`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a7af13fcbe9ac9c100d9cc237048f119e`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a1645ff4c19b997cdc448cbd2616cd38b`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a7779d6a38eeeaf4f5506b15963ac085b`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a12b22af39d17c666c52d163968cda2cc`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1ae51cf6e89c7886be5b0a04b7a8701009`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a33b81ec8be205c6d1608219e7e174979`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a39568a1f393a70de344377cb31697bbd`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1acd433e247c2ec5589b181d178ba876b6`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a2b6e3036a70ea1eb9a50e91638eee714`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a1aaf3acd93db75a4bd5132dc60486418`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1abf73f012c24bb000d4c8c3069087bf1d`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a9270586aa607c2adcbe8840686439eda`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a436a75eef9260e35c82121633c130c70`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1ae033666788822d9481f4fec1159cc02f`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1aa33620724f5a200d8f21efaa596ae54e`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1aa50046870cc596cad77e474f8305b81c`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a3b797ca14182c73f2b1cfe49b00edb0c`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1a23324ff6bb2d9fefaf232586c514a2d5`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1a1383ff85046a4985c1c801e8457238d7`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1a520edd083aecef67d3a7f9dd2a81a18f`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1a0a2625a3792f378c92194c5fec3e5f32`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1ab47a28027ee0e555c7488be74d376f5a`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1a111d1622d368b3079b5b0248c45d2db0`

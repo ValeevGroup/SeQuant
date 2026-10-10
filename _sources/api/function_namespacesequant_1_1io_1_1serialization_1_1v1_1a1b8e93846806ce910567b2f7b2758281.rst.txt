@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a1b8e93846806ce910567b2f7b2758281:
+
+Function sequant::io::serialization::v1::is_base_key
+====================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::is_base_key(std::wstring_view)
+   :project: SeQuant

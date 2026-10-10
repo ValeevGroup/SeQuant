@@ -1,0 +1,139 @@
+
+.. _file_SeQuant_core_expressions_expr_algorithms.cpp:
+
+File expr_algorithms.cpp
+========================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_expressions>` (``SeQuant/core/expressions``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expressions/expr_algorithms.cpp``)
+-------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expressions_expr_algorithms.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/context.hpp`` (:ref:`file_SeQuant_core_context.hpp`)
+
+- ``SeQuant/core/expressions/constant.hpp`` (:ref:`file_SeQuant_core_expressions_constant.hpp`)
+
+- ``SeQuant/core/expressions/expr_algorithms.hpp`` (:ref:`file_SeQuant_core_expressions_expr_algorithms.hpp`)
+
+- ``SeQuant/core/expressions/expr_operators.hpp`` (:ref:`file_SeQuant_core_expressions_expr_operators.hpp`)
+
+- ``SeQuant/core/expressions/power.hpp`` (:ref:`file_SeQuant_core_expressions_power.hpp`)
+
+- ``SeQuant/core/expressions/product.hpp`` (:ref:`file_SeQuant_core_expressions_product.hpp`)
+
+- ``SeQuant/core/expressions/result_expr.hpp`` (:ref:`file_SeQuant_core_expressions_result_expr.hpp`)
+
+- ``SeQuant/core/expressions/sum.hpp`` (:ref:`file_SeQuant_core_expressions_sum.hpp`)
+
+- ``SeQuant/core/expressions/tensor.hpp`` (:ref:`file_SeQuant_core_expressions_tensor.hpp`)
+
+- ``SeQuant/core/io/latex/latex.hpp`` (:ref:`file_SeQuant_core_io_latex_latex.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+- ``SeQuant/core/options.hpp`` (:ref:`file_SeQuant_core_options.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``iostream``
+
+- ``range/v3/range/primitives.hpp``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_expand_visitor`
+
+- :ref:`exhale_struct_structsequant_1_1_rapid_simplify_visitor`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a113060966db09679d51f30fb53462fb1`
+
+- :ref:`exhale_function_namespacesequant_1ae45d1ab781814eb2cb10455da06785f1`
+
+- :ref:`exhale_function_namespacesequant_1a175f4077c34ed84fc54c9a14547d6b6c`
+
+- :ref:`exhale_function_namespacesequant_1aab6886c27528068a1f9b4e8bb41ea13f`
+
+- :ref:`exhale_function_namespacesequant_1a046c20d81ebc0e26a2e6d7f279807fd6`
+
+- :ref:`exhale_function_namespacesequant_1aa92afcc273aa4909023368df460ea3e2`
+
+- :ref:`exhale_function_namespacesequant_1af62672d9a36d78a6f42ea045dff8a442`
+
+- :ref:`exhale_function_namespacesequant_1a4707bc59cef2a682942534231a7357e8`
+
+- :ref:`exhale_function_namespacesequant_1a459ada604346153073774ab11f38d948`
+
+- :ref:`exhale_function_namespacesequant_1a0636d78f537107a5db880464da24fd62`
+
+- :ref:`exhale_function_namespacesequant_1a54d970db0c9613c312bb7b2335c0fa1e`
+
+- :ref:`exhale_function_namespacesequant_1a97ad4e5e5b28a0b29c5b232726968dc4`
+
+- :ref:`exhale_function_namespacesequant_1aabe9737895e799a8bf7bd97282bc67a1`
+
+- :ref:`exhale_function_namespacesequant_1afaf2130fadf95c2f3c1173dc7467b356`
+
+- :ref:`exhale_function_namespacesequant_1a237e4a9cf9e2d2e676a4f61487b859e9`
+
+- :ref:`exhale_function_namespacesequant_1ad3502a95f147cf67cbb10e16456aaf1a`
+
+- :ref:`exhale_function_namespacesequant_1af7af411a33316d3a0de009df2da4069b`
+
+- :ref:`exhale_function_namespacesequant_1a2b8ed8d6d3723466e0b176d456113d00`
+
+- :ref:`exhale_function_namespacesequant_1aa9e484904fdefdd206b5e0e3d5a0ae73`
+
+- :ref:`exhale_function_namespacesequant_1a6ca30fa8ef0b08354509b7c23cf8064e`
+
+- :ref:`exhale_function_namespacesequant_1a707cedc0447e7cd5f40efcec00feb5a4`
+
+- :ref:`exhale_function_namespacesequant_1af0948cfc462ccc7967a31e2cf87318f6`
+
+- :ref:`exhale_function_namespacesequant_1a437ad10a56bd65379c519b985070f255`
+
+- :ref:`exhale_function_namespacesequant_1a0aff40b3eb0bf6a6648b22b23d814510`
+

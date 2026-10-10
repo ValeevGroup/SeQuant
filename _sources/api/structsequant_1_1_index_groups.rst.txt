@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_index_groups:
+
+Template Struct IndexGroups
+===========================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::IndexGroups
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1_py_torch_einsum_generator:
+
+Class PyTorchEinsumGenerator
+============================
+
+- Defined in :ref:`file_SeQuant_core_export_python_einsum.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::PythonEinsumGeneratorBase< PyTorchEinsumGeneratorContext >`` (:ref:`exhale_class_classsequant_1_1_python_einsum_generator_base`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::PyTorchEinsumGenerator
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,278 @@
+
+.. _program_listing_file_SeQuant_core_context.hpp:
+
+Program Listing for File context.hpp
+====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_context.hpp>` (``SeQuant/core/context.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_CONTEXT_HPP
+   #define SEQUANT_CORE_CONTEXT_HPP
+   
+   #include <SeQuant/core/attr.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/index_basis_registry.hpp>
+   #include <SeQuant/core/options.hpp>
+   #include <SeQuant/core/tensor_canonicalizer_fwd.hpp>
+   #include <SeQuant/core/utility/aggregate.hpp>
+   #include <SeQuant/core/utility/context.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <atomic>
+   #include <cstdint>
+   #include <functional>
+   #include <memory>
+   #include <optional>
+   #include <string>
+   #include <string_view>
+   
+   namespace sequant {
+   
+   // clang-format
+   //     or as subscript (`BraKetTypesetting::KetSub`); the latter is the
+   //     traditional tensor convention
+   // clang-format off
+   class Context {
+    public:
+     struct Defaults {
+       constexpr static auto vacuum = Vacuum::Physical;
+       constexpr static auto metric = IndexSpaceMetric::Unit;
+       constexpr static auto assert_strict_braket_symmetry = true;
+       constexpr static auto spbasis = SPBasis::Spinor;
+       constexpr static auto first_dummy_index_ordinal = 100;
+       constexpr static auto braket_typesetting = BraKetTypesetting::ContraSub;
+       constexpr static auto braket_slot_typesetting =
+           BraKetSlotTypesetting::TensorPackage;
+       constexpr static auto deserialization_symmetry = Symmetry::Nonsymm;
+       constexpr static auto deserialization_hermiticity =
+           Hermiticity::NonHermitian;
+       constexpr static auto deserialization_column_symmetry =
+           ColumnSymmetry::Nonsymm;
+     };
+   
+   
+     // the implicit special members of Options use its deprecated fields
+     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+     struct Options {
+       SEQUANT_DESIGNATED_INIT_ONLY;
+         std::shared_ptr<const IndexBasisRegistry> index_basis_registry_shared_ptr = nullptr;
+         std::optional<IndexBasisRegistry> index_basis_registry = std::nullopt;
+         [[deprecated("use index_basis_registry_shared_ptr")]] std::shared_ptr<const IndexBasisRegistry> index_space_registry_shared_ptr = nullptr;
+         [[deprecated("use index_basis_registry")]] std::optional<IndexBasisRegistry> index_space_registry = std::nullopt;
+         Vacuum vacuum = Defaults::vacuum;
+         [[deprecated("the metric is per basis; register a non-orthonormal basis with IndexBasisRegistry::add(label, basis, IndexSpaceMetric::General)")]] IndexSpaceMetric metric = Defaults::metric;
+         bool assert_strict_braket_symmetry = Defaults::assert_strict_braket_symmetry;
+         SPBasis spbasis = Defaults::spbasis;
+         std::size_t first_dummy_index_ordinal = Defaults::first_dummy_index_ordinal;
+         std::optional<CanonicalizeOptions> canonicalization_options = std::nullopt;
+         BraKetTypesetting braket_typesetting = Defaults::braket_typesetting;
+         BraKetSlotTypesetting braket_slot_typesetting =
+           Defaults::braket_slot_typesetting;
+         Symmetry deserialization_symmetry = Defaults::deserialization_symmetry;
+         Hermiticity deserialization_hermiticity =
+           Defaults::deserialization_hermiticity;
+         ColumnSymmetry deserialization_column_symmetry =
+           Defaults::deserialization_column_symmetry;
+         std::optional<container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>> tensor_canonicalizers = std::nullopt;
+         std::optional<tensor_index_comparer_t> index_comparer = std::nullopt;
+         std::optional<tensor_index_pair_comparer_t> index_pair_comparer = std::nullopt;
+         std::optional<container::vector<std::wstring>> cardinal_tensor_labels = std::nullopt;
+     };
+     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+     static Options make_default_options() { return {}; }
+   
+     Context(Options options = make_default_options());
+   
+     ~Context() = default;
+   
+     Context(const Context& ctx) = default;
+   
+     Context& operator=(const Context& ctx) = default;
+   
+     // no move operations, so that an rvalue is copied: a copy is cheap (it
+     // shares the registry and the canonicalizer configuration), and a moved-from
+     // Context would lack them
+   
+     std::uint64_t version() const;
+   
+     Vacuum vacuum() const;
+     std::shared_ptr<const IndexBasisRegistry> index_basis_registry() const;
+     [[deprecated("use index_basis_registry()")]] std::shared_ptr<
+         const IndexBasisRegistry>
+     index_space_registry() const {
+       return index_basis_registry();
+     }
+     [[deprecated("the metric is per basis, see IndexBasis::metric()")]]
+     IndexSpaceMetric metric() const;
+     bool assert_strict_braket_symmetry() const;
+     SPBasis spbasis() const;
+     std::size_t first_dummy_index_ordinal() const;
+     std::optional<CanonicalizeOptions> canonicalization_options() const;
+     BraKetTypesetting braket_typesetting() const;
+     BraKetSlotTypesetting braket_slot_typesetting() const;
+     Symmetry deserialization_symmetry() const;
+     Hermiticity deserialization_hermiticity() const;
+     ColumnSymmetry deserialization_column_symmetry() const;
+     std::shared_ptr<TensorCanonicalizer> tensor_canonicalizer_ptr(
+         std::wstring_view label) const;
+     std::shared_ptr<TensorCanonicalizer> nondefault_tensor_canonicalizer_ptr(
+         std::wstring_view label) const;
+     const TensorCanonicalizer& tensor_canonicalizer(
+         std::wstring_view label) const;
+     const tensor_index_comparer_t& index_comparer() const;
+     const tensor_index_pair_comparer_t& index_pair_comparer() const;
+     std::shared_ptr<const tensor_index_comparer_t> index_comparer_ptr() const;
+     std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer_ptr()
+         const;
+     const container::vector<std::wstring>& cardinal_tensor_labels() const;
+   
+     Context& set(Vacuum vacuum);
+     Context& set(IndexBasisRegistry ISR);
+     Context& set(std::shared_ptr<const IndexBasisRegistry> ISR);
+     [[deprecated("the metric is per basis; register a non-orthonormal basis with IndexBasisRegistry::add(label, basis, IndexSpaceMetric::General)")]]
+     Context& set(IndexSpaceMetric metric);
+     Context& set(AssertStrictBraKetSymmetry assert_strict_braket_symmetry);
+     Context& set(SPBasis spbasis);
+     Context& set_first_dummy_index_ordinal(std::size_t first_dummy_index_ordinal);
+     Context& set(CanonicalizeOptions copt);
+     Context& set(BraKetTypesetting braket_typeset);
+     Context& set(BraKetSlotTypesetting braket_slot_typeset);
+     Context& set(Symmetry symmetry);
+     Context& set(Hermiticity hermiticity);
+     Context& set(ColumnSymmetry column_symmetry);
+     Context& set_tensor_canonicalizer(
+         std::wstring_view label, std::shared_ptr<TensorCanonicalizer> canonicalizer);
+     Context& unset_tensor_canonicalizer(std::wstring_view label);
+     Context& set_index_comparer(tensor_index_comparer_t comparer);
+     Context& set_index_comparer(
+         std::shared_ptr<const tensor_index_comparer_t> comparer);
+     Context& set_index_pair_comparer(tensor_index_pair_comparer_t comparer);
+     Context& set_index_pair_comparer(
+         std::shared_ptr<const tensor_index_pair_comparer_t> comparer);
+     Context& set_cardinal_tensor_labels(container::vector<std::wstring> labels);
+   
+    private:
+     struct CanonicalizationConfig {
+       container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
+           tensor_canonicalizers;
+       std::shared_ptr<const tensor_index_comparer_t> index_comparer;
+       std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer;
+       container::vector<std::wstring> cardinal_labels;
+       std::optional<CanonicalizeOptions> options;
+   
+       bool operator==(const CanonicalizationConfig&) const = default;
+     };
+   
+     friend bool operator==(const Context& ctx1, const Context& ctx2);
+   
+     CanonicalizationConfig& mutable_canonicalization_config();
+   
+     void invalidate_version();
+   
+     struct CachedVersion {
+       std::atomic<std::uint64_t> value{0};
+       CachedVersion() = default;
+       CachedVersion(const CachedVersion& other)
+           : value(other.value.load(std::memory_order_relaxed)) {}
+       CachedVersion& operator=(const CachedVersion& other) {
+         value.store(other.value.load(std::memory_order_relaxed),
+                     std::memory_order_relaxed);
+         return *this;
+       }
+     };
+     mutable CachedVersion version_;
+   
+     std::shared_ptr<const IndexBasisRegistry> idx_basis_reg_ = nullptr;
+     Vacuum vacuum_ = Defaults::vacuum;
+     IndexSpaceMetric metric_ = Defaults::metric;
+     bool assert_strict_braket_symmetry_ = Defaults::assert_strict_braket_symmetry;
+     SPBasis spbasis_ = Defaults::spbasis;
+     std::size_t first_dummy_index_ordinal_ = Defaults::first_dummy_index_ordinal;
+     BraKetTypesetting braket_typesetting_ = Defaults::braket_typesetting;
+     BraKetSlotTypesetting braket_slot_typesetting_ =
+         Defaults::braket_slot_typesetting;
+     Symmetry deserialization_symmetry_ = Defaults::deserialization_symmetry;
+     Hermiticity deserialization_hermiticity_ =
+         Defaults::deserialization_hermiticity;
+     ColumnSymmetry deserialization_column_symmetry_ =
+         Defaults::deserialization_column_symmetry;
+     std::shared_ptr<const CanonicalizationConfig> canonicalization_config_;
+   };
+   
+   bool operator==(const Context& ctx1, const Context& ctx2);
+   
+   bool operator!=(const Context& ctx1, const Context& ctx2);
+   
+   
+   
+   bool default_context_manipulation_threadsafe();
+   
+   std::uint64_t current_context_version(Statistics s = Statistics::Arbitrary);
+   
+   std::uint64_t current_contexts_version();
+   
+   const Context& get_default_context(Statistics s = Statistics::Arbitrary);
+   
+   Context get_default_context_snapshot(Statistics s = Statistics::Arbitrary);
+   
+   std::shared_ptr<const IndexBasisRegistry> get_default_index_basis_registry(
+       Statistics s = Statistics::Arbitrary);
+   
+   [[deprecated("use get_default_index_basis_registry()")]] inline std::shared_ptr<
+       const IndexBasisRegistry>
+   get_default_index_space_registry(Statistics s = Statistics::Arbitrary) {
+     return get_default_index_basis_registry(s);
+   }
+   
+   IndexBasis default_registry_resolved(const IndexBasis& basis);
+   
+   void set_default_context(Context ctx,
+                            Statistics s = Statistics::Arbitrary);
+   
+   void set_default_context(Context::Options ctx_options,
+                            Statistics s = Statistics::Arbitrary);
+   
+   void set_default_context(const container::map<Statistics, Context>& ctxs);
+   
+   void reset_default_context();
+   
+   [[nodiscard]] detail::ImplicitContextResetter<
+       container::map<Statistics, Context>>
+   set_scoped_default_context(container::map<Statistics, Context> ctx);
+   
+   [[nodiscard]] detail::ImplicitContextResetter<
+       container::map<Statistics, Context>>
+   set_scoped_default_context(Context ctx);
+   
+   [[nodiscard]] detail::ImplicitContextResetter<
+       container::map<Statistics, Context>>
+   set_scoped_default_context(Context::Options ctx_options);
+   
+   [[nodiscard]] detail::ImplicitContextResetter<
+       container::map<Statistics, Context>>
+   set_scoped_modified_default_context(
+       const std::function<void(Context&)>& modify);
+   
+   [[nodiscard]] detail::ImplicitContextResetter<
+       container::map<Statistics, Context>>
+   pin_default_contexts();
+   
+   
+   
+   
+   [[nodiscard]] IndexSpace get_particle_space(
+       const IndexSpace::QuantumNumbers& qn);
+   
+   [[nodiscard]] IndexSpace get_hole_space(const IndexSpace::QuantumNumbers& qn);
+   
+   [[nodiscard]] IndexSpace get_complete_space(
+       const IndexSpace::QuantumNumbers& qn);
+   
+   
+   }  // namespace sequant
+   
+   #endif

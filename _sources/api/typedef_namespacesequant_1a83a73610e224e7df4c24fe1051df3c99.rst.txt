@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a83a73610e224e7df4c24fe1051df3c99:
+
+Typedef sequant::tensor_index_pair_comparer_t
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_canonicalizer_fwd.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::tensor_index_pair_comparer_t
+   :project: SeQuant

@@ -1,0 +1,32 @@
+.. _exhale_struct_structsequant_1_1_index_basis_registry_1_1not__a__space:
+
+Struct IndexBasisRegistry::not_a_space
+======================================
+
+- Defined in :ref:`file_SeQuant_core_index_basis_registry.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_index_basis_registry`.
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::IndexSpace::bad_key`` (:ref:`exhale_struct_structsequant_1_1_index_space_1_1bad__key`)
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::IndexBasisRegistry::not_a_space
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

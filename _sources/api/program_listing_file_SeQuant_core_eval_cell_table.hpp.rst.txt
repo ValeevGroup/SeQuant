@@ -1,0 +1,418 @@
+
+.. _program_listing_file_SeQuant_core_eval_cell_table.hpp:
+
+Program Listing for File cell_table.hpp
+=======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_cell_table.hpp>` (``SeQuant/core/eval/cell_table.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_CELL_TABLE_HPP
+   #define SEQUANT_EVAL_CELL_TABLE_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/dag_scope.hpp>
+   #include <SeQuant/core/utility/exception.hpp>
+   
+   #include <algorithm>
+   #include <cstddef>
+   #include <functional>
+   #include <optional>
+   #include <stdexcept>
+   #include <string>
+   #include <utility>
+   
+   namespace sequant::eval {
+   
+   using LoopKey = sequant::LoopKey;
+   
+   struct ScopeBlock;
+   
+   using CellId = std::size_t;
+   
+   struct CellScope {
+     container::svector<std::pair<LoopKey, int>> path;
+   
+     [[nodiscard]] bool encloses(CellScope const& inner) const noexcept {
+       if (path.size() > inner.path.size()) return false;
+       for (std::size_t i = 0; i < path.size(); ++i)
+         if (path[i] != inner.path[i]) return false;
+       return true;
+     }
+     [[nodiscard]] friend bool operator==(CellScope const& a,
+                                          CellScope const& b) noexcept {
+       return a.path.size() == b.path.size() && a.encloses(b);
+     }
+   };
+   
+   enum class ProductionKind { Build, Assemble, Leaf };
+   
+   enum class AssembleKind { Sum, Scatter };
+   
+   struct Production {
+     ProductionKind kind = ProductionKind::Build;
+     AssembleKind assemble = AssembleKind::Sum;  // Assemble only
+     CellId source = 0;                          // Assemble only: the partial
+     container::svector<std::pair<std::size_t, LoopKey>> scatter_map;
+   };
+   
+   struct TableCell {
+     std::size_t value_id = 0;
+     container::svector<std::pair<std::size_t, LoopKey>> sliced;
+     container::svector<LoopKey> partial_over;
+     CellScope scope;
+     Production production;
+     bool produce_if_absent = false;
+     bool persistent = false;
+     std::size_t life = 0;
+   };
+   
+   struct Read {
+     CellId consumer = 0;
+     std::size_t operand_value_id = 0;
+     CellId source = 0;
+     container::svector<std::pair<std::size_t, LoopKey>> slice;
+     container::svector<LoopKey> invariant_on{};
+   };
+   
+   struct CellTable {
+     container::vector<TableCell> cells;
+     container::vector<Read> reads;
+     container::svector<std::pair<CellId, std::size_t>> unresolved;
+   };
+   
+   struct CellViolation {
+     std::string rule;  // "visibility" | "form" | "chain" | "life" | "uniqueness"
+     std::string what;
+   };
+   
+   namespace detail {
+   [[nodiscard]] inline std::string cell_str(CellTable const& t, CellId id) {
+     auto const& c = t.cells[id];
+     std::string s = "cell#" + std::to_string(id) + "(value " +
+                     std::to_string(c.value_id) + ", scope depth " +
+                     std::to_string(c.scope.path.size()) + ", ";
+     s += c.production.kind == ProductionKind::Build      ? "Build"
+          : c.production.kind == ProductionKind::Assemble ? "Assemble"
+                                                          : "Leaf";
+     return s + ")";
+   }
+   [[nodiscard]] inline bool same_key(LoopKey const& a, LoopKey const& b) {
+     return a.depth == b.depth && a.loop_slot == b.loop_slot;
+   }
+   
+   [[nodiscard]] inline container::svector<LoopKey> bound_instances(
+       TableCell const& c) {
+     container::svector<LoopKey> out;
+     for (auto const& [pos, k] : c.sliced) {
+       (void)pos;
+       out.push_back(k);
+     }
+     for (LoopKey const& k : c.partial_over) out.push_back(k);
+     return out;
+   }
+   
+   [[nodiscard]] inline CellScope residency_scope(TableCell const& s) {
+     if (s.production.kind == ProductionKind::Leaf) return CellScope{};
+     if (s.production.kind == ProductionKind::Build) return s.scope;
+     auto const bi = bound_instances(s);
+     std::size_t deepest = 0;
+     bool bound = false;
+     for (std::size_t i = 0; i < s.scope.path.size(); ++i) {
+       LoopKey const& here = s.scope.path[i].first;
+       for (LoopKey const& k : bi) {
+         if (same_key(k, here)) {
+           bound = true;
+           deepest = i;
+         }
+       }
+     }
+     if (!bound) return CellScope{};
+     CellScope r;
+     r.path.assign(s.scope.path.begin(), s.scope.path.begin() + deepest + 1);
+     return r;
+   }
+   
+   template <typename Candidates>
+   [[nodiscard]] inline std::optional<CellId> deepest_visible_form(
+       CellTable const& table, Candidates const& candidates,
+       CellScope const& query) {
+     std::optional<CellId> best;
+     for (CellId c : candidates) {
+       TableCell const& cell = table.cells[c];
+       if (!residency_scope(cell).encloses(query)) continue;
+       if (!best || cell.scope.path.size() > table.cells[*best].scope.path.size())
+         best = c;
+     }
+     return best;
+   }
+   
+   [[nodiscard]] inline std::size_t read_multiplicity(
+       TableCell const& source, CellScope const& consumer_scope,
+       std::function<std::size_t(LoopKey const&)> const& n_batches_of) {
+     CellScope const source_residency = residency_scope(source);
+     std::size_t mult = 1;
+     for (auto const& [pk, lat] : consumer_scope.path) {
+       (void)lat;
+       bool in_source = false;
+       for (auto const& [sk, slat] : source_residency.path) {
+         (void)slat;
+         if (same_key(sk, pk)) in_source = true;
+       }
+       if (!in_source)
+         mult *= std::max<std::size_t>(1, n_batches_of ? n_batches_of(pk) : 1);
+     }
+     return mult;
+   }
+   }  // namespace detail
+   
+   [[nodiscard]] inline container::vector<CellViolation> validate_cell_table(
+       CellTable const& table, ScopeBlock const& /*root*/,
+       std::function<std::size_t(LoopKey const&)> const& n_batches_of = {}) {
+     container::vector<CellViolation> out;
+     auto const n = table.cells.size();
+     for (Read const& r : table.reads)
+       if (r.consumer >= n || r.source >= n) {
+         out.push_back({"visibility", "read with out-of-range cell id"});
+         return out;
+       }
+   
+     // (1) visibility: a source is resident at the consumer's production iff
+     // the source was produced earlier (or is a Leaf) and the source's
+     // residency scope (detail::residency_scope: bound to an enclosing loop
+     // instance -> the prefix of its scope ending at that loop, else -- a
+     // whole cell -- the root scope) encloses the consumer's scope.
+     {
+       container::vector<bool> produced(n, false);
+       for (CellId id = 0; id < n; ++id)
+         if (table.cells[id].production.kind == ProductionKind::Leaf)
+           produced[id] = true;
+       for (CellId id = 0; id < n; ++id) {
+         TableCell const& c = table.cells[id];
+         if (c.production.kind == ProductionKind::Leaf) continue;
+         for (Read const& r : table.reads) {
+           if (r.consumer != id) continue;
+           TableCell const& s = table.cells[r.source];
+           bool const ok =
+               produced[r.source] && detail::residency_scope(s).encloses(c.scope);
+           if (!ok)
+             out.push_back({"visibility", detail::cell_str(table, r.source) +
+                                              " not resident when " +
+                                              detail::cell_str(table, id) +
+                                              " is produced"});
+         }
+         if (c.production.kind == ProductionKind::Assemble) {
+           CellId const src = c.production.source;
+           if (src >= n || !produced[src])
+             out.push_back({"visibility", detail::cell_str(table, id) +
+                                              " assembles a cell not produced"});
+         }
+         produced[id] = true;
+       }
+     }
+   
+     // (2) form: per consumer and per loop instance it is bound to (\c
+     // detail::bound_instances -- its sliced positions' instances and the
+     // instances it is a partial sum over; a value reduced over a loop is just as
+     // much a per-batch form of that loop as one sliced by it, and its operands
+     // must agree on the batch just the same), every operand
+     // bound to that group must be bound to the same instance; an undecided
+     // whole operand (one with no explicit invariant record) on a group that
+     // another operand is bound to is a mismatch. A read the seam recorded as
+     // invariant on this instance (\c Read::invariant_on, from \c
+     // SlicedModeAssignment::occ_invariant: an explicit record that no slicing
+     // decision bound this read on that instance) is neither "bound" nor
+     // "whole" for this rule -- the form rule accepts it as whole, so this
+     // check is necessary, not sufficient (the dry-run range check remains the
+     // ground truth), and it never contributes to the mismatch. A read bound
+     // to another instance of the same group is still always its own
+     // violation, invariant or not.
+     //
+     // That "another instance of the same group" branch keys the group on \c
+     // depth alone (not the full LoopKey): two members of one loop group share a
+     // depth and differ by \c loop_slot. Note that the pass blocks of a nest
+     // differ by latitude (one per pass), which LoopKey drops entirely, so they
+     // are the same instance here; and on a schedule with a single instance per
+     // depth the branch cannot fire at all. It guards hand-built tables and the
+     // multi-instance loop groups a later stage will emit.
+     for (CellId id = 0; id < n; ++id) {
+       TableCell const& c = table.cells[id];
+       if (c.production.kind != ProductionKind::Build) continue;
+       container::svector<LoopKey> seen;
+       for (LoopKey const& L : detail::bound_instances(c)) {
+         bool repeated = false;  // two sliced positions can name one instance
+         for (LoopKey const& k : seen)
+           if (detail::same_key(k, L)) repeated = true;
+         if (repeated) continue;
+         seen.push_back(L);
+         bool any_bound = false, any_whole = false;
+         for (Read const& r : table.reads) {
+           if (r.consumer != id) continue;
+           TableCell const& s = table.cells[r.source];
+           bool bound_here = false, bound_other = false;
+           for (LoopKey const& k : detail::bound_instances(s))
+             if (k.depth == L.depth)
+               (k.loop_slot == L.loop_slot ? bound_here : bound_other) = true;
+           for (auto const& [p, k] : r.slice)
+             if (k.depth == L.depth)
+               (k.loop_slot == L.loop_slot ? bound_here : bound_other) = true;
+           if (bound_other)
+             out.push_back({"form", detail::cell_str(table, r.source) +
+                                        " bound to another instance of loop "
+                                        "group " +
+                                        std::to_string(L.depth) + " than " +
+                                        detail::cell_str(table, id)});
+           bool invariant_here = false;
+           for (LoopKey const& k : r.invariant_on)
+             if (detail::same_key(k, L)) invariant_here = true;
+           if (bound_here)
+             any_bound = true;
+           else if (!bound_other && !invariant_here)
+             any_whole = true;
+         }
+         if (any_bound && any_whole)
+           out.push_back({"form", detail::cell_str(table, id) +
+                                      ": one operand whole and another bound "
+                                      "on loop group " +
+                                      std::to_string(L.depth)});
+       }
+     }
+   
+     // (3) chain: Assemble source/scope/map consistency.
+     for (CellId id = 0; id < n; ++id) {
+       TableCell const& c = table.cells[id];
+       if (c.production.kind != ProductionKind::Assemble) continue;
+       CellId const src = c.production.source;
+       if (src >= n) continue;  // reported by (1)
+       TableCell const& s = table.cells[src];
+       if (!(c.scope.encloses(s.scope) &&
+             s.scope.path.size() > c.scope.path.size()))
+         out.push_back({"chain", detail::cell_str(table, id) +
+                                     " does not enclose its source scope"});
+       if (s.value_id != c.value_id)
+         out.push_back({"chain", detail::cell_str(table, id) +
+                                     " assembles a source of a different "
+                                     "value"});
+       if (c.production.assemble == AssembleKind::Scatter) {
+         for (auto const& [pos, k] : c.production.scatter_map) {
+           bool found = false;
+           for (auto const& [sp, sk] : s.sliced)
+             if (sp == pos && detail::same_key(sk, k)) found = true;
+           if (!found)
+             out.push_back({"chain", detail::cell_str(table, id) +
+                                         " scatters position " +
+                                         std::to_string(pos) +
+                                         " from a source not sliced by that "
+                                         "instance"});
+         }
+         if (c.production.scatter_map.empty())
+           out.push_back({"chain", detail::cell_str(table, id) +
+                                       " scatters nothing: empty scatter map"});
+       } else if (!s.scope.path.empty()) {
+         // The instance a Sum closes is the loop just below the Assemble's own
+         // scope along the source's path (the block that emitted the escape),
+         // not the source's innermost scope loop: loops of other terms may be
+         // interposed below it (the fused chain nests a term under loops it
+         // does not open). The source must be a partial over the closed
+         // instance, and must be bound to none of the deeper interposed loops
+         // -- it is then complete once per batch of the closed instance,
+         // produced in the first iteration of each interposed loop and
+         // resident across the rest (residency_scope + produce_if_absent), so
+         // the closing Sum reads one complete partial per batch.
+         std::size_t const at = c.scope.path.size();
+         // (A source not nested below the Assemble is the link-direction
+         // violation reported above; nothing to add here.)
+         if (s.scope.path.size() > at) {
+           LoopKey const closing = s.scope.path[at].first;
+           bool found = false;
+           for (LoopKey const& k : s.partial_over)
+             if (detail::same_key(k, closing)) found = true;
+           if (!found)
+             out.push_back({"chain", detail::cell_str(table, id) +
+                                         " sums a source whose partial_over "
+                                         "lacks the closing instance"});
+           for (std::size_t j = at + 1; j < s.scope.path.size(); ++j)
+             for (LoopKey const& b : detail::bound_instances(s))
+               if (detail::same_key(b, s.scope.path[j].first))
+                 out.push_back({"chain", detail::cell_str(table, id) +
+                                             " sums a source still bound to an "
+                                             "instance inside the one it closes"});
+         }
+       }
+     }
+   
+     // (3b) chain: a partial sum is consumed only by the Assemble that closes it
+     // -- every Read is a read of a complete form, so a Read whose source has a
+     // non-empty partial_over means some consumer would see a half-summed value.
+     for (Read const& r : table.reads)
+       if (!table.cells[r.source].partial_over.empty())
+         out.push_back({"chain", detail::cell_str(table, r.consumer) + " reads " +
+                                     detail::cell_str(table, r.source) +
+                                     ", a partial sum"});
+   
+     // (4) life: reads (weighted by the consumer's extra enclosing batches via
+     // detail::read_multiplicity, same rule the builder uses) plus one per
+     // Assemble that consumes the cell == life.
+     // Leaf cells are skipped: they are not produced by the table (an input is
+     // fetched on demand from outside it), so their lives are informational only
+     // and nothing here has to add up.
+     for (CellId id = 0; id < n; ++id) {
+       TableCell const& c = table.cells[id];
+       if (c.production.kind == ProductionKind::Leaf) continue;
+       std::size_t reads = 0;
+       for (Read const& r : table.reads)
+         if (r.source == id)
+           reads += detail::read_multiplicity(c, table.cells[r.consumer].scope,
+                                              n_batches_of);
+       for (CellId o = 0; o < n; ++o)
+         if (table.cells[o].production.kind == ProductionKind::Assemble &&
+             table.cells[o].production.source == id)
+           ++reads;
+       if (reads != c.life)
+         out.push_back({"life", detail::cell_str(table, id) + " life " +
+                                    std::to_string(c.life) + " != reads " +
+                                    std::to_string(reads)});
+       // A produced cell nobody reads is dead work. Only at the root scope is a
+       // zero-read cell legitimate: those are the schedule's results, read by
+       // whoever asked for the evaluation.
+       // "At the root scope" is residency, not production: a complete form
+       // produced inside loops it is bound to none of (a term root reduced over
+       // its own loops, nested under another term's) is homed at root and is
+       // the schedule's result there.
+       if (c.life == 0 && !detail::residency_scope(c).path.empty())
+         out.push_back({"life", detail::cell_str(table, id) +
+                                    " zero-read cell at a non-root scope"});
+     }
+   
+     // (5) uniqueness: one Build per (value, scope).
+     for (CellId a = 0; a < n; ++a)
+       for (CellId b = a + 1; b < n; ++b) {
+         TableCell const& x = table.cells[a];
+         TableCell const& y = table.cells[b];
+         if (x.production.kind == ProductionKind::Build &&
+             y.production.kind == ProductionKind::Build &&
+             x.value_id == y.value_id && x.scope == y.scope)
+           out.push_back({"uniqueness", detail::cell_str(table, a) + " and " +
+                                            detail::cell_str(table, b) +
+                                            " build one value in one scope"});
+       }
+     return out;
+   }
+   
+   inline void assert_valid_cell_table(
+       CellTable const& table, ScopeBlock const& root,
+       std::function<std::size_t(LoopKey const&)> const& n_batches_of = {}) {
+     auto const v = validate_cell_table(table, root, n_batches_of);
+     if (v.empty()) return;
+     std::string msg =
+         "cell table invalid (" + std::to_string(v.size()) + " violation(s)):";
+     for (auto const& x : v) msg += "\n  [" + x.rule + "] " + x.what;
+     throw Exception(msg);
+   }
+   
+   }  // namespace sequant::eval
+   
+   #endif  // SEQUANT_EVAL_CELL_TABLE_HPP

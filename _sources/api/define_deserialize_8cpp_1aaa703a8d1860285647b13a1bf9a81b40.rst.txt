@@ -1,0 +1,14 @@
+.. _exhale_define_deserialize_8cpp_1aaa703a8d1860285647b13a1bf9a81b40:
+
+Define SEQUANT_DESERIALIZATION_SPECIALIZATION
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_DESERIALIZATION_SPECIALIZATION
+   :project: SeQuant

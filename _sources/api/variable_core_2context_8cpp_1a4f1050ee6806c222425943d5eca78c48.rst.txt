@@ -1,0 +1,14 @@
+.. _exhale_variable_core_2context_8cpp_1a4f1050ee6806c222425943d5eca78c48:
+
+Variable options
+================
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: options
+   :project: SeQuant

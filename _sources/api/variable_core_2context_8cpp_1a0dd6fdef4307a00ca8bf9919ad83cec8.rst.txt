@@ -1,0 +1,14 @@
+.. _exhale_variable_core_2context_8cpp_1a0dd6fdef4307a00ca8bf9919ad83cec8:
+
+Variable index_pair_comparer
+============================
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: index_pair_comparer
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ae81ef02975ff6db61ebf7a96e55cf68a:
+
+Template Function sequant::to_bitset
+====================================
+
+- Defined in :ref:`file_SeQuant_core_bitset.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_bitset(T)
+   :project: SeQuant

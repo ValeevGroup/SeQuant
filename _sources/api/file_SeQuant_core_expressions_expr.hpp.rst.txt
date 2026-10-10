@@ -1,0 +1,188 @@
+
+.. _file_SeQuant_core_expressions_expr.hpp:
+
+File expr.hpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_expressions>` (``SeQuant/core/expressions``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expressions/expr.hpp``)
+--------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expressions_expr.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/context.hpp`` (:ref:`file_SeQuant_core_context.hpp`)
+
+- ``SeQuant/core/expressions/expr_iterator.hpp`` (:ref:`file_SeQuant_core_expressions_expr_iterator.hpp`)
+
+- ``SeQuant/core/expressions/expr_ptr.hpp`` (:ref:`file_SeQuant_core_expressions_expr_ptr.hpp`)
+
+- ``SeQuant/core/options.hpp`` (:ref:`file_SeQuant_core_options.hpp`)
+
+- ``SeQuant/core/tree_index.hpp`` (:ref:`file_SeQuant_core_tree_index.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``atomic`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+- ``boost/core/demangle.hpp``
+
+- ``concepts`` (:ref:`file_SeQuant_core_io_concepts.hpp`)
+
+- ``cstddef``
+
+- ``cstdint``
+
+- ``memory`` (:ref:`file_SeQuant_core_memory_layout.hpp`)
+
+- ``optional``
+
+- ``ranges`` (:ref:`file_SeQuant_core_ranges.hpp`)
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``type_traits``
+
+- ``typeindex``
+
+- ``typeinfo``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_export_utils.cpp`
+
+- :ref:`file_SeQuant_core_expr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_constant.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_algorithms.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_operators.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_ptr.cpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_range.hpp`
+
+- :ref:`file_SeQuant_core_expressions_power.hpp`
+
+- :ref:`file_SeQuant_core_expressions_product.cpp`
+
+- :ref:`file_SeQuant_core_expressions_product.hpp`
+
+- :ref:`file_SeQuant_core_expressions_sum.hpp`
+
+- :ref:`file_SeQuant_core_expressions_tensor.cpp`
+
+- :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+- :ref:`file_SeQuant_core_expressions_variable.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op_registry.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+- :ref:`namespace_sequant__expr_type_rank`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1_canonical_mark`
+
+- :ref:`exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr`
+
+- :ref:`exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr_3_01_expr_ptr_00_01void_01_4`
+
+- :ref:`exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived`
+
+- :ref:`exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01_expr_ptr_00_01void_01_4`
+
+- :ref:`exhale_struct_structsequant_1_1proportional__to`
+
+- :ref:`exhale_class_classsequant_1_1_expr`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a84ea9511b2e7928464684b7b20b425f3`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1aa693c9b1459762932b9a250dd4f6b3b6`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a51c05bf53795251c793ab9d9c7b8cdd5`
+
+- :ref:`exhale_function_namespacesequant_1aa994929bd73308b55b01a98f6c8b516f`
+
+- :ref:`exhale_function_namespacesequant_1a4f7a82ef79acb5f9253be6cf51a1bde0`
+
+- :ref:`exhale_function_namespacesequant_1a8dc98abe19e714c98e7ada9fc8905a5a`
+
+- :ref:`exhale_function_namespacesequant_1a977e0352b2efe7adc021685e46b9ae7f`
+
+- :ref:`exhale_function_namespacesequant_1a896a75f388c5a99be3b01059d77baa9e`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1a082cfbecb3fa099ac17e21d0714a815b`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a5fba96e2961eea50308823949eac91bc`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a75ab50661e968eee56d414ef9c8d2081`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a4f92f537d9cef2004f20db996fe8687e`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a399d1e670c7867496adfa200a262e934`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a76a32ebeea82821a67f103d751107682`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1aa93d298c014df76707828233d56bdc85`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a4abc5de53e8f62e94480e780d2d03e7c`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a9ea0e86fdae455eec3c6e27927e03421`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a908cd2a66e29d524cdc283a20c5f71ca`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1ab383199e34955d8313ca78e3587133ec`
+

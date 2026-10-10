@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1density_1a769436ffd6846af1b81b0a752c426d99:
+
+Function sequant::density::rdm_label
+====================================
+
+- Defined in :ref:`file_SeQuant_core_density.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::density::rdm_label()
+   :project: SeQuant

@@ -1,0 +1,32 @@
+.. _exhale_class_classsequant_1_1_generation_optimizer_1_1_zero_operation:
+
+Class GenerationOptimizer::ZeroOperation
+========================================
+
+- Defined in :ref:`file_SeQuant_core_export_generation_optimizer.hpp`
+
+
+Nested Relationships
+--------------------
+
+This class is a nested type of :ref:`exhale_class_classsequant_1_1_generation_optimizer`.
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::GenerationOptimizer< MainGenerator, MainContext >::AbstractOperation``
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::GenerationOptimizer::ZeroOperation
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

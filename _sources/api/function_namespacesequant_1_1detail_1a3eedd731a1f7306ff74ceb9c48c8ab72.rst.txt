@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a3eedd731a1f7306ff74ceb9c48c8ab72:
+
+Function sequant::detail::node0(auto&&)
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::node0(auto&&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1afe1890bb203a49c71bb225032b84ee14:
+
+Typedef sequant::IndexSpaceRegistry
+===================================
+
+- Defined in :ref:`file_SeQuant_core_index_basis_registry.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::IndexSpaceRegistry
+   :project: SeQuant

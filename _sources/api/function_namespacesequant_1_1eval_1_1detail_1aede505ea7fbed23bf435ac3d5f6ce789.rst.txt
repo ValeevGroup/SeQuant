@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1aede505ea7fbed23bf435ac3d5f6ce789:
+
+Template Function sequant::eval::detail::dump_read
+==================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_dump.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::dump_read(std::size_t, Cell const&, std::size_t, Read const&, Cell const&, Ctx const&, SameKey&&)
+   :project: SeQuant

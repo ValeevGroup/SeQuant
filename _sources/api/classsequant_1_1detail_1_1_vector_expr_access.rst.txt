@@ -1,0 +1,27 @@
+.. _exhale_class_classsequant_1_1detail_1_1_vector_expr_access:
+
+Template Class VectorExprAccess
+===============================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Derived Types
+*************
+
+- ``public sequant::NormalOperatorSequence< S >`` (:ref:`exhale_class_classsequant_1_1_normal_operator_sequence`)
+- ``public sequant::Operator< S >`` (:ref:`exhale_class_classsequant_1_1_operator`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::detail::VectorExprAccess
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

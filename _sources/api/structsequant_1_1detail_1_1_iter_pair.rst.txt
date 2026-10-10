@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1detail_1_1_iter_pair:
+
+Template Struct IterPair
+========================
+
+- Defined in :ref:`file_SeQuant_core_eval_result.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::IterPair
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

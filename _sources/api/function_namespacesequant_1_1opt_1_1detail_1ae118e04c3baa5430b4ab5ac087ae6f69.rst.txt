@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1ae118e04c3baa5430b4ab5ac087ae6f69:
+
+Template Function sequant::opt::detail::footprint_counter
+=========================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term_detail.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::footprint_counter(has_index_extent auto&&, InnerPow)
+   :project: SeQuant

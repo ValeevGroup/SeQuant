@@ -1,0 +1,243 @@
+
+.. _program_listing_file_SeQuant_core_eval_eval_node_compare.hpp:
+
+Program Listing for File eval_node_compare.hpp
+==============================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_eval_node_compare.hpp>` (``SeQuant/core/eval/eval_node_compare.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_EVAL_NODE_COMPARE_HPP
+   #define SEQUANT_EVAL_EVAL_NODE_COMPARE_HPP
+   
+   #include <SeQuant/core/hash.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   #include <SeQuant/core/utility/tensor.hpp>
+   #include <SeQuant/external/bliss/graph.hh>
+   
+   #include <compare>
+   #include <cstddef>
+   #include <unordered_map>
+   #include <utility>
+   
+   namespace sequant {
+   
+   template <typename TreeNode, bool force_hash_collisions = false>
+   struct TreeNodeHasher {
+     using is_transparent = void;
+   
+     std::size_t operator()(const TreeNode *node) const { return (*this)(*node); }
+   
+     std::size_t operator()(const TreeNode &node) const {
+       if constexpr (force_hash_collisions) {
+         return 0;
+       }
+       return hash::value(*node);
+     }
+   };
+   
+   template <typename TreeNode>
+   std::strong_ordering canonical_operand_cmp(TreeNode const &a,
+                                              TreeNode const &b) {
+     if (&a == &b) return std::strong_ordering::equal;
+   
+     bool const a_scalar = a->is_scalar();
+     bool const b_scalar = b->is_scalar();
+     if (a_scalar != b_scalar)
+       return a_scalar ? std::strong_ordering::greater
+                       : std::strong_ordering::less;
+   
+     std::size_t const ha = hash::value(*a);
+     std::size_t const hb = hash::value(*b);
+     if (ha != hb) return ha <=> hb;
+   
+     return std::strong_ordering::equal;
+   }
+   
+   template <typename TreeNode>
+   std::pair<TreeNode const &, TreeNode const &> canonical_children(
+       TreeNode const &n) {
+     SEQUANT_ASSERT(!n.leaf());
+     if (std::is_gt(canonical_operand_cmp(n.left(), n.right())))
+       return {n.right(), n.left()};
+     return {n.left(), n.right()};
+   }
+   
+   template <typename TreeNode>
+   std::pair<TreeNode const &, TreeNode const &> canonical_children(
+       TreeNode const &&n) = delete;
+   
+   template <typename TreeNode>
+   struct TreeNodeEqualityComparator {
+     using is_transparent = void;
+   
+     TreeNodeEqualityComparator() = default;
+     TreeNodeEqualityComparator(std::vector<Index> indices)
+         : block_comparator_(std::move(indices)) {}
+   
+     bool operator()(const TreeNode *lhs, const TreeNode *rhs) const {
+       return (*this)(*lhs, *rhs);
+     }
+   
+     bool operator()(const TreeNode &lhs, const TreeNode *rhs) const {
+       return (*this)(lhs, *rhs);
+     }
+   
+     bool operator()(const TreeNode *lhs, const TreeNode &rhs) const {
+       return (*this)(*lhs, rhs);
+     }
+   
+     bool operator()(const TreeNode &lhs_in, const TreeNode &rhs_in) const {
+       // The left-child descent is performed iteratively (this loop, not
+       // recursion): an equation's residual/energy is kept as a single in-place
+       // Sum-tree with one node per summand, so its left spine is as deep as the
+       // number of terms -- thousands for e.g. a UCC BCH energy expansion -- and a
+       // recursive descent down that spine would overflow the call stack. Right
+       // children (individual terms) and Product operands are bounded in depth and
+       // stay recursive; only the deep spine is unwound into this loop.
+       const TreeNode *lhsp = &lhs_in;
+       const TreeNode *rhsp = &rhs_in;
+       while (true) {
+         const TreeNode &lhs = *lhsp;
+         const TreeNode &rhs = *rhsp;
+   
+         if (lhs.leaf() != rhs.leaf()) {
+           return false;
+         }
+   
+         // Cheapest discriminator first: hash::value is the EvalExpr's cached
+         // node id (a load) and size() the subtree's cached node count (also a
+         // load, see FullBinaryNode::size_). Both are necessary conditions, so
+         // the order is semantically free; the node id is the more selective of
+         // the two.
+         if (hash::value(*lhs) != hash::value(*rhs)) {
+           return false;
+         }
+   
+         if (lhs.size() != rhs.size()) {
+           return false;
+         }
+   
+         if (lhs->type_id() != rhs->type_id()) {
+           return false;
+         }
+   
+         if (lhs->is_constant() || lhs->is_variable() || lhs->is_power()) {
+           if (*lhs->expr() != *rhs->expr()) {
+             return false;
+           }
+         } else if (lhs->is_tensor() && !lhs->has_connectivity_graph()) {
+           // Tensor nodes that carry a canonical connectivity graph
+           // (tensor-network intermediates and proto-indexed leaves) are compared
+           // exactly by that graph in the connectivity check below: it is the
+           // same canonical colored graph the eval-node hash is derived from, its
+           // 3-way cmp is a complete network identity, and it folds bra<->ket
+           // orientation (the orientation is canonicalized into the graph). Block
+           // comparison here would instead compare on the stored bra/ket slot
+           // order -- a partial, orientation-sensitive signature -- and wrongly
+           // separate e.g. a CSV/PNO coefficient C{a;m} from its equivalent
+           // C{m;a} (m an aux/PAO index), or the two g.C intermediates obtained
+           // by transforming a real density-fitting factor g(m,m,K) on its bra vs
+           // its ket leg. Hence only graph-less tensor nodes -- protoindex-free
+           // leaves (block-canonicalized in place at construction) and
+           // scalar*tensor results -- are compared here by block.
+           const Tensor &lhs_tensor = lhs->as_tensor();
+           const Tensor &rhs_tensor = rhs->as_tensor();
+   
+           if (!block_comparator_(lhs_tensor, rhs_tensor)) {
+             return false;
+           }
+         }
+   
+         if (lhs->has_connectivity_graph() != rhs->has_connectivity_graph()) {
+           return false;
+         }
+   
+         // Check connectivity in products / contractions
+         if (lhs->has_connectivity_graph()) {
+           SEQUANT_ASSERT(lhs->has_connectivity_graph());
+           SEQUANT_ASSERT(rhs->has_connectivity_graph());
+   
+           if (bliss::ConstGraphCmp::cmp(lhs->connectivity_graph(),
+                                         rhs->connectivity_graph()) != 0) {
+             return false;
+           }
+         }
+   
+         if (lhs.leaf()) {
+           return true;
+         }
+   
+         // A Product (contraction) is commutative: the binarizer may emit the
+         // same contraction as (X,Y) in one term and (Y,X) in another, and the
+         // node id (hash) and the canonical connectivity graph both fold that
+         // operand order -- so the child comparison folds it too, else two
+         // swapped occurrences of the same value are split into two cache entries
+         // (and built twice).
+         //
+         // It folds it by comparing the children through a canonical view
+         // (canonical_children) rather than by trying both pairings: the view
+         // picks which child comes first from the children's values alone -- in
+         // O(1), reading only the two nodes' own data -- so the two spellings
+         // present the same ordered pair here and one recursion per child
+         // suffices. The whole comparison is therefore linear in the tree.
+         // Evaluation order is untouched: the node keeps the left/right the DP
+         // emitted (cost, and peak in particular, is order-dependent); only
+         // identity reads them through the view.
+         //
+         // The recursive child comparison is not redundant with the graph check
+         // above: the connectivity graph encodes only the immediate two factors'
+         // connectivity, not each factor's recursive build, so two products with
+         // the same immediate graph but different sub-values are told apart here.
+         // Product operand subtrees are bounded in depth (a contraction of a
+         // fixed set of factors), so they stay recursive.
+         if (lhs->op_type() && *lhs->op_type() == EvalOp::Product) {
+           const auto &[lfirst, lsecond] = canonical_children(lhs);
+           const auto &[rfirst, rsecond] = canonical_children(rhs);
+           return (*this)(lfirst, rfirst) && (*this)(lsecond, rsecond);
+         }
+   
+         // Non-Product internal node (Sum, scalar*tensor product, adjoint): its
+         // left/right assignment is canonical (e.g. the in-place Sum tree is
+         // left-folded; an Adjoint's right child is a sentinel), so operand order
+         // carries meaning and the children are compared in order. The right
+         // child (a single summand / the scalar factor / the adjoint sentinel) is
+         // bounded in depth and compared recursively; the left child is the deep
+         // spine, so rather than recurse into it the loop starts over with it as
+         // the new (lhs, rhs), unwinding the spine iteratively.
+         if (!(*this)(lhs.right(), rhs.right())) {
+           return false;
+         }
+         lhsp = &lhs.left();
+         rhsp = &rhs.left();
+       }
+     }
+   
+    private:
+     IndexSpecificTensorBlockEqualComparator block_comparator_;
+   };
+   
+   template <typename TreeNode, bool force_hash_collisions = false>
+   using SubexpressionHashCollector =
+       std::unordered_map<const TreeNode *, std::size_t,
+                          TreeNodeHasher<TreeNode, force_hash_collisions>,
+                          TreeNodeEqualityComparator<TreeNode>>;
+   
+   template <typename TreeNode, bool force_hash_collisions = false>
+   using SubexpressionUsageCounts =
+       std::unordered_map<TreeNode, std::size_t,
+                          TreeNodeHasher<TreeNode, force_hash_collisions>,
+                          TreeNodeEqualityComparator<TreeNode>>;
+   
+   template <typename TreeNode, bool force_hash_collisions = false>
+   using SubexpressionNames =
+       std::unordered_map<TreeNode, std::wstring,
+                          TreeNodeHasher<TreeNode, force_hash_collisions>,
+                          TreeNodeEqualityComparator<TreeNode>>;
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EVAL_EVAL_NODE_COMPARE_HPP

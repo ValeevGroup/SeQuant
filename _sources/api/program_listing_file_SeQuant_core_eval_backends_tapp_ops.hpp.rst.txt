@@ -1,0 +1,243 @@
+
+.. _program_listing_file_SeQuant_core_eval_backends_tapp_ops.hpp:
+
+Program Listing for File ops.hpp
+================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_backends_tapp_ops.hpp>` (``SeQuant/core/eval/backends/tapp/ops.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_BACKENDS_TAPP_OPS_HPP
+   #define SEQUANT_EVAL_BACKENDS_TAPP_OPS_HPP
+   
+   #ifdef SEQUANT_HAS_TAPP
+   
+   #include <SeQuant/core/eval/backends/tapp/tensor.hpp>
+   
+   #include <tapp.h>
+   
+   #include <algorithm>
+   #include <cassert>
+   #include <cstdint>
+   #include <numeric>
+   
+   namespace sequant::tapp_ops {
+   
+   namespace detail {
+   
+   struct HandleGuard {
+     TAPP_handle handle = 0;
+     HandleGuard() { tapp_detail::check_error(TAPP_create_handle(&handle)); }
+     ~HandleGuard() {
+       if (handle) TAPP_destroy_handle(handle);
+     }
+     HandleGuard(HandleGuard const&) = delete;
+     HandleGuard& operator=(HandleGuard const&) = delete;
+   };
+   
+   struct ExecutorGuard {
+     TAPP_executor executor = 0;
+     ExecutorGuard() { tapp_detail::check_error(TAPP_create_executor(&executor)); }
+     ~ExecutorGuard() {
+       if (executor) TAPP_destroy_executor(executor);
+     }
+     ExecutorGuard(ExecutorGuard const&) = delete;
+     ExecutorGuard& operator=(ExecutorGuard const&) = delete;
+   };
+   
+   struct ProductGuard {
+     TAPP_tensor_product plan = 0;
+     ProductGuard() = default;
+     explicit ProductGuard(TAPP_tensor_product p) : plan{p} {}
+     ~ProductGuard() {
+       if (plan) TAPP_destroy_tensor_product(plan);
+     }
+     ProductGuard(ProductGuard const&) = delete;
+     ProductGuard& operator=(ProductGuard const&) = delete;
+   };
+   
+   struct TensorInfoGuard {
+     TAPP_tensor_info info = 0;
+     TensorInfoGuard() = default;
+     explicit TensorInfoGuard(TAPP_tensor_info i) : info{i} {}
+     ~TensorInfoGuard() {
+       if (info) TAPP_destroy_tensor_info(info);
+     }
+     TensorInfoGuard(TensorInfoGuard const&) = delete;
+     TensorInfoGuard& operator=(TensorInfoGuard const&) = delete;
+   };
+   
+   template <typename T>
+   TensorInfoGuard make_scalar_info() {
+     TAPP_tensor_info info;
+     tapp_detail::check_error(
+         TAPP_create_tensor_info(&info, tapp_detail::datatype<T>(), 0,
+                                 /*extents=*/nullptr, /*strides=*/nullptr));
+     return TensorInfoGuard{info};
+   }
+   
+   template <typename T, typename Alloc>
+   container::svector<int64_t> compute_result_extents(
+       TAPPTensor<T, Alloc> const& A, container::svector<int64_t> const& idx_A,
+       TAPPTensor<T, Alloc> const& B, container::svector<int64_t> const& idx_B,
+       container::svector<int64_t> const& idx_result) {
+     container::svector<int64_t> result_extents(idx_result.size());
+     for (size_t r = 0; r < idx_result.size(); ++r) {
+       bool found = false;
+       for (size_t a = 0; a < idx_A.size(); ++a) {
+         if (idx_A[a] == idx_result[r]) {
+           result_extents[r] = A.extents()[a];
+           found = true;
+           break;
+         }
+       }
+       if (!found) {
+         for (size_t b = 0; b < idx_B.size(); ++b) {
+           if (idx_B[b] == idx_result[r]) {
+             result_extents[r] = B.extents()[b];
+             found = true;
+             break;
+           }
+         }
+       }
+       assert(found && "Result index not found in A or B");
+     }
+     return result_extents;
+   }
+   
+   }  // namespace detail
+   
+   template <typename T, typename Alloc>
+   void contract(T alpha,                                   //
+                 TAPPTensor<T, Alloc> const& A,             //
+                 container::svector<int64_t> const& idx_A,  //
+                 TAPPTensor<T, Alloc> const& B,             //
+                 container::svector<int64_t> const& idx_B,  //
+                 T beta,                                    //
+                 TAPPTensor<T, Alloc>& result,              //
+                 container::svector<int64_t> const& idx_result) {
+     // If result is empty and beta==0, allocate it
+     if (result.volume() == 0) {
+       auto extents =
+           detail::compute_result_extents(A, idx_A, B, idx_B, idx_result);
+       result = TAPPTensor<T, Alloc>(std::move(extents));
+       result.fill(T{0});
+     }
+   
+     detail::HandleGuard handle;
+     detail::ExecutorGuard executor;
+   
+     // Create the product plan:
+     // D = alpha * op_A(A) * op_B(B) + beta * op_C(C)
+     // We set C = D (in-place accumulation when beta != 0)
+     TAPP_tensor_product plan;
+     tapp_detail::check_error(TAPP_create_tensor_product(
+         &plan, handle.handle,                             //
+         TAPP_IDENTITY, A.info(), idx_A.data(),            //
+         TAPP_IDENTITY, B.info(), idx_B.data(),            //
+         TAPP_IDENTITY, result.info(), idx_result.data(),  // C = result
+         TAPP_IDENTITY, result.info(), idx_result.data(),  // D = result
+         TAPP_DEFAULT_PREC));
+     detail::ProductGuard plan_guard{plan};
+   
+     TAPP_status status = 0;
+     tapp_detail::check_error(TAPP_execute_product(
+         plan, executor.executor, &status,        //
+         &alpha,                                  //
+         A.data(), B.data(),                      //
+         &beta,                                   //
+         beta != T{0} ? result.data() : nullptr,  // C data (null if beta==0)
+         result.data()));                         // D data
+   }
+   
+   template <typename T, typename Alloc>
+   void permute(TAPPTensor<T, Alloc> const& src,             //
+                container::svector<int64_t> const& src_idx,  //
+                TAPPTensor<T, Alloc>& dst,                   //
+                container::svector<int64_t> const& dst_idx) {
+     assert(src_idx.size() == static_cast<size_t>(src.rank()));
+     assert(dst_idx.size() == static_cast<size_t>(src.rank()));
+   
+     // Determine destination extents from index mapping
+     container::svector<int64_t> dst_extents(dst_idx.size());
+     for (size_t d = 0; d < dst_idx.size(); ++d) {
+       for (size_t s = 0; s < src_idx.size(); ++s) {
+         if (src_idx[s] == dst_idx[d]) {
+           dst_extents[d] = src.extents()[s];
+           break;
+         }
+       }
+     }
+   
+     dst = TAPPTensor<T, Alloc>(std::move(dst_extents));
+   
+     // Use TAPP product: D = 1.0 * A * scalar(1.0) + 0.0 * C
+     // with A's indices reordered to D's layout
+     detail::HandleGuard handle;
+     detail::ExecutorGuard executor;
+     auto scalar_info = detail::make_scalar_info<T>();
+   
+     T one{1};
+     T zero{0};
+   
+     TAPP_tensor_product plan;
+     tapp_detail::check_error(TAPP_create_tensor_product(
+         &plan, handle.handle,                       //
+         TAPP_IDENTITY, src.info(), src_idx.data(),  // A
+         TAPP_IDENTITY, scalar_info.info, nullptr,   // B = scalar
+         TAPP_IDENTITY, dst.info(), dst_idx.data(),  // C = D
+         TAPP_IDENTITY, dst.info(), dst_idx.data(),  // D
+         TAPP_DEFAULT_PREC));
+     detail::ProductGuard plan_guard{plan};
+   
+     TAPP_status status = 0;
+     tapp_detail::check_error(
+         TAPP_execute_product(plan, executor.executor, &status,  //
+                              &one,                              // alpha
+                              src.data(), &one,  // A data, B data (scalar 1)
+                              &zero,             // beta
+                              nullptr,           // C data (unused, beta=0)
+                              dst.data()));      // D data
+   }
+   
+   template <typename T, typename Alloc>
+   void scal(T alpha, TAPPTensor<T, Alloc>& tensor) {
+     T* d = tensor.data();
+     size_t n = tensor.volume();
+     for (size_t i = 0; i < n; ++i) d[i] *= alpha;
+   }
+   
+   template <typename T, typename Alloc>
+   T dot(TAPPTensor<T, Alloc> const& A, TAPPTensor<T, Alloc> const& B) {
+     assert(A.extents() == B.extents());
+     T const* a = A.data();
+     T const* b = B.data();
+     size_t n = A.volume();
+     T result{0};
+     for (size_t i = 0; i < n; ++i) result += a[i] * b[i];
+     return result;
+   }
+   
+   template <typename T, typename Alloc>
+   T dotc(TAPPTensor<T, Alloc> const& A, TAPPTensor<T, Alloc> const& B) {
+     if constexpr (std::is_arithmetic_v<T>) {
+       return dot(A, B);
+     } else {
+       assert(A.extents() == B.extents());
+       T const* a = A.data();
+       T const* b = B.data();
+       size_t n = A.volume();
+       T result{0};
+       for (size_t i = 0; i < n; ++i) result += std::conj(a[i]) * b[i];
+       return result;
+     }
+   }
+   
+   }  // namespace sequant::tapp_ops
+   
+   #endif  // SEQUANT_HAS_TAPP
+   
+   #endif  // SEQUANT_EVAL_BACKENDS_TAPP_OPS_HPP

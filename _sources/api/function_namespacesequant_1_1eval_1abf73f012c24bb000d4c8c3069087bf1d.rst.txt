@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1abf73f012c24bb000d4c8c3069087bf1d:
+
+Template Function sequant::eval::schedule_ir_json_node
+======================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_schedule_dump.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::schedule_ir_json_node(Node const&, std::ostream&)
+   :project: SeQuant

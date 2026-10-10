@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a815f680e9d072e892d3eb18f70ccdf43:
+
+Function sequant::ordinal_compare
+=================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::ordinal_compare(Index const&, Index const&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a2fd4f124489a13450574a3f621b17130:
+
+Function sequant::hermiticity
+=============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::hermiticity()
+   :project: SeQuant

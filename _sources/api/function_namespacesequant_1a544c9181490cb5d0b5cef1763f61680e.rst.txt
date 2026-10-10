@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a544c9181490cb5d0b5cef1763f61680e:
+
+Function sequant::diff_spaces
+=============================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::diff_spaces(const IndexSpace&, const IndexSpace&)
+   :project: SeQuant

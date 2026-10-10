@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_index_basis:
+
+Class IndexBasis
+================
+
+- Defined in :ref:`file_SeQuant_core_basis.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::IndexBasis
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

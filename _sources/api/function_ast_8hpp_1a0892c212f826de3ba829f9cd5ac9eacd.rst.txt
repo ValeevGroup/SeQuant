@@ -1,0 +1,14 @@
+.. _exhale_function_ast_8hpp_1a0892c212f826de3ba829f9cd5ac9eacd:
+
+Function BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Power, base, exponent, conjugated)
+==========================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_ast.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Power, base, exponent, conjugated)
+   :project: SeQuant

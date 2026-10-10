@@ -1,0 +1,14 @@
+.. _exhale_variable_wick__extended_8cpp_1a6dda932c173d107becc7f29f3a5e4fa2:
+
+Variable virt
+=============
+
+- Defined in :ref:`file_SeQuant_core_wick_extended.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: virt
+   :project: SeQuant

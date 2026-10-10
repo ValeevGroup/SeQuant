@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1_null_tensor_canonicalizer:
+
+Class NullTensorCanonicalizer
+=============================
+
+- Defined in :ref:`file_SeQuant_core_tensor_canonicalizer.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::TensorCanonicalizer`` (:ref:`exhale_class_classsequant_1_1_tensor_canonicalizer`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::NullTensorCanonicalizer
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

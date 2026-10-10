@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a44483e7618b1c2a40cef39612f2fb8a5:
+
+Template Function sequant::serialize
+====================================
+
+- Defined in :ref:`file_SeQuant_core_io_shorthands.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::serialize(T&&, const io::serialization::SerializationOptions&)
+   :project: SeQuant

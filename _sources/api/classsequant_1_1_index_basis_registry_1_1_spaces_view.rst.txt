@@ -1,0 +1,29 @@
+.. _exhale_class_classsequant_1_1_index_basis_registry_1_1_spaces_view:
+
+Class IndexBasisRegistry::SpacesView
+====================================
+
+- Defined in :ref:`file_SeQuant_core_index_basis_registry.hpp`
+
+
+Nested Relationships
+--------------------
+
+This class is a nested type of :ref:`exhale_class_classsequant_1_1_index_basis_registry`.
+
+
+Nested Types
+************
+
+- :ref:`exhale_class_classsequant_1_1_index_basis_registry_1_1_spaces_view_1_1iterator`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::IndexBasisRegistry::SpacesView
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

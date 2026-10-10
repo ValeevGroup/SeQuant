@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1a0bd825c7d1da07ea3b45b171aa8d5af9:
+
+Function sequant::eval::build_cell_table
+========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_cell_table_builder.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::build_cell_table(CellTableInputs const&)
+   :project: SeQuant

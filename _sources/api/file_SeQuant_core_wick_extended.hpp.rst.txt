@@ -1,0 +1,96 @@
+
+.. _file_SeQuant_core_wick_extended.hpp:
+
+File wick_extended.hpp
+======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/wick_extended.hpp``)
+-----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_wick_extended.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/density.hpp`` (:ref:`file_SeQuant_core_density.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/op.hpp`` (:ref:`file_SeQuant_core_op.hpp`)
+
+- ``SeQuant/core/rational.hpp`` (:ref:`file_SeQuant_core_rational.hpp`)
+
+- ``cstddef``
+
+- ``optional``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_wick.hpp`
+
+- :ref:`file_SeQuant_core_wick_extended.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1_extended_wick_options`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1ac21e0aa4937a2f27d3c8ffe56e5a84d9`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a0fb1ab31b28d6a3abccc093682b55410`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1detail_1a711fe259431bbaebb3635cdd85940a75`
+

@@ -1,0 +1,109 @@
+
+.. _file_SeQuant_core_wick_extended.cpp:
+
+File wick_extended.cpp
+======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/wick_extended.cpp``)
+-----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_wick_extended.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/context.hpp`` (:ref:`file_SeQuant_core_context.hpp`)
+
+- ``SeQuant/core/expressions/constant.hpp`` (:ref:`file_SeQuant_core_expressions_constant.hpp`)
+
+- ``SeQuant/core/expressions/expr_algorithms.hpp`` (:ref:`file_SeQuant_core_expressions_expr_algorithms.hpp`)
+
+- ``SeQuant/core/expressions/product.hpp`` (:ref:`file_SeQuant_core_expressions_product.hpp`)
+
+- ``SeQuant/core/expressions/sum.hpp`` (:ref:`file_SeQuant_core_expressions_sum.hpp`)
+
+- ``SeQuant/core/expressions/tensor.hpp`` (:ref:`file_SeQuant_core_expressions_tensor.hpp`)
+
+- ``SeQuant/core/index_basis_registry.hpp`` (:ref:`file_SeQuant_core_index_basis_registry.hpp`)
+
+- ``SeQuant/core/reserved.hpp`` (:ref:`file_SeQuant_core_reserved.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``SeQuant/core/wick.hpp`` (:ref:`file_SeQuant_core_wick.hpp`)
+
+- ``SeQuant/core/wick_extended.hpp`` (:ref:`file_SeQuant_core_wick_extended.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``functional``
+
+- ``memory`` (:ref:`file_SeQuant_core_memory_layout.hpp`)
+
+- ``optional``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a443b94490f1fe820a152418cff03f9d8`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a4c2638539bd9c635ea05a809df307d6c`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a170d5e4f6eb25be053461101a0cf8ca4`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a66dd1c13aec29c3a79451a515b664387`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1aa628cf9867b0a07adacceab2ee6651c2`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_wick__extended_8cpp_1a17a8a217dfeb924e36770b1e43ec3b97`
+
+- :ref:`exhale_variable_wick__extended_8cpp_1af588b96ea65078ff4e375b1eeff136ca`
+
+- :ref:`exhale_variable_wick__extended_8cpp_1a6dda932c173d107becc7f29f3a5e4fa2`
+

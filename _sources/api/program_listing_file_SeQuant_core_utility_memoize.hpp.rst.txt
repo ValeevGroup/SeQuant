@@ -1,0 +1,55 @@
+
+.. _program_listing_file_SeQuant_core_utility_memoize.hpp:
+
+Program Listing for File memoize.hpp
+====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_utility_memoize.hpp>` (``SeQuant/core/utility/memoize.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_UTILITY_MEMOIZE_HPP
+   #define SEQUANT_CORE_UTILITY_MEMOIZE_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   
+   #include <condition_variable>
+   #include <mutex>
+   #include <optional>
+   #include <utility>
+   
+   namespace sequant::detail {
+   
+   template <typename Key, typename Value, typename ComputeFn>
+   const Value& memoize(container::map<Key, std::optional<Value>>& cache,
+                        std::mutex& mutex, std::condition_variable& cv,
+                        const Key& key, ComputeFn&& compute_fn) {
+     {
+       std::unique_lock<std::mutex> lock(mutex);
+       using cache_t = container::map<Key, std::optional<Value>>;
+       typename cache_t::iterator it;
+       bool inserted;
+       // N.B. Use std::tie instead of structured binding to allow lambda capture
+       // (C++17 does not support capturing structured bindings in lambdas)
+       std::tie(it, inserted) = cache.try_emplace(key, std::nullopt);
+       if (!inserted) {
+         cv.wait(lock, [&it] { return it->second.has_value(); });
+         return it->second.value();
+       }
+     }
+   
+     Value result = compute_fn();
+   
+     {
+       std::lock_guard<std::mutex> lock(mutex);
+       cache[key] = std::move(result);
+       cv.notify_all();
+       return cache[key].value();
+     }
+   }
+   
+   }  // namespace sequant::detail
+   
+   #endif  // SEQUANT_CORE_UTILITY_MEMOIZE_HPP

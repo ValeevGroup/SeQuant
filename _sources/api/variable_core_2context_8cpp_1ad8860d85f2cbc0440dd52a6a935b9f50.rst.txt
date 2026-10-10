@@ -1,0 +1,14 @@
+.. _exhale_variable_core_2context_8cpp_1ad8860d85f2cbc0440dd52a6a935b9f50:
+
+Variable obj
+============
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: obj
+   :project: SeQuant

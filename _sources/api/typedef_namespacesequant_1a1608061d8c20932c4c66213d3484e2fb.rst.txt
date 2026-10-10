@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a1608061d8c20932c4c66213d3484e2fb:
+
+Typedef sequant::VariablePtr
+============================
+
+- Defined in :ref:`file_SeQuant_core_expr_fwd.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::VariablePtr
+   :project: SeQuant

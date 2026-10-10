@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1detail_1_1any__comparable_1_1impl__base:
+
+Struct any_comparable::impl_base
+================================
+
+- Defined in :ref:`file_SeQuant_core_tag.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1detail_1_1any__comparable`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::any_comparable::impl_base
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

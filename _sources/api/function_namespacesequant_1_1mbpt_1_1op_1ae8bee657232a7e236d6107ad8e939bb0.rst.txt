@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1op_1ae8bee657232a7e236d6107ad8e939bb0:
+
+Function sequant::mbpt::op::L(nann, ncre, const cre<IndexSpace>&, const ann<IndexSpace>&, Normalization)
+========================================================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::op::L(nann, ncre, const cre<IndexSpace>&, const ann<IndexSpace>&, Normalization)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1ac4fa5f03670f459c0c2b26013b877fce:
+
+Function sequant::eval::detail::ordered_last_registry_residency_slot
+====================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::ordered_last_registry_residency_slot()
+   :project: SeQuant

@@ -1,0 +1,135 @@
+
+.. _program_listing_file_SeQuant_core_basis.hpp:
+
+Program Listing for File basis.hpp
+==================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_basis.hpp>` (``SeQuant/core/basis.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_BASIS_HPP
+   #define SEQUANT_CORE_BASIS_HPP
+   
+   #include <SeQuant/core/attr.hpp>
+   #include <SeQuant/core/hash.hpp>
+   #include <SeQuant/core/space.hpp>
+   
+   #include <compare>
+   #include <concepts>
+   #include <cstddef>
+   #include <cstdint>
+   #include <optional>
+   #include <string>
+   #include <utility>
+   
+   namespace sequant {
+   
+   
+   class IndexBasis {
+    public:
+     using instance_type = std::int32_t;
+     using optional_instance = std::optional<instance_type>;
+   
+     IndexBasis() noexcept = default;
+   
+     IndexBasis(IndexSpace space) noexcept : space_(std::move(space)) {}
+   
+     template <basic_string_convertible S, typename... Args>
+       requires(sizeof...(Args) > 0 &&
+                std::constructible_from<IndexSpace, S, Args...>)
+     IndexBasis(S&& type_label, Args&&... args)
+         : space_(std::forward<S>(type_label), std::forward<Args>(args)...) {}
+   
+     explicit IndexBasis(IndexSpace space,
+                         optional_instance basis_instance) noexcept
+         : space_(std::move(space)), basis_instance_(basis_instance) {}
+   
+     IndexBasis(IndexSpace space, optional_instance basis_instance,
+                std::wstring name, std::optional<std::size_t> extent = {},
+                IndexSpaceMetric metric = IndexSpaceMetric::Unit,
+                std::optional<Field> field = {});
+   
+     const IndexSpace& space() const noexcept { return space_; }
+   
+     const optional_instance& basis_instance() const noexcept {
+       return basis_instance_;
+     }
+   
+     bool has_basis_instance() const noexcept {
+       return basis_instance_.has_value();
+     }
+   
+     const std::wstring& name() const noexcept { return name_; }
+   
+     bool has_name() const noexcept { return !name_.empty(); }
+   
+     const std::wstring& base_key() const noexcept {
+       return has_name() ? name_ : space_.base_key();
+     }
+   
+     optional_instance unnamed_instance() const noexcept {
+       return has_name() ? std::nullopt : basis_instance_;
+     }
+   
+     std::size_t extent() const noexcept {
+       return extent_ ? *extent_ : space_.dimension();
+     }
+   
+     IndexSpaceMetric metric() const noexcept { return metric_; }
+   
+     Field field() const noexcept { return field_ ? *field_ : space_.field(); }
+   
+     const std::optional<std::size_t>& own_extent() const noexcept {
+       return extent_;
+     }
+   
+     const std::optional<Field>& own_field() const noexcept { return field_; }
+   
+     std::wstring instance_suffix() const;
+   
+     friend bool operator==(const IndexBasis& b1, const IndexBasis& b2) noexcept {
+       return b1.space_ == b2.space_ && b1.basis_instance_ == b2.basis_instance_ &&
+              b1.name_ == b2.name_;
+     }
+   
+     friend std::strong_ordering operator<=>(const IndexBasis& b1,
+                                             const IndexBasis& b2) noexcept {
+       if (auto c = b1.space_ <=> b2.space_; c != 0) return c;
+       if (auto c = b1.basis_instance_ <=> b2.basis_instance_; c != 0) return c;
+       return b1.name_ <=> b2.name_;
+     }
+   
+     friend std::size_t hash_value(const IndexBasis& b) {
+       std::size_t result = hash_value(b.space_);
+       if (b.basis_instance_) hash::combine(result, *b.basis_instance_);
+       if (b.has_name()) hash::combine(result, b.name_);
+       return result;
+     }
+   
+    private:
+     IndexSpace space_;
+     optional_instance basis_instance_;
+     std::wstring name_;
+     std::optional<std::size_t> extent_;
+     IndexSpaceMetric metric_ = IndexSpaceMetric::Unit;
+     std::optional<Field> field_;
+   
+     // the registry writes the metadata of its named entries in place
+     friend class IndexBasisRegistry;
+     void extent(std::size_t n) noexcept { extent_ = n; }
+     void metric(IndexSpaceMetric m) noexcept { metric_ = m; }
+     void field(Field f) noexcept { field_ = f; }
+   };
+   
+   bool same_instance(const IndexBasis& b1, const IndexBasis& b2) noexcept;
+   
+   bool includes(const IndexBasis& basis, const IndexBasis& subbasis);
+   
+   bool different_instances(const IndexBasis& b1, const IndexBasis& b2);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_BASIS_HPP

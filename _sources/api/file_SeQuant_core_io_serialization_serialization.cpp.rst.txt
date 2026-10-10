@@ -1,0 +1,64 @@
+
+.. _file_SeQuant_core_io_serialization_serialization.cpp:
+
+File serialization.cpp
+======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_io_serialization>` (``SeQuant/core/io/serialization``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/io/serialization/serialization.cpp``)
+----------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_io_serialization_serialization.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/io/serialization/serialization.hpp`` (:ref:`file_SeQuant_core_io_serialization_serialization.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``string_view``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__io`
+
+- :ref:`namespace_sequant__io__serialization`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_serialization_8cpp_1a0d77ad88155851c96408493eb7e92586`
+
+- :ref:`exhale_define_serialization_8cpp_1ae59c343217de4b4f6b7a5ac0077c00f9`
+
