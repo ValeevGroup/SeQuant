@@ -258,8 +258,7 @@ struct OccurrenceRec {
   /// where the position is not a batched (loop-sliced) mode. Assigned by the
   /// union-find over producer->consumer slot connectivity in \c
   /// compute_dag_boulevard ("Loop identity and value identity"; this file's
-  /// header
-  /// comment carries the path). Parallel to \c carried.
+  /// header comment carries the path). Parallel to \c carried.
   container::svector<int> loop_slot;
   /// Loop identity for the modes this occurrence's value contracts (reduces)
   /// in batches at its own node: assigned either by uniting a producing
@@ -340,7 +339,8 @@ struct ValueCell {
                     //!< compute_dag_boulevard's conflict-aware union-find
                     //!< runs over these records to derive physical loop
                     //!< identity, and value identity is derived from that
-                    //!< (see "Loop identity and value identity" above).
+                    //!< (see "Loop identity and value identity" in
+                    //!< doc/developer/batched_evaluation.rst).
 };
 
 ///
@@ -623,16 +623,17 @@ RichSchedule compute_dag_boulevard(R const& forest,
 
   // ---------------------------------------------------------------------
   // Loop identity first, over occurrences (see "Loop identity and value
-  // identity" above): a loop instance is a connected component of
-  // (occurrence, position) nodes joined by producer->consumer edges within a
-  // tree and by conflict-aware folds across trees; value identity is defined
-  // after the components are numbered -- node id + (position, loop slot) of
-  // every home-sliced position + the operands' keys -- so one node sliced at
-  // one position by two different loops in two terms (the residual's two
-  // external loops, say) is two values, while occurrences one physical loop
-  // does slice fold into one. Numbering the loops first is what keeps those
-  // two loops apart: value ids keyed by hash alone would force both through
-  // the shared node and either collapse them or mis-stamp one family's slots.
+  // identity" in doc/developer/batched_evaluation.rst): a loop instance is a
+  // connected component of (occurrence, position) nodes joined by
+  // producer->consumer edges within a tree and by conflict-aware folds across
+  // trees; value identity is defined after the components are numbered -- node
+  // id + (position, loop slot) of every home-sliced position + the operands'
+  // keys -- so one node sliced at one position by two different loops in two
+  // terms (the residual's two external loops, say) is two values, while
+  // occurrences one physical loop does slice fold into one. Numbering the loops
+  // first is what keeps those two loops apart: value ids keyed by hash alone
+  // would force both through the shared node and either collapse them or
+  // mis-stamp one family's slots.
   // ---------------------------------------------------------------------
   std::size_t const nrec = recs.size();
   std::unordered_map<std::size_t, std::size_t> rec_of_point;

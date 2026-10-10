@@ -274,13 +274,12 @@ void stamp_occurrence_homes(R const& forest) {
 /// \brief The value key of a node: its node id (\c hash_value, the canonical
 /// colored graph of its tensor network, label-free) combined with the sorted
 /// canonical positions it is home-sliced on (see "Loop identity and value
-/// identity" in
-/// doc/developer/batched_evaluation.rst). Equal to the node id when nothing is
-/// home-sliced, so every unbatched
-/// value keeps the identity it has today. Two occurrences are one value iff
-/// they are one node and are home-sliced on the same positions: one node
-/// sliced along two different modes of its array in two terms is two values,
-/// each loop-local in its own nest, never resident whole.
+/// identity" in doc/developer/batched_evaluation.rst). Equal to the node id
+/// when nothing is home-sliced, so every unbatched value keeps the identity it
+/// has today. Two occurrences are one value iff they are one node and are
+/// home-sliced on the same positions: one node sliced along two different modes
+/// of its array in two terms is two values, each loop-local in its own nest,
+/// never resident whole.
 inline std::size_t value_key(std::size_t node_hash,
                              container::svector<std::size_t> positions) {
   if (positions.empty()) return node_hash;

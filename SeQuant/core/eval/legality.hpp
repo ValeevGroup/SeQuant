@@ -390,10 +390,9 @@ struct LegalitySchedule {
 /// later-pass reader is handled entirely by the sequencer (\c
 /// build_ordered_schedule's per-nest pass placement, materialization rule),
 /// which materializes such a value across the pass boundary at schedule-build
-/// time
-/// -- "used across the split" is a property of the ordered pass structure the
-/// sequencer builds, not of the DAG this function sees, so classification here
-/// needs to react to it. \c analyze_legality is therefore a single
+/// time -- "used across the split" is a property of the ordered pass structure
+/// the sequencer builds, not of the DAG this function sees, so classification
+/// here needs to react to it. \c analyze_legality is therefore a single
 /// deterministic round: one classification per cell, with no re-derivation
 /// loop.
 ///
