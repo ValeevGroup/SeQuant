@@ -260,7 +260,7 @@ struct OptimizeOptions {
   ///   - `batch_target_size`: per-index slice size (an upper bound); a sliced
   ///     batchable index ix contributes min(extent, batch_target_size(ix)), a
   ///     conservative over-estimate of the realized tile-floored batch. Only
-  ///     consulted by DenseSpaceTimeBatched.
+  ///     consulted by the batched objectives.
   ///   - `is_volatile_leaf`: marks a LEAF tensor as volatile (its value
   ///     changes between replays). Empty => no tensor is volatile => cost
   ///     weighting is disabled and volatile_weight is ignored. CC callers pass
@@ -318,8 +318,8 @@ struct OptimizeOptions {
 
   /// Roofline parameters for the peak objectives' secondary (tie-break) cost;
   /// see \ref RooflineParams. machine_balance == 0 (default) => pure-flop
-  /// tie-break (no behavior change). Consulted only by DenseSpaceTime /
-  /// DenseSpaceTimeBatched.
+  /// tie-break (no behavior change). Consulted only by the peak objectives
+  /// (DenseSpaceTime*, DenseTimeSpace*).
   RooflineParams roofline = {};
 
   /// Optional out-channel: when non-null, optimize() records for each
