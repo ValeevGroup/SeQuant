@@ -1429,21 +1429,26 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
         if (rdm_index_in_bra.empty()) return product_ptr;
 
         // compute RDM->target replacement rules. An RDM index is external if
-        // it is named in the context or, without named indices, occurs once in
-        // the term. A dummy index is summed over the target space, so it is
-        // replaced by a target-space index. An external index keeps its label:
-        // the RDM vanishes outside the target space, so if the index's space
-        // extends beyond it the RDM gets a target-space index instead and a
-        // Kronecker delta ties the two (bra/ket placement as in WickTheorem's
-        // contractions)
+        // it is named in the context or, without named indices, occurs in a
+        // single bra or ket slot of the term. A dummy index is summed over the
+        // target space, so it is replaced by a target-space index. An external
+        // index keeps its label: the RDM vanishes outside the target space, so
+        // if the index's space extends beyond it the RDM gets a target-space
+        // index instead and a Kronecker delta ties the two (bra/ket placement
+        // as in WickTheorem's contractions)
         const auto index_counts =
             named_indices ? container::map<Index, IndexSlotCounters>{}
                           : get_used_indices_with_counts(product_ptr);
+        // an index in a single bra or ket slot cannot be summed over; aux
+        // slots carry no such constraint
+        auto in_single_braket_slot = [](const IndexSlotCounters& counts) {
+          return counts.bra + counts.ket == 1;
+        };
         auto is_external = [&](const Index& idx) {
           if (named_indices) return named_indices->contains(idx);
           const auto count_it = index_counts.find(idx);
           SEQUANT_ASSERT(count_it != index_counts.end());
-          return count_it->second.nonproto() <= 1;
+          return in_single_braket_slot(count_it->second);
         };
         container::map<Index, Index> replacement_rules;
         container::map<Index, Index> rdm_replacement_rules;
