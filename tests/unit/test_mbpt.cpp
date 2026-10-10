@@ -214,6 +214,25 @@ TEST_CASE("mbpt multireference regressions", "[mbpt]") {
     }
   }
 
+  SECTION("external RDM indices beyond the active space are restricted") {
+    for (const bool named : {false, true}) {
+      auto opts = CanonicalizeOptions::default_options();
+      if (named)
+        opts.named_indices =
+            container::set<Index>{Index(L"I_1"), Index(L"I_2"), Index(L"I_4"),
+                                  Index(L"I_6"), Index(L"p_1"), Index(L"p_2")};
+      auto scope = set_scoped_modified_default_context(
+          [&opts](sequant::Context& ctx) { ctx.set(opts); });
+      CAPTURE(named);
+      CHECK_THAT(tensor::ref_av(deserialize(L"ã{I_1;I_2}")),
+                 EquivalentTo(L"γ{u_1;u_2} * δ{I_1;u_1} * δ{u_2;I_2}"));
+      CHECK_THAT(tensor::ref_av(deserialize(L"ã{p_1;p_2}")),
+                 EquivalentTo(L"γ{u_1;u_2} * δ{p_1;u_1} * δ{u_2;p_2}"));
+      CHECK_THAT(tensor::ref_av(deserialize(L"f{I_4;I_5} * ã{I_5;I_6}")),
+                 EquivalentTo(L"f{I_4;u_1} * γ{u_1;u_2} * δ{u_2;I_6}"));
+    }
+  }
+
   SECTION("a single normal operator becomes an RDM") {
     CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1;u_2}")),
                EquivalentTo(L"γ{u_1;u_2}"));
