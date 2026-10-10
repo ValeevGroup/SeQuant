@@ -172,6 +172,43 @@ TEST_CASE("mbpt_operator_type_id", "[mbpt]") {
           "sequant::mbpt::default_qns_tag>,FermiDirac>");
 }
 
+TEST_CASE("mbpt operator commutativity", "[mbpt]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  const auto ip = [] { return op::R(nann(1), ncre(0)); };
+  const auto dip = [] { return op::R(nann(2), ncre(0)); };
+  const auto ea = [] { return op::R(nann(0), ncre(1)); };
+
+  SECTION("single reference") {
+    auto ctx = get_default_context();
+    ctx.set(make_sr_spaces());
+    auto ctx_resetter = set_scoped_default_context(ctx);
+
+    // odd-rank operators without contractible pairs anticommute
+    CHECK_FALSE(ip()->commutes_with(*ea()));
+    CHECK_FALSE(ip()->commutes_with(*ip()));
+    const auto sum = simplify(ip() * ea() + ea() * ip());
+    REQUIRE(sum.is<Sum>());
+    CHECK(sum.as<Sum>().size() == 2);
+
+    // an even-rank operator commutes with an odd-rank one
+    CHECK(op::t(1)->commutes_with(*ip()));
+    CHECK(dip()->commutes_with(*ip()));
+  }
+
+  SECTION("multireference") {
+    // op counts per base space are intervals here, so the rank comes from
+    // the tensor form
+    auto ctx = get_default_context();
+    ctx.set(make_mr_spaces());
+    auto ctx_resetter = set_scoped_default_context(ctx);
+
+    CHECK_FALSE(ip()->commutes_with(*ip()));
+    CHECK(dip()->commutes_with(*ip()));
+  }
+}
+
 TEST_CASE("mbpt multireference regressions", "[mbpt]") {
   using namespace sequant;
   using namespace sequant::mbpt;
