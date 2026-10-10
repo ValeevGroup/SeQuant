@@ -172,6 +172,101 @@ TEST_CASE("mbpt_operator_type_id", "[mbpt]") {
           "sequant::mbpt::default_qns_tag>,FermiDirac>");
 }
 
+TEST_CASE("mbpt multireference regressions", "[mbpt]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  auto ctx = get_default_context();
+  ctx.set(make_mr_spaces());
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  SECTION("commutators retain active-space contractions") {
+    const auto f = op::h(1);
+    const auto t = op::t(1);
+    CHECK_FALSE(f->commutes_with(*t));
+    const auto commutator = simplify(f * t - t * f);
+    const auto expected = tensor::ref_av(tensor::h(1) * tensor::t(1) -
+                                         tensor::t(1) * tensor::h(1));
+    REQUIRE(expected != ex<Constant>(0));
+    CHECK_THAT(op::ref_av(commutator), EquivalentTo(expected));
+  }
+
+  SECTION("single-reference excitation operators still commute") {
+    auto sr_ctx = get_default_context();
+    sr_ctx.set(make_sr_spaces());
+    auto sr_scope = set_scoped_default_context(sr_ctx);
+    CHECK(op::t(1)->commutes_with(*op::t(2)));
+  }
+
+  SECTION("RDM replacement preserves external indices") {
+    for (const bool named : {false, true}) {
+      auto opts = CanonicalizeOptions::default_options();
+      if (named)
+        opts.named_indices = container::set<Index>{
+            Index(L"u_1"), Index(L"u_2"), Index(L"u_3"), Index(L"u_4")};
+      auto scope = set_scoped_modified_default_context(
+          [&opts](sequant::Context& ctx) { ctx.set(opts); });
+      CAPTURE(named);
+      CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1;u_2} * ã{u_3;u_4}")),
+                 EquivalentTo(L"γ{u_1,u_3;u_2,u_4}:A-C-S + "
+                              L"s{u_1;u_4} * γ{u_3;u_2}"));
+      CHECK_THAT(tensor::ref_av(deserialize(L"x{u_1;u_2} * ã{u_2;u_1}")),
+                 EquivalentTo(L"x{u_1;u_2} * γ{u_2;u_1}"));
+    }
+  }
+
+  SECTION("external RDM indices beyond the active space are restricted") {
+    for (const bool named : {false, true}) {
+      auto opts = CanonicalizeOptions::default_options();
+      if (named)
+        opts.named_indices =
+            container::set<Index>{Index(L"I_1"), Index(L"I_2"), Index(L"I_4"),
+                                  Index(L"I_6"), Index(L"p_1"), Index(L"p_2")};
+      auto scope = set_scoped_modified_default_context(
+          [&opts](sequant::Context& ctx) { ctx.set(opts); });
+      CAPTURE(named);
+      CHECK_THAT(tensor::ref_av(deserialize(L"ã{I_1;I_2}")),
+                 EquivalentTo(L"γ{u_1;u_2} * δ{I_1;u_1} * δ{u_2;I_2}"));
+      CHECK_THAT(tensor::ref_av(deserialize(L"ã{p_1;p_2}")),
+                 EquivalentTo(L"γ{u_1;u_2} * δ{p_1;u_1} * δ{u_2;p_2}"));
+      CHECK_THAT(tensor::ref_av(deserialize(L"f{I_4;I_5} * ã{I_5;I_6}")),
+                 EquivalentTo(L"f{I_4;u_1} * γ{u_1;u_2} * δ{u_2;I_6}"));
+      // only the RDM slot of an external index is restricted
+      CHECK_THAT(
+          tensor::ref_av(deserialize(L"x{;;I_2} * ã{I_1;I_2}")),
+          EquivalentTo(L"x{;;I_2} * γ{u_1;u_2} * δ{I_1;u_1} * δ{u_2;I_2}"));
+    }
+  }
+
+  SECTION("named indices must include every external bra/ket index") {
+    if (assert_behavior() != AssertBehavior::Abort) {
+      auto opts = CanonicalizeOptions::default_options();
+      opts.named_indices = container::set<Index>{Index(L"I_1")};
+      auto scope = set_scoped_modified_default_context(
+          [&opts](sequant::Context& ctx) { ctx.set(opts); });
+      CHECK_THROWS_MATCHES(
+          tensor::ref_av(deserialize(L"ã{I_1;I_2}")), Exception,
+          Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring(
+              "index I_2 occurs in a single bra or ket slot")));
+      // an index in a single aux slot need not be named
+      CHECK_NOTHROW(
+          tensor::ref_av(deserialize(L"x{;;u_5} * ã{I_1;u_2} * y{u_2;}")));
+    }
+  }
+
+  SECTION("a single normal operator becomes an RDM") {
+    CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1;u_2}")),
+               EquivalentTo(L"γ{u_1;u_2}"));
+    CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1,u_3;u_2,u_4}")),
+               EquivalentTo(L"γ{u_1,u_3;u_2,u_4}:A-C-S"));
+  }
+
+  SECTION("bare abstract operators retain their reference average") {
+    const auto expected = tensor::ref_av(tensor::H(1));
+    REQUIRE(expected != ex<Constant>(0));
+    CHECK_THAT(op::ref_av(op::H(1)), EquivalentTo(expected));
+  }
+}
+
 TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
   SECTION("cardinal tensor labels") {
     // every reference density label sorts as a cardinal label

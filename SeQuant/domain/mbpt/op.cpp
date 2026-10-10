@@ -2,11 +2,14 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -90,21 +93,21 @@ qns_t make_qp_qns(std::size_t particle_rank, std::size_t hole_rank,
     const bool ahs_base = !interval && isr->is_base(isr->hole_space(SQN));
     // ex: creators in particle space, annihilators in hole space
     // deex: annihilators in particle space, creators in hole space
-    const std::size_t particle_offset = deexcitation ? 1 : 0;
-    const std::size_t hole_offset = 1 - particle_offset;
-
     for (std::size_t i = 0; i < base_spaces.size(); i++) {
       const auto& base_space = base_spaces[i];
-      result[i * 2] = {0ul, 0ul};
-      result[i * 2 + 1] = {0ul, 0ul};
+      const auto cre = qnc_t::cre_slot(i);
+      const auto ann = qnc_t::ann_slot(i);
+      result[cre] = {0ul, 0ul};
+      result[ann] = {0ul, 0ul};
       if (base_space.qns() != SQN) continue;
 
       if (includes(particle_space->type(), base_space.type())) {
-        result[i * 2 + particle_offset] = {aps_base ? particle_rank : 0ul,
-                                           particle_rank};
+        result[deexcitation ? ann : cre] = {aps_base ? particle_rank : 0ul,
+                                            particle_rank};
       }
       if (includes(hole_space->type(), base_space.type())) {
-        result[i * 2 + hole_offset] = {ahs_base ? hole_rank : 0ul, hole_rank};
+        result[deexcitation ? cre : ann] = {ahs_base ? hole_rank : 0ul,
+                                            hole_rank};
       }
     }
   }
@@ -184,8 +187,8 @@ qns_t combine(qns_t a, qns_t b) {
     auto isr = get_default_context().index_basis_registry();
     const auto& base_spaces = isr->base_spaces();
     for (auto i = 0; i < base_spaces.size(); i++) {
-      auto cre = i * 2;
-      auto ann = (i * 2) + 1;
+      const auto cre = qns_t::cre_slot(i);
+      const auto ann = qns_t::ann_slot(i);
       const auto qns = base_spaces[i].qns();
       // an active space is both reference-occupied and vacuum-unoccupied; its
       // ops can also end up in cumulants, which take any equal number of
@@ -1397,6 +1400,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
       }
     };
     result->visit(replace_nop_with_rdm, true);
+    replace_nop_with_rdm(result);
 
     // STEP 2: project RDM indices onto the target RDM subspace
     // since RDM indices only make sense within a single TN expand + flatten
@@ -1404,68 +1408,114 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
     expand(result);
     // flatten(result);  // TODO where is flatten?
     auto project_rdm_indices_to_target = [&](ExprPtr& exptr) {
-      auto impl_for_single_tn = [&](ProductPtr& product_ptr) {
-        // visit every index of every tensor in the TN
+      const auto named_indices =
+          CanonicalizeOptions::default_options().named_indices;
+      auto impl_for_single_tn = [&](const ExprPtr& term) {
+        auto product_ptr =
+            term.is<Product>()
+                ? term.as<Product>().clone().as_shared_ptr<Product>()
+                : std::make_shared<Product>(ExprPtrList{term->clone()});
+        // visit every bra and ket index of every tensor in the TN
         auto for_each_index_in_tn = [](const auto& product_ptr,
                                        const auto& op) {
           ranges::for_each(product_ptr->factors(), [&](auto& factor) {
             auto tensor_ptr = std::dynamic_pointer_cast<AbstractTensor>(factor);
             if (tensor_ptr) {
-              ranges::for_each(tensor_ptr->_braket(),
-                               [&](auto& idx) { op(idx, *tensor_ptr); });
+              ranges::for_each(tensor_ptr->_bra(), [&](auto& idx) {
+                op(idx, *tensor_ptr, /* in_bra = */ true);
+              });
+              ranges::for_each(tensor_ptr->_ket(), [&](auto& idx) {
+                op(idx, *tensor_ptr, /* in_bra = */ false);
+              });
             }
           });
         };
 
-        // extract RDM-only and all indices
-        container::set<Index> rdm_indices;
+        // extract RDM-only (with their slot) and all indices
+        container::map<Index, bool> rdm_index_in_bra;
         std::set<Index, Index::LabelCompare> all_indices;
-        auto retrieve_rdm_and_all_indices = [&rdm_indices, &all_indices,
-                                             &rdm_label](const auto& idx,
-                                                         const auto& tensor) {
-          all_indices.insert(idx);
-          if (tensor._label() == rdm_label) {
-            rdm_indices.insert(idx);
-          }
-        };
+        auto retrieve_rdm_and_all_indices =
+            [&rdm_index_in_bra, &all_indices, &rdm_label](
+                const auto& idx, const auto& tensor, bool in_bra) {
+              all_indices.insert(idx);
+              if (tensor._label() == rdm_label) {
+                rdm_index_in_bra.emplace(idx, in_bra);
+              }
+            };
         for_each_index_in_tn(product_ptr, retrieve_rdm_and_all_indices);
+        if (rdm_index_in_bra.empty()) return product_ptr;
 
-        // compute RDM->target replacement rules
+        // compute RDM->target replacement rules. An RDM index is external if
+        // it is named in the context or, without named indices, occurs in a
+        // single bra or ket slot of the term. A dummy index is summed over the
+        // target space, so it is replaced by a target-space index. An external
+        // index keeps its label: the RDM vanishes outside the target space, so
+        // if the index's space extends beyond it the RDM gets a target-space
+        // index instead and a Kronecker delta ties the two (bra/ket placement
+        // as in WickTheorem's contractions)
+        const auto index_counts = get_used_indices_with_counts(product_ptr);
+        // an index in a single bra or ket slot cannot be summed over, so the
+        // named indices must include it; aux slots carry no such constraint
+        auto in_single_braket_slot = [](const IndexSlotCounters& counts) {
+          return counts.bra + counts.ket == 1;
+        };
+        if (named_indices) {
+          for (const auto& [idx, counts] : index_counts) {
+            if (in_single_braket_slot(counts) && !named_indices->contains(idx))
+              enforce_failed(
+                  "ref_av: index " + toUtf8(idx.full_label()) +
+                  " occurs in a single bra or ket slot of a term, so it is "
+                  "external, but it is not among the context's named indices");
+          }
+        }
+        auto is_external = [&](const Index& idx) {
+          if (named_indices) return named_indices->contains(idx);
+          const auto count_it = index_counts.find(idx);
+          SEQUANT_ASSERT(count_it != index_counts.end());
+          return in_single_braket_slot(count_it->second);
+        };
         container::map<Index, Index> replacement_rules;
-        ranges::for_each(rdm_indices, [&](const Index& idx) {
+        container::map<Index, Index> rdm_replacement_rules;
+        container::svector<ExprPtr> restrictions;
+        for (const auto& [idx, in_bra] : rdm_index_in_bra) {
           const auto target_type =
               isr->intersection(idx.space(), target_rdm_space_type);
-          if (target_type) {
-            Index target = Index::make_tmp_index(target_type);
-            replacement_rules.emplace(idx, target);
-          }
-        });
+          if (!target_type) continue;
+          const bool external = is_external(idx);
+          if (external && target_type == idx.space()) continue;
+          Index target = Index::make_tmp_index(target_type);
+          (external ? rdm_replacement_rules : replacement_rules)
+              .emplace(idx, target);
+          if (external)
+            restrictions.emplace_back(in_bra ? make_kronecker(idx, target)
+                                             : make_kronecker(target, idx));
+        }
 
         if (!replacement_rules.empty()) {
           sequant::detail::apply_index_replacement_rules(
               product_ptr, replacement_rules, all_indices);
         }
+        // an external index keeps its label in any other slot, e.g. an aux one
+        if (!rdm_replacement_rules.empty()) {
+          for (auto& factor : product_ptr->factors()) {
+            if (!factor->is<AbstractTensor>()) continue;
+            auto& tensor = factor->as<AbstractTensor>();
+            if (tensor._label() != rdm_label) continue;
+            transform_indices(tensor, rdm_replacement_rules);
+            reset_tags(tensor);
+          }
+        }
+        for (auto& restriction : restrictions)
+          product_ptr->append(1, std::move(restriction));
+        return product_ptr;
       };
 
-      if (exptr.template is<Product>()) {
-        auto product_ptr = exptr.template as_shared_ptr<Product>();
-        impl_for_single_tn(product_ptr);
-        exptr = product_ptr;
+      if (!exptr.template is<Sum>()) {
+        exptr = impl_for_single_tn(exptr);
       } else {
-        SEQUANT_ASSERT(exptr.template is<Sum>());
         auto result = std::make_shared<Sum>();
         for (auto& summand : exptr.template as<Sum>().summands()) {
-          // a summand may collapse to a single factor rather than a Product
-          // (e.g. a fully-contracted one-body term like h^O_O with unit
-          // coefficient); wrap it so it can be processed uniformly
-          auto product_ptr =
-              summand.template is<Product>()
-                  ? summand.template as<Product>()
-                        .clone()
-                        .as_shared_ptr<Product>()
-                  : std::make_shared<Product>(ExprPtrList{summand->clone()});
-          impl_for_single_tn(product_ptr);
-          result->append(product_ptr);
+          result->append(impl_for_single_tn(summand));
         }
         exptr = result;
       }

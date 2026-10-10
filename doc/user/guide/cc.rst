@@ -33,7 +33,9 @@ The :class:`CC <sequant::mbpt::CC>` class can be used to derive:
 Expressions are generated in spin-orbital basis and can be post-processed using SeQuant's spin-tracing capabilities. See :ref:`cc-spin-tracing` for more details.
 
 Multireference contexts are not fully supported yet: only ``hbar()``, ``energy()`` and ``t()`` are available, and only
-with the BCH expansion.
+with the BCH expansion. Because the amplitude operators do not commute with each other there, the expansion does not
+terminate and grows exponentially with the commutator rank, so ``hbar_comm_rank`` must be set explicitly, as for the
+unitary ansatz; the constructor throws otherwise.
 
 
 Ansatz Options
@@ -139,7 +141,7 @@ Advanced Usage
 Truncating the Commutator Expansion
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The similarity-transformed Hamiltonian is built by ``mbpt::lst``, see :ref:`mbpt-lst`. For traditional CC with two-body Hamiltonians, the commutator expansion is truncated at 4th order. However, for unitary CC or other Hamiltonians, you may need to explicitly set the commutator rank:
+The similarity-transformed Hamiltonian is built by ``mbpt::lst``, see :ref:`mbpt-lst`. For traditional CC with two-body Hamiltonians and the reference equal to the Wick vacuum, the commutator expansion is truncated at 4th order. For unitary CC or a reference that differs from the Wick vacuum the expansion does not terminate, so the commutator rank must be set explicitly; for other Hamiltonians you may need to set it too:
 
 .. literalinclude:: /examples/user/cc.cpp
    :language: cpp

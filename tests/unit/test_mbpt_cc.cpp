@@ -422,13 +422,24 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     ctx.set(make_mr_spaces());
     auto ctx_resetter = set_scoped_default_context(ctx);
 
+    // the BCH expansion does not terminate here, so the rank must be given
+    REQUIRE_THROWS_MATCHES(
+        CC(2), Exception,
+        Catch::Matchers::MessageMatches(
+            Catch::Matchers::ContainsSubstring("hbar_comm_rank is required")));
+    REQUIRE(simplify(CC(2, {.hbar_comm_rank = 1}).hbar() - op::H()) !=
+            ex<Constant>(0));
+
     // H̄ must use explicit commutators, since ref_av takes no connectivity here
     const auto expected = op::ref_av(lst(op::H(), op::T(1), 2), {});
-    REQUIRE(simplify(CC(1).energy(2) - expected) == ex<Constant>(0));
+    REQUIRE(simplify(CC(1, {.hbar_comm_rank = 2}).energy() - expected) ==
+            ex<Constant>(0));
 
-    // screening must not change the result
-    const auto screened = CC(2).t();
-    const auto unscreened = CC(2, {.screen = false}).t();
+    // screening must not change the result; the MR amplitudes do not commute,
+    // so the BCH expansion at rank 2 and up exceeds several GB, hence rank 1
+    const auto screened = CC(2, {.hbar_comm_rank = 1}).t();
+    const auto unscreened = CC(2, {.screen = false, .hbar_comm_rank = 1}).t();
+    REQUIRE(has_tensor(screened.at(1), L"t"));
     for (std::size_t p = 0; p != screened.size(); ++p)
       REQUIRE_THAT(screened.at(p), EquivalentTo(unscreened.at(p)));
 
@@ -438,7 +449,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       const auto rejects_reference =
           Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring(
               "the reference must be the Wick vacuum"));
-      const CC cc(1);
+      const CC cc(1, {.hbar_comm_rank = 1});
       REQUIRE_THROWS_MATCHES(cc.λ(), Exception, rejects_reference);
       REQUIRE_THROWS_MATCHES(cc.λʼ(), Exception, rejects_reference);
       REQUIRE_THROWS_MATCHES(cc.tʼ(), Exception, rejects_reference);
