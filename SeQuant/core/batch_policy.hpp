@@ -115,9 +115,10 @@ struct BatchPolicy {
   /// loop unless `std::isfinite(peak_threshold)`, so the default +infinity
   /// means no batching at all.
   ///
-  /// - space-first (\c DenseSpaceTimeBatched): among the frontier points whose
-  ///   modeled byte peak is <= peak_threshold, minimize flops, ties broken by
-  ///   lower peak; fall back to global min-peak (best effort) when none fit.
+  /// - space-first (the deprecated \c DenseSpaceTimeBatched): among the
+  ///   frontier points whose modeled byte peak is <= peak_threshold, minimize
+  ///   flops, ties broken by lower peak; fall back to global min-peak (best
+  ///   effort) when none fit.
   ///
   /// - time-first (\c DenseTimeSpaceBatched): among the frontier points whose
   ///   modeled byte peak is <= peak_threshold, minimize flops, ties broken

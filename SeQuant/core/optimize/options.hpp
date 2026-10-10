@@ -21,76 +21,65 @@ class Expr;
 
 /// Objective function to minimize in single-term and top-level optimize
 /// routines. The `Dense*` models assume dense tensors:
-/// - `DenseFLOPs` counts floating-point operations.
-/// - `DenseSize` counts result-tensor storage elements (summed over
-///   intermediates) -- a gross-traffic proxy, not a peak.
-/// - `DenseSpaceTime` (also spelled `DensePeakSize`, a deprecated alias) is
-///   peak-first, perf-second: it minimizes peak memory --
-///   the maximum over the evaluation schedule of the combined size of all
-///   simultaneously-live tensors (intermediates and resident input leaves, the
-///   all-co-resident model) -- and breaks ties by the roofline perf cost.
-///   Unlike the order-independent `DenseFLOPs`/`DenseSize`, the contraction
-///   order is a real lever here. Note: does not yet support
+/// - `DenseFLOPs` (the default) counts floating-point operations, the metric
+///   used throughout the contraction-ordering literature.
+/// - `DenseTimeSpace` is the objective intended for production. It is
+///   perf-first, peak-second: it minimizes a performance cost -- the flop
+///   count, or the roofline wall-time proxy when \ref RooflineParams is set --
+///   and breaks ties by peak memory, the maximum over the evaluation schedule
+///   of the combined size of all simultaneously-live tensors (intermediates and
+///   resident input leaves, the all-co-resident model). Does not support
 ///   common-subexpression elimination (`CSEOptions::subnet` must be false).
-/// - `DenseSpaceTimeBatched` (deprecated alias `DensePeakSizeBatched`) extends
-///   `DenseSpaceTime` with a per-index batchability model: each index
-///   satisfying `OptimizeOptions::batch_policy.is_batchable_index()` (the
-///   derived union of the contracted- and external-role building blocks) is
-///   treated as independently sliced to `min(extent,
-///   batch_policy.batch_target_size(ix))` elements per index --
+/// - `DenseTimeSpaceBatched` extends `DenseTimeSpace` with a per-index
+///   batchability model: each index satisfying
+///   `OptimizeOptions::batch_policy.is_batchable_index()` (the derived union of
+///   the contracted- and external-role building blocks) may be sliced to
+///   `min(extent, batch_policy.batch_target_size(ix))` elements --
 ///   `batch_target_size` is an upper bound, so this is a conservative
 ///   (over-)estimate of the realized whole-tile batch, which the backend rounds
-///   *down* to a tile multiple (never above the target; see
-///   `mode_batches_of_trange1`). The
-///   DP minimises peak over the worst-case sliced configuration. Only consulted
-///   by the batched oracle and DP; requires
-///   a batchability role predicate
-///   (`batch_policy.is_batchable_contracted_index` and/or
-///   `is_batchable_external_index`) and `batch_policy.batch_target_size` to be
-///   set. Final selection is ceiling-gated by `peak_threshold`, which must be
-///   finite for any loop to be opened at all.
-/// - `DenseTimeSpace` / `DenseTimeSpaceBatched` are the perf-first, peak-second
-///   duals of `DenseSpaceTime` / `DenseSpaceTimeBatched`: they select a
-///   factorization by roofline perf first and peak second (same Pareto-frontier
-///   and roofline machinery, opposite lexicographic order). Because slicing is
-///   perf-neutral, a perf-first primary never prefers a flops-catastrophic
-///   factorization merely for its sliceability. Naming:
-///   `Dense{Primary}{Secondary}`, `Space` = peak/size, `Time` = perf.
+///   *down* to a tile multiple (see `mode_batches_of_trange1`). Requires a
+///   batchability role predicate (`batch_policy.is_batchable_contracted_index`
+///   and/or `is_batchable_external_index`) and `batch_policy.batch_target_size`
+///   to be set. Because slicing is perf-neutral, the perf-first primary never
+///   prefers a flops-catastrophic factorization merely for its sliceability.
 ///
-///   `peak_threshold` and these objectives: it is a feasibility ceiling on the
-///   perf-first branch of `select_root` too -- among the frontier points that
-///   fit the budget it takes the fewest flops, ties broken toward the
-///   least-sliced realization (`nsl`) and then lower peak, so nothing is
-///   sliced for free below the ceiling. When no point fits, the fallback stays
-///   perf-first: global min flops, ties by min peak. It cannot force a
-///   flops-catastrophic factorization the way the space-first branch can.
+///   `peak_threshold` is a feasibility ceiling: among the schedules that fit
+///   the budget the fewest flops win, ties broken toward the least-sliced
+///   realization (`nsl`) and then lower peak, so nothing is sliced for free
+///   below the ceiling. When no schedule fits, the fallback stays perf-first:
+///   global min flops, ties by min peak. `peak_threshold` is also the switch
+///   that turns batching on at all: `PeakBatchedModel::relax` opens neither a
+///   contracted nor an external loop unless `std::isfinite(peak_threshold)`.
+///   External opens are emitted per node, gated by exactly
+///   `batch_policy.batch_spectator_indices && std::isfinite(peak_threshold)`,
+///   with no post-DP external placement pass.
+/// - `DenseSize`, `DenseSpaceTime` and `DenseSpaceTimeBatched` (and the
+///   `DensePeakSize`/`DensePeakSizeBatched` spellings) are deprecated.
 ///
-///   `peak_threshold` is also the switch that turns batching on at all:
-///   `PeakBatchedModel::relax` opens neither a contracted nor an external loop
-///   unless `std::isfinite(peak_threshold)`. External opens are emitted per
-///   node, gated by exactly
-///   `batch_policy.batch_spectator_indices && std::isfinite(peak_threshold)`
-///   -- under both batched objectives, with no objective condition and no
-///   post-DP external placement pass.
+/// Naming: `Dense{Primary}{Secondary}`, `Space` = peak/size, `Time` = perf.
 ///
 /// Leaves room for `Sparse*` models later.
 enum class ObjectiveFunction {
+  /// Floating-point operation count (the default).
   DenseFLOPs,
+  /// \deprecated Use \c DenseTimeSpace. Result-tensor storage elements summed
+  /// over intermediates -- a gross-traffic proxy, not a peak.
   DenseSize,
-  /// Peak-first, perf-second. Deprecated alias: `DensePeakSize`.
+  /// \deprecated Use \c DenseTimeSpace. Peak-first, perf-second; can prefer a
+  /// flops-catastrophic factorization for a lower peak.
   DenseSpaceTime,
-  /// Batched variant of `DenseSpaceTime`. Deprecated alias:
-  /// `DensePeakSizeBatched`.
+  /// \deprecated Use \c DenseTimeSpaceBatched. Batched variant of
+  /// \c DenseSpaceTime.
   DenseSpaceTimeBatched,
-  /// Perf-first, peak-second: never prefers a flops-catastrophic factorization
-  /// for its sliceability.
+  /// Perf-first, peak-second; the objective intended for production.
   DenseTimeSpace,
-  /// Batched variant of `DenseTimeSpace`.
+  /// Batched variant of \c DenseTimeSpace.
   DenseTimeSpaceBatched,
-  /// Deprecated aliases, sharing the underlying values of the constants above
-  /// so that code and JSON inputs spelling them ("dense_peak_size") keep
-  /// working: a `== DensePeakSize` guard catches `DenseSpaceTime`.
+  /// \deprecated Old spelling of \c DenseSpaceTime, sharing its value so that
+  /// code and JSON inputs spelling it ("dense_peak_size") keep working: a
+  /// `== DensePeakSize` guard catches `DenseSpaceTime`.
   DensePeakSize = DenseSpaceTime,
+  /// \deprecated Old spelling of \c DenseSpaceTimeBatched.
   DensePeakSizeBatched = DenseSpaceTimeBatched
 };
 
@@ -148,7 +137,8 @@ struct CostParams {
   /// Per-intermediate storage-footprint penalty (DenseFLOPs/DenseSize only; see
   /// OptimizeOptions::footprint_weight). Not used by the peak objectives.
   double footprint_weight = 0.0;
-  /// Relative peak tolerance for DenseSpaceTime's final selection; see
+  /// Relative peak tolerance for the deprecated DenseSpaceTime's final
+  /// selection; see
   /// OptimizeOptions::peak_flops_tolerance. Unused by DenseSpaceTimeBatched,
   /// whose final selection is instead threshold-gated by \c peak_threshold.
   double peak_flops_tolerance = 0.10;
@@ -286,7 +276,8 @@ struct OptimizeOptions {
   /// 0 = strict peak-min (flop tie-break only on exact peak ties). The default
   /// 0.10 trades up to a 10% peak increase for a (often much larger) flop
   /// reduction -- e.g. forming a persistent composite integral instead of
-  /// recomputing a ladder term. Only consulted by \c DenseSpaceTime. \c
+  /// recomputing a ladder term. Only consulted by the deprecated
+  /// \c DenseSpaceTime. \c
   /// DenseSpaceTimeBatched's final selection is instead ceiling-gated by
   /// \ref BatchPolicy::peak_threshold.
   double peak_flops_tolerance = 0.10;
