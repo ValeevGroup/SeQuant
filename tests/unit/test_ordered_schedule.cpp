@@ -1435,7 +1435,7 @@ TEST_CASE(
 // CONFIDENTLY, and to a nest other than V's. (An earlier version of this
 // fixture gave X no per_axis roles at all, so its production site did not
 // resolve; production_depth now never guesses a nest for an unresolved
-// reader (ruling I1), so an unresolved reader can no longer trip this
+// reader, so an unresolved reader can no longer trip this
 // tripwire -- the fixture must give the offending reader a mode that
 // resolves, confidently, into a different nest, which is what this version
 // does.) Passes (by hand, mirroring the [levels] lift/straddle test): C = 0

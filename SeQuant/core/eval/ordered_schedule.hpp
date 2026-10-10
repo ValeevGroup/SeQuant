@@ -578,8 +578,9 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 ///     escape) and the reader is produced inside that same instance (its
 ///     production site is at or below the reduction's depth, in the same
 ///     nest): such a reader would otherwise see the current batch's partial
-///     sum rather than the completed reduction (the finding pinned by the
-///     cell-table partial-sum check). A reader produced outside the reduced
+///     sum rather than the completed reduction (pinned by the
+///     "a reduction source read inside its own loop by a later pass gets two
+///     pass blocks" test). A reader produced outside the reduced
 ///     instance reads the completed sum from the escape's residency scope
 ///     as always and needs no bump. \p inside(reader_vid, source_vid)
 ///     decides this per (reader, source) pair -- the caller's lambda
@@ -1612,9 +1613,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
           }
         }
       } else if (unescaped_local_instance) {
-        // Tripwire (controller ruling I3; reader test corrected by ruling
-        // I4): a value with an unescaped LoopLocal instance of its own nest
-        // (checked before the materialization rule above ran, via
+        // Tripwire: a value with an unescaped LoopLocal instance of its own
+        // nest (checked before the materialization rule above ran, via
         // unescaped_local_instance) has a per-batch-only form of that instance
         // that is never delivered to root -- and there is no same-nest
         // later-pass reader to trigger the materialization rule above and fix
