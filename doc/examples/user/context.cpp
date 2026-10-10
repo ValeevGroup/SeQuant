@@ -115,6 +115,19 @@ int main() {
   SEQUANT_ASSERT(product.as<Product>().scalar() == -1);
   // end-snippet-5
 
+  // start-snippet-7
+  {
+    auto normalization_resetter = mbpt::set_scoped_default_mbpt_context(
+        mbpt::Context{mbpt::get_default_mbpt_context()}.set(
+            mbpt::NormalizationConvention::Symmetric));
+    SEQUANT_ASSERT(
+        mbpt::get_default_mbpt_context().normalization_convention() ==
+        mbpt::NormalizationConvention::Symmetric);
+  }
+  SEQUANT_ASSERT(mbpt::get_default_mbpt_context().normalization_convention() ==
+                 mbpt::NormalizationConvention::Default);
+  // end-snippet-7
+
   (void)ctx;
 
   return 0;

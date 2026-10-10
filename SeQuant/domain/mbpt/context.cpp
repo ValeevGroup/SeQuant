@@ -20,7 +20,8 @@ Context::Context(Options options)
                        : (options.op_registry
                               ? std::make_shared<OpRegistry>(
                                     std::move(options.op_registry.value()))
-                              : nullptr)) {}
+                              : nullptr)),
+      normalization_convention_(options.normalization_convention) {}
 
 Context Context::clone() const {
   Context ctx(*this);
@@ -31,6 +32,10 @@ Context Context::clone() const {
 }
 
 CSV Context::csv() const { return csv_; }
+
+NormalizationConvention Context::normalization_convention() const {
+  return normalization_convention_;
+}
 
 std::shared_ptr<const OpRegistry> Context::op_registry() const {
   SEQUANT_ASSERT(op_registry_, "mbpt::Context has null OpRegistry");
@@ -57,8 +62,15 @@ Context& Context::set(CSV csv) {
   return *this;
 }
 
+Context& Context::set(NormalizationConvention convention) {
+  normalization_convention_ = convention;
+  return *this;
+}
+
 bool operator==(Context const& left, Context const& right) {
   if (left.csv() != right.csv()) return false;
+  if (left.normalization_convention() != right.normalization_convention())
+    return false;
 
   // both null -> equal; one null -> not equal
   if (!left.op_registry_ && !right.op_registry_) return true;

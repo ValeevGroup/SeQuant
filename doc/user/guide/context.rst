@@ -120,7 +120,7 @@ separately from the core ``Context``, via :func:`sequant::mbpt::set_default_mbpt
 Most MBPT functions assert that this has been configured; forgetting this step is a common source of "OpRegistry is null"-type errors
 when SeQuant code is first ported into a new program.
 
-The other configurable field is ``CSV`` (default ``CSV::No``): when set to ``CSV::Yes``, operator tensors built by
+The ``CSV`` field (default ``CSV::No``), when set to ``CSV::Yes``, makes operator tensors built by
 :class:`sequant::mbpt::OpMaker` (e.g. cluster amplitudes ``t``) use cluster-specific virtuals — virtual-space indices that carry the
 operator's occupied indices as proto-indices — instead of plain, independent virtual indices. :func:`sequant::mbpt::csv_transform`
 expands such CSV-dependent tensors into an explicit basis (standard unoccupieds, PAOs, or AOs) when needed downstream; the
@@ -132,6 +132,9 @@ registered under a name, whose registry entry says whether it is orthonormal (:f
    :start-after: start-snippet-4
    :end-before: end-snippet-4
    :dedent: 2
+
+The :class:`sequant::mbpt::NormalizationConvention` controls operator prefactors. Its default is ``Default``;
+:doc:`operator` describes the two conventions and which operators each one affects.
 
 Several bases of one space can meet in an expression: the canonical and the localized orbitals of a perturbation theory,
 the cluster-specific virtuals of the ground-state and of the perturbed amplitudes, and so on. An :class:`sequant::Index`
@@ -181,6 +184,15 @@ Scopes must end in the reverse order of their creation:
    ``Context::Options`` fields are independent of one another and of the *previously active* context: constructing a new ``Context``
    (whether directly or through the scoped-override helpers) starts from the library defaults and applies only the fields explicitly
    given, rather than inheriting from whatever context happened to be active before.
+
+To change a single field of the MBPT context, such as the normalization convention, copy the active context and set that field on
+the copy:
+
+.. literalinclude:: /examples/user/context.cpp
+   :language: cpp
+   :start-after: start-snippet-7
+   :end-before: end-snippet-7
+   :dedent: 2
 
 Scoped contexts are per thread
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
