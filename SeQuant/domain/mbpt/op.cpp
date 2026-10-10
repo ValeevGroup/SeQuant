@@ -9,6 +9,7 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -1436,14 +1437,21 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
         // if the index's space extends beyond it the RDM gets a target-space
         // index instead and a Kronecker delta ties the two (bra/ket placement
         // as in WickTheorem's contractions)
-        const auto index_counts =
-            named_indices ? container::map<Index, IndexSlotCounters>{}
-                          : get_used_indices_with_counts(product_ptr);
-        // an index in a single bra or ket slot cannot be summed over; aux
-        // slots carry no such constraint
+        const auto index_counts = get_used_indices_with_counts(product_ptr);
+        // an index in a single bra or ket slot cannot be summed over, so the
+        // named indices must include it; aux slots carry no such constraint
         auto in_single_braket_slot = [](const IndexSlotCounters& counts) {
           return counts.bra + counts.ket == 1;
         };
+        if (named_indices) {
+          for (const auto& [idx, counts] : index_counts) {
+            if (in_single_braket_slot(counts) && !named_indices->contains(idx))
+              enforce_failed(
+                  "ref_av: index " + toUtf8(idx.full_label()) +
+                  " occurs in a single bra or ket slot of a term, so it is "
+                  "external, but it is not among the context's named indices");
+          }
+        }
         auto is_external = [&](const Index& idx) {
           if (named_indices) return named_indices->contains(idx);
           const auto count_it = index_counts.find(idx);
