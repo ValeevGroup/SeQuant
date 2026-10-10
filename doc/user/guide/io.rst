@@ -28,6 +28,31 @@ The produced LaTeX code is not self-contained. It needs to be embedded in a suit
 
 
 
+Formatting and streams
+=========================
+
+Include :file:`SeQuant/core/io/format.hpp` to print :class:`sequant::Expr`, its subclasses, and
+:class:`sequant::ExprPtr` with ``std::format`` or stream insertion (``<<``). Both default to LaTeX and support
+narrow and wide characters; narrow output is UTF-8. An empty ``ExprPtr`` produces an empty string in both modes
+and with stream insertion, matching the LaTeX and serialization converters. Deserializing that empty string
+returns an empty ``ExprPtr``.
+
+The format specifier selects the representation: ``l`` or ``latex`` for LaTeX, and ``s`` or ``serialize`` for
+serialization. An empty specifier selects LaTeX. These are the only supported specifiers; apply string formatting
+to the rendered string if width, alignment, or precision is needed.
+
+Stream insertion always produces LaTeX. For explicit serialization, insert the result of
+:func:`sequant::io::serialization::to_string` into a wide stream, or use ``std::format`` with ``s`` or ``serialize``
+for a narrow string. Wide formatting is available with wide format strings. The :doc:`expressions` examples
+demonstrate both stream insertion and explicit format selection.
+
+Formatting uses the existing LaTeX and serialization converters and preserves their limitations. In particular,
+a custom expression's LaTeX output comes from its virtual ``to_latex()`` implementation; serialization requires
+support in the serialization converter. Unsupported conversions propagate their exceptions. Unknown format
+specifiers are rejected during compile-time format-string checking, or with :class:`sequant::Exception` when
+using runtime format strings with ``std::vformat``.
+
+
 .. _io-Serialization:
 
 Serialization

@@ -3,6 +3,7 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -128,14 +129,16 @@ std::wstring Sum::to_latex() const {
   for (const auto &i : summands()) {
     const auto i_is_product = i->is<Product>();
     if (!i_is_product) {
-      result += (counter == 0) ? i->to_latex() : (L" + " + i->to_latex());
+      result += (counter == 0) ? io::latex::to_string(*i)
+                               : (L" + " + io::latex::to_string(*i));
     } else {  // i_is_product
       const auto i_prod = i->as<Product>();
       const auto scalar = i_prod.scalar();
       if (scalar.real() < 0 || (scalar.real() == 0 && scalar.imag() < 0)) {
         result += L" - " + i_prod.to_latex(true);
       } else {
-        result += (counter == 0) ? i->to_latex() : (L" + " + i->to_latex());
+        result += (counter == 0) ? io::latex::to_string(*i)
+                                 : (L" + " + io::latex::to_string(*i));
       }
     }
     ++counter;

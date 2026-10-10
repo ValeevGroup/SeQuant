@@ -4,6 +4,8 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
+#include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
@@ -17,6 +19,16 @@
 #include <vector>
 
 namespace sequant::io::latex {
+
+std::wstring to_string(const Expr& expr) {
+  if (expr.is<Power>()) return to_string(expr.as<Power>());
+  return expr.to_latex();
+}
+
+std::wstring to_string(const ExprPtr& expr) {
+  if (!expr) return {};
+  return to_string(*expr);
+}
 
 std::wstring to_string(const rational& t) {
   // n.b. skip enclosing braces to make Constant::to_latex to produce same

@@ -1,6 +1,6 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wick.hpp>
@@ -14,11 +14,10 @@ int main() {
   auto cp1 = fcrex(p1), cp2 = fcrex(p2);
   auto ap3 = fannx(p3), ap4 = fannx(p4);
 
-  std::wcout << to_latex(ap3 * ap4 * cp1 * cp2) << " = "
-             << to_latex(FWickTheorem{ap3 * ap4 * cp1 * cp2}
-                             .full_contractions(false)
-                             .compute())
-             << std::endl;
+  std::wcout
+      << ap3 * ap4 * cp1 * cp2 << " = "
+      << FWickTheorem{ap3 * ap4 * cp1 * cp2}.full_contractions(false).compute()
+      << std::endl;
   // end-snippet-1
 
   SEQUANT_ASSERT(FWickTheorem{ap3 * ap4 * cp1 * cp2}
@@ -38,10 +37,9 @@ int main() {
   //                            ann(std::vector{L"p3", L"p4"}));
   auto nop2 = ex<FNOperator>(cre({L"p_5"}), ann({L"p_6", L"p_7"}));
 
-  std::wcout
-      << to_latex(nop1 * nop2) << " = "
-      << to_latex(FWickTheorem{nop1 * nop2}.full_contractions(false).compute())
-      << std::endl;
+  std::wcout << nop1 * nop2 << " = "
+             << FWickTheorem{nop1 * nop2}.full_contractions(false).compute()
+             << std::endl;
   // end-snippet-2
 
   SEQUANT_ASSERT(
@@ -52,10 +50,9 @@ int main() {
   auto nop3 = ex<BNOperator>(cre({p1, p2}), ann({p3, p4}));
   auto nop4 = ex<BNOperator>(cre({L"p_5", L"p_6"}), ann({L"p_7"}));
 
-  std::wcout
-      << to_latex(nop3 * nop4) << " = "
-      << to_latex(BWickTheorem{nop3 * nop4}.full_contractions(false).compute())
-      << std::endl;
+  std::wcout << nop3 * nop4 << " = "
+             << BWickTheorem{nop3 * nop4}.full_contractions(false).compute()
+             << std::endl;
   // end-snippet-3
 
   SEQUANT_ASSERT(
