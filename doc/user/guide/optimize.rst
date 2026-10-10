@@ -8,8 +8,9 @@ intermediates) by orders of magnitude for the large tensor contractions typical 
 :func:`sequant::optimize` chooses good orderings for both, turning a symbolic expression into one that is also efficient to evaluate
 or translate into code (see :doc:`export`).
 
-The contraction search is per term. It does not jointly optimize the peak memory of a forest or the benefit of sharing
-an intermediate across equations.
+Each :class:`sequant::Product` is optimized on its own. The search does not consider the peak memory of evaluating
+several expressions together (e.g. all residual equations of a coupled-cluster method), nor the savings from an
+intermediate that several of them could share.
 
 What it does
 --------------
@@ -18,7 +19,7 @@ Given an expression (or a :doc:`ResultExpr <expressions>`), :func:`sequant::opti
 
 - picks a pairwise contraction order for every :class:`sequant::Product`, minimizing a cost metric (the total floating-point
   operation count, by default) using each index's basis extent (:func:`sequant::IndexBasis::extent`), and
-- reorders the summands of every :class:`sequant::Sum` so that terms sharing common intermediates end up next to each other, which
+- reorders the summands of every :class:`sequant::Sum` so that summands sharing common intermediates end up next to each other, which
   helps downstream common-subexpression elimination recognize them.
 
 .. literalinclude:: /examples/user/optimize.cpp

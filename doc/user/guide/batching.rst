@@ -74,9 +74,9 @@ The finite ``peak_threshold`` is a ceiling on the **modeled** peak. Among the sc
 the lowest performance cost, then the fewest sliced modes, then the lowest peak, so nothing is sliced unless slicing is
 needed to fit the budget. If no schedule fits, it picks the lowest performance cost, then the lowest peak.
 
-Exceeding the budget is not an error. The modeled peak is a per-term estimate from dense extents; backend workspace,
-tile sizes, and intermediates shared across equations can change the realized peak, so a finite budget does not
-guarantee that the process fits in that many bytes.
+Exceeding the budget is not an error. The modeled peak is estimated for each :class:`sequant::Product` separately, from
+dense extents; backend workspace, tile sizes, and intermediates shared between expressions can change the realized
+peak, so a finite budget does not guarantee that the process fits in that many bytes.
 
 Executing a batched plan
 ---------------------------
@@ -84,9 +84,9 @@ Executing a batched plan
 Once ``optimize()`` has annotated an expression with a batching decision, actually *running* it numerically needs a real tensor backend
 (TiledArray, BTAS, or TAPP) and is reached through the same :func:`sequant::evaluate` entry points used for any other evaluation, plus
 :func:`sequant::make_evaluator` to adapt a ``BatchPolicy`` into the evaluator SeQuant's cache consults. Two execution strategies are
-available, selected by ``BatchPolicy::scheduler``: the default ``BatchScheduler::forest_descent`` evaluates one equation at a time, while
-``BatchScheduler::ordered`` fuses an entire forest of equations into a single schedule so compatible value forms can be reused across
-equations within shared batch loops. Because these entry points are backend-dependent, they are outside the scope of a
+available, selected by ``BatchPolicy::scheduler``: the default ``BatchScheduler::forest_descent`` evaluates one expression at a time, while
+``BatchScheduler::ordered`` fuses all the expressions evaluated together (e.g. all residual equations of a coupled-cluster method) into
+a single schedule, so an intermediate several of them need can be computed once inside shared batch loops. Because these entry points are backend-dependent, they are outside the scope of a
 backend-agnostic example here; the internal architecture behind both strategies is documented for contributors in
 :doc:`/developer/batched_evaluation`, and the cost model driving the decisions above in :doc:`/developer/cost_model`.
 
