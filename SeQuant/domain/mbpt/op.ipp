@@ -9,6 +9,8 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
+#include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/algorithm/is_sorted.hpp>
 #include <range/v3/view/iota.hpp>
@@ -146,8 +148,43 @@ bool Operator<QuantumNumbers, S>::commutes_with_atom(const Expr& that) const {
           (delta_this[ann].upper() > 0 && delta_that[cre].upper() > 0))
         return false;
     }
+    // without a contractible pair two fermionic operators of odd rank
+    // anticommute
+    if constexpr (S == Statistics::FermiDirac)
+      return !(this->may_have_odd_rank(delta_this) &&
+               that_op.may_have_odd_rank(delta_that));
     return true;
   }
+}
+
+template <typename QuantumNumbers, Statistics S>
+bool Operator<QuantumNumbers, S>::may_have_odd_rank(
+    const QuantumNumbers& dN) const {
+  // exact op counts give the rank directly; intervals (ops on non-base
+  // spaces) do not, then the tensor form decides
+  if (ranges::all_of(dN, [](const auto& n) { return singleton(n); })) {
+    std::int64_t rank = 0;
+    for (const auto& n : dN) rank += n.lower();
+    return rank % 2 != 0;
+  }
+
+  auto term_rank = [](const ExprPtr& term) {
+    std::size_t rank = 0;
+    auto count = [&rank](const ExprPtr& e) {
+      if (e.is<NormalOperator<S>>()) {
+        const auto& nop = e.as<NormalOperator<S>>();
+        rank += nop.ncreators() + nop.nannihilators();
+      }
+    };
+    count(term);
+    term->visit(count, /* atoms_only = */ true);
+    return rank;
+  };
+  const ExprPtr form = this->tensor_form();
+  if (!form.is<Sum>()) return term_rank(form) % 2 != 0;
+  return ranges::any_of(form.as<Sum>().summands(), [&](const ExprPtr& t) {
+    return term_rank(t) % 2 != 0;
+  });
 }
 
 template <typename QuantumNumbers, Statistics S>
