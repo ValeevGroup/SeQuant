@@ -1446,6 +1446,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
           return count_it->second.nonproto() <= 1;
         };
         container::map<Index, Index> replacement_rules;
+        container::map<Index, Index> rdm_replacement_rules;
         container::svector<ExprPtr> restrictions;
         for (const auto& [idx, in_bra] : rdm_index_in_bra) {
           const auto target_type =
@@ -1454,7 +1455,8 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
           const bool external = is_external(idx);
           if (external && target_type == idx.space()) continue;
           Index target = Index::make_tmp_index(target_type);
-          replacement_rules.emplace(idx, target);
+          (external ? rdm_replacement_rules : replacement_rules)
+              .emplace(idx, target);
           if (external)
             restrictions.emplace_back(in_bra ? make_kronecker(idx, target)
                                              : make_kronecker(target, idx));
@@ -1463,6 +1465,16 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
         if (!replacement_rules.empty()) {
           sequant::detail::apply_index_replacement_rules(
               product_ptr, replacement_rules, all_indices);
+        }
+        // an external index keeps its label in any other slot, e.g. an aux one
+        if (!rdm_replacement_rules.empty()) {
+          for (auto& factor : product_ptr->factors()) {
+            if (!factor->is<AbstractTensor>()) continue;
+            auto& tensor = factor->as<AbstractTensor>();
+            if (tensor._label() != rdm_label) continue;
+            transform_indices(tensor, rdm_replacement_rules);
+            reset_tags(tensor);
+          }
         }
         for (auto& restriction : restrictions)
           product_ptr->append(1, std::move(restriction));

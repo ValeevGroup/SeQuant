@@ -230,6 +230,11 @@ TEST_CASE("mbpt multireference regressions", "[mbpt]") {
                  EquivalentTo(L"γ{u_1;u_2} * δ{p_1;u_1} * δ{u_2;p_2}"));
       CHECK_THAT(tensor::ref_av(deserialize(L"f{I_4;I_5} * ã{I_5;I_6}")),
                  EquivalentTo(L"f{I_4;u_1} * γ{u_1;u_2} * δ{u_2;I_6}"));
+      // only the RDM slot of an external index is restricted
+      if (named)
+        CHECK_THAT(
+            tensor::ref_av(deserialize(L"x{;;I_2} * ã{I_1;I_2}")),
+            EquivalentTo(L"x{;;I_2} * γ{u_1;u_2} * δ{I_1;u_1} * δ{u_2;I_2}"));
     }
   }
 
