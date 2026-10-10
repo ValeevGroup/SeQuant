@@ -31,16 +31,20 @@ for ``PeakBatchedModel``. A common virtual interface would have to type-erase it
 A type satisfying this concept can be passed directly to ``run_single_term_opt`` to obtain a contraction order under an arbitrary,
 user-defined cost function — this is the intended extension point for a custom objective, rather than modifying the driver itself.
 
-Three model families satisfy the concept, implementing :enum:`sequant::ObjectiveFunction`'s objectives:
+Three model families satisfy the concept, implementing :enum:`sequant::ObjectiveFunction`'s objectives. Only
+``DenseTimeSpace`` and ``DenseTimeSpaceBatched`` are intended for production; ``DenseFLOPs`` remains the default and the
+baseline that matches the literature's operation-count metric. ``DenseSize``, ``DenseSpaceTime`` and
+``DenseSpaceTimeBatched`` are deprecated.
 
-- ``AdditiveModel`` (parameterized by a cost functor) implements ``ObjectiveFunction::DenseFLOPs`` and ``DenseSize``: a plain additive
-  DP over flop count or intermediate storage, with no notion of memory residency. With subnet CSE enabled, each
-  canonically distinct subnetwork's cost is counted once, however many times it appears in the term.
-- ``PeakModel`` implements ``DenseSpaceTime``/``DenseTimeSpace``: an "all-co-resident" pebble-game DP that tracks, at each step, the total size of every
+- ``AdditiveModel`` (parameterized by a cost functor) implements ``ObjectiveFunction::DenseFLOPs`` and the deprecated
+  ``DenseSize``: a plain additive DP over flop count or intermediate storage, with no notion of memory residency. With
+  subnet CSE enabled, each canonically distinct subnetwork's cost is counted once, however many times it appears in the
+  term.
+- ``PeakModel`` implements ``DenseTimeSpace`` and the deprecated ``DenseSpaceTime``: an "all-co-resident" pebble-game DP that tracks, at each step, the total size of every
   tensor simultaneously resident (the currently-forming result plus whatever its sibling subtree's inputs still occupy), maintaining a
   `Pareto frontier <https://en.wikipedia.org/wiki/Pareto_front>`_ of ``(peak, flops)`` points per subset so the lexicographic optimum can be
   read off at the end. The two objectives differ in their root selection.
-- ``PeakBatchedModel`` implements ``DenseSpaceTimeBatched``/``DenseTimeSpaceBatched``: the same pebble-game idea, extended with a second
+- ``PeakBatchedModel`` implements ``DenseTimeSpaceBatched`` and the deprecated ``DenseSpaceTimeBatched``: the same pebble-game idea, extended with a second
   dimension — for each subset, a DP cell per enclosing *ordered batch nest* over the batchable indices (see :doc:`the user-facing batching guide
   </user/guide/batching>` for what "batchable," "contracted," and "peak" mean) — so slicing a mode is just one more move the DP can make
   to trade flops for a lower peak, on the same Pareto-frontier footing as a plain reordering.
@@ -66,11 +70,11 @@ child-frontier pair; a leaf starts with :math:`P_n=S_n` and zero operation cost.
 untouched sibling's resident inputs while the left subtree is computed. Dropping it would describe a different memory
 model.
 
-A single minimum-peak point per subset is insufficient for the secondary performance objective. A child's slightly
-larger peak can be hidden below its parent's unavoidable peak while its lower operation cost still improves the whole
-schedule. ``PeakModel`` therefore retains all non-dominated ``(peak, performance cost)`` points. ``DenseSpaceTime``
-selects the cheapest root point within ``peak_flops_tolerance`` of the minimum peak; ``DenseTimeSpace`` selects by
-performance cost, then peak.
+Peak and performance cost are combined only at the root, so a single best point per subset is insufficient: a child's
+slightly larger peak can be hidden below its parent's unavoidable peak while its lower operation cost still improves
+the whole schedule. ``PeakModel`` therefore retains all non-dominated ``(peak, performance cost)`` points.
+``DenseTimeSpace`` selects by performance cost, then peak; the deprecated ``DenseSpaceTime`` selects the cheapest root
+point within ``peak_flops_tolerance`` of the minimum peak.
 
 .. _cost-model-batched-search:
 
@@ -102,8 +106,9 @@ Two charges prevent slicing from appearing free in the performance objective: a 
 an enclosing loop is recomputed once per batch of that loop; and a persistent value sliced by a loop that a volatile
 node closes must be rebuilt every iteration, so it is weighted by ``volatile_weight`` like a volatile one.
 
-The time-first objective also prefers fewer sliced modes among otherwise equal schedules; root selection under the
-budget is described in :doc:`/user/guide/batching`. The chosen nests are recorded on the expression for the runtime
+``DenseTimeSpaceBatched`` also prefers fewer sliced modes among otherwise equal schedules; root selection under the
+budget is described in :doc:`/user/guide/batching`. The deprecated ``DenseSpaceTimeBatched`` instead falls back to the
+lowest peak when no schedule fits the budget. The chosen nests are recorded on the expression for the runtime
 (see :ref:`batched-evaluation-loop-identity`).
 
 .. _cost-model-roofline:
