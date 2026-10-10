@@ -237,6 +237,22 @@ TEST_CASE("mbpt multireference regressions", "[mbpt]") {
     }
   }
 
+  SECTION("named indices must include every external bra/ket index") {
+    if (assert_behavior() != AssertBehavior::Abort) {
+      auto opts = CanonicalizeOptions::default_options();
+      opts.named_indices = container::set<Index>{Index(L"I_1")};
+      auto scope = set_scoped_modified_default_context(
+          [&opts](sequant::Context& ctx) { ctx.set(opts); });
+      CHECK_THROWS_MATCHES(
+          tensor::ref_av(deserialize(L"ã{I_1;I_2}")), Exception,
+          Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring(
+              "index I_2 occurs in a single bra or ket slot")));
+      // an index in a single aux slot need not be named
+      CHECK_NOTHROW(
+          tensor::ref_av(deserialize(L"x{;;u_5} * ã{I_1;u_2} * y{u_2;}")));
+    }
+  }
+
   SECTION("a single normal operator becomes an RDM") {
     CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1;u_2}")),
                EquivalentTo(L"γ{u_1;u_2}"));
