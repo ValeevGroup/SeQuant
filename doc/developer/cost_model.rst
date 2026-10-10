@@ -1,9 +1,10 @@
 Cost Model and Single-Term Optimization
 ==========================================
 
-:doc:`sequant::optimize() </user/guide/optimize>` picks a contraction order for every product it sees by solving, for each term
-independently, a subset `dynamic program <https://en.wikipedia.org/wiki/Dynamic_programming>`_ (DP) over its tensors: which pairwise
-contraction to form first, second, and so on, so as to
+:doc:`sequant::optimize() </user/guide/optimize>` picks a contraction order for every product it sees (a *term*, in the
+code's naming, hence ``run_single_term_opt``) by solving, for each term independently, a subset `dynamic program
+<https://en.wikipedia.org/wiki/Dynamic_programming>`_ (DP) over its tensors: which pairwise contraction to form first,
+second, and so on, so as to
 minimize some notion of cost. This page documents the architecture behind that DP — the extension point for anyone implementing a new
 cost objective — and the roofline and connectivity refinements shipped on top of it. It complements the :doc:`user-facing optimize() guide
 </user/guide/optimize>` and the :doc:`batched-evaluation architecture page <batched_evaluation>`, neither of which go into this level of
