@@ -4,7 +4,7 @@
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/io/format.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -81,7 +81,7 @@ int main() {
   // vac_av is equivalent to ref_av for single-determinant reference:
   // auto result = op::ref_av(op::P(2) * expr, opts);
 
-  std::wcout << "Result: " << to_latex(result) << "\n";
+  std::wcout << "Result: " << result << "\n";
   // end-snippet-4
 
   // start-snippet-5

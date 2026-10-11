@@ -1,6 +1,6 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -25,7 +25,7 @@ int main() {
   // IndexBasis::extent() for index extents
   auto optimized = optimize(expr);
 
-  std::wcout << to_latex(optimized) << std::endl;
+  std::wcout << optimized << std::endl;
   // end-snippet-1
 
   SEQUANT_ASSERT(optimized.is<Product>());

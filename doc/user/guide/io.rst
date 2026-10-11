@@ -49,7 +49,8 @@ apply string formatting to the rendered string if width, alignment, or precision
 
 Stream insertion of :class:`sequant::Expr` and :class:`sequant::ExprPtr` produces serialization. For explicit LaTeX,
 insert the result of :func:`sequant::io::latex::to_string` into a wide stream, or use ``std::format`` with ``l`` or
-``latex`` for a narrow string. Wide formatting is available with wide format strings.
+``latex`` for a narrow string. Wide formatting is available with wide format strings. The :doc:`expressions` examples
+demonstrate stream insertion and default formatting.
 
 Formatting uses the existing LaTeX and serialization converters and preserves their limitations. In particular,
 a custom expression's LaTeX output comes from its virtual ``to_latex()`` implementation; serialization requires
