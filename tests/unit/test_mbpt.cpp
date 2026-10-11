@@ -7,6 +7,7 @@
 #include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -30,10 +31,12 @@
 #include "catch2_sequant.hpp"
 
 #include <algorithm>
+#include <format>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <numeric>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -156,6 +159,31 @@ sequant::ExprPtr in_base_spaces(
   return simplify(out);
 }
 }  // namespace
+
+TEST_CASE("MBPT operator formatting", "[mbpt][format]") {
+  using namespace sequant;
+  const auto ptr = mbpt::op::t(1);
+  const auto& op = ptr.as<mbpt::op_t>();
+
+  REQUIRE(std::format("{}", op) == "{\\hat{t}_{1}}");
+  REQUIRE(std::format(L"{}", op) == L"{\\hat{t}_{1}}");
+
+  std::ostringstream narrow;
+  narrow << op;
+  REQUIRE(narrow.str() == "{\\hat{t}_{1}}");
+  std::wostringstream wide;
+  wide << op;
+  REQUIRE(wide.str() == L"{\\hat{t}_{1}}");
+
+  const mbpt::FOperatorBase& base = op;
+  REQUIRE(std::format("{}", base) == "{\\hat{t}_{1}}");
+  REQUIRE(std::format("{:l}|{:latex}", op, op) ==
+          "{\\hat{t}_{1}}|{\\hat{t}_{1}}");
+  REQUIRE_THROWS_AS(std::format("{:s}", op), Exception);
+  REQUIRE_THROWS_AS(std::format(L"{:serialize}", op), Exception);
+  REQUIRE_THROWS_AS(std::format("{}", ptr), Exception);
+  REQUIRE_THROWS_AS(std::format("{}", static_cast<const Expr&>(op)), Exception);
+}
 
 TEST_CASE("mbpt_operator_type_id", "[mbpt]") {
   using namespace sequant;

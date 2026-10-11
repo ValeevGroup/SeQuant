@@ -18,6 +18,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/interval.hpp>
+#include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -39,13 +40,16 @@
 
 #include <algorithm>
 #include <array>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <map>
 #include <optional>
+#include <ostream>
 #include <source_location>
 #include <string>
 #include <string_view>
@@ -1496,7 +1500,22 @@ void validate_ref_av_connections(const EVOptions<T>& opts,
 }
 }  // namespace detail
 
+/// Inserts an abstract operator's LaTeX representation.
+template <typename Char, typename Traits, typename QuantumNumbers, Statistics S>
+  requires(std::same_as<Char, char> || std::same_as<Char, wchar_t>)
+std::basic_ostream<Char, Traits>& operator<<(
+    std::basic_ostream<Char, Traits>& stream,
+    const Operator<QuantumNumbers, S>& op) {
+  return io::detail::insert_expression(stream, &op, false);
+}
+
 }  // namespace mbpt
 }  // namespace sequant
+
+// MBPT operators have no serialization grammar.
+template <typename QuantumNumbers, sequant::Statistics S, typename Char>
+  requires(std::same_as<Char, char> || std::same_as<Char, wchar_t>)
+struct std::formatter<sequant::mbpt::Operator<QuantumNumbers, S>, Char>
+    : sequant::io::detail::expression_formatter<Char, false> {};
 
 #endif  // SEQUANT_DOMAIN_MBPT_OP_HPP
