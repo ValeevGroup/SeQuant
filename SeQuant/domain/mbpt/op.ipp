@@ -151,17 +151,16 @@ bool Operator<QuantumNumbers, S>::commutes_with_atom(const Expr& that) const {
     // without a contractible pair two fermionic operators of odd rank
     // anticommute
     if constexpr (S == Statistics::FermiDirac)
-      return !(this->may_have_odd_rank(delta_this) &&
-               that_op.may_have_odd_rank(delta_that));
+      return !(this->has_odd_rank_term() && that_op.has_odd_rank_term());
     return true;
   }
 }
 
 template <typename QuantumNumbers, Statistics S>
-bool Operator<QuantumNumbers, S>::may_have_odd_rank(
-    const QuantumNumbers& dN) const {
+bool Operator<QuantumNumbers, S>::has_odd_rank_term() const {
   // exact op counts give the rank directly; intervals (ops on non-base
   // spaces) do not, then the tensor form decides
+  const auto dN = (*this)();
   if (ranges::all_of(dN, [](const auto& n) { return singleton(n); })) {
     std::int64_t rank = 0;
     for (const auto& n : dN) rank += n.lower();
