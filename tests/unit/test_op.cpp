@@ -685,5 +685,14 @@ TEST_CASE("op", "[elements]") {
     REQUIRE(!nop2.commutes_with(adjoint(FNOperator(nop2))));
     REQUIRE(adjoint(FNOperator(nop1)).commutes_with(adjoint(FNOperator(nop2))));
     REQUIRE(adjoint(FNOperator(nop2)).commutes_with(adjoint(FNOperator(nop1))));
+
+    // odd-rank fermionic operators without contractible pairs anticommute
+    auto ip = FNOperator(cre({}), ann({L"i_1"}));
+    auto ea = FNOperator(cre({L"a_1"}), ann({}));
+    REQUIRE(!ip.commutes_with(ea));
+    REQUIRE(!ea.commutes_with(ip));
+    REQUIRE(!ip.commutes_with(ip));
+    REQUIRE(adjoint(FNOperator(nop1)).commutes_with(ip));
+    REQUIRE(ip.commutes_with(adjoint(FNOperator(nop1))));
   }
 }
