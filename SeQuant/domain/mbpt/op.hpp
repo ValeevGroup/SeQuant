@@ -982,10 +982,9 @@ class Operator : public Operator<void, S> {
 
   bool less_than_rank_of(const this_type& that) const;
 
-  /// @param dN the quantum number change of this operator
-  /// @return true if a term of this operator may have an odd number of
+  /// @return true if some term of this operator has an odd number of
   /// creators and annihilators
-  bool may_have_odd_rank(const QuantumNumbers& dN) const;
+  bool has_odd_rank_term() const;
 
   Expr::type_id_type type_id() const override;
 
