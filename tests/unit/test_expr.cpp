@@ -669,6 +669,8 @@ TEST_CASE("expr", "[elements]") {
   }  // SECTION("clone")
 
   SECTION("latex") {
+    REQUIRE(to_latex(ExprPtr{}).empty());
+
     {  // Variable
       const auto e = std::make_shared<Variable>(L"q");
       REQUIRE(e->to_latex() == L"{q}");
