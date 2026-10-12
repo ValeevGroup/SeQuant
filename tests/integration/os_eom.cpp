@@ -163,7 +163,7 @@ int main(int argc, char* argv[]) {
   const bool print = print_str == "print";
 
   sequant::set_default_context(sequant::Context(
-      {.index_space_registry_shared_ptr = make_min_sr_spaces(),
+      {.index_basis_registry_shared_ptr = make_min_sr_spaces(),
        .vacuum = Vacuum::SingleProduct,
        // .assert_strict_braket_symmetry = false,
        .canonicalization_options = CanonicalizeOptions().copy_and_set(
