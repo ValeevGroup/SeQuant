@@ -758,7 +758,7 @@ TEST_CASE("basis-grants-linear-response", "[mbpt][csv][valgrind_skip]") {
         metrics.push_back(c.metrics);
         CHECK_NOTHROW(assert_amplitudes_carry_granted_basis(eq));
         // through the closed-shell spin trace
-        CHECK(census(closed_shell_CC_spintrace_v2(eq)).instances ==
+        CHECK(census(closed_shell_CC_singlet_spintrace_v2(eq)).instances ==
               Instances{std::nullopt, 1, pno});
       }
     CHECK(int_slots == std::vector<std::size_t>{42, 104, 191, 112});
@@ -769,7 +769,7 @@ TEST_CASE("basis-grants-linear-response", "[mbpt][csv][valgrind_skip]") {
     const auto h1_bar =
         lst(op::Hʼ(1), op::T(2), 2, {.use_connected_form = true});
     const OpConnections<std::wstring> connect = {{L"h¹", L"t"}};
-    const auto pseudo = closed_shell_CC_spintrace_v2(
+    const auto pseudo = closed_shell_CC_singlet_spintrace_v2(
         op::vac_av(adjoint(op::Tʼ(2)) * h1_bar, {.connect = connect}));
     std::size_t n = 0;
     auto const& isr = get_default_context().index_basis_registry();
@@ -796,7 +796,7 @@ TEST_CASE("basis-grants-linear-response", "[mbpt][csv][valgrind_skip]") {
       for (std::size_t p : {1u, 2u}) {
         INFO("traced " << traced << ", R" << p);
         const auto eq =
-            traced ? closed_shell_CC_spintrace_v2(lp.at(p)) : lp.at(p);
+            traced ? closed_shell_CC_singlet_spintrace_v2(lp.at(p)) : lp.at(p);
         const auto c = census(eq);
         CHECK(c.instances == all);
         CHECK(c.metrics_off == 0);
