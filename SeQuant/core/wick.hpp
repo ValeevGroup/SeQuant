@@ -1732,7 +1732,7 @@ class WickTheorem {
           get_default_context(S).index_basis_registry()) {
     // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
-      SEQUANT_ASSERT(vacuum == Vacuum::Physical);
+      SEQUANT_ENFORCE(vacuum == Vacuum::Physical);
     return sequant::can_contract(left, right, vacuum, isr);
   }
 
