@@ -192,9 +192,11 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE(!FWickTheorem::can_contract(fann(L"u_1"), fcre(L"a_2"), MP));
 
       // bosons stay Physical-only
-      REQUIRE_THROWS_AS(
-          BWickTheorem::can_contract(bann(L"i_1"), bcre(L"i_2"), MP),
-          Exception);
+      if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+        REQUIRE_THROWS_AS(
+            BWickTheorem::can_contract(bann(L"i_1"), bcre(L"i_2"), MP),
+            Exception);
+      }
     }
   }
 
