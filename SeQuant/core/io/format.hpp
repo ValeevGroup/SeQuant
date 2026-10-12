@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -19,8 +20,9 @@
 
 namespace sequant::io::detail {
 
-template <typename Char>
-std::basic_string<Char> expression_string(const Expr* expr, bool serialize) {
+template <typename Char, typename T>
+  requires(std::same_as<T, Expr> || std::same_as<T, ResultExpr>)
+std::basic_string<Char> expression_string(const T* expr, bool serialize) {
   auto text = expr ? (serialize ? serialization::to_string(*expr)
                                 : latex::to_string(*expr))
                    : L"";
@@ -31,10 +33,9 @@ std::basic_string<Char> expression_string(const Expr* expr, bool serialize) {
   }
 }
 
-template <typename Char, typename Traits>
+template <typename T, typename Char, typename Traits>
 std::basic_ostream<Char, Traits>& insert_expression(
-    std::basic_ostream<Char, Traits>& stream, const Expr* expr,
-    bool serialize) {
+    std::basic_ostream<Char, Traits>& stream, const T* expr, bool serialize) {
   const auto text = expression_string<Char>(expr, serialize);
   return stream << std::basic_string_view<Char, Traits>(text.data(),
                                                         text.size());
@@ -63,14 +64,16 @@ struct expression_formatter {
 
   template <typename T, typename FormatContext>
   auto format(const T& expr, FormatContext& ctx) const {
-    const sequant::Expr* ptr;
-    if constexpr (std::same_as<T, sequant::ExprPtr>) {
-      ptr = expr.get();
-    } else {
-      ptr = std::addressof(expr);
-    }
-    const auto text =
-        sequant::io::detail::expression_string<Char>(ptr, serialize_);
+    const auto text = [&] {
+      if constexpr (std::same_as<T, sequant::ExprPtr>) {
+        return expression_string<Char>(expr.get(), serialize_);
+      } else if constexpr (std::same_as<T, sequant::ResultExpr>) {
+        return expression_string<Char>(std::addressof(expr), serialize_);
+      } else {
+        return expression_string<Char, sequant::Expr>(std::addressof(expr),
+                                                      serialize_);
+      }
+    }();
     return std::copy(text.begin(), text.end(), ctx.out());
   }
 
@@ -99,11 +102,20 @@ std::basic_ostream<Char, Traits>& operator<<(
   return io::detail::insert_expression(stream, expr.get(), true);
 }
 
+/// Inserts the result expression's serialized representation.
+template <typename Char, typename Traits>
+  requires(std::same_as<Char, char> || std::same_as<Char, wchar_t>)
+std::basic_ostream<Char, Traits>& operator<<(
+    std::basic_ostream<Char, Traits>& stream, const ResultExpr& expr) {
+  return io::detail::insert_expression(stream, &expr, true);
+}
+
 }  // namespace sequant
 
 template <typename T, typename Char>
   requires((std::derived_from<T, sequant::Expr> ||
-            std::same_as<T, sequant::ExprPtr>) &&
+            std::same_as<T, sequant::ExprPtr> ||
+            std::same_as<T, sequant::ResultExpr>) &&
            (std::same_as<Char, char> || std::same_as<Char, wchar_t>))
 struct std::formatter<T, Char>
     : sequant::io::detail::expression_formatter<Char, true> {};

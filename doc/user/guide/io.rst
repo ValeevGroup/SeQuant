@@ -31,9 +31,9 @@ The produced LaTeX code is not self-contained. It needs to be embedded in a suit
 Formatting and streams
 =========================
 
-Include :file:`SeQuant/core/io/format.hpp` to print :class:`sequant::Expr`, its subclasses, and
-:class:`sequant::ExprPtr` with ``std::format`` or stream insertion (``<<``). Both default to serialization and support
-narrow and wide characters; narrow output is UTF-8. An empty ``ExprPtr`` produces an empty string in both modes
+Include :file:`SeQuant/core/io/format.hpp` to print :class:`sequant::Expr`, its subclasses, :class:`sequant::ExprPtr`,
+and :class:`sequant::ResultExpr` with ``std::format`` or stream insertion (``<<``). Both default to serialization and
+support narrow and wide characters; narrow output is UTF-8. An empty ``ExprPtr`` produces an empty string in both modes
 and with stream insertion, matching the LaTeX and serialization converters. Deserializing that empty string
 returns an empty ``ExprPtr``.
 
@@ -47,10 +47,10 @@ The format specifier selects the representation: ``l`` or ``latex`` for LaTeX, a
 serialization. An empty specifier selects the type's default representation. These are the only supported specifiers;
 apply string formatting to the rendered string if width, alignment, or precision is needed.
 
-Stream insertion of :class:`sequant::Expr` and :class:`sequant::ExprPtr` produces serialization. For explicit LaTeX,
-insert the result of :func:`sequant::io::latex::to_string` into a wide stream, or use ``std::format`` with ``l`` or
-``latex`` for a narrow string. Wide formatting is available with wide format strings. The :doc:`expressions` examples
-demonstrate stream insertion and default formatting.
+Stream insertion of :class:`sequant::Expr`, :class:`sequant::ExprPtr` and :class:`sequant::ResultExpr` produces
+serialization. For explicit LaTeX, insert the result of :func:`sequant::io::latex::to_string` into a wide stream, or
+use ``std::format`` with ``l`` or ``latex`` for a narrow string. Wide formatting is available with wide format strings.
+The :doc:`expressions` examples demonstrate stream insertion and default formatting.
 
 Formatting uses the existing LaTeX and serialization converters and preserves their limitations. In particular,
 a custom expression's LaTeX output comes from its virtual ``to_latex()`` implementation; serialization requires

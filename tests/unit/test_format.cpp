@@ -53,6 +53,19 @@ TEST_CASE("tensor formatting", "[format]") {
   REQUIRE(wide.str() == L"t{a_1;i_1}:N-N-N");
 }
 
+TEST_CASE("result expression formatting", "[format]") {
+  using namespace sequant;
+
+  const Tensor r(L"R", bra{L"a_1"}, ket{L"i_1"});
+  const ResultExpr result(r, ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}));
+  REQUIRE(std::format("{}", result) == "R{a_1;i_1}:N-N-N = t{a_1;i_1}:N-N-N");
+  REQUIRE(std::format(L"{:l}", result) ==
+          L"{R^{{i_1}}_{{a_1}}} = {t^{{i_1}}_{{a_1}}}");
+  std::wostringstream wide;
+  wide << result;
+  REQUIRE(wide.str() == L"R{a_1;i_1}:N-N-N = t{a_1;i_1}:N-N-N");
+}
+
 TEST_CASE("expression stream insertion", "[format]") {
   using namespace sequant;
 

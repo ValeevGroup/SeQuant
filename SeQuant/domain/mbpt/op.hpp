@@ -1506,7 +1506,7 @@ template <typename Char, typename Traits, typename QuantumNumbers, Statistics S>
 std::basic_ostream<Char, Traits>& operator<<(
     std::basic_ostream<Char, Traits>& stream,
     const Operator<QuantumNumbers, S>& op) {
-  return io::detail::insert_expression(stream, &op, false);
+  return io::detail::insert_expression<Expr>(stream, &op, false);
 }
 
 }  // namespace mbpt
