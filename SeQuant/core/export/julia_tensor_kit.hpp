@@ -60,7 +60,7 @@ class JuliaTensorKitGenerator : public JuliaTensorOperationsGenerator<Context> {
 
     for (const auto &[i, idx] : ranges::views::enumerate(tensor.indices())) {
       domain += "ℝ^";
-      domain += ctx.get_dim(idx.space());
+      domain += Base::dim(idx, ctx);
 
       if (i == braRank - 1) {
         domain += ", ";

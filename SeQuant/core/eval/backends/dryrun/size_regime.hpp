@@ -14,15 +14,17 @@
 
 namespace sequant::eval::dryrun {
 
-/// Per-space extents and per-rank CSV moment tables that define one size
+/// Per-basis-key extents and per-rank CSV moment tables that define one size
 /// regime for a dry-run replay. Extents are element counts; CSV moments are
 /// power means over occupied pairs (PNO) or singles (OSV).
 struct SizeRegime {
+  /// element extent per IndexBasis::base_key(); an unnamed basis instance
+  /// shares its space's entry (see IndexBasis)
   std::map<std::wstring, std::size_t> space_extent;
 
-  /// Optional per-space batch partition: the element extent of each realized
-  /// batch slice along the space's batch axis, keyed by space base_key, in
-  /// order. Empty (default) => the dry-run batches a mode into uniform
+  /// Optional per-key batch partition: the element extent of each realized
+  /// batch slice along the key's batch axis, keyed by IndexBasis::base_key(),
+  /// in order. Empty (default) => the dry-run batches a mode into uniform
   /// target_batch_size blocks (backend-model-agnostic fallback). When present
   /// for a batch axis, ResultDryRun::mode_batches uses this partition directly
   /// (accumulated to [lo,hi) ranges), so the dry-run's batch count -- hence its
@@ -56,21 +58,22 @@ struct SizeRegime {
   // are not expected here (an entry for 1 or 2 is ignored by inner_pow()).
   std::map<std::size_t, std::array<double, 5>> csv_moment_by_rank;
 
-  /// \return the flat extent of \p ix's space; throws \c std::out_of_range
-  ///         if the space is not present in \c space_extent (fail loud rather
-  ///         than silently defaulting to 1).
+  /// \return the flat extent of \p ix's \c IndexBasis::base_key(); throws
+  ///         \c std::out_of_range if the key is not present in
+  ///         \c space_extent (fail loud rather than silently defaulting to 1).
   [[nodiscard]] std::size_t extent(Index const& ix) const {
-    return space_extent.at(std::wstring{ix.space().base_key()});
+    return space_extent.at(std::wstring{ix.basis().base_key()});
   }
 
-  /// \return \p ix's space batch-slice-extent sequence, or an empty span if the
-  ///         space has no partition recorded (=> the caller falls back to
-  ///         uniform target_batch_size blocks). Never throws.
+  /// \return \p ix's \c IndexBasis::base_key() batch-slice-extent sequence, or
+  /// an
+  ///         empty span if the key has no partition recorded (=> the caller
+  ///         falls back to uniform target_batch_size blocks). Never throws.
   [[nodiscard]] container::svector<std::size_t> const& slice_extents(
       Index const& ix) const {
     static const container::svector<std::size_t> empty;
     auto const it =
-        space_slice_extents.find(std::wstring{ix.space().base_key()});
+        space_slice_extents.find(std::wstring{ix.basis().base_key()});
     return it != space_slice_extents.end() ? it->second : empty;
   }
 

@@ -15,12 +15,12 @@ namespace sequant {
 template <typename Range>
   requires std::ranges::range<Range> &&
            std::is_same_v<std::ranges::range_value_t<Range>, Index>
-IndexSpace max_space_size_idx(Range &&rng) {
-  IndexSpace max;
+IndexBasis max_extent_basis(Range &&rng) {
+  IndexBasis max;
 
   for (const Index &idx : rng) {
-    if (idx.space().approximate_size() > max.approximate_size()) {
-      max = idx.space();
+    if (idx.basis().extent() > max.extent()) {
+      max = idx.basis();
     }
   }
 
@@ -30,7 +30,7 @@ IndexSpace max_space_size_idx(Range &&rng) {
 template <typename Range>
   requires std::ranges::range<Range> &&
            std::is_same_v<std::ranges::range_value_t<Range>, Index>
-IndexSpace relevant_space(Range &&rng, MemoryLayout layout) {
+IndexBasis relevant_basis(Range &&rng, MemoryLayout layout) {
   if (std::ranges::empty(rng)) {
     return {};
   }
@@ -38,10 +38,10 @@ IndexSpace relevant_space(Range &&rng, MemoryLayout layout) {
   switch (layout) {
     case MemoryLayout::RowMajor:
       // Get last element
-      return (--std::ranges::end(rng))->space();
+      return (--std::ranges::end(rng))->basis();
     case MemoryLayout::ColumnMajor:
       // Get first element
-      return std::ranges::begin(rng)->space();
+      return std::ranges::begin(rng)->basis();
     case MemoryLayout::Unspecified:
       return {};
   }
@@ -102,13 +102,12 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   }
 
   auto comparator = [this](const Index &lhs, const Index &rhs) {
-    return this->is_less(lhs.space(), rhs.space());
+    return this->is_less(lhs.basis(), rhs.basis());
   };
 
-  const IndexSpace max_bra_space = max_space_size_idx(tensor.bra());
-  const IndexSpace max_ket_space = max_space_size_idx(tensor.ket());
-  const bool bra_over_ket =
-      max_bra_space.approximate_size() >= max_ket_space.approximate_size();
+  const IndexBasis max_bra_basis = max_extent_basis(tensor.bra());
+  const IndexBasis max_ket_basis = max_extent_basis(tensor.ket());
+  const bool bra_over_ket = max_bra_basis.extent() >= max_ket_basis.extent();
 
   const PairComparator pair_comp(comparator, bra_over_ket);
 
@@ -130,12 +129,12 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
       !std::ranges::is_sorted(ranges::views::zip(tensor.bra(), tensor.ket()),
                               pair_comp);
 
-  IndexSpace relevant_bra = sort_bra || (sort_particles && bra_over_ket)
-                                ? max_space_size_idx(tensor.bra())
-                                : relevant_space(tensor.bra(), m_layout);
-  IndexSpace relevant_ket = sort_ket || (sort_particles && !bra_over_ket)
-                                ? max_space_size_idx(tensor.ket())
-                                : relevant_space(tensor.ket(), m_layout);
+  IndexBasis relevant_bra = sort_bra || (sort_particles && bra_over_ket)
+                                ? max_extent_basis(tensor.bra())
+                                : relevant_basis(tensor.bra(), m_layout);
+  IndexBasis relevant_ket = sort_ket || (sort_particles && !bra_over_ket)
+                                ? max_extent_basis(tensor.ket())
+                                : relevant_basis(tensor.ket(), m_layout);
 
   // Same as for antisymmetry: We can't deal with conjugation at the tensor
   // level
@@ -144,7 +143,7 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
                      needs_swap(relevant_bra, relevant_ket);
   bool prioritize_aux = !tensor.aux().empty() &&
                         needs_swap((swap_braket ? relevant_ket : relevant_bra),
-                                   relevant_space(tensor.aux(), m_layout));
+                                   relevant_basis(tensor.aux(), m_layout));
 
   if (!sort_bra && !sort_ket && !swap_braket && !prioritize_aux &&
       !sort_particles) {
@@ -158,7 +157,7 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
     indices.insert(end(indices), begin(tensor.aux()), end(tensor.aux()));
 
     // We only have to retain relative order of indices that belong to the same
-    // space
+    // basis
     std::ranges::stable_sort(indices, comparator);
   }
 
@@ -215,7 +214,7 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
     indices.insert(end(indices), begin(tensor.aux()), end(tensor.aux()));
 
     // We only have to retain relative order of indices that belong to the same
-    // space
+    // basis
     std::stable_sort(aux_begin, indices.end(), comparator);
   }
 
@@ -226,15 +225,15 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   return true;
 }
 
-bool ReorderingContext::is_less(const IndexSpace &lhs,
-                                const IndexSpace &rhs) const {
+bool ReorderingContext::is_less(const IndexBasis &lhs,
+                                const IndexBasis &rhs) const {
   switch (m_layout) {
     case MemoryLayout::RowMajor:
       // Fastest index is right-most in [abcd]
-      return lhs.approximate_size() < rhs.approximate_size();
+      return lhs.extent() < rhs.extent();
     case MemoryLayout::ColumnMajor:
       // Fastest index is left-most in [abcd]
-      return lhs.approximate_size() > rhs.approximate_size();
+      return lhs.extent() > rhs.extent();
     case MemoryLayout::Unspecified:
       return false;
   }
@@ -242,13 +241,13 @@ bool ReorderingContext::is_less(const IndexSpace &lhs,
   SEQUANT_UNREACHABLE;
 }
 
-bool ReorderingContext::is_ordered(const IndexSpace &lhs,
-                                   const IndexSpace &rhs) const {
-  return is_less(lhs, rhs) || lhs.approximate_size() == rhs.approximate_size();
+bool ReorderingContext::is_ordered(const IndexBasis &lhs,
+                                   const IndexBasis &rhs) const {
+  return is_less(lhs, rhs) || lhs.extent() == rhs.extent();
 }
 
-bool ReorderingContext::needs_swap(const IndexSpace &lhs,
-                                   const IndexSpace &rhs) const {
+bool ReorderingContext::needs_swap(const IndexBasis &lhs,
+                                   const IndexBasis &rhs) const {
   return lhs != rhs && !is_ordered(lhs, rhs);
 }
 

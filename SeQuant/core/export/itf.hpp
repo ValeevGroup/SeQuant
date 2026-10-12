@@ -163,7 +163,7 @@ class ItfGenerator : public Generator<Context> {
     if (tensor.num_indices() > 0) {
       name += ":";
       for (const Index &idx : tensor.const_indices()) {
-        name += ctx.get_tag(idx.space());
+        name += detail::block_tag(ctx.get_tag(idx.space()), idx);
       }
 
       if (name.back() == ':') {
@@ -421,7 +421,7 @@ class ItfGenerator : public Generator<Context> {
 
       SEQUANT_ASSERT(std::ranges::is_sorted(
           batchIndices, std::greater<>{},
-          [](const Index &idx) { return idx.space().approximate_size(); }));
+          [](const Index &idx) { return idx.basis().extent(); }));
 
       std::size_t num_shared = 0;
       for (std::size_t i = 0;

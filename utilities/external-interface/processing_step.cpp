@@ -31,6 +31,16 @@ std::string make_output_range_id(std::string_view step_id, std::size_t start,
          std::to_string(start + count - 1) + "]";
 }
 
+std::string make_group_alias(std::string_view step_id,
+                             std::string_view group_id) {
+  if (auto pos = group_id.find('.'); pos != std::string_view::npos) {
+    // Remove previous step ID
+    return std::string(step_id) + std::string(group_id.substr(pos));
+  }
+
+  return std::string(step_id) + "." + std::string(group_id);
+}
+
 void alias_individual_ids(ExecutionContext &ctx, std::string_view step_id,
                           const std::vector<std::string_view> &associated_ids,
                           std::string_view target_id) {

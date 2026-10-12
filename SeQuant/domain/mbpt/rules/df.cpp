@@ -27,7 +27,7 @@ ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx,
   // (rather than the default non-Hermitian) lets a real computation treat it as
   // bra<->ket symmetric, so e.g. (pq|X) C^p and (pq|X) C^q collapse to one
   // intermediate. The concrete BraKetSymmetry (Symm vs Conjugate) is derived
-  // from the bra/ket indices' IndexSpace::field() (see sequant::base_field)
+  // from the bra/ket indices' IndexBasis::field() (see sequant::base_field)
   // when the Tensor is built.
   auto t1 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}),
                        ket({ranges::front(tnsr.ket())}), aux({aux_idx}),

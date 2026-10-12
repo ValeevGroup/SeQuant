@@ -50,7 +50,7 @@ for every statistics; a canonicalizer registered by the user for those labels is
 workers of the per-summand ``WickTheorem`` instances see that scope.
 
 A candidate pair ``(left, right)`` contracts (``can_contract``) iff ``left`` is a quasiparticle annihilator, ``right`` is a quasiparticle
-creator, and their quasiparticle spaces intersect (``is_qpannihilator``/``is_qpcreator``/``IndexSpaceRegistry::intersection``, from
+creator, and their quasiparticle spaces intersect (``is_qpannihilator``/``is_qpcreator``/``IndexBasisRegistry::intersection``, from
 ``SeQuant/core/op.hpp``); under ``Vacuum::MultiProduct`` their actions must also differ (see :ref:`below <wick-extended>`). The
 contraction *value* (``contract``) depends on whether those quasiparticle spaces are pure hole/particle subspaces or not:
 
@@ -134,12 +134,14 @@ ordinal) and passed to that run with ``set_nop_partitions()``/``set_op_partition
 dispatching ``WickTheorem``'s ``stats()``. The terms of a Sum input are handled one after another, each with its own topology
 analysis, where the standard path contracts them in parallel. Each resulting term then
 
-- has its mixed-space ``γ``/``η`` and surviving operators split into pure pieces: a ``γ`` into a core :math:`\delta` plus an active
-  ``γ``, an ``η`` into a virtual :math:`\delta` plus an active ``η`` (a one-body ``γ`` or ``η`` of the input is split the same way,
-  whatever space its indices range over; the :math:`\delta` binds the bra to a core or virtual index in its basis, so between
-  two bases, e.g. cluster-specific virtuals of different pairs, it is followed by an overlap; as for an operator, an index
-  with protoindices must not reach the active part), a survivor onto its active part and, with partial contractions, its core and virtual parts. A part that is not a registered space is split over its base spaces. The pieces are reduced with the
-  operator indices kept fixed, so each projected index stays :math:`\delta`-bound to an input index and inherits its provenance;
+- has its mixed-space ``γ``/``η`` and surviving operators split into pure pieces: a ``γ`` into a core :math:`\delta` plus an
+  active ``γ``, an ``η`` into a virtual :math:`\delta` plus an active ``η`` (a one-body ``γ`` or ``η`` of the input is split the
+  same way, whatever space its indices range over; the :math:`\delta` binds the bra to a core or virtual index in its basis, so
+  between two bases, e.g. indices with different protoindices or in two basis instances, it is followed by an overlap; as
+  for an operator, an index with protoindices must not reach the active part), a survivor onto its active part and, with partial
+  contractions, its core and virtual parts. A part that is not a registered space is split over its base spaces. The pieces are
+  reduced with the operator indices kept fixed, so each projected index stays :math:`\delta`-bound to an input index and
+  inherits its provenance;
 - is handed to ``detail::cumulant_expand``, which groups the surviving *active* operators into disjoint blocks of :math:`k`
   creators and :math:`k` annihilators, :math:`2 \le k \le` ``WickTheorem::max_cumulant_rank``, with legs from at least two
   input operators. Each block is valued :math:`\kappa_k` (``detail::block_value``), the term takes the parity of the permutation that
@@ -149,16 +151,18 @@ analysis, where the standard path contracts them in parallel. Each resulting ter
   :math:`\delta` or overlap) connects all the input operators its indices came from, any other tensor (e.g. a coefficient) none.
 
 Finally every one-body ``η`` is optionally rewritten as :math:`\delta - \gamma` (``WickTheorem::eta_as_delta_minus_gamma``; a
-multi-body ``η`` of the input is kept), the
+multi-body ``η`` of the input is kept, and the :math:`\delta` is an overlap unless that is a Kronecker delta: between indices
+with different protoindices, in different basis instances or in a non-orthonormal basis, see
+:func:`sequant::is_kronecker_equivalent`), the
 :math:`\delta`\ s over summed indices are applied, and the result is simplified. In it ``γ{ann;cre}`` and ``η{ann;cre}`` are
 one-body, Hermitian and column-symmetric, ``κ{ann…;cre…}`` is of rank :math:`\ge 2`, antisymmetric, Hermitian and
 column-symmetric, and all their indices are active. These symmetries take part in the tensor hash, so a density spelled
 differently would not merge with the engine's; hence ``γ``, ``η``, ``κ`` and the spin-free ``Γ`` are reserved labels
-(``reserved::density_labels()``): a ``Tensor`` carrying one must have the symmetries ``density::symmetries()`` gives for its
-label and rank, or its constructor (and ``set_label``) throws, and the parser supplies them; the permutational symmetry of a
-one-body density is void, so any spelled-out one is accepted and normalized away. The one alternative is a perm-nonsymmetric
-multi-body ``γ``, ``η`` or ``κ``, a spin component such as spin tracing produces. The factories in
-``SeQuant/core/density.hpp`` build densities with them.
+(``reserved::density_labels()``): a ``Tensor`` carrying one must have the symmetries ``density::symmetries()`` gives for its label
+and rank, or its constructor (and ``set_label``) throws, and the parser supplies them; the permutational symmetry of a one-body
+density is void, so any spelled-out one is accepted and normalized away. The one alternative is a perm-nonsymmetric multi-body
+``γ``, ``η`` or ``κ``, a spin component such as spin tracing produces. The factories in ``SeQuant/core/density.hpp`` build
+densities with them.
 
 The no-double-counting rule is that a block is only ever built from operators that survive the standard theorem: each extended term
 descends from exactly one partial-contraction term (the one carrying its pair contractions), so no :math:`1/k!` weights are needed.
@@ -181,16 +185,26 @@ Raw contraction output can contain chains of Kronecker deltas and overlaps intro
 and eliminating deltas wherever the internal/external status of the indices they bind allows it. An overlap is applied only if one of
 its indices is *covariant*, a dummy that appears exactly twice and neither has nor is a protoindex, since such an index can be rotated
 into the basis of the other; between two noncovariant indices it stands. The exception is an overlap that is itself a Kronecker delta
-(unit metric, both indices with the same protoindices, i.e. in one basis): it identifies its indices, through the indices they are
-protoindices of as well, so it is applied unless both are unpaired dummies (not appearing exactly twice); unlike a Kronecker
-delta between them, which is applied, it then stands. These rules apply only if the input of Wick's theorem has noncovariant
-indices; otherwise every overlap is applied. The result is then, like any other
+(:func:`sequant::is_kronecker_equivalent`: both indices in one orthonormal basis, i.e. with the same protoindices, not in two
+different basis instances and neither in a basis of general metric): it identifies
+its indices, through the indices they are protoindices of as well, so it is applied unless both are unpaired dummies (not
+appearing exactly twice); unlike a Kronecker delta between them, which is applied, it then stands. These rules apply only if the
+input of Wick's theorem has noncovariant indices; otherwise every overlap is applied. The result is then, like any other
 :class:`sequant::Product`/:class:`sequant::Sum`, put into canonical form by :doc:`the tensor-network canonicalizer <tnc>` so that like
 terms collect correctly — Wick's-theorem correctness therefore also rests on canonicalization being correct.
+The reduction treats a basis instance (:class:`sequant::IndexBasis`) like a subspace: an index without one runs over the
+space's own basis, which includes every instance of the space, so a delta or overlap between a generic and a specific index
+replaces the generic one by the specific one, and a specific index is never replaced by a generic one. Two different
+instances are not related by an identity: an overlap between them (or between indices that the rules collected so far
+reduce to different instances) stands and yields no rule, and a Kronecker delta between them throws
+:class:`sequant::Exception`, since basis functions of different bases cannot be compared for equality; either is zero
+if the spaces of its indices (as narrowed by the rules collected so far) are disjoint, whatever the bases. When a basis
+instance is present the deltas are applied first, then the overlaps, and an overlap between two generic indices last,
+once every index that will be specific is, so the result does not depend on the order of the factors.
 
 Debugging and tests
 ------------------------
 
 ``Logger::instance().wick_harness``, ``.wick_contract``, and ``.wick_reduce`` (``SeQuant/core/logger.hpp``) trace, respectively, the
 top-level expand/canonicalize/recurse flow, individual contraction attempts, and the delta/overlap reduction step. The algorithm's test
-coverage lives in ``tests/unit/test_wick.cpp``.
+coverage lives in ``tests/unit/test_wick.cpp``, that of the basis-instance rules in ``tests/unit/test_basis_wick.cpp``.

@@ -192,8 +192,8 @@ TEST_CASE(
   CHECK(as_set(forest[0]->sliced_modes()).count(a_pno) == 0);
 }
 
-// Synthetic regression encoding the two ground-truth survey nodes
-// (.superpowers/sdd/lifetime-mask-ir-survey.md), modeled directly rather than
+// Synthetic regression encoding the two ground-truth survey nodes, modeled
+// directly rather than
 // reproducing the heavy [.][dryrun-occ-veto] C60 forest (whose exact canonical
 // hashes were captured at an ancestor commit and are fragile to reproduce).
 TEST_CASE("lifetime mask survey ground-truth semantics",
@@ -351,7 +351,7 @@ TEST_CASE(
   CHECK(as_set(forest[2]->sliced_modes()) == index_set({i, j}));
   CHECK(as_set(forest[3]->sliced_modes()) == index_set({i, j}));
 
-  // Phase 4b-1: stamp_lifetime_masks now uses the SAME all-batched-modes
+  // stamp_lifetime_masks uses the SAME all-batched-modes
   // selector (the External-only filter is deleted), so it keeps the Contracted
   // mode(s) too -- sliced_modes() matches sliced_modes() node-for-node. This
   // is the runtime residency place_at_this_level consumes: a Contracted-mode
@@ -396,8 +396,10 @@ TEST_CASE("home_scope is the per-occurrence home, not the sliced_modes meet",
   // DIFFERENT quantity from EvalExpr::sliced_modes (the meet that
   // eval::stamp_lifetime_masks stamps, read by the forest-descent route only);
   // value identity now tells two differently-sliced occurrences of one node
-  // apart via value_key rather than by folding them to a common home (as-built
-  // design section 5.4). This case pins BOTH halves: the accessor identity and
+  // apart via value_key rather than by folding them to a common home (see
+  // "Loop identity and value identity" in
+  // doc/developer/batched_evaluation.rst). This case pins BOTH halves: the
+  // accessor identity and
   // the deliberate divergence from the meet.
   Index const i{L"i_1"}, j{L"i_2"};
 

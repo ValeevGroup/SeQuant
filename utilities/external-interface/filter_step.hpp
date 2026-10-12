@@ -5,6 +5,7 @@
 #include "processing_step.hpp"
 
 #include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/utility/expr_matcher.hpp>
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -38,6 +39,18 @@ class ExpressionFilter {
   bool require_all_ = true;
   std::vector<std::unique_ptr<Rule>> rules_;
 };
+
+/// Parses a "contains" rule matching @p spec's "expr" (a serialized
+/// expression). @p default_cmp is used if @p spec has no
+/// "tensor_equality_mode".
+std::unique_ptr<ExpressionFilter::Rule> parse_contains_expr(
+    const nlohmann::json &spec,
+    TensorComparison default_cmp = TensorComparison::Identity);
+
+/// Parses a "contains" rule matching @p spec's "label" (one or several
+/// full-match regular expressions).
+std::unique_ptr<ExpressionFilter::Rule> parse_contains_label(
+    const nlohmann::json &spec);
 
 class FilterStep : public ProcessingStep {
  public:

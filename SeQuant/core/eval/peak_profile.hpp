@@ -26,7 +26,7 @@ namespace sequant::eval {
 
 ///
 /// \brief Static peak-profile analysis over an eval forest (see
-/// `doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md`, section 5).
+/// `doc/developer/batched_evaluation.rst`, "Loop identity and value identity").
 ///
 /// Two sizing primitives (`detail::home_depth_of`, `detail::cell_footprint`),
 /// the forest linearization plus loop-identity pass (`compute_dag_boulevard`)
@@ -217,8 +217,8 @@ inline double peak_profile_replay(Schedule const& s) {
 ///
 /// These are what \c compute_dag_boulevard's conflict-aware union-find runs
 /// over: physical loops are connected components of occurrences, and a value's
-/// identity is derived from them (as-built design section 5.2, \c
-/// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md). Each record
+/// identity is derived from them ("Loop identity and value identity", \c
+/// doc/developer/batched_evaluation.rst). Each record
 /// carries its occurrence's physical binding of a relabeled mode plus its own
 /// \c carried / \c home / liveness / enclosing nest.
 ///
@@ -254,11 +254,11 @@ struct OccurrenceRec {
   /// RichSchedule::loop_kind once the loop slots are numbered.
   container::svector<std::pair<Index, BatchModeType>> opens;
   /// Loop identity: per \c carried position, the \c loop_slot of the
-  /// batch loop that slices it (which member of its same-space group), or -1
+  /// batch loop that slices it (which member of its same-key group), or -1
   /// where the position is not a batched (loop-sliced) mode. Assigned by the
   /// union-find over producer->consumer slot connectivity in \c
-  /// compute_dag_boulevard (as-built design section 5.2; this file's header
-  /// comment carries the path). Parallel to \c carried.
+  /// compute_dag_boulevard ("Loop identity and value identity"; this file's
+  /// header comment carries the path). Parallel to \c carried.
   container::svector<int> loop_slot;
   /// Loop identity for the modes this occurrence's value contracts (reduces)
   /// in batches at its own node: assigned either by uniting a producing
@@ -279,9 +279,9 @@ struct OccurrenceRec {
   /// when no operand of the contraction is itself home-sliced on it (an
   /// all-input reduction): the union-find below seeds a component for every
   /// entry here that \c classify_axis would actually call \c Reduction (no
-  /// carried index of the same space as the mode), instead of relying
+  /// carried index of the same basis key as the mode), instead of relying
   /// solely on a home-sliced child to create one; an entry beside a
-  /// same-space carried index is \c classify_axis LoopLocal/LoopCarried, not
+  /// same-key carried index is \c classify_axis LoopLocal/LoopCarried, not
   /// Reduction, and is left to the ordinary carried-position path.
   container::svector<Index> contracted_batched;
 };
@@ -305,7 +305,7 @@ struct ValueCell {
                          //!< to its forest nodes; batched-slot-blind.
   std::size_t key = 0;   //!< the value id (\c value_key: node id combined
                          //!< with the home-sliced canonical positions,
-                         //!< explicit-cells design section 11) -- the
+                         //!< "Loop identity and value identity") -- the
                          //!< identity that folds occurrences into this cell.
                          //!< 0 (a hand-built cell) means "== hash"; read it
                          //!< through \c value_key_of(ValueCell const&).
@@ -314,7 +314,7 @@ struct ValueCell {
                          //!< Cell::home_depth
   container::svector<Index> carried;     //!< canon_indices (same across
                                          //!< occurrences)
-  container::svector<Index> home_modes;  //!< the Phase-3b footprint home:
+  container::svector<Index> home_modes;  //!< the footprint home:
                                          //!< \c r.home minus
                                          //!< own_modes_union[hash], read off
                                          //!< the first occurrence
@@ -339,7 +339,8 @@ struct ValueCell {
                     //!< compute_dag_boulevard's conflict-aware union-find
                     //!< runs over these records to derive physical loop
                     //!< identity, and value identity is derived from that
-                    //!< (as-built design section 5.2).
+                    //!< (see "Loop identity and value identity" in
+                    //!< doc/developer/batched_evaluation.rst).
 };
 
 ///
@@ -361,17 +362,17 @@ struct RichSchedule {
   /// One entry per value, indexed by \c ValueCell::value_id.
   container::svector<ValueCell> cells;
   std::size_t num_points = 0;  //!< one past the last static point
-  /// The kind of every numbered loop instance, keyed by (space base_key,
-  /// loop_slot): Contracted when the open that created the instance
-  /// contracts the mode in batches at its node, External when it introduces
-  /// a carried mode's physical loop. A space may hold instances of both kinds
-  /// (an occupied pair contracted in batches beside an occupied external
-  /// pair), so the kind is a property of the instance, not of the space; the
-  /// ordered schedule builder reads a block's kind here.
+  /// The kind of every numbered loop instance, keyed by
+  /// (IndexBasis::base_key(), loop_slot): Contracted when the open that created
+  /// the instance contracts the mode in batches at its node, External when it
+  /// introduces a carried mode's physical loop. A basis key may hold instances
+  /// of both kinds (an occupied pair contracted in batches beside an occupied
+  /// external pair), so the kind is a property of the instance, not of the
+  /// key; the ordered schedule builder reads a block's kind here.
   std::map<std::pair<std::wstring, int>, BatchModeType> loop_kind;
   /// Loop nesting constraints read off the DP's realization: (outer, inner)
-  /// pairs of loop instances, each (space base_key, loop_slot), such that
-  /// some occurrence sits inside `outer` and `inner` is opened inside it
+  /// pairs of loop instances, each (IndexBasis::base_key(), loop_slot), such
+  /// that some occurrence sits inside `outer` and `inner` is opened inside it
   /// (a consecutive pair of its enclosing context, or its enclosing context
   /// and a loop it opens itself). The ordered schedule builder nests the
   /// realized chain to satisfy every pair (a contradiction is a builder
@@ -621,17 +622,18 @@ RichSchedule compute_dag_boulevard(R const& forest,
   }
 
   // ---------------------------------------------------------------------
-  // Loop identity first, over occurrences (explicit-cells design section
-  // 11): a loop instance is a connected component of
-  // (occurrence, position) nodes joined by producer->consumer edges within a
-  // tree and by conflict-aware folds across trees; value identity is defined
-  // after the components are numbered -- node id + (position, loop slot) of
-  // every home-sliced position + the operands' keys -- so one node sliced at
-  // one position by two different loops in two terms (the residual's two
-  // external loops, say) is two values, while occurrences one physical loop
-  // does slice fold into one. Numbering the loops first is what keeps those
-  // two loops apart: value ids keyed by hash alone would force both through
-  // the shared node and either collapse them or mis-stamp one family's slots.
+  // Loop identity first, over occurrences (see "Loop identity and value
+  // identity" in doc/developer/batched_evaluation.rst): a loop instance is a
+  // connected component of (occurrence, position) nodes joined by
+  // producer->consumer edges within a tree and by conflict-aware folds across
+  // trees; value identity is defined after the components are numbered -- node
+  // id + (position, loop slot) of every home-sliced position + the operands'
+  // keys -- so one node sliced at one position by two different loops in two
+  // terms (the residual's two external loops, say) is two values, while
+  // occurrences one physical loop does slice fold into one. Numbering the loops
+  // first is what keeps those two loops apart: value ids keyed by hash alone
+  // would force both through the shared node and either collapse them or
+  // mis-stamp one family's slots.
   // ---------------------------------------------------------------------
   std::size_t const nrec = recs.size();
   std::unordered_map<std::size_t, std::size_t> rec_of_point;
@@ -986,7 +988,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
     }
   }
 
-  // Number the components: one loop_slot per component, per space in
+  // Number the components: one loop_slot per component, per basis key in
   // first-seen order.
   std::unordered_map<std::size_t, int> root_slot;
   std::map<std::wstring, int> next_slot;
@@ -995,13 +997,13 @@ RichSchedule compute_dag_boulevard(R const& forest,
       if (!is_batched(recs[i], recs[i].carried[pV])) continue;
       std::size_t const root = find(encode(i, pV));
       if (root_slot.find(root) != root_slot.end()) continue;
-      std::wstring const sp{recs[i].carried[pV].space().base_key()};
+      std::wstring const sp{recs[i].carried[pV].basis().base_key()};
       root_slot.emplace(root, next_slot[sp]++);
     }
   for (auto const& [idx, m] : reduction_stamps) {
     std::size_t const root = find(reduction_node(idx, m));
     if (root_slot.find(root) != root_slot.end()) continue;
-    std::wstring const sp{m.space().base_key()};
+    std::wstring const sp{m.basis().base_key()};
     root_slot.emplace(root, next_slot[sp]++);
   }
 
@@ -1308,7 +1310,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
       if (!root) return std::nullopt;
       auto const rit = root_slot.find(*root);
       if (rit == root_slot.end()) return std::nullopt;
-      return std::make_pair(std::wstring{ix.space().base_key()}, rit->second);
+      return std::make_pair(std::wstring{ix.basis().base_key()}, rit->second);
     };
     for (ValueCell const& c : out.cells)
       for (OccurrenceRec const& occ : c.occurrences)

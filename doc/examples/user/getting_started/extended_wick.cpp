@@ -15,7 +15,7 @@ int main() {
   // a multireference vocabulary of index spaces: core (o, i), active (u),
   // virtual (a, g); the reference is a general state in the active space
   set_default_context(
-      Context({.index_space_registry_shared_ptr = mbpt::make_mr_spaces(),
+      Context({.index_basis_registry_shared_ptr = mbpt::make_mr_spaces(),
                .vacuum = Vacuum::MultiProduct}));
 
   // a product of two generalized-normal-ordered one-body operators

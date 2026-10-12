@@ -3,7 +3,7 @@
 // and signatures_consistent -- the criterion that decides whether a CSE-folded
 // value's occurrences may share one sliced materialization (consistent
 // signature) or must be SPLIT (a relabeled mode diverges). See
-// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md, section 5.
+// doc/developer/batched_evaluation.rst, "Loop identity and value identity".
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>

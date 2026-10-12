@@ -184,7 +184,6 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
   const auto begin = cbegin(str);
   const auto end = cend(str);
   /// TODO iterate over characters (graphemes)
-  std::optional<Char> next_ch;
   for (auto it = begin; it != end; ++it) {
     auto append = [&result, &str, &it, &begin](const auto& s) {
       if (result.empty()) result = str.substr(0, it - begin);
@@ -193,6 +192,7 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
     auto is_ascii = [](Char c) { return static_cast<unsigned int>(c) <= 0x7F; };
 
     const Char ch = *it;
+    std::optional<Char> next_ch;
     if (it + 1 != end) next_ch = *(it + 1);
     if (sizeof(Char) == 1 &&
         ((it == begin && !is_ascii(ch)) || (next_ch && !is_ascii(*next_ch)))) {
@@ -240,8 +240,9 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
     }
 
     if (!is_ascii(ch)) {  // check for combined characters
-      {                   // tilde
-                          // lower-case characters with tilde
+      bool replaced = false;
+      {  // tilde
+         // lower-case characters with tilde
         const container::map<str_t, str_t> lc = {
             {SQ_STRLIT(Char, "ã"), SQ_STRLIT(Char, "\\tilde{a}")},
             {SQ_STRLIT(Char, "ẽ"), SQ_STRLIT(Char, "\\tilde{e}")},
@@ -252,6 +253,7 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
         auto lc_it = lc.find(str_t{ch});
         if (lc_it != lc.end()) {
           append(lc_it->second);
+          replaced = true;
         } else {
           // upper-case characters with tilde
           const container::map<str_t, str_t> uc = {
@@ -264,6 +266,7 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
           auto uc_it = uc.find(str_t{ch});
           if (uc_it != uc.end()) {
             append(uc_it->second);
+            replaced = true;
           }
         }
       }  // tilde
@@ -277,6 +280,7 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
         auto lc_it = lc.find(str_t{ch});
         if (lc_it != lc.end()) {
           append(lc_it->second);
+          replaced = true;
         } else {
           // upper-case characters with circumflex
           const container::map<str_t, str_t> uc = {
@@ -288,9 +292,14 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
           auto uc_it = uc.find(str_t{ch});
           if (uc_it != uc.end()) {
             append(uc_it->second);
+            replaced = true;
           }
         }
       }  // circumflex/hat
+      // pass through other non-ASCII characters
+      if (!replaced && !result.empty()) result.push_back(ch);
+    } else {  // ASCII character
+      if (!result.empty()) result.push_back(ch);
     }
   }
 

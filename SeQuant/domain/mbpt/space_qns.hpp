@@ -48,21 +48,6 @@ struct mask<Spin> {
   static constexpr type value = static_cast<type>(Spin::any);
 };
 
-/// quantum numbers tags related to LCAO basis traits
-/// \note LCAO basis traits use 3rd and 4th rightmost bits
-enum class LCAOQNS : bitset_t {
-  ao = 0b000100,
-  pao = 0b001000  // projected AO space denotes unoccupied spaces made
-                  // from AO basis and orthogonal to occupied orbitals
-};
-
-template <>
-struct mask<LCAOQNS> {
-  using type = std::underlying_type_t<LCAOQNS>;
-  static constexpr type value =
-      static_cast<type>(LCAOQNS::ao) | static_cast<type>(LCAOQNS::pao);
-};
-
 /// quantum numbers tags related to tensor factorization basis traits
 /// \note TensorFactorization basis traits use 5th and 6th rightmost bits
 enum class TensorFactorizationQNS : bitset_t {

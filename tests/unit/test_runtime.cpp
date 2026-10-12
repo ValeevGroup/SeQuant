@@ -14,6 +14,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/scope.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -32,6 +33,7 @@
 #include <set>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 TEST_CASE("context", "[runtime]") {
@@ -45,12 +47,10 @@ TEST_CASE("context", "[runtime]") {
 
     // basic set_default_context test
     CHECK_NOTHROW(set_default_context(
-        {.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
+        {.index_basis_registry_shared_ptr = mbpt::make_sr_spaces(),
          .vacuum = Vacuum::SingleProduct,
-         .metric = IndexSpaceMetric::Unit,
          .spbasis = SPBasis::Spinfree}));
     CHECK(get_default_context().vacuum() == Vacuum::SingleProduct);
-    CHECK(get_default_context().metric() == IndexSpaceMetric::Unit);
     CHECK(get_default_context().spbasis() == SPBasis::Spinfree);
 
     // the version of the installed default context is the current version
@@ -63,14 +63,14 @@ TEST_CASE("context", "[runtime]") {
 
     // set distinct contexts for fermi and bose statistics
     auto [fermi_isr, bose_isr] = mbpt::make_fermi_and_bose_spaces();
-    CHECK(fermi_isr->spaces() ==
-          bose_isr->spaces());  // fermi_isr and bose_isr have the same spaces
+    CHECK(fermi_isr->bases() ==
+          bose_isr->bases());  // fermi_isr and bose_isr have the same spaces
     CHECK_NOTHROW(set_default_context(
         {{Statistics::FermiDirac,
-          Context({.index_space_registry_shared_ptr = fermi_isr,
+          Context({.index_basis_registry_shared_ptr = fermi_isr,
                    .vacuum = Vacuum::SingleProduct})},
          {Statistics::BoseEinstein,
-          Context({.index_space_registry_shared_ptr = bose_isr,
+          Context({.index_basis_registry_shared_ptr = bose_isr,
                    .vacuum = Vacuum::Physical})}}));
     CHECK(get_default_context(Statistics::Arbitrary).vacuum() ==
           Vacuum::SingleProduct);
@@ -82,7 +82,6 @@ TEST_CASE("context", "[runtime]") {
     // reset back to default
     CHECK_NOTHROW(reset_default_context());
     CHECK(get_default_context().vacuum() == Vacuum::Physical);
-    CHECK(get_default_context().metric() == IndexSpaceMetric::Unit);
     CHECK(get_default_context().spbasis() == SPBasis::Spinor);
 
     // reset back to initial context
@@ -95,9 +94,8 @@ TEST_CASE("context", "[runtime]") {
     {
       // if we do not save the resetter context is reset back immediately
       CHECK_NOTHROW(set_scoped_default_context(
-          {.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
+          {.index_basis_registry_shared_ptr = mbpt::make_sr_spaces(),
            .vacuum = Vacuum::SingleProduct,
-           .metric = IndexSpaceMetric::Unit,
            .spbasis = SPBasis::Spinfree}));
       CHECK(get_default_context() == initial_ctx);
 
@@ -114,7 +112,7 @@ TEST_CASE("context", "[runtime]") {
 
   SECTION("tensor canonicalizers") {
     const Context ctx(
-        {.index_space_registry_shared_ptr = mbpt::make_sr_spaces()});
+        {.index_basis_registry_shared_ptr = mbpt::make_sr_spaces()});
 
     // defaults
     REQUIRE(ctx.tensor_canonicalizer_ptr(L""));
@@ -144,7 +142,7 @@ TEST_CASE("context", "[runtime]") {
     }
 
     // two default-constructed states compare equal
-    const Context ctx2({.index_space_registry = *ctx.index_space_registry()});
+    const Context ctx2({.index_basis_registry = *ctx.index_basis_registry()});
     CHECK(ctx == ctx2);
 
     // setters act on a copy only
@@ -224,7 +222,7 @@ TEST_CASE("context", "[runtime]") {
 
     // named-parameter construction
     const Context ctx_opts(
-        {.index_space_registry = *ctx.index_space_registry(),
+        {.index_basis_registry = *ctx.index_basis_registry(),
          .tensor_canonicalizers =
              container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>{
                  {L"Q", null_canon}},
@@ -256,42 +254,63 @@ TEST_CASE("context", "[runtime]") {
                     Exception);
   }
 
-  SECTION("index space registry is owned") {
+  SECTION("deprecated index space registry spellings forward") {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    static_assert(std::is_same_v<IndexSpaceRegistry, IndexBasisRegistry>);
+    auto shared = mbpt::make_sr_spaces();
+    const Context from_shared({.index_space_registry_shared_ptr = shared,
+                               .vacuum = Vacuum::Physical});
+    REQUIRE(from_shared.index_space_registry());
+    CHECK(from_shared.index_space_registry() ==
+          from_shared.index_basis_registry());
+    CHECK(*from_shared.index_basis_registry() == *shared);
+    CHECK(from_shared.vacuum() == Vacuum::Physical);
+    const Context from_object(
+        {.index_space_registry = IndexBasisRegistry(*shared)});
+    REQUIRE(from_object.index_basis_registry());
+    CHECK(*from_object.index_basis_registry() == *shared);
+    auto scoped = set_scoped_default_context(from_shared);
+    CHECK(get_default_index_space_registry() ==
+          get_default_index_basis_registry());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+
+  SECTION("index basis registry is owned") {
     // a shared_ptr whose object has other owners is copied, so modifying the
     // object does not affect the context
     auto shared = mbpt::make_sr_spaces();
-    Context ctx({.index_space_registry_shared_ptr = shared});
-    CHECK(ctx.index_space_registry().get() != shared.get());
-    CHECK(*ctx.index_space_registry() == *shared);
+    Context ctx({.index_basis_registry_shared_ptr = shared});
+    CHECK(ctx.index_basis_registry().get() != shared.get());
+    CHECK(*ctx.index_basis_registry() == *shared);
     shared->add(L"q", 0b10000);
-    CHECK(!ctx.index_space_registry()->contains(L"q"));
+    CHECK(!ctx.index_basis_registry()->contains(L"q"));
     ctx.set(shared);
-    CHECK(ctx.index_space_registry().get() != shared.get());
-    CHECK(ctx.index_space_registry()->contains(L"q"));
+    CHECK(ctx.index_basis_registry().get() != shared.get());
+    CHECK(ctx.index_basis_registry()->contains(L"q"));
 
     // the only owner of its object is adopted, without a copy
     {
       auto unique = mbpt::make_sr_spaces();
       const auto* object = unique.get();
       const Context adopted(
-          {.index_space_registry_shared_ptr = std::move(unique)});
-      CHECK(adopted.index_space_registry().get() == object);
+          {.index_basis_registry_shared_ptr = std::move(unique)});
+      CHECK(adopted.index_basis_registry().get() == object);
       auto set_unique = mbpt::make_sr_spaces();
       const auto* set_object = set_unique.get();
       ctx.set(std::move(set_unique));
-      CHECK(ctx.index_space_registry().get() == set_object);
+      CHECK(ctx.index_basis_registry().get() == set_object);
     }
 
     // a registry given by value is moved in, keeping its storage
     {
-      IndexSpaceRegistry by_value = *mbpt::make_sr_spaces();
+      IndexBasisRegistry by_value = *mbpt::make_sr_spaces();
       const auto* storage = &*by_value.begin();
-      const Context from_value({.index_space_registry = std::move(by_value)});
-      CHECK(&*from_value.index_space_registry()->begin() == storage);
-      IndexSpaceRegistry set_value = *mbpt::make_sr_spaces();
+      const Context from_value({.index_basis_registry = std::move(by_value)});
+      CHECK(&*from_value.index_basis_registry()->begin() == storage);
+      IndexBasisRegistry set_value = *mbpt::make_sr_spaces();
       const auto* set_storage = &*set_value.begin();
       ctx.set(std::move(set_value));
-      CHECK(&*ctx.index_space_registry()->begin() == set_storage);
+      CHECK(&*ctx.index_basis_registry()->begin() == set_storage);
     }
 
     // the Options given to set_default_context() and
@@ -301,31 +320,31 @@ TEST_CASE("context", "[runtime]") {
       auto unique = mbpt::make_sr_spaces();
       const auto* object = unique.get();
       set_default_context(
-          {.index_space_registry_shared_ptr = std::move(unique)});
-      CHECK(get_default_context().index_space_registry().get() == object);
-      IndexSpaceRegistry by_value = *mbpt::make_sr_spaces();
+          {.index_basis_registry_shared_ptr = std::move(unique)});
+      CHECK(get_default_context().index_basis_registry().get() == object);
+      IndexBasisRegistry by_value = *mbpt::make_sr_spaces();
       const auto* storage = &*by_value.begin();
-      set_default_context({.index_space_registry = std::move(by_value)});
-      CHECK(&*get_default_context().index_space_registry()->begin() == storage);
+      set_default_context({.index_basis_registry = std::move(by_value)});
+      CHECK(&*get_default_context().index_basis_registry()->begin() == storage);
       set_default_context(initial_ctx);
 
       auto scoped_unique = mbpt::make_sr_spaces();
       const auto* scoped_object = scoped_unique.get();
       const auto resetter = set_scoped_default_context(
-          {.index_space_registry_shared_ptr = std::move(scoped_unique)});
-      CHECK(get_default_context().index_space_registry().get() ==
+          {.index_basis_registry_shared_ptr = std::move(scoped_unique)});
+      CHECK(get_default_context().index_basis_registry().get() ==
             scoped_object);
     }
 
     // copies of a context share its registry
     const Context copy(ctx);
-    CHECK(copy.index_space_registry() == ctx.index_space_registry());
+    CHECK(copy.index_basis_registry() == ctx.index_basis_registry());
 
     // to modify a context's registry, modify a copy and set it
-    IndexSpaceRegistry modified = *ctx.index_space_registry();
+    IndexBasisRegistry modified = *ctx.index_basis_registry();
     modified.add(L"q", 0b10000);
     ctx.set(std::move(modified));
-    CHECK(ctx.index_space_registry()->contains(L"q"));
+    CHECK(ctx.index_basis_registry()->contains(L"q"));
   }
 
   SECTION("version") {
@@ -342,7 +361,7 @@ TEST_CASE("context", "[runtime]") {
     Context assigned;
     assigned = ctx;
     CHECK(assigned.version() == v0);
-    const Context with_registry({.index_space_registry = IndexSpaceRegistry{}});
+    const Context with_registry({.index_basis_registry = IndexBasisRegistry{}});
     CHECK(with_registry.version() != v0);
     // contexts that share a registry, such as a copy with another vacuum, share
     // the version
@@ -351,20 +370,19 @@ TEST_CASE("context", "[runtime]") {
     CHECK(same_registry.version() == with_registry.version());
     // registries are compared by value, the version keys on the registry
     // object; a context need not have one
-    CHECK(Context({.index_space_registry = IndexSpaceRegistry{}}) ==
+    CHECK(Context({.index_basis_registry = IndexBasisRegistry{}}) ==
           with_registry);
-    CHECK(Context({.index_space_registry = IndexSpaceRegistry{}}).version() !=
+    CHECK(Context({.index_basis_registry = IndexBasisRegistry{}}).version() !=
           with_registry.version());
     {
-      IndexSpaceRegistry other;
+      IndexBasisRegistry other;
       other.add(L"q", 0b01);
-      CHECK(Context({.index_space_registry = other}) != with_registry);
+      CHECK(Context({.index_basis_registry = other}) != with_registry);
       // including the approximate sizes of their spaces
-      IndexSpaceRegistry resized = other;
-      resized.retrieve_ptr(L"q")->approximate_size(
-          other.retrieve(L"q").approximate_size() + 1);
-      CHECK(Context({.index_space_registry = std::move(resized)}) !=
-            Context({.index_space_registry = std::move(other)}));
+      IndexBasisRegistry resized = other;
+      resized.extent(L"q", other.retrieve(L"q").dimension() + 1);
+      CHECK(Context({.index_basis_registry = std::move(resized)}) !=
+            Context({.index_basis_registry = std::move(other)}));
     }
     CHECK(Context{} == Context{});
     CHECK(Context{} != with_registry);
@@ -385,23 +403,23 @@ TEST_CASE("context", "[runtime]") {
     // are constructed in one buffer, so the second has the address of the
     // first; a sole-owner shared_ptr is adopted rather than copied
     {
-      alignas(IndexSpaceRegistry) std::byte buffer[sizeof(IndexSpaceRegistry)];
+      alignas(IndexBasisRegistry) std::byte buffer[sizeof(IndexBasisRegistry)];
       auto registry_in_buffer = [&buffer] {
-        return std::shared_ptr<const IndexSpaceRegistry>(
-            new (buffer) IndexSpaceRegistry{},
-            [](const IndexSpaceRegistry* r) { r->~IndexSpaceRegistry(); });
+        return std::shared_ptr<const IndexBasisRegistry>(
+            new (buffer) IndexBasisRegistry{},
+            [](const IndexBasisRegistry* r) { r->~IndexBasisRegistry(); });
       };
       std::uint64_t dead_version = 0;
       {
         const Context dead(
-            {.index_space_registry_shared_ptr = registry_in_buffer()});
-        REQUIRE(static_cast<const void*>(dead.index_space_registry().get()) ==
+            {.index_basis_registry_shared_ptr = registry_in_buffer()});
+        REQUIRE(static_cast<const void*>(dead.index_basis_registry().get()) ==
                 static_cast<const void*>(buffer));
         dead_version = dead.version();
       }
       const Context reborn(
-          {.index_space_registry_shared_ptr = registry_in_buffer()});
-      REQUIRE(static_cast<const void*>(reborn.index_space_registry().get()) ==
+          {.index_basis_registry_shared_ptr = registry_in_buffer()});
+      REQUIRE(static_cast<const void*>(reborn.index_basis_registry().get()) ==
               static_cast<const void*>(buffer));
       CHECK(reborn.version() != dead_version);
     }
@@ -413,7 +431,9 @@ TEST_CASE("context", "[runtime]") {
       return ctx.version() != before;
     };
     CHECK(!changes([](Context& c) { c.set(Vacuum::SingleProduct); }));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     CHECK(!changes([](Context& c) { c.set(IndexSpaceMetric::General); }));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     CHECK(!changes([](Context& c) { c.set(AssertStrictBraKetSymmetry::No); }));
     CHECK(!changes([](Context& c) { c.set_first_dummy_index_ordinal(200); }));
     CHECK(!changes([](Context& c) { c.set(BraKetTypesetting::KetSub); }));
@@ -422,9 +442,9 @@ TEST_CASE("context", "[runtime]") {
     CHECK(!changes([](Context& c) { c.set(Hermiticity::Hermitian); }));
     CHECK(!changes([](Context& c) { c.set(ColumnSymmetry::Symm); }));
     CHECK(changes([](Context& c) { c.set(SPBasis::Spinfree); }));
-    CHECK(changes([](Context& c) { c.set(IndexSpaceRegistry{}); }));
+    CHECK(changes([](Context& c) { c.set(IndexBasisRegistry{}); }));
     CHECK(changes(
-        [](Context& c) { c.set(std::make_shared<IndexSpaceRegistry>()); }));
+        [](Context& c) { c.set(std::make_shared<IndexBasisRegistry>()); }));
     CHECK(changes([](Context& c) { c.set(CanonicalizeOptions{}); }));
     CHECK(changes([](Context& c) {
       c.set(CanonicalizeOptions::default_options().copy_and_set(

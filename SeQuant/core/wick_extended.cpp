@@ -6,10 +6,11 @@
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
-#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/wick.hpp>
 
@@ -22,7 +23,7 @@
 namespace sequant::detail {
 
 void assert_protoindexed_not_active(
-    [[maybe_unused]] const IndexSpaceRegistry &isr,
+    [[maybe_unused]] const IndexBasisRegistry &isr,
     [[maybe_unused]] const IndexSpace &sp, [[maybe_unused]] const Index &a,
     [[maybe_unused]] const Index &b) {
   SEQUANT_ASSERT(!(a.has_proto_indices() || b.has_proto_indices()) ||
@@ -46,20 +47,23 @@ IndexFactory fresh_index_factory(const Expr &expr) {
   });
 }
 
-/// @return a fresh index in @p sp in the basis of @p idx, i.e. with its
-/// protoindices
+/// @return a fresh index in @p sp in the basis of @p idx, i.e. with its basis
+/// instance and protoindices
 Index make_in_basis_of(IndexFactory &idxfac, const IndexSpace &sp,
                        const Index &idx) {
-  return idxfac.make(
-      Index(sp, idx.proto_indices(), idx.symmetric_proto_indices()));
+  return idxfac.make(Index(
+      default_registry_resolved(IndexBasis(sp, idx.basis().basis_instance())),
+      idx.proto_indices(), idx.symmetric_proto_indices()));
 }
 
 /// @return the identity between @p bra and @p ket: their Kronecker delta if
-/// their overlap is one, else their overlap
+/// their overlap is one (and @p metric, the context's, is unit), else their
+/// overlap
 ExprPtr make_identity(const Index &bra, const Index &ket,
                       IndexSpaceMetric metric) {
-  return is_kronecker_equivalent(bra, ket, metric) ? make_kronecker(bra, ket)
-                                                   : make_overlap(bra, ket);
+  return metric == IndexSpaceMetric::Unit && is_kronecker_equivalent(bra, ket)
+             ? make_kronecker(bra, ket)
+             : make_overlap(bra, ket);
 }
 
 /// the core (R minus U), active (R ∩ U) and virtual (U minus R) parts of
@@ -69,7 +73,7 @@ struct SpaceParts {
   IndexSpace::Type core, active, virt;
 };
 
-SpaceParts space_parts(const IndexSpaceRegistry &isr,
+SpaceParts space_parts(const IndexBasisRegistry &isr,
                        IndexSpace::QuantumNumbers qns) {
   const auto r = isr.reference_occupied_space(qns).type();
   const auto u = isr.vacuum_unoccupied_space(qns).type();
@@ -94,7 +98,7 @@ void for_each_block_assignment(const NormalOperator<S> &survivors,
   auto is_cre = [&](std::size_t i) {
     return survivors[i].action() == Action::Create;
   };
-  const auto &isr = *get_default_context(S).index_space_registry();
+  const auto &isr = *get_default_context(S).index_basis_registry();
   // only active ops can be cumulant legs
   auto is_active = [&](std::size_t i) {
     const auto &sp = survivors[i].index().space();
@@ -265,7 +269,7 @@ container::svector<ExprPtr> separate_shared_indices(Expr &term) {
 /// @return registered spaces that partition @p type: the space of that type
 /// if registered, else its base spaces
 container::svector<IndexSpace> registered_pieces(
-    const IndexSpaceRegistry &isr, IndexSpace::Type type,
+    const IndexBasisRegistry &isr, IndexSpace::Type type,
     IndexSpace::QuantumNumbers qns) {
   container::svector<IndexSpace> result;
   if (!type) return result;
@@ -284,13 +288,13 @@ using Alternatives = container::svector<container::svector<ExprPtr>>;
 /// @return the split of a 1-body γ (@p is_gamma) or η {@p bra; @p ket} into
 /// a δ over its core (γ) or virtual (η) part, in the basis of @p bra and so an
 /// overlap if @p ket is in another (e.g. a cluster-specific virtual of another
-/// pair), and a γ/η over its active part, or nullopt if both indices are
-/// already active; the virtual part of a γ and the core part of an η vanish,
-/// so the indices may range over any space (e.g. an input γ over the complete
-/// space)
+/// pair, or another basis instance), and a γ/η over its active part, or
+/// nullopt if both indices are already active; the virtual part of a γ and the
+/// core part of an η vanish, so the indices may range over any space (e.g. an
+/// input γ over the complete space)
 /// @pre if @p bra or @p ket carries protoindices, their common space does not
 ///      reach the active space (see assert_protoindexed_not_active())
-std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
+std::optional<Alternatives> split_density(const IndexBasisRegistry &isr,
                                           IndexSpaceMetric metric,
                                           IndexFactory &idxfac,
                                           const Index &bra, const Index &ket,
@@ -324,7 +328,7 @@ std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
 /// @p full, pure core or pure virtual; each is the projected NormalOperator
 /// preceded by the δs binding projected indices to the original ones
 template <Statistics S>
-Alternatives split_survivors(const IndexSpaceRegistry &isr,
+Alternatives split_survivors(const IndexBasisRegistry &isr,
                              IndexFactory &idxfac, const NormalOperator<S> &nop,
                              bool full) {
   // the projections so far: their ops and the δs they need
@@ -376,7 +380,7 @@ Alternatives split_survivors(const IndexSpaceRegistry &isr,
 /// @return the rewritten term as a list of Products
 template <Statistics S>
 container::svector<std::shared_ptr<Product>> split_mixed_spaces(
-    const ExprPtr &term, const IndexSpaceRegistry &isr, IndexSpaceMetric metric,
+    const ExprPtr &term, const IndexBasisRegistry &isr, IndexSpaceMetric metric,
     bool full) {
   const auto product =
       term->is<Product>()
@@ -497,17 +501,18 @@ ExprPtr apply_dummy_deltas(const ExprPtr &expr) {
   return result;
 }
 
-/// rewrites every 1-body η of @p expr, a Sum, as δ - γ; a multi-body η (an
-/// input tensor, since the theorem only produces 1-body ones) is kept
-void rewrite_eta(ExprPtr &expr) {
+/// rewrites every 1-body η of @p expr, a Sum, as the identity between its
+/// indices (see make_identity) minus γ; a multi-body η (an input tensor, since
+/// the theorem only produces 1-body ones) is kept
+void rewrite_eta(ExprPtr &expr, IndexSpaceMetric metric) {
   expr->visit(
-      [](ExprPtr &e) {
+      [metric](ExprPtr &e) {
         if (e->is<Tensor>() &&
             e->as<Tensor>().label() == density::hole_rdm_label() &&
             e->as<Tensor>().rank() == 1) {
           const auto &t = e->as<Tensor>();
           const Index &b = t.bra()[0], &k = t.ket()[0];
-          e = make_kronecker(b, k) - density::make_rdm(b, k);
+          e = make_identity(b, k, metric) - density::make_rdm(b, k);
         }
       },
       /*atoms_only=*/true);
@@ -582,7 +587,11 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
                       WickTheorem<S> &stats_sink) {
   const auto &ctx = get_default_context(S);
   SEQUANT_ASSERT(ctx.vacuum() == Vacuum::MultiProduct);
-  const auto &isr = *ctx.index_space_registry();
+  const auto &isr = *ctx.index_basis_registry();
+  // the deprecated context metric still makes every overlap stand
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  const auto metric = ctx.metric();
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
   // provenance is per input term
   auto per_term = [&](ExprPtr term) -> ExprPtr {
@@ -689,7 +698,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
           });
       for (const auto &p :
            split_mixed_spaces<S>(ex<Product>(ExprPtrList{prefactor, t}), isr,
-                                 ctx.metric(), opts.full_contractions)) {
+                                 metric, opts.full_contractions)) {
         ExprPtr reduced = p;
         WickTheorem<S> reducer{reduced};
         reducer.reduce(reduced);
@@ -723,7 +732,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
     result->append(per_term(input));
   }
   ExprPtr out = result;
-  if (opts.eta_as_delta_minus_gamma) rewrite_eta(out);
+  if (opts.eta_as_delta_minus_gamma) rewrite_eta(out, metric);
   out = apply_dummy_deltas<S>(out);
   simplify(out);
   if (out->is<Sum>() && out->as<Sum>().empty()) return ex<Constant>(0);

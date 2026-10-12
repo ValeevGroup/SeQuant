@@ -13,8 +13,8 @@ class Index;
 class Tensor;
 
 /// The two runtime execution models for batched evaluation (see
-/// `doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md`,
-/// sections 8 and 12.1):
+/// `doc/developer/batched_evaluation.rst`,
+/// "Two execution strategies"):
 ///   - \c forest_descent (default): one tree at a time,
 ///     `sequant::evaluate(Nodes const&, ...)`, unchanged.
 ///   - \c ordered: one fused, table-driven walk over the whole forest,
@@ -25,7 +25,7 @@ class Tensor;
 enum class BatchScheduler { forest_descent, ordered };
 
 /// One batchability policy shared by the single-term optimizer and the runtime
-/// batched evaluator (make_evaluator, Task A3). All predicates default empty.
+/// batched evaluator (make_evaluator). All predicates default empty.
 struct BatchPolicy {
   SEQUANT_DESIGNATED_INIT_ONLY;
   /// Spaces batchable in the contracted role: a mode of such a space is
@@ -115,9 +115,10 @@ struct BatchPolicy {
   /// loop unless `std::isfinite(peak_threshold)`, so the default +infinity
   /// means no batching at all.
   ///
-  /// - space-first (\c DenseSpaceTimeBatched): among the frontier points whose
-  ///   modeled byte peak is <= peak_threshold, minimize flops, ties broken by
-  ///   lower peak; fall back to global min-peak (best effort) when none fit.
+  /// - space-first (the deprecated \c DenseSpaceTimeBatched): among the
+  ///   frontier points whose modeled byte peak is <= peak_threshold, minimize
+  ///   flops, ties broken by lower peak; fall back to global min-peak (best
+  ///   effort) when none fit.
   ///
   /// - time-first (\c DenseTimeSpaceBatched): among the frontier points whose
   ///   modeled byte peak is <= peak_threshold, minimize flops, ties broken
@@ -127,8 +128,8 @@ struct BatchPolicy {
   ///   ties by min peak (accepting the overage).
   ///
   /// See \c PeakBatchedModel::select_root (\c optimize/cost_model.hpp) and
-  /// the as-built design, \c
-  /// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md section 4.4.
+  /// the user guide, \c doc/user/guide/batching.rst,
+  /// "Deciding what to batch".
   double peak_threshold = std::numeric_limits<double>::infinity();
 };
 

@@ -27,16 +27,16 @@ using BatchContext = container::svector<BatchContextEntry>;
 /// A batch loop's realized placement; see \c dag_scope.hpp.
 using DagScopeLevel = sequant::DagScopeLevel;
 
-/// Wiring \c CellRegistry needs from its owner (the ordered executor's
-/// Stage-3 storage move) but must not construct itself: the cross-call \c
-/// PersistentValueStore (a \c CacheManager member, one instance
-/// per top-level evaluation call, outliving any one \c CellRegistry), the map
-/// from a table value id to the canonical hash that the store and the
-/// \c CacheManager scope caches both key persistence on, and an optional
-/// metering hook. Every field defaults to "off": a \c CellRegistry built with
-/// a default-constructed \c CellRegistryHooks does no persistence or bytes
-/// tracking (persistent cells are never seeded or published, and
-/// \c live_bytes stays a bookkeeping-only counter nobody observes).
+/// Wiring \c CellRegistry needs from its owner (the ordered executor) but must
+/// not construct itself: the cross-call \c PersistentValueStore (a \c
+/// CacheManager member, one instance per top-level evaluation call, outliving
+/// any one \c CellRegistry), the map from a table value id to the canonical
+/// hash that the store and the \c CacheManager scope caches both key
+/// persistence on, and an optional metering hook. Every field defaults to
+/// "off": a \c CellRegistry built with a default-constructed \c
+/// CellRegistryHooks does no persistence or bytes tracking (persistent cells
+/// are never seeded or published, and \c live_bytes stays a bookkeeping-only
+/// counter nobody observes).
 struct CellRegistryHooks {
   /// Cross-call persistence store; \c seed_persistent reads it, \c set
   /// publishes to it. Null disables both.
@@ -57,11 +57,10 @@ struct CellRegistryHooks {
 };
 
 /// Runtime side of the cell table: the current result of each cell and its
-/// remaining life. This is the owner of those results (the
-/// explicit-value-cells design): it tracks the live byte total across held
-/// slots, enforces fill-once (a non-persistent cell produced twice without an
-/// intervening clear is a duplicate producer -- a bug, not a legitimate
-/// replay), and seeds/publishes persistent cells through a \c
+/// remaining life. This is the owner of those results: it tracks the live byte
+/// total across held slots, enforces fill-once (a non-persistent cell produced
+/// twice without an intervening clear is a duplicate producer -- a bug, not a
+/// legitimate replay), and seeds/publishes persistent cells through a \c
 /// PersistentValueStore so they survive across top-level evaluation calls
 /// without depending on the scope caches' own persistence. Bound cells
 /// are cleared at the start of every batch of a loop instance they are bound
@@ -502,19 +501,17 @@ class CellReadResolver {
   /// call \c record_leaf; the cursor entry is left unconsumed so the same
   /// Read is served -- and consumed -- by a later fetch once the leaf is
   /// recorded). Any other matched Read whose source has no current result
-  /// throws naming the consumer cell, the source cell and the value (spec
-  /// section 4: "missing entry or non-resident source: throw with both
-  /// ids") -- a well-formed table guarantees a Build cell's own source is
-  /// always resident when read (registry lookups go by residency, see \c
-  /// CellRegistry::cell_of, and persistent cross-call values are seeded into
-  /// the registry at entry, see \c run_ordered_schedule_pre_results), so
-  /// this is a genuine table/tree or recording gap, never deferred.
-  /// Otherwise the sliced source: each \c (pos, key) of the matched Read's
-  /// \c slice is applied as \c slice_mode(pos, range.first, range.second)
-  /// with \c range taken from the \p ctx entry whose \c level.key() equals
-  /// \c key. Throws when the consumer has no remaining Read of that value at
-  /// all (table/tree disagreement), or when a declared slice names a loop
-  /// instance absent from \p ctx.
+  /// throws naming the consumer cell, the source cell and the value -- a
+  /// well-formed table guarantees a Build cell's own source is always resident
+  /// when read (registry lookups go by residency, see \c CellRegistry::cell_of,
+  /// and persistent cross-call values are seeded into the registry at entry,
+  /// see \c run_ordered_schedule_pre_results), so this is a genuine table/tree
+  /// or recording gap, never deferred. Otherwise the sliced source: each \c
+  /// (pos, key) of the matched Read's \c slice is applied as \c slice_mode(pos,
+  /// range.first, range.second) with \c range taken from the \p ctx entry whose
+  /// \c level.key() equals \c key. Throws when the consumer has no remaining
+  /// Read of that value at all (table/tree disagreement), or when a declared
+  /// slice names a loop instance absent from \p ctx.
   [[nodiscard]] std::optional<ResultPtr> fetch(std::size_t operand_node_hash,
                                                BatchContext const& ctx) {
     auto const vid = vid_of_hash_(operand_node_hash);

@@ -123,16 +123,16 @@ bool ItfContext::rewrite(Tensor &tensor) const {
     container::svector<Index> ket = tensor.ket();
 
     for (std::size_t i = 0; i < 2; ++i) {
-      if (needs_swap(bra.at(i).space(), ket.at(i).space())) {
+      if (needs_swap(bra.at(i).basis(), ket.at(i).basis())) {
         std::swap(bra[i], ket[i]);
       }
     }
 
     bool swap_cols = false;
-    if (bra[0].space() != bra[1].space()) {
-      swap_cols = needs_swap(bra[0].space(), bra[1].space());
-    } else if (ket[0].space() != ket[1].space()) {
-      swap_cols = needs_swap(ket[0].space(), ket[1].space());
+    if (bra[0].basis() != bra[1].basis()) {
+      swap_cols = needs_swap(bra[0].basis(), bra[1].basis());
+    } else if (ket[0].basis() != ket[1].basis()) {
+      swap_cols = needs_swap(ket[0].basis(), ket[1].basis());
     }
 
     if (swap_cols) {
@@ -153,7 +153,7 @@ bool ItfContext::rewrite(Tensor &tensor) const {
     Index *p2_1 = nullptr;
     Index *p2_2 = nullptr;
     if (is_exceptional_J(bra, ket) ||
-        needs_swap(bra[1].space(), ket[0].space())) {
+        needs_swap(bra[1].basis(), ket[0].basis())) {
       label = L"J";
       std::swap(bra[1], ket[0]);
 
@@ -212,10 +212,10 @@ bool ItfContext::is_exceptional_J(std::span<Index> bra,
   // the first ket index are of the same space, the ket indices are of different
   // spaces and the additional ket space compares less than the space of the
   // bras.
-  bool bras_are_same = bra[0].space() == bra[1].space();
-  bool kets_are_different = ket[0].space() != ket[1].space();
-  bool kets_are_ordered = is_ordered(ket[0].space(), ket[1].space());
-  bool first_ket_same_as_bra = ket[0].space() == bra[0].space();
+  bool bras_are_same = bra[0].basis() == bra[1].basis();
+  bool kets_are_different = ket[0].basis() != ket[1].basis();
+  bool kets_are_ordered = is_ordered(ket[0].basis(), ket[1].basis());
+  bool first_ket_same_as_bra = ket[0].basis() == bra[0].basis();
 
   return bras_are_same && kets_are_different && kets_are_ordered &&
          first_ket_same_as_bra;
@@ -241,7 +241,7 @@ void ItfContext::set_batch_indices(std::span<const Index> indices,
   // ITF can parallelize over the first index so make sure this is as large
   // as possible
   std::ranges::stable_sort(it->second, std::greater<>{}, [](const Index &idx) {
-    return idx.space().approximate_size();
+    return idx.basis().extent();
   });
 }
 

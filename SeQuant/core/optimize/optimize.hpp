@@ -20,7 +20,7 @@ struct OptimizeResult {
 /// \param expr  Expression to be optimized.
 /// \param opts  Optimization parameters; see \c OptimizeOptions. By default:
 ///              the cost metric is flop count, index extents are taken from
-///              \c IndexSpace::approximate_size(), and the summands of a sum
+///              \c IndexBasis::extent(), and the summands of a sum
 ///              are reordered to cluster terms that share intermediates.
 /// \return Optimized expression.
 ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts = {});

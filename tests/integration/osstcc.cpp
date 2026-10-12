@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
   std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
 
   sequant::set_default_context(
-      {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
+      {.index_basis_registry_shared_ptr = mbpt::make_min_sr_spaces(),
        .vacuum = Vacuum::SingleProduct,
        .canonicalization_options =
            CanonicalizeOptions::default_options().copy_and_set(

@@ -469,10 +469,17 @@ TEST_CASE("tensor", "[elements]") {
     // symmetric protoindices are kept sorted, ordered ones as given
     const Index a1(L"a_1", {i2, i1}), a2(L"a_2", {i1, i2}, false),
         a3(L"a_3", {i2, i1}, false);
-    REQUIRE(is_kronecker_equivalent(a1, a2, IndexSpaceMetric::Unit));
-    REQUIRE(!is_kronecker_equivalent(a1, a3, IndexSpaceMetric::Unit));
-    REQUIRE(!is_kronecker_equivalent(a2, a3, IndexSpaceMetric::Unit));
-    REQUIRE(!is_kronecker_equivalent(a1, a2, IndexSpaceMetric::General));
+    REQUIRE(is_kronecker_equivalent(a1, a2));
+    REQUIRE(!is_kronecker_equivalent(a1, a3));
+    REQUIRE(!is_kronecker_equivalent(a2, a3));
+    // an index in a non-orthonormal basis overlaps, never identifies
+    const IndexBasis general{a1.space(), 1, L"ã", std::nullopt,
+                             IndexSpaceMetric::General};
+    const Index a1g(general, 1, {i2, i1}), a2g(general, 2, {i2, i1});
+    REQUIRE(!is_kronecker_equivalent(a1g, a2g));
+    REQUIRE(!is_kronecker_equivalent(a1, a1g));
+    REQUIRE(is_kronecker_equivalent(
+        a1, Index(IndexBasis{a1.space(), 1}, 1, {i2, i1})));
   }
 }
 

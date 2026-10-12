@@ -59,6 +59,11 @@ std::pair<std::shared_ptr<Sum>, std::shared_ptr<Sum>> screen_terms(
   }
   return {std::move(kept), std::move(kept_for_vev)};
 }
+
+/// P(@p np) whose legs carry the basis grants of @p amplitude
+ExprPtr amplitude_projector(nₚ np, std::wstring amplitude) {
+  return P(np, nₕ(np), {}, std::move(amplitude));
+}
 }  // namespace
 
 CC::CC(size_t n) : CC(n, Options{}) {}
@@ -161,7 +166,8 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
     const auto hbar = this->hbar();
     std::vector<ExprPtr> result(pmax + 1);
     for (std::int64_t p = pmax; p >= static_cast<std::int64_t>(pmin); --p) {
-      const auto projected = (p != 0) ? op::tensor::P(nₚ(p)) * hbar : hbar;
+      const auto projected =
+          (p != 0) ? op::tensor::P(nₚ(p), nₕ(p), {}, L"t") * hbar : hbar;
       result.at(p) = op::tensor::ref_av(projected);
     }
     return result;
@@ -196,8 +202,9 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
     }
 
     // 2.b project onto <p| (i.e., multiply by P(p) if p>0) and compute VEV
-    result.at(p) = this->ref_av(p != 0 ? P(nₚ(p)) * hbar_for_vev : hbar_for_vev,
-                                connectivity);
+    result.at(p) = this->ref_av(
+        p != 0 ? amplitude_projector(nₚ(p), L"t") * hbar_for_vev : hbar_for_vev,
+        connectivity);
   }
 
   return result;
@@ -257,7 +264,8 @@ std::vector<ExprPtr> CC::λ() const {
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
     // compute VEV
-    result.at(p) = this->ref_av(lhbar_for_vev * P(nₚ(-p)), op_connect);
+    result.at(p) = this->ref_av(
+        lhbar_for_vev * amplitude_projector(nₚ(-p), L"λ"), op_connect);
   }
   return result;
 }
@@ -357,12 +365,14 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
                {{L"h", L"t¹"}, {L"f", L"t¹"}, {L"g", L"t¹"}, {L"h¹", L"t"}});
   }
 
+  const auto t_pert = detail::decorate_with_pert_order(L"t", order);
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    const auto freq_term =
-        L"ω" * P(nₚ(p)) * op::tʼ(p, {.order = order, .nbatch = nbatch});
+    const auto freq_term = L"ω" * amplitude_projector(nₚ(p), t_pert) *
+                           op::tʼ(p, {.order = order, .nbatch = nbatch});
     result.at(p) =
-        this->ref_av(P(nₚ(p)) * expr, op_connect) - this->ref_av(freq_term, {});
+        this->ref_av(amplitude_projector(nₚ(p), t_pert) * expr, op_connect) -
+        this->ref_av(freq_term, {});
   }
   return result;
 }
@@ -421,12 +431,15 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
                                                             {L"h¹", asymm},
                                                             {L"h¹", symm}});
 
+  const auto λ_pert = detail::decorate_with_pert_order(L"λ", order);
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    const auto freq_term =
-        L"ω" * op::λʼ(p, {.order = order, .nbatch = nbatch}) * P(nₚ(-p));
-    result.at(p) = this->ref_av(expr * P(nₚ(-p)), op_connect) +
-                   this->ref_av(freq_term, {});
+    const auto freq_term = L"ω" *
+                           op::λʼ(p, {.order = order, .nbatch = nbatch}) *
+                           amplitude_projector(nₚ(-p), λ_pert);
+    result.at(p) =
+        this->ref_av(expr * amplitude_projector(nₚ(-p), λ_pert), op_connect) +
+        this->ref_av(freq_term, {});
   }
   return result;
 }
@@ -489,7 +502,8 @@ std::vector<ExprPtr> CC::eom_r_ucc(
           bernoulli::detail::R_part(it->second, N, skip_singles() ? 2 : 1);
   }
   auto bra_of = [tensor_level](std::int64_t p, std::int64_t h) {
-    return tensor_level ? op::tensor::δl(nₚ(p), nₕ(h)) : op::δl(nₚ(p), nₕ(h));
+    return tensor_level ? op::tensor::δl(nₚ(p), nₕ(h), L"R")
+                        : op::δl(nₚ(p), nₕ(h), L"R");
   };
   auto ket_of = [tensor_level](std::int64_t p, std::int64_t h) {
     return tensor_level ? op::tensor::r(nₚ(p), nₕ(h), eom_norm)
@@ -544,7 +558,8 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
   using std::min;
   std::vector<ExprPtr> result(min(np, nh) + 1);
   for (const auto& [rp, rh] : eom_manifolds(np, nh))
-    result.at(min(rp, rh)) = ref_av(δl(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
+    result.at(min(rp, rh)) =
+        ref_av(δl(nₚ(rp), nₕ(rh), L"R") * hbar_R, op_connect);
 
   return result;
 }
@@ -580,7 +595,7 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
   // right project with |rp,rh> (i.e., multiply δr(rp, rh)) and compute VEV
   for (const auto& [rp, rh] : eom_manifolds(np, nh))
     result.at(min(rp, rh)) =
-        this->ref_av(L_hbar * δr(nₚ(rp), nₕ(rh)), op_connect);
+        this->ref_av(L_hbar * δr(nₚ(rp), nₕ(rh), L"L"), op_connect);
 
   return result;
 }

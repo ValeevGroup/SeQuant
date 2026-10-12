@@ -97,7 +97,7 @@ PYBIND11_MODULE(_sequant, m) {
   .def_property_static(                                                       \
       #TYPE,                                                                  \
       [](py::object /* self */) {                                             \
-        return get_default_context().index_space_registry()->retrieve(LABEL); \
+        return get_default_context().index_basis_registry()->retrieve(LABEL); \
       },                                                                      \
       [](py::object /* self */) {})
 

@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
   set_num_threads(1);
   set_locale();
   auto idxreg = mbpt::make_sr_spaces();
-  Context fermi_ctx = Context({.index_space_registry_shared_ptr = idxreg,
+  Context fermi_ctx = Context({.index_basis_registry_shared_ptr = idxreg,
                                .vacuum = Vacuum::SingleProduct});
   set_default_context(fermi_ctx);
 
@@ -22,7 +22,7 @@ int main(int argc, char *argv[]) {
   mbpt::set_default_mbpt_context(std::move(mbpt_ctx));
 
   Context bose_einstein_ctx = Context(
-      {.index_space_registry_shared_ptr = idxreg, .vacuum = Vacuum::Physical});
+      {.index_basis_registry_shared_ptr = idxreg, .vacuum = Vacuum::Physical});
 
   set_default_context(bose_einstein_ctx, Statistics::BoseEinstein);
 

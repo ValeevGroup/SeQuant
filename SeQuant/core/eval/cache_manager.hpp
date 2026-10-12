@@ -1746,7 +1746,7 @@ auto cache_manager(meta::eval_node_range auto const& nodes,
   using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
-  // Phase 1: Scan with pointer-based map (low memory)
+  // Scan with pointer-based map (low memory)
   std::unordered_map<const TreeNode*, size_t, Hasher, Comp> imed_counts;
 
   auto imed_visitor = [&imed_counts](auto&& n) -> bool {
@@ -1762,7 +1762,7 @@ auto cache_manager(meta::eval_node_range auto const& nodes,
     tree.visit_internal(imed_visitor);
   });
 
-  // Phase 2: Copy repeated entries (node by value)
+  // Copy repeated entries (node by value)
   std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
   for (auto&& [ptr, count] : imed_counts) {
     if (count >= min_repeats) filtered.emplace(*ptr, count);

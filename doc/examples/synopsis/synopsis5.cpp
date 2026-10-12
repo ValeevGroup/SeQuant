@@ -10,7 +10,7 @@
 
 void test0() {
   using namespace sequant;
-  IndexSpaceRegistry isr;
+  IndexBasisRegistry isr;
 
   // base spaces
   isr.add(L"i", 0b01).add(L"a", 0b10);
@@ -24,7 +24,7 @@ void test0() {
 
   // to use the vocabulary defined by isr use it to make a Context object and
   // make it the default
-  set_default_context({.index_space_registry = std::move(isr)});
+  set_default_context({.index_basis_registry = std::move(isr)});
 
   // now can use space labels to construct Index objects representing said
   // spaces
@@ -39,7 +39,7 @@ void test0() {
 
 void test1() {
   using namespace sequant;
-  IndexSpaceRegistry isr;
+  IndexBasisRegistry isr;
 
   isr.add(L"x", 0b001)
       .add(L"y", 0b010)
@@ -52,7 +52,7 @@ void test1() {
   SEQUANT_ASSERT(isr.intersection(L"xyz", L"y") == isr.retrieve(L"y"));
 
   // use the registry in global context to streamline composition
-  set_default_context({.index_space_registry = std::move(isr)});
+  set_default_context({.index_basis_registry = std::move(isr)});
   Index xy1(L"xy_1");  // now can use space labels to define indices
 }
 
@@ -61,7 +61,7 @@ void test2() {
   using namespace sequant::mbpt;
   // makes 2 base spaces, i and a, and their union
   auto isr = make_min_sr_spaces();
-  set_default_context({.index_space_registry_shared_ptr = isr});
+  set_default_context({.index_basis_registry_shared_ptr = isr});
 
   // set theoretic operations on spaces
   auto i1 = Index(L"i_1");

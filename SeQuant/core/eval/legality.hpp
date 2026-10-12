@@ -24,10 +24,9 @@
 namespace sequant::eval {
 
 ///
-/// \brief Legality analysis output types of the ordered-scope batched-eval
-/// design: per-value classification of which batch-loop axes a value's
-/// computation depends on, and whether it is legal to home the value at each
-/// such axis.
+/// \brief Legality analysis output types of the ordered scheduler: per-value
+/// classification of which batch-loop axes a value's computation depends on,
+/// and whether it is legal to home the value at each such axis.
 ///
 
 ///
@@ -87,7 +86,7 @@ struct CellLegality {
 
   /// Loops that must re-enter (the value cannot be homed above them without
   /// a re-materializing split). Entries are per-\c
-  /// Index-instance, not per-space-type -- an outer product like \c
+  /// Index-instance, not per-basis-key -- an outer product like \c
   /// A{;i_3}*A{;i_4} lists both i_3 and i_4 (both LoopCarried on space i),
   /// yet they name a single occ loop to split. Consumers that want the
   /// distinct loops (axes) to split, not the raw per-instance list, should
@@ -105,24 +104,24 @@ struct LegalitySchedule {
 };
 
 ///
-/// \brief Group \p cell's \c forced_split_axes by axis space type (\c
-/// base_key()), collapsing multiple same-type \c Index instances into the
-/// single loop (axis) they jointly force to split.
+/// \brief Group \p cell's \c forced_split_axes by axis type (\c
+/// IndexBasis::base_key()), collapsing multiple same-type \c Index instances
+/// into the single loop (axis) they jointly force to split.
 ///
 /// \details \c forced_split_axes is recorded per \c Index instance (see its
 /// field doc): an outer product like \c A{;i_3}*A{;i_4} lists both \c i_3 and
 /// \c i_4, both \c LoopCarried on the occ space, but they name only one occ
 /// loop that must re-enter. This returns one representative \c Index per
-/// distinct \c base_key(), in \c forced_split_axes's discovery order, so a
-/// consumer that needs "which loops must split" (not "which indices are
-/// carried") gets a de-duplicated-by-type answer.
+/// distinct \c IndexBasis::base_key(), in \c forced_split_axes's discovery
+/// order, so a consumer that needs "which loops must split" (not "which indices
+/// are carried") gets a de-duplicated-by-type answer.
 ///
 [[nodiscard]] inline container::svector<Index> forced_split_types(
     CellLegality const& cell) {
   container::svector<Index> out;
   for (Index const& ix : cell.forced_split_axes) {
     auto const same_type = [&](Index const& o) {
-      return o.space().base_key() == ix.space().base_key();
+      return o.basis().base_key() == ix.basis().base_key();
     };
     if (std::find_if(out.begin(), out.end(), same_type) == out.end())
       out.push_back(ix);
@@ -145,7 +144,7 @@ struct LegalitySchedule {
 ///   - \p node's own \c contracted_indices(node) (see eval_expr.hpp;
 ///     empty for a leaf or a non-product node),
 /// filtered to the batchable subset. The result is de-duplicated by \c Index
-/// identity (space + ordinal + proto-indices); order follows first
+/// identity (basis + ordinal + proto-indices); order follows first
 /// discovery (carried indices, then contracted indices).
 ///
 [[nodiscard]] inline container::svector<Index> build_site_of(
@@ -192,19 +191,19 @@ struct LegalitySchedule {
 /// every use-site \p occurrences of the value in the forest.
 ///
 /// \details The four-way decision tree:
-///   - Q1: does \p carried hold an index of \p axis's \c IndexSpace (compared
-///     by \c base_key(), i.e. Type not identity)?
+///   - Q1: does \p carried hold an index of \p axis's type (compared by
+///     \c IndexBasis::base_key(), i.e. Type not identity)?
 ///     - no  -> Q2a: does \p contracted_below hold an index of that type
 ///       (the value reduces the axis at its own node)? -> \c Reduction;
 ///       otherwise the axis merely encloses the value without touching it
 ///       -> \c LoopInvariant.
 ///     - yes -> Q2b: for every occurrence that has an enclosing loop of that
 ///       axis type in its \c OccurrenceRec::ectx, gather all same-type
-///       enclosing loops (there may be several nested loops of one space,
+///       enclosing loops (there may be several nested loops of one basis key,
 ///       each binding a distinct carried index) and check that every one of
 ///       the occurrence's own carried indices of that type is bound (via the
 ///       ordinal-and-proto-aware \c Index::operator==) to some enclosing
-///       loop. An occurrence may carry more than one same-space index -- e.g.
+///       loop. An occurrence may carry more than one same-key index -- e.g.
 ///       an outer product carrying two occ indices, each lockstep with its
 ///       own nested loop, or a lockstep slot beside a free one. Every
 ///       same-type carried slot lockstep with some enclosing loop, at every
@@ -217,7 +216,7 @@ struct LegalitySchedule {
 /// \param enclosing_slot (optional) the fusion loop_slot of the enclosing loop
 ///        with tree-frame label \p L at occurrence \p occ (the parent
 ///        occurrence's slot for L; -1 if unknown). Lockstep with an enclosing
-///        loop is then loop-instance-aware: a same-space enclosing loop of a
+///        loop is then loop-instance-aware: a same-key enclosing loop of a
 ///        different fusion instance is not this value's loop -- the value is
 ///        LoopCarried (an assembled escape of its own nest that the other nest
 ///        reads sliced), not LoopLocal. Label equality alone would conflate
@@ -231,9 +230,9 @@ struct LegalitySchedule {
     std::function<int(OccurrenceRec const&, Index const&)> const&
         enclosing_slot = {}) {
   auto const same_type = [&](Index const& ix) {
-    return ix.space().base_key() == axis.space().base_key();
+    return ix.basis().base_key() == axis.basis().base_key();
   };
-  // A carried same-space index is a batched loop mode (subject to the lockstep
+  // A carried same-key index is a batched loop mode (subject to the lockstep
   // test below) iff it is one of the value's sliced modes; otherwise it is a
   // free full "spectator" dimension (e.g. a retained occ index the DP did not
   // batch) that has no loop at all and must not make the axis LoopCarried --
@@ -245,12 +244,12 @@ struct LegalitySchedule {
                        [&](Index const& s) { return s == ix; });
   };
 
-  // The role is decided for this axis, by identity, not for its space: a
-  // value may carry one index of a space (loop-local on that instance) and
-  // contract another index of the same space in batches (a reduction over a
+  // The role is decided for this axis, by identity, not for its basis key: a
+  // value may carry one index of a basis key (loop-local on that instance) and
+  // contract another index of the same key in batches (a reduction over a
   // different instance) -- e.g. a residual-pair intermediate carrying the
   // external pair ij while reducing over a contracted pair kl, once the
-  // occupied space is batchable in both roles. Deciding by space conflated
+  // occupied space is batchable in both roles. Deciding by basis key conflated
   // the two: the carried branch won and the reduction was never recorded, so
   // the builder emitted a scatter escape at the contracted instance with no
   // sliced position to scatter ("scatters nothing: empty scatter map").
@@ -271,10 +270,10 @@ struct LegalitySchedule {
   bool found_enclosing = false;
   for (OccurrenceRec const& occ : occurrences) {
     // All same-type enclosing loops at this occurrence, not just the first:
-    // nested same-space loops each bind a distinct carried index of that
+    // nested same-key loops each bind a distinct carried index of that
     // type (i_1 under the outer loop, i_2 under the inner). Matching every
     // carried slot against only the first enclosing loop mis-flags a value
-    // that carries two same-space indices, each lockstep with its own nested
+    // that carries two same-key indices, each lockstep with its own nested
     // loop, as LoopCarried -- because the second carried index (i_2) never
     // equals the first loop's Index (i_1). Collect the whole same-type
     // enclosing set and let each carried slot lock to any member.
@@ -292,7 +291,7 @@ struct LegalitySchedule {
     // read) makes the whole occurrence -- and thus the axis -- LoopCarried.
     bool matched_any_same_type = false;
     // Loop-instance test at the set level: the fusion slots of the value's
-    // own same-space batched positions at this occurrence. An enclosing loop
+    // own same-key batched positions at this occurrence. An enclosing loop
     // whose instance is not among them is a loop this value is not sliced by
     // in any position -- a sibling nest (e.g. a 4-occupied intermediate
     // built in nest {s3,s4} and read from nest {s5,s6}) -- so the value must
@@ -389,11 +388,11 @@ struct LegalitySchedule {
 /// \par No fixpoint: a value read across a forced split is not demoted here
 /// A value \c LoopLocal on a forced-split axis \c L that is read by a
 /// later-pass reader is handled entirely by the sequencer (\c
-/// build_ordered_schedule's per-nest pass placement, rule 4), which
-/// materializes such a value across the pass boundary at schedule-build time
-/// -- "used across the split" is a property of the ordered pass structure the
-/// sequencer builds, not of the DAG this function sees, so classification here
-/// needs to react to it. \c analyze_legality is therefore a single
+/// build_ordered_schedule's per-nest pass placement, materialization rule),
+/// which materializes such a value across the pass boundary at schedule-build
+/// time -- "used across the split" is a property of the ordered pass structure
+/// the sequencer builds, not of the DAG this function sees, so classification
+/// here needs to react to it. \c analyze_legality is therefore a single
 /// deterministic round: one classification per cell, with no re-derivation
 /// loop.
 ///
@@ -516,7 +515,7 @@ template <meta::eval_node_range R>
       auto const& dp_stamps = (*it->second)->node_slice_mask();
       // Positional: the representative node's home is labeled in its tree's
       // frame, vc.carried in the first occurrence's; positions are canonical
-      // across occurrences (explicit-cells design section 11), labels are
+      // across occurrences ("Loop identity and value identity"), labels are
       // not.
       {
         auto const& rep_carried = (*it->second)->canon_indices();

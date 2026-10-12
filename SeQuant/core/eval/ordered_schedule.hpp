@@ -128,7 +128,7 @@ struct ScopeBlock {
 /// \brief One ordered step of a \c ScopeBlock: build a value at this scope,
 /// or enter a nested child loop block.
 ///
-/// \details The design brief's target shape is a bare alias, \c using Step =
+/// \details The natural shape is a bare alias, \c using Step =
 /// std::variant<BuildStep, ScopeBlock>. That is not directly expressible:
 /// \c ScopeBlock::steps must hold a sequence of \c Step (so a build
 /// interleaves with child blocks in one ordered list, per the class doc
@@ -154,7 +154,7 @@ struct ScopeBlock {
 /// ordered sequence of interleaved build/child-block steps the design
 /// requires, and preserves real \c std::variant semantics (\c
 /// std::holds_alternative / \c std::get_if / \c std::visit all work on \c
-/// Step::value) -- the only change from the brief's literal shape is the one
+/// Step::value) -- the only change from a bare alias is the one
 /// extra wrapping layer forced by the forward-declaration ordering.
 ///
 struct Step {
@@ -198,7 +198,7 @@ namespace detail {
 ///
 /// \brief \c well_formed's recursive worker: checks \p block's own steps and
 /// outputs, recurses into every child \c ScopeBlock step, and checks ordinal
-/// uniqueness among \p block's own same-axis (\c IndexSpace::base_key())
+/// uniqueness among \p block's own same-axis (\c IndexBasis::base_key())
 /// sibling child blocks.
 ///
 inline bool ordered_schedule_block_well_formed(ScopeBlock const& block,
@@ -222,12 +222,12 @@ inline bool ordered_schedule_block_well_formed(ScopeBlock const& block,
       if (!cj) continue;
       // Two sibling blocks are the same realized loop only when their full
       // loop identity collides: (depth, loop_slot) and the latitude (pass
-      // index). Keying on the axis space (a fusion color, not identity) would
-      // wrongly reject two distinct same-space sibling loops that the un-fuse
-      // legitimately emits at different (depth, loop_slot): two occupied
-      // (space "i") nests at (1,0) and (2,1), same latitude 0, are different
-      // loops, not a duplicate. (See LoopKey -- whose identity is the
-      // (depth, loop_slot) pair -- and the same space-vs-identity correction
+      // index). Keying on the axis basis key (a fusion color, not identity)
+      // would wrongly reject two distinct same-key sibling loops that the
+      // un-fuse legitimately emits at different (depth, loop_slot): two
+      // occupied (key "i") nests at (1,0) and (2,1), same latitude 0, are
+      // different loops, not a duplicate. (See LoopKey -- whose identity is the
+      // (depth, loop_slot) pair -- and the same key-vs-identity correction
       // in the home-scope coloring.)
       if (ci->level.depth == cj->level.depth &&
           ci->level.loop_slot == cj->level.loop_slot &&
@@ -312,7 +312,7 @@ inline void collect_productions(ScopeBlock const& block,
 ///
 /// \brief Structural sanity check on \p sched (no sequencer logic):
 ///   - every \c BuildStep::value_id is < \c sched.num_values;
-///   - ordinals are unique among same-axis (\c IndexSpace::base_key())
+///   - ordinals are unique among same-axis (\c IndexBasis::base_key())
 ///     sibling blocks within a parent;
 ///   - every \c ScopeBlock::outputs value_id is < \c sched.num_values;
 ///   - single-producer (SSA-like), with the multi-level escape chain allowed:
@@ -565,22 +565,22 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 }
 
 ///
-/// \brief Pass levels, global over every batched space (design section 9.2):
-/// every value gets an integer pass such that a value that
-/// needs another value's completed form sits in a later pass than that
-/// other value.
+/// \brief Pass levels, global over every batched basis key: every value gets
+/// an integer pass such that a value that needs another value's completed
+/// form sits in a later pass than that other value.
 ///
 /// Two kinds of dependency edge bump the reader's pass, both keyed on the
-/// operand (the "source") rather than the axis space:
-///   - the source is \c LoopCarried on some axis (any space): its full array
-///     exists only after its own loop closes, so every direct reader is
-///     bumped;
+/// operand (the "source") rather than the axis basis key:
+///   - the source is \c LoopCarried on some axis (any basis key): its
+///     full array exists only after its own loop closes, so every direct
+///     reader is bumped;
 ///   - the source is a \c Reduction on some instance (an \c AccumulateSum
 ///     escape) and the reader is produced inside that same instance (its
 ///     production site is at or below the reduction's depth, in the same
 ///     nest): such a reader would otherwise see the current batch's partial
-///     sum rather than the completed reduction (the finding pinned by the
-///     9.1 partial-sum check). A reader produced outside the reduced
+///     sum rather than the completed reduction (pinned by the
+///     "a reduction source read inside its own loop by a later pass gets two
+///     pass blocks" test). A reader produced outside the reduced
 ///     instance reads the completed sum from the escape's residency scope
 ///     as always and needs no bump. \p inside(reader_vid, source_vid)
 ///     decides this per (reader, source) pair -- the caller's lambda
@@ -598,14 +598,15 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 /// least one consumer is lifted to max(base, min over its direct consumers'
 /// passes), so a value whose readers all sit later is built with them; a
 /// value with readers in several passes keeps its base (and is materialized
-/// by the builder's rule 4 when a later same-nest reader needs it).
+/// by the builder's materialization rule when a later same-nest reader needs
+/// it).
 ///
 /// Every dependency edge points to an equal or earlier pass. With only
 /// LoopCarried bumps present (no Reduction-source bump fires) the passes
 /// reduce to a two-set partition: carried sources and everything else.
 ///
 struct ForcedSplitLevels {
-  std::unordered_set<std::size_t> carried;  //!< LoopCarried (any space) ids
+  std::unordered_set<std::size_t> carried;  //!< LoopCarried (any basis key) ids
   std::unordered_set<std::size_t>
       pinned;  //!< sources of a bumping edge (carried values, and Reduction
                //!< sources with at least one in-loop reader): the reverse lift
@@ -798,25 +799,25 @@ inline ForkedSubchain fork_subchain(
 /// static-point timeline) into an \c OrderedSchedule.
 ///
 /// The realized chain is per loop instance, not per axis type: one block per
-/// distinct fusion \c loop_slot appearing on a space across all cells, so a
-/// value carrying two same-space modes on different slots gets two nested
+/// distinct fusion \c loop_slot appearing on a basis key across all cells, so a
+/// value carrying two same-key modes on different slots gets two nested
 /// loops, not one. A nest holding members of more than one pass additionally
 /// emits one sibling block per pass (latitude = pass), run in schedule order
-/// (see step 2b and \c forced_split_levels). See the as-built design
-/// section 6.1, \c
-/// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md.
+/// (see step 2b and \c forced_split_levels). See "Placement, escapes, and pass
+/// splits" in \c
+/// doc/developer/batched_evaluation.rst.
 ///
 /// \details Four-part algorithm, pure scheduling (no cost choice):
 ///
 /// \par 1. The canonical chain
-/// For each batch axis space (\c IndexSpace::base_key()) appearing in any
+/// For each batch axis type (\c IndexBasis::base_key()) appearing in any
 /// cell's \c CellLegality::per_axis (not just \c home_floor -- a \c
 /// Reduction/\c LoopCarried-only axis must still get a block to host its
 /// escape output, even though no cell is homed inside it in that role), one
 /// realized depth per distinct fusion \c loop_slot on it (\c
-/// slots_of_space / \c type_slot, resolved through \c fusion_slot). Spaces
-/// are ordered by \p mode_order (most-significant/outermost first), ties/
-/// unlisted spaces alphabetical, slot-ascending within a space -- but that is
+/// slots_of_space / \c type_slot, resolved through \c fusion_slot). Basis
+/// keys are ordered by \p mode_order (most-significant/outermost first), ties/
+/// unlisted keys alphabetical, slot-ascending within a key -- but that is
 /// only a stable tie-break: the nesting actually satisfies every \c
 /// RichSchedule::loop_order pair, and a cycle among those is a builder error.
 /// Loop members that never co-occur (no value is home-sliced on both) are then
@@ -837,7 +838,7 @@ inline ForkedSubchain fork_subchain(
 ///     equality (an unmatched/non-prefix \c home_floor falls back to
 ///     root). This value
 ///     gets no \c outputs entry anywhere (see \c well_formed's single-
-///     producer invariant): "Transient" (design point 4) is realized as
+///     producer invariant): "Transient" is realized as
 ///     "produced by a \c BuildStep and nothing else", not as an explicit
 ///     \c OutputKind::Transient \c outputs record, since \c
 ///     well_formed::detail::collect_production_ids counts every \c outputs
@@ -845,7 +846,7 @@ inline ForkedSubchain fork_subchain(
 ///     site -- a \c Transient \c outputs entry alongside the \c BuildStep
 ///     would be flagged as double-production.
 ///   - at least one \c per_axis entry is \c Reduction or \c LoopCarried
-///     ("escapes" that axis, per design point 4: \c Reduction ->
+///     ("escapes" that axis: \c Reduction ->
 ///     accumulate-summed out, \c LoopCarried -> accumulate-scattered out)
 ///     -- the value has no \c BuildStep anywhere; instead it is recorded as
 ///     an \c outputs entry (kind \c AccumulateSum / \c AccumulateScatter)
@@ -858,7 +859,8 @@ inline ForkedSubchain fork_subchain(
 ///     can close -- exactly consistent with an outer accumulator reading an
 ///     inner one. A chain may legitimately skip a level the value is
 ///     invariant on; that crossing is carried by residency plus \c
-///     produce_if_absent, not by an escape (as-built section 6.2).
+///     produce_if_absent, not by an escape ("Placement, escapes, and pass
+///     splits").
 ///
 /// \par 3. Topological order within a block -- a real topological sort
 /// Each block's own \c steps interleave its \c BuildStep's (one per value
@@ -926,7 +928,7 @@ inline ForkedSubchain fork_subchain(
 namespace detail {
 
 ///
-/// \brief True iff \p mode's index type (\c IndexSpace::base_key()) ever
+/// \brief True iff \p mode's index type (\c IndexBasis::base_key()) ever
 /// survives, un-summed, into a forest-root value's own carried slots.
 ///
 /// \details \c RichSchedule does not carry \c BatchModeType directly: the
@@ -945,15 +947,16 @@ namespace detail {
 /// anyone's child -- a top-level tree of the forest -- keeps its
 /// default-seeded \c consumer_point == its own \c point.
 ///
-/// Matches by type (\c base_key()) -- not by exact \c Index identity (\c
-/// Index::operator== compares space and ordinal). More than one physical \c
+/// Matches by type (\c IndexBasis::base_key()) -- not by exact \c Index
+/// identity
+/// (\c Index::operator== compares basis and ordinal). More than one physical \c
 /// Index label of the same type can appear across \p rich's cells (e.g. one
 /// occurrence's K_1 vs another's K_2), so an exact-Index match could miss a
 /// root occurrence that uses a different physical label of the very type
 /// being classified, silently misclassifying an External mode as Contracted.
 ///
 inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
-  auto const& mode_bk = mode.space().base_key();
+  auto const& mode_bk = mode.basis().base_key();
   for (auto const& cell : rich.cells) {
     bool const is_root =
         std::any_of(cell.occurrences.begin(), cell.occurrences.end(),
@@ -961,13 +964,13 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
                       return occ.point == occ.consumer_point;
                     });
     if (!is_root) continue;
-    // A batch axis (occ/aux) is external iff its space appears on a root's own
-    // result slots. Slots are matched as-is: batch axes are plain, and a root
-    // carrying a composite PAO leg a<i,j> always carries its occ pair i,j
-    // plainly too, so no space is reachable only through a proto.
+    // A batch axis (occ/aux) is external iff its basis key appears on a root's
+    // own result slots. Slots are matched as-is: batch axes are plain, and a
+    // root carrying a composite PAO leg a<i,j> always carries its occ pair i,j
+    // plainly too, so no basis key is reachable only through a proto.
     bool const has_type = std::any_of(
         cell.carried.begin(), cell.carried.end(),
-        [&](Index const& ix) { return ix.space().base_key() == mode_bk; });
+        [&](Index const& ix) { return ix.basis().base_key() == mode_bk; });
     if (has_type) return true;
   }
   return false;
@@ -983,8 +986,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
 /// \param policy accepted for interface symmetry with the rest of the
 ///        pipeline; the axis filtering it would provide is already baked into
 ///        \c CellLegality::per_axis
-/// \param mode_order optional outer-to-inner order of index-space base keys,
-///        used to order the loop chain
+/// \param mode_order optional outer-to-inner order of \c IndexBasis::base_key()
+///        keys, used to order the loop chain
 /// \return a schedule satisfying \c well_formed
 /// \throw Exception when a batched mode has no loop identity to place its
 ///        escape on
@@ -1010,7 +1013,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   };
 
   // The fusion-assigned loop_slot (compute_dag_boulevard) of a
-  // legality cell's per_axis[pos]: which member of its same-space loop group
+  // legality cell's per_axis[pos]: which member of its same-key loop group
   // slices it -- an occurrence-invariant identity, established by producer->
   // consumer connectivity, not a within-cell position. Read off a
   // representative occurrence in the value's own frame (per_axis modes match
@@ -1039,7 +1042,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       // operand's carried-mode node with a synthetic reduction node) or,
       // absent any home-sliced operand, by seeding that synthetic node
       // directly; read that slot so the reduction escape lands in the same
-      // same-space nest as the operand it reduces, instead of a different
+      // same-key nest as the operand it reduces, instead of a different
       // nest (the operand vanishes before the reduction reaches it) or,
       // absent a slot altogether, the hard-error throw above.
       for (auto const& [rm, rs] : occ.reduced_slot)
@@ -1053,25 +1056,25 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   // 1. The canonical chain: one representative Index per distinct axis type
   // present in any cell's per_axis (LoopLocal, Reduction, or LoopCarried --
   // not just home_floor; see the function doc comment's part 1).
-  // Per-instance loop chain (position-based): for each space, m_s = the max
-  // over cells of the number of same-space per_axis modes in one cell; emit
-  // m_s consecutive depths, one per within-space slot (loop_slot 0..m_s-1). A
-  // value carrying two same-space batched modes (a doubles amplitude's two occ
+  // Per-instance loop chain (position-based): for each basis key, m_s = the
+  // max over cells of the number of same-key per_axis modes in one cell; emit
+  // m_s consecutive depths, one per within-key slot (loop_slot 0..m_s-1). A
+  // value carrying two same-key batched modes (a doubles amplitude's two occ
   // externals) thus gets two distinct loops rather than one. `types[d]` is a
-  // representative Index of the depth's space; `type_slot[d]` is its
-  // within-space slot (the DagScopeLevel loop_slot). Same-space slots occupy
+  // representative Index of the depth's basis key; `type_slot[d]` is its
+  // within-key slot (the DagScopeLevel loop_slot). Same-key slots occupy
   // distinct depths here (the assembly is one loop per depth); depth carries
   // both group and member nesting.
-  // Members present per space = the distinct fusion loop_slots that
-  // appear on that space across all cells. Each distinct slot becomes one
+  // Members present per basis key = the distinct fusion loop_slots that
+  // appear on that key across all cells. Each distinct slot becomes one
   // realized loop. The fusion slot is the occurrence-invariant identity: a
-  // count of same-space per_axis modes with local 0..m-1 slots would be a
+  // count of same-key per_axis modes with local 0..m-1 slots would be a
   // per-position numbering the atlas cannot match to a value's own frame.
   std::map<std::wstring, std::set<int>> slots_of_space;
-  std::map<std::wstring, Index> rep;  // space -> representative axis
+  std::map<std::wstring, Index> rep;  // basis key -> representative axis
   for (CellLegality const& cl : legality.cells)
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
-      std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
+      std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
       rep.emplace(bk, cl.per_axis[pos].axis);
       int const s = fusion_slot(cl, pos);
       slots_of_space[bk].insert(s >= 0 ? s : 0);
@@ -1102,7 +1105,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
 
   // Nest the chain as the DP realized it: RichSchedule::loop_order holds the
   // (outer, inner) instance pairs read off the occurrences' enclosing
-  // contexts. The space-major, slot-ascending order above is only the
+  // contexts. The key-major, slot-ascending order above is only the
   // tie-break (a stable topological order: among the ready instances the
   // earliest in that order goes first). A cycle means the loop identity fused
   // two physical loops that nest in opposite orders -- a builder error, not a
@@ -1111,7 +1114,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     std::size_t const nn = types.size();
     std::map<std::pair<std::wstring, int>, std::size_t> item_of;
     for (std::size_t d = 0; d < nn; ++d)
-      item_of[{std::wstring{types[d].space().base_key()}, type_slot[d]}] = d;
+      item_of[{std::wstring{types[d].basis().base_key()}, type_slot[d]}] = d;
     container::svector<container::svector<std::size_t>> succ(nn);
     container::svector<std::size_t> indeg(nn, 0);
     for (auto const& [pair, witness] : rich.loop_order) {
@@ -1170,11 +1173,11 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     detail::dump_loop_chain(rich.loop_order, types, type_slot);
 
   std::size_t const n = types.size();
-  // Depth of the loop for a given (space, within-space slot).
+  // Depth of the loop for a given (basis key, slot within that key).
   auto const depth_of_instance = [&](std::wstring const& bk,
                                      int slot) -> std::optional<std::size_t> {
     for (std::size_t d = 0; d < n; ++d)
-      if (std::wstring(types[d].space().base_key()) == bk &&
+      if (std::wstring(types[d].basis().base_key()) == bk &&
           type_slot[d] == slot)
         return d;
     return std::nullopt;
@@ -1204,7 +1207,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       int const fs = fusion_slot(cl, pos);
       if (fs < 0) continue;
       auto const dd = depth_of_instance(
-          std::wstring{cl.per_axis[pos].axis.space().base_key()}, fs);
+          std::wstring{cl.per_axis[pos].axis.basis().base_key()}, fs);
       if (!dd) continue;
       if (anchor)
         mem_parent[mfind(*dd)] = mfind(*anchor);
@@ -1237,8 +1240,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       }
   }
 
-  // Legality record by value id, for reader lookups in rule 4 and (below)
-  // for the pass levels' \c inside predicate.
+  // Legality record by value id, for reader lookups in the materialization rule
+  // and (below) for the pass levels' \c inside predicate.
   std::unordered_map<std::size_t, CellLegality const*> cl_by_vid;
   cl_by_vid.reserve(legality.cells.size());
   for (CellLegality const& c2 : legality.cells) {
@@ -1261,12 +1264,12 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
 
   // The LoopLocal home depth of a value: the innermost loop it is LoopLocal
   // on, resolved per-instance by fusion loop_slot -- not by shallowest
-  // same-space count. A value local to slots 2,3 (its own fusion nest) homes
-  // in that nest, not the first same-space nest a space-multiset cover would
-  // pick; picking the wrong same-space nest homes the value where its
+  // same-key count. A value local to slots 2,3 (its own fusion nest) homes
+  // in that nest, not the first same-key nest a key-multiset cover would
+  // pick; picking the wrong same-key nest homes the value where its
   // consumer's nest has not opened (or has already closed), so an
   // in-consumer-nest read misses and the value vanishes. Resolve each
-  // LoopLocal mode's (space, fusion slot) to its realized depth (exactly as
+  // LoopLocal mode's (basis key, fusion slot) to its realized depth (exactly as
   // the escape placement does), and home at the max such depth: within a
   // co-occurrence cluster larger depth nests inside smaller, so the innermost
   // of the value's own home slots is inside all of them. home_floor is the
@@ -1281,7 +1284,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     std::optional<std::size_t> target;
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       if (cl.per_axis[pos].role != LoopRole::LoopLocal) continue;
-      std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
+      std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
       int const fs = fusion_slot(cl, pos);
       auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
       if (!d) continue;
@@ -1290,21 +1293,21 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     return target;
   };
 
-  // The DAG-scope nest a value is produced inside, for rule-4 reader
-  // classification: the deepest depth any of its own per_axis modes (any
+  // The DAG-scope nest a value is produced inside, for materialization-rule
+  // reader classification: the deepest depth any of its own per_axis modes (any
   // role, not just LoopLocal) resolves to. A value with only carried/
   // reduction roles -- a forest root delivered in full, or a carried value
   // of a later pass -- is still produced per batch inside its own nest (its
   // production is the accumulation folded into its escape bucket), so
   // testing only LoopLocal modes (local_home_depth) would report such a
-  // value as homed at root: rule 4 would then neither fire the mixed-pass
-  // materialization for a value it reads, nor guard the tripwire against
-  // it. production_depth instead considers every per_axis mode regardless
-  // of role. A mode whose fusion slot does not resolve (\c fusion_slot
-  // returns -1) is skipped rather than guessed at slot 0 -- a guessed slot
-  // can land in the wrong nest (fusion_slot's own doc comment), and this
-  // result feeds the outside-its-nest tripwire below, where a wrong nest
-  // decides whether to throw. Nullopt = no mode resolves at all, whether
+  // value as homed at root: the materialization rule would then neither fire
+  // the mixed-pass materialization for a value it reads, nor guard the tripwire
+  // against it. production_depth instead considers every per_axis mode
+  // regardless of role. A mode whose fusion slot does not resolve (\c
+  // fusion_slot returns -1) is skipped rather than guessed at slot 0 -- a
+  // guessed slot can land in the wrong nest (fusion_slot's own doc comment),
+  // and this result feeds the outside-its-nest tripwire below, where a wrong
+  // nest decides whether to throw. Nullopt = no mode resolves at all, whether
   // because the value is genuinely unbatched (root) or because every one of
   // its modes has an unresolvable fusion slot -- the two are
   // indistinguishable here; the table validator's visibility rule is the
@@ -1313,7 +1316,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       [&](CellLegality const& cl) -> std::optional<std::size_t> {
     std::optional<std::size_t> target;
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
-      std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
+      std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
       int const fs = fusion_slot(cl, pos);
       if (fs < 0) continue;  // unresolved: never guess slot 0
       auto const d = depth_of_instance(bk, fs);
@@ -1324,8 +1327,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   };
 
   // 2a. Pass levels (per-nest forced split design, sections 3.1 and 9.2).
-  // Global over every batched space: a bumping edge is either
-  // a LoopCarried source (any space, every direct reader bumped) or a
+  // Global over every batched basis key: a bumping edge is either
+  // a LoopCarried source (any basis key, every direct reader bumped) or a
   // Reduction source with a direct reader produced inside that same
   // reduced instance. \c inside resolves the second kind exactly as the
   // escape placement does: for each of the source's Reduction axes,
@@ -1334,7 +1337,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   // reader is "inside" when its own production_depth is at or below that
   // depth in the same nest (type_cluster equal). Defined here because it
   // needs production_depth and cl_by_vid. Computed unconditionally, no
-  // per-space loop, no "more than one forced space" throw: an empty
+  // per-key loop, no "more than one forced space" throw: an empty
   // carried and reduction-source set yields all-zero passes, so a schedule
   // with no forced-split axis at all is unaffected.
   auto const inside = [&](std::size_t reader_vid,
@@ -1348,7 +1351,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     if (!rd) return false;
     for (std::size_t pos = 0; pos < scl.per_axis.size(); ++pos) {
       if (scl.per_axis[pos].role != LoopRole::Reduction) continue;
-      std::wstring const bk{scl.per_axis[pos].axis.space().base_key()};
+      std::wstring const bk{scl.per_axis[pos].axis.basis().base_key()};
       int const fs = fusion_slot(scl, pos);
       if (fs < 0) continue;
       auto const d = depth_of_instance(bk, fs);
@@ -1394,7 +1397,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
         std::wcerr << L"root";
       std::wcerr << L" axes={";
       for (std::size_t p2 = 0; p2 < c2.per_axis.size(); ++p2) {
-        std::wstring const bk2{c2.per_axis[p2].axis.space().base_key()};
+        std::wstring const bk2{c2.per_axis[p2].axis.basis().base_key()};
         int const fs2 = fusion_slot(c2, p2);
         auto const d2 = depth_of_instance(bk2, fs2 >= 0 ? fs2 : 0);
         std::wcerr << c2.per_axis[p2].axis.full_label() << L":"
@@ -1451,7 +1454,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       AxisClass const& ac = cl.per_axis[pos];
       if (ac.role == LoopRole::LoopLocal) continue;
-      std::wstring const bk{ac.axis.space().base_key()};
+      std::wstring const bk{ac.axis.basis().base_key()};
       int const fs = fusion_slot(cl, pos);
       // A Reduction mode with no fusion slot has no loop identity at all
       // (peak_profile's union-find never numbered a component for it) --
@@ -1474,7 +1477,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
               ? OutputKind::AccumulateSum
               : OutputKind::AccumulateScatter;  // LoopCarried
       // Each per-instance mode escapes to its own depth (distinct loop_slot),
-      // so same-space modes keep separate escapes; the dedup below
+      // so same-key modes keep separate escapes; the dedup below
       // only merges a genuine reduce+carry pair that lands at one depth.
       auto it = std::find_if(escapes.begin(), escapes.end(),
                              [&](auto const& e) { return e.first == *d; });
@@ -1484,9 +1487,9 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
         it->second = OutputKind::AccumulateScatter;
     }
 
-    // A value with >1 non-local mode of one space (a doubles amplitude / PPL
-    // product carrying two occ externals) has its distinct per-instance
-    // escapes collapsed to fewer escapes (one per depth == one per space).
+    // A value with >1 non-local mode of one basis key (a doubles amplitude /
+    // PPL product carrying two occ externals) has its distinct per-instance
+    // escapes collapsed to fewer escapes (one per depth == one per key).
     // Dump those cells (SEQUANT_DUMP_SCHEDULE) to expose the collapse.
     if (detail::dump_enabled("SEQUANT_DUMP_SCHEDULE")) {
       container::svector<std::pair<Index, wchar_t const*>> nonlocal;
@@ -1497,8 +1500,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       bool collapse = false;
       for (std::size_t a = 0; a < nonlocal.size() && !collapse; ++a)
         for (std::size_t b = a + 1; b < nonlocal.size(); ++b)
-          if (nonlocal[a].first.space().base_key() ==
-              nonlocal[b].first.space().base_key()) {
+          if (nonlocal[a].first.basis().base_key() ==
+              nonlocal[b].first.basis().base_key()) {
             collapse = true;
             break;
           }
@@ -1521,10 +1524,10 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     bool materialized_across_split = false;
     std::optional<std::size_t> const home_depth = local_home_depth(cl);
     // Whether this value has a LoopLocal instance of its own nest that is
-    // not covered by a role-driven escape (before rule 4 adds anything) --
-    // the invariant the outside-nest tripwire below actually needs. A
-    // per-batch-only instance like that is never delivered to root, so a
-    // later-pass reader outside the nest contradicts legality regardless of
+    // not covered by a role-driven escape (before the materialization rule adds
+    // anything) -- the invariant the outside-nest tripwire below actually
+    // needs. A per-batch-only instance like that is never delivered to root, so
+    // a later-pass reader outside the nest contradicts legality regardless of
     // whether some other instance of this same value happens to be
     // role-escaped elsewhere, at a different depth (a coarser gate on
     // "any role escape at all" would miss exactly this two-different-depth
@@ -1534,7 +1537,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       std::size_t const home_nest = type_cluster[*home_depth];
       for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
         if (cl.per_axis[pos].role != LoopRole::LoopLocal) continue;
-        std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
+        std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
         int const fs = fusion_slot(cl, pos);
         auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
         if (!d || type_cluster[*d] != home_nest) continue;
@@ -1569,7 +1572,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       std::size_t const nest = type_cluster[*home_depth];
       auto const readers = later_same_nest_readers(nest);
       if (!readers.empty()) {
-        // Rule 4 (section 7.3): escape every instance of this nest the
+        // Materialization rule: escape every instance of this nest the
         // value is loop-local on and not already escaped by a role as a
         // Scatter; a role escape already scattering (LoopCarried) that
         // instance is left as-is, a role escape summing it (Reduction) is
@@ -1582,7 +1585,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
         // completeness then falls out for free, since the value is sliced
         // by exactly the instances this loop escapes.
         for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
-          std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
+          std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
           int const fs = fusion_slot(cl, pos);
           auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
           if (!d || type_cluster[*d] != nest) continue;
@@ -1610,21 +1613,20 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
           }
         }
       } else if (unescaped_local_instance) {
-        // Tripwire (controller ruling I3; reader test corrected by ruling
-        // I4): a value with an unescaped LoopLocal instance of its own nest
-        // (checked before rule 4 above ran, via unescaped_local_instance)
-        // has a per-batch-only form of that instance that is never
-        // delivered to root -- and there is no same-nest later-pass reader
-        // to trigger rule 4 above and fix it (this is the `readers.empty()`
-        // branch). A direct later-pass reader whose production site
-        // resolves to a nest other than this one is the reader's location,
-        // not this value's escapes: it cannot see the per-batch home form,
-        // and legality and the schedule disagree, regardless of whether
-        // some other instance of this value happens to be role-escaped
-        // elsewhere. A value whose every LoopLocal instance of its own nest
-        // is already role-escaped is exempt: each such escape already
-        // assembles a full form with root residency (rule 4's own
-        // scatter-dominance above ensures no instance is left half-summed),
+        // Tripwire: a value with an unescaped LoopLocal instance of its own
+        // nest (checked before the materialization rule above ran, via
+        // unescaped_local_instance) has a per-batch-only form of that instance
+        // that is never delivered to root -- and there is no same-nest
+        // later-pass reader to trigger the materialization rule above and fix
+        // it (this is the `readers.empty()` branch). A direct later-pass reader
+        // whose production site resolves to a nest other than this one is the
+        // reader's location, not this value's escapes: it cannot see the
+        // per-batch home form, and legality and the schedule disagree,
+        // regardless of whether some other instance of this value happens to be
+        // role-escaped elsewhere. A value whose every LoopLocal instance of its
+        // own nest is already role-escaped is exempt: each such escape already
+        // assembles a full form with root residency (the materialization rule's
+        // own scatter-dominance above ensures no instance is left half-summed),
         // which any later-pass reader, in any nest, can see.
         // "Produced outside this nest" is decided by production_depth, not
         // by local_home_depth: a reader with only carried/reduction roles --
@@ -1673,18 +1675,16 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     // (below) and its escape chain reaches deeper than that -- a role
     // escape nested inside the LoopLocal home (a Reduction axis, say) --
     // in which case the deepest site on that chain is the true production
-    // site and home's rule-4 escape is pure forwarding, like any other link
-    // in the chain.
-    // Completeness invariant (design section 9.2): a value
-    // reduced over a loop instance (an AccumulateSum escape at depth d) is
-    // complete only after that loop closes; a reader produced inside that
-    // instance (production depth at or below d in the same nest) in the
-    // same pass would be served the current batch's partial sum. The pass
-    // levels above (2a) now bump exactly such a reader to a later pass via
-    // the Reduction-source bumping edge, so this shape should never survive
-    // to here; this check stays as a loud tripwire on the levels
-    // themselves -- its firing means the levels failed to bump a read they
-    // should have, a builder defect, not an expected outcome.
+    // site and home's materialization escape is pure forwarding, like any other
+    // link in the chain. Completeness invariant: a value reduced over a loop
+    // instance (an AccumulateSum escape at depth d) is complete only after that
+    // loop closes; a reader produced inside that instance (production depth at
+    // or below d in the same nest) in the same pass would be served the current
+    // batch's partial sum. The pass levels above (2a) now bump exactly such a
+    // reader to a later pass via the Reduction-source bumping edge, so this
+    // shape should never survive to here; this check stays as a loud tripwire
+    // on the levels themselves -- its firing means the levels failed to bump a
+    // read they should have, a builder defect, not an expected outcome.
     for (auto const& [d, kind] : escapes) {
       if (kind != OutputKind::AccumulateSum) continue;
       auto const cons_it = g.consumers_of.find(vid);
@@ -1714,13 +1714,13 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       // production is the accumulation itself, at the deepest escape site
       // (the multi-level chain's bottom-up assembly: raw production at the
       // deepest site, pure forwarding at every shallower one). One
-      // materialized across the split by rule 4 above is different: it is
-      // produced, at the deepest site of its full chain (role escapes and
-      // the rule-4 scatter together), which same-pass consumers read inside
-      // its own nest, per batch. It keeps its BuildStep there, so that
-      // block both builds it (for its same-pass in-nest readers, and as the
-      // per-batch input of the rest of its chain) and lists it as an output
-      // (for the later-pass reader). `well_formed` admits exactly this
+      // materialized across the split by the materialization rule above is
+      // different: it is produced, at the deepest site of its full chain (role
+      // escapes and the materialization scatter together), which same-pass
+      // consumers read inside its own nest, per batch. It keeps its BuildStep
+      // there, so that block both builds it (for its same-pass in-nest readers,
+      // and as the per-batch input of the rest of its chain) and lists it as an
+      // output (for the later-pass reader). `well_formed` admits exactly this
       // shape: every block that lists a value in `outputs` either holds its
       // BuildStep or is an ancestor of the one that does -- always true
       // here since the BuildStep sits at the chain's deepest site and every
@@ -1795,16 +1795,16 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     block.axis = axis;
     block.latitude_ordinal = latitude_ordinal;
     block.level = DagScopeLevel{.depth = depth,
-                                .space = std::wstring{axis.space().base_key()},
+                                .space = std::wstring{axis.basis().base_key()},
                                 .loop_slot = loop_slot,
                                 .latitude_ordinal = latitude_ordinal};
     // The block's kind is the kind of its loop instance (the open that
-    // created the (space, slot) component -- RichSchedule::loop_kind); a
-    // space can hold both a contracted-in-batches instance and an external
-    // one, so the per-space test (does the space appear on a root result?)
+    // created the (basis key, slot) component -- RichSchedule::loop_kind); a
+    // basis key can hold both a contracted-in-batches instance and an external
+    // one, so the per-key test (does the key appear on a root result?)
     // is only the fallback for an instance no open recorded.
     if (auto const kit = rich.loop_kind.find(
-            {std::wstring{axis.space().base_key()}, loop_slot});
+            {std::wstring{axis.basis().base_key()}, loop_slot});
         kit != rich.loop_kind.end())
       block.kind = kit->second;
     else
@@ -1837,7 +1837,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   container::vector<detail::OrderedScheduleStepMeta> finished_metas;
   std::optional<std::size_t> prev_cluster;
 
-  // Per-nest pass sets (design section 3.2): the passes of every build
+  // Per-nest pass sets: the passes of every build
   // homed at any of the nest's depths and of every escape output listed
   // there. A nest with one pass is one block (latitude = that pass); a nest
   // with several is one block per pass at its outermost depth.
@@ -1903,16 +1903,15 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     bool const outermost = d == cluster_min.at(nest);
     std::set<int> const& passes = nest_passes[nest];
     if (outermost && passes.size() > 1) {
-      // Several passes at this nest's outermost depth (per-nest forced split
-      // design, section 3.2): one block per pass, ascending, each holding the
-      // builds and outputs of that pass at this depth plus the inner
-      // sub-chain forked for that pass (fork_subchain applied once per pass;
-      // the fork's predicate-true "consumer" side is the pass's own steps).
-      // At the innermost axis pending is empty and fork_subchain returns an
-      // empty inner list, reducing to a childless per-pass block emission.
-      // The later pass's block reads the earlier pass's escaped (now-full)
-      // outputs, so its `requires_` names them and the outer topo-sort orders
-      // passes in ascending order.
+      // Several passes at this nest's outermost depth (per-nest forced split):
+      // one block per pass, ascending, each holding the builds and outputs of
+      // that pass at this depth plus the inner sub-chain forked for that pass
+      // (fork_subchain applied once per pass; the fork's predicate-true
+      // "consumer" side is the pass's own steps). At the innermost axis pending
+      // is empty and fork_subchain returns an empty inner list, reducing to a
+      // childless per-pass block emission. The later pass's block reads the
+      // earlier pass's escaped (now-full) outputs, so its `requires_` names
+      // them and the outer topo-sort orders passes in ascending order.
 
       // Recursive value_ids a forked child Step produces (builds + escape
       // outputs, through nested blocks), for its `requires_`/`tie_key` meta.
@@ -2178,8 +2177,8 @@ inline void assert_global_level_axis_uniqueness(
 /// including two of a nest's own pass blocks (one per pass, latitude =
 /// pass), which differ only in \c latitude_ordinal -- get distinct ids by
 /// construction: a nest's pass blocks must be distinguishable colors, not
-/// folded (as-built design section 5.1, \c
-/// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md).
+/// folded ("Placement, escapes, and pass splits", \c
+/// doc/developer/batched_evaluation.rst).
 ///
 /// \note Defined in \c dag_scope.hpp so the low-level DAG-scope types can be
 /// named without depending on this schedule header; re-exported here so the
@@ -2414,13 +2413,14 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           sit->second;
       if (scope.empty()) continue;
       // The atlas: for each of the consumer's enclosing loops `scope[k]`
-      // (space S, loop_slot L), the mode of W it slices is W's carried position
-      // whose value-level component slot is L and whose space is S. A loop-
-      // identity match in W's own frame (occurrence-invariant), keyed off the
-      // value-level slot -- so a value produced whole in a mode is still sliced
-      // there when this consumer sits inside that mode's realized loop (the
-      // measured i_3-contracted case). Over-nested loops the value carries no
-      // mode of get no fact, correct (the value is invariant to them).
+      // (basis key S, loop_slot L), the mode of W it slices is W's carried
+      // position whose value-level component slot is L and whose basis key is
+      // S. A loop-identity match in W's own frame (occurrence-invariant),
+      // keyed off the value-level slot -- so a value produced whole in a mode
+      // is still sliced there when this consumer sits inside that mode's
+      // realized loop (the measured i_3-contracted case). Over-nested loops the
+      // value carries no mode of get no fact, correct (the value is invariant
+      // to them).
       auto const& vs = value_slot[w_vid];
       // This occurrence's leg at its consumer (left 0 / right 1).
       std::size_t leg = static_cast<std::size_t>(-1);
@@ -2449,7 +2449,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
                   ? occ.loop_slot[pos]
                   : vs[pos];
           if (occ_slot != lvl.loop_slot) continue;
-          if (std::wstring(occ.carried[pos].space().base_key()) != lvl.space)
+          if (std::wstring(occ.carried[pos].basis().base_key()) != lvl.space)
             continue;
           result.occ_facts.push_back(
               std::make_tuple(w_vid, pos, id_of(lvl), oit->second, leg));
@@ -2458,8 +2458,8 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         }
         if (self_sliced) continue;
         // Use-induced slicing (Layer 2): W is whole-produced on this loop's
-        // space (no own sliced slot), but this consumer C is sliced on a mode M
-        // there. If M is a shared external W also carries, the C = ...*W
+        // basis key (no own sliced slot), but this consumer C is sliced on a
+        // mode M there. If M is a shared external W also carries, the C = ...*W
         // contraction binds W's M to C's sliced M -- so W must be sliced on M
         // at this loop for this fetch. Record it consumer-keyed in occ_facts,
         // never consumer-blind: W may be
@@ -2490,7 +2490,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           else
             c_sliced = cvs[cp] == lvl.loop_slot;
           if (!c_sliced) continue;
-          if (std::wstring(c_carried[cp].space().base_key()) != lvl.space)
+          if (std::wstring(c_carried[cp].basis().base_key()) != lvl.space)
             continue;
           Index const& M = c_carried[cp];  // the mode C is sliced on here
           // W carries M at some own-occurrence position (shared external,
@@ -2529,7 +2529,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           for (auto const& cocc : rich.cells[c_vid].occurrences) {
             for (auto const& [rm, rs] : cocc.reduced_slot) {
               if (rs != lvl.loop_slot) continue;
-              if (std::wstring(rm.space().base_key()) != lvl.space) continue;
+              if (std::wstring(rm.basis().base_key()) != lvl.space) continue;
               std::size_t pos_a = occ.carried.size();
               for (std::size_t pa = 0; pa < occ.carried.size(); ++pa)
                 if (occ.carried[pa] == rm) {

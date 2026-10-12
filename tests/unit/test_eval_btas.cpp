@@ -74,7 +74,7 @@ class rand_tensor_yield {
     using ranges::views::repeat_n;
     using ranges::views::transform;
     using sequant::IndexSpace;
-    auto isr = sequant::get_default_context().index_space_registry();
+    auto isr = sequant::get_default_context().index_basis_registry();
 
     SEQUANT_ASSERT(
         ranges::all_of(tnsr.const_braket_indices(),
@@ -174,7 +174,7 @@ class aux_rand_tensor_yield {
   }
 
   size_t extent(sequant::Index const& idx) const {
-    auto isr = sequant::get_default_context().index_space_registry();
+    auto isr = sequant::get_default_context().index_basis_registry();
     if (idx.space() == isr->retrieve(L"i")) return nocc_;
     if (idx.space() == isr->retrieve(L"a")) return nvirt_;
     if (idx.space() == isr->retrieve(L"z")) return nz_;
@@ -573,8 +573,8 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
   }
 }
 
-// Task 2 (multiroot-single-dag-eval): a Sum node marked accumulate_in_place()
-// (Task 1's binarize()-applied mark on the left-accumulator chain of a folded
+// A Sum node marked accumulate_in_place()
+// (binarize()'s mark on the left-accumulator chain of a folded
 // N-ary Sum) must evaluate via Result::add_inplace() into the left operand's
 // own buffer rather than the allocating Result::sum() -- EXCEPT when its left
 // child is a leaf: a leaf's ResultPtr comes straight out of the caller's
@@ -586,7 +586,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 // Summation" test, which reads a leaf back out of the SAME yield_ after
 // evaluating a marked Sum that used it as the chain seed -- the leaf came
 // back already mutated. So for the chain (((t1+t2)+t3)+t4), all 3 Sum nodes
-// are STILL marked (Task 1's static property, unaffected), but only the two
+// are STILL marked (a static property, unaffected), but only the two
 // OUTER ones (whose left child is itself a Sum result, never a leaf) actually
 // evaluate in place; the innermost (t1+t2), whose left child t1 is a leaf,
 // falls back to the allocating sum() -- one bounded extra allocation for the
@@ -602,7 +602,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 // marked evaluation (nothing was corrupted), and the marked result's pointer
 // aliases none of the 4 leaves (no accidental leaf mutation slipped through).
 // (2) Numeric equality against an unmarked reference (the SAME chain with
-// every mark forced off, reproducing the pre-Task-2 always-allocate path).
+// every mark forced off, reproducing the always-allocate path).
 TEST_CASE("eval_sum_accumulate_in_place_btas", "[eval_btas]") {
   using namespace sequant;
   using BTensorD = btas::Tensor<double>;
@@ -647,7 +647,7 @@ TEST_CASE("eval_sum_accumulate_in_place_btas", "[eval_btas]") {
   auto marked = eval_node(sum);
   auto unmarked = eval_node(sum);
 
-  // Sanity on the marking itself (Task 1): the whole 3-Sum chain is marked.
+  // Sanity on the marking itself: the whole 3-Sum chain is marked.
   std::size_t total_sum = 0, inplace = 0;
   marked.visit([&](auto const& n) {
     if (!n->is_sum()) return;
@@ -657,7 +657,7 @@ TEST_CASE("eval_sum_accumulate_in_place_btas", "[eval_btas]") {
   REQUIRE(total_sum == 3);
   REQUIRE(inplace == 3);
 
-  // Force the SAME chain unmarked, reproducing the pre-Task-2 always-allocate
+  // Force the SAME chain unmarked, reproducing the always-allocate
   // sum() path, to serve as the reference. The chain is left-leaning
   // (fold_left_to_node): unmarked = ((t1+t2)+t3)+t4, so the 3 Sum nodes are
   // unmarked, unmarked.left(), and unmarked.left().left().
@@ -837,8 +837,8 @@ TEST_CASE("binarize_highorder_aux_hyperindex", "[eval_btas][hyperindex]") {
   // register the OBS AO space (μ) and the batching space (z) on top of the
   // standard single-reference spaces
   auto isr = mbpt::make_sr_spaces();
-  mbpt::add_ao_spaces(isr, mbpt::Spin::any);  // μ (OBS AO)
-  mbpt::add_batching_spaces(isr);             // z (batching)
+  mbpt::add_ao_basis(isr, mbpt::Spin::any);  // μ (OBS AO)
+  mbpt::add_batching_spaces(isr);            // z (batching)
   auto ctx_resetter =
       set_scoped_default_context(Context{get_default_context()}.set(isr));
 
@@ -1029,4 +1029,17 @@ TEST_CASE("result_size_in_bytes_btas", "[eval_btas]") {
   BTensorD t{btas::Range{container::svector<std::size_t>{2, 3}}};
   ResultPtr r = eval_result<ResultTensorBTAS<BTensorD>>(std::move(t));
   REQUIRE(r->size_in_bytes() == 6 * sizeof(double));
+}
+
+TEST_CASE("eval_btas_annotation_tells_basis_instances_apart",
+          "[eval_btas][basis]") {
+  using namespace sequant;
+  const Index a1(L"a_1");
+  const std::vector<Index> idxs{a1, a1.replace_basis_instance(1),
+                                a1.replace_basis_instance(2)};
+  const auto annot =
+      sequant::EvalExprBTAS::index_hash(idxs) | ranges::to<std::vector<long>>;
+  CHECK(annot[0] != annot[1]);
+  CHECK(annot[0] != annot[2]);
+  CHECK(annot[1] != annot[2]);
 }

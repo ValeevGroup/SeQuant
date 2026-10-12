@@ -350,7 +350,7 @@ class EvalExpr {
   ///
   /// \brief The batch modes that slice this occurrence of the node: the loops
   /// opened at or above it that live on its own result slots. The value's
-  /// home in the table-driven engine (explicit-cells design section 11,
+  /// home in the table-driven engine ("Loop identity and value identity",
   /// \c home_scope / \c value_key_of), stamped per occurrence by \c
   /// stamp_occurrence_homes -- not the cross-occurrence meet (\c
   /// sliced_modes), which folds occurrences by node identity and by label and
@@ -367,7 +367,7 @@ class EvalExpr {
   }
 
   ///
-  /// \brief This occurrence's value key (explicit-cells design section 11):
+  /// \brief This occurrence's value key ("Loop identity and value identity"):
   /// node id + (position, loop slot) of every home-sliced position + the
   /// operands' keys, stamped by \c compute_dag_boulevard once loop instances
   /// are numbered; 0 = not stamped (\c value_key_of then falls back to the

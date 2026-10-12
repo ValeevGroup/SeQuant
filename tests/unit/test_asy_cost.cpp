@@ -46,6 +46,7 @@ sequant::AsyCost occ_virt_cost(std::size_t nocc, std::size_t nvirt) {
 
 TEST_CASE("asy_cost", "[AsyCost]") {
   using sequant::AsyCost;
+  using sequant::IndexBasis;
   using sequant::rational;
 
   SECTION("to_text") {
@@ -138,7 +139,8 @@ TEST_CASE("asy_cost", "[AsyCost]") {
     const std::size_t nocc = 2;
     const std::size_t nvirt = 20;
 
-    AsyCost::ExtentMap const ext{{occ_space, nocc}, {virt_space, nvirt}};
+    AsyCost::ExtentMap const ext{{IndexBasis{occ_space}, nocc},
+                                 {IndexBasis{virt_space}, nvirt}};
     auto flops =
         MatFlops{static_cast<double>(nocc), static_cast<double>(nvirt)};
     REQUIRE(AsyCost::zero().ops(ext) == 0);
@@ -218,50 +220,62 @@ TEST_CASE("asy_cost", "[AsyCost]") {
     REQUIRE(AsyCost{m2} == c);
 
     // Numerical evaluation with explicit extents.
-    AsyCost::ExtentMap const ext{{O, 10}, {V, 100}, {U, 5}, {K, 500}, {Q, 7}};
+    AsyCost::ExtentMap const ext{{IndexBasis{O}, 10},
+                                 {IndexBasis{V}, 100},
+                                 {IndexBasis{U}, 5},
+                                 {IndexBasis{K}, 500},
+                                 {IndexBasis{Q}, 7}};
     auto const expected = std::pow(10.0, 2) * std::pow(5.0, 1) *
                           std::pow(100.0, 3) * std::pow(500.0, 2) *
                           std::pow(7.0, 1);
     REQUIRE(c.ops(ext) == expected);
 
-    // A space absent from the extent map falls back to its approximate_size().
-    // Here K (exponent 2) is omitted, so its approximate_size() is used.
-    AsyCost::ExtentMap const ext2{{O, 10}, {V, 100}, {U, 5}, {Q, 7}};
+    // A space absent from the extent map falls back to its dimension().
+    // Here K (exponent 2) is omitted, so its dimension() is used.
+    AsyCost::ExtentMap const ext2{{IndexBasis{O}, 10},
+                                  {IndexBasis{V}, 100},
+                                  {IndexBasis{U}, 5},
+                                  {IndexBasis{Q}, 7}};
     auto const expected2 =
         std::pow(10.0, 2) * std::pow(5.0, 1) * std::pow(100.0, 3) *
-        std::pow(static_cast<double>(K.approximate_size()), 2) *
-        std::pow(7.0, 1);
+        std::pow(static_cast<double>(K.dimension()), 2) * std::pow(7.0, 1);
     REQUIRE(c.ops(ext2) == expected2);
 
-    // With no extents supplied, every space uses its approximate_size().
+    // With no extents supplied, every space uses its dimension().
     auto const expected_default =
-        std::pow(static_cast<double>(O.approximate_size()), 2) *
-        std::pow(static_cast<double>(U.approximate_size()), 1) *
-        std::pow(static_cast<double>(V.approximate_size()), 3) *
-        std::pow(static_cast<double>(K.approximate_size()), 2) *
-        std::pow(static_cast<double>(Q.approximate_size()), 1);
+        std::pow(static_cast<double>(O.dimension()), 2) *
+        std::pow(static_cast<double>(U.dimension()), 1) *
+        std::pow(static_cast<double>(V.dimension()), 3) *
+        std::pow(static_cast<double>(K.dimension()), 2) *
+        std::pow(static_cast<double>(Q.dimension()), 1);
     REQUIRE(c.ops() == expected_default);
 
     // Ordering is by total degree (sum of exponents) first: the overall
     // polynomial / worst-case scaling dominates regardless of which spaces
     // carry the exponents.
-    AsyCost const deg7{AsyCost::ExponentMap{{O, 4}, {K, 3}}};   // sum 7
-    AsyCost const deg11{AsyCost::ExponentMap{{O, 9}, {K, 2}}};  // sum 11
+    AsyCost const deg7{
+        AsyCost::ExponentMap{{IndexBasis{O}, 4}, {IndexBasis{K}, 3}}};  // sum 7
+    AsyCost const deg11{AsyCost::ExponentMap{{IndexBasis{O}, 9},
+                                             {IndexBasis{K}, 2}}};  // sum 11
     REQUIRE(deg7 < deg11);
 
     // Among equal total degrees, IndexSpace priority breaks the tie: with
     // K > O, a larger K-exponent makes the cost larger.
-    AsyCost const big_k{AsyCost::ExponentMap{{O, 1}, {K, 3}}};    // sum 4
-    AsyCost const small_k{AsyCost::ExponentMap{{O, 3}, {K, 1}}};  // sum 4
+    AsyCost const big_k{
+        AsyCost::ExponentMap{{IndexBasis{O}, 1}, {IndexBasis{K}, 3}}};  // sum 4
+    AsyCost const small_k{
+        AsyCost::ExponentMap{{IndexBasis{O}, 3}, {IndexBasis{K}, 1}}};  // sum 4
     REQUIRE(small_k < big_k);
 
     // A multi-term cost renders most-expensive-first, which under the new
     // semantics means highest total degree first. Pinning the full string locks
     // down the term sequence: deg 4 (O^2K^2) > deg 3 (V^3) > deg 2 (OV).
     AsyCost const multi =
-        AsyCost{AsyCost::ExponentMap{{O, 1}, {V, 1}}} +  // deg 2
-        AsyCost{AsyCost::ExponentMap{{O, 2}, {K, 2}}} +  // deg 4
-        AsyCost{AsyCost::ExponentMap{{V, 3}}};           // deg 3
+        AsyCost{AsyCost::ExponentMap{{IndexBasis{O}, 1},
+                                     {IndexBasis{V}, 1}}} +  // deg 2
+        AsyCost{AsyCost::ExponentMap{{IndexBasis{O}, 2},
+                                     {IndexBasis{K}, 2}}} +  // deg 4
+        AsyCost{AsyCost::ExponentMap{{IndexBasis{V}, 3}}};   // deg 3
     REQUIRE(multi.text() == "O^2K^2 + V^3 + OV");
   }
 
@@ -272,16 +286,40 @@ TEST_CASE("asy_cost", "[AsyCost]") {
 
     // max() flows through ops() as infinity, regardless of supplied extents.
     REQUIRE(std::isinf(AsyCost::max().ops()));
-    AsyCost::ExtentMap const ext{{O, 10}, {V, 100}};
+    AsyCost::ExtentMap const ext{{IndexBasis{O}, 10}, {IndexBasis{V}, 100}};
     REQUIRE(std::isinf(AsyCost::max().ops(ext)));
 
     // max() is the greatest cost: it compares above any finite cost via the
     // is_max branch of operator<, and equals itself.
-    auto const finite = AsyCost{AsyCost::ExponentMap{{O, 9}, {V, 9}}};
+    auto const finite =
+        AsyCost{AsyCost::ExponentMap{{IndexBasis{O}, 9}, {IndexBasis{V}, 9}}};
     REQUIRE(finite < AsyCost::max());
     REQUIRE(AsyCost::max() > finite);
     REQUIRE_FALSE(AsyCost::max() < finite);
     REQUIRE(AsyCost::max() == AsyCost::max());
     REQUIRE(AsyCost::max() > AsyCost::zero());
+  }
+
+  // each basis of a space is a symbol of its own, sized by its own extent
+  SECTION("basis instances") {
+    using sequant::IndexSpace;
+    IndexSpace const V{L"V", 0b10, sequant::QuantumNumbersAttr{0}, 100};
+    IndexBasis const own{V}, unnamed{V, 1}, named{V, 2, L"P", 400};
+
+    AsyCost::ExponentMap m;
+    m.emplace(own, 2);
+    m.emplace(unnamed, 1);
+    m.emplace(named, 3);
+    auto const c = AsyCost{m};
+    REQUIRE(c.text() == "V^2V<;1>P^3");
+    REQUIRE(c.to_latex() == L"V^{2}V<;1>P^{3}");
+    REQUIRE(c.ops() == 100.0 * 100.0 * 100.0 * std::pow(400.0, 3));
+    AsyCost::ExtentMap const ext{{named, 7}};
+    REQUIRE(c.ops(ext) == 100.0 * 100.0 * 100.0 * std::pow(7.0, 3));
+    // the name is part of the symbol's identity, the extent is not
+    REQUIRE(AsyCost{AsyCost::ExponentMap{{IndexBasis{V, 2}, 3}}} !=
+            AsyCost{AsyCost::ExponentMap{{named, 3}}});
+    REQUIRE(AsyCost{AsyCost::ExponentMap{{IndexBasis{V, 2, L"P"}, 3}}} ==
+            AsyCost{AsyCost::ExponentMap{{named, 3}}});
   }
 }

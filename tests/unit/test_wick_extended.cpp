@@ -555,7 +555,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     ExprPtr first;
     REQUIRE_NOTHROW(first = wick_mp(in, {.full_contractions = false}));
     const auto& u =
-        get_default_context().index_space_registry()->retrieve(L"u");
+        get_default_context().index_basis_registry()->retrieve(L"u");
     for (int i = 0; i != 1000; ++i) Index::make_tmp_index(u);
     const auto second = wick_mp(in, {.full_contractions = false});
     REQUIRE(simplify(first - second) == ex<Constant>(0));

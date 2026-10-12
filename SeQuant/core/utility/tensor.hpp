@@ -12,8 +12,8 @@
 namespace sequant {
 
 /// Comparator template that compares tensor blocks (slots). This means that it
-/// takes only the spaces of indices into account but not their concrete
-/// labeling (i.e. i1 and i2 are considered equal).
+/// takes only the spaces (and basis instances) of indices into account but not
+/// their concrete labeling (i.e. i1 and i2 are considered equal).
 /// Note that the comparison will NOT take the exact location in bra/ket/aux
 /// into consideration explicitly. It compares the sequence of all indices which
 /// will lead to t{a1,i1} comparing equal to e.g. t{;a1,i1;}. The assumption
@@ -41,15 +41,15 @@ struct TensorBlockComparator {
     auto &&lhs_indices = lhs.indices();
     auto &&rhs_indices = rhs.indices();
 
-    Comparator<IndexSpace> cmp;
-    Selector<IndexSpace> selector;
+    Comparator<IndexBasis> cmp;
+    Selector<IndexBasis> selector;
 
     for (auto lhs_it = lhs_indices.begin(), rhs_it = rhs_indices.begin();
          lhs_it != lhs_indices.end(); ++lhs_it, ++rhs_it) {
       SEQUANT_ASSERT(rhs_it != rhs_indices.end());
 
-      const IndexSpace &left = lhs_it->space();
-      const IndexSpace &right = rhs_it->space();
+      const IndexBasis &left = lhs_it->basis();
+      const IndexBasis &right = rhs_it->basis();
 
       if (selector(left, right)) {
         return cmp(left, right);

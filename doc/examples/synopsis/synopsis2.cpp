@@ -6,9 +6,9 @@ int main() {
 
   // the default is to use genuine vacuum
   SEQUANT_ASSERT(get_default_context().vacuum() == Vacuum::Physical);
-  // create a context with default IndexSpaceRegistry, using a vacuum of a
+  // create a context with default IndexBasisRegistry, using a vacuum of a
   // single product of SP states
-  set_default_context({.index_space_registry = IndexSpaceRegistry{},
+  set_default_context({.index_basis_registry = IndexBasisRegistry{},
                        .vacuum = Vacuum::SingleProduct});
   SEQUANT_ASSERT(get_default_context().vacuum() == Vacuum::SingleProduct);
   // reset the context back to the default

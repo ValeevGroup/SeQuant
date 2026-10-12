@@ -18,6 +18,7 @@
 #include <range/v3/view/transform.hpp>
 
 #include <complex>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -63,7 +64,7 @@ class rand_tensor_yield {
   [[nodiscard]] Tensor_t make_rand_tensor(sequant::Tensor const& tnsr) const {
     using ranges::views::transform;
     using sequant::IndexSpace;
-    auto isr = sequant::get_default_context().index_space_registry();
+    auto isr = sequant::get_default_context().index_basis_registry();
 
     SEQUANT_ASSERT(
         ranges::all_of(tnsr.const_braket_indices(),
@@ -564,4 +565,17 @@ TEST_CASE("evaluate consults the custom evaluator and short-circuits",
     CHECK(leaf_calls == 2);     // both tensor leaves evaluated
     REQUIRE(result);
   }
+}
+
+TEST_CASE("eval_tapp_annotation_tells_basis_instances_apart",
+          "[eval_tapp][basis]") {
+  using namespace sequant;
+  const Index a1(L"a_1");
+  const std::vector<Index> idxs{a1, a1.replace_basis_instance(1),
+                                a1.replace_basis_instance(2)};
+  const auto annot = sequant::EvalExprTAPP::index_hash(idxs) |
+                     ranges::to<std::vector<int64_t>>;
+  CHECK(annot[0] != annot[1]);
+  CHECK(annot[0] != annot[2]);
+  CHECK(annot[1] != annot[2]);
 }

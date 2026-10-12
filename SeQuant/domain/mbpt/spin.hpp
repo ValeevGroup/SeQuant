@@ -104,6 +104,15 @@ std::wstring spinannotation_replacе(WS&& label, Spin s) {
   return spinannotation_add(label_sf, s);
 }
 
+/// @name spin-casing of indices
+/// An index in a named basis instance is moved to the registry's entry for
+/// that instance in the spin-cased space, which carries that basis's own
+/// metadata (e.g. the extents of the α and β bases differ in a spin-polarized
+/// state); the entry is not derived from the index's own basis.
+/// @throw Exception if the index is in a named basis instance that the default
+///        registry does not name in the spin-cased space
+/// @{
+
 // make alpha-spin idx
 [[nodiscard]] Index make_spinalpha(const Index& idx);
 
@@ -112,6 +121,8 @@ std::wstring spinannotation_replacе(WS&& label, Spin s) {
 
 // make null-spin idx
 [[nodiscard]] Index make_spinfree(const Index& idx);
+
+/// @}
 
 /// @brief Preserving particle symmetry, swaps bra and ket labels on all tensors
 /// in an expression

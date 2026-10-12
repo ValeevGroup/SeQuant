@@ -87,8 +87,8 @@ struct TensorBlockIndexComparer {
   }
 
   int compare_spaces(const Index& lhs, const Index& rhs) const {
-    if (lhs.space() != rhs.space()) {
-      return lhs.space() < rhs.space() ? -1 : 1;
+    if (lhs.basis() != rhs.basis()) {
+      return lhs.basis() < rhs.basis() ? -1 : 1;
     }
 
     if (lhs.has_proto_indices() != rhs.has_proto_indices()) {

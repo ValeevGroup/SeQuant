@@ -493,7 +493,7 @@ TEST_CASE("cache_manager_persistent", "[cache_manager]") {
   REQUIRE(man.alive(p));
 }
 
-// Task 9 regression tripwire: after the combined single-DAG evaluation
+// Regression tripwire: after the combined single-DAG evaluation
 // (every value built exactly once per evaluation), a NON-persistent cache
 // entry re-store_and_access()'d with no intervening reset() means a duplicate
 // producer survived -- a bug (see entry::store() / stored_this_eval_ in

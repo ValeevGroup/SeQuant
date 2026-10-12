@@ -4,7 +4,8 @@ A standalone utility that estimates the cost of evaluating a tensor equation
 without running it. It reads a serialized equation, optimizes and binarizes it,
 then writes a Markdown report on the largest intermediates, the most expensive
 contractions, peak storage, total operation count, and (optionally) cache reuse.
-Figures are symbolic `AsyCost` polynomials in the index-space sizes; memory and
+Figures are symbolic `AsyCost` polynomials in the sizes of the index spaces, a basis
+instance of a space counting as a symbol of its own; memory and
 storage are additionally evaluated to megabytes at the driver's sizes (element
 width follows the field: 8 bytes real, 16 bytes complex). Operation counts are
 reported symbolically only.

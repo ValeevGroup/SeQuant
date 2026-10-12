@@ -226,14 +226,15 @@ gains a trailer describing that operation's relationship to the active batch loo
 
 ::
 
-    canon=[<full labels of this node's own array layout>] sliced=[<pos>:<space> ...] scope={<space>,<space>,...}
+    canon=[<full labels of this node's own array layout>] sliced=[<pos>:<basis key> ...] scope={<basis key>,<basis key>,...}
 
 * ``canon=[...]`` — the full labels of this node's current array layout (its ``canon_indices()``), in the order the trace's other
   size/byte fields refer to.
-* ``sliced=[...]`` — which of *this node's own* modes are currently sliced, each written as ``<canonical position>:<index-space base
-  key>`` — e.g. ``0:Κ`` means the mode at position 0 belongs to the auxiliary space ``Κ`` and is a slice, not the mode's full extent.
-* ``scope={...}`` — the base keys of every batch loop currently open around this operation, outermost first (e.g. ``scope={Κ,}`` for
-  one open loop over the ``Κ`` space).
+* ``sliced=[...]`` — which of *this node's own* modes are currently sliced, each written as ``<canonical position>:<basis key>``
+  (``IndexBasis::base_key()``: the index space's base key, or the registry name of a named basis instance such as ``μ̃``) — e.g.
+  ``0:Κ`` means the mode at position 0 belongs to the auxiliary space ``Κ`` and is a slice, not the mode's full extent.
+* ``scope={...}`` — the basis keys of every batch loop currently open around this operation, outermost first (e.g. ``scope={Κ}``
+  for one open loop over the ``Κ`` space).
 
 This trailer is appended to the *same* ``label`` field the earlier sections above already parse (it does not introduce new
 ``key=value`` columns, so it will not show up under ``extras``); reading it back out of ``EvalRow.label``/``CacheRow.label`` is a small

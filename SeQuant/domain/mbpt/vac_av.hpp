@@ -65,7 +65,7 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
 // clang-format off
 /// @brief computes the reference expectation value
 /// @note equivalent to vac_av if the reference state is the Wick vacuum,
-///       i.e. if `get_default_context().index_space_registry()->reference_occupied_space() == get_default_context().index_space_registry()->vacuum_occupied_space()`
+///       i.e. if `get_default_context().index_basis_registry()->reference_occupied_space() == get_default_context().index_basis_registry()->vacuum_occupied_space()`
 /// @param[in] expr input expression
 /// @param[in] opts controls the behavior, @see EVOptions
 /// @note Connectivity constraints are empty by default.

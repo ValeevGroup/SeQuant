@@ -10,7 +10,7 @@
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -55,10 +55,10 @@ sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
 
 // Build an IndexSpace-keyed ExponentMap over the SR test registry's hole
 // ("i") and particle ("a") spaces, matching the spaces that
-// `detail::space_counts` reads off the corresponding indices.
+// `detail::basis_counts` reads off the corresponding indices.
 sequant::AsyCost::ExponentMap occ_virt_map(std::size_t nocc,
                                            std::size_t nvirt) {
-  auto const& isr = *sequant::get_default_context().index_space_registry();
+  auto const& isr = *sequant::get_default_context().index_basis_registry();
   sequant::AsyCost::ExponentMap m;
   if (nocc > 0) m.emplace(isr.retrieve(L"i"), nocc);
   if (nvirt > 0) m.emplace(isr.retrieve(L"a"), nvirt);
@@ -78,7 +78,7 @@ sequant::AsyCost occ_virt_cost(sequant::rational c, std::size_t nocc,
 // ("Κ", added to the registry by mbpt::add_df_spaces).
 sequant::AsyCost occ_virt_aux_cost(sequant::rational c, std::size_t nocc,
                                    std::size_t nvirt, std::size_t naux) {
-  auto const& isr = *sequant::get_default_context().index_space_registry();
+  auto const& isr = *sequant::get_default_context().index_basis_registry();
   auto m = occ_virt_map(nocc, nvirt);
   if (naux > 0) m.emplace(isr.retrieve(L"Κ"), naux);
   return sequant::AsyCost{m, c};
@@ -365,7 +365,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
       auto isr = mbpt::make_min_sr_spaces();
       mbpt::add_df_spaces(isr);
       auto _ =
-          set_scoped_default_context({.index_space_registry_shared_ptr = isr,
+          set_scoped_default_context({.index_basis_registry_shared_ptr = isr,
                                       .vacuum = Vacuum::SingleProduct,
                                       .spbasis = SPBasis::Spinor});
 
@@ -388,10 +388,10 @@ TEST_CASE("eval_node", "[EvalNode]") {
       auto isr = mbpt::make_min_sr_spaces();
       mbpt::add_batching_spaces(isr);
       auto _ =
-          set_scoped_default_context({.index_space_registry_shared_ptr = isr,
+          set_scoped_default_context({.index_basis_registry_shared_ptr = isr,
                                       .vacuum = Vacuum::SingleProduct,
                                       .spbasis = SPBasis::Spinor});
-      auto const& reg = *get_default_context().index_space_registry();
+      auto const& reg = *get_default_context().index_basis_registry();
       auto const a = reg.retrieve(L"a");
       auto const z = reg.retrieve(L"z");
 
@@ -404,30 +404,36 @@ TEST_CASE("eval_node", "[EvalNode]") {
       // flop count (one multiply + one add).
       auto const e1 = binarize(
           deserialize<ResultExpr>(L"R{a1;a2;z1} = A{a1;a3;z1} B{a3;a2;z1}"));
-      REQUIRE(sequant::asy_cost(e1) ==
-              AsyCost{AsyCost::ExponentMap{{a, 3}, {z, 1}}, 2});
+      REQUIRE(
+          sequant::asy_cost(e1) ==
+          AsyCost{AsyCost::ExponentMap{{IndexBasis{a}, 3}, {IndexBasis{z}, 1}},
+                  2});
 
       // Two batched indices z1,z2 (both in space z): the a^3 matmul is repeated
       // for every (z1,z2) pair, so the cost scales as a^3 · z^2.
       auto const e2 = binarize(deserialize<ResultExpr>(
           L"R{a1;a2;z1,z2} = A{a1;a3;z1,z2} B{a3;a2;z1,z2}"));
-      REQUIRE(sequant::asy_cost(e2) ==
-              AsyCost{AsyCost::ExponentMap{{a, 3}, {z, 2}}, 2});
+      REQUIRE(
+          sequant::asy_cost(e2) ==
+          AsyCost{AsyCost::ExponentMap{{IndexBasis{a}, 3}, {IndexBasis{z}, 2}},
+                  2});
     }
 
     SECTION("MRCC like example") {
       auto isr = mbpt::make_min_mr_spaces();
       auto _ =
-          set_scoped_default_context({.index_space_registry_shared_ptr = isr,
+          set_scoped_default_context({.index_basis_registry_shared_ptr = isr,
                                       .vacuum = Vacuum::SingleProduct,
                                       .spbasis = SPBasis::Spinor});
-      auto const& reg = *get_default_context().index_space_registry();
+      auto const& reg = *get_default_context().index_basis_registry();
       auto const u = reg.retrieve(L"u");  // active
       auto const a = reg.retrieve(L"a");  // virtual
 
       auto const n = eval_node(deserialize(L"g{u1,u2;a1,a2} t{a1,a2;u3,u4}"));
-      REQUIRE(sequant::asy_cost(n) ==
-              AsyCost{AsyCost::ExponentMap{{u, 4}, {a, 2}}, 2});  // 2 * u^4 a^2
+      REQUIRE(
+          sequant::asy_cost(n) ==
+          AsyCost{AsyCost::ExponentMap{{IndexBasis{u}, 4}, {IndexBasis{a}, 2}},
+                  2});  // 2 * u^4 a^2
     }
   }
 

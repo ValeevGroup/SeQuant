@@ -62,8 +62,8 @@ struct TensorBlockCompare {
   for (auto lhs_it = lhs_##group.begin(), rhs_it = rhs_##group.begin(); \
        lhs_it != lhs_##group##_end && rhs_it != rhs_##group##_end;      \
        ++lhs_it, ++rhs_it) {                                            \
-    if (lhs_it->space() != rhs_it->space()) {                           \
-      return lhs_it->space() < rhs_it->space();                         \
+    if (lhs_it->basis() != rhs_it->basis()) {                           \
+      return lhs_it->basis() < rhs_it->basis();                         \
     }                                                                   \
   }
 

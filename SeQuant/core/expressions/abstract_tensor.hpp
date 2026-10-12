@@ -214,10 +214,10 @@ class AbstractTensor {
     return to_hermiticity(this->_braket_symmetry());
   }
   /// @return the base scalar Field of the tensor: the OR of the
-  /// IndexSpace::field() of its bra/ket indices (Complex dominates). Together
+  /// IndexBasis::field() of its bra/ket indices (Complex dominates). Together
   /// with _hermiticity() this determines _braket_symmetry() (a real-field
   /// Hermitian tensor is bra<->ket Symm, a complex-field one Conjugate).
-  /// @sa sequant::base_field, IndexSpace::field
+  /// @sa sequant::base_field, IndexBasis::field
   virtual Field _base_field() const {
     return base_field(this->_bra(), this->_ket());
   }
