@@ -4,13 +4,68 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace sequant::util::extint {
+
+namespace {
+
+/// @param chain IDs of the steps whose options are currently being resolved
+std::optional<nlohmann::json> resolve_options(const nlohmann::json &steps,
+                                              const nlohmann::json &step,
+                                              std::vector<std::string> &chain) {
+  std::optional<nlohmann::json> options;
+
+  if (step.contains("inherit_options_from")) {
+    std::string src_id = step.at("inherit_options_from").get<std::string>();
+
+    if (std::ranges::find(chain, src_id) != chain.end()) {
+      std::string cycle;
+      for (const std::string &id : chain) {
+        cycle += "'" + id + "' -> ";
+      }
+      throw Exception("Cyclic option inheritance: " + cycle + "'" + src_id +
+                      "'");
+    }
+
+    auto it = std::ranges::find_if(steps, [&](const nlohmann::json &current) {
+      return current.contains("id") && current.at("id") == src_id;
+    });
+    if (it == steps.end()) {
+      throw Exception("Can't inherit options from unknown step '" + src_id +
+                      "'");
+    }
+
+    if (it->at("kind") != step.at("kind")) {
+      throw Exception("Step of kind '" + step.at("kind").get<std::string>() +
+                      "' can't inherit options from step '" + src_id +
+                      "' of kind '" + it->at("kind").get<std::string>() + "'");
+    }
+
+    chain.push_back(std::move(src_id));
+    options = resolve_options(steps, *it, chain);
+    chain.pop_back();
+  }
+
+  if (step.contains("options")) {
+    if (options) {
+      options->merge_patch(step.at("options"));
+    } else {
+      options = step.at("options");
+    }
+  }
+
+  return options;
+}
+
+}  // namespace
 
 void Executor::execute(const nlohmann::json &steps) {
   if (!steps.is_array()) {
@@ -44,13 +99,19 @@ void Executor::execute(const nlohmann::json &steps) {
     std::unique_ptr<ProcessingStep> proc_step =
         ProcessingStepFactory::instance().instantiate(kind);
 
-    if (step.contains("options")) {
+    std::vector<std::string> chain;
+    if (step.contains("id")) {
+      chain.push_back(step.at("id").get<std::string>());
+    }
+
+    if (std::optional<nlohmann::json> options =
+            resolve_options(steps, step, chain)) {
       if (!proc_step->accepts_options()) {
         throw Exception("Processing step '" + std::string(kind) +
                         "' does not take options but some where given");
       }
 
-      proc_step->set_options(step.at("options"));
+      proc_step->set_options(*options);
     } else if (proc_step->requires_options()) {
       throw Exception("Processing step '" + std::string(kind) +
                       "' requires options but none where given");
