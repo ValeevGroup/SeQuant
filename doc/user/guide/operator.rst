@@ -128,8 +128,10 @@ in a spin-free basis, :math:`c=a` and :math:`m=c!`.
   have supplied coefficients and retain :math:`1/m`.
 
 The prefactor follows from the operator's :class:`sequant::mbpt::OpClass`, so register a custom operator whose coefficients
-are solved for as ``Ex`` or ``Deex``. The replacement operator ``ã`` has explicit free indices and no summed coefficient
-tensor, so it carries no factorial prefactor.
+are solved for as ``Ex`` or ``Deex``. Projectors are recognized by the reserved labels ``reserved::antisymm_label()``
+(``Â``) and ``reserved::symm_label()`` (``Ŝ``): only operators with these labels receive the projector prefactor, and any
+other operator is normalized by its class. The replacement operator ``ã`` has explicit free indices and no summed
+coefficient tensor, so it carries no factorial prefactor.
 
 Normalization is selected when tensor forms are generated; abstract operator identity is independent of the convention.
 Keep a scoped convention active through lowering to tensor form. See :doc:`context` for a compiled example of a scoped
