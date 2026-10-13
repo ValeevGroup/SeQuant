@@ -2297,8 +2297,7 @@ ExprPtr closed_shell_CC_triplet_spintrace(
 
   triplet = triplet_combined_residual(triplet, ext_groups, bare_te);
   simplify(triplet);
-  if (options.compact)
-    triplet = triplet_maxcoeff_compact(triplet, ext_groups, bare_te);
+  if (options.compact) triplet = triplet_maxcoeff_compact(triplet, ext_groups);
   simplify(triplet);
   return triplet;
 }

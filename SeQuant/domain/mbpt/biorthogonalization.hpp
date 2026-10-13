@@ -94,14 +94,11 @@ ExprPtr WK_biorthogonalization_filter(
 /// representative slot permutation per tensor-network hash group.
 /// \param expr The residual; returned unchanged unless it is a Sum
 /// \param ext_idxs A vector of external index groups
-/// \param bare_te Compact the bare-TE residual (see triplet_combined_residual)
 /// \return The compacted expression
 /// \throw Exception for more than 3 groups (beyond triples)
-/// \throw Exception if a hash group does not match the single-representative
-///        pattern
 [[nodiscard]] ExprPtr triplet_maxcoeff_compact(
-    ExprPtr expr, const container::svector<container::svector<Index>>& ext_idxs,
-    bool bare_te = false);
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs);
 
 // clang-format off
 /// \brief Assembles the closed-shell triplet residual from the

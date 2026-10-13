@@ -2386,10 +2386,9 @@ SECTION("closed_shell_CC_spintrace") {
       closed_shell_CC_spintrace(
           expr, {.multiplicity = SpinMultiplicity::Triplet, .compact = false}),
       closed_shell_CC_triplet_spintrace(expr, {.compact = false}));
-  // a single term cannot be compacted, so compaction throws
-  REQUIRE_THROWS_AS(closed_shell_CC_spintrace(
-                        expr, {.multiplicity = SpinMultiplicity::Triplet}),
-                    Exception);
+  require_equal(closed_shell_CC_spintrace(
+                    expr, {.multiplicity = SpinMultiplicity::Triplet}),
+                closed_shell_CC_triplet_spintrace(expr));
 
   REQUIRE_THROWS_AS(
       closed_shell_CC_spintrace(
@@ -2522,8 +2521,6 @@ TEST_CASE("triplet_triples_spintrace", "[spin][triplet]") {
   REQUIRE(st);
   REQUIRE(st->is<Sum>());
   REQUIRE(st->size() > 0);
-
-  REQUIRE_THROWS(closed_shell_CC_triplet_spintrace(expr));
 }
 
 TEST_CASE("triplet_doubles_te_maxcoeff_compact", "[spin][triplet]") {
@@ -2566,10 +2563,8 @@ TEST_CASE("triplet_doubles_te_maxcoeff_compact", "[spin][triplet]") {
   const container::svector<container::svector<Index>> ext_idxs{
       {Index(L"i_1"), Index(L"a_1")}, {Index(L"i_2"), Index(L"a_2")}};
 
-  // compaction against the bare-TE row keeps the (-2c) representative per
-  // group.
-  const ExprPtr compact =
-      triplet_maxcoeff_compact(full, ext_idxs, /*bare_te=*/true);
+  // compaction keeps the (-2c) representative per group.
+  const ExprPtr compact = triplet_maxcoeff_compact(full, ext_idxs);
   REQUIRE(compact->is<Sum>());
   REQUIRE(compact->size() == 2);
 }

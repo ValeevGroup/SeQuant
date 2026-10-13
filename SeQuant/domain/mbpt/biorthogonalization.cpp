@@ -830,16 +830,15 @@ ExprPtr triplet_combined_residual(
 }
 
 ExprPtr triplet_maxcoeff_compact(
-    ExprPtr expr, const container::svector<container::svector<Index>>& ext_idxs,
-    bool bare_te) {
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs) {
   const std::size_t n_particles = ext_idxs.size();
   if (n_particles <= 1) return expr;
-  const auto& numeric_weights =
-      bare_te ? detail::triplet_te_nns_projection_weights<double>(n_particles)
-              : detail::triplet_nns_projection_weights<double>(n_particles);
-  std::vector<rational> weights;
-  weights.reserve(numeric_weights.size());
-  for (const auto w : numeric_weights) weights.push_back(to_rational(w));
+  if (n_particles > 3)
+    throw Exception(
+        "triplet_maxcoeff_compact: only up to 3 external index groups are "
+        "supported, got " +
+        std::to_string(n_particles));
   if (!expr->is<Sum>()) return expr;
 
   auto work = expr->clone();
@@ -860,6 +859,29 @@ ExprPtr triplet_maxcoeff_compact(
                  }) |
                  ranges::to<container::svector<Index>>();
 
+  // count the number of slot-permuted terms equal to this term: n! for the n
+  // external groups occupying columns of each column-symmetric tensor
+  auto stabilizer_order = [&](const Product& term) {
+    sequant::intmax_t order = 1;
+    for (const auto& f : term.factors()) {
+      if (!f->is<Tensor>()) continue;
+      const auto& t = f->as<Tensor>();
+      if (t.column_symmetry() != ColumnSymmetry::Symm) continue;
+      const auto n_cols = std::min(t.bra().size(), t.ket().size());
+      std::size_t n_groups = 0;
+      // the residual weights group 0 by its spin, so it is never permuted
+      for (std::size_t g = 1; g < n_particles; ++g)
+        for (std::size_t c = 0; c != n_cols; ++c)
+          if ((t.bra()[c] == b[g] && t.ket()[c] == k[g]) ||
+              (t.bra()[c] == k[g] && t.ket()[c] == b[g])) {
+            ++n_groups;
+            break;
+          }
+      order *= factorial(n_groups);
+    }
+    return order;
+  };
+
   container::map<std::size_t, container::vector<ExprPtr>> groups;
   const auto ctx = get_default_context_snapshot();
   const auto& cardinal_tensor_labels = ctx.cardinal_tensor_labels();
@@ -872,65 +894,17 @@ ExprPtr triplet_maxcoeff_compact(
     groups[hash].push_back(term);
   }
 
-  // the sign the canonicalization produced is returned separately so the
-  // coefficients can be tracked
-  auto canonical_unit_product =
-      [](const ExprPtr& t) -> std::pair<ExprPtr, Product::scalar_type> {
-    auto out = t->clone();
-    out->as<Product>().scale(Product::scalar_type{1} /
-                             out->as<Product>().scalar());
-    canonicalize(out);
-    simplify(out);
-    const auto sign = out->as<Product>().scalar();
-    out->as<Product>().scale(Product::scalar_type{1} / sign);
-    return {std::move(out), sign};
-  };
-
   Sum compact;
   for (const auto& [_, terms] : groups) {
-    // the max-|coeff| member is an identity-perm representative
+    // the max-|coeff| member is an identity-perm representative; its
+    // coefficient also collects the images that map back onto it
     const ExprPtr* rep = &terms.front();
     for (const auto& t : terms)
       if (abs(t->as<Product>().scalar()) > abs((*rep)->as<Product>().scalar()))
         rep = &t;
-    const auto [rep_unit, rep_sign] = canonical_unit_product(*rep);
-    const auto rep_coeff = (*rep)->as<Product>().scalar() * rep_sign;
-
-    container::map<std::size_t, Product::scalar_type> pred_weight;
-    for (std::size_t p = 0; p != weights.size(); ++p) {
-      auto [u, s] = canonical_unit_product(triplet_expr_for(rep_unit, b, k, p));
-      const auto w = Product::scalar_type(weights[p]) * s;
-      if (auto it = pred_weight.find(u->hash_value()); it != pred_weight.end())
-        it->second += w;
-      else
-        pred_weight.emplace(u->hash_value(), w);
-    }
-
-    const auto rep_weight = pred_weight.at(rep_unit->hash_value());
-    SEQUANT_ASSERT(rep_weight != Product::scalar_type(0));
-    const auto kept_coeff = rep_coeff / rep_weight;
-
-    std::size_t n_predicted_members = 0;
-    for (const auto& [h, w] : pred_weight)
-      if (w != Product::scalar_type(0)) ++n_predicted_members;
-    if (n_predicted_members != terms.size())
-      throw Exception(
-          "triplet_maxcoeff_compact: hash group does not match the "
-          "single-representative pattern; the residual cannot be "
-          "compacted losslessly");
-    for (const auto& t : terms) {
-      const auto [u, s] = canonical_unit_product(t);
-      const auto it = pred_weight.find(u->hash_value());
-      if (it == pred_weight.end() ||
-          t->as<Product>().scalar() * s != kept_coeff * it->second)
-        throw Exception(
-            "triplet_maxcoeff_compact: hash group does not match the "
-            "single-representative pattern; the residual cannot be "
-            "compacted losslessly");
-    }
-
-    auto kept = rep_unit->clone();
-    kept->as<Product>().scale(kept_coeff);
+    auto kept = (*rep)->clone();
+    kept->as<Product>().scale(
+        rational(1, stabilizer_order(kept->as<Product>())));
     compact.append(std::move(kept));
   }
   return ex<Sum>(compact);
