@@ -22,8 +22,11 @@
 #include <libperm/Rank.hpp>
 #include <libperm/Utils.hpp>
 
+#include <range/v3/algorithm/count_if.hpp>
 #include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/view/drop.hpp>
 #include <range/v3/view/transform.hpp>
+#include <range/v3/view/zip.hpp>
 
 #include <algorithm>
 #include <numeric>
@@ -850,34 +853,25 @@ ExprPtr triplet_maxcoeff_compact(
   canonicalize(work);
   simplify(work);
 
-  const auto b = ext_idxs | ranges::views::transform([](const auto& group) {
-                   return get_bra_idx(group);
-                 }) |
-                 ranges::to<container::svector<Index>>();
-  const auto k = ext_idxs | ranges::views::transform([](const auto& group) {
-                   return get_ket_idx(group);
-                 }) |
-                 ranges::to<container::svector<Index>>();
+  // columns of the external groups other than group 0: V was signed by its
+  // spin, so permutations moving it do not fix the TEE operator
+  container::set<std::pair<Index, Index>> ext_columns;
+  for (const auto& g : ext_idxs | ranges::views::drop(1))
+    ext_columns.emplace(std::minmax(get_bra_idx(g), get_ket_idx(g)));
 
   // count the number of slot-permuted terms equal to this term: n! for the n
-  // external groups occupying columns of each column-symmetric tensor
+  // external columns of each column-symmetric tensor
   auto stabilizer_order = [&](const Product& term) {
     sequant::intmax_t order = 1;
     for (const auto& f : term.factors()) {
       if (!f->is<Tensor>()) continue;
       const auto& t = f->as<Tensor>();
       if (t.column_symmetry() != ColumnSymmetry::Symm) continue;
-      const auto n_cols = std::min(t.bra().size(), t.ket().size());
-      std::size_t n_groups = 0;
-      // the residual weights group 0 by its spin, so it is never permuted
-      for (std::size_t g = 1; g < n_particles; ++g)
-        for (std::size_t c = 0; c != n_cols; ++c)
-          if ((t.bra()[c] == b[g] && t.ket()[c] == k[g]) ||
-              (t.bra()[c] == k[g] && t.ket()[c] == b[g])) {
-            ++n_groups;
-            break;
-          }
-      order *= factorial(n_groups);
+      order *= factorial(static_cast<std::size_t>(ranges::count_if(
+          ranges::views::zip(t.bra(), t.ket()), [&](const auto& col) {
+            const auto& [x, y] = col;
+            return ext_columns.contains(std::minmax(x, y));
+          })));
     }
     return order;
   };
