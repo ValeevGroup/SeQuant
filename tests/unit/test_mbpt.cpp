@@ -207,6 +207,28 @@ TEST_CASE("mbpt operator commutativity", "[mbpt]") {
     CHECK_FALSE(ip()->commutes_with(*ip()));
     CHECK(dip()->commutes_with(*ip()));
   }
+
+  SECTION("bare normal operator tensor form") {
+    auto ctx = get_default_context();
+    ctx.set(make_sr_spaces());
+    auto ctx_resetter = set_scoped_default_context(ctx);
+
+    // a creator in the complete space: its op counts per base space are
+    // intervals, so the rank comes from the tensor form, which here is the
+    // normal operator itself rather than a product
+    const auto cre_p = [] {
+      return ex<mbpt::Operator<qns_t>>(
+          []() -> std::wstring_view { return L"c"; },
+          []() -> ExprPtr { return ex<FNOperator>(cre({L"p_1"}), ann({})); },
+          [](qns_t& qns) {
+            qns_t op;
+            for (std::size_t s = 0; s != op.size() / 2; ++s)
+              op[qns_t::cre_slot(s)] = {0ul, 1ul};
+            qns = combine(op, qns);
+          });
+    };
+    CHECK_FALSE(cre_p()->commutes_with(*cre_p()));
+  }
 }
 
 TEST_CASE("mbpt multireference regressions", "[mbpt]") {
