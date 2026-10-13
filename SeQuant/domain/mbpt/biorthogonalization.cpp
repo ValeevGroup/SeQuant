@@ -578,12 +578,12 @@ ExprPtr biorthogonal_transform(
   return biorthogonal_transform_impl(expr, ext_index_groups, threshold);
 }
 
-template <detail::index_group_range IdxGroups>
-ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
-  if (!expr->is<Sum>()) return expr;
-  if (ext_idxs.size() <= 2) return expr;  // always skip R1 and R2
+namespace {
 
-  // hash filtering logic for R > 2
+// groups the terms of \p expr by tensor-network hash, keeping in each group
+// the terms with the largest |coefficient|
+container::map<std::size_t, container::vector<ExprPtr>>
+largest_coeff_terms_by_hash(const ExprPtr& expr) {
   container::map<std::size_t, container::vector<ExprPtr>> largest_coeff_terms;
 
   const auto ctx = get_default_context_snapshot();
@@ -616,8 +616,19 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
     }
   }
 
+  return largest_coeff_terms;
+}
+
+}  // namespace
+
+template <detail::index_group_range IdxGroups>
+ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
+  if (!expr->is<Sum>()) return expr;
+  if (ext_idxs.size() <= 2) return expr;  // always skip R1 and R2
+
+  // hash filtering logic for R > 2
   Sum filtered;
-  for (const auto& [_, terms] : largest_coeff_terms) {
+  for (const auto& [_, terms] : largest_coeff_terms_by_hash(expr)) {
     for (const auto& t : terms) {
       filtered.append(t);
     }
@@ -859,8 +870,7 @@ ExprPtr triplet_maxcoeff_compact(
   for (const auto& g : ext_idxs | ranges::views::drop(1))
     ext_columns.emplace(std::minmax(get_bra_idx(g), get_ket_idx(g)));
 
-  // count the number of slot-permuted terms equal to this term: n! for the n
-  // external columns of each column-symmetric tensor
+  // count the number of slot-permuted terms equal to this term
   auto stabilizer_order = [&](const Product& term) {
     sequant::intmax_t order = 1;
     for (const auto& f : term.factors()) {
@@ -876,27 +886,11 @@ ExprPtr triplet_maxcoeff_compact(
     return order;
   };
 
-  container::map<std::size_t, container::vector<ExprPtr>> groups;
-  const auto ctx = get_default_context_snapshot();
-  const auto& cardinal_tensor_labels = ctx.cardinal_tensor_labels();
-  for (const auto& term : *work) {
-    SEQUANT_ASSERT(term->is<Product>());
-    if (!term->is<Product>()) continue;
-    sequant::TensorNetwork tn(*term.as_shared_ptr<Product>());
-    const auto hash =
-        tn.canonicalize_slots(cardinal_tensor_labels).hash_value();
-    groups[hash].push_back(term);
-  }
-
   Sum compact;
-  for (const auto& [_, terms] : groups) {
+  for (const auto& [_, terms] : largest_coeff_terms_by_hash(work)) {
     // the max-|coeff| member is an identity-perm representative; its
     // coefficient also collects the images that map back onto it
-    const ExprPtr* rep = &terms.front();
-    for (const auto& t : terms)
-      if (abs(t->as<Product>().scalar()) > abs((*rep)->as<Product>().scalar()))
-        rep = &t;
-    auto kept = (*rep)->clone();
+    auto kept = terms.front()->clone();
     kept->as<Product>().scale(
         rational(1, stabilizer_order(kept->as<Product>())));
     compact.append(std::move(kept));
