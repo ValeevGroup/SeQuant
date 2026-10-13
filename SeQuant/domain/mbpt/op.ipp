@@ -175,7 +175,6 @@ bool Operator<QuantumNumbers, S>::has_odd_rank_term() const {
         rank += nop.ncreators() + nop.nannihilators();
       }
     };
-    count(term);
     term->visit(count, /* atoms_only = */ true);
     return rank;
   };
