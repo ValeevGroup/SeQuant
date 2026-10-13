@@ -164,21 +164,22 @@ TEST_CASE("MBPT operator formatting", "[mbpt][format]") {
   using namespace sequant;
   const auto ptr = mbpt::op::t(1);
   const auto& op = ptr.as<mbpt::op_t>();
+  const auto latex = to_latex(ptr);
 
-  REQUIRE(std::format("{}", op) == "{\\hat{t}_{1}}");
-  REQUIRE(std::format(L"{}", op) == L"{\\hat{t}_{1}}");
+  REQUIRE(std::format("{}", op) == toUtf8(latex));
+  REQUIRE(std::format(L"{}", op) == latex);
 
   std::ostringstream narrow;
   narrow << op;
-  REQUIRE(narrow.str() == "{\\hat{t}_{1}}");
+  REQUIRE(narrow.str() == toUtf8(latex));
   std::wostringstream wide;
   wide << op;
-  REQUIRE(wide.str() == L"{\\hat{t}_{1}}");
+  REQUIRE(wide.str() == latex);
 
   const mbpt::FOperatorBase& base = op;
-  REQUIRE(std::format("{}", base) == "{\\hat{t}_{1}}");
-  REQUIRE(std::format("{:l}|{:latex}", op, op) ==
-          "{\\hat{t}_{1}}|{\\hat{t}_{1}}");
+  REQUIRE(std::format("{}", base) == toUtf8(latex));
+  REQUIRE(std::format("{:l}|{:latex}", op, op) == toUtf8(latex + L"|" + latex));
+  // mbpt::Operator does not support serialization
   REQUIRE_THROWS_AS(std::format("{:s}", op), Exception);
   REQUIRE_THROWS_AS(std::format(L"{:serialize}", op), Exception);
   REQUIRE_THROWS_AS(std::format("{}", ptr), Exception);
