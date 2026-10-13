@@ -987,10 +987,14 @@ class Operator : public Operator<void, S> {
 
   size_t order_ = 0;
 
+  mutable std::optional<bool> has_odd_rank_term_;
+
   bool less_than_rank_of(const this_type& that) const;
 
   /// @return true if some term of this operator has an odd number of
   /// creators and annihilators
+  /// @note the result is memoized; it is intrinsic to the operator and does
+  /// not depend on the context
   bool has_odd_rank_term() const;
 
   Expr::type_id_type type_id() const override;
