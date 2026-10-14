@@ -721,6 +721,96 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(nested->as<Product>().scalar() == 2);
       REQUIRE(factors(nested).size() == 1);
     }
+
+    {  // simplify fuses the Variable factors of a Product, bare or in
+       // Powers, into one factor per Variable
+      const auto half = rational{1, 2};
+      const auto vy = ex<Variable>(L"y");
+      const auto factors = [](const ExprPtr &e) {
+        return e->as<Product>().factors();
+      };
+      const auto has_factor = [&](const ExprPtr &e, const Expr &f) {
+        return std::any_of(factors(e).begin(), factors(e).end(),
+                           [&f](const ExprPtr &g) { return *g == f; });
+      };
+
+      // x x = x^2
+      auto square = vx * vy * vx;
+      simplify(square);
+      REQUIRE(factors(square).size() == 2);
+      REQUIRE(has_factor(square, Power(vx, 2)));
+      REQUIRE(has_factor(square, *vy));
+
+      // x x^(1/2) = x^(3/2)
+      auto mixed = vx * ex<Power>(vx, half) * vy;
+      simplify(mixed);
+      REQUIRE(factors(mixed).size() == 2);
+      REQUIRE(has_factor(mixed, Power(vx, rational{3, 2})));
+
+      // x^(1/2) x^(1/2) = x
+      auto roots = ex<Power>(vx, half) * ex<Power>(vx, half) * vy;
+      simplify(roots);
+      REQUIRE(factors(roots).size() == 2);
+      REQUIRE(has_factor(roots, *vx));
+
+      // x^2 x^(-2) = 1
+      auto cancel = ex<Power>(vx, 2) * ex<Power>(vx, -2) * vy;
+      simplify(cancel);
+      REQUIRE(*cancel == *vy);
+
+      // distinct labels are left alone, in their order (canonicalize, not
+      // rapid_simplify, sorts them)
+      auto distinct = vy * vx;
+      rapid_simplify(distinct);
+      REQUIRE(factors(distinct).size() == 2);
+      REQUIRE(*factors(distinct)[0] == *vy);
+
+      // x and x* do not fuse
+      auto cx = vx->clone();
+      cx->adjoint();
+      auto norm = vx * cx;
+      simplify(norm);
+      REQUIRE(factors(norm).size() == 2);
+
+      // (x*)^1 is x*
+      auto first_power = ex<Power>(cx, 1) * vy;
+      simplify(first_power);
+      REQUIRE(factors(first_power).size() == 2);
+      REQUIRE(has_factor(first_power, *cx));
+
+      // so numerically equal terms merge in a Sum: x x y + x^2 y = 2 x^2 y
+      auto sum = vx * vx * vy + ex<Power>(vx, 2) * vy;
+      simplify(sum);
+      REQUIRE(sum->is<Product>());
+      REQUIRE(sum->as<Product>().scalar() == 2);
+      REQUIRE(has_factor(sum, Power(vx, 2)));
+
+      // (x*)^(1/2) (x^(1/2))* = x*: conjugation of the base and of the Power
+      // combine, as in Power::operator*=
+      auto pconj = ex<Power>(vx, half);
+      pconj->adjoint();
+      auto conj = ex<Power>(cx, half) * pconj * vy;
+      simplify(conj);
+      REQUIRE(factors(conj).size() == 2);
+      REQUIRE(has_factor(conj, *cx));
+
+      // the conjugation ends up on the Variable whatever the exponent:
+      // (x*)^2 is left alone, (x^2)* becomes (x*)^2, and the two merge
+      auto base_conj = ex<Power>(cx, 2) * vy;
+      simplify(base_conj);
+      REQUIRE(factors(base_conj).size() == 2);
+      REQUIRE(has_factor(base_conj, Power(cx, 2)));
+      auto power_conj = ex<Power>(vx, 2);
+      power_conj->adjoint();
+      auto moved = power_conj->clone() * vy;
+      simplify(moved);
+      REQUIRE(*moved == *base_conj);
+      auto merged = ex<Power>(cx, 2) * vy + power_conj * vy;
+      simplify(merged);
+      REQUIRE(merged->is<Product>());
+      REQUIRE(merged->as<Product>().scalar() == 2);
+      REQUIRE(has_factor(merged, Power(cx, 2)));
+    }
   }
 
   SECTION("scaled_product") {
