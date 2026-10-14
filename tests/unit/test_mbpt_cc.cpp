@@ -612,6 +612,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
                                 std::size_t rank) {
     auto has = [](const ExprPtr& term, std::wstring_view label,
                   auto&& rank_matches) {
+      SEQUANT_ENFORCE(term->is<Product>());
       return ranges::any_of(term->as<Product>().factors(), [&](auto& f) {
         if (!f.template is<Tensor>()) return false;
         const auto& t = f.template as<Tensor>();
