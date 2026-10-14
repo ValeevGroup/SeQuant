@@ -188,6 +188,8 @@ TEST_CASE("mbpt operator commutativity", "[mbpt]") {
     // odd-rank operators without contractible pairs anticommute
     CHECK_FALSE(ip()->commutes_with(*ea()));
     CHECK_FALSE(ip()->commutes_with(*ip()));
+    // simplify reorders only commuting operators, so the two terms are
+    // neither merged nor cancelled
     const auto sum = simplify(ip() * ea() + ea() * ip());
     REQUIRE(sum.is<Sum>());
     CHECK(sum.as<Sum>().size() == 2);
