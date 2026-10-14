@@ -224,10 +224,13 @@ overloads of ``ref_av`` require empty ``connect`` and ``do_not_connect`` lists: 
 connected and disconnected contributions, so whether the operators feeding it are connected is not a property of a term.
 An RDM index is external if it belongs to the context's named indices (``CanonicalizeOptions::named_indices``) or,
 when no named indices are set, if it occurs in a single bra or ket slot of its term. An index in a single bra or ket
-slot cannot be summed over, so when named indices are set they must include every such index; ``ref_av`` fails
-otherwise. A dummy RDM index is summed over the active space and is relabeled into it; an external one keeps its
-label, and if its space extends beyond the active space the RDM takes an active-space index tied to the external one
-by a Kronecker delta.
+slot cannot be summed over, so when named indices are set they must include every such index of a term that contains
+an RDM; ``ref_av`` fails otherwise. A dummy RDM index is summed over the active space and is relabeled into it; an
+external one keeps its label, and if its space extends beyond the active space the RDM takes an active-space index tied
+to the external one by a Kronecker delta. The active-space index carries no basis instance or protoindices of the index
+it replaces. An RDM index whose space does not overlap the active space, one lying entirely in the vacuum-occupied
+space or entirely outside the reference-occupied space, is left as is, although the normal-ordered expectation value
+it stands for vanishes there.
 ``vac_av`` always computes full contractions and honors these options, but it computes the Wick vacuum average, which
 may differ from the reference average. Under ``Vacuum::MultiProduct`` (see below) ``ref_av`` takes full contractions and
 honors the lists too.
