@@ -1042,10 +1042,45 @@ TEST_CASE("expr", "[elements]") {
       Power::flatten(pf12);
       REQUIRE(pf12->is<Power>());
 
-      // 8^(1/3) is not folded
+      // roots of any order fold when exact: 8^(1/3) = 2, (1/8)^(1/3) = 1/2
       auto pf13 = ex<Power>(8, rational{1, 3});
       Power::flatten(pf13);
-      REQUIRE(pf13->is<Power>());
+      REQUIRE(pf13 == ex<Constant>(rational{2}));
+      auto pf13b = ex<Power>(rational{1, 8}, rational{1, 3});
+      Power::flatten(pf13b);
+      REQUIRE(pf13b == ex<Constant>(rational{1, 2}));
+      // ... and not otherwise, even if a rational factor could come out
+      auto pf13c = ex<Power>(8, rational{1, 2});
+      Power::flatten(pf13c);
+      REQUIRE(pf13c->is<Power>());
+
+      // 0^(1/3) = 0
+      auto pf13d = ex<Power>(0, rational{1, 3});
+      Power::flatten(pf13d);
+      REQUIRE(pf13d == ex<Constant>(rational{0}));
+
+      // an integer power too large to build is left alone
+      auto pf13e = ex<Power>(2, rational{sequant::intmax_t{1} << 17});
+      Power::flatten(pf13e);
+      REQUIRE(pf13e->is<Power>());
+      auto pf13f = ex<Power>(-2, rational{sequant::intmax_t{1} << 17});
+      Power::flatten(pf13f);
+      REQUIRE(pf13f->is<Power>());
+      auto pf13g = ex<Power>(-2, rational{sequant::intmax_t{1} << 15});
+      Power::flatten(pf13g);
+      REQUIRE(pf13g == ex<Constant>(rational{sequant::intmax_t{1} << 32768}));
+      // ... the bound accounts for both denominators of a complex base:
+      // (1/2 + i/3)^20000 folds, with a 6^20000 denominator, while
+      // (1/2 + i/3)^30000 would exceed the cap and is left alone
+      const Constant::scalar_type z{rational{1, 2}, rational{1, 3}};
+      auto pf13h = ex<Power>(z, rational{20000});
+      Power::flatten(pf13h);
+      REQUIRE(pf13h->is<Constant>());
+      REQUIRE(denominator(pf13h->as<Constant>().value().real()) ==
+              pow(sequant::intmax_t{6}, 20000));
+      auto pf13i = ex<Power>(z, rational{30000});
+      Power::flatten(pf13i);
+      REQUIRE(pf13i->is<Power>());
 
       // (b^1)* = conj(b):
       auto pf14 = ex<Power>(L"y", rational{1});

@@ -2,8 +2,11 @@
 #include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
+#include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+
+#include <algorithm>
 
 namespace sequant {
 
@@ -61,54 +64,47 @@ void Power::flatten(ExprPtr& expr) {
     expr = ex<Constant>(scalar_type{1});
     return;
   }
+  // 0^k for k < 0 is undefined; the ctor rejects it, and a disabled assert
+  // must not let it fold to 0 or divide by zero below
+  if (Constant::is_zero(base_val) && pw.exponent_ < 0) return;
 
-  // Both remaining fold cases share one shape — `rational base raised to
-  // an integer exponent` — so we normalize to that shape and run a single
-  // exp-by-squaring loop. Anything else is left untouched.
-  //
-  // Case A: integer exponent (any Constant base, real or complex).
-  //   `base` is just `base_val`.
-  // Case B: half-integer exponent on a non-negative real rational base
-  //   `p/q` with both `p` and `q` perfect squares. Then
-  //     (p/q)^(m/2) = (sqrt(p)/sqrt(q))^m,
-  //   so we replace `base` with `sqrt(p)/sqrt(q)` (still a rational) and
-  //   keep `exp_int = m`.
-
-  // initialize the base
-  scalar_type base{0};
-  auto exp_nr = numerator(pw.exponent_);  // numerator of exponent
-
+  scalar_type value{0};
   if (denominator(pw.exponent_) == 1) {
-    base = base_val;
-  } else if (denominator(pw.exponent_) == 2 && base_val.imag() == 0 &&
-             base_val.real() >= 0) {
-    intmax_t p = numerator(base_val.real());
-    intmax_t q = denominator(base_val.real());  // > 0 by Boost's convention,
-                                                // sign is with the numerator
-
-    // check for perfect squares
-    intmax_t p_rem{0}, q_rem{0};
-    intmax_t p_root = boost::multiprecision::sqrt(p, p_rem);
-    intmax_t q_root = boost::multiprecision::sqrt(q, q_rem);
-    // fold if p and q are perfect squares, else return
-    if (p_rem != 0 || q_rem != 0) return;
-    base = scalar_type{rational(p_root) / rational(q_root)};
+    // integer exponent, any Constant base: exp-by-squaring; for negative
+    // exponents we power the magnitude and invert at the end
+    auto exp_nr = numerator(pw.exponent_);
+    const bool negate = exp_nr < 0;
+    if (negate) exp_nr = -exp_nr;
+    // refuse a value too large to build: with the base written as
+    // (n_re + i n_im) / d over a common denominator d, every part of the
+    // value is bounded by (|n_re| + |n_im|)^k and every denominator by d^k
+    const auto& d_re = denominator(base_val.real());
+    const auto& d_im = denominator(base_val.imag());
+    const intmax_t common_denominator = d_re * d_im;
+    const intmax_t numerator_bound = abs(numerator(base_val.real())) * d_im +
+                                     abs(numerator(base_val.imag())) * d_re;
+    unsigned base_bits = msb(common_denominator) + 1;
+    if (numerator_bound != 0)
+      base_bits = std::max<unsigned>(base_bits, msb(numerator_bound) + 1);
+    if (exp_nr * base_bits > default_max_folded_bits) return;
+    value = scalar_type{1};
+    scalar_type b = base_val;
+    while (exp_nr > 0) {
+      if (exp_nr % 2 != 0) value *= b;
+      exp_nr /= 2;
+      if (exp_nr > 0) b *= b;
+    }
+    if (negate) value = scalar_type{1} / value;
+  } else if (Constant::is_zero(base_val)) {
+    // 0^k = 0 for the k > 0 the ctor admits (k = 0 was handled above)
+  } else if (base_val.imag() == 0 && base_val.real() > 0) {
+    // a rational power of a positive rational folds iff it has no root
+    const auto form = simplest_radical_form({{base_val.real(), pw.exponent_}});
+    if (!form || form->root_order != 1) return;
+    value = scalar_type{form->rational_part};
   } else {
     return;
   }
-
-  // Standard exp-by-squaring; for negative exponents we power the
-  // magnitude and invert at the end.
-  const bool negate = exp_nr < 0;
-  if (negate) exp_nr = -exp_nr;
-  scalar_type value{1};
-  scalar_type b = base;
-  while (exp_nr > 0) {
-    if (exp_nr % 2 != 0) value *= b;
-    exp_nr /= 2;
-    if (exp_nr > 0) b *= b;
-  }
-  if (negate) value = scalar_type{1} / value;
 
   if (pw.conjugated_) value = conj(value);
   expr = ex<Constant>(std::move(value));
