@@ -66,7 +66,8 @@ enum class Normalization {
 
 /// @return the prefactor for an operator labeled @p label under the active
 /// NormalizationConvention
-/// @pre @p label is Â, Ŝ, or registered in the active OpRegistry
+/// @pre @p label is reserved (e.g. Â, Ŝ) or registered in the active
+/// OpRegistry
 Normalization normalization(const std::wstring& label);
 
 /// @brief the rank pairs of a sum of operators truncated at ranks

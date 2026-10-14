@@ -409,16 +409,14 @@ namespace sequant::mbpt {
 
 namespace detail {
 Normalization normalization(const std::wstring& label) {
-  const bool is_projector =
-      label == reserved::antisymm_label() || label == reserved::symm_label();
-  const auto opclass = to_op_class(label);
-
-  if (get_default_mbpt_context().normalization_convention() ==
-      NormalizationConvention::Default)
-    return is_projector ? Normalization::Implicit : Normalization::Default;
-  if (is_projector) return Normalization::SquareRoot;
-  return opclass == OpClass::Gen ? Normalization::Default
-                                 : Normalization::SquareRoot;
+  const bool symmetric =
+      get_default_mbpt_context().normalization_convention() ==
+      NormalizationConvention::Symmetric;
+  if (label == reserved::antisymm_label() || label == reserved::symm_label())
+    return symmetric ? Normalization::SquareRoot : Normalization::Implicit;
+  if (symmetric && to_op_class(label) != OpClass::Gen)
+    return Normalization::SquareRoot;
+  return Normalization::Default;
 }
 }  // namespace detail
 
