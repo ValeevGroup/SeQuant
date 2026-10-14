@@ -173,6 +173,11 @@ TEST_CASE("MBPT operator formatting", "[mbpt][format]") {
   REQUIRE_THROWS_AS(std::format(L"{:s}", ptr), Exception);
   std::ostringstream narrow;
   REQUIRE_THROWS_AS(narrow << op, Exception);
+
+  const auto suggests_latex = Catch::Matchers::MessageMatches(
+      Catch::Matchers::ContainsSubstring("use LaTeX"));
+  REQUIRE_THROWS_MATCHES(std::format("{}", mbpt::op::H() * mbpt::op::T(2)),
+                         Exception, suggests_latex);
 }
 
 TEST_CASE("mbpt_operator_type_id", "[mbpt]") {

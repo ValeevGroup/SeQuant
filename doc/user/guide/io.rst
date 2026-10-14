@@ -48,8 +48,9 @@ The :doc:`expressions` examples demonstrate stream insertion and default formatt
 
 Formatting uses the existing LaTeX and serialization converters and preserves their limitations. In particular,
 a custom expression's LaTeX output comes from its virtual ``to_latex()`` implementation; serialization requires
-support in the serialization converter. Unsupported conversions propagate their exceptions. Unknown format
-specifiers are rejected during compile-time format-string checking, or with :class:`sequant::Exception` when
+support in the serialization converter. Unsupported conversions propagate their exceptions.
+:class:`sequant::mbpt::Operator` has no serialization, so print operators and expressions containing them with ``l``
+or ``latex``. Unknown format specifiers are rejected during compile-time format-string checking, or with :class:`sequant::Exception` when
 using runtime format strings with ``std::vformat``. That exception does not derive from ``std::format_error``, so a handler
 for ``std::format_error`` alone does not catch it.
 

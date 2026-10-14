@@ -234,7 +234,10 @@ std::wstring to_string(const Expr& expr, const SerializationOptions& options) {
   else if (expr.is<Power>())
     return details::to_string(expr.as<Power>(), options);
   else
-    throw Exception("Unsupported expr type for serialize!");
+    throw Exception(
+        expr.type_name() +
+        " cannot be serialized; use LaTeX (to_latex or {:l}) if the "
+        "type provides it");
 }
 
 std::wstring to_string(const ResultExpr& result,
