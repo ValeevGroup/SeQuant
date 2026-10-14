@@ -327,10 +327,15 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto reg = std::make_shared<OpRegistry>();
       reg->add(L"T", OpClass::Ex);
 
-      auto ctx = Context({.csv = CSV::Yes, .op_registry_ptr = reg});
+      auto ctx = Context(
+          {.csv = CSV::Yes,
+           .op_registry_ptr = reg,
+           .normalization_convention = NormalizationConvention::Symmetric});
       auto cloned = ctx.clone();
 
       REQUIRE(cloned.csv() == ctx.csv());
+      REQUIRE(cloned.normalization_convention() ==
+              ctx.normalization_convention());
       REQUIRE(cloned.op_registry() != ctx.op_registry());  // Different pointer
       REQUIRE(cloned.op_registry()->contains(L"T"));
     }
@@ -342,10 +347,16 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto ctx2 = Context({.csv = CSV::Yes, .op_registry_ptr = reg1});
       auto ctx3 = Context({.csv = CSV::No, .op_registry_ptr = reg1});
       auto ctx4 = Context({.csv = CSV::Yes, .op_registry_ptr = reg2});
+      auto ctx5 = Context(
+          {.csv = CSV::Yes,
+           .op_registry_ptr = reg1,
+           .normalization_convention = NormalizationConvention::Symmetric});
 
       REQUIRE(ctx1 == ctx2);
       REQUIRE(ctx1 != ctx3);
       REQUIRE(ctx1 != ctx4);
+      REQUIRE(ctx1 != ctx5);
+      REQUIRE(Context{ctx1}.set(NormalizationConvention::Symmetric) == ctx5);
     }
 
     SECTION("scoped-context") {
