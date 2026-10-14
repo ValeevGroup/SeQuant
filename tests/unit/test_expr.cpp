@@ -670,6 +670,7 @@ TEST_CASE("expr", "[elements]") {
 
   SECTION("latex") {
     REQUIRE(to_latex(ExprPtr{}).empty());
+    REQUIRE(ExprPtr{}.to_latex().empty());
 
     {  // Variable
       const auto e = std::make_shared<Variable>(L"q");

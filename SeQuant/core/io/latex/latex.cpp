@@ -20,10 +20,7 @@
 
 namespace sequant::io::latex {
 
-std::wstring to_string(const ExprPtr& expr) {
-  if (!expr) return {};
-  return expr->to_latex();
-}
+std::wstring to_string(const ExprPtr& expr) { return expr.to_latex(); }
 
 std::wstring to_string(const rational& t) {
   // n.b. skip enclosing braces to make Constant::to_latex to produce same

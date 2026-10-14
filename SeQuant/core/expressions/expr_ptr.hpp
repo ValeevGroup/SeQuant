@@ -134,6 +134,7 @@ class ExprPtr : public std::shared_ptr<Expr> {
   /// @return the range size of the contained expression
   std::size_t size() const;
 
+  /// @return an empty string if this is null
   std::wstring to_latex() const;
 };  // class ExprPtr
 
