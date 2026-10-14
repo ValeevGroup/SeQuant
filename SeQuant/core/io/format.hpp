@@ -120,4 +120,13 @@ template <typename T, typename Char>
 struct std::formatter<T, Char>
     : sequant::io::detail::expression_formatter<Char, true> {};
 
+#if defined(__cpp_lib_format_ranges)
+// Expressions iterate over their subexpressions; without this the standard
+// range formatter and the formatter above are ambiguous.
+template <typename T>
+  requires std::derived_from<T, sequant::Expr>
+inline constexpr std::range_format std::format_kind<T> =
+    std::range_format::disabled;
+#endif
+
 #endif  // SEQUANT_CORE_IO_FORMAT_HPP

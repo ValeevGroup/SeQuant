@@ -26,6 +26,15 @@ struct LatexOnlyExpr : sequant::Expr {
 
 }  // namespace
 
+#if defined(__cpp_lib_format_ranges)
+// expressions are ranges; they must not be formatted as such
+static_assert(std::formattable<sequant::Expr, char>);
+static_assert(std::formattable<sequant::Sum, char>);
+static_assert(std::formattable<sequant::Product, wchar_t>);
+static_assert(std::formattable<sequant::Variable, wchar_t>);
+static_assert(std::formattable<LatexOnlyExpr, char>);
+#endif
+
 TEST_CASE("expression formatting defaults", "[format]") {
   using namespace sequant;
 
