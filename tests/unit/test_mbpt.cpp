@@ -327,10 +327,15 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto reg = std::make_shared<OpRegistry>();
       reg->add(L"T", OpClass::Ex);
 
-      auto ctx = Context({.csv = CSV::Yes, .op_registry_ptr = reg});
+      auto ctx = Context(
+          {.csv = CSV::Yes,
+           .op_registry_ptr = reg,
+           .normalization_convention = NormalizationConvention::Symmetric});
       auto cloned = ctx.clone();
 
       REQUIRE(cloned.csv() == ctx.csv());
+      REQUIRE(cloned.normalization_convention() ==
+              ctx.normalization_convention());
       REQUIRE(cloned.op_registry() != ctx.op_registry());  // Different pointer
       REQUIRE(cloned.op_registry()->contains(L"T"));
     }
@@ -342,10 +347,16 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto ctx2 = Context({.csv = CSV::Yes, .op_registry_ptr = reg1});
       auto ctx3 = Context({.csv = CSV::No, .op_registry_ptr = reg1});
       auto ctx4 = Context({.csv = CSV::Yes, .op_registry_ptr = reg2});
+      auto ctx5 = Context(
+          {.csv = CSV::Yes,
+           .op_registry_ptr = reg1,
+           .normalization_convention = NormalizationConvention::Symmetric});
 
       REQUIRE(ctx1 == ctx2);
       REQUIRE(ctx1 != ctx3);
       REQUIRE(ctx1 != ctx4);
+      REQUIRE(ctx1 != ctx5);
+      REQUIRE(Context{ctx1}.set(NormalizationConvention::Symmetric) == ctx5);
     }
 
     SECTION("scoped-context") {
@@ -369,6 +380,93 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(restored_ctx.csv() == original_csv);
     }
   }  // SECTION("context")
+
+  SECTION("normalization-convention") {
+    using namespace sequant;
+    using namespace sequant::mbpt;
+    auto scalar = [](ExprPtr e) { return simplify(e).as<Product>().scalar(); };
+    auto scoped_symmetric = [] {
+      return set_scoped_default_mbpt_context(
+          mbpt::Context{get_default_mbpt_context()}.set(
+              NormalizationConvention::Symmetric));
+    };
+
+    SECTION("prefactors") {
+      REQUIRE(scalar(tensor::t(2)) == rational(1, 4));
+      REQUIRE(scalar(tensor::P(2)) == 1);
+
+      auto guard = scoped_symmetric();
+      REQUIRE(scalar(tensor::t(2)) == rational(1, 2));
+      REQUIRE(scalar(tensor::P(2)) == rational(1, 2));
+      REQUIRE(scalar(tensor::θ(2)) == rational(1, 4));
+      REQUIRE(scalar(tensor::h(2)) == rational(1, 4));
+      REQUIRE(scalar(tensor::λ(2)) == rational(1, 2));
+      REQUIRE(scalar(tensor::r(nₚ(2), nₕ(2))) == rational(1, 2));
+      REQUIRE(scalar(tensor::l(nₚ(2), nₕ(2))) == rational(1, 2));
+    }
+
+    SECTION("irrational and spin-free prefactors") {
+      // Default gives amplitudes 1/m and projectors no prefactor; Symmetric
+      // gives both 1/sqrt(m). When m is not a perfect square the prefactor
+      // stays a Power, so compare each Symmetric operator with the Default
+      // one rescaled by hand.
+      auto sqrt_of = [](rational x) { return ex<Power>(x, rational{1, 2}); };
+      auto equal = [](const ExprPtr& a, const ExprPtr& b) {
+        return simplify(a - b) == ex<Constant>(0);
+      };
+
+      // spin-orbital basis, m = c! a!
+      const auto P23 = tensor::P(nₚ(2), nₕ(3));  // m = 2! 3! = 12
+      const auto r12 = tensor::r(nₚ(1), nₕ(2));  // m = 1! 2! = 2
+      {
+        auto guard = scoped_symmetric();
+        REQUIRE(equal(tensor::P(nₚ(2), nₕ(3)), sqrt_of({1, 12}) * P23));
+        // 2 * r12 cancels the Default 1/2
+        REQUIRE(equal(tensor::r(nₚ(1), nₕ(2)),
+                      sqrt_of({1, 2}) * ex<Constant>(2) * r12));
+      }
+
+      // spin-free basis, m = c!
+      auto ctx = get_default_context();
+      auto ctx_resetter =
+          set_scoped_default_context(ctx.set(SPBasis::Spinfree));
+      const auto P2 = tensor::P(2);   // m = 2
+      const auto P3 = tensor::P(-3);  // m = 3! = 6
+      const auto t2 = tensor::t(2);   // m = 2
+      {
+        auto guard = scoped_symmetric();
+        REQUIRE(equal(tensor::P(2), sqrt_of({1, 2}) * P2));
+        REQUIRE(equal(tensor::P(-3), sqrt_of({1, 6}) * P3));
+        // 2 * t2 cancels the Default 1/2
+        REQUIRE(equal(tensor::t(2), sqrt_of({1, 2}) * ex<Constant>(2) * t2));
+      }
+    }
+
+    SECTION("chosen at tensor-form generation") {
+      const auto regular = op::t(2);
+      const OpMaker<Statistics::FermiDirac> maker(L"t", 2);
+      ExprPtr symmetric, projector;
+      {
+        auto guard = scoped_symmetric();
+        symmetric = op::t(2);
+        projector = op::P(2);
+        REQUIRE(scalar(regular.as<op_t>().tensor_form()) == rational(1, 2));
+        REQUIRE(scalar(maker()) == rational(1, 2));
+      }
+      REQUIRE(scalar(symmetric.as<op_t>().tensor_form()) == rational(1, 4));
+      REQUIRE(scalar(projector.as<op_t>().tensor_form()) == 1);
+      REQUIRE(scalar(maker()) == rational(1, 4));
+      REQUIRE(scalar(adjoint(symmetric).as<op_t>().tensor_form()) ==
+              rational(1, 4));
+
+      REQUIRE(regular == symmetric);
+      const auto mixed = simplify(regular + symmetric);
+      REQUIRE_THAT(mixed, EquivalentTo(ex<Constant>(2) * regular));
+      REQUIRE_THAT(
+          lower_to_tensor_form(mixed),
+          EquivalentTo(ex<Constant>(2) * regular.as<op_t>().tensor_form()));
+    }
+  }
 
   SECTION("nbody_operators") {
     using namespace sequant;
@@ -981,34 +1079,6 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
       REQUIRE(to_latex(simplify(h1 * t2)) == L"{{\\hat{h¹}}{\\hat{t²}_{2}}}");
       REQUIRE(to_latex(simplify(h2 * t2)) == L"{{\\hat{h²}}{\\hat{t²}_{2}}}");
-
-      // δl δr ops
-      {  // Spinor basis
-        auto dl2 = tensor::δl(2);
-        REQUIRE(simplify(dl2 - rational{1, 2} * tensor::P(2)) ==
-                ex<Constant>(0));
-        auto dr2 = tensor::δr(2);
-        REQUIRE(simplify(dr2 - rational{1, 2} * tensor::P(-2)) ==
-                ex<Constant>(0));
-
-        auto dl23 = tensor::δl(nₚ(2), nₕ(3));
-        REQUIRE(simplify(dl23 - ex<Power>(rational{1, 12}, rational{1, 2}) *
-                                    tensor::P(nₚ(2), nₕ(3))) ==
-                ex<Constant>(0));
-      }
-
-      {  // spinfree basis
-        auto ctx = get_default_context();
-        auto ctx_resetter =
-            set_scoped_default_context(ctx.set(SPBasis::Spinfree));
-        auto dl2 = tensor::δl(2);
-        REQUIRE(simplify(dl2 - ex<Power>(rational{1, 2}, rational{1, 2}) *
-                                   tensor::P(2)) == ex<Constant>(0));
-        auto dr3 = tensor::δr(3);
-        REQUIRE(simplify(dr3 - ex<Power>(rational{1, 6}, rational{1, 2}) *
-                                   tensor::P(-3)) == ex<Constant>(0));
-      }
-
     }  // SECTION("predefined")
 
     SECTION("batching") {

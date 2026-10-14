@@ -53,6 +53,14 @@ class TestSequant(unittest.TestCase):
     s = visit(String(), ccd)
     print (s)
 
+  def test_normalization_convention(self):
+    from _sequant.mbpt import (NormalizationConvention, normalization_convention,
+                               set_normalization_convention)
+    self.assertEqual(normalization_convention(), NormalizationConvention.Default)
+    self.addCleanup(set_normalization_convention, NormalizationConvention.Default)
+    set_normalization_convention(NormalizationConvention.Symmetric)
+    self.assertEqual(normalization_convention(), NormalizationConvention.Symmetric)
+
 
 if __name__ == '__main__':
   unittest.main()

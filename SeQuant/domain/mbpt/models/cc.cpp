@@ -62,7 +62,7 @@ std::pair<std::shared_ptr<Sum>, std::shared_ptr<Sum>> screen_terms(
 
 /// P(@p np) whose legs carry the basis grants of @p amplitude
 ExprPtr amplitude_projector(nₚ np, std::wstring amplitude) {
-  return P(np, nₕ(np), {}, std::move(amplitude));
+  return P(np, nₕ(np), std::move(amplitude));
 }
 }  // namespace
 
@@ -167,7 +167,7 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
     std::vector<ExprPtr> result(pmax + 1);
     for (std::int64_t p = pmax; p >= static_cast<std::int64_t>(pmin); --p) {
       const auto projected =
-          (p != 0) ? op::tensor::P(nₚ(p), nₕ(p), {}, L"t") * hbar : hbar;
+          (p != 0) ? op::tensor::P(nₚ(p), nₕ(p), L"t") * hbar : hbar;
       result.at(p) = op::tensor::ref_av(projected);
     }
     return result;
@@ -445,9 +445,6 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
 }
 
 namespace {
-// EOM eigenvector operators R and L use SquareRoot normalization
-constexpr Normalization eom_norm = Normalization::SquareRoot;
-
 /// Projection manifolds for an EOM operator with @p np particle and @p nh hole
 /// counts, lowest rank first. Descends (np, nh) together, stopping before the
 /// reference and, for IP/EA, once either count reaches zero.
@@ -469,6 +466,10 @@ container::svector<std::pair<std::int64_t, std::int64_t>> eom_manifolds(nₚ np,
 // that same scalar on the diagonal.
 std::vector<ExprPtr> CC::eom_r_ucc(
     nₚ np, nₕ nh, const std::vector<size_t>& block_ranks) const {
+  SEQUANT_ENFORCE(get_default_mbpt_context().normalization_convention() ==
+                      NormalizationConvention::Symmetric,
+                  "UCC EOM needs the Symmetric normalization convention for a "
+                  "Hermitian block matrix");
   using std::min;
   const auto manifolds = eom_manifolds(np, nh);
   const auto K = manifolds.size();
@@ -502,12 +503,11 @@ std::vector<ExprPtr> CC::eom_r_ucc(
           bernoulli::detail::R_part(it->second, N, skip_singles() ? 2 : 1);
   }
   auto bra_of = [tensor_level](std::int64_t p, std::int64_t h) {
-    return tensor_level ? op::tensor::δl(nₚ(p), nₕ(h), L"R")
-                        : op::δl(nₚ(p), nₕ(h), L"R");
+    return tensor_level ? op::tensor::P(nₚ(p), nₕ(h), L"R")
+                        : op::P(nₚ(p), nₕ(h), L"R");
   };
   auto ket_of = [tensor_level](std::int64_t p, std::int64_t h) {
-    return tensor_level ? op::tensor::r(nₚ(p), nₕ(h), eom_norm)
-                        : op::r(nₚ(p), nₕ(h), eom_norm);
+    return tensor_level ? op::tensor::r(nₚ(p), nₕ(h)) : op::r(nₚ(p), nₕ(h));
   };
   auto vev = [tensor_level, this](const ExprPtr& e) {
     return tensor_level ? op::tensor::ref_av(e) : this->ref_av(e, {});
@@ -551,7 +551,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
     throw Exception("CC::eom_r: block_ranks require a unitary ansatz");
 
   const auto hbar = this->hbar();
-  const auto hbar_R = hbar * R(np, nh, eom_norm);
+  const auto hbar_R = hbar * R(np, nh);
   const auto op_connect = concat(default_op_connections(),
                                  {{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
 
@@ -559,7 +559,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
   std::vector<ExprPtr> result(min(np, nh) + 1);
   for (const auto& [rp, rh] : eom_manifolds(np, nh))
     result.at(min(rp, rh)) =
-        ref_av(δl(nₚ(rp), nₕ(rh), L"R") * hbar_R, op_connect);
+        ref_av(P(nₚ(rp), nₕ(rh), L"R") * hbar_R, op_connect);
 
   return result;
 }
@@ -579,7 +579,7 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
   const auto hbar = this->hbar();
 
   // L * hbar
-  const auto L_hbar = L(np, nh, eom_norm) * hbar;
+  const auto L_hbar = L(np, nh) * hbar;
 
   // connectivity:
   // default connections + connect H with projectors
@@ -592,10 +592,10 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
 
   using std::min;
   std::vector<ExprPtr> result(min(np, nh) + 1);  // for EE element 0 stays null
-  // right project with |rp,rh> (i.e., multiply δr(rp, rh)) and compute VEV
+  // right project with |rp,rh> (i.e., multiply P(-rp, -rh)) and compute VEV
   for (const auto& [rp, rh] : eom_manifolds(np, nh))
     result.at(min(rp, rh)) =
-        this->ref_av(L_hbar * δr(nₚ(rp), nₕ(rh), L"L"), op_connect);
+        this->ref_av(L_hbar * P(nₚ(-rp), nₕ(-rh), L"L"), op_connect);
 
   return result;
 }

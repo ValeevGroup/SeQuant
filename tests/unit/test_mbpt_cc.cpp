@@ -9,6 +9,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/bernoulli.hpp>
@@ -22,6 +23,8 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include "catch2_sequant.hpp"
 #include "csv_test_utils.hpp"
+
+#include <range/v3/algorithm/any_of.hpp>
 
 #include <array>
 
@@ -334,6 +337,12 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     // qUCCSD block ranks, 10.1063/5.0062090 Sec. II C: SS at the double
     // commutator (Eq. 29), SD/DS at the single (Eqs. 41, 44), DD bare (Eq. 48).
     const std::vector<std::size_t> quccsd = {2, 1, 1, 0};
+    // UCC EOM requires the Symmetric convention
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort)
+      REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), quccsd), Exception);
+    auto symmetric = set_scoped_default_mbpt_context(
+        mbpt::Context{get_default_mbpt_context()}.set(
+            NormalizationConvention::Symmetric));
 
     const auto ee = cc.eom_r(nₚ(2), nₕ(2), quccsd);
     REQUIRE(ee.size() == 3);
@@ -595,6 +604,40 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 
   SECTION("eom_cc"){SECTION("EOM-CCSD"){const auto N = 2;
   auto cc = CC{N};
+
+  // row I's terms in the rank-J eigenvector amplitude carry 1/m_J under
+  // Default and 1/sqrt(m_I m_J) under Symmetric, with m_K = c! a!; t of
+  // rank > 1 is rescaled as well, so only terms without it are compared
+  auto amplitude_rank_part = [](const ExprPtr& eq, std::wstring_view label,
+                                std::size_t rank) {
+    auto has = [](const ExprPtr& term, std::wstring_view label,
+                  auto&& rank_matches) {
+      SEQUANT_ENFORCE(term->is<Product>());
+      return ranges::any_of(term->as<Product>().factors(), [&](auto& f) {
+        if (!f.template is<Tensor>()) return false;
+        const auto& t = f.template as<Tensor>();
+        return t.label() == label &&
+               rank_matches(std::max(t.bra_rank(), t.ket_rank()));
+      });
+    };
+    ExprPtr result = ex<Constant>(0);
+    for (const auto& term : eq->as<Sum>().summands())
+      if (has(term, label, [rank](auto r) { return r == rank; }) &&
+          !has(term, L"t", [](auto r) { return r > 1; }))
+        result += term;
+    REQUIRE(!simplify(result)->is<Constant>());
+    return result;
+  };
+  auto symmetric = [](auto&& make_eqs) {
+    auto guard = set_scoped_default_mbpt_context(
+        mbpt::Context{get_default_mbpt_context()}.set(
+            NormalizationConvention::Symmetric));
+    return make_eqs();
+  };
+  auto equal = [](const ExprPtr& a, const ExprPtr& b) {
+    return simplify(a - b) == ex<Constant>(0);
+  };
+
   SECTION("EE-EOM-CCSD R") {
     const auto np = 2;
     const auto nh = 2;
@@ -603,6 +646,19 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 
     REQUIRE(size(eqs[1]) == 21);
     REQUIRE(size(eqs[2]) == 53);
+
+    // m_K = (K!)^2
+    const auto symmetric_eqs =
+        symmetric([&cc] { return cc.eom_r(nₚ(2), nₕ(2)); });
+    auto r_rank_part = [&](const ExprPtr& eq, std::size_t rank) {
+      return amplitude_rank_part(eq, L"R", rank);
+    };
+    REQUIRE(equal(r_rank_part(symmetric_eqs[1], 1), r_rank_part(eqs[1], 1)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[1], 2),
+                  ex<Constant>(2) * r_rank_part(eqs[1], 2)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[2], 1),
+                  ex<Constant>(rational{1, 2}) * r_rank_part(eqs[2], 1)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[2], 2), r_rank_part(eqs[2], 2)));
   }
 
   SECTION("IP-EOM-CCSD R") {
@@ -613,6 +669,20 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 
     REQUIRE(size(eqs[0]) == 9);
     REQUIRE(size(eqs[1]) == 32);
+
+    // m_1 = 0! 1! = 1, m_2 = 1! 2! = 2
+    const auto symmetric_eqs =
+        symmetric([&cc] { return cc.eom_r(nₚ(1), nₕ(2)); });
+    auto r_rank_part = [&](const ExprPtr& eq, std::size_t rank) {
+      return amplitude_rank_part(eq, L"R", rank);
+    };
+    const auto sqrt_half = ex<Power>(rational{1, 2}, rational{1, 2});
+    REQUIRE(equal(r_rank_part(symmetric_eqs[0], 1), r_rank_part(eqs[0], 1)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[0], 2),
+                  ex<Constant>(2) * sqrt_half * r_rank_part(eqs[0], 2)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[1], 1),
+                  sqrt_half * r_rank_part(eqs[1], 1)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[1], 2), r_rank_part(eqs[1], 2)));
   }
 
   SECTION("EA-EOM-CCSD R") {
@@ -633,6 +703,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE_THROWS_AS(CC(2).eom_r(ee_np, ee_nh, uniform_ranks), Exception);
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
+    auto symmetric = set_scoped_default_mbpt_context(
+        mbpt::Context{get_default_mbpt_context()}.set(
+            NormalizationConvention::Symmetric));
     const auto ucc = CC(2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2});
     const auto uniform = ucc.eom_r(ee_np, ee_nh);
     const auto blocked = ucc.eom_r(ee_np, ee_nh, uniform_ranks);
@@ -656,6 +729,19 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 
     REQUIRE(size(eqs[1]) == 43);
     REQUIRE(size(eqs[2]) == 31);
+
+    // m_K = (K!)^2
+    const auto symmetric_eqs =
+        symmetric([&cc] { return cc.eom_l(nₚ(2), nₕ(2)); });
+    auto l_rank_part = [&](const ExprPtr& eq, std::size_t rank) {
+      return amplitude_rank_part(eq, L"L", rank);
+    };
+    REQUIRE(equal(l_rank_part(symmetric_eqs[1], 1), l_rank_part(eqs[1], 1)));
+    REQUIRE(equal(l_rank_part(symmetric_eqs[1], 2),
+                  ex<Constant>(2) * l_rank_part(eqs[1], 2)));
+    REQUIRE(equal(l_rank_part(symmetric_eqs[2], 1),
+                  ex<Constant>(rational{1, 2}) * l_rank_part(eqs[2], 1)));
+    REQUIRE(equal(l_rank_part(symmetric_eqs[2], 2), l_rank_part(eqs[2], 2)));
   }
 }  // SECTION("EOM-CCSD")
 
