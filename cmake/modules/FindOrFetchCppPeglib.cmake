@@ -8,7 +8,13 @@ if (NOT TARGET peglib)
         GIT_SHALLOW
     )
 
+    # Only the library target is wanted; cpp-peglib's own tests and benchmark
+    # default to ON and the latter defines a `benchmark` target that collides
+    # with Google Benchmark's.
+    set(BUILD_TESTS OFF)
+    set(PEGLIB_BUILD_BENCHMARK OFF)
     FetchContent_MakeAvailable(peglib)
+    unset(BUILD_TESTS)
 endif()
 
 # postcond check
