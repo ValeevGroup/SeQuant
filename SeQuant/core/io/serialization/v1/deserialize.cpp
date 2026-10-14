@@ -267,28 +267,7 @@ bool is_base_key(std::wstring_view label) {
 
 transform::DefaultSymmetries to_default_symms(
     const DeserializationOptions &options) {
-  // unspecified symmetries default to the active Context's; the Hermiticity is
-  // resolved against each tensor's base_field downstream, as in the Tensor ctor
-  const Context &ctx = get_default_context();
-  transform::DefaultSymmetries symms{ctx.deserialization_symmetry(),
-                                     ctx.deserialization_hermiticity(),
-                                     ctx.deserialization_column_symmetry()};
-
-  if (options.def_perm_symm.has_value()) {
-    std::get<0>(symms) = options.def_perm_symm.value();
-  }
-  if (options.def_braket_symm.has_value()) {
-    std::get<1>(symms) = options.def_braket_symm.value();
-  }
-  if (options.def_col_symm.has_value()) {
-    std::get<2>(symms) = options.def_col_symm.value();
-  }
-  if (std::get<0>(symms) != Symmetry::Nonsymm) {
-    // antisymmetry/symmetric bra and ket imply particle symmetry
-    std::get<2>(symms) = ColumnSymmetry::Symm;
-  }
-
-  return symms;
+  return detail::resolve_default_symmetries(options);
 }
 
 #define SEQUANT_DESERIALIZATION_SPECIALIZATION(ExprType, StartRule, ASTType, \
