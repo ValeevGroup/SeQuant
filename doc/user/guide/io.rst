@@ -37,14 +37,8 @@ support narrow and wide characters; narrow output is UTF-8. An empty ``ExprPtr``
 and with stream insertion, matching the LaTeX and serialization converters. Deserializing that empty string
 returns an empty ``ExprPtr``.
 
-Including :file:`SeQuant/domain/mbpt/op.hpp` provides formatting and stream insertion for concrete
-:class:`sequant::mbpt::Operator` objects. These default to LaTeX because abstract MBPT operators have no
-serialization grammar; explicit ``s`` or ``serialize`` requests are rejected. This default depends on the type
-being printed: an operator accessed through :class:`sequant::Expr` or :class:`sequant::ExprPtr` still uses the
-serialization default, as do products and sums containing operators. Use ``l`` or ``latex`` for those expressions.
-
 The format specifier selects the representation: ``l`` or ``latex`` for LaTeX, and ``s`` or ``serialize`` for
-serialization. An empty specifier selects the type's default representation. These are the only supported specifiers;
+serialization. An empty specifier selects serialization. These are the only supported specifiers;
 apply string formatting to the rendered string if width, alignment, or precision is needed.
 
 Stream insertion of :class:`sequant::Expr`, :class:`sequant::ExprPtr` and :class:`sequant::ResultExpr` produces

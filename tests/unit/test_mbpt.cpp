@@ -166,24 +166,13 @@ TEST_CASE("MBPT operator formatting", "[mbpt][format]") {
   const auto& op = ptr.as<mbpt::op_t>();
   const auto latex = to_latex(ptr);
 
-  REQUIRE(std::format("{}", op) == toUtf8(latex));
-  REQUIRE(std::format(L"{}", op) == latex);
-
-  std::ostringstream narrow;
-  narrow << op;
-  REQUIRE(narrow.str() == toUtf8(latex));
-  std::wostringstream wide;
-  wide << op;
-  REQUIRE(wide.str() == latex);
-
-  const mbpt::FOperatorBase& base = op;
-  REQUIRE(std::format("{}", base) == toUtf8(latex));
-  REQUIRE(std::format("{:l}|{:latex}", op, op) == toUtf8(latex + L"|" + latex));
+  REQUIRE(std::format("{:l}", op) == toUtf8(latex));
+  REQUIRE(std::format(L"{:latex}", ptr) == latex);
   // mbpt::Operator does not support serialization
-  REQUIRE_THROWS_AS(std::format("{:s}", op), Exception);
-  REQUIRE_THROWS_AS(std::format(L"{:serialize}", op), Exception);
-  REQUIRE_THROWS_AS(std::format("{}", ptr), Exception);
-  REQUIRE_THROWS_AS(std::format("{}", static_cast<const Expr&>(op)), Exception);
+  REQUIRE_THROWS_AS(std::format("{}", op), Exception);
+  REQUIRE_THROWS_AS(std::format(L"{:s}", ptr), Exception);
+  std::ostringstream narrow;
+  REQUIRE_THROWS_AS(narrow << op, Exception);
 }
 
 TEST_CASE("mbpt_operator_type_id", "[mbpt]") {
