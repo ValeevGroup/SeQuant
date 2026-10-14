@@ -176,6 +176,24 @@ class IndexBasis {
     return result;
   }
 
+  template <std::ranges::contiguous_range View>
+    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
+                          char> ||
+             std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
+                          wchar_t>)
+  static auto reduce_key(View&& key) {
+    return IndexSpace::reduce_key(key);
+  }
+
+  template <typename CharT>
+  static auto reduce_key(const CharT* key) {
+    return IndexSpace::reduce_key(key);
+  }
+
+  struct bad_key : IndexSpace::bad_key {
+    using IndexSpace::bad_key::bad_key;
+  };
+
  private:
   IndexSpace space_;
   optional_instance basis_instance_;
