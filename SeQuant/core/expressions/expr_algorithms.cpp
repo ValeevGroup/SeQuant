@@ -596,12 +596,29 @@ struct RapidSimplifyVisitor {
     return mutated;
   }
 
-  // @return true if any simplifications were performed
+  /// simplifies a lone Power as simplify_product() would one inside a
+  /// Product: folds it if possible, else brings it to the same form, so that
+  /// e.g. `2^(3/2)` becomes `2 2^(1/2)` and merges with it in a Sum
+  /// @param[in,out] expr (shared_ptr to ) a Power
+  bool simplify_power(ExprPtr& expr) {
+    Power::flatten(expr);
+    if (!expr->is<Power>()) return true;
+    const Product one_factor(ExprPtrList{expr});
+    auto fused = fuse_rational_powers(one_factor);
+    if (!fused) fused = fuse_variable_powers(one_factor);
+    if (!fused) return false;
+    expr = std::move(fused);
+    return true;
+  }
+
+  /// @return true if any simplifications were performed
   bool simplify(ExprPtr& expr) {
     if (expr->is<Product>()) {
       return simplify_product(expr);
     } else if (expr->is<Sum>()) {
       return simplify_sum(expr);
+    } else if (expr->is<Power>()) {
+      return simplify_power(expr);
     } else
       return false;
   }

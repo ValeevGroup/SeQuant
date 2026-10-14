@@ -720,6 +720,22 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(nested->is<Product>());
       REQUIRE(nested->as<Product>().scalar() == 2);
       REQUIRE(factors(nested).size() == 1);
+
+      // a lone Power is brought to the same form, so 8^(1/3) folds to 2,
+      // 2^(3/2) becomes 2 2^(1/2) and merges with it in a Sum, and 2^(1/2)
+      // is left alone
+      auto lone_cube = ex<Power>(8, third);
+      simplify(lone_cube);
+      REQUIRE(lone_cube == ex<Constant>(2));
+      auto lone_sum = ex<Power>(2, rational{3, 2}) +
+                      ex<Constant>(2) * ex<Power>(2, half) + ex<Power>(8, half);
+      simplify(lone_sum);
+      REQUIRE(lone_sum->is<Product>());
+      REQUIRE(lone_sum->as<Product>().scalar() == 6);
+      REQUIRE(has_factor(lone_sum, Power(2, half)));
+      auto lone_root = ex<Power>(2, half);
+      simplify(lone_root);
+      REQUIRE(*lone_root == Power(2, half));
     }
 
     {  // simplify fuses the Variable factors of a Product, bare or in
@@ -810,6 +826,19 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(merged->is<Product>());
       REQUIRE(merged->as<Product>().scalar() == 2);
       REQUIRE(has_factor(merged, Power(cx, 2)));
+
+      // a lone Power gets the same treatment, so it merges with its Product
+      // form in a Sum: (x^2)* + (x*)^2 = 2 (x*)^2, x^1 + x = 2 x
+      auto lone_conj = power_conj->clone() + ex<Power>(cx, 2);
+      simplify(lone_conj);
+      REQUIRE(lone_conj->is<Product>());
+      REQUIRE(lone_conj->as<Product>().scalar() == 2);
+      REQUIRE(has_factor(lone_conj, Power(cx, 2)));
+      auto lone_first = ex<Power>(vx, 1) + vx;
+      simplify(lone_first);
+      REQUIRE(lone_first->is<Product>());
+      REQUIRE(lone_first->as<Product>().scalar() == 2);
+      REQUIRE(has_factor(lone_first, *vx));
     }
   }
 
