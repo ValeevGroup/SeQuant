@@ -70,7 +70,7 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   // try looking up space in registry
   const auto label = mbpt::spinannotation_replacе(idx.space().base_key(), s);
   if (auto isr = get_default_context().index_basis_registry()) {
-    auto* space_ptr = isr->retrieve_ptr(label);
+    auto* space_ptr = isr->retrieve_space_ptr(label);
     if (space_ptr && space_ptr->type() == idx.space().type() &&
         space_ptr->qns() == qns) {
       space = *space_ptr;

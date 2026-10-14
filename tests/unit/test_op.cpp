@@ -282,11 +282,15 @@ TEST_CASE("op", "[elements]") {
       REQUIRE(!is_pure_qpannihilator(fann(L"p_1"), V));
       auto isr = get_default_context().index_basis_registry();
       REQUIRE(!qpannihilator_space(fann(L"i_1"), V));
-      REQUIRE(qpannihilator_space(fcre(L"i_1"), V) == isr->retrieve(L"i_1"));
+      REQUIRE(qpannihilator_space(fcre(L"i_1"), V) ==
+              isr->retrieve_space(L"i_1"));
       REQUIRE(!qpannihilator_space(fcre(L"a_1"), V));
-      REQUIRE(qpannihilator_space(fann(L"a_1"), V) == isr->retrieve(L"a_1"));
-      REQUIRE(qpannihilator_space(fcre(L"p_1"), V) == isr->retrieve(L"m_1"));
-      REQUIRE(qpannihilator_space(fann(L"p_1"), V) == isr->retrieve(L"e_1"));
+      REQUIRE(qpannihilator_space(fann(L"a_1"), V) ==
+              isr->retrieve_space(L"a_1"));
+      REQUIRE(qpannihilator_space(fcre(L"p_1"), V) ==
+              isr->retrieve_space(L"m_1"));
+      REQUIRE(qpannihilator_space(fann(L"p_1"), V) ==
+              isr->retrieve_space(L"e_1"));
     }
     {
       constexpr const Vacuum V = Vacuum::Physical;
@@ -376,12 +380,15 @@ TEST_CASE("op", "[elements]") {
       REQUIRE(!pure_qpcre);
       REQUIRE(!pure_qpann);
 
-      REQUIRE(qpcreator_space(fcre(L"u_1"), V) == isr->retrieve(L"u"));
-      REQUIRE(qpannihilator_space(fcre(L"u_1"), V) == isr->retrieve(L"u"));
-      REQUIRE(qpcreator_space(fcre(L"p_1"), V) == isr->retrieve(L"E"));
-      REQUIRE(qpannihilator_space(fcre(L"p_1"), V) == isr->retrieve(L"M"));
-      REQUIRE(qpcreator_space(fann(L"p_1"), V) == isr->retrieve(L"M"));
-      REQUIRE(qpannihilator_space(fann(L"p_1"), V) == isr->retrieve(L"E"));
+      REQUIRE(qpcreator_space(fcre(L"u_1"), V) == isr->retrieve_space(L"u"));
+      REQUIRE(qpannihilator_space(fcre(L"u_1"), V) ==
+              isr->retrieve_space(L"u"));
+      REQUIRE(qpcreator_space(fcre(L"p_1"), V) == isr->retrieve_space(L"E"));
+      REQUIRE(qpannihilator_space(fcre(L"p_1"), V) ==
+              isr->retrieve_space(L"M"));
+      REQUIRE(qpcreator_space(fann(L"p_1"), V) == isr->retrieve_space(L"M"));
+      REQUIRE(qpannihilator_space(fann(L"p_1"), V) ==
+              isr->retrieve_space(L"E"));
     }
   }
 

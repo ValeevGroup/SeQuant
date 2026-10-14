@@ -10,7 +10,7 @@ namespace sequant {
 // defined in the header, requiring an include to index_basis_registry,
 // resulting in a circular include issue.
 template <typename StrView>
-IndexSpace retrieve(StrView label) {
+IndexSpace retrieve_space(StrView label) {
   auto registry_ptr = get_default_context().index_basis_registry();
 
   if (!registry_ptr) {
@@ -18,12 +18,14 @@ IndexSpace retrieve(StrView label) {
         "Can't use IndexSpace(string) without an active index basis registry");
   }
 
-  return registry_ptr->retrieve(label);
+  return registry_ptr->retrieve_space(label);
 }
 
-IndexSpace::IndexSpace(std::string_view label) : IndexSpace(retrieve(label)) {}
+IndexSpace::IndexSpace(std::string_view label)
+    : IndexSpace(retrieve_space(label)) {}
 
-IndexSpace::IndexSpace(std::wstring_view label) : IndexSpace(retrieve(label)) {}
+IndexSpace::IndexSpace(std::wstring_view label)
+    : IndexSpace(retrieve_space(label)) {}
 
 std::string to_string(IndexSpace::Type type) {
   std::ostringstream oss;

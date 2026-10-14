@@ -301,7 +301,7 @@ class Context {
   /// \warning a registry that is adopted or moved in is the caller's object,
   /// and whatever else the caller kept that reaches it still does: a pointer
   /// or reference to it or into it (e.g. from the non-const
-  /// IndexBasisRegistry::retrieve_ptr()), a std::weak_ptr to it, or a
+  /// IndexBasisRegistry::retrieve_space_ptr()), a std::weak_ptr to it, or a
   /// shared_ptr that does not own it (e.g. one with a no-op deleter), which
   /// cannot be told from its only owner. Modifying the registry through any
   /// of these goes unnoticed by the contexts that hold it.

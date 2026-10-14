@@ -273,12 +273,12 @@ container::svector<IndexSpace> registered_pieces(
     IndexSpace::QuantumNumbers qns) {
   container::svector<IndexSpace> result;
   if (!type) return result;
-  if (const auto *sp = isr.retrieve_ptr(type, qns)) {
+  if (const auto *sp = isr.retrieve_space_ptr(type, qns)) {
     result.push_back(*sp);
     return result;
   }
   for (const auto &t : isr.base_space_types())
-    if (type.includes(t)) result.push_back(isr.retrieve(t, qns));
+    if (type.includes(t)) result.push_back(isr.retrieve_space(t, qns));
   return result;
 }
 
@@ -313,7 +313,7 @@ std::optional<Alternatives> split_density(const IndexBasisRegistry &isr,
     result.push_back({make_kronecker(bra, d), make_identity(d, ket, metric)});
   }
   if (const auto active = common.type().intersection(parts.active)) {
-    const auto &sp = isr.retrieve(active, common.qns());
+    const auto &sp = isr.retrieve_space(active, common.qns());
     const auto b = idxfac.make(sp);
     const auto k = idxfac.make(sp);
     result.push_back(

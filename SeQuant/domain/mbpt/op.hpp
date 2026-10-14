@@ -105,8 +105,8 @@ bool is_vacuum(QuantumNumbers qns);
 
 /// converts an IndexSpace::Type to IndexSpace using default quantum number set
 inline IndexSpace make_space(const IndexSpace::Type& type) {
-  return get_default_context().index_basis_registry()->retrieve(type,
-                                                                Spin::any);
+  return get_default_context().index_basis_registry()->retrieve_space(
+      type, Spin::any);
 }
 
 /// @brief Holds parameters for operator construction
@@ -848,7 +848,7 @@ class OpMaker {
     mbpt::check_for_batching_space();
     SEQUANT_ASSERT(!batch_indices.empty());
     [[maybe_unused]] auto batch_space =
-        get_default_context().index_basis_registry()->retrieve(L"z");
+        get_default_context().index_basis_registry()->retrieve_space(L"z");
     // assumes that there are no more than one type of batch space
     for ([[maybe_unused]] const auto& idx : batch_indices) {
       SEQUANT_ASSERT(idx.space() == batch_space);

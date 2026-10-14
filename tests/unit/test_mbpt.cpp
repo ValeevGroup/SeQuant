@@ -1268,7 +1268,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
           set_scoped_default_context({.index_basis_registry_shared_ptr = isr,
                                       .vacuum = Vacuum::SingleProduct});
       REQUIRE_NOTHROW(
-          get_default_context().index_basis_registry()->retrieve(L"z"));
+          get_default_context().index_basis_registry()->retrieve_space(L"z"));
 
       using namespace mbpt;
       REQUIRE_NOTHROW(op::Hʼ(1, {.order = 1, .nbatch = 1}));
@@ -1816,7 +1816,7 @@ SECTION("MRSO-MultiProduct") {
                  (l.action == Action::Create ? fcrex(l.index) : fannx(l.index));
       auto contracted = FWickTheorem{string}.full_contractions(false).compute();
       const auto isr = get_default_context().index_basis_registry();
-      const auto& active = isr->retrieve(L"u");
+      const auto& active = isr->retrieve_space(L"u");
       auto average = [&](ExprPtr& f) {
         if (f->is<FNOperator>()) {
           const auto& nop = f->as<FNOperator>();
@@ -1957,7 +1957,8 @@ SECTION("MRSO-MultiProduct") {
             const auto& t = e->as<Tensor>();
             if (t.label() == L"γ" || t.label() == L"η" || t.label() == L"κ")
               for (const auto& idx : t.const_braket())
-                active_only = active_only && idx.space() == isr->retrieve(L"u");
+                active_only =
+                    active_only && idx.space() == isr->retrieve_space(L"u");
           },
           /*atoms_only=*/true);
       INFO("mp: " << toUtf8(to_latex(mp)));
@@ -2231,7 +2232,7 @@ SECTION("rules") {
       ExprPtr input_expr = deserialize(inputs.at(i));
 
       const IndexSpace aux_space =
-          get_default_context().index_basis_registry()->retrieve(L"x");
+          get_default_context().index_basis_registry()->retrieve_space(L"x");
 
       ExprPtr actual = mbpt::density_fit(input_expr, aux_space, L"g", L"B");
 
@@ -2262,7 +2263,7 @@ SECTION("rules") {
       ExprPtr input_expr = deserialize(inputs.at(i));
 
       const IndexSpace aux_space =
-          get_default_context().index_basis_registry()->retrieve(L"x");
+          get_default_context().index_basis_registry()->retrieve_space(L"x");
 
       ExprPtr actual =
           mbpt::tensor_hypercontract(input_expr, aux_space, L"g", L"B", L"C");

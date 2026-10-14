@@ -486,7 +486,7 @@ OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
                    "OpMaker: batch_ordinals must be sorted");
     mbpt::check_for_batching_space();
     const auto batch_space =
-        get_default_context().index_basis_registry()->retrieve(L"z");
+        get_default_context().index_basis_registry()->retrieve_space(L"z");
 
     container::svector<Index> batch_indices;
     for (const auto& ord : params.batch_ordinals) {
@@ -499,7 +499,7 @@ OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
                    "OpMaker: nbatch cannot be zero");
     mbpt::check_for_batching_space();
     const auto batch_space =
-        get_default_context().index_basis_registry()->retrieve(L"z");
+        get_default_context().index_basis_registry()->retrieve_space(L"z");
     batch_indices_ = make_batch_indices(
         IndexSpaceContainer(params.nbatch.value(), batch_space));
   }

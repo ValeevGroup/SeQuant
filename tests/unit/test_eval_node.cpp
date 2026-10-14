@@ -60,8 +60,8 @@ sequant::AsyCost::ExponentMap occ_virt_map(std::size_t nocc,
                                            std::size_t nvirt) {
   auto const& isr = *sequant::get_default_context().index_basis_registry();
   sequant::AsyCost::ExponentMap m;
-  if (nocc > 0) m.emplace(isr.retrieve(L"i"), nocc);
-  if (nvirt > 0) m.emplace(isr.retrieve(L"a"), nvirt);
+  if (nocc > 0) m.emplace(isr.retrieve_space(L"i"), nocc);
+  if (nvirt > 0) m.emplace(isr.retrieve_space(L"a"), nvirt);
   return m;
 }
 
@@ -80,7 +80,7 @@ sequant::AsyCost occ_virt_aux_cost(sequant::rational c, std::size_t nocc,
                                    std::size_t nvirt, std::size_t naux) {
   auto const& isr = *sequant::get_default_context().index_basis_registry();
   auto m = occ_virt_map(nocc, nvirt);
-  if (naux > 0) m.emplace(isr.retrieve(L"Κ"), naux);
+  if (naux > 0) m.emplace(isr.retrieve_space(L"Κ"), naux);
   return sequant::AsyCost{m, c};
 }
 
@@ -392,8 +392,8 @@ TEST_CASE("eval_node", "[EvalNode]") {
                                       .vacuum = Vacuum::SingleProduct,
                                       .spbasis = SPBasis::Spinor});
       auto const& reg = *get_default_context().index_basis_registry();
-      auto const a = reg.retrieve(L"a");
-      auto const z = reg.retrieve(L"z");
+      auto const a = reg.retrieve_space(L"a");
+      auto const z = reg.retrieve_space(L"z");
 
       // A batched index appears in left, right, AND result: it is neither
       // summed over (like a contracted index) nor unique to one operand (like
@@ -426,8 +426,8 @@ TEST_CASE("eval_node", "[EvalNode]") {
                                       .vacuum = Vacuum::SingleProduct,
                                       .spbasis = SPBasis::Spinor});
       auto const& reg = *get_default_context().index_basis_registry();
-      auto const u = reg.retrieve(L"u");  // active
-      auto const a = reg.retrieve(L"a");  // virtual
+      auto const u = reg.retrieve_space(L"u");  // active
+      auto const a = reg.retrieve_space(L"a");  // virtual
 
       auto const n = eval_node(deserialize(L"g{u1,u2;a1,a2} t{a1,a2;u3,u4}"));
       REQUIRE(

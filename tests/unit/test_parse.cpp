@@ -520,8 +520,9 @@ TEST_CASE("serialization", "[serialization]") {
       auto f12_resetter = set_scoped_default_context(f12);
       const auto expr = deserialize<ExprPtr>(L"t{α'_1;i_1}");
       REQUIRE(expr->is<Tensor>());
-      REQUIRE(expr->as<Tensor>().bra().at(0).space() ==
-              get_default_context().index_basis_registry()->retrieve(L"α'"));
+      REQUIRE(
+          expr->as<Tensor>().bra().at(0).space() ==
+          get_default_context().index_basis_registry()->retrieve_space(L"α'"));
       REQUIRE(*deserialize<ExprPtr>(serialize(expr)) == *expr);
     }
 

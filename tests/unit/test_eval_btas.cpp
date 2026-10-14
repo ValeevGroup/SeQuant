@@ -79,14 +79,14 @@ class rand_tensor_yield {
     SEQUANT_ASSERT(
         ranges::all_of(tnsr.const_braket_indices(),
                        [&isr](auto const& idx) {
-                         return idx.space() == isr->retrieve(L"i") ||
-                                idx.space() == isr->retrieve(L"a");
+                         return idx.space() == isr->retrieve_space(L"i") ||
+                                idx.space() == isr->retrieve_space(L"a");
                        }) &&
         "Unsupported IndexSpace type found while generating tensor.");
 
     auto rng = btas::Range{
         tnsr.const_braket_indices() | transform([this, &isr](auto const& idx) {
-          return idx.space() == isr->retrieve(L"i") ? nocc_ : nvirt_;
+          return idx.space() == isr->retrieve_space(L"i") ? nocc_ : nvirt_;
         }) |
         ranges::to_vector};
 
@@ -175,9 +175,9 @@ class aux_rand_tensor_yield {
 
   size_t extent(sequant::Index const& idx) const {
     auto isr = sequant::get_default_context().index_basis_registry();
-    if (idx.space() == isr->retrieve(L"i")) return nocc_;
-    if (idx.space() == isr->retrieve(L"a")) return nvirt_;
-    if (idx.space() == isr->retrieve(L"z")) return nz_;
+    if (idx.space() == isr->retrieve_space(L"i")) return nocc_;
+    if (idx.space() == isr->retrieve_space(L"a")) return nvirt_;
+    if (idx.space() == isr->retrieve_space(L"z")) return nz_;
     SEQUANT_ASSERT(false && "aux_rand_tensor_yield: unsupported IndexSpace");
     return 0;
   }
