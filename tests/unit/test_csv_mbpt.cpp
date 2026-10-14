@@ -369,7 +369,7 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
     using Maker = OpMaker<Statistics::FermiDirac>;
     const container::svector<IndexSpace> uoccs{a};
     const auto op = Maker::make(
-        L"t", uoccs, uoccs,
+        OpClass::Ex, uoccs, uoccs,
         [](auto const& creidxs, auto const& annidxs, Symmetry opsymm) {
           return ex<Tensor>(L"X", bra(creidxs), ket(annidxs), opsymm);
         },

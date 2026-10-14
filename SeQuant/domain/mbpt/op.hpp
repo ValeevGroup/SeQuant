@@ -64,6 +64,11 @@ enum class Normalization {
   SquareRoot  ///< 1/sqrt(c! a!)
 };
 
+/// @return the prefactor for an operator of class @p opclass under the active
+/// NormalizationConvention; projectors Â and Ŝ are not operators of any
+/// class, see the label overload
+Normalization normalization(OpClass opclass);
+
 /// @return the prefactor for an operator labeled @p label under the active
 /// NormalizationConvention
 /// @pre @p label is reserved (e.g. Â, Ŝ) or registered in the active
@@ -750,7 +755,7 @@ class OpMaker {
   /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
   /// Tensor with the respective bra/cre and ket/ann indices and of the given
   /// symmetry
-  /// @param[in] label registered operator label whose OpClass selects the
+  /// @param[in] opclass the class of the operator, which selects the
   /// prefactor under the active NormalizationConvention; the tensor label is
   /// set by @p tensor_generator
   /// @param[in] cre_spaces creator IndexSpaces
@@ -760,15 +765,14 @@ class OpMaker {
   /// @param[in] grant the basis instance of each minted index, see
   /// build_op_info
   template <typename TensorGenerator>
-  static ExprPtr make(const std::wstring& label,
-                      const IndexSpaceContainer& cre_spaces,
+  static ExprPtr make(OpClass opclass, const IndexSpaceContainer& cre_spaces,
                       const IndexSpaceContainer& ann_spaces,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx dep = UseDepIdx::None,
                       const BasisGrant& grant = {}) {
     return make(cre_spaces, ann_spaces,
                 std::forward<TensorGenerator>(tensor_generator), dep,
-                detail::normalization(label), grant);
+                detail::normalization(opclass), grant);
   }
 
  private:

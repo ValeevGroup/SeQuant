@@ -408,15 +408,24 @@ sequant::container::svector<sequant::Index> make_batch_indices(
 namespace sequant::mbpt {
 
 namespace detail {
+namespace {
+bool symmetric_convention() {
+  return get_default_mbpt_context().normalization_convention() ==
+         NormalizationConvention::Symmetric;
+}
+}  // namespace
+
+Normalization normalization(OpClass opclass) {
+  return symmetric_convention() && opclass != OpClass::Gen
+             ? Normalization::SquareRoot
+             : Normalization::Default;
+}
+
 Normalization normalization(const std::wstring& label) {
-  const bool symmetric =
-      get_default_mbpt_context().normalization_convention() ==
-      NormalizationConvention::Symmetric;
   if (label == reserved::antisymm_label() || label == reserved::symm_label())
-    return symmetric ? Normalization::SquareRoot : Normalization::Implicit;
-  if (symmetric && to_op_class(label) != OpClass::Gen)
-    return Normalization::SquareRoot;
-  return Normalization::Default;
+    return symmetric_convention() ? Normalization::SquareRoot
+                                  : Normalization::Implicit;
+  return normalization(to_op_class(label));
 }
 }  // namespace detail
 
@@ -630,7 +639,7 @@ ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
     auto make_g_contribution = [](const auto& occ_space) {
       auto isr = get_default_context().index_basis_registry();
       return mbpt::OpMaker<Statistics::FermiDirac>::make(
-          L"f", {isr->complete_space(Spin::any)},
+          OpClass::Gen, {isr->complete_space(Spin::any)},
           {isr->complete_space(Spin::any)},
           [=](auto braidxs, auto ketidxs, Symmetry opsymm) {
             auto m1 = Index::make_tmp_index(occ_space);
