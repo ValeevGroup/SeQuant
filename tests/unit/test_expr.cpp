@@ -531,6 +531,315 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(pwnf->is<Product>());
       REQUIRE(pwnf->as<Product>().scalar() == 1);
     }
+    {  // simplify fuses the positive-rational Powers of a Product into
+       // simplest radical form: the rational part of their value goes into
+       // the scalar, the rest into a single Power R^(1/D)
+      const auto half = rational{1, 2};
+      const auto third = rational{1, 3};
+      const auto factors = [](const ExprPtr &e) {
+        return e->as<Product>().factors();
+      };
+      const auto has_factor = [&](const ExprPtr &e, const Expr &f) {
+        return std::any_of(factors(e).begin(), factors(e).end(),
+                           [&f](const ExprPtr &g) { return *g == f; });
+      };
+
+      // same base: exponents add, b^(1/2) b^(1/2) = b
+      auto same = ex<Power>(half, half) * vx * ex<Power>(half, half);
+      simplify(same);
+      REQUIRE(same->is<Product>());
+      REQUIRE(same->as<Product>().scalar() == half);
+      REQUIRE(factors(same).size() == 1);
+
+      // same exponent: bases multiply, (1/2)^(1/2) (1/8)^(1/2) = 1/4
+      auto perfect =
+          ex<Power>(half, half) * ex<Power>(rational{1, 8}, half) * vx;
+      simplify(perfect);
+      REQUIRE(perfect->is<Product>());
+      REQUIRE(perfect->as<Product>().scalar() == rational{1, 4});
+      REQUIRE(factors(perfect).size() == 1);
+
+      // ... and the irrational part stays: (1/2)^(1/2) (1/6)^(1/2) =
+      // (1/6) 3^(1/2)
+      auto fused = ex<Power>(half, half) * ex<Power>(rational{1, 6}, half) * vx;
+      simplify(fused);
+      REQUIRE(fused->is<Product>());
+      REQUIRE(fused->as<Product>().scalar() == rational{1, 6});
+      REQUIRE(factors(fused).size() == 2);
+      REQUIRE(has_factor(fused, Power(3, half)));
+
+      // more than two Powers fuse into one
+      auto three = ex<Power>(half, half) * ex<Power>(half, half) * vx *
+                   ex<Power>(2, half) * ex<Power>(2, half);
+      simplify(three);
+      REQUIRE(*three == *vx);
+
+      // different bases and exponents fuse into one root:
+      // 2^(1/2) 3^(1/3) = 72^(1/6)
+      auto roots = ex<Power>(2, half) * ex<Power>(3, third) * vx;
+      simplify(roots);
+      REQUIRE(roots->is<Product>());
+      REQUIRE(roots->as<Product>().scalar() == 1);
+      REQUIRE(factors(roots).size() == 2);
+      REQUIRE(has_factor(roots, Power(72, rational{1, 6})));
+
+      // the result does not depend on the order of the factors
+      auto order1 =
+          ex<Power>(2, half) * ex<Power>(3, third) * ex<Power>(2, third) * vx;
+      auto order2 =
+          ex<Power>(3, third) * ex<Power>(2, third) * ex<Power>(2, half) * vx;
+      simplify(order1);
+      simplify(order2);
+      REQUIRE(*order1 == *order2);
+      REQUIRE(has_factor(order1, Power(288, rational{1, 6})));
+
+      // the rational part of a lone Power goes into the scalar:
+      // 2^(3/2) = 2 2^(1/2)
+      auto lone = ex<Power>(2, rational{3, 2}) * vx;
+      simplify(lone);
+      REQUIRE(lone->as<Product>().scalar() == 2);
+      REQUIRE(has_factor(lone, Power(2, half)));
+      // ... including the part hidden in the radicand, 48^(1/2) = 4 3^(1/2),
+      // while the scalar itself is left alone, so 4 3^(1/2) is already in
+      // this form
+      auto root48 = ex<Power>(48, half) * vx;
+      auto scaled = ex<Constant>(4) * ex<Power>(3, half) * vx;
+      simplify(root48);
+      simplify(scaled);
+      REQUIRE(*root48 == *scaled);
+      REQUIRE(root48->as<Product>().scalar() == 4);
+      REQUIRE(has_factor(root48, Power(3, half)));
+      // ... and the part in a denominator: (1/2)^(1/2) = (1/2) 2^(1/2)
+      auto inverse = ex<Power>(half, half) * vx;
+      simplify(inverse);
+      REQUIRE(inverse->as<Product>().scalar() == half);
+      REQUIRE(has_factor(inverse, Power(2, half)));
+      // a complex scalar is left alone as well
+      auto complex_scalar =
+          ex<Constant>(Constant::scalar_type{4, 4}) * ex<Power>(3, half) * vx;
+      simplify(complex_scalar);
+      REQUIRE(complex_scalar->as<Product>().scalar() ==
+              Constant::scalar_type{4, 4});
+      REQUIRE(has_factor(complex_scalar, Power(3, half)));
+
+      // so terms that differ by a rational factor merge in a Sum:
+      // 3^(1/2) x + 2 3^(1/2) x = 3 3^(1/2) x
+      auto sum =
+          ex<Power>(3, half) * vx + ex<Constant>(2) * ex<Power>(3, half) * vx;
+      simplify(sum);
+      REQUIRE(sum->is<Product>());
+      REQUIRE(sum->as<Product>().scalar() == 3);
+      REQUIRE(has_factor(sum, Power(3, half)));
+      // ... however the factor is written: 2 2^(1/2) x + 8^(1/2) x = 4 2^(1/2)
+      // x
+      auto sum2 =
+          ex<Constant>(2) * ex<Power>(2, half) * vx + ex<Power>(8, half) * vx;
+      simplify(sum2);
+      REQUIRE(sum2->is<Product>());
+      REQUIRE(sum2->as<Product>().scalar() == 4);
+      REQUIRE(has_factor(sum2, Power(2, half)));
+      // ... and across several Powers:
+      // (1/2) (1/2)^(1/2) (1/3)^(1/2) x + (1/4) (1/2)^(1/2) (1/3)^(1/2) x
+      // = (1/8) 6^(1/2) x
+      auto sum3 = ex<Constant>(half) * ex<Power>(half, half) *
+                      ex<Power>(third, half) * vx +
+                  ex<Constant>(rational{1, 4}) * ex<Power>(half, half) *
+                      ex<Power>(third, half) * vx;
+      simplify(sum3);
+      REQUIRE(sum3->is<Product>());
+      REQUIRE(sum3->as<Product>().scalar() == rational{1, 8});
+      REQUIRE(has_factor(sum3, Power(6, half)));
+
+      // bases are split by gcds before trial division, so large prime
+      // factors shared between bases are exact:
+      // (p q)^(2/3) p^(1/3) q^(1/3) = p q
+      const rational pq = rational{1000003} * rational{1000033};
+      auto large = ex<Power>(pq, rational{2, 3}) * ex<Power>(1000003, third) *
+                   ex<Power>(1000033, third) * vx;
+      simplify(large);
+      REQUIRE(large->as<Product>().scalar() == pq);
+      REQUIRE(factors(large).size() == 1);
+      // a power of a prime beyond trial division is still taken out of the
+      // radicand: (p^2 3)^(1/2) = p 3^(1/2)
+      auto large_square =
+          ex<Power>(rational{1000003} * rational{1000003} * 3, half) * vx;
+      simplify(large_square);
+      REQUIRE(large_square->as<Product>().scalar() == 1000003);
+      REQUIRE(has_factor(large_square, Power(3, half)));
+
+      // exponents whose lcm of denominators would blow the radicand up are
+      // left alone
+      auto huge = ex<Power>(2, rational{1, 65537}) *
+                  ex<Power>(3, rational{1, 65539}) * vx;
+      simplify(huge);
+      REQUIRE(factors(huge).size() == 3);
+
+      // negative exponents: (1/2)^(-1/2) (1/8)^(-1/2) = 4
+      auto negexp =
+          ex<Power>(half, -half) * ex<Power>(rational{1, 8}, -half) * vx;
+      simplify(negexp);
+      REQUIRE(negexp->as<Product>().scalar() == 4);
+      REQUIRE(factors(negexp).size() == 1);
+
+      // negative bases do not fuse
+      auto negative = ex<Power>(-2, half) * ex<Power>(-3, half) * vx;
+      simplify(negative);
+      REQUIRE(negative->is<Product>());
+      REQUIRE(factors(negative).size() == 3);
+
+      // Variable-based Powers are left alone
+      auto var = ex<Power>(vx, half) * ex<Power>(2, half) * ex<Power>(2, half);
+      simplify(var);
+      REQUIRE(var->is<Product>());
+      REQUIRE(var->as<Product>().scalar() == 2);
+      REQUIRE(factors(var).size() == 1);
+      REQUIRE(has_factor(var, Power(vx, half)));
+
+      // conjugation is a no-op on a positive real base, so conjugated Powers
+      // fuse with unconjugated ones
+      auto conj_a = ex<Power>(half, half);
+      conj_a->adjoint();
+      auto conj = conj_a->clone() * conj_a->clone() * vx;
+      simplify(conj);
+      REQUIRE(conj->is<Product>());
+      REQUIRE(conj->as<Product>().scalar() == half);
+      REQUIRE(factors(conj).size() == 1);
+      auto mixed = ex<Power>(half, half) * conj_a->clone() * vx;
+      simplify(mixed);
+      REQUIRE(mixed->as<Product>().scalar() == half);
+      REQUIRE(factors(mixed).size() == 1);
+
+      // a sub-Product kept by Flatten::No is flattened before its Powers
+      // fuse with the enclosing ones: 2^(1/2) x (2^(1/2)) = 2 x
+      auto nested =
+          ex<Product>(ExprPtrList{ex<Power>(2, half), vx,
+                                  ex<Product>(ExprPtrList{ex<Power>(2, half)})},
+                      Product::Flatten::No);
+      REQUIRE(factors(nested).size() == 3);
+      simplify(nested);
+      REQUIRE(nested->is<Product>());
+      REQUIRE(nested->as<Product>().scalar() == 2);
+      REQUIRE(factors(nested).size() == 1);
+
+      // a lone Power is brought to the same form, so 8^(1/3) folds to 2,
+      // 2^(3/2) becomes 2 2^(1/2) and merges with it in a Sum, and 2^(1/2)
+      // is left alone
+      auto lone_cube = ex<Power>(8, third);
+      simplify(lone_cube);
+      REQUIRE(lone_cube == ex<Constant>(2));
+      auto lone_sum = ex<Power>(2, rational{3, 2}) +
+                      ex<Constant>(2) * ex<Power>(2, half) + ex<Power>(8, half);
+      simplify(lone_sum);
+      REQUIRE(lone_sum->is<Product>());
+      REQUIRE(lone_sum->as<Product>().scalar() == 6);
+      REQUIRE(has_factor(lone_sum, Power(2, half)));
+      auto lone_root = ex<Power>(2, half);
+      simplify(lone_root);
+      REQUIRE(*lone_root == Power(2, half));
+    }
+
+    {  // simplify fuses the Variable factors of a Product, bare or in
+       // Powers, into one factor per Variable
+      const auto half = rational{1, 2};
+      const auto vy = ex<Variable>(L"y");
+      const auto factors = [](const ExprPtr &e) {
+        return e->as<Product>().factors();
+      };
+      const auto has_factor = [&](const ExprPtr &e, const Expr &f) {
+        return std::any_of(factors(e).begin(), factors(e).end(),
+                           [&f](const ExprPtr &g) { return *g == f; });
+      };
+
+      // x x = x^2
+      auto square = vx * vy * vx;
+      simplify(square);
+      REQUIRE(factors(square).size() == 2);
+      REQUIRE(has_factor(square, Power(vx, 2)));
+      REQUIRE(has_factor(square, *vy));
+
+      // x x^(1/2) = x^(3/2)
+      auto mixed = vx * ex<Power>(vx, half) * vy;
+      simplify(mixed);
+      REQUIRE(factors(mixed).size() == 2);
+      REQUIRE(has_factor(mixed, Power(vx, rational{3, 2})));
+
+      // x^(1/2) x^(1/2) = x
+      auto roots = ex<Power>(vx, half) * ex<Power>(vx, half) * vy;
+      simplify(roots);
+      REQUIRE(factors(roots).size() == 2);
+      REQUIRE(has_factor(roots, *vx));
+
+      // x^2 x^(-2) = 1
+      auto cancel = ex<Power>(vx, 2) * ex<Power>(vx, -2) * vy;
+      simplify(cancel);
+      REQUIRE(*cancel == *vy);
+
+      // distinct labels are left alone, in their order (canonicalize, not
+      // rapid_simplify, sorts them)
+      auto distinct = vy * vx;
+      rapid_simplify(distinct);
+      REQUIRE(factors(distinct).size() == 2);
+      REQUIRE(*factors(distinct)[0] == *vy);
+
+      // x and x* do not fuse
+      auto cx = vx->clone();
+      cx->adjoint();
+      auto norm = vx * cx;
+      simplify(norm);
+      REQUIRE(factors(norm).size() == 2);
+
+      // (x*)^1 is x*
+      auto first_power = ex<Power>(cx, 1) * vy;
+      simplify(first_power);
+      REQUIRE(factors(first_power).size() == 2);
+      REQUIRE(has_factor(first_power, *cx));
+
+      // so numerically equal terms merge in a Sum: x x y + x^2 y = 2 x^2 y
+      auto sum = vx * vx * vy + ex<Power>(vx, 2) * vy;
+      simplify(sum);
+      REQUIRE(sum->is<Product>());
+      REQUIRE(sum->as<Product>().scalar() == 2);
+      REQUIRE(has_factor(sum, Power(vx, 2)));
+
+      // (x*)^(1/2) (x^(1/2))* = x*: conjugation of the base and of the Power
+      // combine, as in Power::operator*=
+      auto pconj = ex<Power>(vx, half);
+      pconj->adjoint();
+      auto conj = ex<Power>(cx, half) * pconj * vy;
+      simplify(conj);
+      REQUIRE(factors(conj).size() == 2);
+      REQUIRE(has_factor(conj, *cx));
+
+      // the conjugation ends up on the Variable whatever the exponent:
+      // (x*)^2 is left alone, (x^2)* becomes (x*)^2, and the two merge
+      auto base_conj = ex<Power>(cx, 2) * vy;
+      simplify(base_conj);
+      REQUIRE(factors(base_conj).size() == 2);
+      REQUIRE(has_factor(base_conj, Power(cx, 2)));
+      auto power_conj = ex<Power>(vx, 2);
+      power_conj->adjoint();
+      auto moved = power_conj->clone() * vy;
+      simplify(moved);
+      REQUIRE(*moved == *base_conj);
+      auto merged = ex<Power>(cx, 2) * vy + power_conj * vy;
+      simplify(merged);
+      REQUIRE(merged->is<Product>());
+      REQUIRE(merged->as<Product>().scalar() == 2);
+      REQUIRE(has_factor(merged, Power(cx, 2)));
+
+      // a lone Power gets the same treatment, so it merges with its Product
+      // form in a Sum: (x^2)* + (x*)^2 = 2 (x*)^2, x^1 + x = 2 x
+      auto lone_conj = power_conj->clone() + ex<Power>(cx, 2);
+      simplify(lone_conj);
+      REQUIRE(lone_conj->is<Product>());
+      REQUIRE(lone_conj->as<Product>().scalar() == 2);
+      REQUIRE(has_factor(lone_conj, Power(cx, 2)));
+      auto lone_first = ex<Power>(vx, 1) + vx;
+      simplify(lone_first);
+      REQUIRE(lone_first->is<Product>());
+      REQUIRE(lone_first->as<Product>().scalar() == 2);
+      REQUIRE(has_factor(lone_first, *vx));
+    }
   }
 
   SECTION("scaled_product") {
@@ -1042,10 +1351,45 @@ TEST_CASE("expr", "[elements]") {
       Power::flatten(pf12);
       REQUIRE(pf12->is<Power>());
 
-      // 8^(1/3) is not folded
+      // roots of any order fold when exact: 8^(1/3) = 2, (1/8)^(1/3) = 1/2
       auto pf13 = ex<Power>(8, rational{1, 3});
       Power::flatten(pf13);
-      REQUIRE(pf13->is<Power>());
+      REQUIRE(pf13 == ex<Constant>(rational{2}));
+      auto pf13b = ex<Power>(rational{1, 8}, rational{1, 3});
+      Power::flatten(pf13b);
+      REQUIRE(pf13b == ex<Constant>(rational{1, 2}));
+      // ... and not otherwise, even if a rational factor could come out
+      auto pf13c = ex<Power>(8, rational{1, 2});
+      Power::flatten(pf13c);
+      REQUIRE(pf13c->is<Power>());
+
+      // 0^(1/3) = 0
+      auto pf13d = ex<Power>(0, rational{1, 3});
+      Power::flatten(pf13d);
+      REQUIRE(pf13d == ex<Constant>(rational{0}));
+
+      // an integer power too large to build is left alone
+      auto pf13e = ex<Power>(2, rational{sequant::intmax_t{1} << 17});
+      Power::flatten(pf13e);
+      REQUIRE(pf13e->is<Power>());
+      auto pf13f = ex<Power>(-2, rational{sequant::intmax_t{1} << 17});
+      Power::flatten(pf13f);
+      REQUIRE(pf13f->is<Power>());
+      auto pf13g = ex<Power>(-2, rational{sequant::intmax_t{1} << 15});
+      Power::flatten(pf13g);
+      REQUIRE(pf13g == ex<Constant>(rational{sequant::intmax_t{1} << 32768}));
+      // ... the bound accounts for both denominators of a complex base:
+      // (1/2 + i/3)^20000 folds, with a 6^20000 denominator, while
+      // (1/2 + i/3)^30000 would exceed the cap and is left alone
+      const Constant::scalar_type z{rational{1, 2}, rational{1, 3}};
+      auto pf13h = ex<Power>(z, rational{20000});
+      Power::flatten(pf13h);
+      REQUIRE(pf13h->is<Constant>());
+      REQUIRE(denominator(pf13h->as<Constant>().value().real()) ==
+              pow(sequant::intmax_t{6}, 20000));
+      auto pf13i = ex<Power>(z, rational{30000});
+      Power::flatten(pf13i);
+      REQUIRE(pf13i->is<Power>());
 
       // (b^1)* = conj(b):
       auto pf14 = ex<Power>(L"y", rational{1});

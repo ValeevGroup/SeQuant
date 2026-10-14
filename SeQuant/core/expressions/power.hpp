@@ -51,8 +51,13 @@ class Power : public Expr {
   const exponent_type& exponent() const;
 
   /// @return whether this Power has been complex-conjugated via adjoint()
-  /// @note Conjugation is tracked as a flag because, in general,
-  /// `conj(base^exponent) != conj(base)^exponent`
+  /// @note Conjugation is tracked as a flag rather than pushed into the base
+  /// because, for a fixed branch, `conj(base^exponent)` and
+  /// `conj(base)^exponent` differ on the branch cut. As sets of branches
+  /// they coincide, and SeQuant treats a Power as a branch chosen
+  /// consistently, so the two are identified by Power::operator*= and by
+  /// simplify(); evaluation with the principal branch agrees with this
+  /// except for bases on the negative real axis.
   bool conjugated() const;
 
   /// @brief toggles the conjugation flag
@@ -68,15 +73,18 @@ class Power : public Expr {
   ///   - the exponent is 1 (then `b^1 = b` and conjugate if needed);
   ///   - the exponent is 0 (then `b^0 = 1` for any base);
   ///   - the base is the `Constant` 1 (then `1^k = 1` for any rational @c k);
-  ///   - the base is a Constant and the exponent is a real integer;
-  ///   - the base is a Constant and the exponent has the form `m/2` and the
-  ///     base is a non-negative real rational `p/q` with both @c p and @c q
-  ///     perfect squares (e.g. `4^{1/2} -> 2`, `(1/4)^{1/2} -> 1/2`).
+  ///   - the base is a Constant and the exponent is an integer, unless the
+  ///     exponent times the bit width of the base, i.e. of the larger of
+  ///     its common denominator and `|Re numerator| + |Im numerator|` over
+  ///     that denominator, which bounds the width of the value from above,
+  ///     exceeds default_max_folded_bits;
+  ///   - the base is the `Constant` 0 (then `0^k = 0` for the `k > 0` the
+  ///     constructor admits);
+  ///   - the base is a positive real rational and the value is rational,
+  ///     i.e. its simplest_radical_form() has no root (e.g. `4^{1/2} -> 2`,
+  ///     `(1/8)^{1/3} -> 1/2`, `(9/16)^{3/2} -> 27/64`).
   /// On success, @p expr is rebound to the folded expression; otherwise it
   /// is left unchanged.
-  /// @note Only square-root exponents are folded (that is the only
-  /// case needed in practice right now). Extending to general n-th roots only
-  /// requires replacing the integer-square-root step with an integer n-th-root.
   static void flatten(ExprPtr& expr);
 
   static constexpr type_rank_type type_rank = expr_type_rank::power;
