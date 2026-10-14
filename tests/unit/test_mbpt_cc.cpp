@@ -681,10 +681,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
                   ex<Constant>(2) * sqrt_half * r_rank_part(eqs[0], 2)));
     REQUIRE(equal(r_rank_part(symmetric_eqs[1], 1),
                   sqrt_half * r_rank_part(eqs[1], 1)));
-    // simplify does not fold sqrt(1/2) * sqrt(1/2) into 1/2
-    REQUIRE(equal(
-        r_rank_part(symmetric_eqs[1], 2),
-        ex<Constant>(2) * sqrt_half * sqrt_half * r_rank_part(eqs[1], 2)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[1], 2), r_rank_part(eqs[1], 2)));
   }
 
   SECTION("EA-EOM-CCSD R") {
