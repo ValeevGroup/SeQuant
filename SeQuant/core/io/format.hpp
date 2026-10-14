@@ -17,8 +17,13 @@
 #include <ostream>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 namespace sequant::io::detail {
+
+// Deliberately not constexpr: when compile-time format-string checking meets
+// a bad specifier, the compiler's diagnostic names this function.
+inline void invalid_expression_format_specifier() {}
 
 template <typename Char, typename T>
   requires(std::same_as<T, Expr> || std::same_as<T, ResultExpr>)
@@ -57,6 +62,7 @@ struct expression_formatter {
     } else if (matches("s") || matches("serialize")) {
       serialize_ = true;
     } else {
+      if (std::is_constant_evaluated()) invalid_expression_format_specifier();
       throw sequant::Exception("Invalid expression format specifier");
     }
     return end;
