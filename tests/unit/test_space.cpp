@@ -829,10 +829,10 @@ TEST_CASE("index_space", "[elements]") {
   }
 
   SECTION("paper 2 example") {
-    IndexBasisRegistry isr;
+    IndexBasisRegistry ibr;
     using namespace sequant::mbpt;
     const QuantumNumbersAttr spin_any = 0b0011;
-    isr.add("i", 0b001, spin_any,
+    ibr.add("i", 0b001, spin_any,
             // fully occupied in vacuum state
             is_vacuum_occupied)
         .add("u", 0b010, spin_any)
@@ -845,27 +845,27 @@ TEST_CASE("index_space", "[elements]") {
         .add_union("p", {"I", "A"}, is_complete);
 
     // spaces whose QNs contain spin_any contain physical particles
-    isr.physical_particle_attribute_mask(spin_any);
+    ibr.physical_particle_attribute_mask(spin_any);
 
     // projected atomic orbitals = localized form of virtuals
-    const QuantumNumbersAttr lcao = 0b0100;
-    isr.add("μ̃", 0b100, lcao | spin_any);
-    // nonparticle mode: density fitting, or Cholesky, or Hubbard-Stratonivich
-    isr.add("x", 0b001, QuantumNumbersAttr{0b1000});
+    auto a = ibr.retrieve(L"a");
+    ibr.add("μ̃", IndexBasis{a, 1});
+    // nonparticle mode: density fitting, or Cholesky, or Hubbard-Stratonovich
+    ibr.add("x", 0b001, QuantumNumbersAttr{0b1000});
 
-    REQUIRE(isr.retrieve("u") == isr.intersection("A", "I"));
-    REQUIRE(isr.retrieve("p") == isr.unIon("A", "i"));
-    REQUIRE(isr.valid_intersection("i", "x") == false);
-    REQUIRE(isr.valid_intersection("a", "μ̃") == true);
-    REQUIRE(isr.is_base("u") == true);
-    REQUIRE(isr.is_base("A") == false);
-    REQUIRE(isr.is_pure_occupied("i") == true);
-    REQUIRE(isr.is_pure_unoccupied("μ̃") == true);
-    REQUIRE(isr.contains_occupied("p") == true);
-    REQUIRE(isr.contains_unoccupied("p") == true);
+    REQUIRE(ibr.retrieve("u") == ibr.intersection("A", "I"));
+    REQUIRE(ibr.retrieve("p") == ibr.unIon("A", "i"));
+    REQUIRE(ibr.valid_intersection("i", "x") == false);
+    REQUIRE(ibr.valid_intersection("a", "μ̃") == true);
+    REQUIRE(ibr.is_base("u") == true);
+    REQUIRE(ibr.is_base("A") == false);
+    REQUIRE(ibr.is_pure_occupied("i") == true);
+    REQUIRE(ibr.is_pure_unoccupied("μ̃") == true);
+    REQUIRE(ibr.contains_occupied("p") == true);
+    REQUIRE(ibr.contains_unoccupied("p") == true);
 
     auto _ = set_scoped_default_context(
-        {.index_basis_registry = isr, .vacuum = Vacuum::SingleProduct});
+        {.index_basis_registry = ibr, .vacuum = Vacuum::SingleProduct});
     REQUIRE_NOTHROW(Index("A_1"));
     REQUIRE_NOTHROW(Index("μ̃_1"));
     REQUIRE_NOTHROW(Index("x_1"));

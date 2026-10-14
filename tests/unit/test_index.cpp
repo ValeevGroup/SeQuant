@@ -39,7 +39,7 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(static_cast<bool>(i) == true);
     }
 
-    // labels must match the space key
+    // labels must match the basis key
     REQUIRE_THROWS(Index(L"j"));
 
     REQUIRE_NOTHROW(Index(std::wstring(L"i_") +

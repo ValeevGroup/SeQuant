@@ -918,19 +918,19 @@ class IndexBasisRegistry {
   }
 
   /// @brief queries if the intersection space is nonnull and registered
-  /// @param space1_key base key of a registered IndexSpace
-  /// @param space2_key base key of a registered IndexSpace
+  /// @param space1_key label of a registered space, or of a named basis
+  /// instance, which stands for its space
+  /// @param space2_key label of a registered space, or of a named basis
+  /// instance, which stands for its space
   /// @return true if
   /// `valid_intersection(retrieve(space1_key),retrieve(space2_key))` is
   /// nonnull and registered
   template <basic_string_convertible S1, basic_string_convertible S2>
   bool valid_intersection(S1&& space1_key, S2&& space2_key) const {
     const auto& space1 = retrieve_or_throw(
-        space1_key,
-        "IndexBasisRegistry::valid_intersection(s1,s2): space with key s1=");
+        space1_key, "IndexBasisRegistry::valid_intersection(s1,s2): s1=");
     const auto& space2 = retrieve_or_throw(
-        space2_key,
-        "IndexBasisRegistry::valid_intersection(s1,s2): space key s2=");
+        space2_key, "IndexBasisRegistry::valid_intersection(s1,s2): s2=");
     return this->valid_intersection(space1, space2);
   }
 
@@ -971,18 +971,19 @@ class IndexBasisRegistry {
     }
   }
 
-  /// @param space1_key base key of a registered IndexSpace
-  /// @param space2_key base key of a registered IndexSpace
+  /// @param space1_key label of a registered space, or of a named basis
+  /// instance, which stands for its space
+  /// @param space2_key label of a registered space, or of a named basis
+  /// instance, which stands for its space
   /// @return the intersection of @p space1 and @p space2
   /// @note can return nullspace
   /// @note throw invalid_argument if the nonnull intersection is not registered
   template <basic_string_convertible S1, basic_string_convertible S2>
   const IndexSpace& intersection(S1&& space1_key, S2&& space2_key) const {
     const auto& space1 = retrieve_or_throw(
-        space1_key,
-        "IndexBasisRegistry::intersection(s1,s2): space with key s1=");
+        space1_key, "IndexBasisRegistry::intersection(s1,s2): s1=");
     const auto& space2 = retrieve_or_throw(
-        space2_key, "IndexBasisRegistry::intersection(s1,s2): space key s2=");
+        space2_key, "IndexBasisRegistry::intersection(s1,s2): s2=");
     return this->intersection(space1, space2);
   }
 
@@ -1018,17 +1019,18 @@ class IndexBasisRegistry {
   }
 
   /// @brief is a union between spaces is registered
-  /// @param space1_key base key of a registered IndexSpace
-  /// @param space2_key base key of a registered IndexSpace
+  /// @param space1_key label of a registered space, or of a named basis
+  /// instance, which stands for its space
+  /// @param space2_key label of a registered space, or of a named basis
+  /// instance, which stands for its space
   /// @return true if `valid_unIon(retrieve(space1_key),retrieve(space2_key))`
   /// is registered
   template <basic_string_convertible S1, basic_string_convertible S2>
   bool valid_unIon(S1&& space1_key, S2&& space2_key) const {
     const auto& space1 = retrieve_or_throw(
-        space1_key,
-        "IndexBasisRegistry::valid_unIon(s1,s2): space with key s1=");
+        space1_key, "IndexBasisRegistry::valid_unIon(s1,s2): s1=");
     const auto& space2 = retrieve_or_throw(
-        space2_key, "IndexBasisRegistry::valid_unIon(s1,s2): space key s2=");
+        space2_key, "IndexBasisRegistry::valid_unIon(s1,s2): s2=");
     return this->valid_unIon(space1, space2);
   }
 
@@ -1078,17 +1080,19 @@ class IndexBasisRegistry {
     }
   }
 
-  /// @param space1_key base key of a registered IndexSpace
-  /// @param space2_key base key of a registered IndexSpace
+  /// @param space1_key label of a registered space, or of a named basis
+  /// instance, which stands for its space
+  /// @param space2_key label of a registered space, or of a named basis
+  /// instance, which stands for its space
   /// @return the union of two spaces.
   /// @note can only return registered spaces
   /// @note never returns nullspace
   template <basic_string_convertible S1, basic_string_convertible S2>
   const IndexSpace& unIon(S1&& space1_key, S2&& space2_key) const {
-    const auto& space1 = retrieve_or_throw(
-        space1_key, "IndexBasisRegistry::unIon(s1,s2): space with key s1=");
-    const auto& space2 = retrieve_or_throw(
-        space2_key, "IndexBasisRegistry::unIon(s1,s2): space key s2=");
+    const auto& space1 =
+        retrieve_or_throw(space1_key, "IndexBasisRegistry::unIon(s1,s2): s1=");
+    const auto& space2 =
+        retrieve_or_throw(space2_key, "IndexBasisRegistry::unIon(s1,s2): s2=");
     return this->unIon(space1, space2);
   }
 
@@ -1192,13 +1196,14 @@ class IndexBasisRegistry {
   }
 
   /// @brief equivalent to `is_base(retrieve(space_key))`
-  /// @param space_key space key
+  /// @param space_key label of a registered space, or of a named basis
+  /// instance, which stands for its space
   /// @return true if the space registered with \p space_key is in the basis
   /// @sa base_spaces
   template <basic_string_convertible S>
   bool is_base(S&& space_key) const {
-    return this->is_base(retrieve_or_throw(
-        space_key, "IndexBasisRegistry::is_base(s): space with key s="));
+    return this->is_base(
+        retrieve_or_throw(space_key, "IndexBasisRegistry::is_base(s): s="));
   }
 
   /// @brief checks if an IndexSpace::Type is in the basis
@@ -1236,14 +1241,14 @@ class IndexBasisRegistry {
   }
 
   /// @brief equivalent to `is_pure_occupied(retrieve(space_key))`
-  /// @param space_key space key
+  /// @param space_key label of a registered space, or of a named basis
+  /// instance, which stands for its space
   /// @return `is_pure_occupied(retrieve(space_key))`
   /// @sa base_spaces
   template <basic_string_convertible S>
   bool is_pure_occupied(S&& space_key) const {
     return this->is_pure_occupied(retrieve_or_throw(
-        space_key,
-        "IndexBasisRegistry::is_pure_occupied(s): space with key s="));
+        space_key, "IndexBasisRegistry::is_pure_occupied(s): s="));
   }
 
   /// @brief all states are unoccupied in the fermi vacuum
@@ -1264,14 +1269,14 @@ class IndexBasisRegistry {
   }
 
   /// @brief equivalent to `is_pure_unoccupied(retrieve(space_key))`
-  /// @param space_key space key
+  /// @param space_key label of a registered space, or of a named basis
+  /// instance, which stands for its space
   /// @return `is_pure_unoccupied(retrieve(space_key))`
   /// @sa base_spaces
   template <basic_string_convertible S>
   bool is_pure_unoccupied(S&& space_key) const {
     return this->is_pure_unoccupied(retrieve_or_throw(
-        space_key,
-        "IndexBasisRegistry::is_pure_unoccupied(s): space with key s="));
+        space_key, "IndexBasisRegistry::is_pure_unoccupied(s): s="));
   }
 
   /// @brief some states are fermi vacuum occupied
@@ -1284,14 +1289,14 @@ class IndexBasisRegistry {
   }
 
   /// @brief equivalent to `contains_occupied(retrieve(space_key))`
-  /// @param space_key space key
+  /// @param space_key label of a registered space, or of a named basis
+  /// instance, which stands for its space
   /// @return `contains_occupied(retrieve(space_key))`
   /// @sa base_spaces
   template <basic_string_convertible S>
   bool contains_occupied(S&& space_key) const {
     return this->contains_occupied(retrieve_or_throw(
-        space_key,
-        "IndexBasisRegistry::contains_occupied(s): space with key s="));
+        space_key, "IndexBasisRegistry::contains_occupied(s): s="));
   }
 
   /// @brief some states are fermi vacuum unoccupied
@@ -1305,14 +1310,14 @@ class IndexBasisRegistry {
   }
 
   /// @brief equivalent to `contains_occupied(retrieve(space_key))`
-  /// @param space_key space key
+  /// @param space_key label of a registered space, or of a named basis
+  /// instance, which stands for its space
   /// @return `contains_occupied(retrieve(space_key))`
   /// @sa base_spaces
   template <basic_string_convertible S>
   bool contains_unoccupied(S&& space_key) const {
     return this->contains_unoccupied(retrieve_or_throw(
-        space_key,
-        "IndexBasisRegistry::contains_unoccupied(s): space with key s="));
+        space_key, "IndexBasisRegistry::contains_unoccupied(s): s="));
   }
 
   /// @name  specifies which spaces have nonzero occupancy in the vacuum wave
@@ -1848,17 +1853,18 @@ class IndexBasisRegistry {
     return complete_t.xOr(vacocc_t).intersection(complete_t);
   }
 
-  /// @return the IndexSpace registered under @p space_key
-  /// @throw Exception if @p space_key is not registered; its message is
-  /// @p message_prefix followed by the key
+  /// @return the space of the entry registered under @p label: the space
+  /// itself, or the space of a named basis instance
+  /// @throw Exception if no entry is registered under @p label; its message
+  /// is @p message_prefix followed by the label
   template <basic_string_convertible S>
-  const IndexSpace& retrieve_or_throw(const S& space_key,
+  const IndexSpace& retrieve_or_throw(const S& label,
                                       std::string_view message_prefix) const {
-    const auto* ptr = this->retrieve_ptr(space_key);
+    const auto* ptr = this->retrieve_basis_ptr(label);
     if (!ptr)
-      throw Exception(std::string(message_prefix) + toUtf8(space_key) +
-                      " must be added to the registry first");
-    return *ptr;
+      throw Exception(std::string(message_prefix) + toUtf8(label) +
+                      " is not registered");
+    return ptr->space();
   }
 
   /// @brief find an IndexSpace from its attr. return nullspace if not present.

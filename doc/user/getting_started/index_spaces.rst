@@ -41,9 +41,10 @@ basis instance can be registered under a label of its own with :func:`sequant::I
 carries its own extent (the number of functions in the basis), metric (whether it is orthonormal) and field, read
 off an index by :func:`sequant::IndexBasis::extent`, :func:`sequant::IndexBasis::metric` and
 :func:`sequant::IndexBasis::field`. That label, like a space's, must be one that an index can be parsed with
-(:func:`sequant::io::serialization::v1::is_base_key`); registration throws otherwise. The space views (:func:`sequant::IndexBasisRegistry::spaces`) and the set algebra
-see spaces only; :func:`sequant::IndexBasisRegistry::retrieve` throws on such a label, use
-:func:`sequant::IndexBasisRegistry::retrieve_basis`. Indices in a named basis are printed, serialized and deserialized
+(:func:`sequant::io::serialization::v1::is_base_key`); registration throws otherwise. The space views
+(:func:`sequant::IndexBasisRegistry::spaces`) see spaces only, and :func:`sequant::IndexBasisRegistry::retrieve` throws
+on such a label, use :func:`sequant::IndexBasisRegistry::retrieve_basis`; the set algebra and the occupancy queries take
+the label of a named basis as that of its space. Indices in a named basis are printed, serialized and deserialized
 by that label, and constructed from it; the name is part of the basis's identity, and code that keys an axis by
 label tells them apart from the space's own basis by :func:`sequant::IndexBasis::base_key`. An unnamed basis instance has no entry and no metadata of its own: it
 is the space's own basis up to an orthonormal rotation, so its extent is the dimension of the space, its metric is
