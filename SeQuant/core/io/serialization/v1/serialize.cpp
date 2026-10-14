@@ -15,7 +15,7 @@
 
 namespace sequant::io::serialization::v1 {
 
-namespace details {
+namespace detail {
 
 template <typename Range>
 std::wstring serialize_indices(Range&& indices,
@@ -120,7 +120,7 @@ std::wstring to_string(Tensor const& tensor,
 
 std::wstring to_string(const Constant& constant,
                        const SerializationOptions& options) {
-  return details::serialize_scalar(constant.value(), options);
+  return detail::serialize_scalar(constant.value(), options);
 }
 
 std::wstring to_string(const Variable& variable, const SerializationOptions&) {
@@ -151,7 +151,7 @@ std::wstring to_string(Product const& prod,
 
   const auto& scal = prod.scalar();
   if (scal != Product::scalar_type{1}) {
-    serialized += details::serialize_scalar(scal, options) + L" ";
+    serialized += detail::serialize_scalar(scal, options) + L" ";
   }
 
   for (std::size_t i = 0; i < prod.size(); ++i) {
@@ -206,7 +206,7 @@ std::wstring to_string(Sum const& sum, const SerializationOptions& options) {
   return serialized;
 }
 
-}  // namespace details
+}  // namespace detail
 
 std::wstring to_string(const ExprPtr& expr,
                        const SerializationOptions& options) {
@@ -216,23 +216,23 @@ std::wstring to_string(const ExprPtr& expr,
 }
 
 std::wstring to_string(const Expr& expr, const SerializationOptions& options) {
-  using namespace details;
+  using namespace detail;
   if (expr.is<Tensor>())
-    return details::to_string(expr.as<Tensor>(), options);
+    return detail::to_string(expr.as<Tensor>(), options);
   else if (expr.is<FNOperator>())
     return v1::to_string(expr.as<FNOperator>(), options);
   else if (expr.is<BNOperator>())
     return v1::to_string(expr.as<BNOperator>(), options);
   else if (expr.is<Sum>())
-    return details::to_string(expr.as<Sum>(), options);
+    return detail::to_string(expr.as<Sum>(), options);
   else if (expr.is<Product>())
-    return details::to_string(expr.as<Product>(), options);
+    return detail::to_string(expr.as<Product>(), options);
   else if (expr.is<Constant>())
-    return details::to_string(expr.as<Constant>(), options);
+    return detail::to_string(expr.as<Constant>(), options);
   else if (expr.is<Variable>())
-    return details::to_string(expr.as<Variable>(), options);
+    return detail::to_string(expr.as<Variable>(), options);
   else if (expr.is<Power>())
-    return details::to_string(expr.as<Power>(), options);
+    return detail::to_string(expr.as<Power>(), options);
   else
     throw Exception(
         expr.type_name() +
@@ -244,9 +244,9 @@ std::wstring to_string(const ResultExpr& result,
                        const SerializationOptions& options) {
   std::wstring serialized;
   if (result.produces_tensor()) {
-    serialized = details::to_string(result.result_as_tensor(L"?"), options);
+    serialized = detail::to_string(result.result_as_tensor(L"?"), options);
   } else {
-    serialized = details::to_string(result.result_as_variable(L"?"), options);
+    serialized = detail::to_string(result.result_as_variable(L"?"), options);
   }
 
   return serialized + L" = " + v1::to_string(result.expression(), options);
@@ -275,24 +275,24 @@ std::wstring to_string(const Index& index, const SerializationOptions&) {
 std::wstring to_string(AbstractTensor const& tensor,
                        const SerializationOptions& options) {
   std::wstring serialized(tensor._label());
-  serialized += L"{" + details::serialize_indices(tensor._bra(), options);
+  serialized += L"{" + detail::serialize_indices(tensor._bra(), options);
   if (tensor._ket_rank() > 0) {
-    serialized += L";" + details::serialize_indices(tensor._ket(), options);
+    serialized += L";" + detail::serialize_indices(tensor._ket(), options);
   }
   if (tensor._aux_rank() > 0) {
     if (tensor._ket_rank() == 0) {
       serialized += L";";
     }
-    serialized += L";" + details::serialize_indices(tensor._aux(), options);
+    serialized += L";" + detail::serialize_indices(tensor._aux(), options);
   }
   serialized += L"}";
 
   if (options.annot_symm) {
-    serialized += L":" + details::serialize_symm(tensor._symmetry(), options);
+    serialized += L":" + detail::serialize_symm(tensor._symmetry(), options);
     serialized +=
-        L"-" + details::serialize_symm(tensor._braket_symmetry(), options);
+        L"-" + detail::serialize_symm(tensor._braket_symmetry(), options);
     serialized +=
-        L"-" + details::serialize_symm(tensor._column_symmetry(), options);
+        L"-" + detail::serialize_symm(tensor._column_symmetry(), options);
   }
 
   return serialized;
@@ -307,9 +307,9 @@ template <Statistics S>
 std::wstring to_string(NormalOperator<S> const& nop,
                        const SerializationOptions& options) {
   std::wstring serialized(nop.label());
-  serialized += L"{" + details::serialize_ops(nop.annihilators(), options);
+  serialized += L"{" + detail::serialize_ops(nop.annihilators(), options);
   if (nop.ncreators() > 0) {
-    serialized += L";" + details::serialize_ops(nop.creators(), options);
+    serialized += L";" + detail::serialize_ops(nop.creators(), options);
   }
   serialized += L"}";
 
