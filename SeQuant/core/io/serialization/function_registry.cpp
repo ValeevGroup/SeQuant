@@ -41,6 +41,25 @@ ExprPtr build_sequence(const FunctionCall &call,
   return ex<NormalOperatorSequence<S>>(std::move(seq));
 }
 
+template <Statistics S>
+std::wstring write_operator(const Expr &expr,
+                            const SerializationOptions &options) {
+  return join_strings<std::wstring>(
+      expr.as<Operator<S>>(), L", ", [&options](const Op<S> &op) {
+        return v2::to_string(op.index(), options) +
+               (op.action() == Action::Create ? L"+" : L"-");
+      });
+}
+
+template <Statistics S>
+std::wstring write_sequence(const Expr &expr,
+                            const SerializationOptions &options) {
+  return join_strings<std::wstring>(expr.as<NormalOperatorSequence<S>>(), L", ",
+                                    [&options](const NormalOperator<S> &nop) {
+                                      return v2::to_string(nop, options);
+                                    });
+}
+
 constexpr std::string_view whitespace = " \t\r\n";
 
 std::string_view trim(std::string_view text) {
@@ -54,15 +73,15 @@ std::string_view trim(std::string_view text) {
 FunctionRegistry::FunctionRegistry() {
   using enum Statistics;
   register_function(L"fop", std::type_index(typeid(Operator<FermiDirac>)),
-                    build_operator<FermiDirac>);
+                    build_operator<FermiDirac>, write_operator<FermiDirac>);
   register_function(L"bop", std::type_index(typeid(Operator<BoseEinstein>)),
-                    build_operator<BoseEinstein>);
+                    build_operator<BoseEinstein>, write_operator<BoseEinstein>);
   register_function(L"fnopseq",
                     std::type_index(typeid(NormalOperatorSequence<FermiDirac>)),
-                    build_sequence<FermiDirac>);
+                    build_sequence<FermiDirac>, write_sequence<FermiDirac>);
   register_function(
       L"bnopseq", std::type_index(typeid(NormalOperatorSequence<BoseEinstein>)),
-      build_sequence<BoseEinstein>);
+      build_sequence<BoseEinstein>, write_sequence<BoseEinstein>);
 }
 
 FunctionRegistry &FunctionRegistry::instance() {
@@ -119,7 +138,8 @@ std::optional<std::wstring> FunctionRegistry::serialize(
     if (t == type) {
       const FunctionSerializer &serializer = entries_[idx].serializer;
       if (!serializer) return std::nullopt;
-      return serializer(expr, options);
+      return L"~" + entries_[idx].name + L"(" + serializer(expr, options) +
+             L")";
     }
   }
   return std::nullopt;

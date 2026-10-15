@@ -214,7 +214,8 @@ downstream code may register handlers for its own :class:`Expr` subclasses with
 :func:`sequant::io::serialization::register_function`. A handler receives the text between the parentheses as written and
 parses it itself; :func:`sequant::io::serialization::split_arguments` splits it at the commas that separate arguments, and
 an argument can be parsed with ``v2::from_string`` or, for an index marked as a creator (``+``/``⁺``) or annihilator
-(``-``/``⁻``) such as ``~fop``'s, with :func:`sequant::io::serialization::parse_action_index`.
+(``-``/``⁻``) such as ``~fop``'s, with :func:`sequant::io::serialization::parse_action_index`. Conversely, a handler's
+serializer emits only the text between the parentheses.
 
 Examples
 """"""""

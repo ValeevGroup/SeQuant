@@ -131,29 +131,6 @@ std::wstring serialize_normal_operator(const NormalOperator<S> &nop) {
   return result;
 }
 
-template <Statistics S>
-std::wstring serialize_raw_operator(const Operator<S> &op) {
-  std::wstring result = S == Statistics::FermiDirac ? L"~fop(" : L"~bop(";
-  result += join_strings<std::wstring>(op, L", ", [](const Op<S> &o) {
-    return serialize_index(o.index()) +
-           (o.action() == Action::Create ? L"+" : L"-");
-  });
-  result += L")";
-  return result;
-}
-
-template <Statistics S>
-std::wstring serialize_operator_sequence(const NormalOperatorSequence<S> &seq) {
-  std::wstring result =
-      S == Statistics::FermiDirac ? L"~fnopseq(" : L"~bnopseq(";
-  result +=
-      join_strings<std::wstring>(seq, L", ", [](const NormalOperator<S> &nop) {
-        return serialize_normal_operator(nop);
-      });
-  result += L")";
-  return result;
-}
-
 }  // namespace
 
 std::wstring to_string(const Index &index, const SerializationOptions &) {
@@ -189,17 +166,6 @@ std::wstring to_string(const Expr &expr, const SerializationOptions &options) {
   if (expr.is<NormalOperator<Statistics::BoseEinstein>>())
     return serialize_normal_operator(
         expr.as<NormalOperator<Statistics::BoseEinstein>>());
-  if (expr.is<Operator<Statistics::FermiDirac>>())
-    return serialize_raw_operator(expr.as<Operator<Statistics::FermiDirac>>());
-  if (expr.is<Operator<Statistics::BoseEinstein>>())
-    return serialize_raw_operator(
-        expr.as<Operator<Statistics::BoseEinstein>>());
-  if (expr.is<NormalOperatorSequence<Statistics::FermiDirac>>())
-    return serialize_operator_sequence(
-        expr.as<NormalOperatorSequence<Statistics::FermiDirac>>());
-  if (expr.is<NormalOperatorSequence<Statistics::BoseEinstein>>())
-    return serialize_operator_sequence(
-        expr.as<NormalOperatorSequence<Statistics::BoseEinstein>>());
   if (expr.is<Constant>()) return serialize_scalar(expr.as<Constant>().value());
   if (expr.is<Variable>()) {
     const Variable &var = expr.as<Variable>();

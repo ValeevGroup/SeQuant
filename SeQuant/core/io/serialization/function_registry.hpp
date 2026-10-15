@@ -28,8 +28,9 @@ struct FunctionCall {
 /// builds an Expr from a parsed function call
 using FunctionDeserializer = std::function<ExprPtr(
     const FunctionCall &, const DeserializationOptions &)>;
-/// emits the `~name(...)` representation of an Expr; may be empty (nullptr) if
-/// the function supports deserialization only
+/// emits the arguments of the `~name(...)` representation of an Expr, i.e. the
+/// text that FunctionCall::arguments holds when deserializing it; may be empty
+/// (nullptr) if the function supports deserialization only
 using FunctionSerializer =
     std::function<std::wstring(const Expr &, const SerializationOptions &)>;
 
