@@ -1442,6 +1442,16 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(f_indices.begin()->second.nonproto() == 2);
     REQUIRE(isr->is_pure_unoccupied(f_indices.begin()->first.space()));
 
+    // a dummy bound only as a protoindex: the occupation is 1 for each i_1
+    // that t's indices depend on, with no delta left
+    auto proto_bound = ex<Tensor>(L"t", bra{Index(L"a_1", {L"i_1"})},
+                                  ket{Index(L"a_2", {L"i_1"})}) *
+                       ex<FNOperator>(cre({L"i_1"}), ann({})) *
+                       ex<FNOperator>(cre({}), ann({L"i_1"}));
+    result = FWickTheorem{proto_bound}.compute();
+    REQUIRE(self_deltas(result).empty());
+    REQUIRE(get_used_indices_with_counts(result).at(Index(L"i_1")).proto == 2);
+
     // the norm of a doubly-excited determinant summed over its orbitals:
     // n_o^2 n_v^2 - n_o n_v^2 - n_o^2 n_v + n_o n_v, each term a product of
     // self-deltas (and not 1 - 1 - 1 + 1 = 0)

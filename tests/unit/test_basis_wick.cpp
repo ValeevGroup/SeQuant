@@ -120,10 +120,13 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
       CHECK(metrics[0]->_bra()[0].basis().basis_instance() == 1);
       CHECK(metrics[0]->_ket()[0].basis().basis_instance() == 2);
     }
-    // legs in one instance (or none) contract to a Kronecker delta
+    // legs in one instance (or none) contract to a Kronecker delta, and so
+    // do a generic leg and a specific one: the identity narrows the generic
+    // one (an index without an instance runs over every instance)
     for (auto const& [l, r] :
          {std::pair{p1, Index(L"p_2").replace_basis_instance(1)},
-          std::pair{Index(L"p_1"), Index(L"p_2")}}) {
+          std::pair{Index(L"p_1"), Index(L"p_2")},
+          std::pair{Index(L"p_1"), Index(L"p_2").replace_basis_instance(1)}}) {
       const auto c = FWickTheorem::contract(FOp(l, Action::Annihilate),
                                             FOp(r, Action::Create));
       CHECK(tensors_labelled(c, reserved::overlap_label()).empty());
@@ -145,6 +148,33 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
     CHECK(
         (instances == container::svector<IndexBasis::optional_instance>{1, 2} ||
          instances == container::svector<IndexBasis::optional_instance>{2, 1}));
+  }
+
+  SECTION("a projection resolves its instance to the registered name") {
+    // a name belongs to one (space, instance) pair: the projection of a leg
+    // in p̃ (p in instance 1) onto the particle space is in instance 1 of a,
+    // i.e. in ã if that is registered, not in p̃
+    auto isr = make_min_sr_spaces();
+    isr->add(L"p̃", IndexBasis{isr->retrieve_space(L"p"), 1});
+    isr->add(L"ã", IndexBasis{isr->retrieve_space(L"a"), 1});
+    auto nctx = get_default_context();
+    nctx.set(std::move(isr));
+    auto nctx_resetter = set_scoped_default_context(nctx);
+    const Index x(L"p̃_1");
+    REQUIRE(x.basis().name() == L"p̃");
+    const auto c = FWickTheorem::contract(
+        FOp(x, Action::Annihilate),
+        FOp(Index(L"p_2").replace_basis_instance(2), Action::Create));
+    const auto deltas = tensors_labelled(c, reserved::kronecker_label());
+    REQUIRE(deltas.size() == 2);
+    std::size_t projected = 0;
+    for (auto const* t : deltas)
+      for (auto const& idx : t->_slots())
+        if (idx.basis().basis_instance() == 1 && idx != x) {
+          CHECK(idx.basis().name() == L"ã");
+          ++projected;
+        }
+    CHECK(projected == 1);
   }
 
   SECTION("K0: no instance anywhere") {
