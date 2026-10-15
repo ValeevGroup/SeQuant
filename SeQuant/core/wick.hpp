@@ -1786,19 +1786,20 @@ class WickTheorem {
       }
     }
 
+    // the projection of an index onto the quasiparticle space is in the
+    // index's own basis instance: a subset of a basis is still that basis
+    auto project = [&](const Index &idx) {
+      return Index::make_tmp_index(
+          isr->resolve(
+              IndexBasis(qpspace_common, idx.basis().basis_instance())),
+          idx.proto_indices(), idx.symmetric_proto_indices());
+    };
+
     std::optional<Index> left_qp_idx;
-    if (!left_is_pure) {
-      left_qp_idx =
-          Index::make_tmp_index(qpspace_common, left.index().proto_indices(),
-                                left.index().symmetric_proto_indices());
-    }
+    if (!left_is_pure) left_qp_idx = project(left.index());
 
     std::optional<Index> right_qp_idx;
-    if (!right_is_pure) {
-      right_qp_idx =
-          Index::make_tmp_index(qpspace_common, right.index().proto_indices(),
-                                right.index().symmetric_proto_indices());
-    }
+    if (!right_is_pure) right_qp_idx = project(right.index());
 
     // preserve bra/ket positions of left & right
     const auto left_is_ann = left.action() == Action::Annihilate;

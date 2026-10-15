@@ -60,7 +60,9 @@ contraction *value* (``contract``) depends on whether those quasiparticle spaces
 - only the right space pure: :math:`\delta(L,l)\, s(l,R)`,
 
 where :math:`l = L \cap H` and :math:`r = R \cap P` (:math:`H`/:math:`P` the hole/particle subspaces), materialized via temporary indices
-from ``Index::make_tmp_index`` when a space needs projecting. The middle factor comes from ``WickTheorem::contraction_value``, which
+from ``Index::make_tmp_index`` when a space needs projecting; such a projection is in the basis instance of the index it projects
+(a subset of a basis is still that basis), so with legs in two instances the overlap between the projections is one between the
+instances. The middle factor comes from ``WickTheorem::contraction_value``, which
 returns :math:`s` except under ``Vacuum::MultiProduct`` (see :ref:`below <wick-extended>`). For fermionic statistics, each contraction
 additionally picks up a sign of :math:`-1` for every operator that sat strictly between ``left`` and ``right`` at the time of
 contraction — the usual anticommutation rule.
