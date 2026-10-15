@@ -176,6 +176,16 @@ class IndexBasis {
     return result;
   }
 
+  /// @name registry keys
+  /// An IndexBasisRegistry keys its entries, spaces and named basis instances
+  /// alike, by the base key of a label (an Index label with its ordinal
+  /// stripped); a name follows the grammar of a space's label, so a basis key
+  /// is reduced as a space key is.
+  /// @{
+
+  /// @param key a label of a space, of a named basis instance, or of an
+  /// Index in either
+  /// @return the base key of @p key, as `IndexSpace::reduce_key(key)`
   template <std::ranges::contiguous_range View>
     requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
                           char> ||
@@ -185,14 +195,20 @@ class IndexBasis {
     return IndexSpace::reduce_key(key);
   }
 
+  /// @overload
   template <typename CharT>
   static auto reduce_key(const CharT* key) {
     return IndexSpace::reduce_key(key);
   }
 
+  /// exception type thrown by a registry lookup when no entry, space or
+  /// named basis instance, is registered under a key; an IndexSpace::bad_key,
+  /// so that handlers for space lookups catch it
   struct bad_key : IndexSpace::bad_key {
     using IndexSpace::bad_key::bad_key;
   };
+
+  /// @}
 
  private:
   IndexSpace space_;
