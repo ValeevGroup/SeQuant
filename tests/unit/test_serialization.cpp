@@ -859,6 +859,18 @@ TEST_CASE("serialization", "[serialization]") {
       SECTION("Power") {
         REQUIRE(v2::from_string<ExprPtr>("x^(2)") ==
                 v1::from_string<ExprPtr>(L"x^(2)"));
+        REQUIRE(v2::from_string<ExprPtr>("x^(-1)") ==
+                ex<Power>(L"x", rational{-1}));
+        REQUIRE(v2::from_string<ExprPtr>("x^(1/2)") ==
+                ex<Power>(L"x", rational{1, 2}));
+        REQUIRE(v2::from_string<ExprPtr>("x/y") ==
+                ex<Product>(ExprPtrList{ex<Variable>(L"x"),
+                                        ex<Power>(L"y", rational{-1})}));
+        // both spellings of a conjugated power
+        ExprPtr conjugated = ex<Power>(L"x", rational{2});
+        conjugated->as<Power>().conjugate();
+        REQUIRE(v2::from_string<ExprPtr>("x^(2)^*") == conjugated);
+        REQUIRE(v2::from_string<ExprPtr>("(x^(2))^*") == conjugated);
       }
 
       SECTION("sums, products and implicit multiplication") {
@@ -947,6 +959,14 @@ TEST_CASE("serialization", "[serialization]") {
           ex<Constant>(Constant::scalar_type(3, rational{1, 2})),
           ex<Constant>(Constant::scalar_type(rational{-3, 4}, rational{-1, 2})),
           ex<Product>(Constant::scalar_type(3, -2), ExprPtrList{t}),
+          ex<Power>(x, rational{-1}),
+          ex<Power>(x, rational{-3, 2}),
+          ex<Power>(ex<Constant>(rational{1, 2}), rational{3}),
+          [&] {
+            ExprPtr conjugated = ex<Power>(x, rational{2});
+            conjugated->as<Power>().conjugate();
+            return conjugated;
+          }(),
           ex<Sum>(ExprPtrList{
               t, ex<Product>(Constant::scalar_type(0, rational{-1, 2}),
                              ExprPtrList{g})}),

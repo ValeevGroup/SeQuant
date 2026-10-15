@@ -214,7 +214,7 @@ std::wstring to_string(const Expr &expr, const SerializationOptions &options) {
     std::wstring result =
         base + L"^(" +
         serialize_scalar(Constant::scalar_type{power.exponent()}) + L")";
-    return power.conjugated() ? L"(" + result + L")^*" : result;
+    return power.conjugated() ? result + L"^*" : result;
   }
   if (expr.is<Product>()) {
     const Product &product = expr.as<Product>();

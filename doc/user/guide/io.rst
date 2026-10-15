@@ -183,7 +183,9 @@ A constant with both a nonzero real and a nonzero imaginary part has no single-t
    Product         Factor ( ('*' | '/') Factor | Nullary )*                         A bare juxtaposed ``Nullary`` is implicit multiplication (binds like ``*``)
    Factor          ('+' | '-')* Nullary
    Nullary         Function | Power | '(' Expression ')' | Tensor | Operator | Constant | Variable
-   Power           Nullary '^' '(' Real ')' '^*'?                                   Integer exponent; base is parenthesized when serialized if a Constant/conjugated Variable
+   Power           PowerBase '^' '(' Exponent ')' '^*'?                             Also accepted: ``'(' Power ')' '^*'`` (the V1 form of a conjugated power)
+   PowerBase       '(' Expression ')' | Constant | Variable                         A Constant or conjugated Variable base is parenthesized when serialized
+   Exponent        ('+' | '-')? Integer ('/' Integer)?                              A rational number, e.g. ``x^(-1)`` or ``x^(1/2)``
    Constant        Real | Real 'i'                                                  Integer, float, or (via ``/``) a fraction; ``Ni`` is pure imaginary
    Tensor          Name '[' IndexGroups ']' SymmetrySpec?                           Groups are ``[bra;ket;aux]``
    Operator        Name '{' IndexGroups '}' (':' ('F' | 'B'))?                      Groups are ``{annihilators;creators}``; the label selects the operator and its vacuum

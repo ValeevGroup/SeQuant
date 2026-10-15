@@ -294,13 +294,13 @@ void register_actions(peg::parser &parser) {
   parser["PowerBase"] = [](const SemanticValues &vs) {
     return std::any_cast<ExprPtr>(vs[0]);
   };
+  parser["Exponent"] = [](const SemanticValues &vs) {
+    return string_to<rational>(vs.token());
+  };
   parser["Power"] = [](const SemanticValues &vs) {
-    ExprPtr base = *find_value<ExprPtr>(vs);
-    const rational exponent = *find_value<rational>(vs);
-    if (denominator(exponent) != 1) {
-      throw Error(0, 0, "Power", "power exponent must be an integer");
-    }
-    ExprPtr power = ex<Power>(std::move(base), exponent);
+    ExprPtr power = vs.choice() == 0 ? ex<Power>(*find_value<ExprPtr>(vs),
+                                                 *find_value<rational>(vs))
+                                     : find_value<ExprPtr>(vs)->clone();
     if (has_value<bool>(vs)) power->as<Power>().conjugate();
     return power;
   };

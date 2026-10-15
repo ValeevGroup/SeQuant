@@ -50,7 +50,9 @@ NormalOrderedOperator <- Identifier '{' IndexGroups '}' (':' Statistic)?
 # --- Power -----------------------------------------------------------------
 
 PowerBase <- '(' Expression ')' / Constant / Variable
-Power <- PowerBase '^' '(' Real ')' Conjugation?
+Exponent <- < [-+]? [0-9]+ ('/' [0-9]+)? >
+# The second form is the one v1 writes for a conjugated power.
+Power <- PowerBase '^' '(' Exponent ')' Conjugation? / '(' Power ')' Conjugation
 
 # --- Functions (extension hook) --------------------------------------------
 
