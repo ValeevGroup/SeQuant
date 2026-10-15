@@ -797,8 +797,17 @@ TEST_CASE("serialization", "[serialization]") {
           Constant constant = v2::from_string<Constant>("2i");
           REQUIRE(constant.value() == Constant::scalar_type(0, 2));
 
-          constant = v2::from_string<Constant>("3 i");
-          REQUIRE(constant.value() == Constant::scalar_type(0, 3));
+          constant = v2::from_string<Constant>("1.5i");
+          REQUIRE(constant.value() == Constant::scalar_type(0, rational{3, 2}));
+
+          // 'i' after a space, or starting a label, is a variable
+          const auto i = ex<Variable>(L"i");
+          REQUIRE(v2::from_string<ExprPtr>("3 i") ==
+                  ex<Product>(3, ExprPtrList{i}));
+          REQUIRE(v2::from_string<ExprPtr>("3ix") ==
+                  ex<Product>(3, ExprPtrList{ex<Variable>(L"ix")}));
+          REQUIRE(v2::from_string<ExprPtr>("3i i") ==
+                  ex<Product>(Constant::scalar_type(0, 3), ExprPtrList{i}));
         }
         SECTION("Fraction") {
           REQUIRE(v2::from_string<Constant>("1/2").value() ==
@@ -1078,6 +1087,7 @@ TEST_CASE("serialization", "[serialization]") {
           ex<Tensor>(L"t", bra{Index{}}, ket{L"a_1"}),
           ex<Tensor>(L"t", bra{Index{}, Index{L"i_1"}},
                      ket{Index{L"a_1"}, Index{}}),
+          ex<Product>(2, ExprPtrList{ex<Variable>(L"i")}),
           // labels that need quoting
           ex<Variable>(L"I_{1}"),
           ex<Variable>(L"2x"),

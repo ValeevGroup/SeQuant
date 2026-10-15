@@ -186,7 +186,7 @@ A constant with both a nonzero real and a nonzero imaginary part has no single-t
    Power           PowerBase '^' '(' Exponent ')' '^*'?                             Also accepted: ``'(' Power ')' '^*'`` (the V1 form of a conjugated power)
    PowerBase       '(' Expression ')' | Constant | Variable                         A Constant or conjugated Variable base is parenthesized when serialized
    Exponent        ('+' | '-')? Integer ('/' Integer)?                              A rational number, e.g. ``x^(-1)`` or ``x^(1/2)``
-   Constant        Real | Real 'i'                                                  Integer, float, or (via ``/``) a fraction; ``Ni`` is pure imaginary
+   Constant        Real | Real 'i'                                                  Integer, float, or (via ``/``) a fraction; ``Ni`` (no space) is pure imaginary
    Tensor          Name '[' IndexGroups ']' SymmetrySpec?                           Groups are ``[bra;ket;aux]``
    Operator        Name '{' IndexGroups '}'                                         Groups are ``{annihilators;creators}``; the label selects the operator and its vacuum
    Function        '~' Name '(' Arguments ')'                                       ``Arguments`` is any text with balanced brackets; the function's handler parses it

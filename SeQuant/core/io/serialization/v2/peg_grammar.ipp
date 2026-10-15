@@ -2,7 +2,9 @@ using namespace std::literals;
 constexpr static std::string_view peg_serialization_grammar = R"(
 
 Real <- < [0-9]* '.' [0-9]+ / [0-9]+ >
-Imaginary <- Real 'i'
+# the 'i' must follow the number directly and not start a label, so that e.g.
+# '2 i' and '2ix' are products with variables i and ix
+Imaginary <- < Real 'i' !IdentifierChar >
 Complex <- Imaginary / Real
 Constant <- Complex
 
@@ -10,7 +12,8 @@ Constant <- Complex
 # grammar (and whitespace and control characters) and allows everything else;
 # serialize.cpp's is_bare_label() must agree with it. Any other label is written
 # in backticks, with '\' escaping a '`' or '\' in it.
-BareIdentifier <- < [^\u0000-&(-/:-@[-^`{-\u00A0]+ >
+IdentifierChar <- [^\u0000-&(-/:-@[-^`{-\u00A0]
+BareIdentifier <- < IdentifierChar+ >
 QuotedIdentifier <- < '`' ( '\\' . / [^`\\] )* '`' >
 Identifier <- QuotedIdentifier / BareIdentifier
 
