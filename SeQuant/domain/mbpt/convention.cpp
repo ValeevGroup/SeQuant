@@ -144,7 +144,7 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
   }
   require_unregistered(*isr, "add_ao_basis", bases, instance);
   for (const auto& [label, space] : bases)
-    isr->add(label, IndexBasis{space, instance}, IndexSpaceMetric::General);
+    isr->add(label, IndexBasis{space, instance}, IndexBasisMetric::General);
 }
 
 void add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,

@@ -134,7 +134,7 @@ compute_index_replacement_rules(
     const container::set<Index> &unpaired_indices,
     const std::set<Index, Index::LabelCompare> &all_indices,
     const std::shared_ptr<const IndexBasisRegistry> &isr,
-    IndexSpaceMetric metric) {
+    IndexBasisMetric metric) {
   bool zero_result_status = false;
   auto zero_result = [&zero_result_status]() -> void {
     zero_result_status = true;
@@ -448,7 +448,7 @@ compute_index_replacement_rules(
       // Kronecker delta (its indices in one basis) is one, whatever makes
       // its indices noncovariant, so only unpaired indices keep it
       const bool kronecker_equivalent =
-          metric == IndexSpaceMetric::Unit && is_kronecker_equivalent(bra, ket);
+          metric == IndexBasisMetric::Unit && is_kronecker_equivalent(bra, ket);
       auto keeps_overlap = [&](const Index &idx) {
         return kronecker_equivalent ? unpaired_indices.contains(idx)
                                     : noncovariant_indices.contains(idx);
@@ -720,7 +720,7 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
           const auto tlabel = t._label();
           const auto is_kronecker =
               tlabel == kronecker_label() ||
-              (tlabel == overlap_label() && metric == IndexSpaceMetric::Unit &&
+              (tlabel == overlap_label() && metric == IndexBasisMetric::Unit &&
                is_kronecker_equivalent(t._bra()[0], t._ket()[0]));
           if (is_kronecker) {
             SEQUANT_ASSERT(t._bra_rank() == 1);

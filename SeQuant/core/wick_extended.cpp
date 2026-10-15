@@ -60,8 +60,8 @@ Index make_in_basis_of(IndexFactory &idxfac, const IndexSpace &sp,
 /// their overlap is one (and @p metric, the context's, is unit), else their
 /// overlap
 ExprPtr make_identity(const Index &bra, const Index &ket,
-                      IndexSpaceMetric metric) {
-  return metric == IndexSpaceMetric::Unit && is_kronecker_equivalent(bra, ket)
+                      IndexBasisMetric metric) {
+  return metric == IndexBasisMetric::Unit && is_kronecker_equivalent(bra, ket)
              ? make_kronecker(bra, ket)
              : make_overlap(bra, ket);
 }
@@ -295,7 +295,7 @@ using Alternatives = container::svector<container::svector<ExprPtr>>;
 /// @pre if @p bra or @p ket carries protoindices, their common space does not
 ///      reach the active space (see assert_protoindexed_not_active())
 std::optional<Alternatives> split_density(const IndexBasisRegistry &isr,
-                                          IndexSpaceMetric metric,
+                                          IndexBasisMetric metric,
                                           IndexFactory &idxfac,
                                           const Index &bra, const Index &ket,
                                           bool is_gamma) {
@@ -380,7 +380,7 @@ Alternatives split_survivors(const IndexBasisRegistry &isr,
 /// @return the rewritten term as a list of Products
 template <Statistics S>
 container::svector<std::shared_ptr<Product>> split_mixed_spaces(
-    const ExprPtr &term, const IndexBasisRegistry &isr, IndexSpaceMetric metric,
+    const ExprPtr &term, const IndexBasisRegistry &isr, IndexBasisMetric metric,
     bool full) {
   const auto product =
       term->is<Product>()
@@ -504,7 +504,7 @@ ExprPtr apply_dummy_deltas(const ExprPtr &expr) {
 /// rewrites every 1-body η of @p expr, a Sum, as the identity between its
 /// indices (see make_identity) minus γ; a multi-body η (an input tensor, since
 /// the theorem only produces 1-body ones) is kept
-void rewrite_eta(ExprPtr &expr, IndexSpaceMetric metric) {
+void rewrite_eta(ExprPtr &expr, IndexBasisMetric metric) {
   expr->visit(
       [metric](ExprPtr &e) {
         if (e->is<Tensor>() &&

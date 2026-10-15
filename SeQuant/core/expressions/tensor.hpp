@@ -1247,25 +1247,25 @@ inline ExprPtr make_kronecker(const Index &bra_index, const Index &ket_index) {
 /// sorted), are not in two different basis instances, and neither basis has
 /// a general metric (IndexBasis::metric())
 /// @note until the deprecated Context::metric() is removed, WickTheorem ANDs
-/// it in: under IndexSpaceMetric::General every overlap stands, whatever this
+/// it in: under IndexBasisMetric::General every overlap stands, whatever this
 /// returns
 inline bool is_kronecker_equivalent(const Index &bra, const Index &ket) {
   return bra.proto_indices() == ket.proto_indices() &&
          !different_instances(bra.basis(), ket.basis()) &&
-         bra.basis().metric() == IndexSpaceMetric::Unit &&
-         ket.basis().metric() == IndexSpaceMetric::Unit;
+         bra.basis().metric() == IndexBasisMetric::Unit &&
+         ket.basis().metric() == IndexBasisMetric::Unit;
 }
 
 /// @deprecated the metric is a property of each basis (IndexBasis::metric());
 /// use is_kronecker_equivalent(bra, ket)
-/// @return `metric == IndexSpaceMetric::Unit && is_kronecker_equivalent(bra,
+/// @return `metric == IndexBasisMetric::Unit && is_kronecker_equivalent(bra,
 /// ket)`
 [[deprecated(
     "the metric is per basis; use is_kronecker_equivalent(bra, "
     "ket)")]] inline bool
 is_kronecker_equivalent(const Index &bra, const Index &ket,
-                        IndexSpaceMetric metric) {
-  return metric == IndexSpaceMetric::Unit && is_kronecker_equivalent(bra, ket);
+                        IndexBasisMetric metric) {
+  return metric == IndexBasisMetric::Unit && is_kronecker_equivalent(bra, ket);
 }
 
 /// @name (anti)symmetrization operator factories

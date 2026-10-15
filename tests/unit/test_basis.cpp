@@ -34,6 +34,11 @@
 
 using namespace sequant;
 
+// the pre-rename spelling is a deprecated alias
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+static_assert(std::is_same_v<IndexSpaceMetric, IndexBasisMetric>);
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
 namespace {
 
 auto scoped_min_sr_context(CanonicalizeOptions canonicalization_options =
@@ -133,12 +138,12 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
       {IndexBasis{uocc}, false},
       {IndexBasis{uocc, 1}, false},
       {IndexBasis{uocc, 1, L"ã"}, false},
-      {IndexBasis{uocc, 1, L"ã", 77, IndexSpaceMetric::General, Field::Real},
+      {IndexBasis{uocc, 1, L"ã", 77, IndexBasisMetric::General, Field::Real},
        true}};
   for (const auto& [b, is_custom] : bases) {
     CHECK(b.extent() == (is_custom ? 77 : uocc.dimension()));
     CHECK(b.metric() ==
-          (is_custom ? IndexSpaceMetric::General : IndexSpaceMetric::Unit));
+          (is_custom ? IndexBasisMetric::General : IndexBasisMetric::Unit));
     CHECK(b.field() == (is_custom ? Field::Real : uocc.field()));
     CHECK(b.space().dimension() == uocc.dimension());
     CHECK(b.space().field() == uocc.field());
@@ -853,7 +858,7 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
   constexpr IndexBasis::instance_type P =
       std::numeric_limits<IndexBasis::instance_type>::max();
   isr->add(L"μ̃", IndexBasis{uocc, P}, 120ul,
-           IndexSpaceMetric::General);  // before the Context adopts the
+           IndexBasisMetric::General);  // before the Context adopts the
                                         // registry (#665)
   // an orthonormal unoccupied basis other than the canonical one, e.g.
   // localized virtuals

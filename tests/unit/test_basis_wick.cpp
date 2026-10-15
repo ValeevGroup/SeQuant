@@ -416,12 +416,12 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
     // ũ: a basis of the active space with a general metric
     auto isr = mbpt::make_mr_spaces();
     isr->add(L"ũ", IndexBasis{isr->retrieve_space(L"u"), 1},
-             IndexSpaceMetric::General);
+             IndexBasisMetric::General);
     auto metric_ctx = get_default_context();
     metric_ctx.set(std::move(isr));
     auto metric_resetter = set_scoped_default_context(metric_ctx);
     const Index u1(L"ũ_1"), u2(L"ũ_2");
-    REQUIRE(u1.basis().metric() == IndexSpaceMetric::General);
+    REQUIRE(u1.basis().metric() == IndexBasisMetric::General);
     const auto expr =
         ex<FNOperator>(cre{}, ann{u2}) * ex<FNOperator>(cre{u1}, ann{});
     FWickTheorem wick{expr};
@@ -436,11 +436,11 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
   SECTION("the deprecated context metric still keeps every overlap") {
     auto metric_ctx = get_default_context();
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    metric_ctx.set(IndexSpaceMetric::General);
+    metric_ctx.set(IndexBasisMetric::General);
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     auto metric_resetter = set_scoped_default_context(metric_ctx);
     const Index u1(L"u_1"), u2(L"u_2");
-    REQUIRE(u1.basis().metric() == IndexSpaceMetric::Unit);
+    REQUIRE(u1.basis().metric() == IndexBasisMetric::Unit);
     const auto expr =
         ex<FNOperator>(cre{}, ann{u2}) * ex<FNOperator>(cre{u1}, ann{});
     FWickTheorem wick{expr};

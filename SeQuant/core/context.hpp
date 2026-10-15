@@ -35,10 +35,10 @@ namespace sequant {
 /// - `vacuum`: the vacuum state used to define normal ordering of
 /// `NormalOperator`s
 /// - `metric` (deprecated): whether every basis is orthonormal
-///   (`IndexSpaceMetric::Unit`) or none is (`IndexSpaceMetric::General`);
+///   (`IndexBasisMetric::Unit`) or none is (`IndexBasisMetric::General`);
 ///   the metric is a property of each basis (IndexBasis::metric()), so this
 ///   is only kept to make Wick's theorem keep every overlap standing when set
-///   to `IndexSpaceMetric::General`.
+///   to `IndexBasisMetric::General`.
 /// - `deserialization_symmetry`, `deserialization_hermiticity`,
 ///    `deserialization_column_symmetry`: the symmetries given to a
 ///    *deserialized* tensor that does not specify them; the programmatic
@@ -88,7 +88,7 @@ class Context {
  public:
   struct Defaults {
     constexpr static auto vacuum = Vacuum::Physical;
-    constexpr static auto metric = IndexSpaceMetric::Unit;
+    constexpr static auto metric = IndexBasisMetric::Unit;
     constexpr static auto assert_strict_braket_symmetry = true;
     constexpr static auto spbasis = SPBasis::Spinor;
     constexpr static auto first_dummy_index_ordinal = 100;
@@ -119,8 +119,8 @@ class Context {
       [[deprecated("use index_basis_registry")]] std::optional<IndexBasisRegistry> index_space_registry = std::nullopt;
       /// the Vacuum object
       Vacuum vacuum = Defaults::vacuum;
-      /// @deprecated the metric is per basis (IndexBasis::metric()); register a non-orthonormal basis with IndexBasisRegistry::add(label, basis, IndexSpaceMetric::General)
-      [[deprecated("the metric is per basis; register a non-orthonormal basis with IndexBasisRegistry::add(label, basis, IndexSpaceMetric::General)")]] IndexSpaceMetric metric = Defaults::metric;
+      /// @deprecated the metric is per basis (IndexBasis::metric()); register a non-orthonormal basis with IndexBasisRegistry::add(label, basis, IndexBasisMetric::General)
+      [[deprecated("the metric is per basis; register a non-orthonormal basis with IndexBasisRegistry::add(label, basis, IndexBasisMetric::General)")]] IndexBasisMetric metric = Defaults::metric;
       /// the flag that controls the strictness of bra-ket checks in
       /// tensor network construction
       bool assert_strict_braket_symmetry = Defaults::assert_strict_braket_symmetry;
@@ -212,9 +212,9 @@ class Context {
     return index_basis_registry();
   }
   /// @deprecated the metric is per basis, see IndexBasis::metric()
-  /// \return IndexSpaceMetric of this context
+  /// \return IndexBasisMetric of this context
   [[deprecated("the metric is per basis, see IndexBasis::metric()")]]
-  IndexSpaceMetric metric() const;
+  IndexBasisMetric metric() const;
   /// \return true if strict bra-ket symmetry is asserted;
   /// setting this to false (via `Context::set(AssertStrictBraKetSymmetry::No)`)
   /// allows arbitrary contractions of bra/ket modes as if they were aux indices.
@@ -307,12 +307,12 @@ class Context {
   /// of these goes unnoticed by the contexts that hold it.
   Context& set(std::shared_ptr<const IndexBasisRegistry> ISR);
   /// @deprecated the metric is per basis; register a non-orthonormal basis
-  /// with IndexBasisRegistry::add(label, basis, IndexSpaceMetric::General)
-  /// Sets the IndexSpaceMetric for this context, convenient for chaining
-  /// \param metric IndexSpaceMetric
+  /// with IndexBasisRegistry::add(label, basis, IndexBasisMetric::General)
+  /// Sets the IndexBasisMetric for this context, convenient for chaining
+  /// \param metric IndexBasisMetric
   /// \return ref to `*this`, for chaining
-  [[deprecated("the metric is per basis; register a non-orthonormal basis with IndexBasisRegistry::add(label, basis, IndexSpaceMetric::General)")]]
-  Context& set(IndexSpaceMetric metric);
+  [[deprecated("the metric is per basis; register a non-orthonormal basis with IndexBasisRegistry::add(label, basis, IndexBasisMetric::General)")]]
+  Context& set(IndexBasisMetric metric);
   /// Sets the bra-ket strict assertion flag for this context, convenient for chaining
   /// \param assert_strict_braket_symmetry AssertStrictBraKetSymmetry
   /// \return ref to `*this`, for chaining
@@ -443,7 +443,7 @@ class Context {
 
   std::shared_ptr<const IndexBasisRegistry> idx_basis_reg_ = nullptr;
   Vacuum vacuum_ = Defaults::vacuum;
-  IndexSpaceMetric metric_ = Defaults::metric;
+  IndexBasisMetric metric_ = Defaults::metric;
   bool assert_strict_braket_symmetry_ = Defaults::assert_strict_braket_symmetry;
   SPBasis spbasis_ = Defaults::spbasis;
   std::size_t first_dummy_index_ordinal_ = Defaults::first_dummy_index_ordinal;

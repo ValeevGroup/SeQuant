@@ -134,7 +134,7 @@ std::shared_ptr<const IndexBasisRegistry> take_registry(
 }
 
 /// @return the deprecated metric that @p options carries
-IndexSpaceMetric take_metric(const Context::Options& options) {
+IndexBasisMetric take_metric(const Context::Options& options) {
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   return options.metric;
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
@@ -495,7 +495,7 @@ std::shared_ptr<const IndexBasisRegistry> Context::index_basis_registry()
   return idx_basis_reg_;
 }
 
-IndexSpaceMetric Context::metric() const { return metric_; }
+IndexBasisMetric Context::metric() const { return metric_; }
 
 bool Context::assert_strict_braket_symmetry() const {
   return assert_strict_braket_symmetry_;
@@ -594,7 +594,7 @@ Context& Context::set(std::shared_ptr<const IndexBasisRegistry> ISR) {
   return *this;
 }
 
-Context& Context::set(IndexSpaceMetric metric) {
+Context& Context::set(IndexBasisMetric metric) {
   metric_ = metric;
   return *this;
 }

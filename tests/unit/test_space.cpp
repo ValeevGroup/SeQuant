@@ -139,7 +139,7 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(same_instance(got, pao));
     CHECK(got.extent() == 120);  // the entry carries the metadata
     CHECK(got.space().dimension() == a.dimension());
-    CHECK(got.metric() == IndexSpaceMetric::Unit);
+    CHECK(got.metric() == IndexBasisMetric::Unit);
     CHECK(got.field() == a.field());
     CHECK(isr->retrieve_space(L"a").dimension() == a.dimension());
     CHECK(isr->basis_label(pao) == std::optional<std::wstring_view>{L"μ̃"});
@@ -185,16 +185,16 @@ TEST_CASE("index_space", "[elements]") {
     // metadata by label, either kind
     isr->extent(L"μ̃", 77)
         .field(L"μ̃", Field::Real)
-        .metric(L"μ̃", IndexSpaceMetric::General);
+        .metric(L"μ̃", IndexBasisMetric::General);
     CHECK(isr->retrieve(L"μ̃").extent() == 77);
     CHECK(isr->retrieve(L"μ̃").field() == Field::Real);
-    CHECK(isr->retrieve(L"μ̃").metric() == IndexSpaceMetric::General);
+    CHECK(isr->retrieve(L"μ̃").metric() == IndexBasisMetric::General);
     // the basis's metadata is its own: the space is untouched
     CHECK(isr->retrieve(L"μ̃").space().dimension() == a.dimension());
     CHECK(isr->retrieve(L"μ̃").space().field() == a.field());
     CHECK(isr->retrieve_space(L"a").field() == a.field());
     // the own basis of a space is orthonormal
-    CHECK_THROWS_AS(isr->metric(L"a", IndexSpaceMetric::General), Exception);
+    CHECK_THROWS_AS(isr->metric(L"a", IndexBasisMetric::General), Exception);
     REQUIRE(std::ranges::find(isr->base_spaces(), a) !=
             isr->base_spaces().end());  // memoizes the base spaces
     // ã: a named basis of a with no extent or field of its own
@@ -611,7 +611,7 @@ TEST_CASE("index_space", "[elements]") {
     const auto p = isr->retrieve_space(L"p");
     CHECK(ao == IndexBasis(p, mbpt::default_ao_basis_instance, L"μ"));
     CHECK(ao.space() == p);
-    CHECK(ao.metric() == IndexSpaceMetric::General);
+    CHECK(ao.metric() == IndexBasisMetric::General);
     CHECK(ao.extent() == p.dimension());
     CHECK(mbpt::default_ao_basis_instance < mbpt::default_pao_basis_instance);
 
@@ -627,7 +627,7 @@ TEST_CASE("index_space", "[elements]") {
     for (const auto* label : {L"μ", L"Α", L"Γ"}) {
       CAPTURE(label);
       REQUIRE(vbs->contains(label));
-      CHECK(vbs->retrieve(label).metric() == IndexSpaceMetric::General);
+      CHECK(vbs->retrieve(label).metric() == IndexBasisMetric::General);
     }
     CHECK(vbs->retrieve(L"μ").space() == vbs->retrieve_space(L"m"));
     CHECK(vbs->retrieve(L"Α").space() == vbs->retrieve_space(L"e"));
@@ -685,7 +685,7 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(isr->follows(L"μ̃") == std::optional<std::wstring>{L"μ"});
     CHECK(pao.extent() == ao.extent());
     CHECK(pao.extent() == isr->retrieve_space(L"p").dimension());
-    CHECK(pao.metric() == IndexSpaceMetric::General);
+    CHECK(pao.metric() == IndexBasisMetric::General);
     CHECK(pao.field() == ao.field());
     // the spin-cased PAO bases: the same instance of a↑ and a↓, following μ
     for (const auto& [label, spin] :
@@ -695,7 +695,7 @@ TEST_CASE("index_space", "[elements]") {
       CHECK(pao_spin.space() ==
             isr->retrieve_space(isr->particle_space(), spin));
       CHECK(pao_spin.basis_instance() == pao.basis_instance());
-      CHECK(pao_spin.metric() == IndexSpaceMetric::General);
+      CHECK(pao_spin.metric() == IndexBasisMetric::General);
       CHECK(pao_spin.extent() == ao.extent());
       CHECK(isr->follows(label) == std::optional<std::wstring>{L"μ"});
     }
@@ -766,32 +766,32 @@ TEST_CASE("index_space", "[elements]") {
     isr3->add(L"μ̃", isr->retrieve(L"μ̃"));
     CHECK(isr3->retrieve(L"μ̃") == pao);
     CHECK(isr3->retrieve(L"μ̃").extent() == 1234);
-    CHECK(isr3->retrieve(L"μ̃").metric() == IndexSpaceMetric::General);
+    CHECK(isr3->retrieve(L"μ̃").metric() == IndexBasisMetric::General);
     CHECK(isr3->retrieve(L"μ̃").field() == Field::Real);
     CHECK_FALSE(isr3->follows(L"μ̃"));
     // ... unless overridden by the arguments, and under the label given
     auto isr4 = sequant::mbpt::make_min_sr_spaces();
-    isr4->add(L"ν̃", isr->retrieve(L"μ̃"), 56ul, IndexSpaceMetric::Unit,
+    isr4->add(L"ν̃", isr->retrieve(L"μ̃"), 56ul, IndexBasisMetric::Unit,
               Field::Complex);
     CHECK_FALSE(isr4->contains(L"μ̃"));
     CHECK(isr4->retrieve(L"ν̃").name() == L"ν̃");
     CHECK(same_instance(isr4->retrieve(L"ν̃"), pao));
     CHECK(isr4->retrieve(L"ν̃").extent() == 56);
-    CHECK(isr4->retrieve(L"ν̃").metric() == IndexSpaceMetric::Unit);
+    CHECK(isr4->retrieve(L"ν̃").metric() == IndexBasisMetric::Unit);
     CHECK(isr4->retrieve(L"ν̃").field() == Field::Complex);
     // a basis without metadata of its own takes that of this registry's space
     auto isr5 = sequant::mbpt::make_min_sr_spaces();
     isr5->extent(L"a", 99);
     isr5->add(L"μ̃", IndexBasis{uocc, mbpt::default_pao_basis_instance});
     CHECK(isr5->retrieve(L"μ̃").extent() == 99);
-    CHECK(isr5->retrieve(L"μ̃").metric() == IndexSpaceMetric::Unit);
+    CHECK(isr5->retrieve(L"μ̃").metric() == IndexBasisMetric::Unit);
   }
 
   SECTION("basis follows basis") {
     auto isr = sequant::mbpt::make_min_sr_spaces();
     const IndexSpace p = isr->retrieve_space(L"p"),
                      a = isr->retrieve_space(L"a");
-    isr->add(L"μ", IndexBasis{p, 7}, 500ul, IndexSpaceMetric::General)
+    isr->add(L"μ", IndexBasis{p, 7}, 500ul, IndexBasisMetric::General)
         .add(L"μ̃", IndexBasis{a, 7})
         .add(L"ν̃", IndexBasis{a, 8});
     REQUIRE(isr->retrieve(L"μ̃").extent() == a.dimension());
@@ -801,11 +801,11 @@ TEST_CASE("index_space", "[elements]") {
     // the follower mirrors the source now and on every change of it
     CHECK(isr->retrieve(L"μ̃").extent() == 500);
     CHECK(isr->retrieve(L"μ̃").own_extent() == 500);
-    CHECK(isr->retrieve(L"μ̃").metric() == IndexSpaceMetric::General);
+    CHECK(isr->retrieve(L"μ̃").metric() == IndexBasisMetric::General);
     CHECK(isr->retrieve(L"μ̃").field() == p.field());
-    isr->extent(L"μ", 600).metric(L"μ", IndexSpaceMetric::Unit);
+    isr->extent(L"μ", 600).metric(L"μ", IndexBasisMetric::Unit);
     CHECK(isr->retrieve(L"μ̃").extent() == 600);
-    CHECK(isr->retrieve(L"μ̃").metric() == IndexSpaceMetric::Unit);
+    CHECK(isr->retrieve(L"μ̃").metric() == IndexBasisMetric::Unit);
     // ... also when the source follows its space
     isr->add(L"κ", IndexBasis{p, 9}).follow(L"ν̃", L"κ");
     CHECK(isr->retrieve(L"ν̃").extent() == p.dimension());
@@ -820,7 +820,7 @@ TEST_CASE("index_space", "[elements]") {
                       Catch::Matchers::ContainsSubstring("follows"));
     CHECK_THROWS_WITH(isr->field(L"μ̃", Field::Real),
                       Catch::Matchers::ContainsSubstring("follows"));
-    CHECK_THROWS_WITH(isr->metric(L"μ̃", IndexSpaceMetric::General),
+    CHECK_THROWS_WITH(isr->metric(L"μ̃", IndexBasisMetric::General),
                       Catch::Matchers::ContainsSubstring("follows"));
     // no chains, no self, no spaces
     CHECK_THROWS(isr->follow(L"κ", L"ν̃"));  // ν̃ follows κ

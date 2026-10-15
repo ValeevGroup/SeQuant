@@ -432,7 +432,7 @@ TEST_CASE("context", "[runtime]") {
     };
     CHECK(!changes([](Context& c) { c.set(Vacuum::SingleProduct); }));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    CHECK(!changes([](Context& c) { c.set(IndexSpaceMetric::General); }));
+    CHECK(!changes([](Context& c) { c.set(IndexBasisMetric::General); }));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     CHECK(!changes([](Context& c) { c.set(AssertStrictBraKetSymmetry::No); }));
     CHECK(!changes([](Context& c) { c.set_first_dummy_index_ordinal(200); }));
