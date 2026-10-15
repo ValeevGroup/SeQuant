@@ -492,6 +492,8 @@ set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/rules/pno.hpp
         SeQuant/domain/mbpt/rules/thc.cpp
         SeQuant/domain/mbpt/rules/thc.hpp
+        SeQuant/domain/mbpt/serialization.cpp
+        SeQuant/domain/mbpt/serialization.hpp
         SeQuant/domain/mbpt/space_qns.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp

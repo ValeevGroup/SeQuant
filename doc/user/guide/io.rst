@@ -221,6 +221,10 @@ an argument can be parsed with ``v2::from_string`` or, for an index marked as a 
 (``-``/``⁻``) such as ``~fop``'s, with :func:`sequant::io::serialization::parse_action_index`. Conversely, a handler's
 serializer emits only the text between the parentheses.
 
+The MBPT operators (:class:`sequant::mbpt::Operator`) are serialized as ``~fmbop(...)``/``~bmbop(...)`` once
+:func:`sequant::mbpt::register_serialization_functions` has been called; they are rebuilt from their label and ranks
+through the operator registry of the default MBPT context, e.g. ``~fmbop(t, 2)`` or ``~fmbop(R, 2, 1)``.
+
 Examples
 """"""""
 
