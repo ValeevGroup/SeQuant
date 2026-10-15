@@ -1,9 +1,7 @@
 using namespace std::literals;
 constexpr static std::string_view peg_serialization_grammar = R"(
 
-Integer <- < [0-9]+ >
-Float <- < Integer? '.' Integer >
-Real <- Float / Integer
+Real <- < [0-9]* '.' [0-9]+ / [0-9]+ >
 Imaginary <- Real 'i'
 Complex <- Imaginary / Real
 Constant <- Complex

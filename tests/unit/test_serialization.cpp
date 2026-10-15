@@ -776,6 +776,20 @@ TEST_CASE("serialization", "[serialization]") {
           REQUIRE_THAT(constant.value<double>(),
                        ::Catch::Matchers::WithinAbs(3.14, 1e-6));
         }
+        // numbers are parsed exactly, not via binary floating point
+        SECTION("exact") {
+          REQUIRE(v2::from_string<Constant>("0.1").value() ==
+                  Constant::scalar_type(rational{1, 10}));
+          REQUIRE(v2::from_string<Constant>("9007199254740993").value() ==
+                  Constant::scalar_type(rational{9007199254740993LL}));
+          const rational big =
+              rational{1000000000000LL} * rational{1000000000000LL};
+          REQUIRE(
+              v2::from_string<Constant>("1000000000000000000000000").value() ==
+              Constant::scalar_type(big));
+          REQUIRE(v2::from_string<Constant>(v2::to_string(
+                      ex<Constant>(big / 7))) == Constant(big / 7));
+        }
         SECTION("Imaginary") {
           Constant constant = v2::from_string<Constant>("2i");
           REQUIRE(constant.value() == Constant::scalar_type(0, 2));

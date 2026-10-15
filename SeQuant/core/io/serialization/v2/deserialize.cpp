@@ -8,6 +8,7 @@
 #include <SeQuant/core/io/serialization/v2/error.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -16,8 +17,6 @@
 #include <peglib.h>
 
 #include <any>
-#include <cmath>
-#include <cstdint>
 #include <map>
 #include <memory>
 #include <optional>
@@ -43,7 +42,7 @@ using IndexGroupsValue = std::vector<std::vector<std::optional<Index>>>;
 /// parser backtrack) without a registry lookup throwing
 struct RawIndex {
   std::wstring label;
-  std::optional<std::int64_t> instance;
+  std::optional<IndexBasis::instance_type> instance;
   container::vector<Index> protos;
 };
 
@@ -96,9 +95,7 @@ ExprPtr negate(ExprPtr expr) {
 Index make_index(const RawIndex &raw) {
   Index index =
       raw.protos.empty() ? Index(raw.label) : Index(raw.label, raw.protos);
-  if (raw.instance)
-    index = index.replace_basis_instance(
-        static_cast<IndexBasis::instance_type>(*raw.instance));
+  if (raw.instance) index = index.replace_basis_instance(*raw.instance);
   return index;
 }
 
@@ -192,24 +189,16 @@ void register_actions(peg::parser &parser) {
   parser["Identifier"] = [](const SemanticValues &vs) {
     return std::string(vs.token());
   };
-  parser["Integer"] = [](const SemanticValues &vs) {
-    return vs.token_to_number<std::int64_t>();
-  };
-  parser["Float"] = [](const SemanticValues &vs) {
-    return vs.token_to_number<double>();
-  };
   parser["Real"] = [](const SemanticValues &vs) {
-    return vs.choice() == 0
-               ? std::any_cast<double>(vs[0])
-               : static_cast<double>(std::any_cast<std::int64_t>(vs[0]));
+    return string_to<rational>(vs.token());
   };
   parser["Imaginary"] = [](const SemanticValues &vs) {
-    return Constant::scalar_type(0, std::any_cast<double>(vs[0]));
+    return Constant::scalar_type(0, std::any_cast<rational>(vs[0]));
   };
   parser["Complex"] = [](const SemanticValues &vs) {
     return vs.choice() == 0
                ? std::any_cast<Constant::scalar_type>(vs[0])
-               : Constant::scalar_type(std::any_cast<double>(vs[0]), 0);
+               : Constant::scalar_type(std::any_cast<rational>(vs[0]), 0);
   };
   parser["Constant"] = [](const SemanticValues &vs) {
     return ExprPtr(ex<Constant>(std::any_cast<Constant::scalar_type>(vs[0])));
@@ -237,13 +226,12 @@ void register_actions(peg::parser &parser) {
   };
 
   parser["BasisInstance"] = [](const SemanticValues &vs) {
-    return vs.token_to_number<std::int64_t>();
+    return string_to<IndexBasis::instance_type>(vs.token());
   };
   parser["ProtoIndex"] = [](const SemanticValues &vs) {
     Index proto(toUtf16(*find_value<std::string>(vs)));
-    if (auto instance = find_value<std::int64_t>(vs))
-      proto = proto.replace_basis_instance(
-          static_cast<IndexBasis::instance_type>(*instance));
+    if (auto instance = find_value<IndexBasis::instance_type>(vs))
+      proto = proto.replace_basis_instance(*instance);
     return proto;
   };
   parser["ProtoList"] = [](const SemanticValues &vs) {
@@ -260,7 +248,8 @@ void register_actions(peg::parser &parser) {
   parser["Index"] = [](const SemanticValues &vs) {
     RawIndex raw;
     raw.label = toUtf16(*find_value<std::string>(vs));
-    if (auto instance = find_value<std::int64_t>(vs)) raw.instance = *instance;
+    if (auto instance = find_value<IndexBasis::instance_type>(vs))
+      raw.instance = *instance;
     if (auto protos = find_value<container::vector<Index>>(vs))
       raw.protos = *protos;
     return raw;
@@ -308,12 +297,11 @@ void register_actions(peg::parser &parser) {
   };
   parser["Power"] = [](const SemanticValues &vs) {
     ExprPtr base = *find_value<ExprPtr>(vs);
-    const double exponent = *find_value<double>(vs);
-    if (exponent != std::floor(exponent)) {
+    const rational exponent = *find_value<rational>(vs);
+    if (denominator(exponent) != 1) {
       throw Error(0, 0, "Power", "power exponent must be an integer");
     }
-    ExprPtr power = ex<Power>(std::move(base),
-                              rational(static_cast<std::int64_t>(exponent)));
+    ExprPtr power = ex<Power>(std::move(base), exponent);
     if (has_value<bool>(vs)) power->as<Power>().conjugate();
     return power;
   };
