@@ -1384,6 +1384,78 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         Catch::Matchers::ContainsSubstring("without a Product summand"));
     REQUIRE_NOTHROW(FWickTheorem{nops->clone()}.compute());
   }
+  // a self-delta (a Kronecker delta between an index and itself) is 1 only if
+  // its index is bound elsewhere: named, or in another slot of the term. If it
+  // is the only occurrence of a dummy index it is the sum over it, i.e. the
+  // extent of its space, and stands
+  SECTION("self-delta on a dummy index") {
+    const auto& isr = get_default_context().index_basis_registry();
+    auto self_deltas = [](const ExprPtr& expr) {
+      container::svector<Tensor> result;
+      expr->visit(
+          [&result](const ExprPtr& ex) {
+            if (!ex->is<Tensor>()) return;
+            const auto& t = ex->as<Tensor>();
+            if (t.label() != reserved::overlap_label() &&
+                t.label() != reserved::kronecker_label())
+              return;
+            REQUIRE(t.bra()[0] == t.ket()[0]);
+            result.push_back(t);
+          },
+          /* atoms_only = */ true);
+      return result;
+    };
+
+    // the number of unoccupied orbitals, not 1
+    auto count = ex<FNOperator>(cre({}), ann({L"p_1"})) *
+                 ex<FNOperator>(cre({L"p_1"}), ann({}));
+    auto result = FWickTheorem{count}.compute();
+    REQUIRE(!result->is<Constant>());
+    auto deltas = self_deltas(result);
+    REQUIRE(deltas.size() == 1);
+    REQUIRE(isr->is_pure_unoccupied(deltas[0].bra()[0].space()));
+
+    // the occupation of a named orbital is 1
+    auto occupation = ex<FNOperator>(cre({L"i_1"}), ann({})) *
+                      ex<FNOperator>(cre({}), ann({L"i_1"}));
+    {
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              container::set<Index>{Index{L"i_1"}}));
+      REQUIRE(FWickTheorem{occupation->clone()}.compute() == ex<Constant>(1));
+    }
+    // summed over the orbital it is the number of occupied orbitals
+    result = FWickTheorem{occupation}.compute();
+    deltas = self_deltas(result);
+    REQUIRE(deltas.size() == 1);
+    REQUIRE(isr->is_pure_occupied(deltas[0].bra()[0].space()));
+
+    // a dummy bound by a tensor: the trace of f over the unoccupied orbitals,
+    // with no delta left
+    auto trace = ex<Tensor>(L"f", bra{L"p_2"}, ket{L"p_1"}) *
+                 ex<FNOperator>(cre({}), ann({L"p_1"})) *
+                 ex<FNOperator>(cre({L"p_2"}), ann({}));
+    result = FWickTheorem{trace}.compute();
+    REQUIRE(self_deltas(result).empty());
+    const auto f_indices = get_used_indices_with_counts(result);
+    REQUIRE(f_indices.size() == 1);
+    REQUIRE(f_indices.begin()->second.nonproto() == 2);
+    REQUIRE(isr->is_pure_unoccupied(f_indices.begin()->first.space()));
+
+    // the norm of a doubly-excited determinant summed over its orbitals:
+    // n_o^2 n_v^2 - n_o n_v^2 - n_o^2 n_v + n_o n_v, each term a product of
+    // self-deltas (and not 1 - 1 - 1 + 1 = 0)
+    auto norm = ex<FNOperator>(cre({L"i_1", L"i_2"}), ann({L"a_1", L"a_2"})) *
+                ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}));
+    result = FWickTheorem{norm}.compute();
+    REQUIRE(result->is<Sum>());
+    REQUIRE(result->size() == 4);
+    std::multiset<std::size_t> delta_counts;
+    for (const auto& term : *result)
+      delta_counts.insert(self_deltas(term).size());
+    REQUIRE(delta_counts == std::multiset<std::size_t>{4, 3, 3, 2});
+  }
+
   SECTION("multiproduct vacuum") {
     auto ctx = get_default_context();
     ctx.set(mbpt::make_mr_spaces());

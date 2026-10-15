@@ -579,15 +579,14 @@ compute_index_replacement_rules(
 #undef SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_VOID_IF_ZERO_RESULT
 }
 
-/// @return true if made any changes
-inline bool apply_index_replacement_rules(
+/// applies the replacement rules to every tensor of @p product and updates
+/// @p all_indices accordingly
+inline void apply_index_replacement_rules(
     std::shared_ptr<Product> &product,
     const container::map<Index, Index> &const_replrules,
     std::set<Index, Index::LabelCompare> &all_indices) {
   expr_range exrng(product);
 
-  /// this recursively applies replacement rules until result does not
-  /// change removes the deltas that are no longer needed
   if constexpr (assert_enabled()) {
     // assert that tensors_ indices are not tagged since going to tag indices
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
@@ -600,38 +599,21 @@ inline bool apply_index_replacement_rules(
       }
     }
   }
-  bool mutated = false;
+  // a transformed index is tagged, so a rule applies to it only once, but
+  // Index::transform replaces an index and its protoindices on separate
+  // applications: apply the rules until nothing changes
   bool pass_mutated = false;
   do {
     pass_mutated = false;
-
-    using sequant::reserved::kronecker_label;
-    using sequant::reserved::overlap_label;
-
-    for (auto it = ranges::begin(exrng); it != ranges::end(exrng);) {
+    for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
       const auto &factor = *it;
-      if (factor->is<AbstractTensor>()) {
-        auto &tensor = factor->as<AbstractTensor>();
-
-        /// replace indices
-        pass_mutated &= tensor._transform_indices(const_replrules);
-
-        if (tensor._label() == overlap_label() ||
-            tensor._label() == kronecker_label()) {
-          const auto bra = tensor._bra().at(0);
-          const auto ket = tensor._ket().at(0);
-          if (bra == ket) {
-            pass_mutated = true;
-            *it = ex<Constant>(1);
-          }
-        }  // Kronecker delta
-      }
-      ++it;
+      if (factor->is<AbstractTensor>())
+        pass_mutated |=
+            factor->as<AbstractTensor>()._transform_indices(const_replrules);
     }
-    mutated |= pass_mutated;
-  } while (pass_mutated);  // keep replacing til fixed point
+  } while (pass_mutated);
 
-  // assert that tensors_ indices are not tagged since going to tag indices
+  // reset the tags
   {
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
       const auto &factor = *it;
@@ -650,7 +632,54 @@ inline bool apply_index_replacement_rules(
             dst_it != const_replrules.end() ? dst_it->second : idx);
       });
   std::swap(all_indices_new, all_indices);
+}
 
+/// folds the self-deltas of @p product. A self-delta (a Kronecker delta, or a
+/// Kronecker-equivalent overlap, between an index and itself) is 1 if its
+/// index is bound elsewhere: it is external, or appears in another slot of
+/// the product. Otherwise it is the only occurrence of a dummy index, hence
+/// the sum over it (the extent of its space), and one self-delta per such
+/// index is kept.
+/// @return true if made any changes
+inline bool fold_self_deltas(std::shared_ptr<Product> &product,
+                             const container::set<Index> &external_indices,
+                             IndexSpaceMetric metric) {
+  using sequant::reserved::kronecker_label;
+  using sequant::reserved::overlap_label;
+
+  // the index of a self-delta factor, null for any other factor
+  auto self_delta_index = [metric](const ExprPtr &factor) -> const Index * {
+    if (!factor->is<AbstractTensor>()) return nullptr;
+    const auto &t = factor->as<AbstractTensor>();
+    const bool is_kronecker =
+        t._label() == kronecker_label() ||
+        (t._label() == overlap_label() && metric == IndexSpaceMetric::Unit &&
+         is_kronecker_equivalent(t._bra()[0], t._ket()[0]));
+    if (!is_kronecker) return nullptr;
+    const Index &bra = t._bra()[0];
+    return bra == t._ket()[0] ? &bra : nullptr;
+  };
+
+  expr_range exrng(product);
+  container::map<Index, std::int64_t> self_delta_counts;
+  for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it)
+    if (const Index *idx = self_delta_index(*it)) ++self_delta_counts[*idx];
+  if (self_delta_counts.empty()) return false;
+
+  const auto index_counts = get_used_indices_with_counts(product);
+  bool mutated = false;
+  container::set<Index> kept;
+  for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
+    const Index *idx = self_delta_index(*it);
+    if (!idx) continue;
+    // a self-delta contributes 2 to the index count
+    const bool bound_elsewhere =
+        external_indices.contains(*idx) ||
+        index_counts.at(*idx).total() > 2 * self_delta_counts.at(*idx);
+    if (!bound_elsewhere && kept.insert(*idx).second) continue;
+    *it = ex<Constant>(1);
+    mutated = true;
+  }
   return mutated;
 }
 
@@ -781,10 +810,12 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
     }
 
     // N.B. even if replacement list is empty, but have trivial kroneckers
-    // invoke apply_index_replacement_rules
+    // invoke apply_index_replacement_rules. A pass makes progress only if it
+    // eliminates a delta: a rule can rename a dummy to a fresh one of the same
+    // basis, which another pass would do again
     if (found_kroneckers) {
-      pass_mutated =
-          apply_index_replacement_rules(expr, replacement_rules, all_indices);
+      apply_index_replacement_rules(expr, replacement_rules, all_indices);
+      pass_mutated = fold_self_deltas(expr, external_indices, metric);
     }
 
     if (Logger::instance().wick_reduce) {
