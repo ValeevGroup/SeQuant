@@ -81,9 +81,9 @@ void register_function(std::wstring name, std::type_index type,
                        FunctionSerializer serializer = nullptr);
 
 /// @return the comma-separated arguments in \p arguments (see
-/// FunctionCall::arguments) without surrounding whitespace; a comma inside
-/// brackets or a quoted label does not separate arguments. Blank \p arguments
-/// have none.
+/// FunctionCall::arguments) without surrounding whitespace and comments; a
+/// comma inside brackets, a quoted label or a comment does not separate
+/// arguments. Blank \p arguments have none.
 std::vector<std::string_view> split_arguments(std::string_view arguments);
 
 /// @return \p label as written in the v2 syntax: as is if it is a bare name,

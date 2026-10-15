@@ -168,6 +168,9 @@ by a **function** ``~name(...)`` resolved through an extension registry (see bel
 .. note::
    Conjugation (``^*``) applies to variables and powers; tensors have no conjugated form.
 
+Whitespace, including line breaks, may appear between any two tokens, and so may a comment, which runs from ``//`` to
+the end of the line. Comments are discarded when reading and never written.
+
 A constant with both a nonzero real and a nonzero imaginary part has no single-token form and is written as a sum, e.g.
 ``(3 + 1i/2)``; a sum or product of numbers is read back as a single :class:`Constant`.
 
@@ -231,7 +234,7 @@ Examples
 ::
 
    R[i1;a1]:A-bkN-pS = f[a1;a2]:A-bkN-pS t[i1;a2]:A-bkN-pS + 1/2 g[i1,i2;a1,a2]:A-bkN-pS t[a2;i2]:A-bkN-pS
-   t[i1#3;a1]           an index in basis instance 3
-   `I_{1}`[i1;a1]       a label that is not a bare name
+   t[i1#3;a1]       // an index in basis instance 3
+   `I_{1}`[i1;a1]   // a label that is not a bare name
    ~fop(i1+, a1-)
    ~fnopseq( a{i1;}, a{;a1} )

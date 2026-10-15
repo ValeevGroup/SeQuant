@@ -64,7 +64,7 @@ Power <- PowerBase '^' '(' Exponent ')' Conjugation? / '(' Power ')' Conjugation
 # ~name(...) dispatches to a registered handler, which receives the text
 # between the parentheses as written and parses it itself. Only brackets are
 # matched here, so that the call ends at the right ')'.
-RawText <- ( '(' RawText ')' / '[' RawText ']' / '{' RawText '}' / QuotedIdentifier / ![()[\]{}`] . )*
+RawText <- ( '(' RawText ')' / '[' RawText ']' / '{' RawText '}' / QuotedIdentifier / Comment / ![()[\]{}`] . )*
 RawArguments <- < RawText >
 Function <- '~' Identifier '(' RawArguments ')'
 
@@ -92,6 +92,9 @@ Result <- Tensor / Variable
 
 ResultExpression <- Result '=' Expression
 
-%whitespace  <-  [ \t\r\n]*
+# A comment runs from '//' to the end of the line.
+Comment <- '//' (![\r\n] .)*
+
+%whitespace  <-  ([ \t\r\n] / Comment)*
 
 )"sv;

@@ -162,12 +162,34 @@ void register_function(std::wstring name, std::type_index type,
 
 std::vector<std::string_view> split_arguments(std::string_view arguments) {
   std::vector<std::string_view> result;
-  if (trim(arguments).empty()) return result;
-
   int depth = 0;
-  std::size_t begin = 0;
+  // the extent of the current argument without surrounding whitespace and
+  // comments; first == npos while it has none
+  std::size_t first = std::string_view::npos, last = 0;
+  bool separated = false;
+  auto finish = [&] {
+    result.push_back(first == std::string_view::npos
+                         ? std::string_view{}
+                         : arguments.substr(first, last - first));
+    first = std::string_view::npos;
+  };
+
   for (std::size_t i = 0; i < arguments.size(); ++i) {
-    switch (arguments[i]) {
+    const char c = arguments[i];
+    if (arguments.substr(i).starts_with("//")) {  // skip a comment
+      i = arguments.find_first_of("\r\n", i);
+      if (i == std::string_view::npos) break;
+      continue;
+    }
+    if (whitespace.find(c) != std::string_view::npos) continue;
+    if (c == ',' && depth == 0) {
+      finish();
+      separated = true;
+      continue;
+    }
+
+    if (first == std::string_view::npos) first = i;
+    switch (c) {
       case '(':
       case '[':
       case '{':
@@ -182,15 +204,10 @@ std::vector<std::string_view> split_arguments(std::string_view arguments) {
         for (++i; i < arguments.size() && arguments[i] != '`'; ++i)
           if (arguments[i] == '\\') ++i;
         break;
-      case ',':
-        if (depth == 0) {
-          result.push_back(trim(arguments.substr(begin, i - begin)));
-          begin = i + 1;
-        }
-        break;
     }
+    last = std::min(i + 1, arguments.size());
   }
-  result.push_back(trim(arguments.substr(begin)));
+  if (separated || first != std::string_view::npos) finish();
   return result;
 }
 

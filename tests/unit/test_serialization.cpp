@@ -955,6 +955,33 @@ TEST_CASE("serialization", "[serialization]") {
                 v1::from_string<ExprPtr>(L"1/2 t{i1;a1}"));
       }
 
+      // '//' starts a comment that runs to the end of the line
+      SECTION("comments") {
+        REQUIRE(v2::from_string<ExprPtr>("// leading\n"
+                                         "t[i1;a1] // the amplitude\n"
+                                         "  // a whole line\n"
+                                         "  + f[i1; // within a tensor\n"
+                                         "        a1]//no space\n"
+                                         "  // trailing") ==
+                v2::from_string<ExprPtr>("t[i1;a1] + f[i1;a1]"));
+        REQUIRE(v2::from_string<ExprPtr>("x / // divided by\n y") ==
+                v2::from_string<ExprPtr>("x / y"));
+        // not within a token
+        REQUIRE(v2::from_string<ExprPtr>("`a//b`") == ex<Variable>(L"a//b"));
+        // brackets and commas in a comment do not affect function arguments
+        REQUIRE(v2::from_string<ExprPtr>("~fnopseq(a{i1;}, // (one, two]\n"
+                                         "         a{;a1})") ==
+                v2::from_string<ExprPtr>("~fnopseq(a{i1;}, a{;a1})"));
+        REQUIRE(split_arguments(" // only a comment") ==
+                std::vector<std::string_view>{});
+        REQUIRE(split_arguments("a, // 1, 2\n b // c\n, `x//y`") ==
+                std::vector<std::string_view>{"a", "b", "`x//y`"});
+        REQUIRE(split_arguments("x // c\n - y") ==
+                std::vector<std::string_view>{"x // c\n - y"});
+        // a comment ends at the line's end
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("t[i1;a1 // ]"), v2::Error);
+      }
+
       SECTION("ResultExpr") {
         ResultExpr result = v2::from_string<ResultExpr>("R[i1;a1] = t[i1;a1]");
         REQUIRE(result.expression() == v2::from_string<ExprPtr>("t[i1;a1]"));
