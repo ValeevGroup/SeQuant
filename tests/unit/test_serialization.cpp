@@ -941,6 +941,11 @@ TEST_CASE("serialization", "[serialization]") {
         REQUIRE(error_at("x + 2^(1)^* ~bogus()") ==
                 std::pair<std::size_t, std::size_t>{1, 13});
 
+        // each symmetry field may be given only once
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("t[i1;a1]:A-S"), v2::Error);
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("t[i1;a1]:pN-bkN-pN"),
+                          v2::Error);
+
         // requesting a specific type that the input does not denote
         REQUIRE_THROWS_AS(v2::from_string<Sum>("x"), v2::Error);
         REQUIRE_THROWS_AS(v2::from_string<Product>("x"), v2::Error);

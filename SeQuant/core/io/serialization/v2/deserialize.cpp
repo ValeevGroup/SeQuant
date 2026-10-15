@@ -148,23 +148,30 @@ ExprPtr build_tensor(const std::wstring &name, const IndexGroupsValue &groups,
   ColumnSymmetry column = def_column;
   bool perm_spec = false, braket_spec = false, column_spec = false;
 
+  // records that a field is given, which it may only be once
+  auto specify = [](bool &specified, const char *field) {
+    if (specified)
+      throw Exception(std::string("the ") + field +
+                      " symmetry is specified more than once");
+    specified = true;
+  };
   for (const std::string &token : symmetries) {
     if (token == "A") {
-      perm = Symmetry::Antisymm, perm_spec = true;
+      specify(perm_spec, "permutational"), perm = Symmetry::Antisymm;
     } else if (token == "S") {
-      perm = Symmetry::Symm, perm_spec = true;
+      specify(perm_spec, "permutational"), perm = Symmetry::Symm;
     } else if (token == "N") {
-      perm = Symmetry::Nonsymm, perm_spec = true;
+      specify(perm_spec, "permutational"), perm = Symmetry::Nonsymm;
     } else if (token == "bkS") {
-      braket = BraKetSymmetry::Symm, braket_spec = true;
+      specify(braket_spec, "bra-ket"), braket = BraKetSymmetry::Symm;
     } else if (token == "bkC") {
-      braket = BraKetSymmetry::Conjugate, braket_spec = true;
+      specify(braket_spec, "bra-ket"), braket = BraKetSymmetry::Conjugate;
     } else if (token == "bkN") {
-      braket = BraKetSymmetry::Nonsymm, braket_spec = true;
+      specify(braket_spec, "bra-ket"), braket = BraKetSymmetry::Nonsymm;
     } else if (token == "pS") {
-      column = ColumnSymmetry::Symm, column_spec = true;
+      specify(column_spec, "particle"), column = ColumnSymmetry::Symm;
     } else if (token == "pN") {
-      column = ColumnSymmetry::Nonsymm, column_spec = true;
+      specify(column_spec, "particle"), column = ColumnSymmetry::Nonsymm;
     } else {
       throw Exception("invalid symmetry specifier '" + token + "'");
     }

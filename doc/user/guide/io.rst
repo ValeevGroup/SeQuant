@@ -198,7 +198,7 @@ A constant with both a nonzero real and a nonzero imaginary part has no single-t
    Index           Name BasisInstance? IndexDomain?
    BasisInstance   '#' '-'? Integer                                                An explicit, otherwise-unnamed basis instance (may be negative), e.g. ``i#3``
    IndexDomain     '<' (Index (',' Index)*)? '>'                                   Proto indices
-   SymmetrySpec    ':' SymmetryTok ( '-' SymmetryTok )*                            Order-independent; prefixes disambiguate the field
+   SymmetrySpec    ':' SymmetryTok ( '-' SymmetryTok )*                            Order-independent; prefixes disambiguate the field, each given at most once
    SymmetryTok     'A' | 'S' | 'N' | 'bkS' | 'bkC' | 'bkN' | 'pS' | 'pN'
    Variable        Name '^*'?                                                       ``^*`` marks conjugation
    Name                                                                             Single word (may include Unicode chars)
