@@ -902,6 +902,31 @@ TEST_CASE("serialization", "[serialization]") {
         REQUIRE(v2::from_string<ExprPtr>(serialized) == expr);
       }
 
+      // starting from constructed (rather than parsed) expressions also
+      // catches a parse that is consistently wrong
+      auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"});
+      auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                          Symmetry::Antisymm);
+      auto x = ex<Variable>(L"x");
+      auto y = ex<Variable>(L"y");
+      const std::vector<ExprPtr> exprs = {
+          ex<Sum>(ExprPtrList{t, ex<Product>(rational{-1, 2}, ExprPtrList{g})}),
+          ex<Sum>(ExprPtrList{
+              t, ex<Product>(-1, ExprPtrList{x, y}, Product::Flatten::No)}),
+          ex<Sum>(ExprPtrList{
+              t, ex<Product>(-1,
+                             ExprPtrList{ex<Product>(ExprPtrList{x, y},
+                                                     Product::Flatten::No)},
+                             Product::Flatten::No)}),
+          ex<Product>(1, ExprPtrList{x}),
+          ex<Product>(-1, ExprPtrList{x}),
+      };
+      for (const ExprPtr& constructed : exprs) {
+        std::wstring serialized = v2::to_string(constructed);
+        INFO("serialized: " << toUtf8(serialized));
+        REQUIRE(v2::from_string<ExprPtr>(serialized) == constructed);
+      }
+
       // the top-level dispatcher honours SerializationSyntax::V2
       ExprPtr expr = v2::from_string<ExprPtr>(L"t[i1;a1]:N-bkN-pN");
       REQUIRE(from_string<ExprPtr>(

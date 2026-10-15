@@ -82,6 +82,12 @@ ExprPtr negate(ExprPtr expr) {
   if (expr->is<Constant>()) {
     return ex<Constant>(Constant(-expr->as<Constant>().value()));
   }
+  // fold the sign into the prefactor, which is where the serializer puts it
+  if (expr->is<Product>()) {
+    ExprPtr product = expr->clone();
+    product->as<Product>().scale(-1);
+    return product;
+  }
   return ex<Product>(Constant::scalar_type(-1),
                      std::vector<ExprPtr>{std::move(expr)},
                      Product::Flatten::No);
@@ -357,10 +363,12 @@ void register_actions(peg::parser &parser) {
   };
   parser["Product"] = [](const SemanticValues &vs) -> ExprPtr {
     Constant::scalar_type prefactor(1);
+    bool explicit_prefactor = false;
     std::vector<ExprPtr> factors;
 
     auto apply = [&](char op, ExprPtr operand) {
       if (operand->is<Constant>()) {
+        explicit_prefactor = true;
         if (op == '/')
           prefactor = prefactor / operand->as<Constant>().value();
         else
@@ -379,8 +387,8 @@ void register_actions(peg::parser &parser) {
     }
 
     if (factors.empty()) return ex<Constant>(Constant(prefactor));
-    if (factors.size() == 1 && prefactor == Constant::scalar_type(1))
-      return factors.front();
+    // a spelled-out prefactor (even 1) makes the factor a Product, as written
+    if (factors.size() == 1 && !explicit_prefactor) return factors.front();
     return ex<Product>(prefactor, std::move(factors), Product::Flatten::No);
   };
   parser["Sum"] = [](const SemanticValues &vs) -> ExprPtr {

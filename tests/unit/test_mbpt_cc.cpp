@@ -5,11 +5,13 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/bernoulli.hpp>
@@ -77,6 +79,16 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
                                   L"λ⁺{a_1;i_1}:A-N-S λ⁺{a_2;i_2}:A-N-S"));
       }
     }  // SECTION("λ")
+
+    // v2 serialization must reproduce equations exactly, not just equivalently
+    SECTION("v2 serialization round-trip") {
+      namespace ser = io::serialization;
+      for (const ExprPtr& eq : CC{2}.t()) {
+        const std::wstring serialized = ser::v2::to_string(eq);
+        INFO(toUtf8(serialized));
+        REQUIRE(ser::v2::from_string<ExprPtr>(serialized) == eq);
+      }
+    }
   }
 
   SECTION("bernoulli_wick") {

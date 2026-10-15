@@ -216,7 +216,10 @@ std::wstring to_string(const Expr &expr, const SerializationOptions &options) {
   if (expr.is<Product>()) {
     const Product &product = expr.as<Product>();
     std::wstring result;
-    if (product.scalar() != Constant::scalar_type(1))
+    // a single-factor Product needs its prefactor to not read back as the bare
+    // factor
+    if (product.scalar() != Constant::scalar_type(1) ||
+        product.factors().size() == 1)
       result += serialize_scalar(product.scalar()) + L" ";
     result += join_strings<std::wstring>(
         product.factors(), L" ", [&](const ExprPtr &factor) {
