@@ -362,7 +362,7 @@ class IndexBasisRegistry {
   /// @throw Exception if @p label is that of a space: the own basis of a
   /// space is orthonormal
   template <basic_string_convertible S>
-  IndexBasisRegistry& metric(S&& label, IndexSpaceMetric m) {
+  IndexBasisRegistry& metric(S&& label, IndexBasisMetric m) {
     auto& entry = entry_or_throw(label);
     if (!entry.has_basis_instance())
       throw Exception("IndexBasisRegistry::metric: '" + toUtf8(label) +
@@ -661,9 +661,9 @@ class IndexBasisRegistry {
   /// @param args optional arguments consisting of a mix of zero or one of
   /// each of the following, each defaulting to what @p basis carries (for a
   /// basis built from a space and an instance: the dimension of the space,
-  /// IndexSpaceMetric::Unit and the field of the space's own basis):
+  /// IndexBasisMetric::Unit and the field of the space's own basis):
   ///   - extent of the basis (an integer)
-  ///   - IndexSpaceMetric
+  ///   - IndexBasisMetric
   ///   - Field
   /// @return reference to `this`
   /// @throw Exception if @p label is not a valid label or is already
@@ -677,24 +677,24 @@ class IndexBasisRegistry {
                  boost::hana::type_c<decltype(arg)>) &&
              boost::hana::type_c<decltype(arg)> != boost::hana::type_c<Field> &&
              boost::hana::type_c<decltype(arg)> !=
-                 boost::hana::type_c<IndexSpaceMetric>;
+                 boost::hana::type_c<IndexBasisMetric>;
     });
     static_assert(boost::hana::size(h_tags) == boost::hana::size_c<0>,
                   "IndexBasisRegistry::add(label, basis): attribute tags are "
-                  "per space; only an integral extent, an IndexSpaceMetric "
+                  "per space; only an integral extent, an IndexBasisMetric "
                   "and a Field may be given for a basis instance");
     const auto [extent, field] = parse_extent_and_field(args...);
     auto h_metric = boost::hana::filter(h_args, [](auto arg) {
       return boost::hana::type_c<decltype(arg)> ==
-             boost::hana::type_c<IndexSpaceMetric>;
+             boost::hana::type_c<IndexBasisMetric>;
     });
     constexpr auto nmetrics = boost::hana::size(h_metric);
     static_assert(
         nmetrics == boost::hana::size_c<0> ||
             nmetrics == boost::hana::size_c<1>,
-        "IndexBasisRegistry::add(label, basis): only one IndexSpaceMetric "
+        "IndexBasisRegistry::add(label, basis): only one IndexBasisMetric "
         "argument is allowed");
-    IndexSpaceMetric metric = basis.metric_;
+    IndexBasisMetric metric = basis.metric_;
     if constexpr (nmetrics == boost::hana::size_c<1>) {
       metric = boost::hana::at_c<0>(h_metric);
     }

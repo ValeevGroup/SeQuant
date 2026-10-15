@@ -75,7 +75,7 @@ TEST_CASE("pao-named-basis", "[mbpt][csv][basis][valgrind_skip]") {
     CHECK(Index(pao, 3).full_label() == L"μ̃_3");
     CHECK(Index(pao, 3).basis().base_key() == L"μ̃");
     CHECK(Index(pao, 3).basis().extent() == n_pao);
-    CHECK(Index(pao, 3).basis().metric() == IndexSpaceMetric::General);
+    CHECK(Index(pao, 3).basis().metric() == IndexBasisMetric::General);
     // the bare (space, instance) pair that operator grants and the integral
     // projection build resolves to the basis as registered
     const IndexBasis bare{ctx.index_basis_registry()->retrieve_space(L"a"),

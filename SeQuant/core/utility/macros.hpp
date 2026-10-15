@@ -63,6 +63,11 @@
 #else
 #define SEQUANT_PRAGMA_GCC(x)
 #endif
+#if defined(_MSC_VER) && !defined(__clang__)
+#define SEQUANT_PRAGMA_MSVC(x) __pragma(x)
+#else
+#define SEQUANT_PRAGMA_MSVC(x)
+#endif
 
 /* Scoped suppression of -Wdeprecated-declarations for a specific block of
  * code. Use at a single call site that needs to invoke a deprecated API
@@ -73,10 +78,13 @@
   SEQUANT_PRAGMA_CLANG(diagnostic push)                                \
   SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations") \
   SEQUANT_PRAGMA_GCC(diagnostic push)                                  \
-  SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wdeprecated-declarations")
+  SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wdeprecated-declarations")   \
+  SEQUANT_PRAGMA_MSVC(warning(push))                                   \
+  SEQUANT_PRAGMA_MSVC(warning(disable : 4996))
 #define SEQUANT_PRAGMA_IGNORE_DEPRECATED_END \
   SEQUANT_PRAGMA_CLANG(diagnostic pop)       \
-  SEQUANT_PRAGMA_GCC(diagnostic pop)
+  SEQUANT_PRAGMA_GCC(diagnostic pop)         \
+  SEQUANT_PRAGMA_MSVC(warning(pop))
 
 /* Defines the default error checking behavior */
 #define SEQUANT_ASSERT_THROW 2

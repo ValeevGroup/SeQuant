@@ -133,13 +133,6 @@ std::shared_ptr<const IndexBasisRegistry> take_registry(
   return nullptr;
 }
 
-/// @return the deprecated metric that @p options carries
-IndexSpaceMetric take_metric(const Context::Options& options) {
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  return options.metric;
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-}
-
 void check_tensor_canonicalizer(
     const std::shared_ptr<TensorCanonicalizer>& canonicalizer) {
   if (!canonicalizer)
@@ -182,10 +175,7 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
     return *r1 == *r2;
   };
   if (&ctx1 == &ctx2) return true;
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  const bool same_metric = ctx1.metric() == ctx2.metric();
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  return ctx1.vacuum() == ctx2.vacuum() && same_metric &&
+  return ctx1.vacuum() == ctx2.vacuum() &&
          ctx1.assert_strict_braket_symmetry() ==
              ctx2.assert_strict_braket_symmetry() &&
          ctx1.spbasis() == ctx2.spbasis() &&
@@ -404,7 +394,6 @@ pin_default_contexts() {
 Context::Context(Options options)
     : idx_basis_reg_(take_registry(options)),
       vacuum_(options.vacuum),
-      metric_(take_metric(options)),
       assert_strict_braket_symmetry_(options.assert_strict_braket_symmetry),
       spbasis_(options.spbasis),
       first_dummy_index_ordinal_(options.first_dummy_index_ordinal),
@@ -494,8 +483,6 @@ std::shared_ptr<const IndexBasisRegistry> Context::index_basis_registry()
     const {
   return idx_basis_reg_;
 }
-
-IndexSpaceMetric Context::metric() const { return metric_; }
 
 bool Context::assert_strict_braket_symmetry() const {
   return assert_strict_braket_symmetry_;
@@ -591,11 +578,6 @@ Context& Context::set(IndexBasisRegistry ISR) {
 Context& Context::set(std::shared_ptr<const IndexBasisRegistry> ISR) {
   idx_basis_reg_ = owned(std::move(ISR));
   invalidate_version();
-  return *this;
-}
-
-Context& Context::set(IndexSpaceMetric metric) {
-  metric_ = metric;
   return *this;
 }
 

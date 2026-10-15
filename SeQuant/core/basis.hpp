@@ -88,7 +88,7 @@ class IndexBasis {
   ///      basis is the space's own basis up to an orthonormal rotation)
   IndexBasis(IndexSpace space, optional_instance basis_instance,
              std::wstring name, std::optional<std::size_t> extent = {},
-             IndexSpaceMetric metric = IndexSpaceMetric::Unit,
+             IndexBasisMetric metric = IndexBasisMetric::Unit,
              std::optional<Field> field = {});
 
   const IndexSpace& space() const noexcept { return space_; }
@@ -126,9 +126,9 @@ class IndexBasis {
     return extent_ ? *extent_ : space_.dimension();
   }
 
-  /// @return whether the basis is orthonormal (IndexSpaceMetric::Unit) or not;
+  /// @return whether the basis is orthonormal (IndexBasisMetric::Unit) or not;
   /// unit unless registered otherwise
-  IndexSpaceMetric metric() const noexcept { return metric_; }
+  IndexBasisMetric metric() const noexcept { return metric_; }
 
   /// @return the scalar field of the basis: that of its space's own basis
   /// (IndexSpace::field()) unless registered with a field of its own
@@ -215,13 +215,13 @@ class IndexBasis {
   optional_instance basis_instance_;
   std::wstring name_;
   std::optional<std::size_t> extent_;
-  IndexSpaceMetric metric_ = IndexSpaceMetric::Unit;
+  IndexBasisMetric metric_ = IndexBasisMetric::Unit;
   std::optional<Field> field_;
 
   // the registry writes the metadata of its named entries in place
   friend class IndexBasisRegistry;
   void extent(std::size_t n) noexcept { extent_ = n; }
-  void metric(IndexSpaceMetric m) noexcept { metric_ = m; }
+  void metric(IndexBasisMetric m) noexcept { metric_ = m; }
   void field(Field f) noexcept { field_ = f; }
 };
 
