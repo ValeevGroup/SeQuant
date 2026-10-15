@@ -60,15 +60,13 @@ Power <- PowerBase '^' '(' Exponent ')' Conjugation? / '(' Power ')' Conjugation
 
 Statistic <- 'F' / 'B'
 
-# ~name(arg, arg, ...) dispatches to a registered handler. An argument is
-# either an action-tagged index (creator '+'/'⁺', annihilator '-'/'⁻')
-# or an arbitrary sub-expression. The optional ':' Statistic selects Fermi/Bose.
-CreatorMark <- '+' / '⁺'
-AnnihilatorMark <- '-' / '⁻'
-ActionIndex <- Index ( CreatorMark / AnnihilatorMark )
-FunctionArg <- ActionIndex / Expression
-ArgList <- FunctionArg (',' FunctionArg)*
-Function <- '~' Identifier '(' ArgList? ')' (':' Statistic)?
+# ~name(...) dispatches to a registered handler, which receives the text
+# between the parentheses as written and parses it itself. Only brackets are
+# matched here, so that the call ends at the right ')'. The optional
+# ':' Statistic selects Fermi/Bose.
+RawText <- ( '(' RawText ')' / '[' RawText ']' / '{' RawText '}' / ![()[\]{}] . )*
+RawArguments <- < RawText >
+Function <- '~' Identifier '(' RawArguments ')' (':' Statistic)?
 
 # --- Expression ------------------------------------------------------------
 

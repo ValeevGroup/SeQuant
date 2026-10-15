@@ -9,26 +9,20 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <typeindex>
 #include <utility>
 #include <vector>
 
 namespace sequant::io::serialization {
 
-/// A single argument of a v2 `~name(...)` function call. An argument is either
-/// an action-tagged index (a creator/annihilator) or an arbitrary
-/// sub-expression; exactly one of the two is set.
-struct FunctionArgument {
-  std::optional<std::pair<Index, Action>> action_index;
-  ExprPtr expr;
-
-  bool is_action_index() const { return action_index.has_value(); }
-};
-
-/// A parsed v2 `~name(...)` function call handed to a registered deserializer.
+/// A v2 `~name(...)` function call handed to a registered deserializer.
 struct FunctionCall {
   std::wstring name;
-  std::vector<FunctionArgument> arguments;
+  /// the text between the parentheses as written (UTF-8); the deserializer
+  /// parses it, e.g. with split_arguments(), v2::from_string() and
+  /// parse_action_index()
+  std::string arguments;
   /// the explicit `:F`/`:B` statistic, if any
   std::optional<Statistics> statistic;
 };
@@ -86,6 +80,17 @@ class FunctionRegistry {
 void register_function(std::wstring name, std::type_index type,
                        FunctionDeserializer deserializer,
                        FunctionSerializer serializer = nullptr);
+
+/// @return the comma-separated arguments in \p arguments (see
+/// FunctionCall::arguments) without surrounding whitespace; a comma inside
+/// brackets does not separate arguments. Blank \p arguments have none.
+std::vector<std::string_view> split_arguments(std::string_view arguments);
+
+/// @return the index and action of an action-tagged index such as `i1+` or
+/// `a1⁻`: a creator is marked by `+`/`⁺`, an annihilator by `-`/`⁻`
+/// @throw SerializationError if \p text is not an action-tagged index
+std::pair<Index, Action> parse_action_index(
+    std::string_view text, const DeserializationOptions &options = {});
 
 }  // namespace sequant::io::serialization
 

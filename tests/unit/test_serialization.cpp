@@ -9,6 +9,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/serialization/function_registry.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/io/serialization/v1/error.hpp>
 #include <SeQuant/core/io/serialization/v2/error.hpp>
@@ -24,6 +25,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <typeindex>
 #include <utility>
 #include <vector>
 
@@ -914,6 +916,51 @@ TEST_CASE("serialization", "[serialization]") {
         ExprPtr seq = v2::from_string<ExprPtr>("~nopseq(a{i1;}, a{;a1})");
         REQUIRE(seq->is<FNOperatorSeq>());
         REQUIRE(seq->as<FNOperatorSeq>().size() == 2);
+      }
+
+      // a ~name(...) handler receives its arguments unparsed
+      SECTION("function arguments") {
+        REQUIRE(split_arguments("").empty());
+        REQUIRE(split_arguments("  ").empty());
+        REQUIRE(split_arguments(" a ,b") ==
+                std::vector<std::string_view>{"a", "b"});
+        REQUIRE(split_arguments("f(a, b), t[i1,i2;a1], {x,y}, ") ==
+                std::vector<std::string_view>{"f(a, b)", "t[i1,i2;a1]", "{x,y}",
+                                              ""});
+
+        REQUIRE(parse_action_index("i1+") ==
+                std::pair{Index(L"i_1"), Action::Create});
+        REQUIRE(parse_action_index(" a_2 - ") ==
+                std::pair{Index(L"a_2"), Action::Annihilate});
+        REQUIRE(parse_action_index("i1⁺") ==
+                std::pair{Index(L"i_1"), Action::Create});
+        REQUIRE(parse_action_index("i1⁻") ==
+                std::pair{Index(L"i_1"), Action::Annihilate});
+        REQUIRE_THROWS_AS(parse_action_index("i1"), SerializationError);
+        REQUIRE_THROWS_AS(parse_action_index("+"), SerializationError);
+
+        // a handler parsing expressions, which may contain '-' and ','
+        register_function(
+            L"test_sum", std::type_index(typeid(void)),
+            [](const FunctionCall& call, const DeserializationOptions& opts) {
+              ExprPtr sum = ex<Sum>();
+              for (std::string_view arg : split_arguments(call.arguments))
+                sum->as<Sum>().append(v2::from_string<ExprPtr>(arg, opts));
+              return sum;
+            });
+        REQUIRE(v2::from_string<ExprPtr>("~test_sum(x - y, t[i1,i2;a1,a2])") ==
+                v2::from_string<ExprPtr>("x - y + t[i1,i2;a1,a2]"));
+
+        // the handler's errors are reported at the call
+        try {
+          v2::from_string<ExprPtr>("x +\n ~test_sum(t[i1;az1])");
+          FAIL("no exception thrown");
+        } catch (const v2::Error& e) {
+          REQUIRE(e.line == 2);
+          REQUIRE(e.column == 2);
+          REQUIRE_THAT(e.what(),
+                       Catch::Matchers::ContainsSubstring("~test_sum(...)"));
+        }
       }
 
       // Errors raised inside the semantic actions must surface as catchable

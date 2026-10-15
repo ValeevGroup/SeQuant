@@ -35,15 +35,6 @@ namespace {
 /// a parsed index group list; a std::nullopt entry is a blank index
 using IndexGroupsValue = std::vector<std::vector<std::optional<Index>>>;
 
-/// an index as matched, before it is validated against the index registry; the
-/// deferred construction lets a speculative ActionIndex match fail (and the
-/// parser backtrack) without a registry lookup throwing
-struct RawIndex {
-  std::wstring label;
-  std::optional<IndexBasis::instance_type> instance;
-  container::vector<Index> protos;
-};
-
 /// @return the first value of type T stored in @p vs, or nullptr
 template <typename T>
 const T *find_value(const peg::SemanticValues &vs) {
@@ -85,13 +76,6 @@ ExprPtr negate(ExprPtr expr) {
   return ex<Product>(Constant::scalar_type(-1),
                      std::vector<ExprPtr>{std::move(expr)},
                      Product::Flatten::No);
-}
-
-Index make_index(const RawIndex &raw) {
-  Index index =
-      raw.protos.empty() ? Index(raw.label) : Index(raw.label, raw.protos);
-  if (raw.instance) index = index.replace_basis_instance(*raw.instance);
-  return index;
 }
 
 ExprPtr build_normal_operator(const std::wstring &name,
@@ -237,11 +221,6 @@ void register_actions(peg::parser &parser) {
   on(parser, "Statistic", [](const SemanticValues &vs) {
     return vs.choice() == 0 ? Statistics::FermiDirac : Statistics::BoseEinstein;
   });
-  on(parser, "CreatorMark",
-     [](const SemanticValues &) { return Action::Create; });
-  on(parser, "AnnihilatorMark",
-     [](const SemanticValues &) { return Action::Annihilate; });
-
   on(parser, "BasisInstance", [](const SemanticValues &vs) {
     return string_to<IndexBasis::instance_type>(vs.token());
   });
@@ -263,17 +242,16 @@ void register_actions(peg::parser &parser) {
     return protos;
   });
   on(parser, "Index", [](const SemanticValues &vs) {
-    RawIndex raw;
-    raw.label = toUtf16(*find_value<std::string>(vs));
+    const std::wstring label = toUtf16(*find_value<std::string>(vs));
+    const auto *protos = find_value<container::vector<Index>>(vs);
+    Index index =
+        protos && !protos->empty() ? Index(label, *protos) : Index(label);
     if (auto instance = find_value<IndexBasis::instance_type>(vs))
-      raw.instance = *instance;
-    if (auto protos = find_value<container::vector<Index>>(vs))
-      raw.protos = *protos;
-    return raw;
+      index = index.replace_basis_instance(*instance);
+    return index;
   });
   on(parser, "IndexItem", [](const SemanticValues &vs) {
-    return vs.choice() == 1 ? std::optional<Index>(
-                                  make_index(std::any_cast<RawIndex>(vs[0])))
+    return vs.choice() == 1 ? std::optional<Index>(std::any_cast<Index>(vs[0]))
                             : std::optional<Index>{};
   });
   on(parser, "Indices", [](const SemanticValues &vs) {
@@ -324,32 +302,24 @@ void register_actions(peg::parser &parser) {
     return power;
   });
 
-  on(parser, "ActionIndex", [](const SemanticValues &vs) {
-    return std::pair<Index, Action>(make_index(std::any_cast<RawIndex>(vs[0])),
-                                    std::any_cast<Action>(vs[1]));
-  });
-  on(parser, "FunctionArg", [](const SemanticValues &vs) {
-    FunctionArgument arg;
-    if (vs.choice() == 0)
-      arg.action_index = std::any_cast<std::pair<Index, Action>>(vs[0]);
-    else
-      arg.expr = std::any_cast<ExprPtr>(vs[0]);
-    return arg;
-  });
-  on(parser, "ArgList", [](const SemanticValues &vs) {
-    std::vector<FunctionArgument> args;
-    for (std::size_t i = 0; i < vs.size(); ++i)
-      args.push_back(std::any_cast<FunctionArgument>(vs[i]));
-    return args;
-  });
-  on(parser, "Function", [](const SemanticValues &vs, std::any &dt) {
+  on(parser, "RawArguments",
+     [](const SemanticValues &vs) { return std::string(vs.token()); });
+  // the handler's errors (including those of nested parses of its arguments,
+  // whose positions are relative to the argument) are reported at the call
+  parser["Function"] = [](const SemanticValues &vs, std::any &dt) {
     FunctionCall call;
     call.name = toUtf16(*find_value<std::string>(vs));
-    if (auto args = find_value<std::vector<FunctionArgument>>(vs))
-      call.arguments = *args;
+    // find_value would also match the name, which comes first
+    call.arguments = std::any_cast<std::string>(vs[1]);
     if (auto stat = find_value<Statistics>(vs)) call.statistic = *stat;
-    return FunctionRegistry::instance().deserialize(call, options_of(dt));
-  });
+    try {
+      return FunctionRegistry::instance().deserialize(call, options_of(dt));
+    } catch (const Exception &e) {
+      const auto [line, column] = vs.line_info();
+      throw Error(line, column, "Function",
+                  "~" + toUtf8(call.name) + "(...): " + e.what());
+    }
+  };
 
   on(parser, "Nullary",
      [](const SemanticValues &vs) { return std::any_cast<ExprPtr>(vs[0]); });
@@ -541,6 +511,17 @@ template <>
 Constant from_string<Constant>(std::wstring_view input,
                                const DeserializationOptions &options) {
   return v2::from_string<Constant>(toUtf8(input), options);
+}
+
+template <>
+Index from_string<Index>(std::string_view input,
+                         const DeserializationOptions &options) {
+  return parse_value<Index>("Index", input, options);
+}
+template <>
+Index from_string<Index>(std::wstring_view input,
+                         const DeserializationOptions &options) {
+  return v2::from_string<Index>(toUtf8(input), options);
 }
 
 template <>

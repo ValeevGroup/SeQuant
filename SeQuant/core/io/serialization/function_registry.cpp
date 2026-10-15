@@ -4,6 +4,10 @@
 #include <SeQuant/core/utility/string.hpp>
 
 #include <mutex>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 namespace sequant::io::serialization {
 
@@ -11,54 +15,63 @@ namespace {
 
 // Builds a raw Operator<S> from an ordered list of action-tagged indices.
 template <Statistics S>
-ExprPtr build_operator(const FunctionCall &call) {
+ExprPtr build_operator(const FunctionCall &call,
+                       const DeserializationOptions &options) {
   container::svector<Op<S>> ops;
-  ops.reserve(call.arguments.size());
-  for (const FunctionArgument &arg : call.arguments) {
-    if (!arg.is_action_index())
-      throw SerializationError(
-          "~op(...) expects action-tagged indices (e.g. i1+, a1-) as "
-          "arguments");
-    ops.emplace_back(arg.action_index->first, arg.action_index->second);
+  for (std::string_view arg : split_arguments(call.arguments)) {
+    auto [index, action] = parse_action_index(arg, options);
+    ops.emplace_back(std::move(index), action);
   }
   return ex<Operator<S>>(std::move(ops));
 }
 
-ExprPtr build_op(const FunctionCall &call, const DeserializationOptions &) {
+ExprPtr build_op(const FunctionCall &call,
+                 const DeserializationOptions &options) {
   const Statistics stat = call.statistic.value_or(Statistics::FermiDirac);
   return stat == Statistics::FermiDirac
-             ? build_operator<Statistics::FermiDirac>(call)
-             : build_operator<Statistics::BoseEinstein>(call);
+             ? build_operator<Statistics::FermiDirac>(call, options)
+             : build_operator<Statistics::BoseEinstein>(call, options);
 }
 
 template <Statistics S>
-ExprPtr build_sequence(const FunctionCall &call) {
+ExprPtr build_sequence(const std::vector<ExprPtr> &args) {
   NormalOperatorSequence<S> seq;
-  for (const FunctionArgument &arg : call.arguments) {
-    if (arg.is_action_index() || !arg.expr ||
-        !arg.expr->is<NormalOperator<S>>())
+  for (const ExprPtr &arg : args) {
+    if (!arg->is<NormalOperator<S>>())
       throw SerializationError(
           "~nopseq(...) expects normal-ordered operators of a single statistic "
           "as arguments");
-    seq.insert(seq.end(), arg.expr->as<NormalOperator<S>>());
+    seq.insert(seq.end(), arg->as<NormalOperator<S>>());
   }
   return ex<NormalOperatorSequence<S>>(std::move(seq));
 }
 
-ExprPtr build_nopseq(const FunctionCall &call, const DeserializationOptions &) {
+ExprPtr build_nopseq(const FunctionCall &call,
+                     const DeserializationOptions &options) {
+  std::vector<ExprPtr> args;
+  for (std::string_view arg : split_arguments(call.arguments))
+    args.push_back(v2::from_string<ExprPtr>(arg, options));
+
   // infer statistics from the explicit suffix, else from the first operator
   Statistics stat = Statistics::FermiDirac;
   if (call.statistic) {
     stat = *call.statistic;
-  } else if (!call.arguments.empty() && call.arguments.front().expr) {
-    stat = call.arguments.front()
-                   .expr->is<NormalOperator<Statistics::BoseEinstein>>()
+  } else if (!args.empty()) {
+    stat = args.front()->is<NormalOperator<Statistics::BoseEinstein>>()
                ? Statistics::BoseEinstein
                : Statistics::FermiDirac;
   }
   return stat == Statistics::FermiDirac
-             ? build_sequence<Statistics::FermiDirac>(call)
-             : build_sequence<Statistics::BoseEinstein>(call);
+             ? build_sequence<Statistics::FermiDirac>(args)
+             : build_sequence<Statistics::BoseEinstein>(args);
+}
+
+constexpr std::string_view whitespace = " \t\r\n";
+
+std::string_view trim(std::string_view text) {
+  const auto begin = text.find_first_not_of(whitespace);
+  if (begin == std::string_view::npos) return {};
+  return text.substr(begin, text.find_last_not_of(whitespace) - begin + 1);
 }
 
 }  // namespace
@@ -145,6 +158,56 @@ void register_function(std::wstring name, std::type_index type,
                        FunctionSerializer serializer) {
   FunctionRegistry::instance().register_function(
       std::move(name), type, std::move(deserializer), std::move(serializer));
+}
+
+std::vector<std::string_view> split_arguments(std::string_view arguments) {
+  std::vector<std::string_view> result;
+  if (trim(arguments).empty()) return result;
+
+  int depth = 0;
+  std::size_t begin = 0;
+  for (std::size_t i = 0; i < arguments.size(); ++i) {
+    switch (arguments[i]) {
+      case '(':
+      case '[':
+      case '{':
+        ++depth;
+        break;
+      case ')':
+      case ']':
+      case '}':
+        --depth;
+        break;
+      case ',':
+        if (depth == 0) {
+          result.push_back(trim(arguments.substr(begin, i - begin)));
+          begin = i + 1;
+        }
+        break;
+    }
+  }
+  result.push_back(trim(arguments.substr(begin)));
+  return result;
+}
+
+std::pair<Index, Action> parse_action_index(
+    std::string_view text, const DeserializationOptions &options) {
+  text = trim(text);
+  // the marks, as UTF-8: '+', '⁺' (U+207A), '-', '⁻' (U+207B)
+  constexpr std::pair<std::string_view, Action> marks[] = {
+      {"+", Action::Create},
+      {"\xE2\x81\xBA", Action::Create},
+      {"-", Action::Annihilate},
+      {"\xE2\x81\xBB", Action::Annihilate}};
+  for (const auto &[mark, action] : marks) {
+    if (text.size() > mark.size() && text.ends_with(mark))
+      return {v2::from_string<Index>(text.substr(0, text.size() - mark.size()),
+                                     options),
+              action};
+  }
+  throw SerializationError(
+      "'" + std::string(text) +
+      "' is not an index marked as a creator (+) or annihilator (-)");
 }
 
 }  // namespace sequant::io::serialization

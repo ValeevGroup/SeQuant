@@ -189,9 +189,7 @@ A constant with both a nonzero real and a nonzero imaginary part has no single-t
    Constant        Real | Real 'i'                                                  Integer, float, or (via ``/``) a fraction; ``Ni`` is pure imaginary
    Tensor          Name '[' IndexGroups ']' SymmetrySpec?                           Groups are ``[bra;ket;aux]``
    Operator        Name '{' IndexGroups '}'                                         Groups are ``{annihilators;creators}``; the label selects the operator and its vacuum
-   Function        '~' Name '(' (FunctionArg (',' FunctionArg)*)? ')' (':' ('F'|'B'))?
-   FunctionArg     ActionIndex | Expression
-   ActionIndex     Index ('+' | '-' | '⁺' | '⁻')                                    Creator (``+``/``⁺``) or annihilator (``-``/``⁻``)
+   Function        '~' Name '(' Arguments ')' (':' ('F'|'B'))?                      ``Arguments`` is any text with balanced brackets; the function's handler parses it
    IndexGroups     IndexList ( ';' IndexList )*                                     A group without any text is empty
    IndexList       Slot ( ',' Slot )*
    Slot            Index | '_' | ε                                                  ``_`` (or nothing, between separators) is a blank (null) index
@@ -212,7 +210,10 @@ given on its own (e.g. ``:pS``); :func:`to_string` always emits all three when `
 The ``~name(...)`` syntax is an extension point: core registers ``~op`` (a raw :class:`Operator <sequant::Operator>`, an ordered
 sequence of action-tagged indices) and ``~nopseq`` (a :class:`NormalOperatorSequence <sequant::NormalOperatorSequence>`), and
 downstream code may register handlers for its own :class:`Expr` subclasses with
-:func:`sequant::io::serialization::register_function`.
+:func:`sequant::io::serialization::register_function`. A handler receives the text between the parentheses as written and
+parses it itself; :func:`sequant::io::serialization::split_arguments` splits it at the commas that separate arguments, and
+an argument can be parsed with ``v2::from_string`` or, for an index marked as a creator (``+``/``⁺``) or annihilator
+(``-``/``⁻``) such as ``~op``'s, with :func:`sequant::io::serialization::parse_action_index`.
 
 Examples
 """"""""
