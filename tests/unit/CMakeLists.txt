@@ -33,8 +33,11 @@ add_library(unit_tests-sequant-symb-obj OBJECT ${symb_test_sources})
 target_set_compiler_flags(unit_tests-sequant-symb-obj)
 target_set_optimization_flags(unit_tests-sequant-symb-obj)
 set_target_properties(unit_tests-sequant-symb-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+# the standard registries (mbpt::make_sr_spaces and kin) live in SeQuant::mbpt,
+# which most of these tests set up their Context with; a few also compare
+# eval nodes
 target_link_libraries(unit_tests-sequant-symb-obj
-    PUBLIC SeQuant::symb SeQuant::bliss
+    PUBLIC SeQuant::symb SeQuant::bliss SeQuant::eval SeQuant::mbpt
     PRIVATE Catch2::Catch2 dtl::dtl)
 target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -52,8 +55,9 @@ add_library(unit_tests-sequant-eval-obj OBJECT ${eval_test_sources})
 target_set_compiler_flags(unit_tests-sequant-eval-obj)
 target_set_optimization_flags(unit_tests-sequant-eval-obj)
 set_target_properties(unit_tests-sequant-eval-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+# SeQuant::mbpt for the standard registries and csv_transform
 target_link_libraries(unit_tests-sequant-eval-obj
-    PUBLIC SeQuant::eval
+    PUBLIC SeQuant::eval SeQuant::mbpt
     PRIVATE Catch2::Catch2 dtl::dtl)
 target_compile_definitions(unit_tests-sequant-eval-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -70,8 +74,9 @@ add_library(unit_tests-sequant-optimize-obj OBJECT ${optimize_test_sources})
 target_set_compiler_flags(unit_tests-sequant-optimize-obj)
 target_set_optimization_flags(unit_tests-sequant-optimize-obj)
 set_target_properties(unit_tests-sequant-optimize-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+# SeQuant::mbpt for the standard registries and the AO/PAO/DF bases
 target_link_libraries(unit_tests-sequant-optimize-obj
-    PUBLIC SeQuant::optimize SeQuant::bliss
+    PUBLIC SeQuant::optimize SeQuant::bliss SeQuant::mbpt
     PRIVATE Catch2::Catch2 dtl::dtl)
 target_compile_definitions(unit_tests-sequant-optimize-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
