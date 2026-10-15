@@ -8,6 +8,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/slotted_index.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
@@ -1049,6 +1050,30 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE_THROWS_MATCHES(string_to<float>("2.718 "), ConversionException,
                                MessageMatches(ContainsSubstring(
                                    "'2.718 ' could not be fully parsed as a")));
+      }
+    }
+    SECTION("rational") {
+      REQUIRE(string_to<rational>("42") == rational(42));
+      REQUIRE(string_to<rational>("-42") == rational(-42));
+      REQUIRE(string_to<rational>("+3") == rational(3));
+      // decimals are converted exactly, not via a binary floating-point value
+      REQUIRE(string_to<rational>("0.1") == rational(1, 10));
+      REQUIRE(string_to<rational>("-3.25") == rational(-13, 4));
+      REQUIRE(string_to<rational>(".5") == rational(1, 2));
+      REQUIRE(string_to<rational>("-1/3") == rational(-1, 3));
+      REQUIRE(string_to<rational>("6/4") == rational(3, 2));
+      // arbitrary size
+      REQUIRE(string_to<rational>("1000000000000000000000000") ==
+              rational(1000000000000LL) * rational(1000000000000LL));
+      REQUIRE(string_to<rational>("9007199254740993") ==
+              rational(9007199254740993LL));
+
+      for (const char* invalid : {"", "-", ".", "1.", "1/", "/2", "1/0", " 1",
+                                  "1 ", "1e3", "1.5/2", "abc", "--1"}) {
+        INFO("input: '" << invalid << "'");
+        REQUIRE_THROWS_MATCHES(
+            string_to<rational>(invalid), ConversionException,
+            MessageMatches(ContainsSubstring("is not a valid rational")));
       }
     }
   }

@@ -1,6 +1,7 @@
 #ifndef SEQUANT_UTILITY_CONVERSION_HPP
 #define SEQUANT_UTILITY_CONVERSION_HPP
 
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -161,6 +162,60 @@ T string_to(std::wstring_view str,
                          [](wchar_t c) { return static_cast<char>(c); });
 
   return string_to<T>(buff, fmt);
+}
+
+/// Converts the provided string to an exact rational number. Accepted are an
+/// optionally signed integer ("-12"), decimal ("3.25", ".5") or fraction
+/// ("-1/3") of arbitrary size, which is converted without rounding (e.g.
+/// "0.1" yields 1/10). As for the other overloads, the string must be parsable
+/// in its entirety (no whitespace skipping).
+///
+/// @param str The string to convert
+/// @returns The parsed value
+///
+/// @throws ConversionException in case the conversion is unsuccessful
+template <std::same_as<rational> T>
+T string_to(std::string_view str) {
+  auto fail = [&str](const std::string &reason) -> ConversionException {
+    return ConversionException("'" + std::string(str) +
+                               "' is not a valid rational number: " + reason);
+  };
+  auto is_digits = [](std::string_view digits) {
+    return std::ranges::all_of(digits,
+                               [](char c) { return c >= '0' && c <= '9'; });
+  };
+
+  std::string_view rest = str;
+  const bool negative = !rest.empty() && rest.front() == '-';
+  if (!rest.empty() && (rest.front() == '-' || rest.front() == '+'))
+    rest.remove_prefix(1);
+
+  rational value;
+  if (const auto slash = rest.find('/'); slash != std::string_view::npos) {
+    const std::string_view num = rest.substr(0, slash);
+    const std::string_view den = rest.substr(slash + 1);
+    if (num.empty() || den.empty() || !is_digits(num) || !is_digits(den))
+      throw fail("expected digits on both sides of '/'");
+    const intmax_t denominator{std::string(den)};
+    if (denominator == 0) throw fail("zero denominator");
+    value = rational(intmax_t{std::string(num)}, denominator);
+  } else {
+    const auto dot = rest.find('.');
+    const std::string_view whole = rest.substr(0, dot);
+    const std::string_view fraction = dot == std::string_view::npos
+                                          ? std::string_view{}
+                                          : rest.substr(dot + 1);
+    if (whole.empty() && fraction.empty()) throw fail("expected digits");
+    if (!is_digits(whole) || !is_digits(fraction) ||
+        (dot != std::string_view::npos && fraction.empty()))
+      throw fail("expected an integer or decimal number");
+    const std::string digits = std::string(whole) + std::string(fraction);
+    intmax_t scale = 1;
+    for (std::size_t i = 0; i < fraction.size(); ++i) scale *= 10;
+    value = rational(intmax_t{digits}, scale);
+  }
+
+  return negative ? rational(-value) : value;
 }
 
 }  // namespace sequant
