@@ -634,49 +634,81 @@ inline void apply_index_replacement_rules(
   std::swap(all_indices_new, all_indices);
 }
 
-/// folds the self-deltas of @p product. A self-delta (a Kronecker delta, or a
-/// Kronecker-equivalent overlap, between an index and itself) is 1 if its
-/// index is bound elsewhere: it is external, or appears in another slot of
-/// the product. Otherwise it is the only occurrence of a dummy index, hence
-/// the sum over it (the extent of its space), and one self-delta per such
-/// index is kept.
+/// folds the Kronecker deltas (and Kronecker-equivalent overlaps) of
+/// @p product, which are real and idempotent:
+/// - a self-delta (between an index and itself) is 1 if its index is bound
+///   elsewhere: it is external, or appears in another slot of the product.
+///   Otherwise it is the only occurrence of a dummy index, hence the sum over
+///   it (the extent of its space), and one self-delta per such index is kept;
+/// - a delta between two external indices that the deltas kept so far already
+///   identify is redundant (δ_ij δ_ji = δ_ij, δ_ij δ_jk δ_ki = δ_ij δ_jk) and
+///   becomes 1. A delta with a dummy index is left to the replacement rules,
+///   since dropping it would change the slots the dummy is summed over.
 /// @return true if made any changes
-inline bool fold_self_deltas(std::shared_ptr<Product> &product,
-                             const container::set<Index> &external_indices,
-                             IndexSpaceMetric metric) {
+inline bool fold_deltas(std::shared_ptr<Product> &product,
+                        const container::set<Index> &external_indices) {
   using sequant::reserved::kronecker_label;
   using sequant::reserved::overlap_label;
 
-  // the index of a self-delta factor, null for any other factor
-  auto self_delta_index = [metric](const ExprPtr &factor) -> const Index * {
+  // the delta factor, null for any other factor
+  auto delta = [](const ExprPtr &factor) -> AbstractTensor * {
     if (!factor->is<AbstractTensor>()) return nullptr;
-    const auto &t = factor->as<AbstractTensor>();
+    auto &t = factor->as<AbstractTensor>();
     const bool is_kronecker =
         t._label() == kronecker_label() ||
-        (t._label() == overlap_label() && metric == IndexSpaceMetric::Unit &&
+        (t._label() == overlap_label() &&
          is_kronecker_equivalent(t._bra()[0], t._ket()[0]));
-    if (!is_kronecker) return nullptr;
-    const Index &bra = t._bra()[0];
-    return bra == t._ket()[0] ? &bra : nullptr;
+    return is_kronecker ? &t : nullptr;
+  };
+  // the index of a self-delta factor, null for any other factor
+  auto self_delta_index = [&delta](const ExprPtr &factor) -> const Index * {
+    const auto *t = delta(factor);
+    if (!t) return nullptr;
+    // the views are temporaries, the indices they refer to are the tensor's
+    auto bra = t->_bra();
+    auto ket = t->_ket();
+    return bra[0] == ket[0] ? &bra[0] : nullptr;
   };
 
   expr_range exrng(product);
+  bool have_deltas = false;
   container::map<Index, std::int64_t> self_delta_counts;
-  for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it)
+  for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
+    if (!delta(*it)) continue;
+    have_deltas = true;
     if (const Index *idx = self_delta_index(*it)) ++self_delta_counts[*idx];
-  if (self_delta_counts.empty()) return false;
+  }
+  if (!have_deltas) return false;
 
   const auto index_counts = get_used_indices_with_counts(product);
   bool mutated = false;
   container::set<Index> kept;
+  // the union-find forest of the external indices that the kept deltas
+  // identify
+  container::map<Index, Index> parent;
+  auto root = [&parent](Index idx) {
+    for (auto it = parent.find(idx); it != parent.end(); it = parent.find(idx))
+      idx = it->second;
+    return idx;
+  };
   for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
-    const Index *idx = self_delta_index(*it);
-    if (!idx) continue;
-    // a self-delta contributes 2 to the index count
-    const bool bound_elsewhere =
-        external_indices.contains(*idx) ||
-        index_counts.at(*idx).total() > 2 * self_delta_counts.at(*idx);
-    if (!bound_elsewhere && kept.insert(*idx).second) continue;
+    if (const Index *idx = self_delta_index(*it)) {
+      // a self-delta contributes 2 to the index count
+      const bool bound_elsewhere =
+          external_indices.contains(*idx) ||
+          index_counts.at(*idx).total() > 2 * self_delta_counts.at(*idx);
+      if (!bound_elsewhere && kept.insert(*idx).second) continue;
+    } else if (const auto *t = delta(*it);
+               t && external_indices.contains(t->_bra()[0]) &&
+               external_indices.contains(t->_ket()[0])) {
+      const Index bra_root = root(t->_bra()[0]);
+      const Index ket_root = root(t->_ket()[0]);
+      if (bra_root != ket_root) {
+        parent.emplace(bra_root, ket_root);
+        continue;
+      }
+    } else
+      continue;
     *it = ex<Constant>(1);
     mutated = true;
   }
@@ -815,7 +847,7 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
     // basis, which another pass would do again
     if (found_kroneckers) {
       apply_index_replacement_rules(expr, replacement_rules, all_indices);
-      pass_mutated = fold_self_deltas(expr, external_indices, metric);
+      pass_mutated = fold_deltas(expr, external_indices);
     }
 
     if (Logger::instance().wick_reduce) {

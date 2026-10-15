@@ -1456,6 +1456,72 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(delta_counts == std::multiset<std::size_t>{4, 3, 3, 2});
   }
 
+  // a Kronecker delta (or Kronecker-equivalent overlap) between external
+  // indices that reduce() leaves standing is real and idempotent, so one
+  // between indices that other standing deltas already identify is redundant:
+  // δ_ij δ_ji = δ_ij and δ_ij δ_jk δ_ki = δ_ij δ_jk
+  SECTION("redundant Kronecker deltas are folded") {
+    // the (bra, ket) pairs of the deltas and overlaps of a term
+    auto deltas = [](const ExprPtr& expr) {
+      container::svector<std::pair<Index, Index>> result;
+      expr->visit(
+          [&result](const ExprPtr& ex) {
+            if (!ex->is<Tensor>()) return;
+            const auto& t = ex->as<Tensor>();
+            if (t.label() == reserved::overlap_label() ||
+                t.label() == reserved::kronecker_label())
+              result.emplace_back(t.bra()[0], t.ket()[0]);
+          },
+          /* atoms_only = */ true);
+      return result;
+    };
+    // the norm of a doubly-excited determinant with named orbitals is
+    // (1 - δ_ij)(1 - δ_ab) expanded: 1 - δ_ij - δ_ab + δ_ij δ_ab
+    const Index i1{L"i_1"}, i2{L"i_2"}, a1{L"a_1"}, a2{L"a_2"};
+    {
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              container::set<Index>{i1, i2, a1, a2}));
+      auto norm = ex<FNOperator>(cre({i1, i2}), ann({a1, a2})) *
+                  ex<FNOperator>(cre({a1, a2}), ann({i1, i2}));
+      auto result = FWickTheorem{norm}.compute();
+      REQUIRE(result->is<Sum>());
+      REQUIRE(result->size() == 4);
+      std::multiset<std::size_t> delta_counts;
+      for (const auto& term : *result) {
+        const auto term_deltas = deltas(term);
+        delta_counts.insert(term_deltas.size());
+        for (const auto& [bra, ket] : term_deltas)
+          REQUIRE(bra.space() == ket.space());
+      }
+      REQUIRE(delta_counts == std::multiset<std::size_t>{0, 1, 1, 2});
+    }
+
+    // a chain of named indices keeps a spanning tree of its deltas
+    {
+      const Index i3{L"i_3"};
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              container::set<Index>{i1, i2, i3}));
+      auto chain = make_overlap(i1, i2) * make_overlap(i2, i3) *
+                   make_overlap(i3, i1) * ex<Tensor>(L"f", bra{i1}, ket{i1});
+      FWickTheorem{chain}.reduce(chain);
+      REQUIRE(deltas(chain).size() == 2);
+    }
+
+    // a genuine overlap is not idempotent, so it is never folded: here
+    // between indices with different protoindices
+    {
+      const Index a1_i1{L"a_1", {i1}}, a2_i2{L"a_2", {i2}};
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              container::set<Index>{i1, i2, a1_i1, a2_i2}));
+      auto product = make_overlap(a1_i1, a2_i2) * make_overlap(a2_i2, a1_i1);
+      FWickTheorem{product}.reduce(product);
+      REQUIRE(deltas(product).size() == 2);
+    }
+  }
+
   SECTION("multiproduct vacuum") {
     auto ctx = get_default_context();
     ctx.set(mbpt::make_mr_spaces());

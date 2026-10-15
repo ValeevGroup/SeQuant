@@ -192,7 +192,10 @@ appearing exactly twice); unlike a Kronecker delta between them, which is applie
 input of Wick's theorem has noncovariant indices; otherwise every overlap is applied. A *self-delta*, a Kronecker delta (or
 Kronecker-equivalent overlap) between an index and itself, which an applied delta leaves behind, is 1 if its index is bound
 elsewhere: it is external, or appears in another slot of the term. If instead it is the only occurrence of a dummy index it is
-the sum over that index, i.e. the extent of its space, and one self-delta per such index stands. The result is then, like any other
+the sum over that index, i.e. the extent of its space, and one self-delta per such index stands. The standing Kronecker deltas
+(and Kronecker-equivalent overlaps) between external indices are real and idempotent, so one between indices that the others
+already identify is redundant and dropped (:math:`\delta_{ij} \delta_{ji} = \delta_{ij}`, :math:`\delta_{ij} \delta_{jk}
+\delta_{ki} = \delta_{ij} \delta_{jk}`). The result is then, like any other
 :class:`sequant::Product`/:class:`sequant::Sum`, put into canonical form by :doc:`the tensor-network canonicalizer <tnc>` so that like
 terms collect correctly — Wick's-theorem correctness therefore also rests on canonicalization being correct.
 The reduction treats a basis instance (:class:`sequant::IndexBasis`) like a subspace: an index without one runs over the
