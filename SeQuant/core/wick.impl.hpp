@@ -206,6 +206,14 @@ compute_index_replacement_rules(
     return it == src2dst.end() ? idx.space() : it->second->dst().space();
   };
 
+  // the metric of the basis of idx: that of its current destination, whose
+  // basis (unlike resolved_basis(), which keeps the instance only) carries
+  // the name and the metadata
+  auto resolved_metric = [&src2dst](const Index &idx) {
+    auto it = src2dst.find(idx);
+    return (it == src2dst.end() ? idx : it->second->dst()).basis().metric();
+  };
+
   // adds src->dst, optionally assigning proto indices from protosrc
   auto add_src_to_existing_dst = [&src2dst](const Index &src, auto srd2dst_it) {
     SEQUANT_ASSERT(srd2dst_it != ranges::end(src2dst));
@@ -470,6 +478,16 @@ compute_index_replacement_rules(
                         std::to_string(*ket_basis.basis_instance()) + ")");
       do_skip = true;
     }
+    // - overlap inside a non-orthonormal basis: the metric, not an identity,
+    //   so it stands (zero if the spaces are disjoint); a Kronecker delta in
+    //   it is still an identity between basis functions
+    if (is_overlap && !do_skip &&
+        (resolved_metric(bra) != IndexBasisMetric::Unit ||
+         resolved_metric(ket) != IndexBasisMetric::Unit)) {
+      if (!isr->intersection(resolved_space(bra), resolved_space(ket)))
+        return Outcome::Zero;
+      do_skip = true;
+    }
     if (do_skip) return Outcome::Done;
     if (defer_generic_overlaps && is_overlap &&
         !bra_basis.has_basis_instance() && !ket_basis.has_basis_instance())
@@ -637,7 +655,8 @@ inline bool apply_index_replacement_rules(
 }
 
 /// resolves Kronecker deltas (and overlaps between indices in one
-/// orthonormal basis, see is_kronecker_equivalent) in summations
+/// orthonormal basis, see is_kronecker_equivalent) in summations; an overlap
+/// inside a non-orthonormal basis is its metric and stands
 /// @return false if @c expr is zero
 template <Statistics S>
 bool reduce_wick_impl(std::shared_ptr<Product> &expr,

@@ -271,6 +271,35 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
     CHECK(slots(*metrics[0]) == container::svector<Index>{a1_1, a2_2});
   }
 
+  SECTION("an overlap inside a non-orthonormal basis stands") {
+    // ã: a basis of a with a general metric; an overlap between two of its
+    // functions is the metric, a Kronecker delta is still an identity
+    auto isr = mbpt::make_min_sr_spaces();
+    isr->add(L"ã", IndexBasis{isr->retrieve_space(L"a"), 1},
+             IndexBasisMetric::General);
+    auto gctx = get_default_context();
+    gctx.set(std::move(isr));
+    auto gctx_resetter = set_scoped_default_context(gctx);
+    const Index x1(L"ã_1"), x2(L"ã_2"), x3(L"ã_3");
+    REQUIRE(x1.basis().metric() == IndexBasisMetric::General);
+    auto t = [&](Index const& x) { return ex<Tensor>(L"t", bra{i1}, ket{x}); };
+    // int + ext and int + int: the overlap stands
+    auto r = reduce(t(x1) * make_overlap(x1, x2));
+    CHECK(tensors_labelled(r, reserved::overlap_label()).size() == 1);
+    CHECK(slots(*tensors_labelled(r, L"t")[0])[1] == x1);
+    r = reduce(t(x1) * make_overlap(x1, x3) *
+               ex<Tensor>(L"g", bra{x3}, ket{i2}));
+    CHECK(tensors_labelled(r, reserved::overlap_label()).size() == 1);
+    // a Kronecker delta between its functions reduces
+    r = reduce(t(x1) * make_kronecker(x1, x2));
+    CHECK(tensors_labelled(r, reserved::kronecker_label()).empty());
+    CHECK(slots(*tensors_labelled(r, L"t")[0])[1] == x2);
+    // the same overlap in an orthonormal instance of a is an identity
+    r = reduce(t(a1_1) * make_overlap(a1_1, a2_1));
+    CHECK(tensors_labelled(r, reserved::overlap_label()).empty());
+    CHECK(slots(*tensors_labelled(r, L"t")[0])[1] == a2_1);
+  }
+
   SECTION("a delta or overlap between disjoint spaces is zero in any bases") {
     const auto i1_1 = i1.replace_basis_instance(1);
     const auto a1_2 = a1.replace_basis_instance(2);
