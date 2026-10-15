@@ -444,7 +444,7 @@ compute_index_replacement_rules(
     const auto &ket = tensor.ket().at(0);
 
     // skip if
-    // - self-kronecker (will be replaced by 1 already)
+    // - self-kronecker (fold_deltas decides whether it is 1 or a standing sum)
     bool do_skip = bra == ket;
     // - nontrivial overlap between 2 noncovariant modes
     if (is_overlap) {
@@ -654,10 +654,11 @@ inline bool fold_deltas(std::shared_ptr<Product> &product,
   auto delta = [](const ExprPtr &factor) -> AbstractTensor * {
     if (!factor->is<AbstractTensor>()) return nullptr;
     auto &t = factor->as<AbstractTensor>();
-    const bool is_kronecker =
-        t._label() == kronecker_label() ||
-        (t._label() == overlap_label() &&
-         is_kronecker_equivalent(t._bra()[0], t._ket()[0]));
+    if (t._label() != kronecker_label() && t._label() != overlap_label())
+      return nullptr;
+    SEQUANT_ASSERT(t._bra_rank() == 1 && t._ket_rank() == 1);
+    const bool is_kronecker = t._label() == kronecker_label() ||
+                              is_kronecker_equivalent(t._bra()[0], t._ket()[0]);
     return is_kronecker ? &t : nullptr;
   };
   // the index of a self-delta factor, null for any other factor
@@ -846,8 +847,18 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
     // eliminates a delta: a rule can rename a dummy to a fresh one of the same
     // basis, which another pass would do again
     if (found_kroneckers) {
+      [[maybe_unused]] std::set<Index, Index::LabelCompare> all_indices_before;
+      if constexpr (assert_enabled()) all_indices_before = all_indices;
       apply_index_replacement_rules(expr, replacement_rules, all_indices);
       pass_mutated = fold_deltas(expr, external_indices);
+      // a rule whose destination is an index of the product identifies two
+      // of its indices, and the delta it comes from folds once applied: so a
+      // pass that folds nothing only renamed dummies to fresh ones
+      if constexpr (assert_enabled()) {
+        if (!pass_mutated)
+          for (const auto &[src, dst] : replacement_rules)
+            SEQUANT_ASSERT(!all_indices_before.contains(dst));
+      }
     }
 
     if (Logger::instance().wick_reduce) {
