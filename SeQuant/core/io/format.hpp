@@ -15,6 +15,7 @@
 #include <format>
 #include <memory>
 #include <ostream>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -128,9 +129,13 @@ struct std::formatter<T, Char>
 
 #if defined(__cpp_lib_format_ranges)
 // Expressions iterate over their subexpressions; without this the standard
-// range formatter and the formatter above are ambiguous.
-template <typename T>
-  requires std::derived_from<T, sequant::Expr>
+// range formatter and the formatter above are ambiguous. The library's own
+// partial specialization is `template <ranges::input_range R> requires
+// same_as<R, remove_cvref_t<R>>`; this one restates those constraints so that
+// it subsumes them and is the more specialized of the two.
+template <std::ranges::input_range T>
+  requires std::same_as<T, std::remove_cvref_t<T>> &&
+               std::derived_from<T, sequant::Expr>
 inline constexpr std::range_format std::format_kind<T> =
     std::range_format::disabled;
 #endif
