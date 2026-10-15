@@ -5,7 +5,7 @@ if (NOT TARGET peglib)
         peglib
         GIT_REPOSITORY "https://github.com/yhirose/cpp-peglib.git"
 		GIT_TAG "${SEQUANT_TRACKED_CPPPEGLIB_TAG}"
-        GIT_SHALLOW
+        GIT_SHALLOW TRUE
     )
 
     # Only the library target is wanted; cpp-peglib's own tests and benchmark
