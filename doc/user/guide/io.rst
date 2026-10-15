@@ -166,12 +166,10 @@ by a **function** ``~name(...)`` resolved through an extension registry (see bel
 :class:`SerializationSyntax::Latest`, V2 must be requested explicitly.
 
 .. note::
-   Known limitations:
+   Conjugation (``^*``) applies to variables and powers; tensors have no conjugated form.
 
-   - Conjugation (``^*``) applies to variables and powers; tensors have no conjugated form.
-   - A constant with both a nonzero real and a nonzero imaginary part has no single-token form, so
-     :func:`from_string<ExprPtr>` yields a :class:`Sum`; deserializing explicitly as a :class:`Constant`
-     (:func:`from_string<Constant>`) parses and folds the whole expression and so recovers the single constant.
+A constant with both a nonzero real and a nonzero imaginary part has no single-token form and is written as a sum, e.g.
+``(3 + 1i/2)``; a sum or product of numbers is read back as a single :class:`Constant`.
 
 .. table::
    :widths: auto

@@ -1,6 +1,5 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/serialization/detail/construct.hpp>
 #include <SeQuant/core/io/serialization/function_registry.hpp>
@@ -389,7 +388,12 @@ void register_actions(peg::parser &parser) {
       summands.push_back(op == '-' ? negate(std::move(operand))
                                    : std::move(operand));
     }
-    return ex<Sum>(std::move(summands));
+    ExprPtr sum = ex<Sum>(std::move(summands));
+    // Sum adds up constant summands; one that folded entirely is a Constant,
+    // e.g. the mixed complex "3 + 2i", which has no single-token form
+    if (sum->size() == 1 && sum->as<Sum>().summand(0)->is<Constant>())
+      return sum->as<Sum>().summand(0);
+    return sum;
   };
 
   parser["Result"] = [](const SemanticValues &vs) {
@@ -496,14 +500,13 @@ SEQUANT_DESERIALIZE_EXPR_AS(Tensor, "Tensor")
 SEQUANT_DESERIALIZE_EXPR_AS(Product, "Expression")
 SEQUANT_DESERIALIZE_EXPR_AS(Sum, "Expression")
 
-// A Constant is parsed as a full expression and folded, so that an input that
-// only evaluates to a constant -- e.g. the fraction "1/2" or the mixed complex
-// "3 + 2i", neither of which is a single Constant token -- still yields one.
+// A Constant is parsed as a full expression, so that an arithmetic combination
+// of numbers -- e.g. the fraction "1/2" or the mixed complex "3 + 2i", neither
+// of which is a single Constant token -- still yields one.
 template <>
 Constant from_string<Constant>(std::string_view input,
                                const DeserializationOptions &options) {
   ExprPtr expr = parse_expr("Expression", input, options);
-  if (!expr->is<Constant>()) simplify(expr);
   if (!expr->is<Constant>())
     throw Error(0, 0, "Expression", "input does not denote a constant");
   return expr->as<Constant>();

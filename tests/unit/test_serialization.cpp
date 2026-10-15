@@ -801,13 +801,20 @@ TEST_CASE("serialization", "[serialization]") {
           REQUIRE(v2::from_string<Constant>("1/2").value() ==
                   Constant::scalar_type(rational{1, 2}));
         }
-        // a mixed complex constant is not a single token, but deserializing
-        // explicitly as a Constant parses the full expression and folds it
+        // a mixed complex constant is not a single token, but a sum of
+        // constants folds into one
         SECTION("mixed complex") {
           Constant mixed = v2::from_string<Constant>("3 + 2i");
           REQUIRE(mixed.value() == Constant::scalar_type(3, 2));
           REQUIRE(v2::from_string<Constant>(
                       v2::to_string(ex<Constant>(mixed))) == mixed);
+          REQUIRE(v2::from_string<ExprPtr>("3 + 2i") == ex<Constant>(mixed));
+        }
+        SECTION("not a constant") {
+          REQUIRE_THROWS_AS(v2::from_string<Constant>("x - x"),
+                            SerializationError);
+          REQUIRE_THROWS_AS(v2::from_string<Constant>("2 x"),
+                            SerializationError);
         }
       }
 
@@ -937,6 +944,9 @@ TEST_CASE("serialization", "[serialization]") {
           ex<Constant>(Constant::scalar_type(0, rational{1, 2})),
           ex<Constant>(Constant::scalar_type(0, rational{-1, 2})),
           ex<Product>(Constant::scalar_type(0, rational{1, 2}), ExprPtrList{t}),
+          ex<Constant>(Constant::scalar_type(3, rational{1, 2})),
+          ex<Constant>(Constant::scalar_type(rational{-3, 4}, rational{-1, 2})),
+          ex<Product>(Constant::scalar_type(3, -2), ExprPtrList{t}),
           ex<Sum>(ExprPtrList{
               t, ex<Product>(Constant::scalar_type(0, rational{-1, 2}),
                              ExprPtrList{g})}),
