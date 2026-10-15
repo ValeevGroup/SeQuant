@@ -7,6 +7,7 @@
 #include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -30,10 +31,12 @@
 #include "catch2_sequant.hpp"
 
 #include <algorithm>
+#include <format>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <numeric>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -156,6 +159,26 @@ sequant::ExprPtr in_base_spaces(
   return simplify(out);
 }
 }  // namespace
+
+TEST_CASE("MBPT operator formatting", "[mbpt][format]") {
+  using namespace sequant;
+  const auto ptr = mbpt::op::t(1);
+  const auto& op = ptr.as<mbpt::op_t>();
+  const auto latex = to_latex(ptr);
+
+  REQUIRE(std::format("{:l}", op) == toUtf8(latex));
+  REQUIRE(std::format(L"{:latex}", ptr) == latex);
+  // mbpt::Operator does not support serialization
+  REQUIRE_THROWS_AS(std::format("{}", op), Exception);
+  REQUIRE_THROWS_AS(std::format(L"{:s}", ptr), Exception);
+  std::ostringstream narrow;
+  REQUIRE_THROWS_AS(narrow << op, Exception);
+
+  const auto suggests_latex = Catch::Matchers::MessageMatches(
+      Catch::Matchers::ContainsSubstring("use LaTeX"));
+  REQUIRE_THROWS_MATCHES(std::format("{}", mbpt::op::H() * mbpt::op::T(2)),
+                         Exception, suggests_latex);
+}
 
 TEST_CASE("mbpt_operator_type_id", "[mbpt]") {
   using namespace sequant;

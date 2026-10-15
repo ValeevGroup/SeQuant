@@ -1,5 +1,4 @@
 #include "executor.hpp"
-#include "format_support.hpp"
 #include "processing.hpp"
 #include "utils.hpp"
 
@@ -11,6 +10,7 @@
 #include <SeQuant/core/export/generation_optimizer.hpp>
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/runtime.hpp>

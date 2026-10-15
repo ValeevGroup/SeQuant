@@ -978,6 +978,9 @@ TEST_CASE("expr", "[elements]") {
   }  // SECTION("clone")
 
   SECTION("latex") {
+    REQUIRE(to_latex(ExprPtr{}).empty());
+    REQUIRE(ExprPtr{}.to_latex().empty());
+
     {  // Variable
       const auto e = std::make_shared<Variable>(L"q");
       REQUIRE(e->to_latex() == L"{q}");
@@ -998,6 +1001,18 @@ TEST_CASE("expr", "[elements]") {
 
       Power pv(ex<Variable>(L"x"), rational{2, 1});
       REQUIRE(to_latex(pv) == L"{x}^{2}");
+
+      const Expr &expr = pv;
+      REQUIRE(to_latex(expr) == L"{x}^{2}");
+      REQUIRE(expr.to_latex() == L"{x}^{2}");
+      const auto ptr = pv.clone();
+      REQUIRE(to_latex(ptr) == L"{x}^{2}");
+      REQUIRE(ptr.to_latex() == L"{x}^{2}");
+      REQUIRE(to_latex(std::make_shared<Power>(pv)) == L"{x}^{2}");
+      REQUIRE(to_latex(ex<Product>(ExprPtrList{ptr, ex<Variable>(L"y")})) ==
+              L"{{x}^{2}{y}}");
+      REQUIRE(to_latex(ex<Sum>(ExprPtrList{ptr, ex<Variable>(L"y")})) ==
+              L"{ \\bigl({x}^{2} + {y}\\bigr) }");
     }
 
     Product sp0{};

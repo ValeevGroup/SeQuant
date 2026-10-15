@@ -1,7 +1,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -29,7 +29,7 @@ int main() {
   auto expr_st = spintrace(expr);
   simplify(expr_st);
 
-  std::wcout << to_latex(expr_st) << std::endl;
+  std::wcout << expr_st << std::endl;
   // end-snippet-1
 
   SEQUANT_ASSERT(expr_st.is<Product>());
