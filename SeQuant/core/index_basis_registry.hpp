@@ -1056,13 +1056,11 @@ class IndexBasisRegistry {
   const IndexSpace& unIon(const IndexSpace& space1,
                           const IndexSpace& space2) const {
     if (!contains(space1))
-      throw Exception(
-          std::string("IndexBasisRegistry::valid_unIon(s1,s2): space s1=") +
-          to_string(space1) + " must be added to the registry first");
+      throw Exception(std::string("IndexBasisRegistry::unIon(s1,s2): s1=") +
+                      to_string(space1) + " is not registered");
     if (!contains(space2))
-      throw Exception(
-          std::string("IndexBasisRegistry::valid_unIon(s1,s2): space s2=") +
-          to_string(space2) + " must be added to the registry first");
+      throw Exception(std::string("IndexBasisRegistry::unIon(s1,s2): s2=") +
+                      to_string(space2) + " is not registered");
 
     if (space1 == space2) {
       return space1;
