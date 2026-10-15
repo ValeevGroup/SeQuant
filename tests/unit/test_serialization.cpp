@@ -1196,6 +1196,13 @@ TEST_CASE("serialization", "[serialization]") {
           INFO("serialized: " << toUtf8(serialized));
           REQUIRE(v2::from_string<ResultExpr>(serialized) == result);
         }
+
+        // the left-hand side needs a label
+        REQUIRE_THROWS_AS(v2::to_string(ResultExpr(
+                              bra{Index{L"i_1"}}, ket{Index{L"a_1"}}, aux{},
+                              Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                              ColumnSymmetry::Nonsymm, std::nullopt, rhs)),
+                          SerializationError);
       }
 
       // the top-level dispatcher honours SerializationSyntax::V2

@@ -232,10 +232,12 @@ std::wstring to_string(const ExprPtr &expr,
 
 std::wstring to_string(const ResultExpr &result,
                        const SerializationOptions &options) {
-  std::wstring lhs =
-      result.produces_tensor()
-          ? serialize_tensor(result.result_as_tensor(L"?"), options)
-          : serialize_variable(result.result_as_variable(L"?"));
+  if (!result.has_label())
+    throw SerializationError(
+        "a ResultExpr without a label can't be serialized");
+  std::wstring lhs = result.produces_tensor()
+                         ? serialize_tensor(result.result_as_tensor(), options)
+                         : serialize_variable(result.result_as_variable());
   return lhs + L" = " + v2::to_string(result.expression(), options);
 }
 
