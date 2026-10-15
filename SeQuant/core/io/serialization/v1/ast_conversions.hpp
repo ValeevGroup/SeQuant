@@ -2,8 +2,8 @@
 // Created by Robert Adam on 2023-09-22
 //
 
-#ifndef SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
-#define SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
+#ifndef SEQUANT_CORE_IO_SERIALIZATION_V1_AST_CONVERSIONS_HPP
+#define SEQUANT_CORE_IO_SERIALIZATION_V1_AST_CONVERSIONS_HPP
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
@@ -615,4 +615,4 @@ ResultExpr ast_to_result(const io::serialization::v1::ast::ResultExpr &result,
 
 }  // namespace sequant::io::serialization::v1::transform
 
-#endif  // SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
+#endif  // SEQUANT_CORE_IO_SERIALIZATION_V1_AST_CONVERSIONS_HPP
