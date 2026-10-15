@@ -864,6 +864,8 @@ TEST_CASE("serialization", "[serialization]") {
       SECTION("NormalOperator") {
         REQUIRE(v2::from_string<ExprPtr>("a{i1;a1}") ==
                 v1::from_string<ExprPtr>(L"a{i1;a1}"));
+        // the label selects the statistics, there is no separate annotation
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("a{i1;a1}:B"), v2::Error);
       }
 
       SECTION("Power") {

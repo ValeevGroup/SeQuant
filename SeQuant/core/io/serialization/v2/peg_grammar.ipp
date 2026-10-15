@@ -46,8 +46,8 @@ SymmetrySpec <- ':' Symmetry ('-' Symmetry)*
 
 Tensor <- Identifier '[' IndexGroups ']' SymmetrySpec?
 
-Statistic <- 'F' / 'B'
-NormalOrderedOperator <- Identifier '{' IndexGroups '}' (':' Statistic)?
+# The label selects the statistics (and the vacuum) of the operator.
+NormalOrderedOperator <- Identifier '{' IndexGroups '}'
 
 # --- Power -----------------------------------------------------------------
 
@@ -57,6 +57,8 @@ Exponent <- < [-+]? [0-9]+ ('/' [0-9]+)? >
 Power <- PowerBase '^' '(' Exponent ')' Conjugation? / '(' Power ')' Conjugation
 
 # --- Functions (extension hook) --------------------------------------------
+
+Statistic <- 'F' / 'B'
 
 # ~name(arg, arg, ...) dispatches to a registered handler. An argument is
 # either an action-tagged index (creator '+'/'⁺', annihilator '-'/'⁻')

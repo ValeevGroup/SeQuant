@@ -188,7 +188,7 @@ A constant with both a nonzero real and a nonzero imaginary part has no single-t
    Exponent        ('+' | '-')? Integer ('/' Integer)?                              A rational number, e.g. ``x^(-1)`` or ``x^(1/2)``
    Constant        Real | Real 'i'                                                  Integer, float, or (via ``/``) a fraction; ``Ni`` is pure imaginary
    Tensor          Name '[' IndexGroups ']' SymmetrySpec?                           Groups are ``[bra;ket;aux]``
-   Operator        Name '{' IndexGroups '}' (':' ('F' | 'B'))?                      Groups are ``{annihilators;creators}``; the label selects the operator and its vacuum
+   Operator        Name '{' IndexGroups '}'                                         Groups are ``{annihilators;creators}``; the label selects the operator and its vacuum
    Function        '~' Name '(' (FunctionArg (',' FunctionArg)*)? ')' (':' ('F'|'B'))?
    FunctionArg     ActionIndex | Expression
    ActionIndex     Index ('+' | '-' | '⁺' | '⁻')                                    Creator (``+``/``⁺``) or annihilator (``-``/``⁻``)
