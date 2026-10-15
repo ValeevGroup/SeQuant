@@ -118,10 +118,10 @@ void configure_context_defaults(TextGeneratorContext &) {}
 
 void configure_context_defaults(ItfContext &ctx) {
   auto registry = get_default_context().index_basis_registry();
-  IndexSpace occ = registry->retrieve("i");
-  IndexSpace virt = registry->retrieve("a");
-  IndexSpace aux = registry->retrieve("x");
-  IndexSpace act = registry->retrieve("u");
+  IndexSpace occ = registry->retrieve_space("i");
+  IndexSpace virt = registry->retrieve_space("a");
+  IndexSpace aux = registry->retrieve_space("x");
+  IndexSpace act = registry->retrieve_space("u");
 
   ctx.set_tag(occ, "c");
   ctx.set_tag(virt, "e");
@@ -136,9 +136,9 @@ void configure_context_defaults(ItfContext &ctx) {
 
 void configure_context_defaults(JuliaTensorOperationsGeneratorContext &ctx) {
   auto registry = get_default_context().index_basis_registry();
-  IndexSpace occ = registry->retrieve("i");
-  IndexSpace virt = registry->retrieve("a");
-  IndexSpace aux = registry->retrieve("x");
+  IndexSpace occ = registry->retrieve_space("i");
+  IndexSpace virt = registry->retrieve_space("a");
+  IndexSpace aux = registry->retrieve_space("x");
 
   ctx.set_dim(occ, "nocc");
   ctx.set_dim(virt, "nv");
@@ -151,9 +151,9 @@ void configure_context_defaults(JuliaTensorOperationsGeneratorContext &ctx) {
 
 void configure_context_defaults(NumPyEinsumGeneratorContext &ctx) {
   auto registry = get_default_context().index_basis_registry();
-  IndexSpace occ = registry->retrieve("i");
-  IndexSpace virt = registry->retrieve("a");
-  IndexSpace aux = registry->retrieve("x");
+  IndexSpace occ = registry->retrieve_space("i");
+  IndexSpace virt = registry->retrieve_space("a");
+  IndexSpace aux = registry->retrieve_space("x");
 
   ctx.set_shape(occ, "nocc");
   ctx.set_shape(virt, "nvirt");
@@ -166,9 +166,9 @@ void configure_context_defaults(NumPyEinsumGeneratorContext &ctx) {
 
 void configure_context_defaults(PyTorchEinsumGeneratorContext &ctx) {
   auto registry = get_default_context().index_basis_registry();
-  IndexSpace occ = registry->retrieve("i");
-  IndexSpace virt = registry->retrieve("a");
-  IndexSpace aux = registry->retrieve("x");
+  IndexSpace occ = registry->retrieve_space("i");
+  IndexSpace virt = registry->retrieve_space("a");
+  IndexSpace aux = registry->retrieve_space("x");
 
   ctx.set_shape(occ, "nocc");
   ctx.set_shape(virt, "nvirt");
@@ -229,7 +229,7 @@ void add_to_context(JuliaTensorOperationsGeneratorContext &ctx,
     boost::trim(map);
 
     return std::make_pair(
-        get_default_context().index_basis_registry()->retrieve(space),
+        get_default_context().index_basis_registry()->retrieve_space(space),
         std::string(map));
   };
 
@@ -490,7 +490,7 @@ TEST_CASE("export", "[export]") {
     // ã: a basis of a (extent 100) of extent 1000; the slot in ã, not the
     // space, is the one moved to the fastest position
     auto reg = *get_default_context().index_basis_registry();
-    const IndexSpace virt = reg.retrieve(L"a");
+    const IndexSpace virt = reg.retrieve_space(L"a");
     reg.add(L"ã", IndexBasis{virt, 1}, 1000ul);
     auto ctx_resetter = set_scoped_default_context(
         get_default_context_snapshot().set(std::move(reg)));
@@ -552,7 +552,8 @@ TEST_CASE("export", "[export]") {
     JuliaTensorOperationsGeneratorContext julia_ctx;
     for (const auto *space : {"i", "a", "u"})
       julia_ctx.set_tag(
-          get_default_context().index_basis_registry()->retrieve(space), space);
+          get_default_context().index_basis_registry()->retrieve_space(space),
+          space);
     REQUIRE_NOTHROW(export_expression(
         to_export_tree(deserialize<ResultExpr>(
             L"R{u1,a1;u2,i1} = γ{u1,a1;u2,i1} + Γ{u1,a1;u2,i1}")),
@@ -984,8 +985,8 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
   auto resetter = to_export_context();
 
   auto registry = get_default_context().index_basis_registry();
-  IndexSpace occ = registry->retrieve("i");
-  IndexSpace virt = registry->retrieve("a");
+  IndexSpace occ = registry->retrieve_space("i");
+  IndexSpace virt = registry->retrieve_space("a");
 
   SECTION("NumPy backend - simple contraction") {
     // Create tensors: T[a1, a2] = F[a1, i1] * t[i1, a2]
@@ -1113,8 +1114,8 @@ TEST_CASE("export-basis-instance", "[export][basis]") {
   const Index y = Index(L"a_7").replace_basis_instance(1);
 
   auto registry = get_default_context().index_basis_registry();
-  const IndexSpace occ = registry->retrieve("i");
-  const IndexSpace virt = registry->retrieve("a");
+  const IndexSpace occ = registry->retrieve_space("i");
+  const IndexSpace virt = registry->retrieve_space("a");
   const Tensor t(L"t", bra{y}, ket{L"i_1"});
   const Tensor t_null(L"t", bra{L"a_7"}, ket{L"i_1"});
 
@@ -1219,7 +1220,7 @@ TEST_CASE("export-basis-instance", "[export][basis]") {
                ContainsSubstring("t:v_12o["));
     // with a space tagged `m`, a letter for the sign would make t{a<;-1>;i}
     // and t{a,u<;1>;i} one block
-    const IndexSpace u = registry->retrieve("u");
+    const IndexSpace u = registry->retrieve_space("u");
     itf_ctx.set_tag(u, "m");
     const Tensor t_neg(L"t", bra{Index(L"a_1").replace_basis_instance(-1)},
                        ket{L"i_1"});

@@ -69,17 +69,17 @@ class rand_tensor_yield {
     SEQUANT_ASSERT(
         ranges::all_of(tnsr.const_braket_indices(),
                        [&isr](auto const& idx) {
-                         return idx.space() == isr->retrieve(L"i") ||
-                                idx.space() == isr->retrieve(L"a");
+                         return idx.space() == isr->retrieve_space(L"i") ||
+                                idx.space() == isr->retrieve_space(L"a");
                        }) &&
         "Unsupported IndexSpace type found while generating tensor.");
 
-    auto extents = tnsr.const_braket_indices() |
-                   transform([this, &isr](auto const& idx) {
-                     return static_cast<int64_t>(
-                         idx.space() == isr->retrieve(L"i") ? nocc_ : nvirt_);
-                   }) |
-                   ranges::to<sequant::container::svector<int64_t>>;
+    auto extents =
+        tnsr.const_braket_indices() | transform([this, &isr](auto const& idx) {
+          return static_cast<int64_t>(
+              idx.space() == isr->retrieve_space(L"i") ? nocc_ : nvirt_);
+        }) |
+        ranges::to<sequant::container::svector<int64_t>>;
 
     auto result = Tensor_t{extents};
     using numeric_type = typename Tensor_t::numeric_type;

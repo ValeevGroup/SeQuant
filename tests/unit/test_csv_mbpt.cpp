@@ -172,8 +172,8 @@ TEST_CASE("basis-grants-registry", "[mbpt][csv]") {
 
   auto ctx = set_scoped_default_context(csv_cc_context());
   auto const& isr = get_default_context().index_basis_registry();
-  const auto a = isr->retrieve(L"a");
-  const auto i = isr->retrieve(L"i");
+  const auto a = isr->retrieve_space(L"a");
+  const auto i = isr->retrieve_space(L"i");
 
   auto reg = mbpt::make_minimal_registry();
   auto granted = std::make_shared<mbpt::OpRegistry>(reg->clone());
@@ -209,8 +209,8 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
 
   auto ctx = set_scoped_default_context(csv_cc_context());
   auto const& isr = get_default_context().index_basis_registry();
-  const auto a = isr->retrieve(L"a");
-  const auto i = isr->retrieve(L"i");
+  const auto a = isr->retrieve_space(L"a");
+  const auto i = isr->retrieve_space(L"i");
 
   // every bra/ket slot of the tensors labelled `label` in `expr`
   auto slots_of = [](ExprPtr const& expr, std::wstring_view label) {
@@ -675,7 +675,7 @@ TEST_CASE("basis-grants-cc-t", "[mbpt][csv][valgrind_skip]") {
     const auto csv = GENERATE(CSV::Yes, CSV::No);
     ScopedCsvContext scoped{make_minimal_registry(), csv};
     auto reg = make_minimal_registry();
-    reg->grant_basis(L"t", isr->retrieve(L"i"), 5);
+    reg->grant_basis(L"t", isr->retrieve_space(L"i"), 5);
     std::vector<ExprPtr> eqs;
     REQUIRE_NOTHROW(eqs = derive_t(reg));
     const auto plain = derive_t(granted_registry({}));

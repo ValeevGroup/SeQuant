@@ -2017,7 +2017,7 @@ TEST_CASE("spincase-index-keeps-basis-instance", "[spin][basis]") {
 // tracers must keep both, else the named one is never assigned a spin
 namespace {
 sequant::IndexSpace isr_space_of(const sequant::Index& idx) {
-  return sequant::get_default_context().index_basis_registry()->retrieve(
+  return sequant::get_default_context().index_basis_registry()->retrieve_space(
       idx.space().type(), idx.space().qns());
 }
 }  // namespace
@@ -2029,17 +2029,17 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   using sequant::mbpt::make_spinfree;
   using sequant::mbpt::spintrace;
   auto isr = mbpt::make_sr_spaces();
-  const IndexSpace uocc = isr->retrieve(L"a");
+  const IndexSpace uocc = isr->retrieve_space(L"a");
   isr->add(L"μ̃", IndexBasis{uocc, 77}, 120ul);
   // the spin-cased counterparts are bases of their own, e.g. of different
   // extents in a spin-polarized state
-  isr->add(L"μ̃↑", IndexBasis{isr->retrieve(L"a↑"), 77}, 60ul);
-  isr->add(L"μ̃↓", IndexBasis{isr->retrieve(L"a↓"), 77}, 50ul);
+  isr->add(L"μ̃↑", IndexBasis{isr->retrieve_space(L"a↑"), 77}, 60ul);
+  isr->add(L"μ̃↓", IndexBasis{isr->retrieve_space(L"a↓"), 77}, 50ul);
   auto ctx = set_scoped_default_context(
       Context({.index_basis_registry_shared_ptr = std::move(isr),
                .vacuum = Vacuum::SingleProduct}));
   const IndexBasis pao =
-      get_default_context().index_basis_registry()->retrieve_basis(L"μ̃");
+      get_default_context().index_basis_registry()->retrieve(L"μ̃");
   const Index a1(uocc, 1), m1(pao, 1), m2(pao, 2);
   const Index i1(L"i_1"), i2(L"i_2");
 
@@ -2076,12 +2076,12 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   {
     auto half = mbpt::make_sr_spaces();
     half->add(L"μ̃", IndexBasis{uocc, 77}, 120ul);
-    half->add(L"μ̃↑", IndexBasis{half->retrieve(L"a↑"), 77}, 60ul);
+    half->add(L"μ̃↑", IndexBasis{half->retrieve_space(L"a↑"), 77}, 60ul);
     auto half_ctx = set_scoped_default_context(
         Context({.index_basis_registry_shared_ptr = std::move(half),
                  .vacuum = Vacuum::SingleProduct}));
     const Index m1_half(
-        get_default_context().index_basis_registry()->retrieve_basis(L"μ̃"), 1);
+        get_default_context().index_basis_registry()->retrieve(L"μ̃"), 1);
     CHECK_NOTHROW(make_spinalpha(m1_half));
     CHECK_THROWS_WITH(make_spinbeta(m1_half),
                       Catch::Matchers::ContainsSubstring("μ̃↓"));

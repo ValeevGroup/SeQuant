@@ -50,8 +50,8 @@ std::vector<ExprPtr> derive() {
   for (auto const& eq : mbpt::CC{2}.t(2, 0)) {
     ExprPtr e = mbpt::closed_shell_CC_spintrace(
         eq, {.method = mbpt::BiorthogonalizationMethod::V1});
-    e = mbpt::density_fit(e, isr->retrieve(L"Κ"), L"g", L"g");
-    e = mbpt::csv_transform(e, isr->retrieve_basis(L"μ̃"));
+    e = mbpt::density_fit(e, isr->retrieve_space(L"Κ"), L"g", L"g");
+    e = mbpt::csv_transform(e, isr->retrieve(L"μ̃"));
     flatten(e);
     out.push_back(e);
   }
@@ -66,7 +66,7 @@ TEST_CASE("pao-named-basis", "[mbpt][csv][basis][valgrind_skip]") {
   REQUIRE(eqs.size() == 3);
 
   const Context ctx = gate_context();
-  const IndexBasis pao = ctx.index_basis_registry()->retrieve_basis(L"μ̃");
+  const IndexBasis pao = ctx.index_basis_registry()->retrieve(L"μ̃");
   auto scoped = set_scoped_default_context(ctx);
 
   SECTION("round trip and metadata") {
@@ -78,13 +78,14 @@ TEST_CASE("pao-named-basis", "[mbpt][csv][basis][valgrind_skip]") {
     CHECK(Index(pao, 3).basis().metric() == IndexSpaceMetric::General);
     // the bare (space, instance) pair that operator grants and the integral
     // projection build resolves to the basis as registered
-    const IndexBasis bare{ctx.index_basis_registry()->retrieve(L"a"),
+    const IndexBasis bare{ctx.index_basis_registry()->retrieve_space(L"a"),
                           pao.basis_instance()};
     REQUIRE(bare.extent() != n_pao);
     CHECK(default_registry_resolved(bare) == pao);
     CHECK(default_registry_resolved(bare).extent() == n_pao);
-    CHECK(ctx.index_basis_registry()->retrieve(L"a").dimension() != n_pao);
-    CHECK_THROWS_AS(ctx.index_basis_registry()->retrieve(L"μ̃"),
+    CHECK(ctx.index_basis_registry()->retrieve_space(L"a").dimension() !=
+          n_pao);
+    CHECK_THROWS_AS(ctx.index_basis_registry()->retrieve_space(L"μ̃"),
                     IndexBasisRegistry::not_a_space);
   }
   SECTION("the committed fixture: every μ̃ index is the named basis") {
@@ -103,7 +104,7 @@ TEST_CASE("pao-named-basis", "[mbpt][csv][basis][valgrind_skip]") {
     CHECK(n > 0);
   }
   SECTION("slot layout: the PAO basis sorts after every basis of a") {
-    const IndexSpace a = ctx.index_basis_registry()->retrieve(L"a");
+    const IndexSpace a = ctx.index_basis_registry()->retrieve_space(L"a");
     CHECK((IndexBasis{a} < pao && IndexBasis{a, 0} < pao &&
            IndexBasis{a, 2} < pao && IndexBasis{a, 10} < pao));
     for (std::wstring text :

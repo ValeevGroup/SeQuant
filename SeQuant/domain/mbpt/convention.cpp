@@ -116,7 +116,8 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
   // add() may reallocate the registry's table
   auto union_space = [&](std::wstring_view label, const IndexSpace& s1,
                          const IndexSpace& s2) -> IndexSpace {
-    const auto* space = isr->retrieve_ptr(s1.type() | s2.type(), spin_any);
+    const auto* space =
+        isr->retrieve_space_ptr(s1.type() | s2.type(), spin_any);
     if (!space)
       throw Exception("add_ao_basis: the AO basis '" + toUtf8(label) +
                       "' spans the union of the spaces " +
@@ -125,17 +126,17 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
     return *space;
   };
   container::svector<std::pair<std::wstring, IndexSpace>> bases;
-  const IndexSpace obs = isr->retrieve(vbs ? L"m" : L"p");
+  const IndexSpace obs = isr->retrieve_space(vbs ? L"m" : L"p");
   bases.emplace_back(L"μ", obs);  // OBS AO
   IndexSpace vbs_plus;
   if (vbs) {
-    const IndexSpace vbs_space = isr->retrieve(L"e");
+    const IndexSpace vbs_space = isr->retrieve_space(L"e");
     vbs_plus = union_space(L"Γ", obs, vbs_space);
     bases.emplace_back(L"Α", vbs_space);  // VBS AO
     bases.emplace_back(L"Γ", vbs_plus);   // VBS+ = OBS + VBS
   }
   if (abs) {
-    const IndexSpace abs_space = isr->retrieve(L"α'");
+    const IndexSpace abs_space = isr->retrieve_space(L"α'");
     bases.emplace_back(L"σ", abs_space);  // ABS AO in F12 methods
     bases.emplace_back(L"ρ", union_space(L"ρ", obs, abs_space));  // OBS + ABS
     if (vbs)  // VABS+ = VBS+ + ABS
@@ -171,14 +172,15 @@ void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
         "follow");
   const auto uocc_type = isr->particle_space(/* nulltype_ok = */ false);
   container::svector<std::pair<std::wstring, IndexSpace>> bases;
-  bases.emplace_back(std::wstring(label), isr->retrieve(uocc_type, spin_any));
+  bases.emplace_back(std::wstring(label),
+                     isr->retrieve_space(uocc_type, spin_any));
   for (const auto spin : {Spin::alpha, Spin::beta})
-    if (const auto* uocc_spin = isr->retrieve_ptr(uocc_type, spin))
+    if (const auto* uocc_spin = isr->retrieve_space_ptr(uocc_type, spin))
       bases.emplace_back(spinannotation_add(label, spin), *uocc_spin);
   require_unregistered(*isr, "add_pao_basis", bases, instance);
   if (!isr->contains(L"μ"))
     add_ao_basis(isr, spin_any);
-  else if (!isr->retrieve_basis(L"μ").has_basis_instance())
+  else if (!isr->retrieve(L"μ").has_basis_instance())
     throw Exception(
         "add_pao_basis: 'μ' is a space, not the OBS AO basis the PAO bases "
         "follow");

@@ -380,7 +380,7 @@ TEST_CASE("context", "[runtime]") {
       CHECK(Context({.index_basis_registry = other}) != with_registry);
       // including the approximate sizes of their spaces
       IndexBasisRegistry resized = other;
-      resized.extent(L"q", other.retrieve(L"q").dimension() + 1);
+      resized.extent(L"q", other.retrieve_space(L"q").dimension() + 1);
       CHECK(Context({.index_basis_registry = std::move(resized)}) !=
             Context({.index_basis_registry = std::move(other)}));
     }

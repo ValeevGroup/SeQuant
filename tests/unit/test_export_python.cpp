@@ -415,8 +415,8 @@ TEST_CASE("PythonEinsumGenerator - Memory Layout", "[export][python]") {
   auto resetter = to_export_context();
 
   auto registry = get_default_context().index_basis_registry();
-  IndexSpace occ = registry->retrieve("i");
-  IndexSpace virt = registry->retrieve("a");
+  IndexSpace occ = registry->retrieve_space("i");
+  IndexSpace virt = registry->retrieve_space("a");
 
   SECTION("Default layout (ColumnMajor) generates order='F'") {
     auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
@@ -528,8 +528,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
   auto resetter = to_export_context();
 
   auto registry = get_default_context().index_basis_registry();
-  IndexSpace occ = registry->retrieve("i");
-  IndexSpace virt = registry->retrieve("a");
+  IndexSpace occ = registry->retrieve_space("i");
+  IndexSpace virt = registry->retrieve_space("a");
 
   SECTION("Validation: Simple matrix multiplication") {
     // Create temporary directory for test files
@@ -981,7 +981,7 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
-    IndexSpace auxsp = registry->retrieve("x");
+    IndexSpace auxsp = registry->retrieve_space("x");
 
     const Eigen::Index nvirt = 4;
     const Eigen::Index naux = 3;
@@ -1382,8 +1382,8 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
   auto resetter = to_export_context();
 
   auto registry = get_default_context().index_basis_registry();
-  IndexSpace occ = registry->retrieve("i");
-  IndexSpace virt = registry->retrieve("a");
+  IndexSpace occ = registry->retrieve_space("i");
+  IndexSpace virt = registry->retrieve_space("a");
 
   SECTION("Validation: Simple matrix multiplication with PyTorch") {
     std::filesystem::path temp_dir =
@@ -1629,7 +1629,7 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
-    IndexSpace auxsp = registry->retrieve("x");
+    IndexSpace auxsp = registry->retrieve_space("x");
 
     const Eigen::Index nvirt = 4;
     const Eigen::Index naux = 3;

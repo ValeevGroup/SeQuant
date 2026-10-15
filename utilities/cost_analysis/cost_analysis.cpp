@@ -148,7 +148,7 @@ void setup_context(const Config& cfg) {
     if (!key.empty()) isr->field(key, field);
 
   for (const auto& [label, size] : cfg.sizes) {
-    if (!isr->retrieve_ptr(toUtf16(label)))
+    if (!isr->retrieve_space_ptr(toUtf16(label)))
       throw Exception("unknown index space: " + label);
     isr->extent(toUtf16(label), size);
   }

@@ -19,8 +19,8 @@ void test0() {
   isr.add_union(L"p", {L"i", L"a"});  // union of i and a
 
   // can access unions and intersections of base and composite spaces
-  SEQUANT_ASSERT(isr.unIon(L"i", L"a") == isr.retrieve(L"p"));
-  SEQUANT_ASSERT(isr.intersection(L"p", L"i") == isr.retrieve(L"i"));
+  SEQUANT_ASSERT(isr.unIon(L"i", L"a") == isr.retrieve_space(L"p"));
+  SEQUANT_ASSERT(isr.intersection(L"p", L"i") == isr.retrieve_space(L"i"));
 
   // to use the vocabulary defined by isr use it to make a Context object and
   // make it the default
@@ -48,8 +48,8 @@ void test1() {
       .add_union(L"yz", {L"y", L"z"})      // union of y and z, explicit
       .add_union(L"xyz", {L"xy", L"yz"});  // union of x, y, and z
 
-  SEQUANT_ASSERT(isr.unIon(L"x", L"y") == isr.retrieve(L"xy"));
-  SEQUANT_ASSERT(isr.intersection(L"xyz", L"y") == isr.retrieve(L"y"));
+  SEQUANT_ASSERT(isr.unIon(L"x", L"y") == isr.retrieve_space(L"xy"));
+  SEQUANT_ASSERT(isr.intersection(L"xyz", L"y") == isr.retrieve_space(L"y"));
 
   // use the registry in global context to streamline composition
   set_default_context({.index_basis_registry = std::move(isr)});

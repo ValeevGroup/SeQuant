@@ -415,7 +415,7 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
   SECTION("η = δ - γ in a non-orthonormal basis is an overlap minus γ") {
     // ũ: a basis of the active space with a general metric
     auto isr = mbpt::make_mr_spaces();
-    isr->add(L"ũ", IndexBasis{isr->retrieve(L"u"), 1},
+    isr->add(L"ũ", IndexBasis{isr->retrieve_space(L"u"), 1},
              IndexSpaceMetric::General);
     auto metric_ctx = get_default_context();
     metric_ctx.set(std::move(isr));
