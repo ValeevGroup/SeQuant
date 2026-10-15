@@ -1738,11 +1738,13 @@ class WickTheorem {
 
   /// the value of a single contraction between @p bra (the annihilator's
   /// index) and @p ket (the creator's index), both already projected onto
-  /// the common quasiparticle space; this is where a spin-free variant
-  /// would substitute its own tensors
+  /// the common quasiparticle space: their identity (Kronecker delta if they
+  /// are in one orthonormal basis, else overlap) unless the vacuum is a
+  /// multiproduct; this is where a spin-free variant would substitute its
+  /// own tensors
   static ExprPtr contraction_value(const Index &bra, const Index &ket,
                                    bool left_is_annihilator, Vacuum vacuum) {
-    if (vacuum != Vacuum::MultiProduct) return make_overlap(bra, ket);
+    if (vacuum != Vacuum::MultiProduct) return make_identity(bra, ket);
     return left_is_annihilator ? density::make_hole_rdm(bra, ket)
                                : density::make_rdm(bra, ket);
   }

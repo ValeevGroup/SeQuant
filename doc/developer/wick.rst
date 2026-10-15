@@ -54,7 +54,7 @@ creator, and their quasiparticle spaces intersect (``is_qpannihilator``/``is_qpc
 ``SeQuant/core/op.hpp``); under ``Vacuum::MultiProduct`` their actions must also differ (see :ref:`below <wick-extended>`). The
 contraction *value* (``contract``) depends on whether those quasiparticle spaces are pure hole/particle subspaces or not:
 
-- both pure: the contraction is a plain overlap :math:`s(L,R)`;
+- both pure: the contraction is the identity :math:`s(L,R)` between the two indices;
 - neither pure: :math:`\delta(L,l)\, s(l,r)\, \delta(R,r)`;
 - only the left space pure: :math:`s(L,r)\, \delta(R,r)`;
 - only the right space pure: :math:`\delta(L,l)\, s(l,R)`,
@@ -62,8 +62,9 @@ contraction *value* (``contract``) depends on whether those quasiparticle spaces
 where :math:`l = L \cap H` and :math:`r = R \cap P` (:math:`H`/:math:`P` the hole/particle subspaces), materialized via temporary indices
 from ``Index::make_tmp_index`` when a space needs projecting; such a projection is in the basis instance of the index it projects
 (a subset of a basis is still that basis), so with legs in two instances the overlap between the projections is one between the
-instances. The middle factor comes from ``WickTheorem::contraction_value``, which
-returns :math:`s` except under ``Vacuum::MultiProduct`` (see :ref:`below <wick-extended>`). For fermionic statistics, each contraction
+instances. The middle factor :math:`s` comes from ``WickTheorem::contraction_value``: the identity between its indices
+(:func:`sequant::make_identity`), a Kronecker delta if they are in one orthonormal basis (:func:`sequant::is_kronecker_equivalent`)
+and an overlap otherwise, except under ``Vacuum::MultiProduct`` (see :ref:`below <wick-extended>`). For fermionic statistics, each contraction
 additionally picks up a sign of :math:`-1` for every operator that sat strictly between ``left`` and ``right`` at the time of
 contraction — the usual anticommutation rule.
 

@@ -287,14 +287,14 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         REQUIRE_NOTHROW(wick1.compute());
         // full contractions = delta
         auto full_contractions = FWickTheorem{opseq1}.compute();
-        REQUIRE_THAT(full_contractions, EquivalentTo(L"s{i_1;i_2}"));
+        REQUIRE_THAT(full_contractions, EquivalentTo(L"δ{i_1;i_2}"));
         // partial contractions = delta - N
         auto partial_contractions =
             FWickTheorem{opseq1}.full_contractions(false).compute();
         // std::wcout << "partial_contractions=" <<
         // to_latex(partial_contractions) << std::endl;
         REQUIRE_THAT(partial_contractions,
-                     EquivalentTo(L"s{i_1;i_2} - a{i_1;i_2}"));
+                     EquivalentTo(L"δ{i_1;i_2} - a{i_1;i_2}"));
       }
       {
         auto opseq1 = ex<BNOperatorSeq>(BNOperator(cre({}), ann({L"i_1"})),
@@ -303,14 +303,14 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         REQUIRE_NOTHROW(wick1.compute());
         // full contractions = delta
         auto full_contractions = BWickTheorem{opseq1}.compute();
-        REQUIRE_THAT(full_contractions, EquivalentTo(L"s{i_1;i_2}"));
+        REQUIRE_THAT(full_contractions, EquivalentTo(L"δ{i_1;i_2}"));
         // partial contractions = delta + N
         auto partial_contractions =
             BWickTheorem{opseq1}.full_contractions(false).compute();
         // std::wcout << "partial_contractions=" <<
         // to_latex(partial_contractions) << std::endl;
         REQUIRE_THAT(partial_contractions,
-                     EquivalentTo(L"s{i_1;i_2} + b{i_1;i_2}"));
+                     EquivalentTo(L"δ{i_1;i_2} + b{i_1;i_2}"));
       }
     }
 
@@ -365,11 +365,11 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE_THAT(
           partial_contractions,
           EquivalentTo(
-              L"- s{i_1;i_2} * a{i_4,i_5;i_3,i_1} - s{i_1;i_2} * s{i_4;i_1} * "
-              L"a{i_5;i_3} + s{i_1;i_2} * s{i_5;i_1} * a{i_4;i_3} + s{i_1;i_3} "
-              L"* a{i_4,i_5;i_2,i_1} + s{i_1;i_3} * s{i_4;i_1} * a{i_5;i_2} - "
-              L"s{i_1;i_3} * s{i_5;i_1} * a{i_4;i_2} - a{i_4,i_5;i_2,i_3} + "
-              L"s{i_4;i_1} * a{i_1,i_5;i_2,i_3} - s{i_5;i_1} * "
+              L"- δ{i_1;i_2} * a{i_4,i_5;i_3,i_1} - δ{i_1;i_2} * δ{i_4;i_1} * "
+              L"a{i_5;i_3} + δ{i_1;i_2} * δ{i_5;i_1} * a{i_4;i_3} + δ{i_1;i_3} "
+              L"* a{i_4,i_5;i_2,i_1} + δ{i_1;i_3} * δ{i_4;i_1} * a{i_5;i_2} - "
+              L"δ{i_1;i_3} * δ{i_5;i_1} * a{i_4;i_2} - a{i_4,i_5;i_2,i_3} + "
+              L"δ{i_4;i_1} * a{i_1,i_5;i_2,i_3} - δ{i_5;i_1} * "
               L"a{i_1,i_4;i_2,i_3} + a{i_1,i_4,i_5;i_2,i_3,i_1}"));
     }
 
@@ -445,9 +445,9 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE(result->size() == 5);
       REQUIRE_THAT(
           result,
-          EquivalentTo(L"- a{i_1;i_2} * s{i_3;i_4} - a{i_3;i_4} * s{i_1;i_2} + "
-                       L"a{i_3;i_2} * s{i_1;i_4} + a{i_1,i_3;i_2,i_4} + "
-                       L"s{i_1;i_2} * s{i_3;i_4}"));
+          EquivalentTo(L"- a{i_1;i_2} * δ{i_3;i_4} - a{i_3;i_4} * δ{i_1;i_2} + "
+                       L"a{i_3;i_2} * δ{i_1;i_4} + a{i_1,i_3;i_2,i_4} + "
+                       L"δ{i_1;i_2} * δ{i_3;i_4}"));
     }
 
     // three 1-body operators, partial contraction
@@ -463,9 +463,9 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE_THAT(
           result,
           EquivalentTo(
-              L"a{i_6;i_1} * s{i_2;i_3} * s{i_4;i_5} - a{i_6,i_2;i_1,i_3} * "
-              L"s{i_4;i_5} + a{i_2,i_4,i_6;i_1,i_3,i_5} + a{i_6,i_4;i_1,i_3} * "
-              L"s{i_2;i_5} - a{i_6,i_4;i_1,i_5} * s{i_2;i_3}"));
+              L"a{i_6;i_1} * δ{i_2;i_3} * δ{i_4;i_5} - a{i_6,i_2;i_1,i_3} * "
+              L"δ{i_4;i_5} + a{i_2,i_4,i_6;i_1,i_3,i_5} + a{i_6,i_4;i_1,i_3} * "
+              L"δ{i_2;i_5} - a{i_6,i_4;i_1,i_5} * δ{i_2;i_3}"));
     }
 
     // two 2-body operators, partial contraction: Eq. 9b of DOI 10.1063/1.474405
@@ -482,12 +482,12 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE_THAT(
           result,
           EquivalentTo(
-              L"a{i_8,i_7,i_4;i_1,i_5,i_2} * s{i_3;i_6} + "
+              L"a{i_8,i_7,i_4;i_1,i_5,i_2} * δ{i_3;i_6} + "
               L"a{i_3,i_4,i_7,i_8;i_1,i_2,i_5,i_6} + a{i_8,i_7;i_1,i_2} * "
-              L"s{i_3;i_6} * s{i_4;i_5} + a{i_8,i_7,i_4;i_6,i_1,i_2} * "
-              L"s{i_3;i_5} + a{i_8,i_3,i_7;i_1,i_5,i_2} * s{i_4;i_6} + "
-              L"a{i_8,i_3,i_7;i_6,i_1,i_2} * s{i_4;i_5} - a{i_8,i_7;i_1,i_2} * "
-              L"s{i_3;i_5} * s{i_4;i_6}"));
+              L"δ{i_3;i_6} * δ{i_4;i_5} + a{i_8,i_7,i_4;i_6,i_1,i_2} * "
+              L"δ{i_3;i_5} + a{i_8,i_3,i_7;i_1,i_5,i_2} * δ{i_4;i_6} + "
+              L"a{i_8,i_3,i_7;i_6,i_1,i_2} * δ{i_4;i_5} - a{i_8,i_7;i_1,i_2} * "
+              L"δ{i_3;i_5} * δ{i_4;i_6}"));
 
       // we use this example in the paper, both as bare ops and contracted with
       // scalars to make all indices dummy and the topological optimizations
@@ -698,10 +698,10 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE(result->size() == 4);
       REQUIRE_THAT(
           result,
-          EquivalentTo(L"s{i_4;i_1} * s{i_3;i_2} * s{a_2;a_3} * s{a_1;a_4} - "
-                       L"s{i_4;i_1} * s{i_3;i_2} * s{a_2;a_4} * s{a_1;a_3} - "
-                       L"s{i_3;i_1} * s{i_4;i_2} * s{a_2;a_3} * s{a_1;a_4} + "
-                       L"s{i_3;i_1} * s{i_4;i_2} * s{a_2;a_4} * s{a_1;a_3}"));
+          EquivalentTo(L"δ{i_4;i_1} * δ{i_3;i_2} * δ{a_2;a_3} * δ{a_1;a_4} - "
+                       L"δ{i_4;i_1} * δ{i_3;i_2} * δ{a_2;a_4} * δ{a_1;a_3} - "
+                       L"δ{i_3;i_1} * δ{i_4;i_2} * δ{a_2;a_3} * δ{a_1;a_4} + "
+                       L"δ{i_3;i_1} * δ{i_4;i_2} * δ{a_2;a_4} * δ{a_1;a_3}"));
 
       // in spin-free result first and fourth terms are multiplied by 4, second
       // and third terms multiplied by 2
@@ -715,10 +715,10 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE(result_sf->size() == 4);
       REQUIRE_THAT(
           result_sf,
-          EquivalentTo(L"4 s{i_4;i_1} * s{i_3;i_2} * s{a_2;a_3} * s{a_1;a_4} - "
-                       L"2 s{i_4;i_1} * s{i_3;i_2} * s{a_2;a_4} * s{a_1;a_3} - "
-                       L"2 s{i_3;i_1} * s{i_4;i_2} * s{a_2;a_3} * s{a_1;a_4} + "
-                       L"4 s{i_3;i_1} * s{i_4;i_2} * s{a_2;a_4} * s{a_1;a_3}"));
+          EquivalentTo(L"4 δ{i_4;i_1} * δ{i_3;i_2} * δ{a_2;a_3} * δ{a_1;a_4} - "
+                       L"2 δ{i_4;i_1} * δ{i_3;i_2} * δ{a_2;a_4} * δ{a_1;a_3} - "
+                       L"2 δ{i_3;i_1} * δ{i_4;i_2} * δ{a_2;a_3} * δ{a_1;a_4} + "
+                       L"4 δ{i_3;i_1} * δ{i_4;i_2} * δ{a_2;a_4} * δ{a_1;a_3}"));
     }
     // two (pure qp) 3-body operators
     {
@@ -2168,8 +2168,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
 TEST_CASE("wick_nop_canonicalization", "[algorithms][wick]") {
   using namespace sequant;
 
-  // a sum of products of normal operators whose partial contractions are
-  // normal operators that DefaultTensorCanonicalizer would reorder
+  // a sum of products of normal operators whose partial contractions are a
+  // delta times a normal operator
   auto make_input = [] {
     ExprPtr sum = ex<Constant>(0);
     for (int k = 0; k != 6; ++k) {
@@ -2196,6 +2196,21 @@ TEST_CASE("wick_nop_canonicalization", "[algorithms][wick]") {
   // must neither enable nor disable normal operator canonicalization for each
   // other, so every term equals that of the summand computed on its own
   SECTION("per-summand computations") {
+    // Wick spells a partial contraction as the delta followed by the
+    // surviving normal operator; with the operator labels cardinal before the
+    // delta, the lexicographic step of a complete canonicalization reorders
+    // every such term, whatever the labels hash to (the graph step alone
+    // orders by canonical vertex order, which depends on the label hashes)
+    auto cardinal = set_scoped_modified_default_context([](Context& ctx) {
+      container::vector<std::wstring> labels{reserved::antisymm_label(),
+                                             reserved::symm_label(),
+                                             reserved::transposition_label()};
+      for (const auto& label : FNOperator::labels()) labels.push_back(label);
+      labels.push_back(reserved::kronecker_label());
+      ctx.set_cardinal_tensor_labels(std::move(labels));
+      ctx.set(CanonicalizeOptions::default_options().copy_and_set(
+          CanonicalizationMethod::Complete));
+    });
     const auto input = make_input();
     std::vector<std::wstring> expected;
     // terms that canonicalization of their normal operators would change

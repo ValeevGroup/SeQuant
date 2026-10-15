@@ -1253,6 +1253,13 @@ inline bool is_kronecker_equivalent(const Index &bra, const Index &ket) {
          ket.basis().metric() == IndexBasisMetric::Unit;
 }
 
+/// @return the identity between @p bra and @p ket: their Kronecker delta if
+/// is_kronecker_equivalent(bra, ket), else their overlap
+inline ExprPtr make_identity(const Index &bra, const Index &ket) {
+  return is_kronecker_equivalent(bra, ket) ? make_kronecker(bra, ket)
+                                           : make_overlap(bra, ket);
+}
+
 /// @name (anti)symmetrization operator factories
 /// The reserved (anti)symmetrization operators Ŝ/Â have *defining* symmetries
 /// that are not free parameters: both are braket-Nonsymm (their bra<->ket

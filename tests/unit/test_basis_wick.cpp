@@ -120,6 +120,15 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
       CHECK(metrics[0]->_bra()[0].basis().basis_instance() == 1);
       CHECK(metrics[0]->_ket()[0].basis().basis_instance() == 2);
     }
+    // legs in one instance (or none) contract to a Kronecker delta
+    for (auto const& [l, r] :
+         {std::pair{p1, Index(L"p_2").replace_basis_instance(1)},
+          std::pair{Index(L"p_1"), Index(L"p_2")}}) {
+      const auto c = FWickTheorem::contract(FOp(l, Action::Annihilate),
+                                            FOp(r, Action::Create));
+      CHECK(tensors_labelled(c, reserved::overlap_label()).empty());
+      CHECK(tensors_labelled(c, reserved::kronecker_label()).size() == 3);
+    }
     const auto expr = ex<Tensor>(L"t", bra{i1}, ket{p1}, Symmetry::Nonsymm) *
                       ex<FNOperator>(cre{i1}, ann{p1}) *
                       ex<Tensor>(L"u", bra{p2}, ket{i2}, Symmetry::Nonsymm) *
