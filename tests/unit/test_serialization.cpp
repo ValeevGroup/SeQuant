@@ -850,15 +850,22 @@ TEST_CASE("serialization", "[serialization]") {
       SECTION("empty and proto indices") {
         REQUIRE(v2::from_string<ExprPtr>("t[;a1]") ==
                 v1::from_string<ExprPtr>(L"t{;a1}"));
-        // a blank index is '_', or nothing between separators
+        // a blank index is spelled '_'; a group of only whitespace is empty
         const auto blank_bra =
             ex<Tensor>(L"t", bra{Index{}, Index{L"i_1"}}, ket{L"a_1", L"a_2"});
         REQUIRE(v2::from_string<ExprPtr>("t[_,i1;a1,a2]:N-bkN-pN") ==
                 blank_bra);
-        REQUIRE(v2::from_string<ExprPtr>("t[ , i1;a1,a2]:N-bkN-pN") ==
+        REQUIRE(v2::from_string<ExprPtr>("t[ _ , i1;a1,a2]:N-bkN-pN") ==
                 blank_bra);
         REQUIRE(v2::from_string<ExprPtr>("t[_;a1]:N-bkN-pN") ==
                 ex<Tensor>(L"t", bra{Index{}}, ket{L"a_1"}));
+        REQUIRE(v2::from_string<ExprPtr>("t[ ;a1]") ==
+                v2::from_string<ExprPtr>("t[;a1]"));
+        for (std::string_view invalid :
+             {"t[,i1;a1,a2]", "t[ , i1;a1,a2]", "t[i1,;a1,a2]", "t[i1;a1,]"}) {
+          INFO(invalid);
+          REQUIRE_THROWS_AS(v2::from_string<ExprPtr>(invalid), v2::Error);
+        }
         REQUIRE(v2::from_string<ExprPtr>("t[i1<a1>;a1]") ==
                 v1::from_string<ExprPtr>(L"t{i1<a1>;a1}"));
       }

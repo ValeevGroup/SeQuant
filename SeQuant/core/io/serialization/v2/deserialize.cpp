@@ -258,9 +258,6 @@ void register_actions(peg::parser &parser) {
   });
   on(parser, "Indices", [](const SemanticValues &vs) {
     std::vector<std::optional<Index>> result;
-    // a group without any text (t[] / t[;a1]) is empty rather than one blank
-    if (vs.sv().find_first_not_of(" \t\r\n") == std::string_view::npos)
-      return result;
     for (std::size_t i = 0; i < vs.size(); ++i)
       result.push_back(std::any_cast<std::optional<Index>>(vs[i]));
     return result;

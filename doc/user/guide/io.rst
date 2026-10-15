@@ -190,9 +190,9 @@ A constant with both a nonzero real and a nonzero imaginary part has no single-t
    Tensor            Name '[' IndexGroups ']' SymmetrySpec?                                           Groups are ``[bra;ket;aux]``
    Operator          Name '{' IndexGroups '}'                                                         Groups are ``{annihilators;creators}``; the label selects the operator and its vacuum
    Function          '~' Name '(' Arguments ')'                                                       ``Arguments`` is any text with balanced brackets; the function's handler parses it
-   IndexGroups       IndexList ( ';' IndexList )*                                                     A group without any text is empty
-   IndexList         Slot ( ',' Slot )*
-   Slot              Index | '_' | ε                                                                  ``_`` (or nothing, between separators) is a blank (null) index
+   IndexGroups       IndexList ( ';' IndexList )*                                                     A group without a slot is empty
+   IndexList         ( Slot ( ',' Slot )* )?
+   Slot              Index | '_'                                                                      ``_`` is a blank (null) index
    Index             Name BasisInstance? IndexDomain?
    BasisInstance     '#' '-'? Integer                                                                 An explicit, otherwise-unnamed basis instance (may be negative), e.g. ``i#3``; no whitespace before ``#``
    IndexDomain       '<' (Name BasisInstance? (',' Name BasisInstance?)*)? '>'                        Proto indices
