@@ -252,6 +252,42 @@ TEST_CASE("index_space", "[elements]") {
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     isr->extent(L"μ̃", 77);
 
+    // the set algebra and the occupancy queries take the label of a named
+    // basis as that of its space
+    {
+      const IndexSpace p = isr->retrieve_space(L"p");
+      CHECK(isr->intersection(L"μ̃", L"p") == a);
+      CHECK(isr->intersection(L"μ̃", L"i") == IndexSpace::null);
+      CHECK(isr->valid_intersection(L"μ̃", L"p"));
+      CHECK_FALSE(isr->valid_intersection(L"μ̃", L"i"));
+      CHECK(isr->unIon(L"μ̃", L"i") == p);
+      CHECK(isr->valid_unIon(L"μ̃", L"i"));
+      CHECK_FALSE(isr->valid_unIon(L"μ̃", L"a"));  // the union of a with itself
+      CHECK(isr->is_base(L"μ̃"));
+      CHECK_FALSE(isr->is_pure_occupied(L"μ̃"));
+      CHECK(isr->is_pure_unoccupied(L"μ̃"));
+      CHECK_FALSE(isr->contains_occupied(L"μ̃"));
+      CHECK(isr->contains_unoccupied(L"μ̃"));
+      // a label that is registered neither as a space nor as a name
+      const auto unregistered =
+          Catch::Matchers::ContainsSubstring("ζ is not registered");
+      CHECK_THROWS_WITH(isr->intersection(L"ζ", L"p"), unregistered);
+      CHECK_THROWS_WITH(isr->intersection(L"p", L"ζ"), unregistered);
+      CHECK_THROWS_WITH(isr->valid_intersection(L"ζ", L"p"), unregistered);
+      CHECK_THROWS_WITH(isr->unIon(L"ζ", L"i"), unregistered);
+      CHECK_THROWS_WITH(isr->valid_unIon(L"ζ", L"i"), unregistered);
+      CHECK_THROWS_WITH(isr->is_base(L"ζ"), unregistered);
+      CHECK_THROWS_WITH(isr->is_pure_occupied(L"ζ"), unregistered);
+      CHECK_THROWS_WITH(isr->is_pure_unoccupied(L"ζ"), unregistered);
+      CHECK_THROWS_WITH(isr->contains_occupied(L"ζ"), unregistered);
+      CHECK_THROWS_WITH(isr->contains_unoccupied(L"ζ"), unregistered);
+      // the space-role setters designate a type: a name is not a space
+      CHECK_THROWS_AS(isr->vacuum_occupied_space(L"μ̃"),
+                      IndexBasisRegistry::not_a_space);
+      CHECK_THROWS_AS(isr->particle_space(L"μ̃"),
+                      IndexBasisRegistry::not_a_space);
+    }
+
     // invariants
     CHECK_THROWS(isr->add(L"μ̃", IndexBasis{a, 5}));  // 1: label taken
     CHECK_THROWS(
