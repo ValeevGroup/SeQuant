@@ -890,6 +890,20 @@ TEST_CASE("serialization", "[serialization]") {
                 v2::from_string<ExprPtr>("t[i1;a1]:N-bkN-pN"));
         REQUIRE(v2::to_string(ex<Variable>(L"I_{1}")) == L"`I_{1}`");
         REQUIRE(v2::to_string(ex<Variable>(L"x")) == L"x");
+
+        // the helpers that function handlers use for labels
+        for (std::wstring_view label :
+             {L"t", L"λ⁺", L"I_{1}", L"2x", L"_", L"a`b\\c", L""}) {
+          INFO(toUtf8(label));
+          REQUIRE(parse_label(toUtf8(quote_label(label))) == label);
+        }
+        REQUIRE(quote_label(L"t") == L"t");
+        REQUIRE(quote_label(L"2x") == L"`2x`");
+        REQUIRE(parse_label(" 2x ") == L"2x");
+        for (std::string_view invalid : {"", "a b", "`a", "`a`b", "`a\\`"}) {
+          INFO(invalid);
+          REQUIRE_THROWS_AS(parse_label(invalid), SerializationError);
+        }
       }
 
       SECTION("NormalOperator") {

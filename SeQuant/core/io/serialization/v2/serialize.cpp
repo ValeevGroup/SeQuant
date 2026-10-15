@@ -10,7 +10,6 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
-#include <algorithm>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -20,39 +19,14 @@ namespace sequant::io::serialization::v2 {
 
 namespace {
 
-/// @return whether \p label can be written as a bare identifier: it must not
-/// contain a character excluded by the grammar's BareIdentifier rule, nor read
-/// as something else (a number, or the blank index '_')
-bool is_bare_label(std::wstring_view label) {
-  auto is_identifier_char = [](wchar_t c) {
-    return !(c <= L'&' || (c >= L'(' && c <= L'/') ||
-             (c >= L':' && c <= L'@') || (c >= L'[' && c <= L'^') ||
-             c == L'`' || (c >= L'{' && c <= L'\u00A0'));
-  };
-  return !label.empty() && label != L"_" &&
-         !(label.front() >= L'0' && label.front() <= L'9') &&
-         std::ranges::all_of(label, is_identifier_char);
-}
-
-std::wstring serialize_label(std::wstring_view label) {
-  if (is_bare_label(label)) return std::wstring(label);
-
-  std::wstring result = L"`";
-  for (wchar_t c : label) {
-    if (c == L'`' || c == L'\\') result += L'\\';
-    result += c;
-  }
-  return result + L"`";
-}
-
 std::wstring serialize_variable(const Variable &var) {
-  return serialize_label(var.label()) + (var.conjugated() ? L"^*" : L"");
+  return quote_label(var.label()) + (var.conjugated() ? L"^*" : L"");
 }
 
 std::wstring serialize_index(const Index &index) {
   if (!index) return L"_";
 
-  std::wstring result = serialize_label(index.label());
+  std::wstring result = quote_label(index.label());
   if (auto instance = index.basis().unnamed_instance())
     result += L"#" + std::to_wstring(*instance);
   if (index.has_proto_indices()) {
@@ -137,7 +111,7 @@ std::wstring serialize_scalar(const Constant::scalar_type &scalar) {
 
 std::wstring serialize_tensor(const AbstractTensor &tensor,
                               const SerializationOptions &options) {
-  std::wstring result = serialize_label(tensor._label());
+  std::wstring result = quote_label(tensor._label());
   result += L"[" + serialize_indices(tensor._bra());
   if (tensor._ket_rank() > 0 || tensor._aux_rank() > 0)
     result += L";" + serialize_indices(tensor._ket());
@@ -154,7 +128,7 @@ std::wstring serialize_tensor(const AbstractTensor &tensor,
 
 template <Statistics S>
 std::wstring serialize_normal_operator(const NormalOperator<S> &nop) {
-  std::wstring result = serialize_label(nop.label());
+  std::wstring result = quote_label(nop.label());
   result += L"{" + serialize_ops(nop.annihilators());
   if (nop.ncreators() > 0) result += L";" + serialize_ops(nop.creators());
   result += L"}";

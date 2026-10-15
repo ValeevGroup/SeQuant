@@ -10,8 +10,8 @@ Constant <- Complex
 
 # A bare identifier excludes the ASCII characters that have a meaning in the
 # grammar (and whitespace and control characters) and allows everything else;
-# serialize.cpp's is_bare_label() must agree with it. Any other label is written
-# in backticks, with '\' escaping a '`' or '\' in it.
+# is_identifier_char() in function_registry.cpp must agree with IdentifierChar.
+# Any other label is written in backticks, with '\' escaping a '`' or '\' in it.
 IdentifierChar <- [^\u0000-&(-/:-@[-^`{-\u00A0]
 BareIdentifier <- < IdentifierChar+ >
 QuotedIdentifier <- < '`' ( '\\' . / [^`\\] )* '`' >

@@ -86,6 +86,15 @@ void register_function(std::wstring name, std::type_index type,
 /// have none.
 std::vector<std::string_view> split_arguments(std::string_view arguments);
 
+/// @return \p label as written in the v2 syntax: as is if it is a bare name,
+/// else in backticks with '`' and '\\' escaped by a '\\'
+std::wstring quote_label(std::wstring_view label);
+
+/// @return the label written as \p text (UTF-8), i.e. the inverse of
+/// quote_label() (surrounding whitespace is ignored)
+/// @throw SerializationError if \p text is neither a bare nor a quoted label
+std::wstring parse_label(std::string_view text);
+
 /// @return the index and action of an action-tagged index such as `i1+` or
 /// `a1⁻`: a creator is marked by `+`/`⁺`, an annihilator by `-`/`⁻`
 /// @throw SerializationError if \p text is not an action-tagged index

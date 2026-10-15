@@ -3,6 +3,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <algorithm>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -58,6 +59,13 @@ std::wstring write_sequence(const Expr &expr,
                                     [&options](const NormalOperator<S> &nop) {
                                       return v2::to_string(nop, options);
                                     });
+}
+
+// must agree with the grammar's IdentifierChar rule
+bool is_identifier_char(wchar_t c) {
+  return !(c <= L'&' || (c >= L'(' && c <= L'/') || (c >= L':' && c <= L'@') ||
+           (c >= L'[' && c <= L'^') || c == L'`' ||
+           (c >= L'{' && c <= L'\u00A0'));
 }
 
 constexpr std::string_view whitespace = " \t\r\n";
@@ -204,6 +212,41 @@ std::pair<Index, Action> parse_action_index(
   throw SerializationError(
       "'" + std::string(text) +
       "' is not an index marked as a creator (+) or annihilator (-)");
+}
+
+std::wstring quote_label(std::wstring_view label) {
+  // a bare label must also not read as something else: a number, or the blank
+  // index '_'
+  const bool bare = !label.empty() && label != L"_" &&
+                    !(label.front() >= L'0' && label.front() <= L'9') &&
+                    std::ranges::all_of(label, is_identifier_char);
+  if (bare) return std::wstring(label);
+
+  std::wstring result = L"`";
+  for (wchar_t c : label) {
+    if (c == L'`' || c == L'\\') result += L'\\';
+    result += c;
+  }
+  return result + L"`";
+}
+
+std::wstring parse_label(std::string_view text) {
+  const std::wstring label = toUtf16(trim(text));
+  if (!label.empty() && label.front() == L'`') {
+    std::wstring result;
+    for (std::size_t i = 1; i < label.size(); ++i) {
+      if (label[i] == L'`') {
+        if (i + 1 == label.size()) return result;
+        break;  // text after the closing '`'
+      }
+      if (label[i] == L'\\' && ++i == label.size()) break;
+      result += label[i];
+    }
+  } else if (!label.empty() && std::ranges::all_of(label, is_identifier_char)) {
+    return label;
+  }
+  throw SerializationError("'" + std::string(trim(text)) +
+                           "' is not a valid label");
 }
 
 }  // namespace sequant::io::serialization

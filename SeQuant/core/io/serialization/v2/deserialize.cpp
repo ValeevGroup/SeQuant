@@ -192,15 +192,8 @@ void register_actions(peg::parser &parser) {
 
   on(parser, "BareIdentifier",
      [](const SemanticValues &vs) { return std::string(vs.token()); });
-  on(parser, "QuotedIdentifier", [](const SemanticValues &vs) {
-    const std::string_view quoted = vs.token().substr(1, vs.token().size() - 2);
-    std::string label;
-    for (std::size_t i = 0; i < quoted.size(); ++i) {
-      if (quoted[i] == '\\') ++i;  // the grammar ensures an escaped char
-      label += quoted[i];
-    }
-    return label;
-  });
+  on(parser, "QuotedIdentifier",
+     [](const SemanticValues &vs) { return toUtf8(parse_label(vs.token())); });
   on(parser, "Identifier", [](const SemanticValues &vs) {
     return std::any_cast<std::string>(vs[0]);
   });
