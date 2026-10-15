@@ -237,6 +237,18 @@ set_source_files_properties("test_ordered_executor.cpp" "test_ordered_schedule.c
 target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
+# range-v3 headers name their ::meta namespace unqualified, which is ambiguous
+# with sequant::meta once a file-scope `using namespace sequant` is in effect.
+# Under a Unity build such a directive leaks into the files concatenated after
+# it, so a range-v3 header first parsed there fails to compile. Parse them all
+# ahead of every file instead (include guards make this free after the first).
+foreach(_module IN ITEMS symb eval optimize export mbpt eval-dryrun eval-ta eval-btas eval-tapp)
+    if (TARGET unit_tests-sequant-${_module}-obj)
+        set_property(TARGET unit_tests-sequant-${_module}-obj PROPERTY
+            UNITY_BUILD_CODE_BEFORE_INCLUDE "#include <range/v3/all.hpp>")
+    endif()
+endforeach()
+
 ##########################
 # Single executable combining all OBJECT libraries
 # NB linking OBJECT libraries (since CMake 3.21) both includes their object

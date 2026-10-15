@@ -23,6 +23,8 @@
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
+#include <SeQuant/domain/mbpt/vac_av.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>

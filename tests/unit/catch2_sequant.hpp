@@ -14,7 +14,6 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/utility/string.hpp>
-#include <SeQuant/domain/mbpt/op.hpp>
 
 #include <dtl/dtl.hpp>
 

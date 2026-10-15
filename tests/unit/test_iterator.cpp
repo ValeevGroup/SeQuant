@@ -9,7 +9,6 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/ranges.hpp>
-#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <algorithm>
 #include <initializer_list>
