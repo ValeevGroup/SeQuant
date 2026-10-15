@@ -839,6 +839,15 @@ TEST_CASE("serialization", "[serialization]") {
       SECTION("empty and proto indices") {
         REQUIRE(v2::from_string<ExprPtr>("t[;a1]") ==
                 v1::from_string<ExprPtr>(L"t{;a1}"));
+        // a blank index is '_', or nothing between separators
+        const auto blank_bra =
+            ex<Tensor>(L"t", bra{Index{}, Index{L"i_1"}}, ket{L"a_1", L"a_2"});
+        REQUIRE(v2::from_string<ExprPtr>("t[_,i1;a1,a2]:N-bkN-pN") ==
+                blank_bra);
+        REQUIRE(v2::from_string<ExprPtr>("t[ , i1;a1,a2]:N-bkN-pN") ==
+                blank_bra);
+        REQUIRE(v2::from_string<ExprPtr>("t[_;a1]:N-bkN-pN") ==
+                ex<Tensor>(L"t", bra{Index{}}, ket{L"a_1"}));
         REQUIRE(v2::from_string<ExprPtr>("t[i1<a1>;a1]") ==
                 v1::from_string<ExprPtr>(L"t{i1<a1>;a1}"));
       }
@@ -982,6 +991,9 @@ TEST_CASE("serialization", "[serialization]") {
           ex<Constant>(Constant::scalar_type(3, rational{1, 2})),
           ex<Constant>(Constant::scalar_type(rational{-3, 4}, rational{-1, 2})),
           ex<Product>(Constant::scalar_type(3, -2), ExprPtrList{t}),
+          ex<Tensor>(L"t", bra{Index{}}, ket{L"a_1"}),
+          ex<Tensor>(L"t", bra{Index{}, Index{L"i_1"}},
+                     ket{Index{L"a_1"}, Index{}}),
           ex<Power>(x, rational{-1}),
           ex<Power>(x, rational{-3, 2}),
           ex<Power>(ex<Constant>(rational{1, 2}), rational{3}),

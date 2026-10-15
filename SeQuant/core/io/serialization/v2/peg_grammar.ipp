@@ -27,11 +27,13 @@ ProtoList <- ProtoIndex (',' ProtoIndex)*
 IndexDomain <- '<' ProtoList? '>'
 Index <- Identifier BasisInstance? IndexDomain?
 
-# A slot inside a bra/ket/aux group may be left blank (positional empty index).
-# The empty alternative deliberately matches nothing so that the position is
-# preserved in the produced value list.
+# A slot inside a bra/ket/aux group may hold a blank (null) index, spelled '_'
+# or left empty. The empty alternative deliberately matches nothing so that the
+# position is preserved in the produced value list; a group that is empty
+# altogether has no slots, so a lone blank must be spelled '_'.
+BlankIndex <- '_' &[,;\]}]
 EmptyIndex <- ''
-IndexItem <- Index / EmptyIndex
+IndexItem <- BlankIndex / Index / EmptyIndex
 Indices <- IndexItem (',' IndexItem)*
 IndexGroups <- Indices (';' Indices)*
 

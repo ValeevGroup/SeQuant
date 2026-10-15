@@ -32,8 +32,7 @@ namespace sequant::io::serialization::v2 {
 
 namespace {
 
-/// a parsed index group list; a std::nullopt entry is a positionally blank
-/// index, and a group that is a single blank is an empty group
+/// a parsed index group list; a std::nullopt entry is a blank index
 using IndexGroupsValue = std::vector<std::vector<std::optional<Index>>>;
 
 /// an index as matched, before it is validated against the index registry; the
@@ -65,9 +64,6 @@ const DeserializationOptions &options_of(std::any &dt) {
 
 container::vector<Index> to_index_vector(
     const std::vector<std::optional<Index>> &group) {
-  // a single blank slot is how an empty group is spelled (t[] / t[;])
-  if (group.size() == 1 && !group.front().has_value()) return {};
-
   container::vector<Index> result;
   result.reserve(group.size());
   for (const std::optional<Index> &slot : group) {
@@ -269,12 +265,15 @@ void register_actions(peg::parser &parser) {
     return raw;
   });
   on(parser, "IndexItem", [](const SemanticValues &vs) {
-    return vs.choice() == 0 ? std::optional<Index>(
+    return vs.choice() == 1 ? std::optional<Index>(
                                   make_index(std::any_cast<RawIndex>(vs[0])))
                             : std::optional<Index>{};
   });
   on(parser, "Indices", [](const SemanticValues &vs) {
     std::vector<std::optional<Index>> result;
+    // a group without any text (t[] / t[;a1]) is empty rather than one blank
+    if (vs.sv().find_first_not_of(" \t\r\n") == std::string_view::npos)
+      return result;
     for (std::size_t i = 0; i < vs.size(); ++i)
       result.push_back(std::any_cast<std::optional<Index>>(vs[i]));
     return result;

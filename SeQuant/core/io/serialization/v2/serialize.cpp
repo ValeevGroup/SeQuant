@@ -20,7 +20,7 @@ namespace sequant::io::serialization::v2 {
 namespace {
 
 std::wstring serialize_index(const Index &index) {
-  if (!index) return {};  // a blank (null) index occupies its position silently
+  if (!index) return L"_";
 
   std::wstring result(index.label());
   if (auto instance = index.basis().unnamed_instance())

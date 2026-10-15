@@ -192,8 +192,9 @@ A constant with both a nonzero real and a nonzero imaginary part has no single-t
    Function        '~' Name '(' (FunctionArg (',' FunctionArg)*)? ')' (':' ('F'|'B'))?
    FunctionArg     ActionIndex | Expression
    ActionIndex     Index ('+' | '-' | '⁺' | '⁻')                                    Creator (``+``/``⁺``) or annihilator (``-``/``⁻``)
-   IndexGroups     IndexList ( ';' IndexList )*                                     A blank slot (nothing between separators) is a positional empty index
-   IndexList       (Index | ε) ( ',' (Index | ε) )*
+   IndexGroups     IndexList ( ';' IndexList )*                                     A group without any text is empty
+   IndexList       Slot ( ',' Slot )*
+   Slot            Index | '_' | ε                                                  ``_`` (or nothing, between separators) is a blank (null) index
    Index           Name BasisInstance? IndexDomain?
    BasisInstance   '#' '-'? Integer                                                An explicit, otherwise-unnamed basis instance (may be negative), e.g. ``i#3``
    IndexDomain     '<' (Index (',' Index)*)? '>'                                   Proto indices
