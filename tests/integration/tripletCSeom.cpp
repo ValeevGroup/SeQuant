@@ -148,11 +148,11 @@ class compute_eomcc_closedshell_triplet {
       const auto n_st = term_count(st);
       if (N == 2 && type == EqnType::right && np == 2 && nh == 2) {
         if (i == 1) runtime_assert(n_st == 42);
-        if (i == 2) runtime_assert(n_st == 405);
+        if (i == 2) runtime_assert(n_st == 540);
       }
       if (N == 3 && type == EqnType::right && np == 3 && nh == 3) {
         if (i == 1) runtime_assert(n_st == 54);
-        if (i == 2) runtime_assert(n_st == 690);
+        if (i == 2) runtime_assert(n_st == 920);
         if (i == 3) runtime_assert(n_st == 11592);
       }
 

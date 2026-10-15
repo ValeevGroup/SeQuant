@@ -323,13 +323,10 @@ ExprPtr closed_shell_CC_singlet_spintrace_v2(
 struct ClosedShellCCTripletSpintraceOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
   /// compact the residual to one representative slot permutation per
-  /// tensor-network group via triplet_maxcoeff_compact (doubles: the -2c
-  /// member of each {c, c, -2c} group of the bare-TE residual, 405 -> 135
-  /// terms for 2h2p, recovered on evaluation by triplet_nns_project;
-  /// (doubles on the combined path, now unreachable directly: the -3c
-  /// member of each {c,c,c,-3c} group, 540 -> 135 terms);
-  /// triples: one stabilizer-scaled member per 36 slot perms, recovered on
-  /// evaluation by triplet_nns_project).
+  /// tensor-network group via triplet_maxcoeff_compact, recovered on
+  /// evaluation by triplet_nns_project (doubles: the -3c member of each
+  /// {c,c,c,-3c} group, 540 -> 135 terms for 2h2p; triples: one
+  /// stabilizer-scaled member per 36 slot perms).
   /// On by default; false gives the full residual, which is used only as a
   /// reference in tests.
   bool compact = true;
@@ -341,8 +338,7 @@ struct ClosedShellCCTripletSpintraceOptions {
 ///        one to three external index groups (singles, doubles or triples
 ///        projection)
 /// @param options triplet spin-tracing options
-/// @return the triplet spin-trace residual (see triplet_combined_residual);
-///         the bare-TE for doubles (see detail::triplet_bare_te)
+/// @return the triplet spin-trace residual (see triplet_combined_residual)
 /// @throw Exception for projection manifolds beyond triples, or if the
 ///        equations contain amplitudes beyond triples
 // clang-format on

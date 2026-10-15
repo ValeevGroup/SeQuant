@@ -2272,13 +2272,10 @@ ExprPtr closed_shell_CC_triplet_spintrace(
     ext_groups.push_back(std::move(grp));
   }
 
-  const auto n_ext = ext_idxs.size();
-  const bool bare_te = detail::triplet_bare_te(n_ext);
-
   // spintrace_by_sector already removed spin (with collision relabeling) from
   // each sector.
   auto sectors = spintrace_by_sector(expr, ext_groups, /*triplet_R=*/true);
-  SEQUANT_ASSERT(sectors.size() == (std::size_t{1} << n_ext));
+  SEQUANT_ASSERT(sectors.size() == (std::size_t{1} << ext_idxs.size()));
 
   // V_mu: weight every sector by the sign of the spin of external group 0
   auto V = std::make_shared<Sum>();
@@ -2295,7 +2292,7 @@ ExprPtr closed_shell_CC_triplet_spintrace(
   SEQUANT_ASSERT(std::all_of(ext_idxs.begin(), ext_idxs.end(),
                              [](const auto& g) { return g.size() == 2; }));
 
-  triplet = triplet_combined_residual(triplet, ext_groups, bare_te);
+  triplet = triplet_combined_residual(triplet, ext_groups);
   simplify(triplet);
   if (options.compact) triplet = triplet_maxcoeff_compact(triplet, ext_groups);
   simplify(triplet);

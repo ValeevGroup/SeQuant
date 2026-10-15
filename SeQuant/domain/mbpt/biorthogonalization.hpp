@@ -107,9 +107,6 @@ ExprPtr WK_biorthogonalization_filter(
 ///
 ///   n = 1: Omega = V/2, the biorthogonal factor for singles is 1/2.
 ///   n = 2: Omega = (3 V - V_ps)/16 (Kohn's paper)
-///   bare_te (only support n = 2): Omega = V/4, i.e. the bare TE primitive
-///          with the external pair swap dropped. The dropped part is restored
-///          by the postprocessing Omega = V/4 + (V_bs + V_ks)/16
 ///   n = 3: Omega = (6 V - V_ps01 - V_ps02 + 2 V_ks12)/160
 ///          the 18x18 overlap matrix of the TEE ops (6 pairings x 3 T
 ///          positions) has rank 9;
@@ -121,15 +118,12 @@ ExprPtr WK_biorthogonalization_filter(
 /// \param V The sector-summed triplet primitive
 /// \param ext_idxs A vector of external index groups (must have 1, 2 or 3
 ///        groups)
-/// \param bare_te Assemble the bare-TE weights instead (n = 2 only)
-/// \note I might want to have bare_te for triples if EFV prefer it (tee_only)
 /// \return The combined residual, simplified
 /// \throw Exception for unsupported \p ext_idxs sizes
 // clang-format on
 [[nodiscard]] ExprPtr triplet_combined_residual(
     const ExprPtr& V,
-    const container::svector<container::svector<Index>>& ext_idxs,
-    bool bare_te = false);
+    const container::svector<container::svector<Index>>& ext_idxs);
 
 /// @brief Performs biorthogonal transformation with factored out NNS projector
 /// @details Applies biorthogonal transformation. When factor_out_nns_projector
@@ -344,30 +338,6 @@ std::optional<std::vector<T>> hardcoded_triplet_nullspace_projector(
   }
 }
 
-/// \brief Provides the bare-TE (n = 2) undo-compact row, ordered as in
-/// hardcoded_triplet_nullspace_projector
-///
-/// \return Optional vector of weights, std::nullopt unless n_particles is 2
-template <typename T>
-  requires(std::floating_point<T> || meta::is_complex_v<T>)
-std::optional<std::vector<T>> hardcoded_triplet_te_nns_projector(
-    std::size_t n_particles) {
-  if (n_particles != 2) return std::nullopt;
-  return std::vector<T>{T(0) / T(1), T(-1) / T(2), T(-1) / T(2), T(1) / T(1)};
-}
-
-/// \brief Provides the bare-TE (n = 2) -> full-metric reconstruction row,
-/// ordered as in hardcoded_triplet_nullspace_projector
-///
-/// \return Optional vector of weights, std::nullopt unless n_particles is 2
-template <typename T>
-  requires(std::floating_point<T> || meta::is_complex_v<T>)
-std::optional<std::vector<T>> hardcoded_triplet_te_reconstruction(
-    std::size_t n_particles) {
-  if (n_particles != 2) return std::nullopt;
-  return std::vector<T>{T(0) / T(1), T(1) / T(4), T(1) / T(4), T(1) / T(1)};
-}
-
 /// \brief Provides the closed-shell triplet null-space projector weights
 ///
 /// \tparam T The numeric type (must be floating point or complex)
@@ -417,61 +387,6 @@ template <typename T>
         "n_particles = 2, 3, requested rank is : " +
         std::to_string(n_particles));
   return rows[n_particles - 2];
-}
-
-/// \brief Provides the bare-TE undo-compact weights
-/// (see hardcoded_triplet_te_nns_projector)
-///
-/// \throw Exception unless \p n_particles is 2
-template <typename T>
-  requires(std::floating_point<T> || meta::is_complex_v<T>)
-[[nodiscard]] const std::vector<T>& triplet_te_nns_projection_weights(
-    std::size_t n_particles) {
-  static const std::vector<T> row = *hardcoded_triplet_te_nns_projector<T>(2);
-  if (n_particles != 2)
-    throw Exception(
-        "bare-TE triplet weights are only available for n_particles = 2, "
-        "requested rank is : " +
-        std::to_string(n_particles));
-  return row;
-}
-
-/// \brief Provides the bare-TE -> full-metric reconstruction weights
-/// (see hardcoded_triplet_te_reconstruction)
-///
-/// \throw Exception unless \p n_particles is 2
-template <typename T>
-  requires(std::floating_point<T> || meta::is_complex_v<T>)
-[[nodiscard]] const std::vector<T>& triplet_te_reconstruction_weights(
-    std::size_t n_particles) {
-  static const std::vector<T> row = *hardcoded_triplet_te_reconstruction<T>(2);
-  if (n_particles != 2)
-    throw Exception(
-        "bare-TE triplet weights are only available for n_particles = 2, "
-        "requested rank is : " +
-        std::to_string(n_particles));
-  return row;
-}
-
-/// \brief Whether the closed-shell triplet residual for \p n_particles uses
-/// bare-TE (doubles) instead of Combined (singles, triples).
-///
-/// \throw Exception unless \p n_particles is 1, 2 or 3
-bool triplet_bare_te(std::size_t n_particles);
-
-/// \brief Provides the weights that rebuild the full closed-shell triplet
-/// residual from its compact form: the null-space row for the bare-TE
-/// residual (equal to triplet_te_nns_projection_weights followed by
-/// triplet_te_reconstruction_weights), the NNS row otherwise
-///
-/// \throw Exception unless \p n_particles is 2 or 3
-template <typename T>
-  requires(std::floating_point<T> || meta::is_complex_v<T>)
-[[nodiscard]] const std::vector<T>& triplet_residual_nns_weights(
-    std::size_t n_particles) {
-  return triplet_bare_te(n_particles)
-             ? triplet_nullspace_projection_weights<T>(n_particles)
-             : triplet_nns_projection_weights<T>(n_particles);
 }
 
 }  // namespace detail
@@ -780,7 +695,7 @@ auto triplet_nullspace_project(TA::DistArray<Args...> const& arr,
 
 /// \brief Metric NNS reconstruction for compact closed-shell triplet
 /// residuals: rebuilds the full residual from the representatives kept by
-/// triplet_maxcoeff_compact (see detail::triplet_residual_nns_weights). Apply
+/// triplet_maxcoeff_compact (see detail::triplet_nns_projection_weights). Apply
 /// to the H*R residual when the compact equations were evaluated; no-op for
 /// singles (array rank 2), throws beyond triples (array rank 6).
 template <typename... Args>
@@ -788,51 +703,13 @@ auto triplet_nns_project_ta(TA::DistArray<Args...> const& arr,
                             size_t bra_rank) {
   return detail::triplet_perm_project_ta(
       arr, bra_rank,
-      &detail::triplet_residual_nns_weights<
+      &detail::triplet_nns_projection_weights<
           typename TA::DistArray<Args...>::numeric_type>);
 }
 
 template <typename... Args>
 auto triplet_nns_project(TA::DistArray<Args...> const& arr, size_t bra_rank) {
   return triplet_nns_project_ta(arr, bra_rank);
-}
-
-/// \brief Bare-TE undo-compact for compact triplet doubles residuals
-/// (triplet_te_nns_projection_weights row). Apply to the H*R residual when the
-/// compact bare-TE equations were evaluated, before triplet_te_reconstruct;
-/// no-op for singles (array rank 2), throws for anything but doubles (array
-/// rank 4).
-template <typename... Args>
-auto triplet_te_nns_project_ta(TA::DistArray<Args...> const& arr,
-                               size_t bra_rank) {
-  return detail::triplet_perm_project_ta(
-      arr, bra_rank,
-      &detail::triplet_te_nns_projection_weights<
-          typename TA::DistArray<Args...>::numeric_type>);
-}
-
-template <typename... Args>
-auto triplet_te_nns_project(TA::DistArray<Args...> const& arr,
-                            size_t bra_rank) {
-  return triplet_te_nns_project_ta(arr, bra_rank);
-}
-
-/// \brief TE-only -> full-metric reconstruction for triplet R2 (EFV
-/// experiment), via the exact identity
-/// Omega = te_a + (1/4)(bra_swap(te_a) + ket_swap(te_a)).
-template <typename... Args>
-auto triplet_te_reconstruct_ta(TA::DistArray<Args...> const& arr,
-                               size_t bra_rank) {
-  return detail::triplet_perm_project_ta(
-      arr, bra_rank,
-      &detail::triplet_te_reconstruction_weights<
-          typename TA::DistArray<Args...>::numeric_type>);
-}
-
-template <typename... Args>
-auto triplet_te_reconstruct(TA::DistArray<Args...> const& arr,
-                            size_t bra_rank) {
-  return triplet_te_reconstruct_ta(arr, bra_rank);
 }
 
 #endif  // defined(SEQUANT_HAS_TILEDARRAY)
@@ -897,7 +774,7 @@ auto triplet_nns_project_btas(btas::Tensor<Args...> const& arr,
                               size_t bra_rank) {
   return detail::triplet_perm_project_btas(
       arr, bra_rank,
-      &detail::triplet_residual_nns_weights<
+      &detail::triplet_nns_projection_weights<
           typename btas::Tensor<Args...>::numeric_type>);
 }
 
@@ -928,9 +805,7 @@ auto triplet_nullspace_project(btas::Tensor<Args...> const& arr,
 /// @brief Rebuilds the full closed-shell residual from one evaluated from
 ///        closed_shell_CC_spintrace with the same @p options; dispatches to
 ///        biorthogonal_nns_project or triplet_nns_project for compact
-///        residuals. Non-compact residuals need no NNS projection, except
-///        that the bare-TE triplet doubles one is reconstructed by
-///        triplet_te_reconstruct.
+///        residuals. Non-compact residuals need no NNS projection.
 /// @param arr the evaluated residual
 /// @param bra_rank the particle rank of the residual
 /// @param options the options passed to closed_shell_CC_spintrace
@@ -947,9 +822,7 @@ Array closed_shell_CC_nns_project(Array const& arr, std::size_t bra_rank,
     case SpinMultiplicity::Triplet:
       if constexpr (requires { triplet_nns_project(arr, bra_rank); }) {
         if (options.compact) return triplet_nns_project(arr, bra_rank);
-        if (!detail::triplet_bare_te(bra_rank)) return arr;
-        if constexpr (requires { triplet_te_reconstruct(arr, bra_rank); })
-          return triplet_te_reconstruct(arr, bra_rank);
+        return arr;
       }
       throw Exception(
           "closed_shell_CC_nns_project: the triplet path is not implemented "

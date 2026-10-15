@@ -2322,49 +2322,6 @@ SECTION("ResultExpr") {
     }
   }
 }
-SECTION("triplet_bare_te") {
-  REQUIRE_FALSE(mbpt::detail::triplet_bare_te(1));
-  REQUIRE(mbpt::detail::triplet_bare_te(2));
-  REQUIRE_FALSE(mbpt::detail::triplet_bare_te(3));
-  REQUIRE_THROWS_AS(mbpt::detail::triplet_bare_te(0), Exception);
-  REQUIRE_THROWS_AS(mbpt::detail::triplet_bare_te(4), Exception);
-}
-SECTION("triplet_residual_nns_weights") {
-  using mbpt::detail::compute_permuted_indices_bra_ket;
-
-  // doubles: the bare-TE undo-compact followed by the reconstruction
-  const std::size_t n = 2;
-  const auto& te_nns =
-      mbpt::detail::triplet_te_nns_projection_weights<double>(n);
-  const auto& te_rec =
-      mbpt::detail::triplet_te_reconstruction_weights<double>(n);
-  auto index_of = [&](const container::svector<size_t>& perm) {
-    for (std::size_t r = 0; r != te_nns.size(); ++r)
-      if (compute_permuted_indices_bra_ket(r, n) == perm) return r;
-    FAIL("permutation not found");
-    return std::size_t{0};
-  };
-  std::vector<double> composed(te_nns.size(), 0.0);
-  for (std::size_t p = 0; p != te_nns.size(); ++p) {
-    for (std::size_t q = 0; q != te_rec.size(); ++q) {
-      const auto pp = compute_permuted_indices_bra_ket(p, n);
-      const auto pq = compute_permuted_indices_bra_ket(q, n);
-      container::svector<size_t> pr(pp.size());
-      for (std::size_t s = 0; s != pr.size(); ++s) pr[s] = pp[pq[s]];
-      composed[index_of(pr)] += te_nns[p] * te_rec[q];
-    }
-  }
-  const auto& doubles = mbpt::detail::triplet_residual_nns_weights<double>(n);
-  REQUIRE(doubles.size() == composed.size());
-  for (std::size_t p = 0; p != composed.size(); ++p) {
-    CAPTURE(p);
-    REQUIRE(std::abs(doubles[p] - composed[p]) < 1e-14);
-  }
-
-  // triples: the NNS row
-  REQUIRE(mbpt::detail::triplet_residual_nns_weights<double>(3) ==
-          mbpt::detail::triplet_nns_projection_weights<double>(3));
-}
 SECTION("closed_shell_CC_spintrace") {
   // 2h2p EOM-like residual term: f contracted with R2
   auto expr = deserialize(
@@ -2601,11 +2558,6 @@ TEST_CASE("triplet_combined_residual_product", "[spin][triplet]") {
         triplet_combined_residual(V, ext_idxs),
         ex<Constant>(ratio(3, 16)) * V - ex<Constant>(ratio(1, 16)) * V_ps);
   }
-
-  SECTION("bare_te") {
-    require_equal(triplet_combined_residual(V, ext_idxs, /*te_only=*/true),
-                  ex<Constant>(ratio(1, 4)) * V);
-  }
 }
 
 TEST_CASE("triplet_combined_residual_singles", "[spin][triplet]") {
@@ -2637,8 +2589,6 @@ TEST_CASE("triplet_combined_residual_singles", "[spin][triplet]") {
   canonicalize(diff);
   simplify(diff);
   REQUIRE(diff->size() == 0);
-
-  REQUIRE_THROWS(triplet_combined_residual(V, ext_idxs, /*te_only=*/true));
 }
 
 TEST_CASE("triplet_generic_perms", "[spin][triplet]") {

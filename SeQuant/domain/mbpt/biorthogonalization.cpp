@@ -744,36 +744,29 @@ namespace {
 /// [Kohn's triplet paper](http://dx.doi.org/10.1063/1.1457434).
 ///
 /// \param n_particles The rank of external index pairs
-/// \param bare_te Provide the bare-TE row instead (n = 2 only)
 ///
 /// \return Vector of rational weights in flat perm order
 ///
 /// \throw Exception if the row is not available for \p n_particles
 // clang-format on
-std::vector<rational> hardcoded_triplet_residual_row(std::size_t n_particles,
-                                                     bool bare_te) {
-  if (bare_te) {
-    if (n_particles == 2)
-      return {ratio(0, 1), ratio(0, 1), ratio(0, 1), ratio(1, 4)};
-  } else {
-    switch (n_particles) {
-      case 1:
-        return {ratio(1, 2)};
+std::vector<rational> hardcoded_triplet_residual_row(std::size_t n_particles) {
+  switch (n_particles) {
+    case 1:
+      return {ratio(1, 2)};
 
-      case 2:
-        return {ratio(-1, 16), ratio(0, 1), ratio(0, 1), ratio(3, 16)};
+    case 2:
+      return {ratio(-1, 16), ratio(0, 1), ratio(0, 1), ratio(3, 16)};
 
-      case 3:
-        return {ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
-                ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
-                ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
-                ratio(0, 1), ratio(0, 1),    ratio(-1, 160), ratio(0, 1),
-                ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
-                ratio(0, 1), ratio(-1, 160), ratio(0, 1),    ratio(0, 1),
-                ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
-                ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
-                ratio(0, 1), ratio(0, 1),    ratio(1, 80),   ratio(3, 80)};
-    }
+    case 3:
+      return {ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+              ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+              ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+              ratio(0, 1), ratio(0, 1),    ratio(-1, 160), ratio(0, 1),
+              ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+              ratio(0, 1), ratio(-1, 160), ratio(0, 1),    ratio(0, 1),
+              ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+              ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+              ratio(0, 1), ratio(0, 1),    ratio(1, 80),   ratio(3, 80)};
   }
   throw Exception(
       "hardcoded triplet residual weights are not available for "
@@ -805,10 +798,9 @@ ExprPtr triplet_expr_for(const ExprPtr& term,
 
 ExprPtr triplet_combined_residual(
     const ExprPtr& V,
-    const container::svector<container::svector<Index>>& ext_idxs,
-    bool bare_te) {
+    const container::svector<container::svector<Index>>& ext_idxs) {
   const std::size_t n_particles = ext_idxs.size();
-  const auto weights = hardcoded_triplet_residual_row(n_particles, bare_te);
+  const auto weights = hardcoded_triplet_residual_row(n_particles);
 
   // the n bra slots and the n ket slots are permuted independently
   SEQUANT_ASSERT(weights.size() ==
@@ -918,14 +910,6 @@ container::svector<size_t> compute_permuted_indices_bra_ket(
       compute_permuted_indices(ket_slots, perm_index % num_perms, n_particles);
   ords.insert(ords.end(), permuted_ket.begin(), permuted_ket.end());
   return ords;
-}
-
-bool triplet_bare_te(std::size_t n_particles) {
-  if (n_particles == 0 || n_particles > 3)
-    throw Exception(
-        "the closed-shell triplet residual is implemented for singles, "
-        "doubles and triples");
-  return n_particles == 2;
 }
 
 }  // namespace detail

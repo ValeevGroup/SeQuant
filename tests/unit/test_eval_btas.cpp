@@ -536,10 +536,8 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
                   mbpt::triplet_nns_project(r2, 2));
     require_equal(closed_shell_CC_nns_project(r3, 3, triplet),
                   mbpt::triplet_nns_project(r3, 3));
+    require_equal(closed_shell_CC_nns_project(r2, 2, triplet_full), r2);
     require_equal(closed_shell_CC_nns_project(r3, 3, triplet_full), r3);
-    // BTAS has no triplet_te_reconstruct yet
-    REQUIRE_THROWS_AS(closed_shell_CC_nns_project(r2, 2, triplet_full),
-                      Exception);
 
     REQUIRE_THROWS_AS(
         closed_shell_CC_nns_project(
