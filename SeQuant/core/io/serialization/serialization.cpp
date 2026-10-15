@@ -6,9 +6,8 @@
 
 namespace sequant::io::serialization {
 
-SerializationError::SerializationError(std::size_t offset, std::size_t length,
-                                       std::string message)
-    : Exception(std::move(message)), offset(offset), length(length) {}
+SerializationError::SerializationError(std::string message)
+    : Exception(std::move(message)) {}
 
 #define SEQUANT_RESOLVE_DESERIALIZATION_FUNC(stringType, ExprType)        \
   template <>                                                             \

@@ -16,11 +16,7 @@
 namespace sequant::io::serialization {
 
 struct SerializationError : Exception {
-  std::size_t offset;
-  std::size_t length;
-
-  SerializationError(std::size_t offset, std::size_t length,
-                     std::string message);
+  SerializationError(std::string message);
 };
 
 /// Specifies the syntax of the textual input/representation to use. All

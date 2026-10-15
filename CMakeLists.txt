@@ -389,6 +389,8 @@ set(SeQuant_symb_src
         SeQuant/core/io/serialization/v1/ast.hpp
         SeQuant/core/io/serialization/v1/ast_conversions.hpp
         SeQuant/core/io/serialization/v1/deserialize.cpp
+        SeQuant/core/io/serialization/v1/error.cpp
+        SeQuant/core/io/serialization/v1/error.hpp
         SeQuant/core/io/serialization/v1/semantic_actions.hpp
         SeQuant/core/io/serialization/v1/serialize.cpp
         SeQuant/core/ranges.hpp

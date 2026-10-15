@@ -11,6 +11,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/v1/ast.hpp>
+#include <SeQuant/core/io/serialization/v1/error.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/space.hpp>
@@ -60,7 +61,7 @@ IndexBasis to_basis(const LabelAST &label_ast, const std::wstring &label,
   if (!instance) return basis;
   if (basis.has_basis_instance()) {
     auto [offset, length] = get_pos(label_ast, position_cache, begin);
-    throw SerializationError(
+    throw Error(
         offset, length,
         "label '" + toUtf8(label) +
             "' names a basis instance; an explicit ';N' is not allowed");
@@ -76,7 +77,7 @@ Index to_index(const io::serialization::v1::ast::Index &index,
 
   if (index.domain && domain.protoLabels.empty() && !domain.instance) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
-    throw SerializationError(offset, length, "empty index domain");
+    throw Error(offset, length, "empty index domain");
   }
 
   container::vector<Index> protoIndices;
@@ -93,16 +94,14 @@ Index to_index(const io::serialization::v1::ast::Index &index,
       throw;
     } catch (const IndexSpace::bad_key &) {
       auto [offset, length] = get_pos(current.label, position_cache, begin);
-      throw SerializationError(offset, length,
-                               "Unknown index space '" +
-                                   toUtf8(current.label.label) +
-                                   "' in proto index specification");
+      throw Error(offset, length,
+                  "Unknown index space '" + toUtf8(current.label.label) +
+                      "' in proto index specification");
     } catch (const Exception &e) {
       auto [offset, length] = get_pos(current.label, position_cache, begin);
-      throw SerializationError(offset, length,
-                               "Invalid index '" + toUtf8(current.label.label) +
-                                   "_" + std::to_string(current.label.id) +
-                                   ": " + e.what());
+      throw Error(offset, length,
+                  "Invalid index '" + toUtf8(current.label.label) + "_" +
+                      std::to_string(current.label.id) + ": " + e.what());
     }
   }
 
@@ -115,16 +114,14 @@ Index to_index(const io::serialization::v1::ast::Index &index,
     throw;
   } catch (const IndexSpace::bad_key &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
-    throw SerializationError(offset, length,
-                             "Unknown index space '" +
-                                 toUtf8(index.label.label) +
-                                 "' in index specification");
+    throw Error(offset, length,
+                "Unknown index space '" + toUtf8(index.label.label) +
+                    "' in index specification");
   } catch (const Exception &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
-    throw SerializationError(offset, length,
-                             "Invalid index '" + toUtf8(index.label.label) +
-                                 "_" + std::to_string(index.label.id) + ": " +
-                                 e.what());
+    throw Error(offset, length,
+                "Invalid index '" + toUtf8(index.label.label) + "_" +
+                    std::to_string(index.label.id) + ": " + e.what());
   }
 }
 
@@ -184,8 +181,7 @@ Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &,
       return Symmetry::Nonsymm;
   }
 
-  throw SerializationError(
-      offset, 1, std::string("Invalid symmetry specifier '") + c + "'");
+  throw Error(offset, 1, std::string("Invalid symmetry specifier '") + c + "'");
 }
 
 template <typename Iterator>
@@ -227,10 +223,9 @@ std::variant<BraKetSymmetry, Hermiticity> to_braket_symmetry(
       return Hermiticity::AntiHermitian;
   }
 
-  throw SerializationError(
-      offset, 1,
-      std::string("Invalid BraKet symmetry / Hermiticity specifier '") + c +
-          "'");
+  throw Error(offset, 1,
+              std::string("Invalid BraKet symmetry / Hermiticity specifier '") +
+                  c + "'");
 }
 
 template <typename Iterator>
@@ -249,9 +244,8 @@ ColumnSymmetry to_column_symmetry(char c, std::size_t offset, const Iterator &,
       return ColumnSymmetry::Nonsymm;
   }
 
-  throw SerializationError(
-      offset, 1,
-      std::string("Invalid particle symmetry specifier '") + c + "'");
+  throw Error(offset, 1,
+              std::string("Invalid particle symmetry specifier '") + c + "'");
 }
 
 template <typename PositionCache, typename Iterator>
@@ -493,7 +487,7 @@ struct Transformer {
         static_cast<std::int64_t>(power.exponent.denominator) !=
             power.exponent.denominator) {
       auto [offset, length] = get_pos(power, position_cache.get(), begin.get());
-      throw SerializationError(
+      throw Error(
           offset, length,
           "Power exponent must be a rational number (integer numerator and "
           "denominator)");
@@ -608,8 +602,8 @@ ResultExpr ast_to_result(const io::serialization::v1::ast::ResultExpr &result,
     return {std::move(lhs.as<Variable>()), std::move(rhs)};
   } else {
     auto [offset, length] = get_pos(result.lhs, position_cache, begin);
-    throw SerializationError(
-        offset, length, "LHS of a ResultExpr must be a Tensor or a Variable");
+    throw Error(offset, length,
+                "LHS of a ResultExpr must be a Tensor or a Variable");
   }
 }
 

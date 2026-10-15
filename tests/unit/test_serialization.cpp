@@ -8,6 +8,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/serialization/v1/error.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
 
@@ -26,10 +27,10 @@
 
 namespace Catch {
 template <>
-struct StringMaker<sequant::io::serialization::SerializationError> {
+struct StringMaker<sequant::io::serialization::v1::Error> {
   static std::string convert(
-      const sequant::io::serialization::SerializationError& error) {
-    return "io::serialization::SerializationError{offset: " +
+      const sequant::io::serialization::v1::Error& error) {
+    return "io::serialization::v1::Error{offset: " +
            std::to_string(error.offset) +
            ", length: " + std::to_string(error.length) + ", what(): '" +
            error.what() + "'}";
@@ -38,8 +39,7 @@ struct StringMaker<sequant::io::serialization::SerializationError> {
 }  // namespace Catch
 
 struct SerializationErrorMatcher
-    : Catch::Matchers::MatcherBase<
-          sequant::io::serialization::SerializationError> {
+    : Catch::Matchers::MatcherBase<sequant::io::serialization::v1::Error> {
   std::size_t offset;
   std::size_t length;
   std::string messageFragment;
@@ -50,8 +50,8 @@ struct SerializationErrorMatcher
         length(length),
         messageFragment(std::move(messageFragment)) {}
 
-  bool match(const sequant::io::serialization::SerializationError& exception)
-      const override {
+  bool match(
+      const sequant::io::serialization::v1::Error& exception) const override {
     if (exception.offset != offset) {
       return false;
     }
@@ -542,18 +542,16 @@ TEST_CASE("serialization", "[serialization]") {
 
       SECTION("Invalid index") {
         REQUIRE_THROWS_MATCHES(deserialize<ExprPtr>(L"t{i1<az1>;}"),
-                               io::serialization::SerializationError,
+                               io::serialization::v1::Error,
                                serializationErrorMatches(5, 3, "proto"));
         REQUIRE_THROWS_MATCHES(
-            deserialize<ExprPtr>(L"t{i1;az3}"),
-            io::serialization::SerializationError,
+            deserialize<ExprPtr>(L"t{i1;az3}"), io::serialization::v1::Error,
             serializationErrorMatches(5, 3, "Unknown index space"));
       }
 
       SECTION("Invalid symmetry") {
         REQUIRE_THROWS_MATCHES(
-            deserialize<ExprPtr>(L"t{i1;a3}:P"),
-            io::serialization::SerializationError,
+            deserialize<ExprPtr>(L"t{i1;a3}:P"), io::serialization::v1::Error,
             serializationErrorMatches(9, 1, "Invalid symmetry specifier"));
       }
 
