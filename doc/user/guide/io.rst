@@ -155,3 +155,70 @@ scaled by the constant ``1/2``:
 ::
 
    R1{u1;i1} = f{u1;i1} - Ym1{u1;u2} f{u2;i1} - Ym1{u3;u2} * g{u1,u2;u3,i1} + 1/2 Ym2{u1,u4;u_2,u_3} g{u2,u3;u4,i1}:A-C-S
+
+V2
+^^
+
+V2 revises the syntax so that tensors and operators are no longer spelled alike: a **tensor** uses square brackets
+(``t[bra;ket;aux]``), a **normal-ordered operator** keeps braces (``a{annihilators;creators}``), and any other object is produced
+by a **function** ``~name(...)`` resolved through an extension registry (see below). Over V1 it adds complex constants, explicit
+``Power`` expressions, and representations for the remaining :class:`Expr` subclasses. Because V1 remains
+:class:`SerializationSyntax::Latest`, V2 must be requested explicitly.
+
+.. note::
+   Known limitations:
+
+   - Conjugation (``^*``) applies to variables and powers; tensors have no conjugated form.
+   - A constant with both a nonzero real and a nonzero imaginary part has no single-token form, so
+     :func:`from_string<ExprPtr>` yields a :class:`Sum`; deserializing explicitly as a :class:`Constant`
+     (:func:`from_string<Constant>`) parses and folds the whole expression and so recovers the single constant.
+
+.. table::
+   :widths: auto
+
+   ==============  ===============================================================  ===========================================
+   Component       Rule                                                             Note
+   ==============  ===============================================================  ===========================================
+   ResultExpression (Tensor | Variable) '=' Expression
+   Expression      Sum
+   Sum             Product ( ('+' | '-') Product )*
+   Product         Factor ( ('*' | '/') Factor | Nullary )*                         A bare juxtaposed ``Nullary`` is implicit multiplication (binds like ``*``)
+   Factor          ('+' | '-')* Nullary
+   Nullary         Function | Power | '(' Expression ')' | Tensor | Operator | Constant | Variable
+   Power           Nullary '^' '(' Real ')' '^*'?                                   Integer exponent; base is parenthesized when serialized if a Constant/conjugated Variable
+   Constant        Real | Real 'i'                                                  Integer, float, or (via ``/``) a fraction; ``Ni`` is pure imaginary
+   Tensor          Name '[' IndexGroups ']' SymmetrySpec?                           Groups are ``[bra;ket;aux]``
+   Operator        Name '{' IndexGroups '}' (':' ('F' | 'B'))?                      Groups are ``{annihilators;creators}``; the label selects the operator and its vacuum
+   Function        '~' Name '(' (FunctionArg (',' FunctionArg)*)? ')' (':' ('F'|'B'))?
+   FunctionArg     ActionIndex | Expression
+   ActionIndex     Index ('+' | '-' | '⁺' | '⁻')                                    Creator (``+``/``⁺``) or annihilator (``-``/``⁻``)
+   IndexGroups     IndexList ( ';' IndexList )*                                     A blank slot (nothing between separators) is a positional empty index
+   IndexList       (Index | ε) ( ',' (Index | ε) )*
+   Index           Name BasisInstance? IndexDomain?
+   BasisInstance   '#' '-'? Integer                                                An explicit, otherwise-unnamed basis instance (may be negative), e.g. ``i#3``
+   IndexDomain     '<' (Index (',' Index)*)? '>'                                   Proto indices
+   SymmetrySpec    ':' SymmetryTok ( '-' SymmetryTok )*                            Order-independent; prefixes disambiguate the field
+   SymmetryTok     'A' | 'S' | 'N' | 'bkS' | 'bkC' | 'bkN' | 'pS' | 'pN'
+   Variable        Name '^*'?                                                       ``^*`` marks conjugation
+   Name                                                                             Single word (may include Unicode chars)
+   ==============  ===============================================================  ===========================================
+
+The ``SymmetrySpec`` uses dash-joined, order-independent, prefixed tokens: the unprefixed ``A``/``S``/``N`` set the
+permutational :class:`Symmetry <sequant::Symmetry>`, ``bkS``/``bkC``/``bkN`` the :class:`BraKetSymmetry
+<sequant::BraKetSymmetry>`, and ``pS``/``pN`` the :class:`ColumnSymmetry <sequant::ColumnSymmetry>`. The prefixes let a field be
+given on its own (e.g. ``:pS``); :func:`to_string` always emits all three when ``annot_symm`` is set.
+
+The ``~name(...)`` syntax is an extension point: core registers ``~op`` (a raw :class:`Operator <sequant::Operator>`, an ordered
+sequence of action-tagged indices) and ``~nopseq`` (a :class:`NormalOperatorSequence <sequant::NormalOperatorSequence>`), and
+downstream code may register handlers for its own :class:`Expr` subclasses with
+:func:`sequant::io::serialization::register_function`.
+
+Examples
+""""""""
+
+::
+
+   R[i1;a1]:A-bkN-pS = f[a1;a2]:A-bkN-pS t[i1;a2]:A-bkN-pS + 1/2 g[i1,i2;a1,a2]:A-bkN-pS t[a2;i2]:A-bkN-pS
+   t[i1#3;a1]           an index in basis instance 3
+   ~op(i1+, a1-):F
+   ~nopseq( a{i1;}, a{;a1} )

@@ -281,6 +281,9 @@ include(FindOrFetchUtfcpp)
 # Eigen
 include(FindOrFetchEigen)
 
+# cpp-peglib
+include(FindOrFetchCppPeglib)
+
 # embedded bliss-0.73
 add_library(SeQuant-bliss
         SeQuant/external/bliss/defs.cc
@@ -385,6 +388,8 @@ set(SeQuant_symb_src
         SeQuant/core/options.hpp
         SeQuant/core/io/serialization/serialization.cpp
         SeQuant/core/io/serialization/serialization.hpp
+        SeQuant/core/io/serialization/function_registry.cpp
+        SeQuant/core/io/serialization/function_registry.hpp
         SeQuant/core/io/serialization/detail/construct.cpp
         SeQuant/core/io/serialization/detail/construct.hpp
         SeQuant/core/io/serialization/v1/ast.cpp
@@ -395,6 +400,11 @@ set(SeQuant_symb_src
         SeQuant/core/io/serialization/v1/error.hpp
         SeQuant/core/io/serialization/v1/semantic_actions.hpp
         SeQuant/core/io/serialization/v1/serialize.cpp
+        SeQuant/core/io/serialization/v2/deserialize.cpp
+        SeQuant/core/io/serialization/v2/peg_grammar.ipp
+        SeQuant/core/io/serialization/v2/error.cpp
+        SeQuant/core/io/serialization/v2/error.hpp
+        SeQuant/core/io/serialization/v2/serialize.cpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
         SeQuant/core/runtime.cpp
@@ -651,6 +661,7 @@ target_link_libraries(SeQuant-symb
         Threads::Threads
         libperm::libperm
         $<BUILD_LOCAL_INTERFACE:utf8cpp::utf8cpp>
+        $<BUILD_LOCAL_INTERFACE:peglib>
         Eigen3::Eigen)
 if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant-symb PUBLIC
