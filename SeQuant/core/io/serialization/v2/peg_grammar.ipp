@@ -25,12 +25,13 @@ Conjugation <- '^*'
 
 # An index may carry an explicit, otherwise unnamed, basis instance  i#N
 # (N may be negative) and/or a proto-index domain  i<p1,p2> . A proto index may
-# itself carry a basis instance  p#N .
-BasisInstance <- '#' < '-'? [0-9]+ >
-ProtoIndex <- Identifier BasisInstance?
+# itself carry a basis instance  p#N . The '#N' directly follows the label: the
+# two form a single token.
+BasisInstance <- < '-'? [0-9]+ >
+ProtoIndex <- < Identifier ('#' BasisInstance)? >
 ProtoList <- ProtoIndex (',' ProtoIndex)*
 IndexDomain <- '<' ProtoList? '>'
-Index <- Identifier BasisInstance? IndexDomain?
+Index <- < Identifier ('#' BasisInstance)? > IndexDomain?
 
 # A slot inside a bra/ket/aux group may hold a blank (null) index, spelled '_'
 # or left empty. The empty alternative deliberately matches nothing so that the

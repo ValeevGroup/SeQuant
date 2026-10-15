@@ -870,6 +870,13 @@ TEST_CASE("serialization", "[serialization]") {
                 v1::from_string<ExprPtr>(L"t{i_1<;3>;a1}"));
         ExprPtr expr = v2::from_string<ExprPtr>("t[i_1#3;a1]:N-bkN-pN");
         REQUIRE(v2::from_string<ExprPtr>(v2::to_string(expr)) == expr);
+        // the instance directly follows the label
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("t[i_1 #3;a1]"), v2::Error);
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("t[i_1# 3;a1]"), v2::Error);
+        REQUIRE(v2::from_string<ExprPtr>("t[i1<a1#2>;a1]") ==
+                v1::from_string<ExprPtr>(L"t{i1<a1<;2>>;a1}"));
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("t[i1<a1 #2>;a1]"),
+                          v2::Error);
       }
 
       SECTION("Index in a primed space") {

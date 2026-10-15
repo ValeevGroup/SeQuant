@@ -194,7 +194,7 @@ A constant with both a nonzero real and a nonzero imaginary part has no single-t
    IndexList         Slot ( ',' Slot )*
    Slot              Index | '_' | ε                                                                  ``_`` (or nothing, between separators) is a blank (null) index
    Index             Name BasisInstance? IndexDomain?
-   BasisInstance     '#' '-'? Integer                                                                 An explicit, otherwise-unnamed basis instance (may be negative), e.g. ``i#3``
+   BasisInstance     '#' '-'? Integer                                                                 An explicit, otherwise-unnamed basis instance (may be negative), e.g. ``i#3``; no whitespace before ``#``
    IndexDomain       '<' (Name BasisInstance? (',' Name BasisInstance?)*)? '>'                        Proto indices
    SymmetrySpec      ':' SymmetryTok ( '-' SymmetryTok )*                                             Order-independent; prefixes disambiguate the field, each given at most once
    SymmetryTok       'A' | 'S' | 'N' | 'bkS' | 'bkC' | 'bkN' | 'pS' | 'pN'
