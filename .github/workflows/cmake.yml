@@ -66,7 +66,7 @@ jobs:
         -DSEQUANT_TESTS=ON
         -DSEQUANT_EVAL_TESTS=${{ !matrix.valgrind && !matrix.sanitize && !startswith(matrix.os, 'windows') }}
         -DSEQUANT_USE_SYSTEM_BOOST_HASH=OFF
-        -DCMAKE_CXX_STANDARD=20
+        -DCMAKE_CXX_STANDARD=${{ matrix.build_type == 'Release' && 23 || 20 }}
         -DCMAKE_CXX_EXTENSIONS=OFF
         -DSEQUANT_BENCHMARKS=${{ !matrix.valgrind && !matrix.sanitize }}
         -DSEQUANT_SKIP_LONG_TESTS=${{ matrix.valgrind || matrix.sanitize }}
