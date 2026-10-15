@@ -174,33 +174,33 @@ A constant with both a nonzero real and a nonzero imaginary part has no single-t
 .. table::
    :widths: auto
 
-   ==============  ===============================================================  ===========================================
-   Component       Rule                                                             Note
-   ==============  ===============================================================  ===========================================
-   ResultExpression (Tensor | Variable) '=' Expression
-   Expression      Sum
-   Sum             Product ( ('+' | '-') Product )*
-   Product         Factor ( ('*' | '/') Factor | Nullary )*                         A bare juxtaposed ``Nullary`` is implicit multiplication (binds like ``*``)
-   Factor          ('+' | '-')* Nullary
-   Nullary         Function | Power | '(' Expression ')' | Tensor | Operator | Constant | Variable
-   Power           PowerBase '^' '(' Exponent ')' '^*'?                             Also accepted: ``'(' Power ')' '^*'`` (the V1 form of a conjugated power)
-   PowerBase       '(' Expression ')' | Constant | Variable                         A Constant or conjugated Variable base is parenthesized when serialized
-   Exponent        ('+' | '-')? Integer ('/' Integer)?                              A rational number, e.g. ``x^(-1)`` or ``x^(1/2)``
-   Constant        Real | Real 'i'                                                  Integer, float, or (via ``/``) a fraction; ``Ni`` (no space) is pure imaginary
-   Tensor          Name '[' IndexGroups ']' SymmetrySpec?                           Groups are ``[bra;ket;aux]``
-   Operator        Name '{' IndexGroups '}'                                         Groups are ``{annihilators;creators}``; the label selects the operator and its vacuum
-   Function        '~' Name '(' Arguments ')'                                       ``Arguments`` is any text with balanced brackets; the function's handler parses it
-   IndexGroups     IndexList ( ';' IndexList )*                                     A group without any text is empty
-   IndexList       Slot ( ',' Slot )*
-   Slot            Index | '_' | ε                                                  ``_`` (or nothing, between separators) is a blank (null) index
-   Index           Name BasisInstance? IndexDomain?
-   BasisInstance   '#' '-'? Integer                                                An explicit, otherwise-unnamed basis instance (may be negative), e.g. ``i#3``
-   IndexDomain     '<' (Index (',' Index)*)? '>'                                   Proto indices
-   SymmetrySpec    ':' SymmetryTok ( '-' SymmetryTok )*                            Order-independent; prefixes disambiguate the field, each given at most once
-   SymmetryTok     'A' | 'S' | 'N' | 'bkS' | 'bkC' | 'bkN' | 'pS' | 'pN'
-   Variable        Name '^*'?                                                       ``^*`` marks conjugation
-   Name            BareName | '`' QuotedChar* '`'                                   See below
-   ==============  ===============================================================  ===========================================
+   ================  ===============================================================================  =====================================================================================
+   Component         Rule                                                                             Note
+   ================  ===============================================================================  =====================================================================================
+   ResultExpression  (Tensor | Variable) '=' Expression
+   Expression        Sum
+   Sum               Product ( ('+' | '-') Product )*
+   Product           Factor ( ('*' | '/') Factor | Nullary )*                                         A bare juxtaposed ``Nullary`` is implicit multiplication (binds like ``*``)
+   Factor            ('+' | '-')* Nullary
+   Nullary           Function | Power | '(' Expression ')' | Tensor | Operator | Constant | Variable
+   Power             PowerBase '^' '(' Exponent ')' '^*'?                                             Also accepted: ``'(' Power ')' '^*'`` (the V1 form of a conjugated power)
+   PowerBase         '(' Expression ')' | Constant | Variable                                         A Constant or conjugated Variable base is parenthesized when serialized
+   Exponent          ('+' | '-')? Integer ('/' Integer)?                                              A rational number, e.g. ``x^(-1)`` or ``x^(1/2)``
+   Constant          Real | Real 'i'                                                                  Integer, float, or (via ``/``) a fraction; ``Ni`` (no space) is pure imaginary
+   Tensor            Name '[' IndexGroups ']' SymmetrySpec?                                           Groups are ``[bra;ket;aux]``
+   Operator          Name '{' IndexGroups '}'                                                         Groups are ``{annihilators;creators}``; the label selects the operator and its vacuum
+   Function          '~' Name '(' Arguments ')'                                                       ``Arguments`` is any text with balanced brackets; the function's handler parses it
+   IndexGroups       IndexList ( ';' IndexList )*                                                     A group without any text is empty
+   IndexList         Slot ( ',' Slot )*
+   Slot              Index | '_' | ε                                                                  ``_`` (or nothing, between separators) is a blank (null) index
+   Index             Name BasisInstance? IndexDomain?
+   BasisInstance     '#' '-'? Integer                                                                 An explicit, otherwise-unnamed basis instance (may be negative), e.g. ``i#3``
+   IndexDomain       '<' (Name BasisInstance? (',' Name BasisInstance?)*)? '>'                        Proto indices
+   SymmetrySpec      ':' SymmetryTok ( '-' SymmetryTok )*                                             Order-independent; prefixes disambiguate the field, each given at most once
+   SymmetryTok       'A' | 'S' | 'N' | 'bkS' | 'bkC' | 'bkN' | 'pS' | 'pN'
+   Variable          Name '^*'?                                                                       ``^*`` marks conjugation
+   Name              BareName | '`' QuotedChar* '`'                                                   See below
+   ================  ===============================================================================  =====================================================================================
 
 A bare ``Name`` is a run of any characters except whitespace, control characters and the ASCII punctuation that the
 syntax uses (``_`` and ``'`` are allowed). A label that is not of this form, or that starts with a digit, is written in
