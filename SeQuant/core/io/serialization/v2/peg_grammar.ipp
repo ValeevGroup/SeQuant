@@ -6,11 +6,13 @@ Imaginary <- Real 'i'
 Complex <- Imaginary / Real
 Constant <- Complex
 
-# This is a very liberal rule that simply tries to exclude the most important
-# non-ID characters (in ASCII range) and then allows everything else
-# U+207A/U+207B (superscript +/-) are excluded so that they are available as
-# the Unicode creator/annihilator marks of an action-tagged index.
-Identifier <- < ( [^\u0000-/:-@[-`{-\u00A0⁺⁻] / '_' )+ >
+# A bare identifier excludes the ASCII characters that have a meaning in the
+# grammar (and whitespace and control characters) and allows everything else;
+# serialize.cpp's is_bare_label() must agree with it. Any other label is written
+# in backticks, with '\' escaping a '`' or '\' in it.
+BareIdentifier <- < [^\u0000-&(-/:-@[-^`{-\u00A0]+ >
+QuotedIdentifier <- < '`' ( '\\' . / [^`\\] )* '`' >
+Identifier <- QuotedIdentifier / BareIdentifier
 
 Variable <- Identifier Conjugation?
 
@@ -61,7 +63,7 @@ Power <- PowerBase '^' '(' Exponent ')' Conjugation? / '(' Power ')' Conjugation
 # ~name(...) dispatches to a registered handler, which receives the text
 # between the parentheses as written and parses it itself. Only brackets are
 # matched here, so that the call ends at the right ')'.
-RawText <- ( '(' RawText ')' / '[' RawText ']' / '{' RawText '}' / ![()[\]{}] . )*
+RawText <- ( '(' RawText ')' / '[' RawText ']' / '{' RawText '}' / QuotedIdentifier / ![()[\]{}`] . )*
 RawArguments <- < RawText >
 Function <- '~' Identifier '(' RawArguments ')'
 

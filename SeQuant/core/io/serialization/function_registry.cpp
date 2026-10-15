@@ -170,6 +170,10 @@ std::vector<std::string_view> split_arguments(std::string_view arguments) {
       case '}':
         --depth;
         break;
+      case '`':  // skip a quoted label, which may contain any of these
+        for (++i; i < arguments.size() && arguments[i] != '`'; ++i)
+          if (arguments[i] == '\\') ++i;
+        break;
       case ',':
         if (depth == 0) {
           result.push_back(trim(arguments.substr(begin, i - begin)));

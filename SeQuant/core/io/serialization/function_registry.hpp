@@ -82,7 +82,8 @@ void register_function(std::wstring name, std::type_index type,
 
 /// @return the comma-separated arguments in \p arguments (see
 /// FunctionCall::arguments) without surrounding whitespace; a comma inside
-/// brackets does not separate arguments. Blank \p arguments have none.
+/// brackets or a quoted label does not separate arguments. Blank \p arguments
+/// have none.
 std::vector<std::string_view> split_arguments(std::string_view arguments);
 
 /// @return the index and action of an action-tagged index such as `i1+` or

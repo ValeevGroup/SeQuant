@@ -199,8 +199,12 @@ A constant with both a nonzero real and a nonzero imaginary part has no single-t
    SymmetrySpec    ':' SymmetryTok ( '-' SymmetryTok )*                            Order-independent; prefixes disambiguate the field, each given at most once
    SymmetryTok     'A' | 'S' | 'N' | 'bkS' | 'bkC' | 'bkN' | 'pS' | 'pN'
    Variable        Name '^*'?                                                       ``^*`` marks conjugation
-   Name                                                                             Single word (may include Unicode chars)
+   Name            BareName | '`' QuotedChar* '`'                                   See below
    ==============  ===============================================================  ===========================================
+
+A bare ``Name`` is a run of any characters except whitespace, control characters and the ASCII punctuation that the
+syntax uses (``_`` and ``'`` are allowed). A label that is not of this form, or that starts with a digit, is written in
+backticks, with a backslash escaping a backtick or backslash in it (see the examples below).
 
 The ``SymmetrySpec`` uses dash-joined, order-independent, prefixed tokens: the unprefixed ``A``/``S``/``N`` set the
 permutational :class:`Symmetry <sequant::Symmetry>`, ``bkS``/``bkC``/``bkN`` the :class:`BraKetSymmetry
@@ -224,5 +228,6 @@ Examples
 
    R[i1;a1]:A-bkN-pS = f[a1;a2]:A-bkN-pS t[i1;a2]:A-bkN-pS + 1/2 g[i1,i2;a1,a2]:A-bkN-pS t[a2;i2]:A-bkN-pS
    t[i1#3;a1]           an index in basis instance 3
+   `I_{1}`[i1;a1]       a label that is not a bare name
    ~fop(i1+, a1-)
    ~fnopseq( a{i1;}, a{;a1} )

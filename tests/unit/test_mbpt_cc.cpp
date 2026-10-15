@@ -26,6 +26,7 @@
 #include "catch2_sequant.hpp"
 #include "csv_test_utils.hpp"
 
+#include <range/v3/action/push_back.hpp>
 #include <range/v3/algorithm/any_of.hpp>
 
 #include <array>
@@ -83,7 +84,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     // v2 serialization must reproduce equations exactly, not just equivalently
     SECTION("v2 serialization round-trip") {
       namespace ser = io::serialization;
-      for (const ExprPtr& eq : CC{2}.t()) {
+      auto equations = CC{2}.t();
+      ranges::push_back(equations, CC{2}.λ());
+      for (const ExprPtr& eq : equations) {
         const std::wstring serialized = ser::v2::to_string(eq);
         INFO(toUtf8(serialized));
         REQUIRE(ser::v2::from_string<ExprPtr>(serialized) == eq);

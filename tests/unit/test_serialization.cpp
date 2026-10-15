@@ -863,6 +863,26 @@ TEST_CASE("serialization", "[serialization]") {
         REQUIRE(v2::from_string<ExprPtr>(v2::to_string(expr)) == expr);
       }
 
+      SECTION("Index in a primed space") {
+        auto f12 = get_default_context();
+        f12.set(mbpt::make_F12_sr_spaces());
+        auto f12_resetter = set_scoped_default_context(f12);
+        const auto expr = v2::from_string<ExprPtr>(L"t[α'_1;i_1]");
+        REQUIRE(expr == v1::from_string<ExprPtr>(L"t{α'_1;i_1}"));
+        REQUIRE(v2::from_string<ExprPtr>(v2::to_string(expr)) == expr);
+      }
+
+      // a label that is not a bare identifier is quoted
+      SECTION("quoted labels") {
+        REQUIRE(v2::from_string<ExprPtr>("`x y`") == ex<Variable>(L"x y"));
+        REQUIRE(v2::from_string<ExprPtr>(R"(`a\`b\\c`)") ==
+                ex<Variable>(L"a`b\\c"));
+        REQUIRE(v2::from_string<ExprPtr>("`t`[`i_1`;a1]:N-bkN-pN") ==
+                v2::from_string<ExprPtr>("t[i1;a1]:N-bkN-pN"));
+        REQUIRE(v2::to_string(ex<Variable>(L"I_{1}")) == L"`I_{1}`");
+        REQUIRE(v2::to_string(ex<Variable>(L"x")) == L"x");
+      }
+
       SECTION("NormalOperator") {
         REQUIRE(v2::from_string<ExprPtr>("a{i1;a1}") ==
                 v1::from_string<ExprPtr>(L"a{i1;a1}"));
@@ -933,6 +953,8 @@ TEST_CASE("serialization", "[serialization]") {
         REQUIRE(split_arguments("f(a, b), t[i1,i2;a1], {x,y}, ") ==
                 std::vector<std::string_view>{"f(a, b)", "t[i1,i2;a1]", "{x,y}",
                                               ""});
+        REQUIRE(split_arguments(R"(`a,(\`b`, c)") ==
+                std::vector<std::string_view>{R"(`a,(\`b`)", "c"});
 
         REQUIRE(parse_action_index("i1+") ==
                 std::pair{Index(L"i_1"), Action::Create});
@@ -1056,6 +1078,16 @@ TEST_CASE("serialization", "[serialization]") {
           ex<Tensor>(L"t", bra{Index{}}, ket{L"a_1"}),
           ex<Tensor>(L"t", bra{Index{}, Index{L"i_1"}},
                      ket{Index{L"a_1"}, Index{}}),
+          // labels that need quoting
+          ex<Variable>(L"I_{1}"),
+          ex<Variable>(L"2x"),
+          ex<Variable>(L"_"),
+          ex<Variable>(L"a`b\\c"),
+          ex<Variable>(L"with space"),
+          ex<Product>(2, ExprPtrList{ex<Variable>(L"2"), ex<Variable>(L"1.5")}),
+          ex<Tensor>(L"t'", bra{L"i_1"}, ket{L"a_1"}),
+          ex<Tensor>(L"λ⁺", bra{L"i_1"}, ket{L"a_1"}),
+          ex<Tensor>(L"I(1)", bra{L"i_1"}, ket{L"a_1"}),
           ex<Power>(x, rational{-1}),
           ex<Power>(x, rational{-3, 2}),
           ex<Power>(ex<Constant>(rational{1, 2}), rational{3}),

@@ -190,8 +190,20 @@ void on(peg::parser &parser, const char *rule, F action) {
 void register_actions(peg::parser &parser) {
   using peg::SemanticValues;
 
-  on(parser, "Identifier",
+  on(parser, "BareIdentifier",
      [](const SemanticValues &vs) { return std::string(vs.token()); });
+  on(parser, "QuotedIdentifier", [](const SemanticValues &vs) {
+    const std::string_view quoted = vs.token().substr(1, vs.token().size() - 2);
+    std::string label;
+    for (std::size_t i = 0; i < quoted.size(); ++i) {
+      if (quoted[i] == '\\') ++i;  // the grammar ensures an escaped char
+      label += quoted[i];
+    }
+    return label;
+  });
+  on(parser, "Identifier", [](const SemanticValues &vs) {
+    return std::any_cast<std::string>(vs[0]);
+  });
   on(parser, "Real",
      [](const SemanticValues &vs) { return string_to<rational>(vs.token()); });
   on(parser, "Imaginary", [](const SemanticValues &vs) {
