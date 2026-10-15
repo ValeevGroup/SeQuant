@@ -996,6 +996,11 @@ class NormalOperator : public Operator<S>,
             }
           }
         }
+        // without a contractible pair two fermionic operators of odd rank
+        // anticommute
+        if constexpr (S == Statistics::FermiDirac)
+          result = (this->ncreators() + this->nannihilators()) % 2 == 0 ||
+                   (op_that.ncreators() + op_that.nannihilators()) % 2 == 0;
       } else {  // NormalOperators for different vacua do not commute
         result = false;
       }

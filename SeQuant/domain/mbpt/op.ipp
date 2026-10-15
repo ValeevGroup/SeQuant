@@ -9,6 +9,8 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
+#include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/algorithm/is_sorted.hpp>
 #include <range/v3/view/iota.hpp>
@@ -132,13 +134,59 @@ bool Operator<QuantumNumbers, S>::commutes_with_atom(const Expr& that) const {
     // if this has annihilators/creators in same space as that has
     // creator/annihilators return false
 
-    auto delta_this = (*this)();
-    auto delta_that = (that_op)();
+    const auto delta_this = (*this)();
+    const auto delta_that = (that_op)();
 
-    SEQUANT_ASSERT(this->size() % 2 == 0 && that.size() == this->size());
+    SEQUANT_ASSERT(delta_this.size() % 2 == 0 &&
+                   delta_that.size() == delta_this.size());
 
-    return combine(delta_this, delta_that) == combine(delta_that, delta_this);
+    const auto nspaces = delta_this.size() / 2;
+    for (std::size_t s = 0; s != nspaces; ++s) {
+      const auto cre = QuantumNumbers::cre_slot(s);
+      const auto ann = QuantumNumbers::ann_slot(s);
+      if ((delta_this[cre].upper() > 0 && delta_that[ann].upper() > 0) ||
+          (delta_this[ann].upper() > 0 && delta_that[cre].upper() > 0))
+        return false;
+    }
+    // without a contractible pair two fermionic operators of odd rank
+    // anticommute
+    if constexpr (S == Statistics::FermiDirac)
+      return !(this->has_odd_rank_term() && that_op.has_odd_rank_term());
+    return true;
   }
+}
+
+template <typename QuantumNumbers, Statistics S>
+bool Operator<QuantumNumbers, S>::has_odd_rank_term() const {
+  auto compute = [this]() -> bool {
+    // exact op counts give the rank directly; intervals (ops on non-base
+    // spaces) do not, then the tensor form decides
+    const auto dN = (*this)();
+    if (ranges::all_of(dN, [](const auto& n) { return singleton(n); })) {
+      std::int64_t rank = 0;
+      for (const auto& n : dN) rank += n.lower();
+      return rank % 2 != 0;
+    }
+
+    auto term_rank = [](const ExprPtr& term) {
+      std::size_t rank = 0;
+      auto count = [&rank](const ExprPtr& e) {
+        if (e.is<NormalOperator<S>>()) {
+          const auto& nop = e.as<NormalOperator<S>>();
+          rank += nop.ncreators() + nop.nannihilators();
+        }
+      };
+      term->visit(count, /* atoms_only = */ true);
+      return rank;
+    };
+    const ExprPtr form = this->tensor_form();
+    if (!form.is<Sum>()) return term_rank(form) % 2 != 0;
+    return ranges::any_of(form.as<Sum>().summands(), [&](const ExprPtr& t) {
+      return term_rank(t) % 2 != 0;
+    });
+  };
+  if (!has_odd_rank_term_) has_odd_rank_term_ = compute();
+  return *has_odd_rank_term_;
 }
 
 template <typename QuantumNumbers, Statistics S>

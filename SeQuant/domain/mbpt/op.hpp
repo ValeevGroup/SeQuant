@@ -266,6 +266,12 @@ class QuantumNumberChange
     }
   }
 
+  /// @return the slot of the creator count for base space @p s (the only
+  /// pair under Vacuum::Physical)
+  static constexpr std::size_t cre_slot(std::size_t s) { return 2 * s; }
+  /// @return the slot of the annihilator count for base space @p s
+  static constexpr std::size_t ann_slot(std::size_t s) { return 2 * s + 1; }
+
   /// initializes all values with zeroes
   QuantumNumberChange() {
     this->resize(this->size());
@@ -411,7 +417,7 @@ class QuantumNumberChange
       const auto intersect_type =
           base_space.attr().intersection(active_space.attr()).type();
       if (IndexSpace::Type{} != intersect_type) {
-        result += qnvec[creators ? 2 * i : 2 * i + 1];
+        result += qnvec[creators ? cre_slot(i) : ann_slot(i)];
       }
     }
     return result;
@@ -960,7 +966,15 @@ class Operator : public Operator<void, S> {
 
   size_t order_ = 0;
 
+  mutable std::optional<bool> has_odd_rank_term_;
+
   bool less_than_rank_of(const this_type& that) const;
+
+  /// @return true if some term of this operator has an odd number of
+  /// creators and annihilators
+  /// @note the result is memoized; it is intrinsic to the operator and does
+  /// not depend on the context
+  bool has_odd_rank_term() const;
 
   Expr::type_id_type type_id() const override;
 
