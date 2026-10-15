@@ -307,20 +307,20 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE_THAT(
         result,
         EquivalentTo(
-            L"κ{u_3,u_4;u_1,u_2} * δ{u_1;p_1}:N-C-S * "
-            L"δ{u_2;p_3}:N-C-S * δ{p_2;u_3}:N-C-S * δ{p_4;u_4}:N-C-S "
-            L"+ γ{u_2;u_1} * δ{u_1;p_1}:N-C-S * δ{a_1;p_3}:N-C-S * "
-            L"δ{p_2;a_1}:N-C-S * δ{p_4;u_2}:N-C-S "
-            L"+ γ{u_2;u_1} * δ{u_1;p_1}:N-C-S * δ{g_1;p_3}:N-C-S * "
-            L"δ{p_2;g_1}:N-C-S * δ{p_4;u_2}:N-C-S "
-            L"+ η{u_2;u_1} * δ{u_1;p_3}:N-C-S * δ{O_1;p_1}:N-C-S * "
-            L"δ{p_2;u_2}:N-C-S * δ{p_4;O_1}:N-C-S "
-            L"+ δ{a_1;p_3}:N-C-S * δ{O_1;p_1}:N-C-S * δ{p_2;a_1}:N-C-S * "
-            L"δ{p_4;O_1}:N-C-S "
-            L"+ δ{g_1;p_3}:N-C-S * δ{O_1;p_1}:N-C-S * δ{p_2;g_1}:N-C-S * "
-            L"δ{p_4;O_1}:N-C-S "
-            L"+ η{u_3;u_1} * γ{u_4;u_2} * δ{u_1;p_3}:N-C-S * "
-            L"δ{u_2;p_1}:N-C-S * δ{p_2;u_3}:N-C-S * δ{p_4;u_4}:N-C-S"));
+            L"κ{u_3,u_4;u_1,u_2} * δ{u_1;p_1}:N-S-S * "
+            L"δ{u_2;p_3}:N-S-S * δ{p_2;u_3}:N-S-S * δ{p_4;u_4}:N-S-S "
+            L"+ γ{u_2;u_1} * δ{u_1;p_1}:N-S-S * δ{a_1;p_3}:N-S-S * "
+            L"δ{p_2;a_1}:N-S-S * δ{p_4;u_2}:N-S-S "
+            L"+ γ{u_2;u_1} * δ{u_1;p_1}:N-S-S * δ{g_1;p_3}:N-S-S * "
+            L"δ{p_2;g_1}:N-S-S * δ{p_4;u_2}:N-S-S "
+            L"+ η{u_2;u_1} * δ{u_1;p_3}:N-S-S * δ{O_1;p_1}:N-S-S * "
+            L"δ{p_2;u_2}:N-S-S * δ{p_4;O_1}:N-S-S "
+            L"+ δ{a_1;p_3}:N-S-S * δ{O_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S * "
+            L"δ{p_4;O_1}:N-S-S "
+            L"+ δ{g_1;p_3}:N-S-S * δ{O_1;p_1}:N-S-S * δ{p_2;g_1}:N-S-S * "
+            L"δ{p_4;O_1}:N-S-S "
+            L"+ η{u_3;u_1} * γ{u_4;u_2} * δ{u_1;p_3}:N-S-S * "
+            L"δ{u_2;p_1}:N-S-S * δ{p_2;u_3}:N-S-S * δ{p_4;u_4}:N-S-S"));
   }
 
   SECTION("WickTheorem: an input density over a wider space is split") {
@@ -533,16 +533,16 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // a_p2·a†_u3 contracted (adjacent, so +), p_1 of the surviving
     // {a†_p1 a_u4} projected onto active and onto virtual a
     REQUIRE(
-        contains(L"η{u_2;u_3} * δ{u_1;p_1}:N-C-S * δ{p_2;u_2}:N-C-S * "
+        contains(L"η{u_2;u_3} * δ{u_1;p_1}:N-S-S * δ{p_2;u_2}:N-S-S * "
                  L"ã{u_4;u_1}"));
     REQUIRE(
-        contains(L"η{u_1;u_3} * δ{a_1;p_1}:N-C-S * δ{p_2;u_1}:N-C-S * "
+        contains(L"η{u_1;u_3} * δ{a_1;p_1}:N-S-S * δ{p_2;u_1}:N-S-S * "
                  L"ã{u_4;a_1}"));
     // nothing contracted, p_1 and p_2 projected onto active: the four legs
     // form +κ{u_2,u_4;u_1,u_3} = -κ{u_4,u_2;u_1,u_3}
     REQUIRE(
-        contains(L"-1 κ{u_4,u_2;u_1,u_3} * δ{u_1;p_1}:N-C-S * "
-                 L"δ{p_2;u_2}:N-C-S"));
+        contains(L"-1 κ{u_4,u_2;u_1,u_3} * δ{u_1;p_1}:N-S-S * "
+                 L"δ{p_2;u_2}:N-S-S"));
   }
 
   SECTION("WickTheorem: projected indices are fresh in their term") {
@@ -1007,8 +1007,10 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         sp->visit(
             [](const ExprPtr& e) {
               if (e->is<Tensor>() &&
-                  e->as<Tensor>().label() == reserved::overlap_label())
-                e->as<Tensor>().set_label(reserved::kronecker_label());
+                  e->as<Tensor>().label() == reserved::overlap_label()) {
+                auto& s = e->as<Tensor>();
+                s = make_kronecker(s.bra()[0], s.ket()[0])->as<Tensor>();
+              }
             },
             /*atoms_only=*/true);
         // Surviving ã carry their context's vacuum tag, which keeps otherwise

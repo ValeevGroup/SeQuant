@@ -1231,14 +1231,14 @@ inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
 }
 
 inline ExprPtr make_kronecker(const Index &bra_index, const Index &ket_index) {
-  // as in make_overlap, a Kronecker delta is Hermitian and particle (column)
-  // symmetric
-  return ex<Tensor>(
-      Tensor(reserved::kronecker_label(), bra{bra_index}, ket{ket_index}, aux{},
-             Tensor::reserved_tag{},
-             TensorSymmetries{.perm = Symmetry::Nonsymm,
-                              .hermiticity = Hermiticity::Hermitian,
-                              .column = ColumnSymmetry::Symm}));
+  // a Kronecker delta is 0 or 1, so it is bra-ket symmetric whatever the
+  // field of its indices (its Hermiticity derives from that); as in
+  // make_overlap it is particle (column) symmetric
+  return ex<Tensor>(Tensor(reserved::kronecker_label(), bra{bra_index},
+                           ket{ket_index}, aux{}, Tensor::reserved_tag{},
+                           TensorSymmetries{.perm = Symmetry::Nonsymm,
+                                            .braket = BraKetSymmetry::Symm,
+                                            .column = ColumnSymmetry::Symm}));
 }
 
 /// @return true if an overlap between @p bra and @p ket is a Kronecker delta:

@@ -1522,6 +1522,21 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     }
   }
 
+  SECTION("a Kronecker delta is bra-ket symmetric") {
+    // δ is 0 or 1, so canonicalization may swap its slots whatever the field:
+    // the orientation of a delta between named indices is canonical
+    const Index i1{L"i_1"}, i2{L"i_2"};
+    auto scope = scoped_canonicalize_options(
+        CanonicalizeOptions::default_options().copy_and_set(
+            container::set<Index>{i1, i2}));
+    auto f = [&] { return ex<Tensor>(L"f", bra{i1}, ket{i2}); };
+    auto difference =
+        f() * make_kronecker(i2, i1) - f() * make_kronecker(i1, i2);
+    REQUIRE(simplify(difference) == ex<Constant>(0));
+    // a deserialized delta carries the same symmetry
+    REQUIRE(deserialize(L"δ{i_1;i_2}") == make_kronecker(i1, i2));
+  }
+
   SECTION("multiproduct vacuum") {
     auto ctx = get_default_context();
     ctx.set(mbpt::make_mr_spaces());

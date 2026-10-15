@@ -493,32 +493,35 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       REQUIRE_THAT(
           g,
           EquivalentTo(
-              L"t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-C-S * δ{p_2;a_1}:N-C-S "
-              L"+ λ{i_1;a_1}:A-N-S * δ{a_1;p_1}:N-C-S * δ{p_2;i_1}:N-C-S "
-              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-C-S * "
-              L"δ{p_2;i_3}:N-C-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
+              L"t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S "
+              L"+ λ{i_1;a_1}:A-N-S * δ{a_1;p_1}:N-S-S * δ{p_2;i_1}:N-S-S "
+              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-S-S * "
+              L"δ{p_2;i_3}:N-S-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
               L"- 1 t{a_1;i_1}:A-N-S * t{a_2;i_2}:A-N-S * λ{i_1;a_2}:A-N-S * "
-              L"δ{p_2;a_1}:N-C-S * δ{i_2;p_1}:N-C-S "
-              L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-C-S * "
-              L"δ{p_2;a_3}:N-C-S * λ{i_1,i_2;a_1,a_2}:A-N-S "
-              L"- 1 t{a_1;i_1}:A-N-S * λ{i_2;a_1}:A-N-S * δ{i_1;p_1}:N-C-S * "
-              L"δ{p_2;i_2}:N-C-S "
+              L"δ{p_2;a_1}:N-S-S * δ{i_2;p_1}:N-S-S "
+              L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-S-S * "
+              L"δ{p_2;a_3}:N-S-S * λ{i_1,i_2;a_1,a_2}:A-N-S "
+              L"- 1 t{a_1;i_1}:A-N-S * λ{i_2;a_1}:A-N-S * δ{i_1;p_1}:N-S-S * "
+              L"δ{p_2;i_2}:N-S-S "
               L"- 1/2 t{a_3;i_3}:A-N-S * t{a_1,a_2;i_1,i_2}:A-N-S * "
-              L"δ{i_2;p_1}:N-C-S * δ{p_2;a_3}:N-C-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
+              L"δ{i_2;p_1}:N-S-S * δ{p_2;a_3}:N-S-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
               L"- 1/2 t{a_2;i_3}:A-N-S * t{a_1,a_3;i_1,i_2}:A-N-S * "
-              L"δ{i_3;p_1}:N-C-S * δ{p_2;a_3}:N-C-S * λ{i_1,i_2;a_1,a_2}:A-N-S "
-              L"+ t{a_1;i_1}:A-N-S * λ{i_1;a_2}:A-N-S * δ{p_2;a_1}:N-C-S * "
-              L"δ{a_2;p_1}:N-C-S "
+              L"δ{i_3;p_1}:N-S-S * δ{p_2;a_3}:N-S-S * λ{i_1,i_2;a_1,a_2}:A-N-S "
+              L"+ t{a_1;i_1}:A-N-S * λ{i_1;a_2}:A-N-S * δ{p_2;a_1}:N-S-S * "
+              L"δ{a_2;p_1}:N-S-S "
               L"+ t{a_1,a_2;i_1,i_2}:A-N-S * λ{i_2;a_2}:A-N-S * "
-              L"δ{i_1;p_1}:N-C-S * δ{p_2;a_1}:N-C-S"));
+              L"δ{i_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S"));
       REQUIRE(size(G) == 94);
       // 94 terms is not worth spelling out, so check number of terms and
       // external indices
+      // δ is bra-ket symmetric, so canonicalization does not pin the slot
+      // of an external index that only a δ carries: check the set
       const auto ext = get_unique_indices(G);
+      auto ext_braket = ext.bra;
+      ext_braket.insert(ext_braket.end(), ext.ket.begin(), ext.ket.end());
       REQUIRE(std::ranges::is_permutation(
-          ext.ket, container::svector<Index>{L"p_1", L"p_2"}));
-      REQUIRE(std::ranges::is_permutation(
-          ext.bra, container::svector<Index>{L"p_3", L"p_4"}));
+          ext_braket,
+          container::svector<Index>{L"p_1", L"p_2", L"p_3", L"p_4"}));
       REQUIRE(ext.aux.empty());
       // an explicit comm_rank truncates early: cutting Γ at the 2nd nested
       // commutator drops the terms the default (4th, exact) picks up
@@ -539,19 +542,19 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       REQUIRE_THAT(
           g,
           EquivalentTo(
-              L"t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-C-S * δ{p_2;a_1}:N-C-S "
-              L"+ δ{a_1;p_1}:N-C-S * δ{p_2;i_1}:N-C-S * t⁺{i_1;a_1}:A-N-S "
-              L"+ t{a_2;i_1}:A-N-S * δ{a_1;p_1}:N-C-S * δ{p_2;a_2}:N-C-S * "
+              L"t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S "
+              L"+ δ{a_1;p_1}:N-S-S * δ{p_2;i_1}:N-S-S * t⁺{i_1;a_1}:A-N-S "
+              L"+ t{a_2;i_1}:A-N-S * δ{a_1;p_1}:N-S-S * δ{p_2;a_2}:N-S-S * "
               L"t⁺{i_1;a_1}:A-N-S "
-              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_1;p_1}:N-C-S * "
-              L"δ{p_2;a_2}:N-C-S * t⁺{i_2;a_1}:A-N-S "
-              L"- 1 t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-C-S * δ{p_2;i_2}:N-C-S * "
+              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_1;p_1}:N-S-S * "
+              L"δ{p_2;a_2}:N-S-S * t⁺{i_2;a_1}:A-N-S "
+              L"- 1 t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-S-S * δ{p_2;i_2}:N-S-S * "
               L"t⁺{i_2;a_1}:A-N-S "
-              L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-C-S * "
-              L"δ{p_2;a_3}:N-C-S * t⁺{i_1,i_2;a_1,a_2}:A-N-S "
-              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-C-S * "
-              L"δ{p_2;i_3}:N-C-S * t⁺{i_1,i_3;a_1,a_2}:A-N-S "
-              L"- 1/2 t{a_2;i_1}:A-N-S * δ{a_1;p_1}:N-C-S * δ{p_2;i_2}:N-C-S * "
+              L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-S-S * "
+              L"δ{p_2;a_3}:N-S-S * t⁺{i_1,i_2;a_1,a_2}:A-N-S "
+              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-S-S * "
+              L"δ{p_2;i_3}:N-S-S * t⁺{i_1,i_3;a_1,a_2}:A-N-S "
+              L"- 1/2 t{a_2;i_1}:A-N-S * δ{a_1;p_1}:N-S-S * δ{p_2;i_2}:N-S-S * "
               L"t⁺{i_1,i_2;a_1,a_2}:A-N-S"));
       REQUIRE(size(G) == 24);
     }
@@ -561,10 +564,10 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       // the doubles-only subset of the CCSD γ pinned above
       REQUIRE_THAT(
           ccd.rdm(1),
-          EquivalentTo(L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-C-S * "
-                       L"δ{p_2;i_3}:N-C-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
-                       L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-C-S * "
-                       L"δ{p_2;a_3}:N-C-S * λ{i_1,i_2;a_1,a_2}:A-N-S"));
+          EquivalentTo(L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-S-S * "
+                       L"δ{p_2;i_3}:N-S-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
+                       L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-S-S * "
+                       L"δ{p_2;a_3}:N-S-S * λ{i_1,i_2;a_1,a_2}:A-N-S"));
       // Ansatz::oT forces skip_singles, so it reaches the same path
       REQUIRE_THAT(
           ccd.rdm(1),

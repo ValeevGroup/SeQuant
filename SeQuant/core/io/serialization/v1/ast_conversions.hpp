@@ -422,15 +422,16 @@ struct Transformer {
     if (is_reserved_symmetrizer && !braket_symm_specified)
       braket_symm = BraKetSymmetry::Nonsymm;
 
-    // the reserved metric and Kronecker tensors are Hermitian by definition;
-    // force that rather than inheriting the Context's default Hermiticity, so
-    // that a deserialized s/δ equals the one make_overlap()/make_kronecker()
-    // builds (they participate in the tensor hash, so a mismatch would keep
+    // the reserved metric tensor is Hermitian by definition and the Kronecker
+    // delta, being 0 or 1, bra-ket symmetric whatever the field; force that
+    // rather than inheriting the Context's default Hermiticity, so that a
+    // deserialized s/δ equals the one make_overlap()/make_kronecker() builds
+    // (they participate in the tensor hash, so a mismatch would keep
     // otherwise-equal terms from merging)
-    if ((tensor.name == reserved::overlap_label() ||
-         tensor.name == reserved::kronecker_label()) &&
-        !braket_symm_specified)
+    if (tensor.name == reserved::overlap_label() && !braket_symm_specified)
       braket_symm = Hermiticity::Hermitian;
+    if (tensor.name == reserved::kronecker_label() && !braket_symm_specified)
+      braket_symm = BraKetSymmetry::Symm;
 
     // a reference density's symmetries are fixed by its label and rank (see
     // density::symmetries()); supply them where none was spelled out, and let
