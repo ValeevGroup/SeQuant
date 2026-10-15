@@ -1171,6 +1171,33 @@ TEST_CASE("serialization", "[serialization]") {
         REQUIRE(v2::from_string<ExprPtr>(serialized) == constructed);
       }
 
+      // ResultExpr, built from both a tensor and a variable
+      {
+        const ExprPtr rhs = v2::from_string<ExprPtr>(
+            "1/2 g[i1,i2;a1,a2]:A-bkN-pS t[a2;i2]:N-bkN-pN - x");
+        const std::vector<ResultExpr> results = {
+            ResultExpr(
+                Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Antisymm),
+                rhs),
+            ResultExpr(Tensor(L"R", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                              Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+                              ColumnSymmetry::Symm),
+                       rhs),
+            ResultExpr(Tensor(L"I_{1}", bra{Index{}, Index{L"i_1"}},
+                              ket{L"a_1", L"a_2"}, aux{L"i_3"}),
+                       rhs),
+            ResultExpr(Variable(L"E"), rhs),
+            ResultExpr(Variable(L"E"), ex<Constant>(rational{1, 2})),
+            // a tensor without indices
+            ResultExpr(Tensor(L"R", bra{}, ket{}), rhs),
+        };
+        for (const ResultExpr& result : results) {
+          const std::wstring serialized = v2::to_string(result);
+          INFO("serialized: " << toUtf8(serialized));
+          REQUIRE(v2::from_string<ResultExpr>(serialized) == result);
+        }
+      }
+
       // the top-level dispatcher honours SerializationSyntax::V2
       ExprPtr expr = v2::from_string<ExprPtr>(L"t[i1;a1]:N-bkN-pN");
       REQUIRE(from_string<ExprPtr>(
