@@ -107,9 +107,9 @@ ExprPtr build_normal_operator(const std::wstring &name,
                                           ? to_index_vector(groups[1])
                                           : container::vector<Index>{};
   if (groups.size() > 2) {
-    throw Error(0, 0, "NormalOrderedOperator",
-                "a normal-ordered operator takes at most two index groups "
-                "(annihilators;creators)");
+    throw Exception(
+        "a normal-ordered operator takes at most two index groups "
+        "(annihilators;creators)");
   }
 
   const auto &flabels = NormalOperator<Statistics::FermiDirac>::labels();
@@ -128,8 +128,7 @@ ExprPtr build_normal_operator(const std::wstring &name,
     return ex<NormalOperator<Statistics::BoseEinstein>>(
         cre(std::move(creators)), ann(std::move(annihilators)), vac);
   }
-  throw Error(0, 0, "NormalOrderedOperator",
-              "'" + toUtf8(name) +
+  throw Exception("'" + toUtf8(name) +
                   "' is not a recognized normal-ordered operator label");
 }
 
@@ -143,8 +142,7 @@ ExprPtr build_tensor(const std::wstring &name, const IndexGroupsValue &groups,
   container::vector<Index> aux = groups.size() > 2 ? to_index_vector(groups[2])
                                                    : container::vector<Index>{};
   if (groups.size() > 3) {
-    throw Error(0, 0, "Tensor",
-                "a tensor takes at most three index groups (bra;ket;aux)");
+    throw Exception("a tensor takes at most three index groups (bra;ket;aux)");
   }
 
   const auto [def_perm, def_braket, def_column] =
@@ -172,8 +170,7 @@ ExprPtr build_tensor(const std::wstring &name, const IndexGroupsValue &groups,
     } else if (token == "pN") {
       column = ColumnSymmetry::Nonsymm, column_spec = true;
     } else {
-      throw Error(0, 0, "Symmetry",
-                  "invalid symmetry specifier '" + token + "'");
+      throw Exception("invalid symmetry specifier '" + token + "'");
     }
   }
 
@@ -182,69 +179,87 @@ ExprPtr build_tensor(const std::wstring &name, const IndexGroupsValue &groups,
                              braket_spec, column_spec);
 }
 
+/// Installs \p action for \p rule such that an Exception it throws (e.g. for
+/// an unknown index space) is reported as an Error at the rule's match
+template <typename F>
+void on(peg::parser &parser, const char *rule, F action) {
+  parser[rule] = [rule, action = std::move(action)](
+                     const peg::SemanticValues &vs, std::any &dt) {
+    try {
+      if constexpr (std::is_invocable_v<const F &, const peg::SemanticValues &,
+                                        std::any &>)
+        return action(vs, dt);
+      else
+        return action(vs);
+    } catch (const Error &) {
+      throw;
+    } catch (const Exception &e) {
+      const auto [line, column] = vs.line_info();
+      throw Error(line, column, rule, e.what());
+    }
+  };
+}
+
 void register_actions(peg::parser &parser) {
   using peg::SemanticValues;
 
-  parser["Identifier"] = [](const SemanticValues &vs) {
-    return std::string(vs.token());
-  };
-  parser["Real"] = [](const SemanticValues &vs) {
-    return string_to<rational>(vs.token());
-  };
-  parser["Imaginary"] = [](const SemanticValues &vs) {
+  on(parser, "Identifier",
+     [](const SemanticValues &vs) { return std::string(vs.token()); });
+  on(parser, "Real",
+     [](const SemanticValues &vs) { return string_to<rational>(vs.token()); });
+  on(parser, "Imaginary", [](const SemanticValues &vs) {
     return Constant::scalar_type(0, std::any_cast<rational>(vs[0]));
-  };
-  parser["Complex"] = [](const SemanticValues &vs) {
+  });
+  on(parser, "Complex", [](const SemanticValues &vs) {
     return vs.choice() == 0
                ? std::any_cast<Constant::scalar_type>(vs[0])
                : Constant::scalar_type(std::any_cast<rational>(vs[0]), 0);
-  };
-  parser["Constant"] = [](const SemanticValues &vs) {
+  });
+  on(parser, "Constant", [](const SemanticValues &vs) {
     return ExprPtr(ex<Constant>(std::any_cast<Constant::scalar_type>(vs[0])));
-  };
+  });
 
-  parser["Conjugation"] = [](const SemanticValues &) { return true; };
-  parser["Sign"] = [](const SemanticValues &vs) { return vs.token()[0]; };
-  parser["MulOp"] = [](const SemanticValues &vs) { return vs.token()[0]; };
-  parser["AddOp"] = [](const SemanticValues &vs) { return vs.token()[0]; };
-  parser["Symmetry"] = [](const SemanticValues &vs) {
-    return std::string(vs.token());
-  };
-  parser["SymmetrySpec"] = [](const SemanticValues &vs) {
+  on(parser, "Conjugation", [](const SemanticValues &) { return true; });
+  on(parser, "Sign", [](const SemanticValues &vs) { return vs.token()[0]; });
+  on(parser, "MulOp", [](const SemanticValues &vs) { return vs.token()[0]; });
+  on(parser, "AddOp", [](const SemanticValues &vs) { return vs.token()[0]; });
+  on(parser, "Symmetry",
+     [](const SemanticValues &vs) { return std::string(vs.token()); });
+  on(parser, "SymmetrySpec", [](const SemanticValues &vs) {
     std::vector<std::string> result;
     for (std::size_t i = 0; i < vs.size(); ++i)
       result.push_back(std::any_cast<std::string>(vs[i]));
     return result;
-  };
-  parser["Statistic"] = [](const SemanticValues &vs) {
+  });
+  on(parser, "Statistic", [](const SemanticValues &vs) {
     return vs.choice() == 0 ? Statistics::FermiDirac : Statistics::BoseEinstein;
-  };
-  parser["CreatorMark"] = [](const SemanticValues &) { return Action::Create; };
-  parser["AnnihilatorMark"] = [](const SemanticValues &) {
-    return Action::Annihilate;
-  };
+  });
+  on(parser, "CreatorMark",
+     [](const SemanticValues &) { return Action::Create; });
+  on(parser, "AnnihilatorMark",
+     [](const SemanticValues &) { return Action::Annihilate; });
 
-  parser["BasisInstance"] = [](const SemanticValues &vs) {
+  on(parser, "BasisInstance", [](const SemanticValues &vs) {
     return string_to<IndexBasis::instance_type>(vs.token());
-  };
-  parser["ProtoIndex"] = [](const SemanticValues &vs) {
+  });
+  on(parser, "ProtoIndex", [](const SemanticValues &vs) {
     Index proto(toUtf16(*find_value<std::string>(vs)));
     if (auto instance = find_value<IndexBasis::instance_type>(vs))
       proto = proto.replace_basis_instance(*instance);
     return proto;
-  };
-  parser["ProtoList"] = [](const SemanticValues &vs) {
+  });
+  on(parser, "ProtoList", [](const SemanticValues &vs) {
     container::vector<Index> result;
     for (std::size_t i = 0; i < vs.size(); ++i)
       result.push_back(std::any_cast<Index>(vs[i]));
     return result;
-  };
-  parser["IndexDomain"] = [](const SemanticValues &vs) {
+  });
+  on(parser, "IndexDomain", [](const SemanticValues &vs) {
     container::vector<Index> protos;
     if (auto p = find_value<container::vector<Index>>(vs)) protos = *p;
     return protos;
-  };
-  parser["Index"] = [](const SemanticValues &vs) {
+  });
+  on(parser, "Index", [](const SemanticValues &vs) {
     RawIndex raw;
     raw.label = toUtf16(*find_value<std::string>(vs));
     if (auto instance = find_value<IndexBasis::instance_type>(vs))
@@ -252,103 +267,100 @@ void register_actions(peg::parser &parser) {
     if (auto protos = find_value<container::vector<Index>>(vs))
       raw.protos = *protos;
     return raw;
-  };
-  parser["IndexItem"] = [](const SemanticValues &vs) {
+  });
+  on(parser, "IndexItem", [](const SemanticValues &vs) {
     return vs.choice() == 0 ? std::optional<Index>(
                                   make_index(std::any_cast<RawIndex>(vs[0])))
                             : std::optional<Index>{};
-  };
-  parser["Indices"] = [](const SemanticValues &vs) {
+  });
+  on(parser, "Indices", [](const SemanticValues &vs) {
     std::vector<std::optional<Index>> result;
     for (std::size_t i = 0; i < vs.size(); ++i)
       result.push_back(std::any_cast<std::optional<Index>>(vs[i]));
     return result;
-  };
-  parser["IndexGroups"] = [](const SemanticValues &vs) {
+  });
+  on(parser, "IndexGroups", [](const SemanticValues &vs) {
     IndexGroupsValue result;
     for (std::size_t i = 0; i < vs.size(); ++i)
       result.push_back(std::any_cast<std::vector<std::optional<Index>>>(vs[i]));
     return result;
-  };
+  });
 
-  parser["Variable"] = [](const SemanticValues &vs) {
+  on(parser, "Variable", [](const SemanticValues &vs) {
     Variable var(toUtf16(*find_value<std::string>(vs)));
     if (has_value<bool>(vs)) var.conjugate();
     return ExprPtr(ex<Variable>(std::move(var)));
-  };
+  });
 
-  parser["Tensor"] = [](const SemanticValues &vs, std::any &dt) -> ExprPtr {
+  on(parser, "Tensor", [](const SemanticValues &vs, std::any &dt) -> ExprPtr {
     const std::wstring name = toUtf16(*find_value<std::string>(vs));
     const IndexGroupsValue &groups = *find_value<IndexGroupsValue>(vs);
     std::vector<std::string> symmetries;
     if (auto s = find_value<std::vector<std::string>>(vs)) symmetries = *s;
     return build_tensor(name, groups, symmetries, options_of(dt));
-  };
+  });
 
-  parser["NormalOrderedOperator"] = [](const SemanticValues &vs) {
+  on(parser, "NormalOrderedOperator", [](const SemanticValues &vs) {
     const std::wstring name = toUtf16(*find_value<std::string>(vs));
     const IndexGroupsValue &groups = *find_value<IndexGroupsValue>(vs);
     return build_normal_operator(name, groups);
-  };
+  });
 
-  parser["PowerBase"] = [](const SemanticValues &vs) {
-    return std::any_cast<ExprPtr>(vs[0]);
-  };
-  parser["Exponent"] = [](const SemanticValues &vs) {
-    return string_to<rational>(vs.token());
-  };
-  parser["Power"] = [](const SemanticValues &vs) {
+  on(parser, "PowerBase",
+     [](const SemanticValues &vs) { return std::any_cast<ExprPtr>(vs[0]); });
+  on(parser, "Exponent",
+     [](const SemanticValues &vs) { return string_to<rational>(vs.token()); });
+  on(parser, "Power", [](const SemanticValues &vs) {
     ExprPtr power = vs.choice() == 0 ? ex<Power>(*find_value<ExprPtr>(vs),
                                                  *find_value<rational>(vs))
                                      : find_value<ExprPtr>(vs)->clone();
     if (has_value<bool>(vs)) power->as<Power>().conjugate();
     return power;
-  };
+  });
 
-  parser["ActionIndex"] = [](const SemanticValues &vs) {
+  on(parser, "ActionIndex", [](const SemanticValues &vs) {
     return std::pair<Index, Action>(make_index(std::any_cast<RawIndex>(vs[0])),
                                     std::any_cast<Action>(vs[1]));
-  };
-  parser["FunctionArg"] = [](const SemanticValues &vs) {
+  });
+  on(parser, "FunctionArg", [](const SemanticValues &vs) {
     FunctionArgument arg;
     if (vs.choice() == 0)
       arg.action_index = std::any_cast<std::pair<Index, Action>>(vs[0]);
     else
       arg.expr = std::any_cast<ExprPtr>(vs[0]);
     return arg;
-  };
-  parser["ArgList"] = [](const SemanticValues &vs) {
+  });
+  on(parser, "ArgList", [](const SemanticValues &vs) {
     std::vector<FunctionArgument> args;
     for (std::size_t i = 0; i < vs.size(); ++i)
       args.push_back(std::any_cast<FunctionArgument>(vs[i]));
     return args;
-  };
-  parser["Function"] = [](const SemanticValues &vs, std::any &dt) {
+  });
+  on(parser, "Function", [](const SemanticValues &vs, std::any &dt) {
     FunctionCall call;
     call.name = toUtf16(*find_value<std::string>(vs));
     if (auto args = find_value<std::vector<FunctionArgument>>(vs))
       call.arguments = *args;
     if (auto stat = find_value<Statistics>(vs)) call.statistic = *stat;
     return FunctionRegistry::instance().deserialize(call, options_of(dt));
-  };
+  });
 
-  parser["Nullary"] = [](const SemanticValues &vs) {
-    return std::any_cast<ExprPtr>(vs[0]);
-  };
-  parser["Factor"] = [](const SemanticValues &vs) {
+  on(parser, "Nullary",
+     [](const SemanticValues &vs) { return std::any_cast<ExprPtr>(vs[0]); });
+  on(parser, "Factor", [](const SemanticValues &vs) {
     ExprPtr expr = std::any_cast<ExprPtr>(vs.back());
     std::size_t minus = 0;
     for (std::size_t i = 0; i + 1 < vs.size(); ++i)
       if (std::any_cast<char>(vs[i]) == '-') ++minus;
     return (minus % 2 == 1) ? negate(std::move(expr)) : expr;
-  };
-  parser["ProductTail"] = [](const SemanticValues &vs) {
+  });
+  on(parser, "ProductTail", [](const SemanticValues &vs) {
     return vs.choice() == 0
                ? std::pair<char, ExprPtr>(std::any_cast<char>(vs[0]),
                                           std::any_cast<ExprPtr>(vs[1]))
                : std::pair<char, ExprPtr>('*', std::any_cast<ExprPtr>(vs[0]));
-  };
-  parser["Product"] = [](const SemanticValues &vs) -> ExprPtr {
+  });
+  on(parser, "Product", [](const SemanticValues &vs) -> ExprPtr {
     Constant::scalar_type prefactor(1);
     bool explicit_prefactor = false;
     std::vector<ExprPtr> factors;
@@ -377,8 +389,8 @@ void register_actions(peg::parser &parser) {
     // a spelled-out prefactor (even 1) makes the factor a Product, as written
     if (factors.size() == 1 && !explicit_prefactor) return factors.front();
     return ex<Product>(prefactor, std::move(factors), Product::Flatten::No);
-  };
-  parser["Sum"] = [](const SemanticValues &vs) -> ExprPtr {
+  });
+  on(parser, "Sum", [](const SemanticValues &vs) -> ExprPtr {
     if (vs.size() == 1) return std::any_cast<ExprPtr>(vs[0]);
     std::vector<ExprPtr> summands;
     summands.push_back(std::any_cast<ExprPtr>(vs[0]));
@@ -394,18 +406,17 @@ void register_actions(peg::parser &parser) {
     if (sum->size() == 1 && sum->as<Sum>().summand(0)->is<Constant>())
       return sum->as<Sum>().summand(0);
     return sum;
-  };
+  });
 
-  parser["Result"] = [](const SemanticValues &vs) {
-    return std::any_cast<ExprPtr>(vs[0]);
-  };
-  parser["ResultExpression"] = [](const SemanticValues &vs) {
+  on(parser, "Result",
+     [](const SemanticValues &vs) { return std::any_cast<ExprPtr>(vs[0]); });
+  on(parser, "ResultExpression", [](const SemanticValues &vs) {
     ExprPtr lhs = std::any_cast<ExprPtr>(vs[0]);
     ExprPtr rhs = std::any_cast<ExprPtr>(vs[1]);
     if (lhs->is<Tensor>())
       return std::make_shared<ResultExpr>(lhs->as<Tensor>(), rhs);
     return std::make_shared<ResultExpr>(lhs->as<Variable>(), rhs);
-  };
+  });
 }
 
 std::string describe_error(const peg::ErrorReport &report) {
@@ -479,6 +490,18 @@ ExprPtr parse_expr(const char *start_rule, std::string_view input,
   return parse_value<ExprPtr>(start_rule, input, options);
 }
 
+// Parses \p input beginning at \p start_rule and requires the result to be a
+// \p T, called \p name in the error otherwise
+template <typename T>
+T parse_as(const char *start_rule, std::string_view input,
+           const DeserializationOptions &options, const char *name) {
+  ExprPtr expr = parse_expr(start_rule, input, options);
+  if (!expr->is<T>())
+    throw Error(0, 0, start_rule,
+                std::string("input does not denote a ") + name);
+  return expr->as<T>();
+}
+
 }  // namespace
 
 // All grammar rules that back a leaf type (Constant, Variable, Tensor) produce
@@ -487,7 +510,7 @@ ExprPtr parse_expr(const char *start_rule, std::string_view input,
   template <>                                                     \
   Type from_string<Type>(std::string_view input,                  \
                          const DeserializationOptions &options) { \
-    return parse_expr(Rule, input, options)->as<Type>();          \
+    return parse_as<Type>(Rule, input, options, #Type);           \
   }                                                               \
   template <>                                                     \
   Type from_string<Type>(std::wstring_view input,                 \
@@ -506,10 +529,7 @@ SEQUANT_DESERIALIZE_EXPR_AS(Sum, "Expression")
 template <>
 Constant from_string<Constant>(std::string_view input,
                                const DeserializationOptions &options) {
-  ExprPtr expr = parse_expr("Expression", input, options);
-  if (!expr->is<Constant>())
-    throw Error(0, 0, "Expression", "input does not denote a constant");
-  return expr->as<Constant>();
+  return parse_as<Constant>("Expression", input, options, "Constant");
 }
 template <>
 Constant from_string<Constant>(std::wstring_view input,

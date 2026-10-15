@@ -11,6 +11,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/io/serialization/v1/error.hpp>
+#include <SeQuant/core/io/serialization/v2/error.hpp>
 #include <SeQuant/core/rational.hpp>
 
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -913,6 +914,28 @@ TEST_CASE("serialization", "[serialization]") {
                           SerializationError);
         REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("t[i1;a1"),
                           SerializationError);
+
+        // errors from building an object are reported at the offending match
+        auto error_at = [](std::string_view input) {
+          try {
+            v2::from_string<ExprPtr>(input);
+          } catch (const v2::Error& e) {
+            return std::pair{e.line, e.column};
+          }
+          FAIL("no v2::Error thrown for '" << input << "'");
+          return std::pair<std::size_t, std::size_t>{};
+        };
+        REQUIRE(error_at("x + t[i1;az1]") ==
+                std::pair<std::size_t, std::size_t>{1, 10});
+        REQUIRE(error_at("x +\n  t[i1;a1;i2;a2]") ==
+                std::pair<std::size_t, std::size_t>{2, 3});
+        REQUIRE(error_at("x + 2^(1)^* ~bogus()") ==
+                std::pair<std::size_t, std::size_t>{1, 13});
+
+        // requesting a specific type that the input does not denote
+        REQUIRE_THROWS_AS(v2::from_string<Sum>("x"), v2::Error);
+        REQUIRE_THROWS_AS(v2::from_string<Product>("x"), v2::Error);
+        REQUIRE_THROWS_AS(v2::from_string<Product>("x + y"), v2::Error);
       }
     }
 
