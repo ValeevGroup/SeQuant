@@ -133,18 +133,19 @@ std::wstring serialize_normal_operator(const NormalOperator<S> &nop) {
 
 template <Statistics S>
 std::wstring serialize_raw_operator(const Operator<S> &op) {
-  std::wstring result = L"~op(";
+  std::wstring result = S == Statistics::FermiDirac ? L"~fop(" : L"~bop(";
   result += join_strings<std::wstring>(op, L", ", [](const Op<S> &o) {
     return serialize_index(o.index()) +
            (o.action() == Action::Create ? L"+" : L"-");
   });
-  result += S == Statistics::FermiDirac ? L"):F" : L"):B";
+  result += L")";
   return result;
 }
 
 template <Statistics S>
 std::wstring serialize_operator_sequence(const NormalOperatorSequence<S> &seq) {
-  std::wstring result = L"~nopseq(";
+  std::wstring result =
+      S == Statistics::FermiDirac ? L"~fnopseq(" : L"~bnopseq(";
   result +=
       join_strings<std::wstring>(seq, L", ", [](const NormalOperator<S> &nop) {
         return serialize_normal_operator(nop);

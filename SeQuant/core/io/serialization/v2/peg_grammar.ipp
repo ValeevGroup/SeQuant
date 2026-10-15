@@ -58,15 +58,12 @@ Power <- PowerBase '^' '(' Exponent ')' Conjugation? / '(' Power ')' Conjugation
 
 # --- Functions (extension hook) --------------------------------------------
 
-Statistic <- 'F' / 'B'
-
 # ~name(...) dispatches to a registered handler, which receives the text
 # between the parentheses as written and parses it itself. Only brackets are
-# matched here, so that the call ends at the right ')'. The optional
-# ':' Statistic selects Fermi/Bose.
+# matched here, so that the call ends at the right ')'.
 RawText <- ( '(' RawText ')' / '[' RawText ']' / '{' RawText '}' / ![()[\]{}] . )*
 RawArguments <- < RawText >
-Function <- '~' Identifier '(' RawArguments ')' (':' Statistic)?
+Function <- '~' Identifier '(' RawArguments ')'
 
 # --- Expression ------------------------------------------------------------
 

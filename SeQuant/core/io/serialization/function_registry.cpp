@@ -25,45 +25,20 @@ ExprPtr build_operator(const FunctionCall &call,
   return ex<Operator<S>>(std::move(ops));
 }
 
-ExprPtr build_op(const FunctionCall &call,
-                 const DeserializationOptions &options) {
-  const Statistics stat = call.statistic.value_or(Statistics::FermiDirac);
-  return stat == Statistics::FermiDirac
-             ? build_operator<Statistics::FermiDirac>(call, options)
-             : build_operator<Statistics::BoseEinstein>(call, options);
-}
-
+// Builds a NormalOperatorSequence<S> from a list of normal-ordered operators.
 template <Statistics S>
-ExprPtr build_sequence(const std::vector<ExprPtr> &args) {
+ExprPtr build_sequence(const FunctionCall &call,
+                       const DeserializationOptions &options) {
   NormalOperatorSequence<S> seq;
-  for (const ExprPtr &arg : args) {
-    if (!arg->is<NormalOperator<S>>())
-      throw SerializationError(
-          "~nopseq(...) expects normal-ordered operators of a single statistic "
-          "as arguments");
-    seq.insert(seq.end(), arg->as<NormalOperator<S>>());
+  for (std::string_view arg : split_arguments(call.arguments)) {
+    ExprPtr nop = v2::from_string<ExprPtr>(arg, options);
+    if (!nop->is<NormalOperator<S>>())
+      throw SerializationError("'" + std::string(arg) +
+                               "' is not a normal-ordered operator of the "
+                               "sequence's statistics");
+    seq.insert(seq.end(), nop->as<NormalOperator<S>>());
   }
   return ex<NormalOperatorSequence<S>>(std::move(seq));
-}
-
-ExprPtr build_nopseq(const FunctionCall &call,
-                     const DeserializationOptions &options) {
-  std::vector<ExprPtr> args;
-  for (std::string_view arg : split_arguments(call.arguments))
-    args.push_back(v2::from_string<ExprPtr>(arg, options));
-
-  // infer statistics from the explicit suffix, else from the first operator
-  Statistics stat = Statistics::FermiDirac;
-  if (call.statistic) {
-    stat = *call.statistic;
-  } else if (!args.empty()) {
-    stat = args.front()->is<NormalOperator<Statistics::BoseEinstein>>()
-               ? Statistics::BoseEinstein
-               : Statistics::FermiDirac;
-  }
-  return stat == Statistics::FermiDirac
-             ? build_sequence<Statistics::FermiDirac>(args)
-             : build_sequence<Statistics::BoseEinstein>(args);
 }
 
 constexpr std::string_view whitespace = " \t\r\n";
@@ -77,20 +52,17 @@ std::string_view trim(std::string_view text) {
 }  // namespace
 
 FunctionRegistry::FunctionRegistry() {
-  register_function(L"op",
-                    std::type_index(typeid(Operator<Statistics::FermiDirac>)),
-                    build_op);
-  register_function(L"op",
-                    std::type_index(typeid(Operator<Statistics::BoseEinstein>)),
-                    build_op);
+  using enum Statistics;
+  register_function(L"fop", std::type_index(typeid(Operator<FermiDirac>)),
+                    build_operator<FermiDirac>);
+  register_function(L"bop", std::type_index(typeid(Operator<BoseEinstein>)),
+                    build_operator<BoseEinstein>);
+  register_function(L"fnopseq",
+                    std::type_index(typeid(NormalOperatorSequence<FermiDirac>)),
+                    build_sequence<FermiDirac>);
   register_function(
-      L"nopseq",
-      std::type_index(typeid(NormalOperatorSequence<Statistics::FermiDirac>)),
-      build_nopseq);
-  register_function(
-      L"nopseq",
-      std::type_index(typeid(NormalOperatorSequence<Statistics::BoseEinstein>)),
-      build_nopseq);
+      L"bnopseq", std::type_index(typeid(NormalOperatorSequence<BoseEinstein>)),
+      build_sequence<BoseEinstein>);
 }
 
 FunctionRegistry &FunctionRegistry::instance() {

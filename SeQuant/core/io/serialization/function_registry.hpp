@@ -23,8 +23,6 @@ struct FunctionCall {
   /// parses it, e.g. with split_arguments(), v2::from_string() and
   /// parse_action_index()
   std::string arguments;
-  /// the explicit `:F`/`:B` statistic, if any
-  std::optional<Statistics> statistic;
 };
 
 /// builds an Expr from a parsed function call
@@ -37,9 +35,9 @@ using FunctionSerializer =
 
 /// Registry backing the v2 `~name(...)` extension syntax. It maps a function
 /// name to a deserialization builder and an Expr subtype to a serialization
-/// emitter. Core registers the built-in `op` (Operator<S>) and `nopseq`
-/// (NormalOperatorSequence<S>) handlers; downstream code registers handlers for
-/// its own Expr subclasses through register_function().
+/// emitter. Core registers the built-in `fop`/`bop` (Operator<S>) and
+/// `fnopseq`/`bnopseq` (NormalOperatorSequence<S>) handlers; downstream code
+/// registers handlers for its own Expr subclasses through register_function().
 class FunctionRegistry {
  public:
   static FunctionRegistry &instance();

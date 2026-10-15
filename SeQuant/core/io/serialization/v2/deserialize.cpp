@@ -218,9 +218,6 @@ void register_actions(peg::parser &parser) {
       result.push_back(std::any_cast<std::string>(vs[i]));
     return result;
   });
-  on(parser, "Statistic", [](const SemanticValues &vs) {
-    return vs.choice() == 0 ? Statistics::FermiDirac : Statistics::BoseEinstein;
-  });
   on(parser, "BasisInstance", [](const SemanticValues &vs) {
     return string_to<IndexBasis::instance_type>(vs.token());
   });
@@ -311,7 +308,6 @@ void register_actions(peg::parser &parser) {
     call.name = toUtf16(*find_value<std::string>(vs));
     // find_value would also match the name, which comes first
     call.arguments = std::any_cast<std::string>(vs[1]);
-    if (auto stat = find_value<Statistics>(vs)) call.statistic = *stat;
     try {
       return FunctionRegistry::instance().deserialize(call, options_of(dt));
     } catch (const Exception &e) {

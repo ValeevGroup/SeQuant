@@ -189,7 +189,7 @@ A constant with both a nonzero real and a nonzero imaginary part has no single-t
    Constant        Real | Real 'i'                                                  Integer, float, or (via ``/``) a fraction; ``Ni`` is pure imaginary
    Tensor          Name '[' IndexGroups ']' SymmetrySpec?                           Groups are ``[bra;ket;aux]``
    Operator        Name '{' IndexGroups '}'                                         Groups are ``{annihilators;creators}``; the label selects the operator and its vacuum
-   Function        '~' Name '(' Arguments ')' (':' ('F'|'B'))?                      ``Arguments`` is any text with balanced brackets; the function's handler parses it
+   Function        '~' Name '(' Arguments ')'                                       ``Arguments`` is any text with balanced brackets; the function's handler parses it
    IndexGroups     IndexList ( ';' IndexList )*                                     A group without any text is empty
    IndexList       Slot ( ',' Slot )*
    Slot            Index | '_' | ε                                                  ``_`` (or nothing, between separators) is a blank (null) index
@@ -207,13 +207,14 @@ permutational :class:`Symmetry <sequant::Symmetry>`, ``bkS``/``bkC``/``bkN`` the
 <sequant::BraKetSymmetry>`, and ``pS``/``pN`` the :class:`ColumnSymmetry <sequant::ColumnSymmetry>`. The prefixes let a field be
 given on its own (e.g. ``:pS``); :func:`to_string` always emits all three when ``annot_symm`` is set.
 
-The ``~name(...)`` syntax is an extension point: core registers ``~op`` (a raw :class:`Operator <sequant::Operator>`, an ordered
-sequence of action-tagged indices) and ``~nopseq`` (a :class:`NormalOperatorSequence <sequant::NormalOperatorSequence>`), and
+The ``~name(...)`` syntax is an extension point: core registers ``~fop``/``~bop`` (a fermionic/bosonic raw :class:`Operator
+<sequant::Operator>`, an ordered sequence of action-tagged indices) and ``~fnopseq``/``~bnopseq`` (a fermionic/bosonic
+:class:`NormalOperatorSequence <sequant::NormalOperatorSequence>`), and
 downstream code may register handlers for its own :class:`Expr` subclasses with
 :func:`sequant::io::serialization::register_function`. A handler receives the text between the parentheses as written and
 parses it itself; :func:`sequant::io::serialization::split_arguments` splits it at the commas that separate arguments, and
 an argument can be parsed with ``v2::from_string`` or, for an index marked as a creator (``+``/``⁺``) or annihilator
-(``-``/``⁻``) such as ``~op``'s, with :func:`sequant::io::serialization::parse_action_index`.
+(``-``/``⁻``) such as ``~fop``'s, with :func:`sequant::io::serialization::parse_action_index`.
 
 Examples
 """"""""
@@ -222,5 +223,5 @@ Examples
 
    R[i1;a1]:A-bkN-pS = f[a1;a2]:A-bkN-pS t[i1;a2]:A-bkN-pS + 1/2 g[i1,i2;a1,a2]:A-bkN-pS t[a2;i2]:A-bkN-pS
    t[i1#3;a1]           an index in basis instance 3
-   ~op(i1+, a1-):F
-   ~nopseq( a{i1;}, a{;a1} )
+   ~fop(i1+, a1-)
+   ~fnopseq( a{i1;}, a{;a1} )

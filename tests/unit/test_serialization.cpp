@@ -903,19 +903,25 @@ TEST_CASE("serialization", "[serialization]") {
         REQUIRE(result.expression() == v2::from_string<ExprPtr>("t[i1;a1]"));
       }
 
-      // op / nopseq are the built-in consumers of the ~name(...) registry.
-      SECTION("~op") {
-        ExprPtr op = v2::from_string<ExprPtr>("~op(i1+, a1-)");
+      // the built-in consumers of the ~name(...) registry; the name selects
+      // the statistics
+      SECTION("~fop / ~bop") {
+        ExprPtr op = v2::from_string<ExprPtr>("~fop(i1+, a1-)");
         REQUIRE(op->is<FOperator>());
         REQUIRE(op->as<FOperator>().size() == 2);
         // ASCII and Unicode action marks are equivalent
-        REQUIRE(v2::from_string<ExprPtr>(L"~op(i1⁺, a1⁻)") == op);
+        REQUIRE(v2::from_string<ExprPtr>(L"~fop(i1⁺, a1⁻)") == op);
+        REQUIRE(v2::from_string<ExprPtr>("~bop(i1+)")->is<BOperator>());
       }
 
-      SECTION("~nopseq") {
-        ExprPtr seq = v2::from_string<ExprPtr>("~nopseq(a{i1;}, a{;a1})");
+      SECTION("~fnopseq / ~bnopseq") {
+        ExprPtr seq = v2::from_string<ExprPtr>("~fnopseq(a{i1;}, a{;a1})");
         REQUIRE(seq->is<FNOperatorSeq>());
         REQUIRE(seq->as<FNOperatorSeq>().size() == 2);
+        REQUIRE(v2::from_string<ExprPtr>("~bnopseq()")->is<BNOperatorSeq>());
+        // operators must match the statistics the name selects
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("~bnopseq(a{i1;})"),
+                          v2::Error);
       }
 
       // a ~name(...) handler receives its arguments unparsed
@@ -966,7 +972,7 @@ TEST_CASE("serialization", "[serialization]") {
       // Errors raised inside the semantic actions must surface as catchable
       // SerializationErrors rather than aborting the process.
       SECTION("errors") {
-        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("~op(t[i1;a1])"),
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("~fop(t[i1;a1])"),
                           SerializationError);
         REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("~bogus(i1+)"),
                           SerializationError);
@@ -1010,8 +1016,10 @@ TEST_CASE("serialization", "[serialization]") {
           L"x^*",
           L"x^(2)",
           L"1/2 t[i1;a1]:N-bkN-pN + g[i1;a1]:N-bkN-pN",
-          L"~op(i1+, a1-):F",
-          L"~nopseq(a{i1;}, a{;a1})",
+          L"~fop(i1+, a1-)",
+          L"~bop(i1+, a1-)",
+          L"~fnopseq(a{i1;}, a{;a1})",
+          L"~bnopseq()",
       };
       for (const std::wstring& input : inputs) {
         ExprPtr expr = v2::from_string<ExprPtr>(input);
