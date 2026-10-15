@@ -11,6 +11,7 @@
 #include <SeQuant/core/utility/string.hpp>
 
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -82,8 +83,10 @@ std::wstring serialize_symm(ColumnSymmetry symm) {
 std::wstring serialize_scalar(const Constant::scalar_type &scalar) {
   if (scalar == 0) return L"0";
 
-  auto part = [](const auto &rational) {
-    std::string result = numerator(rational).str();
+  // the imaginary unit goes onto the numerator ("1i/2"): "1/2i" would read as
+  // 1/(2i)
+  auto part = [](const auto &rational, std::string_view unit = "") {
+    std::string result = numerator(rational).str() + std::string(unit);
     if (denominator(rational) != 1) result += "/" + denominator(rational).str();
     return result;
   };
@@ -92,13 +95,13 @@ std::wstring serialize_scalar(const Constant::scalar_type &scalar) {
   const auto &imag = scalar.imag();
 
   if (imag == 0) return toUtf16(part(real));
-  if (real == 0) return toUtf16(part(imag) + "i");
+  if (real == 0) return toUtf16(part(imag, "i"));
 
   // mixed complex constants have no single-token form; emit a parenthesized sum
   std::string result = "(" + part(real);
   result += numerator(imag) < 0 ? " - " : " + ";
   auto imag_mag = imag < 0 ? -imag : imag;
-  result += part(imag_mag) + "i)";
+  result += part(imag_mag, "i") + ")";
   return toUtf16(result);
 }
 

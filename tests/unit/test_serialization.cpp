@@ -934,6 +934,12 @@ TEST_CASE("serialization", "[serialization]") {
                              Product::Flatten::No)}),
           ex<Product>(1, ExprPtrList{x}),
           ex<Product>(-1, ExprPtrList{x}),
+          ex<Constant>(Constant::scalar_type(0, rational{1, 2})),
+          ex<Constant>(Constant::scalar_type(0, rational{-1, 2})),
+          ex<Product>(Constant::scalar_type(0, rational{1, 2}), ExprPtrList{t}),
+          ex<Sum>(ExprPtrList{
+              t, ex<Product>(Constant::scalar_type(0, rational{-1, 2}),
+                             ExprPtrList{g})}),
       };
       for (const ExprPtr& constructed : exprs) {
         std::wstring serialized = v2::to_string(constructed);
