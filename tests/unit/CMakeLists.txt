@@ -33,8 +33,11 @@ add_library(unit_tests-sequant-symb-obj OBJECT ${symb_test_sources})
 target_set_compiler_flags(unit_tests-sequant-symb-obj)
 target_set_optimization_flags(unit_tests-sequant-symb-obj)
 set_target_properties(unit_tests-sequant-symb-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+# the standard registries (mbpt::make_sr_spaces and kin) live in SeQuant::mbpt,
+# which most of these tests set up their Context with; a few also compare
+# eval nodes
 target_link_libraries(unit_tests-sequant-symb-obj
-    PUBLIC SeQuant::symb SeQuant::bliss
+    PUBLIC SeQuant::symb SeQuant::bliss SeQuant::eval SeQuant::mbpt
     PRIVATE Catch2::Catch2 dtl::dtl)
 target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -52,8 +55,9 @@ add_library(unit_tests-sequant-eval-obj OBJECT ${eval_test_sources})
 target_set_compiler_flags(unit_tests-sequant-eval-obj)
 target_set_optimization_flags(unit_tests-sequant-eval-obj)
 set_target_properties(unit_tests-sequant-eval-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+# SeQuant::mbpt for the standard registries and csv_transform
 target_link_libraries(unit_tests-sequant-eval-obj
-    PUBLIC SeQuant::eval
+    PUBLIC SeQuant::eval SeQuant::mbpt
     PRIVATE Catch2::Catch2 dtl::dtl)
 target_compile_definitions(unit_tests-sequant-eval-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -70,8 +74,9 @@ add_library(unit_tests-sequant-optimize-obj OBJECT ${optimize_test_sources})
 target_set_compiler_flags(unit_tests-sequant-optimize-obj)
 target_set_optimization_flags(unit_tests-sequant-optimize-obj)
 set_target_properties(unit_tests-sequant-optimize-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+# SeQuant::mbpt for the standard registries and the AO/PAO/DF bases
 target_link_libraries(unit_tests-sequant-optimize-obj
-    PUBLIC SeQuant::optimize SeQuant::bliss
+    PUBLIC SeQuant::optimize SeQuant::bliss SeQuant::mbpt
     PRIVATE Catch2::Catch2 dtl::dtl)
 target_compile_definitions(unit_tests-sequant-optimize-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -236,6 +241,18 @@ set_source_files_properties("test_ordered_executor.cpp" "test_ordered_schedule.c
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+# range-v3 headers name their ::meta namespace unqualified, which is ambiguous
+# with sequant::meta once a file-scope `using namespace sequant` is in effect.
+# Under a Unity build such a directive leaks into the files concatenated after
+# it, so a range-v3 header first parsed there fails to compile. Parse them all
+# ahead of every file instead (include guards make this free after the first).
+foreach(_module IN ITEMS symb eval optimize export mbpt eval-dryrun eval-ta eval-btas eval-tapp)
+    if (TARGET unit_tests-sequant-${_module}-obj)
+        set_property(TARGET unit_tests-sequant-${_module}-obj PROPERTY
+            UNITY_BUILD_CODE_BEFORE_INCLUDE "#include <range/v3/all.hpp>")
+    endif()
+endforeach()
 
 ##########################
 # Single executable combining all OBJECT libraries

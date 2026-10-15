@@ -17,7 +17,6 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tree_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <algorithm>
 #include <cstddef>

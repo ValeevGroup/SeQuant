@@ -13,7 +13,6 @@
 #include <utility>
 
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/domain/mbpt/convention.hpp>
 
 TEST_CASE("op", "[elements]") {
   using namespace sequant;

@@ -22,8 +22,6 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
-#include <SeQuant/domain/mbpt/convention.hpp>
-#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include "catch2_sequant.hpp"
 

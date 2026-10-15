@@ -17,8 +17,6 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/utility/string.hpp>
-#include <SeQuant/domain/mbpt/context.hpp>
-#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <cstddef>
 #include <initializer_list>
