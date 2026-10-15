@@ -132,7 +132,7 @@ jobs:
       id: vcpkg
       uses: johnwason/vcpkg-action@v8
       with:
-        pkgs: eigen3 boost-locale boost-random boost-regex boost-container boost-container-hash boost-hana boost-multiprecision boost-conversion boost-interval boost-range boost-spirit catch2
+        pkgs: eigen3 boost-locale boost-random boost-regex boost-container boost-container-hash boost-hana boost-multiprecision boost-conversion boost-interval boost-range boost-spirit catch2 benchmark
         triplet: x64-windows
         token: ${{ github.token }}
 
