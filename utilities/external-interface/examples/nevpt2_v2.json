@@ -106,9 +106,17 @@
 			"inputs": "opt"
 		},
 		{
+			"id": "with_deps",
+			"kind": "dependencies",
+			"inputs": "treeify",
+			"options": {
+				"autodetect": true
+			}
+		},
+		{
 			"id": "export",
 			"kind": "export",
-			"inputs": "treeify",
+			"inputs": "with_deps",
 			"options": {
 				"language": "itf",
 				"optimize": true,
@@ -161,12 +169,12 @@
 		{
 			"id": "cse",
 			"kind": "cse",
-			"inputs": "treeify"
+			"inputs": "with_deps"
 		},
 		{
 			"id": "cse_ecc",
 			"kind": "cse",
-			"inputs": "treeify.ecc",
+			"inputs": "with_deps.ecc",
 			"options": {
 				"merge_inputs": true
 			},
@@ -177,7 +185,7 @@
 		{
 			"id": "cse_ecc0",
 			"kind": "cse",
-			"inputs": "treeify.ecc0",
+			"inputs": "with_deps.ecc0",
 			"options": {
 				"merge_inputs": true
 			},
@@ -189,16 +197,16 @@
 			"id": "cse_res",
 			"kind": "cse",
 			"inputs": [
-				"treeify.res1_i1",
-				"treeify.res1_s0",
-				"treeify.res2_s1_singles",
-				"treeify.res1_s1",
-				"treeify.res2_p0",
-				"treeify.res2_p2",
-				"treeify.res2_i2",
-				"treeify.res2_p1",
-				"treeify.res2_s1",
-				"treeify.res2_s2"
+				"with_deps.res1_i1",
+				"with_deps.res1_s0",
+				"with_deps.res2_s1_singles",
+				"with_deps.res1_s1",
+				"with_deps.res2_p0",
+				"with_deps.res2_p2",
+				"with_deps.res2_i2",
+				"with_deps.res2_p1",
+				"with_deps.res2_s1",
+				"with_deps.res2_s2"
 			],
 			"options": {
 				"merge_inputs": true
@@ -231,7 +239,7 @@
 		{
 			"id": "batched",
 			"kind": "batch_indices",
-			"inputs": "treeify",
+			"inputs": "with_deps",
 			"options": {
 				"selection_strategy": "largest"
 			}
@@ -279,8 +287,16 @@
 			"inputs": "opt_replay"
 		},
 		{
-			"kind": "export",
+			"id": "with_deps_replay",
+			"kind": "dependencies",
 			"inputs": "treeify_replay",
+			"options": {
+				"autodetect": true
+			}
+		},
+		{
+			"kind": "export",
+			"inputs": "with_deps_replay",
 			"options": {
 				"language": "itf",
 				"optimize": true,
