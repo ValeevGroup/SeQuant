@@ -120,17 +120,50 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
       CHECK(metrics[0]->_bra()[0].basis().basis_instance() == 1);
       CHECK(metrics[0]->_ket()[0].basis().basis_instance() == 2);
     }
-    // legs in one instance (or none) contract to a Kronecker delta, and so
-    // do a generic leg and a specific one: the identity narrows the generic
-    // one (an index without an instance runs over every instance)
+    // legs in one instance contract to a Kronecker delta
+    {
+      const auto c = FWickTheorem::contract(
+          FOp(p1, Action::Annihilate),
+          FOp(Index(L"p_2").replace_basis_instance(1), Action::Create));
+      CHECK(tensors_labelled(c, reserved::overlap_label()).empty());
+      CHECK(tensors_labelled(c, reserved::kronecker_label()).size() == 3);
+    }
+    // a generic leg contracts to an overlap: a delta of the input may yet
+    // narrow it to an instance, so reduce() decides whether it is an identity
     for (auto const& [l, r] :
-         {std::pair{p1, Index(L"p_2").replace_basis_instance(1)},
-          std::pair{Index(L"p_1"), Index(L"p_2")},
+         {std::pair{Index(L"p_1"), Index(L"p_2")},
           std::pair{Index(L"p_1"), Index(L"p_2").replace_basis_instance(1)}}) {
       const auto c = FWickTheorem::contract(FOp(l, Action::Annihilate),
                                             FOp(r, Action::Create));
-      CHECK(tensors_labelled(c, reserved::overlap_label()).empty());
-      CHECK(tensors_labelled(c, reserved::kronecker_label()).size() == 3);
+      CHECK(tensors_labelled(c, reserved::overlap_label()).size() == 1);
+      CHECK(tensors_labelled(c, reserved::kronecker_label()).size() == 2);
+    }
+    // generic legs that the deltas of the input narrow to two instances
+    // contract to the overlap between the instances, under either vacuum
+    for (auto vacuum : {Vacuum::Physical, Vacuum::SingleProduct}) {
+      auto vctx = get_default_context();
+      vctx.set(vacuum);
+      auto vctx_resetter = set_scoped_default_context(vctx);
+      const auto a1 = Index(L"a_1").replace_basis_instance(1);
+      const auto a2 = Index(L"a_2").replace_basis_instance(2);
+      const Index q1(L"p_1"), q2(L"p_2");
+      auto t = ex<Tensor>(L"t", bra{i1}, ket{a1}, Symmetry::Nonsymm);
+      auto u = ex<Tensor>(L"u", bra{a2}, ket{i2}, Symmetry::Nonsymm);
+      // both legs generic, or one generic and one specific
+      for (auto const& expr :
+           {t * make_kronecker(a1, q1) * ex<FNOperator>(cre{}, ann{q1}) *
+                ex<FNOperator>(cre{q2}, ann{}) * make_kronecker(q2, a2) * u,
+            t * make_kronecker(a1, q1) * ex<FNOperator>(cre{}, ann{q1}) *
+                ex<FNOperator>(cre{a2}, ann{}) * u}) {
+        ExprPtr r;
+        REQUIRE_NOTHROW(r = FWickTheorem{expr->clone()}.compute());
+        REQUIRE(r->is<Product>());
+        CHECK(tensors_labelled(r, reserved::kronecker_label()).empty());
+        const auto metrics = tensors_labelled(r, reserved::overlap_label());
+        REQUIRE(metrics.size() == 1);
+        CHECK(metrics[0]->_bra()[0] == a1);
+        CHECK(metrics[0]->_ket()[0] == a2);
+      }
     }
     const auto expr = ex<Tensor>(L"t", bra{i1}, ket{p1}, Symmetry::Nonsymm) *
                       ex<FNOperator>(cre{i1}, ann{p1}) *

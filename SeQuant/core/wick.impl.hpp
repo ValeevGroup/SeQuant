@@ -644,6 +644,9 @@ inline void apply_index_replacement_rules(
 ///   identify is redundant (δ_ij δ_ji = δ_ij, δ_ij δ_jk δ_ki = δ_ij δ_jk) and
 ///   becomes 1. A delta with a dummy index is left to the replacement rules,
 ///   since dropping it would change the slots the dummy is summed over.
+/// A Kronecker-equivalent overlap that is kept becomes a Kronecker delta: the
+/// bases of its indices are final, since neither a lone dummy nor an external
+/// index is replaced by a rule.
 /// @return true if made any changes
 inline bool fold_deltas(std::shared_ptr<Product> &product,
                         const container::set<Index> &external_indices) {
@@ -692,13 +695,25 @@ inline bool fold_deltas(std::shared_ptr<Product> &product,
       idx = it->second;
     return idx;
   };
+  // keeps the delta at it, spelled as a Kronecker delta
+  auto keep = [&mutated](auto &it) {
+    auto &t = (*it)->template as<AbstractTensor>();
+    if (t._label() == kronecker_label()) return;
+    auto bra = t._bra();
+    auto ket = t._ket();
+    *it = make_kronecker(bra[0], ket[0]);
+    mutated = true;
+  };
   for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
     if (const Index *idx = self_delta_index(*it)) {
       // a self-delta contributes 2 to the index count
       const bool bound_elsewhere =
           external_indices.contains(*idx) ||
           index_counts.at(*idx).total() > 2 * self_delta_counts.at(*idx);
-      if (!bound_elsewhere && kept.insert(*idx).second) continue;
+      if (!bound_elsewhere && kept.insert(*idx).second) {
+        keep(it);
+        continue;
+      }
     } else if (const auto *t = delta(*it);
                t && external_indices.contains(t->_bra()[0]) &&
                external_indices.contains(t->_ket()[0])) {
@@ -706,6 +721,7 @@ inline bool fold_deltas(std::shared_ptr<Product> &product,
       const Index ket_root = root(t->_ket()[0]);
       if (bra_root != ket_root) {
         parent.emplace(bra_root, ket_root);
+        keep(it);
         continue;
       }
     } else
