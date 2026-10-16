@@ -62,7 +62,8 @@ contraction *value* (``contract``) depends on whether those quasiparticle spaces
 where :math:`l = L \cap H` and :math:`r = R \cap P` (:math:`H`/:math:`P` the hole/particle subspaces), materialized via temporary indices
 from ``Index::make_tmp_index`` when a space needs projecting; such a projection is in the basis instance of the index it projects
 (a subset of a basis is still that basis), so with legs in two instances the overlap between the projections is one between the
-instances. The middle factor :math:`s` comes from ``WickTheorem::contraction_value``: the overlap between its indices, which is a
+instances. Its metric is that of the subspace instance as registered, which need not be that of the leg's (see
+:doc:`../user/getting_started/index_spaces`): an unregistered one is orthonormal. The middle factor :math:`s` comes from ``WickTheorem::contraction_value``: the overlap between its indices, which is a
 Kronecker delta if both are in one basis instance of unit metric (:func:`sequant::make_identity`), except under
 ``Vacuum::MultiProduct`` (see :ref:`below <wick-extended>`). An index without a basis instance may yet be narrowed to one by a delta
 of the input, so whether its overlap is an identity is left to the reduction below. For fermionic statistics, each contraction

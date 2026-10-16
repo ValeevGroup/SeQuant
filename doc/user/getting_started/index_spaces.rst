@@ -52,7 +52,11 @@ label tells them apart from the space's own basis by :func:`sequant::IndexBasis:
 is the space's own basis up to an orthonormal rotation, so its extent is the dimension of the space, its metric is
 unit and its field is the space's, and its basis key is its space's, so evaluation sizes, tiles and slices it as the
 space. That is right for a rotation of the space, such as a localized basis; a basis of a different extent, such as a
-truncated or an overcomplete set, or a non-orthonormal one must be registered under a name. A named basis can also be
+truncated or an overcomplete set, or a non-orthonormal one must be registered under a name. This holds for each subspace
+of a basis instance on its own: a subspace of instance 1 of a space is in instance 1 of the subspace, but it does not
+inherit the metric of the instance, since a non-orthonormal basis can have an orthonormal part (the occupied orbitals of a
+basis of occupied orbitals and PAOs). A non-orthonormal subspace of a named basis instance must therefore be registered
+too; unregistered, it is taken to be orthonormal. A named basis can also be
 made to follow another named basis (:func:`sequant::IndexBasisRegistry::follow`): its extent, metric and field are then
 those of the basis it follows, set through that one's label, as the PAO bases follow the AO basis they are projected
 from.

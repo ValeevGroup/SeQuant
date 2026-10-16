@@ -49,6 +49,10 @@ namespace sequant {
 /// that differs in any of these (a truncated or an overcomplete set, a
 /// non-orthonormal basis) must be registered under a name, which gives it a
 /// key and metadata of its own (see IndexBasisRegistry::add(label, basis)).
+/// That holds for each subspace of a basis instance: a subspace shares the
+/// instance of its space but not its metric (a non-orthonormal basis can have
+/// an orthonormal part), so an unregistered subspace instance is orthonormal
+/// even if the instance of its space is not.
 /// A named basis registered without an extent or a field follows its space's
 /// (own_extent() and own_field() are null), and so sees the registry's
 /// setters for the space's label; one registered with them, even with the
