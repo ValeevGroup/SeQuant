@@ -14,7 +14,7 @@
 #include <string_view>
 #include <vector>
 
-namespace sequant::util::extint::tests {
+namespace sequant::util::extint::test_support {
 
 /// Redirects std::cout and std::wcout into throwaway buffers for its lifetime
 /// so that the pipeline's progress chatter and the output step's dumps do not
@@ -70,6 +70,6 @@ inline ExportTreeData tree_data(
       ctx.get_data("tree.0").front().data.get());
 }
 
-}  // namespace sequant::util::extint::tests
+}  // namespace sequant::util::extint::test_support
 
 #endif  // SEQUANT_EXTERNAL_INTERFACE_TESTS_TEST_EXTINT_HPP

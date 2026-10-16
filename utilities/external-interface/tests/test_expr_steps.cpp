@@ -23,7 +23,7 @@ using json = nlohmann::json;
 namespace {
 void seed_expr(ExecutionContext &ctx,
                std::initializer_list<std::wstring_view> defs) {
-  ctx.set_data("in", 0, ProcessingData{tests::expr_data(defs)});
+  ctx.set_data("in", 0, ProcessingData{test_support::expr_data(defs)});
 }
 }  // namespace
 
@@ -149,7 +149,7 @@ TEST_CASE("output step", "[extint]") {
   }
 
   SECTION("produces no output data") {
-    tests::ScopedStreamSilencer silence;
+    test_support::ScopedStreamSilencer silence;
     ExecutionContext ctx;
     seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
     OutputStep step;

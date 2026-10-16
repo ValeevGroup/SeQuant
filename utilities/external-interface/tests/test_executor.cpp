@@ -14,14 +14,15 @@ using json = nlohmann::json;
 
 namespace {
 json read_step(std::string id = "in") {
-  return json{{"id", std::move(id)},
-              {"kind", "read_input"},
-              {"options", {{"file_path", tests::input_path("simple.inp")}}}};
+  return json{
+      {"id", std::move(id)},
+      {"kind", "read_input"},
+      {"options", {{"file_path", test_support::input_path("simple.inp")}}}};
 }
 }  // namespace
 
 TEST_CASE("Executor input validation", "[extint]") {
-  tests::ScopedStreamSilencer silence;
+  test_support::ScopedStreamSilencer silence;
   Executor exec;
 
   SECTION("steps must be an array") {
@@ -50,7 +51,7 @@ TEST_CASE("Executor input validation", "[extint]") {
 }
 
 TEST_CASE("Executor option handling", "[extint]") {
-  tests::ScopedStreamSilencer silence;
+  test_support::ScopedStreamSilencer silence;
   SECTION("required options missing throws") {
     Executor exec;
     REQUIRE_THROWS_WITH(exec.execute(json::array({{{"kind", "read_input"}}})),
@@ -107,7 +108,7 @@ TEST_CASE("Executor option handling", "[extint]") {
 }
 
 TEST_CASE("Executor step identity", "[extint]") {
-  tests::ScopedStreamSilencer silence;
+  test_support::ScopedStreamSilencer silence;
   SECTION("duplicate step id throws") {
     Executor exec;
     json steps = json::array({read_step("dup"), read_step("dup")});

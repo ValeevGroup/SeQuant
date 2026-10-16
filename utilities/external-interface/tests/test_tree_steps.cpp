@@ -30,7 +30,7 @@ TEST_CASE("cse step", "[extint]") {
   SECTION("a tree with no common subexpression is passed through") {
     ExecutionContext ctx;
     ctx.set_data("in", 0,
-                 ProcessingData{tests::tree_data(
+                 ProcessingData{test_support::tree_data(
                      {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"})});
     CSEStep step;
     REQUIRE(step.run("cse", ctx, {"in.0"}) == 1);
@@ -55,7 +55,7 @@ TEST_CASE("batch_indices step", "[extint]") {
   SECTION("a result with too few indices is left unbatched") {
     ExecutionContext ctx;
     ctx.set_data("in", 0,
-                 ProcessingData{tests::tree_data(
+                 ProcessingData{test_support::tree_data(
                      {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"})});
     IndexBatchingStep
         step;  // min_unbatched defaults to 2, result has 2 indices
@@ -84,7 +84,7 @@ TEST_CASE("export step", "[extint]") {
 
   SECTION("a dependency cycle is rejected when ordering the results") {
     // Build two independent trees, then wire a mutual dependency between them.
-    ExportTreeData two = tests::tree_data(
+    ExportTreeData two = test_support::tree_data(
         {L"X{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
          L"Y{a1;i1} = + g{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
     REQUIRE(two.entries.size() == 2);

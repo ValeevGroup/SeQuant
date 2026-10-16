@@ -24,9 +24,9 @@ using json = nlohmann::json;
 
 TEST_CASE("canonicalize step", "[extint]") {
   ExecutionContext ctx;
-  ctx.set_data(
-      "in", 0,
-      ProcessingData{tests::expr_data({L"R1{a1;i1} = + f{a1;i1}:A-H-S"})});
+  ctx.set_data("in", 0,
+               ProcessingData{
+                   test_support::expr_data({L"R1{a1;i1} = + f{a1;i1}:A-H-S"})});
 
   SECTION("produces an ExpressionData output") {
     CanonicalizeStep step;
@@ -51,9 +51,9 @@ TEST_CASE("canonicalize step", "[extint]") {
   }
 
   SECTION("rejects ExportTree input") {
-    ctx.set_data(
-        "tree", 0,
-        ProcessingData{tests::tree_data({L"X{a1;i1} = + f{a1;i1}:A-H-S"})});
+    ctx.set_data("tree", 0,
+                 ProcessingData{test_support::tree_data(
+                     {L"X{a1;i1} = + f{a1;i1}:A-H-S"})});
     CanonicalizeStep step;
     REQUIRE_THROWS_AS(step.run("canon", ctx, {"tree.0"}), Exception);
   }
@@ -62,9 +62,9 @@ TEST_CASE("canonicalize step", "[extint]") {
 TEST_CASE("validate step", "[extint]") {
   SECTION("valid expression passes") {
     ExecutionContext ctx;
-    ctx.set_data(
-        "in", 0,
-        ProcessingData{tests::expr_data({L"R1{a1;i1} = + f{a1;i1}:A-H-S"})});
+    ctx.set_data("in", 0,
+                 ProcessingData{test_support::expr_data(
+                     {L"R1{a1;i1} = + f{a1;i1}:A-H-S"})});
     ValidateStep step;
     REQUIRE(step.run("v", ctx, {"in.0"}) == 0);
   }
@@ -72,7 +72,7 @@ TEST_CASE("validate step", "[extint]") {
   SECTION("inconsistent external indices are rejected") {
     ExecutionContext ctx;
     ctx.set_data("in", 0,
-                 ProcessingData{tests::expr_data(
+                 ProcessingData{test_support::expr_data(
                      {L"R1{a1;i1} = + f{a1;i1}:A-H-S - f{a1;a2}:A-H-S"})});
     ValidateStep step;
     REQUIRE_THROWS_AS(step.run("v", ctx, {"in.0"}), Exception);
@@ -82,7 +82,7 @@ TEST_CASE("validate step", "[extint]") {
 TEST_CASE("to_export_tree step", "[extint]") {
   ExecutionContext ctx;
   ctx.set_data("in", 0,
-               ProcessingData{tests::expr_data(
+               ProcessingData{test_support::expr_data(
                    {L"R1{a1;i1} = + f{a1;i1}:A-H-S",
                     L"R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"})});
 
@@ -109,7 +109,7 @@ TEST_CASE("dependencies step", "[extint]") {
     // Entry 0 produces X; entry 1 (R) consumes X as a leaf -> 1 depends on 0.
     ExecutionContext ctx;
     ctx.set_data("in", 0,
-                 ProcessingData{tests::tree_data(
+                 ProcessingData{test_support::tree_data(
                      {L"X{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
                       L"R{a1;i1} = + X{a2;i1}:A-H-S f{a1;a2}:A-H-S"})});
 
