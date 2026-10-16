@@ -1,5 +1,6 @@
 #include "executor.hpp"
 #include "processing.hpp"
+#include "template_expansion.hpp"
 #include "utils.hpp"
 
 #include <SeQuant/core/context.hpp>
@@ -665,8 +666,12 @@ void process(const json &driver, IndexSpaceMeta &spaceMeta) {
       throw Exception("Missing steps specification");
     }
 
+    const json steps = expand_templates(
+        driver.at("steps"),
+        driver.contains("templates") ? driver.at("templates") : json(nullptr));
+
     Executor executor;
-    executor.execute(driver.at("steps"));
+    executor.execute(steps);
   } else {
     throw Exception(
         "Requested driver_format_version too recent for this implementation: " +
