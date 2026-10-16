@@ -1,0 +1,59 @@
+
+.. _file_SeQuant_domain_mbpt_detail_concepts.hpp:
+
+File concepts.hpp
+=================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt_detail>` (``SeQuant/domain/mbpt/detail``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/detail/concepts.hpp``)
+--------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_detail_concepts.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``ranges`` (:ref:`file_SeQuant_core_ranges.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+- :ref:`namespace_sequant__mbpt__detail`
+

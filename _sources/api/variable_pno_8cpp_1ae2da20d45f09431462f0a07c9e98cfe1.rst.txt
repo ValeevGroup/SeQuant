@@ -1,0 +1,14 @@
+.. _exhale_variable_pno_8cpp_1ae2da20d45f09431462f0a07c9e98cfe1:
+
+Variable externals
+==================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_rules_pno.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: externals
+   :project: SeQuant

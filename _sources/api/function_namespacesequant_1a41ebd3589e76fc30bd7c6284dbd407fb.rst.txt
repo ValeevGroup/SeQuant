@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a41ebd3589e76fc30bd7c6284dbd407fb:
+
+Template Function sequant::left_to_right_binarization_indices
+=============================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::left_to_right_binarization_indices(meta::range_of<Set> auto const&, Set const&)
+   :project: SeQuant

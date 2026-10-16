@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a22b78eba1f73681496ccffb8b86316f5:
+
+Template Function sequant::topological_order_indexed
+====================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_topological.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::topological_order_indexed(std::size_t, const IndexDepFunc&, Comp)
+   :project: SeQuant

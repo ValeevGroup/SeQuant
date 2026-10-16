@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1accb65ab5dcef0896c40de888df332ef2:
+
+Template Function sequant::operator<<(std::basic_ostream<Char, Traits>&, const Expr&)
+=====================================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_format.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator<<(std::basic_ostream<Char, Traits>&, const Expr&)
+   :project: SeQuant

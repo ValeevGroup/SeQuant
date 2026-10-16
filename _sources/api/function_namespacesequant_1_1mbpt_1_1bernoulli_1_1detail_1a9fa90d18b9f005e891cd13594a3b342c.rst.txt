@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1bernoulli_1_1detail_1a9fa90d18b9f005e891cd13594a3b342c:
+
+Function sequant::mbpt::bernoulli::detail::expand_to_blocks
+===========================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_bernoulli.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::bernoulli::detail::expand_to_blocks(const ExprPtr&)
+   :project: SeQuant

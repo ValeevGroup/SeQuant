@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a020d2388e0bcff4617d3fa803d730a4e:
+
+Template Function sequant::is_qpcreator
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::is_qpcreator(const Op<S>&, Vacuum, const std::shared_ptr<const IndexBasisRegistry>&)
+   :project: SeQuant

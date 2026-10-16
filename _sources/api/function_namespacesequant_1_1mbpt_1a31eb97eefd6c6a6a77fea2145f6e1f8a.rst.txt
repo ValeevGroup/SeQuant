@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a31eb97eefd6c6a6a77fea2145f6e1f8a:
+
+Function sequant::mbpt::add_batching_spaces
+===========================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::add_batching_spaces(std::shared_ptr<IndexBasisRegistry>&)
+   :project: SeQuant

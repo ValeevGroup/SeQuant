@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1mbpt_1a4c0e601427ac8aa692f8ff00aa093802:
+
+Enum OpClass
+============
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op_registry.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::mbpt::OpClass
+   :project: SeQuant

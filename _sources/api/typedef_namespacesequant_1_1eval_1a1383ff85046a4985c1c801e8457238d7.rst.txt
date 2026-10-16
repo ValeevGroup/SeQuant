@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1eval_1a1383ff85046a4985c1c801e8457238d7:
+
+Typedef sequant::eval::BatchContextEntry
+========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_cell_registry.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::eval::BatchContextEntry
+   :project: SeQuant

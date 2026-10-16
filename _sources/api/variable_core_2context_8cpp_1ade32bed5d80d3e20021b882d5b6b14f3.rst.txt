@@ -1,0 +1,14 @@
+.. _exhale_variable_core_2context_8cpp_1ade32bed5d80d3e20021b882d5b6b14f3:
+
+Variable canonicalizers
+=======================
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: canonicalizers
+   :project: SeQuant

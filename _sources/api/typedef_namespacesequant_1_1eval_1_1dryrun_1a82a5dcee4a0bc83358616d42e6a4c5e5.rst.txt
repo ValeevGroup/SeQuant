@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1a82a5dcee4a0bc83358616d42e6a4c5e5:
+
+Typedef sequant::eval::dryrun::ExtentOverrides
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_cost_model_object.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::eval::dryrun::ExtentOverrides
+   :project: SeQuant

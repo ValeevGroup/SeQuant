@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1a486614a830de6eef27b9a318998ad4f8:
+
+Function sequant::eval::build_ordered_schedule
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::build_ordered_schedule(RichSchedule const&, LegalitySchedule const&, BatchPolicy const&, std::initializer_list<std::wstring>)
+   :project: SeQuant

@@ -1,0 +1,66 @@
+
+.. _file_SeQuant_core_tensor_canonicalizer_fwd.hpp:
+
+File tensor_canonicalizer_fwd.hpp
+=================================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/tensor_canonicalizer_fwd.hpp``)
+----------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_tensor_canonicalizer_fwd.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``functional``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_context.hpp`
+
+- :ref:`file_SeQuant_core_tensor_canonicalizer.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1a729f6602e9f2a7386f690e7b4fe7ad98`
+
+- :ref:`exhale_typedef_namespacesequant_1a83a73610e224e7df4c24fe1051df3c99`
+
+- :ref:`exhale_typedef_namespacesequant_1a64d4b20d6b0a3fa06dfe958aa0e5a79c`
+

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1density_1ad214ab2a6976334c1477a1e31c2a4572:
+
+Function sequant::density::make_rdm(const Index&, const Index&)
+===============================================================
+
+- Defined in :ref:`file_SeQuant_core_density.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::density::make_rdm(const Index&, const Index&)
+   :project: SeQuant

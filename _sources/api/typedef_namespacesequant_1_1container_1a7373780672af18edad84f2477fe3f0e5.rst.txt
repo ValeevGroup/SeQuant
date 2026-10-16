@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1container_1a7373780672af18edad84f2477fe3f0e5:
+
+Typedef sequant::container::unordered_set
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_container.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::container::unordered_set
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1ab16196b110061fa76ad0573558b7128d:
+
+Function sequant::mbpt::decompositions::cumulants_to_densities
+==============================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_rdm.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::decompositions::cumulants_to_densities(ExprPtr)
+   :project: SeQuant

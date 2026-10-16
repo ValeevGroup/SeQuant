@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1aa50046870cc596cad77e474f8305b81c:
+
+Function sequant::eval::value_key_of
+====================================
+
+- Defined in :ref:`file_SeQuant_core_eval_peak_profile.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::value_key_of(ValueCell const&)
+   :project: SeQuant

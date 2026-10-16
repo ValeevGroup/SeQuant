@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1density_1afe162e0b0068ae6e0fb9bc1789f05fdf:
+
+Template Function sequant::density::rdm_from_nop
+================================================
+
+- Defined in :ref:`file_SeQuant_core_density.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::density::rdm_from_nop(const NormalOperator<S>&, std::wstring_view)
+   :project: SeQuant

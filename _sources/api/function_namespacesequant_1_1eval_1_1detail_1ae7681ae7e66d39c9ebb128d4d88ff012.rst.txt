@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1ae7681ae7e66d39c9ebb128d4d88ff012:
+
+Function sequant::eval::detail::dump_level_bump
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_dump.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::dump_level_bump(std::size_t, std::size_t, bool, int)
+   :project: SeQuant

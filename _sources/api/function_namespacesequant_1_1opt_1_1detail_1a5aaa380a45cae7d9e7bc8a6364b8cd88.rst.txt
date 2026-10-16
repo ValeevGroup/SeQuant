@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a5aaa380a45cae7d9e7bc8a6364b8cd88:
+
+Template Function sequant::opt::detail::option_engaged
+======================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term_detail.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::option_engaged(F const&)
+   :project: SeQuant

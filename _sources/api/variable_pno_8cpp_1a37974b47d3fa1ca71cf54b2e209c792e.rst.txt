@@ -1,0 +1,14 @@
+.. _exhale_variable_pno_8cpp_1a37974b47d3fa1ca71cf54b2e209c792e:
+
+Variable moved_here
+===================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_rules_pno.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: moved_here
+   :project: SeQuant

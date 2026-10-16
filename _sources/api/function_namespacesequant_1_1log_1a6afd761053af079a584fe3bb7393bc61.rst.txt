@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1log_1a6afd761053af079a584fe3bb7393bc61:
+
+Template Function sequant::log::scope_annot
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::log::scope_annot(BatchContext const&)
+   :project: SeQuant

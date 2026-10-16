@@ -1,0 +1,14 @@
+.. _exhale_variable_pno_8cpp_1a5fd4f91efd134fa263a4ecaae00d7175:
+
+Variable opts
+=============
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_rules_pno.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: opts
+   :project: SeQuant

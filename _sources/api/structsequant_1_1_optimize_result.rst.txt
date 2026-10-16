@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_optimize_result:
+
+Struct OptimizeResult
+=====================
+
+- Defined in :ref:`file_SeQuant_core_optimize_optimize.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::OptimizeResult
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

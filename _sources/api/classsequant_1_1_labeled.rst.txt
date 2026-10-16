@@ -1,0 +1,28 @@
+.. _exhale_class_classsequant_1_1_labeled:
+
+Class Labeled
+=============
+
+- Defined in :ref:`file_SeQuant_core_expressions_labeled.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Derived Types
+*************
+
+- ``public sequant::MutatableLabeled`` (:ref:`exhale_class_classsequant_1_1_mutatable_labeled`)
+- ``public sequant::NormalOperator< S >`` (:ref:`exhale_class_classsequant_1_1_normal_operator`)
+- ``public sequant::mbpt::Operator< void, S >`` (:ref:`exhale_class_classsequant_1_1mbpt_1_1_operator_3_01void_00_01_s_01_4`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Labeled
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

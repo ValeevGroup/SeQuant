@@ -1,0 +1,172 @@
+
+.. _program_listing_file_SeQuant_core_eval_schedule_dump.hpp:
+
+Program Listing for File schedule_dump.hpp
+==========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_schedule_dump.hpp>` (``SeQuant/core/eval/schedule_dump.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Per-term schedule-record emitter (JSON) for the batched-evaluation
+   // visualizer. Two producers share this schema:
+   //   * IR side (this header): schedule_ir_json() walks an annotated eval tree
+   //     and emits the factorizer's intended schedule -- node_slice_mask loops,
+   //     sliced/contracted modes, order-aware gate, effective (replay) count.
+   //   * Runtime side (eval.hpp): the evaluator emits the same node-keyed schema
+   //     with the actual lifetimes (life/max_life), hoist placement, replay, and
+   //     footprint, so the two can be diffed node-by-node.
+   //
+   // The schema is deliberately minimal JSON (no external dependency): a per-term
+   // object { term_id, kind, root } whose nodes carry the fields below and a
+   // `children` array (binary: [left,right] for the IR tree; runtime nodes may
+   // carry richer children). Index labels and expr identities are emitted raw
+   // (SeQuant full_label / serialization); the renderer formats them.
+   //
+   
+   #ifndef SEQUANT_CORE_EVAL_SCHEDULE_DUMP_HPP
+   #define SEQUANT_CORE_EVAL_SCHEDULE_DUMP_HPP
+   
+   #include <SeQuant/core/eval/fwd.hpp>
+   #include <SeQuant/core/io/serialization/serialization.hpp>
+   #include <SeQuant/core/utility/string.hpp>
+   
+   #include <cstddef>
+   #include <ostream>
+   #include <sstream>
+   #include <string>
+   
+   namespace sequant::eval {
+   
+   namespace detail {
+   
+   inline double& last_op_flops() noexcept {
+     static thread_local double f = 0.0;
+     return f;
+   }
+   
+   inline double& last_op_exec() noexcept {
+     static thread_local double f = 0.0;
+     return f;
+   }
+   
+   struct OrderedOpCounts {
+     std::size_t builds = 0;
+     std::size_t assembles = 0;
+     std::size_t probes = 0;
+   };
+   
+   inline OrderedOpCounts& ordered_op_counts_slot() noexcept {
+     static thread_local OrderedOpCounts c;
+     return c;
+   }
+   
+   [[nodiscard]] inline OrderedOpCounts ordered_op_counts() noexcept {
+     return ordered_op_counts_slot();
+   }
+   
+   inline std::string sched_json_escape(std::string const& s) {
+     std::string o;
+     o.reserve(s.size() + 8);
+     for (char c : s) {
+       if (c == '"' || c == '\\') {
+         o += '\\';
+         o += c;
+       } else if (c == '\n') {
+         o += "\\n";
+       } else {
+         o += c;
+       }
+     }
+     return o;
+   }
+   
+   inline char const* sched_mode_name(BatchModeType m) {
+     return m == BatchModeType::External ? "External" : "Contracted";
+   }
+   
+   template <typename Range>
+   void sched_json_index_array(Range const& r, std::ostream& os) {
+     os << '[';
+     bool first = true;
+     for (auto const& ix : r) {
+       if (!first) os << ',';
+       first = false;
+       os << '"' << sched_json_escape(sequant::toUtf8(ix.full_label())) << '"';
+     }
+     os << ']';
+   }
+   
+   }  // namespace detail
+   
+   // Nodes are joined to the replay's per-node recompute tally by their
+   // topological hash (\c EvalExpr::hash_value), the same identity the
+   // CacheManager dedups on. A full-label signature would not do: it is
+   // dummy-label- and batch-slice-dependent, so per-block and alpha-renamed
+   // builds of one value would split across keys and mis-attribute the rollup.
+   
+   template <typename Node>
+   void schedule_ir_json_node(Node const& n, std::ostream& os) {
+     using detail::sched_json_escape;
+     using detail::sched_json_index_array;
+     using detail::sched_mode_name;
+   
+     std::string ident;
+     try {
+       ident = sequant::toUtf8(sequant::io::serialization::to_string(n->expr()));
+     } catch (...) {
+       ident.clear();
+     }
+   
+     // hash = the cache/DAG identity: canonically-equal subexpressions share it,
+     // so the renderer collapses the forest into the DAG the CacheManager sees
+     // (and the runtime overlay joins by the same key). Emitted as a string to
+     // survive 64-bit precision through JSON/JS.
+     os << "{\"hash\":\"" << n->hash_value() << "\",\"expr\":\""
+        << sched_json_escape(ident) << "\",\"result\":";
+     sched_json_index_array(n->canon_indices(), os);
+     os << ",\"leaf\":" << (n.leaf() ? "true" : "false")
+        << ",\"order_aware\":" << (n->batch_order_aware() ? "true" : "false")
+        << ",\"effective_count\":" << n->batch_effective_count()
+        << ",\"node_slice_mask\":[";
+     {
+       bool first = true;
+       for (auto const& [ix, knd] : n->node_slice_mask()) {
+         if (!first) os << ',';
+         first = false;
+         os << "{\"index\":\""
+            << sched_json_escape(sequant::toUtf8(ix.full_label()))
+            << "\",\"mode\":\"" << sched_mode_name(knd) << "\"}";
+       }
+     }
+     os << "],\"sliced_modes\":";
+     sched_json_index_array(n->sliced_modes(), os);
+     // Nodes are joined to the replay's per-node recompute tally by their
+     // topological hash (emitted above), not by a signature: a signature is
+     // dummy-label- and batch-slice-dependent and mis-folds per-block /
+     // alpha-renamed builds.
+     os << ",\"children\":[";
+     if (!n.leaf()) {
+       schedule_ir_json_node(n.left(), os);
+       os << ',';
+       schedule_ir_json_node(n.right(), os);
+     }
+     os << "]}";
+   }
+   
+   template <typename Node>
+   std::string schedule_ir_json(Node const& root, std::string const& term_id) {
+     std::ostringstream os;
+     os << "{\"term_id\":\"" << detail::sched_json_escape(term_id)
+        << "\",\"kind\":\"ir\",\"root\":";
+     schedule_ir_json_node(root, os);
+     os << '}';
+     return os.str();
+   }
+   
+   }  // namespace sequant::eval
+   
+   #endif  // SEQUANT_CORE_EVAL_SCHEDULE_DUMP_HPP

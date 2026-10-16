@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1a16f66ec7a766139be2785fbe5886a608:
+
+Function sequant::eval::classify_axis
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_eval_legality.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::classify_axis(container::svector<Index> const&, container::svector<Index> const&, Index const&, container::svector<OccurrenceRec> const&, container::svector<Index> const&, std::function<int(OccurrenceRec const&, Index const&)> const&)
+   :project: SeQuant

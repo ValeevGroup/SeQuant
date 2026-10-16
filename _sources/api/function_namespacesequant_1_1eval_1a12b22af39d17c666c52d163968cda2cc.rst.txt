@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1a12b22af39d17c666c52d163968cda2cc:
+
+Template Function sequant::eval::evaluate_ordered_multiroot
+===========================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::evaluate_ordered_multiroot(Nodes const&, OrderedSchedule const&, RichSchedule const&, container::svector<std::string> const&, F const&, CacheManager<N, FHC>&, std::function<std::size_t(Index const&)> const&, ScopeGuardFactory const&, std::function<bool(std::ranges::range_value_t<Nodes> const&)> const&)
+   :project: SeQuant

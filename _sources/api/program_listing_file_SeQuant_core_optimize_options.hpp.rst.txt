@@ -1,0 +1,114 @@
+
+.. _program_listing_file_SeQuant_core_optimize_options.hpp:
+
+Program Listing for File options.hpp
+====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_optimize_options.hpp>` (``SeQuant/core/optimize/options.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP
+   #define SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP
+   
+   #include <SeQuant/core/batch_policy.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/fwd.hpp>
+   #include <SeQuant/core/utility/aggregate.hpp>
+   
+   #include <cstddef>
+   #include <functional>
+   #include <limits>
+   #include <memory>
+   #include <unordered_map>
+   #include <utility>
+   
+   namespace sequant {
+   
+   class Index;
+   class Tensor;
+   class Expr;
+   
+   enum class ObjectiveFunction {
+     DenseFLOPs,
+     DenseSize,
+     DenseSpaceTime,
+     DenseSpaceTimeBatched,
+     DenseTimeSpace,
+     DenseTimeSpaceBatched,
+     DensePeakSize = DenseSpaceTime,
+     DensePeakSizeBatched = DenseSpaceTimeBatched
+   };
+   
+   enum class ReorderSum { Reorder, NoReorder };
+   
+   struct CSEOptions {
+     SEQUANT_DESIGNATED_INIT_ONLY;
+     bool subnet = false;
+   };
+   
+   struct RooflineParams {
+     SEQUANT_DESIGNATED_INIT_ONLY;
+     double machine_balance = 0.0;
+     double fast_mem_elems = 0.0;
+     double block_tiles = 3.0;
+     double block_prefactor = 1.0;
+   };
+   
+   struct CostParams {
+     SEQUANT_DESIGNATED_INIT_ONLY;
+     std::function<bool(Tensor const&)> is_volatile_leaf = {};
+     double volatile_weight = 1.0;
+     double footprint_weight = 0.0;
+     double peak_flops_tolerance = 0.10;
+     RooflineParams roofline = {};
+     double accumulation_factor = 0.0;
+     double peak_threshold = std::numeric_limits<double>::infinity();
+     bool prune_outer_products = true;
+     bool batch_spectator_indices = false;
+   
+     std::function<bool(Index const&)> is_batchable_contracted_index =
+         [](Index const&) { return false; };
+     std::function<bool(Index const&)> is_batchable_external_index =
+         [](Index const&) { return false; };
+     std::function<std::size_t(Index const&)> batch_target_size = {};
+     std::function<double(Index const&, std::size_t)> inner_pow = {};
+     bool batch_persistent_only = false;
+   };
+   
+   using index_to_extent_t = std::function<std::size_t(Index const&)>;
+   
+   struct OptimizeOptions {
+     SEQUANT_DESIGNATED_INIT_ONLY;
+     ObjectiveFunction objective_function = ObjectiveFunction::DenseFLOPs;
+   
+     ReorderSum reorder = ReorderSum::Reorder;
+   
+     CSEOptions CSE = {};
+   
+     index_to_extent_t idx_to_extent = {};
+   
+     std::function<double(Index const&, std::size_t)> inner_pow = {};
+   
+     BatchPolicy batch_policy = {};
+   
+     double volatile_weight = 1.0;
+   
+     double peak_flops_tolerance = 0.10;
+   
+     double footprint_weight = 0.0;
+   
+     RooflineParams roofline = {};
+   
+     std::shared_ptr<std::unordered_map<sequant::Expr const*,
+                                        container::vector<NodeBatchAnnotation>>>
+         term_batch_axes = {};
+   
+     bool prune_outer_products = true;
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_OPTIMIZE_OPTIONS_HPP

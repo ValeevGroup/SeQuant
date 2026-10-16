@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1mbpt_1ad72c42fd020f040b29fcca860bf19ad3:
+
+Variable sequant::mbpt::mask_v
+==============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_space_qns.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::mbpt::mask_v
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a355d3cba1341e4a1bbadb328b4884fcc:
+
+Function sequant::eval::detail::ordered_forgo_visit
+===================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::ordered_forgo_visit(CellRegistry&, ForgoPlan const&, CellId)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_variable_core_2context_8cpp_1ab6679b8a3625461c4f6c523048234022:
+
+Variable ptr
+============
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: ptr
+   :project: SeQuant

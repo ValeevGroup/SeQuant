@@ -1,0 +1,201 @@
+
+.. _file_SeQuant_core_eval_cache_manager.hpp:
+
+File cache_manager.hpp
+======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/cache_manager.hpp``)
+----------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_cache_manager.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/asy_cost.hpp`` (:ref:`file_SeQuant_core_asy_cost.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval/backend_array_ops.hpp`` (:ref:`file_SeQuant_core_eval_backend_array_ops.hpp`)
+
+- ``SeQuant/core/eval/dag_scope.hpp`` (:ref:`file_SeQuant_core_eval_dag_scope.hpp`)
+
+- ``SeQuant/core/eval/eval_node.hpp`` (:ref:`file_SeQuant_core_eval_eval_node.hpp`)
+
+- ``SeQuant/core/eval/eval_node_compare.hpp`` (:ref:`file_SeQuant_core_eval_eval_node_compare.hpp`)
+
+- ``SeQuant/core/eval/fwd.hpp`` (:ref:`file_SeQuant_core_eval_fwd.hpp`)
+
+- ``SeQuant/core/eval/lifetime_mask.hpp`` (:ref:`file_SeQuant_core_eval_lifetime_mask.hpp`)
+
+- ``SeQuant/core/eval/peak_monitor.hpp`` (:ref:`file_SeQuant_core_eval_peak_monitor.hpp`)
+
+- ``SeQuant/core/eval/result.hpp`` (:ref:`file_SeQuant_core_eval_result.hpp`)
+
+- ``SeQuant/core/eval/value_id.hpp`` (:ref:`file_SeQuant_core_eval_value_id.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``any``
+
+- ``array`` (:ref:`file_SeQuant_core_eval_backends_tiledarray_array_ops.hpp`)
+
+- ``chrono``
+
+- ``cstdint``
+
+- ``cstdio``
+
+- ``cstdlib``
+
+- ``functional``
+
+- ``limits``
+
+- ``map`` (:ref:`file_SeQuant_core_eval_value_node_map.hpp`)
+
+- ``memory`` (:ref:`file_SeQuant_core_memory_layout.hpp`)
+
+- ``optional``
+
+- ``ostream``
+
+- ``range/v3/algorithm/for_each.hpp``
+
+- ``range/v3/view/filter.hpp``
+
+- ``range/v3/view/map.hpp``
+
+- ``range/v3/view/transform.hpp``
+
+- ``ranges`` (:ref:`file_SeQuant_core_ranges.hpp`)
+
+- ``stdexcept``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``type_traits``
+
+- ``unordered_map``
+
+- ``unordered_set``
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_backends_dryrun_meter.hpp`
+
+- :ref:`file_SeQuant_core_eval_cache_manager.cpp`
+
+- :ref:`file_SeQuant_core_eval_cell_registry.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval.hpp`
+
+- :ref:`file_SeQuant_core_eval_forest_combine.hpp`
+
+- :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__eval`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_batch_context_entry`
+
+- :ref:`exhale_struct_structsequant_1_1_cache_manager_1_1access__by`
+
+- :ref:`exhale_struct_structsequant_1_1_cache_manager_1_1_access_result`
+
+- :ref:`exhale_struct_structsequant_1_1_cache_manager_1_1all__non__persistent`
+
+- :ref:`exhale_struct_structsequant_1_1_cache_manager_1_1_build_record`
+
+- :ref:`exhale_struct_structsequant_1_1_cache_manager_1_1_build_tally`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_access_clock`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_build_meter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_build_meter_1_1_reporter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_def_use_meter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_def_use_meter_1_1_reporter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_eval_impl_timeline`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_eval_impl_timeline_1_1_reporter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_eval_impl_timeline_1_1_scope`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_lookup_meter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_lookup_meter_1_1_reporter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_phase_timer`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_phase_timer_1_1_reporter`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_phase_timer_1_1_scope`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_schedule_sink`
+
+- :ref:`exhale_struct_structsequant_1_1zero__footprint`
+
+- :ref:`exhale_class_classsequant_1_1_cache_manager`
+
+- :ref:`exhale_class_classsequant_1_1_cache_manager_1_1entry`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1_persistent_value_store`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a0105e0c218a867a5810dc3c698d2a451`
+
+- :ref:`exhale_function_namespacesequant_1a58931ba0bd0ba1d1748a3624bc9a3a13`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a436a75eef9260e35c82121633c130c70`
+

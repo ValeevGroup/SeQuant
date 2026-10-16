@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a194ed0ffaa987967006e69458ec83423:
+
+Template Function sequant::conj
+===============================
+
+- Defined in :ref:`file_SeQuant_core_complex.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::conj(const Complex<T>&)
+   :project: SeQuant

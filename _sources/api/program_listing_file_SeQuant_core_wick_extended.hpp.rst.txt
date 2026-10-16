@@ -1,0 +1,85 @@
+
+.. _program_listing_file_SeQuant_core_wick_extended.hpp:
+
+Program Listing for File wick_extended.hpp
+==========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_wick_extended.hpp>` (``SeQuant/core/wick_extended.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_WICK_EXTENDED_HPP
+   #define SEQUANT_CORE_WICK_EXTENDED_HPP
+   
+   #include <SeQuant/core/attr.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/density.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/op.hpp>
+   #include <SeQuant/core/rational.hpp>
+   
+   #include <cstddef>
+   #include <optional>
+   #include <utility>
+   
+   namespace sequant {
+   
+   template <Statistics S>
+   class WickTheorem;
+   
+   class IndexBasisRegistry;
+   
+   namespace detail {
+   
+   void assert_protoindexed_not_active(const IndexBasisRegistry &isr,
+                                       const IndexSpace &sp, const Index &a,
+                                       const Index &b);
+   
+   struct ExtendedWickOptions {
+     bool full_contractions = true;
+     std::optional<std::size_t> max_cumulant_rank = std::nullopt;
+     bool eta_as_delta_minus_gamma = false;
+     bool use_topology = true;
+     container::svector<std::pair<std::size_t, std::size_t>> nop_connections = {};
+     container::svector<std::pair<std::size_t, std::size_t>>
+         nop_avoided_connections = {};
+   };
+   
+   using OpProvenance = container::map<Index, std::size_t>;
+   
+   template <Statistics S>
+   ExprPtr block_value(const NormalOperator<S> &block) {
+     return density::make_cumulant(block);
+   }
+   
+   template <Statistics S>
+   rational term_weight(
+       const NormalOperator<S> & /*survivors*/,
+       const container::svector<container::svector<std::size_t>> & /*blocks*/) {
+     return 1;
+   }
+   
+   template <Statistics S>
+   ExprPtr cumulant_expand(const ExprPtr &wick_output,
+                           const OpProvenance &provenance,
+                           const ExtendedWickOptions &opts);
+   
+   extern template ExprPtr cumulant_expand<Statistics::FermiDirac>(
+       const ExprPtr &, const OpProvenance &, const ExtendedWickOptions &);
+   
+   template <Statistics S>
+   ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
+                         WickTheorem<S> &stats_sink);
+   
+   extern template ExprPtr extended_wick<Statistics::FermiDirac>(
+       ExprPtr, const ExtendedWickOptions &,
+       WickTheorem<Statistics::FermiDirac> &);
+   
+   }  // namespace detail
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_WICK_EXTENDED_HPP

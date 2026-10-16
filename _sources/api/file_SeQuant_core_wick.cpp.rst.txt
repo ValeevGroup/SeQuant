@@ -1,0 +1,47 @@
+
+.. _file_SeQuant_core_wick.cpp:
+
+File wick.cpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/wick.cpp``)
+--------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_wick.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/wick.hpp`` (:ref:`file_SeQuant_core_wick.hpp`)
+
+- ``SeQuant/core/wick.impl.hpp`` (:ref:`file_SeQuant_core_wick.impl.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+

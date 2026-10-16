@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1af4f19f545e6cd169b63cae9380ec8a40:
+
+Template Function sequant::ex
+=============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr_ptr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::ex(Args&&...)
+   :project: SeQuant

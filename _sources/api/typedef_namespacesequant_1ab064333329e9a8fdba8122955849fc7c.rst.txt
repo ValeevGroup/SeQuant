@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1ab064333329e9a8fdba8122955849fc7c:
+
+Typedef sequant::IndexSpaceMetric
+=================================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::IndexSpaceMetric
+   :project: SeQuant

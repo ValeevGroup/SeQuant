@@ -1,0 +1,97 @@
+
+.. _file_SeQuant_core_eval_backends_dryrun_cost_model_object.hpp:
+
+File cost_model_object.hpp
+==========================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval_backends_dryrun>` (``SeQuant/core/eval/backends/dryrun``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/backends/dryrun/cost_model_object.hpp``)
+------------------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_backends_dryrun_cost_model_object.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval/backends/dryrun/size_regime.hpp`` (:ref:`file_SeQuant_core_eval_backends_dryrun_size_regime.hpp`)
+
+- ``SeQuant/core/eval/schedule_dump.hpp`` (:ref:`file_SeQuant_core_eval_schedule_dump.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/optimize/cost_model.hpp`` (:ref:`file_SeQuant_core_optimize_cost_model.hpp`)
+
+- ``SeQuant/core/optimize/options.hpp`` (:ref:`file_SeQuant_core_optimize_options.hpp`)
+
+- ``SeQuant/core/optimize/single_term_detail.hpp`` (:ref:`file_SeQuant_core_optimize_single_term_detail.hpp`)
+
+- ``atomic`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+- ``cstddef``
+
+- ``functional``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_backends_dryrun_eval_expr.hpp`
+
+- :ref:`file_SeQuant_core_eval_backends_dryrun_result.hpp`
+
+- :ref:`file_SeQuant_core_eval_peak_profile.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__eval`
+
+- :ref:`namespace_sequant__eval__dryrun`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_cost_sink`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1dryrun_1_1_cost_model`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1a82a5dcee4a0bc83358616d42e6a4c5e5`
+

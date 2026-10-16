@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1afc8b57aeebbe6012a0ddbec3560bd16b:
+
+Template Function sequant::can_contract
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::can_contract(const Op<S>&, const Op<S>&, Vacuum, const std::shared_ptr<const IndexBasisRegistry>&)
+   :project: SeQuant

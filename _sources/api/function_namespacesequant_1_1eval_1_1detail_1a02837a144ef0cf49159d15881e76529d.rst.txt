@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a02837a144ef0cf49159d15881e76529d:
+
+Function sequant::eval::detail::last_op_exec
+============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_schedule_dump.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::last_op_exec()
+   :project: SeQuant

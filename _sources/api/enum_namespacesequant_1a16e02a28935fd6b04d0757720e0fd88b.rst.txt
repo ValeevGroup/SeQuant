@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a16e02a28935fd6b04d0757720e0fd88b:
+
+Enum Trace
+==========
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::Trace
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ab04f68adc8aa8c9f112d1d2374e89da6:
+
+Function sequant::permute_bra
+=============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::permute_bra()
+   :project: SeQuant

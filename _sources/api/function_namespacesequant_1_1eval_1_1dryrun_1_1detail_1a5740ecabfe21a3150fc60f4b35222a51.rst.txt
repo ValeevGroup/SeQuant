@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1a5740ecabfe21a3150fc60f4b35222a51:
+
+Function sequant::eval::dryrun::detail::remap_overrides_by_annot
+================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_result.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::dryrun::detail::remap_overrides_by_annot(ExtentOverrides const&, annot_t const&, annot_t const&)
+   :project: SeQuant

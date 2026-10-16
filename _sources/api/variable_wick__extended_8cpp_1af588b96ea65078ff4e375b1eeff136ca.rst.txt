@@ -1,0 +1,14 @@
+.. _exhale_variable_wick__extended_8cpp_1af588b96ea65078ff4e375b1eeff136ca:
+
+Variable core
+=============
+
+- Defined in :ref:`file_SeQuant_core_wick_extended.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: core
+   :project: SeQuant
