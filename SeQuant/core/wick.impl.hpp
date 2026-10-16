@@ -695,39 +695,34 @@ inline bool fold_deltas(std::shared_ptr<Product> &product,
       idx = it->second;
     return idx;
   };
-  // keeps the delta at it, spelled as a Kronecker delta
-  auto keep = [&mutated](auto &it) {
-    auto &t = (*it)->template as<AbstractTensor>();
-    if (t._label() == kronecker_label()) return;
-    auto bra = t._bra();
-    auto ket = t._ket();
-    *it = make_kronecker(bra[0], ket[0]);
-    mutated = true;
-  };
   for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
+    bool redundant;
     if (const Index *idx = self_delta_index(*it)) {
       // a self-delta contributes 2 to the index count
       const bool bound_elsewhere =
           external_indices.contains(*idx) ||
           index_counts.at(*idx).total() > 2 * self_delta_counts.at(*idx);
-      if (!bound_elsewhere && kept.insert(*idx).second) {
-        keep(it);
-        continue;
-      }
+      redundant = bound_elsewhere || !kept.insert(*idx).second;
     } else if (const auto *t = delta(*it);
                t && external_indices.contains(t->_bra()[0]) &&
                external_indices.contains(t->_ket()[0])) {
       const Index bra_root = root(t->_bra()[0]);
       const Index ket_root = root(t->_ket()[0]);
-      if (bra_root != ket_root) {
-        parent.emplace(bra_root, ket_root);
-        keep(it);
-        continue;
-      }
-    } else
+      redundant = bra_root == ket_root;
+      if (!redundant) parent.emplace(bra_root, ket_root);
+    } else  // not a delta, or one with a dummy index
       continue;
-    *it = ex<Constant>(1);
-    mutated = true;
+
+    auto &t = (*it)->as<AbstractTensor>();
+    if (redundant) {
+      *it = ex<Constant>(1);
+      mutated = true;
+    } else if (t._label() != kronecker_label()) {
+      auto bra = t._bra();
+      auto ket = t._ket();
+      *it = make_kronecker(bra[0], ket[0]);
+      mutated = true;
+    }
   }
   return mutated;
 }
