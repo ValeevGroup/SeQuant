@@ -8,6 +8,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/slotted_index.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
@@ -1028,20 +1029,18 @@ TEST_CASE("utilities", "[utilities]") {
                                  "'4 ' could not be fully parsed as a")));
     }
     SECTION("float") {
-      if constexpr (string_to_supports<float>) {
-        REQUIRE_THAT(string_to<float>("42"),
-                     WithinAbs(42, std::numeric_limits<float>::epsilon()));
-        REQUIRE_THAT(string_to<float>("3.14"),
-                     WithinAbs(3.14, std::numeric_limits<float>::epsilon()));
-        REQUIRE_THAT(
-            string_to<float>("-3.14159"),
-            WithinAbs(-3.14159, std::numeric_limits<float>::epsilon()));
-        if constexpr (string_to_supports<double>) {
-          REQUIRE_THAT(string_to<double>("2.7182818284590"),
-                       WithinAbs(2.7182818284590,
-                                 std::numeric_limits<double>::epsilon()));
-        }
+      REQUIRE_THAT(string_to<float>("42"),
+                   WithinAbs(42, std::numeric_limits<float>::epsilon()));
+      REQUIRE_THAT(string_to<float>("3.14"),
+                   WithinAbs(3.14, std::numeric_limits<float>::epsilon()));
+      REQUIRE_THAT(string_to<float>("-3.14159"),
+                   WithinAbs(-3.14159, std::numeric_limits<float>::epsilon()));
+      REQUIRE_THAT(
+          string_to<double>("2.7182818284590"),
+          WithinAbs(2.7182818284590, std::numeric_limits<double>::epsilon()));
 
+      // Error handling is only available if std::from_chars is supported
+      if constexpr (from_chars_supports<float>) {
         REQUIRE_THROWS_MATCHES(
             string_to<float>(" 3.14"), ConversionException,
             MessageMatches(ContainsSubstring("' 3.14' is not a valid")));
@@ -1051,6 +1050,30 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE_THROWS_MATCHES(string_to<float>("2.718 "), ConversionException,
                                MessageMatches(ContainsSubstring(
                                    "'2.718 ' could not be fully parsed as a")));
+      }
+    }
+    SECTION("rational") {
+      REQUIRE(string_to<rational>("42") == rational(42));
+      REQUIRE(string_to<rational>("-42") == rational(-42));
+      REQUIRE(string_to<rational>("+3") == rational(3));
+      // decimals are converted exactly, not via a binary floating-point value
+      REQUIRE(string_to<rational>("0.1") == rational(1, 10));
+      REQUIRE(string_to<rational>("-3.25") == rational(-13, 4));
+      REQUIRE(string_to<rational>(".5") == rational(1, 2));
+      REQUIRE(string_to<rational>("-1/3") == rational(-1, 3));
+      REQUIRE(string_to<rational>("6/4") == rational(3, 2));
+      // arbitrary size
+      REQUIRE(string_to<rational>("1000000000000000000000000") ==
+              rational(1000000000000LL) * rational(1000000000000LL));
+      REQUIRE(string_to<rational>("9007199254740993") ==
+              rational(9007199254740993LL));
+
+      for (const char* invalid : {"", "-", ".", "1.", "1/", "/2", "1/0", " 1",
+                                  "1 ", "1e3", "1.5/2", "abc", "--1"}) {
+        INFO("input: '" << invalid << "'");
+        REQUIRE_THROWS_MATCHES(
+            string_to<rational>(invalid), ConversionException,
+            MessageMatches(ContainsSubstring("is not a valid rational")));
       }
     }
   }

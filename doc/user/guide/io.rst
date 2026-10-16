@@ -155,3 +155,86 @@ scaled by the constant ``1/2``:
 ::
 
    R1{u1;i1} = f{u1;i1} - Ym1{u1;u2} f{u2;i1} - Ym1{u3;u2} * g{u1,u2;u3,i1} + 1/2 Ym2{u1,u4;u_2,u_3} g{u2,u3;u4,i1}:A-C-S
+
+V2
+^^
+
+V2 revises the syntax so that tensors and operators are no longer spelled alike: a **tensor** uses square brackets
+(``t[bra;ket;aux]``), a **normal-ordered operator** keeps braces (``a{annihilators;creators}``), and any other object is produced
+by a **function** ``~name(...)`` resolved through an extension registry (see below). Over V1 it adds complex constants, explicit
+``Power`` expressions, and representations for the remaining :class:`Expr` subclasses. Because V1 remains
+:class:`SerializationSyntax::Latest`, V2 must be requested explicitly.
+
+.. note::
+   Conjugation (``^*``) applies to variables and powers; tensors have no conjugated form.
+
+Whitespace, including line breaks, may appear between any two tokens, and so may a comment, which runs from ``//`` to
+the end of the line. Comments are discarded when reading and never written.
+
+A constant with both a nonzero real and a nonzero imaginary part has no single-token form and is written as a sum, e.g.
+``(3 + 1i/2)``; a sum or product of numbers is read back as a single :class:`Constant`.
+
+.. table::
+   :widths: auto
+
+   ================  ===============================================================================  =====================================================================================
+   Component         Rule                                                                             Note
+   ================  ===============================================================================  =====================================================================================
+   ResultExpression  (Tensor | Variable) '=' Expression
+   Expression        Sum
+   Sum               Product ( ('+' | '-') Product )*
+   Product           Factor ( ('*' | '/') Factor | Nullary )*                                         A bare juxtaposed ``Nullary`` is implicit multiplication (binds like ``*``)
+   Factor            ('+' | '-')* Nullary
+   Nullary           Function | Power | '(' Expression ')' | Tensor | Operator | Constant | Variable
+   Power             PowerBase '^' '(' Exponent ')' '^*'?                                             Also accepted: ``'(' Power ')' '^*'`` (the V1 form of a conjugated power)
+   PowerBase         '(' Expression ')' | Constant | Variable                                         A Constant or conjugated Variable base is parenthesized when serialized
+   Exponent          ('+' | '-')? Integer ('/' Integer)?                                              A rational number, e.g. ``x^(-1)`` or ``x^(1/2)``
+   Constant          Real | Real 'i'                                                                  Integer, float, or (via ``/``) a fraction; ``Ni`` (no space) is pure imaginary
+   Tensor            Name '[' IndexGroups ']' SymmetrySpec?                                           Groups are ``[bra;ket;aux]``
+   Operator          Name '{' IndexGroups '}'                                                         Groups are ``{annihilators;creators}``; the label selects the operator and its vacuum
+   Function          '~' Name '(' Arguments ')'                                                       ``Arguments`` is any text with balanced brackets; the function's handler parses it
+   IndexGroups       IndexList ( ';' IndexList )*                                                     A group without a slot is empty
+   IndexList         ( Slot ( ',' Slot )* )?
+   Slot              Index | '_'                                                                      ``_`` is a blank (null) index
+   Index             Name BasisInstance? IndexDomain?
+   BasisInstance     '#' '-'? Integer                                                                 An explicit, otherwise-unnamed basis instance (may be negative), e.g. ``i#3``; no whitespace before ``#``
+   IndexDomain       '<' (Name BasisInstance? (',' Name BasisInstance?)*)? '>'                        Proto indices
+   SymmetrySpec      ':' SymmetryTok ( '-' SymmetryTok )*                                             Order-independent; prefixes disambiguate the field, each given at most once
+   SymmetryTok       'A' | 'S' | 'N' | 'bkS' | 'bkC' | 'bkN' | 'pS' | 'pN'
+   Variable          Name '^*'?                                                                       ``^*`` marks conjugation
+   Name              BareName | '`' QuotedChar* '`'                                                   See below
+   ================  ===============================================================================  =====================================================================================
+
+A bare ``Name`` is a run of any characters except whitespace, control characters and the ASCII punctuation that the
+syntax uses (``_`` and ``'`` are allowed). A label that is not of this form, or that starts with a digit, is written in
+backticks, with a backslash escaping a backtick or backslash in it (see the examples below).
+
+The ``SymmetrySpec`` uses dash-joined, order-independent, prefixed tokens: the unprefixed ``A``/``S``/``N`` set the
+permutational :class:`Symmetry <sequant::Symmetry>`, ``bkS``/``bkC``/``bkN`` the :class:`BraKetSymmetry
+<sequant::BraKetSymmetry>`, and ``pS``/``pN`` the :class:`ColumnSymmetry <sequant::ColumnSymmetry>`. The prefixes let a field be
+given on its own (e.g. ``:pS``); :func:`to_string` always emits all three when ``annot_symm`` is set.
+
+The ``~name(...)`` syntax is an extension point: core registers ``~fop``/``~bop`` (a fermionic/bosonic raw :class:`Operator
+<sequant::Operator>`, an ordered sequence of action-tagged indices) and ``~fnopseq``/``~bnopseq`` (a fermionic/bosonic
+:class:`NormalOperatorSequence <sequant::NormalOperatorSequence>`), and
+downstream code may register handlers for its own :class:`Expr` subclasses with
+:func:`sequant::io::serialization::register_function`. A handler receives the text between the parentheses as written and
+parses it itself; :func:`sequant::io::serialization::split_arguments` splits it at the commas that separate arguments, and
+an argument can be parsed with ``v2::from_string`` or, for an index marked as a creator (``+``/``⁺``) or annihilator
+(``-``/``⁻``) such as ``~fop``'s, with :func:`sequant::io::serialization::parse_action_index`. Conversely, a handler's
+serializer emits only the text between the parentheses.
+
+The MBPT operators (:class:`sequant::mbpt::Operator`) are serialized as ``~fmbop(...)``/``~bmbop(...)`` once
+:func:`sequant::mbpt::register_serialization_functions` has been called; they are rebuilt from their label and ranks
+through the operator registry of the default MBPT context, e.g. ``~fmbop(t, 2)`` or ``~fmbop(R, 2, 1)``.
+
+Examples
+""""""""
+
+::
+
+   R[i1;a1]:A-bkN-pS = f[a1;a2]:A-bkN-pS t[i1;a2]:A-bkN-pS + 1/2 g[i1,i2;a1,a2]:A-bkN-pS t[a2;i2]:A-bkN-pS
+   t[i1#3;a1]       // an index in basis instance 3
+   `I_{1}`[i1;a1]   // a label that is not a bare name
+   ~fop(i1+, a1-)
+   ~fnopseq( a{i1;}, a{;a1} )

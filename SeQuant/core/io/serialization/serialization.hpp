@@ -16,11 +16,7 @@
 namespace sequant::io::serialization {
 
 struct SerializationError : Exception {
-  std::size_t offset;
-  std::size_t length;
-
-  SerializationError(std::size_t offset, std::size_t length,
-                     std::string message);
+  SerializationError(std::string message);
 };
 
 /// Specifies the syntax of the textual input/representation to use. All
@@ -34,6 +30,7 @@ struct SerializationError : Exception {
 ///       and support for it may be removed in future versions.
 enum class SerializationSyntax {
   V1,
+  V2,
 
   Latest = V1
 };
@@ -88,6 +85,11 @@ SEQUANT_DECLARE_DESERIALIZATION_FUNC;
 
 SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprPtr);
 SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(Constant);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(Variable);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(Tensor);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(Product);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(Sum);
 
 #define SEQUANT_DECLARE_SERIALIZATION_FUNC                          \
   std::wstring to_string(const ResultExpr &expr,                    \
@@ -137,6 +139,21 @@ SEQUANT_DECLARE_SERIALIZATION_FUNC
 /// arrows (U+2190 to U+21FF, e.g. `↑`, `↓`) and primes (`'`) only
 bool is_base_key(std::wstring_view label);
 }  // namespace v1
+
+namespace v2 {
+SEQUANT_DECLARE_DESERIALIZATION_FUNC;
+
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprPtr);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(Constant);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(Variable);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(Tensor);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(Product);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(Sum);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(Index);
+
+SEQUANT_DECLARE_SERIALIZATION_FUNC
+}  // namespace v2
 
 #undef SEQUANT_DECLARE_DESERIALIZATION_FUNC
 #undef SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION

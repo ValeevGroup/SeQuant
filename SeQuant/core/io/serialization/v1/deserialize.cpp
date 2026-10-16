@@ -10,6 +10,7 @@
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/io/serialization/v1/ast.hpp>
 #include <SeQuant/core/io/serialization/v1/ast_conversions.hpp>
+#include <SeQuant/core/io/serialization/v1/error.hpp>
 #include <SeQuant/core/io/serialization/v1/semantic_actions.hpp>
 #include <SeQuant/core/space.hpp>
 
@@ -211,10 +212,9 @@ struct ErrorHandler {
 
   void operator()(Iterator where, std::string expected) const {
     std::size_t offset = std::distance(begin, where);
-    throw SerializationError(offset, 1,
-                             std::string("Parse failure at offset ") +
-                                 std::to_string(offset) + ": expected " +
-                                 expected);
+    throw Error(offset, 1,
+                std::string("Parse failure at offset ") +
+                    std::to_string(offset) + ": expected " + expected);
   }
 };
 
@@ -237,15 +237,15 @@ AST parse(const StartRule &start, std::wstring_view input,
 
     if (!success) {
       // Normally, this shouldn't happen as any error should itself throw a
-      // SerializationError already
-      throw SerializationError(
-          0, input.size(), "Parsing was unsuccessful for an unknown reason");
+      // Error already
+      throw Error(0, input.size(),
+                  "Parsing was unsuccessful for an unknown reason");
     }
     if (begin != input.end()) {
       // This should also not happen as the parser requires matching EOI
-      throw SerializationError(std::distance(input.begin(), begin),
-                               std::distance(begin, input.end()),
-                               "Couldn't parse the entire input");
+      throw Error(std::distance(input.begin(), begin),
+                  std::distance(begin, input.end()),
+                  "Couldn't parse the entire input");
     }
   } catch ([[maybe_unused]] const boost::spirit::x3::expectation_failure<
            iterator_type> &e) {
@@ -267,28 +267,7 @@ bool is_base_key(std::wstring_view label) {
 
 transform::DefaultSymmetries to_default_symms(
     const DeserializationOptions &options) {
-  // unspecified symmetries default to the active Context's; the Hermiticity is
-  // resolved against each tensor's base_field downstream, as in the Tensor ctor
-  const Context &ctx = get_default_context();
-  transform::DefaultSymmetries symms{ctx.deserialization_symmetry(),
-                                     ctx.deserialization_hermiticity(),
-                                     ctx.deserialization_column_symmetry()};
-
-  if (options.def_perm_symm.has_value()) {
-    std::get<0>(symms) = options.def_perm_symm.value();
-  }
-  if (options.def_braket_symm.has_value()) {
-    std::get<1>(symms) = options.def_braket_symm.value();
-  }
-  if (options.def_col_symm.has_value()) {
-    std::get<2>(symms) = options.def_col_symm.value();
-  }
-  if (std::get<0>(symms) != Symmetry::Nonsymm) {
-    // antisymmetry/symmetric bra and ket imply particle symmetry
-    std::get<2>(symms) = ColumnSymmetry::Symm;
-  }
-
-  return symms;
+  return detail::resolve_default_symmetries(options);
 }
 
 #define SEQUANT_DESERIALIZATION_SPECIALIZATION(ExprType, StartRule, ASTType, \

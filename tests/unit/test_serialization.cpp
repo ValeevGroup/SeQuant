@@ -1,0 +1,1215 @@
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
+
+#include "catch2_sequant.hpp"
+
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/complex.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/serialization/function_registry.hpp>
+#include <SeQuant/core/io/serialization/serialization.hpp>
+#include <SeQuant/core/io/serialization/v1/error.hpp>
+#include <SeQuant/core/io/serialization/v2/error.hpp>
+#include <SeQuant/core/rational.hpp>
+
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
+
+#include <algorithm>
+#include <cstddef>
+#include <locale>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <typeindex>
+#include <utility>
+#include <vector>
+
+#include <range/v3/all.hpp>
+
+namespace Catch {
+template <>
+struct StringMaker<sequant::io::serialization::v1::Error> {
+  static std::string convert(
+      const sequant::io::serialization::v1::Error& error) {
+    return "io::serialization::v1::Error{offset: " +
+           std::to_string(error.offset) +
+           ", length: " + std::to_string(error.length) + ", what(): '" +
+           error.what() + "'}";
+  }
+};
+}  // namespace Catch
+
+struct SerializationErrorV1Matcher
+    : Catch::Matchers::MatcherBase<sequant::io::serialization::v1::Error> {
+  std::size_t offset;
+  std::size_t length;
+  std::string messageFragment;
+
+  SerializationErrorV1Matcher(std::size_t offset, std::size_t length,
+                              std::string messageFragment = "")
+      : offset(offset),
+        length(length),
+        messageFragment(std::move(messageFragment)) {}
+
+  bool match(
+      const sequant::io::serialization::v1::Error& exception) const override {
+    if (exception.offset != offset) {
+      return false;
+    }
+    if (exception.length != length) {
+      return false;
+    }
+    if (!messageFragment.empty()) {
+      std::string message(exception.what());
+      auto iter = message.find(messageFragment);
+
+      return iter != std::string::npos;
+    }
+    return true;
+  }
+
+  std::string describe() const override {
+    return "-- expected {offset: " + std::to_string(offset) +
+           ", length: " + std::to_string(length) +
+           (messageFragment.empty()
+                ? std::string("}")
+                : ", what() references '" + messageFragment + "'}");
+  }
+};
+
+SerializationErrorV1Matcher serializationErrorV1Matches(
+    std::size_t offset, std::size_t length, std::string messageFragment = "") {
+  return SerializationErrorV1Matcher{offset, length,
+                                     std::move(messageFragment)};
+}
+
+TEST_CASE("serialization", "[serialization]") {
+  using namespace sequant;
+  using namespace io::serialization;
+  SECTION("v1") {
+    SECTION("from_string<ExprPtr>") {
+      auto ctx = get_default_context();
+      ctx.set(mbpt::make_sr_spaces());
+      auto ctx_resetter = set_scoped_default_context(ctx);
+
+      SECTION("default symmetries follow the Context") {
+        // the deserializer sources unspecified tensor symmetries from the
+        // active Context (unlike the programmatic Tensor ctor, which uses fixed
+        // defaults -- see test_tensor "programmatic ctor defaults are
+        // Context-independent"). Flip the Context column-symmetry default and
+        // confirm parsed tensors follow it.
+        auto ctx_symm = get_default_context();
+        ctx_symm.set(ColumnSymmetry::Symm);
+        {
+          auto resetter = set_scoped_default_context(ctx_symm);
+          REQUIRE(v1::from_string<ExprPtr>(L"t{i1,i2;a1,a2}")
+                      ->as<Tensor>()
+                      .column_symmetry() == ColumnSymmetry::Symm);
+        }
+        auto ctx_nonsymm = get_default_context();
+        ctx_nonsymm.set(ColumnSymmetry::Nonsymm);
+        {
+          auto resetter = set_scoped_default_context(ctx_nonsymm);
+          REQUIRE(v1::from_string<ExprPtr>(L"t{i1,i2;a1,a2}")
+                      ->as<Tensor>()
+                      .column_symmetry() == ColumnSymmetry::Nonsymm);
+        }
+      }
+
+      SECTION("Scalar tensor") {
+        auto expr = v1::from_string<ExprPtr>(L"t{}");
+        REQUIRE(expr->is<Tensor>());
+        REQUIRE(expr->as<Tensor>().bra().empty());
+        REQUIRE(expr->as<Tensor>().ket().empty());
+        REQUIRE(expr->as<Tensor>().aux().empty());
+
+        REQUIRE(expr == v1::from_string<ExprPtr>(L"t{;}"));
+        REQUIRE(expr == v1::from_string<ExprPtr>(L"t{;;}"));
+        REQUIRE(expr == v1::from_string<ExprPtr>(L"t^{}_{}"));
+        REQUIRE(expr == v1::from_string<ExprPtr>(L"t_{}^{}"));
+      }
+      SECTION("Tensor") {
+        auto expr = v1::from_string<ExprPtr>(L"t{i1;a1}");
+        REQUIRE(expr->is<Tensor>());
+        REQUIRE(expr->as<Tensor>().label() == L"t");
+        REQUIRE(expr->as<Tensor>().bra().size() == 1);
+        REQUIRE(expr->as<Tensor>().bra().at(0).label() == L"i_1");
+        REQUIRE(expr->as<Tensor>().ket().size() == 1);
+        REQUIRE(expr->as<Tensor>().ket().at(0) == L"a_1");
+        REQUIRE(expr->as<Tensor>().aux().empty());
+
+        REQUIRE(expr == v1::from_string<ExprPtr>(L"t_{i1}^{a1}"));
+        REQUIRE(expr == v1::from_string<ExprPtr>(L"t^{a1}_{i1}"));
+        REQUIRE(expr == v1::from_string<ExprPtr>(L"t{i_1; a_1}"));
+        REQUIRE(expr == v1::from_string<ExprPtr>(L"t{i_1; a_1;}"));
+        REQUIRE(expr == v1::from_string<ExprPtr>(L"t_{i_1}^{a_1}"));
+
+        expr = v1::from_string<ExprPtr>(L"t{i1,i2;a1,a2}");
+        REQUIRE(expr->as<Tensor>().bra().size() == 2);
+        REQUIRE(expr->as<Tensor>().bra().at(0).label() == L"i_1");
+        REQUIRE(expr->as<Tensor>().bra().at(1).label() == L"i_2");
+        REQUIRE(expr->as<Tensor>().ket().size() == 2);
+        REQUIRE(expr->as<Tensor>().ket().at(0).label() == L"a_1");
+        REQUIRE(expr->as<Tensor>().ket().at(1).label() == L"a_2");
+        REQUIRE(expr->as<Tensor>().aux().empty());
+
+        REQUIRE(expr == v1::from_string<ExprPtr>(L"+t{i1, i2; a1, a2}"));
+        REQUIRE(v1::from_string<ExprPtr>(L"-t{i1;a1}")->is<Product>());
+        REQUIRE(expr ==
+                v1::from_string<ExprPtr>(L"t{\ti1, \ti2; \na1,\t a2 \t}"));
+
+        // Tensor labels including underscores
+        REQUIRE(
+            v1::from_string<ExprPtr>(L"T_1{i_1;a_1}")->as<Tensor>().label() ==
+            L"T_1");
+
+        // "Non-standard" tensor labels
+        REQUIRE(v1::from_string<ExprPtr>(L"α{a1;i1}")->as<Tensor>().label() ==
+                L"α");
+        REQUIRE(v1::from_string<ExprPtr>(L"γ_1{a1;i1}")->as<Tensor>().label() ==
+                L"γ_1");
+        REQUIRE(v1::from_string<ExprPtr>(L"t⁔1{a1;i1}")->as<Tensor>().label() ==
+                L"t⁔1");
+        REQUIRE(v1::from_string<ExprPtr>(L"t¹{a1;i1}")->as<Tensor>().label() ==
+                L"t¹");
+        REQUIRE(v1::from_string<ExprPtr>(L"t⁸{a1;i1}")->as<Tensor>().label() ==
+                L"t⁸");
+        REQUIRE(v1::from_string<ExprPtr>(L"t⁻{a1;i1}")->as<Tensor>().label() ==
+                L"t⁻");
+        REQUIRE(v1::from_string<ExprPtr>(L"tₐ{a1;i1}")->as<Tensor>().label() ==
+                L"tₐ");
+        REQUIRE(v1::from_string<ExprPtr>(L"t₋{a1;i1}")->as<Tensor>().label() ==
+                L"t₋");
+        REQUIRE(v1::from_string<ExprPtr>(L"t₌{a1;i1}")->as<Tensor>().label() ==
+                L"t₌");
+        REQUIRE(v1::from_string<ExprPtr>(L"t↓{a1;i1}")->as<Tensor>().label() ==
+                L"t↓");
+        REQUIRE(v1::from_string<ExprPtr>(L"t↑{a1;i1}")->as<Tensor>().label() ==
+                L"t↑");
+
+        // "Non-standard" index names
+        auto expr1 = v1::from_string<ExprPtr>(L"t{a↓1;i↑1}");
+        REQUIRE(expr1->as<Tensor>().bra().at(0).label() == L"a↓_1");
+        REQUIRE(expr1->as<Tensor>().ket().at(0).label() == L"i↑_1");
+
+        // Auxiliary indices
+        expr = v1::from_string<ExprPtr>(L"t{;;i1}");
+        REQUIRE(expr->is<Tensor>());
+        REQUIRE(expr->as<Tensor>().bra().empty());
+        REQUIRE(expr->as<Tensor>().ket().empty());
+        REQUIRE(expr->as<Tensor>().aux().size() == 1);
+        REQUIRE(expr->as<Tensor>().aux()[0].label() == L"i_1");
+
+        // All index groups at once
+        expr = v1::from_string<ExprPtr>(L"t{i1,i2;a1;x1,x2}");
+        REQUIRE(expr->is<Tensor>());
+        REQUIRE(expr->as<Tensor>().bra().size() == 2);
+        REQUIRE(expr->as<Tensor>().bra().at(0).label() == L"i_1");
+        REQUIRE(expr->as<Tensor>().bra().at(1).label() == L"i_2");
+        REQUIRE(expr->as<Tensor>().ket().size() == 1);
+        REQUIRE(expr->as<Tensor>().ket().at(0).label() == L"a_1");
+        REQUIRE(expr->as<Tensor>().aux().size() == 2);
+        REQUIRE(expr->as<Tensor>().aux().at(0).label() == L"x_1");
+        REQUIRE(expr->as<Tensor>().aux().at(1).label() == L"x_2");
+      }
+
+      SECTION("Tensor with symmetry annotation") {
+        auto expr1 = v1::from_string<ExprPtr>(L"t{a1;i1}:A");
+        auto expr2 = v1::from_string<ExprPtr>(L"t{a1;i1}:S-C");
+        auto expr3 = v1::from_string<ExprPtr>(L"t{a1;i1}:N-S-N");
+        auto expr4 = v1::from_string<ExprPtr>(L"t{a1;i1}:N-H-N");
+        auto expr5 = v1::from_string<ExprPtr>(L"t{a1;i1}:N-A-N");
+        auto expr6 = v1::from_string<ExprPtr>(L"t{a1;i1}:N-N-N");
+
+        const Tensor& t1 = expr1->as<Tensor>();
+        const Tensor& t2 = expr2->as<Tensor>();
+        const Tensor& t3 = expr3->as<Tensor>();
+        const Tensor& t4 = expr4->as<Tensor>();
+        const Tensor& t5 = expr5->as<Tensor>();
+        const Tensor& t6 = expr6->as<Tensor>();
+
+        REQUIRE(t1.symmetry() == Symmetry::Antisymm);
+
+        REQUIRE(t2.symmetry() == Symmetry::Symm);
+        REQUIRE(t2.braket_symmetry() == BraKetSymmetry::Conjugate);
+
+        REQUIRE(t3.symmetry() == Symmetry::Nonsymm);
+        REQUIRE(t3.braket_symmetry() == BraKetSymmetry::Symm);
+        REQUIRE(t3.column_symmetry() == ColumnSymmetry::Nonsymm);
+
+        REQUIRE(t4.hermiticity() == Hermiticity::Hermitian);
+        REQUIRE(t5.hermiticity() == Hermiticity::AntiHermitian);
+        REQUIRE(t6.hermiticity() == Hermiticity::NonHermitian);
+      }
+
+      SECTION("NormalOperator") {
+        {
+          using NOp = FNOperator;
+          auto expr = v1::from_string<ExprPtr>(L"a{i1;a1}");
+          REQUIRE(expr->is<NOp>());
+          REQUIRE(expr->as<NOp>().label() == NOp::labels()[0]);
+          REQUIRE(expr->as<NOp>().creators().size() == 1);
+          REQUIRE(expr->as<NOp>().creators().at(0).index().label() == L"a_1");
+          REQUIRE(expr->as<NOp>().annihilators().size() == 1);
+          REQUIRE(expr->as<NOp>().annihilators().at(0).index() == L"i_1");
+          REQUIRE(expr->as<NOp>().vacuum() == Vacuum::Physical);
+        }
+        {
+          using NOp = FNOperator;
+          auto expr = v1::from_string<ExprPtr>(L"ã{i1;}");
+          REQUIRE(expr->is<NOp>());
+          REQUIRE(expr->as<NOp>().label() == NOp::labels()[1]);
+          REQUIRE(expr->as<NOp>().creators().size() == 0);
+          REQUIRE(expr->as<NOp>().annihilators().size() == 1);
+          REQUIRE(expr->as<NOp>().annihilators().at(0).index() == L"i_1");
+          REQUIRE(expr->as<NOp>().vacuum() == Vacuum::SingleProduct);
+        }
+
+        {
+          using NOp = BNOperator;
+          auto expr = v1::from_string<ExprPtr>(L"b{i1;a1}");
+          REQUIRE(expr->is<NOp>());
+          REQUIRE(expr->as<NOp>().label() == NOp::labels()[0]);
+          REQUIRE(expr->as<NOp>().creators().size() == 1);
+          REQUIRE(expr->as<NOp>().creators().at(0).index().label() == L"a_1");
+          REQUIRE(expr->as<NOp>().annihilators().size() == 1);
+          REQUIRE(expr->as<NOp>().annihilators().at(0).index() == L"i_1");
+          REQUIRE(expr->as<NOp>().vacuum() == Vacuum::Physical);
+        }
+        {
+          using NOp = BNOperator;
+          auto expr = v1::from_string<ExprPtr>(L"b̃{;a1}");
+          REQUIRE(expr->is<NOp>());
+          REQUIRE(expr->as<NOp>().label() == NOp::labels()[1]);
+          REQUIRE(expr->as<NOp>().creators().size() == 1);
+          REQUIRE(expr->as<NOp>().creators().at(0).index().label() == L"a_1");
+          REQUIRE(expr->as<NOp>().annihilators().size() == 0);
+          REQUIRE(expr->as<NOp>().vacuum() == Vacuum::SingleProduct);
+        }
+        {
+          // a tilde operator takes the Context's (non-Physical) vacuum
+          auto ctx_mp = get_default_context();
+          ctx_mp.set(Vacuum::MultiProduct);
+          auto resetter = set_scoped_default_context(ctx_mp);
+          REQUIRE(v1::from_string<ExprPtr>(L"ã{i1;i2}")
+                      ->as<FNOperator>()
+                      .vacuum() == Vacuum::MultiProduct);
+          REQUIRE(v1::from_string<ExprPtr>(L"b̃{i1;i2}")
+                      ->as<BNOperator>()
+                      .vacuum() == Vacuum::MultiProduct);
+        }
+        {
+          auto ctx_phys = get_default_context();
+          ctx_phys.set(Vacuum::Physical);
+          auto resetter = set_scoped_default_context(ctx_phys);
+          REQUIRE(v1::from_string<ExprPtr>(L"ã{i1;i2}")
+                      ->as<FNOperator>()
+                      .vacuum() == Vacuum::SingleProduct);
+          REQUIRE(v1::from_string<ExprPtr>(L"b̃{i1;i2}")
+                      ->as<BNOperator>()
+                      .vacuum() == Vacuum::SingleProduct);
+        }
+      }
+
+      SECTION("Constant") {
+        REQUIRE(v1::from_string<ExprPtr>(L"1/2")->is<Constant>());
+        REQUIRE(v1::from_string<ExprPtr>(L"0/2")->is<Constant>());
+        REQUIRE(v1::from_string<ExprPtr>(L"-1/2")->is<Constant>());
+        REQUIRE(v1::from_string<ExprPtr>(L"-0/2")->is<Constant>());
+        REQUIRE(v1::from_string<ExprPtr>(L"1")->is<Constant>());
+        REQUIRE(v1::from_string<ExprPtr>(L"123")->is<Constant>());
+        REQUIRE(v1::from_string<ExprPtr>(L"1.")->is<Constant>());
+        REQUIRE(v1::from_string<ExprPtr>(L"01.00")->is<Constant>());
+        REQUIRE(v1::from_string<ExprPtr>(L"0 / 10")->is<Constant>());
+        REQUIRE(v1::from_string<ExprPtr>(L"0.5/0.25")->is<Constant>());
+        REQUIRE(v1::from_string<ExprPtr>(L".4")->is<Constant>());
+      }
+
+      SECTION("Variable") {
+        // SeQuant variable is just a label followed by an optional ^*
+        // to denote if the variable is conjugated
+        REQUIRE(v1::from_string<ExprPtr>(L"a")->is<Variable>());
+        REQUIRE(v1::from_string<ExprPtr>(L"α")->is<Variable>());
+        REQUIRE(v1::from_string<ExprPtr>(L"β")->is<Variable>());
+        REQUIRE(v1::from_string<ExprPtr>(L"γ")->is<Variable>());
+        REQUIRE(v1::from_string<ExprPtr>(L"λ")->is<Variable>());
+        REQUIRE(v1::from_string<ExprPtr>(L"δ")->is<Variable>());
+        REQUIRE(v1::from_string<ExprPtr>(L"a^*")->is<Variable>());
+        REQUIRE(v1::from_string<ExprPtr>(L"α^*")->is<Variable>());
+        REQUIRE(v1::from_string<ExprPtr>(L"β^*")->is<Variable>());
+        REQUIRE(v1::from_string<ExprPtr>(L"b^*")->is<Variable>());
+        REQUIRE(v1::from_string<ExprPtr>(L"b^*")->as<Variable>().conjugated());
+        REQUIRE(v1::from_string<ExprPtr>(L"b^*")->as<Variable>().label() ==
+                L"b");
+      }
+
+      SECTION("Power") {
+        auto half = v1::from_string<ExprPtr>(L"2^(1/2)");
+        REQUIRE(half->is<Power>());
+        REQUIRE(half->as<Power>().base()->is<Constant>());
+        REQUIRE(half->as<Power>().base()->as<Constant>().value() ==
+                rational{2});
+        REQUIRE(half->as<Power>().exponent() == rational{1, 2});
+
+        auto x_square = v1::from_string<ExprPtr>(L"x^(2)");
+        REQUIRE(x_square->is<Power>());
+        REQUIRE(x_square->as<Power>().base()->is<Variable>());
+        REQUIRE(x_square->as<Power>().base()->as<Variable>().label() == L"x");
+        REQUIRE(x_square->as<Power>().exponent() == rational{2});
+
+        // whitespace
+        REQUIRE(v1::from_string<ExprPtr>(L"x ^ ( 1/2 )") ==
+                v1::from_string<ExprPtr>(L"x^(1/2)"));
+
+        // Power composes inside Products
+        auto prod = v1::from_string<ExprPtr>(L"3 * x^(1/2) * t{i1;a1}");
+        REQUIRE(prod->is<Product>());
+        REQUIRE(prod->as<Product>().scalar() == rational{3});
+        REQUIRE(prod->as<Product>().factor(0)->is<Power>());
+        REQUIRE(prod->as<Product>().factor(1)->is<Tensor>());
+
+        auto neg_half = ex<Power>(ex<Constant>(rational{-2}), rational{1, 2});
+        const auto neg_half_str = L"(-2)^(1/2)";
+        REQUIRE(v1::to_string(neg_half) == neg_half_str);
+        REQUIRE(v1::from_string<ExprPtr>(L"(-2)^(1/2)") == neg_half);
+
+        auto frac_half =
+            ex<Power>(ex<Constant>(rational{3, 2}), rational{1, 2});
+        const auto frac_half_str = L"(3/2)^(1/2)";
+        REQUIRE(v1::to_string(frac_half) == frac_half_str);
+        REQUIRE(v1::from_string<ExprPtr>(L"(3/2)^(1/2)") == frac_half);
+
+        // conjugated Variable base must be parenthesized
+        auto conj_var = ex<Variable>(L"x");
+        conj_var->as<Variable>().conjugate();
+        auto pw_conj_var = ex<Power>(conj_var, rational{2});
+        const auto pw_conj_var_str = L"(x^*)^(2)";
+        REQUIRE(v1::to_string(pw_conj_var) == pw_conj_var_str);
+        REQUIRE(v1::from_string<ExprPtr>(pw_conj_var_str) == pw_conj_var);
+
+        // conjugated power with conjugated Variable base: ((x^*)^(2))^*
+        auto pw_conj_var_conj = pw_conj_var->clone();
+        pw_conj_var_conj->as<Power>().conjugate();
+        const auto pw_conj_var_conj_str = L"((x^*)^(2))^*";
+        REQUIRE(v1::to_string(pw_conj_var_conj) == pw_conj_var_conj_str);
+        REQUIRE(v1::from_string<ExprPtr>(pw_conj_var_conj_str) ==
+                pw_conj_var_conj);
+      }
+
+      SECTION("Product") {
+        auto expr =
+            v1::from_string<ExprPtr>(L"-1/2 g{i2,i3; i1,a2} t{a1,a2; i2,i3}");
+        REQUIRE(expr->is<Product>());
+
+        auto const& prod = expr->as<Product>();
+        REQUIRE(prod.scalar() == rational{-1, 2});
+        REQUIRE(prod.factor(0) ==
+                v1::from_string<ExprPtr>(L"g_{i_2, i_3}^{i_1, a_2}"));
+        REQUIRE(prod.factor(1) ==
+                v1::from_string<ExprPtr>(L"t^{i2, i3}_{a1, a2}"));
+        REQUIRE(v1::from_string<ExprPtr>(L"-1/2 * δ * t{i1;a1}") ==
+                v1::from_string<ExprPtr>(L"-1/2  δ  t{i1;a1}"));
+        auto const prod2 =
+            v1::from_string<ExprPtr>(L"-1/2 * δ * γ * t{i1;a1}")->as<Product>();
+        REQUIRE(prod2.scalar() == rational{-1, 2});
+        REQUIRE(prod2.factor(0) == ex<Variable>(L"δ"));
+        REQUIRE(prod2.factor(1) == ex<Variable>(L"γ"));
+        REQUIRE(prod2.factor(2)->is<Tensor>());
+      }
+
+      SECTION("Sum") {
+        auto expr1 = v1::from_string<ExprPtr>(
+            L"f{a1;i1}"
+            "- 1/2*g{i2,a1; a2,a3}t{a2,a3; i1,i2}");
+        REQUIRE(expr1->is<Sum>());
+
+        auto const& sum1 = expr1->as<Sum>();
+        REQUIRE(sum1.summand(0) == v1::from_string<ExprPtr>(L"f{a1;i1}"));
+        REQUIRE(sum1.summand(1) ==
+                v1::from_string<ExprPtr>(
+                    L"- 1/2 * g{i2,a1; a2,a3} * t{a2,a3; i1,i2}"));
+
+        auto expr2 = v1::from_string<ExprPtr>(L"a - 4");
+        REQUIRE(expr2->is<Sum>());
+
+        auto const& sum2 = expr2->as<Sum>();
+        REQUIRE(sum2.summand(0) == v1::from_string<ExprPtr>(L"a"));
+        REQUIRE(sum2.summand(1) == v1::from_string<ExprPtr>(L"-4"));
+      }
+
+      SECTION("Parentheses") {
+        auto expr1 = v1::from_string<ExprPtr>(
+            L"-1/2 g{i2,i3; a2,a3} * ( t{a1,a3; i2,i3} * t{a2;i1} )");
+        REQUIRE(expr1->is<Product>());
+
+        auto const& prod1 = expr1->as<Product>();
+        REQUIRE(prod1.size() == 2);
+        REQUIRE(prod1.scalar() == rational{-1, 2});
+        REQUIRE(prod1.factor(0)->is<Tensor>());
+        REQUIRE(prod1.factor(1)->is<Product>());
+        REQUIRE(prod1.factor(1)->size() == 2);
+
+        auto expr2 = v1::from_string<ExprPtr>(
+            L"(-1/2) ( g{i2,i3; a2,a3} * t{a1,a3; i2,i3} ) * (t{a2;i1})");
+        REQUIRE(expr2->is<Product>());
+
+        auto const& prod2 = expr2->as<Product>();
+        REQUIRE(prod2.size() == 2);
+        REQUIRE(prod2.scalar() == rational{-1, 2});
+        REQUIRE(prod2.factor(0)->is<Product>());
+        REQUIRE(prod2.factor(0)->at(0) ==
+                v1::from_string<ExprPtr>(L"g{i2,i3; a2,a3}"));
+        REQUIRE(prod2.factor(0)->at(1) ==
+                v1::from_string<ExprPtr>(L"t{a1,a3; i2,i3}"));
+        REQUIRE(prod2.factor(1) == v1::from_string<ExprPtr>(L"t{a2;i1}"));
+
+        auto expr3 = v1::from_string<ExprPtr>(
+            L"(-1/2) ( g{i2,i3; a2,a3} * t{a1,a3; i2,i3} ) * (1/2) * "
+            L"((t{a2;i1}))");
+        REQUIRE(expr3->is<Product>());
+
+        auto const& prod3 = expr3->as<Product>();
+        REQUIRE(prod3.size() == 2);
+        REQUIRE(prod3.scalar() == rational{-1, 4});
+        REQUIRE(prod3.factor(0)->is<Product>());
+        REQUIRE(prod3.factor(0)->at(0) ==
+                v1::from_string<ExprPtr>(L"g{i2,i3; a2,a3}"));
+        REQUIRE(prod3.factor(0)->at(1) ==
+                v1::from_string<ExprPtr>(L"t{a1,a3; i2,i3}"));
+        REQUIRE(prod3.factor(1) == v1::from_string<ExprPtr>(L"t{a2;i1}"));
+
+        auto expr4 = v1::from_string<ExprPtr>(L"1/2 (a + b) * c");
+        REQUIRE(expr4->is<Product>());
+
+        const auto& prod4 = expr4->as<Product>();
+        REQUIRE(prod4.size() == 2);
+        REQUIRE(prod4.scalar() == rational{1, 2});
+        REQUIRE(prod4.factor(1)->is<Variable>());
+        REQUIRE(prod4.factor(1)->as<Variable>().label() == L"c");
+        REQUIRE(prod4.factor(0)->is<Sum>());
+        const auto& nestedSum = prod4.factor(0)->as<Sum>();
+        REQUIRE(nestedSum.size() == 2);
+        REQUIRE(nestedSum.summand(0)->is<Variable>());
+        REQUIRE(nestedSum.summand(0)->as<Variable>().label() == L"a");
+        REQUIRE(nestedSum.summand(1)->is<Variable>());
+        REQUIRE(nestedSum.summand(1)->as<Variable>().label() == L"b");
+      }
+
+      SECTION("Mixed") {
+        auto expr = v1::from_string<ExprPtr>(
+            L"0.25 g{a1,a2; i1,i2}"
+            "+ 1/4 g{i3,i4; a3,a4} (t{a3;i1} * t{a4;i2}) * (t{a1;i3} * "
+            "t{a2;i4})");
+        REQUIRE(expr->is<Sum>());
+        auto const& sum = expr->as<Sum>();
+
+        REQUIRE(sum.size() == 2);
+
+        REQUIRE(sum.summand(0)->is<Product>());
+        REQUIRE(sum.summand(0)->as<Product>().scalar() == rational{1, 4});
+        REQUIRE(sum.summand(0)->size() == 1);
+        REQUIRE(sum.summand(0)->at(0) ==
+                v1::from_string<ExprPtr>(L"g{a1,a2; i1,i2}"));
+
+        REQUIRE(sum.summand(1)->is<Product>());
+        auto const& prod = sum.summand(1)->as<Product>();
+
+        REQUIRE(prod.scalar() == rational{1, 4});
+        REQUIRE(prod.size() == 3);
+        REQUIRE(prod.factor(0) == v1::from_string<ExprPtr>(L"g{i3,i4; a3,a4}"));
+
+        REQUIRE(prod.factor(1)->is<Product>());
+        REQUIRE(prod.factor(1)->at(0) == v1::from_string<ExprPtr>(L"t{a3;i1}"));
+        REQUIRE(prod.factor(1)->at(1) == v1::from_string<ExprPtr>(L"t{a4;i2}"));
+
+        REQUIRE(prod.factor(2)->is<Product>());
+        REQUIRE(prod.factor(2)->at(0) == v1::from_string<ExprPtr>(L"t{a1;i3}"));
+        REQUIRE(prod.factor(2)->at(1) == v1::from_string<ExprPtr>(L"t{a2;i4}"));
+      }
+
+      SECTION("Empty input") {
+        REQUIRE(v1::from_string<ExprPtr>(L"") == nullptr);
+      }
+
+      // every registered space label is an index space name of the grammar
+      SECTION("Index in a primed space") {
+        auto f12 = get_default_context();
+        f12.set(mbpt::make_F12_sr_spaces());
+        auto f12_resetter = set_scoped_default_context(f12);
+        const auto expr = v1::from_string<ExprPtr>(L"t{α'_1;i_1}");
+        REQUIRE(expr->is<Tensor>());
+        REQUIRE(expr->as<Tensor>().bra().at(0).space() ==
+                get_default_context().index_basis_registry()->retrieve_space(
+                    L"α'"));
+        REQUIRE(*v1::from_string<ExprPtr>(v1::to_string(expr)) == *expr);
+      }
+
+      SECTION("Error handling") {
+        SECTION("Exception type") {
+          std::vector<std::wstring> inputs = {L"t^",
+                                              L"a + + b"
+                                              L"1/t"
+                                              L"T{}"
+                                              L"T^{i1}{a1}"};
+
+          for (const std::wstring& current : inputs) {
+            REQUIRE_THROWS_AS(v1::from_string<ExprPtr>(current),
+                              io::serialization::v1::Error);
+          }
+        }
+
+        SECTION("Invalid index") {
+          REQUIRE_THROWS_MATCHES(v1::from_string<ExprPtr>(L"t{i1<az1>;}"),
+                                 io::serialization::v1::Error,
+                                 serializationErrorV1Matches(5, 3, "proto"));
+          REQUIRE_THROWS_MATCHES(
+              v1::from_string<ExprPtr>(L"t{i1;az3}"),
+              io::serialization::v1::Error,
+              serializationErrorV1Matches(5, 3, "Unknown index space"));
+        }
+
+        SECTION("Invalid symmetry") {
+          REQUIRE_THROWS_MATCHES(
+              v1::from_string<ExprPtr>(L"t{i1;a3}:P"),
+              io::serialization::v1::Error,
+              serializationErrorV1Matches(9, 1, "Invalid symmetry specifier"));
+        }
+
+        SECTION("(anti)symmetrization operators reject braket symmetry") {
+          // a reserved (anti)symmetrizer must be braket-Nonsymm; an explicit
+          // non-Nonsymm braket spec is rejected by the Tensor ctor
+          REQUIRE_THROWS(v1::from_string<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:N-C-S"));
+          REQUIRE_THROWS(v1::from_string<ExprPtr>(L"Â{i1,i2;a1,a2}:A-C-S"));
+          // the default (braket-Nonsymm) form is accepted
+          REQUIRE_NOTHROW(v1::from_string<ExprPtr>(L"Ŝ{i1,i2;a1,a2}"));
+          REQUIRE_NOTHROW(v1::from_string<ExprPtr>(L"Â{i1,i2;a1,a2}"));
+          // ... and stays accepted even when the Context defaults to Hermitian:
+          // reserved (anti)symmetrizers must not inherit the Context braket
+          // default (which would otherwise derive a non-Nonsymm braket and
+          // throw)
+          {
+            auto ctx = get_default_context();
+            ctx.set(Hermiticity::Hermitian);
+            auto resetter = set_scoped_default_context(ctx);
+            REQUIRE_NOTHROW(v1::from_string<ExprPtr>(L"Ŝ{i1,i2;a1,a2}"));
+            REQUIRE_NOTHROW(v1::from_string<ExprPtr>(L"Â{i1,i2;a1,a2}"));
+          }
+        }
+
+        SECTION("(anti)symmetrization operators reject contradicting perm") {
+          // an explicitly spelled perm symmetry that contradicts the reserved
+          // label's defining one is rejected rather than silently overwritten,
+          // as for the braket and column specs
+          REQUIRE_THROWS(v1::from_string<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:A-N-S"));
+          REQUIRE_THROWS(v1::from_string<ExprPtr>(L"Â{i1,i2;a1,a2}:N-N-S"));
+          // the matching spellings stay accepted
+          REQUIRE_NOTHROW(v1::from_string<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:N-N-S"));
+          REQUIRE_NOTHROW(v1::from_string<ExprPtr>(L"Â{i1,i2;a1,a2}:A-N-S"));
+        }
+
+        SECTION("(anti)symmetrization operators have fixed perm symmetry") {
+          // the defining bra/ket permutational symmetry of a reserved
+          // (anti)symmetrizer is not a free parameter either, so it must not be
+          // inherited from the Context; a parsed operator must match the one
+          // built by make_(anti)symmetrizer()
+          auto ctx = get_default_context();
+          ctx.set(Symmetry::Antisymm);
+          auto resetter = set_scoped_default_context(ctx);
+          const auto S = v1::from_string<ExprPtr>(L"Ŝ{i1,i2;a1,a2}");
+          REQUIRE(S->as<Tensor>().symmetry() == Symmetry::Nonsymm);
+          REQUIRE(S == make_symmetrizer(bra{Index(L"i_1"), Index(L"i_2")},
+                                        ket{Index(L"a_1"), Index(L"a_2")}));
+          const auto A = v1::from_string<ExprPtr>(L"Â{i1,i2;a1,a2}");
+          REQUIRE(A->as<Tensor>().symmetry() == Symmetry::Antisymm);
+          REQUIRE(A == make_antisymmetrizer(bra{Index(L"i_1"), Index(L"i_2")},
+                                            ket{Index(L"a_1"), Index(L"a_2")}));
+        }
+
+        SECTION("(anti)symmetrization operators are always column symmetric") {
+          // ... including under a Context whose column default is the library
+          // default Nonsymm: the deserializer must supply Symm rather than pass
+          // the (contradicting) Context default to the Tensor ctor
+          auto ctx = get_default_context();
+          ctx.set(ColumnSymmetry::Nonsymm);
+          auto resetter = set_scoped_default_context(ctx);
+          for (const auto& input :
+               {L"Ŝ{i1,i2;a1,a2}", L"Â{i1,i2;a1,a2}", L"Ŝ{i1,i2;a1,a2}:N-N-S",
+                L"Â{i1,i2;a1,a2}:A-N-S"}) {
+            ExprPtr expr;
+            REQUIRE_NOTHROW(expr = v1::from_string<ExprPtr>(input));
+            REQUIRE(expr->as<Tensor>().column_symmetry() ==
+                    ColumnSymmetry::Symm);
+          }
+          // a *spelled-out* column symmetry that contradicts the defining one
+          // is rejected, exactly as the equivalent programmatic ctor call is --
+          // only a defaulted one is silently replaced above
+          REQUIRE_THROWS(v1::from_string<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:N-N-N"));
+          REQUIRE_THROWS(v1::from_string<ExprPtr>(L"Â{i1,i2;a1,a2}:A-N-N"));
+        }
+
+        SECTION("(anti)symmetric bra/ket implies column symmetry") {
+          // an unspecified column symmetry follows the implication rather than
+          // the Context default, ...
+          auto ctx = get_default_context();
+          ctx.set(ColumnSymmetry::Nonsymm);
+          auto resetter = set_scoped_default_context(ctx);
+          for (const auto& input : {L"t{i1,i2;a1,a2}:A", L"t{i1,i2;a1,a2}:S"}) {
+            ExprPtr expr;
+            REQUIRE_NOTHROW(expr = v1::from_string<ExprPtr>(input));
+            REQUIRE(expr->as<Tensor>().column_symmetry() ==
+                    ColumnSymmetry::Symm);
+          }
+          // ... while a spelled-out one that contradicts it is rejected
+          REQUIRE_THROWS(v1::from_string<ExprPtr>(L"t{i1,i2;a1,a2}:A-N-N"));
+          REQUIRE_THROWS(v1::from_string<ExprPtr>(L"t{i1,i2;a1,a2}:S-N-N"));
+          // a Nonsymm bra/ket implies nothing, so the Context default stands
+          REQUIRE(v1::from_string<ExprPtr>(L"t{i1,i2;a1,a2}:N")
+                      ->as<Tensor>()
+                      .column_symmetry() == ColumnSymmetry::Nonsymm);
+        }
+      }
+    }
+
+    SECTION("from_string<ResultExpr>") {
+      SECTION("constant") {
+        ResultExpr result = v1::from_string<ResultExpr>(L"A = 3");
+
+        REQUIRE(result.has_label());
+        REQUIRE(result.label() == L"A");
+        REQUIRE(result.bra().empty());
+        REQUIRE(result.ket().empty());
+        REQUIRE(result.symmetry() == Symmetry::Nonsymm);
+        REQUIRE(result.braket_symmetry() == BraKetSymmetry::Nonsymm);
+        REQUIRE(result.column_symmetry() == ColumnSymmetry::Nonsymm);
+
+        REQUIRE(result.expression().is<Constant>());
+        REQUIRE(result.expression().as<Constant>().value<int>() == 3);
+      }
+      SECTION("contraction") {
+        ResultExpr result = v1::from_string<ResultExpr>(
+            L"R{i1,i2;e1,e2}:A = f{e2;e3} t{e1,e3;i1,i2}");
+
+        REQUIRE(result.has_label());
+        REQUIRE(result.label() == L"R");
+        REQUIRE(result.bra().size() == 2);
+        REQUIRE(result.bra()[0].full_label() == L"i_1");
+        REQUIRE(result.bra()[1].full_label() == L"i_2");
+        REQUIRE(result.ket().size() == 2);
+        REQUIRE(result.ket()[0].full_label() == L"e_1");
+        REQUIRE(result.ket()[1].full_label() == L"e_2");
+        REQUIRE(result.symmetry() == Symmetry::Antisymm);
+        REQUIRE(result.braket_symmetry() == BraKetSymmetry::Nonsymm);
+        // This column symmetry is implicit with Symmetry::Antisymm
+        REQUIRE(result.column_symmetry() == ColumnSymmetry::Symm);
+
+        REQUIRE(result.expression().is<Product>());
+        const Product& prod = result.expression().as<Product>();
+        REQUIRE(prod.size() == 2);
+        REQUIRE(prod.factor(0).is<Tensor>());
+        REQUIRE(prod.factor(0).as<Tensor>().label() == L"f");
+        REQUIRE(prod.factor(1).is<Tensor>());
+        REQUIRE(prod.factor(1).as<Tensor>().label() == L"t");
+      }
+    }
+
+    SECTION("to_string") {
+      std::vector<std::wstring> expressions = {
+          L"t{a_1,a_2;a_3,a_4}:N-C-S",
+          L"42",
+          L"1/2",
+          L"-1/4 t{a_1,i_1<a_1>;a_2,i_2}:S-N-S",
+          L"a + b - 4 specialVariable",
+          L"variable + A{a_1;i_1}:N-N-S * B{i_1;a_1}:A-C-S",
+          L"1/2 (a + b) * c",
+          L"T1{}:N-N-N + T2{;;x_1}:N-N-N * T3{;;x_1}:N-N-N "
+          L"+ T4{a_1;;x_2}:S-C-S * T5{;a_1;x_2}:S-S-S",
+          L"q1 * q2^* * q3",
+          L"1/2 ã{i_1;i_2} * b̃{i_3;i_4}"};
+
+      for (const std::wstring& current : expressions) {
+        ExprPtr expression = v1::from_string<ExprPtr>(current);
+
+        REQUIRE(v1::to_string(expression, {.annot_symm = true}) == current);
+      }
+
+      SECTION("nested Sum") {
+        Sum::summands_type summands{
+            ex<Variable>(L"a"),
+            ex<Sum>(ExprPtrList{ex<Variable>(L"b"), ex<Variable>(L"c")})};
+        auto nested = ex<Sum>(std::move(summands), Sum::move_only_tag{});
+        REQUIRE(v1::to_string(nested) == L"a + (b + c)");
+      }
+
+      SECTION("result_expressions") {
+        std::vector<std::wstring> expressions = {
+            L"A = 5",
+            L"A = g{i_1,i_2;e_1,e_2}:S-N-S * t{e_1,e_2;i_1,i_2}:N-N-S",
+            L"R{i_1,i_2;e_1,e_2}:A-N-S = f{e_2;e_3}:A-N-S * "
+            L"t{e_1,e_3;i_1,i_2}:A-N-S + "
+            L"g{i_1,i_2;e_1,e_2}:A-N-S",
+        };
+
+        for (const std::wstring& current : expressions) {
+          ResultExpr result = v1::from_string<ResultExpr>(current);
+
+          REQUIRE(v1::to_string(result, {.annot_symm = true}) == current);
+        }
+      }
+    }
+  }
+
+  SECTION("v2") {
+    auto ctx = get_default_context();
+    ctx.set(mbpt::make_sr_spaces());
+    auto ctx_resetter = set_scoped_default_context(ctx);
+
+    SECTION("from_string") {
+      SECTION("Constant") {
+        SECTION("Integer") {
+          Constant constant = v2::from_string<Constant>("5");
+          REQUIRE(constant.value() == 5);
+        }
+        SECTION("Float") {
+          Constant constant = v2::from_string<Constant>("3.14");
+          REQUIRE_THAT(constant.value<double>(),
+                       ::Catch::Matchers::WithinAbs(3.14, 1e-6));
+        }
+        // numbers are parsed exactly, not via binary floating point
+        SECTION("exact") {
+          REQUIRE(v2::from_string<Constant>("0.1").value() ==
+                  Constant::scalar_type(rational{1, 10}));
+          REQUIRE(v2::from_string<Constant>("9007199254740993").value() ==
+                  Constant::scalar_type(rational{9007199254740993LL}));
+          const rational big =
+              rational{1000000000000LL} * rational{1000000000000LL};
+          REQUIRE(
+              v2::from_string<Constant>("1000000000000000000000000").value() ==
+              Constant::scalar_type(big));
+          REQUIRE(v2::from_string<Constant>(v2::to_string(
+                      ex<Constant>(big / 7))) == Constant(big / 7));
+        }
+        SECTION("Imaginary") {
+          Constant constant = v2::from_string<Constant>("2i");
+          REQUIRE(constant.value() == Constant::scalar_type(0, 2));
+
+          constant = v2::from_string<Constant>("1.5i");
+          REQUIRE(constant.value() == Constant::scalar_type(0, rational{3, 2}));
+
+          // 'i' after a space, or starting a label, is a variable
+          const auto i = ex<Variable>(L"i");
+          REQUIRE(v2::from_string<ExprPtr>("3 i") ==
+                  ex<Product>(3, ExprPtrList{i}));
+          REQUIRE(v2::from_string<ExprPtr>("3ix") ==
+                  ex<Product>(3, ExprPtrList{ex<Variable>(L"ix")}));
+          REQUIRE(v2::from_string<ExprPtr>("3i i") ==
+                  ex<Product>(Constant::scalar_type(0, 3), ExprPtrList{i}));
+        }
+        SECTION("Fraction") {
+          REQUIRE(v2::from_string<Constant>("1/2").value() ==
+                  Constant::scalar_type(rational{1, 2}));
+        }
+        // a mixed complex constant is not a single token, but a sum of
+        // constants folds into one
+        SECTION("mixed complex") {
+          Constant mixed = v2::from_string<Constant>("3 + 2i");
+          REQUIRE(mixed.value() == Constant::scalar_type(3, 2));
+          REQUIRE(v2::from_string<Constant>(
+                      v2::to_string(ex<Constant>(mixed))) == mixed);
+          REQUIRE(v2::from_string<ExprPtr>("3 + 2i") == ex<Constant>(mixed));
+        }
+        SECTION("not a constant") {
+          REQUIRE_THROWS_AS(v2::from_string<Constant>("x - x"),
+                            SerializationError);
+          REQUIRE_THROWS_AS(v2::from_string<Constant>("2 x"),
+                            SerializationError);
+        }
+      }
+
+      SECTION("Variable") {
+        REQUIRE(v2::from_string<Variable>("x") == Variable(L"x"));
+        Variable conjugated(L"y");
+        conjugated.conjugate();
+        REQUIRE(v2::from_string<Variable>("y^*") == conjugated);
+      }
+
+      // The new tensor/operator syntax ('[' ']' tensors, '{' '}' operators)
+      // must build the same objects as the equivalent v1 input.
+      SECTION("Tensor") {
+        REQUIRE(v2::from_string<ExprPtr>("t[i1;a1]") ==
+                v1::from_string<ExprPtr>(L"t{i1;a1}"));
+        REQUIRE(v2::from_string<ExprPtr>("g[i1,i2;a1,a2]:A") ==
+                v1::from_string<ExprPtr>(L"g{i1,i2;a1,a2}:A"));
+        REQUIRE(v2::from_string<Tensor>("t[i1;a1]").label() == L"t");
+      }
+
+      SECTION("empty and proto indices") {
+        REQUIRE(v2::from_string<ExprPtr>("t[;a1]") ==
+                v1::from_string<ExprPtr>(L"t{;a1}"));
+        // a blank index is spelled '_'; a group of only whitespace is empty
+        const auto blank_bra =
+            ex<Tensor>(L"t", bra{Index{}, Index{L"i_1"}}, ket{L"a_1", L"a_2"});
+        REQUIRE(v2::from_string<ExprPtr>("t[_,i1;a1,a2]:N-bkN-pN") ==
+                blank_bra);
+        REQUIRE(v2::from_string<ExprPtr>("t[ _ , i1;a1,a2]:N-bkN-pN") ==
+                blank_bra);
+        REQUIRE(v2::from_string<ExprPtr>("t[_;a1]:N-bkN-pN") ==
+                ex<Tensor>(L"t", bra{Index{}}, ket{L"a_1"}));
+        REQUIRE(v2::from_string<ExprPtr>("t[ ;a1]") ==
+                v2::from_string<ExprPtr>("t[;a1]"));
+        for (std::string_view invalid :
+             {"t[,i1;a1,a2]", "t[ , i1;a1,a2]", "t[i1,;a1,a2]", "t[i1;a1,]"}) {
+          INFO(invalid);
+          REQUIRE_THROWS_AS(v2::from_string<ExprPtr>(invalid), v2::Error);
+        }
+        REQUIRE(v2::from_string<ExprPtr>("t[i1<a1>;a1]") ==
+                v1::from_string<ExprPtr>(L"t{i1<a1>;a1}"));
+      }
+
+      // The '#N' basis-instance tag parses to the same index v1 writes as
+      // '<;N>', and round-trips through the serializer.
+      SECTION("basis instance") {
+        REQUIRE(v2::from_string<ExprPtr>("t[i_1#3;a1]") ==
+                v1::from_string<ExprPtr>(L"t{i_1<;3>;a1}"));
+        ExprPtr expr = v2::from_string<ExprPtr>("t[i_1#3;a1]:N-bkN-pN");
+        REQUIRE(v2::from_string<ExprPtr>(v2::to_string(expr)) == expr);
+        // the instance directly follows the label
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("t[i_1 #3;a1]"), v2::Error);
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("t[i_1# 3;a1]"), v2::Error);
+        REQUIRE(v2::from_string<ExprPtr>("t[i1<a1#2>;a1]") ==
+                v1::from_string<ExprPtr>(L"t{i1<a1<;2>>;a1}"));
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("t[i1<a1 #2>;a1]"),
+                          v2::Error);
+      }
+
+      SECTION("Index in a primed space") {
+        auto f12 = get_default_context();
+        f12.set(mbpt::make_F12_sr_spaces());
+        auto f12_resetter = set_scoped_default_context(f12);
+        const auto expr = v2::from_string<ExprPtr>(L"t[α'_1;i_1]");
+        REQUIRE(expr == v1::from_string<ExprPtr>(L"t{α'_1;i_1}"));
+        REQUIRE(v2::from_string<ExprPtr>(v2::to_string(expr)) == expr);
+      }
+
+      // a label that is not a bare identifier is quoted
+      SECTION("quoted labels") {
+        REQUIRE(v2::from_string<ExprPtr>("`x y`") == ex<Variable>(L"x y"));
+        REQUIRE(v2::from_string<ExprPtr>(R"(`a\`b\\c`)") ==
+                ex<Variable>(L"a`b\\c"));
+        REQUIRE(v2::from_string<ExprPtr>("`t`[`i_1`;a1]:N-bkN-pN") ==
+                v2::from_string<ExprPtr>("t[i1;a1]:N-bkN-pN"));
+        REQUIRE(v2::to_string(ex<Variable>(L"I_{1}")) == L"`I_{1}`");
+        REQUIRE(v2::to_string(ex<Variable>(L"x")) == L"x");
+
+        // the helpers that function handlers use for labels
+        for (std::wstring_view label :
+             {L"t", L"λ⁺", L"I_{1}", L"2x", L"_", L"a`b\\c", L""}) {
+          INFO(toUtf8(label));
+          REQUIRE(parse_label(toUtf8(quote_label(label))) == label);
+        }
+        REQUIRE(quote_label(L"t") == L"t");
+        REQUIRE(quote_label(L"2x") == L"`2x`");
+        REQUIRE(parse_label(" 2x ") == L"2x");
+        for (std::string_view invalid : {"", "a b", "`a", "`a`b", "`a\\`"}) {
+          INFO(invalid);
+          REQUIRE_THROWS_AS(parse_label(invalid), SerializationError);
+        }
+      }
+
+      SECTION("NormalOperator") {
+        REQUIRE(v2::from_string<ExprPtr>("a{i1;a1}") ==
+                v1::from_string<ExprPtr>(L"a{i1;a1}"));
+        // the label selects the statistics, there is no separate annotation
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("a{i1;a1}:B"), v2::Error);
+      }
+
+      SECTION("Power") {
+        REQUIRE(v2::from_string<ExprPtr>("x^(2)") ==
+                v1::from_string<ExprPtr>(L"x^(2)"));
+        REQUIRE(v2::from_string<ExprPtr>("x^(-1)") ==
+                ex<Power>(L"x", rational{-1}));
+        REQUIRE(v2::from_string<ExprPtr>("x^(1/2)") ==
+                ex<Power>(L"x", rational{1, 2}));
+        REQUIRE(v2::from_string<ExprPtr>("x/y") ==
+                ex<Product>(ExprPtrList{ex<Variable>(L"x"),
+                                        ex<Power>(L"y", rational{-1})}));
+        // both spellings of a conjugated power
+        ExprPtr conjugated = ex<Power>(L"x", rational{2});
+        conjugated->as<Power>().conjugate();
+        REQUIRE(v2::from_string<ExprPtr>("x^(2)^*") == conjugated);
+        REQUIRE(v2::from_string<ExprPtr>("(x^(2))^*") == conjugated);
+      }
+
+      SECTION("sums, products and implicit multiplication") {
+        REQUIRE(v2::from_string<ExprPtr>("t[i1;a1] + f[i1;a1]") ==
+                v1::from_string<ExprPtr>(L"t{i1;a1} + f{i1;a1}"));
+        REQUIRE(v2::from_string<ExprPtr>("2 t[i1;a1]") ==
+                v1::from_string<ExprPtr>(L"2 t{i1;a1}"));
+        REQUIRE(v2::from_string<ExprPtr>("g[i1,i2;a1,a2] t[a1,a2;i1,i2]") ==
+                v1::from_string<ExprPtr>(L"g{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
+        REQUIRE(v2::from_string<ExprPtr>("1/2 t[i1;a1]") ==
+                v1::from_string<ExprPtr>(L"1/2 t{i1;a1}"));
+      }
+
+      // '//' starts a comment that runs to the end of the line
+      SECTION("comments") {
+        REQUIRE(v2::from_string<ExprPtr>("// leading\n"
+                                         "t[i1;a1] // the amplitude\n"
+                                         "  // a whole line\n"
+                                         "  + f[i1; // within a tensor\n"
+                                         "        a1]//no space\n"
+                                         "  // trailing") ==
+                v2::from_string<ExprPtr>("t[i1;a1] + f[i1;a1]"));
+        REQUIRE(v2::from_string<ExprPtr>("x / // divided by\n y") ==
+                v2::from_string<ExprPtr>("x / y"));
+        // not within a token
+        REQUIRE(v2::from_string<ExprPtr>("`a//b`") == ex<Variable>(L"a//b"));
+        // brackets and commas in a comment do not affect function arguments
+        REQUIRE(v2::from_string<ExprPtr>("~fnopseq(a{i1;}, // (one, two]\n"
+                                         "         a{;a1})") ==
+                v2::from_string<ExprPtr>("~fnopseq(a{i1;}, a{;a1})"));
+        REQUIRE(split_arguments(" // only a comment") ==
+                std::vector<std::string_view>{});
+        REQUIRE(split_arguments("a, // 1, 2\n b // c\n, `x//y`") ==
+                std::vector<std::string_view>{"a", "b", "`x//y`"});
+        REQUIRE(split_arguments("x // c\n - y") ==
+                std::vector<std::string_view>{"x // c\n - y"});
+        // a comment ends at the line's end
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("t[i1;a1 // ]"), v2::Error);
+      }
+
+      SECTION("ResultExpr") {
+        ResultExpr result = v2::from_string<ResultExpr>("R[i1;a1] = t[i1;a1]");
+        REQUIRE(result.expression() == v2::from_string<ExprPtr>("t[i1;a1]"));
+      }
+
+      // the built-in consumers of the ~name(...) registry; the name selects
+      // the statistics
+      SECTION("~fop / ~bop") {
+        ExprPtr op = v2::from_string<ExprPtr>("~fop(i1+, a1-)");
+        REQUIRE(op->is<FOperator>());
+        REQUIRE(op->as<FOperator>().size() == 2);
+        // ASCII and Unicode action marks are equivalent
+        REQUIRE(v2::from_string<ExprPtr>(L"~fop(i1⁺, a1⁻)") == op);
+        REQUIRE(v2::from_string<ExprPtr>("~bop(i1+)")->is<BOperator>());
+      }
+
+      SECTION("~fnopseq / ~bnopseq") {
+        ExprPtr seq = v2::from_string<ExprPtr>("~fnopseq(a{i1;}, a{;a1})");
+        REQUIRE(seq->is<FNOperatorSeq>());
+        REQUIRE(seq->as<FNOperatorSeq>().size() == 2);
+        REQUIRE(v2::from_string<ExprPtr>("~bnopseq()")->is<BNOperatorSeq>());
+        // operators must match the statistics the name selects
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("~bnopseq(a{i1;})"),
+                          v2::Error);
+      }
+
+      // a ~name(...) handler receives its arguments unparsed
+      SECTION("function arguments") {
+        REQUIRE(split_arguments("").empty());
+        REQUIRE(split_arguments("  ").empty());
+        REQUIRE(split_arguments(" a ,b") ==
+                std::vector<std::string_view>{"a", "b"});
+        REQUIRE(split_arguments("f(a, b), t[i1,i2;a1], {x,y}, ") ==
+                std::vector<std::string_view>{"f(a, b)", "t[i1,i2;a1]", "{x,y}",
+                                              ""});
+        REQUIRE(split_arguments(R"(`a,(\`b`, c)") ==
+                std::vector<std::string_view>{R"(`a,(\`b`)", "c"});
+
+        REQUIRE(parse_action_index("i1+") ==
+                std::pair{Index(L"i_1"), Action::Create});
+        REQUIRE(parse_action_index(" a_2 - ") ==
+                std::pair{Index(L"a_2"), Action::Annihilate});
+        REQUIRE(parse_action_index("i1⁺") ==
+                std::pair{Index(L"i_1"), Action::Create});
+        REQUIRE(parse_action_index("i1⁻") ==
+                std::pair{Index(L"i_1"), Action::Annihilate});
+        REQUIRE_THROWS_AS(parse_action_index("i1"), SerializationError);
+        REQUIRE_THROWS_AS(parse_action_index("+"), SerializationError);
+
+        // a handler parsing expressions, which may contain '-' and ','
+        register_function(
+            L"test_sum", std::type_index(typeid(void)),
+            [](const FunctionCall& call, const DeserializationOptions& opts) {
+              ExprPtr sum = ex<Sum>();
+              for (std::string_view arg : split_arguments(call.arguments))
+                sum->as<Sum>().append(v2::from_string<ExprPtr>(arg, opts));
+              return sum;
+            });
+        REQUIRE(v2::from_string<ExprPtr>("~test_sum(x - y, t[i1,i2;a1,a2])") ==
+                v2::from_string<ExprPtr>("x - y + t[i1,i2;a1,a2]"));
+
+        // the handler's errors are reported at the call
+        try {
+          v2::from_string<ExprPtr>("x +\n ~test_sum(t[i1;az1])");
+          FAIL("no exception thrown");
+        } catch (const v2::Error& e) {
+          REQUIRE(e.line == 2);
+          REQUIRE(e.column == 2);
+          REQUIRE_THAT(e.what(),
+                       Catch::Matchers::ContainsSubstring("~test_sum(...)"));
+        }
+      }
+
+      // Errors raised inside the semantic actions must surface as catchable
+      // SerializationErrors rather than aborting the process.
+      SECTION("errors") {
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("~fop(t[i1;a1])"),
+                          SerializationError);
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("~bogus(i1+)"),
+                          SerializationError);
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("t[i1;a1"),
+                          SerializationError);
+
+        // errors from building an object are reported at the offending match
+        auto error_at = [](std::string_view input) {
+          try {
+            v2::from_string<ExprPtr>(input);
+          } catch (const v2::Error& e) {
+            return std::pair{e.line, e.column};
+          }
+          FAIL("no v2::Error thrown for '" << input << "'");
+          return std::pair<std::size_t, std::size_t>{};
+        };
+        REQUIRE(error_at("x + t[i1;az1]") ==
+                std::pair<std::size_t, std::size_t>{1, 10});
+        REQUIRE(error_at("x +\n  t[i1;a1;i2;a2]") ==
+                std::pair<std::size_t, std::size_t>{2, 3});
+        REQUIRE(error_at("x + 2^(1)^* ~bogus()") ==
+                std::pair<std::size_t, std::size_t>{1, 13});
+
+        // each symmetry field may be given only once
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("t[i1;a1]:A-S"), v2::Error);
+        REQUIRE_THROWS_AS(v2::from_string<ExprPtr>("t[i1;a1]:pN-bkN-pN"),
+                          v2::Error);
+
+        // requesting a specific type that the input does not denote
+        REQUIRE_THROWS_AS(v2::from_string<Sum>("x"), v2::Error);
+        REQUIRE_THROWS_AS(v2::from_string<Product>("x"), v2::Error);
+        REQUIRE_THROWS_AS(v2::from_string<Product>("x + y"), v2::Error);
+      }
+    }
+
+    SECTION("round-trip") {
+      const std::vector<std::wstring> inputs = {
+          L"t[i1;a1]:N-bkN-pN",
+          L"g[i1,i2;a1,a2]:A-bkC-pS",
+          L"a{i1;a1}",
+          L"x^*",
+          L"x^(2)",
+          L"1/2 t[i1;a1]:N-bkN-pN + g[i1;a1]:N-bkN-pN",
+          L"~fop(i1+, a1-)",
+          L"~bop(i1+, a1-)",
+          L"~fnopseq(a{i1;}, a{;a1})",
+          L"~bnopseq()",
+      };
+      for (const std::wstring& input : inputs) {
+        ExprPtr expr = v2::from_string<ExprPtr>(input);
+        std::wstring serialized = v2::to_string(expr);
+        INFO("input:      " << toUtf8(input));
+        INFO("serialized: " << toUtf8(serialized));
+        REQUIRE(v2::from_string<ExprPtr>(serialized) == expr);
+      }
+
+      // starting from constructed (rather than parsed) expressions also
+      // catches a parse that is consistently wrong
+      auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"});
+      auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                          Symmetry::Antisymm);
+      auto x = ex<Variable>(L"x");
+      auto y = ex<Variable>(L"y");
+      const std::vector<ExprPtr> exprs = {
+          ex<Sum>(ExprPtrList{t, ex<Product>(rational{-1, 2}, ExprPtrList{g})}),
+          ex<Sum>(ExprPtrList{
+              t, ex<Product>(-1, ExprPtrList{x, y}, Product::Flatten::No)}),
+          ex<Sum>(ExprPtrList{
+              t, ex<Product>(-1,
+                             ExprPtrList{ex<Product>(ExprPtrList{x, y},
+                                                     Product::Flatten::No)},
+                             Product::Flatten::No)}),
+          ex<Product>(1, ExprPtrList{x}),
+          ex<Product>(-1, ExprPtrList{x}),
+          ex<Constant>(Constant::scalar_type(0, rational{1, 2})),
+          ex<Constant>(Constant::scalar_type(0, rational{-1, 2})),
+          ex<Product>(Constant::scalar_type(0, rational{1, 2}), ExprPtrList{t}),
+          ex<Constant>(Constant::scalar_type(3, rational{1, 2})),
+          ex<Constant>(Constant::scalar_type(rational{-3, 4}, rational{-1, 2})),
+          ex<Product>(Constant::scalar_type(3, -2), ExprPtrList{t}),
+          ex<Tensor>(L"t", bra{Index{}}, ket{L"a_1"}),
+          ex<Tensor>(L"t", bra{Index{}, Index{L"i_1"}},
+                     ket{Index{L"a_1"}, Index{}}),
+          ex<Product>(2, ExprPtrList{ex<Variable>(L"i")}),
+          // labels that need quoting
+          ex<Variable>(L"I_{1}"),
+          ex<Variable>(L"2x"),
+          ex<Variable>(L"_"),
+          ex<Variable>(L"a`b\\c"),
+          ex<Variable>(L"with space"),
+          ex<Product>(2, ExprPtrList{ex<Variable>(L"2"), ex<Variable>(L"1.5")}),
+          ex<Tensor>(L"t'", bra{L"i_1"}, ket{L"a_1"}),
+          ex<Tensor>(L"λ⁺", bra{L"i_1"}, ket{L"a_1"}),
+          ex<Tensor>(L"I(1)", bra{L"i_1"}, ket{L"a_1"}),
+          ex<Power>(x, rational{-1}),
+          ex<Power>(x, rational{-3, 2}),
+          ex<Power>(ex<Constant>(rational{1, 2}), rational{3}),
+          [&] {
+            ExprPtr conjugated = ex<Power>(x, rational{2});
+            conjugated->as<Power>().conjugate();
+            return conjugated;
+          }(),
+          ex<Sum>(ExprPtrList{
+              t, ex<Product>(Constant::scalar_type(0, rational{-1, 2}),
+                             ExprPtrList{g})}),
+      };
+      for (const ExprPtr& constructed : exprs) {
+        std::wstring serialized = v2::to_string(constructed);
+        INFO("serialized: " << toUtf8(serialized));
+        REQUIRE(v2::from_string<ExprPtr>(serialized) == constructed);
+      }
+
+      // ResultExpr, built from both a tensor and a variable
+      {
+        const ExprPtr rhs = v2::from_string<ExprPtr>(
+            "1/2 g[i1,i2;a1,a2]:A-bkN-pS t[a2;i2]:N-bkN-pN - x");
+        const std::vector<ResultExpr> results = {
+            ResultExpr(
+                Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Antisymm),
+                rhs),
+            ResultExpr(Tensor(L"R", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                              Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+                              ColumnSymmetry::Symm),
+                       rhs),
+            ResultExpr(Tensor(L"I_{1}", bra{Index{}, Index{L"i_1"}},
+                              ket{L"a_1", L"a_2"}, aux{L"i_3"}),
+                       rhs),
+            ResultExpr(Variable(L"E"), rhs),
+            ResultExpr(Variable(L"E"), ex<Constant>(rational{1, 2})),
+            // a tensor without indices
+            ResultExpr(Tensor(L"R", bra{}, ket{}), rhs),
+        };
+        for (const ResultExpr& result : results) {
+          const std::wstring serialized = v2::to_string(result);
+          INFO("serialized: " << toUtf8(serialized));
+          REQUIRE(v2::from_string<ResultExpr>(serialized) == result);
+        }
+
+        // the left-hand side needs a label
+        REQUIRE_THROWS_AS(v2::to_string(ResultExpr(
+                              bra{Index{L"i_1"}}, ket{Index{L"a_1"}}, aux{},
+                              Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                              ColumnSymmetry::Nonsymm, std::nullopt, rhs)),
+                          SerializationError);
+      }
+
+      // the top-level dispatcher honours SerializationSyntax::V2
+      ExprPtr expr = v2::from_string<ExprPtr>(L"t[i1;a1]:N-bkN-pN");
+      REQUIRE(from_string<ExprPtr>(
+                  to_string(expr, {.syntax = SerializationSyntax::V2}),
+                  {.syntax = SerializationSyntax::V2}) == expr);
+    }
+  }
+}

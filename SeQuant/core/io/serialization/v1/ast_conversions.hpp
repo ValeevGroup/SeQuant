@@ -2,15 +2,17 @@
 // Created by Robert Adam on 2023-09-22
 //
 
-#ifndef SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
-#define SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
+#ifndef SEQUANT_CORE_IO_SERIALIZATION_V1_AST_CONVERSIONS_HPP
+#define SEQUANT_CORE_IO_SERIALIZATION_V1_AST_CONVERSIONS_HPP
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/serialization/detail/construct.hpp>
 #include <SeQuant/core/io/serialization/v1/ast.hpp>
+#include <SeQuant/core/io/serialization/v1/error.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/space.hpp>
@@ -31,9 +33,7 @@
 
 namespace sequant::io::serialization::v1::transform {
 
-using DefaultSymmetries =
-    std::tuple<Symmetry, std::variant<BraKetSymmetry, Hermiticity>,
-               ColumnSymmetry>;
+using DefaultSymmetries = detail::DefaultSymmetries;
 
 template <typename AST, typename PositionCache, typename Iterator>
 std::tuple<std::size_t, std::size_t> get_pos(const AST &ast,
@@ -60,7 +60,7 @@ IndexBasis to_basis(const LabelAST &label_ast, const std::wstring &label,
   if (!instance) return basis;
   if (basis.has_basis_instance()) {
     auto [offset, length] = get_pos(label_ast, position_cache, begin);
-    throw SerializationError(
+    throw Error(
         offset, length,
         "label '" + toUtf8(label) +
             "' names a basis instance; an explicit ';N' is not allowed");
@@ -76,7 +76,7 @@ Index to_index(const io::serialization::v1::ast::Index &index,
 
   if (index.domain && domain.protoLabels.empty() && !domain.instance) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
-    throw SerializationError(offset, length, "empty index domain");
+    throw Error(offset, length, "empty index domain");
   }
 
   container::vector<Index> protoIndices;
@@ -93,16 +93,14 @@ Index to_index(const io::serialization::v1::ast::Index &index,
       throw;
     } catch (const IndexSpace::bad_key &) {
       auto [offset, length] = get_pos(current.label, position_cache, begin);
-      throw SerializationError(offset, length,
-                               "Unknown index space '" +
-                                   toUtf8(current.label.label) +
-                                   "' in proto index specification");
+      throw Error(offset, length,
+                  "Unknown index space '" + toUtf8(current.label.label) +
+                      "' in proto index specification");
     } catch (const Exception &e) {
       auto [offset, length] = get_pos(current.label, position_cache, begin);
-      throw SerializationError(offset, length,
-                               "Invalid index '" + toUtf8(current.label.label) +
-                                   "_" + std::to_string(current.label.id) +
-                                   ": " + e.what());
+      throw Error(offset, length,
+                  "Invalid index '" + toUtf8(current.label.label) + "_" +
+                      std::to_string(current.label.id) + ": " + e.what());
     }
   }
 
@@ -115,16 +113,14 @@ Index to_index(const io::serialization::v1::ast::Index &index,
     throw;
   } catch (const IndexSpace::bad_key &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
-    throw SerializationError(offset, length,
-                             "Unknown index space '" +
-                                 toUtf8(index.label.label) +
-                                 "' in index specification");
+    throw Error(offset, length,
+                "Unknown index space '" + toUtf8(index.label.label) +
+                    "' in index specification");
   } catch (const Exception &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
-    throw SerializationError(offset, length,
-                             "Invalid index '" + toUtf8(index.label.label) +
-                                 "_" + std::to_string(index.label.id) + ": " +
-                                 e.what());
+    throw Error(offset, length,
+                "Invalid index '" + toUtf8(index.label.label) + "_" +
+                    std::to_string(index.label.id) + ": " + e.what());
   }
 }
 
@@ -184,8 +180,7 @@ Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &,
       return Symmetry::Nonsymm;
   }
 
-  throw SerializationError(
-      offset, 1, std::string("Invalid symmetry specifier '") + c + "'");
+  throw Error(offset, 1, std::string("Invalid symmetry specifier '") + c + "'");
 }
 
 template <typename Iterator>
@@ -227,10 +222,9 @@ std::variant<BraKetSymmetry, Hermiticity> to_braket_symmetry(
       return Hermiticity::AntiHermitian;
   }
 
-  throw SerializationError(
-      offset, 1,
-      std::string("Invalid BraKet symmetry / Hermiticity specifier '") + c +
-          "'");
+  throw Error(offset, 1,
+              std::string("Invalid BraKet symmetry / Hermiticity specifier '") +
+                  c + "'");
 }
 
 template <typename Iterator>
@@ -249,9 +243,8 @@ ColumnSymmetry to_column_symmetry(char c, std::size_t offset, const Iterator &,
       return ColumnSymmetry::Nonsymm;
   }
 
-  throw SerializationError(
-      offset, 1,
-      std::string("Invalid particle symmetry specifier '") + c + "'");
+  throw Error(offset, 1,
+              std::string("Invalid particle symmetry specifier '") + c + "'");
 }
 
 template <typename PositionCache, typename Iterator>
@@ -305,12 +298,7 @@ ExprPtr ast_to_expr(const io::serialization::v1::ast::Sum &sum,
                     const PositionCache &position_cache, const Iterator &begin,
                     const DefaultSymmetries &default_symms);
 
-/// the vacuum of a tilde-labelled NormalOperator: NormalOperator::label()
-/// is the tilde label for every non-Physical vacuum
-inline Vacuum tilde_vacuum(Statistics s) {
-  const auto vac = get_default_context(s).vacuum();
-  return vac == Vacuum::Physical ? Vacuum::SingleProduct : vac;
-}
+using detail::tilde_vacuum;
 
 template <typename PositionCache, typename Iterator>
 struct Transformer {
@@ -387,85 +375,10 @@ struct Transformer {
     const bool column_symm_specified =
         specified(&ast::SymmetrySpec::column_symm);
 
-    // (Anti)symmetry in bra and ket implies column symmetry, and the Tensor
-    // ctor rejects an *explicit* ColumnSymmetry that contradicts it. Apply the
-    // implication here for a column symmetry that merely came from the
-    // defaults, so that only a genuinely contradicting explicit spec reaches
-    // (and is rejected by) the ctor.
-    if (!column_symm_specified &&
-        (perm_symm == Symmetry::Symm || perm_symm == Symmetry::Antisymm))
-      column_symm = ColumnSymmetry::Symm;
-
-    // Force the defining symmetries of the reserved (anti)symmetrization
-    // operators; see sequant::{anti,}symmetrizer_symmetries.
-    const bool is_reserved_symmetrizer =
-        tensor.name == reserved::antisymm_label() ||
-        tensor.name == reserved::symm_label();
-    // Â antisymmetrizes within bra and within ket, Ŝ only across the
-    // {bra,ket} particle columns (i.e. it is perm-Nonsymm). Supply the
-    // defining value only when none was spelled out, so that a contradicting
-    // explicit spec reaches the Tensor ctor and is rejected there rather than
-    // silently overwritten here.
-    if (is_reserved_symmetrizer && !perm_symm_specified)
-      perm_symm = tensor.name == reserved::antisymm_label() ? Symmetry::Antisymm
-                                                            : Symmetry::Nonsymm;
-    // (anti)symmetrization operators act on indistinguishable particles, hence
-    // are always column symmetric; supply that rather than passing the
-    // Context's column default through, which the Tensor ctor would reject as
-    // a contradicting *explicit* request
-    if (is_reserved_symmetrizer && !column_symm_specified)
-      column_symm = ColumnSymmetry::Symm;
-    // likewise, force braket-Nonsymm rather than inheriting the Context's
-    // default Hermiticity, which could derive a non-Nonsymm braket and make a
-    // plain "Ŝ{...}"/"Â{...}" fail to construct; an explicit braket spec is
-    // left untouched so that the Tensor ctor still rejects it
-    if (is_reserved_symmetrizer && !braket_symm_specified)
-      braket_symm = BraKetSymmetry::Nonsymm;
-
-    // the reserved metric and Kronecker tensors are Hermitian by definition;
-    // force that rather than inheriting the Context's default Hermiticity, so
-    // that a deserialized s/δ equals the one make_overlap()/make_kronecker()
-    // builds (they participate in the tensor hash, so a mismatch would keep
-    // otherwise-equal terms from merging)
-    if ((tensor.name == reserved::overlap_label() ||
-         tensor.name == reserved::kronecker_label()) &&
-        !braket_symm_specified)
-      braket_symm = Hermiticity::Hermitian;
-
-    // a reference density's symmetries are fixed by its label and rank (see
-    // density::symmetries()); supply them where none was spelled out, and let
-    // the Tensor ctor reject a spelled-out one that contradicts them. An
-    // aux-only tensor is a layout representation, not a density.
-    if (ranges::contains(reserved::density_labels(), tensor.name) &&
-        !(braIndices.empty() && ketIndices.empty())) {
-      auto syms = density::symmetries(tensor.name, braIndices.size());
-      if (perm_symm_specified) syms.perm = perm_symm;
-      if (column_symm_specified) syms.column = column_symm;
-      if (braket_symm_specified)
-        std::visit(
-            [&syms](auto symm) {
-              if constexpr (std::is_same_v<decltype(symm), BraKetSymmetry>) {
-                syms.braket = symm;
-                syms.hermiticity = std::nullopt;
-              } else
-                syms.hermiticity = symm;
-            },
-            braket_symm);
-      return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
-                        ket(std::move(ketIndices)), aux(std::move(auxiliaries)),
-                        syms);
-    }
-
-    // Dispatch to correct Tensor constructor (taking either BraKetSymmetry or
-    // Hermiticity)
-    return std::visit(
-        [&](auto symm) {
-          return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
-                            ket(std::move(ketIndices)),
-                            aux(std::move(auxiliaries)), perm_symm, symm,
-                            column_symm);
-        },
-        braket_symm);
+    return detail::make_tensor(
+        tensor.name, std::move(braIndices), std::move(ketIndices),
+        std::move(auxiliaries), perm_symm, braket_symm, column_symm,
+        perm_symm_specified, braket_symm_specified, column_symm_specified);
   }
 
   ExprPtr operator()(
@@ -493,7 +406,7 @@ struct Transformer {
         static_cast<std::int64_t>(power.exponent.denominator) !=
             power.exponent.denominator) {
       auto [offset, length] = get_pos(power, position_cache.get(), begin.get());
-      throw SerializationError(
+      throw Error(
           offset, length,
           "Power exponent must be a rational number (integer numerator and "
           "denominator)");
@@ -608,11 +521,11 @@ ResultExpr ast_to_result(const io::serialization::v1::ast::ResultExpr &result,
     return {std::move(lhs.as<Variable>()), std::move(rhs)};
   } else {
     auto [offset, length] = get_pos(result.lhs, position_cache, begin);
-    throw SerializationError(
-        offset, length, "LHS of a ResultExpr must be a Tensor or a Variable");
+    throw Error(offset, length,
+                "LHS of a ResultExpr must be a Tensor or a Variable");
   }
 }
 
 }  // namespace sequant::io::serialization::v1::transform
 
-#endif  // SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP
+#endif  // SEQUANT_CORE_IO_SERIALIZATION_V1_AST_CONVERSIONS_HPP

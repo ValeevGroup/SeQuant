@@ -8,6 +8,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/format.hpp>
+#include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -21,6 +22,7 @@
 #include <SeQuant/domain/mbpt/rdm.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
 #include <SeQuant/domain/mbpt/rules/thc.hpp>
+#include <SeQuant/domain/mbpt/serialization.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
 #include <SeQuant/domain/mbpt/vac_av.hpp>
 
@@ -178,6 +180,66 @@ TEST_CASE("MBPT operator formatting", "[mbpt][format]") {
       Catch::Matchers::ContainsSubstring("use LaTeX"));
   REQUIRE_THROWS_MATCHES(std::format("{}", mbpt::op::H() * mbpt::op::T(2)),
                          Exception, suggests_latex);
+}
+
+TEST_CASE("mbpt operator serialization", "[mbpt][serialization]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  namespace ser = io::serialization;
+  register_serialization_functions();
+
+  auto round_trip = [](const ExprPtr& expr) {
+    const std::wstring serialized = ser::v2::to_string(expr);
+    INFO(toUtf8(serialized));
+    REQUIRE(ser::v2::from_string<ExprPtr>(serialized) == expr);
+  };
+
+  SECTION("factories") {
+    for (const ExprPtr& expr :
+         {op::H(), op::T(3), op::Λ(2), op::θ(2), op::ã(2), op::R(nₚ(2), nₕ(1)),
+          op::L(nₚ(1), nₕ(2)), op::A(nₚ(2), nₕ(1)), op::A(nₚ(-2), nₕ(-2)),
+          op::S(2), op::S(-1), op::tʼ(2, {.order = 1}), op::Hʼ(2, {.order = 2}),
+          op::H() * op::T(2), adjoint(op::t(2)), adjoint(op::R(nₚ(1), nₕ(2))),
+          adjoint(op::tʼ(1, {.order = 3}))})
+      round_trip(expr);
+  }
+
+  SECTION("format") {
+    REQUIRE(ser::v2::to_string(op::t(2)) == L"~fmbop(t, 2)");
+    REQUIRE(ser::v2::to_string(op::r(nₚ(2), nₕ(1))) == L"~fmbop(R, 2, 1)");
+    REQUIRE(ser::v2::to_string(op::h(2)) == L"~fmbop(g, 2)");
+    REQUIRE(ser::v2::to_string(adjoint(op::tʼ(1, {.order = 1}))) ==
+            L"~fmbop(t¹⁺, 1)");
+    REQUIRE(ser::v2::from_string<ExprPtr>("~fmbop(R, 2, 2)") == op::r(2));
+  }
+
+  SECTION("batching") {
+    auto isr = make_legacy_spaces();
+    add_batching_spaces(isr);
+    auto ctx_resetter =
+        set_scoped_default_context({.index_basis_registry_shared_ptr = isr,
+                                    .vacuum = Vacuum::SingleProduct});
+    const ExprPtr batched = op::tʼ(2, {.batch_ordinals = {2, 3}});
+    REQUIRE(ser::v2::to_string(batched) == L"~fmbop(t, 2, batch=[2,3])");
+    round_trip(batched);
+    round_trip(op::Hʼ(1, {.order = 1, .nbatch = 2}));
+  }
+
+  SECTION("errors") {
+    // the label must be in the registry
+    REQUIRE_THROWS_AS(ser::v2::from_string<ExprPtr>("~fmbop(q, 1)"),
+                      ser::SerializationError);
+    // ranks must be valid for the operator
+    REQUIRE_THROWS_AS(ser::v2::from_string<ExprPtr>("~fmbop(t, 0)"),
+                      ser::SerializationError);
+    REQUIRE_THROWS_AS(ser::v2::from_string<ExprPtr>("~fmbop(g, 1, 2)"),
+                      ser::SerializationError);
+    // an operator the standard factories do not make is not serializable
+    REQUIRE_THROWS_AS(ser::v2::to_string(op::r(
+                          nann(1), ncre(1), cre(get_hole_space(Spin::any)),
+                          ann(get_particle_space(Spin::any)))),
+                      ser::SerializationError);
+  }
 }
 
 TEST_CASE("mbpt_operator_type_id", "[mbpt]") {
