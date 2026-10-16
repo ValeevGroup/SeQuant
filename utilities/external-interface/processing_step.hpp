@@ -30,6 +30,11 @@ class ProcessingStep {
   virtual bool requires_options() const = 0;
   virtual void set_options(const nlohmann::json &options) = 0;
 
+  /// Whether the step needs at least one input. The executor enforces this
+  /// before run() so a step accidentally left without inputs fails with a
+  /// clear error instead of silently producing no output.
+  virtual bool requires_inputs() const { return true; }
+
   virtual std::size_t run(std::string_view step_id, ExecutionContext &ctx,
                           const std::vector<std::string_view> &inputs = {}) = 0;
 };
@@ -118,6 +123,10 @@ class OneByOneProcessingStep
     : public ProcessingStep,
       public detail::OBOProcessFunctionMember<DataType> {
  public:
+  bool requires_inputs() const override {
+    return !std::same_as<DataType, void>;
+  }
+
   std::size_t run(std::string_view step_id, ExecutionContext &ctx,
                   const std::vector<std::string_view> &inputs = {}) override {
     std::size_t total_outputs = 0;

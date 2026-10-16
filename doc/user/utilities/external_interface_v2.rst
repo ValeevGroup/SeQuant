@@ -21,7 +21,8 @@ file. Within this file, each processing step is represented as a JSON object wit
   :ref:`external_interface_outputs` - the step ID in this case is implicitly the current step's ID and must not be included explicitly. These names
   are automatically propagated through the processing chain (for most kinds of steps).
 * :code:`inputs` (String or Array of Strings): Specifies the inputs of this step, which must be outputs of other steps. See
-  :ref:`external_interface_outputs`.
+  :ref:`external_interface_outputs`. Every step requires at least one input, except for steps that produce data from scratch
+  (such as :code:`read_input`); omitting :code:`inputs` on a step that needs it is an error.
 
 
 The different steps are listed objects in the top-level :code:`steps` array. Steps are processed in order according to their order in this array.
