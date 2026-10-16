@@ -69,6 +69,112 @@ Errors encountered anywhere in the pipeline (be it while parsing a step's option
 partial/best-effort processing.
 
 
+.. _external_interface_templates:
+
+Templates
+---------
+
+A *template* is a reusable, parameterized sequence of steps. It is defined once under the top-level :code:`templates` object and then stamped out
+wherever it is needed, so a pipeline tail that would otherwise be written out several times (differing only in a few values) is written once.
+Templates are expanded into ordinary steps before the pipeline runs, so everything described above - :code:`inherit_options_from`, output aliasing,
+input resolution - applies unchanged to the result.
+
+Each entry of :code:`templates` maps a template name to a definition with two properties:
+
+* :code:`parameters` (Object): Declares the knobs the template exposes. Each entry maps a parameter name to a declaration object that must specify
+  either :code:`required: true` (the value must be supplied on every use) or a :code:`default` (any JSON value, used when the parameter is not
+  supplied). A declaration that specifies neither is an error.
+* :code:`steps` (Array): The steps the template expands to, written just like top-level steps but allowed to contain :code:`${parameter}`
+  placeholders (see below). May itself contain template uses.
+
+A template is used by writing, in place of a regular step, an object with a :code:`template` property (naming the template) instead of a
+:code:`kind`. Such a step accepts only:
+
+* :code:`template` (required, String): Name of the template to expand here.
+* :code:`id` (required, String): Prefix under which this use's steps are placed (see namespacing below).
+* :code:`parameters` (Object): Binds the template's parameters. Every key must be a declared parameter and every :code:`required` parameter must be
+  given; omitted optional parameters fall back to their :code:`default`.
+
+Placeholder substitution
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Within a template's steps, :code:`${name}` placeholders are recognized in string *values* at any nesting depth (object keys are never substituted).
+There are two forms:
+
+* A string that is *exactly* :code:`"${name}"` is replaced by the parameter's full JSON value, with its type preserved - so a boolean stays a
+  boolean, a number stays a number, and an array or object is spliced in as-is.
+* A placeholder embedded in a longer string (e.g. :code:`"file_${name}.itfaa"`) is substituted textually; the parameter must be a scalar (a boolean
+  renders as :code:`true`/:code:`false`).
+
+If a whole-value placeholder resolves to :code:`null`, its enclosing object member is dropped (and an :code:`options` object left empty this way is
+removed entirely). This lets a single template serve both the "option present" and "option absent" cases: give the parameter a :code:`default` of
+:code:`null` and pass a value only when the option is wanted. To write a literal :code:`${`, double the dollar sign: :code:`$${`.
+
+Namespacing
+^^^^^^^^^^^
+
+When a template is used with :code:`id` :code:`P`, every step inside it that has an :code:`id` is renamed to :code:`P_<id>`, and references to those
+steps (in :code:`inputs` and :code:`inherit_options_from`) are updated to match. References that do *not* point at one of the template's own steps -
+in particular, values that came in through parameters, or an :code:`inherit_options_from` pointing at a top-level step - are left untouched. The
+expanded steps are therefore addressed from the outside as :code:`P_<id>` (and their outputs as :code:`P_<id>.<output>`), and two uses of the same
+template never collide because their :code:`id` prefixes differ. The prefix is joined with an underscore rather than a dot (and a use's :code:`id`
+may not contain a dot) because a step ID must stay a single dot-free token for output names to propagate correctly.
+
+.. note::
+   Only :code:`inputs` and :code:`inherit_options_from` are namespaced. If a template's step refers to one of the template's own steps from within an
+   *option value* (for example the :code:`deps` of a :code:`dependencies` step or the :code:`grouping` of an :code:`export` step), that reference is
+   not rewritten - keep such internal wiring in :code:`inputs`, or pass the referenced name in as a parameter.
+
+For example, the :code:`optimize` + :code:`to_export_tree` sequence below is factored into one template and used twice - once plainly and once
+with :code:`replay` enabled - without repeating the sequence or its :code:`inputs`:
+
+.. code-block:: json
+
+   {
+     "templates": {
+       "optimized_tree": {
+         "parameters": {
+           "source": { "required": true },
+           "replay": { "default": null }
+         },
+         "steps": [
+           {
+             "id": "opt",
+             "kind": "optimize",
+             "inputs": "${source}",
+             "options": { "replay": "${replay}" }
+           },
+           {
+             "id": "tree",
+             "kind": "to_export_tree",
+             "inputs": "opt"
+           }
+         ]
+       }
+     },
+     "steps": [
+       {
+         "template": "optimized_tree",
+         "id": "base",
+         "parameters": { "source": ["traced.en", "biorth"] }
+       },
+       {
+         "template": "optimized_tree",
+         "id": "replay",
+         "parameters": {
+           "source": ["traced.en", "biorth"],
+           "replay": { "volatile": "T\\d", "weight": 10 }
+         }
+       }
+     ]
+   }
+
+The :code:`base` use produces steps :code:`base_opt` and :code:`base_tree` (its :code:`replay` parameter defaults to :code:`null`, so the
+:code:`replay` option vanishes and the now-empty :code:`options` is dropped); the :code:`replay` use likewise produces :code:`replay_opt` and
+:code:`replay_tree`, with the :code:`replay` option present. Subsequent steps refer to the resulting trees as :code:`base_tree` and
+:code:`replay_tree`.
+
+
 .. _external_interface_step_kinds:
 
 Available Processing Step Kinds
