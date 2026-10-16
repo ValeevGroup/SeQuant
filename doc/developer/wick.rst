@@ -54,7 +54,7 @@ creator, and their quasiparticle spaces intersect (``is_qpannihilator``/``is_qpc
 ``SeQuant/core/op.hpp``); under ``Vacuum::MultiProduct`` their actions must also differ (see :ref:`below <wick-extended>`). The
 contraction *value* (``contract``) depends on whether those quasiparticle spaces are pure hole/particle subspaces or not:
 
-- both pure: the contraction is the identity :math:`s(L,R)` between the two indices;
+- both pure: the contraction is the overlap :math:`s(L,R)`;
 - neither pure: :math:`\delta(L,l)\, s(l,r)\, \delta(R,r)`;
 - only the left space pure: :math:`s(L,r)\, \delta(R,r)`;
 - only the right space pure: :math:`\delta(L,l)\, s(l,R)`,
