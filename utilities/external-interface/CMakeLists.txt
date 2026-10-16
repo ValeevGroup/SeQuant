@@ -51,6 +51,14 @@ target_include_directories(external_interface-obj PUBLIC "${CMAKE_CURRENT_LIST_D
 target_set_compiler_flags(external_interface-obj)
 target_set_optimization_flags(external_interface-obj)
 
+# processing.cpp and utils.cpp open with a file-scope `using namespace sequant`
+# that, under a unity build, leaks into the step sources concatenated after them
+# and makes a range-v3 header parsed there ambiguous (range-v3's ::meta vs.
+# sequant::meta). Parse range-v3 ahead of every source instead (include guards
+# make this free after the first), as tests/ and tests/unit do.
+set_property(TARGET external_interface-obj PROPERTY
+    UNITY_BUILD_CODE_BEFORE_INCLUDE "#include <range/v3/all.hpp>")
+
 add_executable(external_interface external_interface.cpp)
 set_target_properties(external_interface PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 
