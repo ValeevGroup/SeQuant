@@ -201,6 +201,47 @@ Expressions that don't contain the targeted tensor are passed through unmodified
      - No
 
 
+dependencies
+^^^^^^^^^^^^
+
+Establishes hard dependencies between result trees: whenever one tree is made to depend on another, the latter is guaranteed to be computed first. The
+dependencies are recorded on the inputs and consumed by the :code:`export` step when it orders the results. Like :code:`export`, this step is not
+restricted to a single input - all inputs are considered jointly so that dependencies can be detected and declared across them. The inputs are annotated
+in place and passed through unchanged, so they remain referenceable (under this step's id) by subsequent steps. At least one of :code:`autodetect` or
+:code:`deps` must be given.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Input
+     - Output
+   * - ExportTree
+     - ExportTree
+
+
+.. list-table:: Options
+   :header-rows: 1
+
+   * - Option
+     - Description
+     - Default
+     - Required
+   * - :code:`autodetect`
+     - Whether to automatically add a dependency whenever the result of one tree is used as an input in another tree. Matching is done on the tensor
+       block (label and index spaces) and hence is insensitive to the concrete index labels.
+     - false
+     - No (but see above)
+   * - :code:`deps`
+     - Object declaring dependencies explicitly. Each key is the id/alias of the dependent tree(s); its value is a single id/alias, or an array of
+       them, naming the tree(s) that must be computed first. Group ids are allowed on both sides. These dependencies are added on top of any that
+       :code:`autodetect` discovers.
+     - :code:`{}`
+     - No (but see above)
+
+
+A dependency cycle - whether autodetected or declared - is an error and aborts the run when the :code:`export` step tries to order the results.
+
+
 export
 ^^^^^^
 
@@ -242,7 +283,8 @@ given, they are merged and jointly ordered before being exported together.
      - No
    * - :code:`relative_order`
      - Array of id/alias names giving a hint for the relative ordering of results within the generated code. Used together with the hard dependencies
-       among results when determining the final order.
+       among results (see the :code:`dependencies` step) when determining the final order; the dependencies take precedence and :code:`relative_order`
+       only breaks ties.
      - :code:`[]`
      - No
    * - :code:`imports`
