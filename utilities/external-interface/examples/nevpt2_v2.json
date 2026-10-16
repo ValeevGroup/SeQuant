@@ -22,6 +22,33 @@
 			"real_valued": true
 		}
 	],
+	"templates": {
+		"optimized_tree": {
+			"parameters": {
+				"source": {
+					"required": true
+				},
+				"replay": {
+					"default": null
+				}
+			},
+			"steps": [
+				{
+					"id": "opt",
+					"kind": "optimize",
+					"inputs": "${source}",
+					"options": {
+						"replay": "${replay}"
+					}
+				},
+				{
+					"id": "tree",
+					"kind": "to_export_tree",
+					"inputs": "opt"
+				}
+			]
+		}
+	},
 	"steps": [
 		{
 			"id": "input",
@@ -93,22 +120,19 @@
 			}
 		},
 		{
-			"id": "opt",
-			"kind": "optimize",
-			"inputs": [
-				"traced.en",
-				"biorth"
-			]
-		},
-		{
-			"id": "treeify",
-			"kind": "to_export_tree",
-			"inputs": "opt"
+			"template": "optimized_tree",
+			"id": "base",
+			"parameters": {
+				"source": [
+					"traced.en",
+					"biorth"
+				]
+			}
 		},
 		{
 			"id": "with_deps",
 			"kind": "dependencies",
-			"inputs": "treeify",
+			"inputs": "base_tree",
 			"options": {
 				"autodetect": true
 			}
@@ -262,13 +286,13 @@
 			}
 		},
 		{
-			"id": "opt_replay",
-			"kind": "optimize",
-			"inputs": [
-				"traced.en",
-				"biorth"
-			],
-			"options": {
+			"template": "optimized_tree",
+			"id": "replay",
+			"parameters": {
+				"source": [
+					"traced.en",
+					"biorth"
+				],
 				"replay": {
 					"volatile": [
 						"T\\d",
@@ -282,14 +306,9 @@
 			}
 		},
 		{
-			"id": "treeify_replay",
-			"kind": "to_export_tree",
-			"inputs": "opt_replay"
-		},
-		{
 			"id": "with_deps_replay",
 			"kind": "dependencies",
-			"inputs": "treeify_replay",
+			"inputs": "replay_tree",
 			"options": {
 				"autodetect": true
 			}
