@@ -433,19 +433,6 @@ struct Transformer {
     if (tensor.name == reserved::kronecker_label() && !braket_symm_specified)
       braket_symm = BraKetSymmetry::Symm;
 
-    // the reserved metric and Kronecker tensors are identities between two
-    // indices, and the engine reads their one bra and one ket slot unchecked
-    if ((tensor.name == reserved::overlap_label() ||
-         tensor.name == reserved::kronecker_label()) &&
-        (braIndices.size() != 1 || ketIndices.size() != 1 ||
-         !auxiliaries.empty())) {
-      auto [offset, length] =
-          get_pos(tensor, position_cache.get(), begin.get());
-      throw SerializationError(offset, length,
-                               "an overlap or Kronecker delta has exactly one "
-                               "bra and one ket index and no auxiliary index");
-    }
-
     // a reference density's symmetries are fixed by its label and rank (see
     // density::symmetries()); supply them where none was spelled out, and let
     // the Tensor ctor reject a spelled-out one that contradicts them. An

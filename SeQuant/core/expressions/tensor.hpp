@@ -702,12 +702,18 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
   /// @throw Exception if @p label is a reserved density label (see
-  ///        reserved::density_labels()) and this lacks its defining symmetries
+  ///        reserved::density_labels()) and this lacks its defining
+  ///        symmetries, or the overlap or Kronecker delta label and this is
+  ///        not between one bra and one ket index
   void set_label(std::wstring label) override {
-    if (ranges::contains(reserved::density_labels(), label)) {
+    if (ranges::contains(reserved::density_labels(), label) ||
+        label == reserved::overlap_label() ||
+        label == reserved::kronecker_label()) {
       const auto previous = std::exchange(label_, std::move(label));
       try {
-        check_density_symmetries();
+        if (ranges::contains(reserved::density_labels(), label_))
+          check_density_symmetries();
+        check_identity_shape();
       } catch (...) {
         label_ = previous;
         throw;
@@ -1037,6 +1043,22 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       if (bra_.size() == 1 && ket_.size() == 1) symmetry_ = Symmetry::Nonsymm;
       check_density_symmetries();
     }
+
+    check_identity_shape();
+  }
+
+  /// @throw Exception if this is an overlap or Kronecker delta (see
+  ///        reserved::overlap_label(), reserved::kronecker_label()) but not
+  ///        between one bra and one ket index: the code that reduces them
+  ///        reads those two slots unchecked
+  void check_identity_shape() const {
+    if ((label_ == reserved::overlap_label() ||
+         label_ == reserved::kronecker_label()) &&
+        (bra_.size() != 1 || ket_.size() != 1 || !aux_.empty() ||
+         !bra_[0].nonnull() || !ket_[0].nonnull()))
+      throw Exception(
+          "Tensor: an overlap or Kronecker delta has exactly one bra and one "
+          "ket index and no auxiliary index");
   }
 
   /// @throw Exception unless this reference density (see
