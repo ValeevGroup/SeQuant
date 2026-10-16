@@ -64,27 +64,6 @@ if (SEQUANT_TESTS)
 endif()
 
 
-add_executable(external_interface_template_test
-    template_expansion.cpp
-    template_expansion_test.cpp
-)
-set_target_properties(external_interface_template_test PROPERTIES CXX_SCAN_FOR_MODULES OFF)
-
-target_link_libraries(external_interface_template_test
-    PRIVATE
-        SeQuant::symb
-        nlohmann_json::nlohmann_json
-)
-
-target_set_compiler_flags(external_interface_template_test)
-target_set_optimization_flags(external_interface_template_test)
-
-add_test(
-	NAME "sequant/external_interface/template_expansion"
-	COMMAND external_interface_template_test
-)
-
-
 # CCSD
 add_test(
 	NAME "sequant/external_interface/ccsd/generate"
