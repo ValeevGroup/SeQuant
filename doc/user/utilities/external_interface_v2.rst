@@ -242,7 +242,8 @@ This step does not accept any options.
 cse
 ^^^
 
-Performs common-subexpression elimination (CSE).
+Performs common-subexpression elimination (CSE). Dependencies already recorded on the inputs (e.g. by a preceding
+:code:`dependencies` step) are carried over onto the corresponding results.
 
 .. list-table::
    :header-rows: 1
