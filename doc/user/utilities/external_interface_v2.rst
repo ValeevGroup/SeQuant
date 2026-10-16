@@ -243,7 +243,9 @@ cse
 ^^^
 
 Performs common-subexpression elimination (CSE). Dependencies already recorded on the inputs (e.g. by a preceding
-:code:`dependencies` step) are carried over onto the corresponding results.
+:code:`dependencies` step) are carried over onto the corresponding results. The introduced intermediates are named only
+uniquely within the entries of a single result, so a :code:`dependencies` step with :code:`autodetect` should run before this
+step rather than after it (see the note under :code:`dependencies`).
 
 .. list-table::
    :header-rows: 1
@@ -348,6 +350,15 @@ in place and passed through unchanged, so they remain referenceable (under this 
 
 
 A dependency cycle - whether autodetected or declared - is an error and aborts the run when the :code:`export` step tries to order the results.
+
+.. note::
+
+   Run this step with :code:`autodetect` *before* any :code:`cse` step, not after. Common-subexpression elimination introduces
+   intermediate results whose names are only unique within the entries of a single result; across results the same name (e.g.
+   :code:`CSE1`) is reused for unrelated intermediates. Since autodetection matches producers and consumers on the tensor block
+   (see :code:`autodetect` above), running it on CSE output conflates these same-named intermediates and can wire up spurious
+   dependencies that form a cycle, aborting the subsequent :code:`export`. Autodetecting dependencies first is safe because
+   :code:`cse` preserves the dependencies already recorded on its inputs.
 
 
 export
