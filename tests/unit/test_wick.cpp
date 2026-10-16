@@ -1466,6 +1466,53 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(delta_counts == std::multiset<std::size_t>{4, 3, 3, 2});
   }
 
+  // a standing self-delta is an ordinary tensor to what follows Wick's theorem
+  SECTION("a standing self-delta survives the passes after Wick") {
+    // n_v
+    auto count = FWickTheorem{ex<FNOperator>(cre({}), ann({L"p_1"})) *
+                              ex<FNOperator>(cre({L"p_1"}), ann({}))}
+                     .compute();
+    REQUIRE_THAT(count, EquivalentTo(L"δ{e_1;e_1}"));
+    auto simplified = count->clone();
+    simplify(simplified);
+    REQUIRE(simplified == count);
+    REQUIRE(deserialize(serialize(count)) == count);
+    // tracing out the spin doubles the number of orbitals
+    REQUIRE_THAT(mbpt::spintrace(count), EquivalentTo(L"2 δ{e_1;e_1}"));
+    REQUIRE_THAT(mbpt::closed_shell_spintrace(count),
+                 EquivalentTo(L"2 δ{e_1;e_1}"));
+
+    // n_o^2 n_v^2 - n_o n_v^2 - n_o^2 n_v + n_o n_v, spin-traced:
+    // 16 n_o^2 n_v^2 - 8 n_o n_v^2 - 8 n_o^2 n_v + 4 n_o n_v
+    auto norm =
+        FWickTheorem{
+            ex<FNOperator>(cre({L"i_1", L"i_2"}), ann({L"a_1", L"a_2"})) *
+            ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}))}
+            .compute();
+    for (const auto& traced :
+         {mbpt::spintrace(norm), mbpt::closed_shell_spintrace(norm)}) {
+      REQUIRE(traced->is<Sum>());
+      std::vector<std::pair<Product::scalar_type, std::size_t>> terms;
+      for (const auto& term : *traced) {
+        REQUIRE(term->is<Product>());
+        terms.emplace_back(term->as<Product>().scalar(), term->size());
+      }
+      const std::vector<std::pair<Product::scalar_type, std::size_t>> expected{
+          {16, 4}, {-8, 3}, {-8, 3}, {4, 2}};
+      REQUIRE(std::ranges::is_permutation(terms, expected));
+    }
+
+    // in a spin-free basis the spin cycle of <E^i_a E^a_i> counts twice:
+    // 2 n_o n_v
+    auto sf_ctx = get_default_context();
+    sf_ctx.set(SPBasis::Spinfree);
+    auto sf_resetter = set_scoped_default_context(sf_ctx);
+    REQUIRE_THAT(FWickTheorem{ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"})) *
+                              ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}))}
+                     .compute(),
+                 EquivalentTo(L"2 δ{a_1;a_1} * δ{i_1;i_1}"));
+  }
+
   // a Kronecker delta (or Kronecker-equivalent overlap) between external
   // indices that reduce() leaves standing is real and idempotent, so one
   // between indices that other standing deltas already identify is redundant:
