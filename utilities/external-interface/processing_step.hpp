@@ -11,6 +11,7 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include <concepts>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -73,6 +74,36 @@ void alias_individual_ids(ExecutionContext &ctx, std::string_view step_id,
                           const std::vector<std::string_view> &associated_ids,
                           std::string_view target_id);
 
+/// Propagates the input aliases of a step onto its outputs so that outputs can
+/// be referenced under the step's own id in the same way as any other step's
+/// (e.g. 'step.bla' for an input aliased 'input.bla'). Individual aliases are
+/// created as each input's outputs are recorded; group aliases are deferred
+/// until flush() because they must only be created once every member of the
+/// group has contributed.
+class AliasPropagator {
+ public:
+  AliasPropagator(ExecutionContext &ctx, std::string_view step_id);
+
+  /// Records the @p count outputs (with ids `step_id.start` ..
+  /// `step_id.(start + count - 1)`) produced for a single input with the given
+  /// @p associated_ids and @p associated_group_ids. If @p alias_source is set,
+  /// the input itself is first aliased to `step_id.start` (used when the step
+  /// leaves its input data in place rather than creating new data, in which
+  /// case @p count must be 1); otherwise the output ids are assumed to already
+  /// exist (e.g. created via ExecutionContext::set_data).
+  void record(const std::vector<std::string_view> &associated_ids,
+              const std::vector<std::string_view> &associated_group_ids,
+              std::size_t start, std::size_t count, bool alias_source);
+
+  /// Creates the group aliases accumulated across all record() calls.
+  void flush();
+
+ private:
+  ExecutionContext &ctx_;
+  std::string_view step_id_;
+  std::map<std::string_view, std::vector<std::string>> group_assocs_;
+};
+
 }  // namespace detail
 
 /// The main point of this wrapper is to
@@ -102,7 +133,7 @@ class OneByOneProcessingStep
         throw Exception("Error while processing " + kind() + ": " + e.what());
       }
     } else {
-      std::map<std::string_view, std::vector<std::string>> group_assocs;
+      detail::AliasPropagator propagator(ctx, step_id);
 
       for (std::string_view current_input : inputs) {
         for (const ExecutionContext::Data<ProcessingData> &current :
@@ -120,23 +151,16 @@ class OneByOneProcessingStep
                             e.what());
           }
 
+          bool alias_source = false;
           if (inherit_aliases && new_outputs == 0 && alias_unchanged_inputs()) {
             new_outputs = 1;
-            ctx.add_data_alias(
-                current.associated_ids.front(),
-                std::string(step_id) + "." + std::to_string(total_outputs));
+            alias_source = true;
           }
 
           if (inherit_aliases && new_outputs > 0) {
-            std::string created_outputs = detail::make_output_range_id(
-                step_id, total_outputs, new_outputs);
-
-            detail::alias_individual_ids(ctx, step_id, current.associated_ids,
-                                         created_outputs);
-
-            for (std::string_view group_id : current.associated_group_ids) {
-              group_assocs[group_id].emplace_back(created_outputs);
-            }
+            propagator.record(current.associated_ids,
+                              current.associated_group_ids, total_outputs,
+                              new_outputs, alias_source);
           }
 
           total_outputs += new_outputs;
@@ -144,29 +168,7 @@ class OneByOneProcessingStep
       }
 
       if (inherit_aliases) {
-        for (auto &[group_id, assoc_outputs] : group_assocs) {
-          const std::size_t expected_size = ctx.dataset_size(group_id);
-          SEQUANT_ASSERT(expected_size >= assoc_outputs.size());
-
-          if (expected_size != assoc_outputs.size()) {
-            continue;
-          }
-
-          std::string out_group_id =
-              detail::make_group_alias(step_id, group_id);
-
-          if (ctx.has_data(out_group_id)) {
-            if (!ctx.ids_are_equivalent(assoc_outputs, out_group_id)) {
-              throw Exception(
-                  "Duplicate group ID name '" + std::string(group_id) +
-                  "' leading to ambiguity for '" + out_group_id + "'");
-            }
-
-            continue;
-          }
-
-          ctx.add_data_alias(assoc_outputs, std::move(out_group_id));
-        }
+        propagator.flush();
       }
     }
 
