@@ -409,6 +409,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ///   derives over @p base_fld (Symm or Antisymm over a complex basis, where
   ///   the exchange relates an array to its conjugate) is refused: such an
   ///   array is real, and a real array is declared through the basis field.
+  ///   A Kronecker delta's symmetries are resolved over a real basis whatever
+  ///   its slots' field (see symmetry_field()).
   /// - #Symmetry, #Hermiticity, #ConjugationParity and #ColumnSymmetry fall
   ///   back to the *fixed* library defaults in Tensor::Defaults -- the safest,
   ///   fully non-symmetric / non-Hermitian choice -- when not specified.
@@ -492,6 +494,19 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         "exchange symmetry");
   }
 
+  /// @return the field the symmetries of a tensor labeled @p label are
+  ///         resolved over, given the @p base_fld of its slots: Field::Real for
+  ///         the Kronecker delta, which is 0 or 1 in any basis and hence a real
+  ///         array, @p base_fld for any other tensor
+  /// @param label the label, with or without trailing state marks
+  template <basic_string_convertible S>
+  static Field symmetry_field(const S &label, Field base_fld) {
+    if (base_fld == Field::Real) return base_fld;
+    auto bare = toUtf16(label);
+    split_state_marks(bare);
+    return bare == reserved::kronecker_label() ? Field::Real : base_fld;
+  }
+
   /// @return the elementwise ConjugationSymmetry an array of @p parity would
   ///         have over the current bra_/ket_, or Nonsymm for a tensor with no
   ///         bra/ket slot at all
@@ -507,7 +522,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       return false;
     };
     if (!has_slot(bra_) && !has_slot(ket_)) return ConjugationSymmetry::Nonsymm;
-    return to_conjugation_symmetry(parity, base_field());
+    return to_conjugation_symmetry(parity,
+                                   symmetry_field(label_, base_field()));
   }
 
   /// @return the elementwise ConjugationSymmetry derived from
@@ -582,11 +598,13 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, reserved_tag,
          const TensorSymmetries &syms = {})
-      : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices,
-               reserved_tag{},
-               resolve_symmetries(
-                   syms, sequant::base_field(make_indices(bra_indices),
-                                             make_indices(ket_indices)))) {}
+      : Tensor(
+            std::forward<S>(label), bra_indices, ket_indices, aux_indices,
+            reserved_tag{},
+            resolve_symmetries(
+                syms, symmetry_field(label, sequant::base_field(
+                                                make_indices(bra_indices),
+                                                make_indices(ket_indices))))) {}
 
   // defaulting reserved-tag ctor (move form)
   template <basic_string_convertible S>
@@ -597,10 +615,12 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       // base_field() takes its arguments by value and the indices are moved
       // only in the delegated ctor's member-init list, so this reads them
       // intact
-      : Tensor(std::forward<S>(label), std::move(bra_indices),
-               std::move(ket_indices), std::move(aux_indices), reserved_tag{},
-               resolve_symmetries(
-                   syms, sequant::base_field(bra_indices, ket_indices))) {}
+      : Tensor(
+            std::forward<S>(label), std::move(bra_indices),
+            std::move(ket_indices), std::move(aux_indices), reserved_tag{},
+            resolve_symmetries(
+                syms, symmetry_field(label, sequant::base_field(
+                                                bra_indices, ket_indices)))) {}
 
  public:
   /// constructs an uninitialized Tensor
@@ -874,6 +894,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     auto slots_before = slot_snapshot();
     label_ = std::move(label);
     try {
+      // the field the symmetries are resolved over depends on the label
+      if (symmetry_field(label_, base_field()) !=
+          symmetry_field(label_before, base_field()))
+        rederive_field_symmetries();
       adopt_marks();
       if (ranges::contains(reserved::density_labels(), label_))
         check_density_symmetries();
@@ -1236,7 +1260,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     // are derived again from them and the new slots, so a rebuild onto
     // slots of another field stays consistent
     const auto rsym = resolve_symmetries(
-        symmetries(), sequant::base_field(new_bra.value(), new_ket.value()));
+        symmetries(),
+        symmetry_field(label_,
+                       sequant::base_field(new_bra.value(), new_ket.value())));
     Tensor t(label_, std::move(new_bra), std::move(new_ket), std::move(new_aux),
              reserved_tag{}, rsym);
     t.adjointed_ = adjointed_;
@@ -1425,13 +1451,20 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ///        tensor, which no Tensor can hold, exactly as in with_slots(). The
   ///        tensor is restored to what @p before recorded first, so a refused
   ///        mutation leaves it as the call found it, down to the slots' field.
+  /// derives #BraKetSymmetry and the elementwise #ConjugationSymmetry again
+  /// from the field-agnostic traits over symmetry_field()
+  void rederive_field_symmetries() {
+    braket_symmetry_ =
+        resolve_symmetries(symmetries(), symmetry_field(label_, base_field()))
+            .braket_symmetry;
+    conjugation_symmetry_ = derive_conjugation_symmetry();
+  }
+
   void renormalize_after_slot_mutation(std::string_view api,
                                        std::optional<SlotSnapshot> &&before,
                                        const SlotKey &key_before) {
     if (slot_key() == key_before) return;
-    braket_symmetry_ =
-        resolve_symmetries(symmetries(), base_field()).braket_symmetry;
-    conjugation_symmetry_ = derive_conjugation_symmetry();
+    rederive_field_symmetries();
     if (adjointed_ || kconjugated_) {
       SEQUANT_ASSERT(before.has_value());
       if (normalize_states() != 1) {

@@ -948,6 +948,50 @@ TEST_CASE("overlap and Kronecker delta labels", "[elements]") {
   }
 }
 
+TEST_CASE("Kronecker delta over a complex basis", "[elements][conjugate]") {
+  using namespace sequant;
+
+  // a Kronecker delta is a real array in any basis, so it is bra-ket
+  // symmetric over the default complex spaces
+  const Index i1(L"i_1"), i2(L"i_2");
+  REQUIRE(i1.basis().field() == Field::Complex);
+  const auto delta_ptr = make_kronecker(i1, i2);
+  const auto& delta = delta_ptr->as<Tensor>();
+  REQUIRE(delta.braket_symmetry() == BraKetSymmetry::Symm);
+  REQUIRE(delta.hermiticity() == Hermiticity::Hermitian);
+  REQUIRE(delta == deserialize(L"δ{i_1;i_2}")->as<Tensor>());
+
+  const TensorSymmetries symm{.perm = Symmetry::Nonsymm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  // a state mark on the label does not hide the delta
+  for (const auto label : {L"δ꙳", L"δ⁺"}) {
+    CAPTURE(toUtf8(label));
+    Tensor marked(label, bra{i1}, ket{i2}, symm);
+    REQUIRE(marked.label() == reserved::kronecker_label());
+    REQUIRE(marked.braket_symmetry() == BraKetSymmetry::Symm);
+    REQUIRE(marked.conjugation_symmetry() == delta.conjugation_symmetry());
+  }
+
+  // relabeling to or from the delta resolves the symmetries anew
+  Tensor h(L"h", bra{i1}, ket{i2},
+           TensorSymmetries{.perm = Symmetry::Nonsymm,
+                            .hermiticity = Hermiticity::Hermitian,
+                            .column = ColumnSymmetry::Symm});
+  REQUIRE(h.braket_symmetry() == BraKetSymmetry::Conjugate);
+  h.set_label(std::wstring(reserved::kronecker_label()));
+  REQUIRE(h == delta);
+  Tensor g = delta;
+  g.set_label(L"g");
+  REQUIRE(g.braket_symmetry() == BraKetSymmetry::Conjugate);
+  REQUIRE(g.conjugation_symmetry() ==
+          Tensor(L"g", bra{i1}, ket{i2},
+                 TensorSymmetries{.perm = Symmetry::Nonsymm,
+                                  .hermiticity = Hermiticity::Hermitian,
+                                  .column = ColumnSymmetry::Symm})
+              .conjugation_symmetry());
+}
+
 TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
   using namespace sequant;
 

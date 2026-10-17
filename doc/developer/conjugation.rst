@@ -99,8 +99,10 @@ The parity is a property of the operator (``K O K⁻¹ = ±O``), so ``꙳`` norm
 elementwise ``ConjugationSymmetry`` is a different, derived observable (the parity read through the basis field; a
 bra/ket-less tensor is ``NonSymm`` in every field), consumed only by the tensor's hash and equality and by the vertex
 painter's colour. Which slot exchanges are symmetries is ``BraKetSymmetry``'s business, derived from the hermiticity,
-the parity and the field. A bra/ket-less tensor (``w{;;x}``) has an empty exchange, so its adjoint is its conjugate:
-there the hermiticity reads "real", "imaginary", "unknown" and normalizes ``꙳`` ahead of the parity.
+the parity and the field. The Kronecker delta is 0 or 1 in any basis, so its symmetries are derived as over a real basis,
+and the Hermitian one ``make_kronecker`` builds is ``Symm`` whatever the field of its indices. A bra/ket-less tensor
+(``w{;;x}``) has an empty exchange, so its adjoint is its conjugate: there the hermiticity reads "real", "imaginary",
+"unknown" and normalizes ``꙳`` ahead of the parity.
 
 The defaults are ``NonHermitian`` and ``Even`` (a real operator): ``t⁺`` on a default tensor is kept, ``t꙳`` on a
 default tensor is ``t`` in every basis, and a kept star requires ``ConjugationParity::None`` (serialized as the fourth
