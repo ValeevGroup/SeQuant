@@ -56,13 +56,6 @@ Index make_in_basis_of(IndexFactory &idxfac, const IndexSpace &sp,
       idx.proto_indices(), idx.symmetric_proto_indices()));
 }
 
-/// @return the identity between @p bra and @p ket: their Kronecker delta if
-/// their overlap is one, else their overlap
-ExprPtr make_identity(const Index &bra, const Index &ket) {
-  return is_kronecker_equivalent(bra, ket) ? make_kronecker(bra, ket)
-                                           : make_overlap(bra, ket);
-}
-
 /// the core (R minus U), active (R ∩ U) and virtual (U minus R) parts of
 /// the space, where R is the reference-occupied and U the vacuum-unoccupied
 /// space

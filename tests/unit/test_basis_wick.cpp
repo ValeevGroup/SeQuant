@@ -102,12 +102,69 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
   }
 
   SECTION("K6: general-space legs of two families contract to one overlap") {
-    // neither leg is pure, so the contraction is s{q;q'} δ{p_1<;1>;q}
-    // δ{q';p_2<;2>} with fresh generic q, q': one overlap between the two
-    // families must stand, and nothing may throw
+    // neither leg is pure, so the contraction is δ{p_1<;1>;q<;1>}
+    // s{q<;1>;q'<;2>} δ{q'<;2>;p_2<;2>}: a projection onto the quasiparticle
+    // space keeps the instance of the leg it projects, and the overlap
+    // between the two families stands
     const Index i1(L"i_1"), i2(L"i_2");
     const auto p1 = Index(L"p_1").replace_basis_instance(1);
     const auto p2 = Index(L"p_2").replace_basis_instance(2);
+    {
+      const auto c = FWickTheorem::contract(FOp(p1, Action::Annihilate),
+                                            FOp(p2, Action::Create));
+      for (auto const* t : tensors_labelled(c, reserved::kronecker_label()))
+        CHECK(t->_bra()[0].basis().basis_instance() ==
+              t->_ket()[0].basis().basis_instance());
+      const auto metrics = tensors_labelled(c, reserved::overlap_label());
+      REQUIRE(metrics.size() == 1);
+      CHECK(metrics[0]->_bra()[0].basis().basis_instance() == 1);
+      CHECK(metrics[0]->_ket()[0].basis().basis_instance() == 2);
+    }
+    // legs in one instance contract to a Kronecker delta
+    {
+      const auto c = FWickTheorem::contract(
+          FOp(p1, Action::Annihilate),
+          FOp(Index(L"p_2").replace_basis_instance(1), Action::Create));
+      CHECK(tensors_labelled(c, reserved::overlap_label()).empty());
+      CHECK(tensors_labelled(c, reserved::kronecker_label()).size() == 3);
+    }
+    // a generic leg contracts to an overlap: a delta of the input may yet
+    // narrow it to an instance, so reduce() decides whether it is an identity
+    for (auto const& [l, r] :
+         {std::pair{Index(L"p_1"), Index(L"p_2")},
+          std::pair{Index(L"p_1"), Index(L"p_2").replace_basis_instance(1)}}) {
+      const auto c = FWickTheorem::contract(FOp(l, Action::Annihilate),
+                                            FOp(r, Action::Create));
+      CHECK(tensors_labelled(c, reserved::overlap_label()).size() == 1);
+      CHECK(tensors_labelled(c, reserved::kronecker_label()).size() == 2);
+    }
+    // generic legs that the deltas of the input narrow to two instances
+    // contract to the overlap between the instances, under either vacuum
+    for (auto vacuum : {Vacuum::Physical, Vacuum::SingleProduct}) {
+      auto vctx = get_default_context();
+      vctx.set(vacuum);
+      auto vctx_resetter = set_scoped_default_context(vctx);
+      const auto a1 = Index(L"a_1").replace_basis_instance(1);
+      const auto a2 = Index(L"a_2").replace_basis_instance(2);
+      const Index q1(L"p_1"), q2(L"p_2");
+      auto t = ex<Tensor>(L"t", bra{i1}, ket{a1}, Symmetry::Nonsymm);
+      auto u = ex<Tensor>(L"u", bra{a2}, ket{i2}, Symmetry::Nonsymm);
+      // both legs generic, or one generic and one specific
+      for (auto const& expr :
+           {t * make_kronecker(a1, q1) * ex<FNOperator>(cre{}, ann{q1}) *
+                ex<FNOperator>(cre{q2}, ann{}) * make_kronecker(q2, a2) * u,
+            t * make_kronecker(a1, q1) * ex<FNOperator>(cre{}, ann{q1}) *
+                ex<FNOperator>(cre{a2}, ann{}) * u}) {
+        ExprPtr r;
+        REQUIRE_NOTHROW(r = FWickTheorem{expr->clone()}.compute());
+        REQUIRE(r->is<Product>());
+        CHECK(tensors_labelled(r, reserved::kronecker_label()).empty());
+        const auto metrics = tensors_labelled(r, reserved::overlap_label());
+        REQUIRE(metrics.size() == 1);
+        CHECK(metrics[0]->_bra()[0] == a1);
+        CHECK(metrics[0]->_ket()[0] == a2);
+      }
+    }
     const auto expr = ex<Tensor>(L"t", bra{i1}, ket{p1}, Symmetry::Nonsymm) *
                       ex<FNOperator>(cre{i1}, ann{p1}) *
                       ex<Tensor>(L"u", bra{p2}, ket{i2}, Symmetry::Nonsymm) *
@@ -124,6 +181,33 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
     CHECK(
         (instances == container::svector<IndexBasis::optional_instance>{1, 2} ||
          instances == container::svector<IndexBasis::optional_instance>{2, 1}));
+  }
+
+  SECTION("a projection resolves its instance to the registered name") {
+    // a name belongs to one (space, instance) pair: the projection of a leg
+    // in p̃ (p in instance 1) onto the particle space is in instance 1 of a,
+    // i.e. in ã if that is registered, not in p̃
+    auto isr = make_min_sr_spaces();
+    isr->add(L"p̃", IndexBasis{isr->retrieve_space(L"p"), 1});
+    isr->add(L"ã", IndexBasis{isr->retrieve_space(L"a"), 1});
+    auto nctx = get_default_context();
+    nctx.set(std::move(isr));
+    auto nctx_resetter = set_scoped_default_context(nctx);
+    const Index x(L"p̃_1");
+    REQUIRE(x.basis().name() == L"p̃");
+    const auto c = FWickTheorem::contract(
+        FOp(x, Action::Annihilate),
+        FOp(Index(L"p_2").replace_basis_instance(2), Action::Create));
+    const auto deltas = tensors_labelled(c, reserved::kronecker_label());
+    REQUIRE(deltas.size() == 2);
+    std::size_t projected = 0;
+    for (auto const* t : deltas)
+      for (auto const& idx : t->_slots())
+        if (idx.basis().basis_instance() == 1 && idx != x) {
+          CHECK(idx.basis().name() == L"ã");
+          ++projected;
+        }
+    CHECK(projected == 1);
   }
 
   SECTION("K0: no instance anywhere") {

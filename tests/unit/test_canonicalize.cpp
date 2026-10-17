@@ -849,7 +849,7 @@ TEST_CASE("canonicalization_zero_by_symmetry", "[algorithms][canonicalize]") {
       auto make = [] {
         return ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
                           Symmetry::Antisymm) *
-               ex<Tensor>(L"s", bra{L"p_5", L"p_6"}, ket{L"p_1", L"p_2"},
+               ex<Tensor>(L"w", bra{L"p_5", L"p_6"}, ket{L"p_1", L"p_2"},
                           Symmetry::Symm);
       };
       auto expr = make();

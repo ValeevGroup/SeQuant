@@ -557,6 +557,14 @@ TEST_CASE("serialization", "[serialization]") {
             serializationErrorMatches(9, 1, "Invalid symmetry specifier"));
       }
 
+      SECTION("an overlap or Kronecker delta is between two indices") {
+        // rejected by the Tensor ctor
+        for (const wchar_t* bad : {L"s{i1,i2;a1,a2}", L"δ{i1,i2;a1,a2}",
+                                   L"s{;i1}", L"δ{i1;}", L"s{i1;a1;x}"})
+          REQUIRE_THROWS_AS(deserialize<ExprPtr>(bad), Exception);
+        REQUIRE_NOTHROW(deserialize<ExprPtr>(L"s{i1;a1} * δ{i2;a2}"));
+      }
+
       SECTION("(anti)symmetrization operators reject braket symmetry") {
         // a reserved (anti)symmetrizer must be braket-Nonsymm; an explicit
         // non-Nonsymm braket spec is rejected by the Tensor ctor

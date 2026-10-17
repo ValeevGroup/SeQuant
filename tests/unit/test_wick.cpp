@@ -287,14 +287,14 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         REQUIRE_NOTHROW(wick1.compute());
         // full contractions = delta
         auto full_contractions = FWickTheorem{opseq1}.compute();
-        REQUIRE_THAT(full_contractions, EquivalentTo(L"s{i_1;i_2}"));
+        REQUIRE_THAT(full_contractions, EquivalentTo(L"δ{i_1;i_2}"));
         // partial contractions = delta - N
         auto partial_contractions =
             FWickTheorem{opseq1}.full_contractions(false).compute();
         // std::wcout << "partial_contractions=" <<
         // to_latex(partial_contractions) << std::endl;
         REQUIRE_THAT(partial_contractions,
-                     EquivalentTo(L"s{i_1;i_2} - a{i_1;i_2}"));
+                     EquivalentTo(L"δ{i_1;i_2} - a{i_1;i_2}"));
       }
       {
         auto opseq1 = ex<BNOperatorSeq>(BNOperator(cre({}), ann({L"i_1"})),
@@ -303,14 +303,14 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         REQUIRE_NOTHROW(wick1.compute());
         // full contractions = delta
         auto full_contractions = BWickTheorem{opseq1}.compute();
-        REQUIRE_THAT(full_contractions, EquivalentTo(L"s{i_1;i_2}"));
+        REQUIRE_THAT(full_contractions, EquivalentTo(L"δ{i_1;i_2}"));
         // partial contractions = delta + N
         auto partial_contractions =
             BWickTheorem{opseq1}.full_contractions(false).compute();
         // std::wcout << "partial_contractions=" <<
         // to_latex(partial_contractions) << std::endl;
         REQUIRE_THAT(partial_contractions,
-                     EquivalentTo(L"s{i_1;i_2} + b{i_1;i_2}"));
+                     EquivalentTo(L"δ{i_1;i_2} + b{i_1;i_2}"));
       }
     }
 
@@ -365,11 +365,11 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE_THAT(
           partial_contractions,
           EquivalentTo(
-              L"- s{i_1;i_2} * a{i_4,i_5;i_3,i_1} - s{i_1;i_2} * s{i_4;i_1} * "
-              L"a{i_5;i_3} + s{i_1;i_2} * s{i_5;i_1} * a{i_4;i_3} + s{i_1;i_3} "
-              L"* a{i_4,i_5;i_2,i_1} + s{i_1;i_3} * s{i_4;i_1} * a{i_5;i_2} - "
-              L"s{i_1;i_3} * s{i_5;i_1} * a{i_4;i_2} - a{i_4,i_5;i_2,i_3} + "
-              L"s{i_4;i_1} * a{i_1,i_5;i_2,i_3} - s{i_5;i_1} * "
+              L"- δ{i_1;i_2} * a{i_4,i_5;i_3,i_1} - δ{i_1;i_2} * δ{i_4;i_1} * "
+              L"a{i_5;i_3} + δ{i_1;i_2} * δ{i_5;i_1} * a{i_4;i_3} + δ{i_1;i_3} "
+              L"* a{i_4,i_5;i_2,i_1} + δ{i_1;i_3} * δ{i_4;i_1} * a{i_5;i_2} - "
+              L"δ{i_1;i_3} * δ{i_5;i_1} * a{i_4;i_2} - a{i_4,i_5;i_2,i_3} + "
+              L"δ{i_4;i_1} * a{i_1,i_5;i_2,i_3} - δ{i_5;i_1} * "
               L"a{i_1,i_4;i_2,i_3} + a{i_1,i_4,i_5;i_2,i_3,i_1}"));
     }
 
@@ -445,9 +445,9 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE(result->size() == 5);
       REQUIRE_THAT(
           result,
-          EquivalentTo(L"- a{i_1;i_2} * s{i_3;i_4} - a{i_3;i_4} * s{i_1;i_2} + "
-                       L"a{i_3;i_2} * s{i_1;i_4} + a{i_1,i_3;i_2,i_4} + "
-                       L"s{i_1;i_2} * s{i_3;i_4}"));
+          EquivalentTo(L"- a{i_1;i_2} * δ{i_3;i_4} - a{i_3;i_4} * δ{i_1;i_2} + "
+                       L"a{i_3;i_2} * δ{i_1;i_4} + a{i_1,i_3;i_2,i_4} + "
+                       L"δ{i_1;i_2} * δ{i_3;i_4}"));
     }
 
     // three 1-body operators, partial contraction
@@ -463,9 +463,9 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE_THAT(
           result,
           EquivalentTo(
-              L"a{i_6;i_1} * s{i_2;i_3} * s{i_4;i_5} - a{i_6,i_2;i_1,i_3} * "
-              L"s{i_4;i_5} + a{i_2,i_4,i_6;i_1,i_3,i_5} + a{i_6,i_4;i_1,i_3} * "
-              L"s{i_2;i_5} - a{i_6,i_4;i_1,i_5} * s{i_2;i_3}"));
+              L"a{i_6;i_1} * δ{i_2;i_3} * δ{i_4;i_5} - a{i_6,i_2;i_1,i_3} * "
+              L"δ{i_4;i_5} + a{i_2,i_4,i_6;i_1,i_3,i_5} + a{i_6,i_4;i_1,i_3} * "
+              L"δ{i_2;i_5} - a{i_6,i_4;i_1,i_5} * δ{i_2;i_3}"));
     }
 
     // two 2-body operators, partial contraction: Eq. 9b of DOI 10.1063/1.474405
@@ -482,12 +482,12 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE_THAT(
           result,
           EquivalentTo(
-              L"a{i_8,i_7,i_4;i_1,i_5,i_2} * s{i_3;i_6} + "
+              L"a{i_8,i_7,i_4;i_1,i_5,i_2} * δ{i_3;i_6} + "
               L"a{i_3,i_4,i_7,i_8;i_1,i_2,i_5,i_6} + a{i_8,i_7;i_1,i_2} * "
-              L"s{i_3;i_6} * s{i_4;i_5} + a{i_8,i_7,i_4;i_6,i_1,i_2} * "
-              L"s{i_3;i_5} + a{i_8,i_3,i_7;i_1,i_5,i_2} * s{i_4;i_6} + "
-              L"a{i_8,i_3,i_7;i_6,i_1,i_2} * s{i_4;i_5} - a{i_8,i_7;i_1,i_2} * "
-              L"s{i_3;i_5} * s{i_4;i_6}"));
+              L"δ{i_3;i_6} * δ{i_4;i_5} + a{i_8,i_7,i_4;i_6,i_1,i_2} * "
+              L"δ{i_3;i_5} + a{i_8,i_3,i_7;i_1,i_5,i_2} * δ{i_4;i_6} + "
+              L"a{i_8,i_3,i_7;i_6,i_1,i_2} * δ{i_4;i_5} - a{i_8,i_7;i_1,i_2} * "
+              L"δ{i_3;i_5} * δ{i_4;i_6}"));
 
       // we use this example in the paper, both as bare ops and contracted with
       // scalars to make all indices dummy and the topological optimizations
@@ -698,10 +698,10 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE(result->size() == 4);
       REQUIRE_THAT(
           result,
-          EquivalentTo(L"s{i_4;i_1} * s{i_3;i_2} * s{a_2;a_3} * s{a_1;a_4} - "
-                       L"s{i_4;i_1} * s{i_3;i_2} * s{a_2;a_4} * s{a_1;a_3} - "
-                       L"s{i_3;i_1} * s{i_4;i_2} * s{a_2;a_3} * s{a_1;a_4} + "
-                       L"s{i_3;i_1} * s{i_4;i_2} * s{a_2;a_4} * s{a_1;a_3}"));
+          EquivalentTo(L"δ{i_4;i_1} * δ{i_3;i_2} * δ{a_2;a_3} * δ{a_1;a_4} - "
+                       L"δ{i_4;i_1} * δ{i_3;i_2} * δ{a_2;a_4} * δ{a_1;a_3} - "
+                       L"δ{i_3;i_1} * δ{i_4;i_2} * δ{a_2;a_3} * δ{a_1;a_4} + "
+                       L"δ{i_3;i_1} * δ{i_4;i_2} * δ{a_2;a_4} * δ{a_1;a_3}"));
 
       // in spin-free result first and fourth terms are multiplied by 4, second
       // and third terms multiplied by 2
@@ -715,10 +715,10 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE(result_sf->size() == 4);
       REQUIRE_THAT(
           result_sf,
-          EquivalentTo(L"4 s{i_4;i_1} * s{i_3;i_2} * s{a_2;a_3} * s{a_1;a_4} - "
-                       L"2 s{i_4;i_1} * s{i_3;i_2} * s{a_2;a_4} * s{a_1;a_3} - "
-                       L"2 s{i_3;i_1} * s{i_4;i_2} * s{a_2;a_3} * s{a_1;a_4} + "
-                       L"4 s{i_3;i_1} * s{i_4;i_2} * s{a_2;a_4} * s{a_1;a_3}"));
+          EquivalentTo(L"4 δ{i_4;i_1} * δ{i_3;i_2} * δ{a_2;a_3} * δ{a_1;a_4} - "
+                       L"2 δ{i_4;i_1} * δ{i_3;i_2} * δ{a_2;a_4} * δ{a_1;a_3} - "
+                       L"2 δ{i_3;i_1} * δ{i_4;i_2} * δ{a_2;a_3} * δ{a_1;a_4} + "
+                       L"4 δ{i_3;i_1} * δ{i_4;i_2} * δ{a_2;a_4} * δ{a_1;a_3}"));
     }
     // two (pure qp) 3-body operators
     {
@@ -1384,6 +1384,216 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         Catch::Matchers::ContainsSubstring("without a Product summand"));
     REQUIRE_NOTHROW(FWickTheorem{nops->clone()}.compute());
   }
+  // a self-delta (a Kronecker delta between an index and itself) is 1 only if
+  // its index is bound elsewhere: named, or in another slot of the term. If it
+  // is the only occurrence of a dummy index it is the sum over it, i.e. the
+  // extent of its space, and stands
+  SECTION("self-delta on a dummy index") {
+    const auto& isr = get_default_context().index_basis_registry();
+    auto self_deltas = [](const ExprPtr& expr) {
+      container::svector<Tensor> result;
+      expr->visit(
+          [&result](const ExprPtr& ex) {
+            if (!ex->is<Tensor>()) return;
+            const auto& t = ex->as<Tensor>();
+            if (t.label() != reserved::overlap_label() &&
+                t.label() != reserved::kronecker_label())
+              return;
+            REQUIRE(t.bra()[0] == t.ket()[0]);
+            result.push_back(t);
+          },
+          /* atoms_only = */ true);
+      return result;
+    };
+
+    // the number of unoccupied orbitals, not 1
+    auto count = ex<FNOperator>(cre({}), ann({L"p_1"})) *
+                 ex<FNOperator>(cre({L"p_1"}), ann({}));
+    auto result = FWickTheorem{count}.compute();
+    REQUIRE(!result->is<Constant>());
+    auto deltas = self_deltas(result);
+    REQUIRE(deltas.size() == 1);
+    REQUIRE(isr->is_pure_unoccupied(deltas[0].bra()[0].space()));
+
+    // the occupation of a named orbital is 1
+    auto occupation = ex<FNOperator>(cre({L"i_1"}), ann({})) *
+                      ex<FNOperator>(cre({}), ann({L"i_1"}));
+    {
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              container::set<Index>{Index{L"i_1"}}));
+      REQUIRE(FWickTheorem{occupation->clone()}.compute() == ex<Constant>(1));
+    }
+    // summed over the orbital it is the number of occupied orbitals
+    result = FWickTheorem{occupation}.compute();
+    deltas = self_deltas(result);
+    REQUIRE(deltas.size() == 1);
+    REQUIRE(isr->is_pure_occupied(deltas[0].bra()[0].space()));
+
+    // a dummy bound by a tensor: the trace of f over the unoccupied orbitals,
+    // with no delta left
+    auto trace = ex<Tensor>(L"f", bra{L"p_2"}, ket{L"p_1"}) *
+                 ex<FNOperator>(cre({}), ann({L"p_1"})) *
+                 ex<FNOperator>(cre({L"p_2"}), ann({}));
+    result = FWickTheorem{trace}.compute();
+    REQUIRE(self_deltas(result).empty());
+    const auto f_indices = get_used_indices_with_counts(result);
+    REQUIRE(f_indices.size() == 1);
+    REQUIRE(f_indices.begin()->second.nonproto() == 2);
+    REQUIRE(isr->is_pure_unoccupied(f_indices.begin()->first.space()));
+
+    // a dummy bound only as a protoindex: the occupation is 1 for each i_1
+    // that t's indices depend on, with no delta left
+    auto proto_bound = ex<Tensor>(L"t", bra{Index(L"a_1", {L"i_1"})},
+                                  ket{Index(L"a_2", {L"i_1"})}) *
+                       ex<FNOperator>(cre({L"i_1"}), ann({})) *
+                       ex<FNOperator>(cre({}), ann({L"i_1"}));
+    result = FWickTheorem{proto_bound}.compute();
+    REQUIRE(self_deltas(result).empty());
+    REQUIRE(get_used_indices_with_counts(result).at(Index(L"i_1")).proto == 2);
+
+    // the norm of a doubly-excited determinant summed over its orbitals:
+    // n_o^2 n_v^2 - n_o n_v^2 - n_o^2 n_v + n_o n_v, each term a product of
+    // self-deltas (and not 1 - 1 - 1 + 1 = 0)
+    auto norm = ex<FNOperator>(cre({L"i_1", L"i_2"}), ann({L"a_1", L"a_2"})) *
+                ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}));
+    result = FWickTheorem{norm}.compute();
+    REQUIRE(result->is<Sum>());
+    REQUIRE(result->size() == 4);
+    std::multiset<std::size_t> delta_counts;
+    for (const auto& term : *result)
+      delta_counts.insert(self_deltas(term).size());
+    REQUIRE(delta_counts == std::multiset<std::size_t>{4, 3, 3, 2});
+  }
+
+  // a standing self-delta is an ordinary tensor to what follows Wick's theorem
+  SECTION("a standing self-delta survives the passes after Wick") {
+    // n_v
+    auto count = FWickTheorem{ex<FNOperator>(cre({}), ann({L"p_1"})) *
+                              ex<FNOperator>(cre({L"p_1"}), ann({}))}
+                     .compute();
+    REQUIRE_THAT(count, EquivalentTo(L"δ{e_1;e_1}"));
+    auto simplified = count->clone();
+    simplify(simplified);
+    REQUIRE(simplified == count);
+    REQUIRE(deserialize(serialize(count)) == count);
+    // tracing out the spin doubles the number of orbitals
+    REQUIRE_THAT(mbpt::spintrace(count), EquivalentTo(L"2 δ{e_1;e_1}"));
+    REQUIRE_THAT(mbpt::closed_shell_spintrace(count),
+                 EquivalentTo(L"2 δ{e_1;e_1}"));
+
+    // n_o^2 n_v^2 - n_o n_v^2 - n_o^2 n_v + n_o n_v, spin-traced:
+    // 16 n_o^2 n_v^2 - 8 n_o n_v^2 - 8 n_o^2 n_v + 4 n_o n_v
+    auto norm =
+        FWickTheorem{
+            ex<FNOperator>(cre({L"i_1", L"i_2"}), ann({L"a_1", L"a_2"})) *
+            ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}))}
+            .compute();
+    for (const auto& traced :
+         {mbpt::spintrace(norm), mbpt::closed_shell_spintrace(norm)}) {
+      REQUIRE(traced->is<Sum>());
+      std::vector<std::pair<Product::scalar_type, std::size_t>> terms;
+      for (const auto& term : *traced) {
+        REQUIRE(term->is<Product>());
+        terms.emplace_back(term->as<Product>().scalar(), term->size());
+      }
+      const std::vector<std::pair<Product::scalar_type, std::size_t>> expected{
+          {16, 4}, {-8, 3}, {-8, 3}, {4, 2}};
+      REQUIRE(std::ranges::is_permutation(terms, expected));
+    }
+
+    // in a spin-free basis the spin cycle of <E^i_a E^a_i> counts twice:
+    // 2 n_o n_v
+    auto sf_ctx = get_default_context();
+    sf_ctx.set(SPBasis::Spinfree);
+    auto sf_resetter = set_scoped_default_context(sf_ctx);
+    REQUIRE_THAT(FWickTheorem{ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"})) *
+                              ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}))}
+                     .compute(),
+                 EquivalentTo(L"2 δ{a_1;a_1} * δ{i_1;i_1}"));
+  }
+
+  // a Kronecker delta (or Kronecker-equivalent overlap) between external
+  // indices that reduce() leaves standing is real and idempotent, so one
+  // between indices that other standing deltas already identify is redundant:
+  // δ_ij δ_ji = δ_ij and δ_ij δ_jk δ_ki = δ_ij δ_jk
+  SECTION("redundant Kronecker deltas are folded") {
+    // the (bra, ket) pairs of the deltas and overlaps of a term
+    auto deltas = [](const ExprPtr& expr) {
+      container::svector<std::pair<Index, Index>> result;
+      expr->visit(
+          [&result](const ExprPtr& ex) {
+            if (!ex->is<Tensor>()) return;
+            const auto& t = ex->as<Tensor>();
+            if (t.label() == reserved::overlap_label() ||
+                t.label() == reserved::kronecker_label())
+              result.emplace_back(t.bra()[0], t.ket()[0]);
+          },
+          /* atoms_only = */ true);
+      return result;
+    };
+    // the norm of a doubly-excited determinant with named orbitals is
+    // (1 - δ_ij)(1 - δ_ab) expanded: 1 - δ_ij - δ_ab + δ_ij δ_ab
+    const Index i1{L"i_1"}, i2{L"i_2"}, a1{L"a_1"}, a2{L"a_2"};
+    {
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              container::set<Index>{i1, i2, a1, a2}));
+      auto norm = ex<FNOperator>(cre({i1, i2}), ann({a1, a2})) *
+                  ex<FNOperator>(cre({a1, a2}), ann({i1, i2}));
+      auto result = FWickTheorem{norm}.compute();
+      REQUIRE(result->is<Sum>());
+      REQUIRE(result->size() == 4);
+      std::multiset<std::size_t> delta_counts;
+      for (const auto& term : *result) {
+        const auto term_deltas = deltas(term);
+        delta_counts.insert(term_deltas.size());
+        for (const auto& [bra, ket] : term_deltas)
+          REQUIRE(bra.space() == ket.space());
+      }
+      REQUIRE(delta_counts == std::multiset<std::size_t>{0, 1, 1, 2});
+    }
+
+    // a chain of named indices keeps a spanning tree of its deltas
+    {
+      const Index i3{L"i_3"};
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              container::set<Index>{i1, i2, i3}));
+      auto chain = make_overlap(i1, i2) * make_overlap(i2, i3) *
+                   make_overlap(i3, i1) * ex<Tensor>(L"f", bra{i1}, ket{i1});
+      FWickTheorem{chain}.reduce(chain);
+      REQUIRE(deltas(chain).size() == 2);
+    }
+
+    // a genuine overlap is not idempotent, so it is never folded: here
+    // between indices with different protoindices
+    {
+      const Index a1_i1{L"a_1", {i1}}, a2_i2{L"a_2", {i2}};
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              container::set<Index>{i1, i2, a1_i1, a2_i2}));
+      auto product = make_overlap(a1_i1, a2_i2) * make_overlap(a2_i2, a1_i1);
+      FWickTheorem{product}.reduce(product);
+      REQUIRE(deltas(product).size() == 2);
+    }
+  }
+
+  SECTION("a Kronecker delta is bra-ket symmetric") {
+    // δ is 0 or 1, so canonicalization may swap its slots whatever the field:
+    // the orientation of a delta between named indices is canonical
+    const Index i1{L"i_1"}, i2{L"i_2"};
+    auto scope = scoped_canonicalize_options(
+        CanonicalizeOptions::default_options().copy_and_set(
+            container::set<Index>{i1, i2}));
+    auto f = [&] { return ex<Tensor>(L"f", bra{i1}, ket{i2}); };
+    auto difference =
+        f() * make_kronecker(i2, i1) - f() * make_kronecker(i1, i2);
+    REQUIRE(simplify(difference) == ex<Constant>(0));
+    // a deserialized delta carries the same symmetry
+    REQUIRE(deserialize(L"δ{i_1;i_2}") == make_kronecker(i1, i2));
+  }
+
   SECTION("multiproduct vacuum") {
     auto ctx = get_default_context();
     ctx.set(mbpt::make_mr_spaces());
@@ -2030,8 +2240,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
 TEST_CASE("wick_nop_canonicalization", "[algorithms][wick]") {
   using namespace sequant;
 
-  // a sum of products of normal operators whose partial contractions are
-  // normal operators that DefaultTensorCanonicalizer would reorder
+  // a sum of products of normal operators whose partial contractions are a
+  // delta times a normal operator
   auto make_input = [] {
     ExprPtr sum = ex<Constant>(0);
     for (int k = 0; k != 6; ++k) {
@@ -2058,6 +2268,21 @@ TEST_CASE("wick_nop_canonicalization", "[algorithms][wick]") {
   // must neither enable nor disable normal operator canonicalization for each
   // other, so every term equals that of the summand computed on its own
   SECTION("per-summand computations") {
+    // Wick spells a partial contraction as the delta followed by the
+    // surviving normal operator; with the operator labels cardinal before the
+    // delta, the lexicographic step of a complete canonicalization reorders
+    // every such term, whatever the labels hash to (the graph step alone
+    // orders by canonical vertex order, which depends on the label hashes)
+    auto cardinal = set_scoped_modified_default_context([](Context& ctx) {
+      container::vector<std::wstring> labels{reserved::antisymm_label(),
+                                             reserved::symm_label(),
+                                             reserved::transposition_label()};
+      for (const auto& label : FNOperator::labels()) labels.push_back(label);
+      labels.push_back(reserved::kronecker_label());
+      ctx.set_cardinal_tensor_labels(std::move(labels));
+      ctx.set(CanonicalizeOptions::default_options().copy_and_set(
+          CanonicalizationMethod::Complete));
+    });
     const auto input = make_input();
     std::vector<std::wstring> expected;
     // terms that canonicalization of their normal operators would change

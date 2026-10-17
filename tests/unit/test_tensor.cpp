@@ -852,3 +852,27 @@ TEST_CASE("density labels", "[elements]") {
       REQUIRE(*deserialize<ExprPtr>(serialize(d)) == *d);
   }
 }
+
+TEST_CASE("overlap and Kronecker delta labels", "[elements]") {
+  using namespace sequant;
+
+  // an overlap or Kronecker delta is an identity between two indices
+  for (const auto& label :
+       {reserved::overlap_label(), reserved::kronecker_label()}) {
+    CAPTURE(toUtf8(label));
+    REQUIRE_NOTHROW(Tensor(label, bra{L"i_1"}, ket{L"i_2"}));
+    REQUIRE_THROWS_AS(Tensor(label, bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}),
+                      Exception);
+    REQUIRE_THROWS_AS(Tensor(label, bra{}, ket{L"i_1"}), Exception);
+    REQUIRE_THROWS_AS(Tensor(label, bra{L"i_1"}, ket{}), Exception);
+    REQUIRE_THROWS_AS(Tensor(label, bra{L"i_1"}, ket{L"i_2"}, aux{L"x_1"}),
+                      Exception);
+
+    // also when relabeled to one
+    auto t = Tensor(L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    REQUIRE_THROWS_AS(t.set_label(label), Exception);
+    REQUIRE(t.label() == L"t");
+    auto f = Tensor(L"f", bra{L"i_1"}, ket{L"i_2"});
+    REQUIRE_NOTHROW(f.set_label(label));
+  }
+}

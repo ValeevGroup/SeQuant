@@ -4289,7 +4289,7 @@ TEST_CASE(
   //   D2 = q{i_1;a_9;x_1} * r{a_9;i_2}         -> {i_1;i_2;x_1}: carries the
   //        OUTER mode x_1, does NOT carry the INNER mode x_2 -- the witness
   //        node (non-empty sliced_modes = {x_1}).
-  //   Q  = D2 * s{;;x_1,x_2}                    -> {i_1;i_2;x_2}: a drop-in
+  //   Q  = D2 * m{;;x_1,x_2}                    -> {i_1;i_2;x_2}: a drop-in
   //        structural replacement for a plain 3-index leaf (same free-index
   //        role as `g` in the "hoists loop-invariant descendant" test), so Q
   //        contracts x_1 internally and carries x_2 onward -- the rest of
@@ -4313,7 +4313,7 @@ TEST_CASE(
   yield_.set_max_tile(4);
 
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(((((q{i_1;a_9;x_1} * r{a_9;i_2}) * s{;;x_1,x_2}) * h{i_3;i_1;x_2}) * "
+      L"(((((q{i_1;a_9;x_1} * r{a_9;i_2}) * m{;;x_1,x_2}) * h{i_3;i_1;x_2}) * "
       L"w{i_2;i_5;x_1}) * p{i_6;i_3;x_1})");
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);

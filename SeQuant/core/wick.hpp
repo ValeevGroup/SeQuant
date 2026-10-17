@@ -1738,11 +1738,19 @@ class WickTheorem {
 
   /// the value of a single contraction between @p bra (the annihilator's
   /// index) and @p ket (the creator's index), both already projected onto
-  /// the common quasiparticle space; this is where a spin-free variant
-  /// would substitute its own tensors
+  /// the common quasiparticle space: their overlap, which is a Kronecker
+  /// delta if both are in one basis instance of unit metric, unless the
+  /// vacuum is a multiproduct; this is where a spin-free variant would
+  /// substitute its own tensors. An index without a basis instance may yet be
+  /// narrowed to one by a delta of the input, so its overlap is left to
+  /// reduce().
   static ExprPtr contraction_value(const Index &bra, const Index &ket,
                                    bool left_is_annihilator, Vacuum vacuum) {
-    if (vacuum != Vacuum::MultiProduct) return make_overlap(bra, ket);
+    if (vacuum != Vacuum::MultiProduct)
+      return bra.basis().has_basis_instance() &&
+                     ket.basis().has_basis_instance()
+                 ? make_identity(bra, ket)
+                 : make_overlap(bra, ket);
     return left_is_annihilator ? density::make_hole_rdm(bra, ket)
                                : density::make_rdm(bra, ket);
   }
@@ -1786,19 +1794,20 @@ class WickTheorem {
       }
     }
 
+    // the projection of an index onto the quasiparticle space is in the
+    // index's own basis instance: a subset of a basis is still that basis
+    auto project = [&](const Index &idx) {
+      return Index::make_tmp_index(
+          isr->resolve(
+              IndexBasis(qpspace_common, idx.basis().basis_instance())),
+          idx.proto_indices(), idx.symmetric_proto_indices());
+    };
+
     std::optional<Index> left_qp_idx;
-    if (!left_is_pure) {
-      left_qp_idx =
-          Index::make_tmp_index(qpspace_common, left.index().proto_indices(),
-                                left.index().symmetric_proto_indices());
-    }
+    if (!left_is_pure) left_qp_idx = project(left.index());
 
     std::optional<Index> right_qp_idx;
-    if (!right_is_pure) {
-      right_qp_idx =
-          Index::make_tmp_index(qpspace_common, right.index().proto_indices(),
-                                right.index().symmetric_proto_indices());
-    }
+    if (!right_is_pure) right_qp_idx = project(right.index());
 
     // preserve bra/ket positions of left & right
     const auto left_is_ann = left.action() == Action::Annihilate;

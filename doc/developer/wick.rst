@@ -54,14 +54,19 @@ creator, and their quasiparticle spaces intersect (``is_qpannihilator``/``is_qpc
 ``SeQuant/core/op.hpp``); under ``Vacuum::MultiProduct`` their actions must also differ (see :ref:`below <wick-extended>`). The
 contraction *value* (``contract``) depends on whether those quasiparticle spaces are pure hole/particle subspaces or not:
 
-- both pure: the contraction is a plain overlap :math:`s(L,R)`;
+- both pure: the contraction is the overlap :math:`s(L,R)`;
 - neither pure: :math:`\delta(L,l)\, s(l,r)\, \delta(R,r)`;
 - only the left space pure: :math:`s(L,r)\, \delta(R,r)`;
 - only the right space pure: :math:`\delta(L,l)\, s(l,R)`,
 
 where :math:`l = L \cap H` and :math:`r = R \cap P` (:math:`H`/:math:`P` the hole/particle subspaces), materialized via temporary indices
-from ``Index::make_tmp_index`` when a space needs projecting. The middle factor comes from ``WickTheorem::contraction_value``, which
-returns :math:`s` except under ``Vacuum::MultiProduct`` (see :ref:`below <wick-extended>`). For fermionic statistics, each contraction
+from ``Index::make_tmp_index`` when a space needs projecting; such a projection is in the basis instance of the index it projects
+(a subset of a basis is still that basis), so with legs in two instances the overlap between the projections is one between the
+instances. Its metric is that of the subspace instance as registered, which need not be that of the leg's (see
+:doc:`../user/getting_started/index_spaces`): an unregistered one is orthonormal. The middle factor :math:`s` comes from ``WickTheorem::contraction_value``: the overlap between its indices, which is a
+Kronecker delta if both are in one basis instance of unit metric (:func:`sequant::make_identity`), except under
+``Vacuum::MultiProduct`` (see :ref:`below <wick-extended>`). An index without a basis instance may yet be narrowed to one by a delta
+of the input, so whether its overlap is an identity is left to the reduction below. For fermionic statistics, each contraction
 additionally picks up a sign of :math:`-1` for every operator that sat strictly between ``left`` and ``right`` at the time of
 contraction — the usual anticommutation rule.
 
@@ -189,7 +194,16 @@ into the basis of the other; between two noncovariant indices it stands. The exc
 different basis instances and neither in a basis of general metric): it identifies
 its indices, through the indices they are protoindices of as well, so it is applied unless both are unpaired dummies (not
 appearing exactly twice); unlike a Kronecker delta between them, which is applied, it then stands. These rules apply only if the
-input of Wick's theorem has noncovariant indices; otherwise every overlap is applied. The result is then, like any other
+input of Wick's theorem has noncovariant indices; otherwise every overlap is applied. A *self-delta*, a Kronecker delta (or
+Kronecker-equivalent overlap) between an index and itself, which an applied delta leaves behind, is 1 if its index is bound
+elsewhere: it is external, or appears in another slot of the term. If instead it is the only occurrence of a dummy index it is
+the sum over that index, i.e. the extent of its space, and one self-delta per such index stands. The standing Kronecker deltas
+(and Kronecker-equivalent overlaps) between external indices are real and idempotent, so one between indices that the others
+already identify is redundant and dropped (:math:`\delta_{ij} \delta_{ji} = \delta_{ij}`, :math:`\delta_{ij} \delta_{jk}
+\delta_{ki} = \delta_{ij} \delta_{jk}`). A Kronecker-equivalent overlap that stands, as a self-delta or between external indices,
+is spelled as a Kronecker delta, since the bases of its indices are final. A Kronecker delta is 0 or 1, hence bra-ket symmetric
+whatever the field of its indices, so
+the orientation of a standing one is up to canonicalization. The result is then, like any other
 :class:`sequant::Product`/:class:`sequant::Sum`, put into canonical form by :doc:`the tensor-network canonicalizer <tnc>` so that like
 terms collect correctly — Wick's-theorem correctness therefore also rests on canonicalization being correct.
 The reduction treats a basis instance (:class:`sequant::IndexBasis`) like a subspace: an index without one runs over the
