@@ -12,6 +12,10 @@ set(TEST_CASES
     "eomcc.cpp -> 2 2h2p R|2 1h2p R|2 2h1p R|2 3h1p R|2 1h3p R|2 4h2p R|3 3h3p R"
     # Unitary Coupled-Cluster, both H̄ expansions (BCH and Bernoulli).
     "ucc.cpp -> 2 bch 2|2 bch 3|2 bernoulli 2|2 bernoulli 3"
+    # Open-shell / closed-shell spin-adapted EOM-CC
+    "os_eom.cpp"
+    "singletCSeom.cpp -> 2 2h2p R"
+    "tripletCSeom.cpp -> 2 2h2p R|3 3h3p R"
 )
 
 if (TARGET Eigen3::Eigen)
