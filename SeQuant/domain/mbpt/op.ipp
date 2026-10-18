@@ -201,9 +201,11 @@ std::int8_t Operator<QuantumNumbers, S>::adjoint() {
   SEQUANT_ASSERT(sequant::is_adjoint_label(lbl) == is_adjoint_);
   sequant::toggle_adjoint_label(lbl);
 
-  // get order and batch_ordinals to restore later
+  // get order, batch_ordinals and the state to restore later: the assignment
+  // below installs a fresh operator
   const auto saved_order = this->order_;
   const auto saved_batch_ordinals = this->batch_ordinals_;
+  const bool saved_is_adjoint = this->is_adjoint_;
 
   // capture the current tensor-form generator so that each call regenerates
   // fresh dummy indices; otherwise using this adjoint operator more than once
@@ -219,7 +221,7 @@ std::int8_t Operator<QuantumNumbers, S>::adjoint() {
         qn += adjoint_dN;
         return qn;  // qn_action
       }};
-  this->is_adjoint_ = !this->is_adjoint_;  // toggle adjoint flag
+  this->is_adjoint_ = !saved_is_adjoint;
 
   // restore original order and batch_ordinals
   this->order_ = saved_order;

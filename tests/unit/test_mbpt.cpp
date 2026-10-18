@@ -972,6 +972,9 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(to_latex(adjoint(r_1_2_adj).as<Expr>()) == L"{\\hat{R}_{1,2}}");
       REQUIRE(to_latex(adjoint(lambda2_adj).as<Expr>()) ==
               L"{\\hat{\\lambda}_{2}}");
+      // the flag follows the label through any number of adjoints
+      REQUIRE(to_latex(adjoint(adjoint(t1_adj)).as<Expr>()) ==
+              to_latex(t1_adj.as<Expr>()));
 
       // adjoint should preserve perturbation order
       auto t1_order2 = tʼ(1, {.order = 2});
