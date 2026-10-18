@@ -75,6 +75,26 @@ inline std::pair<bool, bool> split_state_marks(std::wstring &label) {
   return {adjointed, kconjugated};
 }
 
+/// appends the marks of the set states to @p label, ::adjoint_label first:
+/// the spelling split_state_marks() reads back
+inline void append_state_marks(std::wstring &label, bool adjointed,
+                               bool kconjugated) {
+  if (adjointed) label.push_back(adjoint_label);
+  if (kconjugated) label.push_back(conjugate_label);
+}
+
+/// @return the LaTeX superscript that spells the set states: `\dagger`, `*`
+///         or `\dagger *`; empty if neither is set
+inline std::wstring latex_state_marks(bool adjointed, bool kconjugated) {
+  std::wstring states;
+  if (adjointed) states += L"\\dagger";
+  if (kconjugated) {
+    if (!states.empty()) states += L" ";
+    states += L"*";
+  }
+  return states;
+}
+
 namespace detail {
 
 /// @return the 64-bit FNV-1a hash of @p str

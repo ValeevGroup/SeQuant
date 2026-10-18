@@ -244,12 +244,11 @@ template <Statistics S>
 std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   using namespace sequant::mbpt;
 
-  // base_lbl is used for registry check, it should not have adjoint label or
+  // base_lbl is used for registry check, it should not have state marks or
   // perturbation order
   auto base_lbl = std::wstring(op.label());
   SEQUANT_ASSERT(!base_lbl.empty());
-  const bool is_adjoint = is_adjoint_label(base_lbl);
-  if (is_adjoint) base_lbl.pop_back();
+  const auto [is_adjoint, is_kconjugated] = split_state_marks(base_lbl);
 
   // now remove perturbation order decoration if any
   SEQUANT_ASSERT(!base_lbl.empty());
@@ -282,15 +281,15 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   const bool has_hat = base_lbl == reserved::antisymm_label() ||
                        base_lbl == reserved::symm_label();
 
-  // now start building the output. The adjoint mark is not LaTeX, so the
-  // adjoint prints as a dagger superscript on the hatted bare label.
+  // now start building the output. The state marks are not LaTeX, so the
+  // states print as a superscript on the hatted bare label, as on a Tensor.
   std::wstring decorated_label(op.label());
-  if (is_adjoint) decorated_label.pop_back();
+  split_state_marks(decorated_label);
   std::wstring label = io::latex::utf_to_string(decorated_label);
   std::wstring base = has_hat ? label : L"\\hat{" + label + L"}";
-  if (is_adjoint) {
-    base += L"^{\\dagger}";
-    // where a rank sub/superscript follows, the hat-and-dagger is braced as a
+  if (is_adjoint || is_kconjugated) {
+    base += L"^{" + latex_state_marks(is_adjoint, is_kconjugated) + L"}";
+    // where a rank sub/superscript follows, the hat-and-states is braced as a
     // group of its own, so that the rank attaches to the group instead of
     // forming a second superscript on the same base
     if (!skip_rank_info(base_lbl)) base = L"{" + base + L"}";
@@ -570,8 +569,8 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
       };
   }
 
-  // Builds the operator's tensor for the given slots. A trailing adjoint mark
-  // on full_label is stripped and applied via set_states() ourselves,
+  // Builds the operator's tensor for the given slots. Trailing state marks
+  // on full_label are stripped and applied via set_states() ourselves,
   // rather than left for the Tensor constructor's own mark adoption: that
   // throws when the mark's normalization would consume a sign (an
   // anti-Hermitian operator's adjoint), which no Tensor can hold but the
@@ -580,14 +579,13 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
                                auto&& a, Symmetry symm,
                                ColumnSymmetry column) -> ExprPtr {
     std::wstring base_label(lbl);
-    const bool is_adjoint =
-        !base_label.empty() && base_label.back() == sequant::adjoint_label;
-    if (is_adjoint) base_label.pop_back();
+    const auto [adjointed, kconjugated] =
+        sequant::split_state_marks(base_label);
     Tensor t(std::move(base_label), std::forward<decltype(b)>(b),
              std::forward<decltype(k)>(k), std::forward<decltype(a)>(a), symm,
              op_herm, column);
-    if (!is_adjoint) return ex<Tensor>(std::move(t));
-    const auto sign = t.set_states(true, false);
+    if (!adjointed && !kconjugated) return ex<Tensor>(std::move(t));
+    const auto sign = t.set_states(adjointed, kconjugated);
     return sign == 1 ? ex<Tensor>(std::move(t))
                      : ex<Product>(sign, ExprPtrList{ex<Tensor>(std::move(t))});
   };

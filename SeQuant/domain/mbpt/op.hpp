@@ -949,10 +949,14 @@ class Operator : public Operator<void, S> {
 
   [[nodiscard]] std::int8_t adjoint() override;
 
-  /// @brief K-conjugate of an mbpt Operator is the operator itself: complex
-  /// conjugation acts through the coefficients of its tensor form, see
-  /// sequant::kconjugate(const ExprPtr&)
-  /// @return +1
+  /// @brief changes this to its K-conjugate `K O K⁻¹`: the label takes the
+  /// `꙳` mark, the tensor form is regenerated as sequant::kconjugate() of the
+  /// original's, and the quantum-number action is kept, since `K` reproduces
+  /// an operator string over a basis it closes on
+  /// @return +1; a sign the tensor form consumes lands on its scalar
+  /// @throw Exception if the default context's registry holds a complex-field
+  ///        basis (see default_field_is_complex()), over which `K` has no
+  ///        spelling in the indices at hand
   [[nodiscard]] std::int8_t kconjugate() override;
 
   /// @brief returns the batch ordinals if any
@@ -967,6 +971,7 @@ class Operator : public Operator<void, S> {
   std::function<void(QuantumNumbers&)> qn_action_;
 
   bool is_adjoint_ = false;
+  bool is_kconjugated_ = false;
 
   std::optional<container::svector<std::size_t>> batch_ordinals_ = std::nullopt;
 

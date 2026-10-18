@@ -630,10 +630,6 @@ struct RapidSimplifyVisitor {
   }
 };
 
-namespace {
-
-/// whether the default context's registry contains a complex-field base
-/// space or named basis instance; a null registry counts as real
 bool default_field_is_complex() {
   auto isr = get_default_context().index_basis_registry();
   if (!isr) return false;
@@ -643,6 +639,8 @@ bool default_field_is_complex() {
            (basis.has_basis_instance() || isr->is_base(basis.space()));
   });
 }
+
+namespace {
 
 /// scopes copies of the default contexts whose canonicalization options are
 /// the current ones with @p setting applied

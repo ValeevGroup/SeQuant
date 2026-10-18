@@ -306,13 +306,17 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 ///        operator in it acts on an index space that `K` does not close
 ///        (only a real-field space, with a real-field proto-index closure,
 ///        is `K`-closed today). The check covers `NormalOperator` and
-///        `NormalOperatorSequence`; two operator kinds are accepted without
-///        it: a non-normal-ordered `Operator<S>` (`FOperator`/`BOperator`),
-///        which the check does not reach, and an `mbpt::Operator`, whose
-///        K-conjugate is the operator itself -- complex conjugation acts
-///        through the coefficients of its tensor form.
+///        `NormalOperatorSequence`, and does not reach a non-normal-ordered
+///        `Operator<S>` (`FOperator`/`BOperator`); an `mbpt::Operator`
+///        checks the default registry instead, see
+///        mbpt::Operator::kconjugate() and default_field_is_complex().
 /// @sa conjugate(const ExprPtr&)
 [[nodiscard]] ExprPtr kconjugate(const ExprPtr& expr);
+
+/// @return whether the default context's registry holds a complex-field base
+///         space or named basis instance, i.e. a basis complex conjugation
+///         `K` does not close on; a null registry counts as real
+[[nodiscard]] bool default_field_is_complex();
 
 /// Folds complex-conjugate-related summand pairs of a sum, exactly.
 ///

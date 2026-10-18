@@ -923,6 +923,51 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       }
     }  // SECTION("canonicalize")
 
+    SECTION("kconjugate") {
+      using op_t = mbpt::Operator<mbpt::qns_t>;
+      using namespace mbpt;
+      op_t t1 = t(1)->as<op_t>();
+      op_t lambda2 = λ(2)->as<op_t>();
+
+      // K closes on a real basis only, which the registry decides
+      REQUIRE_THROWS_AS(kconjugate(ex<op_t>(t1)), Exception);
+
+      auto real_basis = sequant::tests::scoped_real_basis();
+      auto t1_k = kconjugate(ex<op_t>(t1));
+      auto lambda2_k = kconjugate(ex<op_t>(lambda2));
+
+      // the quantum-number action is kept, the label takes the mark
+      REQUIRE(t1_k->as<op_t>()() == t1());
+      REQUIRE(lambda2_k->as<op_t>()() == lambda2());
+      REQUIRE(t1_k->as<op_t>().label() == L"t꙳");
+      REQUIRE(to_latex(t1_k) == L"{{\\hat{t}^{*}}_{1}}");
+
+      // K commutes with lowering to the tensor form
+      REQUIRE(simplify(t1_k->as<op_t>().tensor_form()) ==
+              simplify(kconjugate(t1.tensor_form())));
+      REQUIRE(simplify(lambda2_k->as<op_t>().tensor_form()) ==
+              simplify(kconjugate(lambda2.tensor_form())));
+
+      // an involution
+      REQUIRE(to_latex(kconjugate(t1_k)) == to_latex(ex<op_t>(t1)));
+
+      // composes with the adjoint in either order
+      auto t1_adj_k = kconjugate(adjoint(ex<op_t>(t1)));
+      auto t1_k_adj = adjoint(t1_k);
+      REQUIRE(t1_adj_k->as<op_t>().label() == L"t⁺꙳");
+      REQUIRE(t1_k_adj->as<op_t>().label() == L"t⁺꙳");
+      REQUIRE(to_latex(t1_adj_k) == L"{{\\hat{t}^{\\dagger *}}^{1}}");
+      REQUIRE(t1_adj_k->as<op_t>()() == adjoint(ex<op_t>(t1))->as<op_t>()());
+      REQUIRE(simplify(t1_k_adj->as<op_t>().tensor_form()) ==
+              simplify(adjoint(kconjugate(t1.tensor_form()))));
+      REQUIRE(to_latex(kconjugate(adjoint(t1_adj_k))) ==
+              to_latex(ex<op_t>(t1)));
+
+      // the perturbation order carries over
+      auto t1_order2_k = kconjugate(tʼ(1, {.order = 2}));
+      REQUIRE(t1_order2_k->as<op_t>().order() == 2);
+    }
+
     SECTION("adjoint") {
       using qns_t = mbpt::qns_t;
       using op_t = mbpt::Operator<qns_t>;

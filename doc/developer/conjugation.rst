@@ -156,7 +156,8 @@ Vocabulary
      - toggles ``꙳`` and normalizes it: the parity consumes it at a sign, and over a real basis (the coset rule) a definite
        hermiticity consumes it with the bundles exchanged; otherwise the slots stay in place. Factor order kept
      - the same
-     - the identity on the string; throws if a ``NormalOperator``/``NormalOperatorSequence`` index (proto indices included) is over a space ``K`` does not close, i.e. not a real-field space; ``Operator<S>`` and ``mbpt::Operator`` are not checked
+     - the identity on the string; throws if a ``NormalOperator``/``NormalOperatorSequence`` index (proto indices included) is over a space ``K`` does not close, i.e. not a real-field space; ``Operator<S>`` is not checked, and ``mbpt::Operator`` checks the default registry instead
+       (``default_field_is_complex()``) and takes the ``꙳`` mark
 
 
 Each ``Expr::adjoint()`` / ``Expr::kconjugate()`` returns the sign it consumed; the free functions wrap a −1 as a
@@ -271,8 +272,11 @@ A conjugated ``Variable`` is spelled ``conj(x)`` by the generators that have a c
 
 ``adjoint`` of an ``mbpt::Operator`` marks its label ``t⁺``, inverts its quantum-number action and regenerates its
 tensor form as ``sequant::adjoint(tensor form)``, which is where an anti-Hermitian operator's −1 comes from.
-Separately, ``OpMaker`` given an already-marked name (an operator registered as ``v⁺``) strips the mark, builds the
-tensor with the slots it computed and applies ``set_states(true, false)``, wrapping a −1 in a ``Product``. The
+``kconjugate`` likewise marks its label ``t꙳``, keeps the quantum-number action and regenerates the tensor form as
+``sequant::kconjugate(tensor form)``; since the operator's coefficients are not in the tree until it is lowered, it
+refuses while the default registry holds a complex-field basis rather than take them real. Separately, ``OpMaker``
+given an already-marked name (an operator registered as ``v⁺``) strips the marks, builds the tensor with the slots it
+computed and applies ``set_states()``, wrapping a −1 in a ``Product``. The
 ``spin`` and ``csv`` rebuild sites carry both states through ``with_slots()`` / ``set_states()``; a sign consumed by a
 rebuild across a field change lands on the term's scalar. The ``df`` and ``thc`` rules build their factors from the
 tensor's slots, so they factorize a marked tensor as the bare array (for ``⁺`` over the exchanged bundles) and
