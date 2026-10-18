@@ -23,6 +23,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2_sequant.hpp"
+#include "csv_test_utils.hpp"
 
 #include <algorithm>
 #include <array>

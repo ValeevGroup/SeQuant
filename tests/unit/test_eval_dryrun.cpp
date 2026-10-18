@@ -70,6 +70,7 @@
 #include <catch2/generators/catch_generators.hpp>
 
 #include "catch2_sequant.hpp"
+#include "csv_test_utils.hpp"
 
 #include <algorithm>
 #include <atomic>

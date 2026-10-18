@@ -16,6 +16,7 @@
 // fixtures.
 
 #include "catch2_sequant.hpp"
+#include "csv_test_utils.hpp"
 
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/context.hpp>
