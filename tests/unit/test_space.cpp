@@ -855,6 +855,89 @@ TEST_CASE("index_space", "[elements]") {
     CHECK_FALSE(isr->follows(L"ν̃"));
   }
 
+  SECTION("add with specs") {
+    IndexBasisRegistry isr;
+    const IndexSpace::QuantumNumbers qn{0b11};
+    // a space: its type, then anything else by name
+    isr.add(L"i", 0b01,
+            {.qns = qn,
+             .dimension = 20,
+             .field = Field::Real,
+             .vacuum_occupied = true,
+             .reference_occupied = true,
+             .hole = true})
+        .add(L"a", 0b10, {.qns = qn, .particle = true})
+        .add("x", 0b100);  // no spec: the defaults of an IndexSpace
+    const IndexSpace i = isr.retrieve_space(L"i"), a = isr.retrieve_space(L"a"),
+                     x = isr.retrieve_space(L"x");
+    CHECK(i.qns() == qn);
+    CHECK(i.dimension() == 20);
+    CHECK(i.field() == Field::Real);
+    CHECK(a.dimension() == IndexSpace(L"a", 0b10).dimension());
+    CHECK(a.field() == IndexSpace(L"a", 0b10).field());
+    CHECK(x == IndexSpace(L"x", 0b100));
+    CHECK(isr.vacuum_occupied_space() == i.type());
+    CHECK(isr.reference_occupied_space() == i.type());
+    CHECK(isr.hole_space() == i.type());
+    CHECK(isr.particle_space() == a.type());
+    CHECK(isr.complete_space(/* nulltype_ok = */ true) ==
+          IndexSpace::Type::null);
+    // a union or an intersection computes its qns, dimension and field, so
+    // its spec carries the roles only
+    isr.add_union(L"p", {L"i", L"a"}, {.complete = true});
+    CHECK(isr.complete_space() == isr.retrieve_space(L"p").type());
+    REQUIRE_NOTHROW(isr.add_union("q", {"a", "x"}));
+    CHECK_THROWS(isr.add_union(L"r", {L"i", L"x"}, {.dimension = 5}));
+    CHECK_THROWS(isr.add_intersection(L"r", {L"q", L"p"}, {.qns = qn}));
+    CHECK_THROWS(
+        isr.add_intersection(L"r", {L"q", L"p"}, {.field = Field::Real}));
+    CHECK_FALSE(isr.contains(L"r"));
+
+    // a basis instance: its space, by label or by value, and its instance,
+    // then the metadata by name
+    isr.add(L"μ̃", L"a", 1, {.metric = IndexBasisMetric::General});
+    const IndexBasis pao = isr.retrieve(L"μ̃");
+    CHECK(pao == IndexBasis(a, 1, L"μ̃"));
+    CHECK(pao.metric() == IndexBasisMetric::General);
+    CHECK_FALSE(pao.own_extent());  // follows the space
+    CHECK_FALSE(pao.own_field());
+    isr.add("ν̃", a, 2, {.extent = 120, .field = Field::Real});
+    CHECK(isr.retrieve(L"ν̃") == IndexBasis(a, 2, L"ν̃"));
+    CHECK(isr.retrieve(L"ν̃").own_extent() == 120);
+    CHECK(isr.retrieve(L"ν̃").metric() == IndexBasisMetric::Unit);
+    CHECK(isr.retrieve(L"ν̃").own_field() == Field::Real);
+    isr.add("ã", "a", 3);  // no spec: the space's own basis up to a rotation
+    CHECK(isr.retrieve(L"ã") == IndexBasis(a, 3, L"ã"));
+    CHECK(isr.retrieve(L"ã").extent() == a.dimension());
+    CHECK(isr.retrieve(L"ã").metric() == IndexBasisMetric::Unit);
+    CHECK(isr.retrieve(L"ã").field() == a.field());
+    // a follower mirrors its source from the start
+    isr.add(L"κ", L"p", 7, {.extent = 500, .metric = IndexBasisMetric::General})
+        .add(L"λ", L"a", 7, {.follows = L"κ"});
+    CHECK(isr.follows(L"λ") == std::optional<std::wstring>{L"κ"});
+    CHECK(isr.retrieve(L"λ").extent() == 500);
+    CHECK(isr.retrieve(L"λ").metric() == IndexBasisMetric::General);
+    // ... so its metadata cannot be given alongside
+    CHECK_THROWS(isr.add(L"ρ", L"a", 8, {.extent = 1, .follows = L"κ"}));
+    CHECK_FALSE(isr.contains(L"ρ"));
+    // ... and a source that cannot be followed registers nothing
+    CHECK_THROWS_AS(isr.add(L"ρ", L"a", 8, {.follows = L"ζ"}),
+                    IndexSpace::bad_key);
+    CHECK_THROWS(isr.add(L"ρ", L"a", 8, {.follows = L"λ"}));  // λ follows κ
+    CHECK_THROWS(isr.add(L"ρ", L"a", 8, {.follows = L"a"}));  // a space
+    CHECK_FALSE(isr.contains(L"ρ"));
+    // the invariants of a named basis instance
+    CHECK_THROWS(isr.add(L"μ̃", L"a", 9));  // label taken
+    CHECK_THROWS(isr.add(L"ρ", L"a", 1));  // instance 1 of a is μ̃
+    CHECK_THROWS_AS(isr.add(L"ρ", L"ζ", 1), IndexSpace::bad_key);
+    CHECK_THROWS_AS(isr.add(L"ρ", L"μ̃", 1),
+                    IndexBasisRegistry::not_a_space);  // a name is not a space
+    CHECK_THROWS(isr.add(L"ρ", IndexSpace{L"ζ", 0b1000}, 1));  // unregistered
+    CHECK_THROWS(isr.add(L"a2", L"a", 9));                     // not a label
+    CHECK_FALSE(isr.contains(L"ρ"));
+    CHECK(isr.bases().size() == 1 + 5 + 5);  // null + spaces + bases
+  }
+
   SECTION("paper 1 example") {
     IndexBasisRegistry isr;
     using namespace sequant::mbpt;
@@ -886,26 +969,27 @@ TEST_CASE("index_space", "[elements]") {
     IndexBasisRegistry ibr;
     using namespace sequant::mbpt;
     const QuantumNumbersAttr spin_any = 0b0011;
-    ibr.add("i", 0b001, spin_any,
-            // fully occupied in vacuum state
-            is_vacuum_occupied)
-        .add("u", 0b010, spin_any)
-        .add("a", 0b100, spin_any)
+    ibr.add("i", 0b001,
+            {.qns = spin_any,
+             // fully occupied in vacuum state
+             .vacuum_occupied = true})
+        .add("u", 0b010, {.qns = spin_any})
+        .add("a", 0b100, {.qns = spin_any})
         // reference RDMs are nonzero in this space, annihilator = qp creator
-        .add_union("I", {"i", "u"}, is_reference_occupied, is_hole)
+        .add_union("I", {"i", "u"}, {.reference_occupied = true, .hole = true})
         // creator = qp creator
-        .add_union("A", {"u", "a"}, is_particle)
+        .add_union("A", {"u", "a"}, {.particle = true})
         // general particle operators (e.g. Hamiltonian) act on this space
-        .add_union("p", {"I", "A"}, is_complete);
+        .add_union("p", {"I", "A"}, {.complete = true});
 
     // spaces whose QNs contain spin_any contain physical particles
     ibr.physical_particle_attribute_mask(spin_any);
 
-    // projected atomic orbitals = localized form of virtuals
-    auto a = ibr.retrieve_space("a");
-    ibr.add("μ̃", IndexBasis{a, 1});
+    // projected atomic orbitals = localized, non-orthonormal basis of the
+    // virtuals, registered as basis instance 1 of a
+    ibr.add("μ̃", "a", 1, {.metric = IndexBasisMetric::General});
     // nonparticle mode: density fitting, or Cholesky, or Hubbard-Stratonovich
-    ibr.add("x", 0b001, QuantumNumbersAttr{0b1000});
+    ibr.add("x", 0b001, {.qns = QuantumNumbersAttr{0b1000}});
 
     REQUIRE(ibr.retrieve_space("u") == ibr.intersection("A", "I"));
     REQUIRE(ibr.retrieve_space("p") == ibr.unIon("A", "i"));
@@ -917,6 +1001,7 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(ibr.is_pure_unoccupied("μ̃") == true);
     REQUIRE(ibr.contains_occupied("p") == true);
     REQUIRE(ibr.contains_unoccupied("p") == true);
+    REQUIRE(ibr.retrieve("μ̃").metric() == IndexBasisMetric::General);
 
     auto _ = set_scoped_default_context(
         {.index_basis_registry = ibr, .vacuum = Vacuum::SingleProduct});
