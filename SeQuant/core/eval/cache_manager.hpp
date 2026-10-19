@@ -858,10 +858,10 @@ class CacheManager {
       return data_p;
     }
 
-    // Not noexcept: SEQUANT_ASSERT below can throw (SEQUANT_ASSERT_BEHAVIOR
-    // = throw) -- see the tripwire comment on stored_this_eval_. In every
-    // default build config (ignore, or Debug's abort) this never actually
-    // throws.
+    // Not noexcept: under strict fill-once a duplicate store throws
+    // unconditionally, and the SEQUANT_ASSERT below throws under
+    // SEQUANT_ASSERT_BEHAVIOR=throw -- see the tripwire comment on
+    // stored_this_eval_.
     /// @param strict_fill_once whether a duplicate-producer store on a
     ///        non-persistent entry throws; the caller
     ///        (CacheManager::store_and_access) passes its own \c
@@ -876,18 +876,22 @@ class CacheManager {
       // one evaluation (a duplicate producer). Persistent entries are
       // excluded: they legitimately re-store across batch replays.
       if (!persistent_) {
-        SEQUANT_ASSERT(!stored_this_eval_);
-        // Strict cache-fill-once (dry-run schedule test-drive): the assert
-        // above is compiled out in Release/RelWithDebInfo, so a duplicate
+        // Strict cache-fill-once (dry-run schedule test-drive): a duplicate
         // producer (the same value cell built twice without an intervening
         // reset -- e.g. a frame-sensitive key that made a consumer miss a
-        // resident value and rebuild it) passes silently. Under strict mode
-        // it is a hard error.
+        // resident value and rebuild it) is a hard error, thrown
+        // unconditionally. This must precede the SEQUANT_ASSERT below:
+        // under SEQUANT_ASSERT_BEHAVIOR=ABORT the assert would std::abort()
+        // on the same condition before this throw could run, so strict mode
+        // would no longer be observable (nor catchable).
         if (stored_this_eval_ && strict_fill_once)
           throw Exception(
               "CacheManager::entry::store: value cell stored twice without an "
               "intervening reset() (duplicate producer / a consumer missed the "
               "resident cell and rebuilt it) -- cache-fill-once violated");
+        // Non-strict: the assert is the dev-build catch for the same
+        // duplicate-producer bug; it is compiled out in Release/RelWithDebInfo.
+        SEQUANT_ASSERT(!stored_this_eval_);
         stored_this_eval_ = true;
       }
       data_p = std::move(data);

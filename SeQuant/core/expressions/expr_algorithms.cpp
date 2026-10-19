@@ -7,14 +7,18 @@
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/math.hpp>
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/primitives.hpp>
 
+#include <algorithm>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -350,13 +354,167 @@ struct RapidSimplifyVisitor {
                  << std::endl;
   }
 
+  /// fuses the Powers of @p product with positive real Constant bases into
+  /// simplest radical form (see simplest_radical_form()): the rational part
+  /// of their value is multiplied into the scalar, the rest becomes a single
+  /// Power `R^(1/D)`. The scalar itself is never fused in, so the rational
+  /// part of the value always sits in the scalar and the radicand depends
+  /// only on the value; numerically equal Products thus hash and compare
+  /// equal, and terms that differ by a rational factor merge when the Sum is
+  /// next rebuilt, as by canonicalize() and hence simplify() (rapid_simplify()
+  /// leaves summands it has just made identical side by side). Powers
+  /// with negative, complex or Variable bases are left alone, and a Product
+  /// whose form would exceed the size cap of simplest_radical_form() is left
+  /// whole, none of its Powers fused.
+  /// @param[in] product a Product
+  /// @return the fused Product, or null if @p product is already in this form
+  static ExprPtr fuse_rational_powers(const Product& product) {
+    auto is_fusible = [](const ExprPtr& factor) {
+      if (!factor->is<Power>()) return false;
+      const auto& base = factor->as<Power>().base();
+      if (!base->is<Constant>()) return false;
+      const auto& value = base->as<Constant>().value();
+      return value.imag() == 0 && value.real() > 0;
+    };
+    const auto& factors = product.factors();
+    const auto nfusible =
+        std::count_if(factors.begin(), factors.end(), is_fusible);
+    if (nfusible == 0) return {};
+
+    container::svector<std::pair<rational, rational>> powers;
+    for (const auto& factor : factors) {
+      if (!is_fusible(factor)) continue;
+      const auto& pw = factor->as<Power>();
+      powers.emplace_back(pw.base()->as<Constant>().value().real(),
+                          pw.exponent());
+    }
+    const auto form = simplest_radical_form(powers);
+    if (!form) return {};
+
+    ExprPtr fused_power;
+    if (form->root_order != 1)
+      fused_power = ex<Power>(ex<Constant>(form->radicand),
+                              rational{1, form->root_order});
+
+    const auto first_fusible =
+        std::find_if(factors.begin(), factors.end(), is_fusible);
+    // already in this form iff the only fusible factor is R^(1/D) itself
+    // and nothing goes into the scalar
+    const bool unchanged = form->rational_part == 1 &&
+                           nfusible == (fused_power ? 1 : 0) &&
+                           (!fused_power || **first_fusible == *fused_power);
+    if (unchanged) return {};
+
+    container::svector<ExprPtr> fused_factors;
+    fused_factors.reserve(factors.size());
+    for (auto it = factors.begin(); it != factors.end(); ++it) {
+      if (!is_fusible(*it))
+        fused_factors.push_back(*it);
+      else if (it == first_fusible && fused_power)
+        fused_factors.push_back(fused_power);
+    }
+    return ex<Product>(product.scalar() * form->rational_part,
+                       fused_factors.begin(), fused_factors.end());
+  }
+
+  /// fuses the factors of @p product that are a Variable or a Power of one
+  /// into one factor per Variable: the exponents are summed, a bare Variable
+  /// counting as 1, grouped by label and by the conjugation of the base
+  /// combined with that of the Power (as in Power::operator*=). A sum of 0
+  /// drops the factor, 1 gives the bare Variable, anything else a Power of
+  /// the Variable, with the conjugation on the Variable in either case, so
+  /// `(x^2)*` becomes `(x*)^2`. Fused factors keep the position of their
+  /// first occurrence.
+  /// @param[in] product a Product
+  /// @return the fused Product, or null if @p product is already in this form
+  static ExprPtr fuse_variable_powers(const Product& product) {
+    struct Key {
+      std::wstring label;
+      bool conjugated;  // of the base combined with that of the Power
+      bool operator==(const Key&) const = default;
+    };
+    auto key_of = [](const ExprPtr& factor) -> std::optional<Key> {
+      if (factor->is<Variable>()) {
+        const auto& v = factor->as<Variable>();
+        return Key{std::wstring(v.label()), v.conjugated()};
+      }
+      if (factor->is<Power>() && factor->as<Power>().base()->is<Variable>()) {
+        const auto& pw = factor->as<Power>();
+        const auto& v = pw.base()->as<Variable>();
+        return Key{std::wstring(v.label()), v.conjugated() != pw.conjugated()};
+      }
+      return std::nullopt;
+    };
+
+    const auto& factors = product.factors();
+    // the exponent of each Key, in order of first occurrence
+    container::svector<std::pair<Key, rational>> exponents;
+    container::svector<ExprPtr> old_factors;
+    std::size_t first_fusible = factors.size();
+    for (std::size_t i = 0; i != factors.size(); ++i) {
+      const auto& factor = factors[i];
+      const auto key = key_of(factor);
+      if (!key) continue;
+      if (old_factors.empty()) first_fusible = i;
+      old_factors.push_back(factor);
+      auto it = std::find_if(exponents.begin(), exponents.end(),
+                             [&key](const auto& e) { return e.first == *key; });
+      if (it == exponents.end())
+        it = exponents.insert(exponents.end(), {*key, rational{0}});
+      it->second +=
+          factor->is<Power>() ? factor->as<Power>().exponent() : rational{1};
+    }
+    if (old_factors.empty()) return {};
+
+    container::svector<ExprPtr> new_factors;
+    for (const auto& [key, exponent] : exponents) {
+      if (exponent == 0) continue;
+      auto variable = ex<Variable>(key.label);
+      if (key.conjugated) variable->adjoint();
+      if (exponent == 1)
+        new_factors.push_back(std::move(variable));
+      else
+        new_factors.push_back(ex<Power>(std::move(variable), exponent));
+    }
+    if (std::equal(old_factors.begin(), old_factors.end(), new_factors.begin(),
+                   new_factors.end(),
+                   [](const auto& a, const auto& b) { return *a == *b; }))
+      return {};
+
+    container::svector<ExprPtr> fused_factors;
+    fused_factors.reserve(factors.size());
+    for (std::size_t i = 0; i != factors.size(); ++i) {
+      if (!key_of(factors[i]))
+        fused_factors.push_back(factors[i]);
+      else if (i == first_fusible)
+        fused_factors.insert(fused_factors.end(), new_factors.begin(),
+                             new_factors.end());
+    }
+    return ex<Product>(product.scalar(), fused_factors.begin(),
+                       fused_factors.end());
+  }
+
   /// simplifies a Product by:
+  /// - fusing its rational Powers into one, and its Variable factors into
+  ///   one per Variable
   /// - flattening subproducts
   /// - factoring in constants
   /// @param[in,out] expr (shared_ptr to ) a Product
   bool simplify_product(ExprPtr& expr) {
+    bool expr_changed = false;
+    if (auto fused = fuse_rational_powers(expr->as<Product>())) {
+      expr = std::move(fused);
+      expr_changed = true;
+    }
+    if (auto fused = fuse_variable_powers(expr->as<Product>())) {
+      expr = std::move(fused);
+      expr_changed = true;
+    }
     auto& expr_ref = *expr;
 
+    // Power::flatten below matters only for the Powers the fusions leave
+    // alone, such as those with Variable, negative or complex bases; a
+    // fused Power is already in normal form
     // need to rebuild if any factor is a constant or product
     bool need_to_rebuild = false;
     const auto nsubexpr = size(expr);
@@ -371,7 +529,6 @@ struct RapidSimplifyVisitor {
         break;
       }
     }
-    bool expr_changed = false;
     if (need_to_rebuild) {
       expr = ex<Product>(expr->as<Product>().scalar(), begin(expr->expr()),
                          end(expr->expr()));
@@ -439,12 +596,29 @@ struct RapidSimplifyVisitor {
     return mutated;
   }
 
-  // @return true if any simplifications were performed
+  /// simplifies a lone Power as simplify_product() would one inside a
+  /// Product: folds it if possible, else brings it to the same form, so that
+  /// e.g. `2^(3/2)` becomes `2 2^(1/2)` and merges with it in a Sum
+  /// @param[in,out] expr (shared_ptr to ) a Power
+  bool simplify_power(ExprPtr& expr) {
+    Power::flatten(expr);
+    if (!expr->is<Power>()) return true;
+    const Product one_factor(ExprPtrList{expr});
+    auto fused = fuse_rational_powers(one_factor);
+    if (!fused) fused = fuse_variable_powers(one_factor);
+    if (!fused) return false;
+    expr = std::move(fused);
+    return true;
+  }
+
+  /// @return true if any simplifications were performed
   bool simplify(ExprPtr& expr) {
     if (expr->is<Product>()) {
       return simplify_product(expr);
     } else if (expr->is<Sum>()) {
       return simplify_sum(expr);
+    } else if (expr->is<Power>()) {
+      return simplify_power(expr);
     } else
       return false;
   }

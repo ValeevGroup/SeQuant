@@ -112,6 +112,31 @@ up. General operators cannot be granted one.
 
 The registry is stored in the :class:`mbpt::Context <sequant::mbpt::Context>`. See the unit test cases for further manipulations with :class:`mbpt::Context <sequant::mbpt::Context>` and :class:`mbpt::OpRegistry <sequant::mbpt::OpRegistry>`.
 
+Normalization conventions
+---------------------------
+
+:class:`sequant::mbpt::NormalizationConvention` in the MBPT context controls prefactors of coefficient-summed operators.
+For an operator with :math:`c` creators and :math:`a` annihilators, let :math:`m=c!a!` in a spin-orbital basis;
+in a spin-free basis, :math:`c=a` and :math:`m=c!`.
+
+- ``Default`` gives coefficient-summed operators the prefactor :math:`1/m`, while projectors ``A``, ``S``, and ``P`` have no
+  additional prefactor.
+- ``Symmetric`` gives (de)excitation operators (:cpp:enumerator:`OpClass::Ex <sequant::mbpt::OpClass::Ex>` and
+  :cpp:enumerator:`OpClass::Deex <sequant::mbpt::OpClass::Deex>`), whose coefficients are the amplitudes being solved for,
+  and projectors the prefactor :math:`1/\sqrt{m}`. General operators
+  (:cpp:enumerator:`OpClass::Gen <sequant::mbpt::OpClass::Gen>`), such as the Hamiltonian, perturbations, and F12 geminals,
+  have supplied coefficients and retain :math:`1/m`.
+
+The prefactor follows from the operator's :class:`sequant::mbpt::OpClass`, so register a custom operator whose coefficients
+are solved for as ``Ex`` or ``Deex``. Projectors are recognized by the reserved labels ``reserved::antisymm_label()``
+(``Â``) and ``reserved::symm_label()`` (``Ŝ``): only operators with these labels receive the projector prefactor, and any
+other operator is normalized by its class. The replacement operator ``ã`` has explicit free indices and no summed
+coefficient tensor, so it carries no factorial prefactor.
+
+Normalization is selected when tensor forms are generated; abstract operator identity is independent of the convention.
+Keep a scoped convention active through lowering to tensor form. See :doc:`context` for a compiled example of a scoped
+convention.
+
 .. _mbpt-lst:
 
 Lie Similarity Transformation
@@ -222,6 +247,15 @@ compute the reference average.
 In this case partial contractions leave residual operators that become RDMs after Wick's theorem has run, and both
 overloads of ``ref_av`` require empty ``connect`` and ``do_not_connect`` lists: an RDM of rank above one contains both
 connected and disconnected contributions, so whether the operators feeding it are connected is not a property of a term.
+An RDM index is external if it belongs to the context's named indices (``CanonicalizeOptions::named_indices``) or,
+when no named indices are set, if it occurs in a single bra or ket slot of its term. An index in a single bra or ket
+slot cannot be summed over, so when named indices are set they must include every such index of a term that contains
+an RDM; ``ref_av`` fails otherwise. A dummy RDM index is summed over the active space and is relabeled into it; an
+external one keeps its label, and if its space extends beyond the active space the RDM takes an active-space index tied
+to the external one by a Kronecker delta. The active-space index carries no basis instance or protoindices of the index
+it replaces. An RDM index whose space does not overlap the active space, one lying entirely in the vacuum-occupied
+space or entirely outside the reference-occupied space, is left as is, although the normal-ordered expectation value
+it stands for vanishes there.
 ``vac_av`` always computes full contractions and honors these options, but it computes the Wick vacuum average, which
 may differ from the reference average. Under ``Vacuum::MultiProduct`` (see below) ``ref_av`` takes full contractions and
 honors the lists too.

@@ -172,8 +172,8 @@ TEST_CASE("basis-grants-registry", "[mbpt][csv]") {
 
   auto ctx = set_scoped_default_context(csv_cc_context());
   auto const& isr = get_default_context().index_basis_registry();
-  const auto a = isr->retrieve(L"a");
-  const auto i = isr->retrieve(L"i");
+  const auto a = isr->retrieve_space(L"a");
+  const auto i = isr->retrieve_space(L"i");
 
   auto reg = mbpt::make_minimal_registry();
   auto granted = std::make_shared<mbpt::OpRegistry>(reg->clone());
@@ -209,8 +209,8 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
 
   auto ctx = set_scoped_default_context(csv_cc_context());
   auto const& isr = get_default_context().index_basis_registry();
-  const auto a = isr->retrieve(L"a");
-  const auto i = isr->retrieve(L"i");
+  const auto a = isr->retrieve_space(L"a");
+  const auto i = isr->retrieve_space(L"i");
 
   // every bra/ket slot of the tensors labelled `label` in `expr`
   auto slots_of = [](ExprPtr const& expr, std::wstring_view label) {
@@ -245,7 +245,7 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
                : label == L"λ" ? t::λ(2)
                : label == L"h" ? t::h(2)
                : label == L"f" ? t::h(1)
-                               : t::P(nₚ(1), nₕ(1), {}, L"t");
+                               : t::P(nₚ(1), nₕ(1), L"t");
       };
       // granted: authored under the grants; stamped: authored without, then
       // given each leg's grant
@@ -369,11 +369,11 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
     using Maker = OpMaker<Statistics::FermiDirac>;
     const container::svector<IndexSpace> uoccs{a};
     const auto op = Maker::make(
-        uoccs, uoccs,
+        OpClass::Ex, uoccs, uoccs,
         [](auto const& creidxs, auto const& annidxs, Symmetry opsymm) {
           return ex<Tensor>(L"X", bra(creidxs), ket(annidxs), opsymm);
         },
-        Maker::UseDepIdx::Bra, Normalization::Default,
+        Maker::UseDepIdx::Bra,
         [](IndexSpace const&) { return IndexBasis::optional_instance{7}; });
     const auto xs = tensors_labelled(op, L"X");
     REQUIRE(xs.size() == 1);
@@ -391,7 +391,7 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
     ScopedCsvContext scoped{reg, CSV::No};
     for (auto const& [op, label] :
          {std::pair{t::t(2), std::wstring(L"t")},
-          std::pair{t::P(nₚ(2), nₕ(2), {}, L"t"),
+          std::pair{t::P(nₚ(2), nₕ(2), L"t"),
                     std::wstring(reserved::antisymm_label())}}) {
       std::size_t n = 0;
       for (Index const& idx : slots_of(op, label))
@@ -675,7 +675,7 @@ TEST_CASE("basis-grants-cc-t", "[mbpt][csv][valgrind_skip]") {
     const auto csv = GENERATE(CSV::Yes, CSV::No);
     ScopedCsvContext scoped{make_minimal_registry(), csv};
     auto reg = make_minimal_registry();
-    reg->grant_basis(L"t", isr->retrieve(L"i"), 5);
+    reg->grant_basis(L"t", isr->retrieve_space(L"i"), 5);
     std::vector<ExprPtr> eqs;
     REQUIRE_NOTHROW(eqs = derive_t(reg));
     const auto plain = derive_t(granted_registry({}));

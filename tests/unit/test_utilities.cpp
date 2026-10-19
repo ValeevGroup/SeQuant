@@ -952,6 +952,11 @@ TEST_CASE("utilities", "[utilities]") {
              {L"g{a3;a2;i2} t{a1,a2;a3,a4;i1,i2}",
               {{{L"a_1", SlotType::Bra}, {L"a_4", SlotType::Ket}},
                {{L"i_1", SlotType::Aux}}}},
+             // an index in two slots of a lone tensor is summed over, as it is
+             // in a product
+             {L"δ{a1;a1}", {}},
+             {L"t{a1,i1;a2,a1}",
+              {{{L"i_1", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
              {L"t{a1,a2;i1,i2} + t{a1;i1} t{a2;i2}",
               {{{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
                {{L"a_2", SlotType::Bra}, {L"i_2", SlotType::Ket}}}},

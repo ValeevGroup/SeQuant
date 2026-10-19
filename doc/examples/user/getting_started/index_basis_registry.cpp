@@ -21,8 +21,8 @@ void v1() {
   isr.add_union(L"p", {L"i", L"a"});  // union of i and a
 
   // can access unions and intersections of base and composite spaces
-  SEQUANT_ASSERT(isr.unIon(L"i", L"a") == isr.retrieve(L"p"));
-  SEQUANT_ASSERT(isr.intersection(L"p", L"i") == isr.retrieve(L"i"));
+  SEQUANT_ASSERT(isr.unIon(L"i", L"a") == isr.retrieve_space(L"p"));
+  SEQUANT_ASSERT(isr.intersection(L"p", L"i") == isr.retrieve_space(L"i"));
 
   // to use the vocabulary defined by isr use it to make a Context object and
   // make it the default
@@ -64,25 +64,25 @@ void v3() {
   auto isr = mbpt::make_min_sr_spaces();
   // a basis instance of a registered space can be registered under its own
   // label: here a localized basis of the space i, as its basis instance 1
-  const IndexSpace i = isr->retrieve(L"i");
+  const IndexSpace i = isr->retrieve_space(L"i");
   isr->add(L"ĩ", IndexBasis{i, 1});
   // a Context owns its registry: register everything first, then hand it over
   // (it is moved in)
   set_default_context({.index_basis_registry_shared_ptr = std::move(isr)});
   const auto& registry = *get_default_context().index_basis_registry();
-  Index loc1(registry.retrieve_basis(L"ĩ"), 1);
+  Index loc1(registry.retrieve(L"ĩ"), 1);
   // same space ...
   SEQUANT_ASSERT(loc1.space() == i);
   // ... a specific basis of it, which carries its name: the name is part of
   // the basis, as a space's label is of the space, so the registry's entry
   // is the basis and a bare {space, instance} pair is another, unnamed one
-  SEQUANT_ASSERT(loc1.basis() == registry.retrieve_basis(L"ĩ"));
+  SEQUANT_ASSERT(loc1.basis() == registry.retrieve(L"ĩ"));
   SEQUANT_ASSERT(loc1.basis() != IndexBasis(i, 1));
   SEQUANT_ASSERT(same_instance(loc1.basis(), IndexBasis(i, 1)));
   SEQUANT_ASSERT(registry.resolve(IndexBasis(i, 1)) == loc1.basis());
   // a name is not a space
   SEQUANT_ASSERT(registry.contains(L"ĩ") &&
-                 registry.retrieve_ptr(L"ĩ") == nullptr);
+                 registry.retrieve_space_ptr(L"ĩ") == nullptr);
   // the space views see i once: the named entry is not a space
   SEQUANT_ASSERT(
       std::ranges::count_if(registry.spaces(), [](const IndexSpace& s) {

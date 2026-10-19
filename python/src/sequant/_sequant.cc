@@ -93,12 +93,13 @@ PYBIND11_MODULE(_sequant, m) {
   using namespace sequant;
   using namespace sequant::python;
 
-#define SEQUANT_PYTHON_INDEXSPACE_TYPE_PROPERTY(TYPE, LABEL)                  \
-  .def_property_static(                                                       \
-      #TYPE,                                                                  \
-      [](py::object /* self */) {                                             \
-        return get_default_context().index_basis_registry()->retrieve(LABEL); \
-      },                                                                      \
+#define SEQUANT_PYTHON_INDEXSPACE_TYPE_PROPERTY(TYPE, LABEL)                 \
+  .def_property_static(                                                      \
+      #TYPE,                                                                 \
+      [](py::object /* self */) {                                            \
+        return get_default_context().index_basis_registry()->retrieve_space( \
+            LABEL);                                                          \
+      },                                                                     \
       [](py::object /* self */) {})
 
   py::class_<IndexSpace>(m, "IndexSpace")

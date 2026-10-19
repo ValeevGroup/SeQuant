@@ -190,7 +190,7 @@ TEST_CASE("optimize", "[optimize]") {
         *get_default_context().index_basis_registry());
 
     reg->extent(L"i", 10).extent(L"a", 100).extent(L"x", 4);
-    REQUIRE(reg->retrieve(L"a").dimension() == 100);
+    REQUIRE(reg->retrieve_space(L"a").dimension() == 100);
     auto ctx_resetter =
         set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -476,7 +476,7 @@ TEST_CASE("optimize", "[optimize]") {
 
     SECTION("Non-covariant indices") {
       auto sized = std::make_shared<IndexBasisRegistry>(*reg);
-      sized->extent(L"x", 3 * reg->retrieve(L"a").dimension());
+      sized->extent(L"x", 3 * reg->retrieve_space(L"a").dimension());
       auto sized_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(sized));
 
@@ -1346,7 +1346,7 @@ TEST_CASE("optimize", "[optimize]") {
 
   /// verify that space changes did not leak
   auto reg_check = get_default_context().index_basis_registry();
-  auto uocc_check = reg_check->retrieve_ptr(L"a");
+  auto uocc_check = reg_check->retrieve_space_ptr(L"a");
   REQUIRE(uocc_check);
   REQUIRE(uocc_check->dimension() == 10);
 }
@@ -1650,7 +1650,7 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
            {L"i", 56}, {L"a", 12}, {L"μ", 602}, {L"Κ", 1652}}) {
     reg->extent(k, v);
   }
-  auto aux_space = reg->retrieve(L"Κ");
+  auto aux_space = reg->retrieve_space(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -1712,7 +1712,7 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
            {L"i", 16}, {L"a", 12}, {L"μ", 170}, {L"Κ", 472}}) {
     reg->extent(k, v);
   }
-  auto aux_space = reg->retrieve(L"Κ");
+  auto aux_space = reg->retrieve_space(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -1978,7 +1978,7 @@ TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
            {L"i", 120}, {L"a", 42}, {L"μ", 1800}, {L"Κ", 6000}}) {
     reg->extent(k, v);
   }
-  auto aux_space = reg->retrieve(L"Κ");
+  auto aux_space = reg->retrieve_space(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -2075,7 +2075,7 @@ TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
   // Experiment: make PAO (μ̃) batchable TOO (batch 100). Prediction: STO
   // switches away from the double-proto to a g·g-first tree whose worst
   // intermediate carries μ̃ and is now sliceable.
-  auto mu_basis = reg->retrieve_basis(L"μ̃");
+  auto mu_basis = reg->retrieve(L"μ̃");
   auto is_batch2 = [aux_space, mu_basis](Index const& ix) {
     return ix.space() == aux_space || ix.basis() == mu_basis;
   };
@@ -2110,7 +2110,7 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 16}, {L"a", 12}, {L"μ", 170}, {L"Κ", 472}})
     reg->extent(k, v);
-  auto aux = reg->retrieve(L"Κ");
+  auto aux = reg->retrieve_space(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -2313,7 +2313,7 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
            {L"i", 80}, {L"a", 12}, {L"μ", 860}, {L"Κ", 2360}}) {
     reg->extent(k, v);
   }
-  auto aux_space = reg->retrieve(L"Κ");
+  auto aux_space = reg->retrieve_space(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -2541,7 +2541,7 @@ TEST_CASE(
            {L"i", 80}, {L"a", 12}, {L"μ", 860}, {L"Κ", 2360}}) {
     reg->extent(k, v);
   }
-  auto aux_space = reg->retrieve(L"Κ");
+  auto aux_space = reg->retrieve_space(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -2690,8 +2690,8 @@ TEST_CASE("batched DP peak matches oracle with two modes and accumulation",
            {L"i", 20}, {L"a", 20}, {L"μ", 200}, {L"Κ", 300}}) {
     reg->extent(k, v);
   }
-  auto aux = reg->retrieve(L"Κ");
-  auto pao = reg->retrieve_basis(L"μ̃");
+  auto aux = reg->retrieve_space(L"Κ");
+  auto pao = reg->retrieve(L"μ̃");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -2921,7 +2921,7 @@ TEST_CASE("perf-first peak_threshold gates contracted aux slicing",
            {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
     reg->extent(k, v);
   }
-  auto aux = reg->retrieve(L"Κ");
+  auto aux = reg->retrieve_space(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -3004,7 +3004,7 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
            {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
     reg->extent(k, v);
   }
-  auto aux = reg->retrieve(L"Κ");
+  auto aux = reg->retrieve_space(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -3202,8 +3202,8 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 8}, {L"a", 8}, {L"Κ", 400}})
     reg->extent(k, v);
-  auto aux_space = reg->retrieve(L"Κ");
-  auto occ_space = reg->retrieve(L"i");
+  auto aux_space = reg->retrieve_space(L"Κ");
+  auto occ_space = reg->retrieve_space(L"i");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -3382,7 +3382,7 @@ TEST_CASE("select_root_perf_first_ceiling", "[optimize][batch]") {
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 80}, {L"a", 12}, {L"μ", 860}, {L"Κ", 2360}})
     reg->extent(k, v);
-  auto aux_space = reg->retrieve(L"Κ");
+  auto aux_space = reg->retrieve_space(L"Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -4506,8 +4506,8 @@ TEST_CASE("batchability role-split building-block predicates",
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   {
-    auto occ = reg->retrieve_ptr(L"i");
-    auto uocc = reg->retrieve_ptr(L"a");
+    auto occ = reg->retrieve_space_ptr(L"i");
+    auto uocc = reg->retrieve_space_ptr(L"a");
     REQUIRE(occ);
     REQUIRE(uocc);
   }

@@ -523,7 +523,20 @@ Container<Group<SlottedIndex>> external_indices(const Expr& expr) {
     return {};
   }
 
-  if (expr.is<Tensor>()) {
+  // an index in two slots of a tensor is summed over, as in a product, so
+  // such a tensor (a trace) takes the general path below; an
+  // (anti)symmetrizer never has one, and the general path defers to it
+  auto is_trace = [](const Tensor& tensor) {
+    if (tensor.label() == reserved::symm_label() ||
+        tensor.label() == reserved::antisymm_label())
+      return false;
+    container::set<Index> seen;
+    for (const Index& idx : tensor.const_indices())
+      if (idx.nonnull() && !seen.insert(idx).second) return true;
+    return false;
+  };
+
+  if (expr.is<Tensor>() && !is_trace(expr.as<Tensor>())) {
     const Tensor& tensor = expr.as<Tensor>();
 
     const std::size_t num_braket =

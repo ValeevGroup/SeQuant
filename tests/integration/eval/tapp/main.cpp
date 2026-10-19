@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
     auto reg = std::make_shared<IndexBasisRegistry>(
         *get_default_context().index_basis_registry());
     reg->extent(L"i", 10).extent(L"a", 100);
-    SEQUANT_ASSERT(reg->retrieve(L"a").dimension() == 100);
+    SEQUANT_ASSERT(reg->retrieve_space(L"a").dimension() == 100);
     set_default_context(get_default_context_snapshot().set(reg));
   }
 

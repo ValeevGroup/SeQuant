@@ -167,7 +167,7 @@ TEST_CASE("dryrun size regime keys a named basis by its label",
           "[dryrun][sizing][basis]") {
   using namespace sequant;
   auto isr = mbpt::make_min_sr_spaces();
-  const IndexSpace a = isr->retrieve(L"a");
+  const IndexSpace a = isr->retrieve_space(L"a");
   constexpr IndexBasis::instance_type P =
       std::numeric_limits<IndexBasis::instance_type>::max();
   isr->add(L"μ̃", IndexBasis{a, P});  // before the Context adopts the registry
@@ -179,7 +179,7 @@ TEST_CASE("dryrun size regime keys a named basis by its label",
   r.space_extent[L"a"] = 40;
   r.space_extent[L"μ̃"] = 300;
   r.space_slice_extents[L"μ̃"] = {100, 100, 100};
-  const Index pao(registry.retrieve_basis(L"μ̃"), 1), virt(a, 1),
+  const Index pao(registry.retrieve(L"μ̃"), 1), virt(a, 1),
       unnamed = Index(a, 2).replace_basis_instance(1);
   CHECK(r.extent(pao) == 300);
   CHECK(r.extent(virt) == 40);
@@ -1863,7 +1863,8 @@ TEST_CASE(
   auto node = binarize<EvalExprDryRun>(expr);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
-  auto const occ = get_default_context().index_basis_registry()->retrieve(L"i");
+  auto const occ =
+      get_default_context().index_basis_registry()->retrieve_space(L"i");
   auto accept_occ = [occ](Index const& ix) {
     return ix.space() == occ && !ix.has_proto_indices();
   };
@@ -2740,7 +2741,7 @@ TEST_CASE(
   // Flag ON: External stamped, and ONLY on an external occ (space "i") -- the
   // chosen seed modes -- never on a contracted DF-aux/PAO mode (emit follows
   // selection). BOTH external occ (i_1 and i_2) must be stamped (joint seed).
-  auto occ_space = isr->retrieve(L"i");
+  auto occ_space = isr->retrieve_space(L"i");
   std::set<std::wstring> external_labels;
   for (auto const& axs : ax_on)
     for (auto const& e : axs.axes)
@@ -3704,7 +3705,8 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][peak]") {
   auto node = binarize<EvalExprDryRun>(expr);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
-  auto const occ = get_default_context().index_basis_registry()->retrieve(L"i");
+  auto const occ =
+      get_default_context().index_basis_registry()->retrieve_space(L"i");
   auto accept_occ = [occ](Index const& ix) {
     return ix.space() == occ && !ix.has_proto_indices();
   };

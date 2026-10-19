@@ -15,10 +15,16 @@ if (NOT TARGET Eigen3::Eigen)
 			SYSTEM
 			# re:NO_CMAKE_PACKAGE_REGISTRY: eigen3 registers its *build* tree with the user package registry ...
 			#                               to avoid issues with wiped build directory look for installed eigen
-			FIND_PACKAGE_ARGS ${SEQUANT_OLDEST_EIGEN_VERSION} NO_CMAKE_PACKAGE_REGISTRY
+			# re: no version argument: the version files of Eigen 3.x and 5.x disagree on ranges, so no single
+			#                          version spec is accepted by both; the minimum is checked below instead
+			FIND_PACKAGE_ARGS NO_CMAKE_PACKAGE_REGISTRY
 		)
 
 		FetchContent_MakeAvailable(Eigen3)
+
+		if (Eigen3_FOUND AND Eigen3_VERSION VERSION_LESS SEQUANT_OLDEST_EIGEN_VERSION)
+			message(FATAL_ERROR "Found Eigen3 ${Eigen3_VERSION} at ${Eigen3_DIR}, but SeQuant requires Eigen3 ${SEQUANT_OLDEST_EIGEN_VERSION} or later")
+		endif()
 	endif()
 endif()
 

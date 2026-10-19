@@ -335,7 +335,7 @@ class Index : public Taggable {
   template <basic_string_convertible String>
   Index(String &&label)
       : Index(obtain_default_index_registry()
-                  ? obtain_default_index_registry()->retrieve_basis(label)
+                  ? obtain_default_index_registry()->retrieve(label)
                   : IndexBasis{IndexSpace{
                         base_label(label), IndexSpace::Type::reserved,
                         IndexSpace::QuantumNumbers::reserved}},

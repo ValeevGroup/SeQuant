@@ -4,14 +4,19 @@ include(FindOrFetchJSON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 
-add_executable(external_interface
-    external_interface.cpp
+# The processing pipeline (everything but external_interface.cpp, which holds
+# main() and the v1 path) lives in an OBJECT library so the unit tests under
+# tests/ can link it. OBJECT (not STATIC) keeps every translation unit's object
+# file in each consumer, so the processing steps' factory self-registrations
+# (SEQUANT_EXTINT_REGISTER_STEP_TYPE) are not dropped as unreferenced.
+add_library(external_interface-obj OBJECT
     processing.cpp
     utils.cpp
 
     canonicalize_step.cpp
     cse_step.cpp
     density_fitting_step.cpp
+    dependency_step.cpp
     execution_context.cpp
     executor.cpp
     export_step.cpp
@@ -26,13 +31,14 @@ add_executable(external_interface
     simplify_step.cpp
     spintracing_step.cpp
     substitute_step.cpp
+    template_expansion.cpp
     to_export_tree_step.cpp
     validate_step.cpp
 )
-set_target_properties(external_interface PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+set_target_properties(external_interface-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 
-target_link_libraries(external_interface
-    PRIVATE
+target_link_libraries(external_interface-obj
+    PUBLIC
         SeQuant::mbpt
         SeQuant::export
         nlohmann_json::nlohmann_json
@@ -40,9 +46,30 @@ target_link_libraries(external_interface
         Boost::headers
         spdlog::spdlog
 )
+target_include_directories(external_interface-obj PUBLIC "${CMAKE_CURRENT_LIST_DIR}")
+
+target_set_compiler_flags(external_interface-obj)
+target_set_optimization_flags(external_interface-obj)
+
+# processing.cpp and utils.cpp open with a file-scope `using namespace sequant`
+# that, under a unity build, leaks into the step sources concatenated after them
+# and makes a range-v3 header parsed there ambiguous (range-v3's ::meta vs.
+# sequant::meta). Parse range-v3 ahead of every source instead (include guards
+# make this free after the first), as tests/ and tests/unit do.
+set_property(TARGET external_interface-obj PROPERTY
+    UNITY_BUILD_CODE_BEFORE_INCLUDE "#include <range/v3/all.hpp>")
+
+add_executable(external_interface external_interface.cpp)
+set_target_properties(external_interface PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+
+target_link_libraries(external_interface PRIVATE external_interface-obj)
 
 target_set_compiler_flags(external_interface)
 target_set_optimization_flags(external_interface)
+
+if (SEQUANT_TESTS)
+    add_subdirectory(tests)
+endif()
 
 
 # CCSD

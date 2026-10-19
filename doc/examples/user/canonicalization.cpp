@@ -1,6 +1,6 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 int main() {
@@ -35,7 +35,7 @@ int main() {
   simplify(sum);
 
   SEQUANT_ASSERT(sum.is<Product>());
-  std::wcout << to_latex(sum) << std::endl;
+  std::wcout << sum << std::endl;
   // end-snippet-2
 
   return 0;

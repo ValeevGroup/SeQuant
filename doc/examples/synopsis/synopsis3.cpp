@@ -1,5 +1,5 @@
 #include <SeQuant/core/context.hpp>
-#include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/wick.hpp>
 
 int main() {
@@ -15,11 +15,10 @@ int main() {
   auto cp1 = fcrex(L"p_1"), cp2 = fcrex(L"p_2");
   auto ap3 = fannx(L"p_3"), ap4 = fannx(L"p_4");
 
-  std::wcout << to_latex(ap3 * cp1 * ap4 * cp2) << " = "
-             << to_latex(FWickTheorem{ap3 * cp1 * ap4 * cp2}
-                             .full_contractions(false)
-                             .compute())
-             << std::endl;
+  std::wcout
+      << ap3 * cp1 * ap4 * cp2 << " = "
+      << FWickTheorem{ap3 * cp1 * ap4 * cp2}.full_contractions(false).compute()
+      << std::endl;
 
   return 0;
 }

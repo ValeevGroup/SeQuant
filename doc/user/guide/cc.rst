@@ -33,7 +33,9 @@ The :class:`CC <sequant::mbpt::CC>` class can be used to derive:
 Expressions are generated in spin-orbital basis and can be post-processed using SeQuant's spin-tracing capabilities. See :ref:`cc-spin-tracing` for more details.
 
 Multireference contexts are not fully supported yet: only ``hbar()``, ``energy()`` and ``t()`` are available, and only
-with the BCH expansion.
+with the BCH expansion. Because the amplitude operators do not commute with each other there, the expansion does not
+terminate and grows exponentially with the commutator rank, so ``hbar_comm_rank`` must be set explicitly, as for the
+unitary ansatz; the constructor throws otherwise.
 
 
 Ansatz Options
@@ -91,6 +93,13 @@ Equation-of-Motion Coupled-Cluster
 
 Derives equation-of-motion coupled-cluster (EOM-CC) equations for excited states. The ``eom_r`` method generates equations for the right eigenvectors, while ``eom_l`` generates equations for the left eigenvectors. Traditional CC always uses the connected H̄R product. UCC always uses Hamiltonian-matrix assembly, subtracting the scalar part of each diagonal block's Hamiltonian.
 
+Ground-state cluster amplitudes, EOM vectors, and projectors follow the active
+:class:`sequant::mbpt::NormalizationConvention` throughout CC and UCC equation construction, including H̄ in the BCH and
+Bernoulli paths. The caller selects the convention before deriving equations and supplies amplitudes in that convention.
+UCC EOM requires ``Symmetric`` and rejects ``Default``: its blocks then form :math:`\mathbf{D}\mathbf{H}\mathbf{D}` with
+:math:`D_{II}=1/\sqrt{m_I}` (:math:`m_I` as in :doc:`operator`), which is Hermitian when ``block_ranks`` is symmetric.
+Under ``Default`` they would form the non-Hermitian :math:`\mathbf{H}\mathbf{D}^2`.
+
 For UCC, the optional ``block_ranks`` argument gives the per-block truncation orders as a row-major matrix over the EOM manifolds: nested-commutator order for BCH and :math:`\bar{H}^{k}` order for Bernoulli. When omitted, every block uses the configured H̄ rank. A positive ``hbar_singles_comm_rank`` applies the additional singles transform even to rank-0 BCH blocks. Traditional CC does not support block ranks.
 
 Examples
@@ -139,7 +148,7 @@ Advanced Usage
 Truncating the Commutator Expansion
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The similarity-transformed Hamiltonian is built by ``mbpt::lst``, see :ref:`mbpt-lst`. For traditional CC with two-body Hamiltonians, the commutator expansion is truncated at 4th order. However, for unitary CC or other Hamiltonians, you may need to explicitly set the commutator rank:
+The similarity-transformed Hamiltonian is built by ``mbpt::lst``, see :ref:`mbpt-lst`. For traditional CC with two-body Hamiltonians and the reference equal to the Wick vacuum, the commutator expansion is truncated at 4th order. For unitary CC or a reference that differs from the Wick vacuum the expansion does not terminate, so the commutator rank must be set explicitly; for other Hamiltonians you may need to set it too:
 
 .. literalinclude:: /examples/user/cc.cpp
    :language: cpp

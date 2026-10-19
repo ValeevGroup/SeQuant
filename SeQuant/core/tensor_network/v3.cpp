@@ -1483,7 +1483,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         // - can involve any number of aux indices
         if (current_edge.vertex_count() > 1) {
           // ignore if named index
-          if (!this->ext_indices_.contains(current_edge.idx())) {
+          if (!named_indices.contains(current_edge.idx())) {
             std::size_t nbra = 0;
             std::size_t nket = 0;
             [[maybe_unused]] std::size_t naux = 0;

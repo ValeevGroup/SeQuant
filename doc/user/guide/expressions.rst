@@ -71,5 +71,6 @@ since both need to know the external index pairing and symmetry of the result, n
    :end-before: end-snippet-3
    :dedent: 2
 
-Once built, an expression tree can be rendered to LaTeX or round-tripped through SeQuant's text serialization format; see
-:doc:`io` for both.
+The examples print expressions with ``<<`` and ``std::format``, which :file:`SeQuant/core/io/format.hpp` provides and which
+default to SeQuant's text serialization format. Once built, an expression tree can be rendered to LaTeX or round-tripped through
+that format; see :doc:`io` for both and for the format specifiers that select between them.

@@ -52,7 +52,7 @@ int main() {
   // runs over that basis of the space. The instance is written after the
   // proto indices: i_1<;1>
   const auto& isr = get_default_context().index_basis_registry();
-  const IndexSpace occ = isr->retrieve(L"i");
+  const IndexSpace occ = isr->retrieve_space(L"i");
   const Index i_canonical(occ, 1);
   const Index i_localized(IndexBasis(occ, 1), 1);
   SEQUANT_ASSERT(i_canonical.space() == i_localized.space());
@@ -64,7 +64,7 @@ int main() {
   // amplitudes OpMaker builds, and the projectors of the equations solved for
   // them, carry it
   auto granted_registry = mbpt::make_legacy_registry();
-  granted_registry->grant_basis(L"t", isr->retrieve(L"a"), 1);
+  granted_registry->grant_basis(L"t", isr->retrieve_space(L"a"), 1);
   auto grant_resetter = mbpt::set_scoped_default_mbpt_context(
       {.op_registry_ptr = granted_registry});
   const ExprPtr t1 = mbpt::op::tensor::t(1);
@@ -114,6 +114,19 @@ int main() {
   product->canonicalize();
   SEQUANT_ASSERT(product.as<Product>().scalar() == -1);
   // end-snippet-5
+
+  // start-snippet-7
+  {
+    auto normalization_resetter = mbpt::set_scoped_default_mbpt_context(
+        mbpt::Context{mbpt::get_default_mbpt_context()}.set(
+            mbpt::NormalizationConvention::Symmetric));
+    SEQUANT_ASSERT(
+        mbpt::get_default_mbpt_context().normalization_convention() ==
+        mbpt::NormalizationConvention::Symmetric);
+  }
+  SEQUANT_ASSERT(mbpt::get_default_mbpt_context().normalization_convention() ==
+                 mbpt::NormalizationConvention::Default);
+  // end-snippet-7
 
   (void)ctx;
 

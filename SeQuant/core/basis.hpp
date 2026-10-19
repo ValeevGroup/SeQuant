@@ -49,6 +49,10 @@ namespace sequant {
 /// that differs in any of these (a truncated or an overcomplete set, a
 /// non-orthonormal basis) must be registered under a name, which gives it a
 /// key and metadata of its own (see IndexBasisRegistry::add(label, basis)).
+/// That holds for each subspace of a basis instance: a subspace shares the
+/// instance of its space but not its metric (a non-orthonormal basis can have
+/// an orthonormal part), so an unregistered subspace instance is orthonormal
+/// even if the instance of its space is not.
 /// A named basis registered without an extent or a field follows its space's
 /// (own_extent() and own_field() are null), and so sees the registry's
 /// setters for the space's label; one registered with them, even with the
@@ -88,7 +92,7 @@ class IndexBasis {
   ///      basis is the space's own basis up to an orthonormal rotation)
   IndexBasis(IndexSpace space, optional_instance basis_instance,
              std::wstring name, std::optional<std::size_t> extent = {},
-             IndexSpaceMetric metric = IndexSpaceMetric::Unit,
+             IndexBasisMetric metric = IndexBasisMetric::Unit,
              std::optional<Field> field = {});
 
   const IndexSpace& space() const noexcept { return space_; }
@@ -126,9 +130,9 @@ class IndexBasis {
     return extent_ ? *extent_ : space_.dimension();
   }
 
-  /// @return whether the basis is orthonormal (IndexSpaceMetric::Unit) or not;
+  /// @return whether the basis is orthonormal (IndexBasisMetric::Unit) or not;
   /// unit unless registered otherwise
-  IndexSpaceMetric metric() const noexcept { return metric_; }
+  IndexBasisMetric metric() const noexcept { return metric_; }
 
   /// @return the scalar field of the basis: that of its space's own basis
   /// (IndexSpace::field()) unless registered with a field of its own
@@ -176,18 +180,52 @@ class IndexBasis {
     return result;
   }
 
+  /// @name registry keys
+  /// An IndexBasisRegistry keys its entries, spaces and named basis instances
+  /// alike, by the base key of a label (an Index label with its ordinal
+  /// stripped); a name follows the grammar of a space's label, so a basis key
+  /// is reduced as a space key is.
+  /// @{
+
+  /// @param key a label of a space, of a named basis instance, or of an
+  /// Index in either
+  /// @return the base key of @p key, as `IndexSpace::reduce_key(key)`
+  template <std::ranges::contiguous_range View>
+    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
+                          char> ||
+             std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
+                          wchar_t>)
+  static auto reduce_key(View&& key) {
+    return IndexSpace::reduce_key(key);
+  }
+
+  /// @overload
+  template <typename CharT>
+  static auto reduce_key(const CharT* key) {
+    return IndexSpace::reduce_key(key);
+  }
+
+  /// exception type thrown by a registry lookup when no entry, space or
+  /// named basis instance, is registered under a key; an IndexSpace::bad_key,
+  /// so that handlers for space lookups catch it
+  struct bad_key : IndexSpace::bad_key {
+    using IndexSpace::bad_key::bad_key;
+  };
+
+  /// @}
+
  private:
   IndexSpace space_;
   optional_instance basis_instance_;
   std::wstring name_;
   std::optional<std::size_t> extent_;
-  IndexSpaceMetric metric_ = IndexSpaceMetric::Unit;
+  IndexBasisMetric metric_ = IndexBasisMetric::Unit;
   std::optional<Field> field_;
 
   // the registry writes the metadata of its named entries in place
   friend class IndexBasisRegistry;
   void extent(std::size_t n) noexcept { extent_ = n; }
-  void metric(IndexSpaceMetric m) noexcept { metric_ = m; }
+  void metric(IndexBasisMetric m) noexcept { metric_ = m; }
   void field(Field f) noexcept { field_ = f; }
 };
 

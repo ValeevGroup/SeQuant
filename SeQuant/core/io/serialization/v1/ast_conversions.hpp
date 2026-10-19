@@ -56,7 +56,7 @@ IndexBasis to_basis(const LabelAST &label_ast, const std::wstring &label,
                     const PositionCache &position_cache,
                     const Iterator &begin) {
   const auto registry = get_default_context().index_basis_registry();
-  const IndexBasis &basis = registry->retrieve_basis(label);
+  const IndexBasis &basis = registry->retrieve(label);
   if (!instance) return basis;
   if (basis.has_basis_instance()) {
     auto [offset, length] = get_pos(label_ast, position_cache, begin);
@@ -422,15 +422,16 @@ struct Transformer {
     if (is_reserved_symmetrizer && !braket_symm_specified)
       braket_symm = BraKetSymmetry::Nonsymm;
 
-    // the reserved metric and Kronecker tensors are Hermitian by definition;
-    // force that rather than inheriting the Context's default Hermiticity, so
-    // that a deserialized s/δ equals the one make_overlap()/make_kronecker()
-    // builds (they participate in the tensor hash, so a mismatch would keep
+    // the reserved metric tensor is Hermitian by definition and the Kronecker
+    // delta, being 0 or 1, bra-ket symmetric whatever the field; force that
+    // rather than inheriting the Context's default Hermiticity, so that a
+    // deserialized s/δ equals the one make_overlap()/make_kronecker() builds
+    // (they participate in the tensor hash, so a mismatch would keep
     // otherwise-equal terms from merging)
-    if ((tensor.name == reserved::overlap_label() ||
-         tensor.name == reserved::kronecker_label()) &&
-        !braket_symm_specified)
+    if (tensor.name == reserved::overlap_label() && !braket_symm_specified)
       braket_symm = Hermiticity::Hermitian;
+    if (tensor.name == reserved::kronecker_label() && !braket_symm_specified)
+      braket_symm = BraKetSymmetry::Symm;
 
     // a reference density's symmetries are fixed by its label and rank (see
     // density::symmetries()); supply them where none was spelled out, and let

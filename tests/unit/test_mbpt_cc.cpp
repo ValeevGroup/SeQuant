@@ -9,6 +9,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/bernoulli.hpp>
@@ -22,6 +23,8 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include "catch2_sequant.hpp"
 #include "csv_test_utils.hpp"
+
+#include <range/v3/algorithm/any_of.hpp>
 
 #include <array>
 
@@ -334,6 +337,12 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     // qUCCSD block ranks, 10.1063/5.0062090 Sec. II C: SS at the double
     // commutator (Eq. 29), SD/DS at the single (Eqs. 41, 44), DD bare (Eq. 48).
     const std::vector<std::size_t> quccsd = {2, 1, 1, 0};
+    // UCC EOM requires the Symmetric convention
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort)
+      REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), quccsd), Exception);
+    auto symmetric = set_scoped_default_mbpt_context(
+        mbpt::Context{get_default_mbpt_context()}.set(
+            NormalizationConvention::Symmetric));
 
     const auto ee = cc.eom_r(nₚ(2), nₕ(2), quccsd);
     REQUIRE(ee.size() == 3);
@@ -422,13 +431,24 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     ctx.set(make_mr_spaces());
     auto ctx_resetter = set_scoped_default_context(ctx);
 
+    // the BCH expansion does not terminate here, so the rank must be given
+    REQUIRE_THROWS_MATCHES(
+        CC(2), Exception,
+        Catch::Matchers::MessageMatches(
+            Catch::Matchers::ContainsSubstring("hbar_comm_rank is required")));
+    REQUIRE(simplify(CC(2, {.hbar_comm_rank = 1}).hbar() - op::H()) !=
+            ex<Constant>(0));
+
     // H̄ must use explicit commutators, since ref_av takes no connectivity here
     const auto expected = op::ref_av(lst(op::H(), op::T(1), 2), {});
-    REQUIRE(simplify(CC(1).energy(2) - expected) == ex<Constant>(0));
+    REQUIRE(simplify(CC(1, {.hbar_comm_rank = 2}).energy() - expected) ==
+            ex<Constant>(0));
 
-    // screening must not change the result
-    const auto screened = CC(2).t();
-    const auto unscreened = CC(2, {.screen = false}).t();
+    // screening must not change the result; the MR amplitudes do not commute,
+    // so the BCH expansion at rank 2 and up exceeds several GB, hence rank 1
+    const auto screened = CC(2, {.hbar_comm_rank = 1}).t();
+    const auto unscreened = CC(2, {.screen = false, .hbar_comm_rank = 1}).t();
+    REQUIRE(has_tensor(screened.at(1), L"t"));
     for (std::size_t p = 0; p != screened.size(); ++p)
       REQUIRE_THAT(screened.at(p), EquivalentTo(unscreened.at(p)));
 
@@ -438,7 +458,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       const auto rejects_reference =
           Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring(
               "the reference must be the Wick vacuum"));
-      const CC cc(1);
+      const CC cc(1, {.hbar_comm_rank = 1});
       REQUIRE_THROWS_MATCHES(cc.λ(), Exception, rejects_reference);
       REQUIRE_THROWS_MATCHES(cc.λʼ(), Exception, rejects_reference);
       REQUIRE_THROWS_MATCHES(cc.tʼ(), Exception, rejects_reference);
@@ -473,32 +493,35 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       REQUIRE_THAT(
           g,
           EquivalentTo(
-              L"t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-C-S * δ{p_2;a_1}:N-C-S "
-              L"+ λ{i_1;a_1}:A-N-S * δ{a_1;p_1}:N-C-S * δ{p_2;i_1}:N-C-S "
-              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-C-S * "
-              L"δ{p_2;i_3}:N-C-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
+              L"t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S "
+              L"+ λ{i_1;a_1}:A-N-S * δ{a_1;p_1}:N-S-S * δ{p_2;i_1}:N-S-S "
+              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-S-S * "
+              L"δ{p_2;i_3}:N-S-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
               L"- 1 t{a_1;i_1}:A-N-S * t{a_2;i_2}:A-N-S * λ{i_1;a_2}:A-N-S * "
-              L"δ{p_2;a_1}:N-C-S * δ{i_2;p_1}:N-C-S "
-              L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-C-S * "
-              L"δ{p_2;a_3}:N-C-S * λ{i_1,i_2;a_1,a_2}:A-N-S "
-              L"- 1 t{a_1;i_1}:A-N-S * λ{i_2;a_1}:A-N-S * δ{i_1;p_1}:N-C-S * "
-              L"δ{p_2;i_2}:N-C-S "
+              L"δ{p_2;a_1}:N-S-S * δ{i_2;p_1}:N-S-S "
+              L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-S-S * "
+              L"δ{p_2;a_3}:N-S-S * λ{i_1,i_2;a_1,a_2}:A-N-S "
+              L"- 1 t{a_1;i_1}:A-N-S * λ{i_2;a_1}:A-N-S * δ{i_1;p_1}:N-S-S * "
+              L"δ{p_2;i_2}:N-S-S "
               L"- 1/2 t{a_3;i_3}:A-N-S * t{a_1,a_2;i_1,i_2}:A-N-S * "
-              L"δ{i_2;p_1}:N-C-S * δ{p_2;a_3}:N-C-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
+              L"δ{i_2;p_1}:N-S-S * δ{p_2;a_3}:N-S-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
               L"- 1/2 t{a_2;i_3}:A-N-S * t{a_1,a_3;i_1,i_2}:A-N-S * "
-              L"δ{i_3;p_1}:N-C-S * δ{p_2;a_3}:N-C-S * λ{i_1,i_2;a_1,a_2}:A-N-S "
-              L"+ t{a_1;i_1}:A-N-S * λ{i_1;a_2}:A-N-S * δ{p_2;a_1}:N-C-S * "
-              L"δ{a_2;p_1}:N-C-S "
+              L"δ{i_3;p_1}:N-S-S * δ{p_2;a_3}:N-S-S * λ{i_1,i_2;a_1,a_2}:A-N-S "
+              L"+ t{a_1;i_1}:A-N-S * λ{i_1;a_2}:A-N-S * δ{p_2;a_1}:N-S-S * "
+              L"δ{a_2;p_1}:N-S-S "
               L"+ t{a_1,a_2;i_1,i_2}:A-N-S * λ{i_2;a_2}:A-N-S * "
-              L"δ{i_1;p_1}:N-C-S * δ{p_2;a_1}:N-C-S"));
+              L"δ{i_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S"));
       REQUIRE(size(G) == 94);
       // 94 terms is not worth spelling out, so check number of terms and
       // external indices
+      // δ is bra-ket symmetric, so canonicalization does not pin the slot
+      // of an external index that only a δ carries: check the set
       const auto ext = get_unique_indices(G);
+      auto ext_braket = ext.bra;
+      ext_braket.insert(ext_braket.end(), ext.ket.begin(), ext.ket.end());
       REQUIRE(std::ranges::is_permutation(
-          ext.ket, container::svector<Index>{L"p_1", L"p_2"}));
-      REQUIRE(std::ranges::is_permutation(
-          ext.bra, container::svector<Index>{L"p_3", L"p_4"}));
+          ext_braket,
+          container::svector<Index>{L"p_1", L"p_2", L"p_3", L"p_4"}));
       REQUIRE(ext.aux.empty());
       // an explicit comm_rank truncates early: cutting Γ at the 2nd nested
       // commutator drops the terms the default (4th, exact) picks up
@@ -519,19 +542,19 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       REQUIRE_THAT(
           g,
           EquivalentTo(
-              L"t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-C-S * δ{p_2;a_1}:N-C-S "
-              L"+ δ{a_1;p_1}:N-C-S * δ{p_2;i_1}:N-C-S * t⁺{i_1;a_1}:A-N-S "
-              L"+ t{a_2;i_1}:A-N-S * δ{a_1;p_1}:N-C-S * δ{p_2;a_2}:N-C-S * "
+              L"t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S "
+              L"+ δ{a_1;p_1}:N-S-S * δ{p_2;i_1}:N-S-S * t⁺{i_1;a_1}:A-N-S "
+              L"+ t{a_2;i_1}:A-N-S * δ{a_1;p_1}:N-S-S * δ{p_2;a_2}:N-S-S * "
               L"t⁺{i_1;a_1}:A-N-S "
-              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_1;p_1}:N-C-S * "
-              L"δ{p_2;a_2}:N-C-S * t⁺{i_2;a_1}:A-N-S "
-              L"- 1 t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-C-S * δ{p_2;i_2}:N-C-S * "
+              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_1;p_1}:N-S-S * "
+              L"δ{p_2;a_2}:N-S-S * t⁺{i_2;a_1}:A-N-S "
+              L"- 1 t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-S-S * δ{p_2;i_2}:N-S-S * "
               L"t⁺{i_2;a_1}:A-N-S "
-              L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-C-S * "
-              L"δ{p_2;a_3}:N-C-S * t⁺{i_1,i_2;a_1,a_2}:A-N-S "
-              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-C-S * "
-              L"δ{p_2;i_3}:N-C-S * t⁺{i_1,i_3;a_1,a_2}:A-N-S "
-              L"- 1/2 t{a_2;i_1}:A-N-S * δ{a_1;p_1}:N-C-S * δ{p_2;i_2}:N-C-S * "
+              L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-S-S * "
+              L"δ{p_2;a_3}:N-S-S * t⁺{i_1,i_2;a_1,a_2}:A-N-S "
+              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-S-S * "
+              L"δ{p_2;i_3}:N-S-S * t⁺{i_1,i_3;a_1,a_2}:A-N-S "
+              L"- 1/2 t{a_2;i_1}:A-N-S * δ{a_1;p_1}:N-S-S * δ{p_2;i_2}:N-S-S * "
               L"t⁺{i_1,i_2;a_1,a_2}:A-N-S"));
       REQUIRE(size(G) == 24);
     }
@@ -541,10 +564,10 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       // the doubles-only subset of the CCSD γ pinned above
       REQUIRE_THAT(
           ccd.rdm(1),
-          EquivalentTo(L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-C-S * "
-                       L"δ{p_2;i_3}:N-C-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
-                       L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-C-S * "
-                       L"δ{p_2;a_3}:N-C-S * λ{i_1,i_2;a_1,a_2}:A-N-S"));
+          EquivalentTo(L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-S-S * "
+                       L"δ{p_2;i_3}:N-S-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
+                       L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-S-S * "
+                       L"δ{p_2;a_3}:N-S-S * λ{i_1,i_2;a_1,a_2}:A-N-S"));
       // Ansatz::oT forces skip_singles, so it reaches the same path
       REQUIRE_THAT(
           ccd.rdm(1),
@@ -595,6 +618,40 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 
   SECTION("eom_cc"){SECTION("EOM-CCSD"){const auto N = 2;
   auto cc = CC{N};
+
+  // row I's terms in the rank-J eigenvector amplitude carry 1/m_J under
+  // Default and 1/sqrt(m_I m_J) under Symmetric, with m_K = c! a!; t of
+  // rank > 1 is rescaled as well, so only terms without it are compared
+  auto amplitude_rank_part = [](const ExprPtr& eq, std::wstring_view label,
+                                std::size_t rank) {
+    auto has = [](const ExprPtr& term, std::wstring_view label,
+                  auto&& rank_matches) {
+      SEQUANT_ENFORCE(term->is<Product>());
+      return ranges::any_of(term->as<Product>().factors(), [&](auto& f) {
+        if (!f.template is<Tensor>()) return false;
+        const auto& t = f.template as<Tensor>();
+        return t.label() == label &&
+               rank_matches(std::max(t.bra_rank(), t.ket_rank()));
+      });
+    };
+    ExprPtr result = ex<Constant>(0);
+    for (const auto& term : eq->as<Sum>().summands())
+      if (has(term, label, [rank](auto r) { return r == rank; }) &&
+          !has(term, L"t", [](auto r) { return r > 1; }))
+        result += term;
+    REQUIRE(!simplify(result)->is<Constant>());
+    return result;
+  };
+  auto symmetric = [](auto&& make_eqs) {
+    auto guard = set_scoped_default_mbpt_context(
+        mbpt::Context{get_default_mbpt_context()}.set(
+            NormalizationConvention::Symmetric));
+    return make_eqs();
+  };
+  auto equal = [](const ExprPtr& a, const ExprPtr& b) {
+    return simplify(a - b) == ex<Constant>(0);
+  };
+
   SECTION("EE-EOM-CCSD R") {
     const auto np = 2;
     const auto nh = 2;
@@ -603,6 +660,19 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 
     REQUIRE(size(eqs[1]) == 21);
     REQUIRE(size(eqs[2]) == 53);
+
+    // m_K = (K!)^2
+    const auto symmetric_eqs =
+        symmetric([&cc] { return cc.eom_r(nₚ(2), nₕ(2)); });
+    auto r_rank_part = [&](const ExprPtr& eq, std::size_t rank) {
+      return amplitude_rank_part(eq, L"R", rank);
+    };
+    REQUIRE(equal(r_rank_part(symmetric_eqs[1], 1), r_rank_part(eqs[1], 1)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[1], 2),
+                  ex<Constant>(2) * r_rank_part(eqs[1], 2)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[2], 1),
+                  ex<Constant>(rational{1, 2}) * r_rank_part(eqs[2], 1)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[2], 2), r_rank_part(eqs[2], 2)));
   }
 
   SECTION("IP-EOM-CCSD R") {
@@ -613,6 +683,20 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 
     REQUIRE(size(eqs[0]) == 9);
     REQUIRE(size(eqs[1]) == 32);
+
+    // m_1 = 0! 1! = 1, m_2 = 1! 2! = 2
+    const auto symmetric_eqs =
+        symmetric([&cc] { return cc.eom_r(nₚ(1), nₕ(2)); });
+    auto r_rank_part = [&](const ExprPtr& eq, std::size_t rank) {
+      return amplitude_rank_part(eq, L"R", rank);
+    };
+    const auto sqrt_half = ex<Power>(rational{1, 2}, rational{1, 2});
+    REQUIRE(equal(r_rank_part(symmetric_eqs[0], 1), r_rank_part(eqs[0], 1)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[0], 2),
+                  ex<Constant>(2) * sqrt_half * r_rank_part(eqs[0], 2)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[1], 1),
+                  sqrt_half * r_rank_part(eqs[1], 1)));
+    REQUIRE(equal(r_rank_part(symmetric_eqs[1], 2), r_rank_part(eqs[1], 2)));
   }
 
   SECTION("EA-EOM-CCSD R") {
@@ -633,6 +717,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE_THROWS_AS(CC(2).eom_r(ee_np, ee_nh, uniform_ranks), Exception);
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
+    auto symmetric = set_scoped_default_mbpt_context(
+        mbpt::Context{get_default_mbpt_context()}.set(
+            NormalizationConvention::Symmetric));
     const auto ucc = CC(2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2});
     const auto uniform = ucc.eom_r(ee_np, ee_nh);
     const auto blocked = ucc.eom_r(ee_np, ee_nh, uniform_ranks);
@@ -656,6 +743,19 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 
     REQUIRE(size(eqs[1]) == 43);
     REQUIRE(size(eqs[2]) == 31);
+
+    // m_K = (K!)^2
+    const auto symmetric_eqs =
+        symmetric([&cc] { return cc.eom_l(nₚ(2), nₕ(2)); });
+    auto l_rank_part = [&](const ExprPtr& eq, std::size_t rank) {
+      return amplitude_rank_part(eq, L"L", rank);
+    };
+    REQUIRE(equal(l_rank_part(symmetric_eqs[1], 1), l_rank_part(eqs[1], 1)));
+    REQUIRE(equal(l_rank_part(symmetric_eqs[1], 2),
+                  ex<Constant>(2) * l_rank_part(eqs[1], 2)));
+    REQUIRE(equal(l_rank_part(symmetric_eqs[2], 1),
+                  ex<Constant>(rational{1, 2}) * l_rank_part(eqs[2], 1)));
+    REQUIRE(equal(l_rank_part(symmetric_eqs[2], 2), l_rank_part(eqs[2], 2)));
   }
 }  // SECTION("EOM-CCSD")
 

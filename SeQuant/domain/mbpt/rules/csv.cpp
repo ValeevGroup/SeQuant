@@ -180,7 +180,7 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
         "and be keyed as the space's own basis");
   const auto resolved = registry->resolve(csv_basis);
   return csv_transform_rec(expr, resolved,
-                           resolved.metric() == IndexSpaceMetric::Unit,
+                           resolved.metric() == IndexBasisMetric::Unit,
                            coeff_tensor_label, tensor_labels);
 }
 

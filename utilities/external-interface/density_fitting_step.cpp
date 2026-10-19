@@ -32,7 +32,7 @@ void DensityFittingStep::set_options(const nlohmann::json &options) {
                         " requires string argument");
       }
 
-      aux_space_ = get_default_context().index_basis_registry()->retrieve(
+      aux_space_ = get_default_context().index_basis_registry()->retrieve_space(
           value.get<std::string_view>());
     } else if (key == "integral_label") {
       if (!value.is_string()) {

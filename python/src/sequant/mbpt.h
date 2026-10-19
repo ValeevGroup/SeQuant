@@ -55,6 +55,27 @@ inline void __init__(py::module m) {
   opts.op_registry_ptr = sequant::mbpt::make_legacy_registry();
   sequant::mbpt::set_default_mbpt_context(opts);
 
+  py::enum_<sequant::mbpt::NormalizationConvention>(m,
+                                                    "NormalizationConvention")
+      .value("Default", sequant::mbpt::NormalizationConvention::Default)
+      .value("Symmetric", sequant::mbpt::NormalizationConvention::Symmetric);
+  m.def(
+      "normalization_convention",
+      [] {
+        return sequant::mbpt::get_default_mbpt_context()
+            .normalization_convention();
+      },
+      "the normalization convention of the default MBPT context");
+  m.def(
+      "set_normalization_convention",
+      [](sequant::mbpt::NormalizationConvention convention) {
+        auto ctx = sequant::mbpt::get_default_mbpt_context();
+        sequant::mbpt::set_default_mbpt_context(ctx.set(convention));
+      },
+      py::arg("convention"),
+      "sets the normalization convention of the process-wide default MBPT "
+      "context; the change is not scoped and is seen by every thread");
+
   m.def("F", &sequant::mbpt::F);
   m.def("H", &sequant::mbpt::H,
         "H(k = 2) returns a Hamiltonian operator with up to k-body terms",

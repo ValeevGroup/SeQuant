@@ -1,10 +1,10 @@
 #include "processing.hpp"
-#include "format_support.hpp"
 #include "utils.hpp"
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/expr.hpp>
@@ -27,7 +27,7 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
 
   if (options.density_fitting) {
     IndexSpace aux_space =
-        get_default_context().index_basis_registry()->retrieve(L"F");
+        get_default_context().index_basis_registry()->retrieve_space(L"F");
     result.expression() =
         mbpt::density_fit(result.expression(), aux_space, L"g", L"DF");
 

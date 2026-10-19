@@ -597,6 +597,26 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       // the caller
       ExprPtr sum = h_ok * op + h * op;
       REQUIRE_THROWS_AS(sequant::canonicalize(sum), Exception);
+
+      // a named index in two bra (or two ket) slots is not a contraction: a
+      // diagonal matrix element times an amplitude is an element-wise product
+      auto f_diag = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_1"});
+      auto t2 = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+      REQUIRE_THROWS_AS(canonicalize(f_diag * t2), Exception);
+      {
+        auto scope = sequant::tests::scoped_canonicalize_options(
+            CanonicalizeOptions::default_options().copy_and_set(
+                container::set<Index>{Index{L"i_1"}, Index{L"i_2"},
+                                      Index{L"a_1"}, Index{L"a_2"}}));
+        auto product = f_diag * t2;
+        REQUIRE_NOTHROW(sequant::canonicalize(product));
+        auto reordered = t2 * f_diag;
+        sequant::canonicalize(reordered);
+        REQUIRE(product == reordered);
+        // the same index in two ket slots
+        auto fsq = f_diag * f_diag;
+        REQUIRE_NOTHROW(sequant::canonicalize(fsq));
+      }
     }
 
     {  // with no external indices, hence no named indices whatsoever

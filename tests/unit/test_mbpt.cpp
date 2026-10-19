@@ -7,6 +7,7 @@
 #include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -30,10 +31,12 @@
 #include "catch2_sequant.hpp"
 
 #include <algorithm>
+#include <format>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <numeric>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -157,6 +160,26 @@ sequant::ExprPtr in_base_spaces(
 }
 }  // namespace
 
+TEST_CASE("MBPT operator formatting", "[mbpt][format]") {
+  using namespace sequant;
+  const auto ptr = mbpt::op::t(1);
+  const auto& op = ptr.as<mbpt::op_t>();
+  const auto latex = to_latex(ptr);
+
+  REQUIRE(std::format("{:l}", op) == toUtf8(latex));
+  REQUIRE(std::format(L"{:latex}", ptr) == latex);
+  // mbpt::Operator does not support serialization
+  REQUIRE_THROWS_AS(std::format("{}", op), Exception);
+  REQUIRE_THROWS_AS(std::format(L"{:s}", ptr), Exception);
+  std::ostringstream narrow;
+  REQUIRE_THROWS_AS(narrow << op, Exception);
+
+  const auto suggests_latex = Catch::Matchers::MessageMatches(
+      Catch::Matchers::ContainsSubstring("use LaTeX"));
+  REQUIRE_THROWS_MATCHES(std::format("{}", mbpt::op::H() * mbpt::op::T(2)),
+                         Exception, suggests_latex);
+}
+
 TEST_CASE("mbpt_operator_type_id", "[mbpt]") {
   using namespace sequant;
   using mbpt::qns_t;
@@ -170,6 +193,162 @@ TEST_CASE("mbpt_operator_type_id", "[mbpt]") {
   REQUIRE(mbpt::FOperator<qns_t>::static_type_name() ==
           "sequant::mbpt::Operator<sequant::mbpt::QuantumNumberChange<int64,"
           "sequant::mbpt::default_qns_tag>,FermiDirac>");
+}
+
+TEST_CASE("mbpt operator commutativity", "[mbpt]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  const auto ip = [] { return op::R(nann(1), ncre(0)); };
+  const auto dip = [] { return op::R(nann(2), ncre(0)); };
+  const auto ea = [] { return op::R(nann(0), ncre(1)); };
+
+  SECTION("single reference") {
+    auto ctx = get_default_context();
+    ctx.set(make_sr_spaces());
+    auto ctx_resetter = set_scoped_default_context(ctx);
+
+    // odd-rank operators without contractible pairs anticommute
+    CHECK_FALSE(ip()->commutes_with(*ea()));
+    CHECK_FALSE(ip()->commutes_with(*ip()));
+    // simplify reorders only commuting operators, so the two terms are
+    // neither merged nor cancelled
+    const auto sum = simplify(ip() * ea() + ea() * ip());
+    REQUIRE(sum.is<Sum>());
+    CHECK(sum.as<Sum>().size() == 2);
+
+    // an even-rank operator commutes with an odd-rank one
+    CHECK(op::t(1)->commutes_with(*ip()));
+    CHECK(dip()->commutes_with(*ip()));
+  }
+
+  SECTION("multireference") {
+    // op counts per base space are intervals here, so the rank comes from
+    // the tensor form
+    auto ctx = get_default_context();
+    ctx.set(make_mr_spaces());
+    auto ctx_resetter = set_scoped_default_context(ctx);
+
+    CHECK_FALSE(ip()->commutes_with(*ip()));
+    CHECK(dip()->commutes_with(*ip()));
+  }
+
+  SECTION("bare normal operator tensor form") {
+    auto ctx = get_default_context();
+    ctx.set(make_sr_spaces());
+    auto ctx_resetter = set_scoped_default_context(ctx);
+
+    // a creator in the complete space: its op counts per base space are
+    // intervals, so the rank comes from the tensor form, which here is the
+    // normal operator itself rather than a product
+    const auto cre_p = [] {
+      return ex<mbpt::Operator<qns_t>>(
+          []() -> std::wstring_view { return L"c"; },
+          []() -> ExprPtr { return ex<FNOperator>(cre({L"p_1"}), ann({})); },
+          [](qns_t& qns) {
+            qns_t op;
+            for (std::size_t s = 0; s != op.size() / 2; ++s)
+              op[qns_t::cre_slot(s)] = {0ul, 1ul};
+            qns = combine(op, qns);
+          });
+    };
+    CHECK_FALSE(cre_p()->commutes_with(*cre_p()));
+  }
+}
+
+TEST_CASE("mbpt multireference regressions", "[mbpt]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  auto ctx = get_default_context();
+  ctx.set(make_mr_spaces());
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  SECTION("commutators retain active-space contractions") {
+    const auto f = op::h(1);
+    const auto t = op::t(1);
+    CHECK_FALSE(f->commutes_with(*t));
+    const auto commutator = simplify(f * t - t * f);
+    const auto expected = tensor::ref_av(tensor::h(1) * tensor::t(1) -
+                                         tensor::t(1) * tensor::h(1));
+    REQUIRE(expected != ex<Constant>(0));
+    CHECK_THAT(op::ref_av(commutator), EquivalentTo(expected));
+  }
+
+  SECTION("single-reference excitation operators still commute") {
+    auto sr_ctx = get_default_context();
+    sr_ctx.set(make_sr_spaces());
+    auto sr_scope = set_scoped_default_context(sr_ctx);
+    CHECK(op::t(1)->commutes_with(*op::t(2)));
+  }
+
+  SECTION("RDM replacement preserves external indices") {
+    for (const bool named : {false, true}) {
+      auto opts = CanonicalizeOptions::default_options();
+      if (named)
+        opts.named_indices = container::set<Index>{
+            Index(L"u_1"), Index(L"u_2"), Index(L"u_3"), Index(L"u_4")};
+      auto scope = set_scoped_modified_default_context(
+          [&opts](sequant::Context& ctx) { ctx.set(opts); });
+      CAPTURE(named);
+      CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1;u_2} * ã{u_3;u_4}")),
+                 EquivalentTo(L"γ{u_1,u_3;u_2,u_4}:A-C-S + "
+                              L"s{u_1;u_4} * γ{u_3;u_2}"));
+      CHECK_THAT(tensor::ref_av(deserialize(L"x{u_1;u_2} * ã{u_2;u_1}")),
+                 EquivalentTo(L"x{u_1;u_2} * γ{u_2;u_1}"));
+    }
+  }
+
+  SECTION("external RDM indices beyond the active space are restricted") {
+    for (const bool named : {false, true}) {
+      auto opts = CanonicalizeOptions::default_options();
+      if (named)
+        opts.named_indices =
+            container::set<Index>{Index(L"I_1"), Index(L"I_2"), Index(L"I_4"),
+                                  Index(L"I_6"), Index(L"p_1"), Index(L"p_2")};
+      auto scope = set_scoped_modified_default_context(
+          [&opts](sequant::Context& ctx) { ctx.set(opts); });
+      CAPTURE(named);
+      CHECK_THAT(tensor::ref_av(deserialize(L"ã{I_1;I_2}")),
+                 EquivalentTo(L"γ{u_1;u_2} * δ{I_1;u_1} * δ{u_2;I_2}"));
+      CHECK_THAT(tensor::ref_av(deserialize(L"ã{p_1;p_2}")),
+                 EquivalentTo(L"γ{u_1;u_2} * δ{p_1;u_1} * δ{u_2;p_2}"));
+      CHECK_THAT(tensor::ref_av(deserialize(L"f{I_4;I_5} * ã{I_5;I_6}")),
+                 EquivalentTo(L"f{I_4;u_1} * γ{u_1;u_2} * δ{u_2;I_6}"));
+      // only the RDM slot of an external index is restricted
+      CHECK_THAT(
+          tensor::ref_av(deserialize(L"x{;;I_2} * ã{I_1;I_2}")),
+          EquivalentTo(L"x{;;I_2} * γ{u_1;u_2} * δ{I_1;u_1} * δ{u_2;I_2}"));
+    }
+  }
+
+  SECTION("named indices must include every external bra/ket index") {
+    if (assert_behavior() != AssertBehavior::Abort) {
+      auto opts = CanonicalizeOptions::default_options();
+      opts.named_indices = container::set<Index>{Index(L"I_1")};
+      auto scope = set_scoped_modified_default_context(
+          [&opts](sequant::Context& ctx) { ctx.set(opts); });
+      CHECK_THROWS_MATCHES(
+          tensor::ref_av(deserialize(L"ã{I_1;I_2}")), Exception,
+          Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring(
+              "index I_2 occurs in a single bra or ket slot")));
+      // an index in a single aux slot need not be named
+      CHECK_NOTHROW(
+          tensor::ref_av(deserialize(L"x{;;u_5} * ã{I_1;u_2} * y{u_2;}")));
+    }
+  }
+
+  SECTION("a single normal operator becomes an RDM") {
+    CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1;u_2}")),
+               EquivalentTo(L"γ{u_1;u_2}"));
+    CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1,u_3;u_2,u_4}")),
+               EquivalentTo(L"γ{u_1,u_3;u_2,u_4}:A-C-S"));
+  }
+
+  SECTION("bare abstract operators retain their reference average") {
+    const auto expected = tensor::ref_av(tensor::H(1));
+    REQUIRE(expected != ex<Constant>(0));
+    CHECK_THAT(op::ref_av(op::H(1)), EquivalentTo(expected));
+  }
 }
 
 TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
@@ -327,10 +506,15 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto reg = std::make_shared<OpRegistry>();
       reg->add(L"T", OpClass::Ex);
 
-      auto ctx = Context({.csv = CSV::Yes, .op_registry_ptr = reg});
+      auto ctx = Context(
+          {.csv = CSV::Yes,
+           .op_registry_ptr = reg,
+           .normalization_convention = NormalizationConvention::Symmetric});
       auto cloned = ctx.clone();
 
       REQUIRE(cloned.csv() == ctx.csv());
+      REQUIRE(cloned.normalization_convention() ==
+              ctx.normalization_convention());
       REQUIRE(cloned.op_registry() != ctx.op_registry());  // Different pointer
       REQUIRE(cloned.op_registry()->contains(L"T"));
     }
@@ -342,10 +526,16 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto ctx2 = Context({.csv = CSV::Yes, .op_registry_ptr = reg1});
       auto ctx3 = Context({.csv = CSV::No, .op_registry_ptr = reg1});
       auto ctx4 = Context({.csv = CSV::Yes, .op_registry_ptr = reg2});
+      auto ctx5 = Context(
+          {.csv = CSV::Yes,
+           .op_registry_ptr = reg1,
+           .normalization_convention = NormalizationConvention::Symmetric});
 
       REQUIRE(ctx1 == ctx2);
       REQUIRE(ctx1 != ctx3);
       REQUIRE(ctx1 != ctx4);
+      REQUIRE(ctx1 != ctx5);
+      REQUIRE(Context{ctx1}.set(NormalizationConvention::Symmetric) == ctx5);
     }
 
     SECTION("scoped-context") {
@@ -369,6 +559,93 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(restored_ctx.csv() == original_csv);
     }
   }  // SECTION("context")
+
+  SECTION("normalization-convention") {
+    using namespace sequant;
+    using namespace sequant::mbpt;
+    auto scalar = [](ExprPtr e) { return simplify(e).as<Product>().scalar(); };
+    auto scoped_symmetric = [] {
+      return set_scoped_default_mbpt_context(
+          mbpt::Context{get_default_mbpt_context()}.set(
+              NormalizationConvention::Symmetric));
+    };
+
+    SECTION("prefactors") {
+      REQUIRE(scalar(tensor::t(2)) == rational(1, 4));
+      REQUIRE(scalar(tensor::P(2)) == 1);
+
+      auto guard = scoped_symmetric();
+      REQUIRE(scalar(tensor::t(2)) == rational(1, 2));
+      REQUIRE(scalar(tensor::P(2)) == rational(1, 2));
+      REQUIRE(scalar(tensor::θ(2)) == rational(1, 4));
+      REQUIRE(scalar(tensor::h(2)) == rational(1, 4));
+      REQUIRE(scalar(tensor::λ(2)) == rational(1, 2));
+      REQUIRE(scalar(tensor::r(nₚ(2), nₕ(2))) == rational(1, 2));
+      REQUIRE(scalar(tensor::l(nₚ(2), nₕ(2))) == rational(1, 2));
+    }
+
+    SECTION("irrational and spin-free prefactors") {
+      // Default gives amplitudes 1/m and projectors no prefactor; Symmetric
+      // gives both 1/sqrt(m). When m is not a perfect square the prefactor
+      // stays a Power, so compare each Symmetric operator with the Default
+      // one rescaled by hand.
+      auto sqrt_of = [](rational x) { return ex<Power>(x, rational{1, 2}); };
+      auto equal = [](const ExprPtr& a, const ExprPtr& b) {
+        return simplify(a - b) == ex<Constant>(0);
+      };
+
+      // spin-orbital basis, m = c! a!
+      const auto P23 = tensor::P(nₚ(2), nₕ(3));  // m = 2! 3! = 12
+      const auto r12 = tensor::r(nₚ(1), nₕ(2));  // m = 1! 2! = 2
+      {
+        auto guard = scoped_symmetric();
+        REQUIRE(equal(tensor::P(nₚ(2), nₕ(3)), sqrt_of({1, 12}) * P23));
+        // 2 * r12 cancels the Default 1/2
+        REQUIRE(equal(tensor::r(nₚ(1), nₕ(2)),
+                      sqrt_of({1, 2}) * ex<Constant>(2) * r12));
+      }
+
+      // spin-free basis, m = c!
+      auto ctx = get_default_context();
+      auto ctx_resetter =
+          set_scoped_default_context(ctx.set(SPBasis::Spinfree));
+      const auto P2 = tensor::P(2);   // m = 2
+      const auto P3 = tensor::P(-3);  // m = 3! = 6
+      const auto t2 = tensor::t(2);   // m = 2
+      {
+        auto guard = scoped_symmetric();
+        REQUIRE(equal(tensor::P(2), sqrt_of({1, 2}) * P2));
+        REQUIRE(equal(tensor::P(-3), sqrt_of({1, 6}) * P3));
+        // 2 * t2 cancels the Default 1/2
+        REQUIRE(equal(tensor::t(2), sqrt_of({1, 2}) * ex<Constant>(2) * t2));
+      }
+    }
+
+    SECTION("chosen at tensor-form generation") {
+      const auto regular = op::t(2);
+      const OpMaker<Statistics::FermiDirac> maker(L"t", 2);
+      ExprPtr symmetric, projector;
+      {
+        auto guard = scoped_symmetric();
+        symmetric = op::t(2);
+        projector = op::P(2);
+        REQUIRE(scalar(regular.as<op_t>().tensor_form()) == rational(1, 2));
+        REQUIRE(scalar(maker()) == rational(1, 2));
+      }
+      REQUIRE(scalar(symmetric.as<op_t>().tensor_form()) == rational(1, 4));
+      REQUIRE(scalar(projector.as<op_t>().tensor_form()) == 1);
+      REQUIRE(scalar(maker()) == rational(1, 4));
+      REQUIRE(scalar(adjoint(symmetric).as<op_t>().tensor_form()) ==
+              rational(1, 4));
+
+      REQUIRE(regular == symmetric);
+      const auto mixed = simplify(regular + symmetric);
+      REQUIRE_THAT(mixed, EquivalentTo(ex<Constant>(2) * regular));
+      REQUIRE_THAT(
+          lower_to_tensor_form(mixed),
+          EquivalentTo(ex<Constant>(2) * regular.as<op_t>().tensor_form()));
+    }
+  }
 
   SECTION("nbody_operators") {
     using namespace sequant;
@@ -981,34 +1258,6 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
       REQUIRE(to_latex(simplify(h1 * t2)) == L"{{\\hat{h¹}}{\\hat{t²}_{2}}}");
       REQUIRE(to_latex(simplify(h2 * t2)) == L"{{\\hat{h²}}{\\hat{t²}_{2}}}");
-
-      // δl δr ops
-      {  // Spinor basis
-        auto dl2 = tensor::δl(2);
-        REQUIRE(simplify(dl2 - rational{1, 2} * tensor::P(2)) ==
-                ex<Constant>(0));
-        auto dr2 = tensor::δr(2);
-        REQUIRE(simplify(dr2 - rational{1, 2} * tensor::P(-2)) ==
-                ex<Constant>(0));
-
-        auto dl23 = tensor::δl(nₚ(2), nₕ(3));
-        REQUIRE(simplify(dl23 - ex<Power>(rational{1, 12}, rational{1, 2}) *
-                                    tensor::P(nₚ(2), nₕ(3))) ==
-                ex<Constant>(0));
-      }
-
-      {  // spinfree basis
-        auto ctx = get_default_context();
-        auto ctx_resetter =
-            set_scoped_default_context(ctx.set(SPBasis::Spinfree));
-        auto dl2 = tensor::δl(2);
-        REQUIRE(simplify(dl2 - ex<Power>(rational{1, 2}, rational{1, 2}) *
-                                   tensor::P(2)) == ex<Constant>(0));
-        auto dr3 = tensor::δr(3);
-        REQUIRE(simplify(dr3 - ex<Power>(rational{1, 6}, rational{1, 2}) *
-                                   tensor::P(-3)) == ex<Constant>(0));
-      }
-
     }  // SECTION("predefined")
 
     SECTION("batching") {
@@ -1019,7 +1268,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
           set_scoped_default_context({.index_basis_registry_shared_ptr = isr,
                                       .vacuum = Vacuum::SingleProduct});
       REQUIRE_NOTHROW(
-          get_default_context().index_basis_registry()->retrieve(L"z"));
+          get_default_context().index_basis_registry()->retrieve_space(L"z"));
 
       using namespace mbpt;
       REQUIRE_NOTHROW(op::Hʼ(1, {.order = 1, .nbatch = 1}));
@@ -1567,7 +1816,7 @@ SECTION("MRSO-MultiProduct") {
                  (l.action == Action::Create ? fcrex(l.index) : fannx(l.index));
       auto contracted = FWickTheorem{string}.full_contractions(false).compute();
       const auto isr = get_default_context().index_basis_registry();
-      const auto& active = isr->retrieve(L"u");
+      const auto& active = isr->retrieve_space(L"u");
       auto average = [&](ExprPtr& f) {
         if (f->is<FNOperator>()) {
           const auto& nop = f->as<FNOperator>();
@@ -1708,7 +1957,8 @@ SECTION("MRSO-MultiProduct") {
             const auto& t = e->as<Tensor>();
             if (t.label() == L"γ" || t.label() == L"η" || t.label() == L"κ")
               for (const auto& idx : t.const_braket())
-                active_only = active_only && idx.space() == isr->retrieve(L"u");
+                active_only =
+                    active_only && idx.space() == isr->retrieve_space(L"u");
           },
           /*atoms_only=*/true);
       INFO("mp: " << toUtf8(to_latex(mp)));
@@ -1982,7 +2232,7 @@ SECTION("rules") {
       ExprPtr input_expr = deserialize(inputs.at(i));
 
       const IndexSpace aux_space =
-          get_default_context().index_basis_registry()->retrieve(L"x");
+          get_default_context().index_basis_registry()->retrieve_space(L"x");
 
       ExprPtr actual = mbpt::density_fit(input_expr, aux_space, L"g", L"B");
 
@@ -2013,7 +2263,7 @@ SECTION("rules") {
       ExprPtr input_expr = deserialize(inputs.at(i));
 
       const IndexSpace aux_space =
-          get_default_context().index_basis_registry()->retrieve(L"x");
+          get_default_context().index_basis_registry()->retrieve_space(L"x");
 
       ExprPtr actual =
           mbpt::tensor_hypercontract(input_expr, aux_space, L"g", L"B", L"C");

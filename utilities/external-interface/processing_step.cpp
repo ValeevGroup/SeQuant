@@ -65,6 +65,57 @@ void alias_individual_ids(ExecutionContext &ctx, std::string_view step_id,
   }
 }
 
+AliasPropagator::AliasPropagator(ExecutionContext &ctx,
+                                 std::string_view step_id)
+    : ctx_(ctx), step_id_(step_id) {}
+
+void AliasPropagator::record(
+    const std::vector<std::string_view> &associated_ids,
+    const std::vector<std::string_view> &associated_group_ids,
+    std::size_t start, std::size_t count, bool alias_source) {
+  if (count == 0) {
+    return;
+  }
+
+  if (alias_source) {
+    SEQUANT_ASSERT(count == 1);
+    ctx_.add_data_alias(associated_ids.front(),
+                        std::string(step_id_) + "." + std::to_string(start));
+  }
+
+  std::string created_outputs = make_output_range_id(step_id_, start, count);
+
+  alias_individual_ids(ctx_, step_id_, associated_ids, created_outputs);
+
+  for (std::string_view group_id : associated_group_ids) {
+    group_assocs_[group_id].emplace_back(created_outputs);
+  }
+}
+
+void AliasPropagator::flush() {
+  for (auto &[group_id, assoc_outputs] : group_assocs_) {
+    const std::size_t expected_size = ctx_.dataset_size(group_id);
+    SEQUANT_ASSERT(expected_size >= assoc_outputs.size());
+
+    if (expected_size != assoc_outputs.size()) {
+      continue;
+    }
+
+    std::string out_group_id = make_group_alias(step_id_, group_id);
+
+    if (ctx_.has_data(out_group_id)) {
+      if (!ctx_.ids_are_equivalent(assoc_outputs, out_group_id)) {
+        throw Exception("Duplicate group ID name '" + std::string(group_id) +
+                        "' leading to ambiguity for '" + out_group_id + "'");
+      }
+
+      continue;
+    }
+
+    ctx_.add_data_alias(assoc_outputs, std::move(out_group_id));
+  }
+}
+
 }  // namespace detail
 
 }  // namespace sequant::util::extint

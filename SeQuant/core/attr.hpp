@@ -15,7 +15,11 @@
 
 namespace sequant {
 
-enum class IndexSpaceMetric { Unit, General };
+/// whether a basis (IndexBasis::metric()) is orthonormal
+enum class IndexBasisMetric { Unit, General };
+/// @deprecated the metric is a property of a basis, use IndexBasisMetric
+using IndexSpaceMetric [[deprecated("use IndexBasisMetric")]] =
+    IndexBasisMetric;
 
 /// describes the scalar field over which the vector spaces representing the
 /// bra/ket modes are defined. Physically this is a single global choice for a
