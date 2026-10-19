@@ -612,8 +612,10 @@ class ResultDryRun final : public Result {
                                       lobounds_);
   }
 
-  [[nodiscard]] ResultPtr adjoint(
-      std::array<std::any, 2> const& ann) const override {
+  [[nodiscard]] ResultPtr apply_transform(
+      CanonTransform, std::array<std::any, 2> const& ann) const override {
+    // a dry run tracks shapes only: phase and elementwise conjugation are
+    // invisible, the relabeling is the permute
     return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
                                       lobounds_);
   }
@@ -768,8 +770,10 @@ class ResultDryRunNested final : public Result {
                                       lobounds_);
   }
 
-  [[nodiscard]] ResultPtr adjoint(
-      std::array<std::any, 2> const& ann) const override {
+  [[nodiscard]] ResultPtr apply_transform(
+      CanonTransform, std::array<std::any, 2> const& ann) const override {
+    // a dry run tracks shapes only: phase and elementwise conjugation are
+    // invisible, the relabeling is the permute
     return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
                                       lobounds_);
   }

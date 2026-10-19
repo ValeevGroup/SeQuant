@@ -72,10 +72,23 @@ struct CanonicalizeOptions {
   /// labels distinguished regardless.
   IgnoreNamedIndexLabel ignore_named_index_labels = IgnoreNamedIndexLabel::Yes;
 
+  enum class FoldConjugatePairs : bool { Yes = true, No = false };
+  /// whether simplify() folds complex-conjugate-related summand pairs
+  /// (A + A꙳ -> 2 Re(A), A - A꙳ -> 2i Im(A)) after canonicalization;
+  /// engaged only when the default context's registry contains a
+  /// complex-field base space (in a real field conjugation is trivial and
+  /// plain canonicalization already merges such pairs). Read by simplify()
+  /// only; canonicalize() does not fold.
+  /// @note the folded `Re`/`Im` nodes are evaluated by the evaluation engine
+  ///       (EvalOp::RealPart/ImagPart) but are not accepted by spin tracing
+  ///       or by export, hence the default is No
+  FoldConjugatePairs fold_conjugate_pairs = FoldConjugatePairs::No;
+
   static CanonicalizeOptions default_options();
   CanonicalizeOptions copy_and_set(CanonicalizationMethod) const;
   CanonicalizeOptions copy_and_set(std::optional<container::set<Index>>) const;
   CanonicalizeOptions copy_and_set(IgnoreNamedIndexLabel) const;
+  CanonicalizeOptions copy_and_set(FoldConjugatePairs) const;
 
   /// @return true if @p a and @p b agree in every member
   friend bool operator==(const CanonicalizeOptions& a,
@@ -83,12 +96,14 @@ struct CanonicalizeOptions {
     // the bindings name every member (guard is the SEQUANT_DESIGNATED_INIT_ONLY
     // tag), so that a member added to CanonicalizeOptions fails to compile here
     // until it is compared
-    const auto& [guard_a, method_a, named_indices_a, ignore_labels_a] = a;
-    const auto& [guard_b, method_b, named_indices_b, ignore_labels_b] = b;
+    const auto& [guard_a, method_a, named_indices_a, ignore_labels_a, fold_a] =
+        a;
+    const auto& [guard_b, method_b, named_indices_b, ignore_labels_b, fold_b] =
+        b;
     (void)guard_a;
     (void)guard_b;
     return method_a == method_b && named_indices_a == named_indices_b &&
-           ignore_labels_a == ignore_labels_b;
+           ignore_labels_a == ignore_labels_b && fold_a == fold_b;
   }
 };
 

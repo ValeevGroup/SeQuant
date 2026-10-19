@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/context.hpp>
+#include <SeQuant/core/export/marked_name.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/export/utils.hpp>
@@ -51,6 +52,9 @@ class ItfContext : public ReorderingContext {
 
   /// @returns The name under which the given tensor shall be imported. If none
   /// is obtained, the tensor will not be imported.
+  /// @note the lookup is keyed on the tensor's marks folded into its label
+  ///       (fold_marks_into_label()), which is the name the rest of the
+  ///       pipeline sees, so a marked tensor and its bare one are told apart
   virtual std::optional<std::string> import_name(const Tensor &tensor) const;
   /// @returns The name under which the given variable shall be imported. If
   /// none is obtained, the variable will not be imported.
@@ -64,6 +68,8 @@ class ItfContext : public ReorderingContext {
   virtual void set_tag(const IndexSpace &space, std::string tag);
 
   /// Sets the name under which the given tensor is to be exported
+  /// @note keyed as import_name() looks it up, so the name may be registered
+  ///       on a marked tensor as written
   virtual void set_import_name(const Tensor &tensor, std::string name);
   /// Sets the name under which the given variable is to be exported
   virtual void set_import_name(const Variable &variable, std::string name);
@@ -158,7 +164,8 @@ class ItfGenerator : public Generator<Context> {
   }
 
   std::string get_name(const Tensor &tensor, const Context &ctx) const {
-    std::string name = toUtf8(tensor.label());
+    // a marked tensor is a different array: its name carries the suffixes
+    std::string name = export_name(tensor);
 
     if (tensor.num_indices() > 0) {
       name += ":";
@@ -190,9 +197,12 @@ class ItfGenerator : public Generator<Context> {
     return representation;
   }
 
+  /// @note ITF has no conjugation spelling for a scalar operand, so a
+  ///       conjugated variable is an object of its own, named the way a marked
+  ///       tensor's array is (export_name)
   std::string represent(const Variable &variable,
                         const Context &) const override {
-    return toUtf8(variable.label()) + "[]";
+    return export_name(variable) + "[]";
   }
 
   std::string represent(const Constant &constant,
@@ -332,7 +342,7 @@ class ItfGenerator : public Generator<Context> {
       if (import_name.has_value()) {
         append(import_name.value());
       } else {
-        append(toUtf8(variable.label()));
+        append(export_name(variable));
       }
     } else {
       append("!Create{type:scalar}");

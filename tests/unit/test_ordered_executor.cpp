@@ -16,6 +16,7 @@
 // fixtures.
 
 #include "catch2_sequant.hpp"
+#include "csv_test_utils.hpp"
 
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/context.hpp>
@@ -460,15 +461,7 @@ TEST_CASE(
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
 
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -1071,15 +1064,7 @@ TEST_CASE(
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
 
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -1579,15 +1564,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
   // Same construction as the [w20-auxocc-walk] case up to the schedule.
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -1938,15 +1915,7 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -2142,15 +2111,7 @@ TEST_CASE(
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
 
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -2343,15 +2304,7 @@ TEST_CASE(
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
 
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -2630,15 +2583,7 @@ TEST_CASE(
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
 
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -3198,15 +3143,7 @@ TEST_CASE(
   using sequant::eval::dryrun::meter;
   using Node = EvalNodeDryRun;
 
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -3394,15 +3331,7 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
 
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -4136,6 +4065,8 @@ TEST_CASE(
   auto ctx0 = sequant::get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx0));
+  // X and P are real arrays (Symm), derivable only over a real basis
+  auto real_basis = sequant::tests::scoped_real_basis();
 
   sequant::eval::dryrun::SizeRegime regime;
   regime.space_extent = {{L"i", 8}, {L"a", 4}};
@@ -4259,15 +4190,7 @@ TEST_CASE(
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -4394,15 +4317,7 @@ TEST_CASE(
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
 
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -4714,15 +4629,7 @@ TEST_CASE(
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
 
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -4910,15 +4817,7 @@ TEST_CASE(
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
 
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -5212,15 +5111,7 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     using sequant::eval::dryrun::EvalNodeDryRun;
     using Node = EvalNodeDryRun;
 
-    auto ctx = sequant::get_default_context_snapshot();
-    ctx.set_first_dummy_index_ordinal(1000000);
-    REQUIRE(ctx.index_basis_registry() != nullptr);
-    auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-        *ctx.index_basis_registry());
-    sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-    sequant::mbpt::add_df_spaces(isr);
-    ctx.set(isr);
-    auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+    auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
     auto const body =
         orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +

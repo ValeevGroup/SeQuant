@@ -13,6 +13,7 @@ repeats, the :doc:`User Guide </user/guide/index>`, which covers the public API 
    expressions
    wick
    tnc
+   conjugation
    cost_model
    batched_evaluation
    export

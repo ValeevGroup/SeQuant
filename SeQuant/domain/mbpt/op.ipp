@@ -6,7 +6,9 @@
 #define SEQUANT_DOMAIN_MBPT_OP_IPP
 
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
 #include <range/v3/algorithm/all_of.hpp>
@@ -190,20 +192,27 @@ bool Operator<QuantumNumbers, S>::has_odd_rank_term() const {
 }
 
 template <typename QuantumNumbers, Statistics S>
-void Operator<QuantumNumbers, S>::adjoint() {
+std::int8_t Operator<QuantumNumbers, S>::adjoint() {
   const auto dN = (*this)(QuantumNumbers{});
   using qnc_t = std::decay_t<decltype(dN)>;
   static_assert(std::is_same_v<QuantumNumbers, qnc_t>,
                 "mbpt::Operator::adjoint: QuantumNumbers type mismatch");
 
-  // grab label and update according to adjoint flag
+  // grab label and toggle its adjoint mark
   auto lbl = std::wstring(this->label());
-  SEQUANT_ASSERT(sequant::is_adjoint_label(lbl) == is_adjoint_);
-  sequant::toggle_adjoint_label(lbl);
+  {
+    [[maybe_unused]] const auto [adjointed, kconjugated] =
+        sequant::split_state_marks(lbl);
+    SEQUANT_ASSERT(adjointed == is_adjoint_ && kconjugated == is_kconjugated_);
+    sequant::append_state_marks(lbl, !is_adjoint_, is_kconjugated_);
+  }
 
-  // get order and batch_ordinals to restore later
+  // get order, batch_ordinals and the states to restore later: the assignment
+  // below installs a fresh operator
   const auto saved_order = this->order_;
   const auto saved_batch_ordinals = this->batch_ordinals_;
+  const bool saved_is_adjoint = this->is_adjoint_;
+  const bool saved_is_kconjugated = this->is_kconjugated_;
 
   // capture the current tensor-form generator so that each call regenerates
   // fresh dummy indices; otherwise using this adjoint operator more than once
@@ -219,11 +228,60 @@ void Operator<QuantumNumbers, S>::adjoint() {
         qn += adjoint_dN;
         return qn;  // qn_action
       }};
-  this->is_adjoint_ = !this->is_adjoint_;  // toggle adjoint flag
+  this->is_adjoint_ = !saved_is_adjoint;
+  this->is_kconjugated_ = saved_is_kconjugated;
 
   // restore original order and batch_ordinals
   this->order_ = saved_order;
   this->batch_ordinals_ = saved_batch_ordinals;
+
+  // the tensor form is built through sequant::adjoint, which absorbs a sign
+  // of its own into a scalar factor
+  return 1;
+}
+
+template <typename QuantumNumbers, Statistics S>
+std::int8_t Operator<QuantumNumbers, S>::kconjugate() {
+  // K reproduces an operator string only over a basis it closes on, which the
+  // registry's fields decide without lowering the tensor form
+  if (sequant::default_field_is_complex())
+    throw Exception(
+        "mbpt::Operator::kconjugate: K does not close on a complex basis; "
+        "declare the bases real (IndexBasisRegistry::field) to K-conjugate an "
+        "operator");
+
+  // grab label and toggle its conjugation mark
+  auto lbl = std::wstring(this->label());
+  {
+    [[maybe_unused]] const auto [adjointed, kconjugated] =
+        sequant::split_state_marks(lbl);
+    SEQUANT_ASSERT(adjointed == is_adjoint_ && kconjugated == is_kconjugated_);
+    sequant::append_state_marks(lbl, is_adjoint_, !is_kconjugated_);
+  }
+
+  // as in adjoint(): the state to restore, and the captured generator yields
+  // fresh dummy indices on every call
+  const auto saved_order = this->order_;
+  const auto saved_batch_ordinals = this->batch_ordinals_;
+  const bool saved_is_adjoint = this->is_adjoint_;
+  const bool saved_is_kconjugated = this->is_kconjugated_;
+  auto base_tensor_form = this->tensor_form_generator_;
+  auto qn_action = this->qn_action_;
+  *this =
+      Operator{[=]() -> std::wstring_view { return lbl; },  // label_generator
+               [=]() -> ExprPtr {
+                 return sequant::kconjugate(
+                     base_tensor_form());  // tensor_form_generator
+               },
+               std::move(qn_action)};
+  this->is_adjoint_ = saved_is_adjoint;
+  this->is_kconjugated_ = !saved_is_kconjugated;
+  this->order_ = saved_order;
+  this->batch_ordinals_ = saved_batch_ordinals;
+
+  // the tensor form is built through sequant::kconjugate, which absorbs a
+  // consumed sign into a scalar factor
+  return 1;
 }
 
 template <typename QuantumNumbers, Statistics S>
@@ -251,7 +309,7 @@ ExprPtr Operator<QuantumNumbers, S>::clone() const {
 // indicates where the quasiparticle is going to and the second position
 // indicates where it comes from. for the case of adjoint operators, the adjoint
 // is represented by the symbol ⁺ and superscripting the quasi-particle numbers.
-// for example: hat{R⁺}^{1,2}} For operators in which one or more
+// for example: {{\hat{R}^{\dagger}}^{1,2}} For operators in which one or more
 // quasi-particles has only partial coverage in the particle_space or
 // hole_space, this notation is unsuitable, and we default to level printing of
 // the operator.

@@ -58,4 +58,11 @@ CanonicalizeOptions CanonicalizeOptions::copy_and_set(
   return result;
 }
 
+CanonicalizeOptions CanonicalizeOptions::copy_and_set(
+    FoldConjugatePairs arg) const {
+  auto result = *this;
+  result.fold_conjugate_pairs = arg;
+  return result;
+}
+
 }  // namespace sequant

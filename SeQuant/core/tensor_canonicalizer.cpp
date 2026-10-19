@@ -5,10 +5,15 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/constant.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
+#include <compare>
+#include <cstdint>
+#include <memory>
 #include <type_traits>
 #include <vector>
 
@@ -193,18 +198,48 @@ void DefaultTensorCanonicalizer::tag_indices(AbstractTensor& t) const {
   });
 }
 
-void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
-  if (t._braket_symmetry() != BraKetSymmetry::Symm) {
-    return;
+namespace {
+/// @return the canonicalization phase byproduct @p phase -- the convention
+///         every TensorCanonicalizer::apply() returns, nullptr for +1 and
+///         Constant(-1) for -1 -- multiplied by @p sign, spelled in the same
+///         convention so that a +1 product stays nullptr
+ExprPtr multiply_phase(ExprPtr phase, std::int8_t sign) {
+  if (sign == 1) return phase;
+  if (!phase) return ex<Constant>(-1);
+  SEQUANT_ASSERT(phase->is<Constant>() && phase->as<Constant>().value() == -1);
+  return {};
+}
+}  // namespace
+
+bool braket_orientation_pinned(const AbstractTensor& t) {
+  const auto lbl = t._label();
+  return lbl == reserved::antisymm_label() || lbl == reserved::symm_label() ||
+         lbl == reserved::transposition_label();
+}
+
+bool braket_foldable(const AbstractTensor& t) {
+  return braket_swap_sign(t._braket_symmetry()).has_value() &&
+         !braket_orientation_pinned(t);
+}
+
+std::int8_t DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
+                                                            bool fold_signed) {
+  if (!braket_foldable(t)) {
+    return 1;
+  }
+  const auto bks = t._braket_symmetry();
+  if (!fold_signed && bks == BraKetSymmetry::Antisymm) {
+    return 1;
   }
 
-  // bra<->ket exchange is a symmetry for braket-symmetric tensors, so pick a
-  // canonical orientation. The choice is governed solely by the canonical
-  // "colors" of the bra and ket bundles -- i.e. their index spaces, not the
-  // index labels -- so the result is label-independent. Bundles with identical
-  // spaces (e.g. g{p,q;r,s}) compare equal and are left untouched; only
-  // differing-color bundles are reoriented (so e.g. a half-tensor X{;a;x} folds
-  // into X{a;;x}).
+  // the sign every respelling below contributes, for the caller to record
+  std::int8_t sign = 1;
+
+  // bra<->ket exchange is a symmetry for Symm/Antisymm tensors, so pick a
+  // canonical orientation, a plain respelling. The choice is governed by the
+  // canonical "colors" of the bra and ket bundles -- i.e. their index spaces,
+  // not the index labels -- so the result is label-independent. Bundles with
+  // identical spaces (e.g. g{p,q;r,s}) compare equal and are left untouched.
   const TensorBlockIndexComparer cmp;
   auto space_less = [&cmp](const Index& a, const Index& b) {
     return cmp.compare_spaces(a, b) < 0;
@@ -226,36 +261,47 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
   ranges::sort(ket_spaces, space_less);
 
   // canonical orientation: the bundle whose spaces are lexicographically
-  // larger goes to bra.
-  if (ranges::lexicographical_compare(bra_spaces, ket_spaces, space_less)) {
+  // larger goes to bra (three-way compare, so a full tie is detected without
+  // re-comparing in reverse)
+  const auto space_order = std::lexicographical_compare_three_way(
+      bra_spaces.begin(), bra_spaces.end(), ket_spaces.begin(),
+      ket_spaces.end(), [&cmp](const Index& a, const Index& b) {
+        return cmp.compare_spaces(a, b) <=> 0;
+      });
+  const bool swap = space_order < 0;
+
+  if (swap) {
     t._swap_bra_ket();
+    // Symm: +1, Antisymm: -1
+    sign = static_cast<std::int8_t>(sign * *braket_swap_sign(bks));
   }
+  return sign;
 }
 
 ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  canonicalize_braket(t);
+  const auto braket_sign = canonicalize_braket(t);
 
   const auto ctx = get_default_context_snapshot();
   auto result = this->apply(t, ctx.index_comparer(), ctx.index_pair_comparer());
 
   reset_tags(t);
 
-  return result;
+  return multiply_phase(std::move(result), braket_sign);
 }
 
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  canonicalize_braket(t);
+  const auto braket_sign = canonicalize_braket(t, fold_signed_braket_);
 
   auto result = DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{},
                                                   TensorBlockIndexComparer{});
 
   reset_tags(t);
 
-  return result;
+  return multiply_phase(std::move(result), braket_sign);
 }
 
 }  // namespace sequant

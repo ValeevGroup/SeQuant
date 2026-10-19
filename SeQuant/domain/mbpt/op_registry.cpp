@@ -140,7 +140,9 @@ OpRegistry OpRegistry::clone() const {
 }
 
 bool is_amplitude_tensor(const AbstractTensor& t, const OpRegistry& reg) {
-  const auto label = reg.resolve(strip_adjoint_label(t._label()));
+  std::wstring bare(t._label());
+  split_state_marks(bare);
+  const auto label = reg.resolve(bare);
   if (!label) return false;
   const auto cls = reg.to_class(*label);
   return cls == OpClass::Ex || cls == OpClass::Deex;

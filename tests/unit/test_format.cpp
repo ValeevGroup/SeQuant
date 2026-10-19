@@ -6,6 +6,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cstdint>
 #include <format>
 #include <initializer_list>
 #include <sstream>
@@ -19,7 +20,8 @@ struct LatexOnlyExpr : sequant::Expr {
   sequant::ExprPtr clone() const override {
     return sequant::ex<LatexOnlyExpr>();
   }
-  void adjoint() override {}
+  std::int8_t adjoint() override { return 1; }
+  std::int8_t kconjugate() override { return 1; }
   // stateless; operator== has already matched the type id
   bool static_equal(const sequant::Expr&) const override { return true; }
 };

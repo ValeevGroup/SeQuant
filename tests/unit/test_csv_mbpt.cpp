@@ -144,7 +144,7 @@ inline ExprPtr first_tensor(std::vector<ExprPtr> const& eqs,
           [&](ExprPtr const& x) {
             if (result || !x->is<AbstractTensor>()) return;
             auto const& t = x->as<AbstractTensor>();
-            if (t._label() == label &&
+            if (csv::printed_label(x) == label &&
                 (!with_instance ||
                  std::ranges::any_of(t._slots(), [](Index const& idx) {
                    return idx.basis().has_basis_instance();

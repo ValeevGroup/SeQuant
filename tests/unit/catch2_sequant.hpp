@@ -8,11 +8,13 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <dtl/dtl.hpp>
@@ -25,6 +27,7 @@
 #include <initializer_list>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <sstream>
@@ -34,6 +37,7 @@
 #include <type_traits>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace sequant::tests {
 /// Shared particle-symmetric symmetry pack for the MBPT test TUs, which must
@@ -44,6 +48,27 @@ namespace sequant::tests {
 /// cannot collide with a library symbol.
 inline constexpr TensorSymmetries particle_symmetric{.column =
                                                          ColumnSymmetry::Symm};
+
+/// Declares every space of @p isr real (Field::Real). Over a real basis the
+/// bra/ket exchange of a Hermitian tensor is a plain swap, so an explicit
+/// BraKetSymmetry::Symm/Antisymm (the `S` braket letter) is derivable there
+/// and refused over the default complex basis; see Tensor::resolve_symmetries.
+inline void declare_real_basis(IndexBasisRegistry &isr) {
+  std::vector<std::wstring> keys;
+  for (const auto &s : isr) keys.push_back(s.base_key());
+  for (const auto &k : keys)
+    if (!k.empty()) isr.field(k, Field::Real);
+}
+
+/// Installs, for the lifetime of the returned resetter, a default Context
+/// whose index basis registry is a copy of the current one with every space
+/// declared real (see declare_real_basis()).
+[[nodiscard]] inline auto scoped_real_basis() {
+  auto isr = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
+  declare_real_basis(*isr);
+  return set_scoped_default_context(Context(get_default_context()).set(isr));
+}
 
 /// Sets environment variable @p name to @p value for the lifetime of this
 /// object and restores its previous state (value or absence) on destruction,

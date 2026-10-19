@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_RESULT_HPP
 #define SEQUANT_EVAL_RESULT_HPP
 
+#include <SeQuant/core/eval/canon_transform.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 
 #include <SeQuant/core/algorithm.hpp>
@@ -280,19 +281,35 @@ class Result {
       std::array<std::any, 2> const&) const = 0;
 
   ///
-  /// \brief Take the adjoint (complex-conjugate transpose) of this result.
+  /// \brief Applies a canonicalization transform to this result on
+  /// retrieval: the returned result equals `phase * (conj? elementwise-conj)`
+  /// of this, with slots relabeled per \p ann ({source annot, target annot};
+  /// equal annots = no transposition). The caller handles the trivial
+  /// transform (returns the ResultPtr unchanged, exactly as apply_phase
+  /// short-circuits phase==1). Not pure: only data-bearing results
+  /// implement it; the default throws.
   ///
-  /// Used to evaluate the EvalOp::Adjoint IR node — the unary op that holds a
-  /// bare-label operand and emits T† = conj(T) permuted into the adjoint slot
-  /// order. \p ann is [operand_annot, result_annot] (bra/ket swapped relative
-  /// to the operand); backends with a real numeric type implement this as a
-  /// pure permutation (conj is a no-op) and complex backends apply conj as
-  /// well. Not a pure virtual: only tensor-backed results need it; the
-  /// default throws. Mirrors the slice_mode precedent.
+  [[nodiscard]] virtual ResultPtr apply_transform(
+      CanonTransform /*t*/, std::array<std::any, 2> const& /*ann*/) const {
+    throw detail::unimplemented_method("apply_transform");
+  }
+
   ///
-  [[nodiscard]] virtual ResultPtr adjoint(
-      std::array<std::any, 2> const& /*ann*/) const {
-    throw detail::unimplemented_method("adjoint");
+  /// \brief The real part of this result. Re is a projection (not an
+  /// involution), so unlike the conjugation channels it is served by a
+  /// dedicated IR node (EvalOp::RealPart), not by CanonTransform. Not pure:
+  /// only scalar-backed results need it today (the conjugate-pair fold emits
+  /// Re/Im of fully contracted c-number networks); the default throws.
+  ///
+  [[nodiscard]] virtual ResultPtr real_part() const {
+    throw detail::unimplemented_method("real_part");
+  }
+
+  ///
+  /// \brief The imaginary part of this result; see real_part().
+  ///
+  [[nodiscard]] virtual ResultPtr imag_part() const {
+    throw detail::unimplemented_method("imag_part");
   }
 
   ///
@@ -392,6 +409,7 @@ class Result {
   template <typename T>
   [[nodiscard]] T& get() {
     SEQUANT_ASSERT(has_value());
+    ensure_materialized();
     return *std::any_cast<T>(&value_);
   }
 
@@ -402,10 +420,24 @@ class Result {
   template <typename T>
   [[nodiscard]] T const& get() const {
     SEQUANT_ASSERT(has_value());
+    ensure_materialized();
     return *std::any_cast<const T>(&value_);
   }
 
-  /// @return the size of the object in bytes
+  /// @return whether this result's buffer is _owned by another_ result -- the
+  ///         value is an alias, produced by a transform (phase, conjugation,
+  ///         relabel) that was recorded instead of performed, whether or not
+  ///         anything is still pending (a transform composing to the identity
+  ///         leaves an alias with nothing to apply). Producing one allocates
+  ///         nothing, so a tracer must charge it 0 allocated bytes
+  ///         (size_in_bytes() still reports the value's logical size) and must
+  ///         not count its buffer twice in a working set.
+  [[nodiscard]] virtual bool is_buffer_alias() const { return false; }
+
+  /// @return the size of the object in bytes. For a lazy view (see
+  ///         is_buffer_alias()) this is the _logical_ size of the value it
+  ///         represents, which is the size of the buffer it shares -- not a
+  ///         buffer of its own.
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
 
   /// Diagnostic (analysis-only): force any deferred/asynchronous computation
@@ -423,6 +455,26 @@ class Result {
 
   [[nodiscard]] virtual id_t type_id() const noexcept = 0;
 
+  /// @brief hook for lazily-transformed results: called by get<>() before
+  /// handing out the stored value, so a result that carries a pending
+  /// transform (see e.g. ResultTensorTA::is_view) materializes it here.
+  /// Default: no-op.
+  virtual void ensure_materialized() const {}
+
+  /// @return the stored value _without_ the materialization hook (for a
+  ///         backend's own lazy paths)
+  template <typename T>
+  [[nodiscard]] T const& raw() const {
+    SEQUANT_ASSERT(has_value());
+    return *std::any_cast<const T>(&value_);
+  }
+
+  /// replaces the stored value (used by ensure_materialized overrides)
+  template <typename T>
+  void reset_value(T&& arg) const {
+    value_ = std::make_any<std::decay_t<T>>(std::forward<T>(arg));
+  }
+
   template <typename T>
   [[nodiscard]] static id_t id_for_type() noexcept {
     static id_t id = next_id();
@@ -430,7 +482,11 @@ class Result {
   }
 
  private:
-  std::any value_;
+  /// mutable so that a lazily transformed result can materialize itself on
+  /// first read through a const handle. _Not_ thread-safe: a Result is owned
+  /// by one evaluation (the serial evaluate() stack / cache); concurrent
+  /// get<>() on a pending view is not supported
+  mutable std::any value_;
 
   [[nodiscard]] static id_t next_id() noexcept;
 };
@@ -506,6 +562,34 @@ class ResultScalar final : public Result {
 
   [[nodiscard]] ResultPtr clone() const override {
     return eval_result<ResultScalar<T>>(value());
+  }
+
+  [[nodiscard]] ResultPtr apply_transform(
+      CanonTransform t, std::array<std::any, 2> const&) const override {
+    auto v = value();
+    if constexpr (!std::is_arithmetic_v<T>) {
+      using std::conj;
+      if (t.conj) v = conj(v);
+    }
+    return eval_result<ResultScalar<T>>(v * T(t.phase));
+  }
+
+  [[nodiscard]] ResultPtr real_part() const override {
+    if constexpr (std::is_arithmetic_v<T>) {
+      return eval_result<ResultScalar<T>>(value());
+    } else {
+      using std::real;
+      return eval_result<ResultScalar<T>>(T(real(value())));
+    }
+  }
+
+  [[nodiscard]] ResultPtr imag_part() const override {
+    if constexpr (std::is_arithmetic_v<T>) {
+      return eval_result<ResultScalar<T>>(T{0});
+    } else {
+      using std::imag;
+      return eval_result<ResultScalar<T>>(T(imag(value())));
+    }
   }
 
  private:

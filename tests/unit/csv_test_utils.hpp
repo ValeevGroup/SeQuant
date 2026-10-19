@@ -9,6 +9,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/reserved.hpp>
@@ -22,6 +23,8 @@
 #include <SeQuant/domain/mbpt/op_registry.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
+
+#include "catch2_sequant.hpp"
 
 #include <catch2/matchers/catch_matchers_exception.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -40,6 +43,33 @@ namespace test_csv {
 inline constexpr sequant::IndexBasis::instance_type exchange = 1, coulomb = 2,
                                                     pno_pert = 10;
 }  // namespace test_csv
+
+namespace sequant::tests {
+
+/// Installs, for the lifetime of the returned resetter, the default Context the
+/// CSV-CCSD residuals under tests/unit/data are read against: a copy of the
+/// current one whose registry also holds the PAO basis and density-fitting
+/// spaces those residuals' indices name, with every space declared real --
+/// their tensors carry explicit bra/ket exchange pins, derivable only over a
+/// real basis -- and with dummy indices numbered from 1000000, past the
+/// ordinals the data spells out.
+/// @sa declare_real_basis
+[[nodiscard]] inline auto scoped_csv_ccsd_context() {
+  auto ctx = get_default_context_snapshot();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  if (!ctx.index_basis_registry())
+    throw Exception(
+        "scoped_csv_ccsd_context(): the default Context has no index basis "
+        "registry");
+  auto isr = std::make_shared<IndexBasisRegistry>(*ctx.index_basis_registry());
+  mbpt::add_pao_basis(isr, mbpt::Spin::any);
+  mbpt::add_df_spaces(isr);
+  declare_real_basis(*isr);
+  ctx.set(isr);
+  return set_scoped_default_context(std::move(ctx));
+}
+
+}  // namespace sequant::tests
 
 namespace sequant::tests::csv {
 
@@ -155,6 +185,13 @@ inline sequant::Context csv_cc_context() {
   return csv_cc_context(csv_cc_registry());
 }
 
+/// the label of tensor @p x as printed: a Tensor's carries the marks of its
+/// states (Tensor::decorated_label())
+inline std::wstring printed_label(ExprPtr const& x) {
+  if (x->is<Tensor>()) return x->as<Tensor>().decorated_label();
+  return std::wstring(x->as<AbstractTensor>()._label());
+}
+
 /// every tensor of @p expr labelled @p label
 inline std::vector<AbstractTensor const*> tensors_labelled(
     ExprPtr const& expr, std::wstring_view label) {
@@ -163,7 +200,7 @@ inline std::vector<AbstractTensor const*> tensors_labelled(
       [&](ExprPtr const& x) {
         if (!x->is<AbstractTensor>()) return;
         auto const& t = x->as<AbstractTensor>();
-        if (std::wstring_view(t._label()) == label) result.push_back(&t);
+        if (printed_label(x) == label) result.push_back(&t);
       },
       /* atoms_only = */ true);
   return result;
