@@ -71,56 +71,48 @@ void for_each_index(ExprPtr const& factor, F&& f) {
   }
 }
 
-/// Left-first post-order walk over \p tree that mirrors \c binarize: an inner
-/// node consumes an annotation (calls \p on_node with the ordinals of its
-/// subtree's leaves) iff neither child evaluates to a scalar. A leaf is a
-/// tensor; an inner node is a scalar iff none of its indices is named, i.e.
-/// external to the term or used outside the subtree (the same named-index set
-/// \c binarize canonicalizes the node's network with).
-class NodeWalker {
- public:
-  explicit NodeWalker(std::vector<ExprPtr> const& factors) : factors_(factors) {
-    for (auto const& f : factors_)
-      for_each_index(f, [this](Index const& ix) { ++total_[ix]; });
+/// Left-first post-order walk over \p tree calling \p on_node with the
+/// ordinals of each inner node's subtree leaves; one call per inner node.
+///
+/// Every inner node of a pure tensor product tree is a tensor x tensor node
+/// and owns one annotation. This mirrors the producer exactly: the optimizer
+/// emits #tensors - 1 entries, one per inner node, in this post-order
+/// (single_term.hpp, opt_pure_product and single_term_opt). binarize stamps an
+/// entry only on a node neither of whose children is a scalar
+/// (eval_expr.cpp, binarize(Product) make_prod), and a child is a scalar only
+/// when it is fully contracted with respect to the binarize-time external set
+/// (left_to_right_binarization_indices, utility/indices.hpp, whose
+/// `uncontract` comes from the ResultExpr LHS that a term does not carry).
+/// When that happens with a non-empty node_batch_axes, binarize's
+/// node_counter == node_batch_axes.size() assertion fires; so a valid
+/// annotation vector always has one entry per inner node, and that is the
+/// rule used here.
+template <typename F>
+void walk_nodes(TreeShape const& t, F&& on_node,
+                std::vector<std::size_t>& leaves) {
+  if (t.leaf) {
+    leaves.push_back(*t.leaf);
+    return;
   }
+  std::vector<std::size_t> sub;
+  walk_nodes(*t.left, on_node, sub);
+  walk_nodes(*t.right, on_node, sub);
+  on_node(sub);
+  leaves.insert(leaves.end(), sub.begin(), sub.end());
+}
 
-  template <typename F>
-  void walk(TreeShape const& t, F&& on_node) {
-    std::vector<std::size_t> leaves;
-    walk_impl(t, on_node, leaves);
-  }
+/// number of inner (tensor x tensor) nodes of \p t
+std::size_t count_nodes(TreeShape const& t) {
+  return t.leaf ? 0 : 1 + count_nodes(*t.left) + count_nodes(*t.right);
+}
 
- private:
-  std::vector<ExprPtr> const& factors_;
-  std::map<Index, std::size_t> total_;
-
-  bool is_scalar(std::vector<std::size_t> const& leaves) const {
-    std::map<Index, std::size_t> here;
-    for (auto o : leaves)
-      for_each_index(factors_.at(o), [&here](Index const& ix) { ++here[ix]; });
-    for (auto const& [ix, n] : here) {
-      auto const N = total_.at(ix);
-      if (n < N || N == 1) return false;
-    }
-    return true;
-  }
-
-  /// \return whether the subtree evaluates to a scalar
-  template <typename F>
-  bool walk_impl(TreeShape const& t, F& on_node,
-                 std::vector<std::size_t>& leaves) {
-    if (t.leaf) {
-      leaves.push_back(*t.leaf);
-      return false;
-    }
-    std::vector<std::size_t> sub;
-    bool const ls = walk_impl(*t.left, on_node, sub);
-    bool const rs = walk_impl(*t.right, on_node, sub);
-    if (!ls && !rs) on_node(sub);
-    leaves.insert(leaves.end(), sub.begin(), sub.end());
-    return is_scalar(sub);
-  }
-};
+[[noreturn]] void fail_count(std::string const& key, std::size_t n,
+                             std::size_t k) {
+  fail(key, std::to_string(n) + " annotations supplied but the tree has " +
+                std::to_string(k) +
+                " tensor-times-tensor nodes (one annotation per node, or "
+                "none at all)");
+}
 
 ModeKind to_kind(BatchModeType t) {
   return t == BatchModeType::Contracted ? ModeKind::Contracted
@@ -229,16 +221,20 @@ TermRecord record_term(ExprPtr const& canonical, ExprPtr const& optimized,
   for (bool u : used)
     if (!u) fail(rec.key, "optimized output does not use every factor");
 
+  // an empty annotation vector (non-batched objective) records the tree only
+  if (nodes.empty()) return rec;
+  if (nodes.size() != count_nodes(*rec.tree))
+    fail_count(rec.key, nodes.size(), count_nodes(*rec.tree));
   std::size_t k = 0;
-  NodeWalker(factors).walk(*rec.tree, [&](std::vector<std::size_t> const&) {
-    if (k >= nodes.size())
-      fail(rec.key, "fewer annotations than contraction nodes");
-    auto const& n = nodes[k++];
-    rec.nodes.push_back(NodeAnnotationRecord{
-        to_records(n.axes), to_records(n.opened_here), n.order_aware});
-  });
-  if (k != nodes.size())
-    fail(rec.key, "more annotations than contraction nodes");
+  std::vector<std::size_t> all;
+  walk_nodes(
+      *rec.tree,
+      [&](std::vector<std::size_t> const&) {
+        auto const& n = nodes[k++];
+        rec.nodes.push_back(NodeAnnotationRecord{
+            to_records(n.axes), to_records(n.opened_here), n.order_aware});
+      },
+      all);
   return rec;
 }
 
@@ -295,11 +291,16 @@ PinnedTerm rebuild_pinned_term(TermRecord const& rec,
     }
     return out;
   };
+  // a record without node annotations (non-batched objective) rebuilds the
+  // tree only
+  if (rec.nodes.empty()) return result;
+  if (rec.nodes.size() != count_nodes(*rec.tree))
+    fail_count(rec.key, rec.nodes.size(), count_nodes(*rec.tree));
   std::size_t k = 0;
-  NodeWalker(factors).walk(
-      *rec.tree, [&](std::vector<std::size_t> const& leaves) {
-        if (k >= rec.nodes.size())
-          fail(rec.key, "fewer node records than contraction nodes");
+  std::vector<std::size_t> all;
+  walk_nodes(
+      *rec.tree,
+      [&](std::vector<std::size_t> const& leaves) {
         std::map<std::string, Index> by_label;
         for (auto o : leaves)
           for_each_index(factors[o], [&by_label](Index const& ix) {
@@ -312,9 +313,8 @@ PinnedTerm rebuild_pinned_term(TermRecord const& rec,
         ann.order_aware = n.order_aware;
         result.nodes.push_back(std::move(ann));
         ++k;
-      });
-  if (k != rec.nodes.size())
-    fail(rec.key, "more node records than contraction nodes");
+      },
+      all);
   return result;
 }
 

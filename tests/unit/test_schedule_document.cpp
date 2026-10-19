@@ -409,3 +409,111 @@ TEST_CASE("rebuild_pinned_term rejects foreign factors and unknown axis labels",
   REQUIRE_THROWS_WITH(rebuild_pinned_term(bad, canon_a),
                       ContainsSubstring("z_9"));
 }
+
+TEST_CASE(
+    "record_term gives every inner node of a pure tensor tree one annotation",
+    "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  // i_2 is contracted between X and Y only: the (X Y) subtree is fully
+  // contracted unless binarize is told i_2 is external; the optimizer still
+  // emits one annotation per inner node
+  auto canon = canonical_term(pin_parse(L"X{;;i_2} * Y{;;i_2} * Z{a_1;i_1}"));
+  REQUIRE(canonical_factors(canon).size() == 3);
+  auto [optimized, annotations] = pin_optimize(canon);
+  REQUIRE(annotations.size() == 2);
+  auto rec = record_term(canon, optimized, annotations);
+  REQUIRE(rec.nodes.size() == 2);
+  auto pinned = rebuild_pinned_term(rec, canon);
+  REQUIRE(*pinned.expr == *optimized);
+  REQUIRE(pinned.nodes.size() == 2);
+  for (std::size_t k = 0; k < annotations.size(); ++k)
+    REQUIRE(pinned.nodes[k].axes == annotations[k].axes);
+}
+
+TEST_CASE("record_term accepts an empty annotation vector",
+          "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  auto canon = canonical_term(
+      pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseFLOPs;
+  opts.idx_to_extent = pin_extent;
+  opts.term_batch_axes = axes_map;
+  auto optimized = sequant::optimize(canon, opts);
+  sequant::container::vector<sequant::NodeBatchAnnotation> annotations;
+  if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+    annotations = it->second;
+  REQUIRE(annotations.empty());
+  auto rec = record_term(canon, optimized, annotations);
+  REQUIRE(rec.tree.has_value());
+  REQUIRE(!rec.tree->leaf);
+  REQUIRE(rec.nodes.empty());
+  auto pinned = rebuild_pinned_term(rec, canon);
+  REQUIRE(*pinned.expr == *optimized);
+  REQUIRE(pinned.nodes.empty());
+}
+
+TEST_CASE(
+    "schedule pin rejects variables, bad trees and miscounted annotations",
+    "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  using Catch::Matchers::ContainsSubstring;
+
+  SECTION("a Variable factor") {
+    auto canon =
+        canonical_term(sequant::ex<sequant::Product>(sequant::ExprPtrList{
+            sequant::ex<sequant::Variable>(L"x"), pin_parse(L"f{i_1;a_1}"),
+            pin_parse(L"t{a_1;i_2}")}));
+    REQUIRE(canon->is<sequant::Product>());
+    REQUIRE_THROWS_WITH(record_term(canon, canon, {}),
+                        ContainsSubstring("only tensor products"));
+    sequant::eval::schedule::TermRecord rec;
+    rec.key = term_key(canon);
+    rec.scalar = "1";
+    REQUIRE_THROWS_WITH(rebuild_pinned_term(rec, canon),
+                        ContainsSubstring("only tensor products"));
+  }
+
+  auto canon = canonical_term(
+      pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
+  auto [optimized, annotations] = pin_optimize(canon);
+  auto rec = record_term(canon, optimized, annotations);
+  REQUIRE(rec.nodes.size() == 2);
+
+  SECTION("a tree that uses an ordinal twice") {
+    auto bad = rec;
+    // replace the first leaf found by the ordinal of another leaf
+    std::vector<sequant::eval::schedule::TreeShape*> leaves;
+    auto collect = [&](auto&& self,
+                       sequant::eval::schedule::TreeShape& t) -> void {
+      if (t.leaf) {
+        leaves.push_back(&t);
+        return;
+      }
+      self(self, *t.left);
+      self(self, *t.right);
+    };
+    collect(collect, *bad.tree);
+    REQUIRE(leaves.size() == 3);
+    leaves[0]->leaf = leaves[1]->leaf;
+    REQUIRE_THROWS_WITH(rebuild_pinned_term(bad, canon),
+                        ContainsSubstring(rec.key) &&
+                            ContainsSubstring("out of range or repeated"));
+  }
+
+  SECTION("an annotation count that does not match the tree") {
+    auto extra = annotations;
+    extra.emplace_back();
+    REQUIRE_THROWS_WITH(record_term(canon, optimized, extra),
+                        ContainsSubstring("3 annotations supplied") &&
+                            ContainsSubstring("2 tensor-times-tensor nodes"));
+    auto bad = rec;
+    bad.nodes.pop_back();
+    REQUIRE_THROWS_WITH(rebuild_pinned_term(bad, canon),
+                        ContainsSubstring(rec.key) &&
+                            ContainsSubstring("1 annotations supplied"));
+  }
+}
