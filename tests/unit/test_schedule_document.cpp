@@ -2,8 +2,14 @@
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+#include <SeQuant/core/eval/legality.hpp>
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
+#include <SeQuant/core/eval/ordered_schedule.hpp>
+#include <SeQuant/core/eval/peak_profile.hpp>
+#include <SeQuant/core/eval/schedule_dag_record.hpp>
 #include <SeQuant/core/eval/schedule_document.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -18,10 +24,13 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -896,4 +905,195 @@ TEST_CASE("check_fingerprint names every differing field",
   REQUIRE_THROWS_WITH(
       check_fingerprint(a, live),
       ContainsSubstring("fingerprint.context.strict_braket_symmetry"));
+}
+
+namespace {
+
+/// the pipeline of record_root -> binarize -> compute_dag_boulevard ->
+/// analyze_legality -> build_ordered_schedule (MPQC's driver shape), over one
+/// tree per root
+struct DagFixture {
+  std::vector<sequant::eval::dryrun::EvalNodeDryRun> forest;
+  std::vector<RootRecord> roots;
+  sequant::eval::RichSchedule rich;
+  sequant::eval::LegalitySchedule legality;
+  sequant::eval::OrderedSchedule ordered;
+};
+
+DagFixture dag_fixture(
+    std::vector<std::pair<std::string, sequant::ExprPtr>> const& roots,
+    sequant::BatchPolicy const& policy) {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  DagFixture fx;
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = pin_extent;
+  opts.batch_policy = policy;
+  opts.term_batch_axes = std::make_shared<AxesMap>();
+  for (auto const& [label, expr] : roots) {
+    auto rr = sequant::opt::schedule::record_root(label, expr, opts);
+    sequant::BinarizationOptions bopts;
+    if (auto it = opts.term_batch_axes->find(rr.optimized.get());
+        it != opts.term_batch_axes->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    fx.forest.push_back(
+        sequant::binarize<EvalExprDryRun>(rr.optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    fx.roots.push_back(std::move(rr.record));
+  }
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  fx.rich = sequant::eval::compute_dag_boulevard(fx.forest, cm,
+                                                 policy.batch_target_size);
+  fx.legality = sequant::eval::analyze_legality(fx.rich, fx.forest, policy);
+  fx.ordered =
+      sequant::eval::build_ordered_schedule(fx.rich, fx.legality, policy, {});
+  return fx;
+}
+
+/// occupied external modes batchable, nothing contracted; slices at any size
+sequant::BatchPolicy external_occ_policy() {
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  policy.batch_target_size = [](sequant::Index const&) -> std::size_t {
+    return 2;
+  };
+  policy.batch_spectator_indices = true;
+  policy.peak_threshold = 1;
+  return policy;
+}
+
+/// two roots sharing X = g*t; R1 contracts X's ket occ, R2 its bra occ, so
+/// each root can batch X only on the other one
+DagFixture two_root_fixture() {
+  return dag_fixture(
+      {{"R1",
+        session_sum({L"g{i_1;a_1} * t{a_1;i_2} * f{i_2;i_3}", L"h{i_1;i_3}"})},
+       {"R2",
+        session_sum({L"g{i_1;a_1} * t{a_1;i_2} * f{i_3;i_1}", L"h{i_3;i_2}"})}},
+      external_occ_policy());
+}
+
+/// the products of g and t (the X of the fixture), by id
+std::vector<ValueRecord> x_values(DagRecord const& dag) {
+  std::vector<ValueRecord> xs;
+  for (auto const& v : dag.values) {
+    auto const eq = v.expr.find(" = ");
+    if (v.leaf || eq == std::string::npos) continue;
+    auto const rhs = v.expr.substr(eq + 3);
+    if ((rhs.starts_with("g") && rhs.find(" * t") != std::string::npos) ||
+        (rhs.starts_with("t") && rhs.find(" * g") != std::string::npos))
+      xs.push_back(v);
+  }
+  std::ranges::sort(xs, {}, &ValueRecord::id);
+  return xs;
+}
+
+Document doc_with(std::vector<RootRecord> const& roots, DagRecord dag) {
+  Document d;
+  for (auto const& r : roots) d.fingerprint.roots.push_back(r.label);
+  d.roots = roots;
+  d.dag = std::move(dag);
+  return d;
+}
+
+}  // namespace
+
+TEST_CASE(
+    "record_dag gives a node sliced by two loops two values with each other "
+    "as siblings",
+    "[schedule-document]") {
+  auto const fx = two_root_fixture();
+  auto const dag =
+      record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
+  auto const xs = x_values(dag);
+  REQUIRE(xs.size() == 2);
+  REQUIRE(xs[0].siblings == std::vector<std::string>{xs[1].id});
+  REQUIRE(xs[1].siblings == std::vector<std::string>{xs[0].id});
+  REQUIRE(xs[0].home_block != xs[1].home_block);
+  for (auto const& v : xs) REQUIRE(v.home_modes.size() == 1);  // neither whole
+  REQUIRE(dag.blocks[0].kind == "root");
+  REQUIRE(std::ranges::count_if(dag.blocks, [](auto const& b) {
+            return b.kind == "external";
+          }) == 2);
+  // both roots are two-summand Sums: one partial sum each, the root itself
+  std::set<std::string> ids;
+  for (auto const& v : dag.values) ids.insert(v.id);
+  REQUIRE(ids.count("R1+1") == 1);
+  REQUIRE(ids.count("R2+1") == 1);
+  REQUIRE(!dag.loops.empty());
+}
+
+TEST_CASE("record_dag ids resolve for single-summand roots and scaled terms",
+          "[schedule-document]") {
+  auto const fx = dag_fixture(
+      {{"R1", pin_parse(L"1/2 * g{i_1;a_1} * t{a_1;i_2} * f{i_2;i_3}")},
+       {"R2", pin_parse(L"g{i_1;a_1} * t{a_1;i_2} * f{i_2;i_3}")}},
+      session_opts().batch_policy);
+  auto const dag =
+      record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
+  REQUIRE(fx.roots.size() == 2);
+  auto const& scaled = fx.roots[0].terms.at(0).key;
+  auto const& plain = fx.roots[1].terms.at(0).key;
+  REQUIRE(scaled != plain);
+
+  std::size_t nscale = 0;
+  for (auto const& v : dag.values) {
+    REQUIRE(!v.id.starts_with("R1+"));
+    REQUIRE(!v.id.starts_with("R2+"));
+    if (v.id.ends_with("#scale")) {
+      ++nscale;
+      REQUIRE(v.id == scaled + "#scale");
+    }
+  }
+  REQUIRE(nscale == 1);
+
+  // the scaled term's tree ordinals are the plain term's: drop the occurrences
+  // of the scale node and of the Constant leaf it multiplies by
+  std::map<std::string, std::set<std::size_t>> ordinals;
+  for (auto const& v : dag.values)
+    for (auto const& o : v.occurrences) ordinals[o.term].insert(o.node);
+  std::set<std::size_t> extra;
+  for (auto const& v : dag.values)
+    if (v.id == scaled + "#scale" || v.id == scaled + "#scalar")
+      for (auto const& o : v.occurrences)
+        if (o.term == scaled) extra.insert(o.node);
+  REQUIRE(extra.size() == 2);
+  for (auto n : extra) REQUIRE(ordinals[scaled].erase(n) == 1);
+  REQUIRE(ordinals[scaled] == ordinals[plain]);
+  REQUIRE(ordinals[plain] == std::set<std::size_t>{0, 1, 2, 3, 4});
+}
+
+TEST_CASE("record_dag is deterministic and compare sees no difference",
+          "[schedule-document]") {
+  auto const fx = two_root_fixture();
+  auto const dag1 =
+      record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
+  auto const dag2 =
+      record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
+  REQUIRE(compare(doc_with(fx.roots, dag1), doc_with(fx.roots, dag2)).empty());
+  REQUIRE(to_json(doc_with(fx.roots, dag1)) ==
+          to_json(doc_with(fx.roots, dag2)));
+
+  std::set<std::string> ids;
+  for (auto const& v : dag1.values) REQUIRE(ids.insert(v.id).second);
+  REQUIRE(ids.size() == fx.rich.cells.size());
+  for (auto const& e : dag1.edges) {
+    REQUIRE(ids.count(e.from) == 1);
+    REQUIRE(ids.count(e.to) == 1);
+  }
+  for (auto const& b : dag1.blocks) {
+    for (auto const& s : b.steps) {
+      REQUIRE(s.build.has_value() != s.block.has_value());
+      if (s.build) REQUIRE(ids.count(*s.build) == 1);
+      if (s.block) REQUIRE(*s.block < dag1.blocks.size());
+    }
+    for (auto const& [id, kind] : b.outputs) REQUIRE(ids.count(id) == 1);
+  }
 }

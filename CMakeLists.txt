@@ -517,6 +517,7 @@ set(SeQuant_eval_src
         SeQuant/core/eval/peak_profile.hpp
         SeQuant/core/eval/result.cpp
         SeQuant/core/eval/result.hpp
+        SeQuant/core/eval/schedule_dag_record.hpp
         SeQuant/core/eval/schedule_document.cpp
         SeQuant/core/eval/schedule_document.hpp
         SeQuant/core/eval/schedule_dump.hpp
