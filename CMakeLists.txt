@@ -677,7 +677,11 @@ target_compile_features(SeQuant-symb INTERFACE "cxx_std_20")
 # SeQuant-eval: backend-agnostic evaluation framework
 ##########################
 sequant_add_library(eval ${SeQuant_eval_src})
-target_link_libraries(SeQuant-eval PUBLIC SeQuant-symb PRIVATE SeQuant-bliss nlohmann_json::nlohmann_json)
+target_link_libraries(SeQuant-eval PUBLIC SeQuant-symb PRIVATE SeQuant-bliss)
+# nlohmann/json is header-only and used only in schedule_document.cpp: take its
+# include dirs without linking, so it does not leak into the exported target
+target_include_directories(SeQuant-eval SYSTEM PRIVATE
+    $<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>)
 if (SEQUANT_EVAL_TRACE)
     target_compile_definitions(SeQuant-eval PUBLIC SEQUANT_EVAL_TRACE=1)
 endif()

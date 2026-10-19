@@ -105,3 +105,108 @@ TEST_CASE("schedule document compare reports one difference per changed field",
   d3.producer_version = "other";
   REQUIRE(compare(d, d3).empty());
 }
+
+namespace {
+
+Document make_dag_doc() {
+  Document d = make_doc();
+  DagRecord dag;
+  for (std::string id : {"v0", "v1"}) {
+    ValueRecord v;
+    v.id = id;
+    v.expr = "g*t";
+    v.hash = "h" + id;
+    v.key = "k" + id;
+    v.leaf = id == "v0";
+    v.result_modes = {"i_1"};
+    v.home_modes = {"i_1"};
+    v.enclosing_modes = {"a_1"};
+    v.divergent_modes = {"a_1"};
+    v.home_block = 1;
+    v.home_depth = 1;
+    v.persistent = true;
+    v.first_use = 3;
+    v.last_use = 5;
+    v.build_site = {"occ"};
+    v.home_floor = {"occ"};
+    v.forced_split_axes = {"aux"};
+    v.per_axis = {{"i_1", "LoopLocal"}, {"a_1", "Reduction"}};
+    OccurrenceRecord o;
+    o.term = "K";
+    o.node = 0;
+    o.consumer = 1;
+    o.home = {"i_1"};
+    o.enclosing = {"a_1"};
+    o.opens = {{"i_1", ModeKind::External}};
+    v.occurrences = {o};
+    v.siblings = {id == "v0" ? "v1" : "v0"};
+    dag.values.push_back(std::move(v));
+  }
+  BlockRecord root;
+  root.id = 0;
+  root.kind = "root";
+  root.steps = {{std::string("v0"), std::nullopt}, {std::nullopt, 1}};
+  BlockRecord inner;
+  inner.id = 1;
+  inner.parent = 0;
+  inner.axis = "i_1";
+  inner.kind = "external";
+  inner.depth = 1;
+  inner.slot = 2;
+  inner.altitude = 1;
+  inner.pass = 1;
+  inner.steps = {{std::string("v1"), std::nullopt}};
+  inner.outputs = {{"v1", "AccumulateSum"}};
+  dag.blocks = {root, inner};
+  LoopRecord l0{"occ", 0, "external"}, l1{"aux", 1, "contracted"};
+  dag.loops = {l0, l1};
+  dag.loop_order = {{l0, l1, 2}};
+  dag.edges = {{"v0", "v1", true}};
+  d.dag = std::move(dag);
+  RunRecord r;
+  r.extents = {{"occ", 10}};
+  r.batch_targets = {{"occ", 5}};
+  r.n_batches = {{1, 2}};
+  r.footprint = {{"v0", 100}};
+  r.builds = {{"v1", 4}};
+  r.planner = {{"peak", "1e9"}};
+  d.run = std::move(r);
+  return d;
+}
+
+}  // namespace
+
+TEST_CASE("schedule document round-trips the dag and run sections",
+          "[schedule-document]") {
+  auto const d = make_dag_doc();
+  auto const back = from_json(to_json(d));
+  REQUIRE(compare(d, back).empty());
+  REQUIRE(back.run.has_value());
+  REQUIRE(back.run->n_batches.at(1) == 2);
+  REQUIRE(back.run->planner.at("peak") == "1e9");
+  REQUIRE(back.dag->values[0].occurrences[0].consumer == 1);
+  REQUIRE(back.dag->blocks[1].outputs[0].second == "AccumulateSum");
+  REQUIRE(std::get<2>(back.dag->loop_order[0]) == 2);
+  REQUIRE(summary_line(d) == "roots=1 terms=1 values=2 blocks=2 depth=1");
+}
+
+TEST_CASE("schedule document compare covers the dag", "[schedule-document]") {
+  auto const d = make_dag_doc();
+  auto d2 = d;
+  d2.dag->values[1].home_block = 0;
+  auto diffs = compare(d, d2);
+  REQUIRE(diffs.size() == 1);
+  REQUIRE(diffs[0].path == "dag.values[v1].home_block");
+
+  auto d3 = d;
+  d3.dag->edges.push_back({"v1", "v0", false});
+  diffs = compare(d, d3);
+  REQUIRE(diffs.size() == 1);
+  REQUIRE(diffs[0].path.rfind("dag.edges", 0) == 0);
+
+  // ignored value fields
+  auto d4 = d;
+  d4.dag->values[0].hash = "other";
+  d4.dag->values[0].last_use = 99;
+  REQUIRE(compare(d, d4).empty());
+}
