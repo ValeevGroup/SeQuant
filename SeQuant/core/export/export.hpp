@@ -151,7 +151,12 @@ class GenerationVisitor {
       m_generator.create(expr, zeroCreate, m_ctx);
     } else if (load) {
       m_generator.load(expr, zeroLoad, m_ctx);
-    } else if (zeroReuse) {
+    } else if (!isLeaf && zeroReuse) {
+      // Only a result being reused to hold a fresh result is zeroed before
+      // re-accumulating into it. A leaf is a pure read: zeroing it here would
+      // wipe its value right before it is read, which is wrong whenever the
+      // same leaf appears more than once in a computation (e.g. a tensor
+      // contracted with itself).
       SEQUANT_ASSERT(alreadyLoaded);
       m_generator.set_to_zero(expr, m_ctx);
     }
