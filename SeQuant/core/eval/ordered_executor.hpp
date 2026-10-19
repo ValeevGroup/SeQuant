@@ -14,12 +14,14 @@
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/result.hpp>
+#include <SeQuant/core/eval/schedule_document.hpp>
 #include <SeQuant/core/eval/value_node_map.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <format>
 #include <functional>
@@ -615,6 +617,58 @@ template <typename ValueMap, typename Rich>
 }
 
 ///
+/// \brief Fills a \c schedule::RunRecord from one ordered run (wet or dry):
+/// the size-dependent \c run section of a schedule document.
+///
+/// \details Constructed only when the caller asks for a record, so a run
+/// without one pays a null check per production and nothing else. Fills
+/// - \c n_batches: per non-root \c ScopeBlock, its loop's batch count (the
+///   same \c n_batches_of the cell table's lives are computed from), keyed by
+///   the block's preorder index over \c ordered.root -- \c record_dag's block
+///   ids;
+/// - \c builds: per value, the productions executed (\c compute_cell calls:
+///   a \c BuildStep, a root-scope build, or an Assemble's implicit per-batch
+///   build), so a value built once per batch of an N-batch block counts N; a
+///   production skipped by cache-halt or \c produce_if_absent reuse does not
+///   count;
+/// - \c footprint: per value, the largest form a production of it left in
+///   the registry, as \c Result::size_in_bytes reports it. No
+///   \c dryrun::CostModel is reachable here (so \c cell_footprint cannot be
+///   called) and the cell table carries no sizes; the measured size is what
+///   \c cell_footprint would price -- a dry-run result reports
+///   \c CostModel::memsize over its realized (batch-narrowed) extents -- and
+///   on a wet run it is the backend's actual size. Bytes, like \c memsize.
+/// \c extents, \c batch_targets and \c planner are the caller's.
+///
+/// \p value_id_of maps an engine value id (an index into \c rich.cells) to
+/// the document's value id; empty means the engine id in decimal.
+struct OrderedRunRecorder {
+  schedule::RunRecord& run;
+  std::function<std::string(std::size_t)> const& value_id_of;
+
+  void record_blocks(
+      ScopeBlock const& root,
+      std::function<std::size_t(LoopKey const&)> const& n_batches_of) {
+    std::size_t next = 0;
+    auto const visit = [&](auto const& self, ScopeBlock const& b) -> void {
+      if (std::size_t const id = next++; id != 0)
+        run.n_batches[id] = n_batches_of(b.level.key());
+      for (Step const& s : b.steps)
+        if (auto const* c = std::get_if<ScopeBlock>(&s.value)) self(self, *c);
+    };
+    visit(visit, root);
+  }
+
+  /// One executed production of value \p vid, which left \p r in its cell.
+  void built(std::size_t vid, ResultPtr const& r) {
+    std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
+    ++run.builds[id];
+    auto& f = run.footprint[id];
+    if (r) f = std::max(f, r->size_in_bytes());
+  }
+};
+
+///
 /// \brief Realize one \c ScopeBlock's batch loop against \p parent_cache,
 /// executed entirely on the cell table.
 ///
@@ -670,6 +724,8 @@ template <typename ValueMap, typename Rich>
 ///        declared lives.
 /// \param built The run-completeness ledger, marked at the exact site each
 ///        scheduled value is produced (or deliberately skipped).
+/// \param recorder The run record being filled, or null (see \c
+///        OrderedRunRecorder).
 ///
 template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC,
           typename ScopeGuardFactory>
@@ -683,7 +739,7 @@ void run_ordered_contracted_block(
     std::function<bool(node_t const&)> const& is_volatile,
     CellTable const* table, CellRegistry& registry, CellReadResolver& resolver,
     container::vector<char> const& skip, ForgoPlan const& forgo_plan,
-    ScopeGuardFactory const& make_scope_guard) {
+    ScopeGuardFactory const& make_scope_guard, OrderedRunRecorder* recorder) {
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
   // Threaded for symmetry with the entry point and for the recursion below;
@@ -963,6 +1019,8 @@ void run_ordered_contracted_block(
             canonical(build_node,
                       compute_cell<EvalTrace>(build_node, *build_cell, resolver,
                                               leaf_evaluator, bs_cache, ctx)));
+        if (recorder)
+          recorder->built(build->value_id, registry.peek(*build_cell));
         // Diagnostic (SEQUANT_DUMP_ROOT_NORMS): root-scope builds by value
         // hash, for cross-schedule comparison of term values.
         if (static bool const dump_build_norms =
@@ -977,7 +1035,7 @@ void run_ordered_contracted_block(
         run_ordered_contracted_block<EvalTrace>(
             *child, vmap, rich, ordered, leaf_evaluator, bs_cache, target, ctx,
             built, is_volatile, table, registry, resolver, vskip, forgo_plan,
-            make_scope_guard);
+            make_scope_guard, recorder);
       } else {
         // The Step variant has exactly BuildStep/ScopeBlock alternatives;
         // a valueless-by-exception or future third alternative is a schedule
@@ -1042,6 +1100,7 @@ void run_ordered_contracted_block(
                      canonical(part_node, compute_cell<EvalTrace>(
                                               part_node, src, resolver,
                                               leaf_evaluator, bs_cache, ctx)));
+        if (recorder) recorder->built(vid, registry.peek(src));
       }
       // The read the Assemble declares of its source (the table charged the
       // source +1 life for it): spending it here is what lets the source's
@@ -1268,7 +1327,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     std::function<std::size_t(Index const&)> const& target,
     [[maybe_unused]] ScopeGuardFactory const& make_scope_guard = {},
     std::function<bool(std::ranges::range_value_t<Nodes> const&)> const&
-        is_volatile = {}) {
+        is_volatile = {},
+    schedule::RunRecord* run_record = nullptr,
+    std::function<std::string(std::size_t)> const& value_id_of = {}) {
   using node_t = std::ranges::range_value_t<Nodes>;
   static_assert(std::is_same_v<node_t, N>,
                 "the forest's node type and the cache's node type must match");
@@ -1329,6 +1390,14 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
                     " unresolved sliced positions (see CellTable::unresolved)");
   ordered_last_cell_table_size_slot() = cell_table.cells.size();
   ordered_last_block_skips_slot() = 0;
+
+  // The optional run record (see OrderedRunRecorder): block batch counts now,
+  // per-value builds and footprints as the walk below produces them.
+  std::optional<OrderedRunRecorder> recorder;
+  if (run_record) {
+    recorder.emplace(*run_record, value_id_of);
+    recorder->record_blocks(ordered.root, cell_table_inputs.n_batches_of);
+  }
 
   // The runtime side of the table -- CellRegistry (the owner of every result,
   // with its remaining life) and CellReadResolver (the operand reads
@@ -1545,6 +1614,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
         // the combine below instead of a crash in the phase conversion.
         registry.set(*root_cell,
                      (!r || ph == 1) ? std::move(r) : r->mult_by_phase(ph));
+        if (recorder) recorder->built(vid, registry.peek(*root_cell));
         // Diagnostic (SEQUANT_DUMP_ROOT_NORMS): root-scope builds by value
         // hash, for cross-schedule comparison of term values.
         if (static bool const dump_build_norms =
@@ -1558,7 +1628,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       run_ordered_contracted_block<EvalTrace>(
           *block, vmap, rich, ordered, leaf_evaluator, cache, target, root_ectx,
           built, is_volatile, &cell_table, registry, resolver, skip, forgo_plan,
-          make_scope_guard);
+          make_scope_guard, recorder ? &*recorder : nullptr);
     } else {
       // The Step variant has exactly BuildStep/ScopeBlock alternatives; any
       // other state is a schedule this executor cannot interpret. Refusal,
@@ -1756,6 +1826,12 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
 ///        detail::run_ordered_contracted_block's recursion but not consulted
 ///        here: classifying a home value volatile-vs-persistent via
 ///        \c subtree_any at the homing sites is left to the caller.
+/// \param run_record Optional: when non-null, filled with this run's block
+///        batch counts, per-value builds and footprints (see \c
+///        detail::OrderedRunRecorder); its \c extents, \c batch_targets and
+///        \c planner are left to the caller.
+/// \param value_id_of Maps an engine value id (index into \p rich.cells) to
+///        the record's value id (\c record_dag's); empty means decimal.
 /// \return The summed, per-root-permuted result, as forest descent itself
 ///         would produce for the same (unbatched) \p forest.
 ///
@@ -1770,7 +1846,9 @@ ResultPtr evaluate_ordered_schedule(
     std::function<std::size_t(Index const&)> const& target,
     [[maybe_unused]] ScopeGuardFactory const& make_scope_guard = {},
     std::function<bool(std::ranges::range_value_t<Nodes> const&)> const&
-        is_volatile = {}) {
+        is_volatile = {},
+    schedule::RunRecord* run_record = nullptr,
+    std::function<std::string(std::size_t)> const& value_id_of = {}) {
   using node_t = std::ranges::range_value_t<Nodes>;
 
   // The schedule walk itself (plus the cell table
@@ -1782,7 +1860,7 @@ ResultPtr evaluate_ordered_schedule(
   container::svector<ResultPtr> pre_results =
       detail::run_ordered_schedule_pre_results<EvalTrace>(
           forest, ordered, rich, leaf_evaluator, cache, target,
-          make_scope_guard, is_volatile);
+          make_scope_guard, is_volatile, run_record, value_id_of);
 
   // Pointers, for the reason combine_forest_roots' own doc gives: pushing
   // nodes deep-copied every root's whole subtree. `forest` is this call's
@@ -1837,6 +1915,7 @@ ResultPtr evaluate_ordered_schedule(
 /// one-root forest -- the regression anchor: \c evaluate_ordered_multiroot(
 /// {r}, ...) == { evaluate_ordered_schedule({r}, ...) }.
 ///
+/// \param run_record, value_id_of As for \c evaluate_ordered_schedule.
 /// \return One \c ResultPtr per element of \p roots, in \p roots' own order,
 ///         each permuted to its own \p layouts entry -- not summed together.
 ///
@@ -1851,13 +1930,15 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     std::function<std::size_t(Index const&)> const& target,
     [[maybe_unused]] ScopeGuardFactory const& make_scope_guard = {},
     std::function<bool(std::ranges::range_value_t<Nodes> const&)> const&
-        is_volatile = {}) {
+        is_volatile = {},
+    schedule::RunRecord* run_record = nullptr,
+    std::function<std::string(std::size_t)> const& value_id_of = {}) {
   using node_t = std::ranges::range_value_t<Nodes>;
 
   container::svector<ResultPtr> pre_results =
       detail::run_ordered_schedule_pre_results<EvalTrace>(
           roots, ordered, rich, leaf_evaluator, cache, target, make_scope_guard,
-          is_volatile);
+          is_volatile, run_record, value_id_of);
 
   // Pointers, same reason -- and here the copies were doubled: once into this
   // vector, once into the singleton passed to each combine below. `roots` is

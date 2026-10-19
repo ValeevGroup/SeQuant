@@ -4,13 +4,17 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+#include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/legality.hpp>
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
+#include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/schedule_dag_record.hpp>
 #include <SeQuant/core/eval/schedule_document.hpp>
+#include <SeQuant/core/eval/schedule_dump.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -24,6 +28,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -1152,4 +1157,103 @@ TEST_CASE("record_dag names an adjoint factor like a leaf, its operands below",
     if (id.starts_with(adj + "#") && (id.ends_with("/0") || id.ends_with("/1")))
       ++nsub;
   REQUIRE(nsub == 2);
+}
+
+namespace {
+
+/// the two-root fixture's sizes: the external occ extent and its batch target
+/// (pin_extent, external_occ_policy)
+constexpr std::size_t occ_extent = 10;
+constexpr std::size_t occ_target = 2;
+
+/// dry-run evaluation of a DagFixture through the ordered multi-root entry
+/// point, as the ordered executor tests drive it (fresh cache each call)
+sequant::container::svector<sequant::ResultPtr> dry_run(
+    DagFixture const& fx, RunRecord* run = nullptr,
+    std::function<std::string(std::size_t)> const& id_of = {}) {
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", occ_extent}, {L"a", 100}};
+  auto const cm =
+      std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+  sequant::eval::dryrun::DryRunLeafEvaluator const leaf_eval{cm};
+  auto cache = sequant::CacheManager<EvalNodeDryRun>::empty();
+  auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  cache.set_array_ops(&aops);
+  std::function<std::size_t(sequant::Index const&)> const target =
+      external_occ_policy().batch_target_size;
+  return sequant::eval::evaluate_ordered_multiroot(
+      fx.forest, fx.ordered, fx.rich,
+      sequant::container::svector<std::string>(fx.forest.size()), leaf_eval,
+      cache, target, {}, {}, run, id_of);
+}
+
+}  // namespace
+
+TEST_CASE("ordered dry run fills the run record", "[schedule-document]") {
+  auto const fx = two_root_fixture();
+  auto const dag =
+      record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
+  // record_dag keeps one value record per engine value, in value order
+  REQUIRE(dag.values.size() == fx.rich.cells.size());
+  auto const id_of = [&](std::size_t vid) { return dag.values.at(vid).id; };
+
+  RunRecord run;
+  auto const results = dry_run(fx, &run, id_of);
+  REQUIRE(results.size() == 2);
+
+  REQUIRE(run.n_batches.size() == 2);  // two external blocks
+  // each external block loops over occ: ceil(extent(occ) / target(occ))
+  for (auto const& [blk, n] : run.n_batches) {
+    REQUIRE(blk < dag.blocks.size());
+    REQUIRE(dag.blocks[blk].kind == "external");
+    REQUIRE(n == (occ_extent + occ_target - 1) / occ_target);
+  }
+  auto const xs = x_values(dag);
+  REQUIRE(xs.size() == 2);
+  for (auto const& x : xs) {
+    REQUIRE(run.footprint.count(x.id) == 1);
+    REQUIRE(run.footprint.at(x.id) > 0);
+    REQUIRE(run.builds.at(x.id) == run.n_batches.at(x.home_block));
+  }
+  // the caller's sections are left alone
+  REQUIRE(run.extents.empty());
+  REQUIRE(run.batch_targets.empty());
+  REQUIRE(run.planner.empty());
+  // every recorded id names a non-leaf value of the DAG record
+  std::map<std::string, ValueRecord const*> by_id;
+  for (auto const& v : dag.values) by_id[v.id] = &v;
+  for (auto const& [id, n] : run.builds) {
+    REQUIRE(by_id.count(id) == 1);
+    REQUIRE(!by_id.at(id)->leaf);
+    REQUIRE(n > 0);
+    REQUIRE(run.footprint.count(id) == 1);
+  }
+}
+
+TEST_CASE("ordered executor is unchanged without a run record",
+          "[schedule-document]") {
+  auto const fx = two_root_fixture();
+  auto const dag =
+      record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
+  auto const id_of = [&](std::size_t vid) { return dag.values.at(vid).id; };
+
+  auto const plain = dry_run(fx);
+  auto const plain_counts = sequant::eval::detail::ordered_op_counts();
+  RunRecord run;
+  auto const recorded = dry_run(fx, &run, id_of);
+  auto const recorded_counts = sequant::eval::detail::ordered_op_counts();
+
+  REQUIRE(plain.size() == recorded.size());
+  for (std::size_t i = 0; i != plain.size(); ++i) {
+    REQUIRE(plain[i]);
+    REQUIRE(recorded[i]);
+    REQUIRE(plain[i]->size_in_bytes() == recorded[i]->size_in_bytes());
+  }
+  REQUIRE(plain_counts.builds == recorded_counts.builds);
+  REQUIRE(plain_counts.assembles == recorded_counts.assembles);
+  // the record's build tally is the executor's own build count
+  std::size_t nbuilds = 0;
+  for (auto const& [id, n] : run.builds) nbuilds += n;
+  REQUIRE(nbuilds == recorded_counts.builds);
 }
