@@ -2591,18 +2591,6 @@ TEST_CASE("triplet_combined_residual_singles", "[spin][triplet]") {
   REQUIRE(diff->size() == 0);
 }
 
-TEST_CASE("triplet_generic_perms", "[spin][triplet]") {
-  using namespace sequant;
-  using namespace sequant::mbpt;
-
-  // weight rows: the NnsReconstruction row is the NullspaceProjector row
-  for (std::size_t n : {2, 3}) {
-    CAPTURE(n);
-    REQUIRE(mbpt::detail::triplet_nns_projection_weights<double>(n) ==
-            mbpt::detail::triplet_nullspace_projection_weights<double>(n));
-  }
-}
-
 TEST_CASE("spin-traced densities", "[spin]") {
   using namespace sequant;
   using namespace sequant::mbpt;

@@ -303,7 +303,7 @@ template <typename T>
 }
 
 // clang-format off
-/// \brief Provides the identity row of the closed-shell triplet null-space
+/// \brief Provides the identity row of the closed-shell triplet NNS
 /// projector, hardcoded to avoid numerical precision loss.
 ///
 /// The first row of G.pinv(G), and G being the overlap matrix of
@@ -315,7 +315,7 @@ template <typename T>
 // clang-format on
 template <typename T>
   requires(std::floating_point<T> || meta::is_complex_v<T>)
-std::optional<std::vector<T>> hardcoded_triplet_nullspace_projector(
+std::optional<std::vector<T>> hardcoded_triplet_nns_projector(
     std::size_t n_particles) {
   switch (n_particles) {
     case 2:
@@ -339,43 +339,27 @@ std::optional<std::vector<T>> hardcoded_triplet_nullspace_projector(
   }
 }
 
-/// \brief Provides the closed-shell triplet null-space projector weights
+/// \brief Provides the closed-shell triplet NNS projector weights
 ///
 /// \tparam T The numeric type (must be floating point or complex)
 /// \param n_particles The rank of external index pairs
 ///
-/// \return Vector of weights (see hardcoded_triplet_nullspace_projector)
-///
-/// \throw Exception unless \p n_particles is 2 or 3
-template <typename T>
-  requires(std::floating_point<T> || meta::is_complex_v<T>)
-[[nodiscard]] const std::vector<T>& triplet_nullspace_projection_weights(
-    std::size_t n_particles) {
-  static const std::vector<T> rows[2] = {
-      *hardcoded_triplet_nullspace_projector<T>(2),
-      *hardcoded_triplet_nullspace_projector<T>(3)};
-  if (n_particles != 2 && n_particles != 3)
-    throw Exception(
-        "triplet null-space projector weights are only available for "
-        "n_particles = 2, 3, requested rank is : " +
-        std::to_string(n_particles));
-  return rows[n_particles - 2];
-}
-
-/// \brief Provides the closed-shell triplet NNS reconstruction weights: the
-/// nns projector weights (see triplet_maxcoeff_compact)
-///
-/// \tparam T The numeric type
-/// \param n_particles The rank of external index pairs
-///
-/// \return Vector of weights
+/// \return Vector of weights (see hardcoded_triplet_nns_projector)
 ///
 /// \throw Exception unless \p n_particles is 2 or 3
 template <typename T>
   requires(std::floating_point<T> || meta::is_complex_v<T>)
 [[nodiscard]] const std::vector<T>& triplet_nns_projection_weights(
     std::size_t n_particles) {
-  return triplet_nullspace_projection_weights<T>(n_particles);
+  static const std::vector<T> rows[2] = {
+      *hardcoded_triplet_nns_projector<T>(2),
+      *hardcoded_triplet_nns_projector<T>(3)};
+  if (n_particles != 2 && n_particles != 3)
+    throw Exception(
+        "triplet NNS projector weights are only available for "
+        "n_particles = 2, 3, requested rank is : " +
+        std::to_string(n_particles));
+  return rows[n_particles - 2];
 }
 
 }  // namespace detail
@@ -663,30 +647,12 @@ auto triplet_perm_project_ta(
 
 }  // namespace detail
 
-/// \brief Idempotent null-space projector for the closed-shell triplet R:
-/// removes the metric-null component of the array. Apply to the Davidson
-/// trial vector each iteration; no-op for singles (array rank 2), throws
-/// beyond triples (array rank 6).
-template <typename... Args>
-auto triplet_nullspace_project_ta(TA::DistArray<Args...> const& arr,
-                                  size_t bra_rank) {
-  return detail::triplet_perm_project_ta(
-      arr, bra_rank,
-      &detail::triplet_nullspace_projection_weights<
-          typename TA::DistArray<Args...>::numeric_type>);
-}
-
-template <typename... Args>
-auto triplet_nullspace_project(TA::DistArray<Args...> const& arr,
-                               size_t bra_rank) {
-  return triplet_nullspace_project_ta(arr, bra_rank);
-}
-
-/// \brief Metric NNS reconstruction for compact closed-shell triplet
-/// residuals: rebuilds the full residual from the representatives kept by
-/// triplet_maxcoeff_compact (see detail::triplet_nns_projection_weights). Apply
-/// to the H*R residual when the compact equations were evaluated; no-op for
-/// singles (array rank 2), throws beyond triples (array rank 6).
+/// \brief Idempotent NNS projector for the closed-shell triplet: removes the
+/// metric-null component of the array. Apply to the Davidson trial vector
+/// each iteration, and to the H*R residual when the compact equations were
+/// evaluated, where it also rebuilds the terms dropped by
+/// triplet_maxcoeff_compact; no-op for singles (array rank 2), throws beyond
+/// triples (array rank 6).
 template <typename... Args>
 auto triplet_nns_project_ta(TA::DistArray<Args...> const& arr,
                             size_t bra_rank) {
@@ -770,22 +736,6 @@ auto triplet_nns_project_btas(btas::Tensor<Args...> const& arr,
 template <typename... Args>
 auto triplet_nns_project(btas::Tensor<Args...> const& arr, size_t bra_rank) {
   return triplet_nns_project_btas(arr, bra_rank);
-}
-
-/// @brief BTAS analogue of the TA triplet_nullspace_project
-template <typename... Args>
-auto triplet_nullspace_project_btas(btas::Tensor<Args...> const& arr,
-                                    size_t bra_rank) {
-  return detail::triplet_perm_project_btas(
-      arr, bra_rank,
-      &detail::triplet_nullspace_projection_weights<
-          typename btas::Tensor<Args...>::numeric_type>);
-}
-
-template <typename... Args>
-auto triplet_nullspace_project(btas::Tensor<Args...> const& arr,
-                               size_t bra_rank) {
-  return triplet_nullspace_project_btas(arr, bra_rank);
 }
 
 #endif  // defined(SEQUANT_HAS_BTAS)
