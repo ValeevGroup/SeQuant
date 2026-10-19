@@ -58,19 +58,25 @@ constexpr auto is_particle = IsParticle{};
 
 }  // namespace space_tags
 
-/// the types the argument-list spellings of IndexBasisRegistry::add() and
-/// its kin accept: an integral dimension, an IndexSpace::QuantumNumbers, a
-/// Field and the space_tags
+/// the space_tags: what the argument-list spellings of
+/// IndexBasisRegistry::add_unIon() and IndexBasisRegistry::add_intersection()
+/// accept
 template <typename T>
-concept index_space_argument =
-    std::integral<std::remove_cvref_t<T>> ||
-    std::same_as<std::remove_cvref_t<T>, IndexSpace::QuantumNumbers> ||
-    std::same_as<std::remove_cvref_t<T>, Field> ||
+concept index_space_role_tag =
     std::same_as<std::remove_cvref_t<T>, space_tags::IsVacuumOccupied> ||
     std::same_as<std::remove_cvref_t<T>, space_tags::IsReferenceOccupied> ||
     std::same_as<std::remove_cvref_t<T>, space_tags::IsComplete> ||
     std::same_as<std::remove_cvref_t<T>, space_tags::IsHole> ||
     std::same_as<std::remove_cvref_t<T>, space_tags::IsParticle>;
+
+/// the types the argument-list spelling of IndexBasisRegistry::add() accepts:
+/// an integral dimension, an IndexSpace::QuantumNumbers, a Field and the
+/// space_tags
+template <typename T>
+concept index_space_argument =
+    std::integral<std::remove_cvref_t<T>> ||
+    std::same_as<std::remove_cvref_t<T>, IndexSpace::QuantumNumbers> ||
+    std::same_as<std::remove_cvref_t<T>, Field> || index_space_role_tag<T>;
 
 /// @brief what IndexBasisRegistry::add(label, type, spec) registers a space
 /// with besides its label and type: each member is given by name, and each
@@ -809,7 +815,7 @@ class IndexBasisRegistry {
   template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
             typename... OptionalArgs>
     requires(sizeof...(OptionalArgs) > 0 &&
-             (index_space_argument<OptionalArgs> && ...))
+             (index_space_role_tag<OptionalArgs> && ...))
   [[deprecated(
       "give the roles by name in an IndexSpaceSpec")]] IndexBasisRegistry&
   add_unIon(S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
@@ -830,7 +836,7 @@ class IndexBasisRegistry {
   template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
             typename... OptionalArgs>
     requires(sizeof...(OptionalArgs) > 0 &&
-             (index_space_argument<OptionalArgs> && ...))
+             (index_space_role_tag<OptionalArgs> && ...))
   [[deprecated(
       "give the roles by name in an IndexSpaceSpec")]] IndexBasisRegistry&
   add_union(S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
@@ -896,7 +902,7 @@ class IndexBasisRegistry {
   template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
             typename... OptionalArgs>
     requires(sizeof...(OptionalArgs) > 0 &&
-             (index_space_argument<OptionalArgs> && ...))
+             (index_space_role_tag<OptionalArgs> && ...))
   [[deprecated(
       "give the roles by name in an IndexSpaceSpec")]] IndexBasisRegistry&
   add_intersection(S&& type_label,

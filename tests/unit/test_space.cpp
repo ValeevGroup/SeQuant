@@ -27,6 +27,19 @@
 #include <string_view>
 #include <type_traits>
 
+namespace {
+// whether the deprecated argument-list spellings of add_union() and
+// add_intersection() accept Args
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+template <typename... Args>
+concept legacy_union_takes =
+    requires(sequant::IndexBasisRegistry& r, Args... args) {
+      r.add_union(L"R", {L"q", L"i"}, args...);
+      r.add_intersection(L"R", {L"q", L"i"}, args...);
+    };
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+}  // namespace
+
 TEST_CASE("index_space", "[elements]") {
   using namespace sequant;
 
@@ -247,6 +260,11 @@ TEST_CASE("index_space", "[elements]") {
       CHECK(legacy.particle_space() == legacy.retrieve_space(L"q").type());
       legacy.add_union(L"Q", {L"q", L"i"}, is_complete);
       CHECK(legacy.complete_space() == legacy.retrieve_space(L"Q").type());
+      // a union or an intersection takes role tags only
+      static_assert(legacy_union_takes<IsHole, IsParticle>);
+      static_assert(!legacy_union_takes<IndexSpace::QuantumNumbers>);
+      static_assert(!legacy_union_takes<int>);
+      static_assert(!legacy_union_takes<Field>);
     }
     isr->approximate_size(L"μ̃", 78);
     CHECK(isr->retrieve(L"μ̃").extent() == 78);
