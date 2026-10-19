@@ -952,6 +952,44 @@ TEST_CASE("export", "[export]") {
   }
 }
 
+TEST_CASE("export reuse-zero not applied to repeated leaf operand",
+          "[export]") {
+  using Catch::Matchers::ContainsSubstring;
+
+  // Regression test: a tensor that carries ZeroStrategy::ZeroOnReuse (as common
+  // subexpression intermediates do - the CSE step marks them overwrite_previous
+  // and the exporter translates that into ZeroOnReuse | ZeroOnCreate) and that
+  // appears twice within a single contraction (i.e. is contracted with itself)
+  // must not be zeroed between its two reads. Previously the second occurrence
+  // was mistaken for a result being reused and emitted `.X := 0 * One[]`,
+  // wiping the operand immediately before it was read, so the term evaluated to
+  // zero.
+  auto resetter = to_export_context();
+
+  ItfGenerator<ItfContext> generator;
+  ItfContext ctx;
+  configure_context_defaults(ctx);
+
+  // The intermediate carries its single index in the aux slot, mirroring a
+  // density-fitting-style common subexpression that is contracted with itself.
+  const Tensor intermediate = deserialize(L"X{;;x1}")->as<Tensor>();
+  ctx.setZeroStrategy(intermediate,
+                      ZeroStrategy::ZeroOnReuse | ZeroStrategy::ZeroOnCreate);
+
+  export_expression(
+      to_export_tree(deserialize<ResultExpr>(L"ECC = 2 X{;;x1} X{;;x1}")),
+      generator, ctx);
+
+  const std::string code = generator.get_generated_code();
+  CAPTURE(code);
+
+  // The operand must not be zeroed anywhere in the generated code ...
+  CHECK_THAT(code, !ContainsSubstring(":= 0"));
+  // ... and the self-contraction must still be computed from the loaded value.
+  CHECK_THAT(code, ContainsSubstring("ECC[] += 2 * X:x[") &&
+                       ContainsSubstring("] X:x["));
+}
+
 TEST_CASE("ExportExpr", "[export]") {
   SECTION("id & equality") {
     Variable v(L"V");
