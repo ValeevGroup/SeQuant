@@ -280,11 +280,12 @@ class ItfGenerator : public Generator<Context> {
 
   void load(const Variable &variable, bool set_to_zero,
             const Context &ctx) override {
-    append_line("load " + represent(variable, ctx));
-
     if (set_to_zero) {
-      this->set_to_zero(variable, ctx);
+      create(variable, true, ctx);
+      return;
     }
+
+    append_line("load " + represent(variable, ctx));
   }
 
   void set_to_zero(const Variable &variable, const Context &ctx) override {
