@@ -1028,6 +1028,30 @@ TEST_CASE(
   REQUIRE(ids.count("R1+1") == 1);
   REQUIRE(ids.count("R2+1") == 1);
   REQUIRE(!dag.loops.empty());
+
+  // a leaf homed at the root block feeding X[i] inside its loop block is read
+  // in slices; X[i] feeding its consumer in the same block is not
+  auto const edge = [&](std::string const& from, std::string const& to) {
+    auto const it = std::ranges::find_if(
+        dag.edges, [&](auto const& e) { return e.from == from && e.to == to; });
+    REQUIRE(it != dag.edges.end());
+    return *it;
+  };
+  std::map<std::string, ValueRecord const*> by_id;
+  for (auto const& v : dag.values) by_id[v.id] = &v;
+  auto const& x = xs[0];
+  REQUIRE(dag.blocks[x.home_block].parent == std::size_t{0});
+  std::optional<std::string> leaf_in, consumer;
+  for (auto const& e : dag.edges) {
+    if (e.to == x.id && by_id.at(e.from)->leaf) leaf_in = e.from;
+    if (e.from == x.id) consumer = e.to;
+  }
+  REQUIRE(leaf_in);
+  REQUIRE(consumer);
+  REQUIRE(by_id.at(*leaf_in)->home_block == 0);
+  REQUIRE(by_id.at(*consumer)->home_block == x.home_block);
+  REQUIRE(edge(*leaf_in, x.id).sliced);
+  REQUIRE(!edge(x.id, *consumer).sliced);
 }
 
 TEST_CASE("record_dag ids resolve for single-summand roots and scaled terms",
@@ -1078,6 +1102,11 @@ TEST_CASE("record_dag is deterministic and compare sees no difference",
   auto const dag2 =
       record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
   REQUIRE(compare(doc_with(fx.roots, dag1), doc_with(fx.roots, dag2)).empty());
+  // two independent optimize -> binarize -> DAG pipelines on the same input
+  auto const fx2 = two_root_fixture();
+  auto const dag3 =
+      record_dag(fx2.rich, fx2.legality, fx2.ordered, fx2.forest, fx2.roots);
+  REQUIRE(compare(doc_with(fx.roots, dag1), doc_with(fx2.roots, dag3)).empty());
   REQUIRE(to_json(doc_with(fx.roots, dag1)) ==
           to_json(doc_with(fx.roots, dag2)));
 
@@ -1096,4 +1125,31 @@ TEST_CASE("record_dag is deterministic and compare sees no difference",
     }
     for (auto const& [id, kind] : b.outputs) REQUIRE(ids.count(id) == 1);
   }
+}
+
+TEST_CASE("record_dag names an adjoint factor like a leaf, its operands below",
+          "[schedule-document]") {
+  auto const fx =
+      dag_fixture({{"R1", pin_parse(L"g{i_1;a_1} * t⁺{a_1;i_2} * f{i_2;i_3}")},
+                   {"R2", pin_parse(L"g{i_1;a_1} * s{a_1;i_2} * f{i_2;i_3}")}},
+                  session_opts().batch_policy);
+  DagRecord dag;
+  REQUIRE_NOTHROW(
+      dag = record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots));
+  auto const& adj = fx.roots[0].terms.at(0).key;
+  auto const& twin = fx.roots[1].terms.at(0).key;
+
+  std::map<std::string, std::set<std::size_t>> ordinals;
+  std::set<std::string> ids;
+  for (auto const& v : dag.values) {
+    ids.insert(v.id);
+    for (auto const& o : v.occurrences) ordinals[o.term].insert(o.node);
+  }
+  REQUIRE(ordinals[adj] == ordinals[twin]);
+  REQUIRE(ordinals[adj] == std::set<std::size_t>{0, 1, 2, 3, 4});
+  std::size_t nsub = 0;
+  for (auto const& id : ids)
+    if (id.starts_with(adj + "#") && (id.ends_with("/0") || id.ends_with("/1")))
+      ++nsub;
+  REQUIRE(nsub == 2);
 }

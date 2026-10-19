@@ -93,8 +93,17 @@ inline std::string output_kind_name(OutputKind k) {
 ///    the scalar), id "<key>#scale"; its right operand, the Constant leaf
 ///    holding the scalar, is (term key, number of tree positions), id
 ///    "<key>#scalar" (spec 6.1 names no id for it; it is a DAG value too);
+///  - an Adjoint node (a conjugated factor) takes one tree ordinal as a leaf
+///    would; its bare-label operand is id "<key>#<ordinal>/0" and its
+///    Constant{1} sentinel "<key>#<ordinal>/1", both at the same (term, node);
 ///  - the k-th partial sum of a root's left-fold Sum: (root label, k), id
 ///    "<label>+<k>".
+///
+/// A value's home block is the block holding its BuildStep; a value with no
+/// BuildStep anywhere (escape-only) is homed at the innermost block whose
+/// outputs list it; a leaf is homed at the root block (0). An edge is sliced
+/// when the consumer's home block is nested deeper than the producer's (it
+/// reads a slice of a value homed outside its own block).
 struct NodePlace {
   std::string term;
   std::size_t node = 0;
@@ -175,12 +184,16 @@ DagRecord record_dag(RichSchedule const& rich, LegalitySchedule const& legality,
     std::size_t ordinal = 0;
     auto const walk = [&](auto const& self, Node const& n) -> void {
       if (!n.leaf()) {
-        if (n->op_type() && *n->op_type() == EvalOp::Adjoint)
-          throw Exception("record_dag: term " + key +
-                          " has an Adjoint node, which no pinned tree "
-                          "position names");
-        self(self, n.left());
-        self(self, n.right());
+        if (n->op_type() && *n->op_type() == EvalOp::Adjoint) {
+          // the pinned (conjugated) factor: one ordinal, as a leaf; its
+          // bare-label operand and Constant{1} sentinel are sub-positions
+          std::string const id = key + "#" + std::to_string(ordinal);
+          place[&n.left()] = {key, ordinal, id + "/0"};
+          place[&n.right()] = {key, ordinal, id + "/1"};
+        } else {
+          self(self, n.left());
+          self(self, n.right());
+        }
       }
       place[&n] = {key, ordinal, key + "#" + std::to_string(ordinal)};
       ++ordinal;
@@ -266,7 +279,14 @@ DagRecord record_dag(RichSchedule const& rich, LegalitySchedule const& legality,
       throw Exception("record_dag: value " + std::to_string(v) +
                       " has no occurrence to name it by");
     for (auto const& occ : c.occurrences) {
-      auto const& id = place_of(occ.point).id;
+      auto const& id = place_of(occ.point).id;  // bounds-checks the point
+      // identity cross-check: the node at this point is this value's node
+      if (std::size_t const h = (*at_point[occ.point])->hash_value();
+          h != c.hash)
+        throw Exception(
+            "record_dag: static point " + std::to_string(occ.point) +
+            " holds node " + detail::hex_string(h) + " but value " +
+            std::to_string(v) + " is node " + detail::hex_string(c.hash));
       if (id_of[v].empty() || id < id_of[v]) id_of[v] = id;
     }
   }
@@ -280,12 +300,19 @@ DagRecord record_dag(RichSchedule const& rich, LegalitySchedule const& legality,
   DagRecord dag;
 
   // ---- 4. blocks, preorder over ordered.root
-  // value -> the block that produces it (a build step or an outputs entry)
-  std::vector<std::optional<std::size_t>> build_block(ncells);
+  // value -> the block holding its BuildStep, and (for escape-only values)
+  // the innermost block whose outputs list it: a child block's outputs are
+  // seen before its ancestors' (they are read after its steps), so the first
+  // escape site recorded is the innermost. Kept apart so that no outputs
+  // entry ever overrides a build block.
+  std::vector<std::optional<std::size_t>> build_block(ncells),
+      escape_block(ncells);
+  std::vector<std::size_t> nest_depth;  // per block id: number of ancestors
   auto const visit = [&](auto const& self, ScopeBlock const& b,
                          std::optional<std::size_t> parent) -> std::size_t {
     std::size_t const id = dag.blocks.size();
     dag.blocks.emplace_back();
+    nest_depth.push_back(parent ? nest_depth[*parent] + 1 : 0);
     {
       BlockRecord& rec = dag.blocks.back();
       rec.id = id;
@@ -313,15 +340,24 @@ DagRecord record_dag(RichSchedule const& rich, LegalitySchedule const& legality,
     }
     BlockRecord& rec = dag.blocks[id];  // the vector may have grown
     rec.steps = std::move(steps);
-    // an escaping value is produced by its outputs entry, not a build step
-    // (well_formed's single-producer rule): its home is this block too
     for (auto const& [v, kind] : b.outputs) {
       rec.outputs.emplace_back(vid_name(v), detail::output_kind_name(kind));
-      build_block[v] = id;
+      if (!escape_block[v]) escape_block[v] = id;
     }
     return id;
   };
   visit(visit, ordered.root, std::nullopt);
+  // second pass: escape-only values take their innermost escape block
+  std::vector<std::size_t> home_of(ncells, 0);
+  for (std::size_t v = 0; v < ncells; ++v) {
+    if (build_block[v])
+      home_of[v] = *build_block[v];
+    else if (escape_block[v])
+      home_of[v] = *escape_block[v];
+    else if (!rich.cells[v].is_leaf)
+      throw Exception("record_dag: value " + id_of[v] +
+                      " is not a leaf and no block builds or outputs it");
+  }
 
   // ---- 5. values
   std::unordered_map<std::size_t, CellLegality const*> legality_of;
@@ -342,12 +378,7 @@ DagRecord record_dag(RichSchedule const& rich, LegalitySchedule const& legality,
     rec.home_modes = spell_modes(c.home_modes);
     rec.enclosing_modes = spell_modes(c.enclosing_modes);
     rec.divergent_modes = spell_modes(c.divergent_modes);
-    // a leaf is fetched on demand and has no producer: recorded at the root
-    if (build_block[v])
-      rec.home_block = *build_block[v];
-    else if (!c.is_leaf)
-      throw Exception("record_dag: value " + rec.id +
-                      " is not a leaf and no block builds or outputs it");
+    rec.home_block = home_of[v];
     rec.home_depth = c.home_depth;
     // Persistence. The engine's rule (CellTable::persistent, see
     // cell_table_builder.hpp) needs the volatile-leaf predicate, which this
@@ -413,8 +444,10 @@ DagRecord record_dag(RichSchedule const& rich, LegalitySchedule const& legality,
     dag.loop_order.emplace_back(loop_rec(pair.first), loop_rec(pair.second),
                                 witness);
 
-  // ---- 7. operand edges; sliced = the producer is homed shallower than the
-  // consumer (the consumer reads a slice of it)
+  // ---- 7. operand edges; sliced = the consumer's home block is nested
+  // deeper than the producer's (it reads a slice of a value homed outside its
+  // own block). Nesting depth, not DagScopeLevel::depth (a loop-group
+  // identity: a root child block can carry depth 2).
   std::set<std::pair<std::size_t, std::size_t>> seen;
   for (std::size_t to = 0; to < ncells; ++to) {
     auto const it = ordered.operand_vids.find(to);
@@ -423,7 +456,7 @@ DagRecord record_dag(RichSchedule const& rich, LegalitySchedule const& legality,
       if (!seen.insert({from, to}).second) continue;
       dag.edges.push_back(
           {vid_name(from), id_of[to],
-           rich.cells.at(from).home_depth < rich.cells[to].home_depth});
+           nest_depth[home_of[to]] > nest_depth[home_of.at(from)]});
     }
   }
   return dag;
