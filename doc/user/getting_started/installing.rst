@@ -49,7 +49,8 @@ Useful CMake Variables
 ----------------------
 
 .. list-table::
-   :widths: 20 10 70
+   :widths: 35 20 45
+   :class: wrap-ids
    :header-rows: 1
 
    * - CMake Variable
