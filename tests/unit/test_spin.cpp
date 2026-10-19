@@ -110,10 +110,11 @@ TEST_CASE("spin", "[spin]") {
     auto p2 = Index(L"p_2", {L"p", 0b11, mbpt::Spin::any});
     auto p2_b = Index(L"p↓_2", {L"p↓", 0b11, mbpt::Spin::beta});
 
-    auto p_i = Index({L"p", 0b11, mbpt::Spin::any}, {i});
-    auto p1_i = Index({L"p", 0b11, mbpt::Spin::any}, 1, {i});
-    auto p_i1 = Index({L"p", 0b11, mbpt::Spin::any}, {i1});
-    auto p1_i1 = Index({L"p", 0b11, mbpt::Spin::any}, 1, {i1});
+    const IndexSpace P{L"p", 0b11, mbpt::Spin::any};
+    auto p_i = Index(P, {i});
+    auto p1_i = Index(P, 1, {i});
+    auto p_i1 = Index(P, {i1});
+    auto p1_i1 = Index(P, 1, {i1});
 
     // make_spinalpha
     {

@@ -134,12 +134,17 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
   // carries its own unless registered without, which identity ignores. The
   // name is part of the identity, so a named basis is not the unnamed basis
   // of its space and instance (same_instance() relates the two)
+  auto custom_isr = mbpt::make_min_sr_spaces();
+  custom_isr->add(L"ã", uocc, 1,
+                  {.extent = 77,
+                   .metric = IndexBasisMetric::General,
+                   .field = Field::Real});
+  const IndexBasis custom = custom_isr->retrieve(L"ã");
   const std::vector<std::pair<IndexBasis, bool>> bases = {
       {IndexBasis{uocc}, false},
       {IndexBasis{uocc, 1}, false},
       {IndexBasis{uocc, 1, L"ã"}, false},
-      {IndexBasis{uocc, 1, L"ã", 77, IndexBasisMetric::General, Field::Real},
-       true}};
+      {custom, true}};
   for (const auto& [b, is_custom] : bases) {
     CHECK(b.extent() == (is_custom ? 77 : uocc.dimension()));
     CHECK(b.metric() ==
@@ -827,10 +832,10 @@ concept csv_transform_callable = requires(ExprPtr e, Basis b, Args... args) {
   mbpt::csv_transform(e, b, args...);
 };
 
-// a space, or a braced initializer of one, is its own basis; a label alone is
-// not
+// a space is its own basis; a label alone is not, and neither is a label with
+// an instance, which would read as a space
 static_assert(std::is_convertible_v<IndexSpace, IndexBasis>);
-static_assert(std::is_constructible_v<IndexBasis, const wchar_t*, int>);
+static_assert(!std::is_constructible_v<IndexBasis, const wchar_t*, int>);
 static_assert(!std::is_convertible_v<const wchar_t*, IndexBasis>);
 static_assert(!std::is_convertible_v<std::wstring, IndexBasis>);
 

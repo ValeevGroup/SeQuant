@@ -25,7 +25,8 @@ namespace sequant {
 /// 0 and negative ones included, is an ordinary instance distinct from null.
 ///
 /// A basis instance may carry the name it is registered under in an
-/// IndexBasisRegistry (see IndexBasisRegistry::add(label, basis)); a basis
+/// IndexBasisRegistry (see IndexBasisRegistry::add(label, space, instance,
+/// spec)); a basis
 /// obtained from the registry carries it, one built from a space and an
 /// instance does not. The name is part of the basis's identity, as a space's
 /// label is of the space's: equality, ordering and hashing see it, so a named
@@ -48,7 +49,8 @@ namespace sequant {
 /// such an instance, and so sizes, tiles and slices it as the space. A basis
 /// that differs in any of these (a truncated or an overcomplete set, a
 /// non-orthonormal basis) must be registered under a name, which gives it a
-/// key and metadata of its own (see IndexBasisRegistry::add(label, basis)).
+/// key and metadata of its own (see IndexBasisRegistry::add(label, space,
+/// instance, spec)).
 /// That holds for each subspace of a basis instance: a subspace shares the
 /// instance of its space but not its metric (a non-orthonormal basis can have
 /// an orthonormal part), so an unregistered subspace instance is orthonormal
@@ -68,32 +70,20 @@ class IndexBasis {
   /// the space's own basis (null instance)
   IndexBasis(IndexSpace space) noexcept : space_(std::move(space)) {}
 
-  /// the own basis of the IndexSpace constructed from @p type_label and
-  /// @p args, so that a braced IndexSpace initializer also initializes an
-  /// IndexBasis
-  template <basic_string_convertible S, typename... Args>
-    requires(sizeof...(Args) > 0 &&
-             std::constructible_from<IndexSpace, S, Args...>)
-  IndexBasis(S&& type_label, Args&&... args)
-      : space_(std::forward<S>(type_label), std::forward<Args>(args)...) {}
-
   explicit IndexBasis(IndexSpace space,
                       optional_instance basis_instance) noexcept
       : space_(std::move(space)), basis_instance_(basis_instance) {}
 
+  /// the basis instance @p basis_instance of @p space under the name
+  /// @p name, with the metadata of the space's own basis; the entry an
+  /// IndexBasisRegistry keeps under that name carries the metadata the
+  /// basis was registered with, so compare with it, do not stand in for it
   /// @param name the label @p basis_instance is registered under
-  /// @param extent the number of functions in the basis; null for the
-  ///        dimension of @p space
-  /// @param metric whether the basis is orthonormal
-  /// @param field the scalar field of the basis; null for that of the own
-  ///        basis of @p space
-  /// @pre @p name is empty or @p basis_instance is non-null; @p name is
-  ///      non-empty or every other argument is at its default (an unnamed
-  ///      basis is the space's own basis up to an orthonormal rotation)
+  /// @pre @p name is empty or @p basis_instance is non-null
   IndexBasis(IndexSpace space, optional_instance basis_instance,
-             std::wstring name, std::optional<std::size_t> extent = {},
-             IndexBasisMetric metric = IndexBasisMetric::Unit,
-             std::optional<Field> field = {});
+             std::wstring name)
+      : IndexBasis(std::move(space), basis_instance, std::move(name), {},
+                   IndexBasisMetric::Unit, {}) {}
 
   const IndexSpace& space() const noexcept { return space_; }
 
@@ -222,8 +212,21 @@ class IndexBasis {
   IndexBasisMetric metric_ = IndexBasisMetric::Unit;
   std::optional<Field> field_;
 
-  // the registry writes the metadata of its named entries in place
+  // the registry builds its named entries with their metadata, and writes
+  // the metadata in place
   friend class IndexBasisRegistry;
+  /// @param name the label @p basis_instance is registered under
+  /// @param extent the number of functions in the basis; null for the
+  ///        dimension of @p space
+  /// @param metric whether the basis is orthonormal
+  /// @param field the scalar field of the basis; null for that of the own
+  ///        basis of @p space
+  /// @pre @p name is empty or @p basis_instance is non-null; @p name is
+  ///      non-empty or every other argument is at its default (an unnamed
+  ///      basis is the space's own basis up to an orthonormal rotation)
+  IndexBasis(IndexSpace space, optional_instance basis_instance,
+             std::wstring name, std::optional<std::size_t> extent,
+             IndexBasisMetric metric, std::optional<Field> field);
   void extent(std::size_t n) noexcept { extent_ = n; }
   void metric(IndexBasisMetric m) noexcept { metric_ = m; }
   void field(Field f) noexcept { field_ = f; }
