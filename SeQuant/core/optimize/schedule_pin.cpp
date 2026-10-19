@@ -4,12 +4,15 @@
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <utility>
@@ -315,6 +318,167 @@ PinnedTerm rebuild_pinned_term(TermRecord const& rec,
         ++k;
       },
       all);
+  return result;
+}
+
+namespace {
+
+/// appends "\n  <what>: <key>" to \p msg for each of \p keys
+void list_keys(std::string& msg, std::string const& what,
+               std::vector<std::string> const& keys) {
+  for (auto const& k : keys) msg += "\n  " + what + ": " + k;
+}
+
+/// sorted, without repeats
+std::vector<std::string> sorted_unique(std::vector<std::string> keys) {
+  std::sort(keys.begin(), keys.end());
+  keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+  return keys;
+}
+
+}  // namespace
+
+PinSession::PinSession(eval::schedule::RootRecord const& root)
+    : root_(root), uses_(root.terms.size(), 0) {
+  for (std::size_t i = 0; i < root_.terms.size(); ++i)
+    if (!position_.emplace(root_.terms[i].key, i).second)
+      record_duplicates_.push_back(root_.terms[i].key);
+}
+
+TermRecord const* PinSession::take(std::string const& key) {
+  auto it = position_.find(key);
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (it == position_.end()) {
+    missing_.push_back(key);
+    return nullptr;
+  }
+  if (++uses_[it->second] > 1) duplicates_.push_back(key);
+  return &root_.terms[it->second];
+}
+
+std::optional<std::size_t> PinSession::document_position(
+    std::string const& key) const {
+  auto it = position_.find(key);
+  if (it == position_.end()) return std::nullopt;
+  return it->second;
+}
+
+void PinSession::finish() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  std::vector<std::string> unused;
+  for (std::size_t i = 0; i < root_.terms.size(); ++i)
+    if (uses_[i] == 0 && position_.at(root_.terms[i].key) == i)
+      unused.push_back(root_.terms[i].key);
+  auto duplicates = duplicates_;
+  duplicates.insert(duplicates.end(), record_duplicates_.begin(),
+                    record_duplicates_.end());
+  if (missing_.empty() && unused.empty() && duplicates.empty()) return;
+  std::string msg = "schedule pin: root " + root_.label +
+                    " does not match its record (no partial pin):";
+  list_keys(msg, "missing", sorted_unique(missing_));
+  list_keys(msg, "unused", unused);
+  list_keys(msg, "duplicate", sorted_unique(std::move(duplicates)));
+  throw Exception(msg);
+}
+
+void PinSession::bind(Expr const* optimized, std::string key) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  keys_[optimized] = std::move(key);
+}
+
+std::optional<std::string> PinSession::key_of(Expr const* optimized) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  auto it = keys_.find(optimized);
+  if (it == keys_.end()) return std::nullopt;
+  return it->second;
+}
+
+RecordSession::RecordSession(std::string root_label)
+    : label_(std::move(root_label)) {}
+
+void RecordSession::add(Expr const* optimized, TermRecord rec) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (auto it = index_.find(optimized); it != index_.end()) {
+    records_[it->second].second = std::move(rec);
+    return;
+  }
+  index_.emplace(optimized, records_.size());
+  records_.emplace_back(optimized, std::move(rec));
+}
+
+void RecordSession::relocate(
+    std::vector<std::pair<Expr const*, Expr const*>> const& moves) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  // look all sources up first: a target may equal another move's source
+  std::vector<std::pair<std::size_t, Expr const*>> found;
+  for (auto const& [from, to] : moves) {
+    auto it = index_.find(from);
+    if (it == index_.end()) continue;
+    found.emplace_back(it->second, to);
+    index_.erase(it);
+  }
+  for (auto const& [i, to] : found) {
+    records_[i].first = to;
+    index_[to] = i;
+  }
+}
+
+namespace {
+
+eval::schedule::RootRecord checked_root(std::string const& label,
+                                        std::vector<TermRecord> terms) {
+  std::vector<std::string> keys, duplicates;
+  for (auto const& t : terms) keys.push_back(t.key);
+  std::sort(keys.begin(), keys.end());
+  for (std::size_t i = 1; i < keys.size(); ++i)
+    if (keys[i] == keys[i - 1]) duplicates.push_back(keys[i]);
+  if (!duplicates.empty()) {
+    std::string msg = "schedule record: root " + label +
+                      " has the same term more than once (simplify the Sum):";
+    list_keys(msg, "duplicate", sorted_unique(std::move(duplicates)));
+    throw Exception(msg);
+  }
+  return {label, std::move(terms)};
+}
+
+}  // namespace
+
+eval::schedule::RootRecord RecordSession::finish(
+    std::vector<Expr const*> const& order) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  std::vector<TermRecord> terms;
+  terms.reserve(order.size());
+  for (auto const* p : order) {
+    auto it = index_.find(p);
+    if (it == index_.end())
+      throw Exception("schedule record: root " + label_ +
+                      ": a summand of the final Sum has no record");
+    terms.push_back(records_[it->second].second);
+  }
+  return checked_root(label_, std::move(terms));
+}
+
+eval::schedule::RootRecord RecordSession::finish() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  std::vector<TermRecord> terms;
+  terms.reserve(records_.size());
+  for (auto const& [p, rec] : records_) terms.push_back(rec);
+  return checked_root(label_, std::move(terms));
+}
+
+RecordedRoot record_root(std::string label, ExprPtr const& root_sum,
+                         OptimizeOptions opts) {
+  RecordSession session(std::move(label));
+  opts.recording = &session;
+  RecordedRoot result;
+  result.optimized = optimize_result(root_sum, opts).expr;
+  std::vector<Expr const*> order;
+  if (result.optimized->is<Sum>())
+    for (auto const& s : result.optimized->as<Sum>().summands())
+      order.push_back(s.get());
+  else
+    order.push_back(result.optimized.get());
+  result.record = session.finish(order);
   return result;
 }
 

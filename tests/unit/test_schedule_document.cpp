@@ -13,10 +13,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace {
 
@@ -516,4 +519,272 @@ TEST_CASE(
                         ContainsSubstring(rec.key) &&
                             ContainsSubstring("1 annotations supplied"));
   }
+}
+
+// ---- pin and record sessions through optimize_result ------------------------
+
+namespace {
+
+using AxesMap = std::unordered_map<
+    sequant::Expr const*,
+    sequant::container::vector<sequant::NodeBatchAnnotation>>;
+
+/// batched options as pin_optimize uses them, with a fresh term_batch_axes map
+sequant::OptimizeOptions session_opts() {
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"a";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.batch_target_size = [](sequant::Index const&) -> std::size_t {
+    return 10;
+  };
+  policy.peak_threshold = 1e5;
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = pin_extent;
+  opts.batch_policy = policy;
+  opts.term_batch_axes = std::make_shared<AxesMap>();
+  return opts;
+}
+
+/// a Sum of separately parsed summands (no simplification across them)
+sequant::ExprPtr session_sum(std::vector<std::wstring_view> const& terms) {
+  std::vector<sequant::ExprPtr> summands;
+  for (auto t : terms) summands.push_back(pin_parse(t));
+  return sequant::ex<sequant::Sum>(summands);
+}
+
+/// the 4-summand root used by the round-trip tests (the last one a lone tensor)
+sequant::ExprPtr session_root() {
+  return session_sum({L"g{i_1,i_2;a_3,a_4} * t{a_3;i_3} * t{a_4;i_4}",
+                      L"1/2 * g{i_1,i_2;a_3,a_4} * t{a_3,a_4;i_3,i_4}",
+                      L"f{i_1;a_3} * t{a_3,a_4;i_3,i_4} * f{i_2;a_4}",
+                      L"X{i_1,i_2;i_3,i_4}"});
+}
+
+void require_same_annotations(
+    sequant::container::vector<sequant::NodeBatchAnnotation> const& a,
+    sequant::container::vector<sequant::NodeBatchAnnotation> const& b) {
+  REQUIRE(a.size() == b.size());
+  for (std::size_t k = 0; k < a.size(); ++k) {
+    REQUIRE(a[k].axes == b[k].axes);
+    REQUIRE(a[k].opened_here == b[k].opened_here);
+    REQUIRE(a[k].order_aware == b[k].order_aware);
+  }
+}
+
+std::vector<std::string> record_keys(RootRecord const& r) {
+  std::vector<std::string> keys;
+  for (auto const& t : r.terms) keys.push_back(t.key);
+  return keys;
+}
+
+}  // namespace
+
+TEST_CASE("record_root then pin reproduces the optimized Sum and annotations",
+          "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  auto const sum = session_root();
+  auto opts = session_opts();
+  auto rr = record_root("R", sum, opts);
+  REQUIRE(rr.record.label == "R");
+  REQUIRE(rr.record.terms.size() == 4);
+  REQUIRE(rr.optimized->is<sequant::Sum>());
+  REQUIRE(rr.optimized->as<sequant::Sum>().size() == 4);
+  auto const& recorded_axes = (*opts.term_batch_axes)[rr.optimized.get()];
+  REQUIRE(!recorded_axes.empty());
+
+  PinSession session(rr.record);
+  auto opts2 = opts;
+  opts2.pinned = &session;
+  opts2.term_batch_axes = std::make_shared<AxesMap>();
+  auto pinned = sequant::optimize_result(sum, opts2).expr;
+  REQUIRE(*pinned == *rr.optimized);  // same trees, same order, same labels
+  require_same_annotations((*opts2.term_batch_axes)[pinned.get()],
+                           recorded_axes);
+  REQUIRE_NOTHROW(session.finish());
+}
+
+TEST_CASE("pinning is strict", "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  using Catch::Matchers::ContainsSubstring;
+  auto const sum = session_root();
+  auto opts = session_opts();
+  auto rr = record_root("R", sum, opts);
+  REQUIRE(rr.record.terms.size() == 4);
+
+  SECTION("a missing record") {
+    auto doc = rr.record;
+    auto const dropped = doc.terms[1].key;
+    doc.terms.erase(doc.terms.begin() + 1);
+    PinSession session(doc);
+    auto opts2 = opts;
+    opts2.pinned = &session;
+    REQUIRE_THROWS_WITH(
+        sequant::optimize_result(sum, opts2),
+        ContainsSubstring("missing") && ContainsSubstring(dropped));
+  }
+
+  SECTION("an unused record") {
+    auto other = record_root(
+        "O", session_sum({L"h{i_1;a_3} * t{a_3;i_2}", L"Y{i_1;i_2}"}), opts);
+    auto doc = rr.record;
+    doc.terms.push_back(other.record.terms[0]);
+    PinSession session(doc);
+    auto opts2 = opts;
+    opts2.pinned = &session;
+    REQUIRE_THROWS_WITH(sequant::optimize_result(sum, opts2),
+                        ContainsSubstring("unused") &&
+                            ContainsSubstring(other.record.terms[0].key));
+  }
+
+  SECTION("a duplicate term") {
+    auto twice =
+        session_sum({L"g{i_1;a_3} * t{a_3;i_2}", L"g{i_1;a_4} * t{a_4;i_2}"});
+    REQUIRE(twice->as<sequant::Sum>().size() == 2);
+    auto once = record_root("D", session_sum({L"g{i_1;a_3} * t{a_3;i_2}"}),
+                            session_opts());
+    PinSession session(once.record);
+    auto opts2 = opts;
+    opts2.pinned = &session;
+    REQUIRE_THROWS_WITH(sequant::optimize_result(twice, opts2),
+                        ContainsSubstring("duplicate") &&
+                            ContainsSubstring(once.record.terms[0].key));
+  }
+
+  SECTION("a mixed product") {
+    auto mixed = sequant::ex<sequant::Sum>(sequant::ExprPtrList{
+        pin_parse(L"t{a_1;i_1} * (f{i_1;a_1} + g{i_1;a_1})"),
+        pin_parse(L"h{i_1;a_1}")});
+    PinSession session(RootRecord{"M", {}});
+    auto opts2 = opts;
+    opts2.pinned = &session;
+    REQUIRE_THROWS_WITH(sequant::optimize_result(mixed, opts2),
+                        ContainsSubstring("only tensor products"));
+    auto opts3 = opts;
+    RecordSession recording("M");
+    opts3.recording = &recording;
+    REQUIRE_THROWS_WITH(sequant::optimize_result(mixed, opts3),
+                        ContainsSubstring("only tensor products"));
+  }
+
+  SECTION("several failures are listed in one exception") {
+    auto doc = rr.record;
+    auto const dropped = doc.terms[0].key;
+    doc.terms.erase(doc.terms.begin());
+    auto other = record_root("O", session_sum({L"h{i_1;a_3} * t{a_3;i_2}"}),
+                             session_opts());
+    doc.terms.push_back(other.record.terms[0]);
+    PinSession session(doc);
+    auto opts2 = opts;
+    opts2.pinned = &session;
+    REQUIRE_THROWS_WITH(sequant::optimize_result(sum, opts2),
+                        ContainsSubstring("missing") &&
+                            ContainsSubstring(dropped) &&
+                            ContainsSubstring("unused") &&
+                            ContainsSubstring(other.record.terms[0].key));
+  }
+}
+
+TEST_CASE("per-summand pinning through one session", "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  using Catch::Matchers::ContainsSubstring;
+  auto const sum = session_root();
+  auto opts = session_opts();
+  auto rr = record_root("R", sum, opts);
+  auto const& whole = rr.optimized->as<sequant::Sum>();
+
+  // the whole-Sum pin, for comparison
+  PinSession whole_session(rr.record);
+  auto opts_whole = opts;
+  opts_whole.pinned = &whole_session;
+  auto pinned_whole = sequant::optimize_result(sum, opts_whole).expr;
+
+  PinSession session(rr.record);
+  auto opts2 = opts;
+  opts2.pinned = &session;
+  opts2.term_batch_axes = std::make_shared<AxesMap>();
+  std::vector<sequant::ExprPtr> by_position(rr.record.terms.size());
+  for (auto const& s : sum->as<sequant::Sum>().summands()) {
+    auto optimized = sequant::optimize_result(s, opts2).expr;
+    auto const pos = session.document_position(term_key(canonical_term(s)));
+    REQUIRE(pos.has_value());
+    REQUIRE(!by_position[*pos]);
+    by_position[*pos] = optimized;
+  }
+  REQUIRE_NOTHROW(session.finish());
+  for (std::size_t k = 0; k < by_position.size(); ++k) {
+    REQUIRE(*by_position[k] == *whole.summand(k));
+    REQUIRE(*by_position[k] == *pinned_whole->as<sequant::Sum>().summand(k));
+  }
+  REQUIRE(!session.document_position("not a key").has_value());
+
+  // an incomplete per-summand pass is caught by finish()
+  PinSession partial(rr.record);
+  auto opts3 = opts;
+  opts3.pinned = &partial;
+  sequant::optimize_result(sum->as<sequant::Sum>().summand(0), opts3);
+  REQUIRE_THROWS_WITH(partial.finish(), ContainsSubstring("unused"));
+
+  // per-summand recording: records in call order
+  RecordSession recording("R");
+  auto opts4 = opts;
+  opts4.recording = &recording;
+  for (auto const& s : sum->as<sequant::Sum>().summands())
+    sequant::optimize_result(s, opts4);
+  auto per_summand = recording.finish();
+  REQUIRE(per_summand.label == "R");
+  REQUIRE(per_summand.terms.size() == 4);
+  for (std::size_t k = 0; k < 4; ++k)
+    REQUIRE(per_summand.terms[k].key ==
+            term_key(canonical_term(sum->as<sequant::Sum>().summand(k))));
+}
+
+TEST_CASE("pinned order is the document order, not the clustered order",
+          "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  // summands 0 and 2 share the g*t contraction; reorder clusters them
+  auto const sum =
+      session_sum({L"g{i_1,i_2;a_3,a_4} * t{a_3,a_4;i_3,i_4} * f{i_5;i_6}",
+                   L"h{i_1,i_2;i_3,i_4} * k{i_5;i_6}",
+                   L"g{i_1,i_2;a_3,a_4} * t{a_3,a_4;i_3,i_4} * s{i_5;i_6}",
+                   L"Z{i_1,i_2,i_5;i_3,i_4,i_6}"});
+  auto opts = session_opts();
+  auto rr = record_root("R", sum, opts);
+  REQUIRE(rr.record.terms.size() == 4);
+  std::vector<std::string> input_keys;
+  for (auto const& s : sum->as<sequant::Sum>().summands())
+    input_keys.push_back(term_key(canonical_term(s)));
+  // reorder did change the order
+  REQUIRE(record_keys(rr.record) != input_keys);
+
+  auto doc = rr.record;
+  std::reverse(doc.terms.begin(), doc.terms.end());
+  PinSession session(doc);
+  auto opts2 = opts;
+  opts2.pinned = &session;
+  opts2.term_batch_axes = std::make_shared<AxesMap>();
+  auto pinned = sequant::optimize_result(sum, opts2).expr;
+  REQUIRE(pinned->is<sequant::Sum>());
+  auto const& ps = pinned->as<sequant::Sum>();
+  REQUIRE(ps.size() == 4);
+  auto const& rs = rr.optimized->as<sequant::Sum>();
+  for (std::size_t k = 0; k < 4; ++k)
+    REQUIRE(*ps.summand(k) == *rs.summand(3 - k));
+
+  // the combined annotations follow the pinned order too
+  RecordSession recording("R");
+  auto opts3 = opts2;
+  opts3.recording = &recording;
+  opts3.term_batch_axes = std::make_shared<AxesMap>();
+  PinSession session2(doc);
+  opts3.pinned = &session2;
+  auto pinned2 = sequant::optimize_result(sum, opts3).expr;
+  std::vector<sequant::Expr const*> order;
+  for (auto const& s : pinned2->as<sequant::Sum>().summands())
+    order.push_back(s.get());
+  REQUIRE(record_keys(recording.finish(order)) == record_keys(doc));
 }
