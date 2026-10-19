@@ -1,10 +1,22 @@
+#include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/batch_policy.hpp>
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/eval/schedule_document.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/optimize/options.hpp>
+#include <SeQuant/core/optimize/schedule_pin.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <cstddef>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 namespace {
 
@@ -209,4 +221,191 @@ TEST_CASE("schedule document compare covers the dag", "[schedule-document]") {
   d4.dag->values[0].hash = "other";
   d4.dag->values[0].last_use = 99;
   REQUIRE(compare(d, d4).empty());
+}
+
+// ---- term key, term record, pinned rebuild ---------------------------------
+
+namespace {
+
+sequant::ExprPtr pin_parse(std::wstring_view s) {
+  return sequant::deserialize(s, {.def_perm_symm = sequant::Symmetry::Nonsymm});
+}
+
+/// extents: occupied 10, everything else 100
+std::size_t pin_extent(sequant::Index const& ix) {
+  return ix.space().base_key() == L"i" ? 10 : 100;
+}
+
+/// batched optimize of a canonical term; returns the optimized expression and
+/// its annotations (captured via term_batch_axes)
+std::pair<sequant::ExprPtr,
+          sequant::container::vector<sequant::NodeBatchAnnotation>>
+pin_optimize(sequant::ExprPtr const& canon) {
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"a";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.batch_target_size = [](sequant::Index const&) -> std::size_t {
+    return 10;
+  };
+  policy.peak_threshold = 1e5;
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = pin_extent;
+  opts.batch_policy = policy;
+  opts.term_batch_axes = axes_map;
+  auto optimized = sequant::optimize(canon, opts);
+  sequant::container::vector<sequant::NodeBatchAnnotation> annotations;
+  if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+    annotations = it->second;
+  return {optimized, annotations};
+}
+
+}  // namespace
+
+TEST_CASE("term key is stable under relabeling and factor order",
+          "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  auto a = pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_3,i_4}");
+  auto b = pin_parse(L"t{a_3,a_4;i_3,i_4} * g{i_1,i_2;a_3,a_4}");
+  auto const a_text = sequant::serialize(a);
+  REQUIRE(term_key(canonical_term(a)) == term_key(canonical_term(b)));
+  // canonical_term works on a clone
+  REQUIRE(sequant::serialize(a) == a_text);
+  // different externals order
+  auto c = pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_4,i_3}");
+  REQUIRE(term_key(canonical_term(a)) != term_key(canonical_term(c)));
+  // factors of a canonical Product in order
+  REQUIRE(canonical_factors(canonical_term(a)).size() == 2);
+}
+
+TEST_CASE("record_term then rebuild_pinned_term reproduces the optimized tree",
+          "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  auto canon = canonical_term(
+      pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
+  auto [optimized, annotations] = pin_optimize(canon);
+  REQUIRE(annotations.size() == 2);
+  // the policy forces slicing somewhere: the record carries real annotations
+  bool any_axes = false;
+  for (auto const& n : annotations) any_axes = any_axes || !n.axes.empty();
+  REQUIRE(any_axes);
+
+  auto rec = record_term(canon, optimized, annotations);
+  REQUIRE(rec.key == term_key(canon));
+  REQUIRE(rec.factors.size() == 3);
+  REQUIRE(rec.scalar == "1");
+  REQUIRE(rec.tree.has_value());
+  REQUIRE(!rec.tree->leaf);
+  REQUIRE(rec.nodes.size() == 2);
+
+  auto pinned = rebuild_pinned_term(rec, canon);
+  REQUIRE(*pinned.expr == *optimized);  // same nested Product, same labels
+  REQUIRE(pinned.nodes.size() == annotations.size());
+  for (std::size_t k = 0; k < annotations.size(); ++k) {
+    REQUIRE(pinned.nodes[k].axes == annotations[k].axes);
+    REQUIRE(pinned.nodes[k].opened_here == annotations[k].opened_here);
+    REQUIRE(pinned.nodes[k].order_aware == annotations[k].order_aware);
+  }
+
+  // a record survives re-canonicalizing a relabeled copy of the term
+  auto canon2 = canonical_term(
+      pin_parse(L"t{a_4;i_4} * g{i_1,i_2;a_3,a_4} * t{a_3;i_3}"));
+  REQUIRE(term_key(canon2) == rec.key);
+  auto pinned2 = rebuild_pinned_term(rec, canon2);
+  REQUIRE(*pinned2.expr == *optimized);
+}
+
+TEST_CASE(
+    "record_term handles a lone tensor, a scalar, identical factors, and "
+    "rejects mixed products",
+    "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  using Catch::Matchers::ContainsSubstring;
+
+  SECTION("lone tensor") {
+    auto canon = canonical_term(pin_parse(L"t{a_1;i_1}"));
+    REQUIRE(canonical_factors(canon).size() == 1);
+    auto [optimized, annotations] = pin_optimize(canon);
+    auto rec = record_term(canon, optimized, annotations);
+    REQUIRE(rec.tree.has_value());
+    REQUIRE(rec.tree->leaf == std::optional<std::size_t>{0});
+    REQUIRE(rec.nodes.empty());
+    REQUIRE(rec.scalar == "1");
+    auto pinned = rebuild_pinned_term(rec, canon);
+    REQUIRE(pinned.expr->is<sequant::Tensor>());
+    REQUIRE(*pinned.expr == *canon);
+    REQUIRE(pinned.nodes.empty());
+  }
+
+  SECTION("scalar") {
+    auto canon =
+        canonical_term(sequant::ex<sequant::Constant>(sequant::rational{1, 2}));
+    REQUIRE(canonical_factors(canon).empty());
+    auto rec = record_term(canon, canon, {});
+    REQUIRE(!rec.tree.has_value());
+    REQUIRE(rec.scalar == "1/2");
+    REQUIRE(rec.factors.empty());
+    auto pinned = rebuild_pinned_term(rec, canon);
+    REQUIRE(*pinned.expr == *canon);
+    // a negative scalar round-trips too
+    auto neg = canonical_term(
+        sequant::ex<sequant::Constant>(sequant::rational{-3, 4}));
+    REQUIRE(*rebuild_pinned_term(record_term(neg, neg, {}), neg).expr == *neg);
+  }
+
+  SECTION("identical factors and a fractional scalar") {
+    auto canon = canonical_term(
+        pin_parse(L"1/2 * t{a_1;i_1} * t{a_2;i_2} * f{i_1,i_2;a_1,a_2}"));
+    REQUIRE(canonical_factors(canon).size() == 3);
+    auto [optimized, annotations] = pin_optimize(canon);
+    auto rec = record_term(canon, optimized, annotations);
+    REQUIRE(rec.scalar == "1/2");
+    REQUIRE(rec.nodes.size() == 2);
+    auto pinned = rebuild_pinned_term(rec, canon);
+    REQUIRE(*pinned.expr == *optimized);
+    REQUIRE(pinned.nodes.size() == annotations.size());
+    for (std::size_t k = 0; k < annotations.size(); ++k)
+      REQUIRE(pinned.nodes[k].axes == annotations[k].axes);
+  }
+
+  SECTION("mixed product") {
+    auto canon =
+        canonical_term(pin_parse(L"t{a_1;i_1} * (f{i_1;a_1} + g{i_1;a_1})"));
+    REQUIRE(canon->is<sequant::Product>());
+    REQUIRE_THROWS_WITH(record_term(canon, canon, {}),
+                        ContainsSubstring("only tensor products"));
+    sequant::eval::schedule::TermRecord rec;
+    rec.key = term_key(canon);
+    rec.scalar = "1";
+    REQUIRE_THROWS_WITH(rebuild_pinned_term(rec, canon),
+                        ContainsSubstring("only tensor products"));
+  }
+}
+
+TEST_CASE("rebuild_pinned_term rejects foreign factors and unknown axis labels",
+          "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  using Catch::Matchers::ContainsSubstring;
+  auto canon_a =
+      canonical_term(pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_3,i_4}"));
+  auto canon_b = canonical_term(pin_parse(L"f{i_1;a_1} * t{a_1;i_2}"));
+  auto [optimized, annotations] = pin_optimize(canon_a);
+  auto rec = record_term(canon_a, optimized, annotations);
+  REQUIRE(rec.nodes.size() == 1);
+
+  REQUIRE_THROWS_WITH(rebuild_pinned_term(rec, canon_b),
+                      ContainsSubstring(rec.key));
+
+  auto bad = rec;
+  bad.nodes[0].axes.push_back(
+      {"z_9", sequant::eval::schedule::ModeKind::Contracted});
+  REQUIRE_THROWS_WITH(rebuild_pinned_term(bad, canon_a),
+                      ContainsSubstring("z_9"));
 }

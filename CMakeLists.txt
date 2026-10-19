@@ -536,6 +536,8 @@ set(SeQuant_optimize_src
         SeQuant/core/optimize/options.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/optimize/optimize.hpp
+        SeQuant/core/optimize/schedule_pin.cpp
+        SeQuant/core/optimize/schedule_pin.hpp
         SeQuant/core/optimize/single_term.hpp
         SeQuant/core/optimize/single_term_detail.hpp
         SeQuant/core/optimize/sum.cpp
