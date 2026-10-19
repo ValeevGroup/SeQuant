@@ -383,6 +383,8 @@ void PinSession::finish() const {
 
 void PinSession::bind(Expr const* optimized, std::string key) {
   std::lock_guard<std::mutex> lock(mutex_);
+  // newest wins: an address freed by a per-summand caller may be reused by a
+  // later result, and only the live result's key is meaningful
   keys_[optimized] = std::move(key);
 }
 
@@ -398,12 +400,11 @@ RecordSession::RecordSession(std::string root_label)
 
 void RecordSession::add(Expr const* optimized, TermRecord rec) {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (auto it = index_.find(optimized); it != index_.end()) {
-    records_[it->second].second = std::move(rec);
-    return;
-  }
-  index_.emplace(optimized, records_.size());
-  records_.emplace_back(optimized, std::move(rec));
+  // append unconditionally: a per-summand caller that drops each result frees
+  // its address, which the next result may reuse; the record must survive
+  // that. The pointer map follows the newest record for that address.
+  index_[optimized] = records_.size();
+  records_.push_back(std::move(rec));
 }
 
 void RecordSession::relocate(
@@ -417,10 +418,7 @@ void RecordSession::relocate(
     found.emplace_back(it->second, to);
     index_.erase(it);
   }
-  for (auto const& [i, to] : found) {
-    records_[i].first = to;
-    index_[to] = i;
-  }
+  for (auto const& [i, to] : found) index_[to] = i;
 }
 
 namespace {
@@ -453,7 +451,7 @@ eval::schedule::RootRecord RecordSession::finish(
     if (it == index_.end())
       throw Exception("schedule record: root " + label_ +
                       ": a summand of the final Sum has no record");
-    terms.push_back(records_[it->second].second);
+    terms.push_back(records_[it->second]);
   }
   return checked_root(label_, std::move(terms));
 }
@@ -462,7 +460,7 @@ eval::schedule::RootRecord RecordSession::finish() const {
   std::lock_guard<std::mutex> lock(mutex_);
   std::vector<TermRecord> terms;
   terms.reserve(records_.size());
-  for (auto const& [p, rec] : records_) terms.push_back(rec);
+  for (auto const& rec : records_) terms.push_back(rec);
   return checked_root(label_, std::move(terms));
 }
 

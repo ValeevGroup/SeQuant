@@ -733,9 +733,12 @@ TEST_CASE("per-summand pinning through one session", "[schedule-document]") {
   RecordSession recording("R");
   auto opts4 = opts;
   opts4.recording = &recording;
+  // each result is dropped right away (a realistic caller): its address may be
+  // reused by the next result, and no record may be lost
   for (auto const& s : sum->as<sequant::Sum>().summands())
     sequant::optimize_result(s, opts4);
   auto per_summand = recording.finish();
+  REQUIRE(per_summand.terms.size() == sum->as<sequant::Sum>().size());
   REQUIRE(per_summand.label == "R");
   REQUIRE(per_summand.terms.size() == 4);
   for (std::size_t k = 0; k < 4; ++k)

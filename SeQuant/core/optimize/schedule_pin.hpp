@@ -91,10 +91,14 @@ class PinSession {
 
   /// Called by the optimizer: remembers that \p optimized is the summand it
   /// produced for \p key, so the Sum can be assembled in document order.
-  /// Thread-safe.
+  /// A repeated address (freed by a per-summand caller and reused) is
+  /// overwritten: the newest binding wins. Thread-safe.
   void bind(Expr const* optimized, std::string key);
 
-  /// the key \ref bind associated with \p optimized, if any
+  /// the key \ref bind associated with \p optimized, if any. Only meaningful
+  /// while that result is alive (the optimizer reads it only for the summands
+  /// of the whole Sum it is assembling); a freed address may since have been
+  /// reused.
   std::optional<std::string> key_of(Expr const* optimized) const;
 
  private:
@@ -110,6 +114,12 @@ class PinSession {
 /// Collects the record_term results of an optimizer run and emits them as a
 /// RootRecord: hand it to the optimizer via OptimizeOptions::recording.
 /// \ref add and \ref relocate are thread-safe.
+///
+/// Records are kept in call order and never dropped. Resolution by pointer
+/// (\ref finish(std::vector<Expr const*> const&) and \ref relocate) requires
+/// the optimized results to be alive, since a freed address can be reused by a
+/// later result (the newest record for an address wins); call-order
+/// \ref finish() does not, so per-summand callers may drop each result.
 class RecordSession {
  public:
   explicit RecordSession(std::string root_label);
@@ -117,8 +127,8 @@ class RecordSession {
   RecordSession(RecordSession const&) = delete;
   RecordSession& operator=(RecordSession const&) = delete;
 
-  /// thread-safe; keyed by the optimized summand's Expr const* (same key as
-  /// term_batch_axes)
+  /// thread-safe; appends \p rec, and keys it by the optimized summand's
+  /// Expr const* (same key as term_batch_axes) for pointer resolution
   void add(Expr const* optimized, eval::schedule::TermRecord rec);
 
   /// records in \p order (final Sum summand pointers)
@@ -140,7 +150,7 @@ class RecordSession {
  private:
   std::string label_;
   mutable std::mutex mutex_;
-  std::vector<std::pair<Expr const*, eval::schedule::TermRecord>> records_;
+  std::vector<eval::schedule::TermRecord> records_;     // in call order
   std::unordered_map<Expr const*, std::size_t> index_;  // into records_
 };
 
@@ -153,7 +163,9 @@ struct RecordedRoot {
 /// Runs \ref sequant::optimize_result on \p root_sum with a RecordSession
 /// labeled \p label set as \p opts.recording, and returns the record (terms in
 /// the order of the optimized Sum's summands) with the optimized expression.
-/// A root that is not a Sum is recorded as a single term.
+/// A root that is not a Sum is recorded as a single term. The Sum must be
+/// simplified: no two summands may have the same canonical key.
+/// \throws sequant::Exception listing the duplicate keys otherwise
 RecordedRoot record_root(std::string label, ExprPtr const& root_sum,
                          OptimizeOptions opts);
 
