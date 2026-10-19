@@ -1,6 +1,8 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/eval/schedule_document.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -9,6 +11,7 @@
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/optimize/schedule_pin.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -790,4 +793,107 @@ TEST_CASE("pinned order is the document order, not the clustered order",
   for (auto const& s : pinned2->as<sequant::Sum>().summands())
     order.push_back(s.get());
   REQUIRE(record_keys(recording.finish(order)) == record_keys(doc));
+}
+
+// ---- fingerprint ------------------------------------------------------------
+
+namespace {
+
+/// a two-term forest of dry-run trees over session_opts() (batchable: space a,
+/// contracted); volatile leaves: label t
+std::vector<sequant::eval::dryrun::EvalNodeDryRun> fingerprint_forest(
+    sequant::OptimizeOptions const& opts) {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  std::vector<sequant::eval::dryrun::EvalNodeDryRun> forest;
+  for (auto s : {L"g{i_1,i_2;a_3,a_4} * t{a_3;i_3} * t{a_4;i_4}",
+                 L"f{i_1;a_3} * t{a_3,a_4;i_3,i_4} * f{i_2;a_4}"}) {
+    auto canon = sequant::opt::schedule::canonical_term(pin_parse(s));
+    auto optimized = sequant::optimize(canon, opts);
+    sequant::BinarizationOptions bopts;
+    if (auto it = opts.term_batch_axes->find(optimized.get());
+        it != opts.term_batch_axes->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  return forest;
+}
+
+}  // namespace
+
+TEST_CASE("fingerprint captures DAG-shaping inputs and nothing size-dependent",
+          "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  auto opts = session_opts();
+  opts.batch_policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  auto const forest = fingerprint_forest(opts);
+  auto fp = fingerprint_of(forest, {"R"}, opts, {L"a", L"i"});
+  REQUIRE(fp.roots == std::vector<std::string>{"R"});
+  REQUIRE(fp.batchable.at("a") == std::pair{true, false});
+  REQUIRE(fp.batchable.at("i") == std::pair{false, false});
+  REQUIRE(fp.volatile_leaves == std::vector<std::string>{"t"});
+  REQUIRE(fp.mode_order == std::vector<std::string>{"a", "i"});
+  REQUIRE(fp.objective_function == "DenseTimeSpaceBatched");
+  REQUIRE(fp.reorder == "Reorder");
+  REQUIRE(fp.scheduler == "forest_descent");
+  REQUIRE(fp.cse.at("subnet") == "false");
+  REQUIRE(fp.context.spaces == std::vector<std::string>{"a", "i"});
+  REQUIRE(fp.context.strict_braket_symmetry ==
+          sequant::get_default_context().assert_strict_braket_symmetry());
+
+  auto opts2 = opts;
+  opts2.idx_to_extent = [](sequant::Index const&) -> std::size_t { return 3; };
+  opts2.batch_policy.batch_target_size = [](sequant::Index const&) {
+    return std::size_t{7};
+  };
+  opts2.batch_policy.peak_threshold = 1e9;
+  REQUIRE_NOTHROW(check_fingerprint(
+      fp, fingerprint_of(forest, {"R"}, opts2, {L"a", L"i"})));
+
+  auto planner = planner_record(opts2);
+  REQUIRE(planner.at("batch_target_size") == "set");
+  REQUIRE(planner.at("idx_to_extent") == "set");
+  REQUIRE(planner.at("inner_pow") == "unset");
+  REQUIRE(planner.at("peak_threshold") == std::to_string(1e9));
+  REQUIRE(planner.count("volatile_weight") == 1);
+  REQUIRE(planner.count("footprint_weight") == 1);
+  REQUIRE(planner.count("peak_flops_tolerance") == 1);
+  REQUIRE(planner.count("prune_outer_products") == 1);
+  REQUIRE(planner.count("roofline.machine_balance") == 1);
+  REQUIRE(planner.count("roofline.fast_mem_elems") == 1);
+  REQUIRE(planner.count("roofline.block_tiles") == 1);
+  REQUIRE(planner.count("roofline.block_prefactor") == 1);
+}
+
+TEST_CASE("check_fingerprint names every differing field",
+          "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  using Catch::Matchers::ContainsSubstring;
+  auto opts = session_opts();
+  auto const forest = fingerprint_forest(opts);
+  auto a = fingerprint_of(forest, {"R"}, opts, {L"a", L"i"});
+  REQUIRE_NOTHROW(check_fingerprint(a, a));
+
+  auto b = a;
+  b.persistent_only = !a.persistent_only;
+  b.mode_order = {"i"};
+  b.batchable["a"] = {false, true};
+  REQUIRE_THROWS_WITH(check_fingerprint(a, b),
+                      ContainsSubstring("fingerprint.persistent_only") &&
+                          ContainsSubstring("fingerprint.mode_order") &&
+                          ContainsSubstring("fingerprint.batchable.a"));
+
+  // a different Context makes the live fingerprint differ
+  auto ctx = sequant::get_default_context_snapshot();
+  ctx.set(a.context.strict_braket_symmetry
+              ? sequant::AssertStrictBraKetSymmetry::No
+              : sequant::AssertStrictBraKetSymmetry::Yes);
+  auto resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto live = fingerprint_of(forest, {"R"}, opts, {L"a", L"i"});
+  REQUIRE_THROWS_WITH(
+      check_fingerprint(a, live),
+      ContainsSubstring("fingerprint.context.strict_braket_symmetry"));
 }

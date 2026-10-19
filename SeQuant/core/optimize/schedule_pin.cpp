@@ -1,5 +1,6 @@
 #include <SeQuant/core/optimize/schedule_pin.hpp>
 
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
@@ -478,6 +479,189 @@ RecordedRoot record_root(std::string label, ExprPtr const& root_sum,
     order.push_back(result.optimized.get());
   result.record = session.finish(order);
   return result;
+}
+
+namespace detail {
+
+namespace {
+
+std::string objective_name(ObjectiveFunction f) {
+  switch (f) {
+    case ObjectiveFunction::DenseFLOPs:
+      return "DenseFLOPs";
+    case ObjectiveFunction::DenseSize:
+      return "DenseSize";
+    case ObjectiveFunction::DenseSpaceTime:
+      return "DenseSpaceTime";
+    case ObjectiveFunction::DenseTimeSpace:
+      return "DenseTimeSpace";
+    case ObjectiveFunction::DenseSpaceTimeBatched:
+      return "DenseSpaceTimeBatched";
+    case ObjectiveFunction::DenseTimeSpaceBatched:
+      return "DenseTimeSpaceBatched";
+  }
+  throw Exception("fingerprint: unknown ObjectiveFunction");
+}
+
+std::string reorder_name(ReorderSum r) {
+  return r == ReorderSum::Reorder ? "Reorder" : "NoReorder";
+}
+
+std::string scheduler_name(BatchScheduler s) {
+  return s == BatchScheduler::ordered ? "ordered" : "forest_descent";
+}
+
+std::string vacuum_name(Vacuum v) {
+  switch (v) {
+    case Vacuum::Physical:
+      return "Physical";
+    case Vacuum::SingleProduct:
+      return "SingleProduct";
+    case Vacuum::MultiProduct:
+      return "MultiProduct";
+  }
+  throw Exception("fingerprint: unknown Vacuum");
+}
+
+std::string spbasis_name(SPBasis b) {
+  return b == SPBasis::Spinor ? "Spinor" : "Spinfree";
+}
+
+}  // namespace
+
+eval::schedule::Fingerprint make_fingerprint(
+    std::vector<std::string> root_labels, OptimizeOptions const& opts,
+    std::vector<std::wstring> const& mode_order,
+    std::map<std::wstring, Index> const& representatives,
+    std::set<std::string> const& volatile_leaf_labels) {
+  eval::schedule::Fingerprint fp;
+  fp.roots = std::move(root_labels);
+  auto const& policy = opts.batch_policy;
+  for (auto const& [space, ix] : representatives) {
+    fp.batchable[toUtf8(space)] = {policy.is_batchable_contracted_index &&
+                                       policy.is_batchable_contracted_index(ix),
+                                   policy.is_batchable_external_index &&
+                                       policy.is_batchable_external_index(ix)};
+    fp.context.spaces.push_back(toUtf8(space));
+  }
+  std::sort(fp.context.spaces.begin(), fp.context.spaces.end());
+  fp.volatile_leaves.assign(volatile_leaf_labels.begin(),
+                            volatile_leaf_labels.end());
+  fp.persistent_only = policy.persistent_only;
+  fp.batch_spectator_indices = policy.batch_spectator_indices;
+  fp.accumulation_factor = policy.accumulation_factor;
+  fp.scheduler = scheduler_name(policy.scheduler);
+  fp.objective_function = objective_name(opts.objective_function);
+  fp.reorder = reorder_name(opts.reorder);
+  fp.cse["subnet"] = opts.CSE.subnet ? "true" : "false";
+  for (auto const& m : mode_order) fp.mode_order.push_back(toUtf8(m));
+  auto const& ctx = get_default_context();
+  fp.context.vacuum = vacuum_name(ctx.vacuum());
+  fp.context.spbasis = spbasis_name(ctx.spbasis());
+  fp.context.strict_braket_symmetry = ctx.assert_strict_braket_symmetry();
+  for (auto const& l : ctx.cardinal_tensor_labels())
+    fp.context.cardinal_tensor_labels.push_back(toUtf8(l));
+  return fp;
+}
+
+}  // namespace detail
+
+namespace {
+
+std::string join(std::vector<std::string> const& v) {
+  std::string s = "[";
+  for (std::size_t i = 0; i != v.size(); ++i) s += (i ? "," : "") + v[i];
+  return s + "]";
+}
+
+std::string str(std::string const& s) { return s; }
+std::string str(bool b) { return b ? "true" : "false"; }
+std::string str(double d) { return std::to_string(d); }
+std::string str(std::vector<std::string> const& v) { return join(v); }
+std::string str(std::pair<bool, bool> const& p) {
+  return "(" + str(p.first) + "," + str(p.second) + ")";
+}
+std::string str(std::map<std::string, std::string> const& m) {
+  std::string s = "{";
+  bool first = true;
+  for (auto const& [k, v] : m) {
+    s += (first ? "" : ",") + k + "=" + v;
+    first = false;
+  }
+  return s + "}";
+}
+
+template <typename T>
+void diff(std::vector<std::string>& out, std::string const& field, T const& a,
+          T const& b) {
+  if (!(a == b))
+    out.push_back("fingerprint." + field + ": " + str(a) + " vs " + str(b));
+}
+
+}  // namespace
+
+void check_fingerprint(eval::schedule::Fingerprint const& loaded,
+                       eval::schedule::Fingerprint const& live) {
+  std::vector<std::string> d;
+  diff(d, "roots", loaded.roots, live.roots);
+  // per-space predicate results; a space absent on one side is reported too
+  std::set<std::string> spaces;
+  for (auto const& [k, v] : loaded.batchable) spaces.insert(k);
+  for (auto const& [k, v] : live.batchable) spaces.insert(k);
+  for (auto const& sp : spaces) {
+    auto a = loaded.batchable.find(sp);
+    auto b = live.batchable.find(sp);
+    if (a == loaded.batchable.end() || b == live.batchable.end())
+      d.push_back("fingerprint.batchable." + sp + ": " +
+                  (a == loaded.batchable.end() ? "absent" : str(a->second)) +
+                  " vs " +
+                  (b == live.batchable.end() ? "absent" : str(b->second)));
+    else
+      diff(d, "batchable." + sp, a->second, b->second);
+  }
+  diff(d, "volatile_leaves", loaded.volatile_leaves, live.volatile_leaves);
+  diff(d, "persistent_only", loaded.persistent_only, live.persistent_only);
+  diff(d, "batch_spectator_indices", loaded.batch_spectator_indices,
+       live.batch_spectator_indices);
+  diff(d, "accumulation_factor", loaded.accumulation_factor,
+       live.accumulation_factor);
+  diff(d, "scheduler", loaded.scheduler, live.scheduler);
+  diff(d, "objective_function", loaded.objective_function,
+       live.objective_function);
+  diff(d, "reorder", loaded.reorder, live.reorder);
+  diff(d, "cse", loaded.cse, live.cse);
+  diff(d, "mode_order", loaded.mode_order, live.mode_order);
+  auto const& a = loaded.context;
+  auto const& b = live.context;
+  diff(d, "context.vacuum", a.vacuum, b.vacuum);
+  diff(d, "context.spbasis", a.spbasis, b.spbasis);
+  diff(d, "context.strict_braket_symmetry", a.strict_braket_symmetry,
+       b.strict_braket_symmetry);
+  diff(d, "context.cardinal_tensor_labels", a.cardinal_tensor_labels,
+       b.cardinal_tensor_labels);
+  diff(d, "context.spaces", a.spaces, b.spaces);
+  if (d.empty()) return;
+  std::string msg = "schedule fingerprint mismatch:";
+  for (auto const& line : d) msg += "\n" + line;
+  throw Exception(msg);
+}
+
+std::map<std::string, std::string> planner_record(OptimizeOptions const& opts) {
+  auto set = [](auto const& f) -> std::string { return f ? "set" : "unset"; };
+  std::map<std::string, std::string> r;
+  r["idx_to_extent"] = set(opts.idx_to_extent);
+  r["inner_pow"] = set(opts.inner_pow);
+  r["batch_target_size"] = set(opts.batch_policy.batch_target_size);
+  r["peak_threshold"] = std::to_string(opts.batch_policy.peak_threshold);
+  r["volatile_weight"] = std::to_string(opts.volatile_weight);
+  r["footprint_weight"] = std::to_string(opts.footprint_weight);
+  r["peak_flops_tolerance"] = std::to_string(opts.peak_flops_tolerance);
+  r["prune_outer_products"] = opts.prune_outer_products ? "true" : "false";
+  r["roofline.machine_balance"] = std::to_string(opts.roofline.machine_balance);
+  r["roofline.fast_mem_elems"] = std::to_string(opts.roofline.fast_mem_elems);
+  r["roofline.block_tiles"] = std::to_string(opts.roofline.block_tiles);
+  r["roofline.block_prefactor"] = std::to_string(opts.roofline.block_prefactor);
+  return r;
 }
 
 }  // namespace sequant::opt::schedule

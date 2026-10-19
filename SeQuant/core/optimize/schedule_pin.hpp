@@ -9,16 +9,20 @@
 #define SEQUANT_CORE_OPTIMIZE_SCHEDULE_PIN_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/eval/schedule_document.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize/options.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <cstddef>
 #include <map>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -168,6 +172,59 @@ struct RecordedRoot {
 /// \throws sequant::Exception listing the duplicate keys otherwise
 RecordedRoot record_root(std::string label, ExprPtr const& root_sum,
                          OptimizeOptions opts);
+
+namespace detail {
+
+/// the non-template part of \ref fingerprint_of: \p representatives has one
+/// Index per base_key present in the forest, \p volatile_leaf_labels the
+/// labels of the volatile leaf tensors
+eval::schedule::Fingerprint make_fingerprint(
+    std::vector<std::string> root_labels, OptimizeOptions const& opts,
+    std::vector<std::wstring> const& mode_order,
+    std::map<std::wstring, Index> const& representatives,
+    std::set<std::string> const& volatile_leaf_labels);
+
+}  // namespace detail
+
+/// Everything beyond the per-term trees that shapes the fused DAG: the
+/// batchability predicates evaluated on one representative Index per space
+/// present in \p forest, the volatile leaf labels, the scalar BatchPolicy and
+/// OptimizeOptions settings that steer structure, \p mode_order and the active
+/// Context. Size-dependent settings are deliberately absent (see
+/// \ref planner_record).
+template <meta::eval_node_range R>
+eval::schedule::Fingerprint fingerprint_of(
+    R const& forest, std::vector<std::string> root_labels,
+    OptimizeOptions const& opts, std::vector<std::wstring> const& mode_order) {
+  std::map<std::wstring, Index> representatives;
+  std::set<std::string> volatile_leaf_labels;
+  auto const& is_volatile = opts.batch_policy.is_volatile_leaf;
+  auto walk = [&](auto const& self, auto const& node) -> void {
+    if (!node.leaf()) {
+      self(self, node.left());
+      self(self, node.right());
+      return;
+    }
+    if (!node->is_tensor()) return;
+    for (auto const& ix : node->canon_indices())
+      representatives.try_emplace(ix.space().base_key(), ix);
+    auto const& t = node->as_tensor();
+    if (is_volatile && is_volatile(t))
+      volatile_leaf_labels.insert(toUtf8(t.label()));
+  };
+  for (auto const& root : forest) walk(walk, root);
+  return detail::make_fingerprint(std::move(root_labels), opts, mode_order,
+                                  representatives, volatile_leaf_labels);
+}
+
+/// \throws sequant::Exception listing every field in which \p loaded and
+///         \p live differ, one "fingerprint.<field>: <a> vs <b>" per line
+void check_fingerprint(eval::schedule::Fingerprint const& loaded,
+                       eval::schedule::Fingerprint const& live);
+
+/// the optimizer settings the fingerprint excludes (they only steer the
+/// single-term optimizer), stringified; for the document's run.planner
+std::map<std::string, std::string> planner_record(OptimizeOptions const& opts);
 
 }  // namespace sequant::opt::schedule
 
