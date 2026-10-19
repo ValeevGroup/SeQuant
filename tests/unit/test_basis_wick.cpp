@@ -188,8 +188,8 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
     // in p̃ (p in instance 1) onto the particle space is in instance 1 of a,
     // i.e. in ã if that is registered, not in p̃
     auto isr = make_min_sr_spaces();
-    isr->add(L"p̃", IndexBasis{isr->retrieve_space(L"p"), 1});
-    isr->add(L"ã", IndexBasis{isr->retrieve_space(L"a"), 1});
+    isr->add(L"p̃", L"p", 1);
+    isr->add(L"ã", L"a", 1);
     auto nctx = get_default_context();
     nctx.set(std::move(isr));
     auto nctx_resetter = set_scoped_default_context(nctx);
@@ -359,8 +359,7 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
     // ã: a basis of a with a general metric; an overlap between two of its
     // functions is the metric, a Kronecker delta is still an identity
     auto isr = mbpt::make_min_sr_spaces();
-    isr->add(L"ã", IndexBasis{isr->retrieve_space(L"a"), 1},
-             IndexBasisMetric::General);
+    isr->add(L"ã", L"a", 1, {.metric = IndexBasisMetric::General});
     auto gctx = get_default_context();
     gctx.set(std::move(isr));
     auto gctx_resetter = set_scoped_default_context(gctx);
@@ -527,8 +526,7 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
   SECTION("η = δ - γ in a non-orthonormal basis is an overlap minus γ") {
     // ũ: a basis of the active space with a general metric
     auto isr = mbpt::make_mr_spaces();
-    isr->add(L"ũ", IndexBasis{isr->retrieve_space(L"u"), 1},
-             IndexBasisMetric::General);
+    isr->add(L"ũ", L"u", 1, {.metric = IndexBasisMetric::General});
     auto metric_ctx = get_default_context();
     metric_ctx.set(std::move(isr));
     auto metric_resetter = set_scoped_default_context(metric_ctx);

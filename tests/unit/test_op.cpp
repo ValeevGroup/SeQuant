@@ -336,11 +336,11 @@ TEST_CASE("op", "[elements]") {
           .add(L"u", 0b00100)
           .add(L"a", 0b01000)
           .add(L"g", 0b10000)
-          .add_union(L"O", {L"o", L"i"}, is_vacuum_occupied)
-          .add_union(L"M", {L"o", L"i", L"u"}, is_reference_occupied)
+          .add_union(L"O", {L"o", L"i"}, {.vacuum_occupied = true})
+          .add_union(L"M", {L"o", L"i", L"u"}, {.reference_occupied = true})
           .add_union(L"E", {L"u", L"a", L"g"})
           .add_union(L"Z", {L"i", L"u", L"a"})
-          .add_union(L"p", {L"M", L"E"}, is_complete);
+          .add_union(L"p", {L"M", L"E"}, {.complete = true});
       auto ctx = get_default_context();
       ctx.set(isr);
       ctx.set(Vacuum::MultiProduct);

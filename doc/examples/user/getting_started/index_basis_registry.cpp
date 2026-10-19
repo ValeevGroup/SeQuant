@@ -65,7 +65,7 @@ void v3() {
   // a basis instance of a registered space can be registered under its own
   // label: here a localized basis of the space i, as its basis instance 1
   const IndexSpace i = isr->retrieve_space(L"i");
-  isr->add(L"ĩ", IndexBasis{i, 1});
+  isr->add(L"ĩ", i, 1);
   // a Context owns its registry: register everything first, then hand it over
   // (it is moved in)
   set_default_context({.index_basis_registry_shared_ptr = std::move(isr)});

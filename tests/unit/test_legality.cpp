@@ -754,8 +754,7 @@ TEST_CASE("forced_split_types keeps a named basis apart from its space",
   using namespace sequant;
   auto isr = mbpt::make_min_sr_spaces();
   const IndexSpace a = isr->retrieve_space(L"a"), i = isr->retrieve_space(L"i");
-  isr->add(L"μ̃", IndexBasis{
-                     a, std::numeric_limits<IndexBasis::instance_type>::max()});
+  isr->add(L"μ̃", a, std::numeric_limits<IndexBasis::instance_type>::max());
   auto ctx = set_scoped_default_context(
       Context({.index_basis_registry_shared_ptr = std::move(isr),
                .vacuum = Vacuum::SingleProduct}));

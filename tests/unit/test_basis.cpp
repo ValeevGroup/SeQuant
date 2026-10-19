@@ -56,8 +56,8 @@ auto scoped_pao_context() {
   const IndexSpace uocc = isr->retrieve_space(L"a");
   constexpr IndexBasis::instance_type P =
       std::numeric_limits<IndexBasis::instance_type>::max();
-  isr->add(L"μ̃", IndexBasis{uocc, P},
-           120ul);  // before the Context adopts the registry (#665)
+  isr->add(L"μ̃", uocc, P,
+           {.extent = 120});  // before the Context adopts the registry (#665)
   return set_scoped_default_context(
       Context({.index_basis_registry_shared_ptr = std::move(isr),
                .vacuum = Vacuum::SingleProduct}));
@@ -509,11 +509,11 @@ TEST_CASE("index-basis-serialization", "[serialization][basis]") {
                      i = isr->retrieve_space(L"i");
     constexpr IndexBasis::instance_type P =
         std::numeric_limits<IndexBasis::instance_type>::max();
-    isr->add(L"μ̃", IndexBasis{a, P}, 120ul);
+    isr->add(L"μ̃", a, P, {.extent = 120});
     // a named occupied basis (localized occupieds), so a proto can be named
     // too; written with the combining tilde U+0303 the v1 BaseKey alphabet
     // admits
-    isr->add(L"ĩ", IndexBasis{i, 1});
+    isr->add(L"ĩ", i, 1);
     // a copy shares the registry until set() moves the populated one in
     auto named = get_default_context_snapshot();
     named.set(std::move(isr));
@@ -857,12 +857,11 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
                    uocc = isr->retrieve_space(L"a");
   constexpr IndexBasis::instance_type P =
       std::numeric_limits<IndexBasis::instance_type>::max();
-  isr->add(L"μ̃", IndexBasis{uocc, P}, 120ul,
-           IndexBasisMetric::General);  // before the Context adopts the
-                                        // registry (#665)
+  // before the Context adopts the registry (#665)
+  isr->add(L"μ̃", uocc, P, {.extent = 120, .metric = IndexBasisMetric::General});
   // an orthonormal unoccupied basis other than the canonical one, e.g.
   // localized virtuals
-  isr->add(L"ã", IndexBasis{uocc, 2});
+  isr->add(L"ã", uocc, 2);
   auto ctx = set_scoped_default_context(
       Context({.index_basis_registry_shared_ptr = std::move(isr),
                .vacuum = Vacuum::SingleProduct}));

@@ -170,7 +170,7 @@ TEST_CASE("dryrun size regime keys a named basis by its label",
   const IndexSpace a = isr->retrieve_space(L"a");
   constexpr IndexBasis::instance_type P =
       std::numeric_limits<IndexBasis::instance_type>::max();
-  isr->add(L"μ̃", IndexBasis{a, P});  // before the Context adopts the registry
+  isr->add(L"μ̃", a, P);  // before the Context adopts the registry
   auto ctx = set_scoped_default_context(
       Context({.index_basis_registry_shared_ptr = std::move(isr),
                .vacuum = Vacuum::SingleProduct}));

@@ -7,9 +7,9 @@ int main() {
 
   set_default_context(
       {.index_basis_registry = IndexBasisRegistry{}
-                                   .add(L"y", 0b01, is_vacuum_occupied)
+                                   .add(L"y", 0b01, {.vacuum_occupied = true})
                                    .add(L"z", 0b10)
-                                   .add(L"p", 0b11, is_complete),
+                                   .add(L"p", 0b11, {.complete = true}),
        .vacuum = Vacuum::SingleProduct});
 
   auto cp1 = fcrex(L"p_1"), cp2 = fcrex(L"p_2");

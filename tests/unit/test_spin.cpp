@@ -2030,11 +2030,11 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   using sequant::mbpt::spintrace;
   auto isr = mbpt::make_sr_spaces();
   const IndexSpace uocc = isr->retrieve_space(L"a");
-  isr->add(L"μ̃", IndexBasis{uocc, 77}, 120ul);
+  isr->add(L"μ̃", uocc, 77, {.extent = 120});
   // the spin-cased counterparts are bases of their own, e.g. of different
   // extents in a spin-polarized state
-  isr->add(L"μ̃↑", IndexBasis{isr->retrieve_space(L"a↑"), 77}, 60ul);
-  isr->add(L"μ̃↓", IndexBasis{isr->retrieve_space(L"a↓"), 77}, 50ul);
+  isr->add(L"μ̃↑", L"a↑", 77, {.extent = 60});
+  isr->add(L"μ̃↓", L"a↓", 77, {.extent = 50});
   auto ctx = set_scoped_default_context(
       Context({.index_basis_registry_shared_ptr = std::move(isr),
                .vacuum = Vacuum::SingleProduct}));
@@ -2075,8 +2075,8 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   // a missing counterpart is an error, not derived from the index's own basis
   {
     auto half = mbpt::make_sr_spaces();
-    half->add(L"μ̃", IndexBasis{uocc, 77}, 120ul);
-    half->add(L"μ̃↑", IndexBasis{half->retrieve_space(L"a↑"), 77}, 60ul);
+    half->add(L"μ̃", uocc, 77, {.extent = 120});
+    half->add(L"μ̃↑", L"a↑", 77, {.extent = 60});
     auto half_ctx = set_scoped_default_context(
         Context({.index_basis_registry_shared_ptr = std::move(half),
                  .vacuum = Vacuum::SingleProduct}));

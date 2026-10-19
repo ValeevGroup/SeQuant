@@ -700,7 +700,7 @@ TEST_CASE("optimize", "[optimize]") {
       // (0b0001..0b1000).
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, 3ul)));
+              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
 
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
@@ -735,7 +735,7 @@ TEST_CASE("optimize", "[optimize]") {
       // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, 3ul)));
+              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
@@ -785,7 +785,7 @@ TEST_CASE("optimize", "[optimize]") {
       using namespace sequant;
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, 3ul)));
+              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
@@ -840,7 +840,7 @@ TEST_CASE("optimize", "[optimize]") {
       // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, 3ul)));
+              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
@@ -875,7 +875,7 @@ TEST_CASE("optimize", "[optimize]") {
       // product over the 3 leaves.
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, 3ul)));
+              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
       auto expr = deserialize(L"g{a1;i1;F1} * g{a2;i1;F1} * g{a2;i2;F2}",
                               {.def_perm_symm = Symmetry::Nonsymm});
       OptimizeOptions opts;
@@ -919,7 +919,7 @@ TEST_CASE("optimize", "[optimize]") {
       // index has label L"F_1" (not L"F1").
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, 3ul)));
+              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
@@ -1484,7 +1484,7 @@ TEST_CASE("role filter: contracted mode sliced only in the contracted role",
   namespace o = sequant::opt::detail;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 8ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 8}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
@@ -1552,7 +1552,7 @@ TEST_CASE("role filter: external mode needs the external role, not a fallback",
   namespace o = sequant::opt::detail;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 8ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 8}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
@@ -2747,7 +2747,7 @@ TEST_CASE("ordered key prices the hoistable order (Carr != 0)",
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 4ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto is_batchable = [](Index const& ix) {
@@ -2794,7 +2794,7 @@ TEST_CASE("ordered cells exclude external modes", "[optimize][ext-place]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 4ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto is_batchable = [](Index const& ix) {
@@ -2842,7 +2842,7 @@ TEST_CASE("the DP opens an external batch loop on an over-budget node",
   auto ctx_copy = get_default_context_snapshot();
   {
     IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
-    reg.add(L"F", IndexSpace::Type{0b10000}, 100ul);
+    reg.add(L"F", IndexSpace::Type{0b10000}, {.dimension = 100});
     reg.extent(L"a", 3ul);
     ctx_copy.set(std::move(reg));
   }
@@ -3872,7 +3872,7 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   // default context's registry would make them collide on the second add.
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 4ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -4033,7 +4033,7 @@ TEST_CASE("loop-tree charge must not bill a free hoist", "[.][loop-tree]") {
   // default context's registry would make them collide on the second add.
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 4ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -4095,7 +4095,7 @@ TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 4ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -4328,7 +4328,7 @@ TEST_CASE("loop-tree probe: resident-scan peak of a hoisted node",
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 4ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -4384,7 +4384,7 @@ TEST_CASE("loop-tree probe: order-dependent Carr != 0 cells",
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, 4ul));
+                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -4451,7 +4451,7 @@ TEST_CASE("loop-tree probe: resident-scan peak, nested",
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
                    .add(L"F", IndexSpace::Type{0b10000},
-                        1000ul));  // large: dominates peak
+                        {.dimension = 1000}));  // large: dominates peak
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };

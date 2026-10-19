@@ -442,8 +442,8 @@ TEST_CASE("index", "[elements][index]") {
       // named bases of the particle space, with diacritics in their labels
       const IndexSpace uocc = registry.retrieve_space(
           registry.particle_space(/* nulltype_ok = */ false), mbpt::Spin::any);
-      registry.add(L"μ̃", IndexBasis{uocc, 1});
-      if (!registry.contains(L"f̌")) registry.add(L"f̌", IndexBasis{uocc, 2});
+      registry.add(L"μ̃", uocc, 1);
+      if (!registry.contains(L"f̌")) registry.add(L"f̌", uocc, 2);
     }
     const auto ctx_resetter = set_scoped_default_context(
         get_default_context_snapshot().set(std::move(registry)));

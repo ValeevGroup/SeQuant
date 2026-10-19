@@ -114,9 +114,10 @@ TEST_CASE("index_space", "[elements]") {
     static_assert(std::is_same_v<decltype(isr->bases()),
                                  const IndexBasisRegistry::table_type&>);
 
-    // registration: label, basis, own size; the space keeps its own size
+    // registration: label, space, instance, own size; the space keeps its own
+    // size
     CHECK_FALSE(isr->basis_label(pao));  // nothing named yet
-    REQUIRE_NOTHROW(isr->add(L"μ̃", pao, 120ul));
+    REQUIRE_NOTHROW(isr->add(L"μ̃", a, 2147483647, {.extent = 120}));
     CHECK(isr->bases().size() == nentries + 1);
     CHECK(isr->contains(L"μ̃"));
     CHECK(isr->contains(pao));
@@ -169,7 +170,7 @@ TEST_CASE("index_space", "[elements]") {
     // occupied orbitals as basis instance 1 of i, with a size of their own
     const IndexSpace i = isr->retrieve_space(L"i");
     REQUIRE(i.dimension() != 50);
-    REQUIRE_NOTHROW(isr->add(L"Ĩ", IndexBasis{i, 1}, 50ul));
+    REQUIRE_NOTHROW(isr->add(L"Ĩ", i, 1, {.extent = 50}));
     REQUIRE(isr->bases().find(std::wstring_view(L"Ĩ")) <
             isr->bases().find(std::wstring_view(L"i")));
     REQUIRE(std::as_const(*isr).retrieve_space_ptr(L"i") != nullptr);
@@ -198,7 +199,7 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(std::ranges::find(isr->base_spaces(), a) !=
             isr->base_spaces().end());  // memoizes the base spaces
     // ã: a named basis of a with no extent or field of its own
-    REQUIRE_NOTHROW(isr->add(L"ã", IndexBasis{a, 5}));
+    REQUIRE_NOTHROW(isr->add(L"ã", a, 5));
     REQUIRE(isr->retrieve(L"ã").extent() == a.dimension());
     REQUIRE(isr->retrieve(L"ã").field() == a.field());
     CHECK_FALSE(isr->retrieve(L"ã").own_extent());
@@ -207,7 +208,8 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(isr->retrieve(L"μ̃").own_field() == Field::Real);
     // â: registered with the space's current extent and field, which are
     // then its own and do not follow the space
-    REQUIRE_NOTHROW(isr->add(L"â", IndexBasis{a, 6}, a.dimension(), a.field()));
+    REQUIRE_NOTHROW(
+        isr->add(L"â", a, 6, {.extent = a.dimension(), .field = a.field()}));
     CHECK(isr->retrieve(L"â").own_extent() == a.dimension());
     CHECK(isr->retrieve(L"â").own_field() == a.field());
     // a negative extent is rejected, for a basis and for a space alike
@@ -289,21 +291,18 @@ TEST_CASE("index_space", "[elements]") {
     }
 
     // invariants
-    CHECK_THROWS(isr->add(L"μ̃", IndexBasis{a, 5}));  // 1: label taken
+    CHECK_THROWS(isr->add(L"μ̃", a, 5));  // 1: label taken
     CHECK_THROWS(
         isr->add(IndexSpace{L"μ̃", 0b100}));  // 1: a space may not take a name
-    CHECK_THROWS(
-        isr->add(L"ν", IndexBasis{a, 2147483647}));  // 3: one name per basis
-    CHECK_THROWS(isr->add(L"ν", IndexBasis{IndexSpace{L"q", 0b100},
-                                           1}));  // 4: space not registered
-    CHECK_THROWS(isr->add(L"ν", IndexBasis{a}));  // 5: needs an instance
-    CHECK_THROWS(isr->add(
-        L"a2", IndexBasis{a, 1}));  // 6: digit after the first character
-    CHECK_THROWS(isr->add(L"μ̃_x", IndexBasis{a, 1}));  // 6: underscore
-    CHECK_THROWS(isr->add(L"", IndexBasis{a, 1}));     // 6: empty
+    CHECK_THROWS(isr->add(L"ν", a, 2147483647));  // 3: one name per basis
+    CHECK_THROWS(isr->add(L"ν", IndexSpace{L"q", 0b100},
+                          1));             // 4: space not registered
+    CHECK_THROWS(isr->add(L"a2", a, 1));   // 6: digit after the first character
+    CHECK_THROWS(isr->add(L"μ̃_x", a, 1));  // 6: underscore
+    CHECK_THROWS(isr->add(L"", a, 1));     // 6: empty
     // 6: no serializer syntax, for a name or a space alike
     for (auto bad : {L"ν<", L"ν}", L"ν;", L"ν,", L"ν ν", L"2ν"}) {
-      CHECK_THROWS(isr->add(bad, IndexBasis{a, 1}));
+      CHECK_THROWS(isr->add(bad, a, 1));
       CHECK_THROWS(isr->add(IndexSpace{bad, 0b100000000}));
       CHECK_FALSE(isr->retrieve_ptr(bad));
     }
@@ -330,7 +329,7 @@ TEST_CASE("index_space", "[elements]") {
     // compares every entry, named ones and their metadata included; the table
     // ctor takes spaces and names together
     auto isr2 = sequant::mbpt::make_min_sr_spaces();
-    isr2->add(L"μ̃", pao, 120ul);
+    isr2->add(L"μ̃", a, 2147483647, {.extent = 120});
     IndexBasisRegistry copy(*isr2);
     CHECK(copy == *isr2);
     // the name and its count travel
@@ -374,7 +373,7 @@ TEST_CASE("index_space", "[elements]") {
 
     // remove(IndexSpace) never erases a named entry under the same key (R3)
     auto isr3 = sequant::mbpt::make_min_sr_spaces();
-    isr3->add(L"μ̃", pao);
+    isr3->add(L"μ̃", a, 2147483647);
     // an unregistered space whose key is the name: no-op
     REQUIRE_NOTHROW(isr3->remove(IndexSpace{L"μ̃", 0b100}));
     CHECK(isr3->contains(L"μ̃"));
@@ -394,15 +393,19 @@ TEST_CASE("index_space", "[elements]") {
     // similar make_sr_spaces, but no spin AND occupied and unoccupied bits are
     // NOT contiguous!
     REQUIRE_NOTHROW(
-        isr->add(L"o", 0b0001, 3)       // dimension
-            .add("i", 0b0100, is_hole)  // N.B. narrow string
-            .add(L'a', 0b0010, Field::Real, is_particle, QuantumNumbersAttr{},
-                 50)  // N.B. wchar_t + explicit quantum numbers + size
-            .add('g', 0b1000, Field::Real)
-            .add_union(L"m", {L"o", L"i"}, is_vacuum_occupied,
-                       is_reference_occupied)
+        isr->add(L"o", 0b0001, {.dimension = 3})
+            .add("i", 0b0100, {.hole = true})  // N.B. narrow string
+            .add(L'a', 0b0010,
+                 {.qns = QuantumNumbersAttr{},
+                  .dimension = 50,
+                  .field = Field::Real,
+                  .particle = true})  // N.B. wchar_t + explicit quantum
+                                      // numbers + size
+            .add('g', 0b1000, {.field = Field::Real})
+            .add_union(L"m", {L"o", L"i"},
+                       {.vacuum_occupied = true, .reference_occupied = true})
             .add_union(L"e", {L"a", L"g"})
-            .add_unIon(L"p", {L"m", L"e"}, is_complete)  // N.B. unIon
+            .add_unIon(L"p", {L"m", L"e"}, {.complete = true})  // N.B. unIon
     );
     REQUIRE(isr->retrieve_space(L"o").dimension() == 3);
     REQUIRE(isr->retrieve_space(L"o").field() == Field::Complex);
@@ -649,15 +652,14 @@ TEST_CASE("index_space", "[elements]") {
       CHECK_FALSE(both->contains(label));
     }
     auto taken = sequant::mbpt::make_F12_sr_spaces();
-    taken->add(L"ρ", IndexBasis{taken->retrieve_space(L"κ"), 3});
+    taken->add(L"ρ", L"κ", 3);
     CHECK_THROWS_WITH(
         mbpt::add_ao_basis(taken, mbpt::Spin::any, /*vbs=*/false, /*abs=*/true),
         Catch::Matchers::ContainsSubstring("ρ"));
     CHECK_FALSE(taken->contains(L"μ"));
     CHECK_FALSE(taken->contains(L"σ"));
     auto named = sequant::mbpt::make_F12_sr_spaces();
-    named->add(L"ν", IndexBasis{named->retrieve_space(L"α'"),
-                                mbpt::default_ao_basis_instance});
+    named->add(L"ν", L"α'", mbpt::default_ao_basis_instance);
     CHECK_THROWS_WITH(
         mbpt::add_ao_basis(named, mbpt::Spin::any, /*vbs=*/false, /*abs=*/true),
         Catch::Matchers::ContainsSubstring("ν"));
@@ -708,7 +710,8 @@ TEST_CASE("index_space", "[elements]") {
     // a registry that cannot take the AO basis is left untouched
     auto no_p = std::make_shared<IndexBasisRegistry>();
     const IndexSpace::QuantumNumbers any{mbpt::Spin::any};
-    no_p->add(L"i", 0b01, any, is_hole).add(L"a", 0b10, any, is_particle);
+    no_p->add(L"i", 0b01, {.qns = any, .hole = true})
+        .add(L"a", 0b10, {.qns = any, .particle = true});
     CHECK_THROWS_AS(mbpt::add_pao_basis(no_p, mbpt::Spin::any),
                     IndexSpace::bad_key);
     CHECK_FALSE(no_p->contains(L"μ̃"));
@@ -716,15 +719,14 @@ TEST_CASE("index_space", "[elements]") {
     // ... as is one whose μ is not a named basis instance the PAOs can
     // follow: a space, or a follower itself
     auto mu_space = sequant::mbpt::make_min_sr_spaces();
-    mu_space->add(L"μ", 0b100, any);
+    mu_space->add(L"μ", 0b100, {.qns = any});
     CHECK_THROWS_WITH(mbpt::add_pao_basis(mu_space, mbpt::Spin::any),
                       Catch::Matchers::ContainsSubstring("space"));
     CHECK_FALSE(mu_space->contains(L"μ̃"));
     CHECK_FALSE(mu_space->contains(L"μ̃↑"));
     auto mu_follows = sequant::mbpt::make_min_sr_spaces();
     mbpt::add_ao_basis(mu_follows, mbpt::Spin::any);
-    mu_follows->add(L"κ", IndexBasis{mu_follows->retrieve_space(L"p"), 3})
-        .follow(L"μ", L"κ");
+    mu_follows->add(L"κ", L"p", 3).follow(L"μ", L"κ");
     CHECK_THROWS_WITH(mbpt::add_pao_basis(mu_follows, mbpt::Spin::any),
                       Catch::Matchers::ContainsSubstring("κ"));
     CHECK_FALSE(mu_follows->contains(L"μ̃"));
@@ -759,20 +761,27 @@ TEST_CASE("index_space", "[elements]") {
     }
     CHECK_FALSE(*isr2 == *isr);  // equality sees the extent
 
-    // a basis given to add() under another registry keeps its metadata (as
-    // values of its own: the new registry has no μ to follow) ...
+    // an entry of one registry is registered in another by its space,
+    // instance and own metadata (as values of its own: the new registry has
+    // no μ to follow) ...
     isr->extent(L"μ", 1234).field(L"μ", Field::Real);
+    const IndexBasis src = isr->retrieve(L"μ̃");
     auto isr3 = sequant::mbpt::make_min_sr_spaces();
-    isr3->add(L"μ̃", isr->retrieve(L"μ̃"));
+    isr3->add(L"μ̃", src.space(), *src.basis_instance(),
+              {.extent = src.own_extent(),
+               .metric = src.metric(),
+               .field = src.own_field()});
     CHECK(isr3->retrieve(L"μ̃") == pao);
     CHECK(isr3->retrieve(L"μ̃").extent() == 1234);
     CHECK(isr3->retrieve(L"μ̃").metric() == IndexBasisMetric::General);
     CHECK(isr3->retrieve(L"μ̃").field() == Field::Real);
     CHECK_FALSE(isr3->follows(L"μ̃"));
-    // ... unless overridden by the arguments, and under the label given
+    // ... or with metadata and under a label of its own
     auto isr4 = sequant::mbpt::make_min_sr_spaces();
-    isr4->add(L"ν̃", isr->retrieve(L"μ̃"), 56ul, IndexBasisMetric::Unit,
-              Field::Complex);
+    isr4->add(L"ν̃", src.space(), *src.basis_instance(),
+              {.extent = 56,
+               .metric = IndexBasisMetric::Unit,
+               .field = Field::Complex});
     CHECK_FALSE(isr4->contains(L"μ̃"));
     CHECK(isr4->retrieve(L"ν̃").name() == L"ν̃");
     CHECK(same_instance(isr4->retrieve(L"ν̃"), pao));
@@ -782,7 +791,7 @@ TEST_CASE("index_space", "[elements]") {
     // a basis without metadata of its own takes that of this registry's space
     auto isr5 = sequant::mbpt::make_min_sr_spaces();
     isr5->extent(L"a", 99);
-    isr5->add(L"μ̃", IndexBasis{uocc, mbpt::default_pao_basis_instance});
+    isr5->add(L"μ̃", uocc, mbpt::default_pao_basis_instance);
     CHECK(isr5->retrieve(L"μ̃").extent() == 99);
     CHECK(isr5->retrieve(L"μ̃").metric() == IndexBasisMetric::Unit);
   }
@@ -791,9 +800,9 @@ TEST_CASE("index_space", "[elements]") {
     auto isr = sequant::mbpt::make_min_sr_spaces();
     const IndexSpace p = isr->retrieve_space(L"p"),
                      a = isr->retrieve_space(L"a");
-    isr->add(L"μ", IndexBasis{p, 7}, 500ul, IndexBasisMetric::General)
-        .add(L"μ̃", IndexBasis{a, 7})
-        .add(L"ν̃", IndexBasis{a, 8});
+    isr->add(L"μ", p, 7, {.extent = 500, .metric = IndexBasisMetric::General})
+        .add(L"μ̃", a, 7)
+        .add(L"ν̃", a, 8);
     REQUIRE(isr->retrieve(L"μ̃").extent() == a.dimension());
     CHECK_FALSE(isr->follows(L"μ̃"));
     REQUIRE_NOTHROW(isr->follow(L"μ̃", L"μ"));
@@ -807,7 +816,7 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(isr->retrieve(L"μ̃").extent() == 600);
     CHECK(isr->retrieve(L"μ̃").metric() == IndexBasisMetric::Unit);
     // ... also when the source follows its space
-    isr->add(L"κ", IndexBasis{p, 9}).follow(L"ν̃", L"κ");
+    isr->add(L"κ", p, 9).follow(L"ν̃", L"κ");
     CHECK(isr->retrieve(L"ν̃").extent() == p.dimension());
     isr->extent(L"p", 700);
     CHECK(isr->retrieve(L"κ").extent() == 700);
@@ -841,7 +850,7 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(isr->retrieve(L"μ̃").extent() == 700);
     copy.extent(L"κ", 700);
     CHECK(copy == *isr);
-    copy.remove(L"ν̃").add(L"ν̃", IndexBasis{a, 8}, 700ul);
+    copy.remove(L"ν̃").add(L"ν̃", a, 8, {.extent = 700});
     CHECK_FALSE(copy == *isr);  // same values, ν̃ no longer follows κ
     // removing the source detaches the followers, which keep the values
     isr->remove(L"κ");
@@ -851,7 +860,7 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE_NOTHROW(isr->extent(L"μ̃", 1));
     // removing a follower forgets it
     isr->follow(L"ν̃", L"μ").remove(L"ν̃");
-    isr->add(L"ν̃", IndexBasis{a, 8});
+    isr->add(L"ν̃", a, 8);
     CHECK_FALSE(isr->follows(L"ν̃"));
   }
 
@@ -942,8 +951,8 @@ TEST_CASE("index_space", "[elements]") {
     IndexBasisRegistry isr;
     using namespace sequant::mbpt;
     isr.add("i", 0b01,
-            // fully occupied in vacuum state
-            is_vacuum_occupied)
+            {// fully occupied in vacuum state
+             .vacuum_occupied = true})
         .add("a", 0b10)
         .add_union("p", {"i", "a"});
 

@@ -144,7 +144,7 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
   }
   require_unregistered(*isr, "add_ao_basis", bases, instance);
   for (const auto& [label, space] : bases)
-    isr->add(label, IndexBasis{space, instance}, IndexBasisMetric::General);
+    isr->add(label, space, instance, {.metric = IndexBasisMetric::General});
 }
 
 void add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
@@ -188,7 +188,7 @@ void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
     throw Exception("add_pao_basis: the OBS AO basis 'μ' follows '" +
                     toUtf8(*source) + "', so the PAO bases cannot follow it");
   for (const auto& [l, space] : bases)
-    isr->add(l, IndexBasis{space, instance}).follow(l, L"μ");
+    isr->add(l, space, instance, {.follows = L"μ"});
 }
 
 void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& isr) {
@@ -210,10 +210,13 @@ std::shared_ptr<IndexBasisRegistry> make_min_sr_spaces(SpinConvention spconv) {
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
-  isr->add(L"i", 0b01, spin_any, is_vacuum_occupied, is_reference_occupied,
-           is_hole)
-      .add(L"a", 0b10, spin_any, is_particle)
-      .add_union(L"p", {L"i", L"a"}, is_complete);
+  isr->add(L"i", 0b01,
+           {.qns = spin_any,
+            .vacuum_occupied = true,
+            .reference_occupied = true,
+            .hole = true})
+      .add(L"a", 0b10, {.qns = spin_any, .particle = true})
+      .add_union(L"p", {L"i", L"a"}, {.complete = true});
   if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
   isr->physical_particle_attribute_mask(bitset_t(spin_any));
 
@@ -229,17 +232,17 @@ std::shared_ptr<IndexBasisRegistry> make_mr_spaces(SpinConvention spconv) {
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
-  isr->add(L"o", 0b00001, spin_any)
-      .add(L"i", 0b00010, spin_any)
-      .add(L"u", 0b00100, spin_any)
-      .add(L"a", 0b01000, spin_any)
-      .add(L"g", 0b10000, spin_any)
-      .add_union(L"O", {L"o", L"i"}, is_vacuum_occupied)
-      .add_union(L"M", {L"o", L"i", L"u"}, is_reference_occupied)
-      .add_union(L"I", {L"i", L"u"}, is_hole)
+  isr->add(L"o", 0b00001, {.qns = spin_any})
+      .add(L"i", 0b00010, {.qns = spin_any})
+      .add(L"u", 0b00100, {.qns = spin_any})
+      .add(L"a", 0b01000, {.qns = spin_any})
+      .add(L"g", 0b10000, {.qns = spin_any})
+      .add_union(L"O", {L"o", L"i"}, {.vacuum_occupied = true})
+      .add_union(L"M", {L"o", L"i", L"u"}, {.reference_occupied = true})
+      .add_union(L"I", {L"i", L"u"}, {.hole = true})
       .add_union(L"E", {L"u", L"a", L"g"})
-      .add_union(L"A", {L"u", L"a"}, is_particle)
-      .add_union(L"p", {L"M", L"E"}, is_complete);
+      .add_union(L"A", {L"u", L"a"}, {.particle = true})
+      .add_union(L"p", {L"M", L"E"}, {.complete = true});
 
   if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
   isr->physical_particle_attribute_mask(bitset_t(spin_any));
@@ -252,12 +255,12 @@ std::shared_ptr<IndexBasisRegistry> make_min_mr_spaces(SpinConvention spconv) {
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
-  isr->add(L"i", 0b0001, spin_any, is_vacuum_occupied)
-      .add(L"u", 0b0010, spin_any)
-      .add(L"a", 0b0100, spin_any)
-      .add_union(L"I", {L"i", L"u"}, is_reference_occupied, is_hole)
-      .add_union(L"A", {L"u", L"a"}, is_particle)
-      .add_union(L"p", {L"I", L"a"}, is_complete);
+  isr->add(L"i", 0b0001, {.qns = spin_any, .vacuum_occupied = true})
+      .add(L"u", 0b0010, {.qns = spin_any})
+      .add(L"a", 0b0100, {.qns = spin_any})
+      .add_union(L"I", {L"i", L"u"}, {.reference_occupied = true, .hole = true})
+      .add_union(L"A", {L"u", L"a"}, {.particle = true})
+      .add_union(L"p", {L"I", L"a"}, {.complete = true});
 
   if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
   isr->physical_particle_attribute_mask(bitset_t(spin_any));
@@ -270,14 +273,15 @@ std::shared_ptr<IndexBasisRegistry> make_sr_spaces(SpinConvention spconv) {
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
-  isr->add(L"o", 0b0001, spin_any)
-      .add(L"i", 0b0010, spin_any, is_hole)
-      .add(L"a", 0b0100, spin_any, is_particle)
-      .add(L"g", 0b1000, spin_any)
-      .add_union(L"m", {L"o", L"i"}, is_vacuum_occupied, is_reference_occupied)
+  isr->add(L"o", 0b0001, {.qns = spin_any})
+      .add(L"i", 0b0010, {.qns = spin_any, .hole = true})
+      .add(L"a", 0b0100, {.qns = spin_any, .particle = true})
+      .add(L"g", 0b1000, {.qns = spin_any})
+      .add_union(L"m", {L"o", L"i"},
+                 {.vacuum_occupied = true, .reference_occupied = true})
       .add_union(L"e", {L"a", L"g"})
       .add_union(L"x", {L"i", L"a"})
-      .add_union(L"p", {L"m", L"e"}, is_complete);
+      .add_union(L"p", {L"m", L"e"}, {.complete = true});
   if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
   isr->physical_particle_attribute_mask(bitset_t(spin_any));
 
@@ -289,12 +293,13 @@ std::shared_ptr<IndexBasisRegistry> make_F12_sr_spaces(SpinConvention spconv) {
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
-  isr->add(L"o", 0b00001, spin_any)
-      .add(L"i", 0b00010, spin_any, is_hole)
-      .add(L"a", 0b00100, spin_any, is_particle)
-      .add(L"g", 0b01000, spin_any)
-      .add(L"α'", 0b10000, spin_any)
-      .add_union(L"m", {L"o", L"i"}, is_vacuum_occupied, is_reference_occupied)
+  isr->add(L"o", 0b00001, {.qns = spin_any})
+      .add(L"i", 0b00010, {.qns = spin_any, .hole = true})
+      .add(L"a", 0b00100, {.qns = spin_any, .particle = true})
+      .add(L"g", 0b01000, {.qns = spin_any})
+      .add(L"α'", 0b10000, {.qns = spin_any})
+      .add_union(L"m", {L"o", L"i"},
+                 {.vacuum_occupied = true, .reference_occupied = true})
       .add_union(L"e", {L"a", L"g"})
       .add_union(L"x", {L"i", L"a"})
       .add_union(L"p", {L"m", L"e"})
@@ -302,7 +307,7 @@ std::shared_ptr<IndexBasisRegistry> make_F12_sr_spaces(SpinConvention spconv) {
       .add_unIon(L"c", {L"g", L"α'"})
       .add_union(L"α", {L"e", L"α'"})
       .add_union(L"H", {L"i", L"α"})
-      .add_union(L"κ", {L"p", L"α'"}, is_complete);
+      .add_union(L"κ", {L"p", L"α'"}, {.complete = true});
   if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
   isr->physical_particle_attribute_mask(bitset_t(spin_any));
 
@@ -314,21 +319,21 @@ std::shared_ptr<IndexBasisRegistry> make_legacy_spaces(SpinConvention spconv) {
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
-  isr->add(L"o", 0b0000001, spin_any)
-      .add(L"n", 0b0000010, spin_any)
-      .add(L"i", 0b0000100, spin_any, is_hole)
-      .add(L"u", 0b0001000, spin_any)
-      .add(L"a", 0b0010000, spin_any, is_particle)
-      .add(L"g", 0b0100000, spin_any)
-      .add(L"α'", 0b1000000, spin_any)
-      .add_union(L"m", {L"o", L"n", L"i"}, is_vacuum_occupied,
-                 is_reference_occupied)
+  isr->add(L"o", 0b0000001, {.qns = spin_any})
+      .add(L"n", 0b0000010, {.qns = spin_any})
+      .add(L"i", 0b0000100, {.qns = spin_any, .hole = true})
+      .add(L"u", 0b0001000, {.qns = spin_any})
+      .add(L"a", 0b0010000, {.qns = spin_any, .particle = true})
+      .add(L"g", 0b0100000, {.qns = spin_any})
+      .add(L"α'", 0b1000000, {.qns = spin_any})
+      .add_union(L"m", {L"o", L"n", L"i"},
+                 {.vacuum_occupied = true, .reference_occupied = true})
       .add_union(L"M", {L"m", L"u"})
       .add_union(L"e", {L"a", L"g"})
       .add_union(L"E", {L"u", L"e"})
       .add_union(L"x", {L"i", L"u", L"a"})
       .add_union(L"p", {L"m", L"x", L"e"})
-      .add_union(L"κ", {L"p", L"α'"}, is_complete);
+      .add_union(L"κ", {L"p", L"α'"}, {.complete = true});
 
   if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
   isr->physical_particle_attribute_mask(bitset_t(spin_any));
@@ -343,13 +348,13 @@ make_fermi_and_bose_spaces(SpinConvention spconv) {
 
   const auto fspin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
-  isr->add(L"i", 0b001, fspin_any)    // fermi occupied
-      .add(L"a", 0b010, fspin_any)    // fermi unoccupied
-      .add_union(L"p", {L"i", L"a"})  // fermi all
+  isr->add(L"i", 0b001, {.qns = fspin_any})  // fermi occupied
+      .add(L"a", 0b010, {.qns = fspin_any})  // fermi unoccupied
+      .add_union(L"p", {L"i", L"a"})         // fermi all
       ;
   if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
   const auto bspin_any = IndexSpace::QuantumNumbers{Spin::any};
-  isr->add(L"β", 0b100, bspin_any);  // bose
+  isr->add(L"β", 0b100, {.qns = bspin_any});  // bose
 
   auto fermi_isr = std::make_shared<IndexBasisRegistry>(isr->bases());
   fermi_isr->vacuum_occupied_space(L"i");
