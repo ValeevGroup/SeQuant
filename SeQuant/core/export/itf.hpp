@@ -252,7 +252,8 @@ class ItfGenerator : public Generator<Context> {
   }
 
   void set_to_zero(const Tensor &tensor, const Context &ctx) override {
-    append_line("." + represent(tensor, ctx) + " := 0 * One[]");
+    append_line("." + represent(tensor, ctx) + " := 0 * " +
+                represent(tensor, ctx));
   }
 
   void unload(const Tensor &tensor, const Context &ctx) override {
