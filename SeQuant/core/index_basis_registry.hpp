@@ -164,6 +164,13 @@ struct IndexBasisSpec {
 /// - IndexBasisRegistry::particle_space and IndexBasisRegistry::hole_space specify in which space particles/holes
 /// can be created successfully from the reference state; this is a
 /// convenience for making operators
+///
+/// A reference or pointer returned by a lookup (IndexBasisRegistry::retrieve,
+/// IndexBasisRegistry::retrieve_space, their `_ptr` forms, the role-space
+/// getters, IndexBasisRegistry::unIon and IndexBasisRegistry::intersection)
+/// points into the table and stays valid until the next registration or
+/// removal; a registry owned by a Context is immutable, so a reference into
+/// it never dangles.
 // clang-format on
 class IndexBasisRegistry {
  public:
