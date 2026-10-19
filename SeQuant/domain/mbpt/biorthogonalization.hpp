@@ -91,7 +91,8 @@ ExprPtr WK_biorthogonalization_filter(
     const container::svector<container::svector<Index>>& ext_idxs);
 
 /// \brief Compaction of the closed-shell triplet residual: keeps one
-/// representative slot permutation per tensor-network hash group.
+/// representative slot permutation per tensor-network hash group, scaled so
+/// that the nns projector rebuilds the full residual from it.
 /// \param expr The residual; returned unchanged unless it is a Sum
 /// \param ext_idxs A vector of external index groups
 /// \return The compacted expression
@@ -361,7 +362,8 @@ template <typename T>
   return rows[n_particles - 2];
 }
 
-/// \brief Provides the closed-shell triplet NNS reconstruction weights
+/// \brief Provides the closed-shell triplet NNS reconstruction weights: the
+/// nns projector weights (see triplet_maxcoeff_compact)
 ///
 /// \tparam T The numeric type
 /// \param n_particles The rank of external index pairs
@@ -373,20 +375,7 @@ template <typename T>
   requires(std::floating_point<T> || meta::is_complex_v<T>)
 [[nodiscard]] const std::vector<T>& triplet_nns_projection_weights(
     std::size_t n_particles) {
-  auto normalized = [](std::vector<T> row) {
-    const T identity_weight = row.back();
-    for (auto& w : row) w /= identity_weight;
-    return row;
-  };
-  static const std::vector<T> rows[2] = {
-      normalized(*hardcoded_triplet_nullspace_projector<T>(2)),
-      normalized(*hardcoded_triplet_nullspace_projector<T>(3))};
-  if (n_particles != 2 && n_particles != 3)
-    throw Exception(
-        "triplet NNS projection weights are only available for "
-        "n_particles = 2, 3, requested rank is : " +
-        std::to_string(n_particles));
-  return rows[n_particles - 2];
+  return triplet_nullspace_projection_weights<T>(n_particles);
 }
 
 }  // namespace detail

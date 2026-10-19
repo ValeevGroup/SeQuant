@@ -2595,20 +2595,12 @@ TEST_CASE("triplet_generic_perms", "[spin][triplet]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
-  // weight rows: the NnsReconstruction row is the identity-normalized
-  // NullspaceProjector row
-  auto require_normalized = [](std::size_t n, double identity_weight) {
-    const auto& nullspace =
-        mbpt::detail::triplet_nullspace_projection_weights<double>(n);
-    const auto& nns = mbpt::detail::triplet_nns_projection_weights<double>(n);
-    REQUIRE(nullspace.size() == nns.size());
-    for (std::size_t p = 0; p != nns.size(); ++p) {
-      CAPTURE(n, p);
-      REQUIRE(std::abs(nns[p] - nullspace[p] / identity_weight) < 1e-14);
-    }
-  };
-  require_normalized(2, 3.0 / 4.0);  // {3/4, -1/4, -1/4, -1/4}
-  require_normalized(3, 1.0 / 4.0);  // w10[m]/20, identity op weight 5/20
+  // weight rows: the NnsReconstruction row is the NullspaceProjector row
+  for (std::size_t n : {2, 3}) {
+    CAPTURE(n);
+    REQUIRE(mbpt::detail::triplet_nns_projection_weights<double>(n) ==
+            mbpt::detail::triplet_nullspace_projection_weights<double>(n));
+  }
 }
 
 TEST_CASE("spin-traced densities", "[spin]") {

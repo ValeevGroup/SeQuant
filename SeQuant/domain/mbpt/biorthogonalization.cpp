@@ -878,13 +878,16 @@ ExprPtr triplet_maxcoeff_compact(
     return order;
   };
 
+  // scale the compact term by rank/dim (doubles: rank 3 of 4, triples: 9 of 36)
+  const rational dim_over_rank = n_particles == 2 ? rational(4, 3) : 4;
+
   Sum compact;
   for (const auto& [_, terms] : largest_coeff_terms_by_hash(work)) {
     // the max-|coeff| member is an identity-perm representative; its
     // coefficient also collects the images that map back onto it
     auto kept = terms.front()->clone();
     kept->as<Product>().scale(
-        rational(1, stabilizer_order(kept->as<Product>())));
+        dim_over_rank * rational(1, stabilizer_order(kept->as<Product>())));
     compact.append(std::move(kept));
   }
   return ex<Sum>(compact);
