@@ -194,7 +194,8 @@ container::svector<size_t> compute_permuted_indices(
 ///         std::nullopt if n_particles is outside the range [1,5].
 template <typename T>
   requires(std::floating_point<T> || meta::is_complex_v<T>)
-std::optional<std::vector<T>> hardcoded_nns_projector(std::size_t n_particles) {
+std::optional<std::vector<T>> hardcoded_singlet_nns_projector(
+    std::size_t n_particles) {
   switch (n_particles) {
     case 1:
       return std::vector<T>{T(1) / T(1)};
@@ -263,7 +264,7 @@ std::optional<std::vector<T>> hardcoded_nns_projector(std::size_t n_particles) {
 /// \return (memoized) Vector of hrdcoded/computed NNS projection weights
 template <typename T>
   requires(std::floating_point<T> || meta::is_complex_v<T>)
-[[nodiscard]] const std::vector<T>& nns_projection_weights(
+[[nodiscard]] const std::vector<T>& singlet_nns_projection_weights(
     std::size_t n_particles,
     double pseudoinverse_threshold =
         default_biorthogonalizer_pseudoinverse_threshold) {
@@ -283,9 +284,10 @@ template <typename T>
 
   return sequant::detail::memoize(
       cache, cache_mutex, cache_cv, key, [&]() -> std::vector<T> {
-        constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
-        if (n_particles <= max_rank_hardcoded_nns_projector) {
-          if (auto hardcoded_coeffs = hardcoded_nns_projector<T>(n_particles)) {
+        constexpr std::size_t max_rank_hardcoded_singlet_nns_projector = 5;
+        if (n_particles <= max_rank_hardcoded_singlet_nns_projector) {
+          if (auto hardcoded_coeffs =
+                  hardcoded_singlet_nns_projector<T>(n_particles)) {
             return std::move(hardcoded_coeffs.value());
           }
         }
@@ -365,15 +367,15 @@ template <typename T>
 #if defined(SEQUANT_HAS_TILEDARRAY)
 
 /// \brief This function is used to implement
-/// ResultPtr::biorthogonal_nns_project for TA::DistArray
+/// ResultPtr::biorthogonal_singlet_nns_project for TA::DistArray
 ///
 /// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
 ///
 /// \return The cleaned TA::DistArray.
 template <typename... Args>
-auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
-                                 size_t bra_rank) {
+auto biorthogonal_singlet_nns_project_ta(TA::DistArray<Args...> const& arr,
+                                         size_t bra_rank) {
   using ranges::views::iota;
   size_t const rank = arr.trange().rank();
   SEQUANT_ASSERT(bra_rank <= rank);
@@ -386,7 +388,7 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
   using numeric_type = typename TA::DistArray<Args...>::numeric_type;
 
   const auto& nns_p_coeffs =
-      detail::nns_projection_weights<numeric_type>(ket_rank);
+      detail::singlet_nns_projection_weights<numeric_type>(ket_rank);
 
   TA::DistArray<Args...> result;
 
@@ -429,9 +431,9 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 }
 
 template <typename... Args>
-auto biorthogonal_nns_project(TA::DistArray<Args...> const& arr,
-                              size_t bra_rank) {
-  return biorthogonal_nns_project_ta(arr, bra_rank);
+auto biorthogonal_singlet_nns_project(TA::DistArray<Args...> const& arr,
+                                      size_t bra_rank) {
+  return biorthogonal_singlet_nns_project_ta(arr, bra_rank);
 }
 
 #endif  // defined(SEQUANT_HAS_TILEDARRAY)
@@ -439,15 +441,15 @@ auto biorthogonal_nns_project(TA::DistArray<Args...> const& arr,
 #if defined(SEQUANT_HAS_BTAS)
 
 /// \brief This function is used to implement
-/// ResultPtr::biorthogonal_nns_project for btas::Tensor
+/// ResultPtr::biorthogonal_singlet_nns_project for btas::Tensor
 ///
 /// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
 ///
 /// \return The cleaned btas::Tensor.
 template <typename... Args>
-auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
-                                   size_t bra_rank) {
+auto biorthogonal_singlet_nns_project_btas(btas::Tensor<Args...> const& arr,
+                                           size_t bra_rank) {
   using ranges::views::iota;
   size_t const rank = arr.rank();
   SEQUANT_ASSERT(bra_rank <= rank);
@@ -460,7 +462,7 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
   using numeric_type = typename btas::Tensor<Args...>::numeric_type;
 
   const auto& nns_p_coeffs =
-      detail::nns_projection_weights<numeric_type>(ket_rank);
+      detail::singlet_nns_projection_weights<numeric_type>(ket_rank);
 
   btas::Tensor<Args...> result;
 
@@ -504,9 +506,9 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
 }
 
 template <typename... Args>
-auto biorthogonal_nns_project(btas::Tensor<Args...> const& arr,
-                              size_t bra_rank) {
-  return biorthogonal_nns_project_btas(arr, bra_rank);
+auto biorthogonal_singlet_nns_project(btas::Tensor<Args...> const& arr,
+                                      size_t bra_rank) {
+  return biorthogonal_singlet_nns_project_btas(arr, bra_rank);
 }
 
 #endif  // defined(SEQUANT_HAS_BTAS)
@@ -514,15 +516,15 @@ auto biorthogonal_nns_project(btas::Tensor<Args...> const& arr,
 #if defined(SEQUANT_HAS_TAPP)
 
 /// \brief This function is used to implement
-/// ResultPtr::biorthogonal_nns_project for TAPPTensor
+/// ResultPtr::biorthogonal_singlet_nns_project for TAPPTensor
 ///
 /// \param arr The tensor to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
 ///
 /// \return The cleaned TAPPTensor.
 template <typename T, typename Alloc>
-auto biorthogonal_nns_project_tapp(TAPPTensor<T, Alloc> const& arr,
-                                   size_t bra_rank) {
+auto biorthogonal_singlet_nns_project_tapp(TAPPTensor<T, Alloc> const& arr,
+                                           size_t bra_rank) {
   using ranges::views::iota;
   size_t const rank = arr.rank();
   SEQUANT_ASSERT(bra_rank <= rank);
@@ -535,7 +537,7 @@ auto biorthogonal_nns_project_tapp(TAPPTensor<T, Alloc> const& arr,
   using numeric_type = T;
 
   const auto& nns_p_coeffs =
-      detail::nns_projection_weights<numeric_type>(ket_rank);
+      detail::singlet_nns_projection_weights<numeric_type>(ket_rank);
 
   using perm_type = container::svector<size_t>;
 
@@ -581,9 +583,9 @@ auto biorthogonal_nns_project_tapp(TAPPTensor<T, Alloc> const& arr,
 }
 
 template <typename T, typename Alloc>
-auto biorthogonal_nns_project(TAPPTensor<T, Alloc> const& arr,
-                              size_t bra_rank) {
-  return biorthogonal_nns_project_tapp(arr, bra_rank);
+auto biorthogonal_singlet_nns_project(TAPPTensor<T, Alloc> const& arr,
+                                      size_t bra_rank) {
+  return biorthogonal_singlet_nns_project_tapp(arr, bra_rank);
 }
 
 #endif  // defined(SEQUANT_HAS_TAPP)
@@ -741,7 +743,7 @@ auto triplet_nns_project(btas::Tensor<Args...> const& arr, size_t bra_rank) {
 // clang-format off
 /// @brief Rebuilds the full closed-shell residual from one evaluated from
 ///        closed_shell_CC_spintrace with the same @p options; dispatches to
-///        biorthogonal_nns_project or triplet_nns_project for compact
+///        biorthogonal_singlet_nns_project or triplet_nns_project for compact
 ///        residuals. Non-compact residuals need no NNS projection.
 /// @param arr the evaluated residual
 /// @param bra_rank the particle rank of the residual
@@ -754,7 +756,8 @@ Array closed_shell_CC_nns_project(Array const& arr, std::size_t bra_rank,
                                   ClosedShellCCSpintraceOptions options = {}) {
   switch (options.multiplicity) {
     case SpinMultiplicity::Singlet:
-      if (options.compact) return biorthogonal_nns_project(arr, bra_rank);
+      if (options.compact)
+        return biorthogonal_singlet_nns_project(arr, bra_rank);
       return arr;
     case SpinMultiplicity::Triplet:
       if constexpr (requires { triplet_nns_project(arr, bra_rank); }) {

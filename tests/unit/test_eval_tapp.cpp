@@ -220,11 +220,11 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
         ->get<TAPPTensorD>();
   };
 
-  auto eval_biorthogonal_nns_project =
+  auto eval_biorthogonal_singlet_nns_project =
       [&yield_](sequant::ExprPtr const& expr,
                 container::svector<int64_t> const& target_labels) {
         auto result = evaluate(eval_node(expr), target_labels, yield_);
-        return mbpt::biorthogonal_nns_project(
+        return mbpt::biorthogonal_singlet_nns_project(
             result->get<TAPPTensorD>(),
             eval_node(expr)->as_tensor().bra_rank());
       };
@@ -394,7 +394,7 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
     // low-rank residuals: skip cleanup
     auto expr1 = parse_antisymm(L"R_{a1, a2}^{i1, i2}");
     auto tidx1 = tidxs(L"a_1,a_2,i_1,i_2");
-    auto eval1 = eval_biorthogonal_nns_project(expr1, tidx1);
+    auto eval1 = eval_biorthogonal_singlet_nns_project(expr1, tidx1);
     auto const& r1 = yield(L"R{v,v;o,o}");
 
     TAPPTensorD man1{r1.extents()};
@@ -413,7 +413,7 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
     // result = identity - (1/ket_rank!) * sum_of_ket_permutations
     auto expr2 = parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}");
     auto tidx2 = tidxs(L"a_1,a_2,a_3,i_1,i_2,i_3");
-    auto eval2 = eval_biorthogonal_nns_project(expr2, tidx2);
+    auto eval2 = eval_biorthogonal_singlet_nns_project(expr2, tidx2);
     auto const& r2 = yield(L"R{v,v,v;o,o,o}");
 
     TAPPTensorD man2{r2.extents()};
