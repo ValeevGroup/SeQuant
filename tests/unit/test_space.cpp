@@ -212,13 +212,6 @@ TEST_CASE("index_space", "[elements]") {
         isr->add(L"â", a, 6, {.extent = a.dimension(), .field = a.field()}));
     CHECK(isr->retrieve(L"â").own_extent() == a.dimension());
     CHECK(isr->retrieve(L"â").own_field() == a.field());
-    // a negative extent is rejected, for a basis and for a space alike
-    CHECK_THROWS_WITH(isr->add(L"ă", IndexBasis{a, 7}, -1),
-                      Catch::Matchers::ContainsSubstring("negative"));
-    CHECK_FALSE(isr->contains(L"ă"));
-    CHECK_THROWS_WITH(isr->add(L"q", 0b100, a.qns(), -5),
-                      Catch::Matchers::ContainsSubstring("negative"));
-    CHECK_FALSE(isr->contains(L"q"));
     isr->extent(L"a", 33);
     CHECK(isr->retrieve(L"â").extent() == a.dimension());
     CHECK(isr->retrieve_space(L"a").dimension() == 33);
@@ -243,7 +236,18 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE_NOTHROW(isr->remove(L"â"));
     CHECK_THROWS_AS(isr->extent(L"ζ", 1), IndexSpace::bad_key);
     // the deprecated spellings
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN {
+      IndexBasisRegistry legacy = *isr;
+      // a negative dimension is rejected
+      CHECK_THROWS_WITH(legacy.add(L"q", 0b100, a.qns(), -5),
+                        Catch::Matchers::ContainsSubstring("negative"));
+      CHECK_FALSE(legacy.contains(L"q"));
+      legacy.add(L"q", 0b100, a.qns(), 5, is_particle);
+      CHECK(legacy.retrieve_space(L"q").dimension() == 5);
+      CHECK(legacy.particle_space() == legacy.retrieve_space(L"q").type());
+      legacy.add_union(L"Q", {L"q", L"i"}, is_complete);
+      CHECK(legacy.complete_space() == legacy.retrieve_space(L"Q").type());
+    }
     isr->approximate_size(L"μ̃", 78);
     CHECK(isr->retrieve(L"μ̃").extent() == 78);
     CHECK(isr->retrieve_space(L"a").approximate_size() ==

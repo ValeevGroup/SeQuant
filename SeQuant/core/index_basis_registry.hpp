@@ -41,6 +41,8 @@
 
 namespace sequant {
 
+/// the role tags of the deprecated argument-list spellings of
+/// IndexBasisRegistry::add() and its kin; an IndexSpaceSpec names the roles
 inline namespace space_tags {
 struct IsVacuumOccupied {};
 struct IsReferenceOccupied {};
@@ -686,8 +688,9 @@ class IndexBasisRegistry {
   template <basic_string_convertible S, typename... OptionalArgs>
     requires(sizeof...(OptionalArgs) > 0 &&
              (index_space_argument<OptionalArgs> && ...))
-  IndexBasisRegistry& add(S&& type_label, IndexSpace::Type type,
-                          OptionalArgs&&... args) {
+  [[deprecated(
+      "give the arguments by name in an IndexSpaceSpec")]] IndexBasisRegistry&
+  add(S&& type_label, IndexSpace::Type type, OptionalArgs&&... args) {
     return this->add(std::forward<S>(type_label), type,
                      parse_space_spec(args...));
   }
@@ -749,63 +752,6 @@ class IndexBasisRegistry {
     return add(std::forward<S1>(label), space, basis_instance, spec);
   }
 
-  /// @brief registers a basis instance of a registered space under its own
-  /// label
-  /// @param label the label of the basis instance (see
-  /// add(label, space, instance, spec))
-  /// @param basis an IndexBasis with a basis instance whose space is
-  /// registered; the entry is named @p label whatever @p basis is named
-  /// @param args optional arguments consisting of a mix of zero or one of
-  /// each of the following, each defaulting to what @p basis carries (for a
-  /// basis built from a space and an instance: the dimension of the space,
-  /// IndexBasisMetric::Unit and the field of the space's own basis):
-  ///   - extent of the basis (an integer)
-  ///   - IndexBasisMetric
-  ///   - Field
-  /// @return reference to `this`
-  /// @throw Exception if @p label is not a valid label or is already
-  /// registered, if @p basis has no basis instance, if its space is not
-  /// registered, or if @p basis is already named
-  template <basic_string_convertible S, typename... Args>
-  IndexBasisRegistry& add(S&& label, const IndexBasis& basis, Args&&... args) {
-    auto h_args = boost::hana::make_tuple(args...);
-    auto h_tags = boost::hana::filter(h_args, [](auto arg) {
-      return !boost::hana::traits::is_integral(
-                 boost::hana::type_c<decltype(arg)>) &&
-             boost::hana::type_c<decltype(arg)> != boost::hana::type_c<Field> &&
-             boost::hana::type_c<decltype(arg)> !=
-                 boost::hana::type_c<IndexBasisMetric>;
-    });
-    static_assert(boost::hana::size(h_tags) == boost::hana::size_c<0>,
-                  "IndexBasisRegistry::add(label, basis): attribute tags are "
-                  "per space; only an integral extent, an IndexBasisMetric "
-                  "and a Field may be given for a basis instance");
-    const auto [extent, field] = parse_extent_and_field(args...);
-    auto h_metric = boost::hana::filter(h_args, [](auto arg) {
-      return boost::hana::type_c<decltype(arg)> ==
-             boost::hana::type_c<IndexBasisMetric>;
-    });
-    constexpr auto nmetrics = boost::hana::size(h_metric);
-    static_assert(
-        nmetrics == boost::hana::size_c<0> ||
-            nmetrics == boost::hana::size_c<1>,
-        "IndexBasisRegistry::add(label, basis): only one IndexBasisMetric "
-        "argument is allowed");
-    IndexBasisMetric metric = basis.metric_;
-    if constexpr (nmetrics == boost::hana::size_c<1>) {
-      metric = boost::hana::at_c<0>(h_metric);
-    }
-    std::wstring key = toUtf16(std::forward<S>(label));
-    if (!basis.has_basis_instance())
-      throw Exception("IndexBasisRegistry::add(label, basis): '" + toUtf8(key) +
-                      "' needs a basis instance; register a space with "
-                      "add(IndexSpace)");
-    return emplace_named(std::move(key), basis.space(), *basis.basis_instance(),
-                         extent ? extent : basis.extent_, metric,
-                         field ? field : basis.field_,
-                         "IndexBasisRegistry::add(label, basis)");
-  }
-
   /// @brief add a union of IndexSpace objects to this registry.
   /// @param type_label a label that will denote the space type,
   ///                   must be convertible to a std::string
@@ -864,9 +810,10 @@ class IndexBasisRegistry {
             typename... OptionalArgs>
     requires(sizeof...(OptionalArgs) > 0 &&
              (index_space_argument<OptionalArgs> && ...))
-  IndexBasisRegistry& add_unIon(
-      S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
-      OptionalArgs&&... args) {
+  [[deprecated(
+      "give the roles by name in an IndexSpaceSpec")]] IndexBasisRegistry&
+  add_unIon(S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
+            OptionalArgs&&... args) {
     return this->add_unIon(std::forward<S>(type_label), components,
                            parse_space_spec(args...));
   }
@@ -884,9 +831,10 @@ class IndexBasisRegistry {
             typename... OptionalArgs>
     requires(sizeof...(OptionalArgs) > 0 &&
              (index_space_argument<OptionalArgs> && ...))
-  IndexBasisRegistry& add_union(
-      S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
-      OptionalArgs&&... args) {
+  [[deprecated(
+      "give the roles by name in an IndexSpaceSpec")]] IndexBasisRegistry&
+  add_union(S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
+            OptionalArgs&&... args) {
     return this->add_unIon(std::forward<S>(type_label), components,
                            parse_space_spec(args...));
   }
@@ -949,9 +897,11 @@ class IndexBasisRegistry {
             typename... OptionalArgs>
     requires(sizeof...(OptionalArgs) > 0 &&
              (index_space_argument<OptionalArgs> && ...))
-  IndexBasisRegistry& add_intersection(
-      S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
-      OptionalArgs&&... args) {
+  [[deprecated(
+      "give the roles by name in an IndexSpaceSpec")]] IndexBasisRegistry&
+  add_intersection(S&& type_label,
+                   std::initializer_list<IndexSpaceOrLabel> components,
+                   OptionalArgs&&... args) {
     return this->add_intersection(std::forward<S>(type_label), components,
                                   parse_space_spec(args...));
   }
