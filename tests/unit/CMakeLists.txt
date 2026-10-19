@@ -199,6 +199,7 @@ set(eval_dryrun_test_sources
     "test_ordered_executor.cpp"
     "test_ordered_schedule.cpp"
     "test_peak_profile.cpp"
+    "test_schedule_document.cpp"
     "test_slicing_signature.cpp"
 )
 add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})

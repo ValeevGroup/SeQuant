@@ -284,6 +284,7 @@ include(FindOrFetchUtfcpp)
 
 # Eigen
 include(FindOrFetchEigen)
+include(FindOrFetchJSON)
 
 # embedded bliss-0.73
 add_library(SeQuant-bliss
@@ -516,6 +517,8 @@ set(SeQuant_eval_src
         SeQuant/core/eval/peak_profile.hpp
         SeQuant/core/eval/result.cpp
         SeQuant/core/eval/result.hpp
+        SeQuant/core/eval/schedule_document.cpp
+        SeQuant/core/eval/schedule_document.hpp
         SeQuant/core/eval/schedule_dump.hpp
         SeQuant/core/eval/slicing_signature.hpp
         SeQuant/core/eval/value_id.hpp
@@ -674,7 +677,7 @@ target_compile_features(SeQuant-symb INTERFACE "cxx_std_20")
 # SeQuant-eval: backend-agnostic evaluation framework
 ##########################
 sequant_add_library(eval ${SeQuant_eval_src})
-target_link_libraries(SeQuant-eval PUBLIC SeQuant-symb PRIVATE SeQuant-bliss)
+target_link_libraries(SeQuant-eval PUBLIC SeQuant-symb PRIVATE SeQuant-bliss nlohmann_json::nlohmann_json)
 if (SEQUANT_EVAL_TRACE)
     target_compile_definitions(SeQuant-eval PUBLIC SEQUANT_EVAL_TRACE=1)
 endif()
