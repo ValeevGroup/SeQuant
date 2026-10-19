@@ -26,7 +26,7 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
     const std::vector<std::wstring> expected_outputs = {
         L"1/2 t{a1;i1}", L"1/6 (2 g{a1,a2;i1,i2} + g{a2,a1;i1,i2})",
         // cmp. Wang & Knizia (2018), DOI: arXiv:1805.00565
-        L"1/120 ("
+        L"1/144 ("
         "-7 t{i_1,i_2,i_3;a_2,a_3,a_1}:N-N-S "
         "- 7 t{i_1,i_2,i_3;a_3,a_1,a_2}:N-N-S "
         "- t{i_1,i_2,i_3;a_2,a_1,a_3}:N-N-S "

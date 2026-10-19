@@ -52,11 +52,9 @@ using ParticlePairings = container::svector<IndexPair>;
 /// constructed with elements (-2)^{c} × (-1)^{n_particles}, where c is the
 /// number of cycles in the relative permutation.
 ///
-/// The biorthogonal coefficients are obtained from the normalized pseudoinverse
-/// of M: first compute M_pinv (the pseudoinverse), then normalize it by the
-/// factor ((n_particles)!/rank(M)).
-/// Finally, biorthogonal coefficients = normalized_M_pinv · e_1,
-/// where e_1 is the first unit vector.
+/// The biorthogonal coefficients are the first row of the pseudoinverse of M,
+/// biorthogonal coefficients = M_pinv · e_1, where e_1 is the first unit
+/// vector.
 /// See [DOI 10.48550/ARXIV.1805.00565](https://doi.org/10.48550/ARXIV.1805.00565)
 /// for more details.
 ///
@@ -76,63 +74,63 @@ std::vector<sequant::rational> hardcoded_biorthogonalizer_row(
       return std::vector<sequant::rational>{ratio(1, 3), ratio(1, 6)};
 
     case 3:
-      return std::vector<sequant::rational>{ratio(17, 120), ratio(-7, 120),
-                                            ratio(-1, 120), ratio(-1, 120),
-                                            ratio(-1, 120), ratio(-7, 120)};
+      return std::vector<sequant::rational>{ratio(17, 144), ratio(-7, 144),
+                                            ratio(-1, 144), ratio(-1, 144),
+                                            ratio(-1, 144), ratio(-7, 144)};
 
     case 4:
       return std::vector<sequant::rational>{
-          ratio(43, 840), ratio(-19, 1680), ratio(-19, 1680),
-          ratio(-1, 105), ratio(-19, 1680), ratio(-19, 1680),
-          ratio(13, 840), ratio(1, 120),    ratio(-1, 105),
-          ratio(1, 120),  ratio(-1, 105),   ratio(-19, 1680),
-          ratio(-1, 105), ratio(1, 120),    ratio(1, 120),
-          ratio(13, 840), ratio(-1, 105),   ratio(-1, 105),
-          ratio(1, 120),  ratio(-19, 1680), ratio(-19, 1680),
-          ratio(13, 840), ratio(-19, 1680), ratio(1, 120)};
+          ratio(43, 1440), ratio(-19, 2880), ratio(-19, 2880),
+          ratio(-1, 180),  ratio(-19, 2880), ratio(-19, 2880),
+          ratio(13, 1440), ratio(7, 1440),   ratio(-1, 180),
+          ratio(7, 1440),  ratio(-1, 180),   ratio(-19, 2880),
+          ratio(-1, 180),  ratio(7, 1440),   ratio(7, 1440),
+          ratio(13, 1440), ratio(-1, 180),   ratio(-1, 180),
+          ratio(7, 1440),  ratio(-19, 2880), ratio(-19, 2880),
+          ratio(13, 1440), ratio(-19, 2880), ratio(7, 1440)};
 
     case 5:
       return std::vector<sequant::rational>{
-          ratio(59, 3780),   ratio(-5, 3024),   ratio(-5, 3024),
-          ratio(-5, 3024),   ratio(-31, 7560),  ratio(-5, 3024),
-          ratio(-5, 3024),   ratio(-23, 30240), ratio(19, 7560),
-          ratio(37, 15120),  ratio(-5, 3024),   ratio(-23, 30240),
-          ratio(-5, 3024),   ratio(19, 7560),   ratio(37, 15120),
-          ratio(-31, 7560),  ratio(37, 15120),  ratio(37, 15120),
-          ratio(-31, 7560),  ratio(-5, 3024),   ratio(-5, 3024),
-          ratio(-23, 30240), ratio(-23, 30240), ratio(-23, 30240),
-          ratio(-13, 7560),  ratio(-5, 3024),   ratio(-5, 3024),
-          ratio(19, 7560),   ratio(-23, 30240), ratio(37, 15120),
-          ratio(19, 7560),   ratio(-23, 30240), ratio(19, 7560),
-          ratio(-23, 30240), ratio(-13, 7560),  ratio(37, 15120),
-          ratio(-13, 7560),  ratio(-13, 7560),  ratio(37, 15120),
-          ratio(-23, 30240), ratio(-31, 7560),  ratio(-13, 7560),
-          ratio(37, 15120),  ratio(37, 15120),  ratio(19, 7560),
-          ratio(37, 15120),  ratio(37, 15120),  ratio(-13, 7560),
-          ratio(-13, 7560),  ratio(-23, 30240), ratio(-31, 7560),
-          ratio(37, 15120),  ratio(-31, 7560),  ratio(37, 15120),
-          ratio(-5, 3024),   ratio(-5, 3024),   ratio(-23, 30240),
-          ratio(19, 7560),   ratio(-5, 3024),   ratio(37, 15120),
-          ratio(-31, 7560),  ratio(37, 15120),  ratio(37, 15120),
-          ratio(-13, 7560),  ratio(19, 7560),   ratio(37, 15120),
-          ratio(37, 15120),  ratio(-13, 7560),  ratio(-13, 7560),
-          ratio(-23, 30240), ratio(37, 15120),  ratio(-13, 7560),
-          ratio(37, 15120),  ratio(-13, 7560),  ratio(-23, 30240),
-          ratio(19, 7560),   ratio(-23, 30240), ratio(-23, 30240),
-          ratio(19, 7560),   ratio(-13, 7560),  ratio(-31, 7560),
-          ratio(37, 15120),  ratio(-13, 7560),  ratio(37, 15120),
-          ratio(19, 7560),   ratio(-31, 7560),  ratio(-31, 7560),
-          ratio(37, 15120),  ratio(37, 15120),  ratio(-5, 3024),
-          ratio(37, 15120),  ratio(-13, 7560),  ratio(37, 15120),
-          ratio(-13, 7560),  ratio(-23, 30240), ratio(-5, 3024),
-          ratio(19, 7560),   ratio(-23, 30240), ratio(-5, 3024),
-          ratio(37, 15120),  ratio(-5, 3024),   ratio(-23, 30240),
-          ratio(-23, 30240), ratio(-23, 30240), ratio(-13, 7560),
-          ratio(19, 7560),   ratio(19, 7560),   ratio(-23, 30240),
-          ratio(-23, 30240), ratio(-13, 7560),  ratio(-5, 3024),
-          ratio(19, 7560),   ratio(-5, 3024),   ratio(-23, 30240),
-          ratio(37, 15120),  ratio(37, 15120),  ratio(-13, 7560),
-          ratio(-13, 7560),  ratio(37, 15120),  ratio(-23, 30240)};
+          ratio(59, 10800),  ratio(-1, 1728),   ratio(-1, 1728),
+          ratio(-1, 1728),   ratio(-31, 21600), ratio(-1, 1728),
+          ratio(-1, 1728),   ratio(-23, 86400), ratio(19, 21600),
+          ratio(37, 43200),  ratio(-1, 1728),   ratio(-23, 86400),
+          ratio(-1, 1728),   ratio(19, 21600),  ratio(37, 43200),
+          ratio(-31, 21600), ratio(37, 43200),  ratio(37, 43200),
+          ratio(-31, 21600), ratio(-1, 1728),   ratio(-1, 1728),
+          ratio(-23, 86400), ratio(-23, 86400), ratio(-23, 86400),
+          ratio(-13, 21600), ratio(-1, 1728),   ratio(-1, 1728),
+          ratio(19, 21600),  ratio(-23, 86400), ratio(37, 43200),
+          ratio(19, 21600),  ratio(-23, 86400), ratio(19, 21600),
+          ratio(-23, 86400), ratio(-13, 21600), ratio(37, 43200),
+          ratio(-13, 21600), ratio(-13, 21600), ratio(37, 43200),
+          ratio(-23, 86400), ratio(-31, 21600), ratio(-13, 21600),
+          ratio(37, 43200),  ratio(37, 43200),  ratio(19, 21600),
+          ratio(37, 43200),  ratio(37, 43200),  ratio(-13, 21600),
+          ratio(-13, 21600), ratio(-23, 86400), ratio(-31, 21600),
+          ratio(37, 43200),  ratio(-31, 21600), ratio(37, 43200),
+          ratio(-1, 1728),   ratio(-1, 1728),   ratio(-23, 86400),
+          ratio(19, 21600),  ratio(-1, 1728),   ratio(37, 43200),
+          ratio(-31, 21600), ratio(37, 43200),  ratio(37, 43200),
+          ratio(-13, 21600), ratio(19, 21600),  ratio(37, 43200),
+          ratio(37, 43200),  ratio(-13, 21600), ratio(-13, 21600),
+          ratio(-23, 86400), ratio(37, 43200),  ratio(-13, 21600),
+          ratio(37, 43200),  ratio(-13, 21600), ratio(-23, 86400),
+          ratio(19, 21600),  ratio(-23, 86400), ratio(-23, 86400),
+          ratio(19, 21600),  ratio(-13, 21600), ratio(-31, 21600),
+          ratio(37, 43200),  ratio(-13, 21600), ratio(37, 43200),
+          ratio(19, 21600),  ratio(-31, 21600), ratio(-31, 21600),
+          ratio(37, 43200),  ratio(37, 43200),  ratio(-1, 1728),
+          ratio(37, 43200),  ratio(-13, 21600), ratio(37, 43200),
+          ratio(-13, 21600), ratio(-23, 86400), ratio(-1, 1728),
+          ratio(19, 21600),  ratio(-23, 86400), ratio(-1, 1728),
+          ratio(37, 43200),  ratio(-1, 1728),   ratio(-23, 86400),
+          ratio(-23, 86400), ratio(-23, 86400), ratio(-13, 21600),
+          ratio(19, 21600),  ratio(19, 21600),  ratio(-23, 86400),
+          ratio(-23, 86400), ratio(-13, 21600), ratio(-1, 1728),
+          ratio(19, 21600),  ratio(-1, 1728),   ratio(-23, 86400),
+          ratio(37, 43200),  ratio(37, 43200),  ratio(-13, 21600),
+          ratio(-13, 21600), ratio(37, 43200),  ratio(-23, 86400)};
 
     default:
       throw Exception(
@@ -257,15 +255,6 @@ Eigen::MatrixXd compute_biorthogonalizer_matrix(std::size_t n_particles,
   Eigen::MatrixXd pinv = decomp.pseudoInverse();
   // The pseudo inverse of a symmetric matrix should also be symmetric
   SEQUANT_ASSERT(pinv.isApprox(pinv.transpose()));
-
-  // We need to normalize to the amount of non-zero eigenvalues via
-  // normalization = #eigenvalues / #non-zero eigenvalues
-  // Since perm_ovlp_mat is symmetric, it is diagonalizable and for every
-  // diagonalizable matrix, its rank equals the amount of non-zero eigenvalues.
-  double normalization =
-      static_cast<double>(perm_ovlp_mat.rows()) / decomp.rank();
-
-  pinv *= normalization;
 
   return pinv;
 }
@@ -619,6 +608,21 @@ largest_coeff_terms_by_hash(const ExprPtr& expr) {
   return largest_coeff_terms;
 }
 
+// We need to normalize to the amount of non-zero eigenvalues via
+// normalization = #eigenvalues / #non-zero eigenvalues
+// Since perm_ovlp_mat is symmetric, it is diagonalizable and for every
+// diagonalizable matrix, its rank equals the amount of non-zero eigenvalues.
+// The WK filter keeps one member of each group, which the idempotent NNS
+// projector rebuilds scaled by the inverse of this normalization.
+rational biorthogonal_normalization(std::size_t n_particles) {
+  const auto M = permutational_overlap_matrix(n_particles);
+  auto decomp = Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd>();
+  decomp.setThreshold(default_biorthogonalizer_pseudoinverse_threshold);
+  decomp.compute(M);
+  return ratio(static_cast<std::int64_t>(M.rows()),
+               static_cast<std::int64_t>(decomp.rank()));
+}
+
 }  // namespace
 
 template <detail::index_group_range IdxGroups>
@@ -627,10 +631,13 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
   if (ext_idxs.size() <= 2) return expr;  // always skip R1 and R2
 
   // hash filtering logic for R > 2
+  const auto normalization = biorthogonal_normalization(ext_idxs.size());
   Sum filtered;
   for (const auto& [_, terms] : largest_coeff_terms_by_hash(expr)) {
     for (const auto& t : terms) {
-      filtered.append(t);
+      auto kept = t->clone();
+      kept->as<Product>().scale(normalization);
+      filtered.append(std::move(kept));
     }
   }
   auto result = ex<Sum>(filtered);
