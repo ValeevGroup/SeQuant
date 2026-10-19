@@ -77,12 +77,12 @@ concept index_space_argument =
 /// is optional
 struct IndexSpaceSpec {
   /// the quantum numbers of the space; none if not given
-  std::optional<IndexSpace::QuantumNumbers> qns;
+  std::optional<IndexSpace::QuantumNumbers> qns = {};
   /// the dimension of the space; the IndexSpace default if not given
-  std::optional<std::size_t> dimension;
+  std::optional<std::size_t> dimension = {};
   /// the scalar field of the space's own basis; the IndexSpace default if
   /// not given
-  std::optional<Field> field;
+  std::optional<Field> field = {};
   /// @name roles
   /// whether the space is the registry's vacuum-occupied, reference-occupied,
   /// complete, hole or particle space (see
@@ -102,16 +102,16 @@ struct IndexSpaceSpec {
 struct IndexBasisSpec {
   /// the number of functions in the basis; if not given, the dimension of its
   /// space, now and whenever that changes (see IndexBasis::own_extent())
-  std::optional<std::size_t> extent;
+  std::optional<std::size_t> extent = {};
   /// whether the basis is orthonormal; IndexBasisMetric::Unit if not given
-  std::optional<IndexBasisMetric> metric;
+  std::optional<IndexBasisMetric> metric = {};
   /// the scalar field of the basis; if not given, that of its space's own
   /// basis, now and whenever that changes (see IndexBasis::own_field())
-  std::optional<Field> field;
+  std::optional<Field> field = {};
   /// the label of the named basis instance to follow (see
   /// IndexBasisRegistry::follow()), whose extent, metric and field the basis
   /// then mirrors; excludes the three members above
-  std::optional<std::wstring> follows;
+  std::optional<std::wstring> follows = {};
 };
 
 // clang-format off
