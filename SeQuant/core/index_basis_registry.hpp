@@ -77,12 +77,26 @@ concept index_space_role_tag =
     std::same_as<std::remove_cvref_t<T>, space_tags::IsHole> ||
     std::same_as<std::remove_cvref_t<T>, space_tags::IsParticle>;
 
+/// an integer that stands for a dimension or an extent: integral, but neither
+/// a bool nor a character
+template <typename T>
+concept index_space_extent =
+    std::integral<std::remove_cvref_t<T>> &&
+    !std::same_as<std::remove_cvref_t<T>, bool> &&
+    !std::same_as<std::remove_cvref_t<T>, char> &&
+    !std::same_as<std::remove_cvref_t<T>, signed char> &&
+    !std::same_as<std::remove_cvref_t<T>, unsigned char> &&
+    !std::same_as<std::remove_cvref_t<T>, wchar_t> &&
+    !std::same_as<std::remove_cvref_t<T>, char8_t> &&
+    !std::same_as<std::remove_cvref_t<T>, char16_t> &&
+    !std::same_as<std::remove_cvref_t<T>, char32_t>;
+
 /// the types the argument-list spelling of IndexBasisRegistry::add() accepts:
 /// an integral dimension, an IndexSpace::QuantumNumbers, a Field and the
 /// space_tags
 template <typename T>
 concept index_space_argument =
-    std::integral<std::remove_cvref_t<T>> ||
+    index_space_extent<T> ||
     std::same_as<std::remove_cvref_t<T>, IndexSpace::QuantumNumbers> ||
     std::same_as<std::remove_cvref_t<T>, Field> || index_space_role_tag<T>;
 

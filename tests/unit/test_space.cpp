@@ -264,6 +264,12 @@ TEST_CASE("index_space", "[elements]") {
       CHECK(legacy.particle_space() == legacy.retrieve_space(L"q").type());
       legacy.add_union(L"Q", {L"q", L"i"}, is_complete);
       CHECK(legacy.complete_space() == legacy.retrieve_space(L"Q").type());
+      // the dimension is an integer, never a bool or a character
+      static_assert(index_space_argument<int> && index_space_argument<long> &&
+                    index_space_argument<unsigned long>);
+      static_assert(!index_space_argument<bool> &&
+                    !index_space_argument<char> &&
+                    !index_space_argument<wchar_t>);
       // a union or an intersection takes role tags only
       static_assert(legacy_union_takes<IsHole, IsParticle>);
       static_assert(!legacy_union_takes<IndexSpace::QuantumNumbers>);
