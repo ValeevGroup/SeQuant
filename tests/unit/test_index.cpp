@@ -533,3 +533,60 @@ TEST_CASE("kramers_partner", "[elements][index][kramers]") {
   // unflavored index: no flip
   REQUIRE(!kramers_flipped(Index(L"a_1"), *isr).has_value());
 }
+
+TEST_CASE("kramers_partner_named_basis", "[elements][index][kramers]") {
+  using namespace sequant;
+  // the PAO basis is a named instance of the particle space, and its
+  // flavoured counterparts μ̃↑ / μ̃↓ the same instance of the flavoured
+  // particle spaces a↑ / a↓ (mbpt::add_pao_basis), whose Kramers pairing
+  // add_fermi_spin registers: the image of a μ̃↑ index is a μ̃↓ index (same
+  // instance, the registry's name), not a plain a↓ one
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  const auto spin_any = IndexSpace::QuantumNumbers{mbpt::Spin::any};
+  mbpt::add_ao_basis(isr, spin_any);
+  mbpt::add_pao_basis(isr, spin_any);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+
+  const IndexBasis pao = isr->retrieve(L"μ̃");
+  const IndexBasis pao_up = isr->retrieve(L"μ̃↑");
+  const IndexBasis pao_dn = isr->retrieve(L"μ̃↓");
+  REQUIRE(pao_up.has_name());
+  REQUIRE(pao_up.space() == isr->retrieve_space(L"a↑"));
+  REQUIRE(pao_dn.space() == isr->retrieve_space(L"a↓"));
+
+  // the image basis of a flavoured PAO basis is the other flavour's
+  auto pb = kramers_partner_basis(pao_up, *isr);
+  REQUIRE(pb.has_value());
+  REQUIRE(*pb == pao_dn);
+  REQUIRE(pb->name() == pao_dn.name());
+  REQUIRE(!kramers_partner_basis(pao, *isr).has_value());
+
+  // a composite PAO index flips with its protos, basis instance kept
+  Index i1(L"i↑_1"), i2(L"i↓_2");
+  Index idx(pao_up, 3, {i1, i2});
+  auto f = kramers_flipped(idx, *isr);
+  REQUIRE(f.has_value());
+  REQUIRE(f->basis() == pao_dn);
+  REQUIRE(f->basis().name() == pao_dn.name());
+  REQUIRE(f->space() == isr->retrieve_space(L"a↓"));
+  REQUIRE(f->ordinal() == idx.ordinal());
+  REQUIRE(f->proto_indices().size() == 2);
+  REQUIRE(kramers_flipped_deep(idx, *isr) == *f);
+  // twice = identity
+  auto ff = kramers_flipped(*f, *isr);
+  REQUIRE(ff.has_value());
+  REQUIRE(*ff == idx);
+
+  // a spin-free PAO index has no partner; its deep image keeps its basis
+  // while its protos flip
+  Index plain(pao, 4, {i1, i2});
+  REQUIRE(!kramers_flipped(plain, *isr).has_value());
+  auto dp = kramers_flipped_deep(plain, *isr);
+  REQUIRE(dp.basis() == pao);
+  REQUIRE(dp.basis().has_name());
+  REQUIRE(dp.ordinal() == plain.ordinal());
+  REQUIRE(dp != plain);  // the protos flipped
+}
