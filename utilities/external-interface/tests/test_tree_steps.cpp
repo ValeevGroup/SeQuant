@@ -225,6 +225,7 @@ TEST_CASE("export step", "[extint]") {
     std::stringstream buffer;
     buffer << stream.rdbuf();
     const std::string code = buffer.str();
+    stream.close();
     std::filesystem::remove(out);
 
     // The shared intermediate is defined once per input. Each definition must
