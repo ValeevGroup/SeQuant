@@ -748,6 +748,24 @@ class IndexBasisRegistry {
                      parse_space_spec(args...));
   }
 
+  /// @overload
+  /// @note does not compile: @p args holds what neither spelling takes (e.g.
+  /// a Spin enumerator in place of an IndexSpace::QuantumNumbers), so the
+  /// diagnostic points to the spec spelling
+  template <basic_string_convertible S, typename... Args>
+    requires(sizeof...(Args) > 0 && !(index_space_argument<Args> && ...) &&
+             !(sizeof...(Args) == 1 &&
+               (std::same_as<std::remove_cvref_t<Args>, IndexSpaceSpec> &&
+                ...)))
+  IndexBasisRegistry& add(S&&, IndexSpace::Type, Args&&...) {
+    static_assert((meta::always_false<Args>::value && ...),
+                  "IndexBasisRegistry::add(label, type, ...): give the "
+                  "quantum numbers, dimension, field and roles by name in an "
+                  "IndexSpaceSpec, e.g. add(L\"i\", 0b01, {.qns = Spin::any, "
+                  ".vacuum_occupied = true})");
+    return *this;
+  }
+
   /// @brief registers a basis instance of a registered space under its own
   /// label
   /// @param label the label of the basis instance; must be a valid base
