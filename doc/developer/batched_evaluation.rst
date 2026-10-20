@@ -169,6 +169,22 @@ the optimizer's per-product estimate. It assumes real double-precision data.
 ``SeQuant/core/eval/ordered_dump.hpp`` provides environment-gated dumps of each pipeline stage;
 :doc:`/user/guide/evaluation` explains how to read evaluation traces.
 
+Schedule documents
+-----------------------------
+
+A schedule document (``SeQuant/core/eval/schedule_document.hpp``) is one JSON document that describes a batched
+schedule for inspection and for steering later runs. It has a pinnable ``roots`` section, which records the choices the
+optimizer made for each root and can be fed back to reproduce them, a read-only ``dag`` section, which describes the
+ordered schedule built from those choices, and an optional ``run`` section, which carries what an evaluation measured.
+The optimizer side lives in ``SeQuant/core/optimize/schedule_pin.hpp``: ``opt::schedule::record_root`` captures a root,
+and a ``PinSession`` or ``RecordSession`` set on ``OptimizeOptions::pinned`` or ``OptimizeOptions::recording`` replays
+pinned choices or collects the recorded ones during optimization. ``fingerprint_of`` summarizes the expression a
+document was recorded for, and ``check_fingerprint`` throws when a loaded document no longer matches the expression
+about to be optimized. ``eval::schedule::record_dag`` (``SeQuant/core/eval/schedule_dag_record.hpp``) builds the ``dag``
+section from a rich schedule and its legality. The ordered entry points in ``ordered_executor.hpp`` take an optional
+``RunRecord*`` out-parameter that is filled with the ``run`` section. The ``sequant-schedule`` command-line tool validates,
+diffs and renders documents.
+
 Current scope
 ----------------
 

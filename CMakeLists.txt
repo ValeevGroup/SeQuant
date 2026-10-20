@@ -510,6 +510,7 @@ set(SeQuant_eval_src
         SeQuant/core/eval/legality.hpp
         SeQuant/core/eval/lifetime_mask.hpp
         SeQuant/core/eval/node_batch_annotation.hpp
+        SeQuant/core/eval/op_counts.hpp
         SeQuant/core/eval/ordered_dump.hpp
         SeQuant/core/eval/ordered_executor.hpp
         SeQuant/core/eval/ordered_schedule.hpp
@@ -520,7 +521,6 @@ set(SeQuant_eval_src
         SeQuant/core/eval/schedule_dag_record.hpp
         SeQuant/core/eval/schedule_document.cpp
         SeQuant/core/eval/schedule_document.hpp
-        SeQuant/core/eval/schedule_dump.hpp
         SeQuant/core/eval/slicing_signature.hpp
         SeQuant/core/eval/value_id.hpp
         SeQuant/core/eval/value_node_map.hpp

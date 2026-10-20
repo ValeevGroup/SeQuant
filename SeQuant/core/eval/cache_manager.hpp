@@ -49,18 +49,6 @@ namespace sequant::eval {
 // cell_registry.hpp includes this header, not the reverse.
 class CellReadResolver;
 
-/// \brief Destination for the structured schedule dump (SCHEDULE_RUN_EVENT
-/// records) emitted by `evaluate()`. A caller sets one on the (root) cache to
-/// capture one evaluation's batched schedule to \c os; \c fired is a fire-once
-/// latch the caller raises after the first capture so a later re-entry (e.g. a
-/// subsequent CC iteration) does not re-dump. Null sink / null \c os => no dump
-/// (the default). Non-owning: \c os must
-/// outlive the cache.
-struct ScheduleSink {
-  std::ostream* os = nullptr;
-  bool fired = false;
-};
-
 /// \brief diagnostic (analysis-only, off by default): a global monotonic
 ///        "access clock" stamped on every genuine cache read, plus a
 ///        per-value (keyed by canonical node hash) record of the last clock at
@@ -1062,12 +1050,6 @@ class CacheManager {
   std::function<void(std::function<void(std::size_t hash, std::size_t bytes)>)>
       external_liveset_{};
 
-  /// Non-owning schedule-dump sink (see \c eval::ScheduleSink). Null (default)
-  /// => `evaluate()` emits no SCHEDULE_RUN_EVENT records; falls through to
-  /// \c parent_ (only the root cache is wired in practice). The pointee must
-  /// outlive this cache.
-  eval::ScheduleSink* schedule_sink_ = nullptr;
-
   /// Per-instance cache-fill-once strictness (see entry::store), consulted
   /// instead of reading \c eval::strict_fill_once() directly. Defaults to
   /// that same env gate (\c SEQUANT_UT_STRICT_FILL_ONCE), so behavior is
@@ -1160,20 +1142,6 @@ class CacheManager {
                          : nullptr;
   }
 
-  /// Sets the schedule-dump sink (see schedule_sink_). Pass nullptr to detach.
-  /// Non-owning; the pointee (and its \c os) must outlive this cache.
-  void set_schedule_sink(eval::ScheduleSink* s) noexcept { schedule_sink_ = s; }
-
-  /// \return the local schedule sink if set, else the one inherited from
-  ///         \c parent_ (only the root cache is wired in practice); nullptr if
-  ///         none is wired anywhere along the chain. Non-owning.
-  [[nodiscard]] eval::ScheduleSink* schedule_sink() const noexcept {
-    return schedule_sink_ ? schedule_sink_
-           : parent_      ? parent_->schedule_sink()
-                          : nullptr;
-  }
-
-  /// Sets the backend array-ops (see BackendArrayOps). Non-owning; the pointee
   /// must outlive this cache. Absent (nullptr) anywhere along the chain means a
   /// batched external-axis scatter has no way to build its destination.
   void set_array_ops(BackendArrayOps const* a) noexcept { array_ops_ = a; }

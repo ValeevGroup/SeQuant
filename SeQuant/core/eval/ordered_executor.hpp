@@ -10,6 +10,7 @@
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/forest_combine.hpp>
+#include <SeQuant/core/eval/op_counts.hpp>
 #include <SeQuant/core/eval/ordered_dump.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
@@ -923,26 +924,6 @@ void run_ordered_contracted_block(
                          toUtf8(std::wstring(block.axis.basis().base_key())),
                          log::scope_annot(s)));
   }
-  {
-    static bool const sched_dump = detail::dump_enabled("SEQUANT_SCHED_DUMP");
-    if (sched_dump) {
-      std::cerr << "ORDERED_RUN_BLOCK {\"kind\":\""
-                << (block.kind == BatchModeType::External ? "external"
-                                                          : "contracted")
-                << "\",\"mode\":\"" << toUtf8(block.axis.full_label())
-                << "\",\"depth\":" << block.level.depth
-                << ",\"slot\":" << block.level.loop_slot
-                << ",\"lat\":" << block.latitude_ordinal
-                << ",\"blocks\":" << batches.size()
-                << ",\"steps\":" << block.steps.size() << ",\"outs\":[";
-      for (std::size_t k = 0; k != block.outputs.size(); ++k)
-        std::cerr << (k ? "," : "") << "{\"h\":"
-                  << (rich.cells[block.outputs[k].first].hash % 100000)
-                  << ",\"cell\":" << out_cells[k]
-                  << ",\"skip\":" << (int)out_skip[k] << "}";
-      std::cerr << "]}\n";
-    }
-  }
 
   // Running results of this block's Assemble steps: a summed accumulator or a
   // scattered-into destination, one per output.
@@ -1337,7 +1318,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   static_assert(std::is_same_v<node_t, N>,
                 "the forest's node type and the cache's node type must match");
 
-  // B-full accounting (see OrderedOpCounts, schedule_dump.hpp): this call's
+  // B-full accounting (see OrderedOpCounts, op_counts.hpp): this call's
   // own tally of what the walk did -- one `builds` per compute_cell, one
   // `assembles` per Assemble step performed, and `probes` counting entries
   // into the generic recursive evaluator, which a table-driven run never

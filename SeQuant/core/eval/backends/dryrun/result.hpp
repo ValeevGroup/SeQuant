@@ -5,6 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backend_array_ops.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
+#include <SeQuant/core/eval/op_counts.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -310,7 +311,7 @@ struct DryRunOps {
       for (auto const& [lbl, w] : extents_by_label(other_ov, a.rannot))
         label_extents.emplace(lbl, w);
       double const flops = cm->flops(out, contracted, label_extents);
-      sequant::eval::detail::last_op_flops() = flops;  // for the Build event
+      sequant::eval::detail::last_op_flops() = flops;
       // Roofline traffic == the op's compulsory single-pass data movement:
       // read both operands, write the result -- each at its realized (sliced)
       // extent. This is the same footprint the optimizer's DP charges (S[lp] +
@@ -328,7 +329,7 @@ struct DryRunOps {
       double const exec = cm->exec_cost(
           flops, cm->memsize(idx, ov), cm->memsize(indices_of(other), other_ov),
           cm->memsize(out, merged));
-      sequant::eval::detail::last_op_exec() = exec;  // for the Build event
+      sequant::eval::detail::last_op_exec() = exec;
       write_log(Logger::instance(), "OpCost", std::format(" | {}", flops),
                 std::format(" | {}", exec), '\n');
       // Fold this op's sliced-extent cost into the replay cost sink, if one is

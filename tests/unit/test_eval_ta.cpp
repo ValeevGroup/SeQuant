@@ -15,7 +15,6 @@
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
-#include <SeQuant/core/eval/schedule_dump.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
@@ -6371,8 +6370,6 @@ TEST_CASE("dp_external_placement_correctness",
 
     std::cerr << "\n=== DP-opened external loops ===\n";
     dump_annotations(ta_node);
-    std::cerr << "SCHEDULE_IR_JSON "
-              << sequant::eval::schedule_ir_json(ta_node, "dp") << "\n";
 
     auto accept = opts.batch_policy.is_batchable_index();
     auto cache = cache_t::empty();
