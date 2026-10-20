@@ -638,7 +638,9 @@ template <typename ValueMap, typename Rich>
 ///   called) and the cell table carries no sizes; the measured size is what
 ///   \c cell_footprint would price -- a dry-run result reports
 ///   \c CostModel::memsize over its realized (batch-narrowed) extents -- and
-///   on a wet run it is the backend's actual size. Bytes, like \c memsize.
+///   on a wet run it is the backend's actual size, measured through
+///   \c Result::measured_size_in_bytes (the TiledArray backend's plain
+///   size_in_bytes is off untraced). Bytes, like \c memsize.
 ///   For a value assembled from per-batch partials (an Assemble step), this
 ///   is the largest per-batch partial, not the assembled size;
 /// - \c size: per value, the complete value's bytes: the assembled result
@@ -668,17 +670,19 @@ struct OrderedRunRecorder {
   void built(std::size_t vid, ResultPtr const& r) {
     std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
     ++run.builds[id];
+    if (!r) return;
+    std::size_t const bytes = r->measured_size_in_bytes();
     auto& f = run.footprint[id];
-    if (r) f = std::max(f, r->size_in_bytes());
+    f = std::max(f, bytes);
     // the complete value, until an Assemble step closes over it
-    if (r && !run.size.count(id)) run.size[id] = r->size_in_bytes();
+    if (!run.size.count(id)) run.size[id] = bytes;
   }
 
   /// The Assemble step of value \p vid closed, leaving \p r in its cell.
   void assembled(std::size_t vid, ResultPtr const& r) {
     if (!r) return;
     std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
-    run.size[id] = r->size_in_bytes();
+    run.size[id] = r->measured_size_in_bytes();
   }
 };
 

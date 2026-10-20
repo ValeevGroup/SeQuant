@@ -408,6 +408,16 @@ class Result {
   /// @return the size of the object in bytes
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
 
+  /// @return the size of the object in bytes, measured even where
+  ///         size_in_bytes() is switched off for cost: a backend whose
+  ///         measurement is collective (TiledArray's) gates size_in_bytes()
+  ///         behind the eval trace, since the trace calls it on every op; the
+  ///         schedule document's run record calls this once per production
+  ///         instead. Default: size_in_bytes().
+  [[nodiscard]] virtual std::size_t measured_size_in_bytes() const {
+    return size_in_bytes();
+  }
+
   /// Diagnostic (analysis-only): force any deferred/asynchronous computation
   /// backing this result to complete. Default no-op (scalars are always ready);
   /// distributed-array backends override to fence their world. Used to make an

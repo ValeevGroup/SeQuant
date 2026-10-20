@@ -798,7 +798,11 @@ class ResultTensorTA final : public Result {
  private:
   [[nodiscard]] std::size_t size_in_bytes() const final {
     if (Logger::instance().eval.level == 0)
-      return 0;  // size_of disabled untraced
+      return 0;  // size_of disabled untraced: it is collective
+    return measured_size_in_bytes();
+  }
+
+  [[nodiscard]] std::size_t measured_size_in_bytes() const final {
     auto& v = get<ArrayT>();
     auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
     v.world().gop.sum(local_size);
@@ -1048,7 +1052,11 @@ class ResultTensorOfTensorTA final : public Result {
  private:
   [[nodiscard]] std::size_t size_in_bytes() const final {
     if (Logger::instance().eval.level == 0)
-      return 0;  // size_of disabled untraced
+      return 0;  // size_of disabled untraced: it is collective
+    return measured_size_in_bytes();
+  }
+
+  [[nodiscard]] std::size_t measured_size_in_bytes() const final {
     auto& v = get<ArrayT>();
     auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
     v.world().gop.sum(local_size);
