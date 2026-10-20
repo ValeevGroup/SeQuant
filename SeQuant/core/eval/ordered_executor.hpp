@@ -648,7 +648,7 @@ template <typename ValueMap, typename Rich>
 /// the document's value id; empty means the engine id in decimal.
 struct OrderedRunRecorder {
   schedule::RunRecord& run;
-  std::function<std::string(std::size_t)> const& value_id_of;
+  std::function<std::string(std::size_t)> value_id_of;
 
   void record_blocks(
       ScopeBlock const& root,
