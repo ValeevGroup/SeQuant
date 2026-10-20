@@ -618,7 +618,7 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
     Field field =
         current.value("real_valued", false) ? Field::Real : Field::Complex;
     registry.add(label, type,
-                 {.qns = mbpt::Spin::any, .dimension = size, .field = field});
+                 {.dimension = size, .qns = mbpt::Spin::any, .field = field});
 
     spdlog::debug("Registered index '{}' with size {}", toUtf8(label), size);
 

@@ -88,13 +88,14 @@ concept index_space_argument =
 
 /// @brief what IndexBasisRegistry::add(label, type, spec) registers a space
 /// with besides its label and type: each member is given by name, and each
-/// is optional
+/// is optional; the dimension comes first, so that a bare number in a brace
+/// list is the dimension, as in the argument-list spelling
 struct IndexSpaceSpec {
-  /// the quantum numbers of the space; none if not given
-  std::optional<IndexSpace::QuantumNumbers> qns = {};
   /// the dimension of the space; the IndexSpace default if not given
   /// @pre non-negative
   std::optional<std::int64_t> dimension = {};
+  /// the quantum numbers of the space; none if not given
+  std::optional<IndexSpace::QuantumNumbers> qns = {};
   /// the scalar field of the space's own basis; the IndexSpace default if
   /// not given
   std::optional<Field> field = {};

@@ -38,6 +38,10 @@ concept legacy_union_takes =
       r.add_intersection(L"R", {L"q", L"i"}, args...);
     };
 SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+// whether a brace list of a T initializes an IndexSpaceSpec
+template <typename T>
+concept space_spec_from = requires(T v) { sequant::IndexSpaceSpec{v}; };
 }  // namespace
 
 TEST_CASE("index_space", "[elements]") {
@@ -418,8 +422,8 @@ TEST_CASE("index_space", "[elements]") {
         ibr->add(L"o", 0b0001, {.dimension = 3})
             .add("i", 0b0100, {.hole = true})  // N.B. narrow string
             .add(L'a', 0b0010,
-                 {.qns = QuantumNumbersAttr{},
-                  .dimension = 50,
+                 {.dimension = 50,
+                  .qns = QuantumNumbersAttr{},
                   .field = Field::Real,
                   .particle = true})  // N.B. wchar_t + explicit quantum
                                       // numbers + size
@@ -891,14 +895,18 @@ TEST_CASE("index_space", "[elements]") {
     const IndexSpace::QuantumNumbers qn{0b11};
     // a space: its type, then anything else by name
     ibr.add(L"i", 0b01,
-            {.qns = qn,
-             .dimension = 20,
+            {.dimension = 20,
+             .qns = qn,
              .field = Field::Real,
              .vacuum_occupied = true,
              .reference_occupied = true,
              .hole = true})
         .add(L"a", 0b10, {.qns = qn, .particle = true})
         .add("x", 0b100);  // no spec: the defaults of an IndexSpace
+    // a bare number in a brace list is the dimension, never the qns
+    static_assert(IndexSpaceSpec{100}.dimension == 100);
+    static_assert(!IndexSpaceSpec{100}.qns);
+    static_assert(space_spec_from<int> && !space_spec_from<mbpt::Spin>);
     const IndexSpace i = ibr.retrieve_space(L"i"), a = ibr.retrieve_space(L"a"),
                      x = ibr.retrieve_space(L"x");
     CHECK(i.qns() == qn);
