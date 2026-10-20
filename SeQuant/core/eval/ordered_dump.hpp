@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
