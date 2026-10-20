@@ -60,39 +60,56 @@ void add_fermi_spin(IndexBasisRegistry& ibr);
 inline constexpr IndexBasis::instance_type default_ao_basis_instance =
     std::numeric_limits<IndexBasis::instance_type>::max() - 1;
 
-/// @brief registers the AO bases as named instances of the orbital spaces
-/// they span, with a general metric (the AOs are not orthonormal)
+/// @brief registers the OBS AO basis `μ` as a named instance of the orbital
+/// space it spans, with a general metric (the AOs are not orthonormal)
 
-/// The OBS AO basis `μ` spans the complete space (`p`, or `m` with \p vbs);
-/// with \p vbs the VBS AO basis `Α` spans `e` and `Γ` = `μ` + `Α` spans their
-/// union; with \p abs the ABS AO basis `σ` spans `α'`, `ρ` = `μ` + `σ`
-/// spans the union of the OBS and `α'`, and with \p vbs also `Ρ` = `Γ` + `σ`
-/// spans the union of all three. Every space a basis spans must be
-/// registered. The extents default to the spaces' dimensions (populate them
-/// with IndexBasisRegistry::extent(label, n) before the registry is
-/// given to a Context, which holds it immutable). No spin-cased counterparts
-/// (`μ↑`, `μ↓`, ...) are registered, unlike by add_pao_basis(): the AO bases
-/// are the target of csv_transform() after spin tracing, and spin-casing an
-/// index in one throws (see make_spinalpha()) unless they are registered by
-/// hand.
-/// @param ibr the IndexBasisRegistry to which add the AO bases
+/// The OBS AOs span the complete space less the CABS, if the registry has a
+/// space spelled `α'` (`p` in the single-reference conventions, also those
+/// with an ABS); that space must be registered. The basis instance is
+/// default_ao_basis_instance; register `μ` by hand, with
+/// IndexBasisRegistry::add(label, space, instance, spec), for another. The
+/// extent defaults to the space's dimension (populate it with
+/// IndexBasisRegistry::extent(label, n) before the registry is given to a
+/// Context, which holds it immutable). No spin-cased counterparts (`μ↑`,
+/// `μ↓`) are registered, unlike by add_pao_basis(): the AO basis is the
+/// target of csv_transform() after spin tracing, and spin-casing an index in
+/// it throws (see make_spinalpha()) unless they are registered by hand. The
+/// other AO bases of a computation (a VBS, an ABS and their unions) are the
+/// layout of the program's basis registry, which registers them itself.
+/// @param ibr the IndexBasisRegistry to which add the AO basis
 /// @param spin_any the quantum numbers of the spin-agnostic orbital spaces
 ///        in the target convention (Spin::null for SpinConvention::Legacy,
 ///        else Spin::any)
+/// @throw Exception if `μ` is already registered, the instance of the space
+///        is named, or the space is not registered; the registry is then
+///        left untouched
+void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
+                  IndexSpace::QuantumNumbers spin_any);
+
+/// @deprecated the VBS and ABS AO bases are the layout of the program's basis
+/// registry, which registers them itself; this registers MPQC's layout from
+/// the labels of SeQuant's single-reference conventions: the OBS AO basis `μ`
+/// spans `p`, or `m` with \p vbs; with \p vbs the VBS AO basis `Α` spans `e`
+/// and `Γ` = `μ` + `Α` spans their union; with \p abs the ABS AO basis `σ`
+/// spans `α'`, `ρ` = `μ` + `σ` spans the union of the OBS and `α'`, and with
+/// \p vbs also `Ρ` = `Γ` + `σ` spans the union of all three. Every space a
+/// basis spans must be registered. An integer third argument still selects
+/// this overload (`add_ao_basis(ibr, spin_any, 1)` is \p vbs); an instance
+/// cannot be given to add_ao_basis(ibr, spin_any).
 /// @param vbs if true, have separate virtual basis
 /// @param abs if true, have an auxiliary (F12) basis
 /// @param instance the basis instance of the AO bases
-/// @throw Exception if a label is already registered or a space an AO basis
-///        spans is not; the registry is then left untouched
-void add_ao_basis(
-    std::shared_ptr<IndexBasisRegistry>& ibr,
-    IndexSpace::QuantumNumbers spin_any, bool vbs = false, bool abs = false,
-    IndexBasis::instance_type instance = default_ao_basis_instance);
+[[deprecated(
+    "the VBS and ABS AO bases are the program's basis-registry layout; "
+    "register them there, and the OBS AO basis with add_ao_basis(ibr, "
+    "spin_any)")]] void
+add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
+             IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs = false,
+             IndexBasis::instance_type instance = default_ao_basis_instance);
 
 /// @deprecated the AO bases are named instances of the orbital spaces, see
 /// add_ao_basis(), to which this forwards; unlike the AO spaces this used to
-/// register, the bases need every space they span registered (with \p vbs
-/// and \p abs together, also the union of the OBS and the ABS)
+/// register, the bases need every space they span registered
 [[deprecated("the AO bases are named basis instances; use add_ao_basis")]] void
 add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& ibr,
               IndexSpace::QuantumNumbers spin_any, bool vbs = false,

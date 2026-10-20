@@ -14,6 +14,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/context.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <cassert>
 #include <cstdlib>
@@ -105,6 +106,32 @@ void require_unregistered(
 }  // namespace
 
 void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
+                  IndexSpace::QuantumNumbers spin_any) {
+  // the OBS AOs span the complete space less the CABS `α'`, if one is
+  // registered as a space: the CABS is the F12 complement of the OBS, and
+  // has no role. Every lookup and check precedes the registration, so a
+  // failure leaves the registry untouched; the space is taken by value, since
+  // add() may reallocate the registry's table
+  if (!ibr->complete_space(/* nulltype_ok = */ true))
+    throw Exception(
+        "add_ao_basis: the registry designates no complete space, which the "
+        "OBS AO basis 'μ' spans");
+  IndexSpace::Type obs_type = ibr->complete_space(spin_any).type();
+  if (const auto* cabs = ibr->retrieve_space_ptr(L"α'"))
+    obs_type = obs_type.xOr(obs_type.intersection(cabs->type()));
+  const auto* obs_ptr = ibr->retrieve_space_ptr(obs_type, spin_any);
+  if (!obs_ptr)
+    throw Exception(
+        "add_ao_basis: the AO basis 'μ' spans the complete space less the "
+        "CABS, which is not registered");
+  const IndexSpace obs = *obs_ptr;
+  require_unregistered(*ibr, "add_ao_basis", {{L"μ", obs}},
+                       default_ao_basis_instance);
+  ibr->add(L"μ", obs, default_ao_basis_instance,
+           {.metric = IndexBasisMetric::General});
+}
+
+void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
                   IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs,
                   IndexBasis::instance_type instance) {
   // matches the MPQC layout, see spindex.h
@@ -149,7 +176,9 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
 
 void add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& ibr,
                    IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs) {
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   add_ao_basis(ibr, spin_any, vbs, abs);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
 void add_pao_spaces(std::shared_ptr<IndexBasisRegistry>& ibr,
