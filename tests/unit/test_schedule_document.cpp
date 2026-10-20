@@ -1451,8 +1451,8 @@ TEST_CASE("a pinned schedule is identical across two problem sizes",
   ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
-  // number of leading residual summands; raised until the planner's choice
-  // differs between the two regimes (see the final REQUIRE)
+  // number of leading residual summands: N = 8 already makes the planner's
+  // choice differ between the regimes (see the final REQUIRE)
   constexpr std::size_t kNTerms = 8;
   auto const sum = sizeind_residual_sum(kNTerms);
 
