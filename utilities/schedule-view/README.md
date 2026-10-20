@@ -63,7 +63,8 @@ lists further knobs.)
 - Clicking a row, a port, a box header or a block highlights the related rows
   and boxes everywhere; the inspector shows every field of the selection
   (siblings are links) and, when a run is loaded, `n_batches`, `footprint`
-  (the largest production: a slice or partial inside a loop) and `builds`. A value's `frame` is its first occurrence in forest order (what its
+  (the largest production: a slice or partial inside a loop), `size` (the
+  complete value) and `builds`. A value's `frame` is its first occurrence in forest order (what its
   id names): the term whose index labels `expr` and the mode lists are spelled
   in; the other occurrences, each in its own term's labels, are listed under
   `occurrences`. The full id, the engine's hash and key and the lifetime bounds

@@ -191,8 +191,12 @@ struct DagRecord {
 struct RunRecord {
   std::map<std::string, std::size_t> extents, batch_targets;  // by space
   std::map<std::size_t, std::size_t> n_batches;  // block id -> count
-  /// value id -> bytes (largest result a production left in its cell)
+  /// value id -> bytes (largest result a production left in its cell: a
+  /// per-batch slice or partial inside a loop block)
   std::map<std::string, std::size_t> footprint;
+  /// value id -> bytes of the complete value: the assembled result of a value
+  /// produced per batch, else what its production left
+  std::map<std::string, std::size_t> size;
   std::map<std::string, std::size_t> builds;  // value id -> build count
   /// optimizer settings excluded from the fingerprint
   std::map<std::string, std::string> planner;

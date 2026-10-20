@@ -640,8 +640,9 @@ template <typename ValueMap, typename Rich>
 ///   \c CostModel::memsize over its realized (batch-narrowed) extents -- and
 ///   on a wet run it is the backend's actual size. Bytes, like \c memsize.
 ///   For a value assembled from per-batch partials (an Assemble step), this
-///   is the largest per-batch partial, not the assembled size: only
-///   productions are measured, never an Assemble cell.
+///   is the largest per-batch partial, not the assembled size;
+/// - \c size: per value, the complete value's bytes: the assembled result
+///   once an Assemble step closes, else what the production left.
 /// \c extents, \c batch_targets and \c planner are the caller's.
 ///
 /// \p value_id_of maps an engine value id (an index into \c rich.cells) to
@@ -669,6 +670,15 @@ struct OrderedRunRecorder {
     ++run.builds[id];
     auto& f = run.footprint[id];
     if (r) f = std::max(f, r->size_in_bytes());
+    // the complete value, until an Assemble step closes over it
+    if (r && !run.size.count(id)) run.size[id] = r->size_in_bytes();
+  }
+
+  /// The Assemble step of value \p vid closed, leaving \p r in its cell.
+  void assembled(std::size_t vid, ResultPtr const& r) {
+    if (!r) return;
+    std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
+    run.size[id] = r->size_in_bytes();
   }
 };
 
@@ -1174,6 +1184,7 @@ void run_ordered_contracted_block(
           "the Assemble step of value " +
           std::to_string(vid) + " (cell#" + std::to_string(out_cells[k]) + ")");
     registry.set(out_cells[k], std::move(out));
+    if (recorder) recorder->assembled(vid, registry.peek(out_cells[k]));
     if constexpr (::sequant::detail::trace(EvalTrace))
       log::cache(resolve(vid), parent_cache,
                  log::label(resolve(vid), parent_cache.batch_context()) +

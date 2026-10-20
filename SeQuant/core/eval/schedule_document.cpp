@@ -270,6 +270,7 @@ json to_j(RunRecord const& r) {
   for (auto const& [k, v] : r.n_batches) nb[std::to_string(k)] = v;
   j["n_batches"] = std::move(nb);
   j["footprint"] = sizemap_j(r.footprint);
+  j["size"] = sizemap_j(r.size);
   j["builds"] = sizemap_j(r.builds);
   j["planner"] = strmap_j(r.planner);
   return j;
@@ -704,6 +705,8 @@ RunRecord run_r(json const& j) {
     r.n_batches[key] = as_size(v, "'" + k + "'", w);
   }
   r.footprint = sizemap_r(j, "footprint", w);
+  // absent in run files written before the key
+  if (j.contains("size")) r.size = sizemap_r(j, "size", w);
   r.builds = sizemap_r(j, "builds", w);
   r.planner = strmap_r(j, "planner", w);
   return r;

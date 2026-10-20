@@ -1579,7 +1579,20 @@ TEST_CASE("ordered dry run fills the run record", "[schedule-document]") {
     REQUIRE(run.footprint.count(x.id) == 1);
     REQUIRE(run.footprint.at(x.id) > 0);
     REQUIRE(run.builds.at(x.id) == run.n_batches.at(x.home_block));
+    // X is a transient of its loop block (never assembled): its complete
+    // value is the largest slice it was ever built as
+    REQUIRE(run.size.at(x.id) == run.footprint.at(x.id));
   }
+  // the value each block scatters into its whole is larger than the largest
+  // per-batch slice that was written into it
+  std::size_t scattered = 0;
+  for (auto const& b : dag.blocks)
+    for (auto const& [id, kind] : b.outputs)
+      if (kind == "AccumulateScatter") {
+        ++scattered;
+        REQUIRE(run.size.at(id) > run.footprint.at(id));
+      }
+  REQUIRE(scattered == 2);
   // the caller's sections are left alone
   REQUIRE(run.extents.empty());
   REQUIRE(run.batch_targets.empty());

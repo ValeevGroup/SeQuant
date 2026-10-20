@@ -567,6 +567,7 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
       kv(tb, "n_batches", nb.childNodes.length ? nb : "—", "run");
       var partial = /\[[^\]]*\u03a3/.test(v.expr);
       kv(tb, "footprint", run.footprint && run.footprint[v.id] !== undefined ? run.footprint[v.id] + " bytes (largest production" + (partial ? ": a per-batch partial, same shape as the whole" : "") + ")" : "—", "run");
+      kv(tb, "size", run.size && run.size[v.id] !== undefined ? run.size[v.id] + " bytes (complete value)" : "—", "run");
       kv(tb, "builds", run.builds && run.builds[v.id] !== undefined ? run.builds[v.id] : "—", "run");
     }
     // identity details: the full id, the engine's node hash and value key, the lifetime bounds
