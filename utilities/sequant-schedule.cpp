@@ -117,8 +117,9 @@ int view(std::vector<std::string> const& args) {
     std::cerr << "viewer template not found: " << tmpl_path << "\n";
     return 1;
   }
-  // substitute the document first, then the run, so that text inside the
-  // document is never re-scanned for the run marker
+  // substitute the run first, then the document: the document text is inserted
+  // last, so it is never re-scanned for the run marker (and the run text, a
+  // verbatim file, cannot swallow the document placeholder)
   substitute(page, "/*__RUN_JSON__*/", run_json);
   if (!substitute(page, "/*__SCHEDULE_JSON__*/", doc_json)) {
     std::cerr << "template lacks the /*__SCHEDULE_JSON__*/ placeholder: "

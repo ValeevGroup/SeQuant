@@ -244,7 +244,7 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
   function isOpen(b, forced) {
     if (forced) return true;
     if (hidden.has(b.id)) return hidden.get(b.id);
-    return b.depth <= 1;
+    return ancestors(b.id).length - 1 <= 1;  // nesting depth in the block tree
   }
   // returns the block's DOM node, or null if the filter leaves nothing in it
   function buildBlock(b, f) {
