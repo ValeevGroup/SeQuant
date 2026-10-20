@@ -345,10 +345,19 @@ struct OptimizeOptions {
   /// summand is canonicalized, keyed, and rebuilt from the session's record
   /// for that key instead of being optimized (the single-term DP never runs);
   /// a summand with no record is left unoptimized and the miss is recorded in
-  /// the session. Given a whole Sum, optimize_result calls
-  /// \c PinSession::finish() (which throws on any mismatch) and emits the
-  /// summands in document order, bypassing \ref reorder. Given a single term
-  /// the caller calls \c finish() once the root is complete. Not owned.
+  /// the session. Not owned.
+  ///
+  /// \warning Who calls \c PinSession::finish() (which throws on any miss,
+  ///          duplicate or unused record):
+  ///   - a top-level Sum: optimize_result calls it, and emits the summands in
+  ///     document order, bypassing \ref reorder;
+  ///   - a top-level Product, Tensor or Constant (per-summand callers): the
+  ///     caller must call \c finish() once the whole root is done; otherwise
+  ///     misses go unreported.
+  ///
+  /// \warning A session is single-use: it counts every record it hands out,
+  ///          so optimizing the same root twice through one session reports
+  ///          every term as a duplicate. Use a fresh PinSession per run.
   opt::schedule::PinSession* pinned = nullptr;
 
   /// Optional schedule recording (see opt/schedule_pin.hpp). When non-null,

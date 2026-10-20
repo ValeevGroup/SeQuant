@@ -58,8 +58,8 @@ struct PinnedTerm {
 };
 
 /// Rebuild the optimizer's output from a record over \p canonical's factors;
-/// the annotations' Index objects are looked up by full_label among the
-/// subtree's indices.
+/// the annotations' Index objects are looked up by
+/// eval::schedule::index_label among the subtree's indices (protos included).
 /// \throws sequant::Exception naming `rec.key` when the factors differ from
 ///         \p canonical's, or an axis label is not an index of its node's
 ///         subtree

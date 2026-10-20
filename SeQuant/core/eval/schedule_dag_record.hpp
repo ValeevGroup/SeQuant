@@ -27,6 +27,7 @@
 #include <ranges>
 #include <set>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -36,7 +37,7 @@ namespace sequant::eval::schedule {
 
 /// "<label>:<base_key>" spelling used for every mode list in the DAG record
 inline std::string mode_spelling(Index const& ix) {
-  return toUtf8(ix.full_label()) + ":" + toUtf8(ix.basis().base_key());
+  return index_label(ix) + ":" + toUtf8(ix.basis().base_key());
 }
 
 namespace detail {
@@ -126,7 +127,7 @@ std::string node_label(Node const& n) {
     out += "[";
     for (std::size_t k = 0; k < mask.size(); ++k) {
       if (k) out += ",";
-      out += toUtf8(mask[k].first.full_label());
+      out += index_label(mask[k].first);
     }
     out += "]";
   }
@@ -167,6 +168,10 @@ template <meta::eval_node_range R>
 DagRecord record_dag(RichSchedule const& rich, LegalitySchedule const& legality,
                      OrderedSchedule const& ordered, R const& forest,
                      std::vector<RootRecord> const& roots) {
+  // nodes are keyed by address across two passes over the forest
+  static_assert(
+      std::is_lvalue_reference_v<std::ranges::range_reference_t<R const>>,
+      "record_dag needs a range that yields node references");
   using Node = std::ranges::range_value_t<R>;
   using detail::NodePlace;
   using detail::spell_modes;

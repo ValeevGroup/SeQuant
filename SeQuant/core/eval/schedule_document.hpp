@@ -19,7 +19,16 @@
 #include <utility>
 #include <vector>
 
+namespace sequant {
+class Index;
+}  // namespace sequant
+
 namespace sequant::eval::schedule {
+
+/// the spelling of \p index in every axis label and mode list of a schedule
+/// document: the V1 serializer's (proto indices joined by ","), as it appears
+/// inside the term's factor strings
+std::string index_label(Index const& index);
 
 /// value of the `format` key of every schedule document
 inline constexpr char const* kFormat = "sequant.schedule/1";
@@ -27,7 +36,7 @@ inline constexpr char const* kFormat = "sequant.schedule/1";
 /// mirrors \c BatchModeType
 enum class ModeKind { Contracted, External };
 
-/// a batched axis; label = toUtf8(Index::full_label())
+/// a batched axis; label = index_label(axis index)
 struct AxisRecord {
   std::string label;
   ModeKind kind;
@@ -196,7 +205,8 @@ struct Difference {
 std::vector<Difference> compare(Document const& a, Document const& b);
 
 /// "roots=<n> terms=<n> values=<n> blocks=<n> depth=<n>"; the last three are
-/// "-" when the document has no `dag` section
+/// "-" when the document has no `dag` section. depth = the deepest nesting of
+/// the block tree (number of ancestors of a block), not BlockRecord::depth
 std::string summary_line(Document const&);
 
 }  // namespace sequant::eval::schedule

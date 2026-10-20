@@ -12,7 +12,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
-#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -40,10 +40,15 @@ bool slurp(std::string const& path, std::string& out) {
   return true;
 }
 
+// reader errors are prefixed with the path, so `diff a b` names the file
 sched::Document load(std::string const& path) {
   std::ifstream in(path, std::ios::binary);
   if (!in) throw std::runtime_error("cannot open " + path);
-  return sched::read(in);
+  try {
+    return sched::read(in);
+  } catch (std::exception const& e) {
+    throw std::runtime_error(path + ": " + e.what());
+  }
 }
 
 // replaces the first occurrence of `marker` in `text`; false if absent

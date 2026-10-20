@@ -1,6 +1,9 @@
 #include <SeQuant/core/eval/schedule_document.hpp>
 
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -12,6 +15,10 @@
 #include <sstream>
 
 namespace sequant::eval::schedule {
+
+std::string index_label(Index const& index) {
+  return toUtf8(io::serialization::v1::to_string(index));
+}
 
 namespace {
 
@@ -387,6 +394,60 @@ TreeShape tree_r(json const& j, std::string const& where) {
   return t;
 }
 
+// adds to `out` the index labels in `text`, a comma/semicolon-separated list
+// of V1 index spellings, and (recursively) the proto indices of each
+void add_index_labels(std::string_view text, std::set<std::string>& out) {
+  auto const trimmed = [](std::string_view s) {
+    auto const b = s.find_first_not_of(' ');
+    if (b == std::string_view::npos) return std::string_view{};
+    return s.substr(b, s.find_last_not_of(' ') - b + 1);
+  };
+  auto const add = [&](std::string_view tok) {
+    tok = trimmed(tok);
+    if (tok.empty()) return;
+    out.emplace(tok);
+    auto const lt = tok.find('<');
+    if (lt != std::string_view::npos && tok.back() == '>')
+      add_index_labels(tok.substr(lt + 1, tok.size() - lt - 2), out);
+  };
+  int depth = 0;
+  std::size_t start = 0;
+  for (std::size_t k = 0; k < text.size(); ++k) {
+    char const c = text[k];
+    if (c == '<')
+      ++depth;
+    else if (c == '>')
+      --depth;
+    else if (depth == 0 && (c == ',' || c == ';')) {
+      add(text.substr(start, k - start));
+      start = k + 1;
+    }
+  }
+  add(text.substr(start));
+}
+
+// the index labels of a factor string "<label>{<bra>;<ket>;<aux>}[:<symm>]",
+// proto indices included
+std::set<std::string> factor_index_labels(std::string const& factor) {
+  std::set<std::string> out;
+  auto const open = factor.find('{');
+  if (open == std::string::npos) return out;
+  int depth = 0;
+  for (std::size_t k = open + 1; k < factor.size(); ++k) {
+    char const c = factor[k];
+    if (c == '<')
+      ++depth;
+    else if (c == '>')
+      --depth;
+    else if (c == '}' && depth == 0) {
+      add_index_labels(std::string_view{factor}.substr(open + 1, k - open - 1),
+                       out);
+      break;
+    }
+  }
+  return out;
+}
+
 // validates ordinals and axis labels of `t`, consuming node annotations in
 // left-first post-order; returns the factor ordinals under `t`
 std::vector<std::size_t> check_tree(TreeShape const& t, TermRecord const& term,
@@ -404,16 +465,12 @@ std::vector<std::size_t> check_tree(TreeShape const& t, TermRecord const& term,
   auto const n = next_node++;
   if (n < term.nodes.size()) {
     auto const& node = term.nodes[n];
+    std::set<std::string> labels;
+    for (auto o : ords) labels.merge(factor_index_labels(term.factors[o]));
     auto const check = [&](std::vector<AxisRecord> const& axes,
                            char const* what) {
       for (auto const& a : axes) {
-        bool found = false;
-        for (auto o : ords)
-          if (term.factors[o].find(a.label) != std::string::npos) {
-            found = true;
-            break;
-          }
-        if (!found)
+        if (!labels.contains(a.label))
           fail(term.key, "nodes[" + std::to_string(n) + "]." + what +
                              " label '" + a.label +
                              "' does not occur in the node's factors");
@@ -443,7 +500,8 @@ TermRecord term_r(json const& j, std::string const& where) {
   if (t.tree) {
     check_tree(*t.tree, t, inner);
   }
-  if (inner != t.nodes.size())
+  // a tree-only record (non-batched objective) has no node annotations
+  if (!t.nodes.empty() && inner != t.nodes.size())
     fail(t.key, "nodes has " + std::to_string(t.nodes.size()) +
                     " entries but the tree has " + std::to_string(inner) +
                     " inner nodes");
@@ -816,8 +874,21 @@ std::string summary_line(Document const& d) {
   std::ostringstream os;
   os << "roots=" << d.roots.size() << " terms=" << terms;
   if (d.dag) {
+    // nesting depth = number of ancestors; bounded walk tolerates a
+    // malformed parent chain
+    std::map<std::size_t, std::optional<std::size_t>> parent_of;
+    for (auto const& b : d.dag->blocks) parent_of[b.id] = b.parent;
     std::size_t depth = 0;
-    for (auto const& b : d.dag->blocks) depth = std::max(depth, b.depth);
+    for (auto const& b : d.dag->blocks) {
+      std::size_t n = 0;
+      auto p = b.parent;
+      while (p && n < d.dag->blocks.size()) {
+        ++n;
+        auto it = parent_of.find(*p);
+        p = it == parent_of.end() ? std::nullopt : it->second;
+      }
+      depth = std::max(depth, n);
+    }
     os << " values=" << d.dag->values.size()
        << " blocks=" << d.dag->blocks.size() << " depth=" << depth;
   } else {

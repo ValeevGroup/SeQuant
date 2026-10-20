@@ -133,7 +133,7 @@ std::vector<AxisRecord> to_records(
   std::vector<AxisRecord> result;
   result.reserve(axes.size());
   for (auto const& [ix, t] : axes)
-    result.push_back({toUtf8(ix.full_label()), to_kind(t)});
+    result.push_back({eval::schedule::index_label(ix), to_kind(t)});
   return result;
 }
 
@@ -308,7 +308,7 @@ PinnedTerm rebuild_pinned_term(TermRecord const& rec,
         std::map<std::string, Index> by_label;
         for (auto o : leaves)
           for_each_index(factors[o], [&by_label](Index const& ix) {
-            by_label.emplace(toUtf8(ix.full_label()), ix);
+            by_label.emplace(eval::schedule::index_label(ix), ix);
           });
         auto const& n = rec.nodes[k];
         NodeBatchAnnotation ann;

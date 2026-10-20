@@ -128,6 +128,43 @@ TEST_CASE("schedule document rejects bad shapes", "[schedule-document]") {
       ContainsSubstring("format"));
 }
 
+TEST_CASE("schedule document reader accepts a tree-only term",
+          "[schedule-document]") {
+  // a non-batched objective records the tree without node annotations
+  Document d = make_doc();
+  d.roots[0].terms[0].nodes.clear();
+  Document back;
+  REQUIRE_NOTHROW(back = from_json(to_json(d)));
+  REQUIRE(back.roots[0].terms[0].nodes.empty());
+  REQUIRE(compare(d, back).empty());
+}
+
+TEST_CASE("schedule document reader matches axis labels as whole indices",
+          "[schedule-document]") {
+  using Catch::Matchers::ContainsSubstring;
+  // an axis with two proto indices, spelled as the V1 serializer spells it
+  {
+    Document d = make_doc();
+    auto& t = d.roots[0].terms[0];
+    t.factors = {"g{i_1,i_2;a_1<i_1,i_2>}:N-N-S", "t{a_1<i_1,i_2>;i_1}:N-N-S"};
+    t.nodes = {{{{"a_1<i_1,i_2>", ModeKind::Contracted}}, {}, false}};
+    REQUIRE_NOTHROW(from_json(to_json(d)));
+    // a plain index of the node is still found
+    t.nodes = {{{{"i_2", ModeKind::External}}, {}, false}};
+    REQUIRE_NOTHROW(from_json(to_json(d)));
+  }
+  // i_1 is not an index of a subtree whose only occupied index is i_10
+  {
+    Document d = make_doc();
+    auto& t = d.roots[0].terms[0];
+    t.factors = {"g{i_10;a_1}:N-N-S", "t{a_1;i_10}:N-N-S"};
+    t.nodes = {{{{"i_1", ModeKind::External}}, {}, false}};
+    REQUIRE_THROWS_WITH(
+        from_json(to_json(d)),
+        ContainsSubstring("'i_1'") && ContainsSubstring("does not occur"));
+  }
+}
+
 TEST_CASE("schedule document compare reports one difference per changed field",
           "[schedule-document]") {
   auto const d = make_doc();
@@ -226,6 +263,12 @@ TEST_CASE("schedule document round-trips the dag and run sections",
   REQUIRE(back.dag->blocks[1].outputs[0].second == "AccumulateSum");
   REQUIRE(std::get<2>(back.dag->loop_order[0]) == 2);
   REQUIRE(summary_line(d) == "roots=1 terms=1 values=2 blocks=2 depth=1");
+  // depth is the nesting of the block tree, not the blocks' loop-group depth
+  auto d2 = d;
+  d2.dag->blocks[1].depth = 5;
+  REQUIRE(summary_line(d2) == "roots=1 terms=1 values=2 blocks=2 depth=1");
+  d2.dag->blocks[1].parent.reset();
+  REQUIRE(summary_line(d2) == "roots=1 terms=1 values=2 blocks=2 depth=0");
 }
 
 TEST_CASE("schedule document compare covers the dag", "[schedule-document]") {
@@ -629,6 +672,79 @@ TEST_CASE("record_root then pin reproduces the optimized Sum and annotations",
   require_same_annotations((*opts2.term_batch_axes)[pinned.get()],
                            recorded_axes);
   REQUIRE_NOTHROW(session.finish());
+}
+
+TEST_CASE("a pin loaded from JSON reproduces the recorded document",
+          "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  auto const sum = session_root();
+  for (auto const objective :
+       {sequant::ObjectiveFunction::DenseTimeSpaceBatched,
+        sequant::ObjectiveFunction::DenseFLOPs}) {
+    CAPTURE(static_cast<int>(objective));
+    auto opts = session_opts();
+    opts.objective_function = objective;
+    auto rr = record_root("R", sum, opts);
+    bool const batched =
+        objective == sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+    bool any_nodes = false;
+    for (auto const& t : rr.record.terms)
+      any_nodes = any_nodes || !t.nodes.empty();
+    REQUIRE(any_nodes == batched);
+
+    Document doc;
+    doc.fingerprint.roots = {"R"};
+    doc.roots = {rr.record};
+    auto const loaded = from_json(to_json(doc));
+    REQUIRE(compare(doc, loaded).empty());
+
+    // pin from the loaded record and record what the pinned run produced
+    PinSession session(loaded.roots[0]);
+    auto opts2 = opts;
+    opts2.pinned = &session;
+    opts2.term_batch_axes = std::make_shared<AxesMap>();
+    auto rr2 = record_root("R", sum, opts2);
+    REQUIRE_NOTHROW(session.finish());
+    REQUIRE(*rr2.optimized == *rr.optimized);
+
+    Document doc2;
+    doc2.fingerprint.roots = {"R"};
+    doc2.roots = {rr2.record};
+    REQUIRE(compare(loaded, from_json(to_json(doc2))).empty());
+  }
+}
+
+TEST_CASE("an axis with several proto indices survives JSON and pins",
+          "[schedule-document]") {
+  using namespace sequant::opt::schedule;
+  auto canon = canonical_term(
+      pin_parse(L"g{i_1,i_2;a_1<i_1,i_2>} * t{a_1<i_1,i_2>;i_1}"));
+  REQUIRE(canonical_factors(canon).size() == 2);
+  auto [optimized, annotations] = pin_optimize(canon);
+  // annotate the single contraction node with the PNO index
+  std::optional<sequant::Index> pno;
+  for (auto const& f : canonical_factors(canon))
+    for (auto const& ix : f->as<sequant::Tensor>().const_indices())
+      if (ix.proto_indices().size() == 2) pno = ix;
+  REQUIRE(pno.has_value());
+  annotations.assign(1, sequant::NodeBatchAnnotation{});
+  annotations[0].axes.emplace_back(*pno, sequant::BatchModeType::Contracted);
+  auto rec = record_term(canon, optimized, annotations);
+  REQUIRE(rec.nodes.size() == 1);
+  auto const& label = rec.nodes[0].axes[0].label;
+  CAPTURE(label, rec.factors);
+  REQUIRE(label.find(',') != std::string::npos);
+  REQUIRE(label.find(", ") == std::string::npos);  // the V1 spelling
+
+  Document doc;
+  doc.fingerprint.roots = {"R"};
+  doc.roots = {{"R", {rec}}};
+  Document loaded;
+  REQUIRE_NOTHROW(loaded = from_json(to_json(doc)));
+  auto pinned = rebuild_pinned_term(loaded.roots[0].terms[0], canon);
+  REQUIRE(*pinned.expr == *optimized);
+  REQUIRE(pinned.nodes.size() == 1);
+  REQUIRE(pinned.nodes[0].axes == annotations[0].axes);
 }
 
 TEST_CASE("pinning is strict", "[schedule-document]") {
@@ -1259,8 +1375,7 @@ TEST_CASE("ordered dry run fills the run record", "[schedule-document]") {
 /// one the ordered dry-run evaluation records (n_batches, footprint, builds);
 /// extents, batch targets and planner settings are filled in from the
 /// fixture's own policy and pinned extents.
-TEST_CASE("write the viewer example document",
-          "[schedule-document][.write-example]") {
+TEST_CASE("write the viewer example document", "[.write-example]") {
   char const* const out_path = std::getenv("SEQUANT_SCHEDULE_EXAMPLE_OUT");
   REQUIRE(out_path != nullptr);
 
@@ -1442,20 +1557,16 @@ Document build_document(sequant::ExprPtr const& sum,
   opts.roofline.fast_mem_elems = 1000000.0;
   opts.term_batch_axes = std::make_shared<AxesMap>();
 
-  sequant::ExprPtr optimized;
-  RootRecord record;
+  // a pinned run is recorded too, so its roots are what the pin produced
   std::optional<sequant::opt::schedule::PinSession> session;
   if (pinned) {
     session.emplace(*pinned);
     opts.pinned = &*session;
-    optimized = sequant::optimize_result(sum, opts).expr;
-    session->finish();
-    record = *pinned;
-  } else {
-    auto rr = sequant::opt::schedule::record_root("R", sum, opts);
-    optimized = rr.optimized;
-    record = std::move(rr.record);
   }
+  auto rr = sequant::opt::schedule::record_root("R", sum, opts);
+  if (session) session->finish();
+  sequant::ExprPtr const optimized = rr.optimized;
+  RootRecord const record = std::move(rr.record);
 
   sequant::BinarizationOptions bopts;
   if (auto it = opts.term_batch_axes->find(optimized.get());
@@ -1483,7 +1594,7 @@ Document build_document(sequant::ExprPtr const& sum,
 }  // namespace
 
 TEST_CASE("a pinned schedule is identical across two problem sizes",
-          "[schedule-document][.slow]") {
+          "[schedule-document]") {
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
@@ -1505,7 +1616,9 @@ TEST_CASE("a pinned schedule is identical across two problem sizes",
   auto const B = sizeind_doubled(kSizeIndWater20);
   auto docA = build_document(sum, A, 256, nullptr);  // records
   auto docB_free = build_document(sum, B, 512, nullptr);
-  auto docB_pinned = build_document(sum, B, 512, &docA.roots[0]);
+  // the pin goes through the document's JSON form, as a user's file would
+  auto const docA_loaded = from_json(to_json(docA));
+  auto docB_pinned = build_document(sum, B, 512, &docA_loaded.roots[0]);
 
   REQUIRE(compare(docA, docB_pinned).empty());  // roots + dag identical
   REQUIRE(!compare(docA, docB_free).empty());   // the planner changed its mind
