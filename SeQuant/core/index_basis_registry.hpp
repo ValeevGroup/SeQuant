@@ -91,13 +91,14 @@ concept index_space_argument =
 /// is optional; the dimension comes first, so that a bare number in a brace
 /// list is the dimension, as in the argument-list spelling
 struct IndexSpaceSpec {
-  /// the dimension of the space; the IndexSpace default if not given
+  /// the dimension of the space; 10, the default of the IndexSpace ctor, if
+  /// not given
   /// @pre non-negative
   std::optional<std::int64_t> dimension = {};
   /// the quantum numbers of the space; none if not given
   std::optional<IndexSpace::QuantumNumbers> qns = {};
-  /// the scalar field of the space's own basis; the IndexSpace default if
-  /// not given
+  /// the scalar field of the space's own basis; Field::Complex, the default
+  /// of the IndexSpace ctor, if not given
   std::optional<Field> field = {};
   /// @name roles
   /// whether the space is the registry's vacuum-occupied, reference-occupied,
