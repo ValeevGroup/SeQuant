@@ -1142,6 +1142,7 @@ class CacheManager {
                          : nullptr;
   }
 
+  /// Sets the backend array-ops (see BackendArrayOps). Non-owning; the pointee
   /// must outlive this cache. Absent (nullptr) anywhere along the chain means a
   /// batched external-axis scatter has no way to build its destination.
   void set_array_ops(BackendArrayOps const* a) noexcept { array_ops_ = a; }
