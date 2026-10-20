@@ -45,8 +45,11 @@ lists further knobs.)
 
 - Left: folding outline of blocks and the values built in them, in `steps`
   order; `read X[i]` rows are slice reads of a value homed in an outer block.
-  Blocks open to nesting depth 1 (root and its direct children); click the caret to fold. The filter matches value id,
-  expression, term key and root label (ancestors of matches stay).
+  Blocks open to nesting depth 1 (root and its direct children); click the caret to fold. Consecutive rows of one
+  term form a group named by its root (`R12`, or `R12/2` when a root has several terms), folded by default in a
+  block of more than 24 values. A value's short name is that root name plus its node ordinal (`R12#3`); the full
+  id (term key plus ordinal) is the row's tooltip and the inspector's `id`. The filter matches short name, value
+  id, expression, term key and root label (ancestors of matches stay).
 - Right: neighbourhood of the selection (producers, selected, consumers) to the
   chosen depth (1 to 4). One box per node, one port `[i]` per value; boxes are
   tinted by home block; dashed connectors are sliced reads; `+n more` expands a

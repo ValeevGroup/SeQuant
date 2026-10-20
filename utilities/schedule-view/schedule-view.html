@@ -67,6 +67,7 @@ main {
 .row .tag { color: var(--dim); font-size: 11px; }
 .row.read { color: var(--dim); font-style: italic; }
 .blockline { font-weight: 600; white-space: normal; flex-wrap: wrap; }
+.groupline { color: var(--dim); }
 .tint { background: hsl(var(--h) var(--ts) var(--tl)); }
 .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; flex: none;
   background: hsl(var(--h) var(--ts) var(--tl)); border: 1px solid var(--line); }
@@ -128,6 +129,8 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
   var readsInto = new Map();                       // block id -> [value id]
   var nodeProd = new Map(), nodeCons = new Map();  // hash -> Set(hash)
   var termRoot = new Map();                        // term key -> root label
+  var termShort = new Map();                       // term key -> "R3" or "R3/2" (root label, term index when several)
+  var groupOpen = new Map();                       // "block id|group" -> explicit fold state of a term group
   var vTerms = new Map();                          // value id -> [term key]
   var hidden = new Map();                          // block id -> explicit fold state
   var st = { vid: null, bid: null, hash: null, depth: 2, filter: "", expanded: new Set() };
@@ -161,6 +164,23 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     return v.home_modes && v.home_modes.length ? "[" + v.home_modes.map(function (m) { return m.split(":")[0]; }).join(",") + "]" : "[·]";
   }
   function bLabel(b) { return b.axis ? b.axis : "∅"; }
+  // the term key of a value id ("<key>#<ordinal>"), or the root label of a partial sum ("<label>+<k>")
+  function termOf(id) {
+    var h = id.lastIndexOf("#");
+    if (h >= 0) return id.slice(0, h);
+    var p = id.lastIndexOf("+");
+    return p >= 0 ? id.slice(0, p) : id;
+  }
+  // short name: the root label (and term index) for the term key, so "R12#3", "R12#scale", "R12+1"
+  function shortOf(id) {
+    var t = termOf(id);
+    return termShort.has(t) ? termShort.get(t) + id.slice(t.length) : id;
+  }
+  // the outline groups a block's consecutive rows by this: the term's short name, or the root label
+  function groupOf(v) {
+    var t = termOf(v.id);
+    return termShort.has(t) ? termShort.get(t) : t;
+  }
 
   // -------------------------------------------------------------- loading
   function parseSlot(id) {
@@ -173,7 +193,7 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     V = (d.dag && d.dag.values) || [];
     vById.clear(); bById.clear(); byHash.clear(); prod.clear(); cons.clear();
     childBlocks.clear(); readsInto.clear(); nodeProd.clear(); nodeCons.clear();
-    termRoot.clear(); vTerms.clear(); hidden.clear();
+    termRoot.clear(); termShort.clear(); vTerms.clear(); hidden.clear(); groupOpen.clear();
     st.vid = st.bid = st.hash = null; st.expanded = new Set();
     var dag = d.dag || { values: [], blocks: [], edges: [] };
     V.forEach(function (v) {
@@ -191,7 +211,10 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
       }
     });
     (d.roots || []).forEach(function (r0) {
-      (r0.terms || []).forEach(function (t) { termRoot.set(t.key, r0.label); });
+      (r0.terms || []).forEach(function (t, k) {
+        termRoot.set(t.key, r0.label);
+        termShort.set(t.key, (r0.terms.length > 1) ? r0.label + "/" + k : r0.label);
+      });
     });
     V.forEach(function (v) {
       var ts = [];
@@ -235,7 +258,7 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
   }
   function matches(text, f) { return text.toLowerCase().indexOf(f) >= 0; }
   function valueMatches(v, f) {
-    if (matches(v.id, f) || matches(v.expr, f)) return true;
+    if (matches(v.id, f) || matches(v.expr, f) || matches(shortOf(v.id), f)) return true;
     var ts = vTerms.get(v.id) || [];
     for (var i = 0; i < ts.length; ++i)
       if (matches(ts[i], f) || matches(termRoot.get(ts[i]) || "", f)) return true;
@@ -245,6 +268,26 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     if (forced) return true;
     if (hidden.has(b.id)) return hidden.get(b.id);
     return ancestors(b.id).length - 1 <= 1;  // nesting depth in the block tree
+  }
+  // a term group inside a block is folded by default only where the flat list would be long
+  var GROUP_FOLD_ABOVE = 24;
+  function isGroupOpen(b, key, forced) {
+    if (forced) return true;
+    var k = b.id + "|" + key;
+    if (groupOpen.has(k)) return groupOpen.get(k);
+    return blockValues(b).length <= GROUP_FOLD_ABOVE;
+  }
+  function valueRow(v) {
+    var r = el("div", "row"); r.dataset.vid = v.id;
+    r.appendChild(el("span", "caret", ""));
+    r.appendChild(swatch(v.home_block));
+    r.appendChild(el("span", "tag mono", shortOf(v.id)));
+    r.appendChild(el("span", "mono", v.expr));
+    if (v.leaf) r.appendChild(el("span", "tag", "leaf"));
+    if (v.persistent) r.appendChild(el("span", "tag", "persistent"));
+    if (run && run.builds && run.builds[v.id] !== undefined) r.appendChild(el("span", "tag", "×" + run.builds[v.id]));
+    r.title = v.id;
+    return r;
   }
   // returns the block's DOM node, or null if the filter leaves nothing in it
   function buildBlock(b, f) {
@@ -261,25 +304,44 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
       r.title = "read of " + rid + " in slices of " + b.axis;
       kids.appendChild(r); any = true;
     });
+    // consecutive build rows of one term form a group (a run of one is a plain row); nested blocks break runs
+    var pending = [], pendingKey = null;
+    var flush = function () {
+      if (!pending.length) return;
+      var vs = pending.filter(function (v) { return !f || valueMatches(v, f); });
+      if (vs.length) {
+        if (pending.length === 1) {
+          kids.appendChild(valueRow(vs[0]));
+        } else {
+          var open = isGroupOpen(b, pendingKey, !!f);
+          var g = el("div");
+          var line = el("div", "row groupline");
+          var caret = el("span", "caret", open ? "▾" : "▸"); caret.dataset.gcaret = b.id + "|" + pendingKey;
+          line.appendChild(caret);
+          line.appendChild(el("span", "mono", pendingKey + " · " + pending.length + " values"));
+          line.title = termOf(pending[0].id);
+          g.appendChild(line);
+          if (open) { var gk = el("div", "children"); vs.forEach(function (v) { gk.appendChild(valueRow(v)); }); g.appendChild(gk); }
+          kids.appendChild(g);
+        }
+        any = true;
+      }
+      pending = []; pendingKey = null;
+    };
     (b.steps || []).forEach(function (s) {
       if (s.build) {
         var v = vById.get(s.build); if (!v) return;
-        if (f && !valueMatches(v, f)) return;
-        var r = el("div", "row"); r.dataset.vid = v.id;
-        r.appendChild(el("span", "caret", ""));
-        r.appendChild(swatch(v.home_block));
-        r.appendChild(el("span", "mono", v.expr));
-        if (v.leaf) r.appendChild(el("span", "tag", "leaf"));
-        if (v.persistent) r.appendChild(el("span", "tag", "persistent"));
-        if (run && run.builds && run.builds[v.id] !== undefined) r.appendChild(el("span", "tag", "×" + run.builds[v.id]));
-        r.title = v.id;
-        kids.appendChild(r); any = true;
+        var key = groupOf(v);
+        if (pending.length && key !== pendingKey) flush();
+        pending.push(v); pendingKey = key;
       } else if (s.block !== null && s.block !== undefined) {
+        flush();
         var cb = bById.get(s.block); if (!cb) return;
         var n = buildBlock(cb, f);
         if (n) { kids.appendChild(n); any = true; }
       }
     });
+    flush();
     if (f && !any) return null;
     var open = isOpen(b, !!f);
     var line = el("div", "row blockline"); line.dataset.bid = b.id;
@@ -387,7 +449,7 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     var vs = byHash.get(h);
     var b = el("div", "box"); b.dataset.hash = h;
     if (h === st.hash) b.classList.add("sel");
-    var hd = el("div", "bh mono", nodeLabel(vs[0]) + (vs.length > 1 ? "  ×" + vs.length : ""));
+    var hd = el("div", "bh mono", shortOf(vs[0].id) + "  " + nodeLabel(vs[0]) + (vs.length > 1 ? "  ×" + vs.length : ""));
     tint(hd, vs[0].home_block); hd.title = "node " + h;
     b.appendChild(hd);
     vs.forEach(function (v) {
@@ -406,7 +468,7 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
   function link(text, fn) { var a = el("a", "link", text); a.addEventListener("click", fn); return a; }
   function vlink(id) {
     var v = vById.get(id);
-    var a = link(v ? v.expr : id, function () { selectValue(id, true); });
+    var a = link(v ? shortOf(id) + " " + v.expr : id, function () { selectValue(id, true); });
     a.title = id; return a;
   }
   function blink(bid) { return link("block " + bid, function () { selectBlock(bid); }); }
@@ -445,7 +507,7 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     var v = vById.get(st.vid);
     if (!v) { host.appendChild(el("div", "empty", "Nothing selected.")); return; }
     var tb = el("table", "kv mono");
-    kv(tb, "id", v.id); kv(tb, "expr", v.expr); kv(tb, "hash", v.hash); kv(tb, "key", v.key);
+    kv(tb, "name", shortOf(v.id)); kv(tb, "id", v.id); kv(tb, "expr", v.expr); kv(tb, "hash", v.hash); kv(tb, "key", v.key);
     kv(tb, "leaf", v.leaf);
     ["result_modes", "home_modes", "enclosing_modes", "divergent_modes"].forEach(function (k) { kv(tb, k, listOf(v[k])); });
     var hb = el("span"); hb.appendChild(blink(v.home_block)); kv(tb, "home_block", hb);
@@ -458,7 +520,8 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     var oc = el("details"); oc.appendChild(el("summary", null, (v.occurrences || []).length + " occurrences"));
     (v.occurrences || []).forEach(function (o) {
       var d = el("div");
-      d.textContent = "term " + o.term + " · node " + o.node + " · consumer " + (o.consumer === null || o.consumer === undefined ? "—" : o.consumer) +
+      d.title = o.term;
+      d.textContent = "term " + (termShort.get(o.term) || o.term) + " · node " + o.node + " · consumer " + (o.consumer === null || o.consumer === undefined ? "—" : o.consumer) +
         " · home [" + (o.home || []).join(", ") + "] · enclosing [" + (o.enclosing || []).join(", ") + "] · opens " +
         JSON.stringify(o.opens || []);
       oc.appendChild(d);
@@ -491,7 +554,11 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     st.vid = vid; st.hash = v.hash; st.bid = null;
     if (changedHash) st.expanded = new Set();
     var need = false;
-    if (reveal) ancestors(v.home_block).forEach(function (b) { if (!isOpen(b, false)) { hidden.set(b.id, true); need = true; } });
+    if (reveal) {
+      ancestors(v.home_block).forEach(function (b) { if (!isOpen(b, false)) { hidden.set(b.id, true); need = true; } });
+      var hb = bById.get(v.home_block);
+      if (hb && !isGroupOpen(hb, groupOf(v), false)) { groupOpen.set(hb.id + "|" + groupOf(v), true); need = true; }
+    }
     if (need || st.filter) renderOutline(); else applyHighlight();
     renderGraph(); renderInspector();
     if (reveal) {
@@ -510,6 +577,12 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
   }
 
   $("outline").addEventListener("click", function (ev) {
+    var gc = ev.target.closest("[data-gcaret]");
+    if (gc) {
+      var parts = gc.dataset.gcaret, bar = parts.indexOf("|");
+      var gb = bById.get(Number(parts.slice(0, bar)));
+      groupOpen.set(parts, !isGroupOpen(gb, parts.slice(bar + 1), false)); renderOutline(); return;
+    }
     var c = ev.target.closest("[data-caret]");
     if (c) {
       var b = bById.get(Number(c.dataset.caret));
