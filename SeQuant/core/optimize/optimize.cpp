@@ -277,18 +277,19 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     // flat node_batch_axes stays aligned with its node counter -- and store it
     // under the final Sum pointer, dropping the now-unreachable per-summand
     // entries. Without this, every batch annotation is silently lost and
-    // over-budget intermediates materialize whole. `order` is a list of
-    // clusters, each a list of positions into new_sum, flattened in emission
-    // order (identity for the no-reorder path); it must match how the final Sum
-    // orders its summands.
+    // over-budget intermediates materialize whole. `keyed` is the Sum holding
+    // the keyed pointers (new_sum, or on the no-reorder path the final Sum it
+    // was moved into); `order` is a list of clusters, each a list of positions
+    // into `keyed`, flattened in emission order (identity for the no-reorder
+    // path); it must match how the final Sum orders its summands.
     auto rekey_onto =
-        [&](ExprPtr const& result,
+        [&](ExprPtr const& result, Sum const& keyed,
             container::vector<container::vector<std::size_t>> const& order) {
           if (!opts.term_batch_axes) return;
           container::vector<NodeBatchAnnotation> combined;
           for (auto const& clstr : order)
             for (auto p : clstr) {
-              auto it = opts.term_batch_axes->find(new_sum.summand(p).get());
+              auto it = opts.term_batch_axes->find(keyed.summand(p).get());
               if (it == opts.term_batch_axes->end()) continue;
               combined.insert(combined.end(),
                               std::make_move_iterator(it->second.begin()),
@@ -303,7 +304,8 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
       identity.reserve(new_sum.size());
       for (std::size_t i = 0; i < new_sum.size(); ++i) identity.push_back({i});
       auto result = ex<Sum>(std::move(new_sum));
-      rekey_onto(result, identity);
+      // new_sum is moved from; the moved summands keep their pointers
+      rekey_onto(result, result->as<Sum>(), identity);
       return result;
     }
 
@@ -320,7 +322,7 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     // order equals the final summand order the reordered Sum emits.
     auto const order = opt::clusters(new_sum, nodes);
     auto result = ex<Sum>(opt::reorder(new_sum, nodes));
-    rekey_onto(result, order);
+    rekey_onto(result, new_sum, order);
     return result;
   }
 
