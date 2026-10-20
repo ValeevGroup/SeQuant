@@ -42,7 +42,8 @@
 namespace sequant {
 
 /// the role tags of the deprecated argument-list spellings of
-/// IndexBasisRegistry::add() and its kin; an IndexSpaceSpec names the roles
+/// IndexBasisRegistry::add() and its kin; deprecated with them, an
+/// IndexSpaceSpec names the roles
 inline namespace space_tags {
 struct IsVacuumOccupied {};
 struct IsReferenceOccupied {};
@@ -50,11 +51,18 @@ struct IsComplete {};
 struct IsHole {};
 struct IsParticle {};
 
-constexpr auto is_vacuum_occupied = IsVacuumOccupied{};
-constexpr auto is_reference_occupied = IsReferenceOccupied{};
-constexpr auto is_complete = IsComplete{};
-constexpr auto is_hole = IsHole{};
-constexpr auto is_particle = IsParticle{};
+[[deprecated("use IndexSpaceSpec{.vacuum_occupied = true}")]] constexpr auto
+    is_vacuum_occupied = IsVacuumOccupied{};
+[[deprecated("use IndexSpaceSpec{.reference_occupied = true}")]] constexpr auto
+    is_reference_occupied = IsReferenceOccupied{};
+[[deprecated(
+    "use IndexSpaceSpec{.complete = true}")]] constexpr auto is_complete =
+    IsComplete{};
+[[deprecated("use IndexSpaceSpec{.hole = true}")]] constexpr auto is_hole =
+    IsHole{};
+[[deprecated(
+    "use IndexSpaceSpec{.particle = true}")]] constexpr auto is_particle =
+    IsParticle{};
 
 }  // namespace space_tags
 
