@@ -29,6 +29,18 @@ section: `n_batches`, `footprint` and `builds` come from the ordered dry run,
 
 `sequant-schedule validate <doc.json>` checks a document and prints a summary.
 
+A realistic document comes from the hidden `[dryrun-2iter-report]` unit test,
+which runs the DF-CCSD doubles residual through the ordered executor as a dry
+run at water-20 or C60 PNO-CCSD scale:
+
+    SEQUANT_UT_DRYRUN_SYSTEM=c60 SEQUANT_UT_DRYRUN_BATCH=aux_pao_occ \
+      SEQUANT_UT_SCHEDULE_DOC=$PWD/c60.json \
+      build/tests/unit/unit_tests-sequant "[dryrun-2iter-report]"
+
+(`SEQUANT_UT_DRYRUN_SYSTEM` is `water20` or `c60`, `SEQUANT_UT_DRYRUN_BATCH`
+one of `none`, `aux`, `aux_occ`, `pao`, `aux_pao`, `aux_pao_occ`; the test
+lists further knobs.)
+
 ## Using it
 
 - Left: folding outline of blocks and the values built in them, in `steps`
