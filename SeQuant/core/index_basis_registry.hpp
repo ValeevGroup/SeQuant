@@ -2153,9 +2153,16 @@ class IndexBasisRegistry {
       throw Exception(std::string(caller) + ": label '" + toUtf8(key) +
                       "' is already registered");
     const auto* registered = retrieve_space_ptr(space.type(), space.qns());
-    if (!registered || *registered != space)
-      throw Exception(std::string(caller) + ": the space of '" + toUtf8(key) +
+    if (!registered)
+      throw Exception(std::string(caller) + ": the space '" +
+                      toUtf8(space.base_key()) + "' of '" + toUtf8(key) +
                       "' is not registered");
+    if (*registered != space)
+      throw Exception(std::string(caller) + ": the space '" +
+                      toUtf8(space.base_key()) + "' of '" + toUtf8(key) +
+                      "' differs from '" + toUtf8(registered->base_key()) +
+                      "', the registered space of its type and quantum "
+                      "numbers");
     if (auto taken = basis_label(IndexBasis{space, instance}))
       throw Exception(std::string(caller) + ": the basis of '" + toUtf8(key) +
                       "' is already named '" + toUtf8(*taken) + "'");

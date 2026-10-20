@@ -981,8 +981,13 @@ TEST_CASE("index_space", "[elements]") {
     CHECK_THROWS_AS(ibr.add(L"ρ", L"ζ", 1), IndexSpace::bad_key);
     CHECK_THROWS_AS(ibr.add(L"ρ", L"μ̃", 1),
                     IndexBasisRegistry::not_a_space);  // a name is not a space
-    CHECK_THROWS(ibr.add(L"ρ", IndexSpace{L"ζ", 0b1000}, 1));  // unregistered
-    CHECK_THROWS(ibr.add(L"a2", L"a", 9));                     // not a label
+    CHECK_THROWS_WITH(ibr.add(L"ρ", IndexSpace{L"ζ", 0b1000}, 1),
+                      Catch::Matchers::ContainsSubstring("not registered"));
+    // a space of a registered type and qns under another label is not that
+    // space
+    CHECK_THROWS_WITH(ibr.add(L"ρ", IndexSpace{L"ζ", 0b10, qn}, 1),
+                      Catch::Matchers::ContainsSubstring("differs from 'a'"));
+    CHECK_THROWS(ibr.add(L"a2", L"a", 9));  // not a label
     CHECK_FALSE(ibr.contains(L"ρ"));
     CHECK(ibr.bases().size() == 1 + 5 + 5);  // null + spaces + bases
   }
