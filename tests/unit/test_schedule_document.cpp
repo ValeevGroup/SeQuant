@@ -22,17 +22,23 @@
 #include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/optimize/schedule_pin.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/space_qns.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
+#include <cstdlib>
+#include <fstream>
 #include <functional>
 #include <map>
 #include <memory>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -1271,4 +1277,195 @@ TEST_CASE("ordered executor is unchanged without a run record",
   std::size_t nbuilds = 0;
   for (auto const& [id, n] : run.builds) nbuilds += n;
   REQUIRE(nbuilds == recorded_counts.builds);
+}
+
+// ---------------------------------------------------------------------------
+// size independence on a realistic input. The helpers below are copies of the
+// witness fixture in test_ordered_executor.cpp (sizeind_ prefix; the sibling
+// test files duplicate their fixtures rather than share a header, see
+// tests/unit/CMakeLists.txt).
+// ---------------------------------------------------------------------------
+
+namespace {
+
+struct SizeIndProblemSize {
+  std::size_t mu_tilde;
+  std::size_t aux;
+  std::size_t i_occ;
+  std::array<double, 5> pno_M;
+  std::array<double, 5> osv_M;
+};
+
+// water-20 pVDZ-F12
+inline constexpr SizeIndProblemSize kSizeIndWater20{
+    /*mu_tilde=*/896u,
+    /*aux=*/1682u,
+    /*i_occ=*/80u,
+    /*pno_M=*/
+    {1.0, 23.175775480059084, 25.865548281212597, 28.171416142614103,
+     30.03848680550367},
+    /*osv_M=*/
+    {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
+     59.872014818179686}};
+
+/// every extent doubled
+SizeIndProblemSize sizeind_doubled(SizeIndProblemSize p) {
+  p.mu_tilde *= 2;
+  p.aux *= 2;
+  p.i_occ *= 2;
+  return p;
+}
+
+std::string sizeind_slurp(std::string const& path) {
+  std::ifstream in(path);
+  std::stringstream ss;
+  ss << in.rdbuf();
+  return ss.str();
+}
+
+sequant::eval::dryrun::SizeRegime sizeind_df_regime(
+    SizeIndProblemSize const& p) {
+  sequant::eval::dryrun::SizeRegime r;
+  r.space_extent = {
+      {L"i", p.i_occ},
+      {L"μ̃", p.mu_tilde},
+      {L"Κ", p.aux},
+      {L"a", p.mu_tilde},
+  };
+  r.csv_pno_moment = p.pno_M;
+  r.csv_osv_moment = p.osv_M;
+  return r;
+}
+
+sequant::ExprPtr sizeind_flatten_product(sequant::ExprPtr const& e) {
+  if (!e->is<sequant::Product>()) return e;
+  auto const& p = e->as<sequant::Product>();
+  return sequant::ex<sequant::Product>(p.scalar(), p.factors(),
+                                       sequant::Product::Flatten::Yes);
+}
+
+/// the first \p nterms summands of the DF CCSD doubles residual, as one Sum
+sequant::ExprPtr sizeind_residual_sum(std::size_t nterms) {
+  auto const body = sizeind_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                  "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body.substr(0, body.find('\n'));
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  REQUIRE(summands.size() >= nterms);
+  std::vector<sequant::ExprPtr> flat;
+  for (std::size_t s = 0; s < nterms; ++s)
+    flat.push_back(sizeind_flatten_product(summands[s]));
+  return sequant::ex<sequant::Sum>(flat);
+}
+
+/// optimize (record, or replay \p pinned) -> binarize -> DAG stages ->
+/// record_dag -> fingerprint_of, over the single root "R" = \p sum
+Document build_document(sequant::ExprPtr const& sum,
+                        SizeIndProblemSize const& problem,
+                        std::size_t batch_target, RootRecord const* pinned) {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  auto const regime = sizeind_df_regime(problem);
+  auto const cm =
+      std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.batch_spectator_indices = false;
+  policy.batch_target_size = [batch_target](sequant::Index const&) {
+    return batch_target;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = std::make_shared<AxesMap>();
+
+  sequant::ExprPtr optimized;
+  RootRecord record;
+  std::optional<sequant::opt::schedule::PinSession> session;
+  if (pinned) {
+    session.emplace(*pinned);
+    opts.pinned = &*session;
+    optimized = sequant::optimize_result(sum, opts).expr;
+    session->finish();
+    record = *pinned;
+  } else {
+    auto rr = sequant::opt::schedule::record_root("R", sum, opts);
+    optimized = rr.optimized;
+    record = std::move(rr.record);
+  }
+
+  sequant::BinarizationOptions bopts;
+  if (auto it = opts.term_batch_axes->find(optimized.get());
+      it != opts.term_batch_axes->end())
+    bopts.node_batch_axes = it->second;
+  std::vector<sequant::eval::dryrun::EvalNodeDryRun> forest;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm,
+                                                   policy.batch_target_size);
+  auto legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto ordered =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {});
+
+  Document doc;
+  doc.fingerprint =
+      sequant::opt::schedule::fingerprint_of(forest, {"R"}, opts, {L"Κ"});
+  doc.roots = {record};
+  doc.dag = record_dag(rich, legality, ordered, forest, doc.roots);
+  return doc;
+}
+
+}  // namespace
+
+TEST_CASE("a pinned schedule is identical across two problem sizes",
+          "[schedule-document][.slow]") {
+  auto ctx = sequant::get_default_context_snapshot();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
+  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  ctx.set(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  // number of leading residual summands; raised until the planner's choice
+  // differs between the two regimes (see the final REQUIRE)
+  constexpr std::size_t kNTerms = 8;
+  auto const sum = sizeind_residual_sum(kNTerms);
+
+  // regime A = water-20 pVDZ-F12; regime B = every extent doubled, batch
+  // target doubled
+  auto const A = kSizeIndWater20;
+  auto const B = sizeind_doubled(kSizeIndWater20);
+  auto docA = build_document(sum, A, 256, nullptr);  // records
+  auto docB_free = build_document(sum, B, 512, nullptr);
+  auto docB_pinned = build_document(sum, B, 512, &docA.roots[0]);
+
+  REQUIRE(compare(docA, docB_pinned).empty());  // roots + dag identical
+  REQUIRE(!compare(docA, docB_free).empty());   // the planner changed its mind
+  REQUIRE_NOTHROW(sequant::opt::schedule::check_fingerprint(
+      docA.fingerprint, docB_pinned.fingerprint));
 }
