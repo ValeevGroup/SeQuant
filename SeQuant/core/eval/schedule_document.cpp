@@ -110,6 +110,8 @@ json to_j(ContextRecord const& c) {
   j["spbasis"] = c.spbasis;
   j["strict_braket_symmetry"] = c.strict_braket_symmetry;
   j["cardinal_tensor_labels"] = strs_j(c.cardinal_tensor_labels);
+  j["canonicalization_method"] = c.canonicalization_method;
+  j["ignore_named_index_labels"] = c.ignore_named_index_labels;
   return j;
 }
 
@@ -557,6 +559,8 @@ ContextRecord context_r(json const& j, std::string const& where) {
   c.spbasis = get_str(j, "spbasis", where);
   c.strict_braket_symmetry = get_bool(j, "strict_braket_symmetry", where);
   c.cardinal_tensor_labels = get_strs(j, "cardinal_tensor_labels", where);
+  c.canonicalization_method = get_str(j, "canonicalization_method", where);
+  c.ignore_named_index_labels = get_bool(j, "ignore_named_index_labels", where);
   return c;
 }
 

@@ -202,8 +202,18 @@ eval::schedule::Fingerprint make_fingerprint(
 /// engine's loops and the DAG record's mode spellings carry, which is the
 /// basis name when the basis is named), the volatile leaf labels, the scalar
 /// BatchPolicy and OptimizeOptions settings that steer structure, \p mode_order
-/// and the active Context. Size-dependent settings are deliberately absent (see
-/// \ref planner_record).
+/// and the active Context (vacuum, basis, strict bra-ket symmetry, cardinal
+/// tensor labels, canonicalization method and the named-index flag, the
+/// settings a term key depends on). Size-dependent settings are deliberately
+/// absent (see \ref planner_record).
+///
+/// Two limits: a predicate is evaluated on one index per basis, so a policy
+/// that also reads the index itself (its proto indices, an attribute that
+/// varies within a basis) is fingerprinted by that one index alone and a
+/// difference there surfaces as a different DAG rather than a mismatch; and
+/// the tensor canonicalizers and index comparers the Context registers are
+/// not spelled, so a difference there surfaces as a key miss, which
+/// PinSession::finish names.
 template <meta::eval_node_range R>
 eval::schedule::Fingerprint fingerprint_of(
     R const& forest, std::vector<std::string> root_labels,

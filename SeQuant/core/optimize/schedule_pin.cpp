@@ -6,6 +6,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/options.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -573,6 +574,12 @@ eval::schedule::Fingerprint make_fingerprint(
   fp.context.strict_braket_symmetry = ctx.assert_strict_braket_symmetry();
   for (auto const& l : ctx.cardinal_tensor_labels())
     fp.context.cardinal_tensor_labels.push_back(toUtf8(l));
+  auto const copts = ctx.canonicalization_options().value_or(
+      CanonicalizeOptions::default_options());
+  fp.context.canonicalization_method = toUtf8(to_wstring(copts.method));
+  fp.context.ignore_named_index_labels =
+      copts.ignore_named_index_labels ==
+      CanonicalizeOptions::IgnoreNamedIndexLabel::Yes;
   return fp;
 }
 
@@ -651,6 +658,10 @@ void check_fingerprint(eval::schedule::Fingerprint const& loaded,
        b.strict_braket_symmetry);
   diff(d, "context.cardinal_tensor_labels", a.cardinal_tensor_labels,
        b.cardinal_tensor_labels);
+  diff(d, "context.canonicalization_method", a.canonicalization_method,
+       b.canonicalization_method);
+  diff(d, "context.ignore_named_index_labels", a.ignore_named_index_labels,
+       b.ignore_named_index_labels);
   if (d.empty()) return;
   std::string msg = "schedule fingerprint mismatch:";
   for (auto const& line : d) msg += "\n" + line;
