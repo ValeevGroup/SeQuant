@@ -8,11 +8,11 @@
 // exit codes: 0 ok, 1 differences / invalid input, 2 usage
 
 #include <SeQuant/core/eval/schedule_document.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #include <fstream>
 #include <iostream>
 #include <iterator>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -43,11 +43,11 @@ bool slurp(std::string const& path, std::string& out) {
 // reader errors are prefixed with the path, so `diff a b` names the file
 sched::Document load(std::string const& path) {
   std::ifstream in(path, std::ios::binary);
-  if (!in) throw std::runtime_error("cannot open " + path);
+  if (!in) throw sequant::Exception("cannot open " + path);
   try {
     return sched::read(in);
   } catch (std::exception const& e) {
-    throw std::runtime_error(path + ": " + e.what());
+    throw sequant::Exception(path + ": " + e.what());
   }
 }
 
