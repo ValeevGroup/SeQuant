@@ -50,7 +50,10 @@ lists further knobs.)
   inspector's producers and consumers say how each pair meets (same block,
   read in slices, assembled by a sum or a scatter over a loop).
 - Left: folding outline of blocks and the values built in them, in `steps`
-  order; `read X[i]` rows are slice reads of a value homed in an outer block.
+  order, then the values the block accumulates without a step of its own
+  (produced inside its Assemble step per batch: summed partials, scattered
+  slices), tagged as such; `read X[i]` rows are slice reads of a value homed
+  in an outer block.
   Blocks open to nesting depth 1 (root and its direct children); click the caret to fold. Consecutive rows of one
   term form a group named by its root (`R12`, or `R12/2` when a root has several terms), folded by default in a
   block of more than 24 values. A value's short name is that root name plus its node ordinal (`R12#3`); the full

@@ -266,7 +266,16 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
   function blockValues(b) {
     var out = [];
     (b.steps || []).forEach(function (s) { if (s.build) out.push(s.build); });
+    accumulated(b).forEach(function (o) { out.push(o[0]); });
     return out;
+  }
+  // the values a block accumulates that no step of it builds: the executor
+  // produces them inside the block's Assemble step (a per-batch partial sum,
+  // or the per-batch slice it scatters), so they are rows of the block too
+  function accumulated(b) {
+    var built = {};
+    (b.steps || []).forEach(function (s) { if (s.build) built[s.build] = true; });
+    return (b.outputs || []).filter(function (o) { return !built[o[0]]; });
   }
   function nestedCount(bid) {
     var n = 0;
@@ -294,12 +303,13 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     if (groupOpen.has(k)) return groupOpen.get(k);
     return blockValues(b).length <= GROUP_FOLD_ABOVE;
   }
-  function valueRow(v) {
+  function valueRow(v, tag) {
     var r = el("div", "row"); r.dataset.vid = v.id;
     r.appendChild(el("span", "caret", ""));
     r.appendChild(swatch(v.home_block));
     r.appendChild(el("span", "tag mono", shortOf(v.id)));
     r.appendChild(el("span", "mono", v.expr));
+    if (tag) r.appendChild(el("span", "tag", tag));
     if (v.leaf) r.appendChild(el("span", "tag", "leaf"));
     if (v.persistent) r.appendChild(el("span", "tag", "persistent"));
     if (run && run.builds && run.builds[v.id] !== undefined) r.appendChild(el("span", "tag", "×" + run.builds[v.id]));
@@ -322,13 +332,13 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
       kids.appendChild(r); any = true;
     });
     // consecutive build rows of one term form a group (a run of one is a plain row); nested blocks break runs
-    var pending = [], pendingKey = null;
+    var pending = [], pendingKey = null, tagOf = {};
     var flush = function () {
       if (!pending.length) return;
       var vs = pending.filter(function (v) { return !f || valueMatches(v, f); });
       if (vs.length) {
         if (pending.length === 1) {
-          kids.appendChild(valueRow(vs[0]));
+          kids.appendChild(valueRow(vs[0], tagOf[vs[0].id]));
         } else {
           var open = isGroupOpen(b, pendingKey, !!f);
           var g = el("div");
@@ -338,25 +348,35 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
           line.appendChild(el("span", "mono", pendingKey + " · " + pending.length + " values"));
           line.title = termOf(pending[0].id);
           g.appendChild(line);
-          if (open) { var gk = el("div", "children"); vs.forEach(function (v) { gk.appendChild(valueRow(v)); }); g.appendChild(gk); }
+          if (open) { var gk = el("div", "children"); vs.forEach(function (v) { gk.appendChild(valueRow(v, tagOf[v.id])); }); g.appendChild(gk); }
           kids.appendChild(g);
         }
         any = true;
       }
       pending = []; pendingKey = null;
     };
+    var pushValue = function (v) {
+      var key = groupOf(v);
+      if (pending.length && key !== pendingKey) flush();
+      pending.push(v); pendingKey = key;
+    };
     (b.steps || []).forEach(function (s) {
       if (s.build) {
         var v = vById.get(s.build); if (!v) return;
-        var key = groupOf(v);
-        if (pending.length && key !== pendingKey) flush();
-        pending.push(v); pendingKey = key;
+        pushValue(v);
       } else if (s.block !== null && s.block !== undefined) {
         flush();
         var cb = bById.get(s.block); if (!cb) return;
         var n = buildBlock(cb, f);
         if (n) { kids.appendChild(n); any = true; }
       }
+    });
+    flush();
+    // after the steps: what the block's Assemble steps produce per batch
+    accumulated(b).forEach(function (o) {
+      var v = vById.get(o[0]); if (!v) return;
+      tagOf[v.id] = o[1] === "AccumulateSum" ? "\u03a3 per batch, summed" : "per batch, scattered";
+      pushValue(v);
     });
     flush();
     if (f && !any) return null;
