@@ -11,9 +11,11 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#include <cstddef>
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -57,7 +59,7 @@ class ExportStep : public ProcessingStep {
 
   std::vector<ExpressionGroup<>> prepare_expressions(
       ExecutionContext &ctx, const std::vector<std::string_view> &inputs,
-      ExportContext &genctx) const;
+      ExportContext &genctx, std::set<std::size_t> &always_create_ids) const;
 
   friend class MetaAwareIftContext;
 };

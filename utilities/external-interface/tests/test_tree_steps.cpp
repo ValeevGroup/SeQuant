@@ -13,8 +13,14 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <filesystem>
+#include <fstream>
 #include <ranges>
+#include <sstream>
+#include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 using namespace sequant;
 using namespace sequant::util::extint;
@@ -156,5 +162,122 @@ TEST_CASE("export step", "[extint]") {
     REQUIRE_THROWS_WITH(
         step.run("exp", ctx, {"A.0", "B.0"}),
         Catch::Matchers::ContainsSubstring("Impossible dependencies"));
+  }
+
+  SECTION(
+      "CSE intermediates reused across inputs are allocated, not accumulated") {
+    // Common-subexpression elimination runs once per input (per equation) and
+    // restarts its intermediate-name counter each time, so two unrelated
+    // intermediates from different inputs can end up sharing a name once the
+    // inputs are exported into a single section. Such a collision must not turn
+    // the second definition into a load-and-accumulate onto the first (which
+    // would silently add the first intermediate's value into the second).
+    //
+    // Here two independent inputs each contain the *same* common subexpression
+    // used by two results, so CSE factors it out in both and -- because the
+    // counter restarts -- gives both intermediates the same name. We then
+    // export both inputs into one section and require that the shared
+    // intermediate is allocated afresh for each definition.
+    ExportTreeData data_a = test_support::tree_data(
+        {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+         L"R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+    ExportTreeData data_b = test_support::tree_data(
+        {L"R3{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+         L"R4{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+
+    ExecutionContext ctx;
+    ctx.set_data("A", 0, ProcessingData{std::move(data_a)});
+    ctx.set_data("B", 0, ProcessingData{std::move(data_b)});
+
+    CSEStep cse;
+    REQUIRE(cse.run("cse", ctx, {"A.0", "B.0"}) == 2);
+    REQUIRE(ctx.has_data("cse.0"));
+    REQUIRE(ctx.has_data("cse.1"));
+
+    // Each input gained an intermediate definition (CSE fired on both).
+    const ExportTreeData &res_a =
+        convert_data<ExportTreeData>(ctx.get_data("cse.0").front().data.get());
+    const ExportTreeData &res_b =
+        convert_data<ExportTreeData>(ctx.get_data("cse.1").front().data.get());
+    REQUIRE(res_a.entries.size() == 3);
+    REQUIRE(res_b.entries.size() == 3);
+
+    const std::filesystem::path out = std::filesystem::temp_directory_path() /
+                                      "extint_cse_reuse_alloc_test.itfaa";
+
+    ExportStep step;
+    step.set_options(
+        json{{"language", "itf"},
+             // optimize at default (true), matching the real pipeline
+             {"output", out.string()},
+             {"meta",
+              {{"index_spaces",
+                {{"i", {{"name", "Closed"}, {"tag", "c"}}},
+                 {"a", {{"name", "External"}, {"tag", "e"}}}}}}}});
+
+    {
+      test_support::ScopedStreamSilencer silencer;
+      step.run("exp", ctx, {"cse.0", "cse.1"});
+    }
+
+    std::ifstream stream(out);
+    REQUIRE(stream.good());
+    std::stringstream buffer;
+    buffer << stream.rdbuf();
+    const std::string code = buffer.str();
+    stream.close();
+    std::filesystem::remove(out);
+
+    // The shared intermediate is defined once per input. Each definition must
+    // be a fresh allocation. The bug signature is a definition that first
+    // *loads* the stored intermediate and then accumulates onto it, i.e. a
+    //     load  CSEx:blk[...]
+    //     ...
+    //     .CSEx:blk[...] += ...
+    // sequence (reusing the previous, unrelated intermediate's value). Count
+    // such accumulate-definitions; there must be none.
+    std::vector<std::string> lines;
+    for (std::size_t pos = 0; pos <= code.size();) {
+      std::size_t eol = code.find('\n', pos);
+      if (eol == std::string::npos) eol = code.size();
+      lines.emplace_back(code.substr(pos, eol - pos));
+      pos = eol + 1;
+    }
+
+    const auto nameblock = [](std::string_view line,
+                              std::string_view prefix) -> std::string {
+      if (!line.starts_with(prefix)) return {};
+      line.remove_prefix(prefix.size());
+      std::size_t bracket = line.find('[');
+      if (bracket == std::string_view::npos) return {};
+      return std::string(line.substr(0, bracket));
+    };
+
+    std::size_t accumulate_definitions = 0;
+    std::size_t alloc_definitions = 0;
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+      // A CSE result definition line: ".CSEx:blk[...] += ..."
+      const std::string def = nameblock(lines[i], ".CSE");
+      if (def.empty()) continue;
+      alloc_definitions += 1;  // provisionally; corrected below if it's a load
+
+      // Look back a few lines for how this intermediate was brought into scope.
+      bool loaded = false;
+      bool allocated = false;
+      for (std::size_t j = i; j-- > 0 && i - j <= 6;) {
+        if (nameblock(lines[j], "load CSE") == def) {
+          loaded = true;
+          break;
+        }
+        if (nameblock(lines[j], "alloc CSE") == def) {
+          allocated = true;
+          break;
+        }
+      }
+      if (loaded && !allocated) ++accumulate_definitions;
+    }
+
+    REQUIRE(alloc_definitions >= 2);  // CSE fired on both inputs
+    CHECK(accumulate_definitions == 0);
   }
 }

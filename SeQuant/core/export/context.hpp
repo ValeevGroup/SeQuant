@@ -36,6 +36,12 @@ ZeroStrategy operator&(ZeroStrategy lhs, ZeroStrategy rhs);
 bool operator!(ZeroStrategy strategy);
 
 /// A combination of a Load and ZeroStrategy
+///
+/// The two strategies are tracked independently: an entry only carries the
+/// strategy that was explicitly set for it. This matters because setting one
+/// strategy must not implicitly assert a value for the other -- e.g. requesting
+/// a zero strategy for a result must not also pin its load strategy (and
+/// thereby shadow a load strategy set elsewhere for the same object).
 /// @sa LoadStrategy
 /// @sa ZeroStrategy
 struct StrategyPair {
@@ -44,8 +50,8 @@ struct StrategyPair {
   StrategyPair(LoadStrategy load);
   StrategyPair(ZeroStrategy zero);
 
-  LoadStrategy load = LoadStrategy::Create;
-  ZeroStrategy zero = ZeroStrategy::ZeroOnCreate;
+  std::optional<LoadStrategy> load;
+  std::optional<ZeroStrategy> zero;
 };
 
 /// Different ways a given tensor/variable can be used in a given code.

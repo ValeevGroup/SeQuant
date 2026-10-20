@@ -25,13 +25,9 @@ bool operator!(ZeroStrategy strategy) {
 StrategyPair::StrategyPair(LoadStrategy load, ZeroStrategy zero)
     : load(load), zero(zero) {}
 
-StrategyPair::StrategyPair(LoadStrategy load) : StrategyPair() {
-  this->load = load;
-}
+StrategyPair::StrategyPair(LoadStrategy load) : load(load) {}
 
-StrategyPair::StrategyPair(ZeroStrategy zero) : StrategyPair() {
-  this->zero = zero;
-}
+StrategyPair::StrategyPair(ZeroStrategy zero) : zero(zero) {}
 
 UsageSet &UsageSet::operator=(Usage usage) {
   m_val = static_cast<Value>(usage);
@@ -88,8 +84,8 @@ LoadStrategy ExportContext::loadStrategy(const Tensor &tensor) const {
   if (auto map_iter = m_tensorStrategies.find(ID_GLOBAL);
       map_iter != m_tensorStrategies.end()) {
     auto iter = map_iter->second.find(tensor);
-    if (iter != map_iter->second.end()) {
-      return iter->second.load;
+    if (iter != map_iter->second.end() && iter->second.load.has_value()) {
+      return *iter->second.load;
     }
   }
 
@@ -97,8 +93,8 @@ LoadStrategy ExportContext::loadStrategy(const Tensor &tensor) const {
     if (auto map_iter = m_tensorStrategies.find(current_expression_id());
         map_iter != m_tensorStrategies.end()) {
       auto iter = map_iter->second.find(tensor);
-      if (iter != map_iter->second.end()) {
-        return iter->second.load;
+      if (iter != map_iter->second.end() && iter->second.load.has_value()) {
+        return *iter->second.load;
       }
     }
   }
@@ -110,8 +106,8 @@ LoadStrategy ExportContext::loadStrategy(const Variable &variable) const {
   if (auto map_iter = m_variableStrategies.find(ID_GLOBAL);
       map_iter != m_variableStrategies.end()) {
     auto iter = map_iter->second.find(variable);
-    if (iter != map_iter->second.end()) {
-      return iter->second.load;
+    if (iter != map_iter->second.end() && iter->second.load.has_value()) {
+      return *iter->second.load;
     }
   }
 
@@ -119,8 +115,8 @@ LoadStrategy ExportContext::loadStrategy(const Variable &variable) const {
     if (auto map_iter = m_variableStrategies.find(current_expression_id());
         map_iter != m_variableStrategies.end()) {
       auto iter = map_iter->second.find(variable);
-      if (iter != map_iter->second.end()) {
-        return iter->second.load;
+      if (iter != map_iter->second.end() && iter->second.load.has_value()) {
+        return *iter->second.load;
       }
     }
   }
@@ -162,8 +158,8 @@ ZeroStrategy ExportContext::zeroStrategy(const Tensor &tensor) const {
   if (auto map_iter = m_tensorStrategies.find(ID_GLOBAL);
       map_iter != m_tensorStrategies.end()) {
     auto iter = map_iter->second.find(tensor);
-    if (iter != map_iter->second.end()) {
-      return iter->second.zero;
+    if (iter != map_iter->second.end() && iter->second.zero.has_value()) {
+      return *iter->second.zero;
     }
   }
 
@@ -171,8 +167,8 @@ ZeroStrategy ExportContext::zeroStrategy(const Tensor &tensor) const {
     if (auto map_iter = m_tensorStrategies.find(current_expression_id());
         map_iter != m_tensorStrategies.end()) {
       auto iter = map_iter->second.find(tensor);
-      if (iter != map_iter->second.end()) {
-        return iter->second.zero;
+      if (iter != map_iter->second.end() && iter->second.zero.has_value()) {
+        return *iter->second.zero;
       }
     }
   }
@@ -184,8 +180,8 @@ ZeroStrategy ExportContext::zeroStrategy(const Variable &variable) const {
   if (auto map_iter = m_variableStrategies.find(ID_GLOBAL);
       map_iter != m_variableStrategies.end()) {
     auto iter = map_iter->second.find(variable);
-    if (iter != map_iter->second.end()) {
-      return iter->second.zero;
+    if (iter != map_iter->second.end() && iter->second.zero.has_value()) {
+      return *iter->second.zero;
     }
   }
 
@@ -193,8 +189,8 @@ ZeroStrategy ExportContext::zeroStrategy(const Variable &variable) const {
     if (auto map_iter = m_variableStrategies.find(current_expression_id());
         map_iter != m_variableStrategies.end()) {
       auto iter = map_iter->second.find(variable);
-      if (iter != map_iter->second.end()) {
-        return iter->second.zero;
+      if (iter != map_iter->second.end() && iter->second.zero.has_value()) {
+        return *iter->second.zero;
       }
     }
   }
