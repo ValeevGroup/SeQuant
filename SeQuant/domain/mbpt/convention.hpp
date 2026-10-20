@@ -136,34 +136,46 @@ add_pao_spaces(std::shared_ptr<IndexBasisRegistry>& ibr,
 inline constexpr IndexBasis::instance_type default_pao_basis_instance =
     std::numeric_limits<IndexBasis::instance_type>::max();
 
+/// @brief what add_pao_basis() registers the PAO basis with besides the
+/// particle space: each member is given by name, and each has a default
+struct PAOBasisSpec {
+  /// the label the PAO basis is registered under
+  std::wstring_view label = L"μ̃";
+  /// the label of the AO basis the PAOs are projected from, which they follow
+  std::wstring_view ao_basis = L"μ";
+  /// the basis instance of the PAO basis
+  IndexBasis::instance_type instance = default_pao_basis_instance;
+};
+
 /// @brief registers the PAO basis as a named instance of the particle space
 
 /// expects \p ibr to have a defined particle space. The PAOs are the AOs
-/// projected on the particle space, so the entry follows the OBS AO basis
-/// `μ` (IndexBasisRegistry::follow()), which add_ao_basis() registers first
-/// if \p ibr has no `μ`, as the OBS AO basis alone; for the VBS or ABS AO
-/// bases call add_ao_basis() first, since it cannot register `μ` twice. The
-/// PAO bases' extent, metric (general) and field are those
-/// of `μ`, set through `μ`'s label (populate the extent with
-/// IndexBasisRegistry::extent(L"μ", n) before the registry is given to a
+/// projected on the particle space, so the entry follows the AO basis they
+/// are projected from (IndexBasisRegistry::follow()), `spec.ao_basis`: the
+/// OBS AO basis `μ` by default, which add_ao_basis() registers first if
+/// \p ibr has no `μ`; any other AO basis (e.g. the OBS+VBS one of a program
+/// with a separate virtual basis) must be registered already, and must span
+/// the particle space. The PAO bases' extent, metric (general) and field are
+/// those of that basis, set through its label (populate the extent with
+/// IndexBasisRegistry::extent(label, n) before the registry is given to a
 /// Context, which holds it immutable). The α- and β-spin PAO bases are
 /// registered alongside, as the same instance of the spin-cased particle
 /// spaces (if \p ibr has them) under the spin-annotated label (`μ̃↑`,
 /// `μ̃↓`), so that a PAO index can be spin-cased (see make_spinalpha());
-/// they follow `μ` too, since the AOs do not depend on spin.
+/// they follow the same basis, since the AOs do not depend on spin.
 /// @param spin_any the quantum numbers of the spin-agnostic particle space
-/// @param instance the basis instance of the PAO basis
-/// @param label the label the PAO basis is registered under
-/// @throw Exception if \p label is `μ` or it or a spin-annotated version of
-///        it is already registered, if \p instance of a particle space is
-///        already named, if `μ` is missing and cannot be registered (see
-///        add_ao_basis()) or is registered but is a space or follows an
-///        entry itself; the registry is then left untouched
-void add_pao_basis(
-    std::shared_ptr<IndexBasisRegistry>& ibr,
-    IndexSpace::QuantumNumbers spin_any,
-    IndexBasis::instance_type instance = default_pao_basis_instance,
-    std::wstring_view label = L"μ̃");
+/// @param spec the label, the AO basis and the instance of the PAO basis, by
+///        name (see PAOBasisSpec), e.g. `{.ao_basis = L"Γ"}`
+/// @throw Exception if the label is that of the AO basis or it or a
+///        spin-annotated version of it is already registered, if the
+///        instance of a particle space is already named, if the AO basis is
+///        missing and is not `μ` or `μ` cannot be registered (see
+///        add_ao_basis()), or if it is registered but is a space, follows an
+///        entry itself or does not span the particle space; the registry is
+///        then left untouched
+void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
+                   IndexSpace::QuantumNumbers spin_any,
+                   const PAOBasisSpec& spec = {});
 
 /// @brief add batching spaces to registry
 void add_batching_spaces(std::shared_ptr<IndexBasisRegistry>& ibr);

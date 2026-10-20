@@ -763,6 +763,34 @@ TEST_CASE("index_space", "[elements]") {
     with_ao->extent(L"μ", 600);
     REQUIRE_NOTHROW(mbpt::add_pao_basis(with_ao, mbpt::Spin::any));
     CHECK(with_ao->retrieve(L"μ̃").extent() == 600);
+    // the PAOs can be projected from another AO basis, e.g. a program's
+    // OBS+VBS one, which must be registered
+    auto from_vbs_plus = sequant::mbpt::make_min_sr_spaces();
+    CHECK_THROWS_WITH(
+        mbpt::add_pao_basis(from_vbs_plus, mbpt::Spin::any, {.ao_basis = L"Γ"}),
+        Catch::Matchers::ContainsSubstring("Γ"));
+    CHECK_FALSE(from_vbs_plus->contains(L"μ̃"));
+    CHECK_FALSE(from_vbs_plus->contains(L"μ"));
+    from_vbs_plus
+        ->add(L"Γ", L"p", mbpt::default_ao_basis_instance,
+              {.metric = IndexBasisMetric::General})
+        .extent(L"Γ", 700);
+    REQUIRE_NOTHROW(mbpt::add_pao_basis(from_vbs_plus, mbpt::Spin::any,
+                                        {.ao_basis = L"Γ"}));
+    CHECK_FALSE(from_vbs_plus->contains(L"μ"));
+    for (const auto* l : {L"μ̃", L"μ̃↑", L"μ̃↓"}) {
+      CAPTURE(l);
+      CHECK(from_vbs_plus->follows(l) == std::optional<std::wstring>{L"Γ"});
+      CHECK(from_vbs_plus->retrieve(l).extent() == 700);
+    }
+    // ... but not from one that does not span the PAOs
+    auto from_occ = sequant::mbpt::make_min_sr_spaces();
+    from_occ->add(L"ι", L"i", 4, {.metric = IndexBasisMetric::General});
+    CHECK_THROWS_WITH(
+        mbpt::add_pao_basis(from_occ, mbpt::Spin::any, {.ao_basis = L"ι"}),
+        Catch::Matchers::ContainsSubstring("does not include"));
+    CHECK_FALSE(from_occ->contains(L"μ̃"));
+    CHECK_FALSE(from_occ->contains(L"μ̃↑"));
     // a registry that cannot take the AO basis (no complete space designated)
     // is left untouched
     auto no_p = std::make_shared<IndexBasisRegistry>();
@@ -791,8 +819,7 @@ TEST_CASE("index_space", "[elements]") {
     // ... and the PAO bases cannot take the label of the basis they follow
     auto mu_label = sequant::mbpt::make_min_sr_spaces();
     CHECK_THROWS_WITH(
-        mbpt::add_pao_basis(mu_label, mbpt::Spin::any,
-                            mbpt::default_pao_basis_instance, L"μ"),
+        mbpt::add_pao_basis(mu_label, mbpt::Spin::any, {.label = L"μ"}),
         Catch::Matchers::ContainsSubstring("μ"));
     CHECK_FALSE(mu_label->contains(L"μ"));
     // ordering: after every basis of a (I2), between i and Κ as before
