@@ -700,6 +700,26 @@ Document document_r(json const& j) {
   return d;
 }
 
+// Nesting cap for parsing. A document nests a handful of levels around the
+// `tree` arrays, whose depth is bounded by a term's factor count. The DOM
+// parser copies a container's earlier members recursively whenever the
+// container grows, so an unbounded depth exhausts the stack before validation
+// sees the document.
+constexpr int kMaxDepth = 256;
+
+json parse_checked(std::string_view text, std::string const& where) {
+  try {
+    return json::parse(text, [&](int depth, json::parse_event_t, json&) {
+      if (depth > kMaxDepth)
+        fail(where,
+             "nesting deeper than " + std::to_string(kMaxDepth) + " levels");
+      return true;
+    });
+  } catch (json::exception const& e) {
+    fail(where, std::string("not valid JSON: ") + e.what());
+  }
+}
+
 // ---------------------------------------------------------------- compare
 
 struct Differ {
@@ -806,12 +826,7 @@ std::string to_json(Document const& d) { return document_j(d).dump(2) + "\n"; }
 void write(Document const& d, std::ostream& os) { os << to_json(d); }
 
 Document from_json(std::string_view text) {
-  json j;
-  try {
-    j = json::parse(text);
-  } catch (json::exception const& e) {
-    fail("document", std::string("not valid JSON: ") + e.what());
-  }
+  json const j = parse_checked(text, "document");
   try {
     return document_r(j);
   } catch (json::exception const& e) {
@@ -826,12 +841,7 @@ Document read(std::istream& is) {
 }
 
 RunRecord run_from_json(std::string_view text) {
-  json j;
-  try {
-    j = json::parse(text);
-  } catch (json::exception const& e) {
-    fail("run", std::string("not valid JSON: ") + e.what());
-  }
+  json const j = parse_checked(text, "run");
   if (!j.is_object()) fail("run", "expected a JSON object");
   try {
     return run_r(j);

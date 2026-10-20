@@ -129,6 +129,30 @@ TEST_CASE("schedule document rejects bad shapes", "[schedule-document]") {
       ContainsSubstring("format"));
 }
 
+TEST_CASE("schedule document reader caps the nesting depth",
+          "[schedule-document]") {
+  using Catch::Matchers::ContainsSubstring;
+  // deep enough to overflow the stack if it were parsed to the end
+  std::string deep(100000, '[');
+  deep += std::string(100000, ']');
+  REQUIRE_THROWS_WITH(from_json(deep), ContainsSubstring("nesting"));
+  REQUIRE_THROWS_WITH(run_from_json(deep), ContainsSubstring("nesting"));
+  // the cap leaves room for any term: this tree is 200 levels deep
+  Document d = make_doc();
+  auto& t = d.roots[0].terms[0];
+  t.nodes.clear();
+  t.factors.resize(201, "x{i_1;a_1}");
+  TreeShape tree{0};
+  for (std::size_t k = 1; k <= 200; ++k) {
+    TreeShape up;
+    up.left = std::make_unique<TreeShape>(std::move(tree));
+    up.right = std::make_unique<TreeShape>(TreeShape{k});
+    tree = std::move(up);
+  }
+  t.tree = std::move(tree);
+  REQUIRE_NOTHROW(from_json(to_json(d)));
+}
+
 TEST_CASE("schedule document reader accepts a tree-only term",
           "[schedule-document]") {
   // a non-batched objective records the tree without node annotations
