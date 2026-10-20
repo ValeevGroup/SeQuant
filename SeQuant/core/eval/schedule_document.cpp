@@ -813,6 +813,42 @@ Document read(std::istream& is) {
   return from_json(text);
 }
 
+RunRecord run_from_json(std::string_view text) {
+  json j;
+  try {
+    j = json::parse(text);
+  } catch (json::exception const& e) {
+    fail("run", std::string("not valid JSON: ") + e.what());
+  }
+  if (!j.is_object()) fail("run", "expected a JSON object");
+  try {
+    return run_r(j);
+  } catch (json::exception const& e) {
+    fail("run", std::string("malformed: ") + e.what());
+  }
+}
+
+std::string to_json(RunRecord const& r) { return to_j(r).dump(2) + "\n"; }
+
+std::string escape_for_html_script(std::string_view json) {
+  std::string out;
+  out.reserve(json.size());
+  for (std::size_t k = 0; k < json.size(); ++k) {
+    char const c = json[k];
+    // U+2028 and U+2029 are E2 80 A8 and E2 80 A9 in UTF-8
+    if (c == '\xE2' && k + 2 < json.size() && json[k + 1] == '\x80' &&
+        (json[k + 2] == '\xA8' || json[k + 2] == '\xA9')) {
+      out += json[k + 2] == '\xA8' ? "\\u2028" : "\\u2029";
+      k += 2;
+    } else if (c == '<') {
+      out += "\\u003c";
+    } else {
+      out += c;
+    }
+  }
+  return out;
+}
+
 std::vector<Difference> compare(Document const& a, Document const& b) {
   Differ d;
   auto const& fa = a.fingerprint;

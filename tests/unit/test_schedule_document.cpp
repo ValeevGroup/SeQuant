@@ -21,6 +21,7 @@
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/optimize/schedule_pin.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
@@ -269,6 +270,36 @@ TEST_CASE("schedule document round-trips the dag and run sections",
   REQUIRE(summary_line(d2) == "roots=1 terms=1 values=2 blocks=2 depth=1");
   d2.dag->blocks[1].parent.reset();
   REQUIRE(summary_line(d2) == "roots=1 terms=1 values=2 blocks=2 depth=0");
+}
+
+TEST_CASE("run section round-trips alone and JSON is made script-safe",
+          "[schedule-document]") {
+  auto const d = make_dag_doc();
+  REQUIRE(d.run);
+  auto const back = run_from_json(to_json(*d.run));
+  REQUIRE(back.n_batches == d.run->n_batches);
+  REQUIRE(back.footprint == d.run->footprint);
+  REQUIRE(back.builds == d.run->builds);
+  REQUIRE(back.planner == d.run->planner);
+  REQUIRE_THROWS_AS(run_from_json("[]"), sequant::Exception);
+  REQUIRE_THROWS_AS(run_from_json("not json"), sequant::Exception);
+  REQUIRE_THROWS_AS(run_from_json(R"({"extents": {}})"), sequant::Exception);
+
+  // a label containing "</script>" must not be able to end the element the
+  // viewer inlines the document into
+  auto doc = make_doc();
+  doc.roots[0].label = "R</script><b>x\xE2\x80\xA8y\xE2\x80\xA9z";
+  auto const safe = escape_for_html_script(to_json(doc));
+  REQUIRE(safe.find('<') == std::string::npos);
+  REQUIRE(safe.find("\xE2\x80\xA8") == std::string::npos);
+  REQUIRE(safe.find("\xE2\x80\xA9") == std::string::npos);
+  REQUIRE(safe.find("\\u003c/script>") != std::string::npos);
+  REQUIRE(safe.find("\\u2028") != std::string::npos);
+  REQUIRE(safe.find("\\u2029") != std::string::npos);
+  // the escaped text denotes the same document
+  auto const parsed = from_json(safe);
+  REQUIRE(compare(parsed, doc).empty());
+  REQUIRE(parsed.roots[0].label == doc.roots[0].label);
 }
 
 TEST_CASE("schedule document compare covers the dag", "[schedule-document]") {

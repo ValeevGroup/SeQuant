@@ -196,6 +196,18 @@ void write(Document const&, std::ostream&);
 Document from_json(std::string_view);
 Document read(std::istream&);
 
+/// a `run` section on its own (a JSON object with the RunRecord keys), as a
+/// run file shipped separately from its document holds it
+/// \throws sequant::Exception on malformed or invalid input
+RunRecord run_from_json(std::string_view);
+std::string to_json(RunRecord const&);
+
+/// \p json with every '<' and every U+2028/U+2029 line terminator replaced by
+/// its \uXXXX escape, so that the text can be inlined into an HTML <script>
+/// element: a "</script>" inside a JSON string would otherwise end the
+/// element. Denotes the same JSON value as \p json.
+std::string escape_for_html_script(std::string_view json);
+
 struct Difference {
   std::string path, left, right;
 };

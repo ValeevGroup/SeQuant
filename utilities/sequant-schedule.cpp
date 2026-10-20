@@ -102,18 +102,18 @@ int view(std::vector<std::string> const& args) {
   auto const doc = load(doc_path);  // validates
   auto const doc_json = sched::to_json(doc);
 
-  // the run file is a JSON `run` section by contract; it is substituted
-  // verbatim as opaque text (the public API cannot parse a bare run section),
-  // only checked to be non-empty
+  // the run file is a JSON `run` section; it is validated and re-serialized
   std::string run_json = "null";
   if (!run_path.empty()) {
-    if (!slurp(run_path, run_json)) {
+    std::string text;
+    if (!slurp(run_path, text)) {
       std::cerr << "cannot open " << run_path << "\n";
       return 1;
     }
-    if (run_json.find_first_not_of(" \t\r\n") == std::string::npos) {
-      std::cerr << "run file is empty: " << run_path << "\n";
-      return 1;
+    try {
+      run_json = sched::to_json(sched::run_from_json(text));
+    } catch (std::exception const& e) {
+      throw sequant::Exception(run_path + ": " + e.what());
     }
   }
 
@@ -122,11 +122,12 @@ int view(std::vector<std::string> const& args) {
     std::cerr << "viewer template not found: " << tmpl_path << "\n";
     return 1;
   }
-  // substitute the run first, then the document: the document text is inserted
-  // last, so it is never re-scanned for the run marker (and the run text, a
-  // verbatim file, cannot swallow the document placeholder)
-  substitute(page, "/*__RUN_JSON__*/", run_json);
-  if (!substitute(page, "/*__SCHEDULE_JSON__*/", doc_json)) {
+  // both texts go inside <script> elements, so a "</script>" in a label must
+  // not be able to end them; substitute the run first, then the document, so
+  // the inserted document text is never re-scanned for the run marker
+  substitute(page, "/*__RUN_JSON__*/", sched::escape_for_html_script(run_json));
+  if (!substitute(page, "/*__SCHEDULE_JSON__*/",
+                  sched::escape_for_html_script(doc_json))) {
     std::cerr << "template lacks the /*__SCHEDULE_JSON__*/ placeholder: "
               << tmpl_path << "\n";
     return 1;
