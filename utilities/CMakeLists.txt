@@ -18,4 +18,7 @@ target_compile_definitions(sequant-schedule PRIVATE SEQUANT_SCHEDULE_VIEW_TEMPLA
 add_subdirectory(external-interface)
 add_subdirectory(cost_analysis)
 
-add_test(NAME sequant-schedule-validate-fixture COMMAND sequant-schedule validate ${CMAKE_CURRENT_SOURCE_DIR}/schedule-view/example.json)
+add_test(
+    NAME "sequant/schedule-view/validate-example"
+    COMMAND sequant-schedule validate "${CMAKE_CURRENT_SOURCE_DIR}/schedule-view/example.json"
+)
