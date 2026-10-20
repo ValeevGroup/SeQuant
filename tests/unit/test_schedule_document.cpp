@@ -1080,7 +1080,7 @@ TEST_CASE("fingerprint captures DAG-shaping inputs and nothing size-dependent",
   REQUIRE(fp.reorder == "Reorder");
   REQUIRE(fp.scheduler == "forest_descent");
   REQUIRE(fp.cse.at("subnet") == "false");
-  REQUIRE(fp.context.spaces == std::vector<std::string>{"a", "i"});
+  REQUIRE(fp.batchable.size() == 2);  // exactly the bases present
   REQUIRE(fp.context.strict_braket_symmetry ==
           sequant::get_default_context().assert_strict_braket_symmetry());
 

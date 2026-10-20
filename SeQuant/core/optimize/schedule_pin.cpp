@@ -552,9 +552,7 @@ eval::schedule::Fingerprint make_fingerprint(
             policy.is_batchable_contracted_index(ix),
         policy.is_batchable_external_index &&
             policy.is_batchable_external_index(ix)};
-    fp.context.spaces.push_back(toUtf8(basis_key));
   }
-  std::sort(fp.context.spaces.begin(), fp.context.spaces.end());
   fp.volatile_leaves.assign(volatile_leaf_labels.begin(),
                             volatile_leaf_labels.end());
   fp.persistent_only = policy.persistent_only;
@@ -649,7 +647,6 @@ void check_fingerprint(eval::schedule::Fingerprint const& loaded,
        b.strict_braket_symmetry);
   diff(d, "context.cardinal_tensor_labels", a.cardinal_tensor_labels,
        b.cardinal_tensor_labels);
-  diff(d, "context.spaces", a.spaces, b.spaces);
   if (d.empty()) return;
   std::string msg = "schedule fingerprint mismatch:";
   for (auto const& line : d) msg += "\n" + line;

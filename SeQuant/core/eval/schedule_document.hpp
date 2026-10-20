@@ -88,7 +88,7 @@ struct RootRecord {
 struct ContextRecord {
   std::string vacuum, spbasis;
   bool strict_braket_symmetry = false;
-  std::vector<std::string> cardinal_tensor_labels, spaces;
+  std::vector<std::string> cardinal_tensor_labels;
 };
 
 struct Fingerprint {
