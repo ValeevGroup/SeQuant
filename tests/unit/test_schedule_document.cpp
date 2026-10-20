@@ -1161,10 +1161,15 @@ TEST_CASE("record_dag names an adjoint factor like a leaf, its operands below",
 
 namespace {
 
-/// the two-root fixture's sizes: the external occ extent and its batch target
-/// (pin_extent, external_occ_policy)
-constexpr std::size_t occ_extent = 10;
-constexpr std::size_t occ_target = 2;
+/// an index of each space the two-root fixture uses
+sequant::Index const& occ_index() {
+  static sequant::Index const ix{L"i_1"};
+  return ix;
+}
+sequant::Index const& virt_index() {
+  static sequant::Index const ix{L"a_1"};
+  return ix;
+}
 
 /// dry-run evaluation of a DagFixture through the ordered multi-root entry
 /// point, as the ordered executor tests drive it (fresh cache each call)
@@ -1173,7 +1178,11 @@ sequant::container::svector<sequant::ResultPtr> dry_run(
     std::function<std::string(std::size_t)> const& id_of = {}) {
   using sequant::eval::dryrun::EvalNodeDryRun;
   sequant::eval::dryrun::SizeRegime regime;
-  regime.space_extent = {{L"i", occ_extent}, {L"a", 100}};
+  // the sizes the fixture was optimized with (pin_extent)
+  regime.space_extent = {
+      {std::wstring{occ_index().space().base_key()}, pin_extent(occ_index())},
+      {std::wstring{virt_index().space().base_key()},
+       pin_extent(virt_index())}};
   auto const cm =
       std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
   sequant::eval::dryrun::DryRunLeafEvaluator const leaf_eval{cm};
@@ -1201,6 +1210,12 @@ TEST_CASE("ordered dry run fills the run record", "[schedule-document]") {
   RunRecord run;
   auto const results = dry_run(fx, &run, id_of);
   REQUIRE(results.size() == 2);
+
+  // the fixture's external occ extent and its batch target
+  std::size_t const occ_extent = pin_extent(occ_index());
+  std::size_t const occ_target =
+      external_occ_policy().batch_target_size(occ_index());
+  REQUIRE(occ_target < occ_extent);  // a genuine batching
 
   REQUIRE(run.n_batches.size() == 2);  // two external blocks
   // each external block loops over occ: ceil(extent(occ) / target(occ))

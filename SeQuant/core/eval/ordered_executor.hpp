@@ -638,6 +638,9 @@ template <typename ValueMap, typename Rich>
 ///   \c cell_footprint would price -- a dry-run result reports
 ///   \c CostModel::memsize over its realized (batch-narrowed) extents -- and
 ///   on a wet run it is the backend's actual size. Bytes, like \c memsize.
+///   For a value assembled from per-batch partials (an Assemble step), this
+///   is the largest per-batch partial, not the assembled size: only
+///   productions are measured, never an Assemble cell.
 /// \c extents, \c batch_targets and \c planner are the caller's.
 ///
 /// \p value_id_of maps an engine value id (an index into \c rich.cells) to
