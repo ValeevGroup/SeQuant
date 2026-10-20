@@ -93,7 +93,8 @@ struct IndexSpaceSpec {
   /// the quantum numbers of the space; none if not given
   std::optional<IndexSpace::QuantumNumbers> qns = {};
   /// the dimension of the space; the IndexSpace default if not given
-  std::optional<std::size_t> dimension = {};
+  /// @pre non-negative
+  std::optional<std::int64_t> dimension = {};
   /// the scalar field of the space's own basis; the IndexSpace default if
   /// not given
   std::optional<Field> field = {};
@@ -116,7 +117,8 @@ struct IndexSpaceSpec {
 struct IndexBasisSpec {
   /// the number of functions in the basis; if not given, the dimension of its
   /// space, now and whenever that changes (see IndexBasis::own_extent())
-  std::optional<std::size_t> extent = {};
+  /// @pre non-negative
+  std::optional<std::int64_t> extent = {};
   /// whether the basis is orthonormal; IndexBasisMetric::Unit if not given
   std::optional<IndexBasisMetric> metric = {};
   /// the scalar field of the basis; if not given, that of its space's own
@@ -683,13 +685,19 @@ class IndexBasisRegistry {
   /// `add(L"i", 0b01, {.qns = Spin::any, .vacuum_occupied = true})`
   /// @return reference to `this`
   /// @throw Exception if `type_label` or `type` matches
-  /// an already registered IndexSpace
+  /// an already registered IndexSpace, or if @p spec carries a negative
+  /// dimension
   template <basic_string_convertible S>
   IndexBasisRegistry& add(S&& type_label, IndexSpace::Type type,
                           const IndexSpaceSpec& spec = {}) {
     IndexSpace space(std::forward<S>(type_label), type,
                      spec.qns.value_or(IndexSpace::QuantumNumbers{}));
-    if (spec.dimension) space.dimension(*spec.dimension);
+    if (spec.dimension) {
+      if (*spec.dimension < 0)
+        throw Exception("IndexBasisRegistry::add: the dimension of '" +
+                        toUtf8(space.base_key()) + "' must not be negative");
+      space.dimension(*spec.dimension);
+    }
     if (spec.field) space.field(*spec.field);
     this->add(space);
     set_roles(spec, space.type());
@@ -730,9 +738,10 @@ class IndexBasisRegistry {
   /// @return reference to `this`
   /// @throw Exception if @p label is not a valid label or is already
   /// registered, if @p space is not registered, if its instance
-  /// @p basis_instance is already named, if @p spec names an entry to follow
-  /// and also carries an extent, a metric or a field, or if that entry cannot
-  /// be followed (see follow()); the registry is then left untouched
+  /// @p basis_instance is already named, if @p spec carries a negative
+  /// extent, if it names an entry to follow and also carries an extent, a
+  /// metric or a field, or if that entry cannot be followed (see follow());
+  /// the registry is then left untouched
   template <basic_string_convertible S>
   IndexBasisRegistry& add(S&& label, const IndexSpace& space,
                           IndexBasis::instance_type basis_instance,
@@ -740,14 +749,18 @@ class IndexBasisRegistry {
     constexpr const char* caller =
         "IndexBasisRegistry::add(label, space, instance)";
     std::wstring key = toUtf16(std::forward<S>(label));
+    if (spec.extent && *spec.extent < 0)
+      throw Exception(std::string(caller) + ": the extent of '" + toUtf8(key) +
+                      "' must not be negative");
     if (spec.follows && (spec.extent || spec.metric || spec.field))
       throw Exception(std::string(caller) + ": '" + toUtf8(key) +
                       "' follows '" + toUtf8(*spec.follows) +
                       "', whose extent, metric and field it mirrors, so it "
                       "cannot be given its own");
-    emplace_named(key, space, basis_instance, spec.extent,
-                  spec.metric.value_or(IndexBasisMetric::Unit), spec.field,
-                  caller);
+    emplace_named(
+        key, space, basis_instance,
+        spec.extent ? std::optional<std::size_t>(*spec.extent) : std::nullopt,
+        spec.metric.value_or(IndexBasisMetric::Unit), spec.field, caller);
     if (spec.follows) {
       try {
         follow(key, *spec.follows);

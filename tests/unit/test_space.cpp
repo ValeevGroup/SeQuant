@@ -951,7 +951,14 @@ TEST_CASE("index_space", "[elements]") {
     // ... so its metadata cannot be given alongside
     CHECK_THROWS(ibr.add(L"ρ", L"a", 8, {.extent = 1, .follows = L"κ"}));
     CHECK_FALSE(ibr.contains(L"ρ"));
-    // ... and a source that cannot be followed registers nothing
+    // a negative dimension or extent is rejected, and registers nothing
+    CHECK_THROWS_WITH(ibr.add(L"n", 0b1000, {.dimension = -1}),
+                      Catch::Matchers::ContainsSubstring("negative"));
+    CHECK_FALSE(ibr.contains(L"n"));
+    CHECK_THROWS_WITH(ibr.add(L"ρ", L"a", 8, {.extent = -5}),
+                      Catch::Matchers::ContainsSubstring("negative"));
+    CHECK_FALSE(ibr.contains(L"ρ"));
+    // a source that cannot be followed registers nothing
     CHECK_THROWS_AS(ibr.add(L"ρ", L"a", 8, {.follows = L"ζ"}),
                     IndexSpace::bad_key);
     CHECK_THROWS(ibr.add(L"ρ", L"a", 8, {.follows = L"λ"}));  // λ follows κ
