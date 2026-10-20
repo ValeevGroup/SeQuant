@@ -513,11 +513,21 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
             current.overwrite_previous.value()
                 ? ZeroStrategy::ZeroOnReuse | ZeroStrategy::ZeroOnCreate
                 : ZeroStrategy::ZeroOnCreate;
+        // Key the strategy by the rewritten result, as every other strategy
+        // set-site does (and as the code generator's lookup expects):
+        // genctx.rewrite() may reorder a tensor's slots, so setting it on the
+        // unrewritten result would store it under a key the lookup never hits.
+        // rewrite() is the generic per-generator hook, so this holds for every
+        // backend.
         if (current.tree->is_tensor()) {
-          genctx.setZeroStrategy(current.tree->as_tensor(), strategy);
+          Tensor result = current.tree->as_tensor();
+          genctx.rewrite(result);
+          genctx.setZeroStrategy(result, strategy);
         } else {
           SEQUANT_ASSERT(current.tree->is_variable());
-          genctx.setZeroStrategy(current.tree->as_variable(), strategy);
+          Variable result = current.tree->as_variable();
+          genctx.rewrite(result);
+          genctx.setZeroStrategy(result, strategy);
         }
 
         // An entry flagged to overwrite its previous result (e.g. a CSE
