@@ -256,8 +256,9 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
                           Generator<std::remove_cvref_t<decltype(genctx)>>>)
   {
     // Setup load/store/create/import strategies
+    std::set<std::size_t> always_create_ids;
     std::vector<ExpressionGroup<>> groups =
-        prepare_expressions(exctx, inputs, genctx);
+        prepare_expressions(exctx, inputs, genctx, always_create_ids);
 
     for (const ExpressionGroup<> &current_group : groups) {
       std::set<Tensor> created_tensors;
@@ -270,6 +271,14 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
           import_name = it->second;
         }
 
+        // Entries flagged to overwrite their previous result (e.g. CSE
+        // intermediates) are always created fresh and intentionally not
+        // recorded in the shared-result tracking, so that two unrelated
+        // subexpressions reusing the same result name+block each get their own
+        // allocation instead of accumulating onto one another.
+        const bool force_create = always_create_ids.find(current_node->id()) !=
+                                  always_create_ids.end();
+
         if (current_node->is_tensor()) {
           Tensor result = current_node->as_tensor();
           genctx.rewrite(result);
@@ -278,11 +287,11 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
             genctx.set_import_name(result, import_name);
           }
 
-          if (created_tensors.find(result) == created_tensors.end()) {
+          if (force_create ||
+              created_tensors.find(result) == created_tensors.end()) {
             genctx.setLoadStrategy(result, LoadStrategy::Create,
                                    current_node->id());
-
-            created_tensors.emplace(std::move(result));
+            if (!force_create) created_tensors.emplace(std::move(result));
           } else {
             genctx.setLoadStrategy(result, LoadStrategy::Load,
                                    current_node->id());
@@ -296,11 +305,11 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
             genctx.set_import_name(result, import_name);
           }
 
-          if (created_variables.find(result) == created_variables.end()) {
+          if (force_create ||
+              created_variables.find(result) == created_variables.end()) {
             genctx.setLoadStrategy(result, LoadStrategy::Create,
                                    current_node->id());
-
-            created_variables.emplace(std::move(result));
+            if (!force_create) created_variables.emplace(std::move(result));
           } else {
             genctx.setLoadStrategy(result, LoadStrategy::Load,
                                    current_node->id());
@@ -388,7 +397,7 @@ ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
 
 std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
     ExecutionContext &exctx, const std::vector<std::string_view> &inputs,
-    ExportContext &genctx) const {
+    ExportContext &genctx, std::set<std::size_t> &always_create_ids) const {
   using CtxData = ExecutionContext::Data<ProcessingData>;
 
   std::vector<CtxData> data;
@@ -509,6 +518,16 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
         } else {
           SEQUANT_ASSERT(current.tree->is_variable());
           genctx.setZeroStrategy(current.tree->as_variable(), strategy);
+        }
+
+        // An entry flagged to overwrite its previous result (e.g. a CSE
+        // intermediate) must be allocated freshly rather than accumulated onto.
+        // Different equations can reuse the same intermediate name+block for
+        // unrelated subexpressions; without this, the shared-result tracking
+        // below would treat the second definition as a continuation of the
+        // first and emit a load-and-accumulate, corrupting the value.
+        if (current.overwrite_previous.value()) {
+          always_create_ids.insert(current.tree->id());
         }
       }
 
