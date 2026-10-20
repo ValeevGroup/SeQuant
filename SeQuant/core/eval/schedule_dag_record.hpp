@@ -156,8 +156,13 @@ std::string node_expr(Node const& n) {
 
 }  // namespace detail
 
-/// Value ids: smallest occurrence "<term key>#<ordinal>", "<term key>#scale",
-/// "<root label>+<k>". `roots` supplies term keys in forest order
+/// Value ids: the value's first occurrence in forest order, "<term key>#<
+/// ordinal>", "<term key>#scale" or "<root label>+<k>". That occurrence is
+/// also the engine's frame for the value's cell (\c home_modes_in_cell_frame:
+/// "the rich cell's own frame -- the first occurrence's labels"), so the id's
+/// term is the term whose index labels `expr`, the mode lists and the legality
+/// fields of the record are spelled in; every other occurrence has its own
+/// labels, recorded per occurrence. `roots` supplies term keys in forest order
 /// (roots[r].terms[t].key for root r, summand t).
 ///
 /// \details Static points are matched to forest nodes by reproducing \c
@@ -290,7 +295,7 @@ DagRecord record_dag(
     return it->second;
   };
 
-  // ---- 3. value ids: the smallest occurrence id
+  // ---- 3. value ids: the first occurrence, whose labels are the cell's frame
   std::size_t const ncells = rich.cells.size();
   std::vector<std::string> id_of(ncells);
   for (std::size_t v = 0; v < ncells; ++v) {
@@ -299,7 +304,7 @@ DagRecord record_dag(
       throw Exception("record_dag: value " + std::to_string(v) +
                       " has no occurrence to name it by");
     for (auto const& occ : c.occurrences) {
-      auto const& id = place_of(occ.point).id;  // bounds-checks the point
+      (void)place_of(occ.point);  // bounds-checks the point
       // identity cross-check: the node at this point is this value's node
       if (std::size_t const h = (*at_point[occ.point])->hash_value();
           h != c.hash)
@@ -307,8 +312,8 @@ DagRecord record_dag(
             "record_dag: static point " + std::to_string(occ.point) +
             " holds node " + detail::hex_string(h) + " but value " +
             std::to_string(v) + " is node " + detail::hex_string(c.hash));
-      if (id_of[v].empty() || id < id_of[v]) id_of[v] = id;
     }
+    id_of[v] = place_of(c.occurrences.front().point).id;
   }
   auto const vid_name = [&](std::size_t v) -> std::string const& {
     if (v >= ncells)
