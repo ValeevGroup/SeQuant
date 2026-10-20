@@ -662,8 +662,39 @@ TEST_CASE("index_space", "[elements]") {
            IndexBasis{p, 10} < ao));
     CHECK(Index(ibr->retrieve_space(L"i"), 1) < Index(ao, 1));
 
-    // the VBS and ABS variants need the union spaces registered: the F12
-    // registry has p = m + e and κ = p + α' ...
+    // with a CABS the OBS AOs span the complete space less it: p, not κ
+    auto f12 = sequant::mbpt::make_F12_sr_spaces();
+    REQUIRE_NOTHROW(mbpt::add_ao_basis(f12, mbpt::Spin::any));
+    CHECK(f12->retrieve(L"μ").space() == f12->retrieve_space(L"p"));
+    // a failure registers nothing, whether that space is missing or the
+    // label (or the instance) is taken
+    auto no_p = sequant::mbpt::make_F12_sr_spaces();
+    no_p->remove(L"p");
+    CHECK_THROWS_WITH(mbpt::add_ao_basis(no_p, mbpt::Spin::any),
+                      Catch::Matchers::ContainsSubstring("μ"));
+    CHECK_FALSE(no_p->contains(L"μ"));
+    auto taken = sequant::mbpt::make_F12_sr_spaces();
+    taken->add(L"μ", L"κ", 3);
+    CHECK_THROWS_WITH(mbpt::add_ao_basis(taken, mbpt::Spin::any),
+                      Catch::Matchers::ContainsSubstring("μ"));
+    CHECK(taken->retrieve(L"μ").space() == taken->retrieve_space(L"κ"));
+    auto named = sequant::mbpt::make_F12_sr_spaces();
+    named->add(L"ν", L"p", mbpt::default_ao_basis_instance);
+    CHECK_THROWS_WITH(mbpt::add_ao_basis(named, mbpt::Spin::any),
+                      Catch::Matchers::ContainsSubstring("ν"));
+    CHECK_FALSE(named->contains(L"μ"));
+
+    // the deprecated overload registers MPQC's VBS and ABS layout from the
+    // labels of the F12 convention; without either it registers what
+    // add_ao_basis(ibr, spin_any) does, and an integer third argument still
+    // means vbs, not an instance
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto neither = sequant::mbpt::make_F12_sr_spaces();
+    REQUIRE_NOTHROW(mbpt::add_ao_basis(neither, mbpt::Spin::any, false));
+    CHECK(*neither == *f12);
+    auto by_int = sequant::mbpt::make_F12_sr_spaces();
+    REQUIRE_NOTHROW(mbpt::add_ao_basis(by_int, mbpt::Spin::any, 1));
+    CHECK(by_int->contains(L"Α"));
     auto vbs = sequant::mbpt::make_F12_sr_spaces();
     REQUIRE_NOTHROW(mbpt::add_ao_basis(vbs, mbpt::Spin::any, /*vbs=*/true));
     for (const auto* label : {L"μ", L"Α", L"Γ"}) {
@@ -680,30 +711,16 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(abs->retrieve(L"μ").space() == abs->retrieve_space(L"p"));
     CHECK(abs->retrieve(L"σ").space() == abs->retrieve_space(L"α'"));
     CHECK(abs->retrieve(L"ρ").space() == abs->retrieve_space(L"κ"));
-    // ... but no m + α', which ρ spans with both
+    // ... but no m + α', which ρ spans with both, and a failure registers
+    // nothing
     auto both = sequant::mbpt::make_F12_sr_spaces();
     CHECK_THROWS_WITH(mbpt::add_ao_basis(both, mbpt::Spin::any, true, true),
                       Catch::Matchers::ContainsSubstring("ρ"));
-    // ... and a failure registers nothing, whether a space is missing or a
-    // label (or the instance) is taken
     for (const auto* label : {L"μ", L"Α", L"Γ", L"σ", L"ρ", L"Ρ"}) {
       CAPTURE(label);
       CHECK_FALSE(both->contains(label));
     }
-    auto taken = sequant::mbpt::make_F12_sr_spaces();
-    taken->add(L"ρ", L"κ", 3);
-    CHECK_THROWS_WITH(
-        mbpt::add_ao_basis(taken, mbpt::Spin::any, /*vbs=*/false, /*abs=*/true),
-        Catch::Matchers::ContainsSubstring("ρ"));
-    CHECK_FALSE(taken->contains(L"μ"));
-    CHECK_FALSE(taken->contains(L"σ"));
-    auto named = sequant::mbpt::make_F12_sr_spaces();
-    named->add(L"ν", L"α'", mbpt::default_ao_basis_instance);
-    CHECK_THROWS_WITH(
-        mbpt::add_ao_basis(named, mbpt::Spin::any, /*vbs=*/false, /*abs=*/true),
-        Catch::Matchers::ContainsSubstring("ν"));
-    CHECK_FALSE(named->contains(L"μ"));
-    CHECK_FALSE(named->contains(L"σ"));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   }
 
   SECTION("PAO basis") {
@@ -746,13 +763,42 @@ TEST_CASE("index_space", "[elements]") {
     with_ao->extent(L"μ", 600);
     REQUIRE_NOTHROW(mbpt::add_pao_basis(with_ao, mbpt::Spin::any));
     CHECK(with_ao->retrieve(L"μ̃").extent() == 600);
-    // a registry that cannot take the AO basis is left untouched
+    // the PAOs can be projected from another AO basis, e.g. a program's
+    // OBS+VBS one, which must be registered
+    auto from_vbs_plus = sequant::mbpt::make_min_sr_spaces();
+    CHECK_THROWS_WITH(
+        mbpt::add_pao_basis(from_vbs_plus, mbpt::Spin::any, {.ao_basis = L"Γ"}),
+        Catch::Matchers::ContainsSubstring("Γ"));
+    CHECK_FALSE(from_vbs_plus->contains(L"μ̃"));
+    CHECK_FALSE(from_vbs_plus->contains(L"μ"));
+    from_vbs_plus
+        ->add(L"Γ", L"p", mbpt::default_ao_basis_instance,
+              {.metric = IndexBasisMetric::General})
+        .extent(L"Γ", 700);
+    REQUIRE_NOTHROW(mbpt::add_pao_basis(from_vbs_plus, mbpt::Spin::any,
+                                        {.ao_basis = L"Γ"}));
+    CHECK_FALSE(from_vbs_plus->contains(L"μ"));
+    for (const auto* l : {L"μ̃", L"μ̃↑", L"μ̃↓"}) {
+      CAPTURE(l);
+      CHECK(from_vbs_plus->follows(l) == std::optional<std::wstring>{L"Γ"});
+      CHECK(from_vbs_plus->retrieve(l).extent() == 700);
+    }
+    // ... but not from one that does not span the PAOs
+    auto from_occ = sequant::mbpt::make_min_sr_spaces();
+    from_occ->add(L"ι", L"i", 4, {.metric = IndexBasisMetric::General});
+    CHECK_THROWS_WITH(
+        mbpt::add_pao_basis(from_occ, mbpt::Spin::any, {.ao_basis = L"ι"}),
+        Catch::Matchers::ContainsSubstring("does not include"));
+    CHECK_FALSE(from_occ->contains(L"μ̃"));
+    CHECK_FALSE(from_occ->contains(L"μ̃↑"));
+    // a registry that cannot take the AO basis (no complete space designated)
+    // is left untouched
     auto no_p = std::make_shared<IndexBasisRegistry>();
     const IndexSpace::QuantumNumbers any{mbpt::Spin::any};
     no_p->add(L"i", 0b01, {.qns = any, .hole = true})
         .add(L"a", 0b10, {.qns = any, .particle = true});
-    CHECK_THROWS_AS(mbpt::add_pao_basis(no_p, mbpt::Spin::any),
-                    IndexSpace::bad_key);
+    CHECK_THROWS_WITH(mbpt::add_pao_basis(no_p, mbpt::Spin::any),
+                      Catch::Matchers::ContainsSubstring("complete space"));
     CHECK_FALSE(no_p->contains(L"μ̃"));
     CHECK_FALSE(no_p->contains(L"μ"));
     // ... as is one whose μ is not a named basis instance the PAOs can
@@ -773,8 +819,7 @@ TEST_CASE("index_space", "[elements]") {
     // ... and the PAO bases cannot take the label of the basis they follow
     auto mu_label = sequant::mbpt::make_min_sr_spaces();
     CHECK_THROWS_WITH(
-        mbpt::add_pao_basis(mu_label, mbpt::Spin::any,
-                            mbpt::default_pao_basis_instance, L"μ"),
+        mbpt::add_pao_basis(mu_label, mbpt::Spin::any, {.label = L"μ"}),
         Catch::Matchers::ContainsSubstring("μ"));
     CHECK_FALSE(mu_label->contains(L"μ"));
     // ordering: after every basis of a (I2), between i and Κ as before

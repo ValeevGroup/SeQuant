@@ -14,6 +14,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/context.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <cassert>
 #include <cstdlib>
@@ -105,6 +106,32 @@ void require_unregistered(
 }  // namespace
 
 void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
+                  IndexSpace::QuantumNumbers spin_any) {
+  // the OBS AOs span the complete space less the CABS `α'`, if one is
+  // registered as a space: the CABS is the F12 complement of the OBS, and
+  // has no role. Every lookup and check precedes the registration, so a
+  // failure leaves the registry untouched; the space is taken by value, since
+  // add() may reallocate the registry's table
+  if (!ibr->complete_space(/* nulltype_ok = */ true))
+    throw Exception(
+        "add_ao_basis: the registry designates no complete space, which the "
+        "OBS AO basis 'μ' spans");
+  IndexSpace::Type obs_type = ibr->complete_space(spin_any).type();
+  if (const auto* cabs = ibr->retrieve_space_ptr(L"α'"))
+    obs_type = obs_type.xOr(obs_type.intersection(cabs->type()));
+  const auto* obs_ptr = ibr->retrieve_space_ptr(obs_type, spin_any);
+  if (!obs_ptr)
+    throw Exception(
+        "add_ao_basis: the AO basis 'μ' spans the complete space less the "
+        "CABS, which is not registered");
+  const IndexSpace obs = *obs_ptr;
+  require_unregistered(*ibr, "add_ao_basis", {{L"μ", obs}},
+                       default_ao_basis_instance);
+  ibr->add(L"μ", obs, default_ao_basis_instance,
+           {.metric = IndexBasisMetric::General});
+}
+
+void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
                   IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs,
                   IndexBasis::instance_type instance) {
   // matches the MPQC layout, see spindex.h
@@ -149,7 +176,9 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
 
 void add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& ibr,
                    IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs) {
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   add_ao_basis(ibr, spin_any, vbs, abs);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
 void add_pao_spaces(std::shared_ptr<IndexBasisRegistry>& ibr,
@@ -159,36 +188,49 @@ void add_pao_spaces(std::shared_ptr<IndexBasisRegistry>& ibr,
 
 void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
                    IndexSpace::QuantumNumbers spin_any,
-                   IndexBasis::instance_type instance,
-                   std::wstring_view label) {
+                   const PAOBasisSpec& spec) {
   // the PAOs are the AOs projected on the particle space (of either spin),
-  // so every PAO basis follows the OBS AO basis for its extent, metric and
+  // so every PAO basis follows the AO basis for its extent, metric and
   // field. Everything is checked before anything is registered, so a failure
   // leaves the registry untouched. The spaces are taken by value: add() may
   // reallocate the table
-  if (label == L"μ")
-    throw Exception(
-        "add_pao_basis: 'μ' is the label of the OBS AO basis the PAO bases "
-        "follow");
+  const std::wstring label(spec.label), followed(spec.ao_basis);
+  if (label == followed)
+    throw Exception("add_pao_basis: '" + toUtf8(label) +
+                    "' is the label of the AO basis the PAO bases follow");
   const auto uocc_type = ibr->particle_space(/* nulltype_ok = */ false);
   container::svector<std::pair<std::wstring, IndexSpace>> bases;
-  bases.emplace_back(std::wstring(label),
-                     ibr->retrieve_space(uocc_type, spin_any));
+  bases.emplace_back(label, ibr->retrieve_space(uocc_type, spin_any));
   for (const auto spin : {Spin::alpha, Spin::beta})
     if (const auto* uocc_spin = ibr->retrieve_space_ptr(uocc_type, spin))
       bases.emplace_back(spinannotation_add(label, spin), *uocc_spin);
-  require_unregistered(*ibr, "add_pao_basis", bases, instance);
-  if (!ibr->contains(L"μ"))
+  require_unregistered(*ibr, "add_pao_basis", bases, spec.instance);
+  bool registered_ao = false;
+  if (!ibr->contains(followed)) {
+    if (followed != L"μ")
+      throw Exception("add_pao_basis: the AO basis '" + toUtf8(followed) +
+                      "' the PAO bases follow is not registered");
     add_ao_basis(ibr, spin_any);
-  else if (!ibr->retrieve(L"μ").has_basis_instance())
-    throw Exception(
-        "add_pao_basis: 'μ' is a space, not the OBS AO basis the PAO bases "
-        "follow");
-  else if (auto source = ibr->follows(L"μ"))
-    throw Exception("add_pao_basis: the OBS AO basis 'μ' follows '" +
-                    toUtf8(*source) + "', so the PAO bases cannot follow it");
+    registered_ao = true;
+  } else if (!ibr->retrieve(followed).has_basis_instance())
+    throw Exception("add_pao_basis: '" + toUtf8(followed) +
+                    "' is a space, not the AO basis the PAO bases follow");
+  else if (auto source = ibr->follows(followed))
+    throw Exception("add_pao_basis: the AO basis '" + toUtf8(followed) +
+                    "' follows '" + toUtf8(*source) +
+                    "', so the PAO bases cannot follow it");
+  // the AOs must span the PAOs they are projected on
+  const IndexSpace ao_space = ibr->retrieve(followed).space();
   for (const auto& [l, space] : bases)
-    ibr->add(l, space, instance, {.follows = L"μ"});
+    if (!includes(ao_space, space)) {
+      if (registered_ao) ibr->remove(followed);
+      throw Exception("add_pao_basis: the AO basis '" + toUtf8(followed) +
+                      "' spans " + toUtf8(ao_space.base_key()) +
+                      ", which does not include the particle space " +
+                      toUtf8(space.base_key()) + " of '" + toUtf8(l) + "'");
+    }
+  for (const auto& [l, space] : bases)
+    ibr->add(l, space, spec.instance, {.follows = followed});
 }
 
 void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& ibr) {
