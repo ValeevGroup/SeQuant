@@ -188,8 +188,11 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     var p = id.lastIndexOf("+");
     return p >= 0 ? id.slice(0, p) : id;
   }
-  // short name: the root label (and term index) for the term key, so "R12#3", "R12#scale", "R12+1"
+  // short name: the record's `name` (the root label and term index for the term key, so "R12#3", "R12#scale", "R12+1"),
+  // derived here for a document written without it
   function shortOf(id) {
+    var v = vById.get(id);
+    if (v && v.name) return v.name;
     var t = termOf(id);
     return termShort.has(t) ? termShort.get(t) + id.slice(t.length) : id;
   }

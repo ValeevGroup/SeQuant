@@ -44,9 +44,12 @@ lists further knobs.)
 ## Using it
 
 - Notation: `X[i]` is value `X` sliced on loop `i`; `X[Σi]` is the per-batch
-  partial of a reduction over loop `i`, the same shape as the whole. A value's
-  `expr` spells each operand in the form the value reads it inside its own
-  loops: sliced or partial there, bare when it reads the assembled whole. The
+  partial of a reduction over loop `i`, the same shape as the whole. `X` is a
+  leaf's tensor label or an intermediate's short name (`R12#3`: root label,
+  node ordinal), so `R38#11[ΣΚ_1] = R13#10[Κ_1] * R13#11[Κ_1]` names its
+  operands. A value's `expr` spells each operand in the form the value reads
+  it inside its own loops: sliced or partial there, bare when it reads the
+  assembled whole. The
   inspector's producers and consumers say how each pair meets (same block,
   read in slices, assembled by a sum or a scatter over a loop).
 - Left: folding outline of blocks and the values built in them, in `steps`

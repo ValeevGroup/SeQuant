@@ -175,6 +175,7 @@ template <>
 json to_j(ValueRecord const& v) {
   json j;
   j["id"] = v.id;
+  j["name"] = v.name;
   j["expr"] = v.expr;
   j["hash"] = v.hash;
   j["key"] = v.key;
@@ -617,6 +618,7 @@ ValueRecord value_r(json const& j) {
   ValueRecord v;
   v.id = get_str(j, "id", "dag.values");
   std::string const w = "dag.values[" + v.id + "]";
+  v.name = get_str(j, "name", w);
   v.expr = get_str(j, "expr", w);
   v.hash = get_str(j, "hash", w);
   v.key = get_str(j, "key", w);

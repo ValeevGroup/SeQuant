@@ -199,6 +199,7 @@
     "values": [
       {
         "id": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#0",
+        "name": "R1/0#0",
         "expr": "f",
         "hash": "0xc1c75fe9ea45a77f",
         "key": "0xc1c75fe9ea45a77f",
@@ -251,6 +252,7 @@
       },
       {
         "id": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#1",
+        "name": "R1/0#1",
         "expr": "t",
         "hash": "0x63aa8a62e82687cd",
         "key": "0x63aa8a62e82687cd",
@@ -300,6 +302,7 @@
       },
       {
         "id": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#2",
+        "name": "R1/0#2",
         "expr": "g",
         "hash": "0xc6f06bbae601396",
         "key": "0xc6f06bbae601396",
@@ -349,7 +352,8 @@
       },
       {
         "id": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3",
-        "expr": "I[i_1] = t * g[i_1]",
+        "name": "R1/0#3",
+        "expr": "R1/0#3[i_1] = t * g[i_1]",
         "hash": "0xbccc9055519a1969",
         "key": "0x5fee5dd47dc33425",
         "leaf": false,
@@ -402,7 +406,8 @@
       },
       {
         "id": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4",
-        "expr": "I[i_1] = f * I[i_1]",
+        "name": "R1/0#4",
+        "expr": "R1/0#4[i_1] = f * R1/0#3[i_1]",
         "hash": "0x4531b265b115e73c",
         "key": "0xe73674a8a8bcef7f",
         "leaf": false,
@@ -452,6 +457,7 @@
       },
       {
         "id": "h{i_1;i_3}:N-N-S#0",
+        "name": "R1/1#0",
         "expr": "h",
         "hash": "0xa6b8cbf1655caf3f",
         "key": "0xa6b8cbf1655caf3f",
@@ -497,7 +503,8 @@
       },
       {
         "id": "R1+1",
-        "expr": "I = I + h",
+        "name": "R1+1",
+        "expr": "R1+1 = R1/0#4 + h",
         "hash": "0xb918de8d4bd8855f",
         "key": "0xaf443a91992d8fd9",
         "leaf": false,
@@ -531,7 +538,8 @@
       },
       {
         "id": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3",
-        "expr": "I[i_2] = t[i_2] * g",
+        "name": "R2/0#3",
+        "expr": "R2/0#3[i_2] = t[i_2] * g",
         "hash": "0xbccc9055519a1969",
         "key": "0xfba75627c3f4384e",
         "leaf": false,
@@ -584,7 +592,8 @@
       },
       {
         "id": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4",
-        "expr": "I[i_2] = f * I[i_2]",
+        "name": "R2/0#4",
+        "expr": "R2/0#4[i_2] = f * R2/0#3[i_2]",
         "hash": "0x569d6ec195596c6f",
         "key": "0x68604bf889a2b158",
         "leaf": false,
@@ -634,7 +643,8 @@
       },
       {
         "id": "R2+1",
-        "expr": "I = I + h",
+        "name": "R2+1",
+        "expr": "R2+1 = R2/0#4 + h",
         "hash": "0x704c47e729f0e8db",
         "key": "0xdda02cae07256825",
         "leaf": false,

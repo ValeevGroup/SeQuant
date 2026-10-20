@@ -294,6 +294,16 @@ DagRecord record_dag(
   // ---- 3. value ids: the first occurrence, whose labels are the cell's frame
   std::size_t const ncells = rich.cells.size();
   std::vector<std::string> id_of(ncells);
+  // the short name of a term's values: the root label, with the term index
+  // when the root has several terms
+  std::unordered_map<std::string, std::string> short_of_term;
+  for (auto const& root : roots)
+    for (std::size_t t = 0; t < root.terms.size(); ++t)
+      short_of_term.emplace(root.terms[t].key,
+                            root.terms.size() > 1
+                                ? root.label + "/" + std::to_string(t)
+                                : root.label);
+  std::vector<std::string> name_of(ncells);
   std::unordered_map<std::string, std::size_t> value_of_occurrence;  // by id
   for (std::size_t v = 0; v < ncells; ++v) {
     auto const& c = rich.cells[v];
@@ -310,7 +320,12 @@ DagRecord record_dag(
             " holds node " + detail::hex_string(h) + " but value " +
             std::to_string(v) + " is node " + detail::hex_string(c.hash));
     }
-    id_of[v] = place_of(c.occurrences.front().point).id;
+    auto const& first = place_of(c.occurrences.front().point);
+    id_of[v] = first.id;
+    auto const sit = short_of_term.find(first.term);
+    name_of[v] = sit == short_of_term.end()
+                     ? first.id
+                     : sit->second + first.id.substr(first.term.size());
   }
   auto const vid_name = [&](std::size_t v) -> std::string const& {
     if (v >= ncells)
@@ -460,11 +475,14 @@ DagRecord record_dag(
           std::ranges::find(out, carried[pos]) == out.end())
         out.push_back(carried[pos]);
   };
+  // a leaf by its tensor label, an intermediate by its short name
+  auto const label_of = [&](std::size_t w) {
+    return rich.cells[w].is_leaf ? detail::bare_label(node_of(w)) : name_of[w];
+  };
   auto const own_form = [&](std::size_t w) {
     std::vector<std::string> slices;
     if (production[w]) sliced_labels(w, production[w]->sliced, slices);
-    return detail::form_label(detail::bare_label(node_of(w)), slices,
-                              reduced_of(w));
+    return detail::form_label(label_of(w), slices, reduced_of(w));
   };
   // (consumer value, operand value) -> the read's source cell and slicing
   struct ReadForm {
@@ -488,12 +506,12 @@ DagRecord record_dag(
     if (wit == value_of_occurrence.end()) return detail::bare_label(child);
     std::size_t const w = wit->second;
     auto const rit = read_form.find({v, w});
-    if (rit == read_form.end()) return detail::bare_label(node_of(w));
+    if (rit == read_form.end()) return label_of(w);
     TableCell const& source = table.cells[rit->second.source];
     std::vector<std::string> slices;
     sliced_labels(w, source.sliced, slices);
     sliced_labels(w, *rit->second.slice, slices);
-    return detail::form_label(detail::bare_label(node_of(w)), slices,
+    return detail::form_label(label_of(w), slices,
                               source.production.kind == ProductionKind::Build
                                   ? reduced_of(w)
                                   : std::vector<std::string>{});
@@ -503,6 +521,7 @@ DagRecord record_dag(
     auto const& c = rich.cells[v];
     ValueRecord rec;
     rec.id = id_of[v];
+    rec.name = name_of[v];
     {
       auto const& node = node_of(v);
       rec.expr = own_form(v);
