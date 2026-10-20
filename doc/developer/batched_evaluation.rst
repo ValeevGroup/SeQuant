@@ -184,7 +184,8 @@ form, so it is independent of the dummy labels and of the factor order the calle
 labels: a root must be spelled with the same external labels on every run that pins it. ``fingerprint_of`` summarizes the
 binarized forest a document was recorded for, and ``check_fingerprint``, run after binarization and before the DAG
 stages, throws when a loaded document's fingerprint no longer matches the live forest's. ``eval::schedule::record_dag`` (``SeQuant/core/eval/schedule_dag_record.hpp``) builds the ``dag``
-section from a rich schedule and its legality. The ordered entry points in ``ordered_executor.hpp`` take an optional
+section from a rich schedule, its legality and the volatility predicate the evaluation runs with (a value's
+``persistent`` is the cell table's own flag). The ordered entry points in ``ordered_executor.hpp`` take an optional
 ``RunRecord*`` out-parameter that is filled with the ``run`` section. The ``sequant-schedule`` command-line tool validates,
 diffs and renders documents.
 

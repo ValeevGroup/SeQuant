@@ -8,9 +8,12 @@
 #ifndef SEQUANT_EVAL_SCHEDULE_DAG_RECORD_HPP
 #define SEQUANT_EVAL_SCHEDULE_DAG_RECORD_HPP
 
+#include <SeQuant/core/eval/cell_table.hpp>
+#include <SeQuant/core/eval/cell_table_builder.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/eval/legality.hpp>
+#include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/schedule_document.hpp>
@@ -22,6 +25,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdio>
+#include <functional>
 #include <map>
 #include <optional>
 #include <ranges>
@@ -104,7 +108,12 @@ inline std::string output_kind_name(OutputKind k) {
 /// BuildStep anywhere (escape-only) is homed at the innermost block whose
 /// outputs list it; a leaf is homed at the root block (0). An edge is sliced
 /// when the consumer's home block is nested deeper than the producer's (it
-/// reads a slice of a value homed outside its own block).
+/// reads a slice of a value homed outside its own block). A value's
+/// `persistent` is the engine's own flag, \c TableCell::persistent of its
+/// production cell at its home block in the cell table \c build_cell_table
+/// derives from the schedule (a Build cell or, for a leaf, its Leaf cell;
+/// an escape-only value takes its Assemble cell there; a value with no cell is
+/// never stored, so false).
 struct NodePlace {
   std::string term;
   std::size_t node = 0;
@@ -160,14 +169,20 @@ std::string node_expr(Node const& n) {
 /// per value and lose which term each other occurrence sits in. The count is
 /// cross-checked against \c RichSchedule::num_points.
 ///
+/// \param is_volatile the node-level volatility predicate the evaluation
+///        runs with (see \c evaluate_ordered_schedule), which decides
+///        persistence; empty means no leaf is volatile
 /// \throws sequant::Exception when the forest and \p roots disagree (tree or
 ///         summand count, a Sum spine node that is not an in-place Sum), on
 ///         an Adjoint node (not addressable by a pinned tree), or when a
 ///         value, block step or legality record cannot be resolved
 template <meta::eval_node_range R>
-DagRecord record_dag(RichSchedule const& rich, LegalitySchedule const& legality,
-                     OrderedSchedule const& ordered, R const& forest,
-                     std::vector<RootRecord> const& roots) {
+DagRecord record_dag(
+    RichSchedule const& rich, LegalitySchedule const& legality,
+    OrderedSchedule const& ordered, R const& forest,
+    std::vector<RootRecord> const& roots,
+    std::function<bool(std::ranges::range_value_t<R> const&)> const&
+        is_volatile = {}) {
   // nodes are keyed by address across two passes over the forest
   static_assert(
       std::is_lvalue_reference_v<std::ranges::range_reference_t<R const>>,
@@ -313,11 +328,15 @@ DagRecord record_dag(RichSchedule const& rich, LegalitySchedule const& legality,
   std::vector<std::optional<std::size_t>> build_block(ncells),
       escape_block(ncells);
   std::vector<std::size_t> nest_depth;  // per block id: number of ancestors
+  std::vector<CellScope> scope_of;      // per block id: its cell-table scope
   auto const visit = [&](auto const& self, ScopeBlock const& b,
                          std::optional<std::size_t> parent) -> std::size_t {
     std::size_t const id = dag.blocks.size();
     dag.blocks.emplace_back();
     nest_depth.push_back(parent ? nest_depth[*parent] + 1 : 0);
+    scope_of.push_back(parent ? scope_of[*parent] : CellScope{});
+    if (parent)
+      scope_of.back().path.push_back({b.level.key(), b.latitude_ordinal});
     {
       BlockRecord& rec = dag.blocks.back();
       rec.id = id;
@@ -364,7 +383,31 @@ DagRecord record_dag(RichSchedule const& rich, LegalitySchedule const& legality,
                       " is not a leaf and no block builds or outputs it");
   }
 
-  // ---- 5. values
+  // ---- 5. persistence: the engine's flag, read off the cell table the
+  // ordered executor builds from this schedule. The flag needs no lives, so
+  // the batch count is a constant.
+  auto const resolve = [&](std::size_t vid) -> Node const& {
+    return *at_point[rich.cells.at(vid).occurrences.front().point];
+  };
+  SlicedModeAssignment const sliced_modes =
+      compute_sliced_mode_assignment(ordered, rich);
+  CellTableInputs table_inputs = sequant::eval::detail::make_cell_table_inputs(
+      ordered, rich, sliced_modes, resolve, is_volatile);
+  table_inputs.n_batches_of = [](LoopKey const&) { return std::size_t{1}; };
+  CellTable const table = build_cell_table(table_inputs);
+  std::vector<std::optional<bool>> produced(ncells), assembled(ncells);
+  for (TableCell const& cell : table.cells) {
+    std::size_t const v = cell.value_id;
+    if (v >= ncells)
+      throw Exception("record_dag: the cell table names value " +
+                      std::to_string(v) + " past the schedule");
+    if (!(cell.scope == scope_of[home_of[v]])) continue;
+    (cell.production.kind == ProductionKind::Assemble ? assembled
+                                                      : produced)[v] =
+        cell.persistent;
+  }
+
+  // ---- 6. values
   std::unordered_map<std::size_t, CellLegality const*> legality_of;
   for (auto const& cl : legality.cells) legality_of[cl.hash] = &cl;
   std::map<std::size_t, std::vector<std::size_t>> by_hash;  // node id
@@ -385,15 +428,7 @@ DagRecord record_dag(RichSchedule const& rich, LegalitySchedule const& legality,
     rec.divergent_modes = spell_modes(c.divergent_modes);
     rec.home_block = home_of[v];
     rec.home_depth = c.home_depth;
-    // Persistence. The engine's rule (CellTable::persistent, see
-    // cell_table_builder.hpp) needs the volatile-leaf predicate, which this
-    // record does not receive; the record's rule is structural: a computed
-    // value homed at the root block (no home modes) that more than one
-    // occurrence consumes.
-    std::size_t consumed = 0;
-    for (auto const& occ : c.occurrences)
-      if (occ.consumer_point != occ.point) ++consumed;
-    rec.persistent = !c.is_leaf && c.home_modes.empty() && consumed > 1;
+    rec.persistent = produced[v] ? *produced[v] : assembled[v].value_or(false);
     rec.first_use = c.first_use;
     rec.last_use = c.last_use;
     auto const lit = legality_of.find(value_key_of(c));
@@ -433,7 +468,7 @@ DagRecord record_dag(RichSchedule const& rich, LegalitySchedule const& legality,
     dag.values.push_back(std::move(rec));
   }
 
-  // ---- 6. loops and loop order
+  // ---- 7. loops and loop order
   auto const loop_rec = [&](std::pair<std::wstring, int> const& k) {
     if (k.second < 0)
       throw Exception("record_dag: loop " + toUtf8(k.first) + " has no slot (" +
@@ -449,7 +484,7 @@ DagRecord record_dag(RichSchedule const& rich, LegalitySchedule const& legality,
     dag.loop_order.emplace_back(loop_rec(pair.first), loop_rec(pair.second),
                                 witness);
 
-  // ---- 7. operand edges; sliced = the consumer's home block is nested
+  // ---- 8. operand edges; sliced = the consumer's home block is nested
   // deeper than the producer's (it reads a slice of a value homed outside its
   // own block). Nesting depth, not DagScopeLevel::depth (a loop-group
   // identity: a root child block can carry depth 2).

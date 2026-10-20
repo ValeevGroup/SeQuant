@@ -1285,6 +1285,38 @@ TEST_CASE(
   REQUIRE(!edge(x.id, *consumer).sliced);
 }
 
+TEST_CASE("record_dag takes persistence from the cell table",
+          "[schedule-document]") {
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  auto const fx = two_root_fixture();
+  auto const leaf_label = [](ValueRecord const& v) {
+    return v.expr.substr(0, v.expr.find('['));
+  };
+  // nothing volatile: a value survives an evaluation only when nothing reads
+  // it again, i.e. the roots; every leaf and every X is read again or bound
+  auto const dag0 =
+      record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
+  for (auto const& v : dag0.values)
+    REQUIRE(v.persistent == (v.id == "R1+1" || v.id == "R2+1"));
+  // t volatile: whatever holds t (t, X = g*t, the roots) cannot persist; the
+  // leaves read by a value that holds t (g by X, f and h above it) persist
+  auto const dag1 =
+      record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots,
+                 [](EvalNodeDryRun const& n) {
+                   return n->is_tensor() && n->as_tensor().label() == L"t";
+                 });
+  std::size_t leaves = 0;
+  for (auto const& v : dag1.values) {
+    if (v.leaf) {
+      ++leaves;
+      REQUIRE(v.persistent == (leaf_label(v) != "t"));
+    } else {
+      REQUIRE(!v.persistent);
+    }
+  }
+  REQUIRE(leaves == 4);  // g, t, f, h
+}
+
 TEST_CASE("record_dag ids resolve for single-summand roots and scaled terms",
           "[schedule-document]") {
   auto const fx = dag_fixture(
