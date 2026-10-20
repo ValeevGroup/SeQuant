@@ -264,6 +264,13 @@ TEST_CASE("index_space", "[elements]") {
       CHECK(legacy.particle_space() == legacy.retrieve_space(L"q").type());
       legacy.add_union(L"Q", {L"q", L"i"}, is_complete);
       CHECK(legacy.complete_space() == legacy.retrieve_space(L"Q").type());
+      // ... and registers the same entries as the spec spelling: equality
+      // sees the dimension and the roles
+      IndexBasisRegistry by_spec = *ibr;
+      by_spec
+          .add(L"q", 0b100, {.dimension = 5, .qns = a.qns(), .particle = true})
+          .add_union(L"Q", {L"q", L"i"}, {.complete = true});
+      CHECK(by_spec == legacy);
       // the dimension is an integer, never a bool or a character
       static_assert(index_space_argument<int> && index_space_argument<long> &&
                     index_space_argument<unsigned long>);
