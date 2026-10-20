@@ -116,6 +116,14 @@ struct IndexSpaceSpec {
 /// registers a named basis instance with besides its label, space and
 /// instance: each member is given by name, and each is optional
 struct IndexBasisSpec {
+  /// a label given in a spec: any string type (see basic_string_convertible),
+  /// kept as the registry keeps labels
+  struct Label {
+    std::wstring value;
+    template <basic_string_convertible S>
+    Label(S&& label) : value(toUtf16(std::forward<S>(label))) {}
+  };
+
   /// the number of functions in the basis; if not given, the dimension of its
   /// space, now and whenever that changes (see IndexBasis::own_extent())
   /// @pre non-negative
@@ -128,7 +136,7 @@ struct IndexBasisSpec {
   /// the label of the named basis instance to follow (see
   /// IndexBasisRegistry::follow()), whose extent, metric and field the basis
   /// then mirrors; excludes the three members above
-  std::optional<std::wstring> follows = {};
+  std::optional<Label> follows = {};
 };
 
 // clang-format off
@@ -755,7 +763,7 @@ class IndexBasisRegistry {
                       "' must not be negative");
     if (spec.follows && (spec.extent || spec.metric || spec.field))
       throw Exception(std::string(caller) + ": '" + toUtf8(key) +
-                      "' follows '" + toUtf8(*spec.follows) +
+                      "' follows '" + toUtf8(spec.follows->value) +
                       "', whose extent, metric and field it mirrors, so it "
                       "cannot be given its own");
     emplace_named(
@@ -764,7 +772,7 @@ class IndexBasisRegistry {
         spec.metric.value_or(IndexBasisMetric::Unit), spec.field, caller);
     if (spec.follows) {
       try {
-        follow(key, *spec.follows);
+        follow(key, spec.follows->value);
       } catch (...) {
         remove(key);
         throw;

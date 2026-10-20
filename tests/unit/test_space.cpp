@@ -956,6 +956,9 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(ibr.follows(L"λ") == std::optional<std::wstring>{L"κ"});
     CHECK(ibr.retrieve(L"λ").extent() == 500);
     CHECK(ibr.retrieve(L"λ").metric() == IndexBasisMetric::General);
+    ibr.add("ξ", "a", 11, {.follows = "κ"});  // any string type names it
+    CHECK(ibr.follows(L"ξ") == std::optional<std::wstring>{L"κ"});
+    ibr.remove(L"ξ");
     // ... so its metadata cannot be given alongside
     CHECK_THROWS(ibr.add(L"ρ", L"a", 8, {.extent = 1, .follows = L"κ"}));
     CHECK_FALSE(ibr.contains(L"ρ"));
