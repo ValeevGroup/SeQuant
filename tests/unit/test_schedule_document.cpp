@@ -178,6 +178,20 @@ TEST_CASE("schedule document reader matches axis labels as whole indices",
     t.nodes = {{{{"i_2", ModeKind::External}}, {}, false}};
     REQUIRE_NOTHROW(from_json(to_json(d)));
   }
+  // a basis instance suffix is not an index: "2" in a_1<;2> or a_1<i_1;2>
+  {
+    Document d = make_doc();
+    auto& t = d.roots[0].terms[0];
+    t.factors = {"g{i_1;a_1<;2>}:N-N-S", "t{a_1<i_1;2>;i_1}:N-N-S"};
+    t.nodes = {{{{"a_1<;2>", ModeKind::Contracted}}, {}, false}};
+    REQUIRE_NOTHROW(from_json(to_json(d)));
+    t.nodes = {{{{"a_1<i_1;2>", ModeKind::Contracted}}, {}, false}};
+    REQUIRE_NOTHROW(from_json(to_json(d)));
+    t.nodes = {{{{"2", ModeKind::Contracted}}, {}, false}};
+    REQUIRE_THROWS_WITH(
+        from_json(to_json(d)),
+        ContainsSubstring("'2'") && ContainsSubstring("does not occur"));
+  }
   // i_1 is not an index of a subtree whose only occupied index is i_10
   {
     Document d = make_doc();

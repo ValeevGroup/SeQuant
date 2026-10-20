@@ -407,8 +407,14 @@ TreeShape tree_r(json const& j, std::string const& where) {
   return t;
 }
 
-// adds to `out` the index labels in `text`, a comma/semicolon-separated list
-// of V1 index spellings, and (recursively) the proto indices of each
+// Adds to `out` the index labels in `text`, a comma/semicolon-separated list
+// of V1 index spellings, and (recursively) the proto indices of each. The
+// labels are taken from the text rather than from Index objects because the
+// reader must work without the registry the document was produced with
+// (`sequant-schedule validate` has none); the set matches what
+// rebuild_pinned_term collects from the rebuilt factors (schedule_pin.cpp,
+// for_each_index): every slot index and every proto index, each spelled by
+// index_label.
 void add_index_labels(std::string_view text, std::set<std::string>& out) {
   auto const trimmed = [](std::string_view s) {
     auto const b = s.find_first_not_of(' ');
@@ -420,8 +426,23 @@ void add_index_labels(std::string_view text, std::set<std::string>& out) {
     if (tok.empty()) return;
     out.emplace(tok);
     auto const lt = tok.find('<');
-    if (lt != std::string_view::npos && tok.back() == '>')
-      add_index_labels(tok.substr(lt + 1, tok.size() - lt - 2), out);
+    if (lt != std::string_view::npos && tok.back() == '>') {
+      // "<protos>", "<protos;N>" or "<;N>": N is a basis instance, not an
+      // index, so the recursion stops at the top-level ';'
+      auto inner = tok.substr(lt + 1, tok.size() - lt - 2);
+      int nest = 0;
+      for (std::size_t k = 0; k < inner.size(); ++k) {
+        if (inner[k] == '<')
+          ++nest;
+        else if (inner[k] == '>')
+          --nest;
+        else if (inner[k] == ';' && nest == 0) {
+          inner = inner.substr(0, k);
+          break;
+        }
+      }
+      add_index_labels(inner, out);
+    }
   };
   int depth = 0;
   std::size_t start = 0;
