@@ -274,6 +274,7 @@ TEST_CASE("schedule document round-trips the dag and run sections",
 
 TEST_CASE("run section round-trips alone and JSON is made script-safe",
           "[schedule-document]") {
+  using Catch::Matchers::ContainsSubstring;
   auto const d = make_dag_doc();
   REQUIRE(d.run);
   auto const back = run_from_json(to_json(*d.run));
@@ -284,6 +285,23 @@ TEST_CASE("run section round-trips alone and JSON is made script-safe",
   REQUIRE_THROWS_AS(run_from_json("[]"), sequant::Exception);
   REQUIRE_THROWS_AS(run_from_json("not json"), sequant::Exception);
   REQUIRE_THROWS_AS(run_from_json(R"({"extents": {}})"), sequant::Exception);
+  // a block id is a whole decimal number: no sign, space or suffix
+  auto const run_with_key = [](std::string const& key) {
+    return R"({"extents": {}, "batch_targets": {}, "n_batches": {")" + key +
+           R"(": 3}, "footprint": {}, "builds": {}, "planner": {}})";
+  };
+  REQUIRE_NOTHROW(run_from_json(run_with_key("12")));
+  for (auto const* key : {"-1", "+1", "12abc", " 7", "", "0x1"})
+    REQUIRE_THROWS_WITH(run_from_json(run_with_key(key)),
+                        ContainsSubstring("not a block id"));
+  // an int field must fit an int
+  auto const d2 = make_dag_doc();
+  REQUIRE_THROWS_WITH(
+      from_json(mutate(d2, "\"slot\": 2", "\"slot\": 1099511627776")),
+      ContainsSubstring("slot") && ContainsSubstring("fit"));
+  REQUIRE_THROWS_WITH(
+      from_json(mutate(d2, "\"home_depth\": 1", "\"home_depth\": -3000000000")),
+      ContainsSubstring("home_depth") && ContainsSubstring("fit"));
 
   // a label containing "</script>" must not be able to end the element the
   // viewer inlines the document into

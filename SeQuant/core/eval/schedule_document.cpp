@@ -8,8 +8,11 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <charconv>
+#include <cstdint>
 #include <istream>
 #include <iterator>
+#include <limits>
 #include <ostream>
 #include <set>
 #include <sstream>
@@ -320,6 +323,16 @@ int get_int(json const& j, char const* key, std::string const& where) {
   auto const& v = need(j, key, where);
   if (!v.is_number_integer())
     fail(where, std::string("'") + key + "' must be an integer");
+  bool fits = false;
+  if (v.is_number_unsigned()) {
+    fits = v.get<std::uint64_t>() <=
+           static_cast<std::uint64_t>(std::numeric_limits<int>::max());
+  } else {
+    auto const n = v.get<std::int64_t>();
+    fits = n >= std::numeric_limits<int>::min() &&
+           n <= std::numeric_limits<int>::max();
+  }
+  if (!fits) fail(where, std::string("'") + key + "' does not fit an int");
   return v.get<int>();
 }
 
@@ -650,12 +663,11 @@ RunRecord run_r(json const& j) {
   r.extents = sizemap_r(j, "extents", w);
   r.batch_targets = sizemap_r(j, "batch_targets", w);
   for (auto const& [k, v] : get_obj(j, "n_batches", w).items()) {
+    // the whole key must be a decimal block id: no sign, space or suffix
     std::size_t key = 0;
-    try {
-      key = std::stoul(k);
-    } catch (std::exception const&) {
+    auto const [end, ec] = std::from_chars(k.data(), k.data() + k.size(), key);
+    if (k.empty() || ec != std::errc{} || end != k.data() + k.size())
       fail(w, "n_batches key '" + k + "' is not a block id");
-    }
     r.n_batches[key] = as_size(v, "'" + k + "'", w);
   }
   r.footprint = sizemap_r(j, "footprint", w);
