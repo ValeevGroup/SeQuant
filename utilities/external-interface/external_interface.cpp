@@ -618,7 +618,7 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
     Field field =
         current.value("real_valued", false) ? Field::Real : Field::Complex;
     registry.add(label, type,
-                 {.qns = IndexSpace::QuantumNumbers{mbpt::Spin::any},
+                 {.qns = mbpt::Spin::any,
                   .dimension = static_cast<std::size_t>(size),
                   .field = field});
 

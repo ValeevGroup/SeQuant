@@ -1023,7 +1023,7 @@ TEST_CASE("index_space", "[elements]") {
     // virtuals, registered as basis instance 1 of a
     ibr.add("μ̃", "a", 1, {.metric = IndexBasisMetric::General});
     // nonparticle mode: density fitting, or Cholesky, or Hubbard-Stratonovich
-    ibr.add("x", 0b001, {.qns = QuantumNumbersAttr{0b1000}});
+    ibr.add("x", 0b001, {.qns = 0b1000});
 
     REQUIRE(ibr.retrieve_space("u") == ibr.intersection("A", "I"));
     REQUIRE(ibr.retrieve_space("p") == ibr.unIon("A", "i"));
