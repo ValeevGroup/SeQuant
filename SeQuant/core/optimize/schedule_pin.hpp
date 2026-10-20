@@ -180,8 +180,8 @@ RecordedRoot record_root(std::string label, ExprPtr const& root_sum,
 namespace detail {
 
 /// the non-template part of \ref fingerprint_of: \p representatives has one
-/// Index per base_key present in the forest, \p volatile_leaf_labels the
-/// labels of the volatile leaf tensors
+/// Index per IndexBasis::base_key() present in the forest, \p
+/// volatile_leaf_labels the labels of the volatile leaf tensors
 eval::schedule::Fingerprint make_fingerprint(
     std::vector<std::string> root_labels, OptimizeOptions const& opts,
     std::vector<std::wstring> const& mode_order,
@@ -191,10 +191,12 @@ eval::schedule::Fingerprint make_fingerprint(
 }  // namespace detail
 
 /// Everything beyond the per-term trees that shapes the fused DAG: the
-/// batchability predicates evaluated on one representative Index per space
-/// present in \p forest, the volatile leaf labels, the scalar BatchPolicy and
-/// OptimizeOptions settings that steer structure, \p mode_order and the active
-/// Context. Size-dependent settings are deliberately absent (see
+/// batchability predicates evaluated on one representative Index per basis
+/// present in \p forest (keyed by IndexBasis::base_key(), the key the
+/// engine's loops and the DAG record's mode spellings carry, which is the
+/// basis name when the basis is named), the volatile leaf labels, the scalar
+/// BatchPolicy and OptimizeOptions settings that steer structure, \p mode_order
+/// and the active Context. Size-dependent settings are deliberately absent (see
 /// \ref planner_record).
 template <meta::eval_node_range R>
 eval::schedule::Fingerprint fingerprint_of(
@@ -211,7 +213,7 @@ eval::schedule::Fingerprint fingerprint_of(
     }
     if (!node->is_tensor()) return;
     for (auto const& ix : node->canon_indices())
-      representatives.try_emplace(ix.space().base_key(), ix);
+      representatives.try_emplace(ix.basis().base_key(), ix);
     auto const& t = node->as_tensor();
     if (is_volatile && is_volatile(t))
       volatile_leaf_labels.insert(toUtf8(t.label()));

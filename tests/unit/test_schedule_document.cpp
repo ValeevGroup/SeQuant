@@ -1725,7 +1725,14 @@ TEST_CASE("a pinned schedule is identical across two problem sizes",
   auto docB_pinned = build_document(sum, B, 512, &docA_loaded.roots[0]);
 
   REQUIRE(compare(docA, docB_pinned).empty());  // roots + dag identical
-  REQUIRE(!compare(docA, docB_free).empty());   // the planner changed its mind
+  // the fingerprint is keyed the way the DAG spells its modes: by
+  // IndexBasis::base_key(), which for the named PAO basis is its name
+  REQUIRE(docA.fingerprint.batchable.count("μ̃") == 1);
+  for (auto const& v : docA.dag->values)
+    for (auto const& m : v.result_modes)
+      REQUIRE(docA.fingerprint.batchable.count(m.substr(m.rfind(':') + 1)) ==
+              1);
+  REQUIRE(!compare(docA, docB_free).empty());  // the planner changed its mind
   REQUIRE_NOTHROW(sequant::opt::schedule::check_fingerprint(
       docA.fingerprint, docB_pinned.fingerprint));
 }

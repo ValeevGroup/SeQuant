@@ -546,12 +546,13 @@ eval::schedule::Fingerprint make_fingerprint(
   eval::schedule::Fingerprint fp;
   fp.roots = std::move(root_labels);
   auto const& policy = opts.batch_policy;
-  for (auto const& [space, ix] : representatives) {
-    fp.batchable[toUtf8(space)] = {policy.is_batchable_contracted_index &&
-                                       policy.is_batchable_contracted_index(ix),
-                                   policy.is_batchable_external_index &&
-                                       policy.is_batchable_external_index(ix)};
-    fp.context.spaces.push_back(toUtf8(space));
+  for (auto const& [basis_key, ix] : representatives) {
+    fp.batchable[toUtf8(basis_key)] = {
+        policy.is_batchable_contracted_index &&
+            policy.is_batchable_contracted_index(ix),
+        policy.is_batchable_external_index &&
+            policy.is_batchable_external_index(ix)};
+    fp.context.spaces.push_back(toUtf8(basis_key));
   }
   std::sort(fp.context.spaces.begin(), fp.context.spaces.end());
   fp.volatile_leaves.assign(volatile_leaf_labels.begin(),

@@ -93,8 +93,9 @@ struct ContextRecord {
 
 struct Fingerprint {
   std::vector<std::string> roots;
-  std::map<std::string, std::pair<bool, bool>>
-      batchable;  // space -> (contracted, external)
+  /// IndexBasis::base_key() -> (contracted, external): the batchability
+  /// predicates evaluated on one index of each basis present in the forest
+  std::map<std::string, std::pair<bool, bool>> batchable;
   std::vector<std::string> volatile_leaves;
   bool persistent_only = false, batch_spectator_indices = false;
   double accumulation_factor = 1;
