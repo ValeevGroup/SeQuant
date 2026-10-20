@@ -7306,9 +7306,14 @@ TEST_CASE("eval_trace_charges_a_lazy_view_zero_bytes", "[eval][view][trace]") {
   size_t const nocc = 2, nvirt = 3;
   rand_tensor_yield<std::complex<double>, TA::DensePolicy> yield{world, nocc,
                                                                  nvirt};
+  // over a real basis the star decodes into a retrieval-time {conj} view of
+  // the bare array; over a complex basis it names an array of its own
+  auto real_basis = sequant::tests::scoped_real_basis();
 
+  // a non-Hermitian tensor of indefinite parity keeps its star (a Hermitian
+  // one's is consumed into the bundle exchange over a real basis)
   auto const canonical =
-      deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}:N-C-S");
+      deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}:N-N-S-N");
   auto conj_side = canonical->clone();
   (void)conj_side->as<Tensor>().kconjugate();
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN

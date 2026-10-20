@@ -912,7 +912,7 @@ TEST_CASE("csv_df_commute", "[spinor][kramers]") {
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   auto _ = set_scoped_default_context(ctx);
 
-  const IndexSpace csv_basis = isr->retrieve_space(L"\u03bc\u0303");
+  const IndexBasis csv_basis = isr->retrieve(L"\u03bc\u0303");
   const IndexSpace df_basis = isr->retrieve_space(L"\u039a");
   const container::svector<std::wstring> csv_labels = {
       L"f", L"g", std::wstring(reserved::overlap_label())};
@@ -989,6 +989,7 @@ TEST_CASE("csv_df_commute", "[spinor][kramers]") {
 }
 
 TEST_CASE("kramers_symmetry_propagation", "[spinor][kramers]") {
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
   // Task 5 of the TRS canonicalizer: every c-number leaf emitted by the
   // Kramers trace carries KramersSymmetry::TimeReversal, the CSV and DF
   // transforms propagate it to the tensors they mint (C, DF factors), the
@@ -1217,6 +1218,7 @@ TEST_CASE("kramers_symmetry_propagation", "[spinor][kramers]") {
 }
 
 TEST_CASE("fold_stripped_antisymmetrizer", "[spinor][kramers][fold]") {
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
   // Partial-A Kramers blocks keep, for every external group whose Â was
   // stripped (same-flavour pair, antisymmetrized numerically by the consumer),
   // both a term and its signed swap image. Under the numerical ½(1-P) both
@@ -1298,6 +1300,9 @@ TEST_CASE("fold_stripped_antisymmetrizer", "[spinor][kramers][fold]") {
       if (f->is<Tensor>()) {
         Tensor t{f->as<Tensor>()};
         t.transform_indices(repl);
+        // the transform tags every index it replaces; a tagged slot is
+        // refused by the canonicalizer
+        t.reset_tags();
         out->append(1, ex<Tensor>(std::move(t)), Product::Flatten::No);
       } else {
         out->append(1, f, Product::Flatten::No);

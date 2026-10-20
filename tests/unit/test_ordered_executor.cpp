@@ -5413,6 +5413,7 @@ TEST_CASE(
     "compute_dag_boulevard: Kramers-blind values sliced by loops of different "
     "flavour spaces are one value per frame",
     "[ordered-executor][kramers-blind][dag-slicing]") {
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
   using sequant::Index;
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;

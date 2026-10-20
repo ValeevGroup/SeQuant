@@ -1753,7 +1753,7 @@ TEST_CASE("conjugate_fold_skips_operators", "[algorithms][conjugate]") {
   ctx.set(sr_reg);
   auto resetter = set_scoped_default_context(ctx);
 
-  auto ex_op = ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"})) *
+  auto ex_op = ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"})) *
                ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm);
   REQUIRE_NOTHROW(canonicalize(ex_op));
   // no tensor in the result acquired a conjugation marker

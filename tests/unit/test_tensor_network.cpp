@@ -58,6 +58,7 @@ using namespace sequant;
 using namespace std::literals;
 
 TEST_CASE("tensor_network_shared", "[elements]") {
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
   using TN =
       TensorNetworkV3;  // the sections below spell the network through TN
   auto isr = sequant::mbpt::make_legacy_spaces();
@@ -648,15 +649,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       auto t1_x_t2_p_t2 = t1 * (t2 + t2);  // can only use a flat tensor product
       REQUIRE_THROWS_AS(TN(*t1_x_t2_p_t2), Exception);
 
-      // dummies may connect bra-to-bra / ket-to-ket when the braket
-      // orientation fold can reorient an incident tensor: a braket-Conjugate
-      // c-number tensor spelled adjoint folds back to its covariant form
-      (void)t2->adjoint();
-      auto t1_x_t2_adjoint = t1 * t2;
-      REQUIRE_NOTHROW(TN(t1_x_t2_adjoint).create_graph());
-
-      // ... but a braket-Nonsymm (rigid) tensor cannot be reoriented, so for
-      // it the covariance check still rejects bra-to-bra / ket-to-ket
+      // must be covariant: no bra to bra or ket to ket
       if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
         REQUIRE(t2->adjoint() == 1);
         auto t1_x_t2_adjoint = t1 * t2;

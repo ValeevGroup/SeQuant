@@ -4725,6 +4725,7 @@ TEST_CASE("batchability role-split building-block predicates",
 TEST_CASE("Nested product brackets: batch annotations align with binarize",
           "[optimize][annotate][nested-product]") {
   using namespace sequant;
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
@@ -4973,8 +4974,10 @@ TEST_CASE("Re-wrapped summand batch-annotates its inner product",
     opts.term_batch_axes = axes_map;
     return opts;
   };
+  // scalar-valued: a Re/Im wrapper over a tensor-valued expression is refused
+  // where its eval node is built
   auto bare =
-      deserialize(L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} f{i_1;i_3} f{i_2;i_4}");
+      deserialize(L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} f{i_1;a_1} f{i_2;a_2}");
   auto ref_map = std::make_shared<AxesMap>();
   auto ref = optimize(bare, make_opts(ref_map));
   auto ref_it = ref_map->find(ref.get());

@@ -958,12 +958,9 @@ CanonicalKey canonical_key(const ExprPtr& term,
                            const CanonicalizeOptions& opts) {
   CanonicalKey key;
   auto e = term->clone();
-  // canonicalize() leaves index tags behind; a stale tag changes the result
-  e->visit(
-      [](const ExprPtr& x) {
-        if (x->is<Tensor>()) x->as<Tensor>().reset_tags();
-      },
-      /* atoms_only = */ true);
+  // canonicalize() leaves index tags behind (proto indices included); a stale
+  // tag changes the result
+  reset_tags(e);
   {
     // the options are read from the default context
     auto scope =

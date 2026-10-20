@@ -25,9 +25,13 @@ namespace sequant::mbpt {
 
 namespace {
 
-/// @return whether @p idx carries a spin (Kramers) label
+/// @return whether @p idx carries a definite spin (Kramers) label, ↑ or ↓;
+///         a spin-free index (Spin::any) has none
 bool spin_labeled(const Index& idx) {
-  return (bitset_t(idx.space().qns()) & mask_v<Spin>) != 0;
+  const auto qns = idx.space().qns();
+  if ((bitset_t(qns) & mask_v<Spin>) == 0) return false;
+  const auto s = to_spin(qns);
+  return s == Spin::alpha || s == Spin::beta;
 }
 
 /// a fresh expansion dummy in the @p s-flavored counterpart of @p csv_basis:

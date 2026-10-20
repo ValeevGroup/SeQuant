@@ -967,6 +967,7 @@ TEST_CASE("kramers_leaf_slot_identity", "[eval_expr][kramers]") {
 }
 
 TEST_CASE("sum_placeholder_is_spelled_in_its_layout", "[eval_expr][sum]") {
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
   // A sum hands up its FIRST summand's canonical layout, and the tensor it
   // spells for its value (expr()) is what an enclosing network sees for the
   // opaque node -- so that placeholder must be spelled in that layout. Two
@@ -1041,6 +1042,7 @@ TEST_CASE("sum_placeholder_is_spelled_in_its_layout", "[eval_expr][sum]") {
 
 TEST_CASE("twins_whose_composites_carry_the_swapped_externals_are_two_slots",
           "[eval_expr][cache]") {
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
   // CSV/PNS composites carry their pair as proto indices, so the inner tile
   // at outer position (p,q) is the pair-(p,q) block: two relabeled twins that
   // lay the pair out as (i_1,i_2) and (i_2,i_1) are NOT value-compatible --
@@ -1894,6 +1896,7 @@ TEST_CASE("kramers_blind_leaf_identity", "[eval_expr][kramers-blind]") {
 TEST_CASE("kramers_blind_product_identity", "[eval_expr][kramers-blind]") {
   using namespace sequant;
   using namespace sequant::eval;
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
   auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   mbpt::add_fermi_spin(*isr);
   Context ctx = get_default_context();
@@ -2011,6 +2014,7 @@ TEST_CASE("kramers_blind_product_identity", "[eval_expr][kramers-blind]") {
 TEST_CASE("kramers_blind_guards", "[eval_expr][kramers-blind]") {
   using namespace sequant;
   using namespace sequant::eval;
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
   auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   mbpt::add_fermi_spin(*isr);
   Context ctx = get_default_context();
@@ -2076,6 +2080,7 @@ TEST_CASE("kramers_blind_guards", "[eval_expr][kramers-blind]") {
 #include <SeQuant/core/eval/eval_node.hpp>
 
 TEST_CASE("kramers_flip_node", "[eval_expr][kramers-flip]") {
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
   // EvalOp::KramersFlip: a unary wrapper (RealPart pattern: left = the
   // canonical ↑ node, right = the Constant(1) sentinel) denoting
   // phase · F(inner) with F the time-reversal flip over the given union modes
@@ -2155,6 +2160,7 @@ TEST_CASE("kramers_flip_node", "[eval_expr][kramers-flip]") {
 }
 
 TEST_CASE("kramers_fold_intermediates", "[eval_expr][kramers-flip]") {
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
   // BinarizationOptions::kramers_fold_intermediates: a down-majority
   // intermediate (all leaves time-reversal symmetric; the Kramers-blind pair
   // labels do not count) binarizes as a KramersFlip over its canonical (up)

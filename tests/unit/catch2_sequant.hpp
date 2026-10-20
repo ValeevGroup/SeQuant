@@ -192,6 +192,16 @@ std::size_t count_product_canonicalizations(
       [&opts](Context &ctx) { ctx.set(opts); });
 }
 
+/// @return a guard that scopes, for every Statistics, a copy of the default
+/// context in effect for it that does not assert the strict bra-ket pairing
+/// of dummy indices (Context::assert_strict_braket_symmetry()), as MPQC's
+/// CCk context does not: a hand-built network may then contract a dummy
+/// between two bra (or two ket) slots of rigid tensors
+[[nodiscard]] inline auto scoped_lax_braket_pairing() {
+  return set_scoped_modified_default_context(
+      [](Context &ctx) { ctx.set(AssertStrictBraKetSymmetry::No); });
+}
+
 }  // namespace sequant::tests
 
 namespace Catch {
