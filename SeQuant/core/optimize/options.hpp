@@ -356,8 +356,10 @@ struct OptimizeOptions {
   ///     misses go unreported.
   ///
   /// \warning A session is single-use: it counts every record it hands out,
-  ///          so optimizing the same root twice through one session reports
-  ///          every term as a duplicate. Use a fresh PinSession per run.
+  ///          and once finished it refuses further use with an exception that
+  ///          says so. Use a fresh PinSession per run, and reset this pointer
+  ///          (and \ref recording) to null when the same OptimizeOptions
+  ///          object is reused for another call.
   opt::schedule::PinSession* pinned = nullptr;
 
   /// Optional schedule recording (see opt/schedule_pin.hpp). When non-null,

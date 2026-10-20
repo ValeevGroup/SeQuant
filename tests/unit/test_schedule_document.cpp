@@ -1006,6 +1006,9 @@ TEST_CASE("per-summand pinning through one session", "[schedule-document]") {
     by_position[*pos] = optimized;
   }
   REQUIRE_NOTHROW(session.finish());
+  // a finished session is single-use: a further run through it is refused
+  REQUIRE_THROWS_WITH(sequant::optimize_result(sum, opts2),
+                      ContainsSubstring("single-use"));
   for (std::size_t k = 0; k < by_position.size(); ++k) {
     REQUIRE(*by_position[k] == *whole.summand(k));
     REQUIRE(*by_position[k] == *pinned_whole->as<sequant::Sum>().summand(k));

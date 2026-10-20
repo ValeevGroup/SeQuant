@@ -101,6 +101,8 @@ class PinSession {
   ///         "duplicate: ..." (all keys) if any key was missed, any record was
   ///         not taken, or any key was taken twice (or occurs twice in the
   ///         record)
+  /// \post the session is finished: a session is single-use, and \ref take
+  ///       and \ref bind throw from now on (calling finish again is fine)
   void finish() const;
 
   /// Called by the optimizer: remembers that \p optimized is the summand it
@@ -123,6 +125,7 @@ class PinSession {
   std::vector<std::size_t> uses_;  // per record, times taken
   std::vector<std::string> missing_, duplicates_;
   std::unordered_map<Expr const*, std::string> keys_;
+  mutable bool finished_ = false;
 };
 
 /// Collects the record_term results of an optimizer run and emits them as a

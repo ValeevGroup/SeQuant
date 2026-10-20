@@ -351,9 +351,21 @@ PinSession::PinSession(eval::schedule::RootRecord const& root)
       record_duplicates_.push_back(root_.terms[i].key);
 }
 
+namespace {
+
+[[noreturn]] void fail_finished(std::string const& label) {
+  throw Exception("schedule pin: root " + label +
+                  ": the session was finished already; a PinSession is "
+                  "single-use, make a fresh one for every optimize run (and "
+                  "reset OptimizeOptions::pinned when reusing the options)");
+}
+
+}  // namespace
+
 TermRecord const* PinSession::take(std::string const& key) {
   auto it = position_.find(key);
   std::lock_guard<std::mutex> lock(mutex_);
+  if (finished_) fail_finished(root_.label);
   if (it == position_.end()) {
     missing_.push_back(key);
     return nullptr;
@@ -371,6 +383,7 @@ std::optional<std::size_t> PinSession::document_position(
 
 void PinSession::finish() const {
   std::lock_guard<std::mutex> lock(mutex_);
+  finished_ = true;
   std::vector<std::string> unused;
   for (std::size_t i = 0; i < root_.terms.size(); ++i)
     if (uses_[i] == 0 && position_.at(root_.terms[i].key) == i)
@@ -398,6 +411,7 @@ void PinSession::finish() const {
 
 void PinSession::bind(Expr const* optimized, std::string key) {
   std::lock_guard<std::mutex> lock(mutex_);
+  if (finished_) fail_finished(root_.label);
   // newest wins: an address freed by a per-summand caller may be reused by a
   // later result, and only the live result's key is meaningful
   keys_[optimized] = std::move(key);
