@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <SeQuant/core/asy_cost.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
 
@@ -304,7 +305,9 @@ TEST_CASE("asy_cost", "[AsyCost]") {
   SECTION("basis instances") {
     using sequant::IndexSpace;
     IndexSpace const V{L"V", 0b10, sequant::QuantumNumbersAttr{0}, 100};
-    IndexBasis const own{V}, unnamed{V, 1}, named{V, 2, L"P", 400};
+    sequant::IndexBasisRegistry registry;
+    registry.add(V).add(L"P", V, 2, {.extent = 400});
+    IndexBasis const own{V}, unnamed{V, 1}, named = registry.retrieve(L"P");
 
     AsyCost::ExponentMap m;
     m.emplace(own, 2);

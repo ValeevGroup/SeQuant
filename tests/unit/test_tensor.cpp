@@ -12,6 +12,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
@@ -471,8 +472,9 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(!is_kronecker_equivalent(a1, a3));
     REQUIRE(!is_kronecker_equivalent(a2, a3));
     // an index in a non-orthonormal basis overlaps, never identifies
-    const IndexBasis general{a1.space(), 1, L"ã", std::nullopt,
-                             IndexBasisMetric::General};
+    IndexBasisRegistry registry = *get_default_context().index_basis_registry();
+    registry.add(L"ã", a1.space(), 1, {.metric = IndexBasisMetric::General});
+    const IndexBasis general = registry.retrieve(L"ã");
     const Index a1g(general, 1, {i2, i1}), a2g(general, 2, {i2, i1});
     REQUIRE(!is_kronecker_equivalent(a1g, a2g));
     REQUIRE(!is_kronecker_equivalent(a1, a1g));

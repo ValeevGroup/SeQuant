@@ -132,14 +132,14 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE_THAT(bernoulli::detail::expand_to_blocks(Vx),
                  EquivalentTo(Vx));  // idempotent
     // no general index survives: every residual index is occ or uocc
-    auto isr = get_default_context().index_basis_registry();
+    auto ibr = get_default_context().index_basis_registry();
     Vx->visit(
         [&](const ExprPtr& n) {
           if (!n.is<NormalOperator<Statistics::FermiDirac>>()) return;
           for (const auto& o :
                n.as<NormalOperator<Statistics::FermiDirac>>().creann()) {
             const auto& sp = o.index().space();
-            REQUIRE((isr->is_pure_occupied(sp) || isr->is_pure_unoccupied(sp)));
+            REQUIRE((ibr->is_pure_occupied(sp) || ibr->is_pure_unoccupied(sp)));
           }
         },
         /*atoms_only=*/true);
@@ -816,12 +816,12 @@ TEST_CASE("bernoulli-keeps-basis-instance", "[mbpt][basis]") {
 
   // t(2) as a grant of instance 3 on its virtual legs authors it, in one
   // commutator [V, σ] of the Bernoulli UCC derivation
-  const auto& isr = get_default_context().index_basis_registry();
+  const auto& ibr = get_default_context().index_basis_registry();
   const auto V = op::tensor::h(2);
   const auto T2raw = op::tensor::t(2);
   container::map<Index, Index> m;
   for (const auto& idx : get_used_indices(T2raw))
-    if (isr->is_pure_unoccupied(idx.space()))
+    if (ibr->is_pure_unoccupied(idx.space()))
       m.emplace(idx, idx.replace_basis_instance(3));
   const auto T2 = transform_expr(T2raw, m);
 

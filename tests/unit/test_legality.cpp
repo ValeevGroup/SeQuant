@@ -180,12 +180,12 @@ TEST_CASE(
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
   sequant::mbpt::add_pao_basis(
-      isr, sequant::IndexSpace::QuantumNumbers{sequant::mbpt::Spin::any});
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+      ibr, sequant::IndexSpace::QuantumNumbers{sequant::mbpt::Spin::any});
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -752,12 +752,11 @@ TEST_CASE(
 TEST_CASE("forced_split_types keeps a named basis apart from its space",
           "[legality][basis]") {
   using namespace sequant;
-  auto isr = mbpt::make_min_sr_spaces();
-  const IndexSpace a = isr->retrieve_space(L"a"), i = isr->retrieve_space(L"i");
-  isr->add(L"μ̃", IndexBasis{
-                     a, std::numeric_limits<IndexBasis::instance_type>::max()});
+  auto ibr = mbpt::make_min_sr_spaces();
+  const IndexSpace a = ibr->retrieve_space(L"a"), i = ibr->retrieve_space(L"i");
+  ibr->add(L"μ̃", a, std::numeric_limits<IndexBasis::instance_type>::max());
   auto ctx = set_scoped_default_context(
-      Context({.index_basis_registry_shared_ptr = std::move(isr),
+      Context({.index_basis_registry_shared_ptr = std::move(ibr),
                .vacuum = Vacuum::SingleProduct}));
   const Index pao(get_default_context().index_basis_registry()->retrieve(L"μ̃"),
                   1);
@@ -818,12 +817,12 @@ TEST_CASE(
     auto ctx = sequant::get_default_context_snapshot();
     ctx.set_first_dummy_index_ordinal(1000000);
     REQUIRE(ctx.index_basis_registry() != nullptr);
-    auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+    auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
         *ctx.index_basis_registry());
     sequant::mbpt::add_pao_basis(
-        isr, sequant::IndexSpace::QuantumNumbers{sequant::mbpt::Spin::any});
-    sequant::mbpt::add_df_spaces(isr);
-    ctx.set(isr);
+        ibr, sequant::IndexSpace::QuantumNumbers{sequant::mbpt::Spin::any});
+    sequant::mbpt::add_df_spaces(ibr);
+    ctx.set(ibr);
     auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
     auto const body =

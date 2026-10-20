@@ -87,7 +87,7 @@ sequant::ExprPtr in_base_spaces(
     sequant::ExprPtr expr,
     const sequant::container::set<sequant::Index>& externals = {}) {
   using namespace sequant;
-  const auto isr = get_default_context().index_basis_registry();
+  const auto ibr = get_default_context().index_basis_registry();
   auto terms_of = [](const ExprPtr& e) {
     return e->is<Sum>() ? e->as<Sum>().summands() | ranges::to_vector
                         : std::vector<ExprPtr>{e};
@@ -116,13 +116,13 @@ sequant::ExprPtr in_base_spaces(
     auto result = std::make_shared<Sum>();
     for (const auto& term : terms_of(expr)) {
       const auto idx = first_index(
-          term, [&](const Index& i) { return !isr->is_base(i.space()); });
+          term, [&](const Index& i) { return !ibr->is_base(i.space()); });
       if (!idx) {
         result->append(term);
         continue;
       }
       split = true;
-      for (const auto& base : isr->base_spaces())
+      for (const auto& base : ibr->base_spaces())
         if (base.qns() == idx->space().qns() &&
             idx->space().type().includes(base.type()))
           result->append(transform_expr(
@@ -1262,10 +1262,10 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     SECTION("batching") {
       // update context to use batching index
-      auto isr = sequant::mbpt::make_legacy_spaces();
-      mbpt::add_batching_spaces(isr);
+      auto ibr = sequant::mbpt::make_legacy_spaces();
+      mbpt::add_batching_spaces(ibr);
       auto ctx_resetter =
-          set_scoped_default_context({.index_basis_registry_shared_ptr = isr,
+          set_scoped_default_context({.index_basis_registry_shared_ptr = ibr,
                                       .vacuum = Vacuum::SingleProduct});
       REQUIRE_NOTHROW(
           get_default_context().index_basis_registry()->retrieve_space(L"z"));
@@ -1815,8 +1815,8 @@ SECTION("MRSO-MultiProduct") {
         string = string *
                  (l.action == Action::Create ? fcrex(l.index) : fannx(l.index));
       auto contracted = FWickTheorem{string}.full_contractions(false).compute();
-      const auto isr = get_default_context().index_basis_registry();
-      const auto& active = isr->retrieve_space(L"u");
+      const auto ibr = get_default_context().index_basis_registry();
+      const auto& active = ibr->retrieve_space(L"u");
       auto average = [&](ExprPtr& f) {
         if (f->is<FNOperator>()) {
           const auto& nop = f->as<FNOperator>();
@@ -1891,13 +1891,13 @@ SECTION("MRSO-MultiProduct") {
     // a leg over a union of base spaces (e.g. I = i ∪ u) is split into them on
     // the core-vacuum side, whose averages take base-space legs; every density
     // leg of the MultiProduct result must be active
-    const auto isr = get_default_context().index_basis_registry();
+    const auto ibr = get_default_context().index_basis_registry();
     auto check = [&](std::initializer_list<Legs> strings_il) {
       container::svector<Legs> strings(strings_il);
       container::set<Index> externals;
       for (const auto& legs : strings)
         for (const auto& l : legs)
-          if (!isr->is_base(l.index.space())) externals.insert(l.index);
+          if (!ibr->is_base(l.index.space())) externals.insert(l.index);
       ExprPtr mp_input = ex<Constant>(1);
       for (const auto& legs : strings) {
         container::svector<Index> cre_idxs, ann_idxs;
@@ -1916,10 +1916,10 @@ SECTION("MRSO-MultiProduct") {
       for (std::size_t s_i = 0; s_i != strings.size(); ++s_i)
         for (std::size_t l_i = 0; l_i != strings[s_i].size(); ++l_i) {
           const auto& idx = strings[s_i][l_i].index;
-          if (isr->is_base(idx.space())) continue;
+          if (ibr->is_base(idx.space())) continue;
           decltype(assignments) next;
           for (const auto& asg : assignments)
-            for (const auto& base : isr->base_spaces())
+            for (const auto& base : ibr->base_spaces())
               if (base.qns() == idx.space().qns() &&
                   idx.space().type().includes(base.type())) {
                 auto a2 = asg;
@@ -1958,7 +1958,7 @@ SECTION("MRSO-MultiProduct") {
             if (t.label() == L"γ" || t.label() == L"η" || t.label() == L"κ")
               for (const auto& idx : t.const_braket())
                 active_only =
-                    active_only && idx.space() == isr->retrieve_space(L"u");
+                    active_only && idx.space() == ibr->retrieve_space(L"u");
           },
           /*atoms_only=*/true);
       INFO("mp: " << toUtf8(to_latex(mp)));

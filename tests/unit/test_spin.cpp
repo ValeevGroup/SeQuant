@@ -57,7 +57,7 @@ TEST_CASE("spin", "[spin]") {
   auto _ = set_scoped_default_context(ctx);
 
   SECTION("protoindices supported") {
-    auto isr = get_default_context().index_basis_registry();
+    auto ibr = get_default_context().index_basis_registry();
     Index i1(L"i_1");
     Index a1(L"a_1", {i1});
 
@@ -110,10 +110,11 @@ TEST_CASE("spin", "[spin]") {
     auto p2 = Index(L"p_2", {L"p", 0b11, mbpt::Spin::any});
     auto p2_b = Index(L"p↓_2", {L"p↓", 0b11, mbpt::Spin::beta});
 
-    auto p_i = Index({L"p", 0b11, mbpt::Spin::any}, {i});
-    auto p1_i = Index({L"p", 0b11, mbpt::Spin::any}, 1, {i});
-    auto p_i1 = Index({L"p", 0b11, mbpt::Spin::any}, {i1});
-    auto p1_i1 = Index({L"p", 0b11, mbpt::Spin::any}, 1, {i1});
+    const IndexSpace P{L"p", 0b11, mbpt::Spin::any};
+    auto p_i = Index(P, {i});
+    auto p1_i = Index(P, 1, {i});
+    auto p_i1 = Index(P, {i1});
+    auto p1_i1 = Index(P, 1, {i1});
 
     // make_spinalpha
     {
@@ -2016,7 +2017,7 @@ TEST_CASE("spincase-index-keeps-basis-instance", "[spin][basis]") {
 // indices with one label up to the basis name; the index lists of the spin
 // tracers must keep both, else the named one is never assigned a spin
 namespace {
-sequant::IndexSpace isr_space_of(const sequant::Index& idx) {
+sequant::IndexSpace ibr_space_of(const sequant::Index& idx) {
   return sequant::get_default_context().index_basis_registry()->retrieve_space(
       idx.space().type(), idx.space().qns());
 }
@@ -2028,15 +2029,15 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   using sequant::mbpt::make_spinbeta;
   using sequant::mbpt::make_spinfree;
   using sequant::mbpt::spintrace;
-  auto isr = mbpt::make_sr_spaces();
-  const IndexSpace uocc = isr->retrieve_space(L"a");
-  isr->add(L"μ̃", IndexBasis{uocc, 77}, 120ul);
+  auto ibr = mbpt::make_sr_spaces();
+  const IndexSpace uocc = ibr->retrieve_space(L"a");
+  ibr->add(L"μ̃", uocc, 77, {.extent = 120});
   // the spin-cased counterparts are bases of their own, e.g. of different
   // extents in a spin-polarized state
-  isr->add(L"μ̃↑", IndexBasis{isr->retrieve_space(L"a↑"), 77}, 60ul);
-  isr->add(L"μ̃↓", IndexBasis{isr->retrieve_space(L"a↓"), 77}, 50ul);
+  ibr->add(L"μ̃↑", L"a↑", 77, {.extent = 60});
+  ibr->add(L"μ̃↓", L"a↓", 77, {.extent = 50});
   auto ctx = set_scoped_default_context(
-      Context({.index_basis_registry_shared_ptr = std::move(isr),
+      Context({.index_basis_registry_shared_ptr = std::move(ibr),
                .vacuum = Vacuum::SingleProduct}));
   const IndexBasis pao =
       get_default_context().index_basis_registry()->retrieve(L"μ̃");
@@ -2051,7 +2052,7 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   CHECK(m1b.label() == L"μ̃↓_1");
   CHECK(m1b.basis().basis_instance() == 77);
   CHECK(m1b.basis().extent() == 50);
-  CHECK(m1b.space() == isr_space_of(m1b));  // sanity: a↓ with the same attr
+  CHECK(m1b.space() == ibr_space_of(m1b));  // sanity: a↓ with the same attr
   CHECK(make_spinfree(m1a) == m1);
   CHECK(make_spinfree(m1b) == m1);
   CHECK(make_spinfree(m1b).basis().extent() == 120);
@@ -2075,8 +2076,8 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   // a missing counterpart is an error, not derived from the index's own basis
   {
     auto half = mbpt::make_sr_spaces();
-    half->add(L"μ̃", IndexBasis{uocc, 77}, 120ul);
-    half->add(L"μ̃↑", IndexBasis{half->retrieve_space(L"a↑"), 77}, 60ul);
+    half->add(L"μ̃", uocc, 77, {.extent = 120});
+    half->add(L"μ̃↑", L"a↑", 77, {.extent = 60});
     auto half_ctx = set_scoped_default_context(
         Context({.index_basis_registry_shared_ptr = std::move(half),
                  .vacuum = Vacuum::SingleProduct}));

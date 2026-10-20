@@ -187,11 +187,11 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
     // a name belongs to one (space, instance) pair: the projection of a leg
     // in p̃ (p in instance 1) onto the particle space is in instance 1 of a,
     // i.e. in ã if that is registered, not in p̃
-    auto isr = make_min_sr_spaces();
-    isr->add(L"p̃", IndexBasis{isr->retrieve_space(L"p"), 1});
-    isr->add(L"ã", IndexBasis{isr->retrieve_space(L"a"), 1});
+    auto ibr = make_min_sr_spaces();
+    ibr->add(L"p̃", L"p", 1);
+    ibr->add(L"ã", L"a", 1);
     auto nctx = get_default_context();
-    nctx.set(std::move(isr));
+    nctx.set(std::move(ibr));
     auto nctx_resetter = set_scoped_default_context(nctx);
     const Index x(L"p̃_1");
     REQUIRE(x.basis().name() == L"p̃");
@@ -358,11 +358,10 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
   SECTION("an overlap inside a non-orthonormal basis stands") {
     // ã: a basis of a with a general metric; an overlap between two of its
     // functions is the metric, a Kronecker delta is still an identity
-    auto isr = mbpt::make_min_sr_spaces();
-    isr->add(L"ã", IndexBasis{isr->retrieve_space(L"a"), 1},
-             IndexBasisMetric::General);
+    auto ibr = mbpt::make_min_sr_spaces();
+    ibr->add(L"ã", L"a", 1, {.metric = IndexBasisMetric::General});
     auto gctx = get_default_context();
-    gctx.set(std::move(isr));
+    gctx.set(std::move(ibr));
     auto gctx_resetter = set_scoped_default_context(gctx);
     const Index x1(L"ã_1"), x2(L"ã_2"), x3(L"ã_3");
     REQUIRE(x1.basis().metric() == IndexBasisMetric::General);
@@ -449,7 +448,7 @@ TEST_CASE("basis-wick-bernoulli-commutator", "[algorithms][wick][basis]") {
                         .spbasis = SPBasis::Spinor}));
   auto mbpt_ctx = set_scoped_default_mbpt_context(mbpt::Context(
       {.csv = CSV::No, .op_registry_ptr = make_minimal_registry()}));
-  const auto& isr = get_default_context().index_basis_registry();
+  const auto& ibr = get_default_context().index_basis_registry();
 
   // one commutator [V, σ] of the Bernoulli UCC derivation
   const auto ab = bernoulli::detail::wick_commutator(
@@ -460,7 +459,7 @@ TEST_CASE("basis-wick-bernoulli-commutator", "[algorithms][wick][basis]") {
   std::size_t misses = 0;
   for (auto const* t : ts)
     for (Index const& idx : t->_slots())
-      if (isr->is_pure_unoccupied(idx.space()) &&
+      if (ibr->is_pure_unoccupied(idx.space()) &&
           idx.basis().basis_instance() != 3)
         ++misses;
   CHECK(misses == 0);
@@ -526,11 +525,10 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
 
   SECTION("η = δ - γ in a non-orthonormal basis is an overlap minus γ") {
     // ũ: a basis of the active space with a general metric
-    auto isr = mbpt::make_mr_spaces();
-    isr->add(L"ũ", IndexBasis{isr->retrieve_space(L"u"), 1},
-             IndexBasisMetric::General);
+    auto ibr = mbpt::make_mr_spaces();
+    ibr->add(L"ũ", L"u", 1, {.metric = IndexBasisMetric::General});
     auto metric_ctx = get_default_context();
-    metric_ctx.set(std::move(isr));
+    metric_ctx.set(std::move(ibr));
     auto metric_resetter = set_scoped_default_context(metric_ctx);
     const Index u1(L"ũ_1"), u2(L"ũ_2");
     REQUIRE(u1.basis().metric() == IndexBasisMetric::General);

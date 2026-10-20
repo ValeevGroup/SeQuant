@@ -23,11 +23,11 @@
 namespace sequant::detail {
 
 void assert_protoindexed_not_active(
-    [[maybe_unused]] const IndexBasisRegistry &isr,
+    [[maybe_unused]] const IndexBasisRegistry &ibr,
     [[maybe_unused]] const IndexSpace &sp, [[maybe_unused]] const Index &a,
     [[maybe_unused]] const Index &b) {
   SEQUANT_ASSERT(!(a.has_proto_indices() || b.has_proto_indices()) ||
-                     !isr.intersection(sp, isr.active_space(sp.qns())),
+                     !ibr.intersection(sp, ibr.active_space(sp.qns())),
                  "protoindexed indices must not reach the active space");
 }
 
@@ -63,11 +63,11 @@ struct SpaceParts {
   IndexSpace::Type core, active, virt;
 };
 
-SpaceParts space_parts(const IndexBasisRegistry &isr,
+SpaceParts space_parts(const IndexBasisRegistry &ibr,
                        IndexSpace::QuantumNumbers qns) {
-  const auto r = isr.reference_occupied_space(qns).type();
-  const auto u = isr.vacuum_unoccupied_space(qns).type();
-  const auto active = isr.active_space(qns).type();
+  const auto r = ibr.reference_occupied_space(qns).type();
+  const auto u = ibr.vacuum_unoccupied_space(qns).type();
+  const auto active = ibr.active_space(qns).type();
   return {r.xOr(active), active, u.xOr(active)};
 }
 
@@ -88,11 +88,11 @@ void for_each_block_assignment(const NormalOperator<S> &survivors,
   auto is_cre = [&](std::size_t i) {
     return survivors[i].action() == Action::Create;
   };
-  const auto &isr = *get_default_context(S).index_basis_registry();
+  const auto &ibr = *get_default_context(S).index_basis_registry();
   // only active ops can be cumulant legs
   auto is_active = [&](std::size_t i) {
     const auto &sp = survivors[i].index().space();
-    return space_parts(isr, sp.qns()).active.includes(sp.type());
+    return space_parts(ibr, sp.qns()).active.includes(sp.type());
   };
   auto prov = [&](std::size_t i) {
     auto it = provenance.find(survivors[i].index());
@@ -259,16 +259,16 @@ container::svector<ExprPtr> separate_shared_indices(Expr &term) {
 /// @return registered spaces that partition @p type: the space of that type
 /// if registered, else its base spaces
 container::svector<IndexSpace> registered_pieces(
-    const IndexBasisRegistry &isr, IndexSpace::Type type,
+    const IndexBasisRegistry &ibr, IndexSpace::Type type,
     IndexSpace::QuantumNumbers qns) {
   container::svector<IndexSpace> result;
   if (!type) return result;
-  if (const auto *sp = isr.retrieve_space_ptr(type, qns)) {
+  if (const auto *sp = ibr.retrieve_space_ptr(type, qns)) {
     result.push_back(*sp);
     return result;
   }
-  for (const auto &t : isr.base_space_types())
-    if (type.includes(t)) result.push_back(isr.retrieve_space(t, qns));
+  for (const auto &t : ibr.base_space_types())
+    if (type.includes(t)) result.push_back(ibr.retrieve_space(t, qns));
   return result;
 }
 
@@ -284,25 +284,25 @@ using Alternatives = container::svector<container::svector<ExprPtr>>;
 /// input γ over the complete space)
 /// @pre if @p bra or @p ket carries protoindices, their common space does not
 ///      reach the active space (see assert_protoindexed_not_active())
-std::optional<Alternatives> split_density(const IndexBasisRegistry &isr,
+std::optional<Alternatives> split_density(const IndexBasisRegistry &ibr,
                                           IndexFactory &idxfac,
                                           const Index &bra, const Index &ket,
                                           bool is_gamma) {
-  const auto &common = isr.intersection(bra.space(), ket.space());
-  assert_protoindexed_not_active(isr, common, bra, ket);
-  const auto parts = space_parts(isr, bra.space().qns());
+  const auto &common = ibr.intersection(bra.space(), ket.space());
+  assert_protoindexed_not_active(ibr, common, bra, ket);
+  const auto parts = space_parts(ibr, bra.space().qns());
   if (parts.active.includes(bra.space().type()) &&
       parts.active.includes(ket.space().type()))
     return std::nullopt;
   const auto inactive = is_gamma ? parts.core : parts.virt;
   Alternatives result;
   for (const auto &sp : registered_pieces(
-           isr, common.type().intersection(inactive), common.qns())) {
+           ibr, common.type().intersection(inactive), common.qns())) {
     const auto d = make_in_basis_of(idxfac, sp, bra);
     result.push_back({make_kronecker(bra, d), make_identity(d, ket)});
   }
   if (const auto active = common.type().intersection(parts.active)) {
-    const auto &sp = isr.retrieve_space(active, common.qns());
+    const auto &sp = ibr.retrieve_space(active, common.qns());
     const auto b = idxfac.make(sp);
     const auto k = idxfac.make(sp);
     result.push_back(
@@ -317,7 +317,7 @@ std::optional<Alternatives> split_density(const IndexBasisRegistry &isr,
 /// @p full, pure core or pure virtual; each is the projected NormalOperator
 /// preceded by the δs binding projected indices to the original ones
 template <Statistics S>
-Alternatives split_survivors(const IndexBasisRegistry &isr,
+Alternatives split_survivors(const IndexBasisRegistry &ibr,
                              IndexFactory &idxfac, const NormalOperator<S> &nop,
                              bool full) {
   // the projections so far: their ops and the δs they need
@@ -328,7 +328,7 @@ Alternatives split_survivors(const IndexBasisRegistry &isr,
     const Index &idx = op.index();
     const auto type = idx.space().type();
     const auto qns = idx.space().qns();
-    const auto parts = space_parts(isr, qns);
+    const auto parts = space_parts(ibr, qns);
     container::svector<IndexSpace::Type> allowed{parts.active};
     if (!full) allowed.insert(allowed.end(), {parts.core, parts.virt});
     const bool keep = std::any_of(allowed.begin(), allowed.end(),
@@ -336,7 +336,7 @@ Alternatives split_survivors(const IndexBasisRegistry &isr,
     container::svector<IndexSpace> targets;
     if (!keep)
       for (const auto &t : allowed)
-        for (const auto &sp : registered_pieces(isr, type.intersection(t), qns))
+        for (const auto &sp : registered_pieces(ibr, type.intersection(t), qns))
           targets.push_back(sp);
     decltype(partials) next;
     for (const auto &[ops, deltas] : partials) {
@@ -369,7 +369,7 @@ Alternatives split_survivors(const IndexBasisRegistry &isr,
 /// @return the rewritten term as a list of Products
 template <Statistics S>
 container::svector<std::shared_ptr<Product>> split_mixed_spaces(
-    const ExprPtr &term, const IndexBasisRegistry &isr, bool full) {
+    const ExprPtr &term, const IndexBasisRegistry &ibr, bool full) {
   const auto product =
       term->is<Product>()
           ? std::static_pointer_cast<Product>(term->clone().as_shared_ptr())
@@ -385,10 +385,10 @@ container::svector<std::shared_ptr<Product>> split_mixed_spaces(
       if ((is_gamma || t.label() == density::hole_rdm_label()) &&
           t.bra_rank() == 1 && t.ket_rank() == 1)
         alternatives =
-            split_density(isr, idxfac, t.bra()[0], t.ket()[0], is_gamma);
+            split_density(ibr, idxfac, t.bra()[0], t.ket()[0], is_gamma);
     } else if (f->is<NormalOperator<S>>()) {
       alternatives =
-          split_survivors<S>(isr, idxfac, f->as<NormalOperator<S>>(), full);
+          split_survivors<S>(ibr, idxfac, f->as<NormalOperator<S>>(), full);
     }
     if (!alternatives) {
       for (auto &p : partials) p->append(1, f);
@@ -575,7 +575,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
                       WickTheorem<S> &stats_sink) {
   const auto &ctx = get_default_context(S);
   SEQUANT_ASSERT(ctx.vacuum() == Vacuum::MultiProduct);
-  const auto &isr = *ctx.index_basis_registry();
+  const auto &ibr = *ctx.index_basis_registry();
 
   // provenance is per input term
   auto per_term = [&](ExprPtr term) -> ExprPtr {
@@ -681,7 +681,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
                         .copy_and_set(fixed_indices));
           });
       for (const auto &p :
-           split_mixed_spaces<S>(ex<Product>(ExprPtrList{prefactor, t}), isr,
+           split_mixed_spaces<S>(ex<Product>(ExprPtrList{prefactor, t}), ibr,
                                  opts.full_contractions)) {
         ExprPtr reduced = p;
         WickTheorem<S> reducer{reduced};

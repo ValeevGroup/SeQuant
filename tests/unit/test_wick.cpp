@@ -153,32 +153,32 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       ctx.set(mbpt::make_mr_spaces());
       ctx.set(Vacuum::MultiProduct);
       auto ctx_resetter = set_scoped_default_context(ctx);
-      const auto isr = ctx.index_basis_registry();
+      const auto ibr = ctx.index_basis_registry();
       const auto MP = Vacuum::MultiProduct;
 
       // core behaves as in SingleProduct
-      REQUIRE(is_pure_qpannihilator(fcre(L"i_1"), MP, isr));
-      REQUIRE(!is_qpcreator(fcre(L"i_1"), MP, isr));
-      REQUIRE(is_pure_qpcreator(fann(L"i_1"), MP, isr));
-      REQUIRE(!is_qpannihilator(fann(L"i_1"), MP, isr));
+      REQUIRE(is_pure_qpannihilator(fcre(L"i_1"), MP, ibr));
+      REQUIRE(!is_qpcreator(fcre(L"i_1"), MP, ibr));
+      REQUIRE(is_pure_qpcreator(fann(L"i_1"), MP, ibr));
+      REQUIRE(!is_qpannihilator(fann(L"i_1"), MP, ibr));
       // virtual behaves as in SingleProduct
-      REQUIRE(is_pure_qpcreator(fcre(L"a_1"), MP, isr));
-      REQUIRE(!is_qpannihilator(fcre(L"a_1"), MP, isr));
-      REQUIRE(is_pure_qpannihilator(fann(L"a_1"), MP, isr));
-      REQUIRE(!is_qpcreator(fann(L"a_1"), MP, isr));
+      REQUIRE(is_pure_qpcreator(fcre(L"a_1"), MP, ibr));
+      REQUIRE(!is_qpannihilator(fcre(L"a_1"), MP, ibr));
+      REQUIRE(is_pure_qpannihilator(fann(L"a_1"), MP, ibr));
+      REQUIRE(!is_qpcreator(fann(L"a_1"), MP, ibr));
       // active is both
-      REQUIRE(is_pure_qpcreator(fcre(L"u_1"), MP, isr));
-      REQUIRE(is_pure_qpannihilator(fcre(L"u_1"), MP, isr));
-      REQUIRE(is_pure_qpcreator(fann(L"u_1"), MP, isr));
-      REQUIRE(is_pure_qpannihilator(fann(L"u_1"), MP, isr));
+      REQUIRE(is_pure_qpcreator(fcre(L"u_1"), MP, ibr));
+      REQUIRE(is_pure_qpannihilator(fcre(L"u_1"), MP, ibr));
+      REQUIRE(is_pure_qpcreator(fann(L"u_1"), MP, ibr));
+      REQUIRE(is_pure_qpannihilator(fann(L"u_1"), MP, ibr));
       // general p: both, but not pure
-      REQUIRE(is_qpcreator(fcre(L"p_1"), MP, isr));
-      REQUIRE(!is_pure_qpcreator(fcre(L"p_1"), MP, isr));
+      REQUIRE(is_qpcreator(fcre(L"p_1"), MP, ibr));
+      REQUIRE(!is_pure_qpcreator(fcre(L"p_1"), MP, ibr));
       const auto p_qns = fcre(L"p_1").index().space().qns();
-      REQUIRE(qpcreator_space(fcre(L"p_1"), MP, isr) ==
-              isr->vacuum_unoccupied_space(p_qns));
-      REQUIRE(qpannihilator_space(fcre(L"p_1"), MP, isr) ==
-              isr->reference_occupied_space(p_qns));
+      REQUIRE(qpcreator_space(fcre(L"p_1"), MP, ibr) ==
+              ibr->vacuum_unoccupied_space(p_qns));
+      REQUIRE(qpannihilator_space(fcre(L"p_1"), MP, ibr) ==
+              ibr->reference_occupied_space(p_qns));
 
       // contractions: only cre·ann over R and ann·cre over U
       REQUIRE(FWickTheorem::can_contract(fcre(L"i_1"), fann(L"i_2"), MP));
@@ -1389,7 +1389,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
   // is the only occurrence of a dummy index it is the sum over it, i.e. the
   // extent of its space, and stands
   SECTION("self-delta on a dummy index") {
-    const auto& isr = get_default_context().index_basis_registry();
+    const auto& ibr = get_default_context().index_basis_registry();
     auto self_deltas = [](const ExprPtr& expr) {
       container::svector<Tensor> result;
       expr->visit(
@@ -1413,7 +1413,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(!result->is<Constant>());
     auto deltas = self_deltas(result);
     REQUIRE(deltas.size() == 1);
-    REQUIRE(isr->is_pure_unoccupied(deltas[0].bra()[0].space()));
+    REQUIRE(ibr->is_pure_unoccupied(deltas[0].bra()[0].space()));
 
     // the occupation of a named orbital is 1
     auto occupation = ex<FNOperator>(cre({L"i_1"}), ann({})) *
@@ -1428,7 +1428,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     result = FWickTheorem{occupation}.compute();
     deltas = self_deltas(result);
     REQUIRE(deltas.size() == 1);
-    REQUIRE(isr->is_pure_occupied(deltas[0].bra()[0].space()));
+    REQUIRE(ibr->is_pure_occupied(deltas[0].bra()[0].space()));
 
     // a dummy bound by a tensor: the trace of f over the unoccupied orbitals,
     // with no delta left
@@ -1440,7 +1440,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     const auto f_indices = get_used_indices_with_counts(result);
     REQUIRE(f_indices.size() == 1);
     REQUIRE(f_indices.begin()->second.nonproto() == 2);
-    REQUIRE(isr->is_pure_unoccupied(f_indices.begin()->first.space()));
+    REQUIRE(ibr->is_pure_unoccupied(f_indices.begin()->first.space()));
 
     // a dummy bound only as a protoindex: the occupation is 1 for each i_1
     // that t's indices depend on, with no delta left

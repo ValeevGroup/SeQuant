@@ -277,12 +277,12 @@ class Context {
   /// \return ref to `*this`, for chaining
   Context& set(Vacuum vacuum);
   /// sets the IndexBasisRegistry for this context
-  /// \param ISR an IndexBasisRegistry, moved into this context
+  /// \param IBR an IndexBasisRegistry, moved into this context
   /// \return ref to '*this' for chaining
   /// \sa the warning of set(std::shared_ptr<const IndexBasisRegistry>)
-  Context& set(IndexBasisRegistry ISR);
+  Context& set(IndexBasisRegistry IBR);
   /// sets the IndexBasisRegistry for this context
-  /// \param ISR a IndexBasisRegistry shared_ptr; adopted if it is the only
+  /// \param IBR a IndexBasisRegistry shared_ptr; adopted if it is the only
   /// owner of its object (e.g. a temporary or a moved-from shared_ptr), else
   /// the object is copied
   /// \return ref to '*this' for chaining
@@ -293,7 +293,7 @@ class Context {
   /// shared_ptr that does not own it (e.g. one with a no-op deleter), which
   /// cannot be told from its only owner. Modifying the registry through any
   /// of these goes unnoticed by the contexts that hold it.
-  Context& set(std::shared_ptr<const IndexBasisRegistry> ISR);
+  Context& set(std::shared_ptr<const IndexBasisRegistry> IBR);
   /// Sets the bra-ket strict assertion flag for this context, convenient for chaining
   /// \param assert_strict_braket_symmetry AssertStrictBraKetSymmetry
   /// \return ref to `*this`, for chaining

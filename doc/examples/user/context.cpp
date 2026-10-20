@@ -51,8 +51,8 @@ int main() {
   // the space's own basis; one made from an IndexBasis with a basis instance
   // runs over that basis of the space. The instance is written after the
   // proto indices: i_1<;1>
-  const auto& isr = get_default_context().index_basis_registry();
-  const IndexSpace occ = isr->retrieve_space(L"i");
+  const auto& ibr = get_default_context().index_basis_registry();
+  const IndexSpace occ = ibr->retrieve_space(L"i");
   const Index i_canonical(occ, 1);
   const Index i_localized(IndexBasis(occ, 1), 1);
   SEQUANT_ASSERT(i_canonical.space() == i_localized.space());
@@ -64,13 +64,13 @@ int main() {
   // amplitudes OpMaker builds, and the projectors of the equations solved for
   // them, carry it
   auto granted_registry = mbpt::make_legacy_registry();
-  granted_registry->grant_basis(L"t", isr->retrieve_space(L"a"), 1);
+  granted_registry->grant_basis(L"t", ibr->retrieve_space(L"a"), 1);
   auto grant_resetter = mbpt::set_scoped_default_mbpt_context(
       {.op_registry_ptr = granted_registry});
   const ExprPtr t1 = mbpt::op::tensor::t(1);
   for (const Index& idx : get_used_indices(t1))
     SEQUANT_ASSERT(idx.basis().basis_instance() ==
-                   (isr->is_pure_unoccupied(idx.space())
+                   (ibr->is_pure_unoccupied(idx.space())
                         ? IndexBasis::optional_instance{1}
                         : IndexBasis::optional_instance{}));
   // end-snippet-6

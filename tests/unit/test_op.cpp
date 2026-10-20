@@ -279,17 +279,17 @@ TEST_CASE("op", "[elements]") {
       REQUIRE(!is_pure_qpannihilator(fann(L"i_1"), V));
       REQUIRE(is_pure_qpannihilator(fann(L"a_1"), V));
       REQUIRE(!is_pure_qpannihilator(fann(L"p_1"), V));
-      auto isr = get_default_context().index_basis_registry();
+      auto ibr = get_default_context().index_basis_registry();
       REQUIRE(!qpannihilator_space(fann(L"i_1"), V));
       REQUIRE(qpannihilator_space(fcre(L"i_1"), V) ==
-              isr->retrieve_space(L"i_1"));
+              ibr->retrieve_space(L"i_1"));
       REQUIRE(!qpannihilator_space(fcre(L"a_1"), V));
       REQUIRE(qpannihilator_space(fann(L"a_1"), V) ==
-              isr->retrieve_space(L"a_1"));
+              ibr->retrieve_space(L"a_1"));
       REQUIRE(qpannihilator_space(fcre(L"p_1"), V) ==
-              isr->retrieve_space(L"m_1"));
+              ibr->retrieve_space(L"m_1"));
       REQUIRE(qpannihilator_space(fann(L"p_1"), V) ==
-              isr->retrieve_space(L"e_1"));
+              ibr->retrieve_space(L"e_1"));
     }
     {
       constexpr const Vacuum V = Vacuum::Physical;
@@ -330,19 +330,19 @@ TEST_CASE("op", "[elements]") {
       // types, so a
       // space whose intersection with M or E is not registered (Z ∩ E here)
       // is classified rather than throwing
-      auto isr = std::make_shared<IndexBasisRegistry>();
-      isr->add(L"o", 0b00001)
+      auto ibr = std::make_shared<IndexBasisRegistry>();
+      ibr->add(L"o", 0b00001)
           .add(L"i", 0b00010)
           .add(L"u", 0b00100)
           .add(L"a", 0b01000)
           .add(L"g", 0b10000)
-          .add_union(L"O", {L"o", L"i"}, is_vacuum_occupied)
-          .add_union(L"M", {L"o", L"i", L"u"}, is_reference_occupied)
+          .add_union(L"O", {L"o", L"i"}, {.vacuum_occupied = true})
+          .add_union(L"M", {L"o", L"i", L"u"}, {.reference_occupied = true})
           .add_union(L"E", {L"u", L"a", L"g"})
           .add_union(L"Z", {L"i", L"u", L"a"})
-          .add_union(L"p", {L"M", L"E"}, is_complete);
+          .add_union(L"p", {L"M", L"E"}, {.complete = true});
       auto ctx = get_default_context();
-      ctx.set(isr);
+      ctx.set(ibr);
       ctx.set(Vacuum::MultiProduct);
       auto resetter = set_scoped_default_context(ctx);
       constexpr const Vacuum V = Vacuum::MultiProduct;
@@ -379,15 +379,15 @@ TEST_CASE("op", "[elements]") {
       REQUIRE(!pure_qpcre);
       REQUIRE(!pure_qpann);
 
-      REQUIRE(qpcreator_space(fcre(L"u_1"), V) == isr->retrieve_space(L"u"));
+      REQUIRE(qpcreator_space(fcre(L"u_1"), V) == ibr->retrieve_space(L"u"));
       REQUIRE(qpannihilator_space(fcre(L"u_1"), V) ==
-              isr->retrieve_space(L"u"));
-      REQUIRE(qpcreator_space(fcre(L"p_1"), V) == isr->retrieve_space(L"E"));
+              ibr->retrieve_space(L"u"));
+      REQUIRE(qpcreator_space(fcre(L"p_1"), V) == ibr->retrieve_space(L"E"));
       REQUIRE(qpannihilator_space(fcre(L"p_1"), V) ==
-              isr->retrieve_space(L"M"));
-      REQUIRE(qpcreator_space(fann(L"p_1"), V) == isr->retrieve_space(L"M"));
+              ibr->retrieve_space(L"M"));
+      REQUIRE(qpcreator_space(fann(L"p_1"), V) == ibr->retrieve_space(L"M"));
       REQUIRE(qpannihilator_space(fann(L"p_1"), V) ==
-              isr->retrieve_space(L"E"));
+              ibr->retrieve_space(L"E"));
     }
   }
 

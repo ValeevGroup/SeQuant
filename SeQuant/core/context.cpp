@@ -569,14 +569,14 @@ Context& Context::set(Vacuum vacuum) {
   return *this;
 }
 
-Context& Context::set(IndexBasisRegistry ISR) {
-  idx_basis_reg_ = std::make_shared<const IndexBasisRegistry>(std::move(ISR));
+Context& Context::set(IndexBasisRegistry IBR) {
+  idx_basis_reg_ = std::make_shared<const IndexBasisRegistry>(std::move(IBR));
   invalidate_version();
   return *this;
 }
 
-Context& Context::set(std::shared_ptr<const IndexBasisRegistry> ISR) {
-  idx_basis_reg_ = owned(std::move(ISR));
+Context& Context::set(std::shared_ptr<const IndexBasisRegistry> IBR) {
+  idx_basis_reg_ = owned(std::move(IBR));
   invalidate_version();
   return *this;
 }

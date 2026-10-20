@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -40,6 +41,9 @@
 
 namespace sequant {
 
+/// the role tags of the deprecated argument-list spellings of
+/// IndexBasisRegistry::add() and its kin; deprecated with them, an
+/// IndexSpaceSpec names the roles
 inline namespace space_tags {
 struct IsVacuumOccupied {};
 struct IsReferenceOccupied {};
@@ -47,13 +51,108 @@ struct IsComplete {};
 struct IsHole {};
 struct IsParticle {};
 
-constexpr auto is_vacuum_occupied = IsVacuumOccupied{};
-constexpr auto is_reference_occupied = IsReferenceOccupied{};
-constexpr auto is_complete = IsComplete{};
-constexpr auto is_hole = IsHole{};
-constexpr auto is_particle = IsParticle{};
+[[deprecated("use IndexSpaceSpec{.vacuum_occupied = true}")]] constexpr auto
+    is_vacuum_occupied = IsVacuumOccupied{};
+[[deprecated("use IndexSpaceSpec{.reference_occupied = true}")]] constexpr auto
+    is_reference_occupied = IsReferenceOccupied{};
+[[deprecated(
+    "use IndexSpaceSpec{.complete = true}")]] constexpr auto is_complete =
+    IsComplete{};
+[[deprecated("use IndexSpaceSpec{.hole = true}")]] constexpr auto is_hole =
+    IsHole{};
+[[deprecated(
+    "use IndexSpaceSpec{.particle = true}")]] constexpr auto is_particle =
+    IsParticle{};
 
 }  // namespace space_tags
+
+/// the space_tags: what the argument-list spellings of
+/// IndexBasisRegistry::add_unIon() and IndexBasisRegistry::add_intersection()
+/// accept
+template <typename T>
+concept index_space_role_tag =
+    std::same_as<std::remove_cvref_t<T>, space_tags::IsVacuumOccupied> ||
+    std::same_as<std::remove_cvref_t<T>, space_tags::IsReferenceOccupied> ||
+    std::same_as<std::remove_cvref_t<T>, space_tags::IsComplete> ||
+    std::same_as<std::remove_cvref_t<T>, space_tags::IsHole> ||
+    std::same_as<std::remove_cvref_t<T>, space_tags::IsParticle>;
+
+/// an integer that stands for a dimension or an extent: integral, but neither
+/// a bool nor a character
+template <typename T>
+concept index_space_extent =
+    std::integral<std::remove_cvref_t<T>> &&
+    !std::same_as<std::remove_cvref_t<T>, bool> &&
+    !std::same_as<std::remove_cvref_t<T>, char> &&
+    !std::same_as<std::remove_cvref_t<T>, signed char> &&
+    !std::same_as<std::remove_cvref_t<T>, unsigned char> &&
+    !std::same_as<std::remove_cvref_t<T>, wchar_t> &&
+    !std::same_as<std::remove_cvref_t<T>, char8_t> &&
+    !std::same_as<std::remove_cvref_t<T>, char16_t> &&
+    !std::same_as<std::remove_cvref_t<T>, char32_t>;
+
+/// the types the argument-list spelling of IndexBasisRegistry::add() accepts:
+/// an integral dimension, an IndexSpace::QuantumNumbers, a Field and the
+/// space_tags
+template <typename T>
+concept index_space_argument =
+    index_space_extent<T> ||
+    std::same_as<std::remove_cvref_t<T>, IndexSpace::QuantumNumbers> ||
+    std::same_as<std::remove_cvref_t<T>, Field> || index_space_role_tag<T>;
+
+/// @brief what IndexBasisRegistry::add(label, type, spec) registers a space
+/// with besides its label and type: each member is given by name, and each
+/// is optional; the dimension comes first, so that a bare number in a brace
+/// list is the dimension, as in the argument-list spelling
+struct IndexSpaceSpec {
+  /// the dimension of the space; 10, the default of the IndexSpace ctor, if
+  /// not given
+  /// @pre non-negative
+  std::optional<std::int64_t> dimension = {};
+  /// the quantum numbers of the space; none if not given
+  std::optional<IndexSpace::QuantumNumbers> qns = {};
+  /// the scalar field of the space's own basis; Field::Complex, the default
+  /// of the IndexSpace ctor, if not given
+  std::optional<Field> field = {};
+  /// @name roles
+  /// whether the space is the registry's vacuum-occupied, reference-occupied,
+  /// complete, hole or particle space (see
+  /// IndexBasisRegistry::vacuum_occupied_space() and its kin)
+  /// @{
+  bool vacuum_occupied = false;
+  bool reference_occupied = false;
+  bool complete = false;
+  bool hole = false;
+  bool particle = false;
+  /// @}
+};
+
+/// @brief what IndexBasisRegistry::add(label, space, instance, spec)
+/// registers a named basis instance with besides its label, space and
+/// instance: each member is given by name, and each is optional
+struct IndexBasisSpec {
+  /// a label given in a spec: any string type (see basic_string_convertible),
+  /// kept as the registry keeps labels
+  struct Label {
+    std::wstring value;
+    template <basic_string_convertible S>
+    Label(S&& label) : value(toUtf16(std::forward<S>(label))) {}
+  };
+
+  /// the number of functions in the basis; if not given, the dimension of its
+  /// space, now and whenever that changes (see IndexBasis::own_extent())
+  /// @pre non-negative
+  std::optional<std::int64_t> extent = {};
+  /// whether the basis is orthonormal; IndexBasisMetric::Unit if not given
+  std::optional<IndexBasisMetric> metric = {};
+  /// the scalar field of the basis; if not given, that of its space's own
+  /// basis, now and whenever that changes (see IndexBasis::own_field())
+  std::optional<Field> field = {};
+  /// the label of the named basis instance to follow (see
+  /// IndexBasisRegistry::follow()), whose extent, metric and field the basis
+  /// then mirrors; excludes the three members above
+  std::optional<Label> follows = {};
+};
 
 // clang-format off
 /// @brief set of known IndexSpace objects and named basis instances
@@ -99,6 +198,13 @@ constexpr auto is_particle = IsParticle{};
 /// - IndexBasisRegistry::particle_space and IndexBasisRegistry::hole_space specify in which space particles/holes
 /// can be created successfully from the reference state; this is a
 /// convenience for making operators
+///
+/// A reference or pointer returned by a lookup (IndexBasisRegistry::retrieve,
+/// IndexBasisRegistry::retrieve_space, their `_ptr` forms, the role-space
+/// getters, IndexBasisRegistry::unIon and IndexBasisRegistry::intersection)
+/// points into the table and stays valid until the next registration or
+/// removal; a registry owned by a Context is immutable, so a reference into
+/// it never dangles.
 // clang-format on
 class IndexBasisRegistry {
  public:
@@ -599,55 +705,65 @@ class IndexBasisRegistry {
   /// @param type_label a label that will denote the space type,
   ///                   must be convertible to a std::string
   /// @param type an IndexSpace::Type
-  /// @param args optional arguments consisting of a mix of zero or more of
-  /// the following:
+  /// @param spec the rest of the space, by name (see IndexSpaceSpec), e.g.
+  /// `add(L"i", 0b01, {.qns = Spin::any, .vacuum_occupied = true})`
+  /// @return reference to `this`
+  /// @throw Exception if `type_label` or `type` matches
+  /// an already registered IndexSpace, or if @p spec carries a negative
+  /// dimension
+  template <basic_string_convertible S>
+  IndexBasisRegistry& add(S&& type_label, IndexSpace::Type type,
+                          const IndexSpaceSpec& spec = {}) {
+    IndexSpace space(std::forward<S>(type_label), type,
+                     spec.qns.value_or(IndexSpace::QuantumNumbers{}));
+    if (spec.dimension) {
+      if (*spec.dimension < 0)
+        throw Exception("IndexBasisRegistry::add: the dimension of '" +
+                        toUtf8(space.base_key()) + "' must not be negative");
+      space.dimension(*spec.dimension);
+    }
+    if (spec.field) space.field(*spec.field);
+    this->add(space);
+    set_roles(spec, space.type());
+
+    return clear_memoized_data_and_return_this();
+  }
+
+  /// @overload
+  /// @param args one or more of the following, in any order, at most one of
+  /// each:
   ///   - IndexSpace::QuantumNumbers
   ///   - dimension of the space (an integer)
   ///   - any of { is_vacuum_occupied , is_reference_occupied , is_complete ,
   ///   is_hole , is_particle }
-  /// @return reference to `this`
-  /// @throw Exception if `type_label` or `type` matches
-  /// an already registered IndexSpace
+  /// @note same as `add(type_label, type, spec)` with @p args gathered into
+  /// an IndexSpaceSpec
   template <basic_string_convertible S, typename... OptionalArgs>
-  IndexBasisRegistry& add(S&& type_label, IndexSpace::Type type,
-                          OptionalArgs&&... args) {
-    auto h_args = boost::hana::make_tuple(args...);
+    requires(sizeof...(OptionalArgs) > 0 &&
+             (index_space_argument<OptionalArgs> && ...))
+  [[deprecated(
+      "give the arguments by name in an IndexSpaceSpec")]] IndexBasisRegistry&
+  add(S&& type_label, IndexSpace::Type type, OptionalArgs&&... args) {
+    return this->add(std::forward<S>(type_label), type,
+                     parse_space_spec(args...));
+  }
 
-    // process IndexSpace::QuantumNumbers, set to default if not given
-    auto h_qns = boost::hana::filter(h_args, [](auto arg) {
-      return boost::hana::type_c<decltype(arg)> ==
-             boost::hana::type_c<IndexSpace::QuantumNumbers>;
-    });
-    constexpr auto nqns = boost::hana::size(h_qns);
-    static_assert(
-        nqns == boost::hana::size_c<0> || nqns == boost::hana::size_c<1>,
-        "IndexBasisRegistry::add: only one IndexSpace::QuantumNumbers argument "
-        "is allowed");
-    constexpr auto have_qns = nqns == boost::hana::size_c<1>;
-    IndexSpace::QuantumNumbers qns;
-    if constexpr (have_qns) {
-      qns = boost::hana::at_c<0>(h_qns);
-    }
-
-    // process dimension and Field, set to defaults if not given
-    const auto [extent, field] = parse_extent_and_field(args...);
-
-    // make space
-    IndexSpace space(std::forward<S>(type_label), type, qns,
-                     extent.value_or(10), field.value_or(Field::Complex));
-    this->add(space);
-
-    // process attribute tags
-    auto h_attributes = boost::hana::filter(h_args, [](auto arg) {
-      return !boost::hana::traits::is_integral(
-                 boost::hana::type_c<decltype(arg)>) &&
-             boost::hana::type_c<decltype(arg)> !=
-                 boost::hana::type_c<IndexSpace::QuantumNumbers> &&
-             boost::hana::type_c<decltype(arg)> != boost::hana::type_c<Field>;
-    });
-    process_attribute_tags(h_attributes, type);
-
-    return clear_memoized_data_and_return_this();
+  /// @overload
+  /// @note does not compile: @p args holds what neither spelling takes (e.g.
+  /// a Spin enumerator in place of an IndexSpace::QuantumNumbers), so the
+  /// diagnostic points to the spec spelling
+  template <basic_string_convertible S, typename... Args>
+    requires(sizeof...(Args) > 0 && !(index_space_argument<Args> && ...) &&
+             !(sizeof...(Args) == 1 &&
+               (std::same_as<std::remove_cvref_t<Args>, IndexSpaceSpec> &&
+                ...)))
+  IndexBasisRegistry& add(S&&, IndexSpace::Type, Args&&...) {
+    static_assert((meta::always_false<Args>::value && ...),
+                  "IndexBasisRegistry::add(label, type, ...): give the "
+                  "quantum numbers, dimension, field and roles by name in an "
+                  "IndexSpaceSpec, e.g. add(L\"i\", 0b01, {.qns = Spin::any, "
+                  ".vacuum_occupied = true})");
+    return *this;
   }
 
   /// @brief registers a basis instance of a registered space under its own
@@ -656,72 +772,60 @@ class IndexBasisRegistry {
   /// key (see io::serialization::v1::is_base_key()): letters, ⁺, ⁻,
   /// combining diacritics, arrows and primes, so no digits or `_`, which an
   /// index label reserves for the ordinal
-  /// @param basis an IndexBasis with a basis instance whose space is
-  /// registered; the entry is named @p label whatever @p basis is named
-  /// @param args optional arguments consisting of a mix of zero or one of
-  /// each of the following, each defaulting to what @p basis carries (for a
-  /// basis built from a space and an instance: the dimension of the space,
-  /// IndexBasisMetric::Unit and the field of the space's own basis):
-  ///   - extent of the basis (an integer)
-  ///   - IndexBasisMetric
-  ///   - Field
+  /// @param space a registered space; the entry is its basis instance
+  /// @p basis_instance, named @p label
+  /// @param basis_instance the basis instance
+  /// @param spec the metadata of the basis, by name (see IndexBasisSpec),
+  /// e.g. `add(L"μ̃", L"a", 1, {.metric = IndexBasisMetric::General})`
   /// @return reference to `this`
   /// @throw Exception if @p label is not a valid label or is already
-  /// registered, if @p basis has no basis instance, if its space is not
-  /// registered, or if @p basis is already named
-  template <basic_string_convertible S, typename... Args>
-  IndexBasisRegistry& add(S&& label, const IndexBasis& basis, Args&&... args) {
-    auto h_args = boost::hana::make_tuple(args...);
-    auto h_tags = boost::hana::filter(h_args, [](auto arg) {
-      return !boost::hana::traits::is_integral(
-                 boost::hana::type_c<decltype(arg)>) &&
-             boost::hana::type_c<decltype(arg)> != boost::hana::type_c<Field> &&
-             boost::hana::type_c<decltype(arg)> !=
-                 boost::hana::type_c<IndexBasisMetric>;
-    });
-    static_assert(boost::hana::size(h_tags) == boost::hana::size_c<0>,
-                  "IndexBasisRegistry::add(label, basis): attribute tags are "
-                  "per space; only an integral extent, an IndexBasisMetric "
-                  "and a Field may be given for a basis instance");
-    const auto [extent, field] = parse_extent_and_field(args...);
-    auto h_metric = boost::hana::filter(h_args, [](auto arg) {
-      return boost::hana::type_c<decltype(arg)> ==
-             boost::hana::type_c<IndexBasisMetric>;
-    });
-    constexpr auto nmetrics = boost::hana::size(h_metric);
-    static_assert(
-        nmetrics == boost::hana::size_c<0> ||
-            nmetrics == boost::hana::size_c<1>,
-        "IndexBasisRegistry::add(label, basis): only one IndexBasisMetric "
-        "argument is allowed");
-    IndexBasisMetric metric = basis.metric_;
-    if constexpr (nmetrics == boost::hana::size_c<1>) {
-      metric = boost::hana::at_c<0>(h_metric);
-    }
+  /// registered, if @p space is not registered, if its instance
+  /// @p basis_instance is already named, if @p spec carries a negative
+  /// extent, if it names an entry to follow and also carries an extent, a
+  /// metric or a field, or if that entry cannot be followed (see follow());
+  /// the registry is then left untouched
+  template <basic_string_convertible S>
+  IndexBasisRegistry& add(S&& label, const IndexSpace& space,
+                          IndexBasis::instance_type basis_instance,
+                          const IndexBasisSpec& spec = {}) {
+    constexpr const char* caller =
+        "IndexBasisRegistry::add(label, space, instance)";
     std::wstring key = toUtf16(std::forward<S>(label));
-    if (!basis.has_basis_instance())
-      throw Exception("IndexBasisRegistry::add(label, basis): '" + toUtf8(key) +
-                      "' needs a basis instance; register a space with "
-                      "add(IndexSpace)");
-    validate_label(key, "IndexBasisRegistry::add(label, basis)");
-    if (bases_.contains(key))
-      throw Exception("IndexBasisRegistry::add(label, basis): label '" +
-                      toUtf8(key) + "' is already registered");
-    const auto* space =
-        retrieve_space_ptr(basis.space().type(), basis.space().qns());
-    if (!space || *space != basis.space())
-      throw Exception("IndexBasisRegistry::add(label, basis): the space of '" +
-                      toUtf8(key) + "' is not registered");
-    if (auto taken = basis_label(basis))
-      throw Exception("IndexBasisRegistry::add(label, basis): the basis of '" +
-                      toUtf8(key) + "' is already named '" + toUtf8(*taken) +
-                      "'");
-    IndexBasis named{*space, basis.basis_instance(),
-                     key,    extent ? extent : basis.extent_,
-                     metric, field ? field : basis.field_};
-    bases_.emplace(std::move(key), std::move(named));
-    ++named_count_;
-    return clear_memoized_data_and_return_this();
+    if (spec.extent && *spec.extent < 0)
+      throw Exception(std::string(caller) + ": the extent of '" + toUtf8(key) +
+                      "' must not be negative");
+    if (spec.follows && (spec.extent || spec.metric || spec.field))
+      throw Exception(std::string(caller) + ": '" + toUtf8(key) +
+                      "' follows '" + toUtf8(spec.follows->value) +
+                      "', whose extent, metric and field it mirrors, so it "
+                      "cannot be given its own");
+    emplace_named(
+        key, space, basis_instance,
+        spec.extent ? std::optional<std::size_t>(*spec.extent) : std::nullopt,
+        spec.metric.value_or(IndexBasisMetric::Unit), spec.field, caller);
+    if (spec.follows) {
+      try {
+        follow(key, spec.follows->value);
+      } catch (...) {
+        remove(key);
+        throw;
+      }
+    }
+    return *this;
+  }
+
+  /// @overload
+  /// @param space_label the label of a registered space
+  /// @throw not_a_space if @p space_label is that of a named basis instance
+  /// @throw IndexBasis::bad_key if nothing is registered under
+  /// @p space_label
+  template <basic_string_convertible S1, basic_string_convertible S2>
+  IndexBasisRegistry& add(S1&& label, S2&& space_label,
+                          IndexBasis::instance_type basis_instance,
+                          const IndexBasisSpec& spec = {}) {
+    // by value: the registration reallocates the table
+    const IndexSpace space = retrieve_space(std::forward<S2>(space_label));
+    return add(std::forward<S1>(label), space, basis_instance, spec);
   }
 
   /// @brief add a union of IndexSpace objects to this registry.
@@ -729,18 +833,17 @@ class IndexBasisRegistry {
   ///                   must be convertible to a std::string
   /// @param components sequence of IndexSpace objects or labels (known to this)
   /// whose union will be known by @p type_label
-  /// @param args optional arguments consisting of a mix of zero or more of
-  /// { is_vacuum_occupied , is_reference_occupied , is_complete , is_hole ,
-  /// is_particle }
+  /// @param spec the roles of the space, by name (see IndexSpaceSpec); the
+  /// qns, dimension and field of a union are computed from @p components,
+  /// so @p spec may not carry them
   /// @return reference to `this`
-  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
-            typename... OptionalArgs>
+  /// @throw Exception if @p spec carries a qns, a dimension or a field
+  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel>
   IndexBasisRegistry& add_unIon(
       S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
-      OptionalArgs&&... args) {
+      const IndexSpaceSpec& spec = {}) {
+    require_roles_only(spec, "IndexBasisRegistry::add_unIon");
     SEQUANT_ASSERT(components.size() > 1);
-
-    auto h_args = boost::hana::make_tuple(args...);
 
     // make space
     IndexSpace::Attr space_attr;
@@ -769,47 +872,65 @@ class IndexBasisRegistry {
     IndexSpace space(std::forward<S>(type_label), space_attr.type(),
                      space_attr.qns(), dimension, field);
     this->add(space);
-    auto type = space.type();
-
-    // process attribute tags
-    auto h_attributes = boost::hana::filter(h_args, [](auto arg) {
-      return !boost::hana::traits::is_integral(
-                 boost::hana::type_c<decltype(arg)>) &&
-             boost::hana::type_c<decltype(arg)> !=
-                 boost::hana::type_c<IndexSpace::QuantumNumbers>;
-    });
-    process_attribute_tags(h_attributes, type);
+    set_roles(spec, space.type());
 
     return clear_memoized_data_and_return_this();
   }
 
-  /// alias to add_unIon
+  /// @overload
+  /// @param args one or more of { is_vacuum_occupied , is_reference_occupied ,
+  /// is_complete , is_hole , is_particle }
+  /// @note same as `add_unIon(type_label, components, spec)` with @p args
+  /// gathered into an IndexSpaceSpec
   template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
             typename... OptionalArgs>
-  IndexBasisRegistry& add_union(
-      S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
-      OptionalArgs&&... args) {
+    requires(sizeof...(OptionalArgs) > 0 &&
+             (index_space_role_tag<OptionalArgs> && ...))
+  [[deprecated(
+      "give the roles by name in an IndexSpaceSpec")]] IndexBasisRegistry&
+  add_unIon(S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
+            OptionalArgs&&... args) {
     return this->add_unIon(std::forward<S>(type_label), components,
-                           std::forward<OptionalArgs>(args)...);
+                           parse_space_spec(args...));
   }
 
-  /// @brief add a union of IndexSpace objects to this registry.
+  /// alias to add_unIon
+  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel>
+  IndexBasisRegistry& add_union(
+      S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
+      const IndexSpaceSpec& spec = {}) {
+    return this->add_unIon(std::forward<S>(type_label), components, spec);
+  }
+
+  /// @overload
+  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
+            typename... OptionalArgs>
+    requires(sizeof...(OptionalArgs) > 0 &&
+             (index_space_role_tag<OptionalArgs> && ...))
+  [[deprecated(
+      "give the roles by name in an IndexSpaceSpec")]] IndexBasisRegistry&
+  add_union(S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
+            OptionalArgs&&... args) {
+    return this->add_unIon(std::forward<S>(type_label), components,
+                           parse_space_spec(args...));
+  }
+
+  /// @brief add an intersection of IndexSpace objects to this registry.
   /// @param type_label a label that will denote the space type,
   ///                   must be convertible to a std::string
   /// @param components sequence of IndexSpace objects or labels (known to this)
   /// whose intersection will be known by @p type_label
-  /// @param args optional arguments consisting of a mix of zero or more of
-  /// { is_vacuum_occupied , is_reference_occupied , is_complete , is_hole ,
-  /// is_particle }
+  /// @param spec the roles of the space, by name (see IndexSpaceSpec); the
+  /// qns, dimension and field of an intersection are computed from
+  /// @p components, so @p spec may not carry them
   /// @return reference to `this`
-  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
-            typename... OptionalArgs>
+  /// @throw Exception if @p spec carries a qns, a dimension or a field
+  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel>
   IndexBasisRegistry& add_intersection(
       S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
-      OptionalArgs&&... args) {
+      const IndexSpaceSpec& spec = {}) {
+    require_roles_only(spec, "IndexBasisRegistry::add_intersection");
     SEQUANT_ASSERT(components.size() > 1);
-
-    auto h_args = boost::hana::make_tuple(args...);
 
     // make space
     IndexSpace::Attr space_attr;
@@ -838,18 +959,27 @@ class IndexBasisRegistry {
     IndexSpace space(std::forward<S>(type_label), space_attr.type(),
                      space_attr.qns(), dimension);
     this->add(space);
-    auto type = space.type();
-
-    // process attribute tags
-    auto h_attributes = boost::hana::filter(h_args, [](auto arg) {
-      return !boost::hana::traits::is_integral(
-                 boost::hana::type_c<decltype(arg)>) &&
-             boost::hana::type_c<decltype(arg)> !=
-                 boost::hana::type_c<IndexSpace::QuantumNumbers>;
-    });
-    process_attribute_tags(h_attributes, type);
+    set_roles(spec, space.type());
 
     return clear_memoized_data_and_return_this();
+  }
+
+  /// @overload
+  /// @param args one or more of { is_vacuum_occupied , is_reference_occupied ,
+  /// is_complete , is_hole , is_particle }
+  /// @note same as `add_intersection(type_label, components, spec)` with
+  /// @p args gathered into an IndexSpaceSpec
+  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
+            typename... OptionalArgs>
+    requires(sizeof...(OptionalArgs) > 0 &&
+             (index_space_role_tag<OptionalArgs> && ...))
+  [[deprecated(
+      "give the roles by name in an IndexSpaceSpec")]] IndexBasisRegistry&
+  add_intersection(S&& type_label,
+                   std::initializer_list<IndexSpaceOrLabel> components,
+                   OptionalArgs&&... args) {
+    return this->add_intersection(std::forward<S>(type_label), components,
+                                  parse_space_spec(args...));
   }
 
   /// @}
@@ -1963,33 +2093,116 @@ class IndexBasisRegistry {
              container::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
       particle_space_ = {{}, {}};
 
-  // Boost.Hana snippet to process attribute tag arguments
-  template <typename ArgsHanaTuple>
-  void process_attribute_tags(ArgsHanaTuple h_tuple,
-                              const IndexSpace::Type& type) {
-    boost::hana::for_each(h_tuple, [this, &type](auto arg) {
+  /// @return the IndexSpaceSpec that @p args, the optional arguments of the
+  /// argument-list spellings of add(), add_unIon() and add_intersection(),
+  /// stand for: an IndexSpace::QuantumNumbers, an integral dimension, a
+  /// Field and the space_tags, at most one of each
+  template <typename... Args>
+  static IndexSpaceSpec parse_space_spec(const Args&... args) {
+    IndexSpaceSpec spec;
+    auto h_args = boost::hana::make_tuple(args...);
+
+    auto h_qns = boost::hana::filter(h_args, [](auto arg) {
+      return boost::hana::type_c<decltype(arg)> ==
+             boost::hana::type_c<IndexSpace::QuantumNumbers>;
+    });
+    constexpr auto nqns = boost::hana::size(h_qns);
+    static_assert(
+        nqns == boost::hana::size_c<0> || nqns == boost::hana::size_c<1>,
+        "IndexBasisRegistry::add: only one IndexSpace::QuantumNumbers argument "
+        "is allowed");
+    if constexpr (nqns == boost::hana::size_c<1>) {
+      spec.qns = boost::hana::at_c<0>(h_qns);
+    }
+
+    const auto [dimension, field] = parse_extent_and_field(args...);
+    spec.dimension = dimension;
+    spec.field = field;
+
+    auto h_tags = boost::hana::filter(h_args, [](auto arg) {
+      return !boost::hana::traits::is_integral(
+                 boost::hana::type_c<decltype(arg)>) &&
+             boost::hana::type_c<decltype(arg)> !=
+                 boost::hana::type_c<IndexSpace::QuantumNumbers> &&
+             boost::hana::type_c<decltype(arg)> != boost::hana::type_c<Field>;
+    });
+    boost::hana::for_each(h_tags, [&spec](auto arg) {
       if constexpr (boost::hana::type_c<decltype(arg)> ==
                     boost::hana::type_c<space_tags::IsVacuumOccupied>) {
-        this->vacuum_occupied_space(type);
+        spec.vacuum_occupied = true;
       } else if constexpr (boost::hana::type_c<decltype(arg)> ==
                            boost::hana::type_c<
                                space_tags::IsReferenceOccupied>) {
-        this->reference_occupied_space(type);
+        spec.reference_occupied = true;
       } else if constexpr (boost::hana::type_c<decltype(arg)> ==
                            boost::hana::type_c<space_tags::IsComplete>) {
-        this->complete_space(type);
+        spec.complete = true;
       } else if constexpr (boost::hana::type_c<decltype(arg)> ==
                            boost::hana::type_c<space_tags::IsHole>) {
-        this->hole_space(type);
+        spec.hole = true;
       } else if constexpr (boost::hana::type_c<decltype(arg)> ==
                            boost::hana::type_c<space_tags::IsParticle>) {
-        this->particle_space(type);
+        spec.particle = true;
       } else {
         static_assert(meta::always_false<decltype(arg)>::value,
                       "IndexBasisRegistry::add{,_union,_intersect}: unknown "
                       "attribute tag");
       }
     });
+    return spec;
+  }
+
+  /// designates the space of type @p type for the roles @p spec sets
+  void set_roles(const IndexSpaceSpec& spec, const IndexSpace::Type& type) {
+    if (spec.vacuum_occupied) this->vacuum_occupied_space(type);
+    if (spec.reference_occupied) this->reference_occupied_space(type);
+    if (spec.complete) this->complete_space(type);
+    if (spec.hole) this->hole_space(type);
+    if (spec.particle) this->particle_space(type);
+  }
+
+  /// @throw Exception, naming @p caller, if @p spec carries what a union or
+  /// an intersection computes from its components
+  static void require_roles_only(const IndexSpaceSpec& spec,
+                                 const char* caller) {
+    if (spec.qns || spec.dimension || spec.field)
+      throw Exception(std::string(caller) +
+                      ": the qns, dimension and field of a union or an "
+                      "intersection are computed from its components, so "
+                      "its spec may carry roles only");
+  }
+
+  /// the shared tail of the registrations of a named basis instance: checks
+  /// the label, the space and the instance, then inserts the entry
+  /// @return reference to `this`
+  IndexBasisRegistry& emplace_named(std::wstring key, const IndexSpace& space,
+                                    IndexBasis::instance_type instance,
+                                    std::optional<std::size_t> extent,
+                                    IndexBasisMetric metric,
+                                    std::optional<Field> field,
+                                    const char* caller) {
+    validate_label(key, caller);
+    if (bases_.contains(key))
+      throw Exception(std::string(caller) + ": label '" + toUtf8(key) +
+                      "' is already registered");
+    const auto* registered = retrieve_space_ptr(space.type(), space.qns());
+    if (!registered)
+      throw Exception(std::string(caller) + ": the space '" +
+                      toUtf8(space.base_key()) + "' of '" + toUtf8(key) +
+                      "' is not registered");
+    if (*registered != space)
+      throw Exception(std::string(caller) + ": the space '" +
+                      toUtf8(space.base_key()) + "' of '" + toUtf8(key) +
+                      "' differs from '" + toUtf8(registered->base_key()) +
+                      "', the registered space of its type and quantum "
+                      "numbers");
+    if (auto taken = basis_label(IndexBasis{space, instance}))
+      throw Exception(std::string(caller) + ": the basis of '" + toUtf8(key) +
+                      "' is already named '" + toUtf8(*taken) + "'");
+    IndexBasis named{*registered, instance, key, extent, metric, field};
+    bases_.emplace(std::move(key), std::move(named));
+    ++named_count_;
+    return clear_memoized_data_and_return_this();
   }
 
   /// @brief computes the dimension of the space
@@ -2042,11 +2255,11 @@ class IndexBasisRegistry {
   /// field, with the same entries following the same ones (see follow()),
   /// and specify the same physical-particle attributes and vacuum-occupied,
   /// reference-occupied, complete, hole and particle spaces
-  friend bool operator==(const IndexBasisRegistry& isr1,
-                         const IndexBasisRegistry& isr2) {
+  friend bool operator==(const IndexBasisRegistry& ibr1,
+                         const IndexBasisRegistry& ibr2) {
     // IndexBasis equality ignores the metadata
     return std::ranges::equal(
-               isr1.bases_, isr2.bases_,
+               ibr1.bases_, ibr2.bases_,
                [](const auto& e1, const auto& e2) {
                  return e1.first == e2.first && e1.second == e2.second &&
                         e1.second.space().dimension() ==
@@ -2055,13 +2268,13 @@ class IndexBasisRegistry {
                         e1.second.metric() == e2.second.metric() &&
                         e1.second.field() == e2.second.field();
                }) &&
-           isr1.follows_ == isr2.follows_ &&
-           isr1.physical_particle_attribute_mask_ ==
-               isr2.physical_particle_attribute_mask_ &&
-           isr1.vacocc_ == isr2.vacocc_ && isr1.refocc_ == isr2.refocc_ &&
-           isr1.complete_ == isr2.complete_ &&
-           isr1.hole_space_ == isr2.hole_space_ &&
-           isr1.particle_space_ == isr2.particle_space_;
+           ibr1.follows_ == ibr2.follows_ &&
+           ibr1.physical_particle_attribute_mask_ ==
+               ibr2.physical_particle_attribute_mask_ &&
+           ibr1.vacocc_ == ibr2.vacocc_ && ibr1.refocc_ == ibr2.refocc_ &&
+           ibr1.complete_ == ibr2.complete_ &&
+           ibr1.hole_space_ == ibr2.hole_space_ &&
+           ibr1.particle_space_ == ibr2.particle_space_;
   }
 };  // class IndexBasisRegistry
 
