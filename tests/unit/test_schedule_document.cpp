@@ -1252,6 +1252,49 @@ TEST_CASE("ordered dry run fills the run record", "[schedule-document]") {
   }
 }
 
+/// Not run by default. Regenerates utilities/schedule-view/example.json, the
+/// two-root fixture (R1, R2 sharing X = g*t, each batched on the other's
+/// occupied index) as a complete document; the output path is taken from the
+/// environment variable SEQUANT_SCHEDULE_EXAMPLE_OUT. The `run` section is the
+/// one the ordered dry-run evaluation records (n_batches, footprint, builds);
+/// extents, batch targets and planner settings are filled in from the
+/// fixture's own policy and pinned extents.
+TEST_CASE("write the viewer example document",
+          "[schedule-document][.write-example]") {
+  char const* const out_path = std::getenv("SEQUANT_SCHEDULE_EXAMPLE_OUT");
+  REQUIRE(out_path != nullptr);
+
+  auto const fx = two_root_fixture();
+  Document doc;
+  doc.producer_version = "example";
+  doc.producer_date = "2026-10-19";
+
+  sequant::OptimizeOptions opts;  // as dag_fixture() set it up
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = pin_extent;
+  opts.batch_policy = external_occ_policy();
+  doc.fingerprint = sequant::opt::schedule::fingerprint_of(
+      fx.forest, {"R1", "R2"}, opts, {L"a", L"i"});
+  doc.roots = fx.roots;
+  doc.dag = record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
+
+  auto const id_of = [&](std::size_t vid) {
+    return doc.dag->values.at(vid).id;
+  };
+  RunRecord run;
+  dry_run(fx, &run, id_of);
+  run.extents = {{"i", pin_extent(occ_index())},
+                 {"a", pin_extent(virt_index())}};
+  run.batch_targets = {
+      {"i", external_occ_policy().batch_target_size(occ_index())}};
+  run.planner = {{"objective_function", "DenseTimeSpaceBatched"}};
+  doc.run = std::move(run);
+
+  std::ofstream out(out_path, std::ios::binary);
+  REQUIRE(out.good());
+  out << to_json(doc);
+}
+
 TEST_CASE("ordered executor is unchanged without a run record",
           "[schedule-document]") {
   auto const fx = two_root_fixture();
