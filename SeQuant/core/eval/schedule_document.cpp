@@ -531,6 +531,8 @@ TermRecord term_r(json const& j, std::string const& where) {
   }
   std::size_t inner = 0;
   if (t.tree) {
+    if (auto const err = leaf_permutation_error(*t.tree, t.factors.size()))
+      fail(t.key, *err);
     check_tree(*t.tree, t, inner);
   }
   // a tree-only record (non-batched objective) has no node annotations
@@ -839,6 +841,35 @@ struct Differ {
 };
 
 }  // namespace
+
+std::optional<std::string> leaf_permutation_error(TreeShape const& tree,
+                                                  std::size_t nfactors) {
+  std::vector<bool> seen(nfactors, false);
+  std::size_t count = 0;
+  std::optional<std::string> err;
+  auto const visit = [&](auto const& self, TreeShape const& t) -> void {
+    if (err) return;
+    if (t.leaf) {
+      if (*t.leaf >= nfactors || seen[*t.leaf]) {
+        err = "tree leaf " + std::to_string(*t.leaf) +
+              " is out of range or repeated";
+        return;
+      }
+      seen[*t.leaf] = true;
+      ++count;
+      return;
+    }
+    if (!t.left || !t.right) {
+      err = "tree node lacks a child";
+      return;
+    }
+    self(self, *t.left);
+    self(self, *t.right);
+  };
+  visit(visit, tree);
+  if (!err && count != nfactors) err = "tree does not use every factor";
+  return err;
+}
 
 std::string to_json(Document const& d) { return document_j(d).dump(2) + "\n"; }
 

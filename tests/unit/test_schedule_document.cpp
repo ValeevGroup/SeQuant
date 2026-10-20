@@ -97,8 +97,9 @@ TEST_CASE("schedule document rejects bad shapes", "[schedule-document]") {
   {
     Document e = make_doc();
     e.roots[0].terms[0].tree->right->leaf = 7;
-    REQUIRE_THROWS_WITH(from_json(to_json(e)),
-                        ContainsSubstring("K") && ContainsSubstring("ordinal"));
+    REQUIRE_THROWS_WITH(
+        from_json(to_json(e)),
+        ContainsSubstring("K") && ContainsSubstring("out of range"));
   }
 
   // (b) two inner nodes but one `nodes` entry
@@ -114,6 +115,22 @@ TEST_CASE("schedule document rejects bad shapes", "[schedule-document]") {
     top.right = std::make_unique<TreeShape>(TreeShape{2});
     t.tree = std::move(top);
     REQUIRE_THROWS_WITH(from_json(to_json(e)), ContainsSubstring("nodes"));
+  }
+
+  // (b') leaves that are not a permutation of the factors: an ordinal used
+  // twice, a factor unused -- caught by the reader, not only at pin time
+  {
+    Document e = make_doc();
+    e.roots[0].terms[0].tree->right->leaf = 0;
+    REQUIRE_THROWS_WITH(
+        from_json(to_json(e)),
+        ContainsSubstring("K") && ContainsSubstring("repeated"));
+    Document f = make_doc();
+    f.roots[0].terms[0].factors.push_back("f{a_1;i_1}");
+    f.roots[0].terms[0].nodes.clear();
+    REQUIRE_THROWS_WITH(from_json(to_json(f)),
+                        ContainsSubstring("K") &&
+                            ContainsSubstring("does not use every factor"));
   }
 
   // (c) axes label absent from factors

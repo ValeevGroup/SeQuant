@@ -140,23 +140,8 @@ std::vector<AxisRecord> to_records(
 /// \throws if the leaves of \p tree are not a permutation of [0, n)
 void require_permutation(TreeShape const& tree, std::size_t n,
                          std::string const& key) {
-  std::vector<bool> seen(n, false);
-  std::size_t count = 0;
-  auto visit = [&](auto&& self, TreeShape const& t) -> void {
-    if (t.leaf) {
-      if (*t.leaf >= n || seen[*t.leaf])
-        fail(key, "tree leaf " + std::to_string(*t.leaf) +
-                      " is out of range or repeated");
-      seen[*t.leaf] = true;
-      ++count;
-      return;
-    }
-    if (!t.left || !t.right) fail(key, "tree node lacks a child");
-    self(self, *t.left);
-    self(self, *t.right);
-  };
-  visit(visit, tree);
-  if (count != n) fail(key, "tree does not use every factor");
+  if (auto const err = eval::schedule::leaf_permutation_error(tree, n))
+    fail(key, *err);
 }
 
 }  // namespace

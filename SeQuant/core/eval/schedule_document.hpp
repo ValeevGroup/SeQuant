@@ -72,6 +72,12 @@ struct TreeShape {
   TreeShape& operator=(TreeShape&&) noexcept = default;
 };
 
+/// why \p tree is not a tree over \p nfactors factors (a node lacking a
+/// child, a leaf out of range or repeated, a factor unused), or nullopt when
+/// it is
+std::optional<std::string> leaf_permutation_error(TreeShape const& tree,
+                                                  std::size_t nfactors);
+
 struct TermRecord {
   std::string key;
   std::vector<std::string> factors;
