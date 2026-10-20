@@ -21,7 +21,8 @@ section: `n_batches`, `footprint` and `builds` come from the ordered dry run,
 
 1. Embedded (preferred): `sequant-schedule view <doc.json> [--run run.json]
    [-o out.html]` writes a copy of `schedule-view.html` with the document (and
-   the optional run section) inlined; open `out.html` in a browser.
+   the optional run section) inlined; open `out.html` in a browser. The page
+   is compiled into the tool; `--template <file>` substitutes another copy.
 2. File picker: open `schedule-view.html` directly and use "open file(s)" to
    load a document, optionally together with a run-section file (select both
    at once). The same control loads another document into an embedded page.
