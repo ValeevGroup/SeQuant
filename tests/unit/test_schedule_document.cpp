@@ -767,6 +767,23 @@ TEST_CASE("pinning is strict", "[schedule-document]") {
         ContainsSubstring("missing") && ContainsSubstring(dropped));
   }
 
+  SECTION("externals labeled differently than in the record") {
+    // same terms, externals i_1,i_2 -> i_5,i_6: dummies are canonicalized
+    // away, externals are not, so no key matches and the message says so
+    auto relabeled =
+        session_sum({L"g{i_5,i_6;a_3,a_4} * t{a_3;i_3} * t{a_4;i_4}",
+                     L"1/2 * g{i_5,i_6;a_3,a_4} * t{a_3,a_4;i_3,i_4}",
+                     L"f{i_5;a_3} * t{a_3,a_4;i_3,i_4} * f{i_6;a_4}",
+                     L"X{i_5,i_6;i_3,i_4}"});
+    PinSession session(rr.record);
+    auto opts2 = opts;
+    opts2.pinned = &session;
+    REQUIRE_THROWS_WITH(sequant::optimize_result(relabeled, opts2),
+                        ContainsSubstring("missing") &&
+                            ContainsSubstring("no term matched") &&
+                            ContainsSubstring("external indices"));
+  }
+
   SECTION("an unused record") {
     auto other = record_root(
         "O", session_sum({L"h{i_1;a_3} * t{a_3;i_2}", L"Y{i_1;i_2}"}), opts);

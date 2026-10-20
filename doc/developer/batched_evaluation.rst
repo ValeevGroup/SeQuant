@@ -179,7 +179,9 @@ ordered schedule built from those choices, and an optional ``run`` section, whic
 The optimizer side lives in ``SeQuant/core/optimize/schedule_pin.hpp``: ``opt::schedule::record_root`` captures a root,
 and a ``PinSession`` or ``RecordSession`` set on ``OptimizeOptions::pinned`` or ``OptimizeOptions::recording`` replays
 pinned choices or collects the recorded ones during optimization. Recording or pinning a Sum makes the optimized Sum
-carry canonical dummy labels (each summand is optimized on its canonicalized clone). ``fingerprint_of`` summarizes the
+carry canonical dummy labels (each summand is optimized on its canonicalized clone). A term's key is its canonical
+form, so it is independent of the dummy labels and of the factor order the caller used, but not of the external index
+labels: a root must be spelled with the same external labels on every run that pins it. ``fingerprint_of`` summarizes the
 binarized forest a document was recorded for, and ``check_fingerprint``, run after binarization and before the DAG
 stages, throws when a loaded document's fingerprint no longer matches the live forest's. ``eval::schedule::record_dag`` (``SeQuant/core/eval/schedule_dag_record.hpp``) builds the ``dag``
 section from a rich schedule and its legality. The ordered entry points in ``ordered_executor.hpp`` take an optional

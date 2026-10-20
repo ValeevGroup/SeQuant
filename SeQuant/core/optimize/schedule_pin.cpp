@@ -379,6 +379,15 @@ void PinSession::finish() const {
   list_keys(msg, "missing", sorted_unique(missing_));
   list_keys(msg, "unused", unused);
   list_keys(msg, "duplicate", sorted_unique(std::move(duplicates)));
+  // the term key keeps the caller's external labels and follows the Context's
+  // canonicalization settings; a total miss is the signature of either
+  if (!missing_.empty() && !root_.terms.empty() &&
+      std::all_of(uses_.begin(), uses_.end(),
+                  [](std::size_t n) { return n == 0; }))
+    msg +=
+        "\n  no term matched: the root's external indices are probably "
+        "labeled differently from the recorded run, or the Context's "
+        "canonicalization settings differ";
   throw Exception(msg);
 }
 

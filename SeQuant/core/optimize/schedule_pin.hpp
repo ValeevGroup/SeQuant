@@ -34,7 +34,11 @@ namespace sequant::opt::schedule {
 /// works on. \p term itself is not modified.
 ExprPtr canonical_term(ExprPtr const& term);
 
-/// toUtf8(v1::to_string(canonical)) -- the identity of a term in the document
+/// toUtf8(v1::to_string(canonical)) -- the identity of a term in the document.
+/// Canonicalization renames the dummy (contracted) indices only: the external
+/// indices keep the caller's labels and are part of the key, so a root must be
+/// spelled with the same external labels on every run that pins it. The key
+/// also depends on the active Context's canonicalization settings.
 std::string term_key(ExprPtr const& canonical);
 
 /// factors of a canonical Product in order (a lone Tensor is one factor; a
