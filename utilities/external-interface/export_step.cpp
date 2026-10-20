@@ -428,7 +428,17 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
 
       SEQUANT_ASSERT(it != end(tree_data));
 
-      deps.emplace_back(&(*it.base()));
+      const CtxData *producer = &(*it.base());
+
+      // A dependency resolving to an entry in the same group (e.g. after a
+      // merge_inputs cse pulled dependent results into a single group) is
+      // satisfied by the intra-group ordering; turning it into an inter-group
+      // edge would be a spurious self-edge and break the topological sort.
+      if (producer == &base) {
+        continue;
+      }
+
+      deps.emplace_back(producer);
     }
 
     dependencies.emplace(&base, std::move(deps));

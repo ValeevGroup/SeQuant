@@ -169,6 +169,26 @@ the optimizer's per-product estimate. It assumes real double-precision data.
 ``SeQuant/core/eval/ordered_dump.hpp`` provides environment-gated dumps of each pipeline stage;
 :doc:`/user/guide/evaluation` explains how to read evaluation traces.
 
+Schedule documents
+-----------------------------
+
+A schedule document (``SeQuant/core/eval/schedule_document.hpp``) is one JSON document that describes a batched
+schedule for inspection and for steering later runs. It has a pinnable ``roots`` section, which records the choices the
+optimizer made for each root and can be fed back to reproduce them, a read-only ``dag`` section, which describes the
+ordered schedule built from those choices, and an optional ``run`` section, which carries what an evaluation measured.
+The optimizer side lives in ``SeQuant/core/optimize/schedule_pin.hpp``: ``opt::schedule::record_root`` captures a root,
+and a ``PinSession`` or ``RecordSession`` set on ``OptimizeOptions::pinned`` or ``OptimizeOptions::recording`` replays
+pinned choices or collects the recorded ones during optimization. Recording or pinning a Sum makes the optimized Sum
+carry canonical dummy labels (each summand is optimized on its canonicalized clone). A term's key is its canonical
+form, so it is independent of the dummy labels and of the factor order the caller used, but not of the external index
+labels: a root must be spelled with the same external labels on every run that pins it. ``fingerprint_of`` summarizes the
+binarized forest a document was recorded for, and ``check_fingerprint``, run after binarization and before the DAG
+stages, throws when a loaded document's fingerprint no longer matches the live forest's. ``eval::schedule::record_dag`` (``SeQuant/core/eval/schedule_dag_record.hpp``) builds the ``dag``
+section from a rich schedule, its legality and the volatility predicate the evaluation runs with (a value's
+``persistent`` is the cell table's own flag). The ordered entry points in ``ordered_executor.hpp`` take an optional
+``RunRecord*`` out-parameter that is filled with the ``run`` section. The ``sequant-schedule`` command-line tool validates,
+diffs and renders documents.
+
 Current scope
 ----------------
 

@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -64,9 +65,6 @@
 /// | SEQUANT_UT_BLOCK_DIAG     | `[block]` / `[cell-registry]` -- per-batch  |
 /// |                           | build and assemble steps, block skips, and  |
 /// |                           | the end-of-call registry residency.         |
-/// | SEQUANT_SCHED_DUMP        | `ORDERED_RUN_BLOCK` / `SCHEDULE_RUN_GROUP`  |
-/// |                           | JSON lines for the schedule visualizer      |
-/// |                           | (emitted by the executors themselves).      |
 ///
 /// Cache / runtime knobs documented with their own facility (cache_manager.hpp,
 /// runtime.hpp, optimize/): SEQUANT_NUM_THREADS, SEQUANT_FACTORIZER_DEBUG,

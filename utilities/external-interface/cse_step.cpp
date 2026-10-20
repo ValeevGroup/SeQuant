@@ -139,6 +139,7 @@ std::optional<ExportTreeData> perform_cse(ExprRange &&exprs,
 
     for (std::size_t i = current_batch.first; i < current_batch.second; ++i) {
       std::optional<Tensor> symm_target;
+      std::vector<std::size_t> dependencies;
 
       std::optional<bool> overwrite;
       if (cse_positions.empty() || cse_positions.back() != i) {
@@ -155,8 +156,13 @@ std::optional<ExportTreeData> perform_cse(ExprRange &&exprs,
         }
 
         SEQUANT_ASSERT(entry_offset < assoc_tree_data.entries.size());
-        symm_target =
-            assoc_tree_data.entries.at(entry_offset).symm_contribution_target;
+        const ExportTreeData::Entry &assoc_entry =
+            assoc_tree_data.entries.at(entry_offset);
+        symm_target = assoc_entry.symm_contribution_target;
+        // Preserve dependencies set on the original expression (e.g. by a
+        // preceding dependencies step). CSE only introduces new intermediate
+        // trees and leaves the root IDs these refer to intact.
+        dependencies = assoc_entry.dependencies;
         ++entry_offset;
       } else if (!cse_positions.empty()) {
         cse_positions.pop_back();
@@ -181,6 +187,7 @@ std::optional<ExportTreeData> perform_cse(ExprRange &&exprs,
           .tree = std::move(exprs[i]),
           .symm_contribution_target = std::move(symm_target),
           .overwrite_previous = std::move(overwrite),
+          .dependencies = std::move(dependencies),
           .batch_indices = std::move(indices)};
 
       output.entries.emplace_back(std::move(current));

@@ -44,9 +44,9 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/op_counts.hpp>
 #include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
-#include <SeQuant/core/eval/schedule_dump.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
@@ -2073,10 +2073,6 @@ TEST_CASE(
   auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
-  if (std::getenv("SEQUANT_SCHED_DUMP"))
-    std::cerr << "SCHEDULE_IR_JSON "
-              << sequant::eval::schedule_ir_json(node, "giant") << "\n";
-
   // Locate the giant sub-node (the free-mu~ contraction node whose modeled
   // size dwarfs everything else -- same identification criterion the
   // [dryrun-df] verdict case above used) purely to REPORT what the DP
@@ -2127,14 +2123,6 @@ TEST_CASE(
 
   std::cerr << "[dryrun-eval] replaying giant term through the batched "
                "runtime evaluator ...\n";
-  // Enable THIS replay's per-DISTINCT-value build tally on its own cache
-  // (CacheManager::tally_build, keyed by the exact cache identity) so the
-  // avoidable-recompute breakdown is accumulated. Using the test's OWN replay
-  // -- not a separate metered replay -- means the numbers match the exact
-  // run events the visualizer consumes (same cache, same slicing), and there is
-  // no second replay flooding the SCHEDULE_RUN_EVENT stream.
-  bool const sched_dump = std::getenv("SEQUANT_SCHED_DUMP") != nullptr;
-  if (sched_dump) cache.set_recompute_tally_enabled(true);
   auto t1 = std::chrono::steady_clock::now();
   ResultPtr result;
   bool threw = false;
@@ -2144,52 +2132,6 @@ TEST_CASE(
   } catch (std::exception const& e) {
     threw = true;
     what = e.what();
-  }
-  if (sched_dump) {
-    // The replay's per-node avoidable recompute, keyed by the node's
-    // topological hash (the SAME join key the IR and run-event nodes carry) so
-    // the visualizer joins each DAG node to these numbers instead of
-    // recomputing avoidable. Rolled up per DISTINCT value over its SLICES (see
-    // BuildTally): for each slice total += builds*cost and build_once += cost,
-    // so avoidable -- the arithmetic the replay repeated beyond building each
-    // distinct slice once -- is sum over slices of (builds-1)*cost. A value
-    // tiled over DISTINCT slices has builds==1 per slice => 0 avoidable (pure
-    // tiling, even non-uniform); a value rebuilt at the SAME slice (an
-    // invariant rebuilt every block of a loop it does not carry) has builds>1
-    // there. Keeps only values with a positive avoidable amount, worst first.
-    struct AvoidableNode {
-      std::string label;
-      double count = 0;
-      double flops = 0;
-    };
-    std::vector<AvoidableNode> av;
-    for (auto const& [node, t] : cache.recompute_tally()) {
-      double total = 0, once = 0, extra_builds = 0;
-      for (auto const& [sig, bc] : t.slices) {
-        total += bc.count * bc.flops;
-        once += bc.flops;
-        extra_builds += static_cast<double>(bc.count - 1);
-      }
-      if (total - once <= 0.0) continue;
-      av.push_back({.label = std::to_string(node->hash_value()),
-                    .count = extra_builds,
-                    .flops = total - once});
-    }
-    std::sort(av.begin(), av.end(),
-              [](AvoidableNode const& a, AvoidableNode const& b) {
-                return a.flops > b.flops;
-              });
-    std::ostringstream cjson;
-    cjson << "SCHEDULE_COST_JSON {\"term_id\":\"giant\",\"nodes\":[";
-    for (std::size_t i = 0; i < av.size(); ++i) {
-      if (i) cjson << ',';
-      cjson << "{\"sig\":\""
-            << sequant::eval::detail::sched_json_escape(av[i].label)
-            << "\",\"count\":" << av[i].count << ",\"flops\":" << av[i].flops
-            << "}";
-    }
-    cjson << "]}";
-    std::cerr << cjson.str() << "\n";
   }
   auto const eval_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::steady_clock::now() - t1)

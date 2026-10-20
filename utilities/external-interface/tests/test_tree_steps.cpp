@@ -11,7 +11,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cstddef>
+#include <ranges>
 #include <utility>
 
 using namespace sequant;
@@ -37,6 +39,50 @@ TEST_CASE("cse step", "[extint]") {
     REQUIRE(ctx.has_data("cse.0"));
     REQUIRE_NOTHROW(
         convert_data<ExportTreeData>(ctx.get_data("cse.0").front().data.get()));
+  }
+
+  SECTION("dependencies on the original results survive CSE") {
+    // Two identical contractions share a common subexpression, so CSE
+    // introduces an intermediate (the result grows by one entry).
+    ExportTreeData data = test_support::tree_data(
+        {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+         L"R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+    REQUIRE(data.entries.size() == 2);
+
+    // Wire a dependency onto each original result. The CSE step copies these
+    // IDs through verbatim, so a sentinel that is not a real root id is fine.
+    constexpr std::size_t dep_id = 123456;
+    for (ExportTreeData::Entry &entry : data.entries) {
+      entry.dependencies = {dep_id};
+    }
+
+    ExecutionContext ctx;
+    ctx.set_data("in", 0, ProcessingData{std::move(data)});
+
+    CSEStep step;
+    REQUIRE(step.run("cse", ctx, {"in.0"}) == 1);
+    REQUIRE(ctx.has_data("cse.0"));
+
+    const ExportTreeData &result =
+        convert_data<ExportTreeData>(ctx.get_data("cse.0").front().data.get());
+
+    // CSE must actually have fired, otherwise this section would not exercise
+    // the dependency-carrying code path.
+    REQUIRE(result.entries.size() > 2);
+
+    std::size_t original_count = 0;
+    for (const ExportTreeData::Entry &entry : result.entries) {
+      if (entry.overwrite_previous.value_or(false)) {
+        // Freshly introduced intermediate: no prior dependencies to carry.
+        continue;
+      }
+
+      ++original_count;
+      REQUIRE(std::ranges::find(entry.dependencies, dep_id) !=
+              entry.dependencies.end());
+    }
+
+    REQUIRE(original_count == 2);
   }
 }
 
