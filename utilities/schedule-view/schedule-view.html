@@ -507,18 +507,22 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     var v = vById.get(st.vid);
     if (!v) { host.appendChild(el("div", "empty", "Nothing selected.")); return; }
     var tb = el("table", "kv mono");
-    kv(tb, "name", shortOf(v.id)); kv(tb, "id", v.id); kv(tb, "expr", v.expr); kv(tb, "hash", v.hash); kv(tb, "key", v.key);
-    kv(tb, "leaf", v.leaf);
+    // the id names the value's first occurrence in forest order: the term whose labels expr and the mode lists use
+    var occs = v.occurrences || [], terms = {};
+    occs.forEach(function (o) { terms[o.term] = true; });
+    var frame = el("span");
+    frame.appendChild(el("span", "pill", shortOf(v.id)));
+    frame.appendChild(document.createTextNode(" labels of this occurrence; " + occs.length + " occurrence" + (occs.length === 1 ? "" : "s") + " in " + Object.keys(terms).length + " term" + (Object.keys(terms).length === 1 ? "" : "s")));
+    kv(tb, "name", shortOf(v.id)); kv(tb, "frame", frame); kv(tb, "expr", v.expr); kv(tb, "leaf", v.leaf);
     ["result_modes", "home_modes", "enclosing_modes", "divergent_modes"].forEach(function (k) { kv(tb, k, listOf(v[k])); });
     var hb = el("span"); hb.appendChild(blink(v.home_block)); kv(tb, "home_block", hb);
     kv(tb, "home_depth", v.home_depth); kv(tb, "persistent", v.persistent);
-    kv(tb, "first_use", v.first_use); kv(tb, "last_use", v.last_use);
     ["build_site", "home_floor", "forced_split_axes"].forEach(function (k) { kv(tb, k, listOf(v[k])); });
     var pa = el("span");
     (v.per_axis || []).forEach(function (a) { pa.appendChild(el("span", "pill", a.mode + ": " + a.role)); });
     kv(tb, "per_axis", pa.childNodes.length ? pa : "—");
-    var oc = el("details"); oc.appendChild(el("summary", null, (v.occurrences || []).length + " occurrences"));
-    (v.occurrences || []).forEach(function (o) {
+    var oc = el("details"); oc.appendChild(el("summary", null, occs.length + " occurrence" + (occs.length === 1 ? "" : "s") + ", each in its own term's labels"));
+    occs.forEach(function (o) {
       var d = el("div");
       d.title = o.term;
       d.textContent = "term " + (termShort.get(o.term) || o.term) + " · node " + o.node + " · consumer " + (o.consumer === null || o.consumer === undefined ? "—" : o.consumer) +
@@ -543,6 +547,12 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
       kv(tb, "footprint", run.footprint && run.footprint[v.id] !== undefined ? run.footprint[v.id] + " bytes" : "—", "run");
       kv(tb, "builds", run.builds && run.builds[v.id] !== undefined ? run.builds[v.id] : "—", "run");
     }
+    // identity details: the full id, the engine's node hash and value key, the lifetime bounds
+    var det = el("details"); det.appendChild(el("summary", null, "id, hash, key, first_use, last_use"));
+    var dt = el("table", "kv mono");
+    kv(dt, "id", v.id); kv(dt, "hash", v.hash); kv(dt, "key", v.key); kv(dt, "first_use", v.first_use); kv(dt, "last_use", v.last_use);
+    det.appendChild(dt);
+    kv(tb, "identity", det);
     host.appendChild(tb);
   }
 
