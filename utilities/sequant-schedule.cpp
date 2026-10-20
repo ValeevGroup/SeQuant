@@ -10,10 +10,13 @@
 #include <SeQuant/core/eval/schedule_document.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #ifndef SEQUANT_SCHEDULE_VIEW_TEMPLATE
@@ -49,15 +52,6 @@ sched::Document load(std::string const& path) {
   } catch (std::exception const& e) {
     throw sequant::Exception(path + ": " + e.what());
   }
-}
-
-// replaces the first occurrence of `marker` in `text`; false if absent
-bool substitute(std::string& text, std::string const& marker,
-                std::string const& value) {
-  auto const pos = text.find(marker);
-  if (pos == std::string::npos) return false;
-  text.replace(pos, marker.size(), value);
-  return true;
 }
 
 int validate(std::string const& path) {
@@ -122,16 +116,33 @@ int view(std::vector<std::string> const& args) {
     std::cerr << "viewer template not found: " << tmpl_path << "\n";
     return 1;
   }
-  // both texts go inside <script> elements, so a "</script>" in a label must
-  // not be able to end them; substitute the run first, then the document, so
-  // the inserted document text is never re-scanned for the run marker
-  substitute(page, "/*__RUN_JSON__*/", sched::escape_for_html_script(run_json));
-  if (!substitute(page, "/*__SCHEDULE_JSON__*/",
-                  sched::escape_for_html_script(doc_json))) {
-    std::cerr << "template lacks the /*__SCHEDULE_JSON__*/ placeholder: "
-              << tmpl_path << "\n";
+  // Both texts go inside <script> elements, hence the escaping. The slots
+  // are located in the template before anything is inserted, so neither
+  // inserted text can pass for the other's slot, and they are filled from the
+  // back so the earlier offset stays valid.
+  constexpr std::string_view doc_slot = "/*__SCHEDULE_JSON__*/";
+  constexpr std::string_view run_slot = "/*__RUN_JSON__*/";
+  auto const doc_pos = page.find(doc_slot);
+  auto const run_pos = page.find(run_slot);
+  if (doc_pos == std::string::npos) {
+    std::cerr << "template lacks the " << doc_slot << " slot: " << tmpl_path
+              << "\n";
     return 1;
   }
+  if (run_pos == std::string::npos && !run_path.empty()) {
+    std::cerr << "template lacks the " << run_slot
+              << " slot, so --run cannot be embedded: " << tmpl_path << "\n";
+    return 1;
+  }
+  std::vector<std::pair<std::size_t, std::pair<std::string_view, std::string>>>
+      fills{{doc_pos, {doc_slot, sched::escape_for_html_script(doc_json)}}};
+  if (run_pos != std::string::npos)
+    fills.emplace_back(
+        run_pos, std::pair{run_slot, sched::escape_for_html_script(run_json)});
+  std::sort(fills.begin(), fills.end(),
+            [](auto const& a, auto const& b) { return a.first > b.first; });
+  for (auto const& [pos, fill] : fills)
+    page.replace(pos, fill.first.size(), fill.second);
   std::ofstream out(out_path, std::ios::binary);
   if (!out) {
     std::cerr << "cannot write " << out_path << "\n";
