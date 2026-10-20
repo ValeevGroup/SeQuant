@@ -121,38 +121,33 @@ struct NodePlace {
   std::string id;
 };
 
-/// "<label>[<sliced modes>]" for a node: its tensor (or variable) label, or
-/// its scalar for a constant, with the node_slice_mask() modes in brackets
+/// a node's bare label: its tensor (or variable) label, or its scalar for a
+/// constant
 template <typename Node>
-std::string node_label(Node const& n) {
-  std::string out;
-  if (n->is_tensor())
-    out = toUtf8(n->as_tensor().label());
-  else if (n->is_variable())
-    out = toUtf8(n->as_variable().label());
-  else
-    out = toUtf8(io::serialization::v1::to_string(n->expr()));
-  auto const& mask = n->node_slice_mask();
-  if (!mask.empty()) {
-    out += "[";
-    for (std::size_t k = 0; k < mask.size(); ++k) {
-      if (k) out += ",";
-      out += index_label(mask[k].first);
-    }
-    out += "]";
-  }
-  return out;
+std::string bare_label(Node const& n) {
+  if (n->is_tensor()) return toUtf8(n->as_tensor().label());
+  if (n->is_variable()) return toUtf8(n->as_variable().label());
+  return toUtf8(io::serialization::v1::to_string(n->expr()));
 }
 
-/// "<result>[...] = <left>[...] <op> <right>[...]", or the label alone on a
-/// leaf
-template <typename Node>
-std::string node_expr(Node const& n) {
-  if (n.leaf()) return node_label(n);
-  auto const op = n->op_type();
-  std::string const sym = op && *op == EvalOp::Sum ? " + " : " * ";
-  return node_label(n) + " = " + node_label(n.left()) + sym +
-         node_label(n.right());
+/// UTF-8 "\u03a3", the partial-sum marker of a reduced loop axis in `expr`
+inline constexpr char const* kPartialMarker = "\xCE\xA3";
+
+/// "<label>[<form>]": a value in one of its forms: \p slices, the carried
+/// modes a read or its own home loops slice, and \p partials, the loop axes
+/// its node reduces when the form is a per-batch partial sum, each marked
+/// with \ref kPartialMarker; bare when neither applies, which is the complete
+/// value. Mode spellings ("label:basis") are shown by label.
+inline std::string form_label(std::string const& label,
+                              std::vector<std::string> const& slices,
+                              std::vector<std::string> const& partials) {
+  std::string brackets;
+  auto const add = [&](std::string const& mode) {
+    brackets += (brackets.empty() ? "" : ",") + mode.substr(0, mode.find(':'));
+  };
+  for (auto const& m : slices) add(m);
+  for (auto const& m : partials) add(kPartialMarker + m);
+  return brackets.empty() ? label : label + "[" + brackets + "]";
 }
 
 }  // namespace detail
@@ -299,13 +294,14 @@ DagRecord record_dag(
   // ---- 3. value ids: the first occurrence, whose labels are the cell's frame
   std::size_t const ncells = rich.cells.size();
   std::vector<std::string> id_of(ncells);
+  std::unordered_map<std::string, std::size_t> value_of_occurrence;  // by id
   for (std::size_t v = 0; v < ncells; ++v) {
     auto const& c = rich.cells[v];
     if (c.occurrences.empty())
       throw Exception("record_dag: value " + std::to_string(v) +
                       " has no occurrence to name it by");
     for (auto const& occ : c.occurrences) {
-      (void)place_of(occ.point);  // bounds-checks the point
+      value_of_occurrence.emplace(place_of(occ.point).id, v);  // bounds-checks
       // identity cross-check: the node at this point is this value's node
       if (std::size_t const h = (*at_point[occ.point])->hash_value();
           h != c.hash)
@@ -406,6 +402,8 @@ DagRecord record_dag(
     bool any = false;
   };
   std::vector<Outermost> outermost(ncells);
+  // the value's production form: its deepest Build (or Leaf) cell
+  std::vector<TableCell const*> production(ncells, nullptr);
   for (TableCell const& cell : table.cells) {
     std::size_t const v = cell.value_id;
     if (v >= ncells)
@@ -413,6 +411,9 @@ DagRecord record_dag(
                       std::to_string(v) + " past the schedule");
     std::size_t const depth = cell.scope.path.size();
     bool const assemble = cell.production.kind == ProductionKind::Assemble;
+    if (!assemble &&
+        (!production[v] || production[v]->scope.path.size() < depth))
+      production[v] = &cell;
     auto& best = outermost[v];
     if (best.any && (best.depth < depth ||
                      (best.depth == depth && best.assemble && !assemble)))
@@ -431,11 +432,87 @@ DagRecord record_dag(
   for (std::size_t v = 0; v < ncells; ++v)
     by_hash[rich.cells[v].hash].push_back(v);
 
+  // Forms (detail::form_label), spelled in the cell frame (the carried list,
+  // so the labels agree with result_modes). A value's own form is its
+  // production: the carried axes its production cell is sliced on and, for
+  // every slice-mask axis the value does not carry (the node reduces it),
+  // the per-batch partial over it. An operand's form is how the value reads
+  // it, from the cell table: the source cell's own slicing plus the read's,
+  // and the partials when the source is the operand's per-batch Build cell
+  // rather than its assembled form.
+  auto const node_of = [&](std::size_t w) -> Node const& {
+    return *at_point[rich.cells[w].occurrences.front().point];
+  };
+  auto const reduced_of = [&](std::size_t w) {
+    auto const carried = spell_modes(rich.cells[w].carried);
+    std::vector<std::string> out;
+    for (auto const& [ix, kind] : node_of(w)->node_slice_mask())
+      if (auto const m = mode_spelling(ix);
+          std::ranges::find(carried, m) == carried.end())
+        out.push_back(m);
+    return out;
+  };
+  auto const sliced_labels = [&](std::size_t w, auto const& positions,
+                                 std::vector<std::string>& out) {
+    auto const carried = spell_modes(rich.cells[w].carried);
+    for (auto const& [pos, key] : positions)
+      if (pos < carried.size() &&
+          std::ranges::find(out, carried[pos]) == out.end())
+        out.push_back(carried[pos]);
+  };
+  auto const own_form = [&](std::size_t w) {
+    std::vector<std::string> slices;
+    if (production[w]) sliced_labels(w, production[w]->sliced, slices);
+    return detail::form_label(detail::bare_label(node_of(w)), slices,
+                              reduced_of(w));
+  };
+  // (consumer value, operand value) -> the read's source cell and slicing
+  struct ReadForm {
+    CellId source;
+    container::svector<std::pair<std::size_t, LoopKey>> const* slice;
+  };
+  std::map<std::pair<std::size_t, std::size_t>, ReadForm> read_form;
+  for (Read const& r : table.reads) {
+    if (r.consumer >= table.cells.size() || r.source >= table.cells.size())
+      continue;
+    read_form.try_emplace(
+        {table.cells[r.consumer].value_id, r.operand_value_id},
+        ReadForm{r.source, &r.slice});
+  }
+  // an operand of value v's node: the value at that child, as v reads it
+  auto const operand_of = [&](std::size_t v, Node const& child) {
+    auto const pit = place.find(&child);
+    auto const wit = pit == place.end()
+                         ? value_of_occurrence.end()
+                         : value_of_occurrence.find(pit->second.id);
+    if (wit == value_of_occurrence.end()) return detail::bare_label(child);
+    std::size_t const w = wit->second;
+    auto const rit = read_form.find({v, w});
+    if (rit == read_form.end()) return detail::bare_label(node_of(w));
+    TableCell const& source = table.cells[rit->second.source];
+    std::vector<std::string> slices;
+    sliced_labels(w, source.sliced, slices);
+    sliced_labels(w, *rit->second.slice, slices);
+    return detail::form_label(detail::bare_label(node_of(w)), slices,
+                              source.production.kind == ProductionKind::Build
+                                  ? reduced_of(w)
+                                  : std::vector<std::string>{});
+  };
+
   for (std::size_t v = 0; v < ncells; ++v) {
     auto const& c = rich.cells[v];
     ValueRecord rec;
     rec.id = id_of[v];
-    rec.expr = detail::node_expr(*at_point.at(c.occurrences.front().point));
+    {
+      auto const& node = node_of(v);
+      rec.expr = own_form(v);
+      if (!node.leaf()) {
+        auto const op = node->op_type();
+        rec.expr += " = " + operand_of(v, node.left()) +
+                    (op && *op == EvalOp::Sum ? " + " : " * ") +
+                    operand_of(v, node.right());
+      }
+    }
     rec.hash = detail::hex_string(c.hash);
     rec.key = detail::hex_string(value_key_of(c));
     rec.leaf = c.is_leaf;

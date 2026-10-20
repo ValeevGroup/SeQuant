@@ -43,6 +43,12 @@ lists further knobs.)
 
 ## Using it
 
+- Notation: `X[i]` is value `X` sliced on loop `i`; `X[Σi]` is the per-batch
+  partial of a reduction over loop `i`, the same shape as the whole. A value's
+  `expr` spells each operand in the form the value reads it inside its own
+  loops: sliced or partial there, bare when it reads the assembled whole. The
+  inspector's producers and consumers say how each pair meets (same block,
+  read in slices, assembled by a sum or a scatter over a loop).
 - Left: folding outline of blocks and the values built in them, in `steps`
   order; `read X[i]` rows are slice reads of a value homed in an outer block.
   Blocks open to nesting depth 1 (root and its direct children); click the caret to fold. Consecutive rows of one
@@ -56,8 +62,8 @@ lists further knobs.)
   truncated column.
 - Clicking a row, a port, a box header or a block highlights the related rows
   and boxes everywhere; the inspector shows every field of the selection
-  (siblings are links) and, when a run is loaded, `n_batches`, `footprint` and
-  `builds`. A value's `frame` is its first occurrence in forest order (what its
+  (siblings are links) and, when a run is loaded, `n_batches`, `footprint`
+  (the largest production: a slice or partial inside a loop) and `builds`. A value's `frame` is its first occurrence in forest order (what its
   id names): the term whose index labels `expr` and the mode lists are spelled
   in; the other occurrences, each in its own term's labels, are listed under
   `occurrences`. The full id, the engine's hash and key and the lifetime bounds

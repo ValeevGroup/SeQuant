@@ -70,7 +70,9 @@
         "b",
         "b̃",
         "E"
-      ]
+      ],
+      "canonicalization_method": "topological",
+      "ignore_named_index_labels": true
     }
   },
   "roots": [
@@ -118,7 +120,8 @@
               ],
               "order_aware": true
             }
-          ]
+          ],
+          "pinnable": true
         },
         {
           "key": "h{i_1;i_3}:N-N-S",
@@ -127,7 +130,8 @@
           ],
           "scalar": "1",
           "tree": 0,
-          "nodes": []
+          "nodes": [],
+          "pinnable": true
         }
       ]
     },
@@ -175,7 +179,8 @@
               ],
               "order_aware": true
             }
-          ]
+          ],
+          "pinnable": true
         },
         {
           "key": "h{i_3;i_2}:N-N-S",
@@ -184,7 +189,8 @@
           ],
           "scalar": "1",
           "tree": 0,
-          "nodes": []
+          "nodes": [],
+          "pinnable": true
         }
       ]
     }
@@ -343,7 +349,7 @@
       },
       {
         "id": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3",
-        "expr": "I[i_1] = t * g",
+        "expr": "I[i_1] = t * g[i_1]",
         "hash": "0xbccc9055519a1969",
         "key": "0x5fee5dd47dc33425",
         "leaf": false,
@@ -491,7 +497,7 @@
       },
       {
         "id": "R1+1",
-        "expr": "I = I[i_1] + h",
+        "expr": "I = I + h",
         "hash": "0xb918de8d4bd8855f",
         "key": "0xaf443a91992d8fd9",
         "leaf": false,
@@ -525,7 +531,7 @@
       },
       {
         "id": "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3",
-        "expr": "I[i_2] = t * g",
+        "expr": "I[i_2] = t[i_2] * g",
         "hash": "0xbccc9055519a1969",
         "key": "0xfba75627c3f4384e",
         "leaf": false,
@@ -628,7 +634,7 @@
       },
       {
         "id": "R2+1",
-        "expr": "I = I[i_2] + h",
+        "expr": "I = I + h",
         "hash": "0x704c47e729f0e8db",
         "key": "0xdda02cae07256825",
         "leaf": false,
@@ -831,6 +837,14 @@
       "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4": 160,
       "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3": 160,
       "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4": 160
+    },
+    "size": {
+      "R1+1": 800,
+      "R2+1": 800,
+      "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3": 160,
+      "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4": 800,
+      "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#3": 160,
+      "f{i_3;i_1}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#4": 800
     },
     "builds": {
       "R1+1": 1,

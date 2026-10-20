@@ -164,6 +164,23 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     return v.home_modes && v.home_modes.length ? "[" + v.home_modes.map(function (m) { return m.split(":")[0]; }).join(",") + "]" : "[·]";
   }
   function bLabel(b) { return b.axis ? b.axis : "∅"; }
+  // how value `from` reaches value `to`: inside the same loops, read in slices
+  // by loops `to` sits in, or assembled (summed or scattered) at a block that
+  // `from` escapes on its way out to `to`
+  function relation(from, to) {
+    var f = vById.get(from), t = vById.get(to);
+    if (!f || !t) return "";
+    var af = ancestors(f.home_block).map(function (b) { return b.id; });
+    var at = ancestors(t.home_block).map(function (b) { return b.id; });
+    if (f.home_block === t.home_block) return "same block";
+    if (at.indexOf(f.home_block) >= 0) return "read in slices";
+    var kinds = [];
+    for (var i = 0; i < af.length && at.indexOf(af[i]) < 0; ++i) {
+      var b = bById.get(af[i]);
+      (b.outputs || []).forEach(function (o) { if (o[0] === from) kinds.push(o[1].replace("Accumulate", "").toLowerCase() + " over " + bLabel(b).split(":")[0]); });
+    }
+    return kinds.length ? "assembled: " + kinds.join(", ") : "assembled";
+  }
   // the term key of a value id ("<key>#<ordinal>"), or the root label of a partial sum ("<label>+<k>")
   function termOf(id) {
     var h = id.lastIndexOf("#");
@@ -536,7 +553,11 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     kv(tb, "siblings", sb.childNodes.length ? sb : "—");
     [["producers", prod], ["consumers", cons]].forEach(function (pc) {
       var s = el("span");
-      (pc[1].get(v.id) || []).forEach(function (x) { var d = el("div"); d.appendChild(vlink(x)); s.appendChild(d); });
+      (pc[1].get(v.id) || []).forEach(function (x) {
+        var d = el("div"); d.appendChild(vlink(x));
+        d.appendChild(el("span", "tag", "  " + (pc[0] === "producers" ? relation(x, v.id) : relation(v.id, x))));
+        s.appendChild(d);
+      });
       kv(tb, pc[0], s.childNodes.length ? s : "—");
     });
     if (run) {
@@ -544,7 +565,8 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
       var nb = el("span");
       chain.forEach(function (b) { nb.appendChild(el("span", "pill", "block " + b.id + " (" + bLabel(b) + "): " + run.n_batches[b.id])); });
       kv(tb, "n_batches", nb.childNodes.length ? nb : "—", "run");
-      kv(tb, "footprint", run.footprint && run.footprint[v.id] !== undefined ? run.footprint[v.id] + " bytes" : "—", "run");
+      var partial = /\[[^\]]*\u03a3/.test(v.expr);
+      kv(tb, "footprint", run.footprint && run.footprint[v.id] !== undefined ? run.footprint[v.id] + " bytes (largest production" + (partial ? ": a per-batch partial, same shape as the whole" : "") + ")" : "—", "run");
       kv(tb, "builds", run.builds && run.builds[v.id] !== undefined ? run.builds[v.id] : "—", "run");
     }
     // identity details: the full id, the engine's node hash and value key, the lifetime bounds
