@@ -969,32 +969,35 @@ TEST_CASE("index_space", "[elements]") {
     CHECK(ibr.bases().size() == 1 + 5 + 5);  // null + spaces + bases
   }
 
+  // the paper 1 example as published; it uses deprecated spellings
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   SECTION("paper 1 example") {
-    IndexBasisRegistry ibr;
+    IndexSpaceRegistry isr;
     using namespace sequant::mbpt;
-    ibr.add("i", 0b01,
-            {// fully occupied in vacuum state
-             .vacuum_occupied = true})
+    isr.add("i", 0b01,
+            // fully occupied in vacuum state
+            is_vacuum_occupied)
         .add("a", 0b10)
         .add_union("p", {"i", "a"});
 
-    REQUIRE(ibr.retrieve_space("i") == ibr.intersection("p", "i"));
-    REQUIRE(ibr.retrieve_space("p") == ibr.unIon("a", "i"));
-    REQUIRE(ibr.valid_intersection("i", "a") == false);
-    REQUIRE(ibr.is_base("a") == true);
-    REQUIRE(ibr.is_base("p") == false);
-    REQUIRE(ibr.is_pure_occupied("i") == true);
-    REQUIRE(ibr.is_pure_unoccupied("a") == true);
-    REQUIRE(ibr.contains_occupied("p") == true);
+    REQUIRE(isr.retrieve("i") == isr.intersection("p", "i"));
+    REQUIRE(isr.retrieve("p") == isr.unIon("a", "i"));
+    REQUIRE(isr.valid_intersection("i", "a") == false);
+    REQUIRE(isr.is_base("a") == true);
+    REQUIRE(isr.is_base("p") == false);
+    REQUIRE(isr.is_pure_occupied("i") == true);
+    REQUIRE(isr.is_pure_unoccupied("a") == true);
+    REQUIRE(isr.contains_occupied("p") == true);
 
-    // to use IBR load into default context
+    // to use ISR load into default context
     auto _ = set_scoped_default_context(
-        {.index_basis_registry = ibr, .vacuum = Vacuum::SingleProduct});
+        {.index_space_registry = isr, .vacuum = Vacuum::SingleProduct});
     REQUIRE_NOTHROW(Index("a_1"));
     REQUIRE_NOTHROW(Index("p_1"));
     Index a1("a_1");
     Index p1("p_1");
   }
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
   SECTION("paper 2 example") {
     IndexBasisRegistry ibr;
