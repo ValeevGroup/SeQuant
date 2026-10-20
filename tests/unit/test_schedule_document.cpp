@@ -1317,6 +1317,41 @@ TEST_CASE("record_dag takes persistence from the cell table",
   REQUIRE(leaves == 4);  // g, t, f, h
 }
 
+TEST_CASE("record_dag persistence is the flag of the assembled form",
+          "[schedule-document]") {
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  // a contracted (a-batched) root: X = g * h is a partial sum per a-batch,
+  // assembled whole at the root scope, then multiplied by the volatile t
+  auto const fx = dag_fixture(
+      {{"R1", pin_parse(L"g{i_1,i_2;a_3,a_4} * h{a_3,a_4;i_3,i_4} * "
+                        L"t{i_3,i_4;i_5,i_6}")}},
+      session_opts().batch_policy);
+  auto const dag =
+      record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots,
+                 [](EvalNodeDryRun const& n) {
+                   return n->is_tensor() && n->as_tensor().label() == L"t";
+                 });
+  std::map<std::string, ValueRecord const*> by_id;
+  for (auto const& v : dag.values) by_id[v.id] = &v;
+  // the partial escapes its loop block as an AccumulateSum: the value is
+  // homed in the block (built per batch) and its whole, read by the
+  // t-holding product, is what the executor keeps across evaluations
+  // (both a-loops are batched, so the partial escapes two nested blocks)
+  std::set<std::string> assembled;
+  for (auto const& b : dag.blocks)
+    for (auto const& [id, kind] : b.outputs)
+      if (kind == "AccumulateSum") assembled.insert(id);
+  REQUIRE(assembled.size() == 1);
+  auto const& x = *by_id.at(*assembled.begin());
+  CAPTURE(x.expr, x.home_block);
+  REQUIRE(x.home_block != 0);
+  REQUIRE(x.persistent);
+  // g and h feed only the partial, whose whole holds no t: not persistent
+  for (auto const& v : dag.values)
+    if (v.leaf && (v.expr.rfind("g", 0) == 0 || v.expr.rfind("h", 0) == 0))
+      REQUIRE(!v.persistent);
+}
+
 TEST_CASE("record_dag ids resolve for single-summand roots and scaled terms",
           "[schedule-document]") {
   auto const fx = dag_fixture(

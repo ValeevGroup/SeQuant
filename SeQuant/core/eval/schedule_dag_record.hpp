@@ -109,11 +109,12 @@ inline std::string output_kind_name(OutputKind k) {
 /// outputs list it; a leaf is homed at the root block (0). An edge is sliced
 /// when the consumer's home block is nested deeper than the producer's (it
 /// reads a slice of a value homed outside its own block). A value's
-/// `persistent` is the engine's own flag, \c TableCell::persistent of its
-/// production cell at its home block in the cell table \c build_cell_table
-/// derives from the schedule (a Build cell or, for a leaf, its Leaf cell;
-/// an escape-only value takes its Assemble cell there; a value with no cell is
-/// never stored, so false).
+/// `persistent` is the engine's own flag, \c TableCell::persistent of the
+/// value's outermost cell in the cell table \c build_cell_table derives from
+/// the schedule: the complete form the rest of the DAG consumes, which is the
+/// Assemble cell at the parent of the loop block that produces it per batch,
+/// else its Build or Leaf cell. A leaf no cell reads is never stored, so
+/// false.
 struct NodePlace {
   std::string term;
   std::size_t node = 0;
@@ -333,15 +334,11 @@ DagRecord record_dag(
   std::vector<std::optional<std::size_t>> build_block(ncells),
       escape_block(ncells);
   std::vector<std::size_t> nest_depth;  // per block id: number of ancestors
-  std::vector<CellScope> scope_of;      // per block id: its cell-table scope
   auto const visit = [&](auto const& self, ScopeBlock const& b,
                          std::optional<std::size_t> parent) -> std::size_t {
     std::size_t const id = dag.blocks.size();
     dag.blocks.emplace_back();
     nest_depth.push_back(parent ? nest_depth[*parent] + 1 : 0);
-    scope_of.push_back(parent ? scope_of[*parent] : CellScope{});
-    if (parent)
-      scope_of.back().path.push_back({b.level.key(), b.latitude_ordinal});
     {
       BlockRecord& rec = dag.blocks.back();
       rec.id = id;
@@ -389,8 +386,10 @@ DagRecord record_dag(
   }
 
   // ---- 5. persistence: the engine's flag, read off the cell table the
-  // ordered executor builds from this schedule. The flag needs no lives, so
-  // the batch count is a constant.
+  // ordered executor builds from this schedule, on the value's outermost
+  // cell (the fewest enclosing loop instances; an Assemble before a Build at
+  // the same depth): the complete form the rest of the DAG consumes. The flag
+  // needs no lives, so the batch count is a constant.
   auto const resolve = [&](std::size_t vid) -> Node const& {
     return *at_point[rich.cells.at(vid).occurrences.front().point];
   };
@@ -400,17 +399,30 @@ DagRecord record_dag(
       ordered, rich, sliced_modes, resolve, is_volatile);
   table_inputs.n_batches_of = [](LoopKey const&) { return std::size_t{1}; };
   CellTable const table = build_cell_table(table_inputs);
-  std::vector<std::optional<bool>> produced(ncells), assembled(ncells);
+  struct Outermost {
+    std::size_t depth = 0;
+    bool assemble = false;
+    bool persistent = false;
+    bool any = false;
+  };
+  std::vector<Outermost> outermost(ncells);
   for (TableCell const& cell : table.cells) {
     std::size_t const v = cell.value_id;
     if (v >= ncells)
       throw Exception("record_dag: the cell table names value " +
                       std::to_string(v) + " past the schedule");
-    if (!(cell.scope == scope_of[home_of[v]])) continue;
-    (cell.production.kind == ProductionKind::Assemble ? assembled
-                                                      : produced)[v] =
-        cell.persistent;
+    std::size_t const depth = cell.scope.path.size();
+    bool const assemble = cell.production.kind == ProductionKind::Assemble;
+    auto& best = outermost[v];
+    if (best.any && (best.depth < depth ||
+                     (best.depth == depth && best.assemble && !assemble)))
+      continue;
+    best = {depth, assemble, cell.persistent, true};
   }
+  for (std::size_t v = 0; v < ncells; ++v)
+    if (!outermost[v].any && !rich.cells[v].is_leaf)
+      throw Exception("record_dag: value " + id_of[v] +
+                      " has no cell in the cell table");
 
   // ---- 6. values
   std::unordered_map<std::size_t, CellLegality const*> legality_of;
@@ -433,7 +445,7 @@ DagRecord record_dag(
     rec.divergent_modes = spell_modes(c.divergent_modes);
     rec.home_block = home_of[v];
     rec.home_depth = c.home_depth;
-    rec.persistent = produced[v] ? *produced[v] : assembled[v].value_or(false);
+    rec.persistent = outermost[v].persistent;
     rec.first_use = c.first_use;
     rec.last_use = c.last_use;
     auto const lit = legality_of.find(value_key_of(c));
