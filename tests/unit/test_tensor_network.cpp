@@ -57,10 +57,10 @@ using namespace sequant;
 using namespace std::literals;
 
 TEST_CASE("tensor_network_shared", "[elements]") {
-  auto isr = sequant::mbpt::make_legacy_spaces();
-  mbpt::add_pao_basis(isr, mbpt::Spin::any);
+  auto ibr = sequant::mbpt::make_legacy_spaces();
+  mbpt::add_pao_basis(ibr, mbpt::Spin::any);
   auto ctx = get_default_context();
-  ctx.set(isr);
+  ctx.set(ibr);
   ctx.set(Vacuum::SingleProduct);
   auto ctx_resetter = set_scoped_default_context(ctx);
 

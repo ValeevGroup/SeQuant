@@ -62,15 +62,15 @@ TEST_CASE("context", "[runtime]") {
     }
 
     // set distinct contexts for fermi and bose statistics
-    auto [fermi_isr, bose_isr] = mbpt::make_fermi_and_bose_spaces();
-    CHECK(fermi_isr->bases() ==
-          bose_isr->bases());  // fermi_isr and bose_isr have the same spaces
+    auto [fermi_ibr, bose_ibr] = mbpt::make_fermi_and_bose_spaces();
+    CHECK(fermi_ibr->bases() ==
+          bose_ibr->bases());  // fermi_ibr and bose_ibr have the same spaces
     CHECK_NOTHROW(set_default_context(
         {{Statistics::FermiDirac,
-          Context({.index_basis_registry_shared_ptr = fermi_isr,
+          Context({.index_basis_registry_shared_ptr = fermi_ibr,
                    .vacuum = Vacuum::SingleProduct})},
          {Statistics::BoseEinstein,
-          Context({.index_basis_registry_shared_ptr = bose_isr,
+          Context({.index_basis_registry_shared_ptr = bose_ibr,
                    .vacuum = Vacuum::Physical})}}));
     CHECK(get_default_context(Statistics::Arbitrary).vacuum() ==
           Vacuum::SingleProduct);

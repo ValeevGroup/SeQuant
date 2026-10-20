@@ -64,20 +64,20 @@ class rand_tensor_yield {
   [[nodiscard]] Tensor_t make_rand_tensor(sequant::Tensor const& tnsr) const {
     using ranges::views::transform;
     using sequant::IndexSpace;
-    auto isr = sequant::get_default_context().index_basis_registry();
+    auto ibr = sequant::get_default_context().index_basis_registry();
 
     SEQUANT_ASSERT(
         ranges::all_of(tnsr.const_braket_indices(),
-                       [&isr](auto const& idx) {
-                         return idx.space() == isr->retrieve_space(L"i") ||
-                                idx.space() == isr->retrieve_space(L"a");
+                       [&ibr](auto const& idx) {
+                         return idx.space() == ibr->retrieve_space(L"i") ||
+                                idx.space() == ibr->retrieve_space(L"a");
                        }) &&
         "Unsupported IndexSpace type found while generating tensor.");
 
     auto extents =
-        tnsr.const_braket_indices() | transform([this, &isr](auto const& idx) {
+        tnsr.const_braket_indices() | transform([this, &ibr](auto const& idx) {
           return static_cast<int64_t>(
-              idx.space() == isr->retrieve_space(L"i") ? nocc_ : nvirt_);
+              idx.space() == ibr->retrieve_space(L"i") ? nocc_ : nvirt_);
         }) |
         ranges::to<sequant::container::svector<int64_t>>;
 

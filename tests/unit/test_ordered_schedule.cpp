@@ -824,10 +824,10 @@ TEST_CASE(
     "[ordered-schedule][sp2-noninner]") {
   auto ctx = sequant::get_default_context_snapshot();
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_df_spaces(isr);  // Κ (DF aux)
-  ctx.set(isr);
+  sequant::mbpt::add_df_spaces(ibr);  // Κ (DF aux)
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto B = orderedsched_2axis_forest_root();
@@ -1040,11 +1040,11 @@ struct OrderedSchedFixture {
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -1186,10 +1186,10 @@ TEST_CASE(
     "[ordered-schedule][value-id]") {
   auto ctx = sequant::get_default_context_snapshot();
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto B = orderedsched_2axis_forest_root();

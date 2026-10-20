@@ -88,11 +88,11 @@ TEST_CASE(
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx0.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx0.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx0.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx0.set(ibr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
 
   // The reference size regime (the same numbers the dry-run fixtures use), so

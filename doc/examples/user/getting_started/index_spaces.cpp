@@ -17,15 +17,15 @@ int main() {
   // end-snippet-1
 
   // start-snippet-2
-  IndexBasisRegistry isr;
-  isr.add(L"y", 0b01, {.vacuum_occupied = true});
+  IndexBasisRegistry ibr;
+  ibr.add(L"y", 0b01, {.vacuum_occupied = true});
   // end-snippet-2
 
-  // reset isr for the next example to work
-  isr.clear();
+  // reset ibr for the next example to work
+  ibr.clear();
 
   // start-snippet-3
-  isr.add(L"y", 0b01, {.vacuum_occupied = true})
+  ibr.add(L"y", 0b01, {.vacuum_occupied = true})
       .add(L"z", 0b10)
       .add(L"p", 0b11, {.complete = true});
   // end-snippet-3

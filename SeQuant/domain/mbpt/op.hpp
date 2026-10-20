@@ -257,10 +257,10 @@ class QuantumNumberChange
       return 2;
     } else if (get_default_context().vacuum() == Vacuum::SingleProduct ||
                get_default_context().vacuum() == Vacuum::MultiProduct) {
-      auto isr = get_default_context().index_basis_registry();
-      const auto& isr_base_spaces = isr->base_spaces();
-      SEQUANT_ASSERT(isr_base_spaces.size() > 0);
-      return isr_base_spaces.size() * 2;
+      auto ibr = get_default_context().index_basis_registry();
+      const auto& ibr_base_spaces = ibr->base_spaces();
+      SEQUANT_ASSERT(ibr_base_spaces.size() > 0);
+      return ibr_base_spaces.size() * 2;
     } else {
       throw Exception("unknown Vacuum type");
     }
@@ -406,14 +406,14 @@ class QuantumNumberChange
   /// space defined in the current context
   interval_t count_in_active_space(bool particle, bool creators) {
     const auto& qnvec = this->base();
-    auto isr = get_default_context().index_basis_registry();
-    const auto& base_spaces = isr->base_spaces();
+    auto ibr = get_default_context().index_basis_registry();
+    const auto& base_spaces = ibr->base_spaces();
     interval_t result = 0;
     for (unsigned int i = 0; i < base_spaces.size(); i++) {
       const auto& base_space = base_spaces[i];
       const auto& active_space = particle
-                                     ? isr->particle_space(base_space.qns())
-                                     : isr->hole_space(base_space.qns());
+                                     ? ibr->particle_space(base_space.qns())
+                                     : ibr->hole_space(base_space.qns());
       const auto intersect_type =
           base_space.attr().intersection(active_space.attr()).type();
       if (IndexSpace::Type{} != intersect_type) {
@@ -1098,14 +1098,14 @@ ExprPtr S(std::int64_t K, std::optional<std::wstring> grants_of = {});
 /// @param R rank of the perturbation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
-/// @pre If batching is used, ISR must contain batching space
+/// @pre If batching is used, IBR must contain batching space
 ExprPtr Hʼ(std::size_t R, const OpParams& params = {.order = 1});
 
 /// @brief Makes perturbed particle-conserving excitation operator
 /// @param K rank of the excitation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
-/// @pre If batching is used, ISR must contain batching space
+/// @pre If batching is used, IBR must contain batching space
 ExprPtr tʼ(std::size_t K, const OpParams& params = {.order = 1});
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators
@@ -1113,7 +1113,7 @@ ExprPtr tʼ(std::size_t K, const OpParams& params = {.order = 1});
 /// @param params OpParams for operator construction. Default: order=1,
 /// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
-/// @pre If batching is used, ISR must contain batching space
+/// @pre If batching is used, IBR must contain batching space
 ExprPtr Tʼ(std::size_t K,
            const OpParams& params = {.order = 1, .skip1 = false});
 
@@ -1121,7 +1121,7 @@ ExprPtr Tʼ(std::size_t K,
 /// @param K rank of the deexcitation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
-/// @pre If batching is used, ISR must contain batching space
+/// @pre If batching is used, IBR must contain batching space
 ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators
@@ -1129,7 +1129,7 @@ ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
 /// @param params OpParams for operator construction. Default: order=1,
 /// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
-/// @pre If batching is used, ISR must contain batching space
+/// @pre If batching is used, IBR must contain batching space
 ExprPtr Λʼ(std::size_t K,
            const OpParams& params = {.order = 1, .skip1 = false});
 
@@ -1281,14 +1281,14 @@ ExprPtr S(std::int64_t K, std::optional<std::wstring> grants_of = {});
 /// @param R rank of the perturbation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
-/// @pre If batching is used, ISR must contain batching space
+/// @pre If batching is used, IBR must contain batching space
 ExprPtr Hʼ(std::size_t R, const OpParams& params = {.order = 1});
 
 /// @brief Makes perturbed particle-conserving excitation operator from OpParams
 /// @param K rank of the excitation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
-/// @pre If batching is used, ISR must contain batching space
+/// @pre If batching is used, IBR must contain batching space
 ExprPtr tʼ(std::size_t K, const OpParams& params = {.order = 1});
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators
@@ -1296,7 +1296,7 @@ ExprPtr tʼ(std::size_t K, const OpParams& params = {.order = 1});
 /// @param params OpParams for operator construction. Default: order=1,
 /// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
-/// @pre If batching is used, ISR must contain batching space
+/// @pre If batching is used, IBR must contain batching space
 ExprPtr Tʼ(std::size_t K,
            const OpParams& params = {.order = 1, .skip1 = false});
 
@@ -1304,7 +1304,7 @@ ExprPtr Tʼ(std::size_t K,
 /// @param K rank of the deexcitation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
-/// @pre If batching is used, ISR must contain batching space
+/// @pre If batching is used, IBR must contain batching space
 ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators
@@ -1312,7 +1312,7 @@ ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
 /// @param params OpParams for operator construction. Default: order=1,
 /// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
-/// @pre If batching is used, ISR must contain batching space
+/// @pre If batching is used, IBR must contain batching space
 ExprPtr Λʼ(std::size_t K,
            const OpParams& params = {.order = 1, .skip1 = false});
 
@@ -1357,9 +1357,9 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 namespace detail {
 /// @return true if the reference occupied space is the Wick vacuum's
 inline bool reference_is_vacuum() {
-  const auto isr = get_default_context().index_basis_registry();
-  SEQUANT_ASSERT(isr, "the default context has no IndexBasisRegistry");
-  return isr->reference_occupied_space() == isr->vacuum_occupied_space();
+  const auto ibr = get_default_context().index_basis_registry();
+  SEQUANT_ASSERT(ibr, "the default context has no IndexBasisRegistry");
+  return ibr->reference_occupied_space() == ibr->vacuum_occupied_space();
 }
 
 /// @brief Enforces that the reference is the Wick vacuum

@@ -463,11 +463,11 @@ TEST_CASE(
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -1074,11 +1074,11 @@ TEST_CASE(
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -1582,11 +1582,11 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -1941,11 +1941,11 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -2145,11 +2145,11 @@ TEST_CASE(
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -2346,11 +2346,11 @@ TEST_CASE(
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -2633,11 +2633,11 @@ TEST_CASE(
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -3201,11 +3201,11 @@ TEST_CASE(
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -3397,11 +3397,11 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -4262,11 +4262,11 @@ TEST_CASE(
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -4397,11 +4397,11 @@ TEST_CASE(
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -4717,11 +4717,11 @@ TEST_CASE(
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -4913,11 +4913,11 @@ TEST_CASE(
   auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -5215,11 +5215,11 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     auto ctx = sequant::get_default_context_snapshot();
     ctx.set_first_dummy_index_ordinal(1000000);
     REQUIRE(ctx.index_basis_registry() != nullptr);
-    auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+    auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
         *ctx.index_basis_registry());
-    sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-    sequant::mbpt::add_df_spaces(isr);
-    ctx.set(isr);
+    sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+    sequant::mbpt::add_df_spaces(ibr);
+    ctx.set(ibr);
     auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
     auto const body =

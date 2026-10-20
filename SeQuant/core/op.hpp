@@ -199,22 +199,22 @@ bool is_annihilator(const Op<S> &op) {
 template <Statistics S>
 bool is_pure_qpcreator(const Op<S> &op,
                        Vacuum vacuum = get_default_context(S).vacuum(),
-                       const std::shared_ptr<const IndexBasisRegistry> &isr =
+                       const std::shared_ptr<const IndexBasisRegistry> &ibr =
                            get_default_context(S).index_basis_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::Create;
     case Vacuum::SingleProduct: {
-      return (isr->is_pure_occupied(op.index().space()) &&
+      return (ibr->is_pure_occupied(op.index().space()) &&
               op.action() == Action::Annihilate) ||
-             (isr->is_pure_unoccupied(op.index().space()) &&
+             (ibr->is_pure_unoccupied(op.index().space()) &&
               op.action() == Action::Create);
     }
     case Vacuum::MultiProduct: {
       const auto &sp = op.index().space();
       const auto &target = op.action() == Action::Create
-                               ? isr->vacuum_unoccupied_space(sp.qns())
-                               : isr->reference_occupied_space(sp.qns());
+                               ? ibr->vacuum_unoccupied_space(sp.qns())
+                               : ibr->reference_occupied_space(sp.qns());
       return target.type().includes(sp.type());
     }
   }
@@ -227,22 +227,22 @@ bool is_pure_qpcreator(const Op<S> &op,
 template <Statistics S>
 bool is_qpcreator(const Op<S> &op,
                   Vacuum vacuum = get_default_context(S).vacuum(),
-                  const std::shared_ptr<const IndexBasisRegistry> &isr =
+                  const std::shared_ptr<const IndexBasisRegistry> &ibr =
                       get_default_context(S).index_basis_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::Create;
     case Vacuum::SingleProduct: {
-      return (isr->contains_occupied(op.index().space()) &&
+      return (ibr->contains_occupied(op.index().space()) &&
               op.action() == Action::Annihilate) ||
-             (isr->contains_unoccupied(op.index().space()) &&
+             (ibr->contains_unoccupied(op.index().space()) &&
               op.action() == Action::Create);
     }
     case Vacuum::MultiProduct: {
       const auto &sp = op.index().space();
       const auto &target = op.action() == Action::Create
-                               ? isr->vacuum_unoccupied_space(sp.qns())
-                               : isr->reference_occupied_space(sp.qns());
+                               ? ibr->vacuum_unoccupied_space(sp.qns())
+                               : ibr->reference_occupied_space(sp.qns());
       return static_cast<bool>(sp.type().intersection(target.type()));
     }
   }
@@ -253,7 +253,7 @@ bool is_qpcreator(const Op<S> &op,
 template <Statistics S>
 IndexSpace qpcreator_space(
     const Op<S> &op, Vacuum vacuum = get_default_context(S).vacuum(),
-    const std::shared_ptr<const IndexBasisRegistry> &isr =
+    const std::shared_ptr<const IndexBasisRegistry> &ibr =
         get_default_context(S).index_basis_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
@@ -261,18 +261,18 @@ IndexSpace qpcreator_space(
                                            : IndexSpace::null;
     case Vacuum::SingleProduct:
       return op.action() == Action::Annihilate
-                 ? isr->intersection(
+                 ? ibr->intersection(
                        op.index().space(),
-                       isr->vacuum_occupied_space(op.index().space().qns()))
-                 : isr->intersection(
+                       ibr->vacuum_occupied_space(op.index().space().qns()))
+                 : ibr->intersection(
                        op.index().space(),
-                       isr->vacuum_unoccupied_space(op.index().space().qns()));
+                       ibr->vacuum_unoccupied_space(op.index().space().qns()));
     case Vacuum::MultiProduct: {
       const auto &sp = op.index().space();
       return op.action() == Action::Create
-                 ? isr->intersection(sp, isr->vacuum_unoccupied_space(sp.qns()))
-                 : isr->intersection(sp,
-                                     isr->reference_occupied_space(sp.qns()));
+                 ? ibr->intersection(sp, ibr->vacuum_unoccupied_space(sp.qns()))
+                 : ibr->intersection(sp,
+                                     ibr->reference_occupied_space(sp.qns()));
     }
   }
 
@@ -284,22 +284,22 @@ IndexSpace qpcreator_space(
 template <Statistics S>
 bool is_pure_qpannihilator(
     const Op<S> &op, Vacuum vacuum = get_default_context(S).vacuum(),
-    const std::shared_ptr<const IndexBasisRegistry> &isr =
+    const std::shared_ptr<const IndexBasisRegistry> &ibr =
         get_default_context(S).index_basis_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::Annihilate;
     case Vacuum::SingleProduct: {
-      return (isr->is_pure_unoccupied(op.index().space()) &&
+      return (ibr->is_pure_unoccupied(op.index().space()) &&
               op.action() == Action::Annihilate) ||
-             (isr->is_pure_occupied(op.index().space()) &&
+             (ibr->is_pure_occupied(op.index().space()) &&
               op.action() == Action::Create);
     }
     case Vacuum::MultiProduct: {
       const auto &sp = op.index().space();
       const auto &target = op.action() == Action::Annihilate
-                               ? isr->vacuum_unoccupied_space(sp.qns())
-                               : isr->reference_occupied_space(sp.qns());
+                               ? ibr->vacuum_unoccupied_space(sp.qns())
+                               : ibr->reference_occupied_space(sp.qns());
       return target.type().includes(sp.type());
     }
   }
@@ -312,22 +312,22 @@ bool is_pure_qpannihilator(
 template <Statistics S>
 bool is_qpannihilator(const Op<S> &op,
                       Vacuum vacuum = get_default_context(S).vacuum(),
-                      const std::shared_ptr<const IndexBasisRegistry> &isr =
+                      const std::shared_ptr<const IndexBasisRegistry> &ibr =
                           get_default_context(S).index_basis_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::Annihilate;
     case Vacuum::SingleProduct: {
-      return (isr->contains_occupied(op.index().space()) &&
+      return (ibr->contains_occupied(op.index().space()) &&
               op.action() == Action::Create) ||
-             (isr->contains_unoccupied(op.index().space()) &&
+             (ibr->contains_unoccupied(op.index().space()) &&
               op.action() == Action::Annihilate);
     }
     case Vacuum::MultiProduct: {
       const auto &sp = op.index().space();
       const auto &target = op.action() == Action::Annihilate
-                               ? isr->vacuum_unoccupied_space(sp.qns())
-                               : isr->reference_occupied_space(sp.qns());
+                               ? ibr->vacuum_unoccupied_space(sp.qns())
+                               : ibr->reference_occupied_space(sp.qns());
       return static_cast<bool>(sp.type().intersection(target.type()));
     }
   }
@@ -338,7 +338,7 @@ bool is_qpannihilator(const Op<S> &op,
 template <Statistics S>
 IndexSpace qpannihilator_space(
     const Op<S> &op, Vacuum vacuum = get_default_context(S).vacuum(),
-    const std::shared_ptr<const IndexBasisRegistry> &isr =
+    const std::shared_ptr<const IndexBasisRegistry> &ibr =
         get_default_context(S).index_basis_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
@@ -346,18 +346,18 @@ IndexSpace qpannihilator_space(
                                                : IndexSpace::null;
     case Vacuum::SingleProduct:
       return op.action() == Action::Create
-                 ? isr->intersection(
+                 ? ibr->intersection(
                        op.index().space(),
-                       isr->vacuum_occupied_space(op.index().space().qns()))
-                 : isr->intersection(
+                       ibr->vacuum_occupied_space(op.index().space().qns()))
+                 : ibr->intersection(
                        op.index().space(),
-                       isr->vacuum_unoccupied_space(op.index().space().qns()));
+                       ibr->vacuum_unoccupied_space(op.index().space().qns()));
     case Vacuum::MultiProduct: {
       const auto &sp = op.index().space();
       return op.action() == Action::Annihilate
-                 ? isr->intersection(sp, isr->vacuum_unoccupied_space(sp.qns()))
-                 : isr->intersection(sp,
-                                     isr->reference_occupied_space(sp.qns()));
+                 ? ibr->intersection(sp, ibr->vacuum_unoccupied_space(sp.qns()))
+                 : ibr->intersection(sp,
+                                     ibr->reference_occupied_space(sp.qns()));
     }
   }
 
@@ -370,18 +370,18 @@ IndexSpace qpannihilator_space(
 template <Statistics S>
 bool can_contract(const Op<S> &left, const Op<S> &right,
                   Vacuum vacuum = get_default_context(S).vacuum(),
-                  const std::shared_ptr<const IndexBasisRegistry> &isr =
+                  const std::shared_ptr<const IndexBasisRegistry> &ibr =
                       get_default_context(S).index_basis_registry()) {
   // only cre.ann and ann.cre have nonzero reference expectation values; an
   // active op is both a qp creator and a qp annihilator, so the actions must
   // be checked explicitly
   if (vacuum == Vacuum::MultiProduct && left.action() == right.action())
     return false;
-  if (is_qpannihilator<S>(left, vacuum, isr) &&
-      is_qpcreator<S>(right, vacuum, isr)) {
-    const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
-    const auto qpspace_right = qpcreator_space<S>(right, vacuum, isr);
-    const auto qpspace_common = isr->intersection(qpspace_left, qpspace_right);
+  if (is_qpannihilator<S>(left, vacuum, ibr) &&
+      is_qpcreator<S>(right, vacuum, ibr)) {
+    const auto qpspace_left = qpannihilator_space<S>(left, vacuum, ibr);
+    const auto qpspace_right = qpcreator_space<S>(right, vacuum, ibr);
+    const auto qpspace_common = ibr->intersection(qpspace_left, qpspace_right);
     if (qpspace_common) return true;
   }
   return false;
@@ -978,7 +978,7 @@ class NormalOperator : public Operator<S>,
   template <Statistics>
   friend class Operator;
   bool commutes_with_atom(const Expr &that) const override {
-    const auto &isr = get_default_context(S).index_basis_registry();
+    const auto &ibr = get_default_context(S).index_basis_registry();
 
     bool result = true;
     /// does not commute with Operator<S>
@@ -991,7 +991,7 @@ class NormalOperator : public Operator<S>,
           op_that.vacuum()) {  // can only check commutativity for same vacua
         for (auto &&op_l : *this) {
           for (auto &&op_r : op_that) {
-            if (sequant::can_contract(op_l, op_r, vacuum_, isr)) {
+            if (sequant::can_contract(op_l, op_r, vacuum_, ibr)) {
               return false;
             }
           }

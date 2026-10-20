@@ -74,19 +74,19 @@ class rand_tensor_yield {
     using ranges::views::repeat_n;
     using ranges::views::transform;
     using sequant::IndexSpace;
-    auto isr = sequant::get_default_context().index_basis_registry();
+    auto ibr = sequant::get_default_context().index_basis_registry();
 
     SEQUANT_ASSERT(
         ranges::all_of(tnsr.const_braket_indices(),
-                       [&isr](auto const& idx) {
-                         return idx.space() == isr->retrieve_space(L"i") ||
-                                idx.space() == isr->retrieve_space(L"a");
+                       [&ibr](auto const& idx) {
+                         return idx.space() == ibr->retrieve_space(L"i") ||
+                                idx.space() == ibr->retrieve_space(L"a");
                        }) &&
         "Unsupported IndexSpace type found while generating tensor.");
 
     auto rng = btas::Range{
-        tnsr.const_braket_indices() | transform([this, &isr](auto const& idx) {
-          return idx.space() == isr->retrieve_space(L"i") ? nocc_ : nvirt_;
+        tnsr.const_braket_indices() | transform([this, &ibr](auto const& idx) {
+          return idx.space() == ibr->retrieve_space(L"i") ? nocc_ : nvirt_;
         }) |
         ranges::to_vector};
 
@@ -174,10 +174,10 @@ class aux_rand_tensor_yield {
   }
 
   size_t extent(sequant::Index const& idx) const {
-    auto isr = sequant::get_default_context().index_basis_registry();
-    if (idx.space() == isr->retrieve_space(L"i")) return nocc_;
-    if (idx.space() == isr->retrieve_space(L"a")) return nvirt_;
-    if (idx.space() == isr->retrieve_space(L"z")) return nz_;
+    auto ibr = sequant::get_default_context().index_basis_registry();
+    if (idx.space() == ibr->retrieve_space(L"i")) return nocc_;
+    if (idx.space() == ibr->retrieve_space(L"a")) return nvirt_;
+    if (idx.space() == ibr->retrieve_space(L"z")) return nz_;
     SEQUANT_ASSERT(false && "aux_rand_tensor_yield: unsupported IndexSpace");
     return 0;
   }
@@ -797,11 +797,11 @@ TEST_CASE("binarize_highorder_aux_hyperindex", "[eval_btas][hyperindex]") {
 
   // register the OBS AO space (μ) and the batching space (z) on top of the
   // standard single-reference spaces
-  auto isr = mbpt::make_sr_spaces();
-  mbpt::add_ao_basis(isr, mbpt::Spin::any);  // μ (OBS AO)
-  mbpt::add_batching_spaces(isr);            // z (batching)
+  auto ibr = mbpt::make_sr_spaces();
+  mbpt::add_ao_basis(ibr, mbpt::Spin::any);  // μ (OBS AO)
+  mbpt::add_batching_spaces(ibr);            // z (batching)
   auto ctx_resetter =
-      set_scoped_default_context(Context{get_default_context()}.set(isr));
+      set_scoped_default_context(Context{get_default_context()}.set(ibr));
 
   const std::wstring e_a_expr =
       L"E{;;z1} = w{;;z1} * g{μ5,μ6;μ7,μ8;z1} * c{μ1;i1;z1} * ć{i1;μ5;z1} * "
@@ -944,10 +944,10 @@ TEST_CASE("eval_btas_batched_over_aux", "[eval_btas][hyperindex]") {
   using namespace sequant;
   using BTensorD = btas::Tensor<double>;
 
-  auto isr = mbpt::make_sr_spaces();
-  mbpt::add_batching_spaces(isr);  // z
+  auto ibr = mbpt::make_sr_spaces();
+  mbpt::add_batching_spaces(ibr);  // z
   auto ctx_resetter =
-      set_scoped_default_context(Context{get_default_context()}.set(isr));
+      set_scoped_default_context(Context{get_default_context()}.set(ibr));
 
   // Nonsymm so bra<->ket orientation is never folded by canonicalization: the
   // leaf identities (hence the yielder cache keys) stay put.

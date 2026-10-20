@@ -268,10 +268,10 @@ class rand_tensor_yield {
 
   template <typename ToTArray = array_type>
   sequant::BackendArrayOps array_ops() const {
-    auto isr = sequant::get_default_context().index_basis_registry();
+    auto ibr = sequant::get_default_context().index_basis_registry();
     std::map<std::wstring, TA::TiledRange1> m;
     auto const bk = [&](wchar_t const* l) {
-      return std::wstring(isr->retrieve_space(l).base_key());
+      return std::wstring(ibr->retrieve_space(l).base_key());
     };
     m[bk(L"i")] = tr1_for(bk(L"i"), nocc_);
     m[bk(L"a")] = tr1_for(bk(L"a"), nvirt_);
@@ -444,17 +444,17 @@ class rand_tensor_yield {
     } nested{sl.outer, sl.inner};
 
     ResultPtr result{nullptr};
-    auto isr = get_default_context().index_basis_registry();
+    auto ibr = get_default_context().index_basis_registry();
 
-    auto make_extents = [this, &isr](auto&& ixs) -> container::svector<size_t> {
-      return ixs | transform([this, &isr](auto const& ix) -> size_t {
-               SEQUANT_ASSERT(ix.space() == isr->retrieve_space(L"i") ||
-                              ix.space() == isr->retrieve_space(L"a") ||
-                              ix.space() == isr->retrieve_space(L"x") ||
-                              ix.space() == isr->retrieve_space(L"m"));
-               return ix.space() == isr->retrieve_space(L"i")   ? nocc_
-                      : ix.space() == isr->retrieve_space(L"a") ? nvirt_
-                      : ix.space() == isr->retrieve_space(L"x")
+    auto make_extents = [this, &ibr](auto&& ixs) -> container::svector<size_t> {
+      return ixs | transform([this, &ibr](auto const& ix) -> size_t {
+               SEQUANT_ASSERT(ix.space() == ibr->retrieve_space(L"i") ||
+                              ix.space() == ibr->retrieve_space(L"a") ||
+                              ix.space() == ibr->retrieve_space(L"x") ||
+                              ix.space() == ibr->retrieve_space(L"m"));
+               return ix.space() == ibr->retrieve_space(L"i")   ? nocc_
+                      : ix.space() == ibr->retrieve_space(L"a") ? nvirt_
+                      : ix.space() == ibr->retrieve_space(L"x")
                           ? naux_
                           : nvirt_;  // m (flat
                                      // PAO-like
@@ -2893,9 +2893,9 @@ TEST_CASE(
   // nocc 4 tiled by 2 -> two occ batches; aux 8 tiled by 4 -> two aux batches.
   rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 8};
   yield_.set_max_tile(2);
-  auto const isr = sequant::get_default_context().index_basis_registry();
-  auto const occ = isr->retrieve_space(L"i");
-  auto const aux = isr->retrieve_space(L"x");
+  auto const ibr = sequant::get_default_context().index_basis_registry();
+  auto const occ = ibr->retrieve_space(L"i");
+  auto const aux = ibr->retrieve_space(L"x");
 
   // P = g*h (K node) ; Q = (P*C)*C{a_1;m_1} (carries a_1<i_1,i_2>, so i_2
   // survives the i_3 reduction as in the MPQC tree) ; U = t*C ; N1 = Q*U
@@ -6273,10 +6273,10 @@ TEST_CASE("dp_external_placement_correctness",
 
   auto& world = TA::get_default_world();
 
-  auto isr = get_default_context().index_basis_registry();
-  auto occ = isr->retrieve_space(L"i");
-  auto virt = isr->retrieve_space(L"a");
-  auto aux = isr->retrieve_space(L"x");
+  auto ibr = get_default_context().index_basis_registry();
+  auto occ = ibr->retrieve_space(L"i");
+  auto virt = ibr->retrieve_space(L"a");
+  auto aux = ibr->retrieve_space(L"x");
 
   // Actual arrays: occ multi-tiled (40 in tiles of 4 -> 10 blocks) so the
   // external occ mode partitions into > 1 batch, and large vs virt/aux (4) so

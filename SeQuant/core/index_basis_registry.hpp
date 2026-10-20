@@ -2185,11 +2185,11 @@ class IndexBasisRegistry {
   /// field, with the same entries following the same ones (see follow()),
   /// and specify the same physical-particle attributes and vacuum-occupied,
   /// reference-occupied, complete, hole and particle spaces
-  friend bool operator==(const IndexBasisRegistry& isr1,
-                         const IndexBasisRegistry& isr2) {
+  friend bool operator==(const IndexBasisRegistry& ibr1,
+                         const IndexBasisRegistry& ibr2) {
     // IndexBasis equality ignores the metadata
     return std::ranges::equal(
-               isr1.bases_, isr2.bases_,
+               ibr1.bases_, ibr2.bases_,
                [](const auto& e1, const auto& e2) {
                  return e1.first == e2.first && e1.second == e2.second &&
                         e1.second.space().dimension() ==
@@ -2198,13 +2198,13 @@ class IndexBasisRegistry {
                         e1.second.metric() == e2.second.metric() &&
                         e1.second.field() == e2.second.field();
                }) &&
-           isr1.follows_ == isr2.follows_ &&
-           isr1.physical_particle_attribute_mask_ ==
-               isr2.physical_particle_attribute_mask_ &&
-           isr1.vacocc_ == isr2.vacocc_ && isr1.refocc_ == isr2.refocc_ &&
-           isr1.complete_ == isr2.complete_ &&
-           isr1.hole_space_ == isr2.hole_space_ &&
-           isr1.particle_space_ == isr2.particle_space_;
+           ibr1.follows_ == ibr2.follows_ &&
+           ibr1.physical_particle_attribute_mask_ ==
+               ibr2.physical_particle_attribute_mask_ &&
+           ibr1.vacocc_ == ibr2.vacocc_ && ibr1.refocc_ == ibr2.refocc_ &&
+           ibr1.complete_ == ibr2.complete_ &&
+           ibr1.hole_space_ == ibr2.hole_space_ &&
+           ibr1.particle_space_ == ibr2.particle_space_;
   }
 };  // class IndexBasisRegistry
 

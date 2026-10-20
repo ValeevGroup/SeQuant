@@ -57,7 +57,7 @@ TEST_CASE("spin", "[spin]") {
   auto _ = set_scoped_default_context(ctx);
 
   SECTION("protoindices supported") {
-    auto isr = get_default_context().index_basis_registry();
+    auto ibr = get_default_context().index_basis_registry();
     Index i1(L"i_1");
     Index a1(L"a_1", {i1});
 
@@ -2017,7 +2017,7 @@ TEST_CASE("spincase-index-keeps-basis-instance", "[spin][basis]") {
 // indices with one label up to the basis name; the index lists of the spin
 // tracers must keep both, else the named one is never assigned a spin
 namespace {
-sequant::IndexSpace isr_space_of(const sequant::Index& idx) {
+sequant::IndexSpace ibr_space_of(const sequant::Index& idx) {
   return sequant::get_default_context().index_basis_registry()->retrieve_space(
       idx.space().type(), idx.space().qns());
 }
@@ -2029,15 +2029,15 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   using sequant::mbpt::make_spinbeta;
   using sequant::mbpt::make_spinfree;
   using sequant::mbpt::spintrace;
-  auto isr = mbpt::make_sr_spaces();
-  const IndexSpace uocc = isr->retrieve_space(L"a");
-  isr->add(L"μ̃", uocc, 77, {.extent = 120});
+  auto ibr = mbpt::make_sr_spaces();
+  const IndexSpace uocc = ibr->retrieve_space(L"a");
+  ibr->add(L"μ̃", uocc, 77, {.extent = 120});
   // the spin-cased counterparts are bases of their own, e.g. of different
   // extents in a spin-polarized state
-  isr->add(L"μ̃↑", L"a↑", 77, {.extent = 60});
-  isr->add(L"μ̃↓", L"a↓", 77, {.extent = 50});
+  ibr->add(L"μ̃↑", L"a↑", 77, {.extent = 60});
+  ibr->add(L"μ̃↓", L"a↓", 77, {.extent = 50});
   auto ctx = set_scoped_default_context(
-      Context({.index_basis_registry_shared_ptr = std::move(isr),
+      Context({.index_basis_registry_shared_ptr = std::move(ibr),
                .vacuum = Vacuum::SingleProduct}));
   const IndexBasis pao =
       get_default_context().index_basis_registry()->retrieve(L"μ̃");
@@ -2052,7 +2052,7 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
   CHECK(m1b.label() == L"μ̃↓_1");
   CHECK(m1b.basis().basis_instance() == 77);
   CHECK(m1b.basis().extent() == 50);
-  CHECK(m1b.space() == isr_space_of(m1b));  // sanity: a↓ with the same attr
+  CHECK(m1b.space() == ibr_space_of(m1b));  // sanity: a↓ with the same attr
   CHECK(make_spinfree(m1a) == m1);
   CHECK(make_spinfree(m1b) == m1);
   CHECK(make_spinfree(m1b).basis().extent() == 120);

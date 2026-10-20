@@ -37,10 +37,10 @@ using namespace sequant::tests;
 TEST_CASE("canonicalization", "[algorithms]") {
   using namespace sequant;
 
-  auto isr = sequant::mbpt::make_legacy_spaces();
-  mbpt::add_pao_basis(isr, mbpt::Spin::any);
+  auto ibr = sequant::mbpt::make_legacy_spaces();
+  mbpt::add_pao_basis(ibr, mbpt::Spin::any);
   auto ctx = get_default_context();
-  ctx.set(isr);
+  ctx.set(ibr);
   auto ctx_resetter = set_scoped_default_context(ctx);
 
   SECTION("Tensors") {
@@ -795,9 +795,9 @@ TEST_CASE("context_tensor_canonicalizers", "[algorithms]") {
 TEST_CASE("canonicalization_zero_by_symmetry", "[algorithms][canonicalize]") {
   using namespace sequant;
 
-  auto isr = sequant::mbpt::make_legacy_spaces();
+  auto ibr = sequant::mbpt::make_legacy_spaces();
   auto ctx = get_default_context();
-  ctx.set(isr);
+  ctx.set(ibr);
   auto ctx_resetter = set_scoped_default_context(ctx);
 
   auto is_zero = [](const ExprPtr& expr) {

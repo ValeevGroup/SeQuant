@@ -12,21 +12,21 @@
 void v1() {
   // start-snippet-1
   using namespace sequant;
-  IndexBasisRegistry isr;
+  IndexBasisRegistry ibr;
 
   // base spaces
-  isr.add(L"i", 0b01).add(L"a", 0b10);
+  ibr.add(L"i", 0b01).add(L"a", 0b10);
   // union of 2 base spaces
-  // can create manually, as isr.add(L"p", 0b11) , or explicitly ...
-  isr.add_union(L"p", {L"i", L"a"});  // union of i and a
+  // can create manually, as ibr.add(L"p", 0b11) , or explicitly ...
+  ibr.add_union(L"p", {L"i", L"a"});  // union of i and a
 
   // can access unions and intersections of base and composite spaces
-  SEQUANT_ASSERT(isr.unIon(L"i", L"a") == isr.retrieve_space(L"p"));
-  SEQUANT_ASSERT(isr.intersection(L"p", L"i") == isr.retrieve_space(L"i"));
+  SEQUANT_ASSERT(ibr.unIon(L"i", L"a") == ibr.retrieve_space(L"p"));
+  SEQUANT_ASSERT(ibr.intersection(L"p", L"i") == ibr.retrieve_space(L"i"));
 
-  // to use the vocabulary defined by isr use it to make a Context object and
+  // to use the vocabulary defined by ibr use it to make a Context object and
   // make it the default
-  set_default_context({.index_basis_registry = std::move(isr)});
+  set_default_context({.index_basis_registry = std::move(ibr)});
 
   // now can use space labels to construct Index objects representing said
   // spaces
@@ -61,14 +61,14 @@ void v2() {
 void v3() {
   // start-snippet-3
   using namespace sequant;
-  auto isr = mbpt::make_min_sr_spaces();
+  auto ibr = mbpt::make_min_sr_spaces();
   // a basis instance of a registered space can be registered under its own
   // label: here a localized basis of the space i, as its basis instance 1
-  const IndexSpace i = isr->retrieve_space(L"i");
-  isr->add(L"ĩ", i, 1);
+  const IndexSpace i = ibr->retrieve_space(L"i");
+  ibr->add(L"ĩ", i, 1);
   // a Context owns its registry: register everything first, then hand it over
   // (it is moved in)
-  set_default_context({.index_basis_registry_shared_ptr = std::move(isr)});
+  set_default_context({.index_basis_registry_shared_ptr = std::move(ibr)});
   const auto& registry = *get_default_context().index_basis_registry();
   Index loc1(registry.retrieve(L"ĩ"), 1);
   // same space ...

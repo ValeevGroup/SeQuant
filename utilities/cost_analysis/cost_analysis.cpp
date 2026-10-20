@@ -125,14 +125,14 @@ std::shared_ptr<IndexBasisRegistry> make_registry(const std::string& conv) {
 // to every registered space, then override each named space's approximate
 // size from the config.
 void setup_context(const Config& cfg) {
-  auto isr = make_registry(cfg.convention);
+  auto ibr = make_registry(cfg.convention);
   // Register auxiliary factorization spaces (Κ for df, L for thc) so
   // pre-factorized DF/THC equations parse; validated to df|thc in load_config.
   for (const auto& a : cfg.aux) {
     if (a == "df")
-      add_df_spaces(isr);
+      add_df_spaces(ibr);
     else
-      add_thc_spaces(isr);
+      add_thc_spaces(ibr);
   }
 
   // Field is a single global choice for the computation, so apply it to every
@@ -143,14 +143,14 @@ void setup_context(const Config& cfg) {
   // keys first (iteration is const) then set by label.
   const Field field = cfg.real_field ? Field::Real : Field::Complex;
   std::vector<std::wstring> keys;
-  for (const auto& sp : *isr) keys.push_back(sp.base_key());
+  for (const auto& sp : *ibr) keys.push_back(sp.base_key());
   for (const auto& key : keys)
-    if (!key.empty()) isr->field(key, field);
+    if (!key.empty()) ibr->field(key, field);
 
   for (const auto& [label, size] : cfg.sizes) {
-    if (!isr->retrieve_space_ptr(toUtf16(label)))
+    if (!ibr->retrieve_space_ptr(toUtf16(label)))
       throw Exception("unknown index space: " + label);
-    isr->extent(toUtf16(label), size);
+    ibr->extent(toUtf16(label), size);
   }
 
   auto ctx = get_default_context_snapshot();
@@ -158,7 +158,7 @@ void setup_context(const Config& cfg) {
       CanonicalizationMethod::Complete);
   ctx.set(Vacuum::SingleProduct)
       .set(cfg.spinor ? SPBasis::Spinor : SPBasis::Spinfree)
-      .set(isr)
+      .set(ibr)
       .set(BraKetSlotTypesetting::Naive)
       .set(copts);
   set_default_context(ctx);

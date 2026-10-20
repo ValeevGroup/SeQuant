@@ -1321,7 +1321,7 @@ class WickTheorem {
     using std::end;
 
     const auto &ctx = state.ctx;
-    const auto &isr = ctx.index_basis_registry();
+    const auto &ibr = ctx.index_basis_registry();
 
     static const container::svector<std::bitset<max_input_size>> unconstrained;
     const auto &target_connections =
@@ -1336,7 +1336,7 @@ class WickTheorem {
 
     // optimization: can't contract fully if first op is not a qp annihilator
     if (full_contractions_ &&
-        !is_qpannihilator(*op_left_iter, input_->vacuum(), isr))
+        !is_qpannihilator(*op_left_iter, input_->vacuum(), ibr))
       return;
 
     const auto op_left_iter_fence =
@@ -1728,12 +1728,12 @@ class WickTheorem {
   static bool can_contract(
       const Op<S> &left, const Op<S> &right,
       Vacuum vacuum = get_default_context(S).vacuum(),
-      const std::shared_ptr<const IndexBasisRegistry> &isr =
+      const std::shared_ptr<const IndexBasisRegistry> &ibr =
           get_default_context(S).index_basis_registry()) {
     // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
       SEQUANT_ENFORCE(vacuum == Vacuum::Physical);
-    return sequant::can_contract(left, right, vacuum, isr);
+    return sequant::can_contract(left, right, vacuum, ibr);
   }
 
   /// the value of a single contraction between @p bra (the annihilator's
@@ -1757,9 +1757,9 @@ class WickTheorem {
 
   static ExprPtr contract(const Op<S> &left, const Op<S> &right,
                           Vacuum vacuum = get_default_context(S).vacuum(),
-                          const std::shared_ptr<const IndexBasisRegistry> &isr =
+                          const std::shared_ptr<const IndexBasisRegistry> &ibr =
                               get_default_context(S).index_basis_registry()) {
-    SEQUANT_ASSERT(can_contract(left, right, vacuum, isr));
+    SEQUANT_ASSERT(can_contract(left, right, vacuum, ibr));
     // contraction result depends on whether the left/right (L, R) spaces
     // are pure qp annihilator (hole, H) or qp creator (particle, P) subspaces
     // or not, i.e. on whether L ⊆ H and R ⊆ P. The either of the conditions
@@ -1773,22 +1773,22 @@ class WickTheorem {
     // N.B. This is a simplified version of the reality, since qp character
     // depends on the Op's action, so the H/P depend on whether left/right is
     // a creator/annihilator
-    const auto left_is_pure = is_pure_qpannihilator<S>(left, vacuum, isr);
-    const auto right_is_pure = is_pure_qpcreator<S>(right, vacuum, isr);
+    const auto left_is_pure = is_pure_qpannihilator<S>(left, vacuum, ibr);
+    const auto right_is_pure = is_pure_qpcreator<S>(right, vacuum, ibr);
 
     IndexSpace qpspace_common;
     if (!left_is_pure || !right_is_pure) {
-      const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
-      const auto qpspace_right = qpcreator_space<S>(right, vacuum, isr);
-      qpspace_common = isr->intersection(qpspace_left, qpspace_right);
+      const auto qpspace_left = qpannihilator_space<S>(left, vacuum, ibr);
+      const auto qpspace_right = qpcreator_space<S>(right, vacuum, ibr);
+      qpspace_common = ibr->intersection(qpspace_left, qpspace_right);
     }
 
     if constexpr (S == Statistics::FermiDirac) {
       if (vacuum == Vacuum::MultiProduct) {
         detail::assert_protoindexed_not_active(
-            *isr,
+            *ibr,
             left_is_pure && right_is_pure
-                ? isr->intersection(left.index().space(), right.index().space())
+                ? ibr->intersection(left.index().space(), right.index().space())
                 : qpspace_common,
             left.index(), right.index());
       }
@@ -1798,7 +1798,7 @@ class WickTheorem {
     // index's own basis instance: a subset of a basis is still that basis
     auto project = [&](const Index &idx) {
       return Index::make_tmp_index(
-          isr->resolve(
+          ibr->resolve(
               IndexBasis(qpspace_common, idx.basis().basis_instance())),
           idx.proto_indices(), idx.symmetric_proto_indices());
     };

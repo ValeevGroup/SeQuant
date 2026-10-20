@@ -58,10 +58,10 @@ sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
 // `detail::basis_counts` reads off the corresponding indices.
 sequant::AsyCost::ExponentMap occ_virt_map(std::size_t nocc,
                                            std::size_t nvirt) {
-  auto const& isr = *sequant::get_default_context().index_basis_registry();
+  auto const& ibr = *sequant::get_default_context().index_basis_registry();
   sequant::AsyCost::ExponentMap m;
-  if (nocc > 0) m.emplace(isr.retrieve_space(L"i"), nocc);
-  if (nvirt > 0) m.emplace(isr.retrieve_space(L"a"), nvirt);
+  if (nocc > 0) m.emplace(ibr.retrieve_space(L"i"), nocc);
+  if (nvirt > 0) m.emplace(ibr.retrieve_space(L"a"), nvirt);
   return m;
 }
 
@@ -78,9 +78,9 @@ sequant::AsyCost occ_virt_cost(sequant::rational c, std::size_t nocc,
 // ("Κ", added to the registry by mbpt::add_df_spaces).
 sequant::AsyCost occ_virt_aux_cost(sequant::rational c, std::size_t nocc,
                                    std::size_t nvirt, std::size_t naux) {
-  auto const& isr = *sequant::get_default_context().index_basis_registry();
+  auto const& ibr = *sequant::get_default_context().index_basis_registry();
   auto m = occ_virt_map(nocc, nvirt);
-  if (naux > 0) m.emplace(isr.retrieve_space(L"Κ"), naux);
+  if (naux > 0) m.emplace(ibr.retrieve_space(L"Κ"), naux);
   return sequant::AsyCost{m, c};
 }
 
@@ -362,10 +362,10 @@ TEST_CASE("eval_node", "[EvalNode]") {
     SECTION("PPL and density-fitting") {
       // AsyCost on parsed coupled-cluster expressions, using the plain Flops
       // metric
-      auto isr = mbpt::make_min_sr_spaces();
-      mbpt::add_df_spaces(isr);
+      auto ibr = mbpt::make_min_sr_spaces();
+      mbpt::add_df_spaces(ibr);
       auto _ =
-          set_scoped_default_context({.index_basis_registry_shared_ptr = isr,
+          set_scoped_default_context({.index_basis_registry_shared_ptr = ibr,
                                       .vacuum = Vacuum::SingleProduct,
                                       .spbasis = SPBasis::Spinor});
 
@@ -385,10 +385,10 @@ TEST_CASE("eval_node", "[EvalNode]") {
     }
 
     SECTION("batched index") {
-      auto isr = mbpt::make_min_sr_spaces();
-      mbpt::add_batching_spaces(isr);
+      auto ibr = mbpt::make_min_sr_spaces();
+      mbpt::add_batching_spaces(ibr);
       auto _ =
-          set_scoped_default_context({.index_basis_registry_shared_ptr = isr,
+          set_scoped_default_context({.index_basis_registry_shared_ptr = ibr,
                                       .vacuum = Vacuum::SingleProduct,
                                       .spbasis = SPBasis::Spinor});
       auto const& reg = *get_default_context().index_basis_registry();
@@ -420,9 +420,9 @@ TEST_CASE("eval_node", "[EvalNode]") {
     }
 
     SECTION("MRCC like example") {
-      auto isr = mbpt::make_min_mr_spaces();
+      auto ibr = mbpt::make_min_mr_spaces();
       auto _ =
-          set_scoped_default_context({.index_basis_registry_shared_ptr = isr,
+          set_scoped_default_context({.index_basis_registry_shared_ptr = ibr,
                                       .vacuum = Vacuum::SingleProduct,
                                       .spbasis = SPBasis::Spinor});
       auto const& reg = *get_default_context().index_basis_registry();
