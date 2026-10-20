@@ -227,8 +227,27 @@ TermRecord record_term(ExprPtr const& canonical, ExprPtr const& optimized,
   return rec;
 }
 
+TermRecord record_unpinnable_term(ExprPtr const& canonical) {
+  TermRecord rec;
+  rec.key = term_key(canonical);
+  if (canonical->is<Product>()) {
+    for (auto const& f : canonical->as<Product>().factors())
+      rec.factors.push_back(expr_string(f));
+    rec.scalar = scalar_string(canonical->as<Product>().scalar());
+  } else {
+    rec.factors.push_back(expr_string(canonical));
+    rec.scalar = scalar_string(Constant::scalar_type{1});
+  }
+  rec.pinnable = false;
+  return rec;
+}
+
 PinnedTerm rebuild_pinned_term(TermRecord const& rec,
                                ExprPtr const& canonical) {
+  if (!rec.pinnable)
+    fail(rec.key,
+         "recorded as not pinnable (not a tensor product): it cannot be "
+         "rebuilt from a record, leave it to the optimizer");
   require_pure(canonical, rec.key);
   auto const factors = canonical_factors(canonical);
   std::vector<std::string> strings;

@@ -160,7 +160,7 @@ void store_term_axes(OptimizeOptions const& opts, Expr const* optimized,
 
 [[noreturn]] void throw_not_pinnable(std::string const& key) {
   throw Exception("schedule pin: term " + key +
-                  ": only tensor products can be pinned or recorded");
+                  ": only tensor products can be pinned");
 }
 
 /// A term (Product, Tensor or Constant) under schedule pinning or recording
@@ -173,11 +173,19 @@ void store_term_axes(OptimizeOptions const& opts, Expr const* optimized,
 ExprPtr opt_scheduled_term(ExprPtr const& term, OptimizeOptions const& opts) {
   auto canon = opt::schedule::canonical_term(term);
   auto key = opt::schedule::term_key(canon);
+  bool pure = canon->is<Tensor>() || canon->is<Constant>();
   if (canon->is<Product>()) {
+    pure = true;
     for (auto const& f : canon->as<Product>().factors())
-      if (!f->is<Tensor>()) throw_not_pinnable(key);
-  } else if (!canon->is<Tensor>() && !canon->is<Constant>()) {
-    throw_not_pinnable(key);
+      pure = pure && f->is<Tensor>();
+  }
+  if (!pure) {
+    // not a tensor product (a Variable here; a mixed Product never reaches
+    // this function): a pin cannot rebuild it, a recording lists it as such
+    if (opts.pinned) throw_not_pinnable(key);
+    opts.recording->add(canon.get(),
+                        opt::schedule::record_unpinnable_term(canon));
+    return canon;
   }
 
   container::vector<NodeBatchAnnotation> node_axes;
@@ -234,9 +242,14 @@ inline constexpr std::wstring_view placeholder_label_prefix = L"@__opt_";
 /// substituting placeholder tensors with target indices, optimizing the
 /// resulting tensor-only product, then swapping the originals back in.
 ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
-  if (opts.pinned || opts.recording)
+  // a pin cannot rebuild a mixed product; a recording lists it as not
+  // pinnable and optimizes it as usual, with the placeholder product below
+  // kept out of the record (it is not a term of the root)
+  if (opts.pinned)
     throw_not_pinnable(opt::schedule::term_key(
         opt::schedule::canonical_term(ex<Product>(prod))));
+  OptimizeOptions inner = opts;
+  inner.recording = nullptr;
   container::svector<ExprPtr> non_tensors(prod.size());
   container::svector<ExprPtr> new_factors;
   new_factors.reserve(prod.size());
@@ -255,7 +268,7 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
   }
 
   auto result = opt_pure_product(
-      Product{prod.scalar(), new_factors, Product::Flatten::No}, opts);
+      Product{prod.scalar(), new_factors, Product::Flatten::No}, inner);
 
   auto replacer = [&non_tensors](ExprPtr& out) {
     if (!out->is<Tensor>()) return;
@@ -277,6 +290,10 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
   };
 
   result->visit(replacer, /* atoms_only = */ true);
+  if (opts.recording)
+    opts.recording->add(result.get(),
+                        opt::schedule::record_unpinnable_term(
+                            opt::schedule::canonical_term(ex<Product>(prod))));
   return result;
 }
 

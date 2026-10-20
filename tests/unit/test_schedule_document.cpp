@@ -924,10 +924,40 @@ TEST_CASE("pinning is strict", "[schedule-document]") {
     opts2.pinned = &session;
     REQUIRE_THROWS_WITH(sequant::optimize_result(mixed, opts2),
                         ContainsSubstring("only tensor products"));
+    // a recording optimizes the mixed product as usual and lists it as not
+    // pinnable (no tree, no nodes), so the root's term set stays complete
     auto opts3 = opts;
     RecordSession recording("M");
     opts3.recording = &recording;
-    REQUIRE_THROWS_WITH(sequant::optimize_result(mixed, opts3),
+    auto const optimized = sequant::optimize_result(mixed, opts3).expr;
+    REQUIRE(optimized->is<sequant::Sum>());
+    REQUIRE(optimized->as<sequant::Sum>().size() == 2);
+    auto const record = recording.finish();
+    REQUIRE(record.terms.size() == 2);
+    TermRecord const* unpinnable = nullptr;
+    for (auto const& t : record.terms)
+      if (!t.pinnable) {
+        REQUIRE(!unpinnable);
+        unpinnable = &t;
+        REQUIRE(!t.tree);
+        REQUIRE(t.nodes.empty());
+        REQUIRE(t.factors.size() == 2);
+      }
+    REQUIRE(unpinnable);
+    // the flag survives JSON, and a pin refuses the term
+    Document doc;
+    doc.fingerprint.roots = {"M"};
+    doc.roots = {record};
+    auto const loaded = from_json(to_json(doc));
+    REQUIRE(compare(doc, loaded).empty());
+    REQUIRE_THROWS_WITH(
+        rebuild_pinned_term(
+            *unpinnable, canonical_term(mixed->as<sequant::Sum>().summand(0))),
+        ContainsSubstring("not pinnable"));
+    PinSession session2(loaded.roots[0]);
+    auto opts4 = opts;
+    opts4.pinned = &session2;
+    REQUIRE_THROWS_WITH(sequant::optimize_result(mixed, opts4),
                         ContainsSubstring("only tensor products"));
   }
 

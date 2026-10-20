@@ -55,6 +55,12 @@ eval::schedule::TermRecord record_term(
     ExprPtr const& canonical, ExprPtr const& optimized,
     container::vector<NodeBatchAnnotation> const& nodes);
 
+/// The record of a term the optimizer handles but a pin cannot rebuild (a
+/// factor is a Sum or a Variable): key, factors and scalar of \p canonical,
+/// no tree, `pinnable` false. Recording lists such a term for completeness;
+/// rebuild_pinned_term refuses it.
+eval::schedule::TermRecord record_unpinnable_term(ExprPtr const& canonical);
+
 /// the optimizer's output rebuilt from a TermRecord
 struct PinnedTerm {
   ExprPtr expr;

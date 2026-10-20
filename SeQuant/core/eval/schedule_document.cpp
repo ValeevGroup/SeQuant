@@ -91,6 +91,7 @@ json to_j(TermRecord const& t) {
   j["scalar"] = t.scalar;
   j["tree"] = t.tree ? tree_j(*t.tree) : json(nullptr);
   j["nodes"] = vec_j(t.nodes);
+  j["pinnable"] = t.pinnable;
   return j;
 }
 
@@ -529,6 +530,13 @@ TermRecord term_r(json const& j, std::string const& where) {
     r.order_aware = get_bool(n, "order_aware", t.key);
     t.nodes.push_back(std::move(r));
   }
+  // absent = pinnable, so documents written before the key read as before
+  if (auto const it = j.find("pinnable"); it != j.end()) {
+    if (!it->is_boolean()) fail(t.key, "'pinnable' must be a boolean");
+    t.pinnable = it->get<bool>();
+  }
+  if (!t.pinnable && (t.tree || !t.nodes.empty()))
+    fail(t.key, "a term that is not pinnable has no tree and no nodes");
   std::size_t inner = 0;
   if (t.tree) {
     if (auto const err = leaf_permutation_error(*t.tree, t.factors.size()))
@@ -784,6 +792,7 @@ struct Differ {
     leaf(path + ".scalar", json(a.scalar), json(b.scalar));
     leaf(path + ".tree", a.tree ? tree_j(*a.tree) : json(nullptr),
          b.tree ? tree_j(*b.tree) : json(nullptr));
+    leaf(path + ".pinnable", a.pinnable, b.pinnable);
     if (a.nodes.size() != b.nodes.size()) {
       leaf(path + ".nodes", vec_j(a.nodes), vec_j(b.nodes));
       return;
