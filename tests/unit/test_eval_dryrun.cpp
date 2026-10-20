@@ -1391,13 +1391,7 @@ TEST_CASE("dryrun cost model sizes elements and flops by the field",
   CHECK(cm.flops(out, contracted) == Catch::Approx(madds * 4.0));
 
   // Real spaces: one real per element, one multiply-add each.
-  auto ctx = get_default_context().clone();
-  auto reg = ctx.mutable_index_space_registry();
-  std::vector<std::wstring> keys;
-  for (auto const& space : *reg) keys.push_back(space.base_key());
-  for (auto const& key : keys)
-    if (auto* sp = reg->retrieve_ptr(key)) sp->field(Field::Real);
-  auto resetter = set_scoped_default_context(std::move(ctx));
+  auto resetter = scoped_real_field_context();
   container::svector<Index> rout{Index{L"a_3"}, Index{L"i_1"}};
   container::svector<Index> rcontracted{Index{L"i_2"}};
   CHECK(cm.memsize(rout) == static_cast<std::size_t>(elems * 8.0));

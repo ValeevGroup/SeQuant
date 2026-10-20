@@ -153,7 +153,7 @@ std::size_t EvalExpr::layout_fingerprint() const noexcept {
   // its up-first partner's slot (the flavor difference rides the transform).
   if (kramers_folded_) {
     index_vector folded = identity_indices();
-    if (const auto isr = get_default_context().index_space_registry())
+    if (const auto isr = get_default_context().index_basis_registry())
       kramers_flip(folded, *isr);
     layout_fingerprint_ = layout_fingerprint_of(folded);
   } else {
@@ -220,7 +220,7 @@ namespace {
 /// maps a folded leaf's canonical indices back to the as-written flavors
 /// (the Kramers flip is an involution; ordinals and order are kept)
 void kramers_flip_indices_as_written(EvalExpr::index_vector& ixs) {
-  if (const auto isr = get_default_context().index_space_registry())
+  if (const auto isr = get_default_context().index_basis_registry())
     kramers_flip(ixs, *isr);
 }
 
@@ -403,7 +403,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr, eval::KramersBlindness const* blindness)
       auto etn = TensorNetwork(elist);
       auto emd = etn.canonicalize_slots(
           {.cardinal_tensor_labels =
-               TensorCanonicalizer::cardinal_tensor_labels(),
+               get_default_context_snapshot().cardinal_tensor_labels(),
            .apply_slot_order = true});
       auto const ecanon_e =
           std::dynamic_pointer_cast<Expr>(etn.tensors().front());
@@ -1426,7 +1426,7 @@ std::optional<EvalExprNode> maybe_kramers_fold(ExprPtr const& expr,
                                                IndexSet const& uncontract,
                                                BinarizationOptions const& opts,
                                                std::size_t& node_counter) {
-  auto const isr = get_default_context().index_space_registry();
+  auto const isr = get_default_context().index_basis_registry();
   if (!isr) return std::nullopt;
   container::svector<ExprPtr> leaves;
   bool all_tr = true;
@@ -1520,7 +1520,7 @@ EvalExprNode make_kramers_flip_node(EvalExprNode inner,
                                     container::svector<std::size_t> modes,
                                     std::int8_t phase, Tensor denoted) {
   SEQUANT_ASSERT(inner->result_type() == ResultType::Tensor);
-  auto const isr = get_default_context().index_space_registry();
+  auto const isr = get_default_context().index_basis_registry();
   auto h = inner->hash_value();
   if (auto salt = inner->canon_transform().structural_salt(); salt != 0)
     hash::combine(h, salt);

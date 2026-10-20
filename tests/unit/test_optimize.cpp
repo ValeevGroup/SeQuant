@@ -2846,10 +2846,10 @@ TEST_CASE("batched DP peak matches oracle with two modes and accumulation",
     reg->extent(k, v);
   }
   auto aux = reg->retrieve_space(L"Κ");
-  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto pao = reg->retrieve(L"μ̃");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto idxsz = [](Index const& ix) -> std::size_t {
     return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
@@ -4725,17 +4725,20 @@ TEST_CASE("batchability role-split building-block predicates",
 TEST_CASE("Nested product brackets: batch annotations align with binarize",
           "[optimize][annotate][nested-product]") {
   using namespace sequant;
-  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
-  auto reg = get_default_context().mutable_index_space_registry();
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
-    reg->retrieve_ptr(k)->approximate_size(v);
+    reg->extent(k, v);
   }
-  auto aux = reg->retrieve(L"Κ");
+  auto aux = reg->retrieve_space(L"Κ");
+  auto ctx_resetter =
+      set_scoped_default_context(get_default_context_snapshot().set(reg));
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   auto is_batch = [aux](Index const& ix) { return ix.space() == aux; };
   std::function<std::size_t(Index const&)> bts = [](Index const&) {
@@ -4939,17 +4942,20 @@ TEST_CASE("Re-wrapped product factor is optimized like the bare product",
 TEST_CASE("Re-wrapped summand batch-annotates its inner product",
           "[optimize][annotate][re_im]") {
   using namespace sequant;
-  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
-  auto reg = get_default_context().mutable_index_space_registry();
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   for (auto&& [k, v] :
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
-    reg->retrieve_ptr(k)->approximate_size(v);
+    reg->extent(k, v);
   }
-  auto aux = reg->retrieve(L"Κ");
+  auto aux = reg->retrieve_space(L"Κ");
+  auto ctx_resetter =
+      set_scoped_default_context(get_default_context_snapshot().set(reg));
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   auto is_batch = [aux](Index const& ix) { return ix.space() == aux; };
   std::function<std::size_t(Index const&)> bts = [](Index const&) {
@@ -5071,13 +5077,7 @@ TEST_CASE("field cost factors", "[optimize][roofline]") {
     CHECK(tensors_field(std::vector<ExprPtr>{}) == Field::Real);
 
     // A real-orbital computation marks every space real.
-    auto ctx = get_default_context().clone();
-    auto reg = ctx.mutable_index_space_registry();
-    std::vector<std::wstring> keys;
-    for (auto const& space : *reg) keys.push_back(space.base_key());
-    for (auto const& key : keys)
-      if (auto* sp = reg->retrieve_ptr(key)) sp->field(Field::Real);
-    auto resetter = set_scoped_default_context(std::move(ctx));
+    auto resetter = scoped_real_field_context();
     auto const real_prod = deserialize(L"g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
     CHECK(tensors_field(real_prod->as<Product>().factors()) == Field::Real);
   }

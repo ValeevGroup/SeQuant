@@ -1685,7 +1685,8 @@ SECTION("SRSO-PNO") {
   // H2**T2 -> E
   SECTION("wick(H2**T2 -> E)") {
     // the contracted occupied indices of h and t are identified, including
-    // where they are protoindices of t's virtuals; their overlap must not stand
+    // where they are protoindices of t's virtuals; their overlap must not
+    // stand
     REQUIRE_THAT(t::vac_av(t::h(2) * t::t(2)),
                  EquivalentTo(L"1/4 g{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:A-C-S "
                               L"* t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S"));
@@ -1759,7 +1760,8 @@ SECTION("MRSO") {
                              rejects_connections);
       REQUIRE_THROWS_MATCHES(t::ref_av(expr, {.do_not_connect = {{0, 1}}}),
                              Exception, rejects_connections);
-      // Operator requests must be rejected before screening or label lowering.
+      // Operator requests must be rejected before screening or label
+      // lowering.
       REQUIRE_THROWS_MATCHES(
           o::ref_av(ex<Constant>(0), {.connect = {{L"f", L"t"}}}), Exception,
           rejects_connections);
@@ -1821,8 +1823,8 @@ SECTION("MRSO") {
     // the active-first comparer is scoped to ref_av
     CHECK(&get_default_context().index_comparer() == index_comparer);
     // the adjoint of the Hermitian h is h with the slots exchanged, so one
-    // of the two factors is spelled with its bra and ket the other way round
-    // and neither carries a state
+    // of the two factors is spelled with its bra and ket the other way
+    // round and neither carries a state
     REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
                                       L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
   }
@@ -1859,12 +1861,13 @@ SECTION("MRSO-MultiProduct") {
                                       L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
   }
 
-  // the mbpt operators (ã) are normal-ordered relative to the context vacuum,
-  // i.e. to the reference here and to the core under SingleProduct, so
-  // t::h(k)·t::t(k) is a different operator on the two paths; only products
-  // of elementary operators, whose normal order is immaterial, are compared.
-  // connect is not used: it means different things on the two paths (a core
-  // or virtual δ between the operators vs any density linking them)
+  // the mbpt operators (ã) are normal-ordered relative to the context
+  // vacuum, i.e. to the reference here and to the core under SingleProduct,
+  // so t::h(k)·t::t(k) is a different operator on the two paths; only
+  // products of elementary operators, whose normal order is immaterial, are
+  // compared. connect is not used: it means different things on the two
+  // paths (a core or virtual δ between the operators vs any density linking
+  // them)
   SECTION("elementary operators match the core-vacuum path") {
     const Index p1{L"p_1"}, p2{L"p_2"}, p3{L"p_3"}, p4{L"p_4"}, p5{L"p_5"},
         p6{L"p_6"};
@@ -1915,11 +1918,12 @@ SECTION("MRSO-MultiProduct") {
   // relative to a fixed-N reference, a GNO string {x} is defined by
   // x = Σ ± Π κ(B) {x minus the legs of every B} over all sets of disjoint
   // blocks B of the ops of x, each with as many creators as annihilators
-  // (a pair is a γ or an η), the sign being that of moving the blocks' legs,
-  // in order, to the front; κ(B) is the ordered cumulant of the reference
-  // averages of B's substrings. Built so from core-vacuum averages, {x} is an
-  // elementary-operator expression, which makes products of GNO strings,
-  // number-conserving or not, comparable on the two paths
+  // (a pair is a γ or an η), the sign being that of moving the blocks'
+  // legs, in order, to the front; κ(B) is the ordered cumulant of the
+  // reference averages of B's substrings. Built so from core-vacuum
+  // averages, {x} is an elementary-operator expression, which makes
+  // products of GNO strings, number-conserving or not, comparable on the
+  // two paths
   SECTION("GNO products match the core-vacuum path") {
     struct Leg {
       Index index;
@@ -1992,17 +1996,19 @@ SECTION("MRSO-MultiProduct") {
       };
       recurse(recurse);
     };
-    // an elementary-operator expression: Σ c·(string of elementary operators)
+    // an elementary-operator expression: Σ c·(string of elementary
+    // operators)
     using Expansion = container::svector<std::pair<ExprPtr, Legs>>;
     auto subset = [](const Legs& legs, const container::svector<int>& pos) {
       Legs result;
       for (auto p : pos) result.push_back(legs[p]);
       return result;
     };
-    // the reference average of an elementary string via the standard theorem
-    // under the core vacuum: a surviving all-active string is a density, any
-    // other survivor averages to 0, and so does an unbalanced string, the
-    // reference having a fixed N; call under the SingleProduct vacuum
+    // the reference average of an elementary string via the standard
+    // theorem under the core vacuum: a surviving all-active string is a
+    // density, any other survivor averages to 0, and so does an unbalanced
+    // string, the reference having a fixed N; call under the SingleProduct
+    // vacuum
     auto core_vacuum_average = [&](const Legs& legs) -> ExprPtr {
       container::svector<int> all(legs.size());
       std::iota(all.begin(), all.end(), 0);
@@ -2086,9 +2092,9 @@ SECTION("MRSO-MultiProduct") {
       std::iota(all.begin(), all.end(), 0);
       return gno(gno, all);
     };
-    // a leg over a union of base spaces (e.g. I = i ∪ u) is split into them on
-    // the core-vacuum side, whose averages take base-space legs; every density
-    // leg of the MultiProduct result must be active
+    // a leg over a union of base spaces (e.g. I = i ∪ u) is split into them
+    // on the core-vacuum side, whose averages take base-space legs; every
+    // density leg of the MultiProduct result must be active
     const auto isr = get_default_context().index_basis_registry();
     auto check = [&](std::initializer_list<Legs> strings_il) {
       container::svector<Legs> strings(strings_il);
@@ -2194,12 +2200,13 @@ SECTION("MRSO-MultiProduct") {
     // non-conserving
     check({gno_string({M1, E1}, {I1}), gno_string({}, {A1})});
 
-    // partial contractions are operator-valued, so the two paths are compared
-    // in a common normal form: the GNO remainders of the MultiProduct result
-    // are replaced by their elementary-operator expansions and both sides are
-    // normal-ordered relative to the core vacuum by the standard theorem
-    // a lone term is returned as is: a Product whose factor is a one-term Sum
-    // is not flattened by expand, and the theorem would take it for a scalar
+    // partial contractions are operator-valued, so the two paths are
+    // compared in a common normal form: the GNO remainders of the
+    // MultiProduct result are replaced by their elementary-operator
+    // expansions and both sides are normal-ordered relative to the core
+    // vacuum by the standard theorem a lone term is returned as is: a
+    // Product whose factor is a one-term Sum is not flattened by expand,
+    // and the theorem would take it for a scalar
     auto to_expr = [](const Expansion& expansion) {
       auto result = std::make_shared<Sum>();
       for (const auto& [c, legs] : expansion) {
@@ -2500,9 +2507,9 @@ SECTION("rules") {
                      ex<Tensor>(g), aux_space, L"g", L"B", L"C"))));
 
     // over the default (complex) basis the adjoint of a non-Hermitian g is
-    // kept as a state; the fit of g⁺{a;i} is the adjoint of the fit of g{i;a},
-    // and the Hermitian DF factors just exchange their bundles under it, so
-    // it is the fit of the bare g{a;i}
+    // kept as a state; the fit of g⁺{a;i} is the adjoint of the fit of
+    // g{i;a}, and the Hermitian DF factors just exchange their bundles under
+    // it, so it is the fit of the bare g{a;i}
     auto gc = deserialize(L"g{i1,i2;a1,a2}");
     REQUIRE(gc->as<Tensor>().hermiticity() == Hermiticity::NonHermitian);
     auto ga = adjoint(gc);
@@ -2725,7 +2732,8 @@ SECTION("manuscript-examples") {
         simplify(expr),
         EquivalentTo(
             L"1/8 f{p1;p2}:A-C-S x{a1,a2;i1,i2}:A-N-S y{a3,a4;i3}:A-N-S "
-            L"ã{p2;p1} ã{i1,i2;a1,a2} ã{i3;a3,a4} + 1/32 g{p3,p4;p1,p2}:A-C-S "
+            L"ã{p2;p1} ã{i1,i2;a1,a2} ã{i3;a3,a4} + 1/32 "
+            L"g{p3,p4;p1,p2}:A-C-S "
             L"x{a1,a2;i1,i2}:A-N-S y{a3,a4;i3}:A-N-S ã{p1,p2;p3,p4} "
             L"ã{i1,i2;a1,a2} ã{i3;a3,a4}"));
   }
@@ -2784,8 +2792,8 @@ SECTION("rdm-decomposition symmetries") {
   // an RDM is Hermitian and particle (column) symmetric by definition: the γ
   // that the decompositions in mbpt/rdm.cpp build has to equal the γ that
   // expectation_value_impl() (mbpt/op.cpp) and the parser build, or
-  // otherwise-equal terms stop merging. The symmetries take part in the tensor
-  // hash, so a mismatch in either attribute is enough to break it.
+  // otherwise-equal terms stop merging. The symmetries take part in the
+  // tensor hash, so a mismatch in either attribute is enough to break it.
   auto ctx_resetter = set_scoped_default_context(
       Context({.index_basis_registry_shared_ptr = mbpt::make_sr_spaces(),
                .vacuum = Vacuum::SingleProduct}));
@@ -3098,7 +3106,7 @@ TEST_CASE("density_fit_metric_leaf", "[mbpt][df]") {
   //   g_{pq,rs} = Z^K_{pq} (M^-1)_{KL} Z^L_{rs}
   using namespace sequant;
   const IndexSpace aux_space =
-      get_default_context().index_space_registry()->retrieve(L"x");
+      get_default_context().index_basis_registry()->retrieve_space(L"x");
 
   SECTION("nonsymmetric") {
     ExprPtr g = deserialize(L"g{i1,i2;a1,a2}");
@@ -3154,7 +3162,7 @@ TEST_CASE("density_fit_metric_leaf", "[mbpt][df]") {
     // integrals, folded factors for the rest) must not reuse an aux label
     ExprPtr gg = deserialize(L"g{i1,i2;a1,a2} g{i3,i4;i5,i6}");
     auto occ_only = [](const Tensor& t) {
-      const auto& isr = *get_default_context().index_space_registry();
+      const auto& isr = *get_default_context().index_basis_registry();
       for (const auto& ix : t.const_braket())
         if (!isr.is_pure_occupied(ix.space())) return false;
       return true;

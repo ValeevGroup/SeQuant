@@ -442,7 +442,7 @@ std::wstring to_string(AbstractTensor const& tensor,
     }
     if (spell_kramers) {
       serialized +=
-          L"-" + details::serialize_symm(tensor._kramers_symmetry(), options);
+          L"-" + detail::serialize_symm(tensor._kramers_symmetry(), options);
     }
   }
 

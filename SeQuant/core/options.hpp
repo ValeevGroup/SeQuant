@@ -79,7 +79,7 @@ struct CanonicalizeOptions {
   /// fewer down-first tensors), flipped tensors acquiring the conjugation
   /// marker and the phase; components touching a named index are pinned.
   /// Engaged only when the default context's registry has Kramers partner
-  /// spaces (IndexSpaceRegistry::add_kramers_partners).
+  /// spaces (IndexBasisRegistry::add_kramers_partners).
   FoldKramers fold_kramers = FoldKramers::No;
   /// whether an EvalExpr LEAF applies the single-tensor Kramers fold (a
   /// down-first leaf shares the up-first partner's hash/cache slot with a

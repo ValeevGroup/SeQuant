@@ -1223,7 +1223,7 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
 std::pair<int, container::svector<std::size_t>> TensorNetworkV3::kramers_orient(
     const NamedIndexSet &named_indices) {
   container::svector<std::size_t> flipped;
-  const auto isr = get_default_context().index_space_registry();
+  const auto isr = get_default_context().index_basis_registry();
   if (!isr) return {1, flipped};
   const auto flavored = [&](const Index &idx) {
     return isr->kramers_partner(idx.space()).has_value();

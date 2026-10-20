@@ -176,7 +176,7 @@ bool kramers_flip_slots_deep(AbstractTensor& t);
 /// network-level fold, which relabels the summed union dummy consistently
 /// across the term, is unaffected). Indices of spaces without flavoured
 /// partners (e.g. a density-fitting auxiliary index) are not union indices.
-bool kramers_union_index(const Index& idx, const IndexSpaceRegistry& isr);
+bool kramers_union_index(const Index& idx, const IndexBasisRegistry& isr);
 
 /// @return true if any slot (bra, ket, aux) of @p t is a Kramers-union index
 /// (see kramers_union_index) under the default context's registry

@@ -60,8 +60,6 @@ using namespace std::literals;
 TEST_CASE("tensor_network_shared", "[elements]") {
   using TN =
       TensorNetworkV3;  // the sections below spell the network through TN
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
   auto isr = sequant::mbpt::make_legacy_spaces();
   mbpt::add_pao_basis(isr, mbpt::Spin::any);
   auto ctx = get_default_context();
@@ -295,7 +293,8 @@ TEST_CASE("tensor_network_shared", "[elements]") {
         // PNS-CCD, (vv|vv) ladder kept 4-center -- was the eval node's
         // label-sorted Sum placeholder, see
         // sum_placeholder_is_spelled_in_its_layout in test_eval_expr.cpp.)
-        const auto cardinal = TensorCanonicalizer::cardinal_tensor_labels();
+        const auto cardinal =
+            get_default_context_snapshot().cardinal_tensor_labels();
         const std::wstring n183 =
             L"g{a_5,a_6;a_7,a_8}:N-C-S * C{a_5;a_1<i_1,i_2>}:N-N-N * "
             L"C{a_6;a_2<i_1,i_2>}:N-N-N * C{a_7;a_3<i_1,i_2>}:N-N-N * "

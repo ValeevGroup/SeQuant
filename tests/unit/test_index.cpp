@@ -475,22 +475,22 @@ TEST_CASE("kramers_partner", "[elements][index][kramers]") {
   ctx.set(isr);
   auto resetter = set_scoped_default_context(ctx);
 
-  const auto& a_up = isr->retrieve(L"a↑");
-  const auto& a_dn = isr->retrieve(L"a↓");
+  const auto& a_up = isr->retrieve_space(L"a↑");
+  const auto& a_dn = isr->retrieve_space(L"a↓");
   auto p = isr->kramers_partner(a_up);
   REQUIRE(p.has_value());
   REQUIRE(*p == a_dn);
   auto q = isr->kramers_partner(a_dn);
   REQUIRE(q.has_value());
   REQUIRE(*q == a_up);
-  REQUIRE(!isr->kramers_partner(isr->retrieve(L"a")).has_value());
+  REQUIRE(!isr->kramers_partner(isr->retrieve_space(L"a")).has_value());
   // orientation: the up flavor is canonical, down is not, unflavored is
   REQUIRE(isr->kramers_canonical(a_up));
   REQUIRE(!isr->kramers_canonical(a_dn));
-  REQUIRE(isr->kramers_canonical(isr->retrieve(L"a")));
+  REQUIRE(isr->kramers_canonical(isr->retrieve_space(L"a")));
 
   // the registry copies/clones carry the partner map
-  auto cloned = isr->clone();
+  IndexBasisRegistry cloned(*isr);
   REQUIRE(cloned.kramers_partner(a_up).has_value());
 
   // temporary (generated) indices flip too, keeping their tmp ordinal: the
@@ -508,7 +508,7 @@ TEST_CASE("kramers_partner", "[elements][index][kramers]") {
     REQUIRE(ftp.has_value());
     REQUIRE(ftp->ordinal() == tmp_proto.ordinal());
     REQUIRE(ftp->proto_indices().size() == 1);
-    REQUIRE(ftp->proto_indices()[0].space() == isr->retrieve(L"i↓"));
+    REQUIRE(ftp->proto_indices()[0].space() == isr->retrieve_space(L"i↓"));
   }
   // index flip: ordinal kept, protos mapped recursively, unflavored kept
   Index i1(L"i↑_1"), i2(L"i↓_2");
@@ -521,8 +521,8 @@ TEST_CASE("kramers_partner", "[elements][index][kramers]") {
   {  // symmetric proto bundles are canonically ordered: check membership
     bool has_dn = false, has_up = false;
     for (auto const& pr : f->proto_indices()) {
-      has_dn |= pr.space() == isr->retrieve(L"i↓");
-      has_up |= pr.space() == isr->retrieve(L"i↑");
+      has_dn |= pr.space() == isr->retrieve_space(L"i↓");
+      has_up |= pr.space() == isr->retrieve_space(L"i↑");
     }
     REQUIRE((has_dn && has_up));
   }

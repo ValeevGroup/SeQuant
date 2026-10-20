@@ -934,7 +934,7 @@ TEST_CASE("kramers_leaf_slot_identity", "[eval_expr][kramers]") {
     };
     REQUIRE(has_space(ed_t.const_indices(), L"a↑"));
     // the served spelling is the Kramers-canonical one: bra slot up
-    REQUIRE(ed_t.bra()[0].space() == isr->retrieve(L"a↑"));
+    REQUIRE(ed_t.bra()[0].space() == isr->retrieve_space(L"a↑"));
     auto has_label = [&](std::wstring_view lbl) {
       return ranges::any_of(ed.canon_indices(), [&](Index const& i) {
         return i.full_label() == lbl;

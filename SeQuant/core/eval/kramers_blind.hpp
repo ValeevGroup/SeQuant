@@ -86,7 +86,7 @@ container::set<Index> blind_walk(Rng const& tensors, KramersBlindness const& kb,
   // a blind slot holds a pure-occupied plain index or a composite whose
   // protos are pure occupied, and one leaf never reports an index blind in
   // one slot and non-blind in another
-  auto const isr = get_default_context().index_space_registry();
+  auto const isr = get_default_context().index_basis_registry();
   auto const pure_occ = [&isr](Index const& ix) {
     return isr && isr->is_pure_occupied(ix.space());
   };

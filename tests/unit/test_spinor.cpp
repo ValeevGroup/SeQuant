@@ -39,8 +39,6 @@ TEST_CASE("kramers_trace", "[spinor]") {
   auto ctx = get_default_context();
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   auto _ = set_scoped_default_context(ctx);
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 
   // counts RealPart nodes anywhere in the expression tree
   auto count_realparts = [](const ExprPtr& expr) {
@@ -656,8 +654,6 @@ TEST_CASE("kramers_trace_internal_union", "[spinor][kramers][union]") {
   auto ctx = get_default_context();
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   auto _ = set_scoped_default_context(ctx);
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 
   // the number of Kramers-FLAVOURED indices a term uses (a union index --
   // the spin-free union of ↑ and ↓ -- carries no flavour)
@@ -758,8 +754,6 @@ TEST_CASE("drop_mixed_kramers_fock_terms", "[spinor]") {
   auto ctx = get_default_context();
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   auto _ = set_scoped_default_context(ctx);
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 
   // f between the two indices, each labelled with the requested Kramers spin
   auto kr = [](std::wstring_view label, Spin s) {
@@ -843,8 +837,6 @@ TEST_CASE("kramers_trace_csv_no_slot_duplication", "[spinor]") {
   auto ctx = get_default_context();
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   auto _ = set_scoped_default_context(ctx);
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 
   const Index i1{L"i_1"}, i2{L"i_2"};
   const Index a1 = Index(L"a_1", {i1, i2});
@@ -894,9 +886,9 @@ TEST_CASE("kramers_trace_csv_no_slot_duplication", "[spinor]") {
   ExprPtr folded;
   // the deprecated fold is exercised on purpose (the spin-flip pairing map)
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  REQUIRE_NOTHROW(folded = fold_conjugate_pairs_of_real_sum(
-                      E_kr, CanonicalizeOptions::default_options(),
-                      [](ExprPtr const& s) { return mbpt::swap_spin(s); }));
+  REQUIRE_NOTHROW(
+      folded = fold_conjugate_pairs_of_real_sum(
+          E_kr, [](ExprPtr const& s) { return mbpt::swap_spin(s); }));
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
@@ -909,19 +901,19 @@ TEST_CASE("csv_df_commute", "[spinor][kramers]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
-  auto isr = std::make_shared<IndexSpaceRegistry>(
-      get_default_context().index_space_registry()->clone());
+  auto isr = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   if (!isr->retrieve_ptr(L"\u03bc\u0303")) add_pao_spaces(isr, Spin::any);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   if (!isr->retrieve_ptr(L"\u039a")) add_df_spaces(isr);
   auto ctx = get_default_context();
   ctx.set(isr);
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   auto _ = set_scoped_default_context(ctx);
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 
-  const IndexSpace csv_basis = isr->retrieve(L"\u03bc\u0303");
-  const IndexSpace df_basis = isr->retrieve(L"\u039a");
+  const IndexSpace csv_basis = isr->retrieve_space(L"\u03bc\u0303");
+  const IndexSpace df_basis = isr->retrieve_space(L"\u039a");
   const container::svector<std::wstring> csv_labels = {
       L"f", L"g", std::wstring(reserved::overlap_label())};
 
@@ -1005,19 +997,19 @@ TEST_CASE("kramers_symmetry_propagation", "[spinor][kramers]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
-  auto isr = std::make_shared<IndexSpaceRegistry>(
-      get_default_context().index_space_registry()->clone());
+  auto isr = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   if (!isr->retrieve_ptr(L"μ̃")) add_pao_spaces(isr, Spin::any);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   if (!isr->retrieve_ptr(L"Κ")) add_df_spaces(isr);
-  REQUIRE(isr->kramers_partner(isr->retrieve(L"a↑")));
+  REQUIRE(isr->kramers_partner(isr->retrieve_space(L"a↑")));
   auto ctx = get_default_context();
   ctx.set(isr);
   ctx.set(CanonicalizeOptions{
       .method = CanonicalizationMethod::Complete,
       .fold_kramers = CanonicalizeOptions::FoldKramers::Yes});
   auto _ = set_scoped_default_context(ctx);
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
   const auto fold = CanonicalizeOptions::default_options().copy_and_set(
       CanonicalizeOptions::FoldKramers::Yes);
 
@@ -1093,7 +1085,7 @@ TEST_CASE("kramers_symmetry_propagation", "[spinor][kramers]") {
           0);
   REQUIRE(n_non_trs(csv) == 0);
 
-  auto df = density_fit(csv, isr->retrieve(L"Κ"), L"g", L"g");
+  auto df = density_fit(csv, isr->retrieve_space(L"Κ"), L"g", L"g");
   expand(df);
   flatten(df);
   REQUIRE(n_tensors(df, [](const Tensor& t) { return t.aux_rank() == 1; }) > 0);
@@ -1105,22 +1097,32 @@ TEST_CASE("kramers_symmetry_propagation", "[spinor][kramers]") {
   REQUIRE(df->is<Sum>());
   {
     auto nofold = df->clone();
-    canonicalize(nofold, CanonicalizeOptions{});
+    {
+      auto scope =
+          sequant::tests::scoped_canonicalize_options(CanonicalizeOptions{});
+      canonicalize(nofold);
+    }
     REQUIRE(n_non_trs(nofold) == 0);
     auto conj = sequant::conjugate(df->clone());
     REQUIRE(n_non_trs(conj) == 0);
-    auto folded = fold_conjugate_pairs(df->clone(), fold, [](ExprPtr const& e) {
-      return sequant::conjugate(e);
-    });
+    auto scope = sequant::tests::scoped_canonicalize_options(fold);
+    auto folded = fold_conjugate_pairs(
+        df->clone(), [](ExprPtr const& e) { return sequant::conjugate(e); });
     REQUIRE(n_non_trs(folded) == 0);
   }
   for (auto const& term : *df) {
     auto once = term->clone();
-    canonicalize(once, fold);
+    {
+      auto scope = sequant::tests::scoped_canonicalize_options(fold);
+      canonicalize(once);
+    }
     REQUIRE(n_non_trs(once) == 0);
     REQUIRE(n_down_first(once) <= n_down_first(term));
     auto twice = once->clone();
-    canonicalize(twice, fold);
+    {
+      auto scope = sequant::tests::scoped_canonicalize_options(fold);
+      canonicalize(twice);
+    }
     REQUIRE(twice == once);
   }
 
@@ -1133,7 +1135,10 @@ TEST_CASE("kramers_symmetry_propagation", "[spinor][kramers]") {
     e = mark_kramers_symmetric(e);
     INFO("before: " << toUtf8(to_latex(e)) << " down-first "
                     << n_down_first(e));
-    canonicalize(e, fold);
+    {
+      auto scope = sequant::tests::scoped_canonicalize_options(fold);
+      canonicalize(e);
+    }
     INFO("after: " << toUtf8(to_latex(e)));
     REQUIRE(n_down_first(e) == 0);
   }
@@ -1168,8 +1173,14 @@ TEST_CASE("kramers_symmetry_propagation", "[spinor][kramers]") {
     for (auto const& pr : pairs) {
       auto A = mark_kramers_symmetric(deserialize(pr[0]));
       auto B = mark_kramers_symmetric(deserialize(pr[1]));
-      canonicalize(A, fold);
-      canonicalize(B, fold);
+      {
+        auto scope = sequant::tests::scoped_canonicalize_options(fold);
+        canonicalize(A);
+      }
+      {
+        auto scope = sequant::tests::scoped_canonicalize_options(fold);
+        canonicalize(B);
+      }
       INFO("pair " << ip++ << "\nA = " << toUtf8(to_latex(A))
                    << "\nB = " << toUtf8(to_latex(B)));
       // strip marks and scalars, compare the networks: the mark is the
@@ -1214,8 +1225,8 @@ TEST_CASE("fold_stripped_antisymmetrizer", "[spinor][kramers][fold]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
-  auto isr = std::make_shared<IndexSpaceRegistry>(
-      get_default_context().index_space_registry()->clone());
+  auto isr = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
   auto ctx = get_default_context();
   ctx.set(isr);
   // externals stay distinguishable: the fold's canonical keys must be unique
@@ -1224,8 +1235,6 @@ TEST_CASE("fold_stripped_antisymmetrizer", "[spinor][kramers][fold]") {
                           .ignore_named_index_labels =
                               CanonicalizeOptions::IgnoreNamedIndexLabel::No});
   auto _ = set_scoped_default_context(ctx);
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
   auto _m =
       sequant::mbpt::set_scoped_default_mbpt_context(sequant::mbpt::Context(
           {.csv = sequant::mbpt::CSV::Yes,

@@ -799,12 +799,16 @@ IndexSpace kr_flipped_space(const Index& idx) {
   auto qns = sequant::mbpt::spinannotation_remove(idx.space().qns()).unIon(s);
   const auto label =
       sequant::mbpt::spinannotation_replacе(idx.space().base_key(), s);
-  if (auto isr = get_default_context().index_space_registry()) {
-    auto* sp = isr->retrieve_ptr(label);
-    if (sp && sp->type() == idx.space().type() && sp->qns() == qns) return *sp;
+  if (auto isr = get_default_context().index_basis_registry()) {
+    auto* sp = isr->retrieve_space_ptr(label);
+    if (sp && sp->type() == idx.space().type() && sp->qns() == qns &&
+        sp->field() == idx.space().field())
+      return *sp;
   }
-  return IndexSpace{label, idx.space().type(), qns,
-                    idx.space().approximate_size()};
+  // the flavor does not change the basis, so the source space's field (and
+  // dimension) carry over
+  return IndexSpace{label, idx.space().type(), qns, idx.space().dimension(),
+                    idx.space().field()};
 }
 
 }  // namespace
@@ -960,7 +964,12 @@ CanonicalKey canonical_key(const ExprPtr& term,
         if (x->is<Tensor>()) x->as<Tensor>().reset_tags();
       },
       /* atoms_only = */ true);
-  e = canonicalize(e, opts);
+  {
+    // the options are read from the default context
+    auto scope =
+        set_scoped_default_context(Context(get_default_context()).set(opts));
+    e = canonicalize(e);
+  }
   if (!e) return key;
   if (e->is<Tensor>()) {
     key.network = e;

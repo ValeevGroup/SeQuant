@@ -249,7 +249,7 @@ std::pair<bool, std::int8_t> kramers_uprow_exchange(AbstractTensor& t) {
   const auto bks = t._braket_symmetry();
   if (bks != BraKetSymmetry::Conjugate && bks != BraKetSymmetry::AntiConjugate)
     return {false, 1};
-  const auto isr = get_default_context().index_space_registry();
+  const auto isr = get_default_context().index_basis_registry();
   if (!isr) return {false, 1};
   auto n_down = [&isr](auto slots) {
     std::size_t n = 0;
@@ -292,7 +292,7 @@ bool kramers_foldable(const AbstractTensor& t) {
 }
 
 bool kramers_flip_slots_deep(AbstractTensor& t) {
-  const auto isr = get_default_context().index_space_registry();
+  const auto isr = get_default_context().index_basis_registry();
   if (!isr) return false;
   bool flipped = false;
   auto flip = [&](auto&& slots) {
@@ -312,7 +312,7 @@ bool kramers_flip_slots_deep(AbstractTensor& t) {
 }
 
 bool kramers_flip_slots(AbstractTensor& t) {
-  const auto isr = get_default_context().index_space_registry();
+  const auto isr = get_default_context().index_basis_registry();
   if (!isr) return false;
   bool flipped = false;
   // in place (not via _transform_indices: the block canonicalizer tags every
@@ -334,7 +334,7 @@ bool kramers_flip_slots(AbstractTensor& t) {
   return flipped;
 }
 
-bool kramers_union_index(const Index& idx, const IndexSpaceRegistry& isr) {
+bool kramers_union_index(const Index& idx, const IndexBasisRegistry& isr) {
   const auto& sp = idx.space();
   if (isr.kramers_partner(sp)) return false;  // a flavoured index
   // sp is the union of a Kramers-partnered pair of the same type: its quantum
@@ -353,7 +353,7 @@ bool kramers_union_index(const Index& idx, const IndexSpaceRegistry& isr) {
 }
 
 bool has_kramers_union_slot(const AbstractTensor& t) {
-  const auto isr = get_default_context().index_space_registry();
+  const auto isr = get_default_context().index_basis_registry();
   if (!isr) return false;
   auto any_union = [&](auto slots) {
     for (const Index& idx : slots)
@@ -364,7 +364,7 @@ bool has_kramers_union_slot(const AbstractTensor& t) {
 }
 
 std::wstring kramers_flavor_key(const AbstractTensor& t, bool flipped) {
-  const auto isr = get_default_context().index_space_registry();
+  const auto isr = get_default_context().index_basis_registry();
   auto bundle = [&](auto slots) {
     std::wstring b;
     for (const Index& idx : slots) {
@@ -396,7 +396,7 @@ std::wstring kramers_flavor_key(const AbstractTensor& t, bool flipped) {
 }
 
 bool kramers_noncanonical(const AbstractTensor& t) {
-  const auto isr = get_default_context().index_space_registry();
+  const auto isr = get_default_context().index_basis_registry();
   if (!isr) return false;
   std::size_t n_up = 0, n_down = 0;
   auto count = [&](auto slots) {
@@ -418,7 +418,7 @@ bool kramers_noncanonical(const AbstractTensor& t) {
 
 int canonicalize_kramers(AbstractTensor& t, bool mark) {
   if (!kramers_foldable(t)) return 1;
-  const auto isr = get_default_context().index_space_registry();
+  const auto isr = get_default_context().index_basis_registry();
   if (!isr) return 1;
   // orientation/permutation-invariant decision (see kramers_noncanonical);
   // count the down slots for the phase
@@ -491,7 +491,7 @@ std::int8_t DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
   // by the braket move and "first flavored slot up" is a braket-invariant
   // notion for the Kramers fold. Ties fall through to the space criterion.
   if (t._kramers_symmetry() == KramersSymmetry::TimeReversal) {
-    if (const auto isr = get_default_context().index_space_registry()) {
+    if (const auto isr = get_default_context().index_basis_registry()) {
       auto n_down = [&isr](const std::vector<Index>& v) {
         std::size_t n = 0;
         for (const auto& idx : v)

@@ -511,12 +511,10 @@ StringDiffMatcher DiffedStringEquals(String &&str) {
 /// element (sequant::opt::detail::field_cost_factors). Call it after the
 /// test's own registry edits (spaces added later default to complex again).
 inline auto scoped_real_field_context() {
-  auto ctx = sequant::get_default_context().clone();
-  auto reg = ctx.mutable_index_space_registry();
-  std::vector<std::wstring> keys;
-  for (auto const &space : *reg) keys.push_back(space.base_key());
-  for (auto const &key : keys)
-    if (auto *sp = reg->retrieve_ptr(key)) sp->field(sequant::Field::Real);
+  auto ctx = sequant::get_default_context_snapshot();
+  sequant::IndexBasisRegistry reg(*ctx.index_basis_registry());
+  sequant::tests::declare_real_basis(reg);
+  ctx.set(std::move(reg));
   return sequant::set_scoped_default_context(std::move(ctx));
 }
 

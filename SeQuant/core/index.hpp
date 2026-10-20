@@ -1295,7 +1295,7 @@ Field base_field(BraRange bra, KetRange ket) {
 /// (proto indices without a partner are kept)
 /// @return the flipped index, or nullopt if @p idx's space has no partner
 inline std::optional<Index> kramers_flipped(const Index &idx,
-                                            const IndexSpaceRegistry &isr) {
+                                            const IndexBasisRegistry &isr) {
   auto partner = isr.kramers_partner(idx.space());
   if (!partner) return std::nullopt;
   if (!idx.has_proto_indices()) return idx.with_space(*partner);
@@ -1315,7 +1315,7 @@ inline std::optional<Index> kramers_flipped(const Index &idx,
 /// what a whole-expression time-reversal flip needs, so the pair labels inside
 /// such a composite follow their plain-slot occurrences)
 inline Index kramers_flipped_deep(const Index &idx,
-                                  const IndexSpaceRegistry &isr) {
+                                  const IndexBasisRegistry &isr) {
   auto partner = isr.kramers_partner(idx.space());
   if (!idx.has_proto_indices()) return partner ? idx.with_space(*partner) : idx;
   Index::index_vector protos;
@@ -1327,7 +1327,7 @@ inline Index kramers_flipped_deep(const Index &idx,
 /// @brief replaces every index of @p ixs by its deep Kramers image (see
 /// kramers_flipped_deep) in place; ordinals and order are kept
 inline void kramers_flip_deep(Index::index_vector &ixs,
-                              const IndexSpaceRegistry &isr) {
+                              const IndexBasisRegistry &isr) {
   for (auto &ix : ixs) ix = kramers_flipped_deep(ix, isr);
 }
 
@@ -1335,7 +1335,7 @@ inline void kramers_flip_deep(Index::index_vector &ixs,
 /// image (see kramers_flipped) in place; ordinals and order are kept
 /// @return whether any index was flipped
 inline bool kramers_flip(Index::index_vector &ixs,
-                         const IndexSpaceRegistry &isr) {
+                         const IndexBasisRegistry &isr) {
   bool flipped = false;
   for (auto &ix : ixs)
     if (auto f = kramers_flipped(ix, isr)) {

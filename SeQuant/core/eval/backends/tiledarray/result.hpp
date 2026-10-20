@@ -994,7 +994,7 @@ class ResultTensorTA final : public Result {
     auto res = view_ ? eval_result<this_type>(materialized())
                      : eval_result<this_type>(TA::clone(raw<ArrayT>()));
     detail::log_batch_op("Clone", std::chrono::steady_clock::now() - t0,
-                         res->get<ArrayT>(), "");
+                         res->template get<ArrayT>(), "");
     return res;
   }
 

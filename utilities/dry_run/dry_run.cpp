@@ -512,7 +512,7 @@ OptimizeOptions make_optimize_options(const Driver& cfg,
 /// pure-occupied slots of the leaf labelled \p label (the CSV projector, which
 /// one array serves for every pair flavour)
 eval::KramersBlindness make_kramers_blindness(const std::wstring& label) {
-  const auto isr = get_default_context().index_space_registry();
+  const auto isr = get_default_context().index_basis_registry();
   return eval::KramersBlindness{
       .blind_slot =
           [label, isr](const Tensor& t, std::size_t slot) {

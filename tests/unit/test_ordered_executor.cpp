@@ -5420,11 +5420,13 @@ TEST_CASE(
 
   // the default registry carries the Kramers flavours (i↑, i↓, a↑); add the
   // DF auxiliary space
-  auto ctx = sequant::get_default_context().clone();
+  auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
+  REQUIRE(ctx.index_basis_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+      *ctx.index_basis_registry());
   sequant::mbpt::add_df_spaces(isr);
+  ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   // The ladder's CSV bracket [g C C], then the (non-blind) amplitude, in the
@@ -5452,7 +5454,7 @@ TEST_CASE(
   // ↑ is the representative flavour.
   sequant::eval::KramersBlindness const kb{
       .blind_slot =
-          [reg = sequant::get_default_context().index_space_registry()](
+          [reg = sequant::get_default_context().index_basis_registry()](
               sequant::Tensor const& t, std::size_t slot) {
             if (t.label() != L"C") return false;
             auto const& ix = *(t.const_slots().begin() + slot);
@@ -5482,7 +5484,7 @@ TEST_CASE(
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
 
   auto const is_occ = [](Index const& ix) {
-    auto const reg = sequant::get_default_context().index_space_registry();
+    auto const reg = sequant::get_default_context().index_basis_registry();
     return reg && ix.space() && reg->is_pure_occupied(ix.space()) &&
            !ix.has_proto_indices();
   };
