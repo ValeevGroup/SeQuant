@@ -3,6 +3,7 @@
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/irreps/algebra.hpp>
+#include <SeQuant/core/irreps/table_algebra.hpp>
 #include <SeQuant/core/irreps/z2_algebra.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 
@@ -140,6 +141,41 @@ TEST_CASE("irreps", "[irreps]") {
     REQUIRE(product(d2, b1_or_b2, Set{}).empty());
     REQUIRE(product(d2, b1_or_b2, Set::any()).is_any());
     REQUIRE(product(d2, Set{}, Set::any()).empty());
+  }
+
+  SECTION("TableAlgebra") {
+    using Set = IrrepSet<std::string>;
+
+    // C3v
+    TableAlgebra c3v("A1", {{{"A2", "A2"}, Set{"A1"}},
+                            {{"A2", "E"}, Set{"E"}},
+                            {{"E", "E"}, Set{"A1", "A2", "E"}}});
+
+    REQUIRE(c3v.totally_symmetric() == "A1");
+    REQUIRE(c3v.product("E", "E") == Set{"A1", "A2", "E"});
+    REQUIRE(c3v.product("E", "A2") == Set{"E"});
+    REQUIRE(c3v.product("A1", "E") == Set{"E"});
+    REQUIRE(c3v.product("A2", "A1") == Set{"A2"});
+    REQUIRE(product(c3v, Set{"A2", "E"}, Set{"E"}) == Set{"A1", "A2", "E"});
+    REQUIRE(c3v.conjugate("E") == "E");
+
+    // Missing entry
+    TableAlgebra incomplete("A1", {{{"A2", "A2"}, Set{"A1"}}});
+    REQUIRE_THROWS_AS(incomplete.product("A2", "E"), Exception);
+
+    // Inconsistent tables
+    REQUIRE_THROWS_AS((TableAlgebra("A1", {{{"A1", "E"}, Set{"A2"}}})),
+                      Exception);
+    REQUIRE_THROWS_AS((TableAlgebra("A1", {{{"A2", "E"}, Set{"E"}},
+                                           {{"E", "A2"}, Set{"A1"}}})),
+                      Exception);
+    REQUIRE_THROWS_AS((TableAlgebra("A1", {{{"A2", "E"}, Set::any()}})),
+                      Exception);
+
+    // Conjugation map
+    TableAlgebra complex("A", {{{"E1", "E2"}, Set{"A"}}}, {{"E1", "E2"}});
+    REQUIRE(complex.conjugate("E1") == "E2");
+    REQUIRE(complex.conjugate("A") == "A");
   }
 
   SECTION("custom algebra") {

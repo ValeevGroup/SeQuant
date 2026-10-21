@@ -397,6 +397,7 @@ set(SeQuant_symb_src
         SeQuant/core/io/serialization/v1/semantic_actions.hpp
         SeQuant/core/io/serialization/v1/serialize.cpp
         SeQuant/core/irreps/algebra.hpp
+        SeQuant/core/irreps/table_algebra.cpp
         SeQuant/core/irreps/table_algebra.hpp
         SeQuant/core/irreps/z2_algebra.hpp
         SeQuant/core/ranges.hpp
