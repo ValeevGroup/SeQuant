@@ -1271,7 +1271,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE_THAT(
         result,
         EquivalentTo(
-            L"5/2 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * "
+            L"3 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * "
             "g{a_1,a_2;a_4,a_5}:N-N-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-N-S"));
   }
 

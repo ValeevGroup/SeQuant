@@ -137,10 +137,13 @@ container::svector<size_t> compute_permuted_indices(
 /// \brief Provides one row of the NNS projector matrix,
 /// hardcoded from Mathematica to avoid numerical precision loss.
 ///
-/// The NNS projector weights are obtained from the normalized pseudoinverse
-/// of M: first compute M_pinv (the pseudoinverse), then normalize it by the
-/// factor ((n_particles)!/rank(M)).
-/// Finally, NNS projector = normalized_M_pinv · M.
+/// The NNS projector is the idempotent projector onto the range of M,
+/// NNS projector = M_pinv · M.
+/// It must be applied to residuals evaluated from the V2 (WK-compacted)
+/// equations to reconstruct the terms dropped by the compaction.
+/// See
+/// [DOI 10.48550/ARXIV.1805.00565](https://doi.org/10.48550/ARXIV.1805.00565),
+/// for more details.
 ///
 /// \param n_particles The rank of external index pairs
 ///
@@ -157,50 +160,50 @@ std::optional<std::vector<T>> hardcoded_nns_projector(std::size_t n_particles) {
       return std::vector<T>{T(0) / T(1), T(1) / T(1)};
 
     case 3:
-      return std::vector<T>{T(-1) / T(5), T(-1) / T(5), T(-1) / T(5),
-                            T(-1) / T(5), T(-1) / T(5), T(1) / T(1)};
+      return std::vector<T>{T(-1) / T(6), T(-1) / T(6), T(-1) / T(6),
+                            T(-1) / T(6), T(-1) / T(6), T(5) / T(6)};
 
     case 4:
       return std::vector<T>{
-          T(1) / T(7),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(14),
-          T(1) / T(7),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(14),
-          T(-1) / T(14), T(-1) / T(14), T(1) / T(7),   T(-2) / T(7),
-          T(-1) / T(14), T(1) / T(7),   T(-1) / T(14), T(-2) / T(7),
-          T(1) / T(7),   T(-1) / T(14), T(-1) / T(14), T(-2) / T(7),
-          T(-2) / T(7),  T(-2) / T(7),  T(-2) / T(7),  T(1) / T(1)};
+          T(1) / T(12),  T(1) / T(12),  T(1) / T(12),  T(-1) / T(24),
+          T(1) / T(12),  T(1) / T(12),  T(1) / T(12),  T(-1) / T(24),
+          T(-1) / T(24), T(-1) / T(24), T(1) / T(12),  T(-1) / T(6),
+          T(-1) / T(24), T(1) / T(12),  T(-1) / T(24), T(-1) / T(6),
+          T(1) / T(12),  T(-1) / T(24), T(-1) / T(24), T(-1) / T(6),
+          T(-1) / T(6),  T(-1) / T(6),  T(-1) / T(6),  T(7) / T(12)};
 
     case 5:
       return std::vector<T>{
-          T(-1) / T(14), T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
-          T(2) / T(21),  T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
-          T(-1) / T(14), T(2) / T(21),  T(-1) / T(14), T(-1) / T(14),
-          T(-1) / T(14), T(-1) / T(14), T(2) / T(21),  T(2) / T(21),
-          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(0) / T(1),
-          T(-1) / T(14), T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
-          T(2) / T(21),  T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
-          T(-1) / T(14), T(2) / T(21),  T(-1) / T(14), T(-1) / T(14),
-          T(-1) / T(14), T(-1) / T(14), T(2) / T(21),  T(2) / T(21),
-          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(0) / T(1),
-          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(2) / T(21),
-          T(0) / T(1),   T(2) / T(21),  T(2) / T(21),  T(-1) / T(21),
-          T(2) / T(21),  T(0) / T(1),   T(-1) / T(21), T(-1) / T(21),
-          T(-1) / T(21), T(-1) / T(21), T(1) / T(7),   T(0) / T(1),
-          T(0) / T(1),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(3),
-          T(2) / T(21),  T(-1) / T(21), T(2) / T(21),  T(2) / T(21),
-          T(0) / T(1),   T(-1) / T(21), T(-1) / T(21), T(-1) / T(21),
-          T(-1) / T(21), T(1) / T(7),   T(2) / T(21),  T(-1) / T(21),
-          T(2) / T(21),  T(2) / T(21),  T(0) / T(1),   T(0) / T(1),
-          T(1) / T(7),   T(0) / T(1),   T(1) / T(7),   T(-1) / T(3),
-          T(-1) / T(21), T(-1) / T(21), T(-1) / T(21), T(-1) / T(21),
-          T(1) / T(7),   T(-1) / T(21), T(2) / T(21),  T(2) / T(21),
-          T(2) / T(21),  T(0) / T(1),   T(-1) / T(21), T(2) / T(21),
-          T(2) / T(21),  T(2) / T(21),  T(0) / T(1),   T(1) / T(7),
-          T(0) / T(1),   T(0) / T(1),   T(1) / T(7),   T(-1) / T(3),
-          T(0) / T(1),   T(1) / T(7),   T(1) / T(7),   T(0) / T(1),
-          T(-1) / T(3),  T(1) / T(7),   T(0) / T(1),   T(1) / T(7),
-          T(0) / T(1),   T(-1) / T(3),  T(1) / T(7),   T(1) / T(7),
-          T(0) / T(1),   T(0) / T(1),   T(-1) / T(3),  T(-1) / T(3),
-          T(-1) / T(3),  T(-1) / T(3),  T(-1) / T(3),  T(1) / T(1)};
+          T(-1) / T(40), T(-1) / T(40), T(-1) / T(40), T(-1) / T(40),
+          T(1) / T(30),  T(-1) / T(40), T(-1) / T(40), T(-1) / T(40),
+          T(-1) / T(40), T(1) / T(30),  T(-1) / T(40), T(-1) / T(40),
+          T(-1) / T(40), T(-1) / T(40), T(1) / T(30),  T(1) / T(30),
+          T(1) / T(30),  T(1) / T(30),  T(-1) / T(60), T(0) / T(1),
+          T(-1) / T(40), T(-1) / T(40), T(-1) / T(40), T(-1) / T(40),
+          T(1) / T(30),  T(-1) / T(40), T(-1) / T(40), T(-1) / T(40),
+          T(-1) / T(40), T(1) / T(30),  T(-1) / T(40), T(-1) / T(40),
+          T(-1) / T(40), T(-1) / T(40), T(1) / T(30),  T(1) / T(30),
+          T(1) / T(30),  T(1) / T(30),  T(-1) / T(60), T(0) / T(1),
+          T(1) / T(30),  T(1) / T(30),  T(-1) / T(60), T(1) / T(30),
+          T(0) / T(1),   T(1) / T(30),  T(1) / T(30),  T(-1) / T(60),
+          T(1) / T(30),  T(0) / T(1),   T(-1) / T(60), T(-1) / T(60),
+          T(-1) / T(60), T(-1) / T(60), T(1) / T(20),  T(0) / T(1),
+          T(0) / T(1),   T(1) / T(20),  T(1) / T(20),  T(-7) / T(60),
+          T(1) / T(30),  T(-1) / T(60), T(1) / T(30),  T(1) / T(30),
+          T(0) / T(1),   T(-1) / T(60), T(-1) / T(60), T(-1) / T(60),
+          T(-1) / T(60), T(1) / T(20),  T(1) / T(30),  T(-1) / T(60),
+          T(1) / T(30),  T(1) / T(30),  T(0) / T(1),   T(0) / T(1),
+          T(1) / T(20),  T(0) / T(1),   T(1) / T(20),  T(-7) / T(60),
+          T(-1) / T(60), T(-1) / T(60), T(-1) / T(60), T(-1) / T(60),
+          T(1) / T(20),  T(-1) / T(60), T(1) / T(30),  T(1) / T(30),
+          T(1) / T(30),  T(0) / T(1),   T(-1) / T(60), T(1) / T(30),
+          T(1) / T(30),  T(1) / T(30),  T(0) / T(1),   T(1) / T(20),
+          T(0) / T(1),   T(0) / T(1),   T(1) / T(20),  T(-7) / T(60),
+          T(0) / T(1),   T(1) / T(20),  T(1) / T(20),  T(0) / T(1),
+          T(-7) / T(60), T(1) / T(20),  T(0) / T(1),   T(1) / T(20),
+          T(0) / T(1),   T(-7) / T(60), T(1) / T(20),  T(1) / T(20),
+          T(0) / T(1),   T(0) / T(1),   T(-7) / T(60), T(-7) / T(60),
+          T(-7) / T(60), T(-7) / T(60), T(-7) / T(60), T(7) / T(20)};
 
     default:
       return std::nullopt;

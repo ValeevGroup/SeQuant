@@ -602,10 +602,24 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
     }
   }
 
+  // We need to normalize to the amount of non-zero eigenvalues via
+  // normalization = #eigenvalues / #non-zero eigenvalues (or n!/rank)
+  // Since perm_ovlp_mat is symmetric, it is diagonalizable and for every
+  // diagonalizable matrix, its rank equals the amount of non-zero eigenvalues.
+  // The kept terms carry it so that the idempotent NNS projector rebuilds
+  // them exactly.
+  const auto perm_ovlp_mat = permutational_overlap_matrix(ext_idxs.size());
+  auto decomp = Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd>();
+  decomp.setThreshold(default_biorthogonalizer_pseudoinverse_threshold);
+  decomp.compute(perm_ovlp_mat);
+  const rational normalization(static_cast<std::int64_t>(perm_ovlp_mat.rows()),
+                               static_cast<std::int64_t>(decomp.rank()));
   Sum filtered;
   for (const auto& [_, terms] : largest_coeff_terms) {
     for (const auto& t : terms) {
-      filtered.append(t);
+      auto kept = t->clone();
+      kept->as<Product>().scale(normalization);
+      filtered.append(std::move(kept));
     }
   }
   auto result = ex<Sum>(filtered);
@@ -683,18 +697,7 @@ std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
                                          double threshold) {
   auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
   auto pinv = compute_biorthogonalizer_matrix(n_particles, threshold);
-
-  // We need to normalize to the amount of non-zero eigenvalues via
-  // normalization = #eigenvalues / #non-zero eigenvalues
-  // Since perm_ovlp_mat is symmetric, it is diagonalizable and for every
-  // diagonalizable matrix, its rank equals the amount of non-zero eigenvalues.
-  auto decomp = Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd>();
-  decomp.setThreshold(threshold);
-  decomp.compute(perm_ovlp_mat);
-  double normalization =
-      static_cast<double>(perm_ovlp_mat.rows()) / decomp.rank();
-
-  Eigen::MatrixXd nns_matrix = normalization * perm_ovlp_mat * pinv;
+  Eigen::MatrixXd nns_matrix = perm_ovlp_mat * pinv;
 
   auto num_perms = nns_matrix.rows();
   std::vector<double> coeffs;
