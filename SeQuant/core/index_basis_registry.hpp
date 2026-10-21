@@ -104,13 +104,16 @@ concept index_space_argument =
 
 namespace detail {
 /// what a bare brace list in the spec argument of IndexBasisRegistry::add()
-/// and its kin, `{10}` or `{{}, 10}`, binds to once IndexSpaceSpec and
-/// IndexBasisSpec reject it, through its one constructor. Nothing else
+/// and its kin, `{10}` or `{Spin::any, true}`, binds to once IndexSpaceSpec
+/// and IndexBasisSpec reject it, through its one constructor. Nothing else
 /// reaches it: a bare value has no converting constructor to use, an empty
 /// `{}` no default constructor, and a designated list initializes aggregates
 /// only, so those bind to the spec and to the argument-list overloads as
 /// before. The overloads that take this fail with a diagnostic that names the
-/// spec spelling.
+/// spec spelling. A list of mixed types, `{Spin::any, true}`, has no
+/// `std::initializer_list<T>` and keeps the compiler's own diagnostic, as
+/// does `{{}, 10}`, which fails on the spec's guard (its private default
+/// constructor) while the spec overload is still being considered.
 /// @note list-initialization of a class, so that no compiler deduces from the
 /// list against a template parameter: MSVC forms `std::initializer_list<void>`
 /// for a designated list against `std::initializer_list<T>`, and gcc reads a
