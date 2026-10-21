@@ -604,16 +604,11 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
 
   // We need to normalize to the amount of non-zero eigenvalues via
   // normalization = #eigenvalues / #non-zero eigenvalues (or n!/rank)
-  // Since perm_ovlp_mat is symmetric, it is diagonalizable and for every
-  // diagonalizable matrix, its rank equals the amount of non-zero eigenvalues.
   // The kept terms carry it so that the idempotent NNS projector rebuilds
-  // them exactly.
-  const auto perm_ovlp_mat = permutational_overlap_matrix(ext_idxs.size());
-  auto decomp = Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd>();
-  decomp.setThreshold(default_biorthogonalizer_pseudoinverse_threshold);
-  decomp.compute(perm_ovlp_mat);
-  const rational normalization(static_cast<std::int64_t>(perm_ovlp_mat.rows()),
-                               static_cast<std::int64_t>(decomp.rank()));
+  // them exactly. The rank is the Catalan number C_n = (2n)!/(n!(n+1)!).
+  const auto n = ext_idxs.size();
+  const auto rank = factorial(2 * n) / (factorial(n + 1) * factorial(n));
+  const rational normalization(factorial(n), rank);
   Sum filtered;
   for (const auto& [_, terms] : largest_coeff_terms) {
     for (const auto& t : terms) {
