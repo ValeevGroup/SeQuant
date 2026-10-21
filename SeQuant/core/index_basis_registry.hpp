@@ -103,7 +103,7 @@ concept index_space_argument =
 
 /// @brief what IndexBasisRegistry::add(label, type, spec) registers a space
 /// with besides its label and type: each member is given by name, and each
-/// is optional. A bare value in the brace list, `{10}`, does not compile
+/// is optional. A bare value in the brace list, `{10}`, is rejected
 /// (SEQUANT_DESIGNATED_INIT_ONLY): the members are set by name only, so that
 /// reordering them can never reinterpret a call site; the deprecated
 /// argument-list spelling of add() is where a bare number is the dimension.
@@ -134,7 +134,7 @@ struct IndexSpaceSpec {
 /// @brief what IndexBasisRegistry::add(label, space, instance, spec)
 /// registers a named basis instance with besides its label, space and
 /// instance: each member is given by name, and each is optional; as for
-/// IndexSpaceSpec, a bare value in the brace list does not compile
+/// IndexSpaceSpec, a bare value in the brace list is rejected
 struct IndexBasisSpec {
   SEQUANT_DESIGNATED_INIT_ONLY;
   /// a label given in a spec: any string type (see basic_string_convertible),
@@ -772,6 +772,21 @@ class IndexBasisRegistry {
     return *this;
   }
 
+  /// @overload
+  /// @note does not compile: a bare value in the spec's brace list,
+  /// `add(L"i", 0b01, {10})`, is positional initialization, which
+  /// IndexSpaceSpec rejects (SEQUANT_DESIGNATED_INIT_ONLY); the diagnostic
+  /// points to the spec spelling
+  template <basic_string_convertible S, typename T>
+  IndexBasisRegistry& add(S&&, IndexSpace::Type, std::initializer_list<T>) {
+    static_assert(meta::always_false<T>::value,
+                  "IndexBasisRegistry::add(label, type, {...}): give the "
+                  "quantum numbers, dimension, field and roles by name in an "
+                  "IndexSpaceSpec, e.g. add(L\"i\", 0b01, {.qns = Spin::any, "
+                  ".vacuum_occupied = true})");
+    return *this;
+  }
+
   /// @brief registers a basis instance of a registered space under its own
   /// label
   /// @param label the label of the basis instance; must be a valid base
@@ -832,6 +847,23 @@ class IndexBasisRegistry {
     // by value: the registration reallocates the table
     const IndexSpace space = retrieve_space(std::forward<S2>(space_label));
     return add(std::forward<S1>(label), space, basis_instance, spec);
+  }
+
+  /// @overload
+  /// @note does not compile: a bare value in the spec's brace list,
+  /// `add(L"x", L"a", 1, {IndexBasisMetric::General})`, is positional
+  /// initialization, which IndexBasisSpec rejects
+  /// (SEQUANT_DESIGNATED_INIT_ONLY); the diagnostic points to the spec
+  /// spelling
+  template <basic_string_convertible S, index_space_or_label Space, typename T>
+  IndexBasisRegistry& add(S&&, Space&&, IndexBasis::instance_type,
+                          std::initializer_list<T>) {
+    static_assert(meta::always_false<T>::value,
+                  "IndexBasisRegistry::add(label, space, instance, {...}): "
+                  "give the extent, metric, field and the entry to follow by "
+                  "name in an IndexBasisSpec, e.g. add(L\"x\", L\"a\", 1, "
+                  "{.metric = IndexBasisMetric::General})");
+    return *this;
   }
 
   /// @brief add a union of IndexSpace objects to this registry.
@@ -900,6 +932,23 @@ class IndexBasisRegistry {
                            parse_space_spec(args...));
   }
 
+  /// @overload
+  /// @note does not compile: a bare value in the spec's brace list,
+  /// `add_unIon(L"p", {L"i", L"a"}, {true})`, is positional
+  /// initialization, which IndexSpaceSpec rejects
+  /// (SEQUANT_DESIGNATED_INIT_ONLY); the diagnostic points to the spec
+  /// spelling
+  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
+            typename T>
+  IndexBasisRegistry& add_unIon(S&&, std::initializer_list<IndexSpaceOrLabel>,
+                                std::initializer_list<T>) {
+    static_assert(meta::always_false<T>::value,
+                  "IndexBasisRegistry::add_unIon(label, components, {...}): "
+                  "give the roles by name in an IndexSpaceSpec, e.g. "
+                  "add_unIon(L\"p\", {L\"i\", L\"a\"}, {.complete = true})");
+    return *this;
+  }
+
   /// alias to add_unIon
   template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel>
   IndexBasisRegistry& add_union(
@@ -919,6 +968,23 @@ class IndexBasisRegistry {
             OptionalArgs&&... args) {
     return this->add_unIon(std::forward<S>(type_label), components,
                            parse_space_spec(args...));
+  }
+
+  /// @overload
+  /// @note does not compile: a bare value in the spec's brace list,
+  /// `add_union(L"p", {L"i", L"a"}, {true})`, is positional
+  /// initialization, which IndexSpaceSpec rejects
+  /// (SEQUANT_DESIGNATED_INIT_ONLY); the diagnostic points to the spec
+  /// spelling
+  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
+            typename T>
+  IndexBasisRegistry& add_union(S&&, std::initializer_list<IndexSpaceOrLabel>,
+                                std::initializer_list<T>) {
+    static_assert(meta::always_false<T>::value,
+                  "IndexBasisRegistry::add_union(label, components, {...}): "
+                  "give the roles by name in an IndexSpaceSpec, e.g. "
+                  "add_union(L\"p\", {L\"i\", L\"a\"}, {.complete = true})");
+    return *this;
   }
 
   /// @brief add an intersection of IndexSpace objects to this registry.
@@ -986,6 +1052,25 @@ class IndexBasisRegistry {
                    OptionalArgs&&... args) {
     return this->add_intersection(std::forward<S>(type_label), components,
                                   parse_space_spec(args...));
+  }
+
+  /// @overload
+  /// @note does not compile: a bare value in the spec's brace list,
+  /// `add_intersection(L"R", {L"q", L"i"}, {true})`, is positional
+  /// initialization, which IndexSpaceSpec rejects
+  /// (SEQUANT_DESIGNATED_INIT_ONLY); the diagnostic points to the spec
+  /// spelling
+  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
+            typename T>
+  IndexBasisRegistry& add_intersection(S&&,
+                                       std::initializer_list<IndexSpaceOrLabel>,
+                                       std::initializer_list<T>) {
+    static_assert(
+        meta::always_false<T>::value,
+        "IndexBasisRegistry::add_intersection(label, components, {...}): "
+        "give the roles by name in an IndexSpaceSpec, e.g. "
+        "add_intersection(L\"R\", {L\"q\", L\"i\"}, {.complete = true})");
+    return *this;
   }
 
   /// @}
