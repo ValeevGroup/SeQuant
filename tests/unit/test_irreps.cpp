@@ -54,6 +54,34 @@ struct std::formatter<Z3Irrep> {
 
 static_assert(sequant::IrrepAlgebra<Z3Algebra>);
 
+namespace custom {
+
+/// IRREP type stringified via an overload of irrep_to_string (found via ADL)
+struct NamedIrrep {
+  std::string name;
+
+  auto operator<=>(const NamedIrrep &) const = default;
+};
+
+std::string irrep_to_string(const NamedIrrep &irrep) {
+  return "<" + irrep.name + ">";
+}
+
+struct NamedAlgebra {
+  using irrep_type = NamedIrrep;
+
+  irrep_type totally_symmetric() const { return {"A"}; }
+  sequant::IrrepSet<irrep_type> product(const irrep_type &lhs,
+                                        const irrep_type &rhs) const {
+    return {lhs == totally_symmetric() ? rhs : lhs};
+  }
+  irrep_type conjugate(const irrep_type &irrep) const { return irrep; }
+};
+
+}  // namespace custom
+
+static_assert(sequant::IrrepAlgebra<custom::NamedAlgebra>);
+
 TEST_CASE("irreps", "[irreps]") {
   using namespace sequant;
 
@@ -313,6 +341,10 @@ TEST_CASE("irreps", "[irreps]") {
 
     REQUIRE(irrep_to_string(Z3Irrep{2}) == "G2");
 
+    // Stringification via an ADL-found overload
+    REQUIRE(to_string(IrrepSet<custom::NamedIrrep>{{"X"}, {"Y"}}) ==
+            "{<X>,<Y>}");
+    REQUIRE(AnyIrrep(custom::NamedIrrep{"X"}).to_string() == "<X>");
     REQUIRE(to_string(product(alg, Set{Z3Irrep{1}}, Set{Z3Irrep{1}})) ==
             "{G2}");
     REQUIRE(conjugate(alg, Set{Z3Irrep{1}, Z3Irrep{0}}) ==

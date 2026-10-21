@@ -15,11 +15,15 @@ namespace sequant {
 
 /// Converts the given IRREP into its string representation. This is the
 /// customization point for how IRREPs are spelled out (e.g. in generated
-/// code). By default, it uses std::format, so the preferred way of
-/// customizing it is to provide a std::formatter specialization for the IRREP
-/// type. Alternatively, this function template may be fully specialized for
-/// a given IRREP type.
+/// code). This default implementation uses std::format and is thus available
+/// for all IRREP types for which a std::formatter specialization exists.
+/// Alternatively, an overload irrep_to_string(const MyIrrep&) can be provided
+/// in the namespace of the IRREP type, where it is found via
+/// argument-dependent lookup.
+/// @note Always call this function unqualified (or via sequant::to_string for
+/// IrrepSets) such that user-provided overloads are found.
 template <typename Irrep>
+  requires std::default_initializable<std::formatter<Irrep>>
 std::string irrep_to_string(const Irrep &irrep) {
   return std::format("{}", irrep);
 }
@@ -148,8 +152,7 @@ std::string to_string(const IrrepSet<Irrep> &set) {
 /// direct products for non-abelian groups.
 template <typename A>
 concept IrrepAlgebra =
-    std::copyable<A> && std::totally_ordered<typename A::irrep_type> &&
-    std::three_way_comparable<typename A::irrep_type> &&
+    std::copyable<A> && std::three_way_comparable<typename A::irrep_type> &&
     std::copyable<typename A::irrep_type> &&
     requires(const A &algebra, const typename A::irrep_type &irrep) {
       {
