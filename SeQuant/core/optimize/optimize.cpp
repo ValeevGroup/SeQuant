@@ -9,10 +9,12 @@
 #include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/optimize/cost_model.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/optimize/schedule_pin.hpp>
 #include <SeQuant/core/optimize/single_term.hpp>
 #include <SeQuant/core/optimize/sum.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -91,8 +93,11 @@ void log_chosen_factorization(ExprPtr const& result,
   std::clog.flush();
 }
 
-/// Optimize a Product that contains only Tensor and scalar factors.
-ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
+/// The single-term DP on \p prod (Tensor and scalar factors only). The
+/// batched objectives fill \p out_axes (one entry per contraction node,
+/// left-first post-order) when it is non-null; the others never see it.
+ExprPtr single_term_dp(Product const& prod, OptimizeOptions const& opts,
+                       container::vector<NodeBatchAnnotation>* out_axes) {
   bool const subnet_cse = opts.CSE.subnet;
   // Build the cost knobs field-by-field from OptimizeOptions / its BatchPolicy.
   // Batching config (both role predicates, batch_target_size, inner_pow,
@@ -114,51 +119,115 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   cost.batch_target_size = opts.batch_policy.batch_target_size;
   cost.inner_pow = opts.inner_pow;
   cost.batch_persistent_only = opts.batch_policy.persistent_only;
-  // Filled by either batched arm below (both pass &node_axes as out_axes when
-  // term_batch_axes is set); every other objective leaves it empty, so the
-  // term_batch_axes insertion at the end is then a no-op-shaped empty-vector
-  // entry (harmless: the binarizer only consumes entries for summands a
-  // batched objective annotated).
-  container::vector<NodeBatchAnnotation> node_axes;
-  auto run = [&]() -> ExprPtr {
-    if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
-      return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-          prod, opts.idx_to_extent, subnet_cse, cost);
-    if (opts.objective_function == ObjectiveFunction::DenseSize)
-      return opt::single_term_opt<ObjectiveFunction::DenseSize>(
-          prod, opts.idx_to_extent, subnet_cse, cost);
-    if (opts.objective_function == ObjectiveFunction::DenseSpaceTime)
-      return opt::single_term_opt<ObjectiveFunction::DenseSpaceTime>(
-          prod, opts.idx_to_extent, subnet_cse, cost);
-    if (opts.objective_function == ObjectiveFunction::DenseTimeSpace)
-      return opt::single_term_opt<ObjectiveFunction::DenseTimeSpace>(
-          prod, opts.idx_to_extent, subnet_cse, cost);
-    if (opts.objective_function == ObjectiveFunction::DenseSpaceTimeBatched)
-      return opt::single_term_opt<ObjectiveFunction::DenseSpaceTimeBatched>(
-          prod, opts.idx_to_extent, subnet_cse, cost,
-          opts.term_batch_axes ? &node_axes : nullptr);
-    SEQUANT_ASSERT(opts.objective_function ==
-                   ObjectiveFunction::DenseTimeSpaceBatched);
-    return opt::single_term_opt<ObjectiveFunction::DenseTimeSpaceBatched>(
-        prod, opts.idx_to_extent, subnet_cse, cost,
-        opts.term_batch_axes ? &node_axes : nullptr);
-  };
-  ExprPtr result = run();
-  if (opts.term_batch_axes) {
-    // optimize_impl optimizes a Sum's summands with sequant::for_each
-    // (std::execution::par_unseq), so opt_pure_product runs concurrently across
-    // summands -- and this insert into the shared term_batch_axes map is not
-    // thread-safe (std::unordered_map: concurrent inserts race even on distinct
-    // keys -- a rehash tears the structure). Serialize just the insert; the
-    // heavy DP above stays parallel. Without this the map is corrupted and the
-    // downstream whole-Sum re-key reads a wrong-sized node_batch_axes, tripping
-    // binarize's node_counter == size assertion (a nondeterministic, thread-
-    // count-dependent SIGABRT, absent under a sequential par_unseq fallback
-    // such as libc++).
-    static std::mutex term_batch_axes_mutex;
-    std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
-    (*opts.term_batch_axes)[result.get()] = std::move(node_axes);
+  if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
+    return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
+        prod, opts.idx_to_extent, subnet_cse, cost);
+  if (opts.objective_function == ObjectiveFunction::DenseSize)
+    return opt::single_term_opt<ObjectiveFunction::DenseSize>(
+        prod, opts.idx_to_extent, subnet_cse, cost);
+  if (opts.objective_function == ObjectiveFunction::DenseSpaceTime)
+    return opt::single_term_opt<ObjectiveFunction::DenseSpaceTime>(
+        prod, opts.idx_to_extent, subnet_cse, cost);
+  if (opts.objective_function == ObjectiveFunction::DenseTimeSpace)
+    return opt::single_term_opt<ObjectiveFunction::DenseTimeSpace>(
+        prod, opts.idx_to_extent, subnet_cse, cost);
+  if (opts.objective_function == ObjectiveFunction::DenseSpaceTimeBatched)
+    return opt::single_term_opt<ObjectiveFunction::DenseSpaceTimeBatched>(
+        prod, opts.idx_to_extent, subnet_cse, cost, out_axes);
+  SEQUANT_ASSERT(opts.objective_function ==
+                 ObjectiveFunction::DenseTimeSpaceBatched);
+  return opt::single_term_opt<ObjectiveFunction::DenseTimeSpaceBatched>(
+      prod, opts.idx_to_extent, subnet_cse, cost, out_axes);
+}
+
+/// Stores \p node_axes under \p optimized in opts.term_batch_axes (non-null).
+void store_term_axes(OptimizeOptions const& opts, Expr const* optimized,
+                     container::vector<NodeBatchAnnotation> node_axes) {
+  // optimize_impl optimizes a Sum's summands with sequant::for_each
+  // (std::execution::par_unseq), so opt_pure_product runs concurrently across
+  // summands -- and this insert into the shared term_batch_axes map is not
+  // thread-safe (std::unordered_map: concurrent inserts race even on distinct
+  // keys -- a rehash tears the structure). Serialize just the insert; the
+  // heavy DP stays parallel. Without this the map is corrupted and the
+  // downstream whole-Sum re-key reads a wrong-sized node_batch_axes, tripping
+  // binarize's node_counter == size assertion (a nondeterministic, thread-
+  // count-dependent SIGABRT, absent under a sequential par_unseq fallback
+  // such as libc++).
+  static std::mutex term_batch_axes_mutex;
+  std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
+  (*opts.term_batch_axes)[optimized] = std::move(node_axes);
+}
+
+[[noreturn]] void throw_not_pinnable(std::string const& key) {
+  throw Exception("schedule pin: term " + key +
+                  ": only tensor products can be pinned");
+}
+
+/// A term (Product, Tensor or Constant) under schedule pinning or recording
+/// (opts.pinned or opts.recording set): works on canonical_term(term), keyed by
+/// term_key. Pinned: the term is rebuilt from its record (the DP never runs);
+/// a miss leaves the canonical term unoptimized and is reported by
+/// PinSession::finish. Otherwise the DP runs on the canonical term, so the
+/// recorded labels are the output's labels. Recording adds record_term of the
+/// result.
+ExprPtr opt_scheduled_term(ExprPtr const& term, OptimizeOptions const& opts) {
+  auto canon = opt::schedule::canonical_term(term);
+  auto key = opt::schedule::term_key(canon);
+  bool pure = canon->is<Tensor>() || canon->is<Constant>();
+  if (canon->is<Product>()) {
+    pure = true;
+    for (auto const& f : canon->as<Product>().factors())
+      pure = pure && f->is<Tensor>();
   }
+  if (!pure) {
+    // not a tensor product (a Variable here; a mixed Product never reaches
+    // this function): a pin cannot rebuild it, a recording lists it as such
+    if (opts.pinned) throw_not_pinnable(key);
+    opts.recording->add(canon.get(),
+                        opt::schedule::record_unpinnable_term(canon));
+    return canon;
+  }
+
+  container::vector<NodeBatchAnnotation> node_axes;
+  ExprPtr result;
+  if (opts.pinned) {
+    auto const* rec = opts.pinned->take(key);
+    if (!rec) {
+      opts.pinned->bind(canon.get(), std::move(key));
+      return canon;
+    }
+    auto pinned = opt::schedule::rebuild_pinned_term(*rec, canon);
+    result = std::move(pinned.expr);
+    node_axes = std::move(pinned.nodes);
+    opts.pinned->bind(result.get(), key);
+  } else if (canon->is<Product>()) {
+    result = single_term_dp(canon->as<Product>(), opts, &node_axes);
+  } else {
+    result = canon;
+  }
+  if (opts.recording)
+    opts.recording->add(result.get(),
+                        opt::schedule::record_term(canon, result, node_axes));
+  if (opts.term_batch_axes)
+    store_term_axes(opts, result.get(), std::move(node_axes));
+  if (std::getenv("SEQUANT_FACTORIZER_DEBUG"))
+    log_chosen_factorization(result, opts);
+  return result;
+}
+
+/// Optimize a Product that contains only Tensor and scalar factors.
+ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
+  if (opts.pinned || opts.recording)
+    return opt_scheduled_term(ex<Product>(prod), opts);
+  // Filled by either batched objective when term_batch_axes is set; every
+  // other objective leaves it empty, so the term_batch_axes insertion below is
+  // then a no-op-shaped empty-vector entry (harmless: the binarizer only
+  // consumes entries for summands a batched objective annotated).
+  container::vector<NodeBatchAnnotation> node_axes;
+  ExprPtr result =
+      single_term_dp(prod, opts, opts.term_batch_axes ? &node_axes : nullptr);
+  if (opts.term_batch_axes)
+    store_term_axes(opts, result.get(), std::move(node_axes));
   if (std::getenv("SEQUANT_FACTORIZER_DEBUG"))
     log_chosen_factorization(result, opts);
   return result;
@@ -173,6 +242,14 @@ inline constexpr std::wstring_view placeholder_label_prefix = L"@__opt_";
 /// substituting placeholder tensors with target indices, optimizing the
 /// resulting tensor-only product, then swapping the originals back in.
 ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
+  // a pin cannot rebuild a mixed product; a recording lists it as not
+  // pinnable and optimizes it as usual, with the placeholder product below
+  // kept out of the record (it is not a term of the root)
+  if (opts.pinned)
+    throw_not_pinnable(opt::schedule::term_key(
+        opt::schedule::canonical_term(ex<Product>(prod))));
+  OptimizeOptions inner = opts;
+  inner.recording = nullptr;
   container::svector<ExprPtr> non_tensors(prod.size());
   container::svector<ExprPtr> new_factors;
   new_factors.reserve(prod.size());
@@ -191,7 +268,7 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
   }
 
   auto result = opt_pure_product(
-      Product{prod.scalar(), new_factors, Product::Flatten::No}, opts);
+      Product{prod.scalar(), new_factors, Product::Flatten::No}, inner);
 
   auto replacer = [&non_tensors](ExprPtr& out) {
     if (!out->is<Tensor>()) return;
@@ -213,7 +290,51 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
   };
 
   result->visit(replacer, /* atoms_only = */ true);
+  if (opts.recording)
+    opts.recording->add(result.get(),
+                        opt::schedule::record_unpinnable_term(
+                            opt::schedule::canonical_term(ex<Product>(prod))));
   return result;
+}
+
+/// Under schedule pinning, the optimized summands \p smands of a whole root
+/// Sum permuted into the document order of \p session. Call after
+/// PinSession::finish succeeded: every summand then has a key bound to it and
+/// the keys' document positions are a permutation.
+Sum::summands_type in_document_order(Sum::summands_type smands,
+                                     opt::schedule::PinSession const& session) {
+  Sum::summands_type result(smands.size());
+  for (auto& s : smands) {
+    auto const key = session.key_of(s.get());
+    SEQUANT_ASSERT(key);
+    auto const pos = session.document_position(*key);
+    SEQUANT_ASSERT(pos && *pos < result.size() && !result[*pos]);
+    result[*pos] = std::move(s);
+  }
+  return result;
+}
+
+/// Under schedule recording, tells \p session that opt::reorder replaced the
+/// summands of \p before (in the flattened cluster \p order) by the summands
+/// of \p after (clones, in the same order).
+void relocate_records(
+    opt::schedule::RecordSession& session, Sum const& before,
+    container::vector<container::vector<std::size_t>> const& order,
+    Sum const& after) {
+  std::vector<std::pair<Expr const*, Expr const*>> moves;
+  std::size_t k = 0;
+  for (auto const& clstr : order)
+    for (auto p : clstr) {
+      if (k >= after.size())
+        throw Exception(
+            "schedule record: reorder emitted fewer summands than it was "
+            "given");
+      moves.emplace_back(before.summand(p).get(), after.summand(k++).get());
+    }
+  if (k != after.size())
+    throw Exception(
+        "schedule record: reorder emitted more summands than it was given");
+  session.relocate(moves);
 }
 
 /// Recursive workhorse. \p parallel_outer controls whether the (single)
@@ -221,6 +342,11 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
 /// calls always run sequentially to avoid `sequant::for_each` oversubscription.
 ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
                       bool reorder, bool parallel_outer) {
+  bool const scheduled = opts.pinned || opts.recording;
+  // under pinning or recording, a lone Tensor or Constant is a term too
+  if (scheduled && !expr->is<Product>() && !expr->is<Sum>())
+    return opt_scheduled_term(expr, opts);
+
   if (expr->is<Product>()) {
     auto const& prod = expr->as<Product>();
     bool pure = ranges::all_of(prod, [](auto&& x) {
@@ -231,6 +357,12 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
 
   if (expr->is<Sum>()) {
     auto const& in_sum = expr->as<Sum>();
+    if (scheduled)
+      for (auto const& s : in_sum.summands())
+        if (s->is<Sum>())
+          throw Exception(
+              "schedule pin: a summand of the root is a Sum; flatten the root "
+              "so that every summand is a term");
     Sum::summands_type new_smands(in_sum.size());
 
     auto do_term = [&](std::size_t i) {
@@ -262,6 +394,14 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
       for (std::size_t i = 0; i < in_sum.size(); ++i) do_term(i);
     }
 
+    // Pinned whole Sum (scheduled implies no nested Sum, so this is the root):
+    // strictness first, then the document order instead of reorder.
+    if (opts.pinned) {
+      opts.pinned->finish();
+      new_smands = in_document_order(std::move(new_smands), *opts.pinned);
+      reorder = false;
+    }
+
     Sum new_sum(std::move(new_smands), Sum::move_only_tag{});
 
     // Re-key the per-summand batch annotations onto the final reassembled Sum.
@@ -277,18 +417,19 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     // flat node_batch_axes stays aligned with its node counter -- and store it
     // under the final Sum pointer, dropping the now-unreachable per-summand
     // entries. Without this, every batch annotation is silently lost and
-    // over-budget intermediates materialize whole. `order` is a list of
-    // clusters, each a list of positions into new_sum, flattened in emission
-    // order (identity for the no-reorder path); it must match how the final Sum
-    // orders its summands.
+    // over-budget intermediates materialize whole. `keyed` is the Sum holding
+    // the keyed pointers (new_sum, or on the no-reorder path the final Sum it
+    // was moved into); `order` is a list of clusters, each a list of positions
+    // into `keyed`, flattened in emission order (identity for the no-reorder
+    // path); it must match how the final Sum orders its summands.
     auto rekey_onto =
-        [&](ExprPtr const& result,
+        [&](ExprPtr const& result, Sum const& keyed,
             container::vector<container::vector<std::size_t>> const& order) {
           if (!opts.term_batch_axes) return;
           container::vector<NodeBatchAnnotation> combined;
           for (auto const& clstr : order)
             for (auto p : clstr) {
-              auto it = opts.term_batch_axes->find(new_sum.summand(p).get());
+              auto it = opts.term_batch_axes->find(keyed.summand(p).get());
               if (it == opts.term_batch_axes->end()) continue;
               combined.insert(combined.end(),
                               std::make_move_iterator(it->second.begin()),
@@ -303,7 +444,8 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
       identity.reserve(new_sum.size());
       for (std::size_t i = 0; i < new_sum.size(); ++i) identity.push_back({i});
       auto result = ex<Sum>(std::move(new_sum));
-      rekey_onto(result, identity);
+      // new_sum is moved from; the moved summands keep their pointers
+      rekey_onto(result, result->as<Sum>(), identity);
       return result;
     }
 
@@ -320,7 +462,9 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     // order equals the final summand order the reordered Sum emits.
     auto const order = opt::clusters(new_sum, nodes);
     auto result = ex<Sum>(opt::reorder(new_sum, nodes));
-    rekey_onto(result, order);
+    if (opts.recording)
+      relocate_records(*opts.recording, new_sum, order, result->as<Sum>());
+    rekey_onto(result, new_sum, order);
     return result;
   }
 

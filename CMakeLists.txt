@@ -284,6 +284,7 @@ include(FindOrFetchUtfcpp)
 
 # Eigen
 include(FindOrFetchEigen)
+include(FindOrFetchJSON)
 
 # embedded bliss-0.73
 add_library(SeQuant-bliss
@@ -509,6 +510,7 @@ set(SeQuant_eval_src
         SeQuant/core/eval/legality.hpp
         SeQuant/core/eval/lifetime_mask.hpp
         SeQuant/core/eval/node_batch_annotation.hpp
+        SeQuant/core/eval/op_counts.hpp
         SeQuant/core/eval/ordered_dump.hpp
         SeQuant/core/eval/ordered_executor.hpp
         SeQuant/core/eval/ordered_schedule.hpp
@@ -516,7 +518,9 @@ set(SeQuant_eval_src
         SeQuant/core/eval/peak_profile.hpp
         SeQuant/core/eval/result.cpp
         SeQuant/core/eval/result.hpp
-        SeQuant/core/eval/schedule_dump.hpp
+        SeQuant/core/eval/schedule_dag_record.hpp
+        SeQuant/core/eval/schedule_document.cpp
+        SeQuant/core/eval/schedule_document.hpp
         SeQuant/core/eval/slicing_signature.hpp
         SeQuant/core/eval/value_id.hpp
         SeQuant/core/eval/value_node_map.hpp
@@ -533,6 +537,8 @@ set(SeQuant_optimize_src
         SeQuant/core/optimize/options.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/optimize/optimize.hpp
+        SeQuant/core/optimize/schedule_pin.cpp
+        SeQuant/core/optimize/schedule_pin.hpp
         SeQuant/core/optimize/single_term.hpp
         SeQuant/core/optimize/single_term_detail.hpp
         SeQuant/core/optimize/sum.cpp
@@ -675,6 +681,10 @@ target_compile_features(SeQuant-symb INTERFACE "cxx_std_20")
 ##########################
 sequant_add_library(eval ${SeQuant_eval_src})
 target_link_libraries(SeQuant-eval PUBLIC SeQuant-symb PRIVATE SeQuant-bliss)
+# nlohmann/json is header-only and used only in schedule_document.cpp: take its
+# include dirs without linking, so it does not leak into the exported target
+target_include_directories(SeQuant-eval SYSTEM PRIVATE
+    $<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>)
 if (SEQUANT_EVAL_TRACE)
     target_compile_definitions(SeQuant-eval PUBLIC SEQUANT_EVAL_TRACE=1)
 endif()

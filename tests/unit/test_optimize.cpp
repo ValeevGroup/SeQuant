@@ -3068,6 +3068,57 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
   CHECK(aux_found);
 }
 
+// optimize_impl's NoReorder branch moves new_sum into the final Sum and then
+// re-keys the per-summand batch annotations onto it: the lookups must read the
+// final Sum, not the moved-from one, or a NoReorder Sum silently loses every
+// annotation.
+TEST_CASE("NoReorder Sum re-keys batch annotations onto the final Sum",
+          "[optimize][annotate]") {
+  using namespace sequant;
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
+  mbpt::add_df_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 30}, {L"a", 30}, {L"Κ", 500}})
+    reg->extent(k, v);
+  auto aux = reg->retrieve_space(L"Κ");
+  auto ctx_resetter =
+      set_scoped_default_context(get_default_context_snapshot().set(reg));
+
+  // two 4-tensor summands: 3 contraction nodes each, one annotation per node
+  auto expr = deserialize(
+      L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} f{i_1;i_3} f{i_2;i_4} + "
+      L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} h{i_1;i_3} h{i_2;i_4}");
+  REQUIRE(expr->is<Sum>());
+  REQUIRE(expr->as<Sum>().size() == 2);
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      Expr const*, container::vector<NodeBatchAnnotation>>>();
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.reorder = ReorderSum::NoReorder;
+  opts.idx_to_extent = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
+  };
+  opts.batch_policy.is_batchable_contracted_index = [aux](Index const& ix) {
+    return ix.space() == aux;
+  };
+  opts.batch_policy.batch_target_size = [](Index const&) {
+    return std::size_t{20};
+  };
+  opts.term_batch_axes = axes_map;
+
+  auto optimized = optimize(expr, opts);
+  REQUIRE(optimized->is<Sum>());
+  REQUIRE(optimized->as<Sum>().size() == 2);
+  // the per-summand entries are folded into one entry under the final Sum
+  REQUIRE(axes_map->size() == 1);
+  auto it = axes_map->find(optimized.get());
+  REQUIRE(it != axes_map->end());
+  CHECK(it->second.size() == 6);
+}
+
 // Loop-open vs sliced-mask: binarize() must apply
 // NodeBatchAnnotation::opened_here onto EvalExpr::batch_loops_opened_here(),
 // independently of node_slice_mask() (axes). Hand-build node_batch_axes so the

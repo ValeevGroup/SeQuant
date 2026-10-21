@@ -9,9 +9,9 @@
 #include <SeQuant/core/eval/cell_registry.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/lifetime_mask.hpp>
+#include <SeQuant/core/eval/op_counts.hpp>
 #include <SeQuant/core/eval/ordered_dump.hpp>
 #include <SeQuant/core/eval/result.hpp>
-#include <SeQuant/core/eval/schedule_dump.hpp>
 #include <SeQuant/core/eval/slicing_signature.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
@@ -338,22 +338,6 @@ auto cache(CacheStat const& stat, Args const&... args) {
 
 template <typename N, bool F, typename... Args>
 auto cache(N const& node, CacheManager<N, F>& cm, Args const&... args) {
-  // Structured runtime-schedule event, emitted to the cache's ScheduleSink when
-  // one is wired (independent of the trace level). Keyed by node->hash_value()
-  // -- the same identity the IR emitter (schedule_dump.hpp) writes -- so the
-  // schedule visualizer joins runtime lifetimes onto the IR DAG by hash. Mode:
-  // Store (first build), Access (reuse), Release (last use). Store-count > 1
-  // for a hash means the value was rebuilt (recompute).
-  if (auto* const sink = cm.schedule_sink(); sink && sink->os && !sink->fired) {
-    auto const cl = cm.life(node);
-    auto const ml = cm.max_life(node);
-    char const* const evm = (cl == 0)        ? "Release"
-                            : (cl + 1 == ml) ? "Store"
-                                             : "Access";
-    *sink->os << "SCHEDULE_RUN_EVENT {\"hash\":\"" << node->hash_value()
-              << "\",\"mode\":\"" << evm << "\",\"life\":" << cl
-              << ",\"max_life\":" << ml << "}\n";
-  }
   if (!printing()) return;  // skip the entry/total size walks and formatting
   using CacheMode::Access;
   using CacheMode::Release;
@@ -1018,51 +1002,6 @@ void note_fresh_build(Node const& node, CacheManager<N, FHC>& cache) {
                                eval::BuildMeter::enabled()
                                    ? log::label(node, cache.batch_context())
                                    : std::string{});
-  // Per-op build event: finish_phase_b is the single choke point every
-  // freshly computed node passes through -- leaves, custom-eval subtrees, and
-  // standard contractions -- so this counts every build (cached or not),
-  // giving the schedule visualizer full per-node recompute coverage (the
-  // cache Store/ Access/Release events above cover only cached nodes). Keyed
-  // by hash_value() to join onto the IR DAG. Emitted to the cache's
-  // ScheduleSink when one is wired (set_schedule_sink); no sink => no dump.
-  if (auto* const sink = cache.schedule_sink();
-      sink && sink->os && !sink->fired) {
-    std::ostream& os = *sink->os;
-    // ctx = the active batch loops (mode -> block offset) this build ran
-    // under. The visualizer counts distinct ctx projections onto the modes a
-    // node depends on: builds at a repeated projected slice are avoidable
-    // recompute (a value rebuilt where an enclosing loop it is invariant to
-    // advanced) vs the inherent per-block work batching requires.
-    // Leaves are accessed, not computed (leaf_evaluator just hands back a
-    // ref to a precomputed input), so tag them "Fetch" -- cheap, not
-    // recompute. Only internal nodes (contractions) are real "Build" work.
-    char const* const bmode = node.leaf() ? "Fetch" : "Build";
-    os << "SCHEDULE_RUN_EVENT {\"hash\":\"" << node->hash_value()
-       << "\",\"mode\":\"" << bmode << "\"";
-    // sig = the avoidable-recompute join key, matching the IR node record.
-    // Internal nodes only; leaves (Fetch) are not tallied. Lets the
-    // visualizer join this hash to the replay's per-node avoidable without
-    // reconstructing the signature in the renderer.
-    // Per-build flops (cm->flops) keyed to this node by hash above; the
-    // recompute rollup and the visualizer join on the topological hash, not
-    // a dummy-/slice-dependent signature.
-    if (!node.leaf()) os << ",\"flops\":" << eval::detail::last_op_flops();
-    os << ",\"ctx\":[";
-    bool first = true;
-    for (auto const& entry : cache.batch_context()) {
-      Index const& ix = entry.axis;
-      auto const& blk = entry.range;
-      // dep = does the node's subtree carry this loop mode (free or
-      // contracted below)? If not, the node is invariant to it and rebuilding
-      // per block of it is avoidable recompute. find_leaf_carrying works in
-      // the node's own label space, so no alpha-renaming reconciliation.
-      bool const dep = find_leaf_carrying(node, ix).has_value();
-      os << (first ? "" : ",") << "[\"" << toUtf8(ix.full_label()) << "\","
-         << blk.first << "," << (dep ? 1 : 0) << "]";
-      first = false;
-    }
-    os << "]}\n";
-  }
 }
 
 template <Trace EvalTrace = Trace::Default,
@@ -2578,30 +2517,6 @@ template <Trace EvalTrace = Trace::Default, typename F,
         for (auto const& mk : layer)
           log::log("BatchMember",
                    toUtf8(io::serialization::to_string(to_expr(*mk.first))));
-    }
-    {
-      // Structured BatchGroup for the visualizer: the co-evaluation unit (its
-      // batch mode, block count, and member node hashes) so the DAG can draw a
-      // subgraph enclosing the siblings streamed together over K -- the runtime
-      // batching structure the IR forest cannot show. Gated by
-      // SEQUANT_SCHED_DUMP.
-      static bool const sched_dump =
-          eval::detail::dump_enabled("SEQUANT_SCHED_DUMP");
-      if (sched_dump) {
-        std::cerr << "SCHEDULE_RUN_GROUP {\"kind\":\""
-                  << (picked_kind == BatchModeType::External ? "external"
-                                                             : "contracted")
-                  << "\",\"mode\":\"" << toUtf8(K.full_label())
-                  << "\",\"blocks\":" << batches.size() << ",\"members\":[";
-        bool gfirst = true;
-        for (auto const& layer : layers)
-          for (auto const& mk : layer) {
-            std::cerr << (gfirst ? "" : ",") << '"' << (*mk.first)->hash_value()
-                      << '"';
-            gfirst = false;
-          }
-        std::cerr << "]}\n";
-      }
     }
 
     // RAII scope for the batched partial contractions; a backend-supplied

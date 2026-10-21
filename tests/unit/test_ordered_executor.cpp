@@ -31,11 +31,14 @@
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/legality.hpp>
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
+#include <SeQuant/core/eval/op_counts.hpp>
 #include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_monitor.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/result.hpp>
+#include <SeQuant/core/eval/schedule_dag_record.hpp>
+#include <SeQuant/core/eval/schedule_document.hpp>
 #include <SeQuant/core/eval/slicing_signature.hpp>
 #include <SeQuant/core/eval/value_node_map.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -45,6 +48,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/options.hpp>
+#include <SeQuant/core/optimize/schedule_pin.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -57,6 +61,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -2621,6 +2626,12 @@ TEST_CASE(
 // FLOPs / peak, for BOTH forest descent and the ordered/DAG executor, at w20
 // residual scale (ALL terms by default). Locally predicts the cache-halt fix's
 // steady-state benefit without an Owl run.
+//
+// SEQUANT_UT_SCHEDULE_DOC=<path> also writes the schedule document of the run
+// (schedule_document.hpp): every term is optimized through record_root, so
+// `roots` pins exactly this forest, `dag` is record_dag of the ordered
+// schedule, and `run` is what the ordered COLD iteration measured. Render it
+// with `sequant-schedule view <path>`.
 // ===========================================================================
 TEST_CASE(
     "dry-run 2-iteration report: forest vs ordered, cold vs warm cache "
@@ -2744,16 +2755,20 @@ TEST_CASE(
   opts.term_batch_axes = axes_map;
 
   std::vector<Node> forest;
+  // one root per tree: summand s is root "R<s>" with a single term
+  std::vector<sequant::eval::schedule::RootRecord> roots;
   for (std::size_t s = 0; s < nterms; ++s) {
     sequant::ExprPtr const term =
         orderedexec_witness_flatten_product(summands[s]);
     if (!term) continue;
-    sequant::ExprPtr optimized;
+    sequant::opt::schedule::RecordedRoot recorded;
     try {
-      optimized = sequant::optimize(term, opts);
+      recorded = sequant::opt::schedule::record_root("R" + std::to_string(s),
+                                                     term, opts);
     } catch (std::exception const&) {
       continue;
     }
+    auto const& optimized = recorded.optimized;
     if (!optimized) continue;
     sequant::BinarizationOptions bopts;
     if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
@@ -2761,6 +2776,7 @@ TEST_CASE(
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    roots.push_back(std::move(recorded.record));
   }
   REQUIRE(!forest.empty());
 
@@ -2794,22 +2810,25 @@ TEST_CASE(
   // builder may throw on some batch shapes (e.g. the occ+aux nested-batch-group
   // path has a known topo-sort assert); tolerate it so the FOREST rows and the
   // note still print.
+  // Pure aux: Κ is the sole (hence innermost) axis. Otherwise an empty
+  // mode_order matches production; the base-key sort nests the realized axes
+  // by base_key. Contracted axes nest cleanly; an external occupied axis nests
+  // OUTERMOST and forces a non-innermost split, which IS implemented
+  // ("Placement, escapes, and pass splits" in
+  // doc/developer/batched_evaluation.rst) -- the *_occ configurations are
+  // headline gates, not expected failures. The catch below stays as a
+  // report-fixture guard, not an expectation.
+  bool const aux_only = batch_aux && !batch_pao && !batch_occ;
+  // the same order, for the fingerprint (build_ordered_schedule takes an
+  // initializer list)
+  std::vector<std::wstring> const mode_order =
+      aux_only ? std::vector<std::wstring>{L"Κ"} : std::vector<std::wstring>{};
   std::optional<sequant::eval::OrderedSchedule> ordered_opt;
   try {
-    if (batch_aux && !batch_pao && !batch_occ)
-      // Pure aux: Κ is the sole (hence innermost) axis.
-      ordered_opt =
-          sequant::eval::build_ordered_schedule(rich, legality, policy, {L"Κ"});
-    else
-      // Empty mode_order matches production; the base-key sort nests the
-      // realized axes by base_key. Contracted axes nest cleanly; an external
-      // occupied axis nests OUTERMOST and forces a non-innermost split, which
-      // IS implemented ("Placement, escapes, and pass splits" in
-      // doc/developer/batched_evaluation.rst) -- the *_occ
-      // configurations are headline gates, not expected failures. The catch
-      // below stays as a report-fixture guard, not an expectation.
-      ordered_opt =
-          sequant::eval::build_ordered_schedule(rich, legality, policy, {});
+    ordered_opt = aux_only ? sequant::eval::build_ordered_schedule(
+                                 rich, legality, policy, {L"Κ"})
+                           : sequant::eval::build_ordered_schedule(
+                                 rich, legality, policy, {});
   } catch (std::exception const& e) {
     WARN("build_ordered_schedule failed for BATCH=" << batch << ": "
                                                     << e.what());
@@ -2826,6 +2845,43 @@ TEST_CASE(
     if (!n.leaf() || !n->is_tensor()) return false;
     return p && p(n->as_tensor());
   };
+
+  // SEQUANT_UT_SCHEDULE_DOC=<path>: the schedule document of this run; the
+  // ordered COLD iteration below fills its `run` section and writes it.
+  char const* const doc_path = std::getenv("SEQUANT_UT_SCHEDULE_DOC");
+  std::optional<sequant::eval::schedule::Document> doc;
+  std::function<std::string(std::size_t)> value_id_of;
+  if (doc_path && ordered_ok) {
+    namespace sched = sequant::eval::schedule;
+    doc.emplace();
+    doc->producer_version = "unit_tests-sequant [dryrun-2iter-report]";
+    {
+      char date[16] = {};
+      std::time_t const now = std::time(nullptr);
+      std::strftime(date, sizeof date, "%Y-%m-%d", std::localtime(&now));
+      doc->producer_date = date;
+    }
+    std::vector<std::string> labels;
+    for (auto const& r : roots) labels.push_back(r.label);
+    doc->fingerprint = sequant::opt::schedule::fingerprint_of(
+        forest, std::move(labels), opts, mode_order);
+    doc->roots = roots;
+    doc->dag = sched::record_dag(rich, legality, *ordered_opt, forest, roots,
+                                 is_volatile_node);
+    value_id_of = [&doc](std::size_t vid) {
+      return doc->dag->values.at(vid).id;
+    };
+    sched::RunRecord run;
+    for (auto const& [space, extent] : regime.space_extent)
+      run.extents[sequant::toUtf8(space)] = extent;
+    if (batch_aux) run.batch_targets["Κ"] = kAuxBlock;
+    if (batch_pao) run.batch_targets["μ̃"] = kPaoBlock;
+    if (batch_occ) run.batch_targets["i"] = kOccBlock;
+    run.planner = sequant::opt::schedule::planner_record(opts);
+    run.planner["system"] = system;
+    run.planner["batch"] = batch;
+    doc->run = std::move(run);
+  }
 
   // # of {Κ} ScopeBlocks the ordered schedule realized.
   std::size_t n_Kblocks = 0;
@@ -2916,7 +2972,7 @@ TEST_CASE(
           }
         };
     cache.set_peak_monitor(&mon);
-    auto run = [&](Row& r) {
+    auto run = [&](Row& r, sequant::eval::schedule::RunRecord* record) {
       double const f0 = sink.flops.load();
       double const e0 = sink.exec.load();
       std::size_t const n0 = sink.n_ops.load();
@@ -2925,7 +2981,7 @@ TEST_CASE(
       try {
         (void)sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
             forest, *ordered_opt, rich, layout, yield, cache, target, {},
-            is_volatile_node);
+            is_volatile_node, record, value_id_of);
       } catch (std::exception const& e) {
         WARN("ordered evaluate threw: " << e.what());
       }
@@ -2935,7 +2991,16 @@ TEST_CASE(
       r.builds = total_builds(cache.recompute_tally()) - b0;
       r.peak = mon.hwmark_bytes;
     };
-    run(o1);  // COLD
+    run(o1, doc ? &*doc->run : nullptr);  // COLD
+    if (doc) {
+      std::ofstream out(doc_path, std::ios::binary);
+      REQUIRE(out.good());
+      sequant::eval::schedule::write(*doc, out);
+      std::wcerr << L"[dryrun-2iter-report] schedule document written: "
+                 << sequant::toUtf16(
+                        sequant::eval::schedule::summary_line(*doc))
+                 << L" ";
+    }
 
     if (dump_liveset) {
       // Label each co-resident entry; flag carriesΚ via its carried signature.
@@ -2980,7 +3045,7 @@ TEST_CASE(
     }
 
     cache.reset();
-    run(o2);  // WARM
+    run(o2, nullptr);  // WARM
     // SEQUANT_UT_TOP_BUILDS=<N>: the N values built most often over the two
     // iterations (the recompute tally), with their labels and occurrence
     // counts -- where a fused chain's interposed loops rebuild a value.

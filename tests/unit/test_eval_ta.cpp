@@ -15,11 +15,11 @@
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
-#include <SeQuant/core/eval/schedule_dump.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -707,6 +707,27 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
     REQUIRE(tot_inner_rank(s_empty) == 0);
     REQUIRE(s_empty.trange() == s_full.trange());
   }
+}
+
+TEST_CASE("measured_size_in_bytes ignores the trace gate on size_in_bytes",
+          "[eval]") {
+  // size_in_bytes() is collective for a DistArray and so switched off
+  // untraced; the schedule document's run record measures through
+  // measured_size_in_bytes() instead
+  auto& world = TA::get_default_world();
+  TA::TArrayD arr(world, TA::TiledRange{{0, 2, 4}, {0, 3, 6}});
+  arr.fill(1.0);
+  world.gop.fence();
+  auto const res =
+      sequant::eval_result<sequant::ResultTensorTA<TA::TArrayD>>(arr);
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  logger.eval.level = 0;
+  REQUIRE(res->size_in_bytes() == 0);
+  REQUIRE(res->measured_size_in_bytes() >= 4 * 6 * sizeof(double));
+  logger.eval.level = 1;
+  REQUIRE(res->size_in_bytes() == res->measured_size_in_bytes());
+  logger.eval.level = prev_level;
 }
 
 TEST_CASE("eval_with_tiledarray", "[eval]") {
@@ -6371,8 +6392,6 @@ TEST_CASE("dp_external_placement_correctness",
 
     std::cerr << "\n=== DP-opened external loops ===\n";
     dump_annotations(ta_node);
-    std::cerr << "SCHEDULE_IR_JSON "
-              << sequant::eval::schedule_ir_json(ta_node, "dp") << "\n";
 
     auto accept = opts.batch_policy.is_batchable_index();
     auto cache = cache_t::empty();

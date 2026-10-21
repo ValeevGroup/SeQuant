@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SeQuant schedule viewer</title>
+<style>
+:root {
+  --bg: #fafaf8; --panel: #ffffff; --fg: #1d1f21; --dim: #6b7078;
+  --line: #d4d6da; --accent: #1f5fbf; --hl: #fff2b3; --sel: #cfe3ff;
+  --tl: 90%; --ts: 55%;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17181a; --panel: #1f2124; --fg: #e4e5e7; --dim: #9aa0a8;
+    --line: #3a3d42; --accent: #7fb0ff; --hl: #5a4d12; --sel: #1d3b66;
+    --tl: 26%; --ts: 40%;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17181a; --panel: #1f2124; --fg: #e4e5e7; --dim: #9aa0a8;
+  --line: #3a3d42; --accent: #7fb0ff; --hl: #5a4d12; --sel: #1d3b66;
+  --tl: 26%; --ts: 40%;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 13px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+header {
+  display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
+  padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+}
+header h1 { font-size: 14px; margin: 0; }
+header .meta { color: var(--dim); }
+header label { color: var(--dim); }
+input[type="text"], input[type="number"] {
+  background: var(--bg); color: var(--fg); border: 1px solid var(--line);
+  border-radius: 4px; padding: 3px 6px; font: inherit;
+}
+input[type="text"] { min-width: 220px; }
+input[type="number"] { width: 3.5em; }
+main {
+  flex: 1; min-height: 0; display: grid;
+  grid-template-columns: minmax(280px, 34%) 1fr; grid-template-rows: 1fr auto;
+}
+.pane { overflow: auto; min-height: 0; padding: 8px 16px; }
+#outline { border-right: 1px solid var(--line); background: var(--panel); }
+#right { display: flex; flex-direction: column; min-height: 0; padding: 0; }
+#graph-wrap { flex: 1; overflow: auto; padding: 8px 16px; min-height: 120px; }
+#inspector { border-top: 1px solid var(--line); background: var(--panel); max-height: 42%; overflow: auto; padding: 8px 16px; }
+@media (max-width: 760px) {
+  main { grid-template-columns: 1fr; grid-template-rows: 40vh 1fr; }
+  #outline { border-right: 0; border-bottom: 1px solid var(--line); }
+}
+.row {
+  display: flex; align-items: baseline; gap: 6px; padding: 1px 4px;
+  border-radius: 3px; cursor: pointer; white-space: nowrap;
+}
+.row:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.row.hl { background: var(--hl); }
+.row.sel { background: var(--sel); outline: 1px solid var(--accent); }
+.row .caret { width: 1em; color: var(--dim); text-align: center; flex: none; }
+.row .tag { color: var(--dim); font-size: 11px; }
+.row.read { color: var(--dim); font-style: italic; }
+.blockline { font-weight: 600; white-space: normal; flex-wrap: wrap; }
+.groupline { color: var(--dim); }
+.tint { background: hsl(var(--h) var(--ts) var(--tl)); }
+.swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; flex: none;
+  background: hsl(var(--h) var(--ts) var(--tl)); border: 1px solid var(--line); }
+.children { margin-left: 14px; border-left: 1px dotted var(--line); padding-left: 4px; }
+.empty { color: var(--dim); padding: 16px 0; }
+.graph { position: relative; display: flex; gap: 56px; align-items: flex-start; min-width: min-content; }
+.graph svg { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.col { display: flex; flex-direction: column; gap: 12px; min-width: 150px; z-index: 1; }
+.col h4 { margin: 0; font-size: 11px; font-weight: 600; color: var(--dim); text-align: center; }
+.box { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); overflow: hidden; }
+.box.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.box.hl { border-color: #c9a400; box-shadow: 0 0 0 2px #c9a400; }
+.box .bh { padding: 3px 8px; cursor: pointer; font-weight: 600; border-bottom: 1px solid var(--line); }
+.port { display: flex; justify-content: space-between; gap: 10px; padding: 2px 8px; cursor: pointer; }
+.port:hover { filter: brightness(0.94); }
+.port.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+.port.hl { outline: 2px solid #c9a400; outline-offset: -2px; }
+.stub { border: 1px dashed var(--line); border-radius: 6px; padding: 3px 8px; color: var(--dim); cursor: pointer; text-align: center; }
+.stub:hover { border-color: var(--accent); color: var(--accent); }
+svg path { fill: none; stroke: var(--dim); stroke-width: 1.4; }
+svg path.sliced { stroke-dasharray: 5 4; }
+svg path.on { stroke: var(--accent); stroke-width: 2; }
+table.kv { border-collapse: collapse; width: 100%; }
+table.kv th { text-align: left; vertical-align: top; color: var(--dim); font-weight: 500; padding: 1px 12px 1px 0; white-space: nowrap; }
+table.kv td { padding: 1px 0; word-break: break-word; }
+table.kv tr.run th { color: var(--accent); }
+a.link { color: var(--accent); cursor: pointer; text-decoration: underline; text-decoration-style: dotted; }
+.pill { display: inline-block; border: 1px solid var(--line); border-radius: 10px; padding: 0 6px; margin: 0 3px 2px 0; }
+details > summary { cursor: pointer; color: var(--dim); }
+.err { color: #c0392b; padding: 16px; }
+kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-size: 11px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Schedule viewer</h1>
+  <span class="meta" id="meta">no document loaded</span>
+  <span><label>filter <input type="text" id="filter" placeholder="id, expr, term key, root label"></label> <kbd>/</kbd></span>
+  <span><label>depth <input type="number" id="depth" min="1" max="4" value="2"></label></span>
+  <span id="picker"><label>open file(s) <input type="file" id="file" accept=".json,application/json" multiple></label></span>
+</header>
+<main>
+  <div class="pane" id="outline"></div>
+  <div id="right" class="pane">
+    <div id="graph-wrap"></div>
+    <div id="inspector"></div>
+  </div>
+</main>
+<script id="schedule-data" type="application/json">/*__SCHEDULE_JSON__*/</script>
+<script id="run-data" type="application/json">/*__RUN_JSON__*/</script>
+<script>
+"use strict";
+(function () {
+  // ---------------------------------------------------------------- state
+  var doc = null, run = null;
+  var V = [], vById = new Map(), bById = new Map(), byHash = new Map();
+  var prod = new Map(), cons = new Map();          // value id -> [value id]
+  var childBlocks = new Map();                     // block id -> [block id]
+  var readsInto = new Map();                       // block id -> [value id]
+  var nodeProd = new Map(), nodeCons = new Map();  // hash -> Set(hash)
+  var termRoot = new Map();                        // term key -> root label
+  var termShort = new Map();                       // term key -> "R3" or "R3/2" (root label, term index when several)
+  var groupOpen = new Map();                       // "block id|group" -> explicit fold state of a term group
+  var vTerms = new Map();                          // value id -> [term key]
+  var hidden = new Map();                          // block id -> explicit fold state
+  var st = { vid: null, bid: null, hash: null, depth: 2, filter: "", expanded: new Set() };
+  var LIM = 5;
+
+  // ------------------------------------------------------------- helpers
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function hueOf(bid) { return (bid * 67 + 20) % 360; }
+  function tint(node, bid) { node.classList.add("tint"); node.style.setProperty("--h", hueOf(bid)); }
+  function swatch(bid) { var s = el("span", "swatch"); s.style.setProperty("--h", hueOf(bid)); return s; }
+  function axisName(b) { return b.axis ? b.axis.split(":")[0] : null; }
+  // "R1#3[i_1] = t * g" -> "i_1"; leaves have no bracket
+  function sliceOf(v) {
+    var m = /^[^\[=]*\[([^\]]*)\]/.exec(v.expr);
+    return m ? m[1] : null;
+  }
+  // "<name> = <what makes it>"; a document written before leaves were spelled so gets the name prepended
+  function exprOf(v) { return v.expr.indexOf(" = ") >= 0 ? v.expr : shortOf(v.id) + " = " + v.expr; }
+  // what a read of the value is labelled by: a leaf's tensor label, an intermediate's name
+  function baseName(v) {
+    var e = exprOf(v);
+    return v.leaf ? e.slice(e.indexOf(" = ") + 3) : e.split(/\s*=\s*/)[0].replace(/\[.*$/, "").trim();
+  }
+  function nodeLabel(v) { return exprOf(v).replace(/^([^\[=]*)\[[^\]]*\]/, "$1"); }
+  function portLabel(v) {
+    var s = sliceOf(v);
+    if (s) return "[" + s + "]";
+    return v.home_modes && v.home_modes.length ? "[" + v.home_modes.map(function (m) { return m.split(":")[0]; }).join(",") + "]" : "[·]";
+  }
+  function bLabel(b) { return b.axis ? b.axis : "∅"; }
+  // how value `from` reaches value `to`: inside the same loops, read in slices
+  // by loops `to` sits in, or assembled (summed or scattered) at a block that
+  // `from` escapes on its way out to `to`
+  function relation(from, to) {
+    var f = vById.get(from), t = vById.get(to);
+    if (!f || !t) return "";
+    var af = ancestors(f.home_block).map(function (b) { return b.id; });
+    var at = ancestors(t.home_block).map(function (b) { return b.id; });
+    if (f.home_block === t.home_block) return "same block";
+    if (at.indexOf(f.home_block) >= 0) return "read in slices";
+    var kinds = [];
+    for (var i = 0; i < af.length && at.indexOf(af[i]) < 0; ++i) {
+      var b = bById.get(af[i]);
+      (b.outputs || []).forEach(function (o) { if (o[0] === from) kinds.push(o[1].replace("Accumulate", "").toLowerCase() + " over " + bLabel(b).split(":")[0]); });
+    }
+    return kinds.length ? "assembled: " + kinds.join(", ") : "assembled";
+  }
+  // the term key of a value id ("<key>#<ordinal>"), or the root label of a partial sum ("<label>+<k>")
+  function termOf(id) {
+    var h = id.lastIndexOf("#");
+    if (h >= 0) return id.slice(0, h);
+    var p = id.lastIndexOf("+");
+    return p >= 0 ? id.slice(0, p) : id;
+  }
+  // short name: the record's `name` (the root label and term index for the term key, so "R12#3", "R12#scale", "R12+1"),
+  // derived here for a document written without it
+  function shortOf(id) {
+    var v = vById.get(id);
+    if (v && v.name) return v.name;
+    var t = termOf(id);
+    return termShort.has(t) ? termShort.get(t) + id.slice(t.length) : id;
+  }
+  // the outline groups a block's consecutive rows by this: the term's short name, or the root label
+  function groupOf(v) {
+    var t = termOf(v.id);
+    return termShort.has(t) ? termShort.get(t) : t;
+  }
+
+  // -------------------------------------------------------------- loading
+  function parseSlot(id) {
+    var t = $(id).textContent.trim();
+    if (!t || t.indexOf("/*__") === 0) return undefined;   // not substituted
+    return JSON.parse(t);
+  }
+  function load(d, r) {
+    doc = d; run = r || d.run || null;
+    V = (d.dag && d.dag.values) || [];
+    vById.clear(); bById.clear(); byHash.clear(); prod.clear(); cons.clear();
+    childBlocks.clear(); readsInto.clear(); nodeProd.clear(); nodeCons.clear();
+    termRoot.clear(); termShort.clear(); vTerms.clear(); hidden.clear(); groupOpen.clear();
+    st.vid = st.bid = st.hash = null; st.expanded = new Set();
+    var dag = d.dag || { values: [], blocks: [], edges: [] };
+    V.forEach(function (v) {
+      vById.set(v.id, v);
+      if (!byHash.has(v.hash)) byHash.set(v.hash, []);
+      byHash.get(v.hash).push(v);
+      nodeProd.set(v.hash, nodeProd.get(v.hash) || new Set());
+      nodeCons.set(v.hash, nodeCons.get(v.hash) || new Set());
+    });
+    dag.blocks.forEach(function (b) {
+      bById.set(b.id, b);
+      if (b.parent !== null && b.parent !== undefined) {
+        if (!childBlocks.has(b.parent)) childBlocks.set(b.parent, []);
+        childBlocks.get(b.parent).push(b.id);
+      }
+    });
+    (d.roots || []).forEach(function (r0) {
+      (r0.terms || []).forEach(function (t, k) {
+        termRoot.set(t.key, r0.label);
+        termShort.set(t.key, (r0.terms.length > 1) ? r0.label + "/" + k : r0.label);
+      });
+    });
+    V.forEach(function (v) {
+      var ts = [];
+      (v.occurrences || []).forEach(function (o) { if (ts.indexOf(o.term) < 0) ts.push(o.term); });
+      vTerms.set(v.id, ts);
+    });
+    dag.edges.forEach(function (e) {
+      var f = vById.get(e.from), t = vById.get(e.to);
+      if (!f || !t) return;
+      if (!prod.has(t.id)) prod.set(t.id, []);
+      if (!cons.has(f.id)) cons.set(f.id, []);
+      prod.get(t.id).push(f.id); cons.get(f.id).push(t.id);
+      if (f.hash !== t.hash) { nodeProd.get(t.hash).add(f.hash); nodeCons.get(f.hash).add(t.hash); }
+      if (e.sliced && f.home_block !== t.home_block) {
+        if (!readsInto.has(t.home_block)) readsInto.set(t.home_block, []);
+        if (readsInto.get(t.home_block).indexOf(f.id) < 0) readsInto.get(t.home_block).push(f.id);
+      }
+    });
+    var first = V.filter(function (v) { return !v.leaf && v.siblings && v.siblings.length; })[0] ||
+                V.filter(function (v) { return !v.leaf; })[0] || V[0];
+    if (first) { st.vid = first.id; st.hash = first.hash; }
+    var meta = [];
+    if (d.format) meta.push(d.format);
+    if (d.producer_version) meta.push("producer " + d.producer_version);
+    meta.push((d.roots || []).length + " roots", V.length + " values", dag.blocks.length + " blocks");
+    if (run) meta.push("run loaded");
+    $("meta").textContent = meta.join(" · ");
+    renderAll();
+  }
+
+  // -------------------------------------------------------------- outline
+  function blockValues(b) {
+    var out = [];
+    (b.steps || []).forEach(function (s) { if (s.build) out.push(s.build); });
+    accumulated(b).forEach(function (o) { out.push(o[0]); });
+    return out;
+  }
+  // the values a block accumulates that no step of it builds: the executor
+  // produces them inside the block's Assemble step (a per-batch partial sum,
+  // or the per-batch slice it scatters), so they are rows of the block too
+  function accumulated(b) {
+    var built = {};
+    (b.steps || []).forEach(function (s) { if (s.build) built[s.build] = true; });
+    return (b.outputs || []).filter(function (o) { return !built[o[0]]; });
+  }
+  function nestedCount(bid) {
+    var n = 0;
+    (childBlocks.get(bid) || []).forEach(function (c) { n += 1 + nestedCount(c); });
+    return n;
+  }
+  function matches(text, f) { return text.toLowerCase().indexOf(f) >= 0; }
+  function valueMatches(v, f) {
+    if (matches(v.id, f) || matches(v.expr, f) || matches(shortOf(v.id), f)) return true;
+    var ts = vTerms.get(v.id) || [];
+    for (var i = 0; i < ts.length; ++i)
+      if (matches(ts[i], f) || matches(termRoot.get(ts[i]) || "", f)) return true;
+    return false;
+  }
+  function isOpen(b, forced) {
+    if (forced) return true;
+    if (hidden.has(b.id)) return hidden.get(b.id);
+    return ancestors(b.id).length - 1 <= 1;  // nesting depth in the block tree
+  }
+  // a term group inside a block is folded by default only where the flat list would be long
+  var GROUP_FOLD_ABOVE = 24;
+  function isGroupOpen(b, key, forced) {
+    if (forced) return true;
+    var k = b.id + "|" + key;
+    if (groupOpen.has(k)) return groupOpen.get(k);
+    return blockValues(b).length <= GROUP_FOLD_ABOVE;
+  }
+  function valueRow(v, tag) {
+    var r = el("div", "row"); r.dataset.vid = v.id;
+    r.appendChild(el("span", "caret", ""));
+    r.appendChild(swatch(v.home_block));
+    r.appendChild(el("span", "mono", exprOf(v)));
+    if (tag) r.appendChild(el("span", "tag", tag));
+    if (v.leaf) r.appendChild(el("span", "tag", "leaf"));
+    if (v.persistent) r.appendChild(el("span", "tag", "persistent"));
+    if (run && run.builds && run.builds[v.id] !== undefined) r.appendChild(el("span", "tag", "×" + run.builds[v.id]));
+    r.title = v.id;
+    return r;
+  }
+  // returns the block's DOM node, or null if the filter leaves nothing in it
+  function buildBlock(b, f) {
+    var wrap = el("div");
+    var kids = el("div", "children");
+    var any = false;
+    var reads = (readsInto.get(b.id) || []);
+    reads.forEach(function (rid) {
+      var fv = vById.get(rid), label = "read " + baseName(fv) + "[" + (axisName(b) || "") + "]";
+      if (f && !(matches(label, f) || valueMatches(fv, f))) return;
+      var r = el("div", "row read"); r.dataset.vid = rid; r.dataset.read = "1";
+      r.appendChild(el("span", "caret", "⇣"));
+      r.appendChild(el("span", "mono", label));
+      r.title = "read of " + rid + " in slices of " + b.axis;
+      kids.appendChild(r); any = true;
+    });
+    // consecutive build rows of one term form a group (a run of one is a plain row); nested blocks break runs
+    var pending = [], pendingKey = null, tagOf = {};
+    var flush = function () {
+      if (!pending.length) return;
+      var vs = pending.filter(function (v) { return !f || valueMatches(v, f); });
+      if (vs.length) {
+        if (pending.length === 1) {
+          kids.appendChild(valueRow(vs[0], tagOf[vs[0].id]));
+        } else {
+          var open = isGroupOpen(b, pendingKey, !!f);
+          var g = el("div");
+          var line = el("div", "row groupline");
+          var caret = el("span", "caret", open ? "▾" : "▸"); caret.dataset.gcaret = b.id + "|" + pendingKey;
+          line.appendChild(caret);
+          line.appendChild(el("span", "mono", pendingKey + " · " + pending.length + " values"));
+          line.title = termOf(pending[0].id);
+          g.appendChild(line);
+          if (open) { var gk = el("div", "children"); vs.forEach(function (v) { gk.appendChild(valueRow(v, tagOf[v.id])); }); g.appendChild(gk); }
+          kids.appendChild(g);
+        }
+        any = true;
+      }
+      pending = []; pendingKey = null;
+    };
+    var pushValue = function (v) {
+      var key = groupOf(v);
+      if (pending.length && key !== pendingKey) flush();
+      pending.push(v); pendingKey = key;
+    };
+    (b.steps || []).forEach(function (s) {
+      if (s.build) {
+        var v = vById.get(s.build); if (!v) return;
+        pushValue(v);
+      } else if (s.block !== null && s.block !== undefined) {
+        flush();
+        var cb = bById.get(s.block); if (!cb) return;
+        var n = buildBlock(cb, f);
+        if (n) { kids.appendChild(n); any = true; }
+      }
+    });
+    flush();
+    // after the steps: what the block's Assemble steps produce per batch
+    accumulated(b).forEach(function (o) {
+      var v = vById.get(o[0]); if (!v) return;
+      tagOf[v.id] = o[1] === "AccumulateSum" ? "\u03a3 per batch, summed" : "per batch, scattered";
+      pushValue(v);
+    });
+    flush();
+    if (f && !any) return null;
+    var open = isOpen(b, !!f);
+    var line = el("div", "row blockline"); line.dataset.bid = b.id;
+    var caret = el("span", "caret", open ? "▾" : "▸"); caret.dataset.caret = b.id;
+    line.appendChild(caret);
+    line.appendChild(swatch(b.id));
+    line.appendChild(el("span", "mono", "▣ block " + bLabel(b) + " · " + b.kind + " · d" + b.depth + " · " +
+      blockValues(b).length + " values · " + nestedCount(b.id) + " nested · escapes " + (b.outputs || []).length));
+    wrap.appendChild(line);
+    if (open) wrap.appendChild(kids);
+    return wrap;
+  }
+  function renderOutline() {
+    var host = $("outline"); host.textContent = "";
+    if (!doc || !doc.dag || !doc.dag.blocks.length) { host.appendChild(el("div", "empty", "No DAG section in this document.")); return; }
+    var f = st.filter.trim().toLowerCase();
+    var roots = doc.dag.blocks.filter(function (b) { return b.parent === null || b.parent === undefined; });
+    var any = false;
+    roots.forEach(function (b) { var n = buildBlock(b, f); if (n) { host.appendChild(n); any = true; } });
+    if (!any) host.appendChild(el("div", "empty", "No value matches the filter."));
+    applyHighlight();
+  }
+  function applyHighlight() {
+    var rows = $("outline").querySelectorAll(".row");
+    for (var i = 0; i < rows.length; ++i) {
+      var r = rows[i], hl = false, sel = false;
+      if (r.dataset.vid !== undefined) {
+        var v = vById.get(r.dataset.vid);
+        if (st.hash !== null && v.hash === st.hash) hl = true;
+        if (st.bid !== null && v.home_block === st.bid && !r.dataset.read) hl = true;
+        sel = r.dataset.vid === st.vid && !r.dataset.read && st.bid === null;
+      } else if (r.dataset.bid !== undefined) {
+        sel = st.bid !== null && Number(r.dataset.bid) === st.bid;
+      }
+      r.classList.toggle("hl", hl && !sel);
+      r.classList.toggle("sel", sel);
+    }
+  }
+
+  // ---------------------------------------------------------------- graph
+  function neighbourhood() {
+    var k = st.depth, cols = new Map();      // col -> [hash]
+    var seen = new Set([st.hash]);
+    cols.set(0, [st.hash]);
+    [[-1, nodeProd], [1, nodeCons]].forEach(function (d) {
+      var frontier = [st.hash];
+      for (var lvl = 1; lvl <= k; ++lvl) {
+        var next = [];
+        frontier.forEach(function (h) {
+          nodeSet(d[1], h).forEach(function (n) {
+            if (!seen.has(n)) { seen.add(n); next.push(n); }
+          });
+        });
+        if (!next.length) break;
+        cols.set(d[0] * lvl, next); frontier = next;
+      }
+    });
+    return cols;
+  }
+  function nodeSet(m, h) { return m.get(h) || new Set(); }
+  function firstIndex(h) { return V.indexOf(byHash.get(h)[0]); }
+  function renderGraph() {
+    var host = $("graph-wrap"); host.textContent = "";
+    if (st.hash === null || !byHash.has(st.hash)) { host.appendChild(el("div", "empty", "Select a value to see its neighbourhood.")); return; }
+    var cols = neighbourhood(), k = st.depth, shown = new Set();
+    var g = el("div", "graph");
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    g.appendChild(svg);
+    for (var c = -k; c <= k; ++c) {
+      if (!cols.has(c)) continue;
+      var col = el("div", "col");
+      col.appendChild(el("h4", null, c === 0 ? "selected" : c < 0 ? "producers " + c : "consumers +" + c));
+      var hs = cols.get(c).slice().sort(function (a, b) { return firstIndex(a) - firstIndex(b); });
+      var lim = st.expanded.has(c) ? hs.length : LIM;
+      hs.slice(0, lim).forEach(function (h) { shown.add(h); col.appendChild(box(h)); });
+      if (hs.length > lim) {
+        var stub = el("div", "stub", "+" + (hs.length - lim) + " more");
+        stub.dataset.col = c; col.appendChild(stub);
+      }
+      g.appendChild(col);
+    }
+    host.appendChild(g);
+    // connectors once layout exists
+    var gr = g.getBoundingClientRect();
+    svg.setAttribute("width", g.scrollWidth); svg.setAttribute("height", g.scrollHeight);
+    var port = function (vid) { return g.querySelector('.port[data-vid="' + CSS.escape(vid) + '"]'); };
+    (doc.dag.edges || []).forEach(function (e) {
+      var a = port(e.from), b = port(e.to);
+      if (!a || !b) return;
+      var ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+      var x1 = ra.right - gr.left, y1 = ra.top + ra.height / 2 - gr.top;
+      var x2 = rb.left - gr.left, y2 = rb.top + rb.height / 2 - gr.top;
+      var dx = Math.max(24, Math.abs(x2 - x1) / 2);
+      var p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", "M" + x1 + " " + y1 + " C" + (x1 + dx) + " " + y1 + " " + (x2 - dx) + " " + y2 + " " + x2 + " " + y2);
+      var on = vById.get(e.from).hash === st.hash || vById.get(e.to).hash === st.hash;
+      p.setAttribute("class", (e.sliced ? "sliced" : "") + (on ? " on" : ""));
+      var t = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      t.textContent = (e.sliced ? "sliced read: " : "") + e.from + " → " + e.to;
+      p.appendChild(t);
+      svg.appendChild(p);
+    });
+  }
+  function box(h) {
+    var vs = byHash.get(h);
+    var b = el("div", "box"); b.dataset.hash = h;
+    if (h === st.hash) b.classList.add("sel");
+    var hd = el("div", "bh mono", nodeLabel(vs[0]) + (vs.length > 1 ? "  ×" + vs.length : ""));
+    tint(hd, vs[0].home_block); hd.title = "node " + h;
+    b.appendChild(hd);
+    vs.forEach(function (v) {
+      var p = el("div", "port mono"); p.dataset.vid = v.id; tint(p, v.home_block);
+      p.appendChild(el("span", null, portLabel(v)));
+      p.appendChild(el("span", "tag", "block " + v.home_block));
+      p.title = v.id;
+      if (v.id === st.vid && st.bid === null) p.classList.add("sel");
+      else if (st.bid !== null && v.home_block === st.bid) p.classList.add("hl");
+      b.appendChild(p);
+    });
+    return b;
+  }
+
+  // ------------------------------------------------------------ inspector
+  function link(text, fn) { var a = el("a", "link", text); a.addEventListener("click", fn); return a; }
+  function vlink(id) {
+    var v = vById.get(id);
+    var a = link(v ? exprOf(v) : id, function () { selectValue(id, true); });
+    a.title = id; return a;
+  }
+  function blink(bid) { return link("block " + bid, function () { selectBlock(bid); }); }
+  function listOf(a) { var s = el("span"); (a || []).forEach(function (x) { s.appendChild(el("span", "pill mono", x)); }); if (!(a || []).length) s.textContent = "—"; return s; }
+  function kv(t, k, val, cls) {
+    var tr = el("tr", cls); tr.appendChild(el("th", null, k));
+    var td = el("td"); if (typeof val === "string" || typeof val === "number" || typeof val === "boolean") td.textContent = String(val); else td.appendChild(val);
+    tr.appendChild(td); t.appendChild(tr);
+  }
+  function ancestors(bid) {
+    var out = [], b = bById.get(bid);
+    while (b) { out.push(b); b = (b.parent === null || b.parent === undefined) ? null : bById.get(b.parent); }
+    return out;
+  }
+  function renderInspector() {
+    var host = $("inspector"); host.textContent = "";
+    if (st.bid !== null && bById.has(st.bid)) {
+      var b = bById.get(st.bid), t = el("table", "kv mono");
+      ["id", "parent", "axis", "kind", "depth", "slot", "altitude", "pass"].forEach(function (k) {
+        kv(t, k, b[k] === null || b[k] === undefined ? "null" : b[k]);
+      });
+      var steps = el("span");
+      (b.steps || []).forEach(function (s) {
+        var d = el("div");
+        if (s.build) { d.appendChild(document.createTextNode("build ")); d.appendChild(vlink(s.build)); }
+        else { d.appendChild(document.createTextNode("block ")); d.appendChild(blink(s.block)); }
+        steps.appendChild(d);
+      });
+      kv(t, "steps", steps);
+      var outs = el("span");
+      (b.outputs || []).forEach(function (o) { var d = el("div"); d.appendChild(vlink(o[0])); d.appendChild(document.createTextNode("  " + o[1])); outs.appendChild(d); });
+      kv(t, "outputs", outs.childNodes.length ? outs : "—");
+      if (run && run.n_batches && run.n_batches[b.id] !== undefined) kv(t, "n_batches", run.n_batches[b.id], "run");
+      host.appendChild(t); return;
+    }
+    var v = vById.get(st.vid);
+    if (!v) { host.appendChild(el("div", "empty", "Nothing selected.")); return; }
+    var tb = el("table", "kv mono");
+    // the id names the value's first occurrence in forest order: the term whose labels expr and the mode lists use
+    var occs = v.occurrences || [], terms = {};
+    occs.forEach(function (o) { terms[o.term] = true; });
+    var frame = el("span");
+    frame.appendChild(el("span", "pill", shortOf(v.id)));
+    frame.appendChild(document.createTextNode(" labels of this occurrence; " + occs.length + " occurrence" + (occs.length === 1 ? "" : "s") + " in " + Object.keys(terms).length + " term" + (Object.keys(terms).length === 1 ? "" : "s")));
+    kv(tb, "name", shortOf(v.id)); kv(tb, "frame", frame); kv(tb, "expr", exprOf(v)); kv(tb, "leaf", v.leaf);
+    ["result_modes", "home_modes", "enclosing_modes", "divergent_modes"].forEach(function (k) { kv(tb, k, listOf(v[k])); });
+    var hb = el("span"); hb.appendChild(blink(v.home_block)); kv(tb, "home_block", hb);
+    kv(tb, "home_depth", v.home_depth); kv(tb, "persistent", v.persistent);
+    ["build_site", "home_floor", "forced_split_axes"].forEach(function (k) { kv(tb, k, listOf(v[k])); });
+    var pa = el("span");
+    (v.per_axis || []).forEach(function (a) { pa.appendChild(el("span", "pill", a.mode + ": " + a.role)); });
+    kv(tb, "per_axis", pa.childNodes.length ? pa : "—");
+    var oc = el("details"); oc.appendChild(el("summary", null, occs.length + " occurrence" + (occs.length === 1 ? "" : "s") + ", each in its own term's labels"));
+    occs.forEach(function (o) {
+      var d = el("div");
+      d.title = o.term;
+      d.textContent = "term " + (termShort.get(o.term) || o.term) + " · node " + o.node + " · consumer " + (o.consumer === null || o.consumer === undefined ? "—" : o.consumer) +
+        " · home [" + (o.home || []).join(", ") + "] · enclosing [" + (o.enclosing || []).join(", ") + "] · opens " +
+        JSON.stringify(o.opens || []);
+      oc.appendChild(d);
+    });
+    kv(tb, "occurrences", oc);
+    var sb = el("span");
+    (v.siblings || []).forEach(function (s) { var d = el("div"); d.appendChild(vlink(s)); sb.appendChild(d); });
+    kv(tb, "siblings", sb.childNodes.length ? sb : "—");
+    [["producers", prod], ["consumers", cons]].forEach(function (pc) {
+      var s = el("span");
+      (pc[1].get(v.id) || []).forEach(function (x) {
+        var d = el("div"); d.appendChild(vlink(x));
+        d.appendChild(el("span", "tag", "  " + (pc[0] === "producers" ? relation(x, v.id) : relation(v.id, x))));
+        s.appendChild(d);
+      });
+      kv(tb, pc[0], s.childNodes.length ? s : "—");
+    });
+    if (run) {
+      var chain = ancestors(v.home_block).filter(function (b) { return run.n_batches && run.n_batches[b.id] !== undefined; });
+      var nb = el("span");
+      chain.forEach(function (b) { nb.appendChild(el("span", "pill", "block " + b.id + " (" + bLabel(b) + "): " + run.n_batches[b.id])); });
+      kv(tb, "n_batches", nb.childNodes.length ? nb : "—", "run");
+      var partial = /\[[^\]]*\u03a3/.test(v.expr);
+      kv(tb, "footprint", run.footprint && run.footprint[v.id] !== undefined ? run.footprint[v.id] + " bytes (largest production" + (partial ? ": a per-batch partial, same shape as the whole" : "") + ")" : "—", "run");
+      kv(tb, "size", run.size && run.size[v.id] !== undefined ? run.size[v.id] + " bytes (complete value)" : "—", "run");
+      kv(tb, "builds", run.builds && run.builds[v.id] !== undefined ? run.builds[v.id] : "—", "run");
+    }
+    // identity details: the full id, the engine's node hash and value key, the lifetime bounds
+    var det = el("details"); det.appendChild(el("summary", null, "id, hash, key, first_use, last_use"));
+    var dt = el("table", "kv mono");
+    kv(dt, "id", v.id); kv(dt, "hash", v.hash); kv(dt, "key", v.key); kv(dt, "first_use", v.first_use); kv(dt, "last_use", v.last_use);
+    det.appendChild(dt);
+    kv(tb, "identity", det);
+    host.appendChild(tb);
+  }
+
+  // ---------------------------------------------------------- interaction
+  function renderAll() { renderOutline(); renderGraph(); renderInspector(); }
+  function selectValue(vid, reveal) {
+    var v = vById.get(vid); if (!v) return;
+    var changedHash = st.hash !== v.hash;
+    st.vid = vid; st.hash = v.hash; st.bid = null;
+    if (changedHash) st.expanded = new Set();
+    var need = false;
+    if (reveal) {
+      ancestors(v.home_block).forEach(function (b) { if (!isOpen(b, false)) { hidden.set(b.id, true); need = true; } });
+      var hb = bById.get(v.home_block);
+      if (hb && !isGroupOpen(hb, groupOf(v), false)) { groupOpen.set(hb.id + "|" + groupOf(v), true); need = true; }
+    }
+    if (need || st.filter) renderOutline(); else applyHighlight();
+    renderGraph(); renderInspector();
+    if (reveal) {
+      var r = $("outline").querySelector('.row[data-vid="' + CSS.escape(vid) + '"]:not([data-read])');
+      if (r) r.scrollIntoView({ block: "nearest" });
+    }
+  }
+  function selectBlock(bid) {
+    st.bid = bid;
+    applyHighlight(); renderGraph(); renderInspector();
+  }
+  function selectNode(h) {
+    var vs = byHash.get(h); if (!vs) return;
+    st.hash = h; st.vid = vs[0].id; st.bid = null; st.expanded = new Set();
+    applyHighlight(); renderGraph(); renderInspector();
+  }
+
+  $("outline").addEventListener("click", function (ev) {
+    var gc = ev.target.closest("[data-gcaret]");
+    if (gc) {
+      var parts = gc.dataset.gcaret, bar = parts.indexOf("|");
+      var gb = bById.get(Number(parts.slice(0, bar)));
+      groupOpen.set(parts, !isGroupOpen(gb, parts.slice(bar + 1), false)); renderOutline(); return;
+    }
+    var c = ev.target.closest("[data-caret]");
+    if (c) {
+      var b = bById.get(Number(c.dataset.caret));
+      hidden.set(b.id, !isOpen(b, false)); renderOutline(); return;
+    }
+    var row = ev.target.closest(".row"); if (!row) return;
+    if (row.dataset.bid !== undefined) selectBlock(Number(row.dataset.bid));
+    else if (row.dataset.vid !== undefined) selectValue(row.dataset.vid, false);
+  });
+  $("graph-wrap").addEventListener("click", function (ev) {
+    var stub = ev.target.closest(".stub");
+    if (stub) { st.expanded.add(Number(stub.dataset.col)); renderGraph(); return; }
+    var p = ev.target.closest(".port");
+    if (p) { selectValue(p.dataset.vid, true); return; }
+    var h = ev.target.closest(".bh");
+    if (h) { selectNode(h.parentNode.dataset.hash); selectValue(st.vid, true); }
+  });
+  $("filter").addEventListener("input", function (ev) { st.filter = ev.target.value; renderOutline(); });
+  $("depth").addEventListener("change", function (ev) {
+    var n = Math.max(1, Math.min(4, parseInt(ev.target.value, 10) || 2));
+    ev.target.value = n; st.depth = n; st.expanded = new Set(); renderGraph();
+  });
+  document.addEventListener("keydown", function (ev) {
+    var tag = (ev.target && ev.target.tagName) || "";
+    if (ev.key === "/" && tag !== "INPUT" && tag !== "TEXTAREA") { ev.preventDefault(); $("filter").focus(); $("filter").select(); }
+    else if (ev.key === "Escape" && ev.target === $("filter")) { $("filter").blur(); }
+  });
+  window.addEventListener("resize", function () { if (doc) renderGraph(); });
+
+  // file picker: any mix of a document and a run section
+  $("file").addEventListener("change", function (ev) {
+    var files = Array.prototype.slice.call(ev.target.files);
+    Promise.all(files.map(function (f) { return f.text().then(JSON.parse); })).then(function (objs) {
+      var d = null, r = null;
+      objs.forEach(function (o) { if (o && o.dag) d = o; else if (o && (o.n_batches || o.footprint || o.builds)) r = o; else if (o && o.roots) d = o; });
+      if (!d) throw new Error("none of the files is a schedule document (no dag or roots section)");
+      load(d, r);
+    }).catch(function (e) { $("meta").textContent = "error: " + e.message; });
+  });
+
+  // ------------------------------------------------------------------ go
+  try {
+    var d0 = parseSlot("schedule-data");
+    if (d0) {
+      var r0 = parseSlot("run-data");
+      load(d0, r0 || null);
+    } else {
+      $("outline").appendChild(el("div", "empty", "No document embedded. Use “open file(s)” above to load a schedule document (and optionally a run section)."));
+    }
+  } catch (e) {
+    var m = el("div", "err", "Cannot read the embedded document: " + e.message);
+    $("outline").appendChild(m);
+  }
+})();
+</script>
+</body>
+</html>
