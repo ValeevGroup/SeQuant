@@ -113,8 +113,8 @@ AnyIrrepContext &AnyIrrepContext::operator=(AnyIrrepContext &&other) noexcept =
 
 AnyIrrepContext::~AnyIrrepContext() = default;
 
-AnyIrrepSet AnyIrrepContext::irrep_of(const Tensor &tensor) const {
-  return m_impl->irrep_of(tensor);
+AnyIrrepSet AnyIrrepContext::irreps_of(const Tensor &tensor) const {
+  return m_impl->irreps_of(tensor);
 }
 
 AnyIrrepSet AnyIrrepContext::totally_symmetric() const {

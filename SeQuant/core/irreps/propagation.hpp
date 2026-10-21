@@ -4,7 +4,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/irreps/algebra.hpp>
-#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
@@ -48,7 +47,7 @@ class IrrepContext {
   /// labels (Kronecker delta, overlap, (anti)symmetrizers, reference
   /// densities, ...) are considered to be totally symmetric. All others are
   /// handed to the resolver.
-  set_type irrep_of(const Tensor &tensor) const {
+  set_type irreps_of(const Tensor &tensor) const {
     if (ranges::contains(reserved::labels(), tensor.label())) {
       return totally_symmetric();
     }
@@ -83,7 +82,7 @@ concept IrrepPropagationContext =
     requires(const C &ctx, const Tensor &tensor,
              const typename C::set_type &set,
              typename C::set_type &mutable_set) {
-      { ctx.irrep_of(tensor) } -> std::convertible_to<typename C::set_type>;
+      { ctx.irreps_of(tensor) } -> std::convertible_to<typename C::set_type>;
       { ctx.totally_symmetric() } -> std::convertible_to<typename C::set_type>;
       { ctx.empty_set() } -> std::convertible_to<typename C::set_type>;
       { ctx.product(set, set) } -> std::convertible_to<typename C::set_type>;
@@ -191,7 +190,7 @@ typename Ctx::set_type fold_irreps(const Node &node, const Ctx &ctx,
 template <>
 struct IrrepNodeTraits<Expr> {
   static IrrepNodeKind kind(const Expr &expr) {
-    if (expr.is<Product>()) {
+    if (expr.is<Product>() && !expr.is_zero()) {
       return IrrepNodeKind::Product;
     }
     if (expr.is<Sum>()) {
@@ -224,42 +223,18 @@ struct IrrepNodeTraits<Expr> {
         // (consistent with the explicit Adjoint nodes in evaluation trees)
         Tensor bare(tensor);
         bare.adjoint();
-        return ctx.conjugate(ctx.irrep_of(bare));
+        return ctx.conjugate(ctx.irreps_of(bare));
       }
-      return ctx.irrep_of(tensor);
+      return ctx.irreps_of(tensor);
     }
-    if (expr.is<Constant>() || expr.is<Variable>()) {
+    if (expr.is<Constant>() || expr.is<Product>()) {
+      // Only zero-valued products end up here (see kind())
+      SEQUANT_ASSERT(expr.is<Constant>() || expr.is_zero());
+      return expr.is_zero() ? ctx.empty_set() : ctx.totally_symmetric();
+    }
+    if (expr.is<Variable>() || expr.is<Power>()) {
+      // Note: the base of a Power is always a scalar
       return ctx.totally_symmetric();
-    }
-    if (expr.is<Power>()) {
-      const Power &power = expr.as<Power>();
-      if (!power.base()->is<Tensor>()) {
-        // Power of a scalar
-        return ctx.totally_symmetric();
-      }
-
-      if (denominator(power.exponent()) != 1) {
-        throw Exception(
-            "Can't determine IRREPs of a tensor raised to a non-integer power");
-      }
-
-      const bool inverse = power.exponent() < 0;
-      auto exponent = numerator(power.exponent());
-      if (inverse) {
-        exponent = -exponent;
-      }
-
-      typename Ctx::set_type base = leaf_irreps(*power.base(), ctx);
-      if (inverse) {
-        base = ctx.conjugate(base);
-      }
-
-      typename Ctx::set_type result = ctx.totally_symmetric();
-      for (decltype(exponent) i = 0; i < exponent; ++i) {
-        result = ctx.product(result, base);
-      }
-
-      return result;
     }
 
     throw Exception("Can't determine IRREPs of expression of type " +
@@ -267,7 +242,9 @@ struct IrrepNodeTraits<Expr> {
   }
 };
 
-/// @returns The IRREPs spanned by the given expression
+/// @returns The IRREPs spanned by the given expression. Expressions that
+/// vanish identically (zero constants or products, empty sums) span no IRREP
+/// (empty set).
 template <IrrepPropagationContext Ctx>
 typename Ctx::set_type irreps_of(const Expr &expr, const Ctx &ctx) {
   detail::NoOpIrrepCallback no_op;

@@ -72,7 +72,7 @@ bool rename(Variable &variable, PreprocessResult &result,
 RegisteredIrrepContext::RegisteredIrrepContext(const ExportContext &ctx)
     : m_ctx(ctx) {}
 
-AnyIrrepSet RegisteredIrrepContext::irrep_of(const Tensor &tensor) const {
+AnyIrrepSet RegisteredIrrepContext::irreps_of(const Tensor &tensor) const {
   // The registry is keyed by the rewritten tensors
   Tensor rewritten(tensor);
   m_ctx.rewrite(rewritten);
@@ -80,7 +80,7 @@ AnyIrrepSet RegisteredIrrepContext::irrep_of(const Tensor &tensor) const {
     return *known;
   }
 
-  return m_ctx.irrep_context().irrep_of(tensor);
+  return m_ctx.irrep_context().irreps_of(tensor);
 }
 
 AnyIrrepSet RegisteredIrrepContext::totally_symmetric() const {

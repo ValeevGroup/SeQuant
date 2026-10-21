@@ -185,8 +185,8 @@ class AnyIrrepContext {
   AnyIrrepContext &operator=(AnyIrrepContext &&other) noexcept;
   ~AnyIrrepContext();
 
-  /// @sa IrrepContext::irrep_of
-  [[nodiscard]] AnyIrrepSet irrep_of(const Tensor &tensor) const;
+  /// @sa IrrepContext::irreps_of
+  [[nodiscard]] AnyIrrepSet irreps_of(const Tensor &tensor) const;
   [[nodiscard]] AnyIrrepSet totally_symmetric() const;
   [[nodiscard]] AnyIrrepSet empty_set() const;
   /// @throws Exception if the sets are not of this context's IRREP type
@@ -207,7 +207,7 @@ class AnyIrrepContext {
   struct Concept {
     virtual ~Concept() = default;
     virtual std::unique_ptr<Concept> clone() const = 0;
-    virtual AnyIrrepSet irrep_of(const Tensor &tensor) const = 0;
+    virtual AnyIrrepSet irreps_of(const Tensor &tensor) const = 0;
     virtual AnyIrrepSet totally_symmetric() const = 0;
     virtual AnyIrrepSet empty_set() const = 0;
     virtual AnyIrrepSet product(const AnyIrrepSet &lhs,
@@ -225,8 +225,8 @@ class AnyIrrepContext {
     std::unique_ptr<Concept> clone() const override {
       return std::make_unique<Model>(ctx);
     }
-    AnyIrrepSet irrep_of(const Tensor &tensor) const override {
-      return ctx.irrep_of(tensor);
+    AnyIrrepSet irreps_of(const Tensor &tensor) const override {
+      return ctx.irreps_of(tensor);
     }
     AnyIrrepSet totally_symmetric() const override {
       return ctx.totally_symmetric();

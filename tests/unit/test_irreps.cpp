@@ -411,6 +411,12 @@ TEST_CASE("irreps", "[irreps]") {
     REQUIRE(irreps(L"2 * c * t{a1;i1}") == Set{irrep("B1")});
     // Reserved tensors are totally symmetric
     REQUIRE(irreps(L"t{a1;i1} δ{i1;i2}") == Set{irrep("B1")});
+    // Vanishing expressions span no IRREP
+    REQUIRE(irreps_of(Constant(0), ctx).empty());
+    REQUIRE(irreps_of(Sum{}, ctx).empty());
+    REQUIRE(irreps_of(Product(0, {deserialize(L"t{a1;i1}")}), ctx).empty());
+    // Powers (of scalars) are totally symmetric
+    REQUIRE(irreps(L"c^(2) * t{a1;i1}") == Set{irrep("B1")});
 
     // Equality of propagation on plain expressions and on evaluation trees
     for (std::wstring_view spec : {L"t{a1;i1} v{i1;a2} f{a2;a3} m{a3;i2}",
