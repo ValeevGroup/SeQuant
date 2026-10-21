@@ -21,13 +21,14 @@ class TableAlgebra {
   using table_type =
       container::map<std::pair<irrep_type, irrep_type>, IrrepSet<irrep_type>>;
   /// Maps IRREPs to their complex conjugate. IRREPs not listed are taken to
-  /// be their own complex conjugate.
+  /// be their own complex conjugate. It suffices to list one direction of a
+  /// conjugate pair (E1 -> E2 implies E2 -> E1).
   using conjugation_map = container::map<irrep_type, irrep_type>;
 
   /// @param totally_symmetric Name of the totally symmetric IRREP
   /// @param table The multiplication table
   /// @param conjugates The complex conjugation map
-  /// @throws Exception if the table is inconsistent
+  /// @throws Exception if the table or the conjugation map is inconsistent
   TableAlgebra(irrep_type totally_symmetric, table_type table,
                conjugation_map conjugates = {});
 

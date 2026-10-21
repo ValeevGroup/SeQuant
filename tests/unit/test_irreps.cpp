@@ -292,10 +292,19 @@ TEST_CASE("irreps", "[irreps]") {
     REQUIRE_THROWS_AS((TableAlgebra("A1", {{{"A2", "E"}, Set::any()}})),
                       Exception);
 
-    // Conjugation map
+    // Empty products are invalid
+    REQUIRE_THROWS_AS((TableAlgebra("A1", {{{"A2", "E"}, Set{}}})), Exception);
+
+    // Conjugation map (only one direction of a conjugate pair is needed)
     TableAlgebra complex("A", {{{"E1", "E2"}, Set{"A"}}}, {{"E1", "E2"}});
     REQUIRE(complex.conjugate("E1") == "E2");
+    REQUIRE(complex.conjugate("E2") == "E1");
     REQUIRE(complex.conjugate("A") == "A");
+    REQUIRE(conjugate(complex, Set{"E1", "A"}) == Set{"A", "E2"});
+    REQUIRE_NOTHROW(TableAlgebra("A", {}, {{"E1", "E2"}, {"E2", "E1"}}));
+    REQUIRE_THROWS_AS((TableAlgebra("A", {}, {{"A", "E1"}})), Exception);
+    REQUIRE_THROWS_AS((TableAlgebra("A", {}, {{"E1", "E2"}, {"E2", "E3"}})),
+                      Exception);
   }
 
   SECTION("custom algebra") {

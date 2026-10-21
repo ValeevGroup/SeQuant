@@ -11,9 +11,9 @@ TableAlgebra::TableAlgebra(irrep_type totally_symmetric, table_type table,
   for (const auto &[factors, result] : m_table) {
     const auto &[lhs, rhs] = factors;
 
-    if (result.is_any()) {
+    if (result.is_any() || result.empty()) {
       throw Exception("Product of IRREPs '" + lhs + "' and '" + rhs +
-                      "' must not be 'any'");
+                      "' must be a non-empty set of IRREPs");
     }
 
     if (lhs == m_totallySymmetric || rhs == m_totallySymmetric) {
@@ -31,6 +31,25 @@ TableAlgebra::TableAlgebra(irrep_type totally_symmetric, table_type table,
       throw Exception("Multiplication table is not commutative for IRREPs '" +
                       lhs + "' and '" + rhs + "': " + to_string(result) +
                       " vs. " + to_string(it->second));
+    }
+  }
+
+  // Complete the conjugation map (conjugation is an involution)
+  conjugation_map given = m_conjugates;
+  for (const auto &[irrep, conjugate] : given) {
+    if (irrep == m_totallySymmetric || conjugate == m_totallySymmetric) {
+      if (irrep != conjugate) {
+        throw Exception("The totally symmetric IRREP '" + m_totallySymmetric +
+                        "' must be its own complex conjugate");
+      }
+      continue;
+    }
+
+    auto [it, inserted] = m_conjugates.try_emplace(conjugate, irrep);
+    if (!inserted && it->second != irrep) {
+      throw Exception("Inconsistent complex conjugation: '" + irrep + "' -> '" +
+                      conjugate + "' but '" + conjugate + "' -> '" +
+                      it->second + "'");
     }
   }
 }
