@@ -3,6 +3,7 @@
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/irreps/algebra.hpp>
+#include <SeQuant/core/irreps/z2_algebra.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 
 #include <compare>
@@ -74,6 +75,71 @@ TEST_CASE("irreps", "[irreps]") {
 
     REQUIRE(Set{"a"} < Set{"b"});
     REQUIRE(Set{"z"} < any);
+  }
+
+  SECTION("Z2Algebra (symbolic)") {
+    Z2Algebra<> alg;
+    using Irrep = Z2Algebra<>::irrep_type;
+    using Set = IrrepSet<Irrep>;
+
+    const Irrep gx = make_irrep("Gx");
+    const Irrep gy = make_irrep("Gy");
+
+    REQUIRE(irrep_to_string(alg.totally_symmetric()) == "1");
+    REQUIRE(irrep_to_string(gx) == "Gx");
+
+    REQUIRE(alg.product(gx, gy) == Set{make_irrep("Gx*Gy")});
+    REQUIRE(alg.product(gy, gx) == alg.product(gx, gy));
+    REQUIRE(alg.product(gx, gx) == Set{alg.totally_symmetric()});
+    REQUIRE(alg.product(gx, alg.totally_symmetric()) == Set{gx});
+    REQUIRE(irrep_to_string(make_irrep("Gy*Gx")) == "Gx*Gy");
+    REQUIRE(make_irrep("Gx*Gy*Gx") == gy);
+
+    // Associativity
+    const Irrep gz = make_irrep("Gz");
+    REQUIRE(product(alg, alg.product(gx, gy), Set{gz}) ==
+            product(alg, Set{gx}, alg.product(gy, gz)));
+
+    REQUIRE(alg.conjugate(gx) == gx);
+  }
+
+  SECTION("Z2Algebra (concrete + symbolic)") {
+    using point_groups::D2;
+    using point_groups::D2h;
+
+    Z2Algebra<D2> d2;
+    using Set = IrrepSet<Z2Irrep<D2>>;
+
+    REQUIRE(irrep_to_string(d2.totally_symmetric()) == "A");
+    REQUIRE(d2.product(make_irrep<D2>("B1"), make_irrep<D2>("B2")) ==
+            Set{make_irrep<D2>("B3")});
+    REQUIRE(irrep_to_string(make_irrep<D2>("B1*Gx*B2")) == "B3*Gx");
+    REQUIRE(irrep_to_string(make_irrep<D2>("B1*Gx*B1")) == "Gx");
+    REQUIRE(irrep_to_string(make_irrep<D2>("B1*Gx*B1*Gx")) == "A");
+
+    Z2Algebra<D2h> d2h;
+    auto mul = [&](std::string_view lhs, std::string_view rhs) {
+      return irrep_to_string(
+          *d2h.product(make_irrep<D2h>(lhs), make_irrep<D2h>(rhs)).begin());
+    };
+    REQUIRE(mul("B3u", "B2u") == "B1g");
+    REQUIRE(mul("B1g", "B1u") == "Au");
+    REQUIRE(mul("B3u", "B3g") == "Au");
+    REQUIRE(mul("B2g", "B1g") == "B3g");
+    REQUIRE(mul("Au", "Au") == "Ag");
+
+    Z2Algebra<point_groups::C2v> c2v;
+    REQUIRE(irrep_to_string(*c2v.product(make_irrep<point_groups::C2v>("B1"),
+                                         make_irrep<point_groups::C2v>("B2"))
+                                 .begin()) == "A2");
+
+    // Sets
+    Set b1_or_b2{make_irrep<D2>("B1"), make_irrep<D2>("B2")};
+    REQUIRE(to_string(b1_or_b2) == "{B2,B1}");
+    REQUIRE(product(d2, b1_or_b2, Set{make_irrep<D2>("B3")}) == b1_or_b2);
+    REQUIRE(product(d2, b1_or_b2, Set{}).empty());
+    REQUIRE(product(d2, b1_or_b2, Set::any()).is_any());
+    REQUIRE(product(d2, Set{}, Set::any()).empty());
   }
 
   SECTION("custom algebra") {
