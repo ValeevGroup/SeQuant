@@ -12,8 +12,10 @@ SeQuant uses `calendar versioning <https://calver.org/>`_: ``YY.N`` for a releas
 with an optional prerelease identifier (e.g., ``alpha.1``, ``beta.2``, ``rc.1``). ``YY`` is the two-digit year, ``N``
 counts the releases within that year starting from 0, and ``P`` counts the patch releases of ``YY.N`` starting from 1.
 E.g., the third release of 2026 is ``26.2``, its first patch release is ``26.2.1``, and the first release of 2027 is
-``27.0``. (Releases up to ``2.2.0`` used semantic versioning.) The canonical version is defined in the top-level
-``CMakeLists.txt`` and propagated automatically to all other locations via CMake template substitution.
+``27.0``. Releases up to ``2.2.0`` used semantic versioning; ``2.1.0`` and ``2.2.0``, both released in 2026, count as
+the first two releases of that year, so the first calendar-versioned release is ``26.2``. The canonical version is
+defined in the top-level ``CMakeLists.txt`` and propagated automatically to all other locations via CMake template
+substitution.
 
 Files to Update
 ---------------
