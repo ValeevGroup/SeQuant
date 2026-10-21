@@ -112,8 +112,8 @@ namespace detail {
 /// before. The overloads that take this fail with a diagnostic that names the
 /// spec spelling. A list of mixed types, `{Spin::any, true}`, has no
 /// `std::initializer_list<T>` and keeps the compiler's own diagnostic, as
-/// does `{{}, 10}`, which fails on the spec's guard (its private default
-/// constructor) while the spec overload is still being considered.
+/// does `{{}, 10}`: the spec's guard rejects it only once chosen, so the spec
+/// and this helper are both viable for it and the call is ambiguous.
 /// @note list-initialization of a class, so that no compiler deduces from the
 /// list against a template parameter: MSVC forms `std::initializer_list<void>`
 /// for a designated list against `std::initializer_list<T>`, and gcc reads a
