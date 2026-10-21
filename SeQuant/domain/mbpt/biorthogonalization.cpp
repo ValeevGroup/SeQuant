@@ -617,7 +617,7 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
   Sum filtered;
   for (const auto& [_, terms] : largest_coeff_terms) {
     for (const auto& t : terms) {
-      auto kept = t->clone();
+      auto kept = ex<Product>(t->as<Product>());
       kept->as<Product>().scale(normalization);
       filtered.append(std::move(kept));
     }
