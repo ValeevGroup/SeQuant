@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/irreps/algebra.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #include <algorithm>
 #include <array>
@@ -13,6 +14,8 @@
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace sequant {
 
@@ -96,25 +99,106 @@ struct Z2Irrep {
 /// IRREP algebra for Z2 groups (D2h and its subgroups) that supports symbolic
 /// IRREPs. Products are formed by XOR-ing the concrete parts and forming the
 /// symmetric difference of the symbols (as every IRREP is its own inverse).
+///
+/// Optionally, relations between symbolic (and concrete) IRREPs can be
+/// specified (e.g. My1*My2 = My3). Without relations, symbols are treated as
+/// independent of each other and products of symbols remain unevaluated.
+/// With relations, every IRREP is reduced to the representation with the
+/// fewest symbols among all representations that are equivalent under the
+/// given relations (ties broken by the IRREP ordering). This makes the
+/// representation unique and e.g. turns My1*My2 into My3.
 template <Z2Group Group = NoConcreteGroup>
 class Z2Algebra {
  public:
   using group_type = Group;
   using irrep_type = Z2Irrep<Group>;
 
+  /// Creates an algebra without any relations between symbols
+  Z2Algebra() = default;
+
+  /// @param identities Relations of the form lhs = rhs between IRREPs
+  /// @throws Exception if the relations imply an identity between different
+  ///         concrete IRREPs or if there are too many independent relations
+  explicit Z2Algebra(
+      const std::vector<std::pair<irrep_type, irrep_type>> &identities) {
+    // The span of all relations (in the form x = totally symmetric)
+    std::vector<irrep_type> span{totally_symmetric()};
+
+    for (const auto &[lhs, rhs] : identities) {
+      irrep_type relation = multiply(lhs, rhs);
+      if (std::ranges::find(span, relation) != span.end()) {
+        // Trivial or implied by previous relations
+        continue;
+      }
+
+      if (span.size() >= max_span_size) {
+        throw Exception("Too many independent IRREP relations");
+      }
+
+      const std::size_t size = span.size();
+      for (std::size_t i = 0; i < size; ++i) {
+        span.push_back(multiply(span[i], relation));
+      }
+    }
+
+    for (const irrep_type &current : span) {
+      if (current.symbols.empty() && current.concrete != 0) {
+        throw Exception(
+            "IRREP relations imply that two different concrete IRREPs are "
+            "identical");
+      }
+    }
+
+    // The totally symmetric element is implicit
+    span.erase(span.begin());
+    m_relations = std::move(span);
+  }
+
   irrep_type totally_symmetric() const { return {}; }
 
   IrrepSet<irrep_type> product(const irrep_type &lhs,
                                const irrep_type &rhs) const {
+    return {reduce(multiply(lhs, rhs))};
+  }
+
+  irrep_type conjugate(const irrep_type &irrep) const { return irrep; }
+
+  /// @returns The canonical representation of the given IRREP under this
+  /// algebra's relations
+  irrep_type reduce(irrep_type irrep) const {
+    if (m_relations.empty()) {
+      return irrep;
+    }
+
+    irrep_type best = irrep;
+    for (const irrep_type &relation : m_relations) {
+      irrep_type candidate = multiply(irrep, relation);
+      if (candidate.symbols.size() < best.symbols.size() ||
+          (candidate.symbols.size() == best.symbols.size() &&
+           candidate < best)) {
+        best = std::move(candidate);
+      }
+    }
+
+    return best;
+  }
+
+ private:
+  static constexpr std::size_t max_span_size = 1 << 16;
+
+  /// All non-trivial elements of the span of the relations, each of which
+  /// is equivalent to the totally symmetric IRREP
+  std::vector<irrep_type> m_relations;
+
+  /// @returns The plain product of the given IRREPs (not reduced)
+  static irrep_type multiply(const irrep_type &lhs, const irrep_type &rhs) {
     irrep_type result;
     result.concrete = lhs.concrete ^ rhs.concrete;
     std::ranges::set_symmetric_difference(lhs.symbols, rhs.symbols,
                                           std::back_inserter(result.symbols));
 
-    return {std::move(result)};
+    return result;
   }
-
-  irrep_type conjugate(const irrep_type &irrep) const { return irrep; }
 };
 
 /// Creates an IRREP from its name. The name may be a product of several

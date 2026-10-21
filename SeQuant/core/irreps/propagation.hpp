@@ -53,7 +53,9 @@ class IrrepContext {
       return totally_symmetric();
     }
 
-    return m_resolver(tensor);
+    // Multiplying with the totally symmetric IRREP brings the resolved IRREPs
+    // into the algebra's canonical form
+    return product(totally_symmetric(), m_resolver(tensor));
   }
 
   set_type totally_symmetric() const { return {m_algebra.totally_symmetric()}; }

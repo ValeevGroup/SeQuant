@@ -53,6 +53,7 @@ struct std::formatter<Z3Irrep> {
 };
 
 static_assert(sequant::IrrepAlgebra<Z3Algebra>);
+
 TEST_CASE("irreps", "[irreps]") {
   using namespace sequant;
 
@@ -111,6 +112,65 @@ TEST_CASE("irreps", "[irreps]") {
             product(alg, Set{gx}, alg.product(gy, gz)));
 
     REQUIRE(alg.conjugate(gx) == gx);
+  }
+
+  SECTION("Z2Algebra (relations)") {
+    using Irrep = Z2Algebra<>::irrep_type;
+    using Set = IrrepSet<Irrep>;
+    const Irrep my1 = make_irrep("My1");
+    const Irrep my2 = make_irrep("My2");
+    const Irrep my3 = make_irrep("My3");
+    const Irrep x = make_irrep("X");
+
+    Z2Algebra<> alg({{make_irrep("My1*My2"), my3}});
+
+    REQUIRE(alg.product(my1, my2) == Set{my3});
+    REQUIRE(alg.product(my2, my1) == Set{my3});
+    REQUIRE(alg.product(my1, my3) == Set{my2});
+    REQUIRE(alg.product(my3, my2) == Set{my1});
+    REQUIRE(alg.product(my3, my3) == Set{alg.totally_symmetric()});
+    REQUIRE(alg.reduce(make_irrep("My1*My2*My3")) == alg.totally_symmetric());
+    // Unrelated symbols remain independent
+    REQUIRE(alg.product(my1, x) == Set{make_irrep("My1*X")});
+    REQUIRE(alg.product(alg.reduce(make_irrep("My1*X")), my2) ==
+            Set{make_irrep("My3*X")});
+
+    // Without relations, products remain unevaluated
+    REQUIRE(Z2Algebra<>{}.product(my1, my2) == Set{make_irrep("My1*My2")});
+
+    // Redundant relations are fine
+    Z2Algebra<> redundant({{make_irrep("My1*My2"), my3},
+                           {make_irrep("My2*My3"), my1},
+                           {my1, my1}});
+    REQUIRE(redundant.product(my1, my2) == Set{my3});
+
+    // Relations involving concrete IRREPs
+    using point_groups::D2;
+    using D2Set = IrrepSet<Z2Irrep<D2>>;
+    Z2Algebra<D2> d2({{make_irrep<D2>("Gp*Gq"), make_irrep<D2>("B1")}});
+    REQUIRE(d2.product(make_irrep<D2>("Gp"), make_irrep<D2>("Gq")) ==
+            D2Set{make_irrep<D2>("B1")});
+    REQUIRE(d2.product(make_irrep<D2>("Gp"), make_irrep<D2>("B1")) ==
+            D2Set{make_irrep<D2>("Gq")});
+    REQUIRE(irrep_to_string(
+                *d2.product(make_irrep<D2>("Gp*B2"), make_irrep<D2>("Gq"))
+                     .begin()) == "B3");
+
+    // Contradictions
+    REQUIRE_THROWS_AS(
+        Z2Algebra<D2>({{make_irrep<D2>("B1"), make_irrep<D2>("B2")}}),
+        Exception);
+    REQUIRE_THROWS_AS(
+        Z2Algebra<D2>({{make_irrep<D2>("Gp"), make_irrep<D2>("B1")},
+                       {make_irrep<D2>("Gp"), make_irrep<D2>("B2")}}),
+        Exception);
+
+    // Resolved leaf IRREPs are brought into canonical form
+    IrrepContext<Z2Algebra<>> ctx(
+        alg, resolve_by_label<Irrep>(
+                 {{L"t", Set{make_irrep("My1*My2")}}, {L"v", Set{my1}}}));
+    REQUIRE(irreps_of(*deserialize(L"t{a1;i1}"), ctx) == Set{my3});
+    REQUIRE(irreps_of(*deserialize(L"t{a1;i1} v{i1;a2}"), ctx) == Set{my2});
   }
 
   SECTION("Z2Algebra (concrete + symbolic)") {
