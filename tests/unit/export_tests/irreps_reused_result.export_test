@@ -1,0 +1,48 @@
+section s:
+X{a1;i1} = t{a1;i2} v{i2;i1}
+R{a1;i1} = X{a1;i2} f{i2;i3} f{i3;i1}
+
+=================================================
+ITF
+point_group: D2
+irreps: t:B1, f:A, v:B2
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: l, Closed, c
+index-space: b, External, e
+
+tensor: I:ec[bl], !Create{type:plain irrep:B3}
+tensor: R:ec[bj], R:ec // irrep:B3
+tensor: X:ec[bj], !Create{type:disk irrep:B3}
+tensor: f:cc[kl], f:cc // irrep:A
+tensor: t:ec[bk], t:ec // irrep:B1
+tensor: v:cc[kj], v:cc // irrep:B2
+
+
+---- code("s")
+alloc X:ec[bj]
+load t:ec[bk]
+load v:cc[kj]
+.X:ec[bj] += t:ec[bk] v:cc[kj]
+drop v:cc[kj]
+drop t:ec[bk]
+store X:ec[bj]
+
+alloc R:ec[bj]
+alloc I:ec[bl]
+load X:ec[bk]
+load f:cc[kl]
+.I:ec[bl] += X:ec[bk] f:cc[kl]
+drop f:cc[kl]
+drop X:ec[bk]
+load f:cc[lj]
+.R:ec[bj] += I:ec[bl] f:cc[lj]
+drop f:cc[lj]
+drop I:ec[bl]
+store R:ec[bj]
+
+
+---- end
+
