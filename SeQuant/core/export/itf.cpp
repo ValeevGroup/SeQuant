@@ -72,6 +72,8 @@ std::string ItfContext::irrep_name(const AnyIrrep &irrep) const {
   return irrep.to_string();
 }
 
+std::string ItfContext::any_irreps_name() const { return "*"; }
+
 std::optional<std::string> ItfContext::import_name(const Tensor &tensor) const {
   auto it = m_tensor_imports.find(tensor);
 

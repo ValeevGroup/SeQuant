@@ -61,6 +61,9 @@ class ItfContext : public ReorderingContext {
   /// @returns The ITF representation of the given IRREP. By default, this is
   /// the IRREP's standard string representation (via irrep_to_string).
   virtual std::string irrep_name(const AnyIrrep &irrep) const;
+  /// @returns The ITF representation of a set spanning any IRREP (e.g. for
+  /// tensors of unknown symmetry). By default, this is "*".
+  virtual std::string any_irreps_name() const;
 
   /// Sets the name of the given index space
   virtual void set_name(const IndexSpace &space, std::string name);
@@ -367,13 +370,13 @@ class ItfGenerator : public Generator<Context> {
 
       if (irreps) {
         // IRREPs of imported tensors are only given for informational purposes
-        append(" // " + irrep_entry(*irreps, ctx));
+        append(" // " + irrep_entry(tensor, *irreps, ctx));
       }
     } else {
       append("!Create{type:");
       append(usage == Usage::Intermediate ? "plain" : "disk");
       if (irreps) {
-        append(" " + irrep_entry(*irreps, ctx));
+        append(" " + irrep_entry(tensor, *irreps, ctx));
       }
       append("}");
     }
@@ -381,14 +384,20 @@ class ItfGenerator : public Generator<Context> {
     append_line();
   }
 
-  /// @returns The ITF specification of the given IRREPs as
+  /// @returns The ITF specification of the given tensor's IRREPs as
   /// "irrep:<comma-separated list of IRREP names>"
-  static std::string irrep_entry(const AnyIrrepSet &irreps,
+  /// @throws Exception if the tensor spans no IRREP at all
+  static std::string irrep_entry(const Tensor &tensor,
+                                 const AnyIrrepSet &irreps,
                                  const Context &ctx) {
     std::string entry = "irrep:";
 
     if (irreps.is_any()) {
-      return entry + "*";
+      return entry + ctx.any_irreps_name();
+    }
+    if (irreps.empty()) {
+      throw Exception("Tensor " + toUtf8(tensor.label()) +
+                      " spans no IRREP (i.e. it vanishes by symmetry)");
     }
 
     bool first = true;

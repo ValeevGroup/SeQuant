@@ -1457,4 +1457,16 @@ TEST_CASE("export-irreps", "[export][irreps]") {
         parse_expression_spec("R{a1;i1} = t{a1;i2} f{i2;a2} t{a2;i1}", false);
     REQUIRE_THROWS_AS(export_groups<>(groups, generator, ctx), Exception);
   }
+
+  SECTION("empty IRREP set") {
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ctx.set_irrep_context(IrrepContext<Z2Algebra<D2>>(
+        resolve_by_label<Irrep>({{L"t", Set{}}, {L"f", Set{irrep("A")}}})));
+
+    auto groups =
+        parse_expression_spec("R{a1;i1} = t{a1;i2} f{i2;i3} f{i3;i1}", false);
+    ItfGenerator<ItfContext> generator;
+    REQUIRE_THROWS_AS(export_groups<>(groups, generator, ctx), Exception);
+  }
 }
