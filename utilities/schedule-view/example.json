@@ -200,7 +200,7 @@
       {
         "id": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#0",
         "name": "R1/0#0",
-        "expr": "f",
+        "expr": "R1/0#0 = f",
         "hash": "0xc1c75fe9ea45a77f",
         "key": "0xc1c75fe9ea45a77f",
         "leaf": true,
@@ -253,7 +253,7 @@
       {
         "id": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#1",
         "name": "R1/0#1",
-        "expr": "t",
+        "expr": "R1/0#1 = t",
         "hash": "0x63aa8a62e82687cd",
         "key": "0x63aa8a62e82687cd",
         "leaf": true,
@@ -303,7 +303,7 @@
       {
         "id": "f{i_2;i_3}:N-N-S * t{a_1;i_2}:N-N-S * g{i_1;a_1}:N-N-S#2",
         "name": "R1/0#2",
-        "expr": "g",
+        "expr": "R1/0#2 = g",
         "hash": "0xc6f06bbae601396",
         "key": "0xc6f06bbae601396",
         "leaf": true,
@@ -458,7 +458,7 @@
       {
         "id": "h{i_1;i_3}:N-N-S#0",
         "name": "R1/1#0",
-        "expr": "h",
+        "expr": "R1/1#0 = h",
         "hash": "0xa6b8cbf1655caf3f",
         "key": "0xa6b8cbf1655caf3f",
         "leaf": true,

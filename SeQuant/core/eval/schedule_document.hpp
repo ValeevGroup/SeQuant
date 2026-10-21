@@ -140,9 +140,11 @@ struct ValueRecord {
   std::string id;
   /// the short name: the root's label (with "/<term index>" when the root
   /// has several terms) and the node ordinal of the id, "R12#3", or the id
-  /// itself for a root's partial sum, "R12+1"; intermediates are spelled by
-  /// it in every `expr`, leaves by their tensor label
+  /// itself for a root's partial sum, "R12+1"
   std::string name;
+  /// "<name>[<slices>] = <operands>": the value in the form it is produced
+  /// in, then a leaf's tensor label or the two operands as the value reads
+  /// them, each a leaf's tensor label or an intermediate's name
   std::string expr;
   std::string hash, key;
   bool leaf = false;

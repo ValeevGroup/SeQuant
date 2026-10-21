@@ -148,16 +148,19 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
   function tint(node, bid) { node.classList.add("tint"); node.style.setProperty("--h", hueOf(bid)); }
   function swatch(bid) { var s = el("span", "swatch"); s.style.setProperty("--h", hueOf(bid)); return s; }
   function axisName(b) { return b.axis ? b.axis.split(":")[0] : null; }
-  // "I[i_1] = t * g" -> "i_1"; leaves have no bracket
+  // "R1#3[i_1] = t * g" -> "i_1"; leaves have no bracket
   function sliceOf(v) {
     var m = /^[^\[=]*\[([^\]]*)\]/.exec(v.expr);
     return m ? m[1] : null;
   }
-  function baseName(v) { return v.expr.split(/\s*=\s*/)[0].replace(/\[.*$/, "").trim() || v.expr; }
-  function nodeLabel(v) {
-    var s = v.expr.replace(/^([^\[=]*)\[[^\]]*\]/, "$1");
-    return s;
+  // "<name> = <what makes it>"; a document written before leaves were spelled so gets the name prepended
+  function exprOf(v) { return v.expr.indexOf(" = ") >= 0 ? v.expr : shortOf(v.id) + " = " + v.expr; }
+  // what a read of the value is labelled by: a leaf's tensor label, an intermediate's name
+  function baseName(v) {
+    var e = exprOf(v);
+    return v.leaf ? e.slice(e.indexOf(" = ") + 3) : e.split(/\s*=\s*/)[0].replace(/\[.*$/, "").trim();
   }
+  function nodeLabel(v) { return exprOf(v).replace(/^([^\[=]*)\[[^\]]*\]/, "$1"); }
   function portLabel(v) {
     var s = sliceOf(v);
     if (s) return "[" + s + "]";
@@ -310,8 +313,7 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     var r = el("div", "row"); r.dataset.vid = v.id;
     r.appendChild(el("span", "caret", ""));
     r.appendChild(swatch(v.home_block));
-    r.appendChild(el("span", "tag mono", shortOf(v.id)));
-    r.appendChild(el("span", "mono", v.expr));
+    r.appendChild(el("span", "mono", exprOf(v)));
     if (tag) r.appendChild(el("span", "tag", tag));
     if (v.leaf) r.appendChild(el("span", "tag", "leaf"));
     if (v.persistent) r.appendChild(el("span", "tag", "persistent"));
@@ -489,7 +491,7 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     var vs = byHash.get(h);
     var b = el("div", "box"); b.dataset.hash = h;
     if (h === st.hash) b.classList.add("sel");
-    var hd = el("div", "bh mono", shortOf(vs[0].id) + "  " + nodeLabel(vs[0]) + (vs.length > 1 ? "  ×" + vs.length : ""));
+    var hd = el("div", "bh mono", nodeLabel(vs[0]) + (vs.length > 1 ? "  ×" + vs.length : ""));
     tint(hd, vs[0].home_block); hd.title = "node " + h;
     b.appendChild(hd);
     vs.forEach(function (v) {
@@ -508,7 +510,7 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
   function link(text, fn) { var a = el("a", "link", text); a.addEventListener("click", fn); return a; }
   function vlink(id) {
     var v = vById.get(id);
-    var a = link(v ? shortOf(id) + " " + v.expr : id, function () { selectValue(id, true); });
+    var a = link(v ? exprOf(v) : id, function () { selectValue(id, true); });
     a.title = id; return a;
   }
   function blink(bid) { return link("block " + bid, function () { selectBlock(bid); }); }
@@ -553,7 +555,7 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     var frame = el("span");
     frame.appendChild(el("span", "pill", shortOf(v.id)));
     frame.appendChild(document.createTextNode(" labels of this occurrence; " + occs.length + " occurrence" + (occs.length === 1 ? "" : "s") + " in " + Object.keys(terms).length + " term" + (Object.keys(terms).length === 1 ? "" : "s")));
-    kv(tb, "name", shortOf(v.id)); kv(tb, "frame", frame); kv(tb, "expr", v.expr); kv(tb, "leaf", v.leaf);
+    kv(tb, "name", shortOf(v.id)); kv(tb, "frame", frame); kv(tb, "expr", exprOf(v)); kv(tb, "leaf", v.leaf);
     ["result_modes", "home_modes", "enclosing_modes", "divergent_modes"].forEach(function (k) { kv(tb, k, listOf(v[k])); });
     var hb = el("span"); hb.appendChild(blink(v.home_block)); kv(tb, "home_block", hb);
     kv(tb, "home_depth", v.home_depth); kv(tb, "persistent", v.persistent);

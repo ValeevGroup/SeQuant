@@ -1267,13 +1267,20 @@ DagFixture two_root_fixture() {
       external_occ_policy());
 }
 
+/// what a value's expr spells it from: a leaf's tensor label, else the
+/// operands
+std::string rhs_of(ValueRecord const& v) {
+  auto const eq = v.expr.find(" = ");
+  REQUIRE(eq != std::string::npos);
+  return v.expr.substr(eq + 3);
+}
+
 /// the products of g and t (the X of the fixture), by id
 std::vector<ValueRecord> x_values(DagRecord const& dag) {
   std::vector<ValueRecord> xs;
   for (auto const& v : dag.values) {
-    auto const eq = v.expr.find(" = ");
-    if (v.leaf || eq == std::string::npos) continue;
-    auto const rhs = v.expr.substr(eq + 3);
+    if (v.leaf) continue;
+    auto const rhs = rhs_of(v);
     if ((rhs.starts_with("g") && rhs.find(" * t") != std::string::npos) ||
         (rhs.starts_with("t") && rhs.find(" * g") != std::string::npos))
       xs.push_back(v);
@@ -1341,13 +1348,37 @@ TEST_CASE(
   REQUIRE(!edge(x.id, *consumer).sliced);
 }
 
+TEST_CASE("record_dag spells every value as its name and what makes it",
+          "[schedule-document]") {
+  auto const fx = two_root_fixture();
+  auto const dag =
+      record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
+  std::set<std::string> names;
+  for (auto const& v : dag.values) {
+    CAPTURE(v.id, v.name, v.expr);
+    REQUIRE(names.insert(v.name).second);
+    // the name opens expr, bare or in the form the value is produced in
+    REQUIRE(v.expr.starts_with(v.name));
+    auto const after = v.expr.substr(v.name.size());
+    REQUIRE((after.starts_with(" = ") || after.starts_with("[")));
+    auto const rhs = rhs_of(v);
+    if (v.leaf) {
+      REQUIRE(std::set<std::string>{"f", "g", "h", "t"}.contains(rhs));
+    } else {
+      REQUIRE((rhs.find(" * ") != std::string::npos ||
+               rhs.find(" + ") != std::string::npos));
+    }
+  }
+  // the whole X of R1's loop, assembled from per-batch partials, by name
+  auto const xs = x_values(dag);
+  REQUIRE(!xs.empty());
+  for (auto const& x : xs) REQUIRE(x.name.starts_with("R"));
+}
+
 TEST_CASE("record_dag takes persistence from the cell table",
           "[schedule-document]") {
   using sequant::eval::dryrun::EvalNodeDryRun;
   auto const fx = two_root_fixture();
-  auto const leaf_label = [](ValueRecord const& v) {
-    return v.expr.substr(0, v.expr.find('['));
-  };
   // nothing volatile: a value survives an evaluation only when nothing reads
   // it again, i.e. the roots; every leaf and every X is read again or bound
   auto const dag0 =
@@ -1365,7 +1396,7 @@ TEST_CASE("record_dag takes persistence from the cell table",
   for (auto const& v : dag1.values) {
     if (v.leaf) {
       ++leaves;
-      REQUIRE(v.persistent == (leaf_label(v) != "t"));
+      REQUIRE(v.persistent == (rhs_of(v) != "t"));
     } else {
       REQUIRE(!v.persistent);
     }
@@ -1404,7 +1435,7 @@ TEST_CASE("record_dag persistence is the flag of the assembled form",
   REQUIRE(x.persistent);
   // g and h feed only the partial, whose whole holds no t: not persistent
   for (auto const& v : dag.values)
-    if (v.leaf && (v.expr.rfind("g", 0) == 0 || v.expr.rfind("h", 0) == 0))
+    if (v.leaf && (rhs_of(v) == "g" || rhs_of(v) == "h"))
       REQUIRE(!v.persistent);
 }
 

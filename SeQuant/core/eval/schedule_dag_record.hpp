@@ -475,14 +475,15 @@ DagRecord record_dag(
           std::ranges::find(out, carried[pos]) == out.end())
         out.push_back(carried[pos]);
   };
-  // a leaf by its tensor label, an intermediate by its short name
+  // as an operand: a leaf by its tensor label, an intermediate by its name
   auto const label_of = [&](std::size_t w) {
     return rich.cells[w].is_leaf ? detail::bare_label(node_of(w)) : name_of[w];
   };
+  // the left-hand side of expr: the name in the form the value is produced in
   auto const own_form = [&](std::size_t w) {
     std::vector<std::string> slices;
     if (production[w]) sliced_labels(w, production[w]->sliced, slices);
-    return detail::form_label(label_of(w), slices, reduced_of(w));
+    return detail::form_label(name_of[w], slices, reduced_of(w));
   };
   // (consumer value, operand value) -> the read's source cell and slicing
   struct ReadForm {
@@ -524,10 +525,12 @@ DagRecord record_dag(
     rec.name = name_of[v];
     {
       auto const& node = node_of(v);
-      rec.expr = own_form(v);
-      if (!node.leaf()) {
+      rec.expr = own_form(v) + " = ";
+      if (node.leaf()) {
+        rec.expr += detail::bare_label(node);
+      } else {
         auto const op = node->op_type();
-        rec.expr += " = " + operand_of(v, node.left()) +
+        rec.expr += operand_of(v, node.left()) +
                     (op && *op == EvalOp::Sum ? " + " : " * ") +
                     operand_of(v, node.right());
       }
