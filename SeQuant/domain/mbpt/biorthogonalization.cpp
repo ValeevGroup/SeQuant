@@ -48,13 +48,12 @@ using ParticlePairings = container::svector<IndexPair>;
 /// constructed with elements (-2)^{c} × (-1)^{n_particles}, where c is the
 /// number of cycles in the relative permutation.
 ///
-/// The biorthogonal coefficients are obtained from the normalized pseudoinverse
-/// of M: first compute M_pinv (the pseudoinverse), then normalize it by the
-/// factor ((n_particles)!/rank(M)).
-/// Finally, biorthogonal coefficients = normalized_M_pinv · e_1,
-/// where e_1 is the first unit vector.
+  /// The biorthogonal coefficients are obtained from the unnormalized
+  /// pseudoinverse of M.
+/// biorthogonal coefficients = M_pinv · e_1, where e_1 is the first unit vector.
 /// See [DOI 10.48550/ARXIV.1805.00565](https://doi.org/10.48550/ARXIV.1805.00565)
-/// for more details.
+  /// for more details (Note that these biorthogonal coefficients are unnormalized,
+  /// unlike those in the reference).
 ///
 /// \param n_particles The rank of external index pairs
 ///
@@ -72,63 +71,63 @@ std::vector<sequant::rational> hardcoded_biorthogonalizer_row(
       return std::vector<sequant::rational>{ratio(1, 3), ratio(1, 6)};
 
     case 3:
-      return std::vector<sequant::rational>{ratio(17, 120), ratio(-7, 120),
-                                            ratio(-1, 120), ratio(-1, 120),
-                                            ratio(-1, 120), ratio(-7, 120)};
+      return std::vector<sequant::rational>{ratio(17, 144), ratio(-7, 144),
+                                            ratio(-1, 144), ratio(-1, 144),
+                                            ratio(-1, 144), ratio(-7, 144)};
 
     case 4:
       return std::vector<sequant::rational>{
-          ratio(43, 840), ratio(-19, 1680), ratio(-19, 1680),
-          ratio(-1, 105), ratio(-19, 1680), ratio(-19, 1680),
-          ratio(13, 840), ratio(1, 120),    ratio(-1, 105),
-          ratio(1, 120),  ratio(-1, 105),   ratio(-19, 1680),
-          ratio(-1, 105), ratio(1, 120),    ratio(1, 120),
-          ratio(13, 840), ratio(-1, 105),   ratio(-1, 105),
-          ratio(1, 120),  ratio(-19, 1680), ratio(-19, 1680),
-          ratio(13, 840), ratio(-19, 1680), ratio(1, 120)};
+          ratio(43, 1440), ratio(-19, 2880), ratio(-19, 2880),
+          ratio(-1, 180),  ratio(-19, 2880), ratio(-19, 2880),
+          ratio(13, 1440), ratio(7, 1440),   ratio(-1, 180),
+          ratio(7, 1440),  ratio(-1, 180),   ratio(-19, 2880),
+          ratio(-1, 180),  ratio(7, 1440),   ratio(7, 1440),
+          ratio(13, 1440), ratio(-1, 180),   ratio(-1, 180),
+          ratio(7, 1440),  ratio(-19, 2880), ratio(-19, 2880),
+          ratio(13, 1440), ratio(-19, 2880), ratio(7, 1440)};
 
     case 5:
       return std::vector<sequant::rational>{
-          ratio(59, 3780),   ratio(-5, 3024),   ratio(-5, 3024),
-          ratio(-5, 3024),   ratio(-31, 7560),  ratio(-5, 3024),
-          ratio(-5, 3024),   ratio(-23, 30240), ratio(19, 7560),
-          ratio(37, 15120),  ratio(-5, 3024),   ratio(-23, 30240),
-          ratio(-5, 3024),   ratio(19, 7560),   ratio(37, 15120),
-          ratio(-31, 7560),  ratio(37, 15120),  ratio(37, 15120),
-          ratio(-31, 7560),  ratio(-5, 3024),   ratio(-5, 3024),
-          ratio(-23, 30240), ratio(-23, 30240), ratio(-23, 30240),
-          ratio(-13, 7560),  ratio(-5, 3024),   ratio(-5, 3024),
-          ratio(19, 7560),   ratio(-23, 30240), ratio(37, 15120),
-          ratio(19, 7560),   ratio(-23, 30240), ratio(19, 7560),
-          ratio(-23, 30240), ratio(-13, 7560),  ratio(37, 15120),
-          ratio(-13, 7560),  ratio(-13, 7560),  ratio(37, 15120),
-          ratio(-23, 30240), ratio(-31, 7560),  ratio(-13, 7560),
-          ratio(37, 15120),  ratio(37, 15120),  ratio(19, 7560),
-          ratio(37, 15120),  ratio(37, 15120),  ratio(-13, 7560),
-          ratio(-13, 7560),  ratio(-23, 30240), ratio(-31, 7560),
-          ratio(37, 15120),  ratio(-31, 7560),  ratio(37, 15120),
-          ratio(-5, 3024),   ratio(-5, 3024),   ratio(-23, 30240),
-          ratio(19, 7560),   ratio(-5, 3024),   ratio(37, 15120),
-          ratio(-31, 7560),  ratio(37, 15120),  ratio(37, 15120),
-          ratio(-13, 7560),  ratio(19, 7560),   ratio(37, 15120),
-          ratio(37, 15120),  ratio(-13, 7560),  ratio(-13, 7560),
-          ratio(-23, 30240), ratio(37, 15120),  ratio(-13, 7560),
-          ratio(37, 15120),  ratio(-13, 7560),  ratio(-23, 30240),
-          ratio(19, 7560),   ratio(-23, 30240), ratio(-23, 30240),
-          ratio(19, 7560),   ratio(-13, 7560),  ratio(-31, 7560),
-          ratio(37, 15120),  ratio(-13, 7560),  ratio(37, 15120),
-          ratio(19, 7560),   ratio(-31, 7560),  ratio(-31, 7560),
-          ratio(37, 15120),  ratio(37, 15120),  ratio(-5, 3024),
-          ratio(37, 15120),  ratio(-13, 7560),  ratio(37, 15120),
-          ratio(-13, 7560),  ratio(-23, 30240), ratio(-5, 3024),
-          ratio(19, 7560),   ratio(-23, 30240), ratio(-5, 3024),
-          ratio(37, 15120),  ratio(-5, 3024),   ratio(-23, 30240),
-          ratio(-23, 30240), ratio(-23, 30240), ratio(-13, 7560),
-          ratio(19, 7560),   ratio(19, 7560),   ratio(-23, 30240),
-          ratio(-23, 30240), ratio(-13, 7560),  ratio(-5, 3024),
-          ratio(19, 7560),   ratio(-5, 3024),   ratio(-23, 30240),
-          ratio(37, 15120),  ratio(37, 15120),  ratio(-13, 7560),
-          ratio(-13, 7560),  ratio(37, 15120),  ratio(-23, 30240)};
+          ratio(59, 10800),  ratio(-1, 1728),   ratio(-1, 1728),
+          ratio(-1, 1728),   ratio(-31, 21600), ratio(-1, 1728),
+          ratio(-1, 1728),   ratio(-23, 86400), ratio(19, 21600),
+          ratio(37, 43200),  ratio(-1, 1728),   ratio(-23, 86400),
+          ratio(-1, 1728),   ratio(19, 21600),  ratio(37, 43200),
+          ratio(-31, 21600), ratio(37, 43200),  ratio(37, 43200),
+          ratio(-31, 21600), ratio(-1, 1728),   ratio(-1, 1728),
+          ratio(-23, 86400), ratio(-23, 86400), ratio(-23, 86400),
+          ratio(-13, 21600), ratio(-1, 1728),   ratio(-1, 1728),
+          ratio(19, 21600),  ratio(-23, 86400), ratio(37, 43200),
+          ratio(19, 21600),  ratio(-23, 86400), ratio(19, 21600),
+          ratio(-23, 86400), ratio(-13, 21600), ratio(37, 43200),
+          ratio(-13, 21600), ratio(-13, 21600), ratio(37, 43200),
+          ratio(-23, 86400), ratio(-31, 21600), ratio(-13, 21600),
+          ratio(37, 43200),  ratio(37, 43200),  ratio(19, 21600),
+          ratio(37, 43200),  ratio(37, 43200),  ratio(-13, 21600),
+          ratio(-13, 21600), ratio(-23, 86400), ratio(-31, 21600),
+          ratio(37, 43200),  ratio(-31, 21600), ratio(37, 43200),
+          ratio(-1, 1728),   ratio(-1, 1728),   ratio(-23, 86400),
+          ratio(19, 21600),  ratio(-1, 1728),   ratio(37, 43200),
+          ratio(-31, 21600), ratio(37, 43200),  ratio(37, 43200),
+          ratio(-13, 21600), ratio(19, 21600),  ratio(37, 43200),
+          ratio(37, 43200),  ratio(-13, 21600), ratio(-13, 21600),
+          ratio(-23, 86400), ratio(37, 43200),  ratio(-13, 21600),
+          ratio(37, 43200),  ratio(-13, 21600), ratio(-23, 86400),
+          ratio(19, 21600),  ratio(-23, 86400), ratio(-23, 86400),
+          ratio(19, 21600),  ratio(-13, 21600), ratio(-31, 21600),
+          ratio(37, 43200),  ratio(-13, 21600), ratio(37, 43200),
+          ratio(19, 21600),  ratio(-31, 21600), ratio(-31, 21600),
+          ratio(37, 43200),  ratio(37, 43200),  ratio(-1, 1728),
+          ratio(37, 43200),  ratio(-13, 21600), ratio(37, 43200),
+          ratio(-13, 21600), ratio(-23, 86400), ratio(-1, 1728),
+          ratio(19, 21600),  ratio(-23, 86400), ratio(-1, 1728),
+          ratio(37, 43200),  ratio(-1, 1728),   ratio(-23, 86400),
+          ratio(-23, 86400), ratio(-23, 86400), ratio(-13, 21600),
+          ratio(19, 21600),  ratio(19, 21600),  ratio(-23, 86400),
+          ratio(-23, 86400), ratio(-13, 21600), ratio(-1, 1728),
+          ratio(19, 21600),  ratio(-1, 1728),   ratio(-23, 86400),
+          ratio(37, 43200),  ratio(37, 43200),  ratio(-13, 21600),
+          ratio(-13, 21600), ratio(37, 43200),  ratio(-23, 86400)};
 
     default:
       throw Exception(
@@ -253,15 +252,6 @@ Eigen::MatrixXd compute_biorthogonalizer_matrix(std::size_t n_particles,
   Eigen::MatrixXd pinv = decomp.pseudoInverse();
   // The pseudo inverse of a symmetric matrix should also be symmetric
   SEQUANT_ASSERT(pinv.isApprox(pinv.transpose()));
-
-  // We need to normalize to the amount of non-zero eigenvalues via
-  // normalization = #eigenvalues / #non-zero eigenvalues
-  // Since perm_ovlp_mat is symmetric, it is diagonalizable and for every
-  // diagonalizable matrix, its rank equals the amount of non-zero eigenvalues.
-  double normalization =
-      static_cast<double>(perm_ovlp_mat.rows()) / decomp.rank();
-
-  pinv *= normalization;
 
   return pinv;
 }
@@ -692,9 +682,19 @@ namespace detail {
 std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
                                          double threshold) {
   auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
-  auto normalized_pinv =
-      compute_biorthogonalizer_matrix(n_particles, threshold);
-  Eigen::MatrixXd nns_matrix = perm_ovlp_mat * normalized_pinv;
+  auto pinv = compute_biorthogonalizer_matrix(n_particles, threshold);
+
+  // We need to normalize to the amount of non-zero eigenvalues via
+  // normalization = #eigenvalues / #non-zero eigenvalues
+  // Since perm_ovlp_mat is symmetric, it is diagonalizable and for every
+  // diagonalizable matrix, its rank equals the amount of non-zero eigenvalues.
+  auto decomp = Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd>();
+  decomp.setThreshold(threshold);
+  decomp.compute(perm_ovlp_mat);
+  double normalization =
+      static_cast<double>(perm_ovlp_mat.rows()) / decomp.rank();
+
+  Eigen::MatrixXd nns_matrix = normalization * perm_ovlp_mat * pinv;
 
   auto num_perms = nns_matrix.rows();
   std::vector<double> coeffs;
