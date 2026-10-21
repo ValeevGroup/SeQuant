@@ -68,7 +68,7 @@ Release Checklist
    .. code-block:: bash
 
       git add CMakeLists.txt CITATION.cff
-      git commit -m "bump version to YY.N"
+      git commit -m "bump version to YY.N[.P]"
 
 4. **Verify the build** — ensure the project configures, builds, and tests pass:
 
@@ -82,7 +82,7 @@ Release Checklist
 
    .. code-block:: bash
 
-      git tag -a vYY.N -m "SeQuant YY.N"
+      git tag -a vYY.N[.P] -m "SeQuant YY.N[.P]"
 
 6. **Push the branch and tag**:
 
