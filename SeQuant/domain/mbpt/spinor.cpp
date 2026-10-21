@@ -811,6 +811,14 @@ IndexSpace kr_flipped_space(const Index& idx) {
                     idx.space().field()};
 }
 
+/// the flavor-flipped basis of a flavored index: kr_flipped_space with the
+/// index's basis instance kept and resolved against the default registry (a
+/// flavored PAO basis μ̃↑ flips to μ̃↓)
+IndexBasis kr_flipped_basis(const Index& idx) {
+  return default_registry_resolved(
+      IndexBasis{kr_flipped_space(idx), idx.basis().basis_instance()});
+}
+
 }  // namespace
 
 ExprPtr kramers_term_flip(const ExprPtr& term,
@@ -839,7 +847,7 @@ ExprPtr kramers_term_flip(const ExprPtr& term,
     if (auto it = ext_map.find(idx); it != ext_map.end())
       repl.emplace(idx, it->second);
     else
-      repl.emplace(idx, Index::make_tmp_index(kr_flipped_space(idx)));
+      repl.emplace(idx, Index::make_tmp_index(kr_flipped_basis(idx)));
   }
   for (auto const& idx : flavored) {
     if (!idx.has_proto_indices()) continue;
@@ -851,7 +859,7 @@ ExprPtr kramers_term_flip(const ExprPtr& term,
     for (auto& pr : protos)
       if (auto it = repl.find(pr); it != repl.end()) pr = it->second;
     repl.emplace(
-        idx, Index::make_tmp_index(kr_flipped_space(idx), std::move(protos)));
+        idx, Index::make_tmp_index(kr_flipped_basis(idx), std::move(protos)));
   }
   auto result = std::make_shared<Product>();
   if (term->is<Product>()) result->scale(term->as<Product>().scalar());
@@ -920,7 +928,7 @@ ExprPtr external_swap_image(const ExprPtr& term, const Index& p,
         changed = true;
       }
     if (changed)
-      repl.emplace(idx, Index(idx.space(), idx.ordinal(), std::move(protos)));
+      repl.emplace(idx, idx.with_basis(idx.basis(), std::move(protos)));
   }
   auto out = std::make_shared<Product>();
   container::svector<ExprPtr> factors;

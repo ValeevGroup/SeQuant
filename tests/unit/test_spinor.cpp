@@ -1217,6 +1217,145 @@ TEST_CASE("kramers_symmetry_propagation", "[spinor][kramers]") {
   }
 }
 
+TEST_CASE("fold_stripped_antisymmetrizer_exchange_driver",
+          "[spinor][kramers][fold]") {
+  // The two exchange partners of a CSV doubles driver in a block whose
+  // external virtuals share a flavour,
+  //   g{a_1,a_2;i↑_2,i↓_1} C{a↑_2<..>;a_1} C{a↑_1<..>;a_2}
+  // - g{a_1,a_2;i↑_2,i↓_1} C{a↑_1<..>;a_1} C{a↑_2<..>;a_2},
+  // are each other's signed swap image under a↑_1 <-> a↑_2: the fold keeps
+  // ONE of them with the factor 2. Neither is its own image (g is rigid in
+  // its bra pair and column-symmetric only), so neither is dead: dropping
+  // one (HSeOH PNS-CCSD, 2026-10-21: the ↑↓ and ↓↑ blocks each lost a
+  // driver) is the regression this guards.
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  auto isr = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
+  auto ctx = get_default_context();
+  ctx.set(isr);
+  auto _ = set_scoped_default_context(ctx);
+
+  // spelled as the CSV-CCk pipeline hands them to the fold: the tensors are
+  // time-reversal symmetric (:...-E-T), which the Kramers fold acts on
+  auto const t1 = deserialize(
+      L"g{a_1,a_2;i↑_2,i↓_1}:N-H-S-E-T * C{a↑_2<i↑_2,i↓_1>;a_1}:N-N-N-E-T * "
+      L"C{a↑_1<i↑_2,i↓_1>;a_2}:N-N-N-E-T");
+  auto const t2 = deserialize(
+      L"-1 * g{a_1,a_2;i↑_2,i↓_1}:N-H-S-E-T * "
+      L"C{a↑_1<i↑_2,i↓_1>;a_1}:N-N-N-E-T * C{a↑_2<i↑_2,i↓_1>;a_2}:N-N-N-E-T");
+  REQUIRE(t1);
+  REQUIRE(t2);
+  auto block = ex<Sum>(ExprPtrList{t1, t2});
+  container::svector<std::pair<Index, Index>> groups;
+  Index i2(L"i↑_2"), i1(L"i↓_1");
+  groups.emplace_back(Index(L"a↑_1", {i2, i1}), Index(L"a↑_2", {i2, i1}));
+  // MPQC canonicalizes with the Complete method (the unit tests default to
+  // Topological), and its CSV-CCk hands the fold its Kramers options
+  auto opts = CanonicalizeOptions::default_options();
+  SECTION("default options") {}
+  SECTION("Kramers network fold on") {
+    opts.fold_kramers = CanonicalizeOptions::FoldKramers::Yes;
+  }
+  SECTION("Complete method, Kramers network fold on") {
+    opts = opts.copy_and_set(CanonicalizationMethod::Complete);
+    opts.fold_kramers = CanonicalizeOptions::FoldKramers::Yes;
+  }
+  auto fold = fold_stripped_antisymmetrizer(block, groups, opts);
+  INFO("folded = " << toUtf8(to_latex(fold.expr)));
+  CHECK(fold.n_in == 2);
+  CHECK(fold.n_dead == 0);
+  CHECK(fold.n_merged == 1);
+  REQUIRE(fold.n_out == 1);
+  // the survivor (a Sum of one Product, or the Product) carries the factor 2
+  ExprPtr const survivor =
+      fold.expr->is<Sum>() ? fold.expr->as<Sum>().summand(0) : fold.expr;
+  REQUIRE(survivor->is<Product>());
+  CHECK(survivor->as<Product>().scalar() == Product::scalar_type{2});
+}
+
+TEST_CASE("fold_stripped_antisymmetrizer_exchange_driver_csv_composites",
+          "[spinor][kramers][fold]") {
+  // The same exchange-partner pair as the fold sees it in CSV-CCk: BEFORE the
+  // CSV transform, the drivers carry the CSV composites on g itself,
+  //   g{a↑_2<..>,a↑_1<..>;i↑_2,i↓_1} - g{a↑_1<..>,a↑_2<..>;i↑_2,i↓_1},
+  // each the signed swap image of the other under a↑_1 <-> a↑_2. The fold
+  // keeps ONE with the factor 2 (HSeOH PNS-MP1/CCSD 2026-10-21: the fold
+  // dropped one, leaving a single driver at weight 1 in the ↑↓ and ↓↑ blocks).
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  auto isr = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
+  auto ctx = get_default_context();
+  ctx.set(isr);
+  auto _ = set_scoped_default_context(ctx);
+
+  auto const t1 =
+      deserialize(L"g{a↑_2<i↑_2,i↓_1>,a↑_1<i↑_2,i↓_1>;i↑_2,i↓_1}:N-H-S-E-T");
+  auto const t2 = deserialize(
+      L"-1 * g{a↑_1<i↑_2,i↓_1>,a↑_2<i↑_2,i↓_1>;i↑_2,i↓_1}:N-H-S-E-T");
+  REQUIRE(t1);
+  REQUIRE(t2);
+  auto block = ex<Sum>(ExprPtrList{t1, t2});
+  container::svector<std::pair<Index, Index>> groups;
+  Index i2(L"i↑_2"), i1(L"i↓_1");
+  groups.emplace_back(Index(L"a↑_1", {i2, i1}), Index(L"a↑_2", {i2, i1}));
+  // MPQC canonicalizes with the Complete method (the unit tests default to
+  // Topological), and its CSV-CCk hands the fold its Kramers options
+  auto opts = CanonicalizeOptions::default_options();
+  SECTION("default options") {}
+  SECTION("Kramers network fold on") {
+    opts.fold_kramers = CanonicalizeOptions::FoldKramers::Yes;
+  }
+  SECTION("Complete method") {
+    opts = opts.copy_and_set(CanonicalizationMethod::Complete);
+  }
+  SECTION("Complete method, Kramers network fold on") {
+    opts = opts.copy_and_set(CanonicalizationMethod::Complete);
+    opts.fold_kramers = CanonicalizeOptions::FoldKramers::Yes;
+  }
+  auto fold = fold_stripped_antisymmetrizer(block, groups, opts);
+  INFO("folded = " << toUtf8(to_latex(fold.expr)));
+  CHECK(fold.n_in == 2);
+  // neither term is dead (its own signed image), whether or not the
+  // canonicalizer pairs the two (a pair it does not recognize stays, which
+  // is exact too); what the consumer's (1-P) sees is the same either way
+  CHECK(fold.n_dead == 0);
+  CHECK((fold.n_out == 1 || fold.n_out == 2));
+  CHECK(fold.n_out + fold.n_merged == 2);
+  auto antisymmetrized = [&](ExprPtr const& e) {
+    auto const [p, q] = groups[0];
+    auto out = std::make_shared<Sum>();
+    container::svector<ExprPtr> terms;
+    if (e->is<Sum>())
+      for (auto const& t : e->as<Sum>().summands()) terms.push_back(t);
+    else
+      terms.push_back(e);
+    for (auto const& t : terms) {
+      out->append(t);
+      // the signed swap image, through the fold's own relabeling
+      container::map<Index, Index> swap{{p, q}, {q, p}};
+      auto im = t->clone();
+      im->visit(
+          [&swap](ExprPtr& x) {
+            if (!x->is<Tensor>()) return;
+            Tensor tt{x->as<Tensor>()};
+            tt.transform_indices(swap);
+            tt.reset_tags();
+            x = ex<Tensor>(std::move(tt));
+          },
+          /* atoms_only = */ true);
+      out->append(ex<Constant>(-1) * im);
+    }
+    return ExprPtr(out);
+  };
+  auto diff = antisymmetrized(fold.expr) - antisymmetrized(block);
+  simplify(diff);
+  INFO("(1-P)[folded] - (1-P)[block] = " << toUtf8(to_latex(diff)));
+  REQUIRE(diff->is<Constant>());
+  CHECK(diff->as<Constant>().is_zero());
+}
+
 TEST_CASE("fold_stripped_antisymmetrizer", "[spinor][kramers][fold]") {
   auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
   // Partial-A Kramers blocks keep, for every external group whose Â was
@@ -1287,7 +1426,7 @@ TEST_CASE("fold_stripped_antisymmetrizer", "[spinor][kramers][fold]") {
           changed = true;
         }
       if (changed)
-        repl.emplace(idx, Index(idx.space(), idx.ordinal(), std::move(protos)));
+        repl.emplace(idx, idx.with_basis(idx.basis(), std::move(protos)));
     }
     auto out = std::make_shared<Product>();
     if (term->is<Product>()) out->scale(term->as<Product>().scalar());

@@ -183,7 +183,12 @@ ErasureMap erasure_map(Rng const& tensors, KramersBlindness const& kb,
   if (erasable.empty()) return result;
   auto place = [&](Index const& ix) {
     if (!erasable.contains(ix) || result.contains(ix)) return;
-    result.emplace(ix, Index::make_tmp_index(kb.erase_space(ix.space())));
+    // the placeholder keeps the index's basis instance (a named basis over
+    // the erased space, e.g. a flavored PAO basis, resolves to its
+    // registered counterpart over the erased space)
+    result.emplace(
+        ix, Index::make_tmp_index(default_registry_resolved(IndexBasis{
+                kb.erase_space(ix.space()), ix.basis().basis_instance()})));
   };
   for (ExprPtr const& e : tensors) {
     if (!e->is<Tensor>()) continue;
