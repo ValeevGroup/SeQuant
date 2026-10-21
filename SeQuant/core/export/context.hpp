@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/irreps/any.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
 #include <limits>
@@ -227,6 +228,25 @@ class ExportContext {
   virtual bool is_index_batched(const Index &idx,
                                 std::optional<std::size_t> id = {}) const;
 
+  /// Sets the context used to determine the IRREPs of all tensors occurring
+  /// during export. Without such a context, no IRREP information is
+  /// determined.
+  virtual void set_irrep_context(AnyIrrepContext ctx);
+  /// @returns Whether an IRREP context has been set
+  [[nodiscard]] virtual bool has_irrep_context() const;
+  /// @returns The IRREP context. Throws if none has been set.
+  [[nodiscard]] virtual const AnyIrrepContext &irrep_context() const;
+  /// @returns The IRREPs of the given tensor (block) as determined during the
+  /// export or nullptr if they are unknown
+  [[nodiscard]] virtual const AnyIrrepSet *irreps(const Tensor &tensor) const;
+  /// Registers the IRREPs of the given tensor (block)
+  /// @param tensor The tensor
+  /// @param irreps The IRREPs the tensor spans
+  /// @param merge Whether to merge the given IRREPs with already registered
+  ///        ones. If false, an existing registration must be identical.
+  virtual void register_irreps(const Tensor &tensor, AnyIrrepSet irreps,
+                               bool merge);
+
  protected:
   static constexpr std::size_t ID_GLOBAL =
       std::numeric_limits<std::size_t>::max();
@@ -236,6 +256,8 @@ class ExportContext {
   std::map<std::size_t, VariableStrategyMap> m_variableStrategies;
   std::optional<std::string> m_currentSection;
   std::optional<std::size_t> m_currentExpressionID;
+  std::optional<AnyIrrepContext> m_irrepContext;
+  std::map<Tensor, AnyIrrepSet, TensorBlockLessThanComparator> m_irreps;
 };
 
 }  // namespace sequant

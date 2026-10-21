@@ -1,5 +1,6 @@
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
 #include <type_traits>
@@ -282,6 +283,44 @@ bool ExportContext::is_index_batched(const Index &idx,
   const auto &indices = batch_indices(std::move(id));
 
   return std::ranges::find(indices, idx) != indices.end();
+}
+
+void ExportContext::set_irrep_context(AnyIrrepContext ctx) {
+  m_irrepContext = std::move(ctx);
+}
+
+bool ExportContext::has_irrep_context() const {
+  return m_irrepContext.has_value();
+}
+
+const AnyIrrepContext &ExportContext::irrep_context() const {
+  if (!m_irrepContext.has_value()) {
+    throw Exception("No IRREP context has been set");
+  }
+
+  return m_irrepContext.value();
+}
+
+const AnyIrrepSet *ExportContext::irreps(const Tensor &tensor) const {
+  auto it = m_irreps.find(tensor);
+
+  return it == m_irreps.end() ? nullptr : &it->second;
+}
+
+void ExportContext::register_irreps(const Tensor &tensor, AnyIrrepSet irreps,
+                                    bool merge) {
+  auto [it, inserted] = m_irreps.try_emplace(tensor, irreps);
+  if (inserted) {
+    return;
+  }
+
+  if (merge) {
+    it->second.unite(irreps);
+  } else if (it->second != irreps) {
+    throw Exception("Conflicting IRREPs for tensor " +
+                    toUtf8(tensor.to_latex()) + ": " + it->second.to_string() +
+                    " vs. " + irreps.to_string());
+  }
 }
 
 }  // namespace sequant

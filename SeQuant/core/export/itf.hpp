@@ -57,6 +57,10 @@ class ItfContext : public ReorderingContext {
   virtual std::optional<std::string> import_name(
       const Variable &variable) const;
 
+  /// @returns The ITF representation of the given IRREP. By default, this is
+  /// the IRREP's standard string representation (via irrep_to_string).
+  virtual std::string irrep_name(const AnyIrrep &irrep) const;
+
   /// Sets the name of the given index space
   virtual void set_name(const IndexSpace &space, std::string name);
 
@@ -351,19 +355,51 @@ class ItfGenerator : public Generator<Context> {
     bool needs_import = import_name.has_value() || usage == Usage::Terminal ||
                         usage == Usage::Result;
 
+    const AnyIrrepSet *irreps = ctx.irreps(tensor);
+
     if (needs_import) {
       if (import_name.has_value()) {
         append(import_name.value());
       } else {
         append(get_name(tensor, ctx));
       }
-    } else if (usage == Usage::Intermediate) {
-      append("!Create{type:plain}");
+
+      if (irreps) {
+        // IRREPs of imported tensors are only given for informational purposes
+        append(" // " + irrep_entry(*irreps, ctx));
+      }
     } else {
-      append("!Create{type:disk}");
+      append("!Create{type:");
+      append(usage == Usage::Intermediate ? "plain" : "disk");
+      if (irreps) {
+        append(" " + irrep_entry(*irreps, ctx));
+      }
+      append("}");
     }
 
     append_line();
+  }
+
+  /// @returns The ITF specification of the given IRREPs as
+  /// "irrep:<comma-separated list of IRREP names>"
+  static std::string irrep_entry(const AnyIrrepSet &irreps,
+                                 const Context &ctx) {
+    std::string entry = "irrep:";
+
+    if (irreps.is_any()) {
+      return entry + "*";
+    }
+
+    bool first = true;
+    irreps.for_each([&](const AnyIrrep &irrep) {
+      if (!first) {
+        entry += ",";
+      }
+      first = false;
+      entry += ctx.irrep_name(irrep);
+    });
+
+    return entry;
   }
 
   void all_indices_declared(std::size_t amount, const Context &) override {

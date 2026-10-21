@@ -68,6 +68,10 @@ std::string ItfContext::get_tag(const IndexSpace &space) const {
   return it->second;
 }
 
+std::string ItfContext::irrep_name(const AnyIrrep &irrep) const {
+  return irrep.to_string();
+}
+
 std::optional<std::string> ItfContext::import_name(const Tensor &tensor) const {
   auto it = m_tensor_imports.find(tensor);
 
