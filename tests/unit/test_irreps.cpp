@@ -112,6 +112,17 @@ TEST_CASE("irreps", "[irreps]") {
             product(alg, Set{gx}, alg.product(gy, gz)));
 
     REQUIRE(alg.conjugate(gx) == gx);
+
+    // Direct construction canonicalizes the symbols
+    REQUIRE(Irrep(0, {"Gy", "Gx"}) == make_irrep("Gx*Gy"));
+    REQUIRE(Irrep(0, {"Gy", "Gx", "Gy"}) == gx);
+    REQUIRE(Irrep(0, {"Gx", "Gx"}) == alg.totally_symmetric());
+    REQUIRE(alg.product(Irrep(0, {"Gy", "Gx"}), gx) == Set{gy});
+    REQUIRE_THROWS_AS(Irrep(1), Exception);
+    REQUIRE_THROWS_AS(Irrep(0, {""}), Exception);
+    REQUIRE_THROWS_AS(Irrep(0, {"Gx*Gy"}), Exception);
+    REQUIRE_THROWS_AS(Irrep(0, {"1"}), Exception);
+    REQUIRE_THROWS_AS(Z2Irrep<point_groups::D2>(0, {"B1"}), Exception);
   }
 
   SECTION("Z2Algebra (relations)") {
@@ -134,6 +145,46 @@ TEST_CASE("irreps", "[irreps]") {
     REQUIRE(alg.product(my1, x) == Set{make_irrep("My1*X")});
     REQUIRE(alg.product(alg.reduce(make_irrep("My1*X")), my2) ==
             Set{make_irrep("My3*X")});
+
+    // Reduction is compatible with multiplication and all members of the same
+    // equivalence class reduce to the same representation
+    {
+      const std::vector<Irrep> elements = {alg.totally_symmetric(),
+                                           my1,
+                                           my2,
+                                           my3,
+                                           x,
+                                           make_irrep("My1*My2"),
+                                           make_irrep("My1*My3"),
+                                           make_irrep("My2*My3*X"),
+                                           make_irrep("My1*My2*My3*X")};
+      for (const Irrep &a : elements) {
+        REQUIRE(alg.reduce(alg.reduce(a)) == alg.reduce(a));
+        for (const Irrep &b : elements) {
+          const Irrep plain = *Z2Algebra<>{}.product(a, b).begin();
+          REQUIRE(alg.product(a, b) ==
+                  alg.product(alg.reduce(a), alg.reduce(b)));
+          REQUIRE(alg.product(a, b) == Set{alg.reduce(plain)});
+        }
+        // Multiplying with a relation doesn't change the class
+        REQUIRE(
+            alg.reduce(
+                *Z2Algebra<>{}.product(a, make_irrep("My1*My2*My3")).begin()) ==
+            alg.reduce(a));
+      }
+    }
+
+    // Too many independent relations
+    {
+      std::vector<std::pair<Irrep, Irrep>> relations;
+      for (std::size_t i = 0; i <= Z2Algebra<>::max_relations; ++i) {
+        relations.emplace_back(make_irrep("S" + std::to_string(i)),
+                               make_irrep("T" + std::to_string(i)));
+      }
+      REQUIRE_THROWS_AS(Z2Algebra<>(relations), Exception);
+      relations.pop_back();
+      REQUIRE_NOTHROW(Z2Algebra<>(relations));
+    }
 
     // Without relations, products remain unevaluated
     REQUIRE(Z2Algebra<>{}.product(my1, my2) == Set{make_irrep("My1*My2")});
@@ -252,6 +303,7 @@ TEST_CASE("irreps", "[irreps]") {
     using Set = IrrepSet<Z3Irrep>;
 
     REQUIRE(irrep_to_string(Z3Irrep{2}) == "G2");
+
     REQUIRE(to_string(product(alg, Set{Z3Irrep{1}}, Set{Z3Irrep{1}})) ==
             "{G2}");
     REQUIRE(conjugate(alg, Set{Z3Irrep{1}, Z3Irrep{0}}) ==
@@ -406,7 +458,6 @@ TEST_CASE("irreps", "[irreps]") {
     AnyIrrepSet other_type(IrrepSet<std::string>{"A"});
     REQUIRE(other_type != empty);
     REQUIRE_THROWS_AS(empty.unite(other_type), Exception);
-
     // Iteration
     std::vector<std::string> names;
     AnyIrrepSet(Set{irrep("B1"), irrep("B2*Gx")})

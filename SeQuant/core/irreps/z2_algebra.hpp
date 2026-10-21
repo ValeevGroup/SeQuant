@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <compare>
 #include <concepts>
 #include <cstdint>
@@ -71,29 +72,73 @@ struct D2h {
 
 }  // namespace point_groups
 
+template <typename Group = NoConcreteGroup>
+  requires Z2Group<Group>
+class Z2Algebra;
+
 /// An IRREP of a Z2 group (in which every element is its own inverse) that
 /// may contain symbolic (unevaluated) factors. It is represented as the
 /// product of a concrete IRREP of Group and a set of symbols, each of which
 /// represents an IRREP that is unknown at the time of code generation.
 template <Z2Group Group = NoConcreteGroup>
-struct Z2Irrep {
-  /// Index of the concrete IRREP in Group::names (interpreted as bitmask)
-  std::uint8_t concrete = 0;
-  /// Sorted list of (unique) symbols
-  container::svector<std::string, 2> symbols;
+class Z2Irrep {
+ public:
+  using symbol_container = container::svector<std::string, 2>;
+
+  /// Creates the totally symmetric IRREP
+  Z2Irrep() = default;
+
+  /// @param concrete Index of the concrete IRREP in Group::names
+  /// @param symbols The symbolic factors (in any order). As every IRREP is
+  ///        its own inverse, pairs of identical symbols cancel.
+  /// @throws Exception if concrete is out of range or if a symbol is empty,
+  ///         contains a '*' or is the name of one of Group's IRREPs
+  explicit Z2Irrep(std::uint8_t concrete, symbol_container symbols = {})
+      : m_concrete(concrete) {
+    if (concrete >= Group::names.size()) {
+      throw Exception("Concrete IRREP index " + std::to_string(concrete) +
+                      " is out of range");
+    }
+
+    std::ranges::sort(symbols);
+    for (std::string &symbol : symbols) {
+      if (symbol.empty() || symbol.find('*') != std::string::npos ||
+          std::ranges::find(Group::names, symbol) != Group::names.end()) {
+        throw Exception("Invalid IRREP symbol '" + symbol + "'");
+      }
+
+      if (!m_symbols.empty() && m_symbols.back() == symbol) {
+        m_symbols.pop_back();
+      } else {
+        m_symbols.push_back(std::move(symbol));
+      }
+    }
+  }
+
+  /// @returns Index of the concrete IRREP in Group::names (interpreted as
+  /// bitmask)
+  std::uint8_t concrete() const { return m_concrete; }
+  /// @returns The sorted list of (unique) symbols
+  const symbol_container &symbols() const { return m_symbols; }
 
   friend bool operator==(const Z2Irrep &, const Z2Irrep &) = default;
 
   friend std::strong_ordering operator<=>(const Z2Irrep &lhs,
                                           const Z2Irrep &rhs) {
-    if (auto cmp = lhs.concrete <=> rhs.concrete; cmp != 0) {
+    if (auto cmp = lhs.m_concrete <=> rhs.m_concrete; cmp != 0) {
       return cmp;
     }
 
     return std::lexicographical_compare_three_way(
-        lhs.symbols.begin(), lhs.symbols.end(), rhs.symbols.begin(),
-        rhs.symbols.end());
+        lhs.m_symbols.begin(), lhs.m_symbols.end(), rhs.m_symbols.begin(),
+        rhs.m_symbols.end());
   }
+
+ private:
+  std::uint8_t m_concrete = 0;
+  symbol_container m_symbols;
+
+  friend class Z2Algebra<Group>;
 };
 
 /// IRREP algebra for Z2 groups (D2h and its subgroups) that supports symbolic
@@ -106,19 +151,26 @@ struct Z2Irrep {
 /// With relations, every IRREP is reduced to the representation with the
 /// fewest symbols among all representations that are equivalent under the
 /// given relations (ties broken by the IRREP ordering). This makes the
-/// representation unique and e.g. turns My1*My2 into My3.
-template <Z2Group Group = NoConcreteGroup>
+/// representation unique and e.g. turns My1*My2 into My3. Note that the cost
+/// of this reduction grows exponentially with the number of independent
+/// relations.
+template <typename Group>
+  requires Z2Group<Group>
 class Z2Algebra {
  public:
   using group_type = Group;
   using irrep_type = Z2Irrep<Group>;
+
+  /// The maximum number of independent relations
+  static constexpr std::size_t max_relations = 16;
 
   /// Creates an algebra without any relations between symbols
   Z2Algebra() = default;
 
   /// @param identities Relations of the form lhs = rhs between IRREPs
   /// @throws Exception if the relations imply an identity between different
-  ///         concrete IRREPs or if there are too many independent relations
+  ///         concrete IRREPs or if there are more than max_relations
+  ///         independent relations
   explicit Z2Algebra(
       const std::vector<std::pair<irrep_type, irrep_type>> &identities) {
     // The span of all relations (in the form x = totally symmetric)
@@ -131,27 +183,25 @@ class Z2Algebra {
         continue;
       }
 
-      if (span.size() >= max_span_size) {
-        throw Exception("Too many independent IRREP relations");
+      if (m_relations.size() >= max_relations) {
+        throw Exception("Too many independent IRREP relations (max. " +
+                        std::to_string(max_relations) + ")");
       }
 
       const std::size_t size = span.size();
       for (std::size_t i = 0; i < size; ++i) {
         span.push_back(multiply(span[i], relation));
       }
+      m_relations.push_back(std::move(relation));
     }
 
     for (const irrep_type &current : span) {
-      if (current.symbols.empty() && current.concrete != 0) {
+      if (current.symbols().empty() && current.concrete() != 0) {
         throw Exception(
             "IRREP relations imply that two different concrete IRREPs are "
             "identical");
       }
     }
-
-    // The totally symmetric element is implicit
-    span.erase(span.begin());
-    m_relations = std::move(span);
   }
 
   irrep_type totally_symmetric() const { return {}; }
@@ -165,18 +215,20 @@ class Z2Algebra {
 
   /// @returns The canonical representation of the given IRREP under this
   /// algebra's relations
-  irrep_type reduce(irrep_type irrep) const {
-    if (m_relations.empty()) {
-      return irrep;
-    }
-
+  irrep_type reduce(const irrep_type &irrep) const {
     irrep_type best = irrep;
-    for (const irrep_type &relation : m_relations) {
-      irrep_type candidate = multiply(irrep, relation);
-      if (candidate.symbols.size() < best.symbols.size() ||
-          (candidate.symbols.size() == best.symbols.size() &&
+    irrep_type candidate = irrep;
+
+    // Visit all elements of the coset of irrep w.r.t. the span of the
+    // relations in Gray code order (only one relation is applied per step)
+    const std::size_t n_elements = std::size_t{1} << m_relations.size();
+    for (std::size_t i = 1; i < n_elements; ++i) {
+      candidate = multiply(candidate, m_relations[std::countr_zero(i)]);
+
+      if (candidate.symbols().size() < best.symbols().size() ||
+          (candidate.symbols().size() == best.symbols().size() &&
            candidate < best)) {
-        best = std::move(candidate);
+        best = candidate;
       }
     }
 
@@ -184,18 +236,16 @@ class Z2Algebra {
   }
 
  private:
-  static constexpr std::size_t max_span_size = 1 << 16;
-
-  /// All non-trivial elements of the span of the relations, each of which
-  /// is equivalent to the totally symmetric IRREP
+  /// Independent relations, each of which is equivalent to the totally
+  /// symmetric IRREP
   std::vector<irrep_type> m_relations;
 
   /// @returns The plain product of the given IRREPs (not reduced)
   static irrep_type multiply(const irrep_type &lhs, const irrep_type &rhs) {
     irrep_type result;
-    result.concrete = lhs.concrete ^ rhs.concrete;
-    std::ranges::set_symmetric_difference(lhs.symbols, rhs.symbols,
-                                          std::back_inserter(result.symbols));
+    result.m_concrete = lhs.m_concrete ^ rhs.m_concrete;
+    std::ranges::set_symmetric_difference(lhs.m_symbols, rhs.m_symbols,
+                                          std::back_inserter(result.m_symbols));
 
     return result;
   }
@@ -207,8 +257,8 @@ class Z2Algebra {
 /// symbols.
 template <Z2Group Group = NoConcreteGroup>
 Z2Irrep<Group> make_irrep(std::string_view name) {
-  Z2Algebra<Group> algebra;
-  Z2Irrep<Group> irrep;
+  std::uint8_t concrete = 0;
+  typename Z2Irrep<Group>::symbol_container symbols;
 
   std::size_t start = 0;
   while (start <= name.size()) {
@@ -223,19 +273,16 @@ Z2Irrep<Group> make_irrep(std::string_view name) {
       continue;
     }
 
-    Z2Irrep<Group> factor;
     auto it = std::ranges::find(Group::names, factor_name);
     if (it != Group::names.end()) {
-      factor.concrete =
+      concrete ^=
           static_cast<std::uint8_t>(std::distance(Group::names.begin(), it));
     } else {
-      factor.symbols.emplace_back(factor_name);
+      symbols.emplace_back(factor_name);
     }
-
-    irrep = *algebra.product(irrep, factor).begin();
   }
 
-  return irrep;
+  return Z2Irrep<Group>(concrete, std::move(symbols));
 }
 
 }  // namespace sequant
@@ -251,11 +298,11 @@ struct std::formatter<sequant::Z2Irrep<Group>> {
               std::format_context &ctx) const {
     auto out = ctx.out();
     bool first = true;
-    if (irrep.concrete != 0 || irrep.symbols.empty()) {
-      out = std::format_to(out, "{}", Group::names[irrep.concrete]);
+    if (irrep.concrete() != 0 || irrep.symbols().empty()) {
+      out = std::format_to(out, "{}", Group::names[irrep.concrete()]);
       first = false;
     }
-    for (const std::string &symbol : irrep.symbols) {
+    for (const std::string &symbol : irrep.symbols()) {
       if (!first) {
         *out++ = '*';
       }

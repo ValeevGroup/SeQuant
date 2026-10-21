@@ -1355,7 +1355,7 @@ class NumberedIrrepItfContext : public ItfContext {
   std::string irrep_name(const AnyIrrep &irrep) const override {
     const auto *typed = irrep.as<Z2Irrep<point_groups::D2>>();
     REQUIRE(typed != nullptr);
-    return std::to_string(typed->concrete + 1);
+    return std::to_string(typed->concrete() + 1);
   }
 };
 
