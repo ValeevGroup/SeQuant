@@ -337,9 +337,23 @@ namespace {
 // ...) sizes a k-composite group as mean(d^k), the true block-sparse volume.
 // pno_M[k]/osv_M[k] for k in [1,4]; index 0 unused (kept 1). Rank >= 3
 // (CSV-CCSDT) is not populated here (CCSD is ranks 1-2).
+// Per-rank cluster-grid occupancy p_r = (genuinely nonnull clusters)/nocc^r,
+// element-level (nested TA tiles are element-sparse: a null inner cell stores
+// nothing). MPQC folds it into the moment tables it hands SeQuant
+// (CSVSizeMoments::extent: p^(1/k) * M_k per member of a k-group, so the
+// group contributes p * M_k^k = the block-sparse volume sum_{nonnull} d^k);
+// the fixtures below apply the same adjustment via occupancy_adjusted() so a
+// test regime sizes composites exactly as a production run of that size does.
+std::array<double, 5> occupancy_adjusted(std::array<double, 5> M, double p) {
+  for (std::size_t k = 1; k <= 4; ++k)
+    M[k] *= std::pow(p, 1.0 / static_cast<double>(k));
+  return M;
+}
+
 SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux, std::size_t i_occ,
                      std::array<double, 5> const& pno_M,
-                     std::array<double, 5> const& osv_M) {
+                     std::array<double, 5> const& osv_M,
+                     double pno_occupancy = 1.0, double osv_occupancy = 1.0) {
   SizeRegime r;
   r.space_extent = {
       {L"i", i_occ},
@@ -347,8 +361,8 @@ SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux, std::size_t i_occ,
       {L"Κ", aux},
       {L"a", mu_tilde},
   };
-  r.csv_pno_moment = pno_M;
-  r.csv_osv_moment = osv_M;
+  r.csv_pno_moment = occupancy_adjusted(pno_M, pno_occupancy);
+  r.csv_osv_moment = occupancy_adjusted(osv_M, osv_occupancy);
   return r;
 }
 
@@ -362,6 +376,8 @@ struct ProblemSize {
   std::size_t i_occ;            // active occupied extent
   std::array<double, 5> pno_M;  // per-pair PNO power means M_0..M_4 (0 unused)
   std::array<double, 5> osv_M;  // per-orbital OSV power means M_0..M_4
+  double pno_occupancy;         // nonnull (CSV) ordered pairs / i_occ^2
+  double osv_occupancy;         // orbitals with a nonnull OSV domain / i_occ
 };
 
 // C60, cc-pVDZ-F12, TCUTPNO=1e-8 / TCUTOSV=1e-9. Extents from the Owl job log;
@@ -376,7 +392,10 @@ inline constexpr ProblemSize kC60_pVDZF12{
     {1.0, 42.029069767441861, 46.039206412923569, 49.766252354482994,
      53.151291880343109},
     /*osv_M=*/
-    {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926}};
+    {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926},
+    // 6300 CC (CSV) pairs of 120^2 (Owl C60 job logs); every orbital has OSVs.
+    /*pno_occupancy=*/0.4375,
+    /*osv_occupancy=*/1.0};
 
 // Water-20 (H2O)20 / cc-pVDZ-F12, extracted from Owl job 649160:
 //   ext(i)=80 (active occ), ext(K)=1682 (DF aux; from g(i,i,K)=86.1MB),
@@ -391,11 +410,16 @@ inline constexpr ProblemSize kWater20_pVDZF12{
      30.03848680550367},
     /*osv_M=*/
     {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
-     59.872014818179686}};
+     59.872014818179686},
+    // 1354 CSV pairs of 80^2 (tIJ 3e-5; the z820 w20 runs that report these
+    // exact moments); every orbital has OSVs.
+    /*pno_occupancy=*/0.2115625,
+    /*osv_occupancy=*/1.0};
 
 // Build a SizeRegime from a named ProblemSize.
 SizeRegime df_regime(ProblemSize const& p) {
-  return df_regime(p.mu_tilde, p.aux, p.i_occ, p.pno_M, p.osv_M);
+  return df_regime(p.mu_tilde, p.aux, p.i_occ, p.pno_M, p.osv_M,
+                   p.pno_occupancy, p.osv_occupancy);
 }
 
 // Batchable = the two modes mpqc's runtime batches on the CSV path: PAO (mu~)

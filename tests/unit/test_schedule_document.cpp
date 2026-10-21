@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <fstream>
@@ -1723,7 +1724,19 @@ struct SizeIndProblemSize {
   std::size_t i_occ;
   std::array<double, 5> pno_M;
   std::array<double, 5> osv_M;
+  double pno_occupancy;  // nonnull (CSV) ordered pairs / i_occ^2
+  double osv_occupancy;  // orbitals with a nonnull OSV domain / i_occ
 };
+
+// Per-rank cluster-grid occupancy folded into the moment tables exactly as
+// MPQC's CSVSizeMoments::extent does (p^(1/k) * M_k per member of a k-group,
+// so the group contributes p * M_k^k = sum_{nonnull clusters} d^k).
+std::array<double, 5> sizeind_occupancy_adjusted(std::array<double, 5> M,
+                                                 double p) {
+  for (std::size_t k = 1; k <= 4; ++k)
+    M[k] *= std::pow(p, 1.0 / static_cast<double>(k));
+  return M;
+}
 
 // water-20 pVDZ-F12
 inline constexpr SizeIndProblemSize kSizeIndWater20{
@@ -1735,7 +1748,10 @@ inline constexpr SizeIndProblemSize kSizeIndWater20{
      30.03848680550367},
     /*osv_M=*/
     {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
-     59.872014818179686}};
+     59.872014818179686},
+    // 1354 CSV pairs of 80^2 (tIJ 3e-5, the runs reporting these moments).
+    /*pno_occupancy=*/0.2115625,
+    /*osv_occupancy=*/1.0};
 
 /// every extent doubled
 SizeIndProblemSize sizeind_doubled(SizeIndProblemSize p) {
@@ -1761,8 +1777,8 @@ sequant::eval::dryrun::SizeRegime sizeind_df_regime(
       {L"Κ", p.aux},
       {L"a", p.mu_tilde},
   };
-  r.csv_pno_moment = p.pno_M;
-  r.csv_osv_moment = p.osv_M;
+  r.csv_pno_moment = sizeind_occupancy_adjusted(p.pno_M, p.pno_occupancy);
+  r.csv_osv_moment = sizeind_occupancy_adjusted(p.osv_M, p.osv_occupancy);
   return r;
 }
 

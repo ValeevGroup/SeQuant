@@ -60,6 +60,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
@@ -340,7 +341,19 @@ struct OrderedExecWater20ProblemSize {
   std::size_t i_occ;
   std::array<double, 5> pno_M;
   std::array<double, 5> osv_M;
+  double pno_occupancy;  // nonnull (CSV) ordered pairs / i_occ^2
+  double osv_occupancy;  // orbitals with a nonnull OSV domain / i_occ
 };
+
+// Per-rank cluster-grid occupancy folded into the moment tables exactly as
+// MPQC's CSVSizeMoments::extent does (p^(1/k) * M_k per member of a k-group,
+// so the group contributes p * M_k^k = sum_{nonnull clusters} d^k).
+std::array<double, 5> orderedexec_occupancy_adjusted(std::array<double, 5> M,
+                                                     double p) {
+  for (std::size_t k = 1; k <= 4; ++k)
+    M[k] *= std::pow(p, 1.0 / static_cast<double>(k));
+  return M;
+}
 
 // Same (molecule, basis, parameter-set) size as test_ordered_schedule.cpp's
 // kOrderedSchedWater20_pVDZF12 (job-log / mpqc PaoPnoRMP2 moments) --
@@ -354,7 +367,10 @@ inline constexpr OrderedExecWater20ProblemSize kOrderedExecWater20_pVDZF12{
      30.03848680550367},
     /*osv_M=*/
     {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
-     59.872014818179686}};
+     59.872014818179686},
+    // 1354 CSV pairs of 80^2 (tIJ 3e-5, the runs reporting these moments).
+    /*pno_occupancy=*/0.2115625,
+    /*osv_occupancy=*/1.0};
 
 // C60 pVDZ-F12 problem size (copied from test_eval_dryrun.cpp's kC60_pVDZF12).
 inline constexpr OrderedExecWater20ProblemSize kOrderedExecC60_pVDZF12{
@@ -365,7 +381,10 @@ inline constexpr OrderedExecWater20ProblemSize kOrderedExecC60_pVDZF12{
     {1.0, 42.029069767441861, 46.039206412923569, 49.766252354482994,
      53.151291880343109},
     /*osv_M=*/
-    {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926}};
+    {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926},
+    // 6300 CC (CSV) pairs of 120^2 (Owl C60 job logs).
+    /*pno_occupancy=*/0.4375,
+    /*osv_occupancy=*/1.0};
 
 sequant::eval::dryrun::SizeRegime orderedexec_witness_df_regime(
     OrderedExecWater20ProblemSize const& p) {
@@ -376,9 +395,24 @@ sequant::eval::dryrun::SizeRegime orderedexec_witness_df_regime(
       {L"Κ", p.aux},
       {L"a", p.mu_tilde},
   };
-  r.csv_pno_moment = p.pno_M;
-  r.csv_osv_moment = p.osv_M;
+  r.csv_pno_moment = orderedexec_occupancy_adjusted(p.pno_M, p.pno_occupancy);
+  r.csv_osv_moment = orderedexec_occupancy_adjusted(p.osv_M, p.osv_occupancy);
   return r;
+}
+
+// Peak budget for the w20 STRUCTURE tests below (cell kinds, escapes,
+// produce-if-absent rebinding, scatter-destination sizing). Their budgets were
+// chosen against the dense-occupancy regime (every ordered pair nonnull). The
+// occupancy-adjusted moments shrink a one-cluster value by p and a two-cluster
+// value by p^2, so the same absolute budget opens different loops and the cell
+// kind a test probes may not arise. Each test therefore scales its dense
+// budget by p^n, with n the smallest power that restores its probed schedule
+// shape (the shape is not monotone in the budget, so n is per test).
+double orderedexec_structure_budget(double dense_budget,
+                                    OrderedExecWater20ProblemSize const& p,
+                                    int occupancy_power) {
+  return dense_budget *
+         std::pow(p.pno_occupancy, static_cast<double>(occupancy_power));
 }
 
 sequant::ExprPtr orderedexec_witness_flatten_product(
@@ -1623,7 +1657,8 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
-  policy.peak_threshold = 1e11;
+  policy.peak_threshold =
+      orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
@@ -4502,7 +4537,8 @@ TEST_CASE(
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
-  policy.peak_threshold = 1e11;
+  policy.peak_threshold =
+      orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -4825,7 +4861,8 @@ TEST_CASE(
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
-  policy.peak_threshold = 1e11;
+  policy.peak_threshold =
+      orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -5014,7 +5051,8 @@ TEST_CASE(
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
-  policy.peak_threshold = 25e9;  // THE mirrored setting
+  policy.peak_threshold = orderedexec_structure_budget(
+      25e9, kOrderedExecWater20_pVDZF12, 1);  // THE mirrored setting
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();

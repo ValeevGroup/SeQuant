@@ -103,6 +103,10 @@ TEST_CASE(
                            28.171416142614103, 30.03848680550367};
   regime.csv_osv_moment = {1.0, 58.987499999999997, 59.289227520688783,
                            59.584437469011633, 59.872014818179686};
+  // Pair-grid occupancy (1354 CSV pairs of 80^2) folded in as MPQC's
+  // CSVSizeMoments::extent does: p^(1/k) * M_k per member of a k-group.
+  for (std::size_t k = 1; k <= 4; ++k)
+    regime.csv_pno_moment[k] *= std::pow(0.2115625, 1.0 / double(k));
   auto idx_to_extent = [&regime](Index const& idx) -> std::size_t {
     if (idx.has_proto_indices())
       return static_cast<std::size_t>(
