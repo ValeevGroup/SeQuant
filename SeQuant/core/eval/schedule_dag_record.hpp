@@ -101,6 +101,9 @@ inline std::string output_kind_name(OutputKind k) {
 ///  - an Adjoint node (a conjugated factor) takes one tree ordinal as a leaf
 ///    would; its bare-label operand is id "<key>#<ordinal>/0" and its
 ///    Constant{1} sentinel "<key>#<ordinal>/1", both at the same (term, node);
+///  - a unary node (Re, Im, Kramers flip) takes one tree ordinal after its
+///    operand's subtree, like a product; its Constant{1} sentinel right child
+///    is not an operand, never a static point, and has no place;
 ///  - the k-th partial sum of a root's left-fold Sum: (root label, k), id
 ///    "<label>+<k>".
 ///
@@ -128,6 +131,21 @@ std::string bare_label(Node const& n) {
   if (n->is_tensor()) return toUtf8(n->as_tensor().label());
   if (n->is_variable()) return toUtf8(n->as_variable().label());
   return toUtf8(io::serialization::v1::to_string(n->expr()));
+}
+
+/// the bracket form of a unary op in `expr`: "Re[...]", "Im[...]" (the parser's
+/// spelling), "KramersFlip[...]"
+inline std::string unary_name(EvalOp op) {
+  switch (op) {
+    case EvalOp::RealPart:
+      return "Re";
+    case EvalOp::ImagPart:
+      return "Im";
+    case EvalOp::KramersFlip:
+      return "KramersFlip";
+    default:
+      throw Exception("record_dag: not a unary op");
+  }
 }
 
 /// UTF-8 "\u03a3", the partial-sum marker of a reduced loop axis in `expr`
@@ -163,9 +181,10 @@ inline std::string form_label(std::string const& label,
 ///
 /// \details Static points are matched to forest nodes by reproducing \c
 /// compute_dag_boulevard's numbering: one post-order (left, right, node)
-/// over every tree in forest order, leaves included, one counter across
-/// trees. This needs nothing beyond the forest itself and resolves every
-/// occurrence (each occurrence is one point), whereas going through
+/// over every tree in forest order, leaves included and a unary op's sentinel
+/// right child excluded, one counter across trees. This needs nothing beyond
+/// the forest itself and resolves every occurrence (each occurrence is one
+/// point), whereas going through
 /// \c build_value_key_node_map / \c resolve_value_node would give one node
 /// per value and lose which term each other occurrence sits in. The count is
 /// cross-checked against \c RichSchedule::num_points.
@@ -209,7 +228,9 @@ DagRecord record_dag(
     auto const walk = [&](auto const& self, Node const& n) -> void {
       if (!n.leaf()) {
         self(self, n.left());
-        self(self, n.right());
+        // a unary op's right child is the Constant{1} sentinel: not an
+        // operand, never a static point, so it takes no ordinal
+        if (!n->is_unary_op()) self(self, n.right());
       }
       place[&n] = {key, ordinal, key + "#" + std::to_string(ordinal)};
       ++ordinal;
@@ -266,7 +287,8 @@ DagRecord record_dag(
         continue;
       }
       stack.push_back({n, true});
-      stack.push_back({&n->right(), false});
+      // a unary op's right child is the Constant{1} sentinel: not a point
+      if (!(*n)->is_unary_op()) stack.push_back({&n->right(), false});
       stack.push_back({&n->left(), false});
     }
   }
@@ -503,9 +525,13 @@ DagRecord record_dag(
       rec.expr = own_form(v);
       if (!node.leaf()) {
         auto const op = node->op_type();
-        rec.expr += " = " + operand_of(v, node.left()) +
-                    (op && *op == EvalOp::Sum ? " + " : " * ") +
-                    operand_of(v, node.right());
+        if (node->is_unary_op())
+          rec.expr += " = " + detail::unary_name(*op) + "[" +
+                      operand_of(v, node.left()) + "]";
+        else
+          rec.expr += " = " + operand_of(v, node.left()) +
+                      (op && *op == EvalOp::Sum ? " + " : " * ") +
+                      operand_of(v, node.right());
       }
     }
     rec.hash = detail::hex_string(c.hash);

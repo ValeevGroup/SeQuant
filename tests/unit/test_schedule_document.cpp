@@ -1448,6 +1448,45 @@ TEST_CASE("record_dag ids resolve for single-summand roots and scaled terms",
   REQUIRE(ordinals[plain] == std::set<std::size_t>{0, 1, 2, 3, 4});
 }
 
+TEST_CASE("record_dag names a Re-wrapped term without its sentinel",
+          "[schedule-document]") {
+  // an energy root as the TRS fold emits it, 2 Re[P] beside a plain term:
+  // the Re node is unary, its right child the Constant{1} sentinel that
+  // compute_dag_boulevard never numbers as a static point
+  auto const fx = dag_fixture(
+      {{"R1",
+        session_sum({L"g{i_1;a_1} * t{a_1;i_2} * f{i_2;i_3}", L"h{i_1;i_3}"})},
+       {"E", session_sum({L"2 Re[g{i_1;a_1} * t{a_1;i_1}]",
+                          L"f{i_1;a_1} * t{a_1;i_1}"})}},
+      external_occ_policy());
+  DagRecord dag;
+  REQUIRE_NOTHROW(
+      dag = record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots));
+  // the Re value is spelled over its inner contraction; the sentinel is no
+  // value of the record
+  auto const re = std::ranges::find_if(dag.values, [](ValueRecord const& v) {
+    return v.expr.find(" = Re[") != std::string::npos;
+  });
+  REQUIRE(re != dag.values.end());
+  CHECK_FALSE(re->leaf);
+  CHECK(re->expr.ends_with("]"));
+  for (auto const& v : dag.values) CHECK_FALSE((v.leaf && v.expr == "1"));
+  // one operand edge into the Re value, from the inner product
+  std::size_t n_in = 0;
+  for (auto const& e : dag.edges) n_in += e.to == re->id;
+  CHECK(n_in == 1);
+  // every value has an id, every edge resolves, the document round-trips
+  std::set<std::string> ids;
+  for (auto const& v : dag.values) REQUIRE(ids.insert(v.id).second);
+  REQUIRE(ids.size() == fx.rich.cells.size());
+  for (auto const& e : dag.edges) {
+    REQUIRE(ids.count(e.from) == 1);
+    REQUIRE(ids.count(e.to) == 1);
+  }
+  auto const doc = doc_with(fx.roots, dag);
+  REQUIRE(compare(doc, from_json(to_json(doc))).empty());
+}
+
 TEST_CASE("record_dag is deterministic and compare sees no difference",
           "[schedule-document]") {
   auto const fx = two_root_fixture();
