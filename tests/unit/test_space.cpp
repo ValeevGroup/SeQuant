@@ -39,9 +39,20 @@ concept legacy_union_takes =
     };
 SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
-// whether a brace list of a T initializes an IndexSpaceSpec
+// whether a brace list of a T, bare or behind a value-initialized first
+// member, initializes an IndexSpaceSpec / IndexBasisSpec
 template <typename T>
 concept space_spec_from = requires(T v) { sequant::IndexSpaceSpec{v}; };
+template <typename T>
+concept space_spec_from_tag_and = requires(T v) {
+  sequant::IndexSpaceSpec{{}, v};
+};
+template <typename T>
+concept basis_spec_from = requires(T v) { sequant::IndexBasisSpec{v}; };
+template <typename T>
+concept basis_spec_from_tag_and = requires(T v) {
+  sequant::IndexBasisSpec{{}, v};
+};
 }  // namespace
 
 TEST_CASE("index_space", "[elements]") {
@@ -961,10 +972,19 @@ TEST_CASE("index_space", "[elements]") {
              .hole = true})
         .add(L"a", 0b10, {.qns = qn, .particle = true})
         .add("x", 0b100);  // no spec: the defaults of an IndexSpace
-    // a bare number in a brace list is the dimension, never the qns
-    static_assert(IndexSpaceSpec{100}.dimension == 100);
-    static_assert(!IndexSpaceSpec{100}.qns);
-    static_assert(space_spec_from<int> && !space_spec_from<mbpt::Spin>);
+    // the spec is written by name. A bare value in its brace list, a number,
+    // a bool or a Spin, does not compile, nor does one behind a
+    // value-initialized first member; the deprecated argument-list spelling
+    // is where a bare number is the dimension.
+    static_assert(IndexSpaceSpec{.dimension = 100}.dimension == 100);
+    static_assert(!IndexSpaceSpec{.dimension = 100}.qns);
+    static_assert(!space_spec_from<int> && !space_spec_from<bool> &&
+                  !space_spec_from<mbpt::Spin>);
+    static_assert(!space_spec_from_tag_and<int>);
+    static_assert(IndexBasisSpec{.extent = 100}.extent == 100);
+    static_assert(!basis_spec_from<int> && !basis_spec_from<bool> &&
+                  !basis_spec_from<IndexBasisMetric>);
+    static_assert(!basis_spec_from_tag_and<int>);
     const IndexSpace i = ibr.retrieve_space(L"i"), a = ibr.retrieve_space(L"a"),
                      x = ibr.retrieve_space(L"x");
     CHECK(i.qns() == qn);
