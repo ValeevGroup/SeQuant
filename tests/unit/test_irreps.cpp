@@ -2,14 +2,22 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/irreps/algebra.hpp>
+#include <SeQuant/core/irreps/eval_tree.hpp>
+#include <SeQuant/core/irreps/propagation.hpp>
 #include <SeQuant/core/irreps/table_algebra.hpp>
 #include <SeQuant/core/irreps/z2_algebra.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/expr_matcher.hpp>
 
 #include <compare>
 #include <format>
+#include <map>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -187,5 +195,114 @@ TEST_CASE("irreps", "[irreps]") {
             "{G2}");
     REQUIRE(conjugate(alg, Set{Z3Irrep{1}, Z3Irrep{0}}) ==
             Set{Z3Irrep{0}, Z3Irrep{2}});
+  }
+
+  SECTION("resolvers") {
+    using Irrep = Z2Irrep<point_groups::D2>;
+    using Set = IrrepSet<Irrep>;
+    const Set b1{make_irrep<point_groups::D2>("B1")};
+    const Set b2{make_irrep<point_groups::D2>("B2")};
+
+    const Tensor t_ov = deserialize(L"t{i1;a1}")->as<Tensor>();
+    const Tensor t_vo = deserialize(L"t{a1;i1}")->as<Tensor>();
+    const Tensor f = deserialize(L"f{i1;i2}")->as<Tensor>();
+
+    auto by_label = resolve_by_label<Irrep>({{L"t", b1}});
+    REQUIRE(by_label(t_ov) == b1);
+    REQUIRE(by_label(f).is_any());
+
+    std::map<Tensor, Set, TensorBlockLessThanComparator> blocks;
+    blocks.emplace(deserialize(L"t{i2;a3}")->as<Tensor>(), b1);
+    blocks.emplace(t_vo, b2);
+    auto by_block = resolve_by_block<Irrep>(std::move(blocks));
+    REQUIRE(by_block(t_ov) == b1);
+    REQUIRE(by_block(t_vo) == b2);
+    REQUIRE(by_block(f).is_any());
+
+    auto by_pattern = resolve_by_pattern<Irrep>(
+        {{ExprMatcher(deserialize(L"t{i1;a1}")->as<Tensor>(),
+                      {.tensor_cmp = TensorComparison::Block}),
+          b2}});
+    REQUIRE(by_pattern(deserialize(L"t{i3;a2}")->as<Tensor>()) == b2);
+    REQUIRE(by_pattern(t_vo).is_any());
+  }
+
+  SECTION("propagation") {
+    using point_groups::D2;
+    using Irrep = Z2Irrep<D2>;
+    using Set = IrrepSet<Irrep>;
+    auto irrep = [](std::string_view name) { return make_irrep<D2>(name); };
+
+    IrrepContext<Z2Algebra<D2>> ctx(
+        resolve_by_label<Irrep>({{L"t", Set{irrep("B1")}},
+                                 {L"v", Set{irrep("B2")}},
+                                 {L"f", Set{irrep("A")}},
+                                 {L"m", Set{irrep("B1"), irrep("B2")}},
+                                 {L"p", Set{irrep("Gp")}}}));
+
+    auto irreps = [&](std::wstring_view spec) {
+      return irreps_of(*deserialize(spec), ctx);
+    };
+
+    REQUIRE(irreps(L"t{a1;i1}") == Set{irrep("B1")});
+    REQUIRE(irreps(L"t{a1;i1} v{i1;a2}") == Set{irrep("B3")});
+    REQUIRE(irreps(L"1/2 * t{a1;i1} v{i1;a2} f{a2;a3}") == Set{irrep("B3")});
+    REQUIRE(irreps(L"t{a1;i1} + v{a1;i1}") == Set{irrep("B1"), irrep("B2")});
+    REQUIRE(irreps(L"t{a1;i1} m{i1;a2}") == Set{irrep("A"), irrep("B3")});
+    REQUIRE(irreps(L"t{a1;i1} p{i1;a2}") == Set{irrep("B1*Gp")});
+    REQUIRE(irreps(L"p{a1;i1} p{i1;a2}") == Set{irrep("A")});
+    // Unknown tensors span any IRREP
+    REQUIRE(irreps(L"t{a1;i1} x{i1;a2}").is_any());
+    // Scalars are totally symmetric
+    REQUIRE(irreps(L"2 * c * t{a1;i1}") == Set{irrep("B1")});
+    // Reserved tensors are totally symmetric
+    REQUIRE(irreps(L"t{a1;i1} δ{i1;i2}") == Set{irrep("B1")});
+
+    // Equality of propagation on plain expressions and on evaluation trees
+    for (std::wstring_view spec : {L"t{a1;i1} v{i1;a2} f{a2;a3} m{a3;i2}",
+                                   L"t{a1;i1} v{i1;i2} + p{a1;a2} f{a2;i2}",
+                                   L"t{a1;i1} m{i1;i2} + v{a1;i3} f{i3;i2}"}) {
+      ResultExpr res(deserialize(L"R{a1;i2}")->as<Tensor>(), deserialize(spec));
+      auto tree = binarize(res);
+
+      REQUIRE(irreps_of(tree, ctx) == irreps_of(res, ctx));
+    }
+
+    // Callback is called for every node
+    {
+      ResultExpr res(deserialize(L"R{a1;i2}")->as<Tensor>(),
+                     deserialize(L"t{a1;i1} v{i1;i2} + p{a1;a2} f{a2;i2}"));
+      auto tree = binarize(res);
+      std::size_t n_nodes = 0;
+      irreps_of(tree, ctx, [&](const auto &, const Set &) { n_nodes++; });
+      REQUIRE(n_nodes == tree.size());
+    }
+  }
+
+  SECTION("adjoint") {
+    Z3Algebra alg;
+    using Set = IrrepSet<Z3Irrep>;
+    IrrepContext<Z3Algebra> ctx(
+        alg, resolve_by_label<Z3Irrep>(
+                 {{L"t", Set{Z3Irrep{1}}}, {L"v", Set{Z3Irrep{1}}}}));
+
+    const io::serialization::DeserializationOptions nonsymm{
+        .def_perm_symm = Symmetry::Nonsymm,
+        .def_braket_symm = BraKetSymmetry::Nonsymm,
+        .def_col_symm = ColumnSymmetry::Nonsymm};
+
+    ExprPtr expr = deserialize(L"t{a1;i1} v{i1;a2}", nonsymm);
+    REQUIRE(irreps_of(*expr, ctx) == Set{Z3Irrep{2}});
+
+    // Adjoint of t -> conjugate IRREP
+    ExprPtr adjointed = deserialize(L"t{i1;a1}", nonsymm);
+    adjointed->adjoint();
+    REQUIRE(adjointed->as<Tensor>().label() != L"t");
+    ExprPtr prod = adjointed * deserialize(L"v{i1;a2}", nonsymm);
+    REQUIRE(irreps_of(*prod, ctx) == Set{Z3Irrep{0}});
+
+    ResultExpr res(deserialize(L"R{a2;a1}")->as<Tensor>(), prod);
+    auto tree = binarize(res);
+    REQUIRE(irreps_of(tree, ctx) == Set{Z3Irrep{0}});
   }
 }
