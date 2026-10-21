@@ -90,6 +90,36 @@ inline std::wstring toUtf16(wchar_t c) {
   return toUtf16(std::wstring_view(&c, 1));
 }
 
+/// @return true if @p str is a valid UTF-8 encoded string
+bool is_valid_utf8(std::string_view str);
+
+/// @throw std::invalid_argument if @p str is not a valid UTF-8 encoded string
+void validate_utf8(std::string_view str);
+
+/// Decodes the given UTF-8 encoded string into its code points
+/// @pre @p str is valid UTF-8
+std::u32string to_utf32(std::string_view str);
+
+/// Encodes the given code points as UTF-8
+std::string to_utf8(std::u32string_view str);
+
+/// Encodes the given code point as UTF-8
+std::string to_utf8(char32_t code_point);
+
+/// @return the UTF-8 encoded first code point of @p str (empty if @p str is
+/// empty)
+/// @pre @p str is valid UTF-8
+std::string_view first_code_point(std::string_view str);
+
+/// @return the UTF-8 encoded last code point of @p str (empty if @p str is
+/// empty)
+/// @pre @p str is valid UTF-8
+std::string_view last_code_point(std::string_view str);
+
+/// @return true if @p c is an ASCII digit; unlike std::isdigit, this is safe to
+/// use on the individual code units of a UTF-8 encoded string
+constexpr bool is_ascii_digit(char c) { return c >= '0' && c <= '9'; }
+
 template <basic_string_convertible S>
 std::basic_string_view<meta::char_t<S>> to_basic_string_view(S &&str) {
   if constexpr (meta::is_char_v<std::remove_reference_t<S>>)

@@ -18,6 +18,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 #include <SeQuant/core/utility/topological.hpp>
@@ -216,6 +217,57 @@ TEST_CASE("join_strings", "[utilities]") {
   REQUIRE(join_strings<std::string>(std::vector<int>{1, 2, 3}, "-", [](int i) {
             return std::to_string(i);
           }) == "1-2-3");
+}
+
+TEST_CASE("utf8", "[utilities]") {
+  using namespace sequant;
+  using namespace std::string_literals;
+  using namespace std::string_view_literals;
+
+  // "a" (1 byte), "α" (2 bytes), "↑" (3 bytes), "𝛼" (4 bytes, outside BMP),
+  // and "ã" written as "a" + combining tilde (U+0303)
+  const std::string str = "aα↑𝛼a\u0303";
+  const std::string invalid = "a\xFF" "b"s;
+
+  SECTION("validation") {
+    REQUIRE(is_valid_utf8(""));
+    REQUIRE(is_valid_utf8(str));
+    REQUIRE_FALSE(is_valid_utf8(invalid));
+    // truncated multi-byte sequence
+    REQUIRE_FALSE(is_valid_utf8(std::string_view(str).substr(0, 2)));
+    // overlong encoding of '/'
+    REQUIRE_FALSE(is_valid_utf8("\xC0\xAF"s));
+
+    REQUIRE_NOTHROW(validate_utf8(str));
+    REQUIRE_THROWS_AS(validate_utf8(invalid), std::invalid_argument);
+  }
+
+  SECTION("conversion") {
+    REQUIRE(to_utf32(str) == U"aα↑𝛼a\u0303");
+    REQUIRE(to_utf32("").empty());
+    REQUIRE(to_utf8(U"aα↑𝛼a\u0303") == str);
+    REQUIRE(to_utf8(U'𝛼') == "𝛼");
+    REQUIRE(to_utf8(to_utf32(str)) == str);
+  }
+
+  SECTION("first/last code point") {
+    REQUIRE(first_code_point("").empty());
+    REQUIRE(last_code_point("").empty());
+    REQUIRE(first_code_point(str) == "a");
+    REQUIRE(first_code_point("αβ") == "α");
+    REQUIRE(first_code_point("𝛼b") == "𝛼");
+    REQUIRE(last_code_point(str) == "\u0303");
+    REQUIRE(last_code_point("a↑") == "↑");
+    REQUIRE(last_code_point("a𝛼") == "𝛼");
+  }
+
+  SECTION("is_ascii_digit") {
+    REQUIRE(is_ascii_digit('0'));
+    REQUIRE(is_ascii_digit('9'));
+    REQUIRE_FALSE(is_ascii_digit('a'));
+    // individual code units of multi-byte sequences are never digits
+    for (char c : "¹²³"sv) REQUIRE_FALSE(is_ascii_digit(c));
+  }
 }
 
 TEST_CASE("pop_symmetrizer", "[utilities]") {
