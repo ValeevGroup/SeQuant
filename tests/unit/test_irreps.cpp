@@ -6,6 +6,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/irreps/algebra.hpp>
+#include <SeQuant/core/irreps/any.hpp>
 #include <SeQuant/core/irreps/eval_tree.hpp>
 #include <SeQuant/core/irreps/propagation.hpp>
 #include <SeQuant/core/irreps/table_algebra.hpp>
@@ -304,5 +305,55 @@ TEST_CASE("irreps", "[irreps]") {
     ResultExpr res(deserialize(L"R{a2;a1}")->as<Tensor>(), prod);
     auto tree = binarize(res);
     REQUIRE(irreps_of(tree, ctx) == Set{Z3Irrep{0}});
+  }
+
+  SECTION("type erasure") {
+    using point_groups::D2;
+    using Irrep = Z2Irrep<D2>;
+    using Set = IrrepSet<Irrep>;
+    auto irrep = [](std::string_view name) { return make_irrep<D2>(name); };
+
+    IrrepContext<Z2Algebra<D2>> typed(resolve_by_label<Irrep>(
+        {{L"t", Set{irrep("B1")}}, {L"m", Set{irrep("B1"), irrep("B2")}}}));
+    AnyIrrepContext erased(typed);
+
+    for (std::wstring_view spec :
+         {L"t{a1;i1}", L"t{a1;i1} m{i1;a2}", L"t{a1;i1} + m{a1;i1}",
+          L"t{a1;i1} x{i1;a2}"}) {
+      ExprPtr expr = deserialize(spec);
+      AnyIrrepSet result = irreps_of(*expr, erased);
+      const Set *typed_result = result.as<Irrep>();
+      REQUIRE(typed_result != nullptr);
+      REQUIRE(*typed_result == irreps_of(*expr, typed));
+      REQUIRE(result.to_string() == to_string(*typed_result));
+    }
+
+    // Deep copy
+    AnyIrrepContext copy(erased);
+    REQUIRE(copy.as<Z2Algebra<D2>>() != nullptr);
+    REQUIRE(copy.as<Z2Algebra<D2>>() != erased.as<Z2Algebra<D2>>());
+    REQUIRE(copy.as<Z2Algebra<>>() == nullptr);
+
+    // Untyped empty sets
+    AnyIrrepSet empty;
+    REQUIRE(empty.empty());
+    REQUIRE(empty == AnyIrrepSet(Set{}));
+    REQUIRE(empty != AnyIrrepSet(Set{irrep("B1")}));
+    empty.unite(AnyIrrepSet(Set{irrep("B1")}));
+    REQUIRE(empty == AnyIrrepSet(Set{irrep("B1")}));
+
+    // Type mismatch
+    AnyIrrepSet other_type(IrrepSet<std::string>{"A"});
+    REQUIRE(other_type != empty);
+    REQUIRE_THROWS_AS(empty.unite(other_type), Exception);
+
+    // Iteration
+    std::vector<std::string> names;
+    AnyIrrepSet(Set{irrep("B1"), irrep("B2*Gx")})
+        .for_each([&](const AnyIrrep &current) {
+          names.push_back(current.to_string());
+          REQUIRE(current.as<Irrep>() != nullptr);
+        });
+    REQUIRE(names == std::vector<std::string>{"B2*Gx", "B1"});
   }
 }
