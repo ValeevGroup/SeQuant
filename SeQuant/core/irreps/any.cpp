@@ -22,12 +22,13 @@ AnyIrrep &AnyIrrep::operator=(AnyIrrep &&other) noexcept = default;
 AnyIrrep::~AnyIrrep() = default;
 
 std::string AnyIrrep::to_string() const {
-  SEQUANT_ASSERT(m_impl);
+  SEQUANT_ASSERT(m_impl && "moved-from AnyIrrep objects must not be used");
   return m_impl->to_string();
 }
 
 bool operator==(const AnyIrrep &lhs, const AnyIrrep &rhs) {
-  SEQUANT_ASSERT(lhs.m_impl && rhs.m_impl);
+  SEQUANT_ASSERT(lhs.m_impl && rhs.m_impl &&
+                 "moved-from AnyIrrep objects must not be used");
   return lhs.m_impl->equals(*rhs.m_impl);
 }
 
@@ -86,11 +87,12 @@ void AnyIrrepSet::for_each(
 }
 
 bool operator==(const AnyIrrepSet &lhs, const AnyIrrepSet &rhs) {
-  if (!lhs.m_impl || !rhs.m_impl) {
-    // At least one of the sets is an untyped, empty set
+  if (lhs.empty() || rhs.empty()) {
+    // Empty sets compare equal regardless of their IRREP type (if any)
     return lhs.empty() && rhs.empty();
   }
 
+  SEQUANT_ASSERT(lhs.m_impl && rhs.m_impl);
   return lhs.m_impl->equals(*rhs.m_impl);
 }
 
@@ -114,21 +116,33 @@ AnyIrrepContext &AnyIrrepContext::operator=(AnyIrrepContext &&other) noexcept =
 AnyIrrepContext::~AnyIrrepContext() = default;
 
 AnyIrrepSet AnyIrrepContext::irreps_of(const Tensor &tensor) const {
+  SEQUANT_ASSERT(m_impl &&
+                 "moved-from AnyIrrepContext objects must not be used");
   return m_impl->irreps_of(tensor);
 }
 
 AnyIrrepSet AnyIrrepContext::totally_symmetric() const {
+  SEQUANT_ASSERT(m_impl &&
+                 "moved-from AnyIrrepContext objects must not be used");
   return m_impl->totally_symmetric();
 }
 
-AnyIrrepSet AnyIrrepContext::empty_set() const { return m_impl->empty_set(); }
+AnyIrrepSet AnyIrrepContext::empty_set() const {
+  SEQUANT_ASSERT(m_impl &&
+                 "moved-from AnyIrrepContext objects must not be used");
+  return m_impl->empty_set();
+}
 
 AnyIrrepSet AnyIrrepContext::product(const AnyIrrepSet &lhs,
                                      const AnyIrrepSet &rhs) const {
+  SEQUANT_ASSERT(m_impl &&
+                 "moved-from AnyIrrepContext objects must not be used");
   return m_impl->product(lhs, rhs);
 }
 
 AnyIrrepSet AnyIrrepContext::conjugate(const AnyIrrepSet &set) const {
+  SEQUANT_ASSERT(m_impl &&
+                 "moved-from AnyIrrepContext objects must not be used");
   return m_impl->conjugate(set);
 }
 

@@ -505,6 +505,15 @@ TEST_CASE("irreps", "[irreps]") {
     AnyIrrepSet other_type(IrrepSet<std::string>{"A"});
     REQUIRE(other_type != empty);
     REQUIRE_THROWS_AS(empty.unite(other_type), Exception);
+    REQUIRE(AnyIrrep(std::string("B1")) != AnyIrrep(irrep("B1")));
+    REQUIRE(AnyIrrep(irrep("B1")) == AnyIrrep(irrep("B1")));
+
+    // Empty sets are equal regardless of their type (transitivity)
+    REQUIRE(AnyIrrepSet(Set{}) == AnyIrrepSet());
+    REQUIRE(AnyIrrepSet() == AnyIrrepSet(IrrepSet<std::string>{}));
+    REQUIRE(AnyIrrepSet(Set{}) == AnyIrrepSet(IrrepSet<std::string>{}));
+    REQUIRE(AnyIrrepSet(Set::any()) != AnyIrrepSet(Set{}));
+
     // Iteration
     std::vector<std::string> names;
     AnyIrrepSet(Set{irrep("B1"), irrep("B2*Gx")})

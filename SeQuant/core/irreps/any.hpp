@@ -16,7 +16,8 @@ namespace sequant {
 
 class Tensor;
 
-/// Type-erased IRREP (of arbitrary IRREP type)
+/// Type-erased IRREP (of arbitrary IRREP type). A moved-from object may only
+/// be assigned to or destroyed.
 class AnyIrrep {
  public:
   template <typename Irrep>
@@ -74,7 +75,8 @@ class AnyIrrep {
 
 /// Type-erased IrrepSet (of arbitrary IRREP type). A default-constructed
 /// object represents an empty set whose IRREP type is not yet known. It
-/// adopts the IRREP type of the first set it is united with.
+/// adopts the IRREP type of the first set it is united with. Empty sets
+/// compare equal regardless of their IRREP type.
 class AnyIrrepSet {
  public:
   /// Creates an empty set
@@ -170,7 +172,8 @@ class AnyIrrepSet {
 };
 
 /// Type-erased IrrepContext (for arbitrary IRREP algebras). It satisfies
-/// IrrepPropagationContext and can thus be used with irreps_of.
+/// IrrepPropagationContext and can thus be used with irreps_of. A moved-from
+/// object may only be assigned to or destroyed.
 class AnyIrrepContext {
  public:
   using set_type = AnyIrrepSet;
