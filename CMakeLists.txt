@@ -423,6 +423,7 @@ set(SeQuant_symb_src
         SeQuant/core/utility/atomic.hpp
         SeQuant/core/utility/context.hpp
         SeQuant/core/utility/debug.hpp
+        SeQuant/core/utility/deprecated_member.hpp
         SeQuant/core/utility/exception.hpp
         SeQuant/core/utility/expr.cpp
         SeQuant/core/utility/expr.hpp

@@ -116,17 +116,16 @@ std::shared_ptr<const IndexBasisRegistry> owned(
 }
 
 /// @return the registry that @p options carries, moved out of it and owned
-/// (see owned()); the deprecated fields are read where the current ones are
-/// empty
+/// (see owned()); the deprecated aliases are read where the current members
+/// are empty
 std::shared_ptr<const IndexBasisRegistry> take_registry(
     Context::Options& options) {
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto& shared = options.index_basis_registry_shared_ptr
                      ? options.index_basis_registry_shared_ptr
-                     : options.index_space_registry_shared_ptr;
-  auto& object = options.index_basis_registry ? options.index_basis_registry
-                                              : options.index_space_registry;
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+                     : options.index_space_registry_shared_ptr.value;
+  auto& object = options.index_basis_registry
+                     ? options.index_basis_registry
+                     : options.index_space_registry.value;
   if (shared) return owned(std::move(shared));
   if (object)
     return std::make_shared<const IndexBasisRegistry>(std::move(*object));
