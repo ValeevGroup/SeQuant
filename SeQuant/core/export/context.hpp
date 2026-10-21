@@ -3,11 +3,11 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/irreps/any.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
 #include <limits>
 #include <map>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -54,6 +54,49 @@ struct StrategyPair {
   std::optional<LoadStrategy> load;
   std::optional<ZeroStrategy> zero;
 };
+
+class AnyIrrepContext;
+class AnyIrrepSet;
+
+/// The origin of the IRREPs of a tensor (block) registered during export
+enum class IrrepOrigin {
+  /// IRREPs of a leaf tensor as obtained from the IRREP context. Repeated
+  /// registrations must agree.
+  Input,
+  /// IRREPs of an intermediate as computed during export. Repeated
+  /// registrations must agree.
+  Intermediate,
+  /// IRREPs of a result as computed during export. Repeated registrations
+  /// (e.g. from different expressions contributing to the same result) are
+  /// merged.
+  Result,
+};
+
+namespace detail {
+
+struct ExportIrrepData;
+
+/// Value-semantic, opaque holder of the IRREP-related data of an
+/// ExportContext (keeps the IRREP machinery out of this header)
+class ExportIrrepDataHolder {
+ public:
+  ExportIrrepDataHolder();
+  ExportIrrepDataHolder(const ExportIrrepDataHolder &other);
+  ExportIrrepDataHolder(ExportIrrepDataHolder &&other) noexcept;
+  ExportIrrepDataHolder &operator=(const ExportIrrepDataHolder &other);
+  ExportIrrepDataHolder &operator=(ExportIrrepDataHolder &&other) noexcept;
+  ~ExportIrrepDataHolder();
+
+  /// @returns The held data or nullptr if there is none
+  [[nodiscard]] const ExportIrrepData *get() const;
+  /// @returns The held data (created if necessary)
+  ExportIrrepData &get_or_create();
+
+ private:
+  std::unique_ptr<ExportIrrepData> m_data;
+};
+
+}  // namespace detail
 
 /// Different ways a given tensor/variable can be used in a given code.
 enum class Usage {
@@ -236,16 +279,23 @@ class ExportContext {
   [[nodiscard]] virtual bool has_irrep_context() const;
   /// @returns The IRREP context. Throws if none has been set.
   [[nodiscard]] virtual const AnyIrrepContext &irrep_context() const;
-  /// @returns The IRREPs of the given tensor (block) as determined during the
+  /// @returns The IRREPs of the given tensor (block) as registered during the
   /// export or nullptr if they are unknown
-  [[nodiscard]] virtual const AnyIrrepSet *irreps(const Tensor &tensor) const;
+  [[nodiscard]] virtual const AnyIrrepSet *irreps_of(
+      const Tensor &tensor) const;
+  /// @returns The IRREPs of the given tensor (block) if it has been computed
+  /// (as an intermediate or result) during the export. Otherwise, nullptr.
+  [[nodiscard]] virtual const AnyIrrepSet *computed_irreps_of(
+      const Tensor &tensor) const;
   /// Registers the IRREPs of the given tensor (block)
   /// @param tensor The tensor
   /// @param irreps The IRREPs the tensor spans
-  /// @param merge Whether to merge the given IRREPs with already registered
-  ///        ones. If false, an existing registration must be identical.
+  /// @param origin The origin of the IRREPs, which determines how repeated
+  ///        registrations of the same tensor block are handled
+  /// @throws Exception if the IRREPs conflict with a previous registration
+  /// @sa IrrepOrigin
   virtual void register_irreps(const Tensor &tensor, AnyIrrepSet irreps,
-                               bool merge);
+                               IrrepOrigin origin);
 
  protected:
   static constexpr std::size_t ID_GLOBAL =
@@ -256,8 +306,7 @@ class ExportContext {
   std::map<std::size_t, VariableStrategyMap> m_variableStrategies;
   std::optional<std::string> m_currentSection;
   std::optional<std::size_t> m_currentExpressionID;
-  std::optional<AnyIrrepContext> m_irrepContext;
-  std::map<Tensor, AnyIrrepSet, TensorBlockLessThanComparator> m_irreps;
+  detail::ExportIrrepDataHolder m_irrepData;
 };
 
 }  // namespace sequant

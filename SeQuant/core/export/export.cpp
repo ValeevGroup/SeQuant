@@ -76,8 +76,8 @@ AnyIrrepSet RegisteredIrrepContext::irreps_of(const Tensor &tensor) const {
   // The registry is keyed by the rewritten tensors
   Tensor rewritten(tensor);
   m_ctx.rewrite(rewritten);
-  if (const AnyIrrepSet *known = m_ctx.irreps(rewritten)) {
-    return *known;
+  if (const AnyIrrepSet *computed = m_ctx.computed_irreps_of(rewritten)) {
+    return *computed;
   }
 
   return m_ctx.irrep_context().irreps_of(tensor);

@@ -17,6 +17,7 @@
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/irreps/any.hpp>
 #include <SeQuant/core/irreps/propagation.hpp>
 #include <SeQuant/core/irreps/z2_algebra.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
@@ -1384,4 +1385,76 @@ TEST_CASE("export-irrep-name", "[export][irreps]") {
   CHECK_THAT(code, ContainsSubstring("R:ec // irrep:2"));
   CHECK_THAT(code, ContainsSubstring("v:cc // irrep:3"));
   CHECK_THAT(code, ContainsSubstring("f:cc // irrep:1"));
+}
+
+TEST_CASE("export-irreps", "[export][irreps]") {
+  using point_groups::D2;
+  using Irrep = Z2Irrep<D2>;
+  using Set = IrrepSet<Irrep>;
+  auto resetter = to_export_context();
+  auto irrep = [](std::string_view name) { return make_irrep<D2>(name); };
+
+  SECTION("registry") {
+    ExportContext ctx;
+    REQUIRE(!ctx.has_irrep_context());
+    REQUIRE_THROWS_AS(ctx.irrep_context(), Exception);
+
+    const Tensor t = deserialize(L"t{a1;i1}")->as<Tensor>();
+    // Same tensor block as t
+    const Tensor t_other = deserialize(L"t{a2;i2}")->as<Tensor>();
+
+    REQUIRE(ctx.irreps_of(t) == nullptr);
+    ctx.register_irreps(t, Set{irrep("B1")}, IrrepOrigin::Input);
+    REQUIRE(ctx.irreps_of(t_other) != nullptr);
+    REQUIRE(*ctx.irreps_of(t_other) == AnyIrrepSet(Set{irrep("B1")}));
+    REQUIRE(ctx.computed_irreps_of(t) == nullptr);
+
+    REQUIRE_NOTHROW(
+        ctx.register_irreps(t_other, Set{irrep("B1")}, IrrepOrigin::Input));
+    REQUIRE_THROWS_AS(
+        ctx.register_irreps(t, Set{irrep("B2")}, IrrepOrigin::Input),
+        Exception);
+    REQUIRE_THROWS_AS(
+        ctx.register_irreps(t, Set{irrep("B2")}, IrrepOrigin::Intermediate),
+        Exception);
+
+    ctx.register_irreps(t, Set{irrep("B2")}, IrrepOrigin::Result);
+    const AnyIrrepSet merged(Set{irrep("B1"), irrep("B2")});
+    REQUIRE(*ctx.irreps_of(t) == merged);
+    REQUIRE(ctx.computed_irreps_of(t) != nullptr);
+
+    // Copies are independent of each other
+    ExportContext copy(ctx);
+    copy.register_irreps(t, Set{irrep("B3")}, IrrepOrigin::Result);
+    REQUIRE(*ctx.irreps_of(t) == merged);
+    REQUIRE(*copy.irreps_of(t) ==
+            AnyIrrepSet(Set{irrep("B1"), irrep("B2"), irrep("B3")}));
+  }
+
+  SECTION("conflicting leaf IRREPs") {
+    // A resolver that (inconsistently) assigns different IRREPs to the same
+    // tensor block on subsequent calls
+    std::size_t calls = 0;
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ctx.set_irrep_context(
+        IrrepContext<Z2Algebra<D2>>([&](const Tensor &tensor) -> Set {
+          if (tensor.label() == L"t") {
+            return {calls++ == 0 ? irrep("B1") : irrep("B2")};
+          }
+          return {irrep("A")};
+        }));
+
+    // Conflict across different expressions
+    auto groups = parse_expression_spec(
+        "R{a1;i1} = t{a1;i2} f{i2;i1}\nS{a1;i1} = t{a1;i2} f{i2;i1}", false);
+    ItfGenerator<ItfContext> generator;
+    REQUIRE_THROWS_AS(export_groups<>(groups, generator, ctx), Exception);
+
+    // Conflict within the same expression
+    calls = 0;
+    groups =
+        parse_expression_spec("R{a1;i1} = t{a1;i2} f{i2;a2} t{a2;i1}", false);
+    REQUIRE_THROWS_AS(export_groups<>(groups, generator, ctx), Exception);
+  }
 }

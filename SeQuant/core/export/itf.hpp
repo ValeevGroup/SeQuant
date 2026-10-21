@@ -8,6 +8,7 @@
 #include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/irreps/any.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -355,7 +356,7 @@ class ItfGenerator : public Generator<Context> {
     bool needs_import = import_name.has_value() || usage == Usage::Terminal ||
                         usage == Usage::Result;
 
-    const AnyIrrepSet *irreps = ctx.irreps(tensor);
+    const AnyIrrepSet *irreps = ctx.irreps_of(tensor);
 
     if (needs_import) {
       if (import_name.has_value()) {

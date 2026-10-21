@@ -1,4 +1,5 @@
 #include <SeQuant/core/export/context.hpp>
+#include <SeQuant/core/irreps/any.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -6,6 +7,22 @@
 #include <type_traits>
 
 namespace sequant {
+
+namespace detail {
+
+struct ExportIrrepData {
+  struct Entry {
+    AnyIrrepSet irreps;
+    /// Whether the IRREPs have been computed (for an intermediate or
+    /// result) rather than being obtained from the IRREP context
+    bool computed = false;
+  };
+
+  std::optional<AnyIrrepContext> context;
+  std::map<Tensor, Entry, TensorBlockLessThanComparator> registry;
+};
+
+}  // namespace detail
 
 ZeroStrategy operator|(ZeroStrategy lhs, ZeroStrategy rhs) {
   using underlying_type = std::underlying_type_t<ZeroStrategy>;
@@ -286,41 +303,105 @@ bool ExportContext::is_index_batched(const Index &idx,
 }
 
 void ExportContext::set_irrep_context(AnyIrrepContext ctx) {
-  m_irrepContext = std::move(ctx);
+  m_irrepData.get_or_create().context = std::move(ctx);
 }
 
 bool ExportContext::has_irrep_context() const {
-  return m_irrepContext.has_value();
+  return m_irrepData.get() && m_irrepData.get()->context.has_value();
 }
 
 const AnyIrrepContext &ExportContext::irrep_context() const {
-  if (!m_irrepContext.has_value()) {
+  if (!has_irrep_context()) {
     throw Exception("No IRREP context has been set");
   }
 
-  return m_irrepContext.value();
+  return m_irrepData.get()->context.value();
 }
 
-const AnyIrrepSet *ExportContext::irreps(const Tensor &tensor) const {
-  auto it = m_irreps.find(tensor);
+const AnyIrrepSet *ExportContext::irreps_of(const Tensor &tensor) const {
+  if (!m_irrepData.get()) {
+    return nullptr;
+  }
 
-  return it == m_irreps.end() ? nullptr : &it->second;
+  const auto &registry = m_irrepData.get()->registry;
+  auto it = registry.find(tensor);
+
+  return it == registry.end() ? nullptr : &it->second.irreps;
+}
+
+const AnyIrrepSet *ExportContext::computed_irreps_of(
+    const Tensor &tensor) const {
+  if (!m_irrepData.get()) {
+    return nullptr;
+  }
+
+  const auto &registry = m_irrepData.get()->registry;
+  auto it = registry.find(tensor);
+
+  return it == registry.end() || !it->second.computed ? nullptr
+                                                      : &it->second.irreps;
 }
 
 void ExportContext::register_irreps(const Tensor &tensor, AnyIrrepSet irreps,
-                                    bool merge) {
-  auto [it, inserted] = m_irreps.try_emplace(tensor, irreps);
+                                    IrrepOrigin origin) {
+  auto &registry = m_irrepData.get_or_create().registry;
+  const bool computed = origin != IrrepOrigin::Input;
+
+  auto [it, inserted] = registry.try_emplace(
+      tensor,
+      detail::ExportIrrepData::Entry{.irreps = irreps, .computed = computed});
   if (inserted) {
     return;
   }
 
-  if (merge) {
-    it->second.unite(irreps);
-  } else if (it->second != irreps) {
+  detail::ExportIrrepData::Entry &entry = it->second;
+  entry.computed |= computed;
+
+  if (origin == IrrepOrigin::Result) {
+    entry.irreps.unite(irreps);
+  } else if (entry.irreps != irreps) {
     throw Exception("Conflicting IRREPs for tensor " +
-                    toUtf8(tensor.to_latex()) + ": " + it->second.to_string() +
-                    " vs. " + irreps.to_string());
+                    toUtf8(tensor.to_latex()) + ": " +
+                    entry.irreps.to_string() + " vs. " + irreps.to_string());
   }
 }
+
+namespace detail {
+
+ExportIrrepDataHolder::ExportIrrepDataHolder() = default;
+
+ExportIrrepDataHolder::ExportIrrepDataHolder(const ExportIrrepDataHolder &other)
+    : m_data(other.m_data ? std::make_unique<ExportIrrepData>(*other.m_data)
+                          : nullptr) {}
+
+ExportIrrepDataHolder::ExportIrrepDataHolder(
+    ExportIrrepDataHolder &&other) noexcept = default;
+
+ExportIrrepDataHolder &ExportIrrepDataHolder::operator=(
+    const ExportIrrepDataHolder &other) {
+  if (this != &other) {
+    m_data = other.m_data ? std::make_unique<ExportIrrepData>(*other.m_data)
+                          : nullptr;
+  }
+  return *this;
+}
+
+ExportIrrepDataHolder &ExportIrrepDataHolder::operator=(
+    ExportIrrepDataHolder &&other) noexcept = default;
+
+ExportIrrepDataHolder::~ExportIrrepDataHolder() = default;
+
+const ExportIrrepData *ExportIrrepDataHolder::get() const {
+  return m_data.get();
+}
+
+ExportIrrepData &ExportIrrepDataHolder::get_or_create() {
+  if (!m_data) {
+    m_data = std::make_unique<ExportIrrepData>();
+  }
+  return *m_data;
+}
+
+}  // namespace detail
 
 }  // namespace sequant

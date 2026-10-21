@@ -446,9 +446,9 @@ bool rename(Variable &variable, PreprocessResult &result,
             const std::function<bool(const Variable &)> &acceptable = {});
 
 /// Context for IRREP propagation during export. Tensors whose IRREPs have
-/// already been registered in the ExportContext (e.g. results of previously
-/// processed trees) are resolved via that registry. All others are resolved
-/// via the user-provided IRREP context.
+/// already been computed during the export (i.e. results of previously
+/// processed trees) are resolved via the ExportContext's registry. All others
+/// are resolved via the user-provided IRREP context.
 class RegisteredIrrepContext {
  public:
   using set_type = AnyIrrepSet;
@@ -498,16 +498,22 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
   // Every tensor block must be associated with a unique set of IRREPs. Hence,
   // intermediates must not (re)use a tensor block that is associated with
   // different IRREPs.
+  // Note: non-leaf children of sums are skipped as they will adopt their
+  // parent's result tensor (see PreprocessVisitor's
+  // prune_redundant_intermediate)
   std::function<bool(const ExprType &)> irreps_compatible;
   if constexpr (std::is_same_v<ExprType, Tensor>) {
     auto it = result.nodeIrreps.find(node->id());
-    if (it != result.nodeIrreps.end() && !node.leaf() && !node.root()) {
+    if (it != result.nodeIrreps.end() && !node.leaf() && !node.root() &&
+        node.parent()->op_type() != EvalOp::Sum) {
       irreps_compatible = [&ctx, &irreps = it->second](const Tensor &tensor) {
-        const AnyIrrepSet *known = ctx.irreps(tensor);
+        const AnyIrrepSet *known = ctx.irreps_of(tensor);
         return known == nullptr || *known == irreps;
       };
 
       if (!irreps_compatible(expr)) {
+        // In case the new name refers to a previously used tensor, it gets
+        // zeroed before reuse by the result reuse handling below
         rename(expr, result, irreps_compatible);
         storeExpr = true;
       }
@@ -832,10 +838,17 @@ class PreprocessVisitor {
 
     // Results (also the ones accumulated into via a sum) may receive
     // contributions of different IRREPs from different trees
-    const bool merge = !node.leaf() &&
-                       (node.root() || node.parent()->op_type() == EvalOp::Sum);
+    const IrrepOrigin origin = [&]() {
+      if (node.leaf()) {
+        return IrrepOrigin::Input;
+      }
+      if (node.root() || node.parent()->op_type() == EvalOp::Sum) {
+        return IrrepOrigin::Result;
+      }
+      return IrrepOrigin::Intermediate;
+    }();
 
-    m_ctx.register_irreps(node->as_tensor(), it->second, merge);
+    m_ctx.register_irreps(node->as_tensor(), it->second, origin);
   }
 
   void release_used_terms(ExportNode<T> &node) {
