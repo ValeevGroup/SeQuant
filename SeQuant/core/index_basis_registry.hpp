@@ -9,6 +9,7 @@
 #include <SeQuant/core/bitset.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -102,9 +103,12 @@ concept index_space_argument =
 
 /// @brief what IndexBasisRegistry::add(label, type, spec) registers a space
 /// with besides its label and type: each member is given by name, and each
-/// is optional; the dimension comes first, so that a bare number in a brace
-/// list is the dimension, as in the argument-list spelling
+/// is optional. A bare value in the brace list, `{10}`, does not compile
+/// (SEQUANT_DESIGNATED_INIT_ONLY): the members are set by name only, so that
+/// reordering them can never reinterpret a call site; the deprecated
+/// argument-list spelling of add() is where a bare number is the dimension.
 struct IndexSpaceSpec {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   /// the dimension of the space; 10, the default of the IndexSpace ctor, if
   /// not given
   /// @pre non-negative
@@ -129,8 +133,10 @@ struct IndexSpaceSpec {
 
 /// @brief what IndexBasisRegistry::add(label, space, instance, spec)
 /// registers a named basis instance with besides its label, space and
-/// instance: each member is given by name, and each is optional
+/// instance: each member is given by name, and each is optional; as for
+/// IndexSpaceSpec, a bare value in the brace list does not compile
 struct IndexBasisSpec {
+  SEQUANT_DESIGNATED_INIT_ONLY;
   /// a label given in a spec: any string type (see basic_string_convertible),
   /// kept as the registry keeps labels
   struct Label {
