@@ -269,6 +269,10 @@ step rather than after it (see the note under :code:`dependencies`).
      - No
    * - :code:`merge_inputs`
      - Whether multiple inputs shall be merged together in order to undergo combined rather than individual CSE.
+       Instead of a boolean, an array of input IDs/aliases can be given, in which case merging happens only within the
+       inputs matching each listed ID (matched like the groups of the :code:`grouping` option of the export step). Each
+       listed ID yields one output, aliased to :code:`<step>.<ID>`. Inputs matching none of the IDs undergo individual
+       CSE; inputs matching more than one ID are an error.
      - false
      - No
 

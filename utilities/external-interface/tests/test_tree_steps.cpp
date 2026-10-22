@@ -32,6 +32,13 @@ TEST_CASE("cse step", "[extint]") {
     REQUIRE_THROWS_AS(step.set_options(json::array()), Exception);
     REQUIRE_THROWS_AS(step.set_options(json{{"min_usage", "two"}}), Exception);
     REQUIRE_THROWS_AS(step.set_options(json{{"merge_inputs", 1}}), Exception);
+    REQUIRE_THROWS_AS(
+        step.set_options(json{{"merge_inputs", json::array({1})}}), Exception);
+    REQUIRE_THROWS_AS(
+        step.set_options(json{{"merge_inputs", json::array({""})}}), Exception);
+    REQUIRE_NOTHROW(step.set_options(json{{"merge_inputs", true}}));
+    REQUIRE_NOTHROW(
+        step.set_options(json{{"merge_inputs", json::array({"ecc", "res"})}}));
     REQUIRE_THROWS_AS(step.set_options(json{{"unknown", true}}), Exception);
   }
 
@@ -45,6 +52,33 @@ TEST_CASE("cse step", "[extint]") {
     REQUIRE(ctx.has_data("cse.0"));
     REQUIRE_NOTHROW(
         convert_data<ExportTreeData>(ctx.get_data("cse.0").front().data.get()));
+  }
+
+  SECTION("merge_inputs with group IDs merges only within each group") {
+    const std::wstring expr =
+        L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S";
+    ExecutionContext ctx;
+    for (std::size_t i = 0; i < 3; ++i) {
+      ctx.set_data("in", i, ProcessingData{test_support::tree_data({expr})});
+    }
+    ctx.add_data_alias(std::vector<std::string_view>{"in.0", "in.1"}, "in.grp");
+
+    CSEStep step;
+    step.set_options(json{{"merge_inputs", json::array({"grp"})}});
+    // One merged output for the group plus the individually processed input
+    REQUIRE(step.run("cse", ctx, {"in.0", "in.1", "in.2"}) == 2);
+    REQUIRE(ctx.has_data("cse.grp"));
+    REQUIRE(ctx.dataset_size("cse.grp") == 1);
+    REQUIRE(ctx.dataset_size("cse[0-1]") == 2);
+
+    SECTION("overlapping groups are rejected") {
+      ctx.add_data_alias("in.1", "in.other");
+      CSEStep overlap;
+      overlap.set_options(
+          json{{"merge_inputs", json::array({"grp", "other"})}});
+      REQUIRE_THROWS_AS(overlap.run("cse2", ctx, {"in.0", "in.1", "in.2"}),
+                        Exception);
+    }
   }
 
   SECTION("dependencies on the original results survive CSE") {
