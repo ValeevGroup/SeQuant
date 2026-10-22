@@ -48,12 +48,12 @@ using ParticlePairings = container::svector<IndexPair>;
 /// constructed with elements (-2)^{c} × (-1)^{n_particles}, where c is the
 /// number of cycles in the relative permutation.
 ///
-  /// The biorthogonal coefficients are obtained from the unnormalized
-  /// pseudoinverse of M.
+/// The biorthogonal coefficients are obtained from the unnormalized
+/// pseudoinverse of M.
 /// biorthogonal coefficients = M_pinv · e_1, where e_1 is the first unit vector.
 /// See [DOI 10.48550/ARXIV.1805.00565](https://doi.org/10.48550/ARXIV.1805.00565)
-  /// for more details (Note that these biorthogonal coefficients are unnormalized,
-  /// unlike those in the reference).
+/// for more details (Note that these biorthogonal coefficients are unnormalized,
+/// unlike those in the reference).
 ///
 /// \param n_particles The rank of external index pairs
 ///
@@ -602,10 +602,8 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
     }
   }
 
-  // We need to normalize to the amount of non-zero eigenvalues via
-  // normalization = #eigenvalues / #non-zero eigenvalues (or n!/rank)
-  // The kept terms carry it so that the idempotent NNS projector rebuilds
-  // them exactly. The rank is the Catalan number C_n = (2n)!/(n!(n+1)!).
+  // the idempotent NNS projector rebuilds a group from its kept term scaled by
+  // rank(M)/n!, so the kept term carries n!/rank(M); rank(M) = Catalan(n)
   const auto n = ext_idxs.size();
   const auto rank = factorial(2 * n) / (factorial(n + 1) * factorial(n));
   const rational normalization(factorial(n), rank);
