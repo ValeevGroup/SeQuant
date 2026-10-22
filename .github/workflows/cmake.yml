@@ -17,7 +17,7 @@ jobs:
     # plus the integration suite, so the cap is not a symptom of any one
     # change and trimming tests further buys almost nothing. Give every
     # configuration headroom instead of losing runs to a 6-second margin.
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
