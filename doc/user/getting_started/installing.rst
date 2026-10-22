@@ -158,3 +158,14 @@ provide 8 MB). SeQuant's own executables are therefore linked with :code:`/STACK
 SeQuant must be linked with an equivalent stack reserve too, e.g. via
 :code:`target_link_options(<target> PRIVATE /STACK:8388608)`. This reserve is the default for every thread of the
 program; threads created with an explicit stack size that call into SeQuant need a comparable size.
+
+
+Versioning
+----------
+
+SeQuant uses `calendar versioning <https://calver.org/>`_: ``YY.N`` for a release, where ``YY`` is the two-digit year
+and ``N`` counts the releases within that year starting from 0, and ``YY.N.P`` for the ``P``-th patch release of
+``YY.N``; e.g. ``26.2`` is the third release of 2026 and ``26.2.1`` its first patch release. Releases up to ``2.2.0``
+used `semantic versioning <https://semver.org/>`_; ``26.2`` is the first calendar-versioned release. Since a version
+is just a dot-separated sequence of integers, ``find_package(SeQuant 26.2)`` and similar version requirements work as
+usual. See :ref:`release-guide` for details.

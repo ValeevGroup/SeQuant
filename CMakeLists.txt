@@ -33,12 +33,16 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(vg_cmake_kit)
 list(APPEND CMAKE_MODULE_PATH "${vg_cmake_kit_SOURCE_DIR}/modules")
 
-# Set SeQuant version
-set(SEQUANT_MAJOR_VERSION 2)
-set(SEQUANT_MINOR_VERSION 3)
-set(SEQUANT_MICRO_VERSION 0)
+# Set SeQuant version: calendar versioning YY.N[.P][-id], where N counts the
+# releases within the year starting from 0 and P is the patch level
+set(SEQUANT_YEAR_VERSION 26)   # two-digit year
+set(SEQUANT_YMAJOR_VERSION 2)  # zero-based release counter within the year
+set(SEQUANT_PATCH_VERSION 0)   # patch level; 0 is omitted from the version string
 set(SEQUANT_PRERELEASE_ID alpha)
-set(SEQUANT_VERSION "${SEQUANT_MAJOR_VERSION}.${SEQUANT_MINOR_VERSION}.${SEQUANT_MICRO_VERSION}")
+set(SEQUANT_VERSION "${SEQUANT_YEAR_VERSION}.${SEQUANT_YMAJOR_VERSION}")
+if (SEQUANT_PATCH_VERSION GREATER 0)
+    string(APPEND SEQUANT_VERSION ".${SEQUANT_PATCH_VERSION}")
+endif ()
 if (SEQUANT_PRERELEASE_ID)
     set(SEQUANT_EXT_VERSION "${SEQUANT_VERSION}-${SEQUANT_PRERELEASE_ID}")
 else (SEQUANT_PRERELEASE_ID)
@@ -116,7 +120,7 @@ set(SEQUANT_INSTALL_INCLUDEDIR "include"
         CACHE PATH "SeQuant INCLUDE install directory")
 set(SEQUANT_INSTALL_LIBDIR "lib"
         CACHE PATH "SeQuant LIB install directory")
-set(SEQUANT_INSTALL_SHAREDIR "share/sequant/${SEQUANT_MAJOR_VERSION}.${SEQUANT_MINOR_VERSION}.${SEQUANT_MICRO_VERSION}"
+set(SEQUANT_INSTALL_SHAREDIR "share/sequant/${SEQUANT_VERSION}"
         CACHE PATH "SeQuant SHARE install directory")
 set(SEQUANT_INSTALL_DATADIR "${SEQUANT_INSTALL_SHAREDIR}/data"
         CACHE PATH "SeQuant DATA install directory")
@@ -423,6 +427,7 @@ set(SeQuant_symb_src
         SeQuant/core/utility/atomic.hpp
         SeQuant/core/utility/context.hpp
         SeQuant/core/utility/debug.hpp
+        SeQuant/core/utility/deprecated_member.hpp
         SeQuant/core/utility/exception.hpp
         SeQuant/core/utility/expr.cpp
         SeQuant/core/utility/expr.hpp
