@@ -712,7 +712,7 @@ TEST_CASE("basis-grants-lambda", "[mbpt][csv][valgrind_skip]") {
   CHECK(g_r2.at(1) == 19);
   CHECK(g_r2.at(2) == 35);
 
-  const auto st = derive_λ(reg);
+  const auto st = spintraced(raw);
   std::vector<std::size_t> metrics;
   for (std::size_t p : {1u, 2u}) {
     const auto c = census(st.at(p));
