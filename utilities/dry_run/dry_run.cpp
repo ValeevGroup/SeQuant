@@ -18,7 +18,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
@@ -308,30 +308,29 @@ Driver load_driver(const json& d) {
 // the producer's spaces with their type and quantum-number bits, and
 // setup_context() refuses a driver whose listing this registry does not
 // reproduce, so a change on either side cannot pass unnoticed.
-std::shared_ptr<IndexSpaceRegistry> make_mpqc_sr_spaces(bool vbs) {
+std::shared_ptr<IndexBasisRegistry> make_mpqc_sr_spaces(bool vbs) {
   using namespace sequant::mbpt;
-  auto isr = std::make_shared<IndexSpaceRegistry>();
+  auto isr = std::make_shared<IndexBasisRegistry>();
   const auto spin_any = IndexSpace::QuantumNumbers{Spin::any};
   isr->add(L"i", 0b01, spin_any, is_vacuum_occupied, is_reference_occupied,
            is_hole)
       .add(L"a", 0b10, spin_any, is_particle)
       .add_union(L"p", {L"i", L"a"}, is_complete);
   add_fermi_spin(*isr);
-  add_ao_spaces(isr, spin_any, vbs, /* abs = */ false);
-  add_pao_spaces(isr, spin_any);
+  add_ao_basis(isr, spin_any, vbs, /* abs = */ false);
+  // the PAO bases as MPQC registers them: named instances of the particle
+  // space and of its spin flavours with extents of their own (on a
+  // 2-component reference the spin-PAS rows span both Kramers halves), not
+  // followers of the OBS AO basis
   {
-    const auto pao = isr->retrieve(L"μ̃");
-    const IndexSpace pao_up{
-        spinannotation_add(pao.base_key(), Spin::alpha), pao.type(),
-        IndexSpace::QuantumNumbers{Spin::alpha} | LCAOQNS::pao,
-        pao.approximate_size()};
-    const IndexSpace pao_dn{
-        spinannotation_add(pao.base_key(), Spin::beta), pao.type(),
-        IndexSpace::QuantumNumbers{Spin::beta} | LCAOQNS::pao,
-        pao.approximate_size()};
-    isr->add(pao_up);
-    isr->add(pao_dn);
-    isr->add_kramers_partners(pao_up, pao_dn);
+    const auto instance = default_pao_basis_instance;
+    const auto uocc = isr->particle_space(/* nulltype_ok = */ false);
+    isr->add(L"μ̃", IndexBasis{isr->retrieve_space(uocc, spin_any), instance},
+             IndexBasisMetric::General);
+    for (const auto spin : {Spin::alpha, Spin::beta})
+      if (const auto* uocc_spin = isr->retrieve_space_ptr(uocc, spin))
+        isr->add(spinannotation_add(std::wstring(L"μ̃"), spin),
+                 IndexBasis{*uocc_spin, instance}, IndexBasisMetric::General);
   }
   add_df_spaces(isr);
   isr->physical_particle_attribute_mask(mask_v<Spin>);
@@ -339,37 +338,38 @@ std::shared_ptr<IndexSpaceRegistry> make_mpqc_sr_spaces(bool vbs) {
 }
 
 void setup_context(const Driver& cfg) {
-  std::shared_ptr<IndexSpaceRegistry> isr;
+  std::shared_ptr<IndexBasisRegistry> isr;
   if (cfg.convention == "mpqc-sr")
     isr = make_mpqc_sr_spaces(cfg.vbs);
   else
     throw Exception("unknown context.convention (want mpqc-sr): " +
                     cfg.convention);
 
+  // the scalar field of every entry, as MPQC's scoped_sequant_field sets it
   const Field field = cfg.complex_field ? Field::Complex : Field::Real;
   std::vector<std::wstring> keys;
   for (const auto& sp : *isr) keys.push_back(std::wstring(sp.base_key()));
-  for (const auto& key : keys)
-    if (IndexSpace* sp = isr->retrieve_ptr(key)) sp->field(field);
+  for (const auto& key : keys) isr->field(key, field);
 
   for (const auto& s : cfg.spaces) {
-    IndexSpace* sp = isr->retrieve_ptr(s.key);
-    if (!sp)
+    const IndexBasis* b = isr->retrieve_ptr(s.key);
+    if (!b)
       throw Exception("the driver lists index space \"" + toUtf8(s.key) +
                       "\", which the \"" + cfg.convention +
                       "\" convention does not have");
-    if ((s.type && *s.type != static_cast<long>(sp->type().to_int32())) ||
-        (s.qns && *s.qns != static_cast<long>(sp->qns().to_int32())))
+    if ((s.type &&
+         *s.type != static_cast<long>(b->space().type().to_int32())) ||
+        (s.qns && *s.qns != static_cast<long>(b->space().qns().to_int32())))
       throw Exception(
           "index space \"" + toUtf8(s.key) +
           "\" has other type/quantum-number bits here than in the program "
           "that wrote the driver; the two conventions have diverged");
-    sp->approximate_size(s.size);
+    // a follower takes the extent of the entry it follows
+    if (!isr->follows(s.key)) isr->extent(s.key, s.size);
   }
 
   auto ctx = Context()
                  .set(Vacuum::SingleProduct)
-                 .set(IndexSpaceMetric::Unit)
                  .set(SPBasis::Spinor)
                  .set(CanonicalizeOptions::default_options().copy_and_set(
                      CanonicalizationMethod::Complete))
@@ -416,7 +416,7 @@ std::function<std::size_t(const Index&)> make_idx_to_extent(const Driver& cfg) {
       return static_cast<std::size_t>(
           std::ceil(union_factor(cfg, idx) *
                     csv_extent(cfg, idx.proto_indices().size(), 1)));
-    return idx.space().approximate_size();
+    return idx.basis().extent();
   };
 }
 
@@ -748,7 +748,6 @@ bool close(double a, double b) {
 
 int main(int argc, char** argv) {
   set_locale();
-  sequant::detail::OpIdRegistrar op_id_registrar;
 
   CLI::App app(
       "SeQuant dry run: plan an evaluation from a JSON driver and meter it");
