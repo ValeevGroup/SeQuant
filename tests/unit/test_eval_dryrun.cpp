@@ -4406,11 +4406,11 @@ TEST_CASE(
 
   // A single-root, fully-contracted product -- a_3 is a genuine operand
   // index of BOTH factors (contracted away at the root), hand-stamped as the
-  // root's one Contracted batch axis (no optimize() involved, matching
-  // test_eval_dryrun.cpp's hand-built batch-annotation recipe): the driver
-  // entry rebuilds its schedule from the forest's OWN node_slice_mask()
-  // stamps, not from BatchPolicy predicates, so this alone is enough for it
-  // to realize a non-root-only loop nest.
+  // root's one Contracted batch axis and as the loop the root opens (no
+  // optimize() involved, matching test_eval_dryrun.cpp's hand-built
+  // batch-annotation recipe): the driver entry rebuilds its schedule from the
+  // forest's OWN stamps, not from BatchPolicy predicates, so these two stamps
+  // are enough for it to realize a non-root-only loop nest.
   auto expr =
       sequant::deserialize<sequant::ExprPtr>(L"g{i_1;a_3} * h{a_3;i_1}");
   REQUIRE(static_cast<bool>(expr));
@@ -4422,6 +4422,10 @@ TEST_CASE(
 
   Index const a3{L"a_3"};
   node->set_node_slice_mask({{a3, BatchModeType::Contracted}});
+  // The root reduces a_3 in batches, so it is also the node that opens that
+  // loop; the DP records both (NodeBatchAnnotation::opened_here), and the
+  // boulevard reads the loop's kind off the open.
+  node->set_batch_loops_opened_here({{a3, BatchModeType::Contracted}});
 
   std::vector<EvalNodeDryRun> const forest{node};
 

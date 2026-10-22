@@ -569,7 +569,8 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
       d.title = o.term;
       d.textContent = "term " + (termShort.get(o.term) || o.term) + " · node " + o.node + " · consumer " + (o.consumer === null || o.consumer === undefined ? "—" : o.consumer) +
         " · home [" + (o.home || []).join(", ") + "] · enclosing [" + (o.enclosing || []).join(", ") + "] · opens " +
-        JSON.stringify(o.opens || []);
+        JSON.stringify(o.opens || []) +
+        ((o.roles || []).length ? " · roles [" + o.roles.map(function (r) { return r.mode + ": " + r.role; }).join(", ") + "]" : "");
       oc.appendChild(d);
     });
     kv(tb, "occurrences", oc);

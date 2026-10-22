@@ -572,6 +572,11 @@ DagRecord record_dag(
       o.home = spell_modes(occ.home);
       for (auto const& e : occ.ectx)
         o.enclosing.push_back(mode_spelling(e.first));
+      for (auto const& ac : cl.per_axis)
+        for (auto const& por : ac.per_occurrence)
+          if (por.point == occ.point)
+            o.roles.push_back(
+                {mode_spelling(ac.axis), detail::role_name(por.role)});
       for (auto const& [ix, kind] : occ.opens)
         o.opens.push_back({mode_spelling(ix), kind == BatchModeType::External
                                                   ? ModeKind::External
