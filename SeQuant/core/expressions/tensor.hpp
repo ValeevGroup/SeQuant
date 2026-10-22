@@ -377,7 +377,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, reserved_tag,
          ResolvedSymmetries rsym)
-      : label_(std::string(std::forward<S>(label))),
+      : label_(to_string_view(label)),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
         aux_(make_indices(aux_indices)),
@@ -401,7 +401,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          ket<index_container_type> &&ket_indices,
          aux<index_container_type> &&aux_indices, reserved_tag,
          ResolvedSymmetries rsym)
-      : label_(std::string(std::forward<S>(label))),
+      : label_(to_string_view(label)),
         bra_(std::move(bra_indices)),
         ket_(std::move(ket_indices)),
         aux_(std::move(aux_indices)),

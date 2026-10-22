@@ -249,6 +249,13 @@ TEST_CASE("tensor", "[elements]") {
                           sequant::Exception);
       }
     }
+
+    // labels can be given as single characters or as (multi-byte) UTF-8
+    // strings
+    REQUIRE(Tensor('t', bra{"i_1"}, ket{"a_1"}).label() == "t");
+    REQUIRE(Tensor("λ⁺", bra{"i_1"}, ket{"a_1"}).label() == "λ⁺");
+    REQUIRE(Tensor(std::string_view("𝛼"), bra{"i_1"}, ket{"a_1"}).label() ==
+            "𝛼");
   }  // SECTION("constructors")
 
   SECTION("index transformation") {

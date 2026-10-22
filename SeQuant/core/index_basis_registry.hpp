@@ -841,7 +841,7 @@ class IndexBasisRegistry {
                           const IndexBasisSpec& spec = {}) {
     constexpr const char* caller =
         "IndexBasisRegistry::add(label, space, instance)";
-    std::string key = std::string(std::forward<S>(label));
+    std::string key(to_string_view(label));
     if (spec.extent && *spec.extent < 0)
       throw Exception(std::string(caller) + ": the extent of '" +
                       std::string(to_string_view(key)) +
