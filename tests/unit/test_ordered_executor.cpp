@@ -43,6 +43,7 @@
 #include <SeQuant/core/eval/slicing_signature.hpp>
 #include <SeQuant/core/eval/value_node_map.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -76,6 +77,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 namespace {
@@ -5550,4 +5552,190 @@ TEST_CASE("ordered executor refuses a batched schedule with no backend ops",
                       sched, target, &ops));
   auto const& block = std::get<ScopeBlock>(sched.root.steps.front().value);
   CHECK(n_batches(block.level.key()) == 2);
+}
+
+// ===========================================================================
+// Issue #720: a shared, batched intermediate read by one term in lockstep
+// inside its loop and by another term whole, at the root. W = g{i;i;K} g{a;a;K}
+// is sliced on a_2 in both terms of a two-term DF doubles residual and the two
+// occurrences fold into one value. Term 1 reads W inside the a_2 loop; in term
+// 2 W opens the a_2 loop itself and W t2 reads it assembled. Legality must
+// classify the two occurrences separately (lockstep / outside), the schedule
+// must build W inside the loop (for term 1) and also scatter it out (for term
+// 2), and the cell table must validate. Decided per recorded loop instance, not
+// by basis key.
+// ===========================================================================
+TEST_CASE(
+    "ordered schedule: a shared batched intermediate read in lockstep by one "
+    "term and whole by another is built in its loop and escapes assembled",
+    "[ordered][cell_table][legality]") {
+  using sequant::Index;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context_snapshot();
+  auto ibr = sequant::mbpt::make_sr_spaces();
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(sequant::Vacuum::SingleProduct)
+      .set(sequant::SPBasis::Spinfree)
+      .set(ibr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  // R{a1,a2;i1,i2} = -g{i1;i3;Κ2} g{a3;a2;Κ2} t{a1;i3} t{a3;i2}
+  //                 - 2 g{i1;i3;Κ2} g{a3;a2;Κ2} t{a1,a3;i3,i2}
+  auto const rhs = sequant::deserialize<sequant::ExprPtr>(
+      L"-1 g{i_1;i_3;Κ_2}:N-S-S * g{a_3;a_2;Κ_2}:N-S-S * t{a_1;i_3}:N-N-S "
+      L"* t{a_3;i_2}:N-N-S "
+      L"- 2 g{i_1;i_3;Κ_2}:N-S-S * g{a_3;a_2;Κ_2}:N-S-S "
+      L"* t{a_1,a_3;i_3,i_2}:N-N-S");
+  sequant::ResultExpr const res(
+      sequant::Tensor(L"R", sequant::bra{L"a_1", L"a_2"},
+                      sequant::ket{L"i_1", L"i_2"}),
+      rhs);
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 4}, {L"a", 8}, {L"Κ", 24}};
+
+  // Slice the virtuals (external role) in blocks of 4 under a peak budget
+  // tight enough that both occurrences of W are sliced the same way and
+  // merge into one value.
+  auto const is_a = [](Index const& ix) {
+    return ix.space() && ix.basis().base_key() == L"a";
+  };
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = is_a;
+  policy.batch_spectator_indices = true;
+  policy.batch_target_size = [is_a](Index const& ix) -> std::size_t {
+    return is_a(ix) ? 4 : 0;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.peak_threshold = 8000;
+  policy.scheduler = sequant::BatchScheduler::ordered;
+
+  auto axes = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.batch_policy = policy;
+  opts.term_batch_axes = axes;
+  opts.volatile_weight = 10;
+  auto const optimized = sequant::optimize_result(res.expression(), opts).expr;
+  sequant::BinarizationOptions bopts;
+  if (auto it = axes->find(optimized.get()); it != axes->end())
+    bopts.node_batch_axes = it->second;
+  std::vector<Node> const forest{sequant::binarize<EvalExprDryRun>(
+      sequant::ResultExpr(res.result_as_tensor(), optimized), bopts)};
+
+  auto const target = policy.batch_target_size;
+  auto const rich = sequant::eval::compute_dag_boulevard(
+      forest,
+      sequant::eval::dryrun::CostModel{sequant::eval::dryrun::SizeRegime{}},
+      target);
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+
+  // W is the only CSE-shared non-leaf value: two occurrences, one under an
+  // enclosing a loop (term 1) and one with none (term 2, W opens the loop).
+  // This pins the cost model's choice at this budget; if the optimizer ever
+  // shares a second intermediate here, or none, the fixture no longer
+  // produces the issue's shape and needs a new budget, not a new assertion.
+  std::optional<std::size_t> w_vid;
+  for (auto const& vc : rich.cells) {
+    if (vc.is_leaf || vc.occurrences.size() != 2) continue;
+    INFO("a second CSE-shared non-leaf value ("
+         << vc.value_id << "): the fixture no longer isolates W");
+    REQUIRE_FALSE(w_vid.has_value());
+    w_vid = vc.value_id;
+  }
+  INFO(
+      "no CSE-shared non-leaf value: the optimizer no longer shares W at "
+      "this budget");
+  REQUIRE(w_vid.has_value());
+  auto const& w_cell = rich.cells[*w_vid];
+  {
+    bool one_enclosed = false, one_bare = false;
+    for (auto const& occ : w_cell.occurrences)
+      (occ.ectx.empty() ? one_bare : one_enclosed) = true;
+    REQUIRE((one_enclosed && one_bare));
+  }
+  std::unordered_map<std::size_t, std::size_t> point_owner;
+  for (auto const& vc : rich.cells)
+    for (auto const& occ : vc.occurrences) point_owner[occ.point] = vc.value_id;
+  // the term-1 reader of W, inside the loop
+  std::optional<std::size_t> lockstep_reader;
+  for (auto const& occ : w_cell.occurrences)
+    if (!occ.ectx.empty()) lockstep_reader = point_owner.at(occ.consumer_point);
+  REQUIRE(lockstep_reader.has_value());
+
+  // Legality: one a axis, LoopLocal for the value (it has a lockstep reader),
+  // with the two occurrences classified separately.
+  auto const cl_it = std::find_if(
+      legality.cells.begin(), legality.cells.end(), [&](auto const& cl) {
+        return cl.hash == sequant::eval::value_key_of(w_cell);
+      });
+  REQUIRE(cl_it != legality.cells.end());
+  REQUIRE(cl_it->per_axis.size() == 1);
+  auto const& ac = cl_it->per_axis.front();
+  CHECK(ac.axis.basis().base_key() == L"a");
+  CHECK(ac.role == sequant::eval::LoopRole::LoopLocal);
+  REQUIRE(ac.per_occurrence.size() == 2);
+  {
+    std::size_t n_lockstep = 0, n_outside = 0;
+    for (auto const& o : ac.per_occurrence) {
+      if (o.role == sequant::eval::OccurrenceRole::Lockstep) ++n_lockstep;
+      if (o.role == sequant::eval::OccurrenceRole::Assembled) ++n_outside;
+    }
+    CHECK(n_lockstep == 1);
+    CHECK(n_outside == 1);
+  }
+  CHECK(cl_it->home_floor.size() == 1);
+  CHECK(cl_it->forced_split_axes.empty());
+
+  // Schedule: W has a BuildStep in an a block that also scatters it out, and
+  // its lockstep reader is built in that same block (same pass).
+  sequant::eval::OrderedSchedule ordered;
+  REQUIRE_NOTHROW(ordered = sequant::eval::build_ordered_schedule(
+                      rich, legality, policy, {}));
+  sequant::eval::ScopeBlock const* w_block = nullptr;
+  std::function<void(sequant::eval::ScopeBlock const&)> const find_w =
+      [&](sequant::eval::ScopeBlock const& b) {
+        for (auto const& st : b.steps) {
+          if (auto const* bs = std::get_if<sequant::eval::BuildStep>(&st.value);
+              bs && bs->value_id == *w_vid)
+            w_block = &b;
+          if (auto const* child =
+                  std::get_if<sequant::eval::ScopeBlock>(&st.value))
+            find_w(*child);
+        }
+      };
+  find_w(ordered.root);
+  REQUIRE(w_block != nullptr);
+  CHECK(w_block->level.depth == 1);
+  CHECK(w_block->axis.basis().base_key() == L"a");
+  CHECK(std::count_if(w_block->outputs.begin(), w_block->outputs.end(),
+                      [&](auto const& o) {
+                        return o.first == *w_vid &&
+                               o.second ==
+                                   sequant::eval::OutputKind::AccumulateScatter;
+                      }) == 1);
+  CHECK(std::any_of(
+      w_block->steps.begin(), w_block->steps.end(), [&](auto const& st) {
+        auto const* bs = std::get_if<sequant::eval::BuildStep>(&st.value);
+        return bs && bs->value_id == *lockstep_reader;
+      }));
+
+  // The cell table is built and validated before any replay; then the
+  // zero-data replay itself must run.
+  auto const cm =
+      std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+  auto cache = sequant::cache_manager(forest);
+  auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  cache.set_array_ops(&aops);
+  REQUIRE_NOTHROW((void)sequant::eval::evaluate_ordered_multiroot(
+      forest, ordered, rich, {""},
+      sequant::eval::dryrun::DryRunLeafEvaluator{cm}, cache, target));
 }

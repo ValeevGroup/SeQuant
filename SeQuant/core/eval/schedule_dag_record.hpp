@@ -77,6 +77,16 @@ inline std::string role_name(LoopRole r) {
   throw Exception("record_dag: unknown LoopRole");
 }
 
+inline std::string role_name(OccurrenceRole r) {
+  switch (r) {
+    case OccurrenceRole::Lockstep:
+      return "Lockstep";
+    case OccurrenceRole::Assembled:
+      return "Assembled";
+  }
+  throw Exception("record_dag: unknown OccurrenceRole");
+}
+
 inline std::string output_kind_name(OutputKind k) {
   switch (k) {
     case OutputKind::Transient:
@@ -572,6 +582,24 @@ DagRecord record_dag(
       o.home = spell_modes(occ.home);
       for (auto const& e : occ.ectx)
         o.enclosing.push_back(mode_spelling(e.first));
+      // a per-occurrence role is on a carried position of the value; spell
+      // the position in this occurrence's own frame, as home and enclosing
+      // are (ac.axis is in the first occurrence's)
+      for (auto const& ac : cl.per_axis)
+        for (auto const& por : ac.per_occurrence) {
+          if (por.point != occ.point) continue;
+          auto const pit =
+              std::find(c.carried.begin(), c.carried.end(), ac.axis);
+          std::size_t const pos =
+              static_cast<std::size_t>(pit - c.carried.begin());
+          if (pit == c.carried.end() || pos >= occ.carried.size())
+            throw Exception("record_dag: value " + rec.id +
+                            " has an occurrence role on " +
+                            mode_spelling(ac.axis) +
+                            ", which is not a carried position of the value");
+          o.roles.push_back(
+              {mode_spelling(occ.carried[pos]), detail::role_name(por.role)});
+        }
       for (auto const& [ix, kind] : occ.opens)
         o.opens.push_back({mode_spelling(ix), kind == BatchModeType::External
                                                   ? ModeKind::External
