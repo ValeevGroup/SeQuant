@@ -166,9 +166,7 @@ enum class SlotType {
   Proto = 0b1000,
 };
 
-template <typename CharT, typename Traits>
-std::basic_ostream<CharT, Traits>& operator<<(
-    std::basic_ostream<CharT, Traits>& stream, SlotType origin) {
+inline std::ostream& operator<<(std::ostream& stream, SlotType origin) {
   switch (origin) {
     case SlotType::Bra:
       stream << "Bra";

@@ -20,7 +20,7 @@ namespace detail {
 template <typename Range>
 std::string serialize_indices(Range&& indices,
                               const SerializationOptions& options) {
-  return join_strings<std::string>(indices, ",", [&](const Index& idx) {
+  return join_strings(indices, ",", [&](const Index& idx) {
     return v1::to_string(idx, options);
   });
 }
@@ -28,7 +28,7 @@ std::string serialize_indices(Range&& indices,
 template <typename Range>
 std::string serialize_ops(const Range& ops,
                           const SerializationOptions& options) {
-  return join_strings<std::string>(ops, ",", [&](const auto& op) {
+  return join_strings(ops, ",", [&](const auto& op) {
     return v1::to_string(op.index(), options);
   });
 }
@@ -257,7 +257,7 @@ std::string to_string(const Index& index, const SerializationOptions&) {
   const bool unnamed_instance = index.basis().unnamed_instance().has_value();
   if (index.has_proto_indices() || unnamed_instance) {
     serialized += "<";
-    serialized += join_strings<std::string>(
+    serialized += join_strings(
         index.proto_indices(), ",", [](const Index& proto) -> std::string {
           std::string label(proto.label());
           if (proto.basis().unnamed_instance())

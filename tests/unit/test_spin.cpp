@@ -1889,7 +1889,7 @@ SECTION("ResultExpr") {
     // instead; for 3 bra indices the permutations do not alternate in sign.
     // Permutations that pair the same bra and ket spaces yield one result.
     auto csv = [](const auto& indices) {
-      return join_strings<std::string>(indices, ",", [](const Index& idx) {
+      return join_strings(indices, ",", [](const Index& idx) {
         return std::string(idx.full_label());
       });
     };

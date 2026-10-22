@@ -593,9 +593,8 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
 ///         without a trailing comma (the dag-scope trace format)
 template <typename Modes>
 [[nodiscard]] std::string dag_scope(Modes&& modes) {
-  return join_strings<std::string>(
-      std::forward<Modes>(modes), ",",
-      [](Index const& m) { return std::string(m.basis().base_key()); });
+  return join_strings(std::forward<Modes>(modes), ",",
+                      [](Index const& m) { return m.basis().base_key(); });
 }
 
 /// value id -> forest node: the node of \p vmap whose value key is that of

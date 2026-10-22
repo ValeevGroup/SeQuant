@@ -180,16 +180,7 @@ class IndexBasis {
   /// @param key a label of a space, of a named basis instance, or of an
   /// Index in either
   /// @return the base key of @p key, as `IndexSpace::reduce_key(key)`
-  template <std::ranges::contiguous_range View>
-    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          char>)
-  static auto reduce_key(View&& key) {
-    return IndexSpace::reduce_key(key);
-  }
-
-  /// @overload
-  template <typename CharT>
-  static auto reduce_key(const CharT* key) {
+  static std::string_view reduce_key(std::string_view key) {
     return IndexSpace::reduce_key(key);
   }
 

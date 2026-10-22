@@ -21,7 +21,7 @@ double SequantEvalScf::energy() const { return energy_; }
 //
 // todo separate logging functions
 //
-void SequantEvalScf::scf(std::basic_ostream<char>& log) {
+void SequantEvalScf::scf(std::ostream& log) {
   using HRC = std::chrono::high_resolution_clock;
 
   size_t const iter_print_width =

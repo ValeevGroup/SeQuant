@@ -43,7 +43,7 @@ class SequantEvalScf {
 
   [[nodiscard]] double energy() const;
 
-  void scf(std::basic_ostream<char>& log);
+  void scf(std::ostream& log);
 };
 
 }  // namespace sequant::eval

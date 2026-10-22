@@ -223,13 +223,11 @@ TEST_CASE("find_position", "[utilities]") {
 TEST_CASE("join_strings", "[utilities]") {
   using namespace sequant;
 
-  REQUIRE(join_strings<std::string>(std::vector<std::string>{}, ",").empty());
-  REQUIRE(join_strings<std::string>(std::vector<std::string>{"a"}, ",") == "a");
-  REQUIRE(join_strings<std::string>(std::vector<std::string>{"a", "b"}, ", ") ==
-          "a, b");
-  REQUIRE(join_strings<std::string>(std::vector<int>{1, 2, 3}, "-", [](int i) {
-            return std::to_string(i);
-          }) == "1-2-3");
+  REQUIRE(join_strings(std::vector<std::string>{}, ",").empty());
+  REQUIRE(join_strings(std::vector<std::string>{"a"}, ",") == "a");
+  REQUIRE(join_strings(std::vector<std::string>{"a", "b"}, ", ") == "a, b");
+  REQUIRE(join_strings(std::vector<int>{1, 2, 3}, "-",
+                       [](int i) { return std::to_string(i); }) == "1-2-3");
 }
 
 TEST_CASE("utf8", "[utilities]") {

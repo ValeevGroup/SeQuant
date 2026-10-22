@@ -519,43 +519,25 @@ class Index : public Taggable {
     return result;
   }
 
-  template <std::ranges::contiguous_range View>
-    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          char>)
-  static auto base_label_end(View &&label) {
-    using std::ranges::begin;
-    using std::ranges::end;
-    using CharT = std::remove_cvref_t<std::ranges::range_value_t<View>>;
-
-    auto it = std::ranges::find(label, static_cast<CharT>('_'));
-    if (it != end(label)) {
-      return it;
+  /// @return the position (in @p label) at which the base part of the Index
+  /// label @p label ends
+  static std::size_t base_label_end(std::string_view label) {
+    if (const auto pos = label.find('_'); pos != std::string_view::npos) {
+      return pos;
     }
 
-    it = std::ranges::find_if(label, [](char c) { return is_ascii_digit(c); });
-
-    if (it != end(label) && it != begin(label)) {
-      return it;
+    const auto it = std::ranges::find_if(label, is_ascii_digit);
+    if (it != label.end() && it != label.begin()) {
+      return std::distance(label.begin(), it);
     }
 
-    return end(label);
+    return label.size();
   }
 
   /// @param label an Index label (e.g., returned by Index::label())
   /// @return base part of @p label
-  template <std::ranges::contiguous_range View>
-    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          char>)
-  static std::string base_label(View &&label) {
-    using std::ranges::begin;
-    auto end = base_label_end(label);
-
-    return std::string(begin(label), end);
-  }
-
-  template <typename CharT>
-  static std::string base_label(const CharT *label) {
-    return base_label(std::basic_string_view<CharT>{label});
+  static std::string base_label(std::string_view label) {
+    return std::string(label.substr(0, base_label_end(label)));
   }
 
   static std::string base_label(char label) { return std::string(1, label); }
@@ -591,7 +573,7 @@ class Index : public Taggable {
       "representation")]] std::string
   ascii_label() const;
 
-  /// @return A UTF-8 encoded narrow-character string label
+  /// @return the label as a UTF-8 encoded string
   /// @warning not to be used with proto indices
   std::string to_string() const;
 
@@ -919,36 +901,25 @@ class Index : public Taggable {
     }
   }
 
-  template <typename Char, typename = std::enable_if_t<meta::is_char_v<Char>>>
-  static inline std::optional<ordinal_type> to_ordinal(Char) noexcept {
+  static std::optional<ordinal_type> to_ordinal(char) noexcept {
     return std::nullopt;
   }
 
-  template <std::ranges::contiguous_range View>
-    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          char>)
-  static std::optional<ordinal_type> to_ordinal(View &&label) noexcept {
+  static std::optional<ordinal_type> to_ordinal(
+      std::string_view label) noexcept {
     auto end = base_label_end(label);
 
-    if (end == std::ranges::end(label)) {
+    if (end == label.size()) {
       return std::nullopt;
     }
 
-    if (*end == '_') {
+    if (label[end] == '_') {
       ++end;
     }
 
-    SEQUANT_ASSERT(end != std::ranges::end(label));
+    SEQUANT_ASSERT(end != label.size());
 
-    std::basic_string_view<
-        std::remove_cvref_t<std::ranges::range_value_t<View>>>
-        view(&(*end), std::ranges::distance(end, std::ranges::end(label)));
-    return string_to<ordinal_type>(view);
-  }
-
-  template <typename CharT>
-  static std::optional<ordinal_type> to_ordinal(const CharT *label) noexcept {
-    return to_ordinal(std::basic_string_view<CharT>{label});
+    return string_to<ordinal_type>(label.substr(end));
   }
 
   friend class IndexFactory;

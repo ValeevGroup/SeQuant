@@ -484,39 +484,23 @@ class IndexSpace {
 
   const std::string &base_key() const { return base_key_; }
 
-  template <std::ranges::contiguous_range View>
-    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          char>)
-  static auto reduce_key(View &&key) {
-    using std::ranges::begin;
-    using std::ranges::end;
-    using CharT = std::remove_cvref_t<std::ranges::range_value_t<View>>;
-
-    auto to_return = [](auto &&range) {
-      return std::string(begin(range), end(range));
-    };
-
-    const auto underscore_pos = std::ranges::find(key, static_cast<CharT>('_'));
-    if (underscore_pos != end(key)) {
+  /// @param key a label of a space or of an Index in it
+  /// @return the base key of @p key, i.e. @p key without its ordinal (if any)
+  static std::string_view reduce_key(std::string_view key) {
+    if (const auto underscore_pos = key.find('_');
+        underscore_pos != std::string_view::npos) {
       // base key ends at underscore
-      return to_return(std::ranges::subrange(begin(key), underscore_pos));
+      return key.substr(0, underscore_pos);
     }
 
-    const auto digit_pos =
-        std::ranges::find_if(key, [](char c) { return is_ascii_digit(c); });
-
-    if (digit_pos != end(key) && digit_pos != begin(key)) {
+    const auto digit_pos = std::ranges::find_if(key, is_ascii_digit);
+    if (digit_pos != key.end() && digit_pos != key.begin()) {
       // base key ends at first digit (unless the digit is the first character)
-      return to_return(std::ranges::subrange(begin(key), digit_pos));
+      return key.substr(0, std::distance(key.begin(), digit_pos));
     }
 
     // No ordinal to separate from key -> entire key is base key (reduced key)
-    return to_return(key);
-  }
-
-  template <typename CharT>
-  static auto reduce_key(const CharT *key) {
-    return reduce_key(std::basic_string_view<CharT>(key));
+    return key;
   }
 
   /// @return the (nominal) dimension of the space, the extent of its own
