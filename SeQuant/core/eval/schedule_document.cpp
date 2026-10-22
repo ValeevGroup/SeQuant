@@ -152,6 +152,14 @@ json to_j(Fingerprint const& f) {
 }
 
 template <>
+json to_j(PerAxisRecord const& p) {
+  json j;
+  j["mode"] = p.mode;
+  j["role"] = p.role;
+  return j;
+}
+
+template <>
 json to_j(OccurrenceRecord const& o) {
   json j;
   j["term"] = o.term;
@@ -160,14 +168,7 @@ json to_j(OccurrenceRecord const& o) {
   j["home"] = strs_j(o.home);
   j["enclosing"] = strs_j(o.enclosing);
   j["opens"] = vec_j(o.opens);
-  return j;
-}
-
-template <>
-json to_j(PerAxisRecord const& p) {
-  json j;
-  j["mode"] = p.mode;
-  j["role"] = p.role;
+  j["roles"] = vec_j(o.roles);
   return j;
 }
 
@@ -645,6 +646,10 @@ ValueRecord value_r(json const& j) {
     r.home = get_strs(o, "home", w);
     r.enclosing = get_strs(o, "enclosing", w);
     r.opens = axes_r(o, "opens", w);
+    // absent in documents written before the per-occurrence roles existed
+    if (o.contains("roles"))
+      for (auto const& p : get_arr(o, "roles", w))
+        r.roles.push_back({get_str(p, "mode", w), get_str(p, "role", w)});
     v.occurrences.push_back(std::move(r));
   }
   v.siblings = get_strs(j, "siblings", w);

@@ -122,18 +122,22 @@ struct Fingerprint {
   ContextRecord context;
 };
 
+/// role: LoopLocal|Reduction|LoopCarried|LoopInvariant
+struct PerAxisRecord {
+  std::string mode;
+  std::string role;
+};
+
 struct OccurrenceRecord {
   std::string term;
   std::size_t node = 0;
   std::optional<std::size_t> consumer;
   std::vector<std::string> home, enclosing;
   std::vector<AxisRecord> opens;
-};
-
-/// role: LoopLocal|Reduction|LoopCarried|LoopInvariant
-struct PerAxisRecord {
-  std::string mode;
-  std::string role;
+  /// the value's batched result modes at this occurrence, each LoopLocal
+  /// (read inside the loop instance that slices it) or LoopCarried (read
+  /// where that instance is not running: assembled)
+  std::vector<PerAxisRecord> roles;
 };
 
 struct ValueRecord {
