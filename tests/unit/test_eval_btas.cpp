@@ -42,7 +42,7 @@ auto eval_node(sequant::ExprPtr const& expr) {
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
-static auto const idx_rgx = boost::regex{"([ia])([↑↓])?_?(\\d+)"};
+static auto const idx_rgx = boost::regex{"([ia])(↑|↓)?_?(\\d+)"};
 auto tensor_to_key(sequant::Tensor const& tnsr) {
   auto formatter = [](boost::smatch mo) -> std::string {
     return (mo[1].str() == "i" ? "o" : "v") + mo[2].str();
@@ -170,7 +170,7 @@ class aux_rand_tensor_yield {
     // leaf and the original deserialized tensor map to the same entry
     return boost::regex_replace(
         sequant::serialize(t.clone(), {.annot_symm = false}),
-        boost::regex{"([iaz])[↑↓]?_?\\d+"}, "$1");
+        boost::regex{"([iaz])(?:↑|↓)?_?\\d+"}, "$1");
   }
 
   size_t extent(sequant::Index const& idx) const {

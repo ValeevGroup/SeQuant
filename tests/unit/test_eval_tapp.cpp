@@ -31,7 +31,7 @@ auto eval_node(sequant::ExprPtr const& expr) {
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
-static auto const idx_rgx = boost::regex{"([ia])([↑↓])?_?(\\d+)"};
+static auto const idx_rgx = boost::regex{"([ia])(↑|↓)?_?(\\d+)"};
 auto tensor_to_key(sequant::Tensor const& tnsr) {
   auto formatter = [](boost::smatch mo) -> std::string {
     return (mo[1].str() == "i" ? "o" : "v") + mo[2].str();

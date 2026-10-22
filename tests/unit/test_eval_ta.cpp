@@ -139,7 +139,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
   // proto pattern), independent of the index names: that is the DAG's own
   // value identity (a CSE-shared leaf is one array), so forest references
   // and the ordered executor agree. The PAO-like `m` space is normalized too.
-  static auto const idx_rgx = boost::regex{"([iaxm])([↑↓])?(_?\\d+)"};
+  static auto const idx_rgx = boost::regex{"([iaxm])(↑|↓)?(_?\\d+)"};
   auto formatter = [](boost::smatch mo) -> std::string {
     return (mo[1].str() == "i"   ? "o"
             : mo[1].str() == "a" ? "v"
