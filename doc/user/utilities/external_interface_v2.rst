@@ -411,10 +411,64 @@ given, they are merged and jointly ordered before being exported together.
        (imported) rather than being computed by the generated code.
      - :code:`{}`
      - No
+   * - :code:`irreps`
+     - Point-group symmetry (IRREP) information. If given, the IRREPs of all exported tensors are determined from the IRREPs of the input tensors
+       and emitted into the generated code. See below for the sub-schema.
+     - -
+     - No
    * - :code:`meta`
      - Additional, language-specific metadata. See below for the sub-schema accepted when :code:`language` is :code:`itf`.
      - :code:`{}`
      - No
+
+The :code:`irreps` option accepts the following properties:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Option
+     - Description
+     - Default
+     - Required
+   * - :code:`group`
+     - The symmetry group. Either the name of one of the abelian point groups :code:`C1`, :code:`Ci`, :code:`C2`, :code:`Cs`, :code:`C2v`,
+       :code:`C2h`, :code:`D2` and :code:`D2h` (with IRREPs named and ordered as in Molpro), :code:`symbolic` for a group consisting of symbolic
+       IRREPs only, or an object describing an explicit (possibly non-abelian) multiplication table with the properties
+       :code:`totally_symmetric` (name of the totally symmetric IRREP), :code:`products` (object mapping :code:`"X*Y"` to the IRREP(s) of the
+       product; one ordering per pair suffices and products with the totally symmetric IRREP are implicit) and :code:`conjugates` (object mapping
+       complex IRREPs to their complex conjugate; one direction per pair suffices).
+     - -
+     - Yes
+   * - :code:`symbols`
+     - Array of names of symbolic IRREPs, i.e. IRREPs whose value is only known at runtime (e.g. the symmetry of a perturbation). Symbols remain
+       unevaluated in the generated code (e.g. :code:`B1u*Gp`), where every IRREP is its own inverse (:code:`Gp*Gp` is totally symmetric). For the
+       named point groups, every name that is not an IRREP of the group must be declared here (this catches typos). For :code:`symbolic`, any
+       name is accepted unless this list is given. Not supported for explicit multiplication tables.
+     - :code:`[]`
+     - No
+   * - :code:`relations`
+     - Array of relations between IRREPs of the form :code:`"My1*My2 = My3"`, which are used to simplify products of symbolic IRREPs. Not
+       supported for explicit multiplication tables.
+     - :code:`[]`
+     - No
+   * - :code:`tensors`
+     - Object mapping tensors to their IRREP(s), given as a single IRREP name or an array of names (for tensors spanning several IRREPs).
+       :code:`"*"` stands for any IRREP. Keys are either a serialized tensor (matching the corresponding tensor block, as for :code:`imports`) or
+       otherwise a full-match regular expression for the tensor label (applying to all blocks of matching tensors, as for the :code:`label` rules
+       of the :code:`filter` step). Tensor block keys take precedence over label keys and a label key spelling out a tensor's label literally takes
+       precedence over other matching label keys. Beyond that, all keys matching a given tensor must specify the same IRREPs. Tensors are referred
+       to by their names in the expressions (e.g. :code:`g` rather than :code:`K`/:code:`J`). Reserved tensors (e.g. Kronecker deltas) are totally symmetric and tensors computed during the export (results,
+       intermediates) need not be listed.
+     - :code:`{}`
+     - No
+   * - :code:`default`
+     - IRREP(s) of tensors not listed in :code:`tensors`. The special value :code:`error` turns unlisted tensors into an error, which is
+       recommended to catch missing specifications.
+     - :code:`"*"`
+     - No
+
+For :code:`language: itf`, the IRREPs of created tensors are emitted as an :code:`irrep:` entry of their :code:`!Create{...}` statement, whereas the
+IRREPs of imported tensors are given as a trailing comment of their declaration (for informational purposes only).
 
 For :code:`language: itf`, :code:`meta` accepts the following properties:
 
@@ -434,6 +488,11 @@ For :code:`language: itf`, :code:`meta` accepts the following properties:
    * - :code:`min_index_id`
      - Non-negative integer offset that index IDs emitted into the generated ITF code start counting from.
      - 0
+     - No
+   * - :code:`irrep_names`
+     - Object mapping IRREP names (as used in the :code:`irreps` option, e.g. :code:`Ag` or :code:`B1u*Gp`) to the names used in the generated ITF
+       code. The key :code:`"*"` refers to tensors spanning any IRREP. IRREPs not listed here keep their name.
+     - :code:`{}`
      - No
 
 

@@ -134,6 +134,192 @@ TEST_CASE("export step", "[extint]") {
         Exception);
   }
 
+  SECTION("irreps option validation") {
+    auto with_irreps = [](json irreps) {
+      return json{{"language", "itf"},
+                  {"output", "out.itfaa"},
+                  {"irreps", std::move(irreps)}};
+    };
+    auto rejects = [&](json irreps, std::string_view message) {
+      REQUIRE_THROWS_WITH(
+          ExportStep{}.set_options(with_irreps(std::move(irreps))),
+          Catch::Matchers::ContainsSubstring(std::string(message)));
+    };
+
+    REQUIRE_NOTHROW(ExportStep{}.set_options(with_irreps(
+        {{"group", "D2h"},
+         {"symbols", {"Gp", "Gq"}},
+         {"relations", {"Gp*Gq = B1u"}},
+         {"default", "error"},
+         {"tensors",
+          {{"f", "Ag"}, {"T2{a1,a2;i1,i2}", {"Gp", "B1u*Gq"}}, {"X", "*"}}}})));
+    REQUIRE_NOTHROW(ExportStep{}.set_options(
+        with_irreps({{"group", "symbolic"}, {"tensors", {{"t", "Gx*Gy"}}}})));
+    REQUIRE_NOTHROW(ExportStep{}.set_options(with_irreps(
+        {{"group",
+          {{"totally_symmetric", "A1"},
+           {"products",
+            {{"A2*A2", "A1"}, {"A2*E", "E"}, {"E*E", {"A1", "A2", "E"}}}}}},
+         {"tensors", {{"t", "E"}}}})));
+
+    rejects(json::array(), "Expected an object");
+    rejects({{"tensors", json::object()}}, "'group' entry is mandatory");
+    rejects({{"group", "D3h"}}, "Unknown point group");
+    rejects({{"group", "D2h"}, {"unknown", 1}}, "Unknown key");
+    // Symbols must be declared for concrete point groups (catches typos)
+    rejects({{"group", "D2h"}, {"tensors", {{"t", "B1"}}}}, "Unknown IRREP");
+    rejects({{"group", "symbolic"},
+             {"symbols", {"Gp"}},
+             {"tensors", {{"t", "Gq"}}}},
+            "Unknown IRREP");
+    rejects({{"group", "D2h"}, {"relations", {"B1u"}}}, "lhs = rhs");
+    rejects({{"group", "D2h"}, {"relations", {"B1u = B2u"}}},
+            "two different concrete IRREPs");
+    rejects({{"group", "D2h"}, {"tensors", {{"t", json::array()}}}},
+            "non-empty array");
+    rejects({{"group", "D2h"}, {"tensors", {{"t", 5}}}}, "string");
+    rejects(
+        {{"group", {{"totally_symmetric", "A1"}, {"products", json::object()}}},
+         {"tensors", {{"t", "E"}}}},
+        "Unknown IRREP 'E'");
+    rejects(
+        {{"group", {{"totally_symmetric", "A1"}}}, {"relations", {"A1 = A1"}}},
+        "only supported");
+    rejects({{"group", {{"products", json::object()}}}}, "totally_symmetric");
+  }
+
+  SECTION("IRREPs are emitted in the generated code") {
+    ExportTreeData data = test_support::tree_data(
+        {L"R{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i3}:A-H-S "
+         L"Y{i3;i2}:N-N-N"});
+
+    ExecutionContext ctx;
+    ctx.set_data("in", 0, ProcessingData{std::move(data)});
+
+    const std::filesystem::path out =
+        std::filesystem::temp_directory_path() / "extint_irreps_test.itfaa";
+
+    json options{{"language", "itf"},
+                 {"output", out.string()},
+                 {"irreps",
+                  {{"group", "D2h"},
+                   {"symbols", {"Gp"}},
+                   {"default", "error"},
+                   {"tensors",
+                    {{"f", "Ag"}, {"T2", "Gp"}, {"Y{i1;i2}", {"Ag", "B1u"}}}}}},
+                 {"meta",
+                  {{"index_spaces",
+                    {{"i", {{"name", "Closed"}, {"tag", "c"}}},
+                     {"a", {{"name", "External"}, {"tag", "e"}}}}},
+                   {"irrep_names", {{"Gp", "pert"}}}}}};
+
+    ExportStep step;
+    step.set_options(options);
+    {
+      test_support::ScopedStreamSilencer silencer;
+      step.run("exp", ctx, {"in.0"});
+    }
+
+    std::ifstream stream(out);
+    REQUIRE(stream.good());
+    std::stringstream buffer;
+    buffer << stream.rdbuf();
+    const std::string code = buffer.str();
+    stream.close();
+    std::filesystem::remove(out);
+
+    // Gp x Ag x {Ag, B1u} = {Gp, B1u*Gp} where Gp is renamed to 'pert'
+    REQUIRE_THAT(
+        code, Catch::Matchers::ContainsSubstring("R:ec // irrep:pert,B1u*Gp"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("f:ce // irrep:Ag"));
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring("T2:eecc // irrep:pert"));
+    REQUIRE_THAT(
+        code, Catch::Matchers::ContainsSubstring("!Create{type:plain irrep:"));
+
+    // Tensors without IRREP specification are rejected if requested
+    options["irreps"]["tensors"].erase("Y{i1;i2}");
+    ExecutionContext ctx2;
+    ctx2.set_data("in", 0,
+                  ProcessingData{test_support::tree_data(
+                      {L"R{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i3}:A-H-S "
+                       L"Y{i3;i2}:N-N-N"})});
+    ExportStep strict;
+    strict.set_options(options);
+    test_support::ScopedStreamSilencer silencer;
+    REQUIRE_THROWS_WITH(strict.run("exp", ctx2, {"in.0"}),
+                        Catch::Matchers::ContainsSubstring("No IRREPs"));
+    std::filesystem::remove(out);
+  }
+
+  SECTION("tensors are matched by label patterns and blocks") {
+    // @returns The code generated for a fixed expression with the given
+    // IRREP specification of the tensors
+    auto export_code = [](json tensors) {
+      ExecutionContext ctx;
+      ctx.set_data("in", 0,
+                   ProcessingData{test_support::tree_data(
+                       {L"R{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i3}:A-H-S "
+                        L"Y{i3;i2}:N-N-N"})});
+
+      const std::filesystem::path out = std::filesystem::temp_directory_path() /
+                                        "extint_irreps_matching_test.itfaa";
+
+      ExportStep step;
+      step.set_options(
+          json{{"language", "itf"},
+               {"output", out.string()},
+               {"irreps",
+                {{"group", "D2h"},
+                 {"symbols", {"Gp"}},
+                 {"default", "error"},
+                 {"tensors", std::move(tensors)}}},
+               {"meta",
+                {{"index_spaces",
+                  {{"i", {{"name", "Closed"}, {"tag", "c"}}},
+                   {"a", {{"name", "External"}, {"tag", "e"}}}}}}}});
+
+      test_support::ScopedStreamSilencer silencer;
+      step.run("exp", ctx, {"in.0"});
+
+      std::ifstream stream(out);
+      std::stringstream buffer;
+      buffer << stream.rdbuf();
+      stream.close();
+      std::filesystem::remove(out);
+
+      return buffer.str();
+    };
+
+    using Catch::Matchers::ContainsSubstring;
+
+    // Labels are full-match regular expressions
+    std::string code = export_code({{"[fY]", "Ag"}, {"T.", "Gp"}});
+    REQUIRE_THAT(code, ContainsSubstring("Y:cc // irrep:Ag"));
+    REQUIRE_THAT(code, ContainsSubstring("T2:eecc // irrep:Gp"));
+    REQUIRE_THAT(code, ContainsSubstring("R:ec // irrep:Gp"));
+    REQUIRE_THROWS_WITH(export_code({{"[fY]", "Ag"}, {"T", "Gp"}}),
+                        ContainsSubstring("No IRREPs"));
+
+    // A literal label takes precedence over patterns
+    code = export_code({{"[fY]", "Ag"}, {"T.", "Gp"}, {"T2", "B1u"}});
+    REQUIRE_THAT(code, ContainsSubstring("T2:eecc // irrep:B1u"));
+
+    // Tensor blocks take precedence over labels
+    code = export_code(
+        {{"[fY]", "Ag"}, {"T2", "Gp"}, {"Y{i1;i2}", {"Ag", "B1u"}}});
+    REQUIRE_THAT(code, ContainsSubstring("Y:cc // irrep:Ag,B1u"));
+
+    // Several patterns may only match if they agree
+    REQUIRE_NOTHROW(export_code({{"[fY]", "Ag"}, {"T.", "Gp"}, {".2", "Gp"}}));
+    REQUIRE_THROWS_WITH(
+        export_code({{"[fY]", "Ag"}, {"T.", "Gp"}, {".2", "B1u"}}),
+        ContainsSubstring("Ambiguous"));
+
+    REQUIRE_THROWS_WITH(export_code({{"T[", "Gp"}}),
+                        ContainsSubstring("Invalid label regex"));
+  }
+
   SECTION("a dependency cycle is rejected when ordering the results") {
     // Build two independent trees, then wire a mutual dependency between them.
     ExportTreeData two = test_support::tree_data(

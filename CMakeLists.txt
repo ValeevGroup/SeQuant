@@ -400,6 +400,13 @@ set(SeQuant_symb_src
         SeQuant/core/io/serialization/v1/deserialize.cpp
         SeQuant/core/io/serialization/v1/semantic_actions.hpp
         SeQuant/core/io/serialization/v1/serialize.cpp
+        SeQuant/core/irreps/algebra.hpp
+        SeQuant/core/irreps/any.cpp
+        SeQuant/core/irreps/any.hpp
+        SeQuant/core/irreps/propagation.hpp
+        SeQuant/core/irreps/table_algebra.cpp
+        SeQuant/core/irreps/table_algebra.hpp
+        SeQuant/core/irreps/z2_algebra.hpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
         SeQuant/core/runtime.cpp
@@ -530,6 +537,7 @@ set(SeQuant_eval_src
         SeQuant/core/eval/value_id.hpp
         SeQuant/core/eval/value_node_map.hpp
         SeQuant/core/eval/fwd.hpp
+        SeQuant/core/irreps/eval_tree.hpp
 )
 
 # Optimize sources (depends on eval)

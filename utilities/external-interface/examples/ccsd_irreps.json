@@ -1,0 +1,99 @@
+{
+	"driver_format_version": 2,
+	"index_spaces": [
+		{
+			"label": "a",
+			"size": 1000,
+			"real_valued": true
+		},
+		{
+			"label": "i",
+			"size": 80,
+			"real_valued": true
+		}
+	],
+	"steps": [
+		{
+			"id": "input",
+			"kind": "read_input",
+			"options": {
+				"file_path": [
+					"ccsd/ccsd_en.inp",
+					"ccsd/ccsd_res1_s1.inp",
+					"ccsd/ccsd_res2_p2.inp"
+				],
+				"default_symmetry": "antisymmetric"
+			},
+			"outputs": {
+				"en": "0",
+				"res": "1-2"
+			}
+		},
+		{
+			"id": "traced",
+			"kind": "spintracing",
+			"inputs": "input",
+			"options": {
+				"algorithm": "closed_shell"
+			}
+		},
+		{
+			"id": "biorth",
+			"kind": "project",
+			"inputs": "traced.res",
+			"options": {
+				"method": "biorthogonal"
+			}
+		},
+		{
+			"id": "opt",
+			"kind": "optimize",
+			"inputs": [
+				"traced.en",
+				"biorth"
+			]
+		},
+		{
+			"id": "tree",
+			"kind": "to_export_tree",
+			"inputs": "opt"
+		},
+		{
+			"id": "export",
+			"kind": "export",
+			"inputs": "tree",
+			"options": {
+				"language": "itf",
+				"optimize": true,
+				"output": "ccsd_irreps.itfaa",
+				"irreps": {
+					"group": "D2h",
+					"symbols": ["Gp"],
+					"default": "error",
+					"tensors": {
+						"f": "Ag",
+						"g": "Ag",
+						"T1": "Gp",
+						"T2": "Gp",
+						"INTpp": "Gp"
+					}
+				},
+				"meta": {
+					"index_spaces": {
+						"a": {
+							"name": "External",
+							"tag": "e"
+						},
+						"i": {
+							"name": "Closed",
+							"tag": "c"
+						}
+					},
+					"irrep_names": {
+						"Ag": "1"
+					}
+				}
+			}
+		}
+	]
+}

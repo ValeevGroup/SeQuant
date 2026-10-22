@@ -1,4 +1,5 @@
 #include "export_step.hpp"
+#include "filter_step.hpp"
 #include "processing_data.hpp"
 #include "processing_step_factory.hpp"
 #include "utils.hpp"
@@ -12,10 +13,16 @@
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
+#include <SeQuant/core/irreps/any.hpp>
+#include <SeQuant/core/irreps/propagation.hpp>
+#include <SeQuant/core/irreps/table_algebra.hpp>
+#include <SeQuant/core/irreps/z2_algebra.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/topological.hpp>
 
+#include <boost/algorithm/string/trim.hpp>
 #include <range/v3/view/concat.hpp>
 
 #include <nlohmann/json.hpp>
@@ -26,7 +33,9 @@
 #include <fstream>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <numeric>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -60,9 +69,332 @@ class MetaAwareIftContext : public ItfContext {
     return it->second.name;
   }
 
+  std::string irrep_name(const AnyIrrep &irrep) const override {
+    SEQUANT_ASSERT(meta_);
+    std::string name = irrep.to_string();
+    auto it = meta_->irrep_names.find(name);
+
+    return it == meta_->irrep_names.end() ? name : it->second;
+  }
+
+  std::string any_irreps_name() const override {
+    SEQUANT_ASSERT(meta_);
+    auto it = meta_->irrep_names.find("*");
+
+    return it == meta_->irrep_names.end() ? ItfContext::any_irreps_name()
+                                          : it->second;
+  }
+
  private:
   const ExportStep::ItfMeta *meta_ = nullptr;
 };
+
+namespace {
+
+using json = nlohmann::json;
+
+/// Parses a set of IRREPs given either as a single IRREP name or as an array
+/// of IRREP names. The name "*" refers to any IRREP.
+template <typename Irrep, typename Parser>
+IrrepSet<Irrep> parse_irrep_set(const json &value, const Parser &parse,
+                                std::string_view what) {
+  auto add = [&](const json &entry, IrrepSet<Irrep> &set) {
+    if (!entry.is_string()) {
+      throw Exception("Expected IRREPs of " + std::string(what) +
+                      " to be given as string(s)");
+    }
+
+    const std::string name = entry.get<std::string>();
+    if (name == "*") {
+      set = IrrepSet<Irrep>::any();
+    } else {
+      set.insert(parse(name));
+    }
+  };
+
+  IrrepSet<Irrep> set;
+  if (value.is_array() && !value.empty()) {
+    for (const json &entry : value) {
+      add(entry, set);
+    }
+  } else if (value.is_string()) {
+    add(value, set);
+  } else {
+    throw Exception("Expected IRREPs of " + std::string(what) +
+                    " to be given as a string or a non-empty array of strings");
+  }
+
+  return set;
+}
+
+/// Creates an IRREP context for the given algebra with the leaf tensor IRREPs
+/// as specified in the 'tensors' and 'default' entries of the given
+/// configuration
+template <IrrepAlgebra A, typename Parser>
+AnyIrrepContext make_irrep_context(A algebra, const json &config,
+                                   const Parser &parse) {
+  using Set = IrrepSet<typename A::irrep_type>;
+
+  // Tensors are matched consistently with the other steps: keys containing
+  // a '{' are serialized tensors matched by block (cmp. imports), all other
+  // keys are full-match regular expressions for the tensor label (cmp. label
+  // rules of the filter step)
+  struct TensorRule {
+    std::string key;
+    std::shared_ptr<const ExpressionFilter::Rule> rule;
+    Set irreps;
+  };
+  std::vector<TensorRule> blocks;
+  std::vector<TensorRule> labels;
+  container::map<std::wstring, Set> literal_labels;
+  if (config.contains("tensors")) {
+    const json &tensors = config.at("tensors");
+    if (!tensors.is_object()) {
+      throw Exception("Expected 'tensors' to be an object");
+    }
+
+    for (const auto &[key, value] : tensors.items()) {
+      Set set = parse_irrep_set<typename A::irrep_type>(value, parse,
+                                                        "tensor '" + key + "'");
+
+      if (key.find('{') == std::string::npos) {
+        literal_labels.emplace(toUtf16(key), set);
+        labels.push_back(
+            TensorRule{.key = key,
+                       .rule = parse_contains_label(json{{"label", key}}),
+                       .irreps = std::move(set)});
+        continue;
+      }
+
+      ExprPtr tensor = io::serialization::from_string<ExprPtr>(key);
+      if (!tensor->is<Tensor>()) {
+        throw Exception("Expected '" + key + "' to be a tensor");
+      }
+      blocks.push_back(TensorRule{
+          .key = key,
+          .rule =
+              parse_contains_expr(json{{"expr", key}}, TensorComparison::Block),
+          .irreps = std::move(set)});
+    }
+  }
+
+  // An empty optional means that unspecified tensors are an error
+  std::optional<Set> fallback = Set::any();
+  if (config.contains("default")) {
+    const json &value = config.at("default");
+    if (value.is_string() && value.get<std::string>() == "error") {
+      fallback.reset();
+    } else {
+      fallback =
+          parse_irrep_set<typename A::irrep_type>(value, parse, "the default");
+    }
+  }
+
+  auto resolver = [blocks = std::move(blocks), labels = std::move(labels),
+                   literal_labels = std::move(literal_labels),
+                   fallback = std::move(fallback)](const Tensor &tensor) {
+    // @returns The rule matching the tensor (if any)
+    // @throws Exception if several rules with different IRREPs match
+    auto unique_match =
+        [&tensor](const std::vector<TensorRule> &rules) -> const TensorRule * {
+      const TensorRule *match = nullptr;
+      for (const TensorRule &current : rules) {
+        if (!current.rule->matches(tensor)) {
+          continue;
+        }
+
+        if (match && match->irreps != current.irreps) {
+          throw Exception("Ambiguous IRREPs for tensor " +
+                          toUtf8(tensor.to_latex()) + ": matched by '" +
+                          match->key + "' and '" + current.key + "'");
+        }
+        match = match ? match : &current;
+      }
+
+      return match;
+    };
+
+    if (const TensorRule *match = unique_match(blocks)) {
+      return match->irreps;
+    }
+
+    // A key spelling out the label literally takes precedence over patterns
+    if (auto it = literal_labels.find(std::wstring(tensor.label()));
+        it != literal_labels.end()) {
+      return it->second;
+    }
+
+    if (const TensorRule *match = unique_match(labels)) {
+      return match->irreps;
+    }
+
+    if (!fallback.has_value()) {
+      throw Exception("No IRREPs specified for tensor " +
+                      toUtf8(tensor.to_latex()));
+    }
+
+    return fallback.value();
+  };
+
+  return IrrepContext<A>(std::move(algebra), std::move(resolver));
+}
+
+/// @returns The list of strings in the given (optional) array entry
+std::vector<std::string> string_list(const json &config, const char *key) {
+  std::vector<std::string> list;
+  if (!config.contains(key)) {
+    return list;
+  }
+
+  const json &value = config.at(key);
+  if (!value.is_array()) {
+    throw Exception("Expected '" + std::string(key) +
+                    "' to be an array of strings");
+  }
+  for (const json &entry : value) {
+    if (!entry.is_string()) {
+      throw Exception("Expected '" + std::string(key) +
+                      "' to be an array of strings");
+    }
+    list.push_back(entry.get<std::string>());
+  }
+
+  return list;
+}
+
+/// Creates an IRREP context for a Z2 group (D2h or one of its subgroups, or
+/// a group consisting of symbols only)
+/// @param symbols_must_be_declared Whether all symbolic IRREPs must be listed
+///        in the configuration's 'symbols' entry
+template <Z2Group Group>
+AnyIrrepContext make_z2_context(const json &config,
+                                bool symbols_must_be_declared) {
+  std::optional<std::set<std::string, std::less<>>> declared;
+  if (symbols_must_be_declared || config.contains("symbols")) {
+    std::vector<std::string> symbols = string_list(config, "symbols");
+    declared.emplace(symbols.begin(), symbols.end());
+  }
+
+  auto parse = [declared](std::string_view name) {
+    Z2Irrep<Group> irrep = make_irrep<Group>(name);
+    if (declared.has_value()) {
+      for (const std::string &symbol : irrep.symbols()) {
+        if (!declared->contains(symbol)) {
+          throw Exception("Unknown IRREP '" + symbol +
+                          "': neither an IRREP of the point group nor a "
+                          "declared symbol");
+        }
+      }
+    }
+
+    return irrep;
+  };
+
+  std::vector<std::pair<Z2Irrep<Group>, Z2Irrep<Group>>> relations;
+  for (const std::string &relation : string_list(config, "relations")) {
+    const auto pos = relation.find('=');
+    if (pos == std::string::npos ||
+        relation.find('=', pos + 1) != std::string::npos) {
+      throw Exception(
+          "Expected IRREP relation of the form 'lhs = rhs' but got '" +
+          relation + "'");
+    }
+
+    std::string lhs = relation.substr(0, pos);
+    std::string rhs = relation.substr(pos + 1);
+    boost::trim(lhs);
+    boost::trim(rhs);
+    if (lhs.empty() || rhs.empty()) {
+      throw Exception("Incomplete IRREP relation '" + relation + "'");
+    }
+
+    relations.emplace_back(parse(lhs), parse(rhs));
+  }
+
+  return make_irrep_context(Z2Algebra<Group>(relations), config, parse);
+}
+
+/// Creates an IRREP context for a group given by an explicit multiplication
+/// table
+AnyIrrepContext make_table_context(const json &group, const json &config) {
+  if (config.contains("relations") || config.contains("symbols")) {
+    throw Exception(
+        "'relations' and 'symbols' are only supported for the shipped point "
+        "groups and 'symbolic'");
+  }
+
+  for (const auto &[key, value] : group.items()) {
+    if (key != "totally_symmetric" && key != "products" &&
+        key != "conjugates") {
+      throw Exception("Unknown key '" + key + "' in multiplication table");
+    }
+  }
+
+  if (!group.contains("totally_symmetric") ||
+      !group.at("totally_symmetric").is_string()) {
+    throw Exception(
+        "Multiplication table requires 'totally_symmetric' to be a string");
+  }
+  const std::string totally_symmetric =
+      group.at("totally_symmetric").get<std::string>();
+
+  std::set<std::string, std::less<>> known{totally_symmetric};
+  auto add_known = [&known](std::string_view name) {
+    return std::string(*known.emplace(name).first);
+  };
+
+  TableAlgebra::table_type table;
+  if (group.contains("products")) {
+    const json &products = group.at("products");
+    if (!products.is_object()) {
+      throw Exception("Expected 'products' to be an object");
+    }
+
+    for (const auto &[key, value] : products.items()) {
+      const auto pos = key.find('*');
+      if (pos == std::string::npos ||
+          key.find('*', pos + 1) != std::string::npos) {
+        throw Exception("Expected product of the form 'X*Y' but got '" + key +
+                        "'");
+      }
+
+      std::string lhs = add_known(key.substr(0, pos));
+      std::string rhs = add_known(key.substr(pos + 1));
+      table.emplace(std::make_pair(std::move(lhs), std::move(rhs)),
+                    parse_irrep_set<std::string>(value, add_known,
+                                                 "product '" + key + "'"));
+    }
+  }
+
+  TableAlgebra::conjugation_map conjugates;
+  if (group.contains("conjugates")) {
+    const json &value = group.at("conjugates");
+    if (!value.is_object()) {
+      throw Exception("Expected 'conjugates' to be an object");
+    }
+
+    for (const auto &[irrep, conjugate] : value.items()) {
+      if (!conjugate.is_string()) {
+        throw Exception("Expected conjugate of '" + irrep + "' to be a string");
+      }
+      conjugates.emplace(add_known(irrep),
+                         add_known(conjugate.get<std::string>()));
+    }
+  }
+
+  auto parse = [known = std::move(known)](std::string_view name) {
+    if (!known.contains(name)) {
+      throw Exception("Unknown IRREP '" + std::string(name) + "'");
+    }
+    return std::string(name);
+  };
+
+  return make_irrep_context(
+      TableAlgebra(totally_symmetric, std::move(table), std::move(conjugates)),
+      config, parse);
+}
+
+}  // namespace
 
 SEQUANT_EXTINT_REGISTER_STEP_TYPE(ExportStep);
 
@@ -113,6 +445,8 @@ void ExportStep::set_options(const nlohmann::json &options) {
 
         group_assoc_.emplace(ids.get<std::string>(), name);
       }
+    } else if (key == "irreps") {
+      irrep_context_ = parse_irreps(value);
     } else if (key == "meta") {
       // Processing happens later as we need to ensure we know the target
       // language beforehand
@@ -330,6 +664,9 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
   if (language_ == "itf") {
     ItfGenerator<MetaAwareIftContext> generator;
     MetaAwareIftContext genctx(std::get<ItfMeta>(meta_));
+    if (irrep_context_.has_value()) {
+      genctx.set_irrep_context(irrep_context_.value());
+    }
 
     if (optimize_) {
       generated = perform_export(
@@ -378,6 +715,18 @@ ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
         }
 
         data.idx_id_offset = value.get<std::size_t>();
+      } else if (key == "irrep_names") {
+        if (!value.is_object()) {
+          throw Exception("Expected '" + key + "' to be an object");
+        }
+
+        for (const auto &[irrep, name] : value.items()) {
+          if (!name.is_string()) {
+            throw Exception("Expected the name of IRREP '" + irrep +
+                            "' to be a string");
+          }
+          data.irrep_names.emplace(irrep, name.get<std::string>());
+        }
       } else {
         throw Exception("Unknown meta data type '" + key + "' for language '" +
                         std::string(language) + "'");
@@ -392,6 +741,61 @@ ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
     }
 
     return {};
+  }
+}
+
+AnyIrrepContext ExportStep::parse_irreps(const nlohmann::json &irreps) {
+  try {
+    if (!irreps.is_object()) {
+      throw Exception("Expected an object");
+    }
+
+    for (const auto &[key, value] : irreps.items()) {
+      if (key != "group" && key != "relations" && key != "symbols" &&
+          key != "tensors" && key != "default") {
+        throw Exception("Unknown key '" + key + "'");
+      }
+    }
+
+    if (!irreps.contains("group")) {
+      throw Exception("The 'group' entry is mandatory");
+    }
+
+    const json &group = irreps.at("group");
+    if (group.is_object()) {
+      return make_table_context(group, irreps);
+    }
+    if (!group.is_string()) {
+      throw Exception(
+          "Expected 'group' to be the name of a point group or a "
+          "multiplication table");
+    }
+
+    const std::string name = group.get<std::string>();
+    if (name == "symbolic") {
+      return make_z2_context<NoConcreteGroup>(irreps, false);
+    } else if (name == "C1") {
+      return make_z2_context<point_groups::C1>(irreps, true);
+    } else if (name == "Ci") {
+      return make_z2_context<point_groups::Ci>(irreps, true);
+    } else if (name == "C2") {
+      return make_z2_context<point_groups::C2>(irreps, true);
+    } else if (name == "Cs") {
+      return make_z2_context<point_groups::Cs>(irreps, true);
+    } else if (name == "C2v") {
+      return make_z2_context<point_groups::C2v>(irreps, true);
+    } else if (name == "C2h") {
+      return make_z2_context<point_groups::C2h>(irreps, true);
+    } else if (name == "D2") {
+      return make_z2_context<point_groups::D2>(irreps, true);
+    } else if (name == "D2h") {
+      return make_z2_context<point_groups::D2h>(irreps, true);
+    }
+
+    throw Exception("Unknown point group '" + name + "'");
+  } catch (const Exception &e) {
+    throw Exception("Invalid 'irreps' option for export: " +
+                    std::string(e.what()));
   }
 }
 

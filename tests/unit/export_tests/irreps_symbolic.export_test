@@ -1,0 +1,37 @@
+R{a1;i1} = t{a1;i2} v{i2;i3} f{i3;i1}
+
+=================================================
+ITF
+point_group: symbolic
+irreps: t:Gp, v:Go, f:1
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: l, Closed, c
+index-space: b, External, e
+
+tensor: I:ec[bl], !Create{type:plain irrep:Go*Gp}
+tensor: R:ec[bj], R:ec // irrep:Go*Gp
+tensor: f:cc[lj], f:cc // irrep:1
+tensor: t:ec[bk], t:ec // irrep:Gp
+tensor: v:cc[kl], v:cc // irrep:Go
+
+
+---- code("unnamed")
+alloc R:ec[bj]
+alloc I:ec[bl]
+load t:ec[bk]
+load v:cc[kl]
+.I:ec[bl] += t:ec[bk] v:cc[kl]
+drop v:cc[kl]
+drop t:ec[bk]
+load f:cc[lj]
+.R:ec[bj] += I:ec[bl] f:cc[lj]
+drop f:cc[lj]
+drop I:ec[bl]
+store R:ec[bj]
+
+
+---- end
+
