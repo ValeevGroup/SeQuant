@@ -583,7 +583,14 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 ///     captures the loop chain (fusion_slot, depth_of_instance,
 ///     production_depth, type_cluster) needed to resolve the source's
 ///     reduced instance(s) and the reader's production site exactly as the
-///     escape placement does.
+///     escape placement does;
+///   - the source is \c LoopLocal on an instance some occurrence reads
+///     assembled (\c OccurrenceRole::Assembled, a \c AccumulateScatter
+///     escape) and the reader at such an occurrence is produced inside that
+///     instance, decided by \p inside_assembled the same way. A reader
+///     above the instance, at root, or in another nest reads the scattered
+///     form after the block closes and needs no bump (pinned by the
+///     "assembled reader produced inside the nest above the instance" test).
 ///
 /// Forward sweep (operands before consumers):
 ///   level(v) = max over direct operands o of (bump(o, v) ? pass(o) + 1
@@ -628,7 +635,10 @@ inline ForcedSplitLevels forced_split_levels(
     RichSchedule const& rich, LegalitySchedule const& legality,
     OrderedScheduleDepGraph const& g,
     std::function<bool(std::size_t /*reader_vid*/,
-                       std::size_t /*source_vid*/)> const& inside) {
+                       std::size_t /*source_vid*/)> const& inside,
+    std::function<bool(std::size_t /*reader_vid*/,
+                       std::size_t /*source_vid*/)> const& inside_assembled =
+        {}) {
   ForcedSplitLevels r;
   std::unordered_set<std::size_t> reduction_sources;
   for (CellLegality const& cl : legality.cells) {
@@ -645,12 +655,15 @@ inline ForcedSplitLevels forced_split_levels(
   }
   r.pinned = r.carried;
 
-  // A reader bumped by a carried source is one that reads the source where
-  // the source's own loop is not running (OccurrenceRole::Assembled): it
-  // needs the assembled value. Readers of a
-  // LoopLocal source through its lockstep occurrences read the per-batch
-  // form in the same pass and are not bumped; a value LoopCarried as a whole
-  // has only such reading occurrences, so every one of its readers is.
+  // A reader of a LoopLocal source through an occurrence that takes the
+  // source assembled (OccurrenceRole::Assembled) needs a later pass only if
+  // it is produced inside the instance it reads assembled over (\p
+  // inside_assembled, the same test \p inside applies to a reduced
+  // instance): there the current traversal can only hand it the current
+  // batch. A reader above that instance, at root, or in another nest reads
+  // the scattered form once the instance's block has closed, which ordering
+  // within its own block already guarantees. Lockstep readers read the
+  // per-batch form in the same pass and are never bumped.
   auto const points = point_occurrences(rich);
   std::set<std::pair<std::size_t, std::size_t>> outside;  // (reader, source)
   for (CellLegality const& cl : legality.cells) {
@@ -703,8 +716,9 @@ inline ForcedSplitLevels forced_split_levels(
     auto const it = g.depends_on.find(v);
     if (it != g.depends_on.end())
       for (std::size_t o : it->second) {
-        bool const carried_read =
-            r.carried.count(o) != 0 || outside.count({v, o}) != 0;
+        bool const carried_read = r.carried.count(o) != 0 ||
+                                  (outside.count({v, o}) != 0 &&
+                                   inside_assembled && inside_assembled(v, o));
         bool const bump =
             carried_read || (reduction_sources.count(o) != 0 && inside(v, o));
         if (bump) r.pinned.insert(o);
@@ -1332,21 +1346,22 @@ namespace detail {
   };
 
   // 2a. Pass levels (per-nest forced split design, sections 3.1 and 9.2).
-  // Global over every batched basis key: a bumping edge is either
-  // a LoopCarried source (any basis key, every direct reader bumped) or a
-  // Reduction source with a direct reader produced inside that same
-  // reduced instance. \c inside resolves the second kind exactly as the
-  // escape placement does: for each of the source's Reduction axes,
-  // fusion_slot (which already reads \c reduced_slot for a Reduction mode)
-  // gives the instance's slot, depth_of_instance gives its depth, and the
-  // reader is "inside" when its own production_depth is at or below that
-  // depth in the same nest (type_cluster equal). Defined here because it
-  // needs production_depth and cl_by_vid. Computed unconditionally, no
-  // per-key loop, no "more than one forced space" throw: an empty
-  // carried and reduction-source set yields all-zero passes, so a schedule
-  // with no forced-split axis at all is unaffected.
-  auto const inside = [&](std::size_t reader_vid,
-                          std::size_t source_vid) -> bool {
+  // Global over every batched basis key: a bumping edge is a LoopCarried
+  // source (any basis key, every direct reader bumped), a Reduction source
+  // with a direct reader produced inside that same reduced instance, or a
+  // LoopLocal source read assembled over an instance by a reader produced
+  // inside it. \c produced_inside resolves the last two exactly as the
+  // escape placement does: for each of the source's axes the predicate
+  // selects, slot_of gives the instance's slot, depth_of_instance gives its
+  // depth, and the reader is "inside" when its own production_depth is at
+  // or below that depth in the same nest (type_cluster equal). Defined here
+  // because it needs production_depth and cl_by_vid. Computed unconditionally,
+  // no per-key loop, no "more than one forced space" throw: an empty carried
+  // and reduction-source set yields all-zero passes, so a schedule with no
+  // forced-split axis at all is unaffected.
+  auto const produced_inside =
+      [&](std::size_t reader_vid, std::size_t source_vid,
+          std::function<bool(AxisClass const&)> const& on_axis) -> bool {
     auto const sit = cl_by_vid.find(source_vid);
     if (sit == cl_by_vid.end()) return false;
     CellLegality const& scl = *sit->second;
@@ -1355,7 +1370,7 @@ namespace detail {
     auto const rd = production_depth(*rit->second);
     if (!rd) return false;
     for (std::size_t pos = 0; pos < scl.per_axis.size(); ++pos) {
-      if (scl.per_axis[pos].role != LoopRole::Reduction) continue;
+      if (!on_axis(scl.per_axis[pos])) continue;
       std::wstring const bk{scl.per_axis[pos].axis.basis().base_key()};
       auto const d = depth_of_instance(bk, slot_of(scl, pos));
       if (!d) continue;
@@ -1363,8 +1378,26 @@ namespace detail {
     }
     return false;
   };
+  auto const inside = [&](std::size_t reader_vid, std::size_t source_vid) {
+    return produced_inside(reader_vid, source_vid, [](AxisClass const& ac) {
+      return ac.role == LoopRole::Reduction;
+    });
+  };
+  // The same test for a source read assembled over a LoopLocal instance
+  // (OccurrenceRole::Assembled): a reader produced inside that instance
+  // needs a later pass, one above it only needs ordering.
+  auto const inside_assembled = [&](std::size_t reader_vid,
+                                    std::size_t source_vid) {
+    return produced_inside(reader_vid, source_vid, [](AxisClass const& ac) {
+      return ac.role == LoopRole::LoopLocal &&
+             std::any_of(ac.per_occurrence.begin(), ac.per_occurrence.end(),
+                         [](OccurrenceAxisRole const& o) {
+                           return o.role == OccurrenceRole::Assembled;
+                         });
+    });
+  };
   detail::ForcedSplitLevels const levels =
-      detail::forced_split_levels(rich, legality, g, inside);
+      detail::forced_split_levels(rich, legality, g, inside, inside_assembled);
   auto const pass_of = [&](std::size_t vid) -> int { return levels.pass(vid); };
 
   // Dump-only diagnostic (SEQUANT_DUMP_SCHEDULE) for the outside-nest

@@ -2360,3 +2360,96 @@ TEST_CASE(
       sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"}),
       Catch::Matchers::ContainsSubstring("legality and the schedule disagree"));
 }
+
+// ===========================================================================
+// A value read assembled by a consumer produced INSIDE its nest, above the
+// instance it is assembled over: W{a_1,a_2} sliced by (a,0) at depth 1 and
+// (a,1) at depth 2; R{a_1} = sum_{a_2} W X is built per a_1 batch and reads
+// W over the whole a_2 range, and the root reads R whole. W is lockstep on
+// (a,0) and assembled on (a,1) at its one occurrence; R is assembled at its
+// one occurrence (LoopCarried, scattered out to the root). The depth-2
+// block scatters W's a_2-assembled form, bound to the current a_1 iteration,
+// and R is produced after it inside the depth-1 block: one traversal, no
+// root-resident W, no pass split. (Bumping R to a later pass would
+// re-traverse the a_1 loop and materialize all of W.)
+// ===========================================================================
+TEST_CASE(
+    "ordered schedule: an assembled reader produced inside the nest above "
+    "the instance reads the scattered form in the same pass",
+    "[ordered-schedule]") {
+  using sequant::Index;
+  using sequant::eval::LoopRole;
+  using sequant::eval::OccurrenceRole;
+  using sequant::eval::OutputKind;
+  Index const a1{L"a_1"}, a2{L"a_2"};
+
+  sequant::eval::RichSchedule rich;
+  // W: point 0, read by R (point 10); R: read by the root (point 20).
+  rich.cells.push_back(
+      orderedsched_nest_cell(0, 7000, {a1, a2}, {0, 1}, {{0, 10}}));
+  rich.cells.push_back(orderedsched_nest_cell(1, 7001, {a1}, {0}, {{10, 20}}));
+  rich.cells.push_back(orderedsched_nest_cell(2, 7002, {}, {}, {{20, 20}}));
+  for (auto& vc : rich.cells)
+    if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
+  rich.loop_kind[{L"a", 0}] = sequant::BatchModeType::External;
+  rich.loop_kind[{L"a", 1}] = sequant::BatchModeType::External;
+
+  sequant::eval::LegalitySchedule legality;
+  {
+    sequant::eval::CellLegality cl;
+    cl.hash = 7000;
+    cl.per_axis.push_back(
+        {a1, LoopRole::LoopLocal, {{0, OccurrenceRole::Lockstep}}});
+    cl.per_axis.push_back(
+        {a2, LoopRole::LoopLocal, {{0, OccurrenceRole::Assembled}}});
+    cl.home_floor = {a1, a2};
+    legality.cells.push_back(cl);
+  }
+  {
+    sequant::eval::CellLegality cl;
+    cl.hash = 7001;
+    cl.per_axis.push_back(
+        {a1, LoopRole::LoopCarried, {{10, OccurrenceRole::Assembled}}});
+    cl.forced_split_axes = {a1};
+    legality.cells.push_back(cl);
+  }
+  {
+    sequant::eval::CellLegality cl;
+    cl.hash = 7002;
+    legality.cells.push_back(cl);
+  }
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](Index const& ix) {
+    return ix.basis().base_key() == L"a";
+  };
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"a"});
+  REQUIRE(well_formed(sched));
+
+  // One traversal of the a_1 loop.
+  auto const roots = orderedsched_root_blocks(sched);
+  REQUIRE(roots.size() == 1);
+  sequant::eval::ScopeBlock const& outer = *roots.front();
+  CHECK(outer.level.depth == 1);
+  // Only R leaves the a_1 loop; W is not delivered to root.
+  REQUIRE(outer.outputs.size() == 1);
+  CHECK(outer.outputs.front() ==
+        std::make_pair(std::size_t{1}, OutputKind::AccumulateScatter));
+  // Inside it: the depth-2 block builds W and scatters it.
+  sequant::eval::ScopeBlock const* inner = nullptr;
+  for (auto const& st : outer.steps)
+    if (auto const* b = std::get_if<sequant::eval::ScopeBlock>(&st.value))
+      inner = b;
+  REQUIRE(inner != nullptr);
+  CHECK(inner->level.depth == 2);
+  CHECK(
+      std::any_of(inner->steps.begin(), inner->steps.end(), [](auto const& st) {
+        auto const* bs = std::get_if<sequant::eval::BuildStep>(&st.value);
+        return bs && bs->value_id == 0;
+      }));
+  REQUIRE(inner->outputs.size() == 1);
+  CHECK(inner->outputs.front() ==
+        std::make_pair(std::size_t{0}, OutputKind::AccumulateScatter));
+  orderedsched_validated_table(rich, sched);
+}
