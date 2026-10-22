@@ -2454,3 +2454,116 @@ TEST_CASE(
         std::make_pair(std::size_t{0}, OutputKind::AccumulateScatter));
   orderedsched_validated_table(rich, sched);
 }
+
+// ===========================================================================
+// The other side of the test above: an assembled reader produced INSIDE the
+// instance it reads assembled over needs a later pass. W{a_1,a_2} is sliced
+// by (a,0) at depth 1 and (a,1) at depth 2 and has two readers: L{a_1,a_2},
+// which reads it in lockstep on both (built under both loops, scattered out
+// as a carried value), and R{a_2}, which reads it in lockstep on a_2 only --
+// its record names (a,1) but not (a,0) as enclosing -- while the chain places
+// R at depth 2, inside (a,0). The traversal that builds W per batch can only
+// hand R the current a_1 batch, so R is bumped to pass 1 (the predicate
+// build_ordered_schedule resolves from the chain, not a hand-rolled one), W
+// is materialized to a root-resident form for it, and the nest becomes two
+// pass blocks. The table validates.
+// ===========================================================================
+TEST_CASE(
+    "ordered schedule: an assembled reader produced inside the instance it "
+    "reads assembled over is bumped to a later pass",
+    "[ordered-schedule][per-nest-split]") {
+  using sequant::Index;
+  using sequant::eval::LoopRole;
+  using sequant::eval::OccurrenceRole;
+  using sequant::eval::OutputKind;
+  Index const a1{L"a_1"}, a2{L"a_2"};
+
+  sequant::eval::RichSchedule rich;
+  // W: point 0 read by L (point 10), point 1 read by R (point 20); L and R
+  // are read by the root (point 30).
+  rich.cells.push_back(
+      orderedsched_nest_cell(0, 7100, {a1, a2}, {0, 1}, {{0, 10}, {1, 20}}));
+  rich.cells.push_back(
+      orderedsched_nest_cell(1, 7101, {a1, a2}, {0, 1}, {{10, 30}}));
+  rich.cells.push_back(orderedsched_nest_cell(2, 7102, {a2}, {1}, {{20, 30}}));
+  rich.cells.push_back(orderedsched_nest_cell(3, 7103, {}, {}, {{30, 30}}));
+  for (auto& vc : rich.cells)
+    if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
+  rich.loop_kind[{L"a", 0}] = sequant::BatchModeType::External;
+  rich.loop_kind[{L"a", 1}] = sequant::BatchModeType::External;
+
+  sequant::eval::LegalitySchedule legality;
+  {
+    sequant::eval::CellLegality cl;  // W
+    cl.hash = 7100;
+    cl.per_axis.push_back(
+        {a1,
+         LoopRole::LoopLocal,
+         {{0, OccurrenceRole::Lockstep}, {1, OccurrenceRole::Assembled}}});
+    cl.per_axis.push_back(
+        {a2,
+         LoopRole::LoopLocal,
+         {{0, OccurrenceRole::Lockstep}, {1, OccurrenceRole::Lockstep}}});
+    cl.home_floor = {a1, a2};
+    legality.cells.push_back(cl);
+  }
+  {
+    sequant::eval::CellLegality cl;  // L
+    cl.hash = 7101;
+    cl.per_axis.push_back(
+        {a1, LoopRole::LoopCarried, {{10, OccurrenceRole::Assembled}}});
+    cl.per_axis.push_back(
+        {a2, LoopRole::LoopCarried, {{10, OccurrenceRole::Assembled}}});
+    cl.forced_split_axes = {a1, a2};
+    legality.cells.push_back(cl);
+  }
+  {
+    sequant::eval::CellLegality cl;  // R
+    cl.hash = 7102;
+    cl.per_axis.push_back(
+        {a2, LoopRole::LoopCarried, {{20, OccurrenceRole::Assembled}}});
+    cl.forced_split_axes = {a2};
+    legality.cells.push_back(cl);
+  }
+  {
+    sequant::eval::CellLegality cl;  // root
+    cl.hash = 7103;
+    legality.cells.push_back(cl);
+  }
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](Index const& ix) {
+    return ix.basis().base_key() == L"a";
+  };
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"a"});
+  REQUIRE(well_formed(sched));
+
+  // Two passes of the a_1 loop: W and L in pass 0, R in pass 1.
+  auto const roots = orderedsched_root_blocks(sched);
+  REQUIRE(roots.size() == 2);
+  std::vector<int> lats;
+  for (auto const* b : roots) lats.push_back(b->latitude_ordinal);
+  CHECK(lats == std::vector<int>{0, 1});
+  std::vector<std::pair<std::size_t, std::optional<OutputKind>>> p[2];
+  for (int k = 0; k < 2; ++k) orderedsched_collect_productions(*roots[k], p[k]);
+  auto const has = [](auto const& v, std::size_t id,
+                      std::optional<OutputKind> kind) {
+    return std::any_of(v.begin(), v.end(), [&](auto const& e) {
+      return e.first == id && e.second == kind;
+    });
+  };
+  // pass 0 builds W per batch and scatters it out of both instances (the
+  // root-resident form R reads), and produces L
+  CHECK(has(p[0], 0, std::nullopt));
+  CHECK(has(p[0], 0, OutputKind::AccumulateScatter));
+  CHECK(has(p[1], 2, OutputKind::AccumulateScatter));
+  CHECK_FALSE(has(p[1], 0, std::nullopt));
+  CHECK_FALSE(has(p[0], 2, OutputKind::AccumulateScatter));
+  CHECK(std::count_if(roots[0]->outputs.begin(), roots[0]->outputs.end(),
+                      [](auto const& o) {
+                        return o.first == 0 &&
+                               o.second == OutputKind::AccumulateScatter;
+                      }) == 1);
+  orderedsched_validated_table(rich, sched);
+}
