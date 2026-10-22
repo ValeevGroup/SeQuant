@@ -7,13 +7,17 @@
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <memory>
+#include <optional>
 #include <ranges>
 #include <string>
 #include <type_traits>
@@ -42,11 +46,30 @@ enum class LoopRole {
 };
 
 ///
+/// \brief The role of one occurrence of a value with respect to one of the
+/// value's batched positions: \c LoopLocal when the loop instance that slices
+/// the position encloses the occurrence (a lockstep, per-batch read), \c
+/// LoopCarried when it does not (the reader needs the assembled value).
+///
+struct OccurrenceAxisRole {
+  std::size_t point;  //!< the occurrence (\c OccurrenceRec::point)
+  LoopRole role;      //!< \c LoopLocal or \c LoopCarried
+};
+
+///
 /// \brief The classification of one (value, build-site axis) pair.
 ///
 struct AxisClass {
   Index axis;
+  /// The value's summary role: \c Reduction or \c LoopInvariant from the
+  /// value's own node, else \c LoopLocal if any occurrence is lockstep with
+  /// the axis's loop instance and \c LoopCarried if none is.
   LoopRole role;
+  /// The role at each occurrence (empty for \c Reduction / \c
+  /// LoopInvariant). A \c LoopLocal axis may still list \c LoopCarried
+  /// occurrences: the value is built inside the loop for its lockstep
+  /// readers and also escapes assembled for the others.
+  container::svector<OccurrenceAxisRole> per_occurrence = {};
 };
 
 ///
@@ -185,74 +208,142 @@ struct LegalitySchedule {
 }
 
 ///
+/// \brief A batch-loop instance: (IndexBasis::base_key(), fusion loop_slot),
+/// the key of \c RichSchedule::loop_kind. Loop identity is established once,
+/// by \c compute_dag_boulevard's union-find, and stamped on every occurrence
+/// (\c OccurrenceRec::loop_slot / \c reduced_slot); nothing here rederives it.
+///
+using LoopInstance = std::pair<std::wstring, int>;
+
+///
+/// \brief The loop instance an occurrence opens on mode \p ix with kind \p
+/// kind, read off the opener's own stamps: a Contracted open is the \c
+/// reduced_slot entry for \p ix, an External open the \c loop_slot of \p ix's
+/// carried position. Nullopt when the opener carries no stamp for it.
+///
+[[nodiscard]] inline std::optional<LoopInstance> opened_instance(
+    OccurrenceRec const& opener, Index const& ix, BatchModeType kind) {
+  std::wstring const bk{ix.basis().base_key()};
+  if (kind == BatchModeType::Contracted) {
+    for (auto const& [rm, rs] : opener.reduced_slot)
+      if (rm == ix) return LoopInstance{bk, rs};
+    return std::nullopt;
+  }
+  for (std::size_t p = 0; p < opener.carried.size(); ++p)
+    if (opener.carried[p] == ix)
+      return p < opener.loop_slot.size() && opener.loop_slot[p] >= 0
+                 ? std::optional<LoopInstance>{{bk, opener.loop_slot[p]}}
+                 : std::nullopt;
+  return std::nullopt;
+}
+
+///
+/// \brief The loop instances enclosing \p occ, one per \c OccurrenceRec::ectx
+/// entry, each resolved through the occurrence that opened it (\c
+/// ectx_opener_point) and that opener's stamps (\c opened_instance). \p
+/// point_occ maps a static point to its occurrence (every occurrence of the
+/// forest, as \c analyze_legality builds it).
+///
+/// Throws \c Exception when an entry cannot be resolved: the opener is not in
+/// \p point_occ, opens no such mode, or carries no stamp for it. Each of those
+/// is a defect in the boulevard's record, and a guess here (a label-only
+/// comparison, say) would turn it into a silently wrong schedule.
+///
+[[nodiscard]] inline container::svector<LoopInstance> enclosing_instances(
+    OccurrenceRec const& occ,
+    std::unordered_map<std::size_t, OccurrenceRec const*> const& point_occ) {
+  container::svector<LoopInstance> out;
+  SEQUANT_ASSERT(occ.ectx.size() == occ.ectx_opener_point.size());
+  for (std::size_t k = 0; k < occ.ectx.size(); ++k) {
+    auto const pit = point_occ.find(occ.ectx_opener_point[k]);
+    if (pit == point_occ.end())
+      throw Exception(
+          "enclosing_instances: the opener of an enclosing loop (point " +
+          std::to_string(occ.ectx_opener_point[k]) + ") is not an occurrence");
+    OccurrenceRec const& opener = *pit->second;
+    Index const& L = occ.ectx[k].first;
+    std::optional<LoopInstance> inst;
+    for (auto const& [oix, okind] : opener.opens)
+      if (oix == L) {
+        inst = opened_instance(opener, oix, okind);
+        break;
+      }
+    if (!inst)
+      throw Exception("enclosing_instances: the enclosing loop over " +
+                      toUtf8(L.label()) + " at point " +
+                      std::to_string(occ.point) +
+                      " has no loop identity at its opener (point " +
+                      std::to_string(occ.ectx_opener_point[k]) + ")");
+    out.push_back(*inst);
+  }
+  return out;
+}
+
+///
+/// \brief The \c classify_axis resolver of enclosing loop instances over every
+/// occurrence of \p rich (\c enclosing_instances with the point -> occurrence
+/// map of the whole forest). \p rich must outlive the returned function.
+///
+[[nodiscard]] inline std::function<
+    container::svector<LoopInstance>(OccurrenceRec const&)>
+enclosing_instances_of(RichSchedule const& rich) {
+  auto point_occ =
+      std::make_shared<std::unordered_map<std::size_t, OccurrenceRec const*>>();
+  for (ValueCell const& vc : rich.cells)
+    for (OccurrenceRec const& occ : vc.occurrences)
+      (*point_occ)[occ.point] = &occ;
+  return [point_occ](OccurrenceRec const& occ) {
+    return enclosing_instances(occ, *point_occ);
+  };
+}
+
+///
 /// \brief Classify one batch-loop axis \p axis against one value, given the
 /// value's own result indices \p carried, the axes it contracts at its own
 /// node \p contracted_below (see \c contracted_indices in eval_expr.hpp), and
 /// every use-site \p occurrences of the value in the forest.
 ///
-/// \details The four-way decision tree:
-///   - Q1: does \p carried hold an index of \p axis's type (compared by
-///     \c IndexBasis::base_key(), i.e. Type not identity)?
-///     - no  -> Q2a: does \p contracted_below hold an index of that type
-///       (the value reduces the axis at its own node)? -> \c Reduction;
-///       otherwise the axis merely encloses the value without touching it
-///       -> \c LoopInvariant.
-///     - yes -> Q2b: for every occurrence that has an enclosing loop of that
-///       axis type in its \c OccurrenceRec::ectx, gather all same-type
-///       enclosing loops (there may be several nested loops of one basis key,
-///       each binding a distinct carried index) and check that every one of
-///       the occurrence's own carried indices of that type is bound (via the
-///       ordinal-and-proto-aware \c Index::operator==) to some enclosing
-///       loop. An occurrence may carry more than one same-key index -- e.g.
-///       an outer product carrying two occ indices, each lockstep with its
-///       own nested loop, or a lockstep slot beside a free one. Every
-///       same-type carried slot lockstep with some enclosing loop, at every
-///       such occurrence -> \c LoopLocal; a carried slot with no matching
-///       enclosing loop at any occurrence (a free / cross-iteration read) ->
-///       \c LoopCarried. If no occurrence has an enclosing loop of that type
-///       at all, the axis is a plain free result index with nothing to lock
-///       it to a loop iteration -> \c LoopCarried.
+/// \details Two questions, the second answered per occurrence:
+///   - Q1: is \p axis one of \p carried (by \c Index identity)?
+///     - no  -> does \p contracted_below hold it (the value reduces the axis
+///       at its own node)? -> \c Reduction; otherwise the axis merely
+///       encloses the value without touching it -> \c LoopInvariant.
+///     - yes -> Q2: for every occurrence, is the loop instance that slices
+///       \p axis's carried position (the occurrence's own \c loop_slot at that
+///       position) among the instances enclosing the occurrence (\p
+///       enclosing_instances)? Enclosed -> the occurrence reads the value
+///       inside its own loop, per batch (\c LoopLocal at that occurrence);
+///       not enclosed -> the occurrence reads it where that loop is not
+///       running: the value opens the loop itself, or the reader sits after
+///       it, or in a sibling nest -- in every case the reader needs the
+///       assembled value (\c LoopCarried at that occurrence).
+///     The value's role is \c LoopLocal if any occurrence is enclosed and \c
+///     LoopCarried otherwise (also with no occurrences at all). The
+///     per-occurrence verdicts are appended to \p per_occurrence when given;
+///     a \c LoopLocal value with \c LoopCarried occurrences is built inside
+///     its loop for the former and additionally escapes assembled for the
+///     latter (\c build_ordered_schedule).
 ///
-/// \param enclosing_slot (optional) the fusion loop_slot of the enclosing loop
-///        with tree-frame label \p L at occurrence \p occ (the parent
-///        occurrence's slot for L; -1 if unknown). Lockstep with an enclosing
-///        loop is then loop-instance-aware: a same-key enclosing loop of a
-///        different fusion instance is not this value's loop -- the value is
-///        LoopCarried (an assembled escape of its own nest that the other nest
-///        reads sliced), not LoopLocal. Label equality alone would conflate
-///        the instances (e.g. a 4-occupied intermediate built per batch inside
-///        its own nest and read from a sibling nest).
+/// Positions, not labels, align the occurrences: every occurrence's \c
+/// carried list is positionally aligned with \p carried (each occurrence's
+/// frame relabels the same slots), so \p axis's position in \p carried is
+/// the one read at every occurrence. Loop identity is the recorded one
+/// (\c OccurrenceRec::loop_slot and the openers' stamps); a batched position
+/// with no stamp is a defect of the record and throws.
+///
 [[nodiscard]] inline LoopRole classify_axis(
     container::svector<Index> const& carried,
     container::svector<Index> const& contracted_below, Index const& axis,
     container::svector<OccurrenceRec> const& occurrences,
-    container::svector<Index> const& sliced,
-    std::function<int(OccurrenceRec const&, Index const&)> const&
-        enclosing_slot = {}) {
-  auto const same_type = [&](Index const& ix) {
-    return ix.basis().base_key() == axis.basis().base_key();
-  };
-  // A carried same-key index is a batched loop mode (subject to the lockstep
-  // test below) iff it is one of the value's sliced modes; otherwise it is a
-  // free full "spectator" dimension (e.g. a retained occ index the DP did not
-  // batch) that has no loop at all and must not make the axis LoopCarried --
-  // the value is still loop-local w.r.t. the axis's own loop, carrying the
-  // spectator dimension through as full. Compared by identity (same
-  // ordinal/proto), so a spectator i_4 beside a batched i_1 is skipped.
-  auto const is_batched = [&](Index const& ix) {
-    return std::any_of(sliced.begin(), sliced.end(),
-                       [&](Index const& s) { return s == ix; });
-  };
-
+    std::function<container::svector<LoopInstance>(OccurrenceRec const&)> const&
+        enclosing_instances,
+    container::svector<OccurrenceAxisRole>* per_occurrence = nullptr) {
   // The role is decided for this axis, by identity, not for its basis key: a
   // value may carry one index of a basis key (loop-local on that instance) and
   // contract another index of the same key in batches (a reduction over a
   // different instance) -- e.g. a residual-pair intermediate carrying the
   // external pair ij while reducing over a contracted pair kl, once the
-  // occupied space is batchable in both roles. Deciding by basis key conflated
-  // the two: the carried branch won and the reduction was never recorded, so
-  // the builder emitted a scatter escape at the contracted instance with no
-  // sliced position to scatter ("scatters nothing: empty scatter map").
+  // occupied space is batchable in both roles.
   auto const carried_pos = std::find(carried.begin(), carried.end(), axis);
   if (carried_pos == carried.end()) {
     bool const reduces_axis =
@@ -260,105 +351,32 @@ struct LegalitySchedule {
         contracted_below.end();
     return reduces_axis ? LoopRole::Reduction : LoopRole::LoopInvariant;
   }
-  // The carried slot this axis occupies; every occurrence's carried list is
-  // positionally aligned with the value's canonical carried list (each
-  // occurrence's frame relabels the same slots), so the slot, not the label,
-  // identifies the axis across occurrences.
   std::size_t const axis_slot =
       static_cast<std::size_t>(carried_pos - carried.begin());
+  std::wstring const bk{axis.basis().base_key()};
 
-  bool found_enclosing = false;
+  bool any_lockstep = false;
   for (OccurrenceRec const& occ : occurrences) {
-    // All same-type enclosing loops at this occurrence, not just the first:
-    // nested same-key loops each bind a distinct carried index of that
-    // type (i_1 under the outer loop, i_2 under the inner). Matching every
-    // carried slot against only the first enclosing loop mis-flags a value
-    // that carries two same-key indices, each lockstep with its own nested
-    // loop, as LoopCarried -- because the second carried index (i_2) never
-    // equals the first loop's Index (i_1). Collect the whole same-type
-    // enclosing set and let each carried slot lock to any member.
-    container::svector<Index> encl;
-    for (auto const& e : occ.ectx)
-      if (same_type(e.first)) encl.push_back(e.first);
-    if (encl.empty())
-      continue;  // no enclosing loop of this type at this occurrence
-    found_enclosing = true;
-
-    // A carried slot is lockstep iff it equals some enclosing loop's Index
-    // (any nesting level). Only an occurrence whose every same-type carried
-    // slot is lockstep with some enclosing loop is truly loop-local; a single
-    // carried slot with no matching enclosing loop (a free / cross-iteration
-    // read) makes the whole occurrence -- and thus the axis -- LoopCarried.
-    bool matched_any_same_type = false;
-    // Loop-instance test at the set level: the fusion slots of the value's
-    // own same-key batched positions at this occurrence. An enclosing loop
-    // whose instance is not among them is a loop this value is not sliced by
-    // in any position -- a sibling nest (e.g. a 4-occupied intermediate
-    // built in nest {s3,s4} and read from nest {s5,s6}) -- so the value must
-    // be an assembled escape of its own nest: LoopCarried. A permutation of
-    // the same instances (a symmetric value read with i_1/i_2 transposed,
-    // slots {1,2} either way) is not this case: the value-keyed cache serves
-    // it as a distinct colored cell in-nest, and forcing it to the root would
-    // strand the in-nest read.
-    // The value's production instances: the front occurrence's stamps (the
-    // value is built there; a read occurrence's own stamps follow the
-    // consumer's instance at that read -- a sibling-nest read is stamped with
-    // the sibling's slots and would pass a self-comparison).
-    container::svector<int> own_slots;
-    {
-      OccurrenceRec const& prod = occurrences.front();
-      std::size_t const pc = axis_slot;
-      if (pc < prod.carried.size() && same_type(prod.carried[pc]) &&
-          is_batched(prod.carried[pc]) && pc < prod.loop_slot.size() &&
-          prod.loop_slot[pc] >= 0)
-        own_slots.push_back(prod.loop_slot[pc]);
-    }
-    // Direction matters: the value may be read inside loops it is invariant
-    // to (a deeper level of its own nest -- enclosing instances beyond its
-    // own are fine), but every one of its own instances must be among the
-    // enclosing loops, else it is being read outside its own loops (a sibling
-    // nest) and must be an assembled escape. Skipped when any enclosing
-    // instance cannot be resolved (incomplete evidence -> label-only test).
-    if (enclosing_slot && !own_slots.empty()) {
-      container::svector<int> encl_slots;
-      bool complete = true;
-      for (Index const& L : encl) {
-        int const es = enclosing_slot(occ, L);
-        if (es < 0) {
-          complete = false;
-          break;
-        }
-        encl_slots.push_back(es);
-      }
-      if (complete)
-        for (int os : own_slots)
-          if (std::find(encl_slots.begin(), encl_slots.end(), os) ==
-              encl_slots.end())
-            return LoopRole::LoopCarried;  // own loop instance not enclosing
-    }
-    if (axis_slot < occ.carried.size()) {
-      Index const& c = occ.carried[axis_slot];
-      // Batched-ness of this occurrence's position is read off its own home
-      // (same frame as `c`), never off `sliced`, which is labeled in the
-      // representative occurrence's frame: one node's occurrences carry
-      // different labels at one position across terms (i_3 here, i_4
-      // there), and a label miss here wrongly made a value every consumer
-      // reads inside its loop LoopCarried -- which then bumped its
-      // consumers into later passes and materialized it whole.
-      bool const batched_here =
-          std::find(occ.home.begin(), occ.home.end(), c) != occ.home.end();
-      if (same_type(c) && batched_here) {
-        matched_any_same_type = true;
-        bool const lockstep = std::any_of(
-            encl.begin(), encl.end(), [&](Index const& L) { return c == L; });
-        if (!lockstep)
-          return LoopRole::LoopCarried;  // free / cross-iteration binding
-      }
-    }
-    if (!matched_any_same_type)
-      return LoopRole::LoopCarried;  // this slot is not a batched loop slot
+    SEQUANT_ASSERT(axis_slot < occ.carried.size() &&
+                   occ.carried[axis_slot].basis().base_key() == bk &&
+                   "classify_axis: occurrence not positionally aligned");
+    int const own_slot =
+        axis_slot < occ.loop_slot.size() ? occ.loop_slot[axis_slot] : -1;
+    if (own_slot < 0)
+      throw Exception("classify_axis: batched position " +
+                      std::to_string(axis_slot) + " of the value at point " +
+                      std::to_string(occ.point) +
+                      " has no loop identity (loop_slot unstamped)");
+    LoopInstance const own{bk, own_slot};
+    auto const encl = enclosing_instances(occ);
+    bool const lockstep =
+        std::find(encl.begin(), encl.end(), own) != encl.end();
+    any_lockstep = any_lockstep || lockstep;
+    if (per_occurrence)
+      per_occurrence->push_back(
+          {occ.point, lockstep ? LoopRole::LoopLocal : LoopRole::LoopCarried});
   }
-  return found_enclosing ? LoopRole::LoopLocal : LoopRole::LoopCarried;
+  return any_lockstep ? LoopRole::LoopLocal : LoopRole::LoopCarried;
 }
 
 ///
@@ -401,32 +419,7 @@ template <meta::eval_node_range R>
     RichSchedule const& rich, R const& forest, BatchPolicy const& policy) {
   using Node = std::ranges::range_value_t<R>;
 
-  // point -> occurrence, to reach the parent occurrence (same tree) of an
-  // occurrence and read the fusion slot of an enclosing loop by its
-  // tree-frame label (carried position, or a reduced mode of the parent).
-  std::unordered_map<std::size_t, OccurrenceRec const*> point_occ;
-  for (ValueCell const& vc : rich.cells)
-    for (OccurrenceRec const& occ : vc.occurrences) point_occ[occ.point] = &occ;
-  std::function<int(OccurrenceRec const&, Index const&)> const enclosing_slot =
-      [&point_occ](OccurrenceRec const& occ, Index const& L) -> int {
-    // Walk up the tree: the loop labeled L is opened by some ancestor; the
-    // nearest ancestor carrying (or reducing) L in its own frame stamps its
-    // slot.
-    std::size_t pt = occ.consumer_point;
-    for (int guard = 0; guard < 64; ++guard) {
-      auto const it = point_occ.find(pt);
-      if (it == point_occ.end()) return -1;
-      OccurrenceRec const& par = *it->second;
-      for (std::size_t p = 0; p < par.carried.size(); ++p)
-        if (par.carried[p] == L)
-          return p < par.loop_slot.size() ? par.loop_slot[p] : -1;
-      for (auto const& [rm, rs] : par.reduced_slot)
-        if (rm == L) return rs;
-      if (par.consumer_point == par.point) return -1;  // forest root
-      pt = par.consumer_point;
-    }
-    return -1;
-  };
+  auto const enclosing = enclosing_instances_of(rich);
 
   // One representative forest node per value (keyed by value id, not node
   // id): a value's roles are read off one of its own occurrences' nodes -- a
@@ -535,7 +528,7 @@ template <meta::eval_node_range R>
         AxisClass ac;
         ac.axis = axis;
         ac.role = classify_axis(vc.carried, contracted_below, axis,
-                                vc.occurrences, dp_sliced, enclosing_slot);
+                                vc.occurrences, enclosing, &ac.per_occurrence);
         cl.per_axis.push_back(std::move(ac));
       }
 
