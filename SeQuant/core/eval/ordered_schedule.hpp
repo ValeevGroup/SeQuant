@@ -981,29 +981,6 @@ namespace detail {
 /// Index label of the same type can appear across \p rich's cells (e.g. one
 /// occurrence's K_1 vs another's K_2), so an exact-Index match could miss a
 /// root occurrence that uses a different physical label of the very type
-/// being classified, silently misclassifying an External mode as Contracted.
-///
-inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
-  auto const& mode_bk = mode.basis().base_key();
-  for (auto const& cell : rich.cells) {
-    bool const is_root =
-        std::any_of(cell.occurrences.begin(), cell.occurrences.end(),
-                    [](OccurrenceRec const& occ) {
-                      return occ.point == occ.consumer_point;
-                    });
-    if (!is_root) continue;
-    // A batch axis (occ/aux) is external iff its basis key appears on a root's
-    // own result slots. Slots are matched as-is: batch axes are plain, and a
-    // root carrying a composite PAO leg a<i,j> always carries its occ pair i,j
-    // plainly too, so no basis key is reachable only through a proto.
-    bool const has_type = std::any_of(
-        cell.carried.begin(), cell.carried.end(),
-        [&](Index const& ix) { return ix.basis().base_key() == mode_bk; });
-    if (has_type) return true;
-  }
-  return false;
-}
-
 }  // namespace detail
 
 /// \brief Builds the \c OrderedSchedule of \p rich: the loop-block tree, the
@@ -1045,13 +1022,11 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   // slices it -- an occurrence-invariant identity, established by producer->
   // consumer connectivity, not a within-cell position. Read off a
   // representative occurrence in the value's own frame (per_axis modes match
-  // the occurrence's `carried` by label). Returns -1 if unavailable (a leaf, a
-  // not-batched mode, or a divergent occurrence): the LoopCarried caller
-  // falls back to slot 0, but the Reduction caller (the escape-placement
-  // loop below) treats -1 as a hard error and throws -- a Reduction mode
-  // with no slot has no loop identity at all (compute_dag_boulevard's
-  // union-find never numbered a component for it), so guessing would silently
-  // place the escape in the wrong nest.
+  // the occurrence's `carried` by label; the stamps are the same at every
+  // occurrence, see ValueCell::key). Returns -1 if unavailable (a leaf, or a
+  // mode with no stamp). Every caller except the SEQUANT_DUMP_SCHEDULE dump
+  // goes through slot_of below, which treats -1 as a defect of the record and
+  // throws; the dump prints it.
   std::unordered_map<std::size_t, ValueCell const*> hash_to_rich;
   hash_to_rich.reserve(rich.cells.size());
   for (ValueCell const& vc : rich.cells)
@@ -1080,6 +1055,23 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     std::size_t const p = static_cast<std::size_t>(cit - occ.carried.begin());
     return p < occ.loop_slot.size() ? occ.loop_slot[p] : -1;
   };
+  // The slot of a per_axis mode that must resolve: every per_axis mode is a
+  // batched position or a batched contraction of the value, so the boulevard
+  // stamped it; a miss is a defect of the record, never a reason to place the
+  // value at slot 0 (which can be another nest's loop).
+  auto const slot_of = [&](CellLegality const& cl, std::size_t pos) -> int {
+    int const fs = fusion_slot(cl, pos);
+    if (fs < 0) {
+      auto const vit = value_id_of.find(cl.hash);
+      throw Exception(
+          "build_ordered_schedule: value " +
+          (vit != value_id_of.end() ? std::to_string(vit->second)
+                                    : "key " + std::to_string(cl.hash)) +
+          " has no loop identity on " + toUtf8(cl.per_axis[pos].axis.label()) +
+          " (no loop_slot / reduced_slot stamped)");
+    }
+    return fs;
+  };
 
   // 1. The canonical chain: one representative Index per distinct axis type
   // present in any cell's per_axis (LoopLocal, Reduction, or LoopCarried --
@@ -1104,8 +1096,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
       rep.emplace(bk, cl.per_axis[pos].axis);
-      int const s = fusion_slot(cl, pos);
-      slots_of_space[bk].insert(s >= 0 ? s : 0);
+      slots_of_space[bk].insert(slot_of(cl, pos));
     }
   auto const rank_of = [&](std::wstring const& bk) -> std::size_t {
     std::size_t i = 0;
@@ -1232,10 +1223,9 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   for (CellLegality const& cl : legality.cells) {
     std::optional<std::size_t> anchor;
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
-      int const fs = fusion_slot(cl, pos);
-      if (fs < 0) continue;
       auto const dd = depth_of_instance(
-          std::wstring{cl.per_axis[pos].axis.basis().base_key()}, fs);
+          std::wstring{cl.per_axis[pos].axis.basis().base_key()},
+          slot_of(cl, pos));
       if (!dd) continue;
       if (anchor)
         mem_parent[mfind(*dd)] = mfind(*anchor);
@@ -1313,8 +1303,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       if (cl.per_axis[pos].role != LoopRole::LoopLocal) continue;
       std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
-      int const fs = fusion_slot(cl, pos);
-      auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
+      int const fs = slot_of(cl, pos);
+      auto const d = depth_of_instance(bk, fs);
       if (!d) continue;
       if (!target || *d > *target) target = *d;
     }
@@ -1331,23 +1321,17 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   // value as homed at root: the materialization rule would then neither fire
   // the mixed-pass materialization for a value it reads, nor guard the tripwire
   // against it. production_depth instead considers every per_axis mode
-  // regardless of role. A mode whose fusion slot does not resolve (\c
-  // fusion_slot returns -1) is skipped rather than guessed at slot 0 -- a
-  // guessed slot can land in the wrong nest (fusion_slot's own doc comment),
-  // and this result feeds the outside-its-nest tripwire below, where a wrong
-  // nest decides whether to throw. Nullopt = no mode resolves at all, whether
-  // because the value is genuinely unbatched (root) or because every one of
-  // its modes has an unresolvable fusion slot -- the two are
-  // indistinguishable here; the table validator's visibility rule is the
-  // net for whichever of those a later-pass reader turns out to be.
+  // regardless of role. Nullopt = the value has no per_axis mode at all (a
+  // genuinely unbatched value, e.g. a root delivered in full); a mode whose
+  // slot does not resolve throws (slot_of), since this result feeds the
+  // outside-its-nest tripwire below, where a wrong nest decides whether to
+  // throw.
   auto const production_depth =
       [&](CellLegality const& cl) -> std::optional<std::size_t> {
     std::optional<std::size_t> target;
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
-      int const fs = fusion_slot(cl, pos);
-      if (fs < 0) continue;  // unresolved: never guess slot 0
-      auto const d = depth_of_instance(bk, fs);
+      auto const d = depth_of_instance(bk, slot_of(cl, pos));
       if (!d) continue;
       if (!target || *d > *target) target = *d;
     }
@@ -1380,9 +1364,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     for (std::size_t pos = 0; pos < scl.per_axis.size(); ++pos) {
       if (scl.per_axis[pos].role != LoopRole::Reduction) continue;
       std::wstring const bk{scl.per_axis[pos].axis.basis().base_key()};
-      int const fs = fusion_slot(scl, pos);
-      if (fs < 0) continue;
-      auto const d = depth_of_instance(bk, fs);
+      auto const d = depth_of_instance(bk, slot_of(scl, pos));
       if (!d) continue;
       if (*rd >= *d && type_cluster[*rd] == type_cluster[*d]) return true;
     }
@@ -1427,7 +1409,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       for (std::size_t p2 = 0; p2 < c2.per_axis.size(); ++p2) {
         std::wstring const bk2{c2.per_axis[p2].axis.basis().base_key()};
         int const fs2 = fusion_slot(c2, p2);
-        auto const d2 = depth_of_instance(bk2, fs2 >= 0 ? fs2 : 0);
+        auto const d2 = fs2 >= 0 ? depth_of_instance(bk2, fs2) : std::nullopt;
         std::wcerr << c2.per_axis[p2].axis.full_label() << L":"
                    << role_str(c2.per_axis[p2].role) << L"@slot" << fs2
                    << L"->d";
@@ -1483,22 +1465,12 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       AxisClass const& ac = cl.per_axis[pos];
       if (ac.role == LoopRole::LoopLocal) continue;
       std::wstring const bk{ac.axis.basis().base_key()};
-      int const fs = fusion_slot(cl, pos);
-      // A Reduction mode with no fusion slot has no loop identity at all
-      // (peak_profile's union-find never numbered a component for it) --
-      // guessing slot 0 places the AccumulateSum escape in whatever nest
-      // happens to own slot 0, not the loop the operands were actually
-      // sliced on, and every batch then silently contracts the full
-      // operands (the sum over n batches overcounts by n). A LoopCarried
-      // mode keeps the existing slot-0 fallback: it always carries a real
-      // position, so home_scope + compute_dag_boulevard resolve it in the
-      // ordinary case and the fallback is purely defensive there.
-      if (ac.role == LoopRole::Reduction && fs < 0)
-        throw Exception(
-            "build_ordered_schedule: value " + std::to_string(vid) +
-            " reduces a batched mode with no loop identity (no reduced_slot "
-            "stamped); the escape cannot be placed");
-      auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
+      // A mode with no loop identity cannot have its escape placed: guessing
+      // slot 0 would put it in whatever nest owns slot 0, not the loop the
+      // operands were sliced on, and every batch would then contract the
+      // full operands (a sum over n batches overcounts by n).
+      int const fs = slot_of(cl, pos);
+      auto const d = depth_of_instance(bk, fs);
       SEQUANT_ASSERT(d.has_value());  // types was built from this same union
       OutputKind const kind =
           (ac.role == LoopRole::Reduction)
@@ -1569,12 +1541,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
                        }))
         continue;
       std::wstring const bk{ac.axis.basis().base_key()};
-      int const fs = fusion_slot(cl, pos);
-      if (fs < 0)
-        throw Exception("build_ordered_schedule: value " + std::to_string(vid) +
-                        " is read outside its loop on a mode with no loop "
-                        "identity (loop_slot unstamped); the escape cannot be "
-                        "placed");
+      int const fs = slot_of(cl, pos);
       auto const d = depth_of_instance(bk, fs);
       SEQUANT_ASSERT(d.has_value());
       auto it = std::find_if(escapes.begin(), escapes.end(),
@@ -1601,8 +1568,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
         if (cl.per_axis[pos].role != LoopRole::LoopLocal) continue;
         std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
-        int const fs = fusion_slot(cl, pos);
-        auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
+        int const fs = slot_of(cl, pos);
+        auto const d = depth_of_instance(bk, fs);
         if (!d || type_cluster[*d] != home_nest) continue;
         bool const escaped =
             std::any_of(escapes.begin(), escapes.end(),
@@ -1649,8 +1616,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
         // by exactly the instances this loop escapes.
         for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
           std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
-          int const fs = fusion_slot(cl, pos);
-          auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
+          int const fs = slot_of(cl, pos);
+          auto const d = depth_of_instance(bk, fs);
           if (!d || type_cluster[*d] != nest) continue;
           auto it = std::find_if(escapes.begin(), escapes.end(),
                                  [&](auto const& e) { return e.first == *d; });
@@ -1871,9 +1838,10 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
         kit != rich.loop_kind.end())
       block.kind = kit->second;
     else
-      block.kind = detail::mode_is_external(rich, axis)
-                       ? BatchModeType::External
-                       : BatchModeType::Contracted;
+      throw Exception("build_ordered_schedule: loop instance " +
+                      toUtf8(std::wstring(axis.basis().base_key())) + "#" +
+                      std::to_string(loop_slot) +
+                      " has no recorded kind (no open created it)");
     block.steps =
         detail::ordered_schedule_topo_sort_steps(std::move(items), meta);
     block.outputs.assign(outputs.begin(), outputs.end());
@@ -2421,25 +2389,6 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
   for (ValueCell const& vc : rich.cells)
     for (OccurrenceRec const& occ : vc.occurrences) point_occ[occ.point] = &occ;
 
-  // The value-level component slot per carried position: the loop_slot the
-  // union-find assigned to (value, position), recovered unmasked.
-  // compute_dag_boulevard stamps occ.loop_slot = -1 wherever a mode is not
-  // batched at that occurrence (i.e. the value was produced whole in that mode
-  // in that term). But a value produced whole is still read sliced wherever a
-  // consumer sits inside that mode's realized loop -- the atlas must key the
-  // slice fact off which loops the consumer is in and which modes the value
-  // carries, not off the per-occurrence production mask. So recover the
-  // value-level slot as any non-(-1) loop_slot across the value's occurrences
-  // at each position.
-  std::unordered_map<std::size_t, container::svector<int>> value_slot;
-  for (ValueCell const& vc : rich.cells) {
-    container::svector<int>& vs = value_slot[vc.value_id];
-    vs.assign(vc.carried.size(), -1);
-    for (OccurrenceRec const& occ : vc.occurrences)
-      for (std::size_t p = 0; p < occ.loop_slot.size() && p < vs.size(); ++p)
-        if (occ.loop_slot[p] >= 0) vs[p] = occ.loop_slot[p];
-  }
-
   for (ValueCell const& w : rich.cells) {
     std::size_t const w_vid = w.value_id;
     for (OccurrenceRec const& occ : w.occurrences) {
@@ -2484,7 +2433,6 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
       // realized loop (the measured i_3-contracted case). Over-nested loops the
       // value carries no mode of get no fact, correct (the value is invariant
       // to them).
-      auto const& vs = value_slot[w_vid];
       // This occurrence's leg at its consumer (left 0 / right 1).
       std::size_t leg = static_cast<std::size_t>(-1);
       {
@@ -2496,21 +2444,12 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
       for (std::size_t k = 0; k < scope.size(); ++k) {
         DagScopeLevel const& lvl = scope[k].level;
         bool self_sliced = false;
-        for (std::size_t pos = 0; pos < occ.carried.size() && pos < vs.size();
-             ++pos) {
-          // Per-occurrence slot: value_slot folds every occurrence's
-          // loop_slot into one per-value vector, so a CSE-shared value whose
-          // mode is sliced by different loop instances in different
-          // occurrences (one consumer slicing a mode under a K-loop slot,
-          // another under a second slot for a K-reduction) keeps only one slot
-          // and silently misses the other occurrence (served whole under a K
-          // batch -> TA sparse-gemm out-of-bounds read). The occurrence's own
-          // truth; the per-value slot is only the fallback where it is
-          // unstamped (-1).
+        for (std::size_t pos = 0; pos < occ.carried.size(); ++pos) {
+          // The occurrence's own stamp; every occurrence of a value carries
+          // the same ones (ValueCell::key), so a position unstamped here is
+          // unstamped everywhere: not sliced.
           int const occ_slot =
-              (pos < occ.loop_slot.size() && occ.loop_slot[pos] >= 0)
-                  ? occ.loop_slot[pos]
-                  : vs[pos];
+              pos < occ.loop_slot.size() ? occ.loop_slot[pos] : -1;
           if (occ_slot != lvl.loop_slot) continue;
           if (std::wstring(occ.carried[pos].basis().base_key()) != lvl.space)
             continue;
@@ -2532,26 +2471,21 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         // every carried-mode coincidence, so a genuinely invariant shared
         // operand is not sliced.
         std::size_t const c_vid = oit->second;
-        auto const& cvs = value_slot[c_vid];
         auto const& c_carried = rich.cells[c_vid].carried;
         bool recorded = false;
-        for (std::size_t cp = 0; cp < c_carried.size() && cp < cvs.size();
-             ++cp) {
+        for (std::size_t cp = 0; cp < c_carried.size(); ++cp) {
           // The consumer's slot for position cp in this tree: the parent
           // occurrence on this edge (point == occ.consumer_point). Mixing C's
           // other occurrences (other trees, permuted frames) leaked a slot
           // binding from a different frame and sliced one operand position
           // by two loops (observed on the water-20 strict dry-run walk: one
           // value's operand position 1 was sliced by two different loop slots
-          // at once). The per-value value_slot is the fallback only when the
-          // parent occurrence carries no stamp at all.
+          // at once).
           bool c_sliced = false;
           if (auto const pit = point_occ.find(occ.consumer_point);
               pit != point_occ.end() && cp < pit->second->loop_slot.size() &&
               pit->second->loop_slot[cp] >= 0)
             c_sliced = pit->second->loop_slot[cp] == lvl.loop_slot;
-          else
-            c_sliced = cvs[cp] == lvl.loop_slot;
           if (!c_sliced) continue;
           if (std::wstring(c_carried[cp].basis().base_key()) != lvl.space)
             continue;
@@ -2583,7 +2517,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           break;  // one shared mode per enclosing loop
         }
         // Reduction consumer: C reduces a mode under this loop
-        // (its result does not carry it, so it is in no carried/value_slot
+        // (its result does not carry it, so it is in no carried
         // position) -- C is building a per-batch partial of that reduction,
         // so an operand occurrence carrying the reduced mode is sliced on
         // it; one that does not carry it is legitimately whole. Recorded

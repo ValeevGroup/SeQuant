@@ -882,6 +882,29 @@ TEST_CASE(
 
 namespace {
 
+// Record the kind of every loop instance the cells' stamps name, as
+// compute_dag_boulevard does from the opens: a stamped carried position is
+// an External instance, a reduced_slot entry a Contracted one. The first
+// kind recorded for a slot wins (emplace): the boulevard forbids one
+// instance with two kinds, but the same-depth fixture below deliberately
+// gives a carried mode and a reduced mode one slot to probe the role
+// dominance at one depth, and records that instance as External.
+void orderedsched_record_loop_kinds(sequant::eval::RichSchedule& rich) {
+  for (auto const& vc : rich.cells)
+    for (auto const& occ : vc.occurrences) {
+      for (std::size_t p = 0; p < occ.loop_slot.size(); ++p)
+        if (occ.loop_slot[p] >= 0)
+          rich.loop_kind.emplace(
+              std::make_pair(std::wstring{occ.carried[p].basis().base_key()},
+                             occ.loop_slot[p]),
+              sequant::BatchModeType::External);
+      for (auto const& [m, slot] : occ.reduced_slot)
+        rich.loop_kind.emplace(
+            std::make_pair(std::wstring{m.basis().base_key()}, slot),
+            sequant::BatchModeType::Contracted);
+    }
+}
+
 sequant::eval::ValueCell orderedsched_levels_cell(
     std::size_t id, std::size_t hash,
     std::vector<std::pair<std::size_t, std::size_t>> const& occs) {
@@ -1384,6 +1407,18 @@ TEST_CASE(
   // L_a (carried on "a"): itself a root (point == consumer_point) -- no
   // reader at all, so "a" is LoopCarried but NOT genuine (max_pass == 0).
   rich.cells.push_back(orderedsched_levels_cell(2, 9002, {{2, 2}}));
+  // The carried values' stamps: L_i sliced on i_1 by instance (i, 0), L_a
+  // on a_1 by (a, 0) -- build_ordered_schedule places by recorded instance.
+  for (auto* vc : {&rich.cells[0], &rich.cells[2]}) {
+    sequant::Index const& m = vc->value_id == 0 ? i1 : a1;
+    vc->carried = {m};
+    for (auto& o : vc->occurrences) {
+      o.carried = {m};
+      o.home = {m};
+      o.loop_slot = {0};
+    }
+  }
+  orderedsched_record_loop_kinds(rich);
 
   sequant::eval::LegalitySchedule legality;
   {
@@ -1663,6 +1698,7 @@ OrderedSchedReductionInLoopFixture orderedsched_reduction_in_loop_fixture() {
       orderedsched_nest_legality(9301, {i1}, LoopRole::Reduction));
   fx.legality.cells.push_back(
       orderedsched_nest_legality(9302, {}, LoopRole::LoopLocal));
+  orderedsched_record_loop_kinds(fx.rich);
   return fx;
 }
 
@@ -1773,6 +1809,7 @@ TEST_CASE(
   // the same (per-value-consistent) modes the occurrences already carry.
   for (auto& vc : rich.cells)
     if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
+  orderedsched_record_loop_kinds(rich);
 
   sequant::eval::LegalitySchedule legality;
   legality.cells.push_back(
@@ -1885,6 +1922,7 @@ TEST_CASE("per-nest split: a carried chain gives three pass blocks",
   rich.cells.push_back(orderedsched_nest_cell(0, 3000, ab, {0, 1}, {{0, 10}}));
   rich.cells.push_back(orderedsched_nest_cell(1, 3001, ab, {0, 1}, {{10, 20}}));
   rich.cells.push_back(orderedsched_nest_cell(2, 3002, ab, {0, 1}, {{20, 20}}));
+  orderedsched_record_loop_kinds(rich);
   sequant::eval::LegalitySchedule legality;
   legality.cells.push_back(
       orderedsched_nest_legality(3000, ab, LoopRole::LoopCarried));
@@ -1956,6 +1994,7 @@ TEST_CASE(
   // table below (see the two-nest fixture above).
   for (auto& vc : rich.cells)
     if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
+  orderedsched_record_loop_kinds(rich);
   sequant::eval::LegalitySchedule legality;
   legality.cells.push_back(
       orderedsched_nest_legality(4000, ab, LoopRole::LoopCarried));
@@ -2034,6 +2073,7 @@ TEST_CASE(
   // one), so this correctly leaves V's own carried set to just i_1.
   for (auto& vc : rich.cells)
     if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
+  orderedsched_record_loop_kinds(rich);
   sequant::eval::LegalitySchedule legality;
   legality.cells.push_back(
       orderedsched_nest_legality(5000, ab, LoopRole::LoopCarried));
@@ -2125,6 +2165,7 @@ TEST_CASE(
     occ.reduced_slot.push_back({i2, 0});  // SAME slot as i_1: one depth
   for (auto& vc : rich.cells)
     if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
+  orderedsched_record_loop_kinds(rich);
   sequant::eval::LegalitySchedule legality;
   legality.cells.push_back(
       orderedsched_nest_legality(6000, ab, LoopRole::LoopCarried));
