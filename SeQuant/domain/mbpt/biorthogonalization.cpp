@@ -237,6 +237,12 @@ Eigen::MatrixXd permutational_overlap_matrix(std::size_t n_particles) {
   return M;
 }
 
+/// rank of the permutational overlap matrix of @p n_particles particles = the
+/// number of linearly independent singlet couplings = Catalan number C_n
+sequant::intmax_t catalan(std::size_t n) {
+  return factorial(2 * n) / (factorial(n + 1) * factorial(n));
+}
+
 Eigen::MatrixXd compute_biorthogonalizer_matrix(std::size_t n_particles,
                                                 double threshold) {
   auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
@@ -248,6 +254,8 @@ Eigen::MatrixXd compute_biorthogonalizer_matrix(std::size_t n_particles,
       Eigen::CompleteOrthogonalDecomposition<decltype(perm_ovlp_mat)>();
   decomp.setThreshold(threshold);
   decomp.compute(perm_ovlp_mat);
+  // WK_biorthogonalization_filter_impl assumes this rank
+  SEQUANT_ASSERT(decomp.rank() == catalan(n_particles));
 
   Eigen::MatrixXd pinv = decomp.pseudoInverse();
   // The pseudo inverse of a symmetric matrix should also be symmetric
@@ -605,7 +613,7 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
   // the idempotent NNS projector rebuilds a group from its kept term scaled by
   // rank(M)/n!, so the kept term carries n!/rank(M); rank(M) = Catalan(n)
   const auto n = ext_idxs.size();
-  const auto rank = factorial(2 * n) / (factorial(n + 1) * factorial(n));
+  const auto rank = catalan(n);
   const rational normalization(factorial(n), rank);
   Sum filtered;
   for (const auto& [_, terms] : largest_coeff_terms) {
