@@ -253,18 +253,7 @@ namespace {
 /// dumping the value of the string to the console
 class StringDiffMatcher : public Catch::Matchers::MatcherGenericBase {
  public:
-  template <typename String>
-  StringDiffMatcher(const String &str) {
-    if constexpr (std::is_same_v<String, std::string>) {
-      expected_ = str;
-    } else if constexpr (std::is_same_v<String, std::string> ||
-                         std::is_same_v<String, std::string_view> ||
-                         std::is_same_v<String, char *>) {
-      expected_ = std::string(str);
-    } else {
-      expected_ = std::string(str);
-    }
-  }
+  StringDiffMatcher(std::string_view str) : expected_(str) {}
 
   bool match(const std::string &input) const {
     if (expected_ == input) {
@@ -321,7 +310,7 @@ using ExprVar = std::variant<sequant::ExprPtr, sequant::ResultExpr>;
 
 /// Converts the given expression-like object into an actual ExprPtr.
 /// It accepts either an actual expression object (as Expr & or ExprPtr) or
-/// a (w)string-like object which will then be deserialized to yield the actual
+/// a string-like object which will then be deserialized to yield the actual
 /// expression object.
 template <typename T>
 ExprVar to_expression(T &&expression) {
@@ -330,27 +319,15 @@ ExprVar to_expression(T &&expression) {
 
   using BaseT = std::remove_cvref_t<T>;
 
-  if constexpr (std::is_convertible_v<BaseT, std::string>) {
-    std::string string = std::string(std::forward<T>(expression));
+  if constexpr (std::is_convertible_v<BaseT, std::string_view>) {
+    const std::string_view string = expression;
 
-    if (std::find(begin(string), end(string), '=') != end(string)) {
+    if (string.find('=') != std::string_view::npos) {
       return sequant::deserialize<sequant::ResultExpr>(
-          std::string(std::forward<T>(expression)),
-          {.def_perm_symm = sequant::Symmetry::Nonsymm});
+          string, {.def_perm_symm = sequant::Symmetry::Nonsymm});
     } else {
       return sequant::deserialize<sequant::ExprPtr>(
-          std::string(std::forward<T>(expression)),
-          {.def_perm_symm = sequant::Symmetry::Nonsymm});
-    }
-  } else if constexpr (std::is_convertible_v<BaseT, std::string>) {
-    if (std::find(begin(expression), end(expression), '=') != end(expression)) {
-      return sequant::deserialize<sequant::ResultExpr>(
-          std::string(std::forward<T>(expression)),
-          {.def_perm_symm = sequant::Symmetry::Nonsymm});
-    } else {
-      return sequant::deserialize<sequant::ExprPtr>(
-          std::string(std::forward<T>(expression)),
-          {.def_perm_symm = sequant::Symmetry::Nonsymm});
+          string, {.def_perm_symm = sequant::Symmetry::Nonsymm});
     }
   } else if constexpr (std::same_as<BaseT, sequant::ResultExpr>) {
     return expression;

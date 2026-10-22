@@ -220,7 +220,6 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
         6, FullBinaryNode<int>{1}, FullBinaryNode<int>{take_nums(2, 2), ms}};
 
     auto label_gen_str = [](auto const& n) { return std::to_string(*n); };
-    auto label_gen_wstr = [](auto const& n) { return std::to_string(*n); };
 
     REQUIRE(node1.digraph(label_gen_str, "node1") ==
             std::string{"digraph node1{\n"
@@ -235,7 +234,7 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
                                                         "node0 -> node2;\n"
                                                         "}"});
 
-    REQUIRE(node3.digraph(label_gen_wstr, "node3") ==
+    REQUIRE(node3.digraph(label_gen_str, "node3") ==
             std::string{"digraph node3{\n"
                         "node0[label=6];\n"
                         "node1[label=3];\n"
@@ -248,7 +247,7 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
                         "node0 -> node4;\n"
                         "}"});
 
-    REQUIRE(node4.digraph(label_gen_wstr, "node4") ==
+    REQUIRE(node4.digraph(label_gen_str, "node4") ==
             std::string{"digraph node4{\n"
                         "node0[label=6];\n"
                         "node1[label=1];\n"

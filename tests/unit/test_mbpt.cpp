@@ -171,8 +171,8 @@ TEST_CASE("MBPT operator formatting", "[mbpt][format]") {
   // mbpt::Operator does not support serialization
   REQUIRE_THROWS_AS(std::format("{}", op), Exception);
   REQUIRE_THROWS_AS(std::format("{:s}", ptr), Exception);
-  std::ostringstream narrow;
-  REQUIRE_THROWS_AS(narrow << op, Exception);
+  std::ostringstream stream;
+  REQUIRE_THROWS_AS(stream << op, Exception);
 
   const auto suggests_latex = Catch::Matchers::MessageMatches(
       Catch::Matchers::ContainsSubstring("use LaTeX"));

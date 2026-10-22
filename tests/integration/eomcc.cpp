@@ -73,7 +73,7 @@ enum class EqnType { left, right };
 inline const container::map<std::string, EqnType> str2type = {
     {"L", EqnType::left}, {"R", EqnType::right}};
 
-inline const container::map<EqnType, std::string> type2wstr = {
+inline const container::map<EqnType, std::string> type2str = {
     {EqnType::left, "L"}, {EqnType::right, "R"}};
 
 class compute_eomcc {
@@ -103,7 +103,7 @@ class compute_eomcc {
     timer_pool.stop(N);
 
     std::cout << std::boolalpha
-              << "EOM-CC Equations [type=" << type2wstr.at(type)
+              << "EOM-CC Equations [type=" << type2str.at(type)
               << ", CC rank=" << N << ", manifold=" << manifold << "]"
               << " computed in " << timer_pool.read(N) << " s\n";
     for (auto i = 0; i < eqvec.size(); i++) {

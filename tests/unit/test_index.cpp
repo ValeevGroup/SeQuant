@@ -146,7 +146,7 @@ TEST_CASE("index", "[elements][index]") {
       }
     }
 
-    SECTION("from bytestring") {
+    SECTION("from character or non-ASCII label") {
       Index i1("i_1");
       REQUIRE(i1.label() == "i_1");
       REQUIRE(i1.space() == ibr->retrieve_space("i"));

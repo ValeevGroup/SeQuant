@@ -92,9 +92,9 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE_THROWS(sr_ibr->add(
         jactive_occupied));  // cannot add a space with duplicate attr
 
-    // can use bytestrings too
-    REQUIRE_NOTHROW(sr_ibr->retrieve_space("a"));  // N.B. string
-    REQUIRE_NOTHROW(sr_ibr->remove('a'));          // N.B. char
+    // can use single characters too
+    REQUIRE_NOTHROW(sr_ibr->retrieve_space("a"));
+    REQUIRE_NOTHROW(sr_ibr->remove('a'));  // N.B. char
   }
 
   // the table constructor takes the entries as given, but their labels must
@@ -439,7 +439,7 @@ TEST_CASE("index_space", "[elements]") {
     // NOT contiguous!
     REQUIRE_NOTHROW(
         ibr->add("o", 0b0001, {.dimension = 3})
-            .add("i", 0b0100, {.hole = true})  // N.B. narrow string
+            .add("i", 0b0100, {.hole = true})
             .add('a', 0b0010,
                  {.dimension = 50,
                   .qns = QuantumNumbersAttr{},
@@ -465,10 +465,9 @@ TEST_CASE("index_space", "[elements]") {
             ibr->retrieve_space("m").dimension() +
                 ibr->retrieve_space("e").dimension());
     REQUIRE(ibr->retrieve_space("p").dimension() == 73);
-    REQUIRE_NOTHROW(
-        ibr->add_union("iag", {"i", "a", "g"})
-            .add_union("oia", {"o", "i", "a"})  // N.B. narrow strings
-            .add_intersection("x", {"oia", "iag"}));
+    REQUIRE_NOTHROW(ibr->add_union("iag", {"i", "a", "g"})
+                        .add_union("oia", {"o", "i", "a"})
+                        .add_intersection("x", {"oia", "iag"}));
     REQUIRE(ibr->retrieve_space("x").type().to_int32() == 0b0110);
     REQUIRE(ibr->retrieve_space("x").dimension() ==
             ibr->retrieve_space("i").dimension() +
