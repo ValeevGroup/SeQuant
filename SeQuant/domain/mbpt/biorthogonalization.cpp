@@ -143,14 +143,21 @@ make_hardcoded_biorthogonalizer_matrix(
   const auto n = first_row.size();
   Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic> M(n, n);
 
+  // entry (row, col) depends only on the permutation relating the permutations
+  // of rank row and col (formed as in permutational_overlap_matrix), and
+  // first_row tabulates it for row 0, so look up the column whose relation to
+  // row 0 is the same
+  const perm::Permutation first = perm::unrank(0, n_particles);
   for (std::size_t row = 0; row < n; ++row) {
+    perm::Permutation ref = perm::unrank(row, n_particles);
+    ref->invert();
+
     for (std::size_t col = 0; col < n; ++col) {
-      perm::Permutation row_perm = perm::unrank(n - 1 - row, n_particles);
-      perm::Permutation col_perm = perm::unrank(col, n_particles);
+      perm::Permutation current = perm::unrank(col, n_particles);
+      current->postMultiply(ref);
+      current->postMultiply(first);
 
-      col_perm->preMultiply(row_perm);
-
-      std::size_t source_idx = perm::rank(col_perm, n_particles);
+      std::size_t source_idx = perm::rank(current, n_particles);
       M(row, col) = first_row[source_idx];
     }
   }
