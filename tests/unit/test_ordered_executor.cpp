@@ -1910,26 +1910,33 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
-// The SAME derivation on the configuration mirrored from a real input, set
-// DIRECTLY here (no environment variable, so this runs in every suite): the
-// only difference from the default configuration above is the finite peak
-// budget, which is what makes the optimizer produce the two schedule shapes
-// this stage had to learn to describe --
+// The configuration mirrored from a real input, set DIRECTLY here (no
+// environment variable), uses a fixed peak budget of 25e9, distinct from the
+// default structural case's occupancy-scaled budget. Two budget-sensitive
+// schedule shapes of interest are:
 //   (1) an escape chain that SKIPS a level the value is invariant to (the
 //       Assemble's source sits more than one level deeper), and
 //   (2) a member MATERIALIZED across the forced loop split: built in its home
 //       block for its in-nest readers AND escaped out of it for the other
 //       pass, so the value has a Build cell and an Assemble cell at a
 //       strictly shallower scope.
+// Their occurrence depends on the optimizer's loop placement and value
+// identity; the diagnostics below report them rather than require both shapes.
+// The dedicated [per-nest-split] fixtures pin mixed-pass materialization.
 // The objective is the same enumerator the [w20-auxocc-walk] fixture's
 // SEQUANT_UT_OBJECTIVE=dense_time_space_batched override selects
-// (DenseTimeSpaceBatched -- also its default). The executor is NOT run here;
-// the [w20-auxocc-walk] case does that.
+// (DenseTimeSpaceBatched -- also its default).
+// This case derives and validates the cell table, then RUNS the strict
+// dry-run executor.
+// It exercises the mirrored configuration in every suite that enables long
+// tests, without requiring the [w20-auxocc-walk] environment overrides.
 // ===========================================================================
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
-          "[cell_table][ordered]") {
+TEST_CASE(
+    "ordered executor: the input-mirrored configuration RUNS the strict "
+    "dry-run walk to completion",
+    "[ordered][cell_table]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -2016,9 +2023,7 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
   REQUIRE(sequant::eval::well_formed(ordered));
   auto const sma = sequant::eval::compute_sliced_mode_assignment(ordered, rich);
   auto const vmap = sequant::eval::build_value_node_map(forest);
-  // Real per-loop batch counts for n_batches_of (see
-  // the walk-gate case's own note); aops is otherwise unused in this
-  // static-only fixture.
+  // Use the same real per-loop batch counts as the executor.
   auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
 
   sequant::eval::CellTableInputs in;
@@ -2068,11 +2073,10 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
       ++level_skipping_chains;
   WARN("level_skipping_chains = " << level_skipping_chains);
 
-  // (2) at least one value is MATERIALIZED across the forced split. In the
-  // TABLE that shows up as a Build cell whose value also has an Assemble cell
-  // at a strictly shallower scope -- necessary but not sufficient, since the
-  // implicit per-batch Build the builder synthesizes for an ordinary escape
-  // matches it too.
+  // (2) at least one Build cell's value also has an Assemble cell at a strictly
+  // shallower scope. This TABLE shape is necessary but not sufficient for a
+  // member MATERIALIZED across the forced split, since the implicit per-batch
+  // Build the builder synthesizes for an ordinary escape matches it too.
   std::size_t build_with_shallower_assemble = 0;
   for (auto const& b : table.cells) {
     if (b.production.kind != sequant::eval::ProductionKind::Build) continue;
@@ -2106,11 +2110,49 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
       };
   scan(ordered.root);
   // Under value identity ("Loop identity and value identity") the water-20
-  // default schedule no longer materializes a member across a split: the
+  // mirrored schedule no longer materializes a member across a split: the
   // later-pass reader of a nest-homed value was a merged-frame occurrence,
   // now its own value in its own nest. The mixed-pass shape stays pinned by
   // the [per-nest-split] fixtures; here it is reported, not required.
   WARN("built_and_escaped_here = " << built_and_escaped_here);
+
+  // Explicit value cells: the input-mirrored configuration is EXECUTED, not
+  // merely validated. The static gate above proves the table is well formed;
+  // only a run proves the executor can walk the resulting schedule, including
+  // level-skipping escape chains and materialized members when present.
+  // Reuse the forest and schedule validated above (peak threshold 25e9 and
+  // the batched time-then-space objective, set directly rather than through
+  // the environment), then run the strict dry-run walk the default fixture
+  // uses: range/lobound checks in the backend plus the cache-fill-once
+  // tripwire. The [w20-auxocc-walk] fixture retains its environment-driven
+  // mirroring; this case makes the mirrored RUN part of every suite enabling
+  // long tests.
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const& ix) -> std::size_t {
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
+  };
+  std::function<bool(Node const&)> const is_volatile_node =
+      [p = policy.is_volatile_leaf](Node const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  logger.eval.level = 0;
+  auto ordered_cache = sequant::cache_manager(forest);
+  ordered_cache.set_array_ops(&aops);
+
+  // Per-instance override; see [block-skip]'s note on the env latch.
+  ordered_cache.set_strict_fill_once(true);
+  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
+      forest, ordered, rich, layout, yield, ordered_cache, target, {},
+      is_volatile_node));
+
+  logger.eval.level = prev_level;
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
@@ -2121,9 +2163,9 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
 // built or escaped, and who consumes it and where. Those gaps are FIXED: the
 // mirrored configuration now derives a table that validates clean (see the
 // unconditional gate block in the [w20-auxocc-walk] case, and the
-// "cell table: the input-mirrored configuration derives a valid table" case
-// which asserts it without any environment variable). This case is kept as
-// the shape characterization behind the fix. Hidden ("[.]") so it never runs
+// mirrored execution case, which asserts it without any environment variable).
+// This case is kept as the shape characterization behind the fix.
+// Hidden ("[.]") so it never runs
 // in the default or CI suites; run explicitly with the mirrored environment
 // (SEQUANT_UT_PEAK_THRESHOLD=25e9,
 // SEQUANT_UT_OBJECTIVE=dense_time_space_batched) to see the report on
@@ -4291,138 +4333,6 @@ TEST_CASE(
   // consumer has no read of that value left.
   CHECK_THROWS(resolver.fetch(x_hash, bctx));
 }
-// ===========================================================================
-// Explicit value cells, final round (I2): the input-mirrored configuration is
-// EXECUTED, not merely validated. The static gate above ("cell table: the
-// input-mirrored configuration derives a valid table") proves the table is
-// well formed under that configuration; only a run proves the executor can
-// walk it -- the level-skipping escape chain and the materialized member the
-// mirrored schedule contains are runtime shapes the default configuration
-// never produces. Same construction as the static case (peak threshold 25e9,
-// the batched time-then-space objective, set directly rather than through the
-// environment), then the strict dry-run walk the default fixture uses:
-// range/lobound checks in the backend plus the cache-fill-once tripwire.
-// The [w20-auxocc-walk] fixture keeps its environment-driven mirroring
-// unchanged; this case makes the mirrored RUN part of the default suite.
-// ===========================================================================
-// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
-#ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "ordered executor: the input-mirrored configuration RUNS the strict "
-    "dry-run walk to completion",
-    "[ordered][cell_table]") {
-  using sequant::eval::dryrun::EvalExprDryRun;
-  using sequant::eval::dryrun::EvalNodeDryRun;
-  using Node = EvalNodeDryRun;
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(ibr);
-  ctx.set(ibr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
-
-  auto const body =
-      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                                "/data/csv_ccsd_doubles_residual_df.txt");
-  REQUIRE(!body.empty());
-  std::string line = body;
-  if (auto nl = line.find('\n'); nl != std::string::npos)
-    line = line.substr(0, nl);
-  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
-  REQUIRE(expr->is<sequant::Sum>());
-  auto const& summands = expr->as<sequant::Sum>().summands();
-  auto regime = orderedexec_witness_df_regime(kOrderedExecWater20_pVDZF12);
-  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
-  sequant::BatchPolicy policy;
-  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"Κ";
-  };
-  policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    auto const reg = sequant::get_default_context().index_basis_registry();
-    return reg && ix.space() && reg->is_pure_occupied(ix.space());
-  };
-  policy.batch_spectator_indices = true;
-  policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"Κ" ? 256 : 16;
-  };
-  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
-    return t.label() == L"t";
-  };
-  policy.accumulation_factor = 1.0;
-  policy.persistent_only = false;
-  policy.peak_threshold = 25e9;  // THE mirrored setting
-  auto axes_map = std::make_shared<std::unordered_map<
-      sequant::Expr const*,
-      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
-  sequant::OptimizeOptions opts;
-  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
-  opts.idx_to_extent = regime.idx_to_extent();
-  opts.inner_pow = regime.inner_pow_fn();
-  opts.batch_policy = policy;
-  opts.volatile_weight = 20.0;
-  opts.roofline.machine_balance = 200.0;
-  opts.roofline.fast_mem_elems = 1000000.0;
-  opts.term_batch_axes = axes_map;
-  std::vector<Node> forest;
-  for (auto const& s : summands) {
-    sequant::ExprPtr const term = orderedexec_witness_flatten_product(s);
-    if (!term) continue;
-    sequant::ExprPtr optimized;
-    try {
-      optimized = sequant::optimize(term, opts);
-    } catch (std::exception const&) {
-      continue;
-    }
-    if (!optimized) continue;
-    sequant::BinarizationOptions bopts;
-    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
-      bopts.node_batch_axes = it->second;
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  }
-  REQUIRE(!forest.empty());
-  auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"Κ" ? 256 : 16;
-  };
-  auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
-  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
-  auto const ordered = sequant::eval::build_ordered_schedule(
-      rich, legality, policy, std::initializer_list<std::wstring>{});
-  REQUIRE(sequant::eval::well_formed(ordered));
-
-  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
-  annot_t const layout{};
-  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
-  std::function<std::size_t(sequant::Index const&)> const target =
-      [](sequant::Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"Κ" ? 256 : 16;
-  };
-  std::function<bool(Node const&)> const is_volatile_node =
-      [p = policy.is_volatile_leaf](Node const& n) -> bool {
-    if (!n.leaf() || !n->is_tensor()) return false;
-    return p && p(n->as_tensor());
-  };
-
-  auto& logger = sequant::Logger::instance();
-  auto const prev_level = logger.eval.level;
-  logger.eval.level = 0;
-  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
-  auto ordered_cache = sequant::cache_manager(forest);
-  ordered_cache.set_array_ops(&aops);
-
-  // Per-instance override; see [block-skip]'s note on the env latch.
-  ordered_cache.set_strict_fill_once(true);
-  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
-      forest, ordered, rich, layout, yield, ordered_cache, target, {},
-      is_volatile_node));
-
-  logger.eval.level = prev_level;
-}
-#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 // ===========================================================================
 // An Assemble step's destination is sized from ITS OWN CELL'S FORM (the
 // table), never inferred from where the escaped axis happens to sit on the
