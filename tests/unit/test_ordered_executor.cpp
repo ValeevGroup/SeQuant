@@ -24,6 +24,7 @@
 #include <SeQuant/core/eval/backends/dryrun/meter.hpp>
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/cell_table_builder.hpp>
 #include <SeQuant/core/eval/dag_scope.hpp>
@@ -54,12 +55,14 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
+#include "csv_size_fixtures.hpp"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
@@ -334,51 +337,33 @@ std::string orderedexec_witness_slurp(std::string const& path) {
   return ss.str();
 }
 
-struct OrderedExecWater20ProblemSize {
-  std::size_t mu_tilde;
-  std::size_t aux;
-  std::size_t i_occ;
-  std::array<double, 5> pno_M;
-  std::array<double, 5> osv_M;
-};
-
-// Same (molecule, basis, parameter-set) size as test_ordered_schedule.cpp's
-// kOrderedSchedWater20_pVDZF12 (job-log / mpqc PaoPnoRMP2 moments) --
-// duplicated per the file-header note above.
-inline constexpr OrderedExecWater20ProblemSize kOrderedExecWater20_pVDZF12{
-    /*mu_tilde=*/896u,
-    /*aux=*/1682u,
-    /*i_occ=*/80u,
-    /*pno_M=*/
-    {1.0, 23.175775480059084, 25.865548281212597, 28.171416142614103,
-     30.03848680550367},
-    /*osv_M=*/
-    {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
-     59.872014818179686}};
-
-// C60 pVDZ-F12 problem size (copied from test_eval_dryrun.cpp's kC60_pVDZF12).
-inline constexpr OrderedExecWater20ProblemSize kOrderedExecC60_pVDZF12{
-    /*mu_tilde=*/1800u,
-    /*aux=*/4320u,
-    /*i_occ=*/120u,
-    /*pno_M=*/
-    {1.0, 42.029069767441861, 46.039206412923569, 49.766252354482994,
-     53.151291880343109},
-    /*osv_M=*/
-    {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926}};
+// The water-20 / C60 problem sizes, their provenance and the occupancy
+// adjustment live in csv_size_fixtures.hpp (a named namespace, so sharing it
+// across files is unity-build safe); these aliases keep this file's names.
+using OrderedExecWater20ProblemSize = sequant::tests::csv_sizes::CsvProblemSize;
+inline constexpr auto const& kOrderedExecWater20_pVDZF12 =
+    sequant::tests::csv_sizes::kWater20_pVDZF12;
+inline constexpr auto const& kOrderedExecC60_pVDZF12 =
+    sequant::tests::csv_sizes::kC60_pVDZF12;
 
 sequant::eval::dryrun::SizeRegime orderedexec_witness_df_regime(
     OrderedExecWater20ProblemSize const& p) {
-  sequant::eval::dryrun::SizeRegime r;
-  r.space_extent = {
-      {L"i", p.i_occ},
-      {L"μ̃", p.mu_tilde},
-      {L"Κ", p.aux},
-      {L"a", p.mu_tilde},
-  };
-  r.csv_pno_moment = p.pno_M;
-  r.csv_osv_moment = p.osv_M;
-  return r;
+  return sequant::tests::csv_sizes::df_size_regime(p);
+}
+
+// Peak budget for the w20 STRUCTURE tests below (cell kinds, escapes,
+// produce-if-absent rebinding, scatter-destination sizing). Their budgets were
+// chosen against the dense-occupancy regime (every ordered pair nonnull). The
+// occupancy-adjusted moments shrink a one-cluster value by p and a two-cluster
+// value by p^2, so the same absolute budget opens different loops and the cell
+// kind a test probes may not arise. Each test therefore scales its dense
+// budget by p^n, with n the smallest power that restores its probed schedule
+// shape (the shape is not monotone in the budget, so n is per test).
+double orderedexec_structure_budget(double dense_budget,
+                                    OrderedExecWater20ProblemSize const& p,
+                                    int occupancy_power) {
+  return dense_budget *
+         std::pow(p.pno_occupancy, static_cast<double>(occupancy_power));
 }
 
 sequant::ExprPtr orderedexec_witness_flatten_product(
@@ -1623,7 +1608,8 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
-  policy.peak_threshold = 1e11;
+  policy.peak_threshold =
+      orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
@@ -4502,7 +4488,8 @@ TEST_CASE(
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
-  policy.peak_threshold = 1e11;
+  policy.peak_threshold =
+      orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -4825,7 +4812,8 @@ TEST_CASE(
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
-  policy.peak_threshold = 1e11;
+  policy.peak_threshold =
+      orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -5014,7 +5002,8 @@ TEST_CASE(
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
-  policy.peak_threshold = 25e9;  // THE mirrored setting
+  policy.peak_threshold = orderedexec_structure_budget(
+      25e9, kOrderedExecWater20_pVDZF12, 1);  // THE mirrored setting
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
