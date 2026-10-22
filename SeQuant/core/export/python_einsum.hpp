@@ -399,11 +399,9 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
     // Try to use the first character of the label, preserving case (einsum
     // only supports ASCII letters, so fall back to 'i' otherwise)
-    const char base_char =
-        full_label.empty() ||
-                !std::isalpha(static_cast<unsigned char>(full_label[0]))
-            ? 'i'
-            : full_label[0];
+    const char base_char = full_label.empty() || !is_ascii_letter(full_label[0])
+                               ? 'i'
+                               : full_label[0];
     std::string candidate(1, base_char);
 
     // Check if this character is already used (O(1) lookup)

@@ -82,6 +82,13 @@ std::string utf8_regex_pattern(std::string_view pattern);
 /// use on the individual code units of a UTF-8 encoded string
 constexpr bool is_ascii_digit(char c) { return c >= '0' && c <= '9'; }
 
+/// @return true if @p c is an ASCII letter; unlike std::isalpha, this is
+/// locale-independent and safe to use on the individual code units of a UTF-8
+/// encoded string
+constexpr bool is_ascii_letter(char c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
 template <string_convertible S>
 std::string_view to_string_view(S &&str) {
   if constexpr (meta::is_char_v<std::remove_reference_t<S>>)
