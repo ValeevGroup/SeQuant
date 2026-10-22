@@ -17,8 +17,10 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -1294,6 +1296,38 @@ SECTION("Closed-shell spintrace CCSDT terms") {
             " t{a_3,a_4,a_5;i_3,i_2,i_1}:N-N-S -"
             " Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5}:N-N-S *"
             " t{a_3,a_4,a_5;i_2,i_1,i_3}:N-N-S"));
+  }
+
+  SECTION("NNS projection of the v2 term rebuilds the v1 terms") {
+    const auto input = ex<Sum>(ExprPtrList{
+        deserialize(L"3/2 Â{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5} * "
+                    "t{a_3,a_4,a_5;i_1,i_2,i_3}",
+                    {.def_perm_symm = Symmetry::Antisymm})});
+    const auto v1 = closed_shell_CC_spintrace_v1(input);
+    const auto v2 = closed_shell_CC_spintrace_v2(input);
+
+    // mirror biorthogonal_nns_project: R'(a;i) = sum_p w_p R(a;p(i)), with the
+    // kets permuted and weighted exactly as in the numerical backends
+    const container::svector<Index> kets{Index(L"i_1"), Index(L"i_2"),
+                                         Index(L"i_3")};
+    const auto& weights =
+        mbpt::detail::nns_projection_weights<double>(kets.size());
+    REQUIRE(weights.size() == 6);
+    Sum projected;
+    for (std::size_t p = 0; p < weights.size(); ++p) {
+      const auto permuted =
+          mbpt::detail::compute_permuted_indices({0, 1, 2}, p, kets.size());
+      container::map<Index, Index> replacements;
+      for (std::size_t k = 0; k < kets.size(); ++k)
+        replacements.emplace(kets[k], kets[permuted[k]]);
+      projected.append(
+          transform_expr(v2, replacements, to_rational(weights[p])));
+    }
+
+    // the permuted symmetrizers are merged modulo the symmetrizer, as the
+    // v2 pipeline does
+    REQUIRE_THAT(S_maps(ex<Sum>(std::move(projected))),
+                 EquivalentTo(S_maps(v1)));
   }
 
   SECTION("f * t3") {
