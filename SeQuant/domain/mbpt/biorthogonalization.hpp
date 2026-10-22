@@ -75,7 +75,10 @@ void biorthogonal_transform(
 /// have identical graph hashes).
 /// @details This function processes a sum expression, grouping product terms by
 /// hash of their canonicalized tensor network forms. For each group, it
-/// retains only the terms with the largest absolute scalar coefficient.
+/// retains only the terms with the largest absolute scalar coefficient, scaled
+/// by n!/rank (rank(M) = Catalan(n) for n external index groups) so that the
+/// idempotent NNS projector (biorthogonal_nns_project) rebuilds the full
+/// residual.
 /// @param expr The input expression, expected to be a `Sum` of `Product` terms.
 /// @param ext_idxs A vector of external index groups. The function will not
 /// apply the filtering logic if `ext_idxs.size()` is 2 or less.
