@@ -27,8 +27,7 @@ std::size_t IndexSpaceMeta::getSize(const Index &index) const {
 std::string IndexSpaceMeta::getName(const IndexSpace &space) const {
   auto iter = m_entries.find(space);
   if (iter == m_entries.end()) {
-    throw Exception("No known name for index space " +
-                    std::string(space.base_key()));
+    throw Exception("No known name for index space " + space.base_key());
   }
 
   return iter->second.name;
@@ -37,8 +36,7 @@ std::string IndexSpaceMeta::getName(const IndexSpace &space) const {
 std::string IndexSpaceMeta::getTag(const IndexSpace &space) const {
   auto iter = m_entries.find(space);
   if (iter == m_entries.end()) {
-    throw Exception("No known tag for index space " +
-                    std::string(space.base_key()));
+    throw Exception("No known tag for index space " + space.base_key());
   }
 
   return iter->second.tag;

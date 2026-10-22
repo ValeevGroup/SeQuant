@@ -17,7 +17,7 @@ std::string ItfContext::index_name(const IndexSpace &space,
   SEQUANT_ASSERT(ordinal >= m_idx_offset);
   ordinal -= m_idx_offset;
 
-  std::string base_key = std::string(space.base_key());
+  std::string base_key = space.base_key();
 
   char limit = [&]() -> char {
     auto it = m_index_label_limits.find(space);
@@ -50,8 +50,7 @@ std::string ItfContext::get_name(const IndexSpace &space) const {
   auto it = m_space_names.find(space);
 
   if (it == m_space_names.end()) {
-    throw Exception("No name known for index space '" +
-                    std::string(space.base_key()) + "'");
+    throw Exception("No name known for index space '" + space.base_key() + "'");
   }
 
   return it->second;
@@ -61,8 +60,7 @@ std::string ItfContext::get_tag(const IndexSpace &space) const {
   auto it = m_tags.find(space);
 
   if (it == m_tags.end()) {
-    throw Exception("No tag known for index space '" +
-                    std::string(space.base_key()) + "'");
+    throw Exception("No tag known for index space '" + space.base_key() + "'");
   }
 
   return it->second;

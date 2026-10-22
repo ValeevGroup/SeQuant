@@ -93,12 +93,12 @@ void require_unregistered(
     IndexBasis::instance_type instance) {
   for (const auto& [label, space] : bases) {
     if (ibr.contains(label))
-      throw Exception(std::string(caller) + ": the label '" +
-                      std::string(label) + "' is already registered");
+      throw Exception(std::string(caller) + ": the label '" + label +
+                      "' is already registered");
     if (auto taken = ibr.basis_label(IndexBasis{space, instance}))
       throw Exception(std::string(caller) + ": instance " +
                       std::to_string(instance) + " of space " +
-                      std::string(space.base_key()) + " is already named '" +
+                      space.base_key() + " is already named '" +
                       std::string(*taken) + "'");
   }
 }
@@ -147,9 +147,8 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
         ibr->retrieve_space_ptr(s1.type() | s2.type(), spin_any);
     if (!space)
       throw Exception("add_ao_basis: the AO basis '" + std::string(label) +
-                      "' spans the union of the spaces " +
-                      std::string(s1.base_key()) + " and " +
-                      std::string(s2.base_key()) + ", which is not registered");
+                      "' spans the union of the spaces " + s1.base_key() +
+                      " and " + s2.base_key() + ", which is not registered");
     return *space;
   };
   container::svector<std::pair<std::string, IndexSpace>> bases;
@@ -196,7 +195,7 @@ void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
   // reallocate the table
   const std::string label(spec.label), followed(spec.ao_basis);
   if (label == followed)
-    throw Exception("add_pao_basis: '" + std::string(label) +
+    throw Exception("add_pao_basis: '" + label +
                     "' is the label of the AO basis the PAO bases follow");
   const auto uocc_type = ibr->particle_space(/* nulltype_ok = */ false);
   container::svector<std::pair<std::string, IndexSpace>> bases;
@@ -208,27 +207,25 @@ void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
   bool registered_ao = false;
   if (!ibr->contains(followed)) {
     if (followed != "μ")
-      throw Exception("add_pao_basis: the AO basis '" + std::string(followed) +
+      throw Exception("add_pao_basis: the AO basis '" + followed +
                       "' the PAO bases follow is not registered");
     add_ao_basis(ibr, spin_any);
     registered_ao = true;
   } else if (!ibr->retrieve(followed).has_basis_instance())
-    throw Exception("add_pao_basis: '" + std::string(followed) +
+    throw Exception("add_pao_basis: '" + followed +
                     "' is a space, not the AO basis the PAO bases follow");
   else if (auto source = ibr->follows(followed))
-    throw Exception("add_pao_basis: the AO basis '" + std::string(followed) +
-                    "' follows '" + *source +
-                    "', so the PAO bases cannot follow it");
+    throw Exception("add_pao_basis: the AO basis '" + followed + "' follows '" +
+                    *source + "', so the PAO bases cannot follow it");
   // the AOs must span the PAOs they are projected on
   const IndexSpace ao_space = ibr->retrieve(followed).space();
   for (const auto& [l, space] : bases)
     if (!includes(ao_space, space)) {
       if (registered_ao) ibr->remove(followed);
-      throw Exception("add_pao_basis: the AO basis '" + std::string(followed) +
-                      "' spans " + std::string(ao_space.base_key()) +
+      throw Exception("add_pao_basis: the AO basis '" + followed + "' spans " +
+                      ao_space.base_key() +
                       ", which does not include the particle space " +
-                      std::string(space.base_key()) + " of '" + std::string(l) +
-                      "'");
+                      space.base_key() + " of '" + l + "'");
     }
   for (const auto& [l, space] : bases)
     ibr->add(l, space, spec.instance, {.follows = followed});

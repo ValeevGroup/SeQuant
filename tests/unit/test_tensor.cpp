@@ -748,7 +748,7 @@ TEST_CASE("density labels", "[elements]") {
 
   SECTION("ctors reject a density without its defining symmetries") {
     for (const auto& label : reserved::density_labels()) {
-      CAPTURE(std::string(label));
+      CAPTURE(label);
       REQUIRE_THROWS_AS(ex<Tensor>(label, bra{"i_1"}, ket{"i_2"}), Exception);
       REQUIRE_THROWS_AS(ex<Tensor>(label, bra{"i_1", "i_3"}, ket{"i_2", "i_4"},
                                    Symmetry::Nonsymm, Hermiticity::NonHermitian,
@@ -785,7 +785,7 @@ TEST_CASE("density labels", "[elements]") {
     // nonsymmetric
     for (const auto& label : {reserved::rdm_label(), reserved::hole_rdm_label(),
                               reserved::cumulant_label()}) {
-      CAPTURE(std::string(label));
+      CAPTURE(label);
       REQUIRE_NOTHROW(ex<Tensor>(label, bra{"i_1", "i_3"}, ket{"i_2", "i_4"},
                                  density::rdm_symmetries));
     }
@@ -858,7 +858,7 @@ TEST_CASE("overlap and Kronecker delta labels", "[elements]") {
   // an overlap or Kronecker delta is an identity between two indices
   for (const auto& label :
        {reserved::overlap_label(), reserved::kronecker_label()}) {
-    CAPTURE(std::string(label));
+    CAPTURE(label);
     REQUIRE_NOTHROW(Tensor(label, bra{"i_1"}, ket{"i_2"}));
     REQUIRE_THROWS_AS(Tensor(label, bra{"i_1", "i_2"}, ket{"a_1", "a_2"}),
                       Exception);

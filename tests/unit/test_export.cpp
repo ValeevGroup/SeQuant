@@ -528,7 +528,7 @@ TEST_CASE("export", "[export]") {
       ctx.set_memory_layout(layout);
 
       for (const auto &[input, candidates] : tests) {
-        CAPTURE(std::string(input));
+        CAPTURE(input);
 
         const std::string &expected =
             candidates.at(static_cast<std::size_t>(layout));
@@ -540,7 +540,7 @@ TEST_CASE("export", "[export]") {
                 ->as<Tensor>();
         bool rewritten = ctx.rewrite(tensor);
         REQUIRE_THAT(tensor, EquivalentTo(expected));
-        REQUIRE(rewritten == (std::string(input) != expected));
+        REQUIRE(rewritten == (input != expected));
       }
     }
   }

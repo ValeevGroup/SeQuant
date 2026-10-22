@@ -102,9 +102,8 @@ inline void assert_amplitudes_carry_granted_basis(ExprPtr const& expr) {
     throw Exception("assert_amplitudes_carry_granted_basis: slot " +
                     std::string(idx.full_label()) + " of " +
                     std::string(t._label()) + " carries basis instance " +
-                    instance_text(instance) + " but the grant of " +
-                    std::string(label) + " on its space is " +
-                    instance_text(grant));
+                    instance_text(instance) + " but the grant of " + label +
+                    " on its space is " + instance_text(grant));
   };
   expr->visit(
       [&](ExprPtr const& x) {

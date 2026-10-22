@@ -41,7 +41,7 @@ namespace sequant::eval::schedule {
 
 /// "<label>:<base_key>" spelling used for every mode list in the DAG record
 inline std::string mode_spelling(Index const& ix) {
-  return index_label(ix) + ":" + std::string(ix.basis().base_key());
+  return index_label(ix) + ":" + ix.basis().base_key();
 }
 
 namespace detail {
@@ -615,10 +615,10 @@ DagRecord record_dag(
   // ---- 7. loops and loop order
   auto const loop_rec = [&](std::pair<std::string, int> const& k) {
     if (k.second < 0)
-      throw Exception("record_dag: loop " + std::string(k.first) +
-                      " has no slot (" + std::to_string(k.second) + ")");
+      throw Exception("record_dag: loop " + k.first + " has no slot (" +
+                      std::to_string(k.second) + ")");
     auto const it = rich.loop_kind.find(k);
-    return LoopRecord{std::string(k.first), static_cast<std::size_t>(k.second),
+    return LoopRecord{k.first, static_cast<std::size_t>(k.second),
                       it == rich.loop_kind.end()
                           ? std::string{}
                           : detail::kind_name(it->second)};

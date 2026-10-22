@@ -1185,10 +1185,9 @@ namespace detail {
         auto const b = item_of.find(pair.second);
         if (a == item_of.end() || b == item_of.end()) continue;
         if (indeg[a->second] == 0 && indeg[b->second] == 0) continue;
-        msg += " [" + std::string(pair.first.first) + "#" +
-               std::to_string(pair.first.second) + " > " +
-               std::string(pair.second.first) + "#" +
-               std::to_string(pair.second.second) + " by v" +
+        msg += " [" + pair.first.first + "#" +
+               std::to_string(pair.first.second) + " > " + pair.second.first +
+               "#" + std::to_string(pair.second.second) + " by v" +
                std::to_string(witness) + "]";
       }
       throw Exception(msg);
@@ -1211,9 +1210,7 @@ namespace detail {
   auto const depth_of_instance = [&](std::string const& bk,
                                      int slot) -> std::optional<std::size_t> {
     for (std::size_t d = 0; d < n; ++d)
-      if (std::string(types[d].basis().base_key()) == bk &&
-          type_slot[d] == slot)
-        return d;
+      if (types[d].basis().base_key() == bk && type_slot[d] == slot) return d;
     return std::nullopt;
   };
 
@@ -2477,8 +2474,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           int const occ_slot =
               pos < occ.loop_slot.size() ? occ.loop_slot[pos] : -1;
           if (occ_slot != lvl.loop_slot) continue;
-          if (std::string(occ.carried[pos].basis().base_key()) != lvl.space)
-            continue;
+          if (occ.carried[pos].basis().base_key() != lvl.space) continue;
           result.occ_facts.push_back(
               std::make_tuple(w_vid, pos, id_of(lvl), consumer_vid, leg));
           self_sliced = true;
@@ -2514,8 +2510,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
               pit->second.occ->loop_slot[cp] >= 0)
             c_sliced = pit->second.occ->loop_slot[cp] == lvl.loop_slot;
           if (!c_sliced) continue;
-          if (std::string(c_carried[cp].basis().base_key()) != lvl.space)
-            continue;
+          if (c_carried[cp].basis().base_key() != lvl.space) continue;
           Index const& M = c_carried[cp];  // the mode C is sliced on here
           // W carries M at some own-occurrence position (shared external,
           // canonical-label match for a direct operand)?
@@ -2553,7 +2548,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           for (auto const& cocc : rich.cells[c_vid].occurrences) {
             for (auto const& [rm, rs] : cocc.reduced_slot) {
               if (rs != lvl.loop_slot) continue;
-              if (std::string(rm.basis().base_key()) != lvl.space) continue;
+              if (rm.basis().base_key() != lvl.space) continue;
               std::size_t pos_a = occ.carried.size();
               for (std::size_t pa = 0; pa < occ.carried.size(); ++pa)
                 if (occ.carried[pa] == rm) {

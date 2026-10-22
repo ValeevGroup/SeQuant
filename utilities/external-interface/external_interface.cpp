@@ -249,8 +249,7 @@ ExportNode<> prepareForExport(const ResultExpr &result,
   } else {
     if (opts.importResult) {
       SEQUANT_ASSERT(result.has_label());
-      ctx.set_import_name(result.result_as_variable(),
-                          std::string(result.label()));
+      ctx.set_import_name(result.result_as_variable(), result.label());
     }
     if (opts.createResult) {
       ctx.setLoadStrategy(result.result_as_variable(), LoadStrategy::Create,

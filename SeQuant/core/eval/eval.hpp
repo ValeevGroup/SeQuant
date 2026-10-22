@@ -396,7 +396,7 @@ std::string scope_annot(BatchContext const& active) {
   std::string scope;
   for (auto const& e : active) {
     if (!scope.empty()) scope += ",";
-    scope += std::string(e.axis.basis().base_key());
+    scope += e.axis.basis().base_key();
   }
   return std::format("scope={{{}}}", scope);
 }
@@ -429,7 +429,7 @@ std::string slice_home_annot(Node const& node, BatchContext const& active) {
       spos.push_back(*p);
   std::sort(spos.begin(), spos.end());
   for (auto const p : spos)
-    sliced += std::format("{}:{} ", p, std::string(idxs[p].basis().base_key()));
+    sliced += std::format("{}:{} ", p, idxs[p].basis().base_key());
   auto annot = std::format("canon=[{}] sliced=[{}] {}", canon, sliced,
                            scope_annot(active));
   // Append any schedule-derived per-node metadata (e.g. the value's home
@@ -2067,7 +2067,7 @@ template <Trace EvalTrace = Trace::Default, typename F,
     // push site below).
     auto const synth_level = [&cache](Index const& ax) -> DagScopeLevel {
       return DagScopeLevel{.depth = cache.batch_context().size() + 1,
-                           .space = std::string(ax.basis().base_key())};
+                           .space = ax.basis().base_key()};
     };
     // Mode selection is sliceability-aware and realizes the optimizer's
     // multi-mode nesting one mode per depth level. candidate_axes lists this

@@ -216,7 +216,7 @@ TEST_CASE("csv-shape-predicates", "[mbpt][csv]") {
       {"g{i1,i2;a1}", false, false},    {"g{i1;a1,a2}", false, false},
   };
   for (auto const& [tensor, ovov, oovv] : cases) {
-    CAPTURE(std::string(tensor));
+    CAPTURE(tensor);
     ExprPtr owner = deserialize(tensor);
     CHECK(mbpt::is_ovov_integral(owner->as<Tensor>()) == ovov);
     CHECK(mbpt::is_oovv_integral(owner->as<Tensor>()) == oovv);
@@ -386,7 +386,7 @@ TEST_CASE("csv-pno-projection-fixtures", "[mbpt][csv]") {
     const ExprPtr input = deserialize(in);
     for (auto scope :
          {ExchangeLinear, ExchangeNonlinear, CoulombLinear, CoulombNonlinear}) {
-      CAPTURE(std::string(in), static_cast<int>(scope));
+      CAPTURE(in, static_cast<int>(scope));
       CHECK((project(input, own_pair(scope)).get() != input.get()) ==
             (scope == cell));
     }
@@ -407,7 +407,7 @@ TEST_CASE("csv-pno-projection-fixtures", "[mbpt][csv]") {
 
   // no option reaches the energy, a singles residual or a (vv|vv) ladder
   for (std::string const& text : {energy, singles, ladder}) {
-    CAPTURE(std::string(text));
+    CAPTURE(text);
     const ExprPtr input = deserialize(text);
     for (auto const& opts : {own_pair(All), amplitude(All),
                              ProjectionOptions{.terms = All,

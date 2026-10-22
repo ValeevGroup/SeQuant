@@ -653,8 +653,8 @@ TEST_CASE("utilities", "[utilities]") {
       };
 
       for (const auto& [lhs, rhs, equal] : test_cases) {
-        CAPTURE(std::string(lhs));
-        CAPTURE(std::string(rhs));
+        CAPTURE(lhs);
+        CAPTURE(rhs);
 
         const Tensor lhs_tensor = deserialize(lhs)->as<Tensor>();
         const Tensor rhs_tensor = deserialize(rhs)->as<Tensor>();
@@ -684,8 +684,8 @@ TEST_CASE("utilities", "[utilities]") {
       };
 
       for (const auto& [lhs, rhs, less] : test_cases) {
-        CAPTURE(std::string(lhs));
-        CAPTURE(std::string(rhs));
+        CAPTURE(lhs);
+        CAPTURE(rhs);
 
         const Tensor lhs_tensor = deserialize(lhs)->as<Tensor>();
         const Tensor rhs_tensor = deserialize(rhs)->as<Tensor>();
@@ -897,10 +897,10 @@ TEST_CASE("utilities", "[utilities]") {
                {"g{p1,p2;p3,p4} t{p3,p4;p1,p2}", "t{p5,p6;p1,p2}",
                 "T{p5,p6;p7,p8}", "g{p1,p2;p3,p4} T{p3,p4;p7,p8}"},
            }) {
-        CAPTURE(std::string(input_str));
-        CAPTURE(std::string(target_str));
-        CAPTURE(std::string(replacement_str));
-        CAPTURE(std::string(expected_str));
+        CAPTURE(input_str);
+        CAPTURE(target_str);
+        CAPTURE(replacement_str);
+        CAPTURE(expected_str);
 
         ExprPtr input = deserialize(input_str);
         ExprPtr input2 = deserialize(input_str);
@@ -941,10 +941,10 @@ TEST_CASE("utilities", "[utilities]") {
                 "T{p5,p6;p7,p8}",
                 "R{p1,p2;p7,p8}:N-N-N = g{p1,p2;p3,p4} T{p3,p4;p7,p8}"},
            }) {
-        CAPTURE(std::string(input_str));
-        CAPTURE(std::string(target_str));
-        CAPTURE(std::string(replacement_str));
-        CAPTURE(std::string(expected_str));
+        CAPTURE(input_str);
+        CAPTURE(target_str);
+        CAPTURE(replacement_str);
+        CAPTURE(expected_str);
 
         ResultExpr input = deserialize<ResultExpr>(input_str);
         ResultExpr input2 = deserialize<ResultExpr>(input_str);
@@ -1028,7 +1028,7 @@ TEST_CASE("utilities", "[utilities]") {
                // Allow bra/ket inconsistencies in external indices
                {"R{a2;a1} = t{a1;i1} t{i1;a2}", ""},
            }) {
-        CAPTURE(std::string(expr_str));
+        CAPTURE(expr_str);
 
         ResultExpr expr = deserialize<ResultExpr>(expr_str);
 
@@ -1110,7 +1110,7 @@ TEST_CASE("utilities", "[utilities]") {
              {"Â{i1,i2;} R{;i1,i2}",
               {{{"i_1", SlotType::Ket}}, {{"i_2", SlotType::Ket}}}},
          }) {
-      CAPTURE(std::string(input));
+      CAPTURE(input);
 
       ExprPtr expr = deserialize(input);
       SlottedIndexGroupContainer auto actual =

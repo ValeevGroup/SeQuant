@@ -64,7 +64,7 @@ IndexBasis to_basis(const LabelAST &label_ast, const std::string &label,
     auto [offset, length] = get_pos(label_ast, position_cache, begin);
     throw SerializationError(
         offset, length,
-        "label '" + std::string(label) +
+        "label '" + label +
             "' names a basis instance; an explicit ';N' is not allowed");
   }
   return registry->resolve(IndexBasis{basis.space(), *instance});
@@ -96,15 +96,14 @@ Index to_index(const io::serialization::v1::ast::Index &index,
     } catch (const IndexSpace::bad_key &) {
       auto [offset, length] = get_pos(current.label, position_cache, begin);
       throw SerializationError(offset, length,
-                               "Unknown index space '" +
-                                   std::string(current.label.label) +
+                               "Unknown index space '" + current.label.label +
                                    "' in proto index specification");
     } catch (const Exception &e) {
       auto [offset, length] = get_pos(current.label, position_cache, begin);
-      throw SerializationError(
-          offset, length,
-          "Invalid index '" + std::string(current.label.label) + "_" +
-              std::to_string(current.label.id) + ": " + e.what());
+      throw SerializationError(offset, length,
+                               "Invalid index '" + current.label.label + "_" +
+                                   std::to_string(current.label.id) + ": " +
+                                   e.what());
     }
   }
 
@@ -118,15 +117,14 @@ Index to_index(const io::serialization::v1::ast::Index &index,
   } catch (const IndexSpace::bad_key &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
     throw SerializationError(offset, length,
-                             "Unknown index space '" +
-                                 std::string(index.label.label) +
+                             "Unknown index space '" + index.label.label +
                                  "' in index specification");
   } catch (const Exception &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
-    throw SerializationError(
-        offset, length,
-        "Invalid index '" + std::string(index.label.label) + "_" +
-            std::to_string(index.label.id) + ": " + e.what());
+    throw SerializationError(offset, length,
+                             "Invalid index '" + index.label.label + "_" +
+                                 std::to_string(index.label.id) + ": " +
+                                 e.what());
   }
 }
 

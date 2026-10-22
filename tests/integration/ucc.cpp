@@ -121,8 +121,7 @@ int main(int argc, char* argv[]) {
   const auto eqvec = cc.t();
   tpool.stop(0);
 
-  std::cout << "UCC equations [rank=" << N
-            << ",expansion=" << std::string(expansion_str)
+  std::cout << "UCC equations [rank=" << N << ",expansion=" << expansion_str
             << ",hbar_comm_rank=" << RANK << "] computed in " << tpool.read(0)
             << " seconds" << std::endl;
 

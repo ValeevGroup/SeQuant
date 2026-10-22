@@ -117,8 +117,8 @@ std::string diff_spaces(const IndexSpace &lhs, const IndexSpace &rhs) {
     stream << "QNs differ: " << AttrSet(lhs.qns().to_int32()) << " vs. "
            << AttrSet(rhs.qns().to_int32());
   } else if (lhs.base_key() != rhs.base_key()) {
-    stream << "Base key differs: " << std::string(lhs.base_key()) << " vs. "
-           << std::string(rhs.base_key());
+    stream << "Base key differs: " << lhs.base_key() << " vs. "
+           << rhs.base_key();
   } else if (lhs.dimension() != rhs.dimension()) {
     stream << "Size differs: " << std::to_string(lhs.dimension()) << " vs. "
            << std::to_string(rhs.dimension());

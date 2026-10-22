@@ -90,10 +90,10 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
       IndexBasis{space, idx.basis().basis_instance()});
   if (idx.basis().has_name() && !basis.has_name())
     throw Exception("make_index_with_spincase: the basis " +
-                    std::string(idx.basis().name()) + " of index " +
+                    idx.basis().name() + " of index " +
                     std::string(idx.full_label()) +
                     " has no registered counterpart in space " +
-                    std::string(space.base_key()) + "; register it (e.g. as " +
+                    space.base_key() + "; register it (e.g. as " +
                     mbpt::spinannotation_replace(idx.basis().name(), s) +
                     ") before spin-casing");
   auto protoindices = idx.proto_indices();

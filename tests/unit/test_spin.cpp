@@ -1969,7 +1969,7 @@ TEST_CASE("spin-traced densities", "[spin]") {
       ex<Tensor>("g", bra{"i_3", "i_4"}, ket{"i_1", "i_2"}, Symmetry::Antisymm);
   for (const auto& label :
        {reserved::rdm_label(), reserved::cumulant_label()}) {
-    CAPTURE(std::string(label));
+    CAPTURE(label);
     const auto expr =
         g * density::make_density(label, bra{"i_1", "i_2"}, ket{"i_3", "i_4"});
     for (bool closed_shell : {true, false}) {

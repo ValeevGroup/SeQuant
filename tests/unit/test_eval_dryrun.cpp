@@ -1228,7 +1228,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
             if (!n->node_slice_mask().empty()) ++term_batched_nodes;
             ++term_internal_nodes;
             for (auto const& ax : n->node_slice_mask())
-              term_axis_hist[std::string(ax.first.basis().base_key())]++;
+              term_axis_hist[ax.first.basis().base_key()]++;
             // Forest-level CSE bookkeeping (see declarations above). The mode
             // signature includes the ancestor-sliced context, not just this
             // node's own modes: the same expression evaluated under a different
@@ -3604,8 +3604,8 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
     Record const& basis = records.at(true);
     CHECK(space.leaf_extents == basis.leaf_extents);
     INFO("space encoding:\n"
-         << std::string(space.dump) << "basis encoding:\n"
-         << std::string(basis.dump));
+         << space.dump << "basis encoding:\n"
+         << basis.dump);
     CHECK(space.nodes == basis.nodes);
     CHECK(space.peak == basis.peak);
   }

@@ -52,7 +52,7 @@ class PythonEinsumGeneratorContext : public ReorderingContext {
       return it->second;
     }
     // Default fallback - use a simple naming scheme
-    return "dim_" + std::string(space.base_key());
+    return "dim_" + space.base_key();
   }
 
   /// Get the shape tuple for a tensor

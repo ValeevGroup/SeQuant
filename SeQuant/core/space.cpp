@@ -47,7 +47,7 @@ std::string to_string(const IndexSpace& space) {
   std::ostringstream oss;
   oss << "{attr=" << to_string(space.attr());
   if (space.base_key().empty() == false) {
-    oss << ",base_key=" << std::string(space.base_key());
+    oss << ",base_key=" << space.base_key();
   }
   oss << ",dimension=" << std::to_string(space.dimension()) << "}";
   return oss.str();

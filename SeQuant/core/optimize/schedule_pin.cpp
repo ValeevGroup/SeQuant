@@ -566,11 +566,10 @@ eval::schedule::Fingerprint make_fingerprint(
   fp.roots = std::move(root_labels);
   auto const& policy = opts.batch_policy;
   for (auto const& [basis_key, ix] : representatives) {
-    fp.batchable[std::string(basis_key)] = {
-        policy.is_batchable_contracted_index &&
-            policy.is_batchable_contracted_index(ix),
-        policy.is_batchable_external_index &&
-            policy.is_batchable_external_index(ix)};
+    fp.batchable[basis_key] = {policy.is_batchable_contracted_index &&
+                                   policy.is_batchable_contracted_index(ix),
+                               policy.is_batchable_external_index &&
+                                   policy.is_batchable_external_index(ix)};
   }
   fp.volatile_leaves.assign(volatile_leaf_labels.begin(),
                             volatile_leaf_labels.end());
@@ -581,13 +580,13 @@ eval::schedule::Fingerprint make_fingerprint(
   fp.objective_function = objective_name(opts.objective_function);
   fp.reorder = reorder_name(opts.reorder);
   fp.cse["subnet"] = opts.CSE.subnet ? "true" : "false";
-  for (auto const& m : mode_order) fp.mode_order.push_back(std::string(m));
+  for (auto const& m : mode_order) fp.mode_order.push_back(m);
   auto const& ctx = get_default_context();
   fp.context.vacuum = vacuum_name(ctx.vacuum());
   fp.context.spbasis = spbasis_name(ctx.spbasis());
   fp.context.strict_braket_symmetry = ctx.assert_strict_braket_symmetry();
   for (auto const& l : ctx.cardinal_tensor_labels())
-    fp.context.cardinal_tensor_labels.push_back(std::string(l));
+    fp.context.cardinal_tensor_labels.push_back(l);
   auto const copts = ctx.canonicalization_options().value_or(
       CanonicalizeOptions::default_options());
   fp.context.canonicalization_method = std::string(to_string(copts.method));

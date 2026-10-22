@@ -2857,7 +2857,7 @@ TEST_CASE(
     };
     sched::RunRecord run;
     for (auto const& [space, extent] : regime.space_extent)
-      run.extents[std::string(space)] = extent;
+      run.extents[space] = extent;
     if (batch_aux) run.batch_targets["Κ"] = kAuxBlock;
     if (batch_pao) run.batch_targets["μ̃"] = kPaoBlock;
     if (batch_occ) run.batch_targets["i"] = kOccBlock;
@@ -2916,7 +2916,7 @@ TEST_CASE(
     std::string s;
     for (std::size_t i = 0; i < v.size(); ++i) {
       if (i) s += ",";
-      s += std::string(v[i].basis().base_key());
+      s += v[i].basis().base_key();
     }
     return s;
   };
@@ -3552,7 +3552,7 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
     std::string s;
     for (std::size_t i = 0; i < v.size(); ++i) {
       if (i) s += ",";
-      s += std::string(v[i].basis().base_key());
+      s += v[i].basis().base_key();
     }
     return s;
   };

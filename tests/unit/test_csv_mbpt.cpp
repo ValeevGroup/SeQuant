@@ -334,8 +334,7 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
     for (auto const& granted : amplitudes) {
       ScopedCsvContext scoped{granted_registry({{granted, 7}})};
       for (auto const& label : amplitudes) {
-        INFO(std::string(granted)
-             << " granted, " << std::string(label) << " built");
+        INFO(granted << " granted, " << label << " built");
         std::size_t n = 0;
         for (Index const& idx : slots_of(make(label), label))
           n += idx.basis().basis_instance() == 7;
@@ -388,8 +387,7 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
     ScopedCsvContext scoped{reg, CSV::No};
     for (auto const& [op, label] :
          {std::pair{t::t(2), std::string("t")},
-          std::pair{t::P(nₚ(2), nₕ(2), "t"),
-                    std::string(reserved::antisymm_label())}}) {
+          std::pair{t::P(nₚ(2), nₕ(2), "t"), reserved::antisymm_label()}}) {
       std::size_t n = 0;
       for (Index const& idx : slots_of(op, label))
         if (ibr->is_pure_unoccupied(idx.space())) {

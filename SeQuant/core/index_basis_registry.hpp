@@ -539,14 +539,12 @@ class IndexBasisRegistry {
     if (auto it = follows_.find(followed.name()); it != follows_.end())
       throw Exception("IndexBasisRegistry::follow: '" +
                       std::string(to_string_view(source)) + "' follows '" +
-                      std::string(it->second) +
-                      "' itself; follow that one instead");
+                      it->second + "' itself; follow that one instead");
     for (const auto& [f, s] : follows_)
       if (s == follower.name())
         throw Exception("IndexBasisRegistry::follow: '" +
                         std::string(to_string_view(label)) +
-                        "' is followed by '" + std::string(f) +
-                        "'; make that one follow '" +
+                        "' is followed by '" + f + "'; make that one follow '" +
                         std::string(to_string_view(source)) + "' instead");
     follows_.insert_or_assign(follower.name(), followed.name());
     refresh_followers();
@@ -711,7 +709,7 @@ class IndexBasisRegistry {
       throw Exception(
           (std::string("IndexBasisRegistry::add(index_space): an entry with "
                        "index_space.base_key()=") +
-           std::string(IS.base_key()) +
+           IS.base_key() +
            " already in the registry; if you are trying to replace the "
            "IndexSpace use "
            "IndexBasisRegistry::replace(is)"));
@@ -753,8 +751,7 @@ class IndexBasisRegistry {
     if (spec.dimension) {
       if (*spec.dimension < 0)
         throw Exception("IndexBasisRegistry::add: the dimension of '" +
-                        std::string(space.base_key()) +
-                        "' must not be negative");
+                        space.base_key() + "' must not be negative");
       space.dimension(*spec.dimension);
     }
     if (spec.field) space.field(*spec.field);
@@ -843,13 +840,11 @@ class IndexBasisRegistry {
         "IndexBasisRegistry::add(label, space, instance)";
     std::string key(to_string_view(label));
     if (spec.extent && *spec.extent < 0)
-      throw Exception(std::string(caller) + ": the extent of '" +
-                      std::string(to_string_view(key)) +
+      throw Exception(std::string(caller) + ": the extent of '" + key +
                       "' must not be negative");
     if (spec.follows && (spec.extent || spec.metric || spec.field))
-      throw Exception(std::string(caller) + ": '" +
-                      std::string(to_string_view(key)) + "' follows '" +
-                      std::string(spec.follows->value) +
+      throw Exception(std::string(caller) + ": '" + key + "' follows '" +
+                      spec.follows->value +
                       "', whose extent, metric and field it mirrors, so it "
                       "cannot be given its own");
     emplace_named(
@@ -1114,11 +1109,9 @@ class IndexBasisRegistry {
       std::string named;
       for (auto const& [label, basis] : bases_)
         if (basis.has_basis_instance() && basis.space() == it->second.space())
-          named +=
-              (named.empty() ? "" : ", ") + std::string(to_string_view(label));
+          named += (named.empty() ? "" : ", ") + label;
       if (!named.empty())
-        throw Exception("IndexBasisRegistry::remove: space " +
-                        std::string(IS.base_key()) +
+        throw Exception("IndexBasisRegistry::remove: space " + IS.base_key() +
                         " still has named basis instances: " + named);
       bases_.erase(it);
     }
@@ -1972,9 +1965,8 @@ class IndexBasisRegistry {
   void throw_if_follower(const IndexBasis& entry, const char* what) const {
     if (auto it = follows_.find(entry.name()); it != follows_.end())
       throw Exception(std::string("IndexBasisRegistry::") + what + ": '" +
-                      std::string(it->first) + "' follows '" +
-                      std::string(it->second) + "'; set the " + what +
-                      " of that one");
+                      it->first + "' follows '" + it->second + "'; set the " +
+                      what + " of that one");
   }
 
   /// @throw Exception, naming @p caller, unless @p label is a valid label of
@@ -2306,24 +2298,20 @@ class IndexBasisRegistry {
                                     const char* caller) {
     validate_label(key, caller);
     if (bases_.contains(key))
-      throw Exception(std::string(caller) + ": label '" +
-                      std::string(to_string_view(key)) +
+      throw Exception(std::string(caller) + ": label '" + key +
                       "' is already registered");
     const auto* registered = retrieve_space_ptr(space.type(), space.qns());
     if (!registered)
-      throw Exception(std::string(caller) + ": the space '" +
-                      std::string(space.base_key()) + "' of '" +
-                      std::string(to_string_view(key)) + "' is not registered");
+      throw Exception(std::string(caller) + ": the space '" + space.base_key() +
+                      "' of '" + key + "' is not registered");
     if (*registered != space)
-      throw Exception(std::string(caller) + ": the space '" +
-                      std::string(space.base_key()) + "' of '" +
-                      std::string(to_string_view(key)) + "' differs from '" +
-                      std::string(registered->base_key()) +
+      throw Exception(std::string(caller) + ": the space '" + space.base_key() +
+                      "' of '" + key + "' differs from '" +
+                      registered->base_key() +
                       "', the registered space of its type and quantum "
                       "numbers");
     if (auto taken = basis_label(IndexBasis{space, instance}))
-      throw Exception(std::string(caller) + ": the basis of '" +
-                      std::string(to_string_view(key)) +
+      throw Exception(std::string(caller) + ": the basis of '" + key +
                       "' is already named '" + std::string(*taken) + "'");
     IndexBasis named{*registered, instance, key, extent, metric, field};
     bases_.emplace(std::move(key), std::move(named));

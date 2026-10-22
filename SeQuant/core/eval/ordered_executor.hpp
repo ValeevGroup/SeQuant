@@ -932,11 +932,10 @@ void run_ordered_contracted_block(
   if (log::printing()) {
     BatchContext s = ectx;
     s.push_back({block.axis, block.level, {0, 0}, std::nullopt});
-    log::log(
-        "BatchGroup", "Begin",
-        std::format("{} steps over {} batches of {} {}", block.steps.size(),
-                    batches.size(), std::string(block.axis.basis().base_key()),
-                    log::scope_annot(s)));
+    log::log("BatchGroup", "Begin",
+             std::format("{} steps over {} batches of {} {}",
+                         block.steps.size(), batches.size(),
+                         block.axis.basis().base_key(), log::scope_annot(s)));
   }
 
   // Running results of this block's Assemble steps: a summed accumulator or a

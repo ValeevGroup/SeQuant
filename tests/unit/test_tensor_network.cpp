@@ -176,8 +176,8 @@ TEST_CASE("tensor_network_shared", "[elements]") {
                          "f{u3;u4}:N-S Y{u2,u4;u1,u5}", Eq, Plus);
 
       for (const auto& [input1, input2, eq, phase] : tests) {
-        CAPTURE(std::string(input1));
-        CAPTURE(std::string(input2));
+        CAPTURE(input1);
+        CAPTURE(input2);
 
         auto ex1 = deserialize(input1);
         auto ex2 = deserialize(input2);
@@ -294,7 +294,7 @@ TEST_CASE("tensor_network_shared", "[elements]") {
             }) |
             ranges::to<std::vector>();
 
-        INFO(std::string(input));
+        INFO(input);
         Product prod = deserialize(input)->as<Product>();
         TN tn(prod.factors());
 

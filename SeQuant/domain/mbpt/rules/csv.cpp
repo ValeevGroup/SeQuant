@@ -43,9 +43,9 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
   auto require_in_basis_space = [&csv_basis](const Index& leg) {
     if (csv_basis.has_basis_instance() && leg.space() != csv_basis.space())
       throw Exception("csv_transform: a CSV leg is in space " +
-                      std::string(leg.space().base_key()) +
+                      leg.space().base_key() +
                       ", not in the target basis instance's space " +
-                      std::string(csv_basis.space().base_key()));
+                      csv_basis.space().base_key());
   };
 
   // shortcut for the CSV overlap if csv_basis is orthonormal
@@ -174,7 +174,7 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
   if (!registry || !registry->basis_label(csv_basis))
     throw Exception(
         "csv_transform: the target basis instance " +
-        std::string(csv_basis.space().base_key()) + ";" +
+        csv_basis.space().base_key() + ";" +
         std::to_string(*csv_basis.basis_instance()) +
         " is not registered under a name; indices minted in it would print "
         "and be keyed as the space's own basis");

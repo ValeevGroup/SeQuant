@@ -21,7 +21,7 @@ namespace {
 /// @return the symbol of @p basis in a cost: its base key, followed by `<;N>`
 /// for an unnamed instance `N`
 std::string symbol(IndexBasis const &basis) {
-  auto result = std::string(basis.base_key());
+  auto result = basis.base_key();
   if (basis.unnamed_instance())
     result += "<" + std::string(basis.instance_suffix()) + ">";
   return result;

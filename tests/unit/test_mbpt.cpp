@@ -166,7 +166,7 @@ TEST_CASE("MBPT operator formatting", "[mbpt][format]") {
   const auto& op = ptr.as<mbpt::op_t>();
   const auto latex = to_latex(ptr);
 
-  REQUIRE(std::format("{:l}", op) == std::string(latex));
+  REQUIRE(std::format("{:l}", op) == latex);
   REQUIRE(std::format("{:latex}", ptr) == latex);
   // mbpt::Operator does not support serialization
   REQUIRE_THROWS_AS(std::format("{}", op), Exception);

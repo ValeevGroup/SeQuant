@@ -12,11 +12,11 @@
 namespace sequant::mbpt {
 void OpRegistry::validate_op(const std::string& op) const {
   if (!reserved::is_nonreserved(op)) {
-    throw Exception("mbpt::OpRegistry::add: operator " + std::string(op) +
+    throw Exception("mbpt::OpRegistry::add: operator " + op +
                     " uses a reserved label");
   }
   if (this->contains(op)) {
-    throw Exception("mbpt::OpRegistry::add: operator " + std::string(op) +
+    throw Exception("mbpt::OpRegistry::add: operator " + op +
                     " already exists in registry");
   }
 }
@@ -52,8 +52,8 @@ OpRegistry& OpRegistry::add(const std::string& op, OpClass action,
 OpRegistry& OpRegistry::set_hermiticity(const std::string& op,
                                         Hermiticity hermiticity) {
   if (!this->contains(op)) {
-    throw Exception("mbpt::OpRegistry::set_hermiticity: operator " +
-                    std::string(op) + " does not exist in registry");
+    throw Exception("mbpt::OpRegistry::set_hermiticity: operator " + op +
+                    " does not exist in registry");
   }
   herm_overrides_->insert_or_assign(op, hermiticity);
   return *this;
@@ -63,12 +63,11 @@ OpRegistry& OpRegistry::grant_basis(const std::string& op,
                                     const IndexSpace& leg_space,
                                     IndexBasis::instance_type instance) {
   if (!this->contains(op)) {
-    throw Exception("mbpt::OpRegistry::grant_basis: operator " +
-                    std::string(op) + " does not exist in registry");
+    throw Exception("mbpt::OpRegistry::grant_basis: operator " + op +
+                    " does not exist in registry");
   }
   if (this->to_class(op) == OpClass::Gen) {
-    throw Exception("mbpt::OpRegistry::grant_basis: operator " +
-                    std::string(op) +
+    throw Exception("mbpt::OpRegistry::grant_basis: operator " + op +
                     " is a general operator; only (de)excitation operators "
                     "carry a basis instance");
   }
@@ -102,7 +101,7 @@ IndexBasis::optional_instance OpRegistry::basis_grant(
 
 OpRegistry& OpRegistry::remove(const std::string& op) {
   if (!this->contains(op)) {
-    throw Exception("mbpt::OpRegistry::remove: operator " + std::string(op) +
+    throw Exception("mbpt::OpRegistry::remove: operator " + op +
                     " does not exist in registry");
   }
   ops_->erase(op);
@@ -118,7 +117,7 @@ bool OpRegistry::contains(const std::string& op) const {
 OpClass OpRegistry::to_class(const std::string& op) const {
   auto it = ops_->find(op);
   if (it == ops_->end()) {
-    throw Exception("mbpt::OpRegistry::to_class: operator " + std::string(op) +
+    throw Exception("mbpt::OpRegistry::to_class: operator " + op +
                     " does not exist in registry");
   }
   return it->second;

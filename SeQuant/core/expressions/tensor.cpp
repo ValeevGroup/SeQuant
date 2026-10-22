@@ -55,9 +55,8 @@ void Tensor::check_density_symmetries() const {
             ? "density::make_cumulant"
             : "density::make_density(reserved::spinfree_rdm_label(), ...)";
     throw Exception(
-        "Tensor: " + std::string(label_) +
-        " is a reserved density label; a rank-" + std::to_string(rank) + " " +
-        std::string(label_) +
+        "Tensor: " + label_ + " is a reserved density label; a rank-" +
+        std::to_string(rank) + " " + label_ +
         " must have equal bra and ket ranks, no aux indices and be " +
         (multibody_spinorbital ? "antisymmetric (or perm-nonsymmetric), "
                                : "perm-nonsymmetric, ") +
