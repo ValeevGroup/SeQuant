@@ -44,9 +44,6 @@ concept string_convertible =
 /// @return true if @p str is a valid UTF-8 encoded string
 bool is_valid_utf8(std::string_view str);
 
-/// @throw std::invalid_argument if @p str is not a valid UTF-8 encoded string
-void validate_utf8(std::string_view str);
-
 /// Decodes the given UTF-8 encoded string into its code points
 /// @pre @p str is valid UTF-8
 std::u32string to_utf32(std::string_view str);

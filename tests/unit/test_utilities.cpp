@@ -252,9 +252,6 @@ TEST_CASE("utf8", "[utilities]") {
     REQUIRE_FALSE(is_valid_utf8(std::string_view(str).substr(0, 2)));
     // overlong encoding of '/'
     REQUIRE_FALSE(is_valid_utf8("\xC0\xAF"s));
-
-    REQUIRE_NOTHROW(validate_utf8(str));
-    REQUIRE_THROWS_AS(validate_utf8(invalid), std::invalid_argument);
   }
 
   SECTION("conversion") {

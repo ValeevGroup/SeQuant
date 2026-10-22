@@ -1,5 +1,6 @@
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <string>
 
@@ -14,6 +15,7 @@ IndexBasis::IndexBasis(IndexSpace space, optional_instance basis_instance,
       extent_(extent),
       metric_(metric),
       field_(field) {
+  SEQUANT_ASSERT(is_valid_utf8(name_), "basis name must be UTF-8 encoded");
   SEQUANT_ASSERT(name_.empty() || basis_instance_);
   SEQUANT_ASSERT(!name_.empty() ||
                  (!extent_ && metric_ == IndexBasisMetric::Unit && !field_));

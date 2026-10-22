@@ -10,7 +10,9 @@
 namespace sequant {
 
 Variable::Variable(std::string label)
-    : label_(std::move(label)), conjugated_(false) {}
+    : label_(std::move(label)), conjugated_(false) {
+  SEQUANT_ASSERT(is_valid_utf8(label_), "Variable label must be UTF-8 encoded");
+}
 
 Expr::type_id_type Variable::type_id() const { return get_type_id<Variable>(); }
 
@@ -40,6 +42,7 @@ bool Variable::static_equal(const Expr &that) const {
 std::string_view Variable::label() const { return label_; }
 
 void Variable::set_label(std::string label) {
+  SEQUANT_ASSERT(is_valid_utf8(label), "Variable label must be UTF-8 encoded");
   label_ = std::move(label);
   reset_hash_value();
 }

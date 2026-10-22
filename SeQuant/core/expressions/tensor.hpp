@@ -389,6 +389,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
+    SEQUANT_ASSERT(is_valid_utf8(label_), "Tensor label must be UTF-8 encoded");
     validate_indices();
     check_symmetries(rsym.column_symmetry_specified, rsym.symmetry_specified);
     canonicalize_slots();
@@ -412,6 +413,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
+    SEQUANT_ASSERT(is_valid_utf8(label_), "Tensor label must be UTF-8 encoded");
     validate_indices();
     check_symmetries(rsym.column_symmetry_specified, rsym.symmetry_specified);
     canonicalize_slots();
@@ -705,6 +707,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ///        symmetries, or the overlap or Kronecker delta label and this is
   ///        not between one bra and one ket index
   void set_label(std::string label) override {
+    SEQUANT_ASSERT(is_valid_utf8(label), "Tensor label must be UTF-8 encoded");
     if (ranges::contains(reserved::density_labels(), label) ||
         label == reserved::overlap_label() ||
         label == reserved::kronecker_label()) {

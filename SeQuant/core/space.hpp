@@ -451,7 +451,10 @@ class IndexSpace {
       : attr_(typeattr, qnattr),
         base_key_(to_string_view(type_label)),
         dimension_(dimension),
-        field_(field) {}
+        field_(field) {
+    SEQUANT_ASSERT(is_valid_utf8(base_key_),
+                   "IndexSpace label must be UTF-8 encoded");
+  }
 
   explicit IndexSpace(std::string_view label);
 

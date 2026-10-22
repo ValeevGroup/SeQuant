@@ -4,6 +4,7 @@
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/labeled.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <string>
 #include <string_view>
@@ -27,7 +28,10 @@ class Variable : public Expr, public MutatableLabeled {
              !Expr::is_shared_ptr_of_expr_or_derived<
                  std::remove_reference_t<U>>::value &&
              std::constructible_from<std::string, U>)
-  explicit Variable(U &&label) : label_(std::forward<U>(label)) {}
+  explicit Variable(U &&label) : label_(std::forward<U>(label)) {
+    SEQUANT_ASSERT(is_valid_utf8(label_),
+                   "Variable label must be UTF-8 encoded");
+  }
 
   Variable(std::string label);
 

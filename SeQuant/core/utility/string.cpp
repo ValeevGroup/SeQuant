@@ -5,7 +5,6 @@
 
 #include <cstddef>
 #include <iterator>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -15,15 +14,6 @@
 namespace sequant {
 
 bool is_valid_utf8(std::string_view str) { return utf8::is_valid(str); }
-
-void validate_utf8(std::string_view str) {
-  if (!is_valid_utf8(str)) {
-    throw std::invalid_argument(
-        "String is not valid UTF-8 (invalid byte at "
-        "offset " +
-        std::to_string(utf8::find_invalid(str)) + ")");
-  }
-}
 
 std::u32string to_utf32(std::string_view str) {
   SEQUANT_ASSERT(is_valid_utf8(str));
