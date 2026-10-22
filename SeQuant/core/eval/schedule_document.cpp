@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <charconv>
 #include <cstdint>
+#include <initializer_list>
 #include <istream>
 #include <iterator>
 #include <limits>
@@ -29,6 +30,15 @@ using json = nlohmann::ordered_json;
 
 [[noreturn]] void fail(std::string const& where, std::string const& what) {
   throw Exception("schedule document: " + where + ": " + what);
+}
+
+// A role is one of the names record_dag writes (detail::role_name).
+void check_role(std::string const& role,
+                std::initializer_list<char const*> allowed,
+                std::string const& where) {
+  for (char const* a : allowed)
+    if (role == a) return;
+  fail(where, "unknown role \"" + role + "\"");
 }
 
 // ---------------------------------------------------------------- writing
@@ -636,8 +646,12 @@ ValueRecord value_r(json const& j) {
   v.build_site = get_strs(j, "build_site", w);
   v.home_floor = get_strs(j, "home_floor", w);
   v.forced_split_axes = get_strs(j, "forced_split_axes", w);
-  for (auto const& p : get_arr(j, "per_axis", w))
-    v.per_axis.push_back({get_str(p, "mode", w), get_str(p, "role", w)});
+  for (auto const& p : get_arr(j, "per_axis", w)) {
+    std::string role = get_str(p, "role", w);
+    check_role(role, {"LoopLocal", "Reduction", "LoopCarried", "LoopInvariant"},
+               w + ".per_axis");
+    v.per_axis.push_back({get_str(p, "mode", w), std::move(role)});
+  }
   for (auto const& o : get_arr(j, "occurrences", w)) {
     OccurrenceRecord r;
     r.term = get_str(o, "term", w);
@@ -648,8 +662,11 @@ ValueRecord value_r(json const& j) {
     r.opens = axes_r(o, "opens", w);
     // absent in documents written before the per-occurrence roles existed
     if (o.contains("roles"))
-      for (auto const& p : get_arr(o, "roles", w))
-        r.roles.push_back({get_str(p, "mode", w), get_str(p, "role", w)});
+      for (auto const& p : get_arr(o, "roles", w)) {
+        std::string role = get_str(p, "role", w);
+        check_role(role, {"Lockstep", "Assembled"}, w + ".occurrences.roles");
+        r.roles.push_back({get_str(p, "mode", w), std::move(role)});
+      }
     v.occurrences.push_back(std::move(r));
   }
   v.siblings = get_strs(j, "siblings", w);

@@ -319,6 +319,11 @@ TEST_CASE("schedule document round-trips the dag and run sections",
   REQUIRE(back.dag->values[0].occurrences[0].consumer == 1);
   REQUIRE(back.dag->values[0].occurrences[0].roles.size() == 1);
   REQUIRE(back.dag->values[0].occurrences[0].roles[0].role == "Lockstep");
+  // a role is one of the names the writer produces
+  REQUIRE_THROWS_WITH(from_json(mutate(d, "\"Lockstep\"", "\"Sideways\"")),
+                      Catch::Matchers::ContainsSubstring("unknown role"));
+  REQUIRE_THROWS_WITH(from_json(mutate(d, "\"LoopLocal\"", "\"Local\"")),
+                      Catch::Matchers::ContainsSubstring("unknown role"));
   REQUIRE(back.dag->blocks[1].outputs[0].second == "AccumulateSum");
   REQUIRE(std::get<2>(back.dag->loop_order[0]) == 2);
   REQUIRE(summary_line(d) == "roots=1 terms=1 values=2 blocks=2 depth=1");
