@@ -649,6 +649,33 @@ inline ForcedSplitLevels forced_split_levels(
   }
   r.pinned = r.carried;
 
+  // A reader bumped by a carried source is one that reads the source where
+  // the source's own loop is not running (classify_axis's per-occurrence
+  // LoopCarried verdict): it needs the assembled value. Readers of a
+  // LoopLocal source through its lockstep occurrences read the per-batch
+  // form in the same pass and are not bumped; a value LoopCarried as a whole
+  // has only such reading occurrences, so every one of its readers is.
+  std::unordered_map<std::size_t, std::size_t> point_owner, point_consumer;
+  for (ValueCell const& vc : rich.cells)
+    for (OccurrenceRec const& occ : vc.occurrences) {
+      point_owner[occ.point] = vc.value_id;
+      point_consumer[occ.point] = occ.consumer_point;
+    }
+  std::set<std::pair<std::size_t, std::size_t>> outside;  // (reader, source)
+  for (CellLegality const& cl : legality.cells) {
+    auto const it = g.value_id_of.find(cl.hash);
+    if (it == g.value_id_of.end()) continue;
+    for (AxisClass const& ac : cl.per_axis)
+      for (OccurrenceAxisRole const& o : ac.per_occurrence) {
+        if (o.role != LoopRole::LoopCarried) continue;
+        auto const cp = point_consumer.find(o.point);
+        if (cp == point_consumer.end() || cp->second == o.point) continue;
+        auto const rd = point_owner.find(cp->second);
+        if (rd == point_owner.end()) continue;
+        outside.insert({rd->second, it->second});
+      }
+  }
+
   std::size_t const n = rich.cells.size();
   // Topological order, operands before consumers (Kahn over depends_on).
   container::svector<std::size_t> topo;
@@ -683,12 +710,13 @@ inline ForcedSplitLevels forced_split_levels(
     auto const it = g.depends_on.find(v);
     if (it != g.depends_on.end())
       for (std::size_t o : it->second) {
-        bool const bump = r.carried.count(o) != 0 ||
-                          (reduction_sources.count(o) != 0 && inside(v, o));
+        bool const carried_read =
+            r.carried.count(o) != 0 || outside.count({v, o}) != 0;
+        bool const bump =
+            carried_read || (reduction_sources.count(o) != 0 && inside(v, o));
         if (bump) r.pinned.insert(o);
         if (bump && detail::dump_enabled("SEQUANT_DUMP_SCHEDULE"))
-          detail::dump_level_bump(v, o, r.carried.count(o) != 0,
-                                  base.at(o) + 1);
+          detail::dump_level_bump(v, o, carried_read, base.at(o) + 1);
         lv = std::max(lv, bump ? base.at(o) + 1 : base.at(o));
       }
     base[v] = lv;
@@ -1523,6 +1551,41 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     // value is invariant to is simply skipped.
     bool materialized_across_split = false;
     std::optional<std::size_t> const home_depth = local_home_depth(cl);
+    // A LoopLocal axis with an occurrence that reads the value outside its
+    // loop instance (classify_axis's per-occurrence LoopCarried verdict: the
+    // value opens the loop itself there, or the reader sits after it or in
+    // a sibling nest) is the same shape: the value keeps its Build step for
+    // its lockstep readers and escapes assembled, as a Scatter, at that
+    // instance for the others. A Sum escape that a Reduction mode already
+    // placed at that depth is upgraded to a Scatter, as the materialization
+    // rule below does: the lockstep instance's batches are disjoint and must
+    // not be summed.
+    for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
+      AxisClass const& ac = cl.per_axis[pos];
+      if (ac.role != LoopRole::LoopLocal) continue;
+      if (std::none_of(ac.per_occurrence.begin(), ac.per_occurrence.end(),
+                       [](OccurrenceAxisRole const& o) {
+                         return o.role == LoopRole::LoopCarried;
+                       }))
+        continue;
+      std::wstring const bk{ac.axis.basis().base_key()};
+      int const fs = fusion_slot(cl, pos);
+      if (fs < 0)
+        throw Exception("build_ordered_schedule: value " + std::to_string(vid) +
+                        " is read outside its loop on a mode with no loop "
+                        "identity (loop_slot unstamped); the escape cannot be "
+                        "placed");
+      auto const d = depth_of_instance(bk, fs);
+      SEQUANT_ASSERT(d.has_value());
+      auto it = std::find_if(escapes.begin(), escapes.end(),
+                             [&](auto const& e) { return e.first == *d; });
+      if (it == escapes.end()) {
+        escapes.push_back({*d, OutputKind::AccumulateScatter});
+        materialized_across_split = true;
+      } else if (it->second == OutputKind::AccumulateSum) {
+        it->second = OutputKind::AccumulateScatter;
+      }
+    }
     // Whether this value has a LoopLocal instance of its own nest that is
     // not covered by a role-driven escape (before the materialization rule adds
     // anything) -- the invariant the outside-nest tripwire below actually
