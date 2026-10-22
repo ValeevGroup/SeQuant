@@ -314,4 +314,57 @@ TEST_CASE("export step", "[extint]") {
     REQUIRE(alloc_definitions >= 2);  // CSE fired on both inputs
     CHECK(accumulate_definitions == 0);
   }
+
+  SECTION("a CSE intermediate that is a sum is not zeroed between summands") {
+    // Both results contain the same two-term sum, so CSE factors it out as an
+    // intermediate whose summands all accumulate into that one tensor.
+    ExportTreeData data = test_support::tree_data(
+        {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"
+         L" + g{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"
+         L" + h{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+         L"R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"
+         L" + g{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"
+         L" + k{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+
+    ExecutionContext ctx;
+    ctx.set_data("in", 0, ProcessingData{std::move(data)});
+
+    CSEStep cse;
+    REQUIRE(cse.run("cse", ctx, {"in.0"}) == 1);
+
+    const ExportTreeData &res =
+        convert_data<ExportTreeData>(ctx.get_data("cse.0").front().data.get());
+    REQUIRE(res.entries.size() > 2);  // CSE fired
+
+    const std::filesystem::path out = std::filesystem::temp_directory_path() /
+                                      "extint_cse_sum_zeroing_test.itfaa";
+
+    ExportStep step;
+    step.set_options(json{{"language", "itf"},
+                          {"output", out.string()},
+                          {"meta",
+                           {{"index_spaces",
+                             {{"i", {{"name", "Closed"}, {"tag", "c"}}},
+                              {"a", {{"name", "External"}, {"tag", "e"}}}}}}}});
+
+    {
+      test_support::ScopedStreamSilencer silencer;
+      step.run("exp", ctx, {"cse.0"});
+    }
+
+    std::ifstream stream(out);
+    REQUIRE(stream.good());
+    std::stringstream buffer;
+    buffer << stream.rdbuf();
+    const std::string code = buffer.str();
+    stream.close();
+    std::filesystem::remove(out);
+
+    // The zeroing of a freshly created intermediate is the allocation's; an
+    // explicit reset in the middle of the accumulation discards the summands
+    // added so far.
+    CAPTURE(code);
+    CHECK(code.find("+=") != std::string::npos);
+    CHECK(code.find(":= 0") == std::string::npos);
+  }
 }

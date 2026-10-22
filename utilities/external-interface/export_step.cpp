@@ -502,10 +502,10 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
       group.add(current.tree);
 
       if (current.overwrite_previous.has_value()) {
-        ZeroStrategy strategy =
-            current.overwrite_previous.value()
-                ? ZeroStrategy::ZeroOnReuse | ZeroStrategy::ZeroOnCreate
-                : ZeroStrategy::ZeroOnCreate;
+        // Never ZeroOnReuse: the summands of a sum all accumulate into the same
+        // result, so zeroing on every reappearance would discard what the
+        // earlier summands have already added.
+        constexpr ZeroStrategy strategy = ZeroStrategy::ZeroOnCreate;
         // Key the strategy by the rewritten result, as every other strategy
         // set-site does (and as the code generator's lookup expects):
         // genctx.rewrite() may reorder a tensor's slots, so setting it on the
