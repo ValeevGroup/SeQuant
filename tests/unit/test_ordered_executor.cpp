@@ -24,6 +24,7 @@
 #include <SeQuant/core/eval/backends/dryrun/meter.hpp>
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/cell_table_builder.hpp>
 #include <SeQuant/core/eval/dag_scope.hpp>
@@ -54,6 +55,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
+#include "csv_size_fixtures.hpp"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -335,69 +337,18 @@ std::string orderedexec_witness_slurp(std::string const& path) {
   return ss.str();
 }
 
-struct OrderedExecWater20ProblemSize {
-  std::size_t mu_tilde;
-  std::size_t aux;
-  std::size_t i_occ;
-  std::array<double, 5> pno_M;
-  std::array<double, 5> osv_M;
-  double pno_occupancy;  // nonnull (CSV) ordered pairs / i_occ^2
-  double osv_occupancy;  // orbitals with a nonnull OSV domain / i_occ
-};
-
-// Per-rank cluster-grid occupancy folded into the moment tables exactly as
-// MPQC's CSVSizeMoments::extent does (p^(1/k) * M_k per member of a k-group,
-// so the group contributes p * M_k^k = sum_{nonnull clusters} d^k).
-std::array<double, 5> orderedexec_occupancy_adjusted(std::array<double, 5> M,
-                                                     double p) {
-  for (std::size_t k = 1; k <= 4; ++k)
-    M[k] *= std::pow(p, 1.0 / static_cast<double>(k));
-  return M;
-}
-
-// Same (molecule, basis, parameter-set) size as test_ordered_schedule.cpp's
-// kOrderedSchedWater20_pVDZF12 (job-log / mpqc PaoPnoRMP2 moments) --
-// duplicated per the file-header note above.
-inline constexpr OrderedExecWater20ProblemSize kOrderedExecWater20_pVDZF12{
-    /*mu_tilde=*/896u,
-    /*aux=*/1682u,
-    /*i_occ=*/80u,
-    /*pno_M=*/
-    {1.0, 23.175775480059084, 25.865548281212597, 28.171416142614103,
-     30.03848680550367},
-    /*osv_M=*/
-    {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
-     59.872014818179686},
-    // 1354 CSV pairs of 80^2 (tIJ 3e-5, the runs reporting these moments).
-    /*pno_occupancy=*/0.2115625,
-    /*osv_occupancy=*/1.0};
-
-// C60 pVDZ-F12 problem size (copied from test_eval_dryrun.cpp's kC60_pVDZF12).
-inline constexpr OrderedExecWater20ProblemSize kOrderedExecC60_pVDZF12{
-    /*mu_tilde=*/1800u,
-    /*aux=*/4320u,
-    /*i_occ=*/120u,
-    /*pno_M=*/
-    {1.0, 42.029069767441861, 46.039206412923569, 49.766252354482994,
-     53.151291880343109},
-    /*osv_M=*/
-    {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926},
-    // 6300 CC (CSV) pairs of 120^2 (Owl C60 job logs).
-    /*pno_occupancy=*/0.4375,
-    /*osv_occupancy=*/1.0};
+// The water-20 / C60 problem sizes, their provenance and the occupancy
+// adjustment live in csv_size_fixtures.hpp (a named namespace, so sharing it
+// across files is unity-build safe); these aliases keep this file's names.
+using OrderedExecWater20ProblemSize = sequant::tests::csv_sizes::CsvProblemSize;
+inline constexpr auto const& kOrderedExecWater20_pVDZF12 =
+    sequant::tests::csv_sizes::kWater20_pVDZF12;
+inline constexpr auto const& kOrderedExecC60_pVDZF12 =
+    sequant::tests::csv_sizes::kC60_pVDZF12;
 
 sequant::eval::dryrun::SizeRegime orderedexec_witness_df_regime(
     OrderedExecWater20ProblemSize const& p) {
-  sequant::eval::dryrun::SizeRegime r;
-  r.space_extent = {
-      {L"i", p.i_occ},
-      {L"μ̃", p.mu_tilde},
-      {L"Κ", p.aux},
-      {L"a", p.mu_tilde},
-  };
-  r.csv_pno_moment = orderedexec_occupancy_adjusted(p.pno_M, p.pno_occupancy);
-  r.csv_osv_moment = orderedexec_occupancy_adjusted(p.osv_M, p.osv_occupancy);
-  return r;
+  return sequant::tests::csv_sizes::df_size_regime(p);
 }
 
 // Peak budget for the w20 STRUCTURE tests below (cell kinds, escapes,

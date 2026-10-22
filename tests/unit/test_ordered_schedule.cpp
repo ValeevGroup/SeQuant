@@ -13,6 +13,7 @@
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+
 #include <SeQuant/core/eval/cell_table_builder.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
@@ -30,6 +31,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
+#include "csv_size_fixtures.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -319,52 +321,15 @@ std::string orderedsched_witness_slurp(std::string const& path) {
   return ss.str();
 }
 
-struct OrderedSchedWater20ProblemSize {
-  std::size_t mu_tilde;
-  std::size_t aux;
-  std::size_t i_occ;
-  std::array<double, 5> pno_M;
-  std::array<double, 5> osv_M;
-  double pno_occupancy;  // nonnull (CSV) ordered pairs / i_occ^2
-  double osv_occupancy;  // orbitals with a nonnull OSV domain / i_occ
-};
-
-// Per-rank cluster-grid occupancy folded into the moment tables exactly as
-// MPQC's CSVSizeMoments::extent does (p^(1/k) * M_k per member of a k-group,
-// so the group contributes p * M_k^k = sum_{nonnull clusters} d^k).
-std::array<double, 5> orderedsched_occupancy_adjusted(std::array<double, 5> M,
-                                                      double p) {
-  for (std::size_t k = 1; k <= 4; ++k)
-    M[k] *= std::pow(p, 1.0 / static_cast<double>(k));
-  return M;
-}
-
-inline constexpr OrderedSchedWater20ProblemSize kOrderedSchedWater20_pVDZF12{
-    /*mu_tilde=*/896u,
-    /*aux=*/1682u,
-    /*i_occ=*/80u,
-    /*pno_M=*/
-    {1.0, 23.175775480059084, 25.865548281212597, 28.171416142614103,
-     30.03848680550367},
-    /*osv_M=*/
-    {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
-     59.872014818179686},
-    // 1354 CSV pairs of 80^2 (tIJ 3e-5, the runs reporting these moments).
-    /*pno_occupancy=*/0.2115625,
-    /*osv_occupancy=*/1.0};
+// Problem size, provenance and occupancy adjustment: csv_size_fixtures.hpp.
+using OrderedSchedWater20ProblemSize =
+    sequant::tests::csv_sizes::CsvProblemSize;
+inline constexpr auto const& kOrderedSchedWater20_pVDZF12 =
+    sequant::tests::csv_sizes::kWater20_pVDZF12;
 
 sequant::eval::dryrun::SizeRegime orderedsched_witness_df_regime(
     OrderedSchedWater20ProblemSize const& p) {
-  sequant::eval::dryrun::SizeRegime r;
-  r.space_extent = {
-      {L"i", p.i_occ},
-      {L"μ̃", p.mu_tilde},
-      {L"Κ", p.aux},
-      {L"a", p.mu_tilde},
-  };
-  r.csv_pno_moment = orderedsched_occupancy_adjusted(p.pno_M, p.pno_occupancy);
-  r.csv_osv_moment = orderedsched_occupancy_adjusted(p.osv_M, p.osv_occupancy);
-  return r;
+  return sequant::tests::csv_sizes::df_size_regime(p);
 }
 
 sequant::ExprPtr orderedsched_witness_flatten_product(

@@ -24,6 +24,8 @@
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 
+#include "csv_size_fixtures.hpp"
+
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
@@ -97,16 +99,10 @@ TEST_CASE(
 
   // The reference size regime (the same numbers the dry-run fixtures use), so
   // the unbatched factorization is the one a real run of that size picks.
-  SizeRegime regime;
-  regime.space_extent = {{L"i", 80u}, {L"μ̃", 896u}, {L"Κ", 1682u}};
-  regime.csv_pno_moment = {1.0, 23.175775480059084, 25.865548281212597,
-                           28.171416142614103, 30.03848680550367};
-  regime.csv_osv_moment = {1.0, 58.987499999999997, 59.289227520688783,
-                           59.584437469011633, 59.872014818179686};
-  // Pair-grid occupancy (1354 CSV pairs of 80^2) folded in as MPQC's
-  // CSVSizeMoments::extent does: p^(1/k) * M_k per member of a k-group.
-  for (std::size_t k = 1; k <= 4; ++k)
-    regime.csv_pno_moment[k] *= std::pow(0.2115625, 1.0 / double(k));
+  // The water-20 problem size (extents, moments, pair occupancy) and its
+  // provenance: csv_size_fixtures.hpp.
+  SizeRegime regime = sequant::tests::csv_sizes::df_size_regime(
+      sequant::tests::csv_sizes::kWater20_pVDZF12);
   auto idx_to_extent = [&regime](Index const& idx) -> std::size_t {
     if (idx.has_proto_indices())
       return static_cast<std::size_t>(
