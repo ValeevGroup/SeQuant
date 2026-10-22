@@ -252,6 +252,74 @@ TEST_CASE("export step", "[extint]") {
     std::filesystem::remove(out);
   }
 
+  SECTION("tensors are matched by label patterns and blocks") {
+    // @returns The code generated for a fixed expression with the given
+    // IRREP specification of the tensors
+    auto export_code = [](json tensors) {
+      ExecutionContext ctx;
+      ctx.set_data("in", 0,
+                   ProcessingData{test_support::tree_data(
+                       {L"R{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i3}:A-H-S "
+                        L"Y{i3;i2}:N-N-N"})});
+
+      const std::filesystem::path out = std::filesystem::temp_directory_path() /
+                                        "extint_irreps_matching_test.itfaa";
+
+      ExportStep step;
+      step.set_options(
+          json{{"language", "itf"},
+               {"output", out.string()},
+               {"irreps",
+                {{"group", "D2h"},
+                 {"symbols", {"Gp"}},
+                 {"default", "error"},
+                 {"tensors", std::move(tensors)}}},
+               {"meta",
+                {{"index_spaces",
+                  {{"i", {{"name", "Closed"}, {"tag", "c"}}},
+                   {"a", {{"name", "External"}, {"tag", "e"}}}}}}}});
+
+      test_support::ScopedStreamSilencer silencer;
+      step.run("exp", ctx, {"in.0"});
+
+      std::ifstream stream(out);
+      std::stringstream buffer;
+      buffer << stream.rdbuf();
+      stream.close();
+      std::filesystem::remove(out);
+
+      return buffer.str();
+    };
+
+    using Catch::Matchers::ContainsSubstring;
+
+    // Labels are full-match regular expressions
+    std::string code = export_code({{"[fY]", "Ag"}, {"T.", "Gp"}});
+    REQUIRE_THAT(code, ContainsSubstring("Y:cc // irrep:Ag"));
+    REQUIRE_THAT(code, ContainsSubstring("T2:eecc // irrep:Gp"));
+    REQUIRE_THAT(code, ContainsSubstring("R:ec // irrep:Gp"));
+    REQUIRE_THROWS_WITH(export_code({{"[fY]", "Ag"}, {"T", "Gp"}}),
+                        ContainsSubstring("No IRREPs"));
+
+    // A literal label takes precedence over patterns
+    code = export_code({{"[fY]", "Ag"}, {"T.", "Gp"}, {"T2", "B1u"}});
+    REQUIRE_THAT(code, ContainsSubstring("T2:eecc // irrep:B1u"));
+
+    // Tensor blocks take precedence over labels
+    code = export_code(
+        {{"[fY]", "Ag"}, {"T2", "Gp"}, {"Y{i1;i2}", {"Ag", "B1u"}}});
+    REQUIRE_THAT(code, ContainsSubstring("Y:cc // irrep:Ag,B1u"));
+
+    // Several patterns may only match if they agree
+    REQUIRE_NOTHROW(export_code({{"[fY]", "Ag"}, {"T.", "Gp"}, {".2", "Gp"}}));
+    REQUIRE_THROWS_WITH(
+        export_code({{"[fY]", "Ag"}, {"T.", "Gp"}, {".2", "B1u"}}),
+        ContainsSubstring("Ambiguous"));
+
+    REQUIRE_THROWS_WITH(export_code({{"T[", "Gp"}}),
+                        ContainsSubstring("Invalid label regex"));
+  }
+
   SECTION("a dependency cycle is rejected when ordering the results") {
     // Build two independent trees, then wire a mutual dependency between them.
     ExportTreeData two = test_support::tree_data(

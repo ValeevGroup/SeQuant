@@ -1,4 +1,5 @@
 #include "export_step.hpp"
+#include "filter_step.hpp"
 #include "processing_data.hpp"
 #include "processing_step_factory.hpp"
 #include "utils.hpp"
@@ -32,6 +33,7 @@
 #include <fstream>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <numeric>
 #include <optional>
 #include <set>
@@ -133,8 +135,18 @@ AnyIrrepContext make_irrep_context(A algebra, const json &config,
                                    const Parser &parse) {
   using Set = IrrepSet<typename A::irrep_type>;
 
-  std::vector<std::pair<ExprMatcher, Set>> blocks;
-  container::map<std::wstring, Set> labels;
+  // Tensors are matched consistently with the other steps: keys containing
+  // a '{' are serialized tensors matched by block (cmp. imports), all other
+  // keys are full-match regular expressions for the tensor label (cmp. label
+  // rules of the filter step)
+  struct TensorRule {
+    std::string key;
+    std::shared_ptr<const ExpressionFilter::Rule> rule;
+    Set irreps;
+  };
+  std::vector<TensorRule> blocks;
+  std::vector<TensorRule> labels;
+  container::map<std::wstring, Set> literal_labels;
   if (config.contains("tensors")) {
     const json &tensors = config.at("tensors");
     if (!tensors.is_object()) {
@@ -146,8 +158,11 @@ AnyIrrepContext make_irrep_context(A algebra, const json &config,
                                                         "tensor '" + key + "'");
 
       if (key.find('{') == std::string::npos) {
-        // Bare label -> applies to all blocks of the tensor
-        labels.emplace(toUtf16(key), std::move(set));
+        literal_labels.emplace(toUtf16(key), set);
+        labels.push_back(
+            TensorRule{.key = key,
+                       .rule = parse_contains_label(json{{"label", key}}),
+                       .irreps = std::move(set)});
         continue;
       }
 
@@ -155,9 +170,11 @@ AnyIrrepContext make_irrep_context(A algebra, const json &config,
       if (!tensor->is<Tensor>()) {
         throw Exception("Expected '" + key + "' to be a tensor");
       }
-      blocks.emplace_back(
-          ExprMatcher(*tensor, {.tensor_cmp = TensorComparison::Block}),
-          std::move(set));
+      blocks.push_back(TensorRule{
+          .key = key,
+          .rule =
+              parse_contains_expr(json{{"expr", key}}, TensorComparison::Block),
+          .irreps = std::move(set)});
     }
   }
 
@@ -174,16 +191,41 @@ AnyIrrepContext make_irrep_context(A algebra, const json &config,
   }
 
   auto resolver = [blocks = std::move(blocks), labels = std::move(labels),
+                   literal_labels = std::move(literal_labels),
                    fallback = std::move(fallback)](const Tensor &tensor) {
-    for (const auto &[matcher, set] : blocks) {
-      if (matcher == tensor) {
-        return set;
+    // @returns The rule matching the tensor (if any)
+    // @throws Exception if several rules with different IRREPs match
+    auto unique_match =
+        [&tensor](const std::vector<TensorRule> &rules) -> const TensorRule * {
+      const TensorRule *match = nullptr;
+      for (const TensorRule &current : rules) {
+        if (!current.rule->matches(tensor)) {
+          continue;
+        }
+
+        if (match && match->irreps != current.irreps) {
+          throw Exception("Ambiguous IRREPs for tensor " +
+                          toUtf8(tensor.to_latex()) + ": matched by '" +
+                          match->key + "' and '" + current.key + "'");
+        }
+        match = match ? match : &current;
       }
+
+      return match;
+    };
+
+    if (const TensorRule *match = unique_match(blocks)) {
+      return match->irreps;
     }
 
-    if (auto it = labels.find(std::wstring(tensor.label()));
-        it != labels.end()) {
+    // A key spelling out the label literally takes precedence over patterns
+    if (auto it = literal_labels.find(std::wstring(tensor.label()));
+        it != literal_labels.end()) {
       return it->second;
+    }
+
+    if (const TensorRule *match = unique_match(labels)) {
+      return match->irreps;
     }
 
     if (!fallback.has_value()) {

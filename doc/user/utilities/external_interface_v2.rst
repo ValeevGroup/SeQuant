@@ -453,9 +453,11 @@ The :code:`irreps` option accepts the following properties:
      - No
    * - :code:`tensors`
      - Object mapping tensors to their IRREP(s), given as a single IRREP name or an array of names (for tensors spanning several IRREPs).
-       :code:`"*"` stands for any IRREP. Keys are either a tensor label (applying to all blocks of that tensor) or a serialized tensor (applying to
-       the matching tensor block only, which takes precedence). Tensors are referred to by their names in the expressions (e.g. :code:`g` rather
-       than :code:`K`/:code:`J`). Reserved tensors (e.g. Kronecker deltas) are totally symmetric and tensors computed during the export (results,
+       :code:`"*"` stands for any IRREP. Keys are either a serialized tensor (matching the corresponding tensor block, as for :code:`imports`) or
+       otherwise a full-match regular expression for the tensor label (applying to all blocks of matching tensors, as for the :code:`label` rules
+       of the :code:`filter` step). Tensor block keys take precedence over label keys and a label key spelling out a tensor's label literally takes
+       precedence over other matching label keys. Beyond that, all keys matching a given tensor must specify the same IRREPs. Tensors are referred
+       to by their names in the expressions (e.g. :code:`g` rather than :code:`K`/:code:`J`). Reserved tensors (e.g. Kronecker deltas) are totally symmetric and tensors computed during the export (results,
        intermediates) need not be listed.
      - :code:`{}`
      - No
