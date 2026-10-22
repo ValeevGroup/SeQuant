@@ -374,7 +374,7 @@ struct RichSchedule {
   /// of both kinds (an occupied pair contracted in batches beside an occupied
   /// external pair), so the kind is a property of the instance, not of the
   /// key; the ordered schedule builder reads a block's kind here.
-  std::map<std::pair<std::wstring, int>, BatchModeType> loop_kind;
+  std::map<std::pair<std::string, int>, BatchModeType> loop_kind;
   /// Loop nesting constraints read off the DP's realization: (outer, inner)
   /// pairs of loop instances, each (IndexBasis::base_key(), loop_slot), such
   /// that some occurrence sits inside `outer` and `inner` is opened inside it
@@ -384,9 +384,8 @@ struct RichSchedule {
   /// error: the loop identity fused two loops that nest in opposite orders).
   /// The mapped value is a witness: the value id of the first occurrence
   /// that produced the pair (diagnostics only).
-  std::map<
-      std::pair<std::pair<std::wstring, int>, std::pair<std::wstring, int>>,
-      std::size_t>
+  std::map<std::pair<std::pair<std::string, int>, std::pair<std::string, int>>,
+           std::size_t>
       loop_order;
 };
 
@@ -413,7 +412,7 @@ point_occurrences(RichSchedule const& rich) {
 /// by \c compute_dag_boulevard's union-find, and stamped on every occurrence
 /// (\c OccurrenceRec::loop_slot / \c reduced_slot); nothing here rederives it.
 ///
-using LoopInstance = std::pair<std::wstring, int>;
+using LoopInstance = std::pair<std::string, int>;
 
 ///
 /// \brief The loop instance an occurrence opens on mode \p ix with kind \p
@@ -423,7 +422,7 @@ using LoopInstance = std::pair<std::wstring, int>;
 ///
 [[nodiscard]] inline std::optional<LoopInstance> opened_instance(
     OccurrenceRec const& opener, Index const& ix, BatchModeType kind) {
-  std::wstring const bk{ix.basis().base_key()};
+  std::string const bk{ix.basis().base_key()};
   if (kind == BatchModeType::Contracted) {
     for (auto const& [rm, rs] : opener.reduced_slot)
       if (rm == ix) return LoopInstance{bk, rs};
@@ -475,7 +474,7 @@ using LoopInstance = std::pair<std::wstring, int>;
       }
     if (!inst)
       throw Exception("enclosing_instances: the enclosing loop over " +
-                      toUtf8(L.label()) + " at point " +
+                      std::string(L.label()) + " at point " +
                       std::to_string(occ.point) +
                       " has no loop identity at its opener (point " +
                       std::to_string(occ.ectx_opener_point[k]) + ")");
@@ -767,11 +766,11 @@ RichSchedule compute_dag_boulevard(R const& forest,
   // Reduction-mode nodes live in the upper half of an occurrence's position
   // space, one per (occurrence, reduced mode label in its own frame).
   std::size_t constexpr CONTRACTED_BASE = std::size_t{1} << (POS_BITS - 1);
-  std::map<std::pair<std::size_t, std::wstring>, std::size_t> red_pos;
+  std::map<std::pair<std::size_t, std::string>, std::size_t> red_pos;
   std::size_t red_next = CONTRACTED_BASE;
   auto const reduction_node = [&](std::size_t idx,
                                   Index const& m) -> std::size_t {
-    auto const key = std::make_pair(idx, std::wstring{m.full_label()});
+    auto const key = std::make_pair(idx, std::string{m.full_label()});
     auto const it = red_pos.find(key);
     if (it != red_pos.end()) return encode(idx, it->second);
     std::size_t const pos = red_next++;
@@ -1090,19 +1089,19 @@ RichSchedule compute_dag_boulevard(R const& forest,
   // Number the components: one loop_slot per component, per basis key in
   // first-seen order.
   std::unordered_map<std::size_t, int> root_slot;
-  std::map<std::wstring, int> next_slot;
+  std::map<std::string, int> next_slot;
   for (std::size_t i = 0; i < nrec; ++i)
     for (std::size_t pV = 0; pV < recs[i].carried.size(); ++pV) {
       if (!is_batched(recs[i], recs[i].carried[pV])) continue;
       std::size_t const root = find(encode(i, pV));
       if (root_slot.find(root) != root_slot.end()) continue;
-      std::wstring const sp{recs[i].carried[pV].basis().base_key()};
+      std::string const sp{recs[i].carried[pV].basis().base_key()};
       root_slot.emplace(root, next_slot[sp]++);
     }
   for (auto const& [idx, m] : reduction_stamps) {
     std::size_t const root = find(reduction_node(idx, m));
     if (root_slot.find(root) != root_slot.end()) continue;
-    std::wstring const sp{m.basis().base_key()};
+    std::string const sp{m.basis().base_key()};
     root_slot.emplace(root, next_slot[sp]++);
   }
 
@@ -1115,9 +1114,9 @@ RichSchedule compute_dag_boulevard(R const& forest,
         r.loop_slot[pV] = root_slot.at(find(encode(i, pV)));
   }
   {
-    std::set<std::pair<std::size_t, std::wstring>> stamped;
+    std::set<std::pair<std::size_t, std::string>> stamped;
     for (auto const& [idx, m] : reduction_stamps) {
-      if (!stamped.insert({idx, std::wstring{m.full_label()}}).second) continue;
+      if (!stamped.insert({idx, std::string{m.full_label()}}).second) continue;
       auto const rit = root_slot.find(find(reduction_node(idx, m)));
       if (rit == root_slot.end()) continue;
       recs[idx].reduced_slot.push_back({m, rit->second});
@@ -1395,8 +1394,9 @@ RichSchedule compute_dag_boulevard(R const& forest,
           auto const key = opened_instance(occ, ix, kind);
           if (!key)
             throw Exception(
-                "compute_dag_boulevard: the loop over " + toUtf8(ix.label()) +
-                " opened at point " + std::to_string(occ.point) +
+                "compute_dag_boulevard: the loop over " +
+                std::string(ix.label()) + " opened at point " +
+                std::to_string(occ.point) +
                 " has no loop identity (the opener carries no stamp for it)");
           [[maybe_unused]] auto const [kit, inserted] =
               out.loop_kind.emplace(*key, kind);
@@ -1404,8 +1404,8 @@ RichSchedule compute_dag_boulevard(R const& forest,
                          "compute_dag_boulevard: one loop instance opened "
                          "with two kinds (contracted and external)");
         }
-    auto const constrains = [&](std::pair<std::wstring, int> const& a,
-                                std::pair<std::wstring, int> const& b) {
+    auto const constrains = [&](std::pair<std::string, int> const& a,
+                                std::pair<std::string, int> const& b) {
       auto const ka = out.loop_kind.find(a);
       auto const kb = out.loop_kind.find(b);
       bool const a_ext =

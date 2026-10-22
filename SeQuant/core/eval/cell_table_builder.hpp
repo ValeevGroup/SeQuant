@@ -88,10 +88,10 @@ template <typename Node>
 [[nodiscard]] inline std::optional<LoopKey> slicing_instance(
     RichSchedule const& rich, std::size_t vid, std::size_t p,
     container::svector<std::pair<LoopKey, int>> const& path,
-    container::svector<std::wstring> const& path_spaces) {
+    container::svector<std::string> const& path_spaces) {
   ValueCell const& c = rich.cells[vid];
   if (c.occurrences.empty() || p >= c.carried.size()) return std::nullopt;
-  std::wstring const space{c.carried[p].basis().base_key()};
+  std::string const space{c.carried[p].basis().base_key()};
   for (std::size_t i = 0; i < path.size(); ++i) {
     if (path_spaces[i] != space) continue;
     // every occurrence carries the same stamp at p (ValueCell::key); any
@@ -152,7 +152,7 @@ inline void set_residency_flags(
 [[nodiscard]] inline CellId emit_build_cell(
     CellTableInputs const& in, std::size_t vid,
     container::svector<std::pair<LoopKey, int>> const& path,
-    container::svector<std::wstring> const& path_spaces,
+    container::svector<std::string> const& path_spaces,
     container::svector<ScopeBlock const*> const& block_stack,
     CellBuildState& st) {
   RichSchedule const& rich = *in.rich;
@@ -189,7 +189,7 @@ inline void set_residency_flags(
 /// for the duration of that recursion.
 inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
                        container::svector<std::pair<LoopKey, int>>& path,
-                       container::svector<std::wstring>& path_spaces,
+                       container::svector<std::string>& path_spaces,
                        container::svector<ScopeBlock const*>& block_stack,
                        CellBuildState& st) {
   for (Step const& step : block.steps) {
@@ -200,7 +200,7 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
     }
     auto const& child = std::get<ScopeBlock>(step.value);
     path.push_back({child.level.key(), child.latitude_ordinal});
-    path_spaces.push_back(std::wstring{child.axis.basis().base_key()});
+    path_spaces.push_back(std::string{child.axis.basis().base_key()});
     block_stack.push_back(&child);
     emit_cells(in, child, path, path_spaces, block_stack, st);
     // The child's outputs assemble at this (the parent's) scope, while an
@@ -366,7 +366,7 @@ inline void apply_persistence_frontier(
         "volatile_of are all required");
   detail::CellBuildState st;
   container::svector<std::pair<LoopKey, int>> path;
-  container::svector<std::wstring> path_spaces;
+  container::svector<std::string> path_spaces;
   container::svector<ScopeBlock const*> block_stack;
   detail::emit_cells(in, in.ordered->root, path, path_spaces, block_stack, st);
   auto const g = detail::ordered_schedule_dep_graph(*in.rich);

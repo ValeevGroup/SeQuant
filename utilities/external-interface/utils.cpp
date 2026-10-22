@@ -28,7 +28,7 @@ std::string IndexSpaceMeta::getName(const IndexSpace &space) const {
   auto iter = m_entries.find(space);
   if (iter == m_entries.end()) {
     throw Exception("No known name for index space " +
-                    toUtf8(space.base_key()));
+                    std::string(space.base_key()));
   }
 
   return iter->second.name;
@@ -37,7 +37,8 @@ std::string IndexSpaceMeta::getName(const IndexSpace &space) const {
 std::string IndexSpaceMeta::getTag(const IndexSpace &space) const {
   auto iter = m_entries.find(space);
   if (iter == m_entries.end()) {
-    throw Exception("No known tag for index space " + toUtf8(space.base_key()));
+    throw Exception("No known tag for index space " +
+                    std::string(space.base_key()));
   }
 
   return iter->second.tag;
@@ -150,7 +151,7 @@ bool needsSymmetrization(const sequant::ExprPtr &expression) {
 }
 
 sequant::ExprPtr generateResultSymmetrization(const ResultExpr &result,
-                                              std::wstring_view precursorName) {
+                                              std::string_view precursorName) {
   IndexGroups<std::vector<Index> > externals;
 
   for (const auto &[bra, ket] :
@@ -164,7 +165,7 @@ sequant::ExprPtr generateResultSymmetrization(const ResultExpr &result,
 }
 
 sequant::ExprPtr generateResultSymmetrization(const Tensor &result,
-                                              std::wstring_view precursorName) {
+                                              std::string_view precursorName) {
   SEQUANT_ASSERT(result.bra_rank() == result.ket_rank());
 
   IndexGroups<std::vector<Index> > externals;
@@ -178,7 +179,7 @@ sequant::ExprPtr generateResultSymmetrization(const Tensor &result,
 }
 
 sequant::ExprPtr generateResultSymmetrization(
-    std::wstring_view precursorName,
+    std::string_view precursorName,
     const sequant::IndexGroups<std::vector<sequant::Index> > &externals,
     const Tensor &ref) {
   SEQUANT_ASSERT(externals.bra.size() == externals.ket.size());

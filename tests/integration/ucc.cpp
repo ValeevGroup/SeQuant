@@ -82,8 +82,8 @@ void check(Hbar expansion, std::size_t n, std::size_t rank, std::size_t r,
   for (const auto& p : pins)
     if (expansion == p.expansion && n == p.n && rank == p.rank && r == p.r) {
       if (nterms != p.nterms)
-        std::wcout << "MISMATCH: expected " << p.nterms << " terms, got "
-                   << nterms << std::endl;
+        std::cout << "MISMATCH: expected " << p.nterms << " terms, got "
+                  << nterms << std::endl;
       runtime_assert(nterms == p.nterms);
       return;
     }
@@ -92,7 +92,7 @@ void check(Hbar expansion, std::size_t n, std::size_t rank, std::size_t r,
 }  // namespace
 
 int main(int argc, char* argv[]) {
-  std::wcout.precision(std::numeric_limits<double>::max_digits10);
+  std::cout.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
 
   const std::size_t N = argc > 1 ? string_to<std::size_t>(argv[1]) : 2;
@@ -121,16 +121,16 @@ int main(int argc, char* argv[]) {
   const auto eqvec = cc.t();
   tpool.stop(0);
 
-  std::wcout << "UCC equations [rank=" << N
-             << ",expansion=" << sequant::toUtf16(expansion_str)
-             << ",hbar_comm_rank=" << RANK << "] computed in " << tpool.read(0)
-             << " seconds" << std::endl;
+  std::cout << "UCC equations [rank=" << N
+            << ",expansion=" << std::string(expansion_str)
+            << ",hbar_comm_rank=" << RANK << "] computed in " << tpool.read(0)
+            << " seconds" << std::endl;
 
   for (std::size_t R = 0; R < eqvec.size(); ++R) {
-    std::wcout << (R == 0 ? "E" : "R") << (R == 0 ? L"" : std::to_wstring(R))
-               << "(expU" << N << ") has " << eqvec[R]->size()
-               << " terms:" << std::endl;
-    if (print) std::wcout << to_latex_align(eqvec[R], 20, 1) << std::endl;
+    std::cout << (R == 0 ? "E" : "R") << (R == 0 ? "" : std::to_string(R))
+              << "(expU" << N << ") has " << eqvec[R]->size()
+              << " terms:" << std::endl;
+    if (print) std::cout << to_latex_align(eqvec[R], 20, 1) << std::endl;
     check(expansion, N, RANK, R, eqvec[R]->size());
   }
 

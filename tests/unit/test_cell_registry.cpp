@@ -51,7 +51,7 @@ CellTable make_table() {
 // a genuine narrowing, checkable through lobounds_of.
 sequant::eval::dryrun::SizeRegime cell_registry_test_regime() {
   sequant::eval::dryrun::SizeRegime r;
-  r.space_extent = {{L"i", 8}};
+  r.space_extent = {{"i", 8}};
   return r;
 }
 }  // namespace
@@ -63,7 +63,7 @@ TEST_CASE("cell registry: set, read, life and batch clearing",
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
       cell_registry_test_regime());
   sequant::ResultPtr r = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
-      sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}}, cm);
+      sequant::container::svector<sequant::Index>{sequant::Index{"i_1"}}, cm);
   reg.set(1, r);
   CHECK(reg.peek(1) == r);
   CHECK(reg.read(1) == r);
@@ -88,7 +88,7 @@ TEST_CASE(
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
       cell_registry_test_regime());
   sequant::ResultPtr r = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
-      sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}}, cm);
+      sequant::container::svector<sequant::Index>{sequant::Index{"i_1"}}, cm);
 
   reg.set(1, r);  // cell 1: Build, non-persistent, life 1
   bool exhausted = false;
@@ -111,7 +111,7 @@ TEST_CASE("cell read resolver: declared slice against the batch context",
   CellRegistry reg(t);
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
       cell_registry_test_regime());
-  sequant::container::svector<sequant::Index> idx{sequant::Index{L"i_1"}};
+  sequant::container::svector<sequant::Index> idx{sequant::Index{"i_1"}};
   sequant::ResultPtr leaf =
       std::make_shared<sequant::eval::dryrun::ResultDryRun>(idx, cm);
   sequant::ResultPtr b1 = leaf->slice_mode(0, 0, 2);  // already a batch slice
@@ -125,8 +125,8 @@ TEST_CASE("cell read resolver: declared slice against the batch context",
   });
   res.begin_consumer(2);
   sequant::eval::BatchContext ctx;
-  ctx.push_back({sequant::Index{L"i_1"},
-                 sequant::eval::DagScopeLevel{1, L"i", 0, 0, 0},
+  ctx.push_back({sequant::Index{"i_1"},
+                 sequant::eval::DagScopeLevel{1, "i", 0, 0, 0},
                  {2, 4},
                  std::nullopt});
   auto got0 = res.fetch(0, ctx);
@@ -154,7 +154,7 @@ TEST_CASE(
   CellRegistry reg(t);
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
       cell_registry_test_regime());
-  sequant::container::svector<sequant::Index> idx{sequant::Index{L"i_1"}};
+  sequant::container::svector<sequant::Index> idx{sequant::Index{"i_1"}};
   // Neither cell 0 (Leaf) nor cell 1 (Build) is set: both reads (see
   // make_table's doc comment: consumer 2 reads cell 0 sliced, cell 1 whole)
   // start with no current result.
@@ -164,8 +164,8 @@ TEST_CASE(
   });
   res.begin_consumer(2);
   sequant::eval::BatchContext ctx;
-  ctx.push_back({sequant::Index{L"i_1"},
-                 sequant::eval::DagScopeLevel{1, L"i", 0, 0, 0},
+  ctx.push_back({sequant::Index{"i_1"},
+                 sequant::eval::DagScopeLevel{1, "i", 0, 0, 0},
                  {2, 4},
                  std::nullopt});
 
@@ -257,7 +257,7 @@ TEST_CASE("table_read spends one declared life and reports exhaustion once",
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
       cell_registry_test_regime());
   sequant::ResultPtr r = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
-      sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}}, cm);
+      sequant::container::svector<sequant::Index>{sequant::Index{"i_1"}}, cm);
 
   std::size_t released = 0;
   reg.set(1, r);  // cell 1: Build, non-persistent, life 1
@@ -329,9 +329,9 @@ TEST_CASE("cell registry owns results: bytes, fill-once, persistence",
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
       cell_registry_test_regime());
   sequant::ResultPtr r1 = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
-      sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}}, cm);
+      sequant::container::svector<sequant::Index>{sequant::Index{"i_1"}}, cm);
   sequant::ResultPtr r2 = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
-      sequant::container::svector<sequant::Index>{sequant::Index{L"i_2"}}, cm);
+      sequant::container::svector<sequant::Index>{sequant::Index{"i_2"}}, cm);
 
   reg.set(1, r1);
   CHECK(reg.live_bytes() == r1->size_in_bytes());
@@ -389,7 +389,7 @@ TEST_CASE(
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
       cell_registry_test_regime());
   sequant::ResultPtr r = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
-      sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}}, cm);
+      sequant::container::svector<sequant::Index>{sequant::Index{"i_1"}}, cm);
   reg.set(0, r);
   reg.set(1, r);
   reg.set(2, r);
@@ -451,7 +451,7 @@ TEST_CASE("cell registry: forgo spends a read the executor will not perform",
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
       cell_registry_test_regime());
   sequant::ResultPtr r = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
-      sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}}, cm);
+      sequant::container::svector<sequant::Index>{sequant::Index{"i_1"}}, cm);
 
   // Forgoing a non-persistent cell's LAST life releases the value, exactly as
   // the draining read does: bytes accounted, slot emptied, drained.

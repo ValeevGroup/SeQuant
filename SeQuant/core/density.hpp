@@ -23,14 +23,14 @@ namespace sequant::density {
 /// reserved::density_labels()): a density's symmetries take part in the tensor
 /// hash, so a γ built by hand with other symmetries would not merge with the
 /// γ the engine builds. Construct densities with the factories below.
-inline const std::wstring &rdm_label() { return reserved::rdm_label(); }
-inline const std::wstring &hole_rdm_label() {
+inline const std::string &rdm_label() { return reserved::rdm_label(); }
+inline const std::string &hole_rdm_label() {
   return reserved::hole_rdm_label();
 }
-inline const std::wstring &cumulant_label() {
+inline const std::string &cumulant_label() {
   return reserved::cumulant_label();
 }
-inline const std::wstring &spinfree_rdm_label() {
+inline const std::string &spinfree_rdm_label() {
   return reserved::spinfree_rdm_label();
 }
 
@@ -49,7 +49,7 @@ inline constexpr TensorSymmetries cumulant_symmetries{
 /// a spin-free one (Γ) and a 1-body one are not
 /// @note a multi-body spin-orbital density may also be perm-nonsymmetric: that
 ///       is a spin component of it, as spin tracing produces
-inline TensorSymmetries symmetries(std::wstring_view label, std::size_t rank) {
+inline TensorSymmetries symmetries(std::string_view label, std::size_t rank) {
   return rank > 1 && label != spinfree_rdm_label() ? cumulant_symmetries
                                                    : rdm_symmetries;
 }
@@ -59,12 +59,12 @@ inline TensorSymmetries symmetries(std::wstring_view label, std::size_t rank) {
 /// defining symmetries()
 template <range_of_castables_to_index IndexRange1,
           range_of_castables_to_index IndexRange2>
-ExprPtr make_density(std::wstring_view label,
+ExprPtr make_density(std::string_view label,
                      const bra<IndexRange1> &bra_indices,
                      const ket<IndexRange2> &ket_indices) {
   SEQUANT_ASSERT(ranges::contains(reserved::density_labels(), label));
   SEQUANT_ASSERT(bra_indices.size() == ket_indices.size());
-  return ex<Tensor>(std::wstring(label), bra_indices, ket_indices,
+  return ex<Tensor>(std::string(label), bra_indices, ket_indices,
                     symmetries(label, bra_indices.size()));
 }
 
@@ -89,7 +89,7 @@ inline ExprPtr make_hole_rdm(const Index &ann, const Index &cre) {
 /// @p label: bra = annihilator indices, ket = creator indices, both in
 /// particle order
 template <Statistics S>
-ExprPtr rdm_from_nop(const NormalOperator<S> &nop, std::wstring_view label) {
+ExprPtr rdm_from_nop(const NormalOperator<S> &nop, std::string_view label) {
   using index_container = container::svector<Index>;
   auto braidxs =
       nop.annihilators() |

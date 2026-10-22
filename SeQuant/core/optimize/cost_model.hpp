@@ -1162,14 +1162,14 @@ struct PeakBatchedModel {
             "PeakBatchedModel: composite (CSV/PNO) indices present but no "
             "inner_pow provided -- sizing composites by base extent is a bug. "
             "Pass a real inner_pow (e.g. SizeRegime::inner_pow_fn()).");
-      std::map<std::wstring, std::uint32_t> gid;  // proto-signature -> group id
+      std::map<std::string, std::uint32_t> gid;  // proto-signature -> group id
       for (auto const& c : inner_atoms) {
         iid.emplace(c, static_cast<std::uint32_t>(ctx.fi_index.size()));
         ctx.fi_index.push_back(c);
-        std::wstring sig;
+        std::string sig;
         for (auto const& p : c.proto_indices()) {
           sig += p.full_label();
-          sig += L',';
+          sig += ',';
         }
         auto it = gid.find(sig);
         ctx.fi_grp.push_back(

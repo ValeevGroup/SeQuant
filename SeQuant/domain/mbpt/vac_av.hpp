@@ -13,12 +13,12 @@ namespace sequant::mbpt {
 inline namespace op {
 
 /// defines the conventional coupled-cluster op connections
-inline OpConnections<std::wstring> default_op_connections() {
-  static const OpConnections<std::wstring> defaults = {
-      {L"h", L"t"},
-      {L"f", L"t"},
-      {L"f̃", L"t"},
-      {L"g", L"t"},
+inline OpConnections<std::string> default_op_connections() {
+  static const OpConnections<std::string> defaults = {
+      {"h", "t"},
+      {"f", "t"},
+      {"f̃", "t"},
+      {"g", "t"},
       // NBs
       // - for unitary ansatz can also connect t^+ with Hamiltonian
       // - for exact (non-approximated) unitary ansatz will also need to connect
@@ -28,10 +28,10 @@ inline OpConnections<std::wstring> default_op_connections() {
       //   as same connection ... this points out the need to have a separate
       //   OpType for t^+ and t, and in general the contents of OpType must be
       //   customizable
-      {L"t", L"h"},
-      {L"t", L"f"},
-      {L"t", L"f̃"},
-      {L"t", L"g"}};
+      {"t", "h"},
+      {"t", "f"},
+      {"t", "f̃"},
+      {"t", "g"}};
   return defaults;
 }
 
@@ -72,7 +72,7 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
 /// @pre When the reference differs from the Wick vacuum and the vacuum is not MultiProduct, opts.connect and
 ///      opts.do_not_connect must both be empty.
 // clang-format on
-ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts = {});
+ExprPtr ref_av(ExprPtr expr, EVOptions<std::string> opts = {});
 
 /// @brief computes the vacuum expectation value
 /// @internal evaluates only full contractions in  WickTheorem
@@ -80,7 +80,7 @@ ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts = {});
 /// @param[in] opts controls the behavior, @see EVOptions
 /// @note Connectivity constraints are empty by default.
 /// @return the VEV
-ExprPtr vac_av(ExprPtr expr, EVOptions<std::wstring> opts = {});
+ExprPtr vac_av(ExprPtr expr, EVOptions<std::string> opts = {});
 
 }  // namespace op
 }  // namespace sequant::mbpt

@@ -16,7 +16,6 @@
 #include <range/v3/algorithm/any_of.hpp>
 
 #include <cmath>
-#include <cwctype>
 #include <string_view>
 #include <type_traits>
 
@@ -381,8 +380,10 @@ class IndexSpace {
   /// IndexSpace::base_key() or Index::label()
   struct bad_key : Exception {
     bad_key() : Exception("bad key") {}
-    template <basic_string_convertible S>
-    bad_key(S &&key) : Exception(std::string("bad key: ") + toUtf8(key)) {}
+    template <string_convertible S>
+    bad_key(S &&key)
+        : Exception(std::string("bad key: ") +
+                    std::string(to_string_view(key))) {}
   };
 
   struct KeyCompare {
@@ -390,25 +391,25 @@ class IndexSpace {
     bool operator()(const IndexSpace &a, const IndexSpace &b) const {
       return a.base_key() < b.base_key();
     }
-    bool operator()(const std::wstring &a, const IndexSpace &b) const {
+    bool operator()(const std::string &a, const IndexSpace &b) const {
       return a < b.base_key();
     }
-    bool operator()(const std::wstring_view &a, const IndexSpace &b) const {
+    bool operator()(const std::string_view &a, const IndexSpace &b) const {
       return a < b.base_key();
     }
-    bool operator()(const IndexSpace &a, const std::wstring &b) const {
+    bool operator()(const IndexSpace &a, const std::string &b) const {
       return a.base_key() < b;
     }
-    bool operator()(const IndexSpace &a, const std::wstring_view &b) const {
+    bool operator()(const IndexSpace &a, const std::string_view &b) const {
       return a.base_key() < b;
     }
-    bool operator()(const std::wstring &a, const std::wstring &b) const {
+    bool operator()(const std::string &a, const std::string &b) const {
       return a < b;
     }
-    bool operator()(const std::wstring &a, const std::wstring_view &b) const {
+    bool operator()(const std::string &a, const std::string_view &b) const {
       return a < b;
     }
-    bool operator()(const std::wstring_view &a, const std::wstring &b) const {
+    bool operator()(const std::string_view &a, const std::string &b) const {
       return a < b;
     }
   };
@@ -443,17 +444,16 @@ class IndexSpace {
 
   explicit operator bool() const { return *this != null; }
 
-  template <basic_string_convertible S>
+  template <string_convertible S>
   IndexSpace(S &&type_label, TypeAttr typeattr,
              QuantumNumbersAttr qnattr = QuantumNumbersAttr{0},
              std::size_t dimension = 10, Field field = Field::Complex)
       : attr_(typeattr, qnattr),
-        base_key_(toUtf16(std::forward<S>(type_label))),
+        base_key_(to_string_view(type_label)),
         dimension_(dimension),
         field_(field) {}
 
   explicit IndexSpace(std::string_view label);
-  explicit IndexSpace(std::wstring_view label);
 
   IndexSpace(const IndexSpace &other) = default;
   /// move constructor
@@ -479,26 +479,18 @@ class IndexSpace {
     return *this;
   }
 
-  const std::wstring &base_key() const { return base_key_; }
+  const std::string &base_key() const { return base_key_; }
 
   template <std::ranges::contiguous_range View>
     requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          char> ||
-             std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          wchar_t>)
+                          char>)
   static auto reduce_key(View &&key) {
     using std::ranges::begin;
     using std::ranges::end;
     using CharT = std::remove_cvref_t<std::ranges::range_value_t<View>>;
 
     auto to_return = [](auto &&range) {
-      std::basic_string_view<CharT> view(begin(range), end(range));
-
-      if constexpr (std::same_as<CharT, char>) {
-        return toUtf16(view);
-      } else {
-        return view;
-      }
+      return std::string(begin(range), end(range));
     };
 
     const auto underscore_pos = std::ranges::find(key, static_cast<CharT>('_'));
@@ -507,12 +499,8 @@ class IndexSpace {
       return to_return(std::ranges::subrange(begin(key), underscore_pos));
     }
 
-    const auto digit_pos = std::ranges::find_if(key, [](CharT c) {
-      if constexpr (std::same_as<CharT, char>) {
-        return c >= 0 && std::isdigit(static_cast<unsigned char>(c));
-      }
-      return std::iswdigit(c) != 0;
-    });
+    const auto digit_pos =
+        std::ranges::find_if(key, [](char c) { return is_ascii_digit(c); });
 
     if (digit_pos != end(key) && digit_pos != begin(key)) {
       // base key ends at first digit (unless the digit is the first character)
@@ -560,7 +548,7 @@ class IndexSpace {
 
  private:
   Attr attr_ = {};
-  std::wstring base_key_ = {};
+  std::string base_key_ = {};
   std::size_t dimension_ = {};
   Field field_ = Field::Complex;
 };  // class IndexSpace
@@ -631,7 +619,7 @@ std::string to_string(const IndexSpace &space);
 template <typename T>
 concept index_space_or_label =
     (std::is_same_v<std::remove_cvref_t<T>, IndexSpace> ||
-     meta::is_basic_string_convertible_v<std::remove_cvref_t<T>>);
+     meta::is_string_convertible_v<std::remove_cvref_t<T>>);
 
 }  // namespace sequant
 

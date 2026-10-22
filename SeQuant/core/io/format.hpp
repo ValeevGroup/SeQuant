@@ -29,14 +29,9 @@ inline void invalid_expression_format_specifier() {}
 template <typename Char, typename T>
   requires(std::same_as<T, Expr> || std::same_as<T, ResultExpr>)
 std::basic_string<Char> expression_string(const T* expr, bool serialize) {
-  auto text = expr ? (serialize ? serialization::to_string(*expr)
-                                : latex::to_string(*expr))
-                   : L"";
-  if constexpr (std::same_as<Char, char>) {
-    return toUtf8(text);
-  } else {
-    return text;
-  }
+  return expr ? (serialize ? serialization::to_string(*expr)
+                           : latex::to_string(*expr))
+              : std::string{};
 }
 
 template <typename T, typename Char, typename Traits>
@@ -92,10 +87,9 @@ struct expression_formatter {
 
 namespace sequant {
 
-/// Inserts the expression's serialized representation into a narrow or wide
-/// stream.
+/// Inserts the expression's serialized representation into a stream.
 template <typename Char, typename Traits>
-  requires(std::same_as<Char, char> || std::same_as<Char, wchar_t>)
+  requires(std::same_as<Char, char>)
 std::basic_ostream<Char, Traits>& operator<<(
     std::basic_ostream<Char, Traits>& stream, const Expr& expr) {
   return io::detail::insert_expression(stream, &expr, true);
@@ -103,7 +97,7 @@ std::basic_ostream<Char, Traits>& operator<<(
 
 /// Inserts serialization, or an empty string for an empty expression pointer.
 template <typename Char, typename Traits>
-  requires(std::same_as<Char, char> || std::same_as<Char, wchar_t>)
+  requires(std::same_as<Char, char>)
 std::basic_ostream<Char, Traits>& operator<<(
     std::basic_ostream<Char, Traits>& stream, const ExprPtr& expr) {
   return io::detail::insert_expression(stream, expr.get(), true);
@@ -111,7 +105,7 @@ std::basic_ostream<Char, Traits>& operator<<(
 
 /// Inserts the result expression's serialized representation.
 template <typename Char, typename Traits>
-  requires(std::same_as<Char, char> || std::same_as<Char, wchar_t>)
+  requires(std::same_as<Char, char>)
 std::basic_ostream<Char, Traits>& operator<<(
     std::basic_ostream<Char, Traits>& stream, const ResultExpr& expr) {
   return io::detail::insert_expression(stream, &expr, true);
@@ -123,7 +117,7 @@ template <typename T, typename Char>
   requires((std::derived_from<T, sequant::Expr> ||
             std::same_as<T, sequant::ExprPtr> ||
             std::same_as<T, sequant::ResultExpr>) &&
-           (std::same_as<Char, char> || std::same_as<Char, wchar_t>))
+           std::same_as<Char, char>)
 struct std::formatter<T, Char>
     : sequant::io::detail::expression_formatter<Char, true> {};
 

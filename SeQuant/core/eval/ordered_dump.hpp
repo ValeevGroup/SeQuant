@@ -106,9 +106,9 @@ namespace sequant::eval::detail {
 /// is either carried across a loop or read inside the loop that reduces it.
 inline void dump_level_bump(std::size_t v, std::size_t o, bool carried,
                             int level) {
-  std::wcerr << L"[levels] v" << v << L" bumped by operand v" << o
-             << (carried ? L" (carried)" : L" (reduction read inside)")
-             << L" -> level " << level << L"\n";
+  std::cerr << "[levels] v" << v << " bumped by operand v" << o
+            << (carried ? " (carried)" : " (reduction read inside)")
+            << " -> level " << level << "\n";
 }
 
 /// \brief `[sched]`: the pairwise loop order the rich schedule witnesses, and
@@ -117,14 +117,14 @@ template <typename LoopOrder, typename Types, typename Slots>
 void dump_loop_chain(LoopOrder const& loop_order, Types const& types,
                      Slots const& type_slot) {
   for (auto const& [pair, witness] : loop_order)
-    std::wcerr << L"[sched] loop_order " << pair.first.first << L"#"
-               << pair.first.second << L" > " << pair.second.first << L"#"
-               << pair.second.second << L" by v" << witness << L"\n";
-  std::wcerr << L"[sched] per-instance loop chain: ";
+    std::cerr << "[sched] loop_order " << pair.first.first << "#"
+              << pair.first.second << " > " << pair.second.first << "#"
+              << pair.second.second << " by v" << witness << "\n";
+  std::cerr << "[sched] per-instance loop chain: ";
   for (std::size_t d = 0; d < types.size(); ++d)
-    std::wcerr << L"d" << d << L"=" << types[d].basis().base_key() << L"#slot"
-               << type_slot[d] << L" ";
-  std::wcerr << L"\n";
+    std::cerr << "d" << d << "=" << types[d].basis().base_key() << "#slot"
+              << type_slot[d] << " ";
+  std::cerr << "\n";
 }
 
 /// \brief `[sched-collapse]`: a value with more than one non-local mode of one
@@ -134,18 +134,17 @@ void dump_loop_chain(LoopOrder const& loop_order, Types const& types,
 template <typename Nonlocal, typename Escapes>
 void dump_sched_collapse(std::size_t hash, Nonlocal const& nonlocal,
                          Escapes const& escapes) {
-  std::wcerr << L"[sched-collapse] hash=" << hash << L" nonlocal={";
+  std::cerr << "[sched-collapse] hash=" << hash << " nonlocal={";
   for (auto const& [ix, role] : nonlocal)
-    std::wcerr << ix.full_label() << L":" << role << L" ";
-  std::wcerr << L"} -> " << nonlocal.size() << L" modes COLLAPSE to "
-             << escapes.size() << L" escapes(depth:kind)={";
+    std::cerr << ix.full_label() << ":" << role << " ";
+  std::cerr << "} -> " << nonlocal.size() << " modes COLLAPSE to "
+            << escapes.size() << " escapes(depth:kind)={";
   for (auto const& [d, k] : escapes)
-    std::wcerr << d << L":"
-               << (k == std::decay_t<decltype(k)>::AccumulateScatter
-                       ? L"Scatter"
-                       : L"Sum")
-               << L" ";
-  std::wcerr << L"}\n";
+    std::cerr << d << ":"
+              << (k == std::decay_t<decltype(k)>::AccumulateScatter ? "Scatter"
+                                                                    : "Sum")
+              << " ";
+  std::cerr << "}\n";
 }
 
 /// \brief `[sched-materialize]`: the members built and escaped across a forced
@@ -153,10 +152,10 @@ void dump_sched_collapse(std::size_t hash, Nonlocal const& nonlocal,
 /// the assembled form).
 template <typename Ids>
 void dump_sched_materialize(Ids const& ids) {
-  std::wcerr << L"[sched-materialize] " << ids.size()
-             << L" member(s) built AND escaped across the forced split:";
-  for (std::size_t v : ids) std::wcerr << L" v" << v;
-  std::wcerr << L"\n";
+  std::cerr << "[sched-materialize] " << ids.size()
+            << " member(s) built AND escaped across the forced split:";
+  for (std::size_t v : ids) std::cerr << " v" << v;
+  std::cerr << "\n";
 }
 
 /// \brief `[sched-nest]`: per nest, its outermost depth and the passes emitted
@@ -166,10 +165,10 @@ template <typename NestPasses, typename ClusterMin, typename CountFn>
 void dump_sched_nests(NestPasses const& nest_passes,
                       ClusterMin const& cluster_min, CountFn&& count) {
   for (auto const& [c, ps] : nest_passes) {
-    std::wcerr << L"[sched-nest] outermost depth " << cluster_min.at(c)
-               << L" passes={";
-    for (int k : ps) std::wcerr << k << L":" << count(c, k) << L" ";
-    std::wcerr << L"}\n";
+    std::cerr << "[sched-nest] outermost depth " << cluster_min.at(c)
+              << " passes={";
+    for (int k : ps) std::cerr << k << ":" << count(c, k) << " ";
+    std::cerr << "}\n";
   }
 }
 
@@ -189,21 +188,19 @@ void dump_schedule_tree(Block const& b, int depth) {
             ++builds;
         },
         st.value);
-  std::wcerr << L"[sched-tree] " << std::wstring(2 * depth, L' ') << L"depth="
-             << depth << L" axis=" << (b.axis ? b.axis.full_label() : L"<root>")
-             << L" kind="
-             << (b.kind == BatchModeType::External ? L"external"
-                                                   : L"contracted")
-             << L" builds=" << builds << L" children=" << children << L" outs=";
+  std::cerr << "[sched-tree] " << std::string(2 * depth, ' ')
+            << "depth=" << depth
+            << " axis=" << (b.axis ? b.axis.full_label() : "<root>") << " kind="
+            << (b.kind == BatchModeType::External ? "external" : "contracted")
+            << " builds=" << builds << " children=" << children << " outs=";
   for (auto const& [ovid, okind] : b.outputs)
-    std::wcerr << ovid << L":"
-               << (okind == std::decay_t<decltype(okind)>::AccumulateSum
-                       ? L"sum"
-                   : okind == std::decay_t<decltype(okind)>::AccumulateScatter
-                       ? L"scatter"
-                       : L"other")
-               << L" ";
-  std::wcerr << L"\n";
+    std::cerr << ovid << ":"
+              << (okind == std::decay_t<decltype(okind)>::AccumulateSum ? "sum"
+                  : okind == std::decay_t<decltype(okind)>::AccumulateScatter
+                      ? "scatter"
+                      : "other")
+              << " ";
+  std::cerr << "\n";
   for (auto const& st : b.steps)
     std::visit(
         [&](auto const& alt) {
@@ -224,7 +221,7 @@ inline void dump_use_induced(std::size_t value_h, Index const& mode,
                              std::size_t pos, std::size_t loop,
                              std::size_t consumer_h) {
   std::cerr << "[useinduced] value_h=" << value_h
-            << " M=" << toUtf8(mode.full_label()) << " pos=" << pos
+            << " M=" << std::string(mode.full_label()) << " pos=" << pos
             << " loop=" << loop << " consumer_h=" << consumer_h << "\n";
 }
 
@@ -238,13 +235,13 @@ inline void dump_use_induced(std::size_t value_h, Index const& mode,
 /// nodes (separate groups).
 template <typename Node>
 void dump_opens(Node const& n) {
-  std::wcerr << L"[opens] hash=" << n->hash_value() << L" opened_here={";
+  std::cerr << "[opens] hash=" << n->hash_value() << " opened_here={";
   for (auto const& [ix, kind] : n->batch_loops_opened_here())
-    std::wcerr << ix.full_label() << L":" << ix.basis().base_key() << L":"
-               << (kind == BatchModeType::Contracted ? L"C" : L"E") << L" ";
-  std::wcerr << L"} carried={";
-  for (auto const& c : n->canon_indices()) std::wcerr << c.full_label() << L" ";
-  std::wcerr << L"}\n";
+    std::cerr << ix.full_label() << ":" << ix.basis().base_key() << ":"
+              << (kind == BatchModeType::Contracted ? "C" : "E") << " ";
+  std::cerr << "} carried={";
+  for (auto const& c : n->canon_indices()) std::cerr << c.full_label() << " ";
+  std::cerr << "}\n";
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +286,7 @@ void dump_cells_of(Table const& table, Rich const& rich,
       std::cerr << "pos" << p << "@d" << k.depth << "#" << k.loop_slot << " ";
     std::cerr << "} carried={";
     for (auto const& ix : rich.cells[c.value_id].carried)
-      std::cerr << toUtf8(std::wstring(ix.full_label())) << ' ';
+      std::cerr << std::string(ix.full_label()) << ' ';
     std::cerr << "} pia=" << c.produce_if_absent
               << " persistent=" << c.persistent << "\n";
   }
@@ -307,7 +304,7 @@ void dump_occs_of(Table const& table, Rich const& rich,
       point_to[rich.cells[vid].occurrences[o].point] = {vid, o};
   auto const labels = [](container::svector<Index> const& c) {
     std::string s;
-    for (auto const& ix : c) s += toUtf8(std::wstring(ix.full_label())) + " ";
+    for (auto const& ix : c) s += std::string(ix.full_label()) + " ";
     return s;
   };
   for (std::size_t vid : want) {
@@ -390,7 +387,7 @@ void dump_read(std::size_t consumer, Cell const& ccell, std::size_t vid,
 /// steps', its descendants' and its outputs') was already resident.
 inline void dump_block_skipped(Index const& axis, std::size_t depth,
                                int loop_slot) {
-  std::cerr << "[BLOCK] axis=" << toUtf8(axis.full_label())
+  std::cerr << "[BLOCK] axis=" << std::string(axis.full_label())
             << " depth=" << depth << " slot=" << loop_slot
             << " SKIPPED WHOLE (every production resident)" << std::endl;
 }
@@ -399,8 +396,8 @@ inline void dump_block_skipped(Index const& axis, std::size_t depth,
 inline void dump_block_build(Index const& axis, std::size_t lo, std::size_t hi,
                              std::size_t vid, std::size_t cell,
                              std::size_t hash) {
-  std::cerr << "[BLOCK] axis=" << toUtf8(axis.full_label()) << " batch=[" << lo
-            << "," << hi << ") BUILD vid=" << vid << " cell=" << cell
+  std::cerr << "[BLOCK] axis=" << std::string(axis.full_label()) << " batch=["
+            << lo << "," << hi << ") BUILD vid=" << vid << " cell=" << cell
             << " hash=" << hash << std::endl;
 }
 
@@ -409,8 +406,8 @@ inline void dump_block_assemble(Index const& axis, std::size_t lo,
                                 std::size_t hi, std::size_t vid,
                                 std::size_t cell, std::size_t src,
                                 bool is_sum) {
-  std::cerr << "[BLOCK] axis=" << toUtf8(axis.full_label()) << " batch=[" << lo
-            << "," << hi << ") ASSEMBLE vid=" << vid << " cell=" << cell
+  std::cerr << "[BLOCK] axis=" << std::string(axis.full_label()) << " batch=["
+            << lo << "," << hi << ") ASSEMBLE vid=" << vid << " cell=" << cell
             << " src=" << src << " kind=" << (is_sum ? "SUM" : "SCATTER")
             << std::endl;
 }

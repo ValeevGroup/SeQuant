@@ -595,7 +595,7 @@ template <typename Modes>
 [[nodiscard]] std::string dag_scope(Modes&& modes) {
   return join_strings<std::string>(
       std::forward<Modes>(modes), ",",
-      [](Index const& m) { return toUtf8(m.basis().base_key()); });
+      [](Index const& m) { return std::string(m.basis().base_key()); });
 }
 
 /// value id -> forest node: the node of \p vmap whose value key is that of
@@ -932,11 +932,11 @@ void run_ordered_contracted_block(
   if (log::printing()) {
     BatchContext s = ectx;
     s.push_back({block.axis, block.level, {0, 0}, std::nullopt});
-    log::log("BatchGroup", "Begin",
-             std::format("{} steps over {} batches of {} {}",
-                         block.steps.size(), batches.size(),
-                         toUtf8(std::wstring(block.axis.basis().base_key())),
-                         log::scope_annot(s)));
+    log::log(
+        "BatchGroup", "Begin",
+        std::format("{} steps over {} batches of {} {}", block.steps.size(),
+                    batches.size(), std::string(block.axis.basis().base_key()),
+                    log::scope_annot(s)));
   }
 
   // Running results of this block's Assemble steps: a summed accumulator or a
@@ -2042,7 +2042,7 @@ ResultPtr evaluate_ordered(
     Nodes const& forest, BatchPolicy const& policy, auto const& layout,
     F const& leaf_evaluator, CacheManager<N, FHC>& cache,
     std::function<std::size_t(Index const&)> const& target,
-    std::initializer_list<std::wstring> mode_order = {},
+    std::initializer_list<std::string> mode_order = {},
     ScopeGuardFactory make_scope_guard = {}) {
   dryrun::SizeRegime const regime;
   dryrun::CostModel const cm{regime};
@@ -2104,7 +2104,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
 ResultPtr evaluate(Nodes const& forest, BatchPolicy const& policy,
                    auto const& layout, F const& leaf_evaluator,
                    CacheManager<N, FHC>& cache,
-                   std::initializer_list<std::wstring> mode_order = {},
+                   std::initializer_list<std::string> mode_order = {},
                    ScopeGuardFactory make_scope_guard = {}) {
   if (policy.scheduler != BatchScheduler::ordered)
     return evaluate<EvalTrace>(forest, layout, leaf_evaluator, cache);

@@ -139,12 +139,12 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
   // proto pattern), independent of the index names: that is the DAG's own
   // value identity (a CSE-shared leaf is one array), so forest references
   // and the ordered executor agree. The PAO-like `m` space is normalized too.
-  static auto const idx_rgx = boost::wregex{L"([iaxm])([↑↓])?(_?\\d+)"};
-  auto formatter = [](boost::wsmatch mo) -> std::wstring {
-    return (mo[1].str() == L"i"   ? L"o"
-            : mo[1].str() == L"a" ? L"v"
-            : mo[1].str() == L"m" ? L"m"
-                                  : L"x") +
+  static auto const idx_rgx = boost::regex{"([iaxm])([↑↓])?(_?\\d+)"};
+  auto formatter = [](boost::smatch mo) -> std::string {
+    return (mo[1].str() == "i"   ? "o"
+            : mo[1].str() == "a" ? "v"
+            : mo[1].str() == "m" ? "m"
+                                 : "x") +
            mo[2].str();
   };
 
@@ -159,23 +159,23 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
     using ranges::views::transform;
     using namespace sequant;
 
-    auto ix_lbl = [&formatter](Index const& ix) -> std::wstring {
-      std::wstring lbl(ix.label().data());
+    auto ix_lbl = [&formatter](Index const& ix) -> std::string {
+      std::string lbl(ix.label().data());
       return boost::regex_replace(lbl, idx_rgx, formatter);
     };
 
-    auto ixs_lbl = [&ix_lbl](auto const& ixs) -> std::wstring {
-      return ixs | transform(ix_lbl) | intersperse(L",") | join |
-             ranges::to<std::wstring>;
+    auto ixs_lbl = [&ix_lbl](auto const& ixs) -> std::string {
+      return ixs | transform(ix_lbl) | intersperse(",") | join |
+             ranges::to<std::string>;
     };
 
-    std::wstring result(tnsr.label());
-    result += L"{" + ixs_lbl(oixs.outer) + L";" + ixs_lbl(oixs.inner) + L"}";
+    std::string result(tnsr.label());
+    result += "{" + ixs_lbl(oixs.outer) + ";" + ixs_lbl(oixs.inner) + "}";
     return result;
   }
 }
 
-auto tensor_to_key(std::wstring_view spec) {
+auto tensor_to_key(std::string_view spec) {
   return tensor_to_key(sequant::deserialize<sequant::ExprPtr>(
                            spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
                            ->as<sequant::Tensor>());
@@ -211,10 +211,9 @@ class rand_tensor_yield {
   // max tile size along each mode; the default (~0) makes a single tile per
   // mode (the original behavior). Set smaller to produce multi-tile arrays.
   size_t max_tile_ = ~size_t{0};
-  mutable sequant::container::map<std::wstring, sequant::ResultPtr>
-      label_to_er_;
+  mutable sequant::container::map<std::string, sequant::ResultPtr> label_to_er_;
   /// the TA annotation (layout) of the array stored under a tensor key
-  mutable sequant::container::map<std::wstring, std::string> layout_of_;
+  mutable sequant::container::map<std::string, std::string> layout_of_;
 
  public:
   /// Produce arrays whose modes are tiled in blocks of at most \p n.
@@ -228,7 +227,7 @@ class rand_tensor_yield {
   /// fresh (different) random value -- models an amplitude tensor changing
   /// between CC iterations (a "volatile" leaf), while every other leaf stays
   /// fixed. Used to test cross-iteration cache correctness.
-  void reset_label(std::wstring const& lbl) {
+  void reset_label(std::string const& lbl) {
     label_to_er_.erase(lbl);
     layout_of_.erase(lbl);
   }
@@ -252,13 +251,13 @@ class rand_tensor_yield {
   /// when a scatter destination is nested (defaults to flat).
   /// Per-space tile size override (SEQUANT_UT_TILE_<space base key>, e.g.
   /// SEQUANT_UT_TILE_i=1 SEQUANT_UT_TILE_x=168); falls back to max_tile_.
-  size_t tile_for(std::wstring const& bk) const {
-    std::string key = "SEQUANT_UT_TILE_" + sequant::toUtf8(bk);
+  size_t tile_for(std::string const& bk) const {
+    std::string key = "SEQUANT_UT_TILE_" + std::string(bk);
     if (char const* e = std::getenv(key.c_str()); e && std::atol(e) > 0)
       return static_cast<size_t>(std::atol(e));
     return max_tile_;
   }
-  TA::TiledRange1 tr1_for(std::wstring const& bk, size_t e) const {
+  TA::TiledRange1 tr1_for(std::string const& bk, size_t e) const {
     size_t const t = tile_for(bk);
     sequant::container::svector<size_t> b;
     for (size_t x = 0; x < e; x += t) b.push_back(x);
@@ -269,14 +268,14 @@ class rand_tensor_yield {
   template <typename ToTArray = array_type>
   sequant::BackendArrayOps array_ops() const {
     auto ibr = sequant::get_default_context().index_basis_registry();
-    std::map<std::wstring, TA::TiledRange1> m;
-    auto const bk = [&](wchar_t const* l) {
-      return std::wstring(ibr->retrieve_space(l).base_key());
+    std::map<std::string, TA::TiledRange1> m;
+    auto const bk = [&](char const* l) {
+      return std::string(ibr->retrieve_space(l).base_key());
     };
-    m[bk(L"i")] = tr1_for(bk(L"i"), nocc_);
-    m[bk(L"a")] = tr1_for(bk(L"a"), nvirt_);
-    m[bk(L"x")] = tr1_for(bk(L"x"), naux_);
-    m[bk(L"m")] = tr1_for(bk(L"m"), nvirt_);
+    m[bk("i")] = tr1_for(bk("i"), nocc_);
+    m[bk("a")] = tr1_for(bk("a"), nvirt_);
+    m[bk("x")] = tr1_for(bk("x"), naux_);
+    m[bk("m")] = tr1_for(bk("m"), nvirt_);
     return sequant::make_ta_array_ops<array_type, ToTArray>(std::move(m),
                                                             world);
   }
@@ -289,7 +288,7 @@ class rand_tensor_yield {
           TA::detail::MakeRandom<NumericT>::generate_value());
     };
 
-    return label_to_er_.try_emplace(std::wstring{var.label()}, make_var())
+    return label_to_er_.try_emplace(std::string{var.label()}, make_var())
         .first->second;
   }
 
@@ -417,18 +416,18 @@ class rand_tensor_yield {
     using namespace ranges::views;
     using namespace sequant;
 
-    std::wstring const label = tensor_to_key(tnsr);
+    std::string const label = tensor_to_key(tnsr);
     SlotLayout const sl = slot_layout(tnsr);
     std::string const requested = canon_slot_annot(sl, canon);
     std::string const stored = slot_annot(sl);
     auto const serve = [&](ResultPtr const& base) -> ResultPtr {
       if (std::getenv("SEQUANT_UT_YIELD_DIAG"))
-        std::cerr << "[yield] key=" << sequant::toUtf8(label)
+        std::cerr << "[yield] key=" << std::string(label)
                   << " stored=" << stored << " requested=" << requested
                   << " base_layout=" << base->layout_desc() << std::endl;
       if (requested == stored) return base;
-      std::wstring const key =
-          label + L"|" + std::wstring(requested.begin(), requested.end());
+      std::string const key =
+          label + "|" + std::string(requested.begin(), requested.end());
       if (auto&& f2 = label_to_er_.find(key); f2 != label_to_er_.end())
         return f2->second;
       auto permuted = base->permute(std::array<std::any, 2>{stored, requested});
@@ -448,13 +447,13 @@ class rand_tensor_yield {
 
     auto make_extents = [this, &ibr](auto&& ixs) -> container::svector<size_t> {
       return ixs | transform([this, &ibr](auto const& ix) -> size_t {
-               SEQUANT_ASSERT(ix.space() == ibr->retrieve_space(L"i") ||
-                              ix.space() == ibr->retrieve_space(L"a") ||
-                              ix.space() == ibr->retrieve_space(L"x") ||
-                              ix.space() == ibr->retrieve_space(L"m"));
-               return ix.space() == ibr->retrieve_space(L"i")   ? nocc_
-                      : ix.space() == ibr->retrieve_space(L"a") ? nvirt_
-                      : ix.space() == ibr->retrieve_space(L"x")
+               SEQUANT_ASSERT(ix.space() == ibr->retrieve_space("i") ||
+                              ix.space() == ibr->retrieve_space("a") ||
+                              ix.space() == ibr->retrieve_space("x") ||
+                              ix.space() == ibr->retrieve_space("m"));
+               return ix.space() == ibr->retrieve_space("i")   ? nocc_
+                      : ix.space() == ibr->retrieve_space("a") ? nvirt_
+                      : ix.space() == ibr->retrieve_space("x")
                           ? naux_
                           : nvirt_;  // m (flat
                                      // PAO-like
@@ -471,7 +470,7 @@ class rand_tensor_yield {
       std::size_t k = 0;
       for (auto const& ix : nested.outer) {
         tr1s.emplace_back(
-            tr1_for(std::wstring(ix.space().base_key()), outer_extent[k]));
+            tr1_for(std::string(ix.space().base_key()), outer_extent[k]));
         ++k;
       }
       return TA::TiledRange(tr1s.begin(), tr1s.end());
@@ -547,7 +546,7 @@ class rand_tensor_yield {
   ///       from the cache. To create a new cache entry use the
   ///       operator()(Tensor const&) overload.
   ///
-  sequant::ResultPtr operator()(std::wstring_view label) const {
+  sequant::ResultPtr operator()(std::string_view label) const {
     auto&& found = label_to_er_.find(label.data());
     if (found == label_to_er_.end())
       found = label_to_er_.find(tensor_to_key(label));
@@ -758,7 +757,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     auto report = [](sequant::ExprPtr const& e, std::string const& label) {
       auto node = eval_node(e);
       auto const& head = node->as_tensor();
-      std::wstring head_str = sequant::to_latex(head);
+      std::string head_str = sequant::to_latex(head);
       std::string head_str8{head_str.begin(), head_str.end()};
       INFO(label + " head: " + head_str8 +
            "  bra_rank=" + std::to_string(head.bra_rank()) +
@@ -775,15 +774,15 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     // braket_symmetry, the head ends up I{i_2,a_1,a_2; i_1} — head bra/ket is
     // assigned by external SLOT, not by space.
     auto expr_bra_external_symm = deserialize(
-        L"2 g{i_2,a_3;i_3,i_4}:N-S-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        "2 g{i_2,a_3;i_3,i_4}:N-S-S * t{a_3;i_3}:N-N-S "
+        "* t{a_1,a_2;i_1,i_4}:N-N-S");
     REQUIRE(expr_bra_external_symm);
     auto [br_symm, kr_symm] =
         report(expr_bra_external_symm, "g{i_2,a_3;...}:N-S-S");
 
     auto expr_bra_external_conj = deserialize(
-        L"2 g{i_2,a_3;i_3,i_4}:N-C-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        "2 g{i_2,a_3;i_3,i_4}:N-C-S * t{a_3;i_3}:N-N-S "
+        "* t{a_1,a_2;i_1,i_4}:N-N-S");
     REQUIRE(expr_bra_external_conj);
     auto [br_conj, kr_conj] =
         report(expr_bra_external_conj, "g{i_2,a_3;...}:N-C-S");
@@ -795,8 +794,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     // comes out the same 3:1 as (A). Pre-swapping no longer steers the head
     // layout — use the ResultExpr API (C) to pin it.
     auto expr_ket_external_swap = deserialize(
-        L"2 g{i_3,i_4;i_2,a_3}:N-S-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        "2 g{i_3,i_4;i_2,a_3}:N-S-S * t{a_3;i_3}:N-N-S "
+        "* t{a_1,a_2;i_1,i_4}:N-N-S");
     REQUIRE(expr_ket_external_swap);
     auto [br_swap, kr_swap] =
         report(expr_ket_external_swap, "g{i_3,i_4;i_2,a_3}:N-S-S (pre-swap)");
@@ -807,12 +806,12 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     // overwrites the eval-tree root's tensor with res.result_as_tensor(),
     // making the IR's positional choice irrelevant.
     auto res_explicit_layout = sequant::deserialize<sequant::ResultExpr>(
-        L"R2{a_1,a_2;i_1,i_2}:N-N-S = "
-        L"2 g{i_2,a_3;i_3,i_4}:N-S-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        "R2{a_1,a_2;i_1,i_2}:N-N-S = "
+        "2 g{i_2,a_3;i_3,i_4}:N-S-S * t{a_3;i_3}:N-N-S "
+        "* t{a_1,a_2;i_1,i_4}:N-N-S");
     auto node_explicit = eval_node(res_explicit_layout);
     auto const& head_explicit = node_explicit->as_tensor();
-    std::wstring head_explicit_str = sequant::to_latex(head_explicit);
+    std::string head_explicit_str = sequant::to_latex(head_explicit);
     std::string head_explicit_str8{head_explicit_str.begin(),
                                    head_explicit_str.end()};
     INFO("ResultExpr R2{a_1,a_2;i_1,i_2} head: " + head_explicit_str8 +
@@ -835,10 +834,10 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     // verbatim no matter how the RHS factors are oriented internally.
     CHECK(head_explicit.bra_rank() == 2);
     CHECK(head_explicit.ket_rank() == 2);
-    CHECK(head_explicit.bra().at(0).label() == L"a_1");
-    CHECK(head_explicit.bra().at(1).label() == L"a_2");
-    CHECK(head_explicit.ket().at(0).label() == L"i_1");
-    CHECK(head_explicit.ket().at(1).label() == L"i_2");
+    CHECK(head_explicit.bra().at(0).label() == "a_1");
+    CHECK(head_explicit.bra().at(1).label() == "a_2");
+    CHECK(head_explicit.ket().at(0).label() == "i_1");
+    CHECK(head_explicit.ket().at(1).label() == "i_2");
   }
 
   SECTION("real") {
@@ -860,11 +859,11 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     const size_t nocc = 2, nvirt = 20;
     auto yield_ =
         rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
-    auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
+    auto yield = [&yield_](std::string_view lbl) -> TA::TArrayD const& {
       return yield_(lbl)->get<TA::TArrayD>();
     };
 
-    auto yield_d = [&yield_](std::wstring_view lbl) ->
+    auto yield_d = [&yield_](std::string_view lbl) ->
         typename TA::TArrayD::numeric_type {
           return yield_(lbl)->get<typename TA::TArrayD::numeric_type>();
         };
@@ -896,48 +895,48 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     };
 
     SECTION("summation") {
-      auto expr1 = parse_antisymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
+      auto expr1 = parse_antisymm("t_{a1}^{i1} + f_{i1}^{a1}");
 
       auto sum1_eval = eval(expr1, "i_1,a_1");
 
       auto sum1_man = TArrayD{};
       sum1_man("i1,a1") =
-          yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
+          yield("t{a1;i1}")("a1,i1") + yield("f{i1;a1}")("i1,a1");
 
       REQUIRE(equal_tarrays(sum1_eval, sum1_man));
 
-      auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
+      auto expr2 = parse_antisymm("2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
 
       auto sum2_eval = eval(expr2, "i_1,a_1");
 
       auto sum2_man = TArrayD{};
       sum2_man("i1,a1") =
-          2 * yield(L"t{a1;i1}")("a1,i1") + 1.5 * yield(L"f{i1;a1}")("i1,a1");
+          2 * yield("t{a1;i1}")("a1,i1") + 1.5 * yield("f{i1;a1}")("i1,a1");
       REQUIRE(equal_tarrays(sum2_eval, sum2_man));
     }
 
     SECTION("product") {
       auto expr1 =
-          parse_antisymm(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+          parse_antisymm("1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
       auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
 
       TArrayD prod1_man{};
       prod1_man("i4,a1,a4,i1") = 1 / 2.0 *
-                                 yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
-                                 yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
+                                 yield("g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
+                                 yield("t{a1,a2;i1,i2}")("a1,a2,i1,i2");
 
       REQUIRE(equal_tarrays(prod1_eval, prod1_man));
 
       auto expr2 = parse_antisymm(
-          L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
-          L"i4}");
+          "-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
+          "i4}");
       auto prod2_eval = eval(expr2, "a_1,a_2,i_1,i_2");
 
       auto prod2_man = TArrayD{};
       prod2_man("a1,a2,i1,i2") = -1 / 4.0 *
-                                 yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
-                                 yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
-                                 yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
+                                 yield("g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+                                 yield("t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
+                                 yield("t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
       // Unlike the two-tensor cases above, this three-tensor chain does NOT
       // reproduce the hand-written TA expression bit for bit: eval lays each
@@ -959,65 +958,65 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(prod2_rel < 1e-12);
 
       auto expr3 = sequant::deserialize<sequant::ExprPtr>(
-          L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+          "R_{a1}^{i1,i3} * f_{i3}^{i2}");
       auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
       auto prod3_man = TArrayD{};
       prod3_man("a1,i1,i2") =
-          yield(L"R{a1;i1,i3}")("a1,i1,i3") * yield(L"f{i3;i2}")("i3,i2");
+          yield("R{a1;i1,i3}")("a1,i1,i3") * yield("f{i3;i2}")("i3,i2");
       REQUIRE(equal_tarrays(prod3_eval, prod3_man));
 
       auto expr4 = sequant::deserialize<sequant::ExprPtr>(
-          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
+          "1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
       auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
       auto prod4_man = TArrayD{};
       prod4_man("i1,a1,a2") = 1 / 4.0 *
-                              yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
-                              yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3");
+                              yield("R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
+                              yield("g{i2,i3;i1,a3}")("i2,i3,i1,a3");
       REQUIRE(equal_tarrays(prod4_eval, prod4_man));
     }
 
     SECTION("sum and product") {
       auto expr1 = parse_antisymm(
-          L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
+          "-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
           " + "
           " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
       auto eval1 = eval(expr1, "a_1,a_2,i_1,i_2");
 
       auto man1 = TArrayD{};
-      man1("a1,a2,i1,i2") = -1.0 / 4 * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
-                                yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
-                                yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4") +
-                            1.0 / 16 * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
-                                yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
-                                yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
+      man1("a1,a2,i1,i2") = -1.0 / 4 * yield("g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+                                yield("t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
+                                yield("t{a1,a3;i3,i4}")("a1,a3,i3,i4") +
+                            1.0 / 16 * yield("g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+                                yield("t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
+                                yield("t{a3,a4;i1,i2}")("a3,a4,i1,i2");
       // the canonical intermediate layouts reorder the summation vs the
       // hand-written reference: agreement to rounding, not bitwise
       REQUIRE(equal_tarrays<Loose>(eval1, man1));
 
       auto expr2 = sequant::deserialize<sequant::ExprPtr>(
-          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
-          L"f_{i2}^{a3} * t_{a2}^{i2}");
+          "1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
+          "f_{i2}^{a3} * t_{a2}^{i2}");
       auto eval2 = eval(expr2, "i_1,a_1,a_2");
 
       auto man2 = TArrayD{};
       man2("i1,a1,a2") =
-          1 / 4.0 * yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
-              yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3") +
-          yield(L"R{a1,a3;i1}")("a1,a3,i1") * yield(L"f{i2;a3}")("i2,a3") *
-              yield(L"t{a2;i2}")("a2,i2");
+          1 / 4.0 * yield("R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
+              yield("g{i2,i3;i1,a3}")("i2,i3,i1,a3") +
+          yield("R{a1,a3;i1}")("a1,a3,i1") * yield("f{i2;a3}")("i2,a3") *
+              yield("t{a2;i2}")("a2,i2");
       REQUIRE(equal_tarrays(eval2, man2));
     }
 
     SECTION("variable at leaves") {
       auto expr2 =
-          parse_antisymm(L"(α * 2 * t_{a1}^{i1} * β) + (3/2 * f_{i1}^{a1})");
+          parse_antisymm("(α * 2 * t_{a1}^{i1} * β) + (3/2 * f_{i1}^{a1})");
 
       auto sum2_eval = eval(expr2, "i_1,a_1");
 
       auto sum2_man = TArrayD{};
       sum2_man("i1,a1") =
-          yield_d(L"α") * 2 * yield(L"t{a1;i1}")("a1,i1") * yield_d(L"β") +
-          1.5 * yield(L"f{i1;a1}")("i1,a1");
+          yield_d("α") * 2 * yield("t{a1;i1}")("a1,i1") * yield_d("β") +
+          1.5 * yield("f{i1;a1}")("i1,a1");
 
       REQUIRE(equal_tarrays(sum2_eval, sum2_man));
     }
@@ -1031,62 +1030,62 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       {
         auto pw = ex<Power>(ex<Constant>(2), rational{1, 2});
-        auto t = parse_antisymm(L"t_{a1}^{i1}");
+        auto t = parse_antisymm("t_{a1}^{i1}");
         auto expr = pw * t;
 
         auto eval1 = eval(expr, "i_1,a_1");
 
         auto man1 = TArrayD{};
-        man1("i1,a1") = std::sqrt(2.0) * yield(L"t{a1;i1}")("a1,i1");
+        man1("i1,a1") = std::sqrt(2.0) * yield("t{a1;i1}")("a1,i1");
         REQUIRE(equal_tarrays(eval1, man1));
       }
 
       {
-        auto pw = ex<Power>(ex<Variable>(L"α"), rational{2, 1});
-        auto f = parse_antisymm(L"f_{i1}^{a1}");
+        auto pw = ex<Power>(ex<Variable>("α"), rational{2, 1});
+        auto f = parse_antisymm("f_{i1}^{a1}");
         auto expr = pw * f;
         auto eval1 = eval(expr, "i_1,a_1");
 
-        auto alpha_val = yield_d(L"α");
+        auto alpha_val = yield_d("α");
         auto man1 = TArrayD{};
-        man1("i1,a1") = (alpha_val * alpha_val) * yield(L"f{i1;a1}")("i1,a1");
+        man1("i1,a1") = (alpha_val * alpha_val) * yield("f{i1;a1}")("i1,a1");
         REQUIRE(equal_tarrays(eval1, man1));
       }
 
       {
         auto pw = ex<Power>(ex<Constant>(2), rational{1, 2});
-        auto t = parse_antisymm(L"t_{a1}^{i1}");
-        auto alpha = ex<Variable>(L"α");
-        auto f = parse_antisymm(L"f_{i1}^{a1}");
+        auto t = parse_antisymm("t_{a1}^{i1}");
+        auto alpha = ex<Variable>("α");
+        auto f = parse_antisymm("f_{i1}^{a1}");
 
         auto expr = pw * t + alpha * f;
 
         auto eval1 = eval(expr, "i_1,a_1");
 
         auto man1 = TArrayD{};
-        man1("i1,a1") = std::sqrt(2.0) * yield(L"t{a1;i1}")("a1,i1") +
-                        yield_d(L"α") * yield(L"f{i1;a1}")("i1,a1");
+        man1("i1,a1") = std::sqrt(2.0) * yield("t{a1;i1}")("a1,i1") +
+                        yield_d("α") * yield("f{i1;a1}")("i1,a1");
         REQUIRE(equal_tarrays(eval1, man1));
       }
 
       {
         auto pw = ex<Power>(ex<Constant>(rational{1, 3}), rational{2, 1});
-        auto g = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
+        auto g = parse_antisymm("g_{i1, i2}^{a1, a2}");
         auto expr = pw * g;
 
         auto eval1 = eval(expr, "i_1,i_2,a_1,a_2");
 
         auto man1 = TArrayD{};
         man1("i1,i2,a1,a2") =
-            std::pow(1.0 / 3.0, 2.0) * yield(L"g{i1,i2;a1,a2}")("i1,i2,a1,a2");
+            std::pow(1.0 / 3.0, 2.0) * yield("g{i1,i2;a1,a2}")("i1,i2,a1,a2");
         REQUIRE(equal_tarrays(eval1, man1));
       }
     }
 
     SECTION("Antisymmetrization") {
-      auto expr1 = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
+      auto expr1 = parse_antisymm("g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
-      auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
+      auto const& arr1 = yield("g{i1,i2;a1,a2}");
 
       auto man1 = TArrayD{};
       man1("0,1,2,3") =
@@ -1097,9 +1096,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(eval1, man1));
 
       // odd-ranked tensor
-      auto expr2 = parse_antisymm(L"g_{i1, i2, i3}^{a1, a2}");
+      auto expr2 = parse_antisymm("g_{i1, i2, i3}^{a1, a2}");
       auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2");
-      auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2}");
+      auto const& arr2 = yield("g{i1,i2,i3;a1,a2}");
 
       auto man2 = TArrayD{};
       man2("0,1,2,3,4") =
@@ -1110,9 +1109,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(eval2, man2));
 
-      auto expr3 = parse_antisymm(L"R_{a1,a2}^{}");
+      auto expr3 = parse_antisymm("R_{a1,a2}^{}");
       auto eval3 = eval_antisymm(expr3, "a_1,a_2");
-      auto const& arr3 = yield(L"R{a1,a2;}");
+      auto const& arr3 = yield("R{a1,a2;}");
       auto man3 = TArrayD{};
       man3("0,1") = arr3("0,1") - arr3("1,0");
       man3("0,1") = 0.5 * man3("0,1");
@@ -1121,9 +1120,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Symmetrization") {
-      auto expr1 = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
+      auto expr1 = parse_antisymm("g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
-      auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
+      auto const& arr1 = yield("g{i1,i2;a1,a2}");
 
       auto man1 = TArrayD{};
       man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
@@ -1131,10 +1130,10 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(eval1, man1));
 
-      auto expr2 = parse_antisymm(L"g_{i1,i2,i3}^{a1,a2,a3}");
+      auto expr2 = parse_antisymm("g_{i1,i2,i3}^{a1,a2,a3}");
 
       auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3");
-      auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
+      auto const& arr2 = yield("g{i1,i2,i3;a1,a2,a3}");
       TArrayD man2;
       man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") + arr2("0,2,1,3,5,4") +
                             arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
@@ -1145,9 +1144,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
     SECTION("Biorthogonal Cleanup") {
       // low-rank residuals: skip nns
-      auto expr1 = parse_antisymm(L"R_{a1, a2}^{i1, i2}");
+      auto expr1 = parse_antisymm("R_{a1, a2}^{i1, i2}");
       auto eval1 = eval_biorthogonal_nns_project(expr1, "a_1,a_2,i_1,i_2");
-      auto const& arr1 = yield(L"R{a1,a2;i1,i2}");
+      auto const& arr1 = yield("R{a1,a2;i1,i2}");
 
       auto man1 = TArrayD{};
       man1("0,1,2,3") = arr1("0,1,2,3");
@@ -1156,10 +1155,10 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       // for rank 3 residual, nns applies:
       // result = NNS_P * sum_of_ket_permutations
-      auto expr2 = parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}");
+      auto expr2 = parse_antisymm("R_{a1, a2, a3}^{i1, i2, i3}");
       auto eval2 =
           eval_biorthogonal_nns_project(expr2, "a_1,a_2,a_3,i_1,i_2,i_3");
-      auto const& arr2 = yield(L"R{a1,a2,a3;i1,i2,i3}");
+      auto const& arr2 = yield("R{a1,a2,a3;i1,i2,i3}");
 
       auto man2 = TArrayD{};
       man2("0,1,2,3,4,5") =
@@ -1172,10 +1171,10 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       // for rank 4 residual, nns applies:
       // result = NNS_P * sum_of_ket_permutations
-      auto expr3 = parse_antisymm(L"R_{a1, a2, a3, a4}^{i1, i2, i3, i4}");
+      auto expr3 = parse_antisymm("R_{a1, a2, a3, a4}^{i1, i2, i3, i4}");
       auto eval3 = eval_biorthogonal_nns_project(
           expr3, "a_1,a_2,a_3,a_4,i_1,i_2,i_3,i_4");
-      auto const& arr3 = yield(L"R{a1,a2,a3,a4;i1,i2,i3,i4}");
+      auto const& arr3 = yield("R{a1,a2,a3,a4;i1,i2,i3,i4}");
 
       auto man3 = TArrayD{};
       man3("0,1,2,3,4,5,6,7") = 14.0 / 24.0 * arr3("0,1,2,3,4,5,6,7") +
@@ -1209,7 +1208,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     SECTION("Others") {
       using namespace std::string_literals;
       auto expr1 = parse_antisymm(
-          L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
+          "-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
           " + "
           " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
 
@@ -1237,7 +1236,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto yield_ =
           rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt, naux};
-      auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
+      auto yield = [&yield_](std::string_view lbl) -> TA::TArrayD const& {
         return yield_(lbl)->get<TA::TArrayD>();
       };
 
@@ -1248,22 +1247,22 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       };
 
       auto expr1 = deserialize(
-          L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})");
+          "((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})");
       auto eval1 = eval(expr1, "a_1,a_2,a_3,a_4");
       auto man1 = [&]() {
-        auto X1 = yield(L"X{a1;;x1}");
+        auto X1 = yield("X{a1;;x1}");
         REQUIRE(X1.trange().elements_range().extent(0) == nvirt);
         REQUIRE(X1.trange().elements_range().extent(1) == naux);
-        auto X2 = yield(L"X{;a2;x1}");
+        auto X2 = yield("X{;a2;x1}");
         REQUIRE(X2.trange().elements_range().extent(0) == nvirt);
         REQUIRE(X2.trange().elements_range().extent(1) == naux);
-        auto X3 = yield(L"X{a3;;x2}");
+        auto X3 = yield("X{a3;;x2}");
         REQUIRE(X3.trange().elements_range().extent(0) == nvirt);
         REQUIRE(X3.trange().elements_range().extent(1) == naux);
-        auto X4 = yield(L"X{;a4;x2}");
+        auto X4 = yield("X{;a4;x2}");
         REQUIRE(X4.trange().elements_range().extent(0) == nvirt);
         REQUIRE(X4.trange().elements_range().extent(1) == naux);
-        auto Y = yield(L"Y{;;x1,x2}");
+        auto Y = yield("Y{;;x1,x2}");
         REQUIRE(Y.trange().elements_range().extent(0) == naux);
         REQUIRE(Y.trange().elements_range().extent(1) == naux);
         auto X12 = TA::einsum("ax,bx->abx", X1, X2);
@@ -1281,13 +1280,13 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       // (in aux of result); binarize(ResultExpr) must keep them uncontracted
       {
         auto res = deserialize<sequant::ResultExpr>(
-            L"GAM{a2;a1;i1,i2} = t{i1,i2;a1,a3} T2{a2,a3;i1,i2}");
+            "GAM{a2;a1;i1,i2} = t{i1,i2;a1,a3} T2{a2,a3;i1,i2}");
         auto node = eval_node(res);
         auto eval_rdm = evaluate(node, std::string("a_2,a_1,i_1,i_2"), yield_)
                             ->get<TA::TArrayD>();
         auto man_rdm = [&]() {
-          auto t = yield(L"t{i1,i2;a1,a3}");
-          auto T2 = yield(L"T2{a2,a3;i1,i2}");
+          auto t = yield("t{i1,i2;a1,a3}");
+          auto T2 = yield("T2{a2,a3;i1,i2}");
           return TA::einsum("ijab,cbij->caij", t, T2);
         }();
         REQUIRE(equal_tarrays(eval_rdm, man_rdm, "a2,a1,i1,i2"));
@@ -1299,24 +1298,24 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                 sequant::AssertStrictBraKetSymmetry::No));
 
         // hyperindex i1 in ket slots of 3 tensors
-        auto expr2 = deserialize(L"T{a1;i1} T{a2;i1} T{a3;i1}");
+        auto expr2 = deserialize("T{a1;i1} T{a2;i1} T{a3;i1}");
         auto eval2 = eval(expr2, "a_1,a_2,a_3");
         auto man2 = [&]() {
-          auto T1 = yield(L"T{a1;i1}");
-          auto T2 = yield(L"T{a2;i1}");
-          auto T3 = yield(L"T{a3;i1}");
+          auto T1 = yield("T{a1;i1}");
+          auto T2 = yield("T{a2;i1}");
+          auto T3 = yield("T{a3;i1}");
           auto T12 = TA::einsum("ai,bi->abi", T1, T2);
           return TA::einsum("abi,ci->abc", T12, T3);
         }();
         REQUIRE(equal_tarrays(eval2, man2, "a1,a2,a3"));
 
         // hyperindex a1 in bra slots of 3 tensors
-        auto expr3 = deserialize(L"T{a1;i1} T{a1;i2} T{a1;i3}");
+        auto expr3 = deserialize("T{a1;i1} T{a1;i2} T{a1;i3}");
         auto eval3 = eval(expr3, "i_1,i_2,i_3");
         auto man3 = [&]() {
-          auto T1 = yield(L"T{a1;i1}");
-          auto T2 = yield(L"T{a1;i2}");
-          auto T3 = yield(L"T{a1;i3}");
+          auto T1 = yield("T{a1;i1}");
+          auto T2 = yield("T{a1;i2}");
+          auto T3 = yield("T{a1;i3}");
           auto T12 = TA::einsum("ai,aj->aij", T1, T2);
           return TA::einsum("aij,ak->ijk", T12, T3);
         }();
@@ -1331,13 +1330,13 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
          //   R{;;x1} = A{;a1;x1} B{a1;a2;x1} C{a2;;x1}
          //   R[x] = sum_{a1,a2} A[a1,x] B[a1,a2,x] C[a2,x]
         auto res = deserialize<sequant::ResultExpr>(
-            L"R{;;x1} = A{;a1;x1} B{a1;a2;x1} C{a2;;x1}");
+            "R{;;x1} = A{;a1;x1} B{a1;a2;x1} C{a2;;x1}");
         auto evalR = evaluate(eval_node(res), std::string("x_1"), yield_)
                          ->get<TA::TArrayD>();
         auto manR = [&]() {
-          auto A = yield(L"A{;a1;x1}");    // [a1, x]
-          auto B = yield(L"B{a1;a2;x1}");  // [a1, a2, x]
-          auto C = yield(L"C{a2;;x1}");    // [a2, x]
+          auto A = yield("A{;a1;x1}");    // [a1, x]
+          auto B = yield("B{a1;a2;x1}");  // [a1, a2, x]
+          auto C = yield("C{a2;;x1}");    // [a2, x]
           auto AB = TA::einsum("ax,abx->bx", A, B);
           return TA::einsum("bx,bx->x", AB, C);
         }();
@@ -1355,7 +1354,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     auto yield_ = rand_tensor_yield<std::complex<double>, TA::DensePolicy>{
         world, nocc, nvirt};
 
-    auto yield = [&yield_](std::wstring_view lbl) -> TArrayC const& {
+    auto yield = [&yield_](std::string_view lbl) -> TArrayC const& {
       return yield_(lbl)->get<TArrayC>();
     };
 
@@ -1380,110 +1379,110 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using namespace std::string_literals;
 
     SECTION("summation") {
-      auto expr1 = deserialize<sequant::ExprPtr>(L"t_{a1}^{i1} + f_{i1}^{a1}");
+      auto expr1 = deserialize<sequant::ExprPtr>("t_{a1}^{i1} + f_{i1}^{a1}");
 
       auto sum1_eval = eval(expr1, "i_1,a_1");
 
       auto sum1_man = TArrayC{};
       sum1_man("i1,a1") =
-          yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
+          yield("t{a1;i1}")("a1,i1") + yield("f{i1;a1}")("i1,a1");
 
       REQUIRE(equal_tarrays(sum1_eval, sum1_man));
 
       auto expr2 =
-          deserialize<sequant::ExprPtr>(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
+          deserialize<sequant::ExprPtr>("2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
 
       auto sum2_eval = eval(expr2, "i_1,a_1");
 
       auto sum2_man = TArrayC{};
       sum2_man("i1,a1") =
-          std::complex<double>{2} * yield(L"t{a1;i1}")("a1,i1") +
-          std::complex<double>{1.5} * yield(L"f{i1;a1}")("i1,a1");
+          std::complex<double>{2} * yield("t{a1;i1}")("a1,i1") +
+          std::complex<double>{1.5} * yield("f{i1;a1}")("i1,a1");
 
       REQUIRE(equal_tarrays(sum2_eval, sum2_man));
     }
 
     SECTION("product") {
       auto expr1 = deserialize<sequant::ExprPtr>(
-          L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+          "1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
       auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
 
       TArrayC prod1_man{};
       prod1_man("i4,a1,a4,i1") = std::complex<double>{1 / 2.0} *
-                                 yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
-                                 yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
+                                 yield("g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
+                                 yield("t{a1,a2;i1,i2}")("a1,a2,i1,i2");
 
       REQUIRE(equal_tarrays(prod1_eval, prod1_man));
 
       auto expr2 = deserialize<sequant::ExprPtr>(
-          L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
-          L"i4}");
+          "-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
+          "i4}");
       auto prod2_eval = eval(expr2, "a_1,a_2,i_1,i_2");
 
       auto prod2_man = TArrayC{};
       prod2_man("a1,a2,i1,i2") = std::complex<double>{-1 / 4.0} *
-                                 yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
-                                 yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
-                                 yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
+                                 yield("g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+                                 yield("t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
+                                 yield("t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
       REQUIRE(equal_tarrays(prod2_eval, prod2_man));
 
       auto expr3 = sequant::deserialize<sequant::ExprPtr>(
-          L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+          "R_{a1}^{i1,i3} * f_{i3}^{i2}");
       auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
       auto prod3_man = TArrayC{};
       prod3_man("a1,i1,i2") =
-          yield(L"R{a1;i1,i3}")("a1,i1,i3") * yield(L"f{i3;i2}")("i3,i2");
+          yield("R{a1;i1,i3}")("a1,i1,i3") * yield("f{i3;i2}")("i3,i2");
 
       REQUIRE(equal_tarrays(prod3_eval, prod3_man));
 
       auto expr4 = sequant::deserialize<sequant::ExprPtr>(
-          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
+          "1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
       auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
       auto prod4_man = TArrayC{};
       prod4_man("i1,a1,a2") = 1 / 4.0 *
-                              yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
-                              yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3");
+                              yield("R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
+                              yield("g{i2,i3;i1,a3}")("i2,i3,i1,a3");
       REQUIRE(equal_tarrays(prod4_eval, prod4_man));
     }
 
     SECTION("sum and product") {
       auto expr1 = deserialize<sequant::ExprPtr>(
-          L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
+          "-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
           " + "
           " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
       auto eval1 = eval(expr1, "a_1,a_2,i_1,i_2");
 
       auto man1 = TArrayC{};
       man1("a1,a2,i1,i2") = std::complex<double>{-1.0 / 4} *
-                                yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
-                                yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
-                                yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4") +
+                                yield("g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+                                yield("t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
+                                yield("t{a1,a3;i3,i4}")("a1,a3,i3,i4") +
                             std::complex<double>{1.0 / 16} *
-                                yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
-                                yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
-                                yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
+                                yield("g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+                                yield("t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
+                                yield("t{a3,a4;i1,i2}")("a3,a4,i1,i2");
 
       REQUIRE(equal_tarrays(eval1, man1));
 
       auto expr2 = sequant::deserialize<sequant::ExprPtr>(
-          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
-          L"f_{i2}^{a3} * t_{a2}^{i2}");
+          "1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
+          "f_{i2}^{a3} * t_{a2}^{i2}");
       auto eval2 = eval(expr2, "i_1,a_1,a_2");
 
       auto man2 = TArrayC{};
       man2("i1,a1,a2") =
-          1 / 4.0 * yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
-              yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3") +
-          yield(L"R{a1,a3;i1}")("a1,a3,i1") * yield(L"f{i2;a3}")("i2,a3") *
-              yield(L"t{a2;i2}")("a2,i2");
+          1 / 4.0 * yield("R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
+              yield("g{i2,i3;i1,a3}")("i2,i3,i1,a3") +
+          yield("R{a1,a3;i1}")("a1,a3,i1") * yield("f{i2;a3}")("i2,a3") *
+              yield("t{a2;i2}")("a2,i2");
       REQUIRE(equal_tarrays(eval2, man2));
     }
 
     SECTION("Antisymmetrization") {
-      auto expr1 = deserialize<sequant::ExprPtr>(L"g_{i1, i2}^{a1, a2}");
+      auto expr1 = deserialize<sequant::ExprPtr>("g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
-      auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
+      auto const& arr1 = yield("g{i1,i2;a1,a2}");
 
       auto man1 = TArrayC{};
       man1("0,1,2,3") =
@@ -1494,9 +1493,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(eval1, man1));
 
       // odd-ranked tensor
-      auto expr2 = deserialize<sequant::ExprPtr>(L"g_{i1, i2, i3}^{a1, a2}");
+      auto expr2 = deserialize<sequant::ExprPtr>("g_{i1, i2, i3}^{a1, a2}");
       auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2");
-      auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2}");
+      auto const& arr2 = yield("g{i1,i2,i3;a1,a2}");
 
       auto man2 = TArrayC{};
       man2("0,1,2,3,4") =
@@ -1507,9 +1506,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(eval2, man2));
 
-      auto expr3 = deserialize<sequant::ExprPtr>(L"R_{a1,a2}^{}");
+      auto expr3 = deserialize<sequant::ExprPtr>("R_{a1,a2}^{}");
       auto eval3 = eval_antisymm(expr3, "a_1,a_2");
-      auto const& arr3 = yield(L"R{a1,a2;}");
+      auto const& arr3 = yield("R{a1,a2;}");
       auto man3 = TArrayC{};
       man3("0,1") = arr3("0,1") - arr3("1,0");
       man3("0,1") = std::complex<double>{0.5} * man3("0,1");
@@ -1518,9 +1517,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Symmetrization") {
-      auto expr1 = deserialize<sequant::ExprPtr>(L"g_{i1, i2}^{a1, a2}");
+      auto expr1 = deserialize<sequant::ExprPtr>("g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
-      auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
+      auto const& arr1 = yield("g{i1,i2;a1,a2}");
 
       auto man1 = TArrayC{};
       man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
@@ -1528,10 +1527,10 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(eval1, man1));
 
-      auto expr2 = deserialize<sequant::ExprPtr>(L"g_{i1,i2,i3}^{a1,a2,a3}");
+      auto expr2 = deserialize<sequant::ExprPtr>("g_{i1,i2,i3}^{a1,a2,a3}");
 
       auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3");
-      auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
+      auto const& arr2 = yield("g{i1,i2,i3;a1,a2,a3}");
       TArrayC man2;
       man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") + arr2("0,2,1,3,5,4") +
                             arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
@@ -1544,7 +1543,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     SECTION("Others") {
       using namespace std::string_literals;
       auto expr1 = deserialize<sequant::ExprPtr>(
-          L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
+          "-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
           " + "
           " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
 
@@ -1592,20 +1591,20 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using NumericT = typename decltype(yield)::numeric_type;
 
     SECTION("T_times_ToT_to_ToT") {
-      constexpr std::wstring_view expr_str =
-          L"3"
-          L" * "
-          L"f{i3;i1}"
-          L" * "
-          L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}";
+      constexpr std::string_view expr_str =
+          "3"
+          " * "
+          "f{i3;i1}"
+          " * "
+          "t{a3<i2,i3>,a4<i2,i3>;i2,i3}";
       auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
       std::string const target_layout{"i_1,i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
       auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
       ArrayToT ref;
       {
-        auto const& lhs = yield(L"f{i3;i1}")->get<ArrayT>();
+        auto const& lhs = yield("f{i3;i1}")->get<ArrayT>();
         auto const& rhs =
-            yield(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}")->get<ArrayToT>();
+            yield("t{a3<i2,i3>,a4<i2,i3>;i2,i3}")->get<ArrayToT>();
         ref = TA::einsum(lhs("i_3,i_1"), rhs("i_2,i_3;a_3i_2i_3,a_4i_2i_3"),
                          target_layout);
         ref(target_layout) = 3 * ref(target_layout);
@@ -1614,10 +1613,10 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("ToT_times_ToT_to_ToT") {
-      constexpr std::wstring_view expr_str =
-          L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}"
-          L" * "
-          L"s{a2<i1,i2>;a4<i2,i3>}";
+      constexpr std::string_view expr_str =
+          "I{a4<i2,i3>,a1<i1,i2>;i1,i2}"
+          " * "
+          "s{a2<i1,i2>;a4<i2,i3>}";
 
       auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
       // The contracted composite a_4<i_2,i_3> leaves the result a function
@@ -1630,8 +1629,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       ArrayToT ref;
       {
         auto const& lhs =
-            yield(L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}")->get<ArrayToT>();
-        auto const& rhs = yield(L"s{a2<i1,i2>;a4<i2,i3>}")->get<ArrayToT>();
+            yield("I{a4<i2,i3>,a1<i1,i2>;i1,i2}")->get<ArrayToT>();
+        auto const& rhs = yield("s{a2<i1,i2>;a4<i2,i3>}")->get<ArrayToT>();
         ref = TA::einsum(lhs("i_1,i_2,i_3;a_4i_2i_3,a_1i_1i_2"),
                          rhs("i_1,i_2,i_3;a_2i_1i_2,a_4i_2i_3"), target_layout);
       }
@@ -1639,10 +1638,10 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("ToT_times_ToT_to_Scalar") {
-      constexpr std::wstring_view expr_str =
-          L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}"
-          L" * "
-          L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}";
+      constexpr std::string_view expr_str =
+          "I{a1<i1,i2>,a2<i1,i2>;i1,i2}"
+          " * "
+          "g{i1,i2;a2<i1,i2>,a1<i1,i2>}";
       auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
 
       auto result = evaluate(node, yield)->get<NumericT>();
@@ -1650,9 +1649,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       NumericT ref;
       {
         auto const& lhs =
-            yield(L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}")->get<ArrayToT>();
+            yield("I{a1<i1,i2>,a2<i1,i2>;i1,i2}")->get<ArrayToT>();
         auto const& rhs =
-            yield(L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}")->get<ArrayToT>();
+            yield("g{i1,i2;a2<i1,i2>,a1<i1,i2>}")->get<ArrayToT>();
         ref = TA::dot(lhs("i_1,i_2;a_1i_1i_2,a_2i_1i_2"),
                       rhs("i_1,i_2;a_2i_1i_2,a_1i_1i_2"));
       }
@@ -1670,7 +1669,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       // -- outer and inner modes permute in lockstep.
       {
         auto const Rnode = eval_node(
-            deserialize<sequant::ExprPtr>(L"R{a1<i1,i2>,a2<i1,i2>;i1,i2}"));
+            deserialize<sequant::ExprPtr>("R{a1<i1,i2>,a2<i1,i2>;i1,i2}"));
         auto const Rres = dyield(Rnode);
         auto const& R = Rres->get<DArrayToT>();
 
@@ -1696,7 +1695,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       // lockstep; each inner index keeps its proto-suffix "i_1i_2i_3".
       {
         auto const Rnode = eval_node(deserialize<sequant::ExprPtr>(
-            L"R{a1<i1,i2,i3>,a2<i1,i2,i3>,a3<i1,i2,i3>;i1,i2,i3}"));
+            "R{a1<i1,i2,i3>,a2<i1,i2,i3>,a3<i1,i2,i3>;i1,i2,i3}"));
         auto const Rres = dyield(Rnode);
         auto const& R = Rres->get<DArrayToT>();
 
@@ -1739,7 +1738,7 @@ TEST_CASE("eval_custom_evaluator", "[eval]") {
 
   // a multi-product expression: several non-leaf nodes in the eval tree.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}",
+      "-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}",
       {.def_perm_symm = sequant::Symmetry::Antisymm});
   std::string const target = "a_1,a_2,i_1,i_2";
   auto const node = eval_node(expr);
@@ -1785,13 +1784,13 @@ TEST_CASE("eval_batch_axis", "[eval]") {
   using sequant::batch_axis;
   using sequant::contracted_indices;
 
-  auto node_of = [](std::wstring_view xpr) {
+  auto node_of = [](std::string_view xpr) {
     return eval_node(sequant::deserialize<sequant::ExprPtr>(xpr));
   };
 
   SECTION("single contracted index") {
     // R_{a1}^{i1,i3} * f_{i3}^{i2} sums over i3.
-    auto const node = node_of(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+    auto const node = node_of("R_{a1}^{i1,i3} * f_{i3}^{i2}");
     auto const c = contracted_indices(node);
     REQUIRE(c.size() == 1);
     auto const mode = batch_axis(node);
@@ -1801,7 +1800,7 @@ TEST_CASE("eval_batch_axis", "[eval]") {
 
   SECTION("two contracted indices") {
     // g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4} sums over a1,a2.
-    auto const node = node_of(L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+    auto const node = node_of("g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
     auto const c = contracted_indices(node);
     REQUIRE(c.size() == 2);
     auto const mode = batch_axis(node);
@@ -1810,20 +1809,20 @@ TEST_CASE("eval_batch_axis", "[eval]") {
   }
 
   SECTION("leaf has no contracted index") {
-    auto const node = node_of(L"f_{i1}^{a1}");
+    auto const node = node_of("f_{i1}^{a1}");
     REQUIRE(contracted_indices(node).empty());
     REQUIRE_FALSE(batch_axis(node).has_value());
   }
 
   SECTION("a sum is not a contraction") {
-    auto const node = node_of(L"f_{i1}^{a1} + t_{a1}^{i1}");
+    auto const node = node_of("f_{i1}^{a1} + t_{a1}^{i1}");
     REQUIRE(contracted_indices(node).empty());
     REQUIRE_FALSE(batch_axis(node).has_value());
   }
 
   SECTION("predicate scopes the batch mode") {
     // contracts a1,a2 (unoccupied)
-    auto const node = node_of(L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+    auto const node = node_of("g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
     auto const c = contracted_indices(node);
     REQUIRE(c.size() == 2);
 
@@ -1846,7 +1845,7 @@ TEST_CASE("eval_batch_axis", "[eval]") {
     REQUIRE(batch_axis(node, in_unocc).has_value());
 
     // a node whose only contracted index is in a different (occupied) space
-    auto const node_occ = node_of(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");  // sums i3
+    auto const node_occ = node_of("R_{a1}^{i1,i3} * f_{i3}^{i2}");  // sums i3
     REQUIRE_FALSE(batch_axis(node_occ, in_unocc).has_value());
   }
 }
@@ -2075,7 +2074,7 @@ TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
 
   // contracts a1,a2 (unoccupied) -> batch mode is an unoccupied index (3 tiles)
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+      "g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
   std::string const target = "i_1,i_2,i_3,i_4";
   auto node = eval_node(expr);
 
@@ -2124,7 +2123,7 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
   // Contracts a1,a2 (unoccupied, 3 tiles) -> batchable over an unoccupied mode.
   // The subtree contains a "t" leaf, which we treat as volatile.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+      "g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
   std::string const target = "i_1,i_2,i_3,i_4";
   auto node = eval_node(expr);
   // The runtime batches STRICTLY on the optimizer's annotations (there is no
@@ -2137,7 +2136,7 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
 
   // Volatile-leaf predicate: the amplitude "t".
   auto is_volatile_t = [](node_t const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == "t";
   };
 
   // (1) Gate ON (persistent_only=true): the subtree contains a volatile "t"
@@ -2210,7 +2209,7 @@ TEST_CASE("eval_batched_custom_evaluator_tot", "[eval]") {
   // composite a_4<i_2,i_3> it is a proto of, so it leaves the result: a
   // genuinely contracted occupied index of a ToT x ToT -> ToT product.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"I{a4<i2,i3>,a1<i1,i2>;i1,i3} * s{i3;a4<i2,i3>}");
+      "I{a4<i2,i3>,a1<i1,i2>;i1,i3} * s{i3;a4<i2,i3>}");
   auto node = eval_node(expr);
   std::string const target = node->annot();
   // Reference first (non-batched), so yield's random leaf arrays are generated
@@ -2219,7 +2218,7 @@ TEST_CASE("eval_batched_custom_evaluator_tot", "[eval]") {
 
   auto const occ =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"i");
+          "i");
   auto accept_occ = [occ](sequant::Index const& ix) {
     return ix.space() == occ;
   };
@@ -2268,7 +2267,7 @@ TEST_CASE("ta_tot_conj_complex", "[eval]") {
   using ArrayToT = typename decltype(yield)::array_tot_type;
 
   std::string const annot{"i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
-  auto const t = deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}");
+  auto const t = deserialize<sequant::ExprPtr>("t{a3<i2,i3>,a4<i2,i3>;i2,i3}");
   auto const& src = yield(t->as<sequant::Tensor>())->get<ArrayToT>();
 
   ArrayToT conjd;
@@ -2305,7 +2304,7 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
   // children, contracted at the root; an aux-aux edge, like the DF index K).
   // Every orbital contraction pairs a bra with a ket.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})");
+      "(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})");
   auto const node = eval_node(expr);
   REQUIRE_FALSE(node.leaf());
   REQUIRE_FALSE(node.left().leaf());
@@ -2337,9 +2336,9 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
     // mode (an index the shared subnode does not carry) gives it signature
     // 'absent' while the first gives a position -> inconsistent -> unshared
     auto const expr2 = sequant::deserialize<sequant::ExprPtr>(
-        L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}");
+        "(g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}");
     auto const node2 = eval_node(expr2);
-    auto const bogus_axis = Index(L"i_9");
+    auto const bogus_axis = Index("i_9");
     std::vector<std::pair<node_t const*, Index>> const members{
         {&node, x1}, {&node2, bogus_axis}};
     auto bs = sequant::detail::make_batched_scratch(members, real);
@@ -2355,11 +2354,11 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
     // sharing D would serve M2's (per-occurrence) evaluation of X a wrongly
     // sliced value. D must end up unregistered.
     auto const expr_m1 = sequant::deserialize<sequant::ExprPtr>(
-        L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * "
-        L"(g{a_3;i_2;x_1} * h{i_4;a_3})");
+        "((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * "
+        "(g{a_3;i_2;x_1} * h{i_4;a_3})");
     auto const m1 = eval_node(expr_m1);
     auto const expr_m2 = sequant::deserialize<sequant::ExprPtr>(
-        L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * p{i_6;i_7;x_1}");
+        "((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * p{i_6;i_7;x_1}");
     auto const m2 = eval_node(expr_m2);
     // structural preconditions: m1 = X * D2, X = D * u, D2 == D == m2's X
     // child canonically
@@ -2380,7 +2379,7 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
     // adding M2 makes X inconsistent AND must expose D's 'absent' signature
     // beneath X's second occurrence
     {
-      auto const bogus_axis = Index(L"i_9");
+      auto const bogus_axis = Index("i_9");
       std::vector<std::pair<node_t const*, Index>> const members{
           {&m1, x1}, {&m2, bogus_axis}};
       auto bs = sequant::detail::make_batched_scratch(members, real);
@@ -2441,22 +2440,22 @@ TEST_CASE(
   yield_.set_max_tile(2);
   auto const occ =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"i");
+          "i");
 
-  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"g{i_3;i_1} * t{a_1,a_2;i_3,i_2}");
+  auto const t1 =
+      sequant::deserialize<sequant::ExprPtr>("g{i_3;i_1} * t{a_1,a_2;i_3,i_2}");
   std::vector<node_t> forest{eval_node(t1)};
   std::string target;
   for (auto const& ix : forest[0]->canon_indices()) {
     if (!target.empty()) target += ",";
-    target += sequant::toUtf8(ix.full_label());
+    target += std::string(ix.full_label());
   }
 
   auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
 
   // The i_3-reducing root opens all three occ loops; its leaves carry the
   // externals they hold (the DP stamps External on every carrying node).
-  auto const find = [&](std::wstring const& lbl) {
+  auto const find = [&](std::string const& lbl) {
     for (auto const& ix : forest[0]->canon_indices())
       if (ix.full_label() == lbl) return ix;
     for (auto const& ix : forest[0].left()->canon_indices())
@@ -2465,7 +2464,7 @@ TEST_CASE(
       if (ix.full_label() == lbl) return ix;
     throw sequant::Exception{"index not found"};
   };
-  auto const i1 = find(L"i_1"), i2 = find(L"i_2"), i3 = find(L"i_3");
+  auto const i1 = find("i_1"), i2 = find("i_2"), i3 = find("i_3");
   using sequant::BatchModeType;
   forest[0]->set_node_slice_mask({{i1, BatchModeType::External},
                                   {i2, BatchModeType::External},
@@ -2500,18 +2499,18 @@ TEST_CASE(
   {
     std::vector<int> ext, con;
     for (auto const& [key, kind] : rich.loop_kind)
-      if (key.first == L"i")
+      if (key.first == "i")
         (kind == BatchModeType::External ? ext : con).push_back(key.second);
     REQUIRE(ext.size() == 2);
     REQUIRE(con.size() == 1);
-    std::pair<std::wstring, int> const a{L"i", ext[0]}, c{L"i", con[0]},
-        b{L"i", ext[1]};
+    std::pair<std::string, int> const a{"i", ext[0]}, c{"i", con[0]},
+        b{"i", ext[1]};
     rich.loop_order.emplace(std::make_pair(a, c), std::size_t{0});
     rich.loop_order.emplace(std::make_pair(c, b), std::size_t{0});
   }
   auto const legality = analyze_legality(rich, forest, policy);
   OrderedSchedule const ordered =
-      build_ordered_schedule(rich, legality, policy, {L"i"});
+      build_ordered_schedule(rich, legality, policy, {"i"});
   if (std::getenv("SEQUANT_UT_SCHED_TREE"))
     sequant::eval::detail::dump_schedule_tree(ordered.root, 0);
 
@@ -2563,22 +2562,22 @@ TEST_CASE(
   yield_.set_max_tile(2);
   auto const occ =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"i");
+          "i");
 
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{i_3;i_1;x_1} * h{a_3;a_1;x_1}) * t{a_3,a_2;i_3,i_2}");
+      "(g{i_3;i_1;x_1} * h{a_3;a_1;x_1}) * t{a_3,a_2;i_3,i_2}");
   std::vector<node_t> forest{eval_node(t1)};
   std::string target;
   for (auto const& ix : forest[0]->canon_indices()) {
     if (!target.empty()) target += ",";
-    target += sequant::toUtf8(ix.full_label());
+    target += std::string(ix.full_label());
   }
 
   auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
 
   // The i_3-reducing root opens all three occ loops; its leaves carry the
   // externals they hold (the DP stamps External on every carrying node).
-  auto const find = [&](std::wstring const& lbl) {
+  auto const find = [&](std::string const& lbl) {
     std::optional<sequant::Index> out;
     forest[0].visit([&](node_t const& n) {
       for (auto const& ix : n->canon_indices())
@@ -2587,7 +2586,7 @@ TEST_CASE(
     if (!out) throw sequant::Exception{"index not found"};
     return *out;
   };
-  auto const i1 = find(L"i_1"), i2 = find(L"i_2"), i3 = find(L"i_3");
+  auto const i1 = find("i_1"), i2 = find("i_2"), i3 = find("i_3");
   using sequant::BatchModeType;
   forest[0]->set_node_slice_mask({{i1, BatchModeType::External},
                                   {i2, BatchModeType::External},
@@ -2597,7 +2596,7 @@ TEST_CASE(
                                           {i3, BatchModeType::Contracted}});
   auto const aux =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
   forest[0].visit([&](node_t const& cn) {
     if (&cn == &forest[0]) return;
     auto& n = const_cast<node_t&>(cn);
@@ -2637,18 +2636,18 @@ TEST_CASE(
   {
     std::vector<int> ext, con;
     for (auto const& [key, kind] : rich.loop_kind)
-      if (key.first == L"i")
+      if (key.first == "i")
         (kind == BatchModeType::External ? ext : con).push_back(key.second);
     REQUIRE(ext.size() == 2);
     REQUIRE(con.size() == 1);
-    std::pair<std::wstring, int> const a{L"i", ext[0]}, c{L"i", con[0]},
-        b{L"i", ext[1]};
+    std::pair<std::string, int> const a{"i", ext[0]}, c{"i", con[0]},
+        b{"i", ext[1]};
     rich.loop_order.emplace(std::make_pair(a, c), std::size_t{0});
     rich.loop_order.emplace(std::make_pair(c, b), std::size_t{0});
   }
   auto const legality = analyze_legality(rich, forest, policy);
   OrderedSchedule const ordered =
-      build_ordered_schedule(rich, legality, policy, {L"i", L"x"});
+      build_ordered_schedule(rich, legality, policy, {"i", "x"});
   if (std::getenv("SEQUANT_UT_SCHED_TREE"))
     sequant::eval::detail::dump_schedule_tree(ordered.root, 0);
 
@@ -2709,22 +2708,22 @@ TEST_CASE(
   yield_.set_max_tile(tile);
   auto const occ =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"i");
+          "i");
 
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{i_3;i_1;x_1} * h{a_3;a_1;x_1}) * t{a_3,a_2;i_3,i_2}");
+      "(g{i_3;i_1;x_1} * h{a_3;a_1;x_1}) * t{a_3,a_2;i_3,i_2}");
   std::vector<node_t> forest{eval_node(t1)};
   std::string target;
   for (auto const& ix : forest[0]->canon_indices()) {
     if (!target.empty()) target += ",";
-    target += sequant::toUtf8(ix.full_label());
+    target += std::string(ix.full_label());
   }
 
   auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
 
   // The i_3-reducing root opens all three occ loops; its leaves carry the
   // externals they hold (the DP stamps External on every carrying node).
-  auto const find = [&](std::wstring const& lbl) {
+  auto const find = [&](std::string const& lbl) {
     std::optional<sequant::Index> out;
     forest[0].visit([&](node_t const& n) {
       for (auto const& ix : n->canon_indices())
@@ -2733,7 +2732,7 @@ TEST_CASE(
     if (!out) throw sequant::Exception{"index not found"};
     return *out;
   };
-  auto const i1 = find(L"i_1"), i2 = find(L"i_2"), i3 = find(L"i_3");
+  auto const i1 = find("i_1"), i2 = find("i_2"), i3 = find("i_3");
   using sequant::BatchModeType;
   forest[0]->set_node_slice_mask({{i1, BatchModeType::External},
                                   {i2, BatchModeType::External},
@@ -2743,7 +2742,7 @@ TEST_CASE(
                                           {i3, BatchModeType::Contracted}});
   auto const aux =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
   forest[0].visit([&](node_t const& cn) {
     if (&cn == &forest[0]) return;
     auto& n = const_cast<node_t&>(cn);
@@ -2784,18 +2783,18 @@ TEST_CASE(
   {
     std::vector<int> ext, con;
     for (auto const& [key, kind] : rich.loop_kind)
-      if (key.first == L"i")
+      if (key.first == "i")
         (kind == BatchModeType::External ? ext : con).push_back(key.second);
     REQUIRE(ext.size() == 2);
     REQUIRE(con.size() == 1);
-    std::pair<std::wstring, int> const a{L"i", ext[0]}, c{L"i", con[0]},
-        b{L"i", ext[1]};
+    std::pair<std::string, int> const a{"i", ext[0]}, c{"i", con[0]},
+        b{"i", ext[1]};
     rich.loop_order.emplace(std::make_pair(a, c), std::size_t{0});
     rich.loop_order.emplace(std::make_pair(c, b), std::size_t{0});
   }
   auto const legality = analyze_legality(rich, forest, policy);
   OrderedSchedule const ordered =
-      build_ordered_schedule(rich, legality, policy, {L"i", L"x"});
+      build_ordered_schedule(rich, legality, policy, {"i", "x"});
   if (std::getenv("SEQUANT_UT_SCHED_TREE"))
     sequant::eval::detail::dump_schedule_tree(ordered.root, 0);
 
@@ -2915,24 +2914,24 @@ TEST_CASE(
   rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 8};
   yield_.set_max_tile(2);
   auto const ibr = sequant::get_default_context().index_basis_registry();
-  auto const occ = ibr->retrieve_space(L"i");
-  auto const aux = ibr->retrieve_space(L"x");
+  auto const occ = ibr->retrieve_space("i");
+  auto const aux = ibr->retrieve_space("x");
 
   // P = g*h (K node) ; Q = (P*C)*C{a_1;m_1} (carries a_1<i_1,i_2>, so i_2
   // survives the i_3 reduction as in the MPQC tree) ; U = t*C ; N1 = Q*U
   // (reduces i_3, a_3) ; R = (N1*s)*C{m_4;a_2}.
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"(((((g{i_3;i_1;x_1} * h{m_1;m_2;x_1}) * C{m_2;a_3<i_2,i_3>}) * "
-      L"C{a_1<i_1,i_2>;m_1}) * "
-      L"(t{a_3<i_2,i_3>,a_4<i_2,i_3>;i_3,i_2} * C{a_4<i_2,i_3>;m_3})) * "
-      L"s{m_3;m_4}) * C{m_4;a_2<i_1,i_2>}");
+      "(((((g{i_3;i_1;x_1} * h{m_1;m_2;x_1}) * C{m_2;a_3<i_2,i_3>}) * "
+      "C{a_1<i_1,i_2>;m_1}) * "
+      "(t{a_3<i_2,i_3>,a_4<i_2,i_3>;i_3,i_2} * C{a_4<i_2,i_3>;m_3})) * "
+      "s{m_3;m_4}) * C{m_4;a_2<i_1,i_2>}");
   std::vector<node_t> forest{eval_node(t1)};
   std::string const target = forest.front()->annot();
 
   auto const ref = evaluate(forest, target, yield_)->get<ToTArray>();
   REQUIRE(TA::norm2(ref) > 0.0);
 
-  auto const find = [&](std::wstring const& lbl) {
+  auto const find = [&](std::string const& lbl) {
     std::optional<sequant::Index> out;
     forest[0].visit([&](node_t const& n) {
       for (auto const& ix : n->canon_indices())
@@ -2941,7 +2940,7 @@ TEST_CASE(
     if (!out) throw sequant::Exception{"index not found"};
     return *out;
   };
-  auto const i1 = find(L"i_1"), i2 = find(L"i_2"), i3 = find(L"i_3");
+  auto const i1 = find("i_1"), i2 = find("i_2"), i3 = find("i_3");
   // N1 = the node whose result carries no i_3 but whose children do.
   node_t* n1 = nullptr;
   forest[0].visit([&](node_t const& cn) {
@@ -2999,18 +2998,18 @@ TEST_CASE(
   {
     std::vector<int> ext, con;
     for (auto const& [key, kind] : rich.loop_kind)
-      if (key.first == L"i")
+      if (key.first == "i")
         (kind == BatchModeType::External ? ext : con).push_back(key.second);
     REQUIRE(ext.size() == 2);
     REQUIRE(con.size() == 1);
-    std::pair<std::wstring, int> const a{L"i", ext[0]}, c{L"i", con[0]},
-        b{L"i", ext[1]};
+    std::pair<std::string, int> const a{"i", ext[0]}, c{"i", con[0]},
+        b{"i", ext[1]};
     rich.loop_order.emplace(std::make_pair(a, c), std::size_t{0});
     rich.loop_order.emplace(std::make_pair(c, b), std::size_t{0});
   }
   auto const legality = analyze_legality(rich, forest, policy);
   OrderedSchedule const ordered =
-      build_ordered_schedule(rich, legality, policy, {L"i", L"x"});
+      build_ordered_schedule(rich, legality, policy, {"i", "x"});
   if (std::getenv("SEQUANT_UT_SCHED_TREE"))
     sequant::eval::detail::dump_schedule_tree(ordered.root, 0);
 
@@ -3090,7 +3089,7 @@ TEST_CASE(
 
   auto const aux =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
 
   // Two summable roots sharing S = g*h (carries aux x_1, free at the child,
   // contracted at each root -- an AccumulateSum output of the x_1 block):
@@ -3098,9 +3097,9 @@ TEST_CASE(
   //   F2 = (g{a2;i1;x1} * h{i3;a2}) * (r{a3;i2;x1} * w{i4;a3})
   // both contract x_1 (aux-aux) -> results over {i1,i2,i3,i4}.
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (p{a_3;i_2;x_1} * q{i_4;a_3})");
+      "(g{a_2;i_1;x_1} * h{i_3;a_2}) * (p{a_3;i_2;x_1} * q{i_4;a_3})");
   auto const t2 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (r{a_3;i_2;x_1} * w{i_4;a_3})");
+      "(g{a_2;i_1;x_1} * h{i_3;a_2}) * (r{a_3;i_2;x_1} * w{i_4;a_3})");
   std::string const target = "i_1,i_2,i_3,i_4";
   std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
 
@@ -3155,7 +3154,7 @@ TEST_CASE(
   RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
   auto const legality = analyze_legality(rich, forest, policy);
   OrderedSchedule const ordered =
-      build_ordered_schedule(rich, legality, policy, {L"x"});
+      build_ordered_schedule(rich, legality, policy, {"x"});
 
   // Precondition this test exists to exercise: a realized Contracted loop
   // block at the root, with at least one AccumulateSum output (the shared
@@ -3229,9 +3228,9 @@ TEST_CASE(
   // batchable, so the schedule is a flat sequence of BuildSteps (no loop
   // block).
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (p{a_3;i_2;x_1} * q{i_4;a_3})");
+      "(g{a_2;i_1;x_1} * h{i_3;a_2}) * (p{a_3;i_2;x_1} * q{i_4;a_3})");
   auto const t2 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (r{a_3;i_2;x_1} * w{i_4;a_3})");
+      "(g{a_2;i_1;x_1} * h{i_3;a_2}) * (r{a_3;i_2;x_1} * w{i_4;a_3})");
   std::string const target = "i_1,i_2,i_3,i_4";
   std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
 
@@ -3304,9 +3303,9 @@ TEST_CASE(
   // both results carry the same outer occ target, so the root-combine sums
   // them -- exercising combine_forest_roots on ToT tiles too.
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{m_1;m_2} * C{m_2;a1<i_1,i_2>}) * C{a2<i_1,i_2>;m_1}");
+      "(g{m_1;m_2} * C{m_2;a1<i_1,i_2>}) * C{a2<i_1,i_2>;m_1}");
   auto const t2 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{m_1;m_2} * D{m_2;a1<i_1,i_2>}) * D{a2<i_1,i_2>;m_1}");
+      "(g{m_1;m_2} * D{m_2;a1<i_1,i_2>}) * D{a2<i_1,i_2>;m_1}");
   std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
   std::string const target = forest.front()->annot();
 
@@ -3381,19 +3380,19 @@ TEST_CASE(
   // Root F2 = S * u   (no 't'       -> persistent, kept across reset).
   // Both results over {i_1,i_2}; the root-combine sums them.
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{i_1;a_1} * h{a_1;i_3}) * t{i_3;i_2}");
+      "(g{i_1;a_1} * h{a_1;i_3}) * t{i_3;i_2}");
   auto const t2 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{i_1;a_1} * h{a_1;i_3}) * u{i_3;i_2}");
+      "(g{i_1;a_1} * h{a_1;i_3}) * u{i_3;i_2}");
   std::string const target = "i_1,i_2";
   std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
 
   // node-level volatility: leaf tensor labeled 't' (as MPQC lifts
   // policy.is_volatile_leaf).
   std::function<bool(node_t const&)> const is_vol = [](node_t const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == "t";
   };
   auto const is_vol_leaf = [](node_t const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == "t";
   };
 
   sequant::BatchPolicy policy;
@@ -3434,7 +3433,7 @@ TEST_CASE(
 
   // ---- between iterations: reset the cache and change ONLY 't' ----
   cache.reset();
-  yield_.reset_label(L"t");
+  yield_.reset_label("t");
 
   // ---- iteration 2 (t = B, integrals unchanged) ----
   auto const ref2 = evaluate(forest, target, yield_)->get<TArrayD>();
@@ -3477,12 +3476,12 @@ TEST_CASE(
   yield_.set_max_tile(4);
   auto const aux =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
 
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (t{a_3;i_2;x_1} * q{i_4;a_3})");
+      "(g{a_2;i_1;x_1} * h{i_3;a_2}) * (t{a_3;i_2;x_1} * q{i_4;a_3})");
   auto const t2 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (p{a_3;i_2;x_1} * q{i_4;a_3})");
+      "(g{a_2;i_1;x_1} * h{i_3;a_2}) * (p{a_3;i_2;x_1} * q{i_4;a_3})");
   std::string const target = "i_1,i_2,i_3,i_4";
   std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
 
@@ -3500,7 +3499,7 @@ TEST_CASE(
   }
 
   std::function<bool(node_t const&)> const is_vol = [](node_t const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == "t";
   };
   auto const is_vol_leaf = is_vol;
 
@@ -3517,7 +3516,7 @@ TEST_CASE(
   RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
   auto const legality = analyze_legality(rich, forest, policy);
   OrderedSchedule const ordered =
-      build_ordered_schedule(rich, legality, policy, {L"x"});
+      build_ordered_schedule(rich, legality, policy, {"x"});
   bool has_block = false;
   for (auto const& step : ordered.root.steps)
     if (std::holds_alternative<sequant::eval::ScopeBlock>(step.value))
@@ -3544,7 +3543,7 @@ TEST_CASE(
   }
 
   cache.reset();
-  yield_.reset_label(L"t");
+  yield_.reset_label("t");
 
   auto const ref2 = evaluate(forest, target, yield_)->get<TArrayD>();
   auto const got2 =
@@ -3604,7 +3603,7 @@ TEST_CASE(
 
   auto const occ =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"i");
+          "i");
 
   // S = g*h carries i_1 (free, LoopLocal under the loop F1/F2 realize) and a
   // virtual spectator a_3 (contracts a_2). T1/T2 are ALL-virtual (no occ
@@ -3616,9 +3615,9 @@ TEST_CASE(
   //   T2 = r{a_4;a_5} * w{a_6;a_4}
   //   F1 = S * T1, F2 = S * T2  ->  results over {i_1, a_3, a_5, a_6}
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1} * h{a_3;a_2}) * (p{a_4;a_5} * q{a_6;a_4})");
+      "(g{a_2;i_1} * h{a_3;a_2}) * (p{a_4;a_5} * q{a_6;a_4})");
   auto const t2 = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1} * h{a_3;a_2}) * (r{a_4;a_5} * w{a_6;a_4})");
+      "(g{a_2;i_1} * h{a_3;a_2}) * (r{a_4;a_5} * w{a_6;a_4})");
   std::string const target = "i_1,a_3,a_5,a_6";
   std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
 
@@ -3638,7 +3637,7 @@ TEST_CASE(
   // enclosing loop at all (nothing wraps a forest root) and still carry i_1 on
   // their own result, which is exactly the LoopCarried (AccumulateScatter)
   // shape this test exists to exercise.
-  sequant::Index const i1{L"i_1"};
+  sequant::Index const i1{"i_1"};
   for (auto& nd : forest) {
     nd->set_node_slice_mask({{i1, sequant::BatchModeType::External}});
     // each root realizes (opens) the i_1 loop; ectx is built from opens.
@@ -3662,7 +3661,7 @@ TEST_CASE(
   RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
   auto const legality = analyze_legality(rich, forest, policy);
   OrderedSchedule const ordered =
-      build_ordered_schedule(rich, legality, policy, {L"i"});
+      build_ordered_schedule(rich, legality, policy, {"i"});
 
   // Precondition this test exists to exercise: a realized External loop
   // block at the root, with an AccumulateScatter output for EACH root (F1
@@ -3721,7 +3720,7 @@ TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
   // W-analog: root contracts the aux index x_1; the two children are
   // canonically equal
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})");
+      "(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})");
   std::string const target = "i_1,i_3,i_2,i_4";
   auto node = eval_node(expr);
   // The runtime batches STRICTLY on the optimizer's annotations (there is no
@@ -3732,9 +3731,9 @@ TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
   node->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
   auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
 
-  std::map<std::wstring, int> n_yield;
+  std::map<std::string, int> n_yield;
   auto counting_yield = [&yield_, &n_yield](node_t const& n) {
-    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
+    if (n->is_tensor()) ++n_yield[std::string(n->as_tensor().label())];
     return yield_(n);
   };
 
@@ -3751,8 +3750,8 @@ TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
   // with within-batch dedup: per batch the left child evaluates (g and h
   // yielded once each), the right child is a scratch cache hit; plus one g
   // from the evaluator's mode_batches probe of the x_1-carrying leaf
-  CHECK(n_yield[L"g"] == n_b + 1);
-  CHECK(n_yield[L"h"] == n_b);
+  CHECK(n_yield["g"] == n_b + 1);
+  CHECK(n_yield["h"] == n_b);
 }
 
 // BLOCKED, hidden by default. This test batched an UNANNOTATED node via the
@@ -3783,10 +3782,10 @@ TEST_CASE("eval_batched_custom_evaluator group replay",
   // Volatile heads (label "t") make F1 and F2 persistent. Every orbital
   // contraction pairs a bra with a ket.
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3}))"
-      L" * t{i_1,i_2;i_3,i_9}");
+      "((g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3}))"
+      " * t{i_1,i_2;i_3,i_9}");
   auto const t2 = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3}");
+      "((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3}");
   std::string const tgt1 = "i_4,i_9";
   std::string const tgt2 = "i_5,i_6";
   auto n1 = eval_node(t1);
@@ -3802,7 +3801,7 @@ TEST_CASE("eval_batched_custom_evaluator group replay",
   }
 
   auto is_volatile_t = [](node_t const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == "t";
   };
 
   // references (unbatched, uncached, uncounted)
@@ -3814,9 +3813,9 @@ TEST_CASE("eval_batched_custom_evaluator group replay",
   REQUIRE(cache.persistent(n1.left()));
   REQUIRE(cache.persistent(n2.left()));
 
-  std::map<std::wstring, int> n_yield;
+  std::map<std::string, int> n_yield;
   auto counting_yield = [&yield_, &n_yield](node_t const& n) {
-    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
+    if (n->is_tensor()) ++n_yield[std::string(n->as_tensor().label())];
     return yield_(n);
   };
   // persistent_only=true: gate volatile term heads so the group replay streams
@@ -3840,10 +3839,10 @@ TEST_CASE("eval_batched_custom_evaluator group replay",
   // S evaluated once per batch (n_b = 3), shared by F1 (twice) and F2 (once):
   // g: 3 (S evals) + 1 (trigger probe) + 1 (F2 candidacy probe) = 5
   // h: 3; p: 3 (sliced, once per batch); t: 2 (one per term head)
-  CHECK(n_yield[L"g"] == 5);
-  CHECK(n_yield[L"h"] == 3);
-  CHECK(n_yield[L"p"] == 3);
-  CHECK(n_yield[L"t"] == 2);
+  CHECK(n_yield["g"] == 5);
+  CHECK(n_yield["h"] == 3);
+  CHECK(n_yield["p"] == 3);
+  CHECK(n_yield["t"] == 2);
 }
 
 // BLOCKED, hidden by default. This test batched an UNANNOTATED node via the
@@ -3873,17 +3872,17 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
   // inner layer first, then seed its full value into F_out's pass (F_in
   // carries no x_2). Every orbital contraction pairs a bra with a ket.
   auto const t_out = sequant::deserialize<sequant::ExprPtr>(
-      L"((((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * r{i_6;i_7;x_2})"
-      L" * q{i_7;i_8;x_2}) * t{i_1;i_3,i_9}");
+      "((((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * r{i_6;i_7;x_2})"
+      " * q{i_7;i_8;x_2}) * t{i_1;i_3,i_9}");
   auto const t_in = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3,i_7}");
+      "((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3,i_7}");
   std::string const tgt_out = "i_5,i_8,i_9";
   std::string const tgt_in = "i_5,i_6,i_7";
   auto n_out = eval_node(t_out);
   auto n_in = eval_node(t_in);
 
   auto is_volatile_t = [](node_t const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == "t";
   };
 
   auto const ref_out = evaluate(n_out, tgt_out, yield_)->get<TArrayD>();
@@ -3898,15 +3897,15 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
     REQUIRE(eq(n_out.left().left().left(), n_in.left()));
   }
 
-  std::map<std::wstring, int> n_yield;
+  std::map<std::string, int> n_yield;
   auto counting_yield = [&yield_, &n_yield](node_t const& n) {
-    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
+    if (n->is_tensor()) ++n_yield[std::string(n->as_tensor().label())];
     return yield_(n);
   };
   // batch only over auxiliary indices (as a DF-batched application would)
   auto const aux_space =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -3940,12 +3939,12 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
   // Probes: +1 r (trigger, x_2-carrying leaf), +1 g (F_in candidacy, x_1
   // leaf). If seeding failed and F_in were re-derived per batch, g/h/p
   // would be 6+.
-  CHECK(n_yield[L"g"] == 4);
-  CHECK(n_yield[L"h"] == 3);
-  CHECK(n_yield[L"p"] == 3);
-  CHECK(n_yield[L"r"] == 4);
-  CHECK(n_yield[L"q"] == 3);
-  CHECK(n_yield[L"t"] == 2);
+  CHECK(n_yield["g"] == 4);
+  CHECK(n_yield["h"] == 3);
+  CHECK(n_yield["p"] == 3);
+  CHECK(n_yield["r"] == 4);
+  CHECK(n_yield["q"] == 3);
+  CHECK(n_yield["t"] == 2);
 }
 
 TEST_CASE("eval_batched_custom_evaluator nests inner mode", "[eval]") {
@@ -3976,14 +3975,14 @@ TEST_CASE("eval_batched_custom_evaluator nests inner mode", "[eval]") {
   // extent and the x_1 contraction above would then mismatch. Every product is
   // written fully binary so binarize preserves the nesting.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(((u{i_1;i_2;x_1,x_2} * v{i_3;i_1;x_2}) * w{i_2;i_5;x_1})"
-      L" * p{i_6;i_3;x_1})");
+      "(((u{i_1;i_2;x_1,x_2} * v{i_3;i_1;x_2}) * w{i_2;i_5;x_1})"
+      " * p{i_6;i_3;x_1})");
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);  // mutable: batch modes are annotated below
 
   auto const aux_space =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -4082,13 +4081,13 @@ TEST_CASE("eval_batched_custom_evaluator nests two modes on one node",
   // leaf carries x_1 and x_2, so slicing either aux mode slices both leaves.
   // Result free indices are i_5, i_6.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{i_1;i_5;x_1,x_2} * h{i_6;i_1;x_1,x_2})");
+      "(g{i_1;i_5;x_1,x_2} * h{i_6;i_1;x_1,x_2})");
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);  // mutable: both batch modes annotated below
 
   auto const aux_space =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -4205,14 +4204,14 @@ TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
   // - M = I2*w contracts i_2 -> {i_3;i_5;x_1}: carries x_1 (not hoistable).
   // - R = M*p contracts i_3 and x_1 -> {i_5;i_6}: the x_1 batch trigger.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(((g{i_1;i_2;x_2} * h{i_3;i_1;x_2}) * w{i_2;i_5;x_1})"
-      L" * p{i_6;i_3;x_1})");
+      "(((g{i_1;i_2;x_2} * h{i_3;i_1;x_2}) * w{i_2;i_5;x_1})"
+      " * p{i_6;i_3;x_1})");
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);
 
   auto const aux_space =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -4260,7 +4259,7 @@ TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
   int g_evals = 0;
   auto counting_yield = [&yield_,
                          &g_evals](node_t const& leaf) -> sequant::ResultPtr {
-    if (leaf->is_tensor() && leaf->as_tensor().label() == L"g") ++g_evals;
+    if (leaf->is_tensor() && leaf->as_tensor().label() == "g") ++g_evals;
     return yield_(leaf);
   };
 
@@ -4334,14 +4333,14 @@ TEST_CASE(
   yield_.set_max_tile(4);
 
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(((((q{i_1;a_9;x_1} * r{a_9;i_2}) * m{;;x_1,x_2}) * h{i_3;i_1;x_2}) * "
-      L"w{i_2;i_5;x_1}) * p{i_6;i_3;x_1})");
+      "(((((q{i_1;a_9;x_1} * r{a_9;i_2}) * m{;;x_1,x_2}) * h{i_3;i_1;x_2}) * "
+      "w{i_2;i_5;x_1}) * p{i_6;i_3;x_1})");
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);
 
   auto const aux_space =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -4384,8 +4383,8 @@ TEST_CASE(
   REQUIRE_FALSE(sequant::index_position(d2, *t_axis).has_value());  // not x_2
   REQUIRE(d2.left().leaf());
   REQUIRE(d2.right().leaf());
-  REQUIRE(d2.left()->as_tensor().label() == L"q");
-  REQUIRE(d2.right()->as_tensor().label() == L"r");
+  REQUIRE(d2.left()->as_tensor().label() == "q");
+  REQUIRE(d2.right()->as_tensor().label() == "r");
 
   // Annotate D2: order-aware, with NON-EMPTY sliced_modes = {x_1} (the signal
   // under test -- the all-batched-modes meet carries the enclosing aux mode
@@ -4409,7 +4408,7 @@ TEST_CASE(
   int r_evals = 0;
   auto counting_yield = [&yield_,
                          &r_evals](node_t const& leaf) -> sequant::ResultPtr {
-    if (leaf->is_tensor() && leaf->as_tensor().label() == L"r") ++r_evals;
+    if (leaf->is_tensor() && leaf->as_tensor().label() == "r") ++r_evals;
     return yield_(leaf);
   };
 
@@ -4485,13 +4484,13 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
   // ExprPtr binarize would instead infer it contracted); stamping x_1 External
   // on the root and the inner node exercises the scatter branch at both levels.
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
-      L"R{a_1;a_4;x_1} = ((g{a_1;a_2;x_1} * h{a_2;a_3;x_1}) * p{a_3;a_4;x_1})");
+      "R{a_1;a_4;x_1} = ((g{a_1;a_2;x_1} * h{a_2;a_3;x_1}) * p{a_3;a_4;x_1})");
   auto node = eval_node(res_expr);  // mutable: External mode stamped below
   std::string const target = node->annot();
 
   auto const aux_space =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -4621,14 +4620,14 @@ TEST_CASE(
   yield_.set_max_tile(4);
 
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
-      L"R{a_1;a_4;x_1} = ((g{a_1;a_2;x_1} * h{a_2;a_3;x_1})"
-      L" * (u{a_3;a_5} * v{a_5;a_4}))");
+      "R{a_1;a_4;x_1} = ((g{a_1;a_2;x_1} * h{a_2;a_3;x_1})"
+      " * (u{a_3;a_5} * v{a_5;a_4}))");
   auto node = eval_node(res_expr);
   std::string const target = node->annot();
 
   auto const aux_space =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -4703,8 +4702,8 @@ TEST_CASE(
     auto counting_yield = [&yield_, &h_evals,
                            &v_evals](node_t const& leaf) -> sequant::ResultPtr {
       if (leaf->is_tensor()) {
-        if (leaf->as_tensor().label() == L"h") ++h_evals;
-        if (leaf->as_tensor().label() == L"v") ++v_evals;
+        if (leaf->as_tensor().label() == "h") ++h_evals;
+        if (leaf->as_tensor().label() == "v") ++v_evals;
       }
       return yield_(leaf);
     };
@@ -4773,13 +4772,13 @@ TEST_CASE("batched cached intermediate is sliced to the batch block on use",
   yield_.set_max_tile(4);
 
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
-      L"R{a_1;a_4;x_1} = ((g{a_1;a_2;x_1} * h{a_2;a_3;x_1}) * p{a_3;a_4})");
+      "R{a_1;a_4;x_1} = ((g{a_1;a_2;x_1} * h{a_2;a_3;x_1}) * p{a_3;a_4})");
   auto node = eval_node(res_expr);  // R
   std::string const target = node->annot();
 
   auto const aux_space =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
   // The external mode x_1 (a plain outer aux mode, no protos).
   sequant::Index mode;
   for (auto const& ix : node->canon_indices())
@@ -4837,8 +4836,8 @@ TEST_CASE("batched cached intermediate is sliced to the batch block on use",
   int gh_evals = 0;
   auto counting_yield = [&yield_,
                          &gh_evals](node_t const& leaf) -> sequant::ResultPtr {
-    if (leaf->is_tensor() && (leaf->as_tensor().label() == L"g" ||
-                              leaf->as_tensor().label() == L"h"))
+    if (leaf->is_tensor() &&
+        (leaf->as_tensor().label() == "g" || leaf->as_tensor().label() == "h"))
       ++gh_evals;
     return yield_(leaf);
   };
@@ -4862,7 +4861,7 @@ TEST_CASE("batched cached intermediate is sliced to the batch block on use",
   // against.
   inner.set_batch_context(
       {{mode,
-        sequant::DagScopeLevel{1, std::wstring(mode.space().base_key())},
+        sequant::DagScopeLevel{1, std::string(mode.space().base_key())},
         {blk_lo, blk_hi},
         mode}});
 
@@ -4913,7 +4912,7 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
   // head t makes P a PERSISTENT final. P does not carry the contracted batch
   // mode played by `mu` below.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * t{i_1;i_3}");
+      "(g{a_2;i_1;x_1} * h{i_3;a_2}) * t{i_1;i_3}");
   auto n = eval_node(expr);
   REQUIRE_FALSE(n.leaf());
   auto const& P = n.left();  // g*h, carries x_1
@@ -4922,7 +4921,7 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
   // the External mode carried by P (a plain aux outer mode)
   auto const aux_space =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
   Index x_ext;
   for (auto const& ix : P->canon_indices())
     if (ix.space() == aux_space && !ix.has_proto_indices()) {
@@ -4940,7 +4939,7 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
   // External mode and leaves every mask all-full -- the mask veto stays inert
   // and P is persistent here exactly as before that change.
   auto is_volatile_t = [](node_t const& k) {
-    return k.leaf() && k->is_tensor() && k->as_tensor().label() == L"t";
+    return k.leaf() && k->is_tensor() && k->as_tensor().label() == "t";
   };
   auto real = sequant::cache_manager(std::vector{n}, is_volatile_t);
   REQUIRE(real.persistent(P));
@@ -4959,7 +4958,7 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
   // member mode = a contracted mode P does NOT carry (mu-analog): its per-node
   // signature over P is 'absent', so on the contracted mode alone P looks
   // seedable. The External mode is what must veto the seed.
-  Index const mu(L"i_9");  // absent from the tree -> null contracted signature
+  Index const mu("i_9");  // absent from the tree -> null contracted signature
   REQUIRE_FALSE(sequant::index_position(P, mu).has_value());
   std::vector<std::pair<node_t const*, Index>> const members{{&n, mu}};
 
@@ -5106,13 +5105,13 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
   // g is a flat (mu~) operand carrying NO occ; the two C legs are composite
   // (a<i_1,i_2>) carrying the occ only as protos.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{m_1;m_2} * C{m_2;a1<i_1,i_2>}) * C{a2<i_1,i_2>;m_1}");
+      "(g{m_1;m_2} * C{m_2;a1<i_1,i_2>}) * C{a2<i_1,i_2>;m_1}");
   auto node = eval_node(expr);  // mutable: External mode stamped below
   std::string const target = node->annot();
 
   auto const occ =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"i");
+          "i");
   auto accept_occ = [occ](Index const& ix) {
     return ix.space() == occ && !ix.has_proto_indices();
   };
@@ -5141,8 +5140,8 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
     if (n.leaf()) {
       if (n->is_tensor()) {
         auto const lbl = n->as_tensor().label();
-        if (lbl == L"C" && !c_leaf) c_leaf = &n;
-        if (lbl == L"g" && !g_leaf) g_leaf = &n;
+        if (lbl == "C" && !c_leaf) c_leaf = &n;
+        if (lbl == "g" && !g_leaf) g_leaf = &n;
       }
       return;
     }
@@ -5254,13 +5253,13 @@ TEST_CASE("batched_eval_external_hadamard", "[eval][batched-external]") {
   yield_.set_max_tile(4);
 
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
-      L"R{;a_1,a_2;i_3} = (g{;a_1;i_3} * h{;a_2;i_3})");
+      "R{;a_1,a_2;i_3} = (g{;a_1;i_3} * h{;a_2;i_3})");
   auto node = eval_node(res_expr);  // mutable: External mode stamped below
   std::string const target = node->annot();
 
   auto const occ =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"i");
+          "i");
   auto accept_occ = [occ](sequant::Index const& ix) {
     return ix.space() == occ;
   };
@@ -5365,14 +5364,14 @@ TEST_CASE("batched_eval_external_nested_contracted",
   yield_.set_max_tile(4);
 
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
-      L"R{i_2;i_6;x_1} = ((u{i_2;i_1;x_1,x_2} * v{i_1;i_3;x_2})"
-      L" * p{i_3;i_6;x_1})");
+      "R{i_2;i_6;x_1} = ((u{i_2;i_1;x_1,x_2} * v{i_1;i_3;x_2})"
+      " * p{i_3;i_6;x_1})");
   auto node = eval_node(res_expr);  // mutable: batch modes stamped below
   std::string const target = node->annot();
 
   auto const aux_space =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -5502,14 +5501,14 @@ TEST_CASE(
   yield_.set_max_tile(4);
 
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(((u{i_1;i_2;x_1,x_2} * v{i_3;i_1;x_2}) * w{i_2;i_5;x_1})"
-      L" * p{i_6;i_3;x_1})");
+      "(((u{i_1;i_2;x_1,x_2} * v{i_3;i_1;x_2}) * w{i_2;i_5;x_1})"
+      " * p{i_6;i_3;x_1})");
   std::string const target = "i_5,i_6";
   auto node = eval_node(expr);
 
   auto const aux_space =
       sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
+          "x");
   auto accept_aux = [aux_space](sequant::Index const& ix) {
     return ix.space() == aux_space;
   };
@@ -5614,7 +5613,7 @@ TEST_CASE("make_evaluator BatchPolicy adapter", "[eval]") {
   // Contracts a1,a2 (unoccupied) -> batch mode is an unoccupied index (3
   // tiles). The subtree contains a "t" leaf, which the policy marks volatile.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+      "g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
   std::string const target = "i_1,i_2,i_3,i_4";
   auto const node = eval_node(expr);
 
@@ -5631,7 +5630,7 @@ TEST_CASE("make_evaluator BatchPolicy adapter", "[eval]") {
         return 4;
       },
       .is_volatile_leaf =
-          [](sequant::Tensor const& t) { return t.label() == L"t"; },
+          [](sequant::Tensor const& t) { return t.label() == "t"; },
       .persistent_only = true};
 
   // (1) make_evaluator with volatile "t" gate (persistent_only=true): batching
@@ -6038,10 +6037,10 @@ TEST_CASE("shape_provider_general_product", "[shape-provider]") {
 
   using ToTArray = typename decltype(yield)::array_tot_type;
 
-  constexpr std::wstring_view expr_str =
-      L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}"
-      L" * "
-      L"s{a2<i1,i2>;a4<i2,i3>}";
+  constexpr std::string_view expr_str =
+      "I{a4<i2,i3>,a1<i1,i2>;i1,i2}"
+      " * "
+      "s{a2<i1,i2>;a4<i2,i3>}";
   auto const node = eval_node(sequant::deserialize<sequant::ExprPtr>(expr_str));
   // i_3 (pair basis of the contracted composite) is an outer mode of the
   // result; the node's canonical layout is the target.
@@ -6159,8 +6158,8 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
   // Result head D{i1,i2} (flat): both operands carry composite virtuals
   // a1<i1,i2>,a2<i1,i2> that fully contract (inner), leaving bare i1,i2.
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
-      L"D{i1,i2} = "
-      L"R{a1<i1,i2>,a2<i1,i2>;i1,i2} * g{i1,i2;a1<i1,i2>,a2<i1,i2>}");
+      "D{i1,i2} = "
+      "R{a1<i1,i2>,a2<i1,i2>;i1,i2} * g{i1,i2;a1<i1,i2>,a2<i1,i2>}");
   auto const node = eval_node(res_expr);
   // Confirm this really is the denest (DeNest::True) path.
   REQUIRE(node.left()->tot());
@@ -6254,22 +6253,22 @@ void dump_annotations(sequant::FullBinaryNode<sequant::EvalExprTA> const& n,
   std::string pad(2 * depth, ' ');
   std::string res;
   for (auto const& ix : n->canon_indices()) {
-    res += sequant::toUtf8(ix.full_label());
+    res += std::string(ix.full_label());
     res += ' ';
   }
   std::string bh;
   for (auto const& [ix, knd] : n->node_slice_mask()) {
-    bh += sequant::toUtf8(ix.full_label());
+    bh += std::string(ix.full_label());
     bh += (knd == BatchModeType::External ? ":ext " : ":con ");
   }
   std::string sm;
   for (auto const& ix : n->sliced_modes()) {
-    sm += sequant::toUtf8(ix.full_label());
+    sm += std::string(ix.full_label());
     sm += ' ';
   }
   std::string ident;
   try {
-    ident = sequant::toUtf8(sequant::io::serialization::to_string(n->expr()));
+    ident = sequant::io::serialization::to_string(n->expr());
   } catch (...) {
     ident = "?";
   }
@@ -6295,9 +6294,9 @@ TEST_CASE("dp_external_placement_correctness",
   auto& world = TA::get_default_world();
 
   auto ibr = get_default_context().index_basis_registry();
-  auto occ = ibr->retrieve_space(L"i");
-  auto virt = ibr->retrieve_space(L"a");
-  auto aux = ibr->retrieve_space(L"x");
+  auto occ = ibr->retrieve_space("i");
+  auto virt = ibr->retrieve_space("a");
+  auto aux = ibr->retrieve_space("x");
 
   // Actual arrays: occ multi-tiled (40 in tiles of 4 -> 10 blocks) so the
   // external occ mode partitions into > 1 batch, and large vs virt/aux (4) so
@@ -6343,7 +6342,7 @@ TEST_CASE("dp_external_placement_correctness",
 
   auto run = [&]() -> TArrayD {
     auto const expr =
-        deserialize<ExprPtr>(std::wstring(expr_str.begin(), expr_str.end()));
+        deserialize<ExprPtr>(std::string(expr_str.begin(), expr_str.end()));
 
     auto axes_map = std::make_shared<std::unordered_map<
         Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -6370,7 +6369,7 @@ TEST_CASE("dp_external_placement_correctness",
       std::cerr << "  node_axes[" << j << "] oa=" << node_axes[j].order_aware
                 << " naxes=" << node_axes[j].axes.size() << " :";
       for (auto const& [ix, knd] : node_axes[j].axes)
-        std::cerr << " " << toUtf8(ix.full_label())
+        std::cerr << " " << std::string(ix.full_label())
                   << (knd == BatchModeType::External ? ":ext" : ":con");
       std::cerr << "\n";
     }
@@ -6405,7 +6404,7 @@ TEST_CASE("dp_external_placement_correctness",
   // Ground truth: plain unbatched evaluation (no custom evaluator, batch
   // stamps ignored). Also fills yield_'s random leaf cache first.
   auto const ref_expr =
-      deserialize<ExprPtr>(std::wstring(expr_str.begin(), expr_str.end()));
+      deserialize<ExprPtr>(std::string(expr_str.begin(), expr_str.end()));
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto ref_node = to_ta_node(binarize(ref_expr));
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
@@ -6463,7 +6462,7 @@ TEST_CASE(
   sequant::io::serialization::DeserializationOptions const antisymm{
       .def_perm_symm = sequant::Symmetry::Antisymm};
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"g{a_2,a_1;i_3,i_4} * t{i_3,i_4;i_1,i_2}", antisymm);
+      "g{a_2,a_1;i_3,i_4} * t{i_3,i_4;i_1,i_2}", antisymm);
   std::vector<node_t> forest{eval_node(t1)};
   std::string const target = "a_1,a_2,i_1,i_2";
 
@@ -6553,9 +6552,9 @@ TEST_CASE(
   // all, which is exactly the "constant term" case cache-halt must serve from
   // the store instead of recomputing.
   auto const t1 =
-      sequant::deserialize<sequant::ExprPtr>(L"g{a_1;i_1} * h{i_2;a_1}");
+      sequant::deserialize<sequant::ExprPtr>("g{a_1;i_1} * h{i_2;a_1}");
   auto const t2 =
-      sequant::deserialize<sequant::ExprPtr>(L"p{a_1;i_1} * q{i_2;a_1}");
+      sequant::deserialize<sequant::ExprPtr>("p{a_1;i_1} * q{i_2;a_1}");
   std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
   REQUIRE(forest.front()->annot() == forest.back()->annot());
   std::string const annot = forest.front()->annot();

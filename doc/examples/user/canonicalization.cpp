@@ -9,10 +9,10 @@ int main() {
   // start-snippet-1
   // two Products that are mathematically identical, differing only by a
   // relabeling of their (implicitly summed) dummy indices
-  auto term_a = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
-                ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
-  auto term_b = ex<Tensor>(L"g", bra{L"i_2", L"i_1"}, ket{L"a_2", L"a_1"}) *
-                ex<Tensor>(L"t", bra{L"a_2", L"a_1"}, ket{L"i_2", L"i_1"});
+  auto term_a = ex<Tensor>("g", bra{"i_1", "i_2"}, ket{"a_1", "a_2"}) *
+                ex<Tensor>("t", bra{"a_1", "a_2"}, ket{"i_1", "i_2"});
+  auto term_b = ex<Tensor>("g", bra{"i_2", "i_1"}, ket{"a_2", "a_1"}) *
+                ex<Tensor>("t", bra{"a_2", "a_1"}, ket{"i_2", "i_1"});
 
   // before canonicalization the two Products are not recognized as equal ...
   SEQUANT_ASSERT(!(term_a == term_b));
@@ -28,14 +28,14 @@ int main() {
   // start-snippet-2
   // simplify() combines canonicalization with cheap algebraic clean-up, so a
   // Sum of the two forms above collapses to a single term with a factor of 2
-  auto sum = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
-                 ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) +
-             ex<Tensor>(L"g", bra{L"i_2", L"i_1"}, ket{L"a_2", L"a_1"}) *
-                 ex<Tensor>(L"t", bra{L"a_2", L"a_1"}, ket{L"i_2", L"i_1"});
+  auto sum = ex<Tensor>("g", bra{"i_1", "i_2"}, ket{"a_1", "a_2"}) *
+                 ex<Tensor>("t", bra{"a_1", "a_2"}, ket{"i_1", "i_2"}) +
+             ex<Tensor>("g", bra{"i_2", "i_1"}, ket{"a_2", "a_1"}) *
+                 ex<Tensor>("t", bra{"a_2", "a_1"}, ket{"i_2", "i_1"});
   simplify(sum);
 
   SEQUANT_ASSERT(sum.is<Product>());
-  std::wcout << sum << std::endl;
+  std::cout << sum << std::endl;
   // end-snippet-2
 
   return 0;

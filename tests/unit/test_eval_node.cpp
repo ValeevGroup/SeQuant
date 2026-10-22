@@ -48,9 +48,9 @@ sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
   return *n_;
 }
 
-[[maybe_unused]] std::wstring tikz(
+[[maybe_unused]] std::string tikz(
     sequant::EvalNode<sequant::EvalExpr> const& n) noexcept {
-  return n.tikz([](auto&& n) { return L"$" + n->expr()->to_latex() + L"$"; });
+  return n.tikz([](auto&& n) { return "$" + n->expr()->to_latex() + "$"; });
 }
 
 // Build an IndexSpace-keyed ExponentMap over the SR test registry's hole
@@ -60,8 +60,8 @@ sequant::AsyCost::ExponentMap occ_virt_map(std::size_t nocc,
                                            std::size_t nvirt) {
   auto const& ibr = *sequant::get_default_context().index_basis_registry();
   sequant::AsyCost::ExponentMap m;
-  if (nocc > 0) m.emplace(ibr.retrieve_space(L"i"), nocc);
-  if (nvirt > 0) m.emplace(ibr.retrieve_space(L"a"), nvirt);
+  if (nocc > 0) m.emplace(ibr.retrieve_space("i"), nocc);
+  if (nvirt > 0) m.emplace(ibr.retrieve_space("a"), nvirt);
   return m;
 }
 
@@ -80,7 +80,7 @@ sequant::AsyCost occ_virt_aux_cost(sequant::rational c, std::size_t nocc,
                                    std::size_t nvirt, std::size_t naux) {
   auto const& ibr = *sequant::get_default_context().index_basis_registry();
   auto m = occ_virt_map(nocc, nvirt);
-  if (naux > 0) m.emplace(ibr.retrieve_space(L"Κ"), naux);
+  if (naux > 0) m.emplace(ibr.retrieve_space("Κ"), naux);
   return sequant::AsyCost{m, c};
 }
 
@@ -96,24 +96,24 @@ TEST_CASE("eval_node", "[EvalNode]") {
   };
 
   SECTION("terminals") {
-    auto node = eval_node(parse_expr_antisymm(L"f{a1;i1}"));
+    auto node = eval_node(parse_expr_antisymm("f{a1;i1}"));
     REQUIRE(node.leaf());
-    REQUIRE(node->as_tensor().label() == L"f");
+    REQUIRE(node->as_tensor().label() == "f");
 
     // In order to represent unary computations, i.e. assignments, we have to
     // represent them as a multiplication with 1 in order for the tree to remain
     // a full binary tree.
-    node = binarize(deserialize<ResultExpr>(L"R{a1;i1} = f{a1;i1}"));
+    node = binarize(deserialize<ResultExpr>("R{a1;i1} = f{a1;i1}"));
     REQUIRE(!node.leaf());
     REQUIRE(node->op_type() == EvalOp::Product);
-    REQUIRE(node->as_tensor().label() == L"R");
+    REQUIRE(node->as_tensor().label() == "R");
     REQUIRE(((node.left()->is_tensor() && node.right()->is_scalar()) ||
              (node.right()->is_tensor() && node.left()->is_scalar())));
 
-    node = binarize(deserialize<ResultExpr>(L"R = Var"));
+    node = binarize(deserialize<ResultExpr>("R = Var"));
     REQUIRE(!node.leaf());
     REQUIRE(node->op_type() == EvalOp::Product);
-    REQUIRE(node->as_variable().label() == L"R");
+    REQUIRE(node->as_variable().label() == "R");
     REQUIRE(((node.left()->is_variable() && node.right()->is_scalar()) ||
              (node.right()->is_variable() && node.left()->is_scalar())));
   }
@@ -121,10 +121,10 @@ TEST_CASE("eval_node", "[EvalNode]") {
   SECTION("product") {
     // 1/16 * (A * B) * C
     const auto p1 = parse_expr_antisymm(
-        L"1/16 "
-        L"* g_{i3, i4}^{a3, a4}"
-        L"* t_{a1, a2}^{i3, i4}"
-        L"* t_{a3,a4}^{i1,i2}");
+        "1/16 "
+        "* g_{i3, i4}^{a3, a4}"
+        "* t_{a1, a2}^{i3, i4}"
+        "* t_{a3,a4}^{i1,i2}");
 
     auto node1 = eval_node(p1);
 
@@ -180,9 +180,9 @@ TEST_CASE("eval_node", "[EvalNode]") {
 
   SECTION("sum") {
     auto const sum1 = parse_expr_antisymm(
-        L"X^{i1,i2}_{a1,a2} "
-        L"+ Y^{i1, i2}_{a1,a2}"
-        L"+ g_{i3,a1}^{i1,i2} * t_{a2}^{i3}");
+        "X^{i1,i2}_{a1,a2} "
+        "+ Y^{i1, i2}_{a1,a2}"
+        "+ g_{i3,a1}^{i1,i2} * t_{a2}^{i3}");
 
     auto const node1 = eval_node(sum1);
     REQUIRE(node1->op_type() == EvalOp::Sum);
@@ -204,7 +204,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
   }
 
   SECTION("variable") {
-    auto prod1 = deserialize(L"a * b * c");
+    auto prod1 = deserialize("a * b * c");
     auto node1 = eval_node(prod1);
 
     REQUIRE(node1->op_type() == EvalOp::Product);
@@ -213,11 +213,11 @@ TEST_CASE("eval_node", "[EvalNode]") {
     REQUIRE(node(node1, {}).is_variable());
     REQUIRE(node(node1, {L}).is_variable());
     REQUIRE(node(node1, {R}).is_variable());
-    REQUIRE(node(node1, {R}).as_variable() == Variable{L"c"});
-    REQUIRE(node(node1, {L, R}).as_variable() == Variable{L"b"});
-    REQUIRE(node(node1, {L, L}).as_variable() == Variable{L"a"});
+    REQUIRE(node(node1, {R}).as_variable() == Variable{"c"});
+    REQUIRE(node(node1, {L, R}).as_variable() == Variable{"b"});
+    REQUIRE(node(node1, {L, L}).as_variable() == Variable{"a"});
 
-    auto sum1 = deserialize(L"a + b + c");
+    auto sum1 = deserialize("a + b + c");
     auto node2 = eval_node(sum1);
 
     REQUIRE(node2->op_type() == EvalOp::Sum);
@@ -226,23 +226,23 @@ TEST_CASE("eval_node", "[EvalNode]") {
     REQUIRE(node(node2, {}).is_variable());
     REQUIRE(node(node2, {L}).is_variable());
     REQUIRE(node(node2, {R}).is_variable());
-    REQUIRE(node(node2, {R}).as_variable() == Variable{L"c"});
-    REQUIRE(node(node2, {L, R}).as_variable() == Variable{L"b"});
-    REQUIRE(node(node2, {L, L}).as_variable() == Variable{L"a"});
+    REQUIRE(node(node2, {R}).as_variable() == Variable{"c"});
+    REQUIRE(node(node2, {L, R}).as_variable() == Variable{"b"});
+    REQUIRE(node(node2, {L, L}).as_variable() == Variable{"a"});
 
-    auto prod2 = deserialize(L"a * t{i1;a1}");
+    auto prod2 = deserialize("a * t{i1;a1}");
     auto node3 = eval_node(prod2);
     REQUIRE_THAT(node(node3, {}).as_tensor(), EquivalentTo("I{i1;a1}:N-N-N"));
     REQUIRE_THAT(node(node3, {R}).as_tensor(), EquivalentTo("t{i1;a1}"));
-    REQUIRE(node(node3, {L}).as_variable() == Variable{L"a"});
+    REQUIRE(node(node3, {L}).as_variable() == Variable{"a"});
   }
 
   SECTION("to_expr") {
     const auto p1 = parse_expr_antisymm(
-        L"1/16 "
-        L"* g_{i3, i4}^{a3, a4}"
-        L"* t_{a1, a2}^{i3, i4}"
-        L"* t_{a3,a4}^{i1,i2}");
+        "1/16 "
+        "* g_{i3, i4}^{a3, a4}"
+        "* t_{a1, a2}^{i3, i4}"
+        "* t_{a3,a4}^{i1,i2}");
 
     auto p1_after = ex<Product>(rational{1, 16}, ExprPtrList{});
     p1_after->as<Product>().append(
@@ -254,7 +254,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
 
     REQUIRE(to_expr(n1)->to_latex() == p1_after->to_latex());
 
-    auto const p2 = parse_expr_antisymm(L"1/4 * g_{i2,i1}^{a1,a2}");
+    auto const p2 = parse_expr_antisymm("1/4 * g_{i2,i1}^{a1,a2}");
 
     auto const n2 = eval_node(p2);
     REQUIRE(to_expr(n2)->to_latex() == p2->to_latex());
@@ -262,31 +262,31 @@ TEST_CASE("eval_node", "[EvalNode]") {
 
   SECTION("linearize_eval_node") {
     const auto p1 = parse_expr_antisymm(
-        L"1/16 "
-        L"* g_{i3, i4}^{a3, a4}"
-        L"* t_{a1, a2}^{i3, i4}"
-        L"* t_{a3,a4}^{i1,i2}");
+        "1/16 "
+        "* g_{i3, i4}^{a3, a4}"
+        "* t_{a1, a2}^{i3, i4}"
+        "* t_{a3,a4}^{i1,i2}");
     REQUIRE(linearize_eval_node(eval_node(p1))->to_latex() == p1->to_latex());
 
-    auto const p2 = parse_expr_antisymm(L"1/4 * g_{i2,i1}^{a1,a2}");
+    auto const p2 = parse_expr_antisymm("1/4 * g_{i2,i1}^{a1,a2}");
     REQUIRE(linearize_eval_node(eval_node(p2))->to_latex() == p2->to_latex());
   }
 
   SECTION("single node") {
     auto asy_cost_single_node = FlopsWithSymm{};
     auto const p1 =
-        parse_expr_antisymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
+        parse_expr_antisymm("g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
     REQUIRE(asy_cost_single_node(eval_node(p1)) == occ_virt_cost(2, 2, 3));
 
     auto const p2 = parse_expr_antisymm(
-        L"g_{i2,i3}^{a2,a3} * t_{a2}^{i1} * t_{a1,a3}^{i2,i3}");
+        "g_{i2,i3}^{a2,a3} * t_{a2}^{i1} * t_{a1,a3}^{i2,i3}");
     auto const n2 = eval_node(p2);
 
     REQUIRE(asy_cost_single_node(n2) == occ_virt_cost(2, 3, 2));
     REQUIRE(asy_cost_single_node(n2.left()) == occ_virt_cost(2, 3, 2));
 
     auto const p3 =
-        parse_expr_antisymm(L"g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
+        parse_expr_antisymm("g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
     auto const n3 = eval_node(p3);
     REQUIRE(asy_cost_single_node(n3) == occ_virt_cost(2, 2, 1));
     REQUIRE(asy_cost_single_node(n3.left()) == occ_virt_cost(2, 3, 1));
@@ -297,64 +297,64 @@ TEST_CASE("eval_node", "[EvalNode]") {
       return sequant::asy_cost(n, FlopsWithSymm{});
     };
     auto const p1 =
-        parse_expr_antisymm(L"g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
+        parse_expr_antisymm("g_{i2, a1}^{a2, a3} * t_{a2, a3}^{i1, i2}");
     REQUIRE(asy_cost(eval_node(p1)) == occ_virt_cost(2, 2, 3));
 
     auto const p2 = parse_expr_antisymm(
-        L"g_{i2,i3}^{a2,a3} * t_{a2}^{i1} * t_{a1,a3}^{i2,i3}");
+        "g_{i2,i3}^{a2,a3} * t_{a2}^{i1} * t_{a1,a3}^{i2,i3}");
 
     auto const np2 = eval_node(p2);
     REQUIRE(asy_cost(np2) == occ_virt_cost(2, 3, 2) + occ_virt_cost(2, 3, 2));
 
     auto const p3 =
-        parse_expr_antisymm(L"g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
+        parse_expr_antisymm("g_{i2,i3}^{i1,a2} * t_{a2}^{i2} * t_{a1}^{i3}");
     auto const np3 = eval_node(p3);
     REQUIRE(asy_cost(np3) == occ_virt_cost(2, 2, 1) + occ_virt_cost(2, 3, 1));
 
     // full contraction to scalar: cc energy-like expression
     auto const p_e = parse_expr_antisymm(
-        L"f_{i1}^{a1} * t_{a1}^{i1} + g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i1,i2}");
+        "f_{i1}^{a1} * t_{a1}^{i1} + g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i1,i2}");
     auto const n_e = eval_node(p_e);
     REQUIRE(n_e->is_scalar());
     REQUIRE(asy_cost(n_e) == 2 * occ_virt_cost(2, 2) + 2 * occ_virt_cost(1, 1));
 
 #if 0
     auto const s1 =
-        deserialize(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Symm);
+        deserialize("I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Symm);
     auto const ns1 = eval_node(s1);
     REQUIRE(asy_cost(ns1) == AsyCost{{1, 4}, 2, 2});  // 1/4 * O^2V^2
 
     auto const s2 =
-        deserialize(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Antisymm);
+        deserialize("I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Antisymm);
     auto const ns2 = eval_node(s2);
     REQUIRE(asy_cost(ns2) == AsyCost{{1, 2}, 2, 2});  // 1/2 * O^2V^2
 
     auto const s3 =
-        deserialize(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Nonsymm);
+        deserialize("I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Nonsymm);
     auto const ns3 = eval_node(s3);
     REQUIRE(asy_cost(ns3) == AsyCost{2, 2});  // O^2V^2
 
     auto const p4 =
-        deserialize(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Symm);
+        deserialize("I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Symm);
     auto const np4 = eval_node(p4);
     REQUIRE(asy_cost(np4) == AsyCost{{1, 2}, 2, 4});  // 1/4 * 2 * O^2V^4
 
     auto const p5 =
-        deserialize(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Antisymm);
+        deserialize("I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Antisymm);
     auto const np5 = eval_node(p5);
     REQUIRE(asy_cost(np5) == AsyCost{{1, 2}, 2, 4});  // 1/4 * 2 * O^2V^4
 
     auto const p6 =
-        deserialize(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Antisymm);
+        deserialize("I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Antisymm);
     auto const np6 = eval_node(p6);
     REQUIRE(asy_cost(np6) == AsyCost{{1, 2}, 2, 4});  // 1/4 * 2 * O^2V^4
 
-    auto const p7 = deserialize(L"I{i1;a1} * I{i2;a2}", Symmetry::Nonsymm);
+    auto const p7 = deserialize("I{i1;a1} * I{i2;a2}", Symmetry::Nonsymm);
     auto const np7 = eval_node(p7);
     REQUIRE(asy_cost(np7) == AsyCost{{1, 2}, 2, 2});  // 1/2 * O^2V^2
 
     auto const p8 =
-        deserialize(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Nonsymm);
+        deserialize("I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Nonsymm);
     auto const np8 = eval_node(p8);
     REQUIRE(asy_cost(np8) == AsyCost{2, 2, 4});  // 2 * O^2V^4
 #endif
@@ -370,7 +370,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
                                       .spbasis = SPBasis::Spinor});
 
       // The particle-particle ladder term
-      auto const ppl = deserialize(L"g{a3,a4;a1,a2} t{a1,a2;i1,i2}");
+      auto const ppl = deserialize("g{a3,a4;a1,a2} t{a1,a2;i1,i2}");
       REQUIRE(sequant::asy_cost(eval_node(ppl)) ==
               occ_virt_aux_cost(2, 2, 4, 0));
       REQUIRE(sequant::asy_cost(eval_node(ppl)) == occ_virt_cost(2, 2, 4));
@@ -379,7 +379,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
       // sharing an auxiliary index, g{a3,a4;a1,a2} -> B{a3;a1;Κ} B{a4;a2;Κ}.
       // (B{a4;a2;Κ} t{a1,a2;i1,i2}) B{a3;a1;Κ}.
       auto const pp_ladder_df =
-          deserialize(L"(B{a4;a2;Κ_1} t{a1,a2;i1,i2}) B{a3;a1;Κ_1}");
+          deserialize("(B{a4;a2;Κ_1} t{a1,a2;i1,i2}) B{a3;a1;Κ_1}");
       REQUIRE(sequant::asy_cost(eval_node(pp_ladder_df)) ==
               occ_virt_aux_cost(4, 2, 3, 1));
     }
@@ -392,8 +392,8 @@ TEST_CASE("eval_node", "[EvalNode]") {
                                       .vacuum = Vacuum::SingleProduct,
                                       .spbasis = SPBasis::Spinor});
       auto const& reg = *get_default_context().index_basis_registry();
-      auto const a = reg.retrieve_space(L"a");
-      auto const z = reg.retrieve_space(L"z");
+      auto const a = reg.retrieve_space("a");
+      auto const z = reg.retrieve_space("z");
 
       // A batched index appears in left, right, AND result: it is neither
       // summed over (like a contracted index) nor unique to one operand (like
@@ -403,7 +403,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
       // the cost by |z|. Total: a^3 · z^1. The leading 2 is the per-element
       // flop count (one multiply + one add).
       auto const e1 = binarize(
-          deserialize<ResultExpr>(L"R{a1;a2;z1} = A{a1;a3;z1} B{a3;a2;z1}"));
+          deserialize<ResultExpr>("R{a1;a2;z1} = A{a1;a3;z1} B{a3;a2;z1}"));
       REQUIRE(
           sequant::asy_cost(e1) ==
           AsyCost{AsyCost::ExponentMap{{IndexBasis{a}, 3}, {IndexBasis{z}, 1}},
@@ -412,7 +412,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
       // Two batched indices z1,z2 (both in space z): the a^3 matmul is repeated
       // for every (z1,z2) pair, so the cost scales as a^3 · z^2.
       auto const e2 = binarize(deserialize<ResultExpr>(
-          L"R{a1;a2;z1,z2} = A{a1;a3;z1,z2} B{a3;a2;z1,z2}"));
+          "R{a1;a2;z1,z2} = A{a1;a3;z1,z2} B{a3;a2;z1,z2}"));
       REQUIRE(
           sequant::asy_cost(e2) ==
           AsyCost{AsyCost::ExponentMap{{IndexBasis{a}, 3}, {IndexBasis{z}, 2}},
@@ -426,10 +426,10 @@ TEST_CASE("eval_node", "[EvalNode]") {
                                       .vacuum = Vacuum::SingleProduct,
                                       .spbasis = SPBasis::Spinor});
       auto const& reg = *get_default_context().index_basis_registry();
-      auto const u = reg.retrieve_space(L"u");  // active
-      auto const a = reg.retrieve_space(L"a");  // virtual
+      auto const u = reg.retrieve_space("u");  // active
+      auto const a = reg.retrieve_space("a");  // virtual
 
-      auto const n = eval_node(deserialize(L"g{u1,u2;a1,a2} t{a1,a2;u3,u4}"));
+      auto const n = eval_node(deserialize("g{u1,u2;a1,a2} t{a1,a2;u3,u4}"));
       REQUIRE(
           sequant::asy_cost(n) ==
           AsyCost{AsyCost::ExponentMap{{IndexBasis{u}, 4}, {IndexBasis{a}, 2}},
@@ -438,7 +438,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
   }
 
   SECTION("minimum storage") {
-    auto p1 = deserialize(L"2 * g{i2,a1;a2,a3} * t{a2,a3;i2,i1}");
+    auto p1 = deserialize("2 * g{i2,a1;a2,a3} * t{a2,a3;i2,i1}");
     auto const n1 = eval_node(p1);
     // evaluation happens in two steps.
     // g and t are contracted to give an intermediate I{a1;i1}
@@ -451,7 +451,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
     REQUIRE(min_storage(n1) ==
             occ_virt_cost(1, 3) + occ_virt_cost(2, 2) + occ_virt_cost(1, 1));
 
-    auto p2 = deserialize(L"1/2 * (g{a1,a2; a3,a4} t{a3;i1}) t{a4;i2}");
+    auto p2 = deserialize("1/2 * (g{a1,a2; a3,a4} t{a3;i1}) t{a4;i2}");
     auto const n2 = eval_node(p2);
     REQUIRE(min_storage(n2) ==
             occ_virt_cost(0, 4) + occ_virt_cost(1, 3) + occ_virt_cost(1, 1));

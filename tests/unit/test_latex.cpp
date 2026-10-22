@@ -8,6 +8,7 @@
 
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <stdexcept>
 #include <string>
@@ -16,96 +17,69 @@ TEST_CASE("latex", "[util]") {
   using namespace sequant;
 
   SECTION("greek->latex") {
-    using namespace std::string_literals;
-    REQUIRE(io::latex::greek_characters_to_string("alpha"s) == "alpha");
-    REQUIRE_THROWS_AS(io::latex::greek_characters_to_string("α"s) == "\\alpha",
-                      Exception);
-
-    REQUIRE(io::latex::greek_characters_to_string(std::wstring(L"alpha")) ==
-            L"alpha");
-    REQUIRE(io::latex::greek_characters_to_string(std::wstring(L"α")) ==
-            L"\\alpha");
-
-    REQUIRE(io::latex::greek_characters_to_string(std::wstring(L"Alpha")) ==
-            L"Alpha");
-    REQUIRE(io::latex::greek_characters_to_string(std::wstring(L"Α")) == L"A");
-    REQUIRE(io::latex::greek_characters_to_string(std::wstring(L"Γ")) ==
-            L"\\Gamma");
-
-    REQUIRE(io::latex::greek_characters_to_string(std::u8string(u8"alpha")) ==
-            u8"alpha");
-    REQUIRE_THROWS_AS(io::latex::greek_characters_to_string(
-                          std::u8string(u8"α")) == u8"\\alpha",
-                      Exception);
-    REQUIRE_THROWS_AS(io::latex::greek_characters_to_string(
-                          std::u8string(u8"Γ")) == u8"\\Gamma",
-                      Exception);
-
-    REQUIRE(io::latex::greek_characters_to_string(std::u16string(u"alpha")) ==
-            u"alpha");
-    REQUIRE(io::latex::greek_characters_to_string(std::u16string(u"α")) ==
-            u"\\alpha");
-    REQUIRE(io::latex::greek_characters_to_string(std::u16string(u"Γ")) ==
-            u"\\Gamma");
-
-    REQUIRE(io::latex::greek_characters_to_string(std::u32string(U"alpha")) ==
-            U"alpha");
-    REQUIRE(io::latex::greek_characters_to_string(std::u32string(U"α")) ==
-            U"\\alpha");
-    REQUIRE(io::latex::greek_characters_to_string(std::u32string(U"Γ")) ==
-            U"\\Gamma");
+    REQUIRE(io::latex::greek_characters_to_string("") == "");
+    REQUIRE(io::latex::greek_characters_to_string("alpha") == "alpha");
+    REQUIRE(io::latex::greek_characters_to_string("α") == "\\alpha");
+    REQUIRE(io::latex::greek_characters_to_string("Alpha") == "Alpha");
+    REQUIRE(io::latex::greek_characters_to_string("Α") == "A");
+    REQUIRE(io::latex::greek_characters_to_string("Γ") == "\\Gamma");
+    REQUIRE(io::latex::greek_characters_to_string("aγb") == "a\\gammab");
+    // other non-ASCII characters (incl. ones outside of the BMP) are kept
+    REQUIRE(io::latex::greek_characters_to_string("α↑𝛼ω") ==
+            "\\alpha↑𝛼\\omega");
   }
 
   SECTION("diactrids->latex") {
-    std::wstring tilde__a = L"ã";
-    REQUIRE(tilde__a.size() == 2);
-    REQUIRE(io::latex::diactrics_to_string(tilde__a) == L"\\tilde{a}");
-    std::wstring tilde_a = L"ã";
-    REQUIRE(tilde_a.size() == 1);
-    REQUIRE(io::latex::diactrics_to_string(tilde_a) == L"\\tilde{a}");
-    std::wstring tilde_A = L"Ã";
-    REQUIRE(tilde_A.size() == 1);
-    REQUIRE(io::latex::diactrics_to_string(tilde_A) == L"\\tilde{A}");
+    std::string tilde__a = "ã";
+    REQUIRE(to_utf32(tilde__a).size() == 2);
+    REQUIRE(io::latex::diactrics_to_string(tilde__a) == "\\tilde{a}");
+    std::string tilde_a = "ã";
+    REQUIRE(to_utf32(tilde_a).size() == 1);
+    REQUIRE(io::latex::diactrics_to_string(tilde_a) == "\\tilde{a}");
+    std::string tilde_A = "Ã";
+    REQUIRE(to_utf32(tilde_A).size() == 1);
+    REQUIRE(io::latex::diactrics_to_string(tilde_A) == "\\tilde{A}");
 
-    std::wstring tilde__f = L"f̃";
-    REQUIRE(tilde__f.size() == 2);
-    REQUIRE(io::latex::diactrics_to_string(tilde__f) == L"\\tilde{f}");
-    std::wstring grave__f = L"f̀";
-    REQUIRE(grave__f.size() == 2);
-    REQUIRE(io::latex::diactrics_to_string(grave__f) == L"\\grave{f}");
-    std::wstring acute__f = L"f́";
-    REQUIRE(acute__f.size() == 2);
-    REQUIRE(io::latex::diactrics_to_string(acute__f) == L"\\acute{f}");
-    std::wstring caron__f = L"f̌";
-    REQUIRE(caron__f.size() == 2);
-    REQUIRE(io::latex::diactrics_to_string(caron__f) == L"\\check{f}");
+    std::string tilde__f = "f̃";
+    REQUIRE(to_utf32(tilde__f).size() == 2);
+    REQUIRE(io::latex::diactrics_to_string(tilde__f) == "\\tilde{f}");
+    std::string grave__f = "f̀";
+    REQUIRE(to_utf32(grave__f).size() == 2);
+    REQUIRE(io::latex::diactrics_to_string(grave__f) == "\\grave{f}");
+    std::string acute__f = "f́";
+    REQUIRE(to_utf32(acute__f).size() == 2);
+    REQUIRE(io::latex::diactrics_to_string(acute__f) == "\\acute{f}");
+    std::string caron__f = "f̌";
+    REQUIRE(to_utf32(caron__f).size() == 2);
+    REQUIRE(io::latex::diactrics_to_string(caron__f) == "\\check{f}");
     // characters after a replacement are kept, whether replaced or not
-    std::wstring tilde__f_g = L"f̃g";
-    REQUIRE(io::latex::diactrics_to_string(tilde__f_g) == L"\\tilde{f}g");
-    std::wstring tilde_a_arrow = L"ã→";
-    REQUIRE(io::latex::diactrics_to_string(tilde_a_arrow) == L"\\tilde{a}→");
+    std::string tilde__f_g = "f̃g";
+    REQUIRE(io::latex::diactrics_to_string(tilde__f_g) == "\\tilde{f}g");
+    std::string tilde_a_arrow = "ã→";
+    REQUIRE(io::latex::diactrics_to_string(tilde_a_arrow) == "\\tilde{a}→");
     // a non-ASCII character that follows a combined pair and ends the string
     // (a spin-cased label) is not taken to carry the pair's diacritic
-    std::wstring tilde__mu_up = L"μ̃↑";
-    REQUIRE(tilde__mu_up.size() == 3);
-    REQUIRE(io::latex::diactrics_to_string(tilde__mu_up) == L"\\tilde{μ}↑");
-    REQUIRE(io::latex::utf_to_string(tilde__mu_up) == L"\\tilde{\\mu}↑");
+    std::string tilde__mu_up = "μ̃↑";
+    REQUIRE(to_utf32(tilde__mu_up).size() == 3);
+    REQUIRE(io::latex::diactrics_to_string(tilde__mu_up) == "\\tilde{μ}↑");
+    REQUIRE(io::latex::utf_to_string(tilde__mu_up) == "\\tilde{\\mu}↑");
 
-    // notice the size is 1 since these are precomposed characters
-    std::wstring hat_A = L"Â";
-    REQUIRE(hat_A.size() == 1);
-    REQUIRE(io::latex::diactrics_to_string(hat_A) == L"\\hat{A}");
-    std::wstring hat_S = L"Ŝ";
-    REQUIRE(hat_S.size() == 1);
-    REQUIRE(io::latex::diactrics_to_string(hat_S) == L"\\hat{S}");
+    // notice the size is 1 since these are precomposed characters (i.e., single
+    // code points)
+    std::string hat_A = "Â";
+    REQUIRE(to_utf32(hat_A).size() == 1);
+    REQUIRE(io::latex::diactrics_to_string(hat_A) == "\\hat{A}");
+    std::string hat_S = "Ŝ";
+    REQUIRE(to_utf32(hat_S).size() == 1);
+    REQUIRE(io::latex::diactrics_to_string(hat_S) == "\\hat{S}");
   }
 
   SECTION("UTF->latex") {
-    std::wstring tilde__alpha = L"α̃";
-    REQUIRE(tilde__alpha.size() == 2);
-    REQUIRE(io::latex::utf_to_string(tilde__alpha) == L"\\tilde{\\alpha}");
-    std::wstring hat__alpha = L"α̂";
-    REQUIRE(hat__alpha.size() == 2);
-    REQUIRE(io::latex::utf_to_string(hat__alpha) == L"\\hat{\\alpha}");
+    std::string tilde__alpha = "α̃";
+    REQUIRE(to_utf32(tilde__alpha).size() == 2);
+    REQUIRE(io::latex::utf_to_string(tilde__alpha) == "\\tilde{\\alpha}");
+    std::string hat__alpha = "α̂";
+    REQUIRE(to_utf32(hat__alpha).size() == 2);
+    REQUIRE(io::latex::utf_to_string(hat__alpha) == "\\hat{\\alpha}");
   }
 }

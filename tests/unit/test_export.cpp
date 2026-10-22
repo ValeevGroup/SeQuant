@@ -208,7 +208,7 @@ bool set_irreps_by_label(ItfContext &ctx, std::string_view spec) {
     return false;
   }
 
-  container::map<std::wstring, IrrepSet<Irrep>> irreps;
+  container::map<std::string, IrrepSet<Irrep>> irreps;
   for (auto entry : std::ranges::views::split(spec, ',')) {
     std::string current(entry.begin(), entry.end());
     boost::trim(current);
@@ -223,7 +223,7 @@ bool set_irreps_by_label(ItfContext &ctx, std::string_view spec) {
       set.insert(make_irrep<Group>(std::string_view(name.begin(), name.end())));
     }
 
-    irreps.emplace(toUtf16(current.substr(0, pos)), std::move(set));
+    irreps.emplace(std::string(current.substr(0, pos)), std::move(set));
   }
 
   ctx.set_irrep_context(IrrepContext<Z2Algebra<Group>>(
@@ -376,7 +376,7 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
 
   auto resetter = to_export_context();
 
-  REQUIRE(Index(L"i_1") < Index(L"a_1"));
+  REQUIRE(Index("i_1") < Index("a_1"));
 
   // Safe-guard that template magic works
   const std::size_t n_generators = 7;
@@ -465,55 +465,55 @@ TEST_CASE("export", "[export]") {
   auto resetter = to_export_context();
 
   SECTION("reordering_context") {
-    REQUIRE(Index(L"i_1").space().dimension() >
-            Index(L"u_1").space().dimension());
-    REQUIRE(Index(L"a_1").space().dimension() >
-            Index(L"i_1").space().dimension());
+    REQUIRE(Index("i_1").space().dimension() >
+            Index("u_1").space().dimension());
+    REQUIRE(Index("a_1").space().dimension() >
+            Index("i_1").space().dimension());
 
-    std::vector<std::pair<std::wstring, std::array<std::string, 3>>> tests = {
+    std::vector<std::pair<std::string, std::array<std::string, 3>>> tests = {
         // Unchanged
-        {L"t{a1;i1}:N-N-N",
+        {"t{a1;i1}:N-N-N",
          {"t{a1;i1}:N-N-N", "t{a1;i1}:N-N-N", "t{a1;i1}:N-N-N"}},
-        {L"t{a1,a2;i1,i2}:N-N-S",
+        {"t{a1,a2;i1,i2}:N-N-S",
          {"t{a1,a2;i1,i2}:N-N-S", "t{a1,a2;i1,i2}:N-N-S",
           "t{a1,a2;i1,i2}:N-N-S"}},
         // Bra resorting
-        {L"t{a1,i1}:S-N-S",
+        {"t{a1,i1}:S-N-S",
          {"t{;;i1,a1}:N-N-N", "t{a1,i1}:S-N-S", "t{a1,i1}:S-N-S"}},
-        {L"t{i1,a1}:S-N-S",
+        {"t{i1,a1}:S-N-S",
          {"t{i1,a1}:S-N-S", "t{;;a1,i1}:N-N-N", "t{i1,a1}:S-N-S"}},
         // Ket resorting
-        {L"t{;a1,i1}:S-N-S",
+        {"t{;a1,i1}:S-N-S",
          {"t{;;i1,a1}:N-N-N", "t{;a1,i1}:S-N-S", "t{;a1,i1}:S-N-S"}},
-        {L"t{;i1,a1}:S-N-S",
+        {"t{;i1,a1}:S-N-S",
          {"t{;i1,a1}:S-N-S", "t{;;a1,i1}:N-N-N", "t{;i1,a1}:S-N-S"}},
-        {L"t{;u1,a1}:S-N-S",
+        {"t{;u1,a1}:S-N-S",
          {"t{;u1,a1}:S-N-S", "t{;;a1,u1}:N-N-N", "t{;u1,a1}:S-N-S"}},
         // BraKet swapping
-        {L"t{a1;i1}:N-S-N",
+        {"t{a1;i1}:N-S-N",
          {"t{;;i1,a1}:N-N-N", "t{a1;i1}:N-S-N", "t{a1;i1}:N-S-N"}},
-        {L"t{i1;a1}:N-S-N",
+        {"t{i1;a1}:N-S-N",
          {"t{i1;a1}:N-S-N", "t{;;a1,i1}:N-N-N", "t{i1;a1}:N-S-N"}},
         // Aux prioritization
-        {L"t{i1;;a1}:N-N-N",
+        {"t{i1;;a1}:N-N-N",
          {"t{i1;;a1}:N-N-N", "t{;;a1,i1}:N-N-N", "t{i1;;a1}:N-N-N"}},
-        {L"t{a1;;i1}:N-N-N",
+        {"t{a1;;i1}:N-N-N",
          {"t{;;i1,a1}:N-N-N", "t{a1;;i1}:N-N-N", "t{a1;;i1}:N-N-N"}},
         // Column-resorting (particle-symmetry)
-        {L"t{i1,i2;u1,a1}:N-N-S",
+        {"t{i1,i2;u1,a1}:N-N-S",
          {"t{i1,i2;u1,a1}:N-N-S", "t{;;i2,i1,a1,u1}:N-N-N",
           "t{i1,i2;u1,a1}:N-N-S"}},
-        {L"t{u1,a1;i1,i2}:N-N-S",
+        {"t{u1,a1;i1,i2}:N-N-S",
          {"t{u1,a1;i1,i2}:N-N-S", "t{;;a1,u1,i2,i1}:N-N-N",
           "t{u1,a1;i1,i2}:N-N-S"}},
-        {L"t{u1,a1;i1,u2}:N-N-S",
+        {"t{u1,a1;i1,u2}:N-N-S",
          {"t{u1,a1;i1,u2}:N-N-S", "t{;;a1,u1,u2,i1}:N-N-N",
           "t{u1,a1;i1,u2}:N-N-S"}},
-        {L"t{i1,u2;u1,a1}:N-N-S",
+        {"t{i1,u2;u1,a1}:N-N-S",
          {"t{i1,u2;u1,a1}:N-N-S", "t{;;u2,i1,a1,u1}:N-N-N",
           "t{i1,u2;u1,a1}:N-N-S"}},
         // combined
-        {L"t{u1,a1;u2,i1}:N-S-S",
+        {"t{u1,a1;u2,i1}:N-S-S",
          {"t{;;u2,i1,u1,a1}:N-N-N", "t{;;a1,u1,i1,u2}:N-N-N",
           "t{u1,a1;u2,i1}:N-S-S"}},
     };
@@ -528,7 +528,7 @@ TEST_CASE("export", "[export]") {
       ctx.set_memory_layout(layout);
 
       for (const auto &[input, candidates] : tests) {
-        CAPTURE(toUtf8(input));
+        CAPTURE(std::string(input));
 
         const std::string &expected =
             candidates.at(static_cast<std::size_t>(layout));
@@ -540,7 +540,7 @@ TEST_CASE("export", "[export]") {
                 ->as<Tensor>();
         bool rewritten = ctx.rewrite(tensor);
         REQUIRE_THAT(tensor, EquivalentTo(expected));
-        REQUIRE(rewritten == (toUtf8(input) != expected));
+        REQUIRE(rewritten == (std::string(input) != expected));
       }
     }
   }
@@ -549,20 +549,20 @@ TEST_CASE("export", "[export]") {
     // ã: a basis of a (extent 100) of extent 1000; the slot in ã, not the
     // space, is the one moved to the fastest position
     auto reg = *get_default_context().index_basis_registry();
-    const IndexSpace virt = reg.retrieve_space(L"a");
-    reg.add(L"ã", virt, 1, {.extent = 1000});
+    const IndexSpace virt = reg.retrieve_space("a");
+    reg.add("ã", virt, 1, {.extent = 1000});
     auto ctx_resetter = set_scoped_default_context(
         get_default_context_snapshot().set(std::move(reg)));
-    const Index a1(L"a_1"), ã1(L"ã_1");
+    const Index a1("a_1"), ã1("ã_1");
     REQUIRE(ã1.basis().extent() > a1.basis().extent());
     REQUIRE(ã1.space() == a1.space());
 
     auto symm = [](const Index &b, const Index &k) {
-      return Tensor(L"t", bra{b}, ket{k}, Symmetry::Nonsymm,
+      return Tensor("t", bra{b}, ket{k}, Symmetry::Nonsymm,
                     BraKetSymmetry::Symm, ColumnSymmetry::Nonsymm);
     };
     auto flat = [](const Index &i1, const Index &i2) {
-      return Tensor(L"t", bra{}, ket{}, aux{i1, i2}, Symmetry::Nonsymm,
+      return Tensor("t", bra{}, ket{}, aux{i1, i2}, Symmetry::Nonsymm,
                     BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
     };
     // {input, {RowMajor, ColumnMajor}}: the largest slot goes last (row
@@ -592,9 +592,9 @@ TEST_CASE("export", "[export]") {
     // a density is reordered into the aux-only layout like any other tensor
     ReorderingContext ctx(MemoryLayout::ColumnMajor);
     for (const auto &[density, like] :
-         {std::pair{L"γ{u1,a1;u2,i1}", L"t{u1,a1;u2,i1}:A-H-S"},
-          std::pair{L"Γ{u1,a1;u2,i1}", L"t{u1,a1;u2,i1}:N-H-S"}}) {
-      CAPTURE(toUtf8(density));
+         {std::pair{"γ{u1,a1;u2,i1}", "t{u1,a1;u2,i1}:A-H-S"},
+          std::pair{"Γ{u1,a1;u2,i1}", "t{u1,a1;u2,i1}:N-H-S"}}) {
+      CAPTURE(std::string(density));
       Tensor tensor = deserialize(density)->as<Tensor>();
       Tensor reference = deserialize(like)->as<Tensor>();
       bool rewritten = false;
@@ -615,7 +615,7 @@ TEST_CASE("export", "[export]") {
           space);
     REQUIRE_NOTHROW(export_expression(
         to_export_tree(deserialize<ResultExpr>(
-            L"R{u1,a1;u2,i1} = γ{u1,a1;u2,i1} + Γ{u1,a1;u2,i1}")),
+            "R{u1,a1;u2,i1} = γ{u1,a1;u2,i1} + Γ{u1,a1;u2,i1}")),
         generator, julia_ctx));
   }
 
@@ -624,12 +624,12 @@ TEST_CASE("export", "[export]") {
     GenerationOptimizer<TextGenerator<TextGeneratorContext>> generator(textgen);
     TextGeneratorContext ctx;
 
-    Variable v1{L"v1"};
-    Variable v2{L"v2"};
-    Variable v3{L"v3"};
+    Variable v1{"v1"};
+    Variable v2{"v2"};
+    Variable v3{"v3"};
 
     SECTION("unchanged") {
-      export_expression(to_export_tree(deserialize<ResultExpr>(L"v1 = 2 v2")),
+      export_expression(to_export_tree(deserialize<ResultExpr>("v1 = 2 v2")),
                         generator, ctx);
 
       REQUIRE_THAT(generator.get_generated_code(),
@@ -645,7 +645,7 @@ TEST_CASE("export", "[export]") {
     SECTION("elided load/unload") {
       SECTION("single") {
         export_expression(
-            to_export_tree(deserialize<ResultExpr>(L"v1 = 2 v2 + 4 v2 v3")),
+            to_export_tree(deserialize<ResultExpr>("v1 = 2 v2 + 4 v2 v3")),
             generator, ctx);
 
         REQUIRE_THAT(generator.get_generated_code(),
@@ -664,7 +664,7 @@ TEST_CASE("export", "[export]") {
       }
       SECTION("multiple") {
         export_expression(to_export_tree(deserialize<ResultExpr>(
-                              L"ECC = 2 g{i1,i2;a1,a2} t{a1,a2;i1,i2} "
+                              "ECC = 2 g{i1,i2;a1,a2} t{a1,a2;i1,i2} "
                               "- g{i1,i2;a1,a2} t{a2,a1;i1,i2}")),
                           generator, ctx);
 
@@ -698,8 +698,8 @@ TEST_CASE("export", "[export]") {
 
         export_expression(
             to_export_tree(deserialize<ResultExpr>(
-                L"R{a1,a2;i1,i2} = A{a1,a2;i1,i2} + A{a3,a4;i1,i2} "
-                L"B{a1,a2;a3,a4} + A{a1,a2;i3,i4} B{a3,a4;i1,i2}")),
+                "R{a1,a2;i1,i2} = A{a1,a2;i1,i2} + A{a3,a4;i1,i2} "
+                "B{a1,a2;a3,a4} + A{a1,a2;i3,i4} B{a3,a4;i1,i2}")),
             generator, ctx);
         REQUIRE_THAT(
             generator.get_generated_code(),
@@ -750,7 +750,7 @@ TEST_CASE("export", "[export]") {
         // compatibility to frameworks with stack-based memory models
         export_expression(
             to_export_tree(deserialize<ResultExpr>(
-                L"R{a1;i1} = 2 B{a1;i1} + B{a1;i1} C - C D{a1;i1}")),
+                "R{a1;i1} = 2 B{a1;i1} + B{a1;i1} C - C D{a1;i1}")),
             generator, ctx);
 
         REQUIRE_THAT(
@@ -778,8 +778,8 @@ TEST_CASE("export", "[export]") {
       }
       SECTION("reused intermediates") {
         export_expression(to_export_tree(deserialize<ResultExpr>(
-                              L"ECC = 2 K{i1,i2;a1,a2} t{a1;i1} t{a2;i2} - "
-                              L"K{i1,i2;a1,a2} t{a1;i2} t{a2;i1}")),
+                              "ECC = 2 K{i1,i2;a1,a2} t{a1;i1} t{a2;i2} - "
+                              "K{i1,i2;a1,a2} t{a1;i2} t{a2;i1}")),
                           generator, ctx);
 
         REQUIRE_THAT(
@@ -816,8 +816,8 @@ TEST_CASE("export", "[export]") {
       SECTION("requires caution") {
         export_expression(
             to_export_tree(deserialize<ResultExpr>(
-                L"R{a1,a2;i1,i2} = g{i3,i4;a3,a4} t{a4;i2} t{a1,a3;i1,i4} "
-                L"t{a2;i3} "
+                "R{a1,a2;i1,i2} = g{i3,i4;a3,a4} t{a4;i2} t{a1,a3;i1,i4} "
+                "t{a2;i3} "
                 "- 2 g{i3,i4;a3,a4} t{a4;i2} t{a1,a3;i1,i3} t{a2;i4} ")),
             generator, ctx);
 
@@ -881,9 +881,9 @@ TEST_CASE("export", "[export]") {
       SECTION("tbd2") {
         export_expression(
             to_export_tree(deserialize<ResultExpr>(
-                L"R1{u_1;i_1;} = "
-                L"+ 2 g{u_2, i_2;a_1, a_2;} (GAM0{u_3, u_4;u_5, u_2;} T2g{a_2, "
-                L"u_5;u_3, i_2;}) T2g{a_1, u_1;i_1, u_4;} "
+                "R1{u_1;i_1;} = "
+                "+ 2 g{u_2, i_2;a_1, a_2;} (GAM0{u_3, u_4;u_5, u_2;} T2g{a_2, "
+                "u_5;u_3, i_2;}) T2g{a_1, u_1;i_1, u_4;} "
                 "+ -4 g{u_2, i_2;a_1, a_2;} (GAM0{u_3, u_4;u_5, u_2;} T2g{a_1, "
                 "u_5;i_2, u_3;}) T2g{a_2, u_1;u_4, i_1;} ")),
             generator, ctx);
@@ -894,25 +894,25 @@ TEST_CASE("export", "[export]") {
   }
 
   SECTION("itf") {
-    std::wstring int_label = L"g";
+    std::string int_label = "g";
     ItfContext ctx;
     ctx.set_two_electron_integral_label(int_label);
 
     SECTION("remap_integrals") {
       SECTION("Unchanged") {
-        Tensor tensor = deserialize(L"t{i1;a1}:N-N-N")->as<Tensor>();
+        Tensor tensor = deserialize("t{i1;a1}:N-N-N")->as<Tensor>();
         bool rewritten = ctx.rewrite(tensor);
         REQUIRE_THAT(tensor, EquivalentTo("t{i1;a1}:N-N-N"));
         REQUIRE_FALSE(rewritten);
 
-        tensor = deserialize(int_label + L"{a1;i1}:N-N-N")->as<Tensor>();
+        tensor = deserialize(int_label + "{a1;i1}:N-N-N")->as<Tensor>();
         rewritten = ctx.rewrite(tensor);
         REQUIRE_THAT(tensor, EquivalentTo("g{a1;i1}:N-N-N"));
       }
 
       SECTION("K") {
         SECTION("occ,occ,occ,occ") {
-          std::vector<Index> indices = {L"i_1", L"i_2", L"i_3", L"i_4"};
+          std::vector<Index> indices = {"i_1", "i_2", "i_3", "i_4"};
           REQUIRE(indices.size() == 4);
 
           for (const std::vector<std::size_t> &indexPerm :
@@ -932,7 +932,7 @@ TEST_CASE("export", "[export]") {
         }
 
         SECTION("virt,virt,occ,occ") {
-          std::vector<Index> indices = {L"a_1", L"a_2", L"i_1", L"i_2"};
+          std::vector<Index> indices = {"a_1", "a_2", "i_1", "i_2"};
           REQUIRE(indices.size() == 4);
 
           for (const std::vector<std::size_t> &indexPerm :
@@ -951,7 +951,7 @@ TEST_CASE("export", "[export]") {
         }
 
         SECTION("virt,virt,virt,virt") {
-          std::vector<Index> indices = {L"a_1", L"a_2", L"a_3", L"a_4"};
+          std::vector<Index> indices = {"a_1", "a_2", "a_3", "a_4"};
           REQUIRE(indices.size() == 4);
 
           for (const std::vector<std::size_t> &indexPerm :
@@ -972,7 +972,7 @@ TEST_CASE("export", "[export]") {
 
       SECTION("J") {
         SECTION("virt,occ,virt,occ") {
-          std::vector<Index> indices = {L"a_1", L"i_1", L"a_2", L"i_2"};
+          std::vector<Index> indices = {"a_1", "i_1", "a_2", "i_2"};
           REQUIRE(indices.size() == 4);
 
           for (const std::vector<std::size_t> &indexPerm :
@@ -991,7 +991,7 @@ TEST_CASE("export", "[export]") {
         }
 
         SECTION("virt,occ,virt,virt") {
-          std::vector<Index> indices = {L"a_1", L"i_1", L"a_2", L"a_3"};
+          std::vector<Index> indices = {"a_1", "i_1", "a_2", "a_3"};
           REQUIRE(indices.size() == 4);
 
           for (const std::vector<std::size_t> &indexPerm :
@@ -1033,12 +1033,12 @@ TEST_CASE("export reuse-zero not applied to repeated leaf operand",
 
   // The intermediate carries its single index in the aux slot, mirroring a
   // density-fitting-style common subexpression that is contracted with itself.
-  const Tensor intermediate = deserialize(L"X{;;x1}")->as<Tensor>();
+  const Tensor intermediate = deserialize("X{;;x1}")->as<Tensor>();
   ctx.setZeroStrategy(intermediate,
                       ZeroStrategy::ZeroOnReuse | ZeroStrategy::ZeroOnCreate);
 
   export_expression(
-      to_export_tree(deserialize<ResultExpr>(L"ECC = 2 X{;;x1} X{;;x1}")),
+      to_export_tree(deserialize<ResultExpr>("ECC = 2 X{;;x1} X{;;x1}")),
       generator, ctx);
 
   const std::string code = generator.get_generated_code();
@@ -1053,7 +1053,7 @@ TEST_CASE("export reuse-zero not applied to repeated leaf operand",
 
 TEST_CASE("ExportExpr", "[export]") {
   SECTION("id & equality") {
-    Variable v(L"V");
+    Variable v("V");
 
     ExportExpr e1(v);
     ExportExpr e2(v);
@@ -1071,8 +1071,8 @@ TEST_CASE("JuliaTensorOperationsGenerator", "[export]") {
   SECTION("load scalar and set to zero") {
     JuliaTensorOperationsGenerator<> generator;
     JuliaTensorOperationsGeneratorContext ctx;
-    generator.set_to_zero(Variable(L"x"), ctx);
-    generator.load(Variable(L"y"), /*set_to_zero=*/true, ctx);
+    generator.set_to_zero(Variable("x"), ctx);
+    generator.load(Variable("y"), /*set_to_zero=*/true, ctx);
 
     REQUIRE(generator.get_generated_code() == "x = 0.0\ny = 0.0\n");
   }
@@ -1087,9 +1087,9 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
 
   SECTION("NumPy backend - simple contraction") {
     // Create tensors: T[a1, a2] = F[a1, i1] * t[i1, a2]
-    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
-    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
-    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+    auto F = ex<Tensor>("F", bra{"a_1"}, ket{"i_1"});
+    auto t = ex<Tensor>("t", bra{"i_1"}, ket{"a_2"});
+    Tensor T("T", bra{"a_1"}, ket{"a_2"});
 
     // Build the expression
     ResultExpr result_expr(T, F * t);
@@ -1121,9 +1121,9 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
 
   SECTION("PyTorch backend - simple contraction") {
     // Create tensors: T[a1, a2] = F[a1, i1] * t[i1, a2]
-    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
-    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
-    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+    auto F = ex<Tensor>("F", bra{"a_1"}, ket{"i_1"});
+    auto t = ex<Tensor>("t", bra{"i_1"}, ket{"a_2"});
+    Tensor T("T", bra{"a_1"}, ket{"a_2"});
 
     ResultExpr result_expr(T, F * t);
     auto export_tree = to_export_tree(result_expr);
@@ -1150,14 +1150,14 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
 
   SECTION("Scalar factor") {
     // Test with scalar prefactor: R = 0.5 * t1 * t2
-    Index i1(L"i_1", occ);
-    Index i2(L"i_2", occ);
-    Index a1(L"a_1", virt);
-    Index a2(L"a_2", virt);
+    Index i1("i_1", occ);
+    Index i2("i_2", occ);
+    Index a1("a_1", virt);
+    Index a2("a_2", virt);
 
-    auto t1 = ex<Tensor>(L"t1", bra{L"i_1"}, ket{L"a_1"});
-    auto t2 = ex<Tensor>(L"t2", bra{L"i_2"}, ket{L"a_2"});
-    Tensor R(L"R", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    auto t1 = ex<Tensor>("t1", bra{"i_1"}, ket{"a_1"});
+    auto t2 = ex<Tensor>("t2", bra{"i_2"}, ket{"a_2"});
+    Tensor R("R", bra{"i_1", "i_2"}, ket{"a_1", "a_2"});
 
     ResultExpr result_with_scalar(R, rational(1, 2) * t1 * t2);
     auto export_tree_scalar = to_export_tree(result_with_scalar);
@@ -1180,9 +1180,9 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
   }
 
   SECTION("Scalar result - energy expression") {
-    auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
-    auto t = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
-    Variable E(L"E");
+    auto g = ex<Tensor>("g", bra{"i_1", "i_2"}, ket{"a_1", "a_2"});
+    auto t = ex<Tensor>("t", bra{"a_1", "a_2"}, ket{"i_1", "i_2"});
+    Variable E("E");
 
     ResultExpr result_expr(E, g * t);
     auto export_tree = to_export_tree(result_expr);
@@ -1208,13 +1208,13 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
 TEST_CASE("export-basis-instance", "[export][basis]") {
   using Catch::Matchers::ContainsSubstring;
   auto resetter = to_export_context();
-  const Index y = Index(L"a_7").replace_basis_instance(1);
+  const Index y = Index("a_7").replace_basis_instance(1);
 
   auto registry = get_default_context().index_basis_registry();
   const IndexSpace occ = registry->retrieve_space("i");
   const IndexSpace virt = registry->retrieve_space("a");
-  const Tensor t(L"t", bra{y}, ket{L"i_1"});
-  const Tensor t_null(L"t", bra{L"a_7"}, ket{L"i_1"});
+  const Tensor t("t", bra{y}, ket{"i_1"});
+  const Tensor t_null("t", bra{"a_7"}, ket{"i_1"});
 
   // a mode in a basis instance appends the instance to its block tag; the
   // generic block is named as before
@@ -1261,9 +1261,9 @@ TEST_CASE("export-basis-instance", "[export][basis]") {
       ctx.set_tag(occ, "o");
       ctx.set_tag(virt, "v");
       // the result is in basis 1, so its allocation shows the basis' extent
-      ResultExpr result(Tensor(L"R", bra{y}, ket{L"i_1"}),
-                        ex<Tensor>(L"f", bra{y}, ket{L"a_1"}) *
-                            ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}));
+      ResultExpr result(Tensor("R", bra{y}, ket{"i_1"}),
+                        ex<Tensor>("f", bra{y}, ket{"a_1"}) *
+                            ex<Tensor>("t", bra{"a_1"}, ket{"i_1"}));
       export_expression(to_export_tree(result), generator, ctx);
       return generator.get_generated_code();
     };
@@ -1279,9 +1279,9 @@ TEST_CASE("export-basis-instance", "[export][basis]") {
   // make an appended instance ambiguous (v1 + "" vs v + 1, nvirt_ + _1 vs
   // nvirt + _ + 1), so an instance-bearing mode in such a space is refused
   SECTION("ambiguous space tag") {
-    const Index z = Index(L"a_7").replace_basis_instance(1);
-    const Tensor tz(L"t", bra{z}, ket{L"i_1"});
-    const Tensor t0(L"t", bra{L"a_7"}, ket{L"i_1"});
+    const Index z = Index("a_7").replace_basis_instance(1);
+    const Tensor tz("t", bra{z}, ket{"i_1"});
+    const Tensor t0("t", bra{"a_7"}, ket{"i_1"});
     ItfContext itf_ctx;
     itf_ctx.set_tag(occ, "o");
     itf_ctx.set_tag(virt, "v1");
@@ -1308,8 +1308,8 @@ TEST_CASE("export-basis-instance", "[export][basis]") {
   // a negative instance is spelled with an `_` in place of the minus sign,
   // which no identifier may contain; a letter would read as the tag of a space
   SECTION("negative instance") {
-    const Index z = Index(L"a_7").replace_basis_instance(-12);
-    const Tensor tz(L"t", bra{z}, ket{L"i_1"});
+    const Index z = Index("a_7").replace_basis_instance(-12);
+    const Tensor tz("t", bra{z}, ket{"i_1"});
     ItfContext itf_ctx;
     itf_ctx.set_tag(occ, "o");
     itf_ctx.set_tag(virt, "v");
@@ -1319,11 +1319,11 @@ TEST_CASE("export-basis-instance", "[export][basis]") {
     // and t{a,u<;1>;i} one block
     const IndexSpace u = registry->retrieve_space("u");
     itf_ctx.set_tag(u, "m");
-    const Tensor t_neg(L"t", bra{Index(L"a_1").replace_basis_instance(-1)},
-                       ket{L"i_1"});
-    const Tensor t_m(
-        L"t", bra{Index(L"a_1"), Index(L"u_1").replace_basis_instance(1)},
-        ket{L"i_1"});
+    const Tensor t_neg("t", bra{Index("a_1").replace_basis_instance(-1)},
+                       ket{"i_1"});
+    const Tensor t_m("t",
+                     bra{Index("a_1"), Index("u_1").replace_basis_instance(1)},
+                     ket{"i_1"});
     const ItfGenerator<ItfContext> itf;
     CHECK(itf.get_name(t_neg, itf_ctx) != itf.get_name(t_m, itf_ctx));
     JuliaTensorOperationsGeneratorContext julia_ctx;
@@ -1337,9 +1337,9 @@ TEST_CASE("export-basis-instance", "[export][basis]") {
     py_ctx.set_tag(occ, "o");
     py_ctx.set_tag(virt, "v");
     NumPyEinsumGenerator py;
-    ResultExpr result(Tensor(L"R", bra{z}, ket{L"i_1"}),
-                      ex<Tensor>(L"f", bra{z}, ket{L"a_1"}) *
-                          ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}));
+    ResultExpr result(Tensor("R", bra{z}, ket{"i_1"}),
+                      ex<Tensor>("f", bra{z}, ket{"a_1"}) *
+                          ex<Tensor>("t", bra{"a_1"}, ket{"i_1"}));
     export_expression(to_export_tree(result), py, py_ctx);
     CHECK_THAT(py.get_generated_code(),
                ContainsSubstring("R_v_12o") && ContainsSubstring("f_v_12v"));
@@ -1370,9 +1370,9 @@ TEST_CASE("export-irrep-name", "[export][irreps]") {
   NumberedIrrepItfContext ctx;
   configure_context_defaults(ctx);
   ctx.set_irrep_context(IrrepContext<Z2Algebra<point_groups::D2>>(
-      resolve_by_label<Irrep>({{L"t", {make_irrep<point_groups::D2>("B1")}},
-                               {L"v", {make_irrep<point_groups::D2>("B2")}},
-                               {L"f", {make_irrep<point_groups::D2>("A")}}})));
+      resolve_by_label<Irrep>({{"t", {make_irrep<point_groups::D2>("B1")}},
+                               {"v", {make_irrep<point_groups::D2>("B2")}},
+                               {"f", {make_irrep<point_groups::D2>("A")}}})));
 
   auto groups =
       parse_expression_spec("R{a1;i1} = t{a1;i2} f{i2;i3} v{i3;i1}", false);
@@ -1399,9 +1399,9 @@ TEST_CASE("export-irreps", "[export][irreps]") {
     REQUIRE(!ctx.has_irrep_context());
     REQUIRE_THROWS_AS(ctx.irrep_context(), Exception);
 
-    const Tensor t = deserialize(L"t{a1;i1}")->as<Tensor>();
+    const Tensor t = deserialize("t{a1;i1}")->as<Tensor>();
     // Same tensor block as t
-    const Tensor t_other = deserialize(L"t{a2;i2}")->as<Tensor>();
+    const Tensor t_other = deserialize("t{a2;i2}")->as<Tensor>();
 
     REQUIRE(ctx.irreps_of(t) == nullptr);
     ctx.register_irreps(t, Set{irrep("B1")}, IrrepOrigin::Input);
@@ -1439,7 +1439,7 @@ TEST_CASE("export-irreps", "[export][irreps]") {
     configure_context_defaults(ctx);
     ctx.set_irrep_context(
         IrrepContext<Z2Algebra<D2>>([&](const Tensor &tensor) -> Set {
-          if (tensor.label() == L"t") {
+          if (tensor.label() == "t") {
             return {calls++ == 0 ? irrep("B1") : irrep("B2")};
           }
           return {irrep("A")};
@@ -1462,7 +1462,7 @@ TEST_CASE("export-irreps", "[export][irreps]") {
     ItfContext ctx;
     configure_context_defaults(ctx);
     ctx.set_irrep_context(IrrepContext<Z2Algebra<D2>>(
-        resolve_by_label<Irrep>({{L"t", Set{}}, {L"f", Set{irrep("A")}}})));
+        resolve_by_label<Irrep>({{"t", Set{}}, {"f", Set{irrep("A")}}})));
 
     auto groups =
         parse_expression_spec("R{a1;i1} = t{a1;i2} f{i2;i3} f{i3;i1}", false);

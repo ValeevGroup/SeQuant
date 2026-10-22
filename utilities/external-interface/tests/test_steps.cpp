@@ -26,7 +26,7 @@ TEST_CASE("canonicalize step", "[extint]") {
   ExecutionContext ctx;
   ctx.set_data("in", 0,
                ProcessingData{
-                   test_support::expr_data({L"R1{a1;i1} = + f{a1;i1}:A-H-S"})});
+                   test_support::expr_data({"R1{a1;i1} = + f{a1;i1}:A-H-S"})});
 
   SECTION("produces an ExpressionData output") {
     CanonicalizeStep step;
@@ -52,8 +52,8 @@ TEST_CASE("canonicalize step", "[extint]") {
 
   SECTION("rejects ExportTree input") {
     ctx.set_data("tree", 0,
-                 ProcessingData{test_support::tree_data(
-                     {L"X{a1;i1} = + f{a1;i1}:A-H-S"})});
+                 ProcessingData{
+                     test_support::tree_data({"X{a1;i1} = + f{a1;i1}:A-H-S"})});
     CanonicalizeStep step;
     REQUIRE_THROWS_AS(step.run("canon", ctx, {"tree.0"}), Exception);
   }
@@ -64,7 +64,7 @@ TEST_CASE("validate step", "[extint]") {
     ExecutionContext ctx;
     ctx.set_data("in", 0,
                  ProcessingData{test_support::expr_data(
-                     {L"R1{a1;i1} = + f{a1;i1}:A-H-S"})});
+                     {"R1{a1;i1} = + f{a1;i1}:A-H-S"})});
     ValidateStep step;
     REQUIRE(step.run("v", ctx, {"in.0"}) == 0);
   }
@@ -73,7 +73,7 @@ TEST_CASE("validate step", "[extint]") {
     ExecutionContext ctx;
     ctx.set_data("in", 0,
                  ProcessingData{test_support::expr_data(
-                     {L"R1{a1;i1} = + f{a1;i1}:A-H-S - f{a1;a2}:A-H-S"})});
+                     {"R1{a1;i1} = + f{a1;i1}:A-H-S - f{a1;a2}:A-H-S"})});
     ValidateStep step;
     REQUIRE_THROWS_AS(step.run("v", ctx, {"in.0"}), Exception);
   }
@@ -83,8 +83,8 @@ TEST_CASE("to_export_tree step", "[extint]") {
   ExecutionContext ctx;
   ctx.set_data("in", 0,
                ProcessingData{test_support::expr_data(
-                   {L"R1{a1;i1} = + f{a1;i1}:A-H-S",
-                    L"R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"})});
+                   {"R1{a1;i1} = + f{a1;i1}:A-H-S",
+                    "R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"})});
 
   ToExportTreeStep step;
   REQUIRE(step.run("tree", ctx, {"in.0"}) == 1);
@@ -110,8 +110,8 @@ TEST_CASE("dependencies step", "[extint]") {
     ExecutionContext ctx;
     ctx.set_data("in", 0,
                  ProcessingData{test_support::tree_data(
-                     {L"X{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
-                      L"R{a1;i1} = + X{a2;i1}:A-H-S f{a1;a2}:A-H-S"})});
+                     {"X{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+                      "R{a1;i1} = + X{a2;i1}:A-H-S f{a1;a2}:A-H-S"})});
 
     DependencyStep step;
     step.set_options(json{{"autodetect", true}});

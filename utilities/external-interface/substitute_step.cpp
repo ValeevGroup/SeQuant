@@ -105,9 +105,10 @@ std::size_t SubstituteStep::process(std::string_view id_prefix,
                                                    .cross_comparisons = true});
       replace(output.expressions.back(), matcher, *with);
 
-      auto it = result_labels_.find(toUtf8(output.expressions.back().label()));
+      auto it =
+          result_labels_.find(std::string(output.expressions.back().label()));
       if (it != result_labels_.end()) {
-        output.expressions.back().set_label(toUtf16(it->second));
+        output.expressions.back().set_label(it->second);
       }
     }
   }

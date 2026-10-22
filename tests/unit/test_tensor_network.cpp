@@ -77,44 +77,44 @@ TEST_CASE("tensor_network_shared", "[elements]") {
       //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
       //          l.canonicalize_input_graph = true;
 
-      std::vector<std::tuple<std::wstring, std::wstring, EqEnum, SignEnum>>
+      std::vector<std::tuple<std::string, std::string, EqEnum, SignEnum>>
           tests = {
               // original 4 tensor networks from Bimal
-              {L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-               L"s{a1<i1,i2>;a5<i3>} * g{i3,i4;a3<i1,i4>,a4<i2>}", Eq,
+              {"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+               "s{a1<i1,i2>;a5<i3>} * g{i3,i4;a3<i1,i4>,a4<i2>}", Eq,
                Plus},  // product reorder is OK
-              {L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-               L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", NEq, Plus},
-              {L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-               L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a2<i1,i2>;a6<i3>}", Eq, Plus},
-              {L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-               L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", NEq, Plus},
+              {"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+               "g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", NEq, Plus},
+              {"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+               "g{i3,i4;a3<i1,i4>,a4<i2>} * s{a2<i1,i2>;a6<i3>}", Eq, Plus},
+              {"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+               "g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", NEq, Plus},
               // one more pair of ternary products
-              {L"s{a2<i1,i2>;a6<i2,i4>} * g{i3,i4;a3<i2,i4>,a4<i1,i3>} * "
-               L"t{a3<i2,i4>,a6<i2,i4>;i4,i2}",
-               L"g{i3,i4;a3<i1,i4>,a4<i2,i3>} * "
-               L"t{a3<i1,i4>,a5<i1,i4>;i4,i1} "
-               L"* s{a1<i1,i2>;a5<i1,i4>}",
+              {"s{a2<i1,i2>;a6<i2,i4>} * g{i3,i4;a3<i2,i4>,a4<i1,i3>} * "
+               "t{a3<i2,i4>,a6<i2,i4>;i4,i2}",
+               "g{i3,i4;a3<i1,i4>,a4<i2,i3>} * "
+               "t{a3<i1,i4>,a5<i1,i4>;i4,i1} "
+               "* s{a1<i1,i2>;a5<i1,i4>}",
                Eq, Plus},
               // last pair of ternary nets involved in MO->PNO integral
               // transform
-              {L"g{i3,i4;a3,a4} * C{a3;a3<i1,i4>} * C{a4;a4<i2>}",
-               L"g{i3,i4;a3,a4} * C{a3;a3<i1,i3>} * C{a4;a4<i2>}", NEq, Plus},
+              {"g{i3,i4;a3,a4} * C{a3;a3<i1,i4>} * C{a4;a4<i2>}",
+               "g{i3,i4;a3,a4} * C{a3;a3<i1,i3>} * C{a4;a4<i2>}", NEq, Plus},
               // representation of the above as single tensor
-              {L"g{i3,i4;a3<i1,i4>,a4<i2>}", L"g{i3,i4;a3<i1,i3>,a4<i2>}", NEq,
+              {"g{i3,i4;a3<i1,i4>,a4<i2>}", "g{i3,i4;a3<i1,i3>,a4<i2>}", NEq,
                Plus},
               // 3-index MO->PNO integral transform, but extra aux index just
               // for fun
-              {L"g{a3;a4;x1,x2} * C{a3<i1,i4>;a3} * C{a4;a4<i1>}",
-               L"g{a3;a4;x2,x1} * C{a3<i1,i2>;a3} * C{a4;a4<i2>}", Eq, Plus},
+              {"g{a3;a4;x1,x2} * C{a3<i1,i4>;a3} * C{a4;a4<i1>}",
+               "g{a3;a4;x2,x1} * C{a3<i1,i2>;a3} * C{a4;a4<i2>}", Eq, Plus},
               // TNs discovered during CSV evaluation that did not deduce
               // external indices correctly
-              {L"f{i2;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",
+              {"f{i2;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",
                // f_i2 -> f_i1
-               L"f{i1;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}", NEq, Plus},
-              {L"f{i2;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",
+               "f{i1;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}", NEq, Plus},
+              {"f{i2;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",
                // f_i2 -> f_i1, a2 <-> a3
-               L"f{i1;a2<i1,i2>} * t{a3<i1,i2>,a2<i1,i2>;i2,i1}", Eq, Plus},
+               "f{i1;a2<i1,i2>} * t{a3<i1,i2>,a2<i1,i2>;i2,i1}", Eq, Plus},
 
               //////////////// TNs w antisymmetric tensors
               // unlike the nonsymmetric/symmetric cases we need to check for
@@ -125,60 +125,59 @@ TEST_CASE("tensor_network_shared", "[elements]") {
               //
               // spin-orbital CC cases suggested by Bimal testing
               // these differ by a sign ...
-              {L"g{i1,i4;a1,a4}:A * t{a4;i4}:A",
-               L"g{i3,i2;a2,a4}:A * t{a4;i3}:A", Eq, Minus},
+              {"g{i1,i4;a1,a4}:A * t{a4;i4}:A", "g{i3,i2;a2,a4}:A * t{a4;i3}:A",
+               Eq, Minus},
               // more spin-orbital CC cases suggested by Bimal
               // 1
-              {L"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
-               L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A", Eq, Plus},
-              {L"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
-               L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A", Eq, Minus},
+              {"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
+               "g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A", Eq, Plus},
+              {"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
+               "g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A", Eq, Minus},
               // 2a
-              {L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
-               L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A * t{a_3;i_2}:A", Eq,
-               Minus},
+              {"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
+               "g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A * t{a_3;i_2}:A", Eq, Minus},
               // 2b: unlike its equivalent counterpart 2a the order of named
               // indices is different for the 2 TNs, which cancels out the
               // phase change
-              {L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
-               L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_2}:A * t{a_4;i_1}:A", Eq, Plus},
+              {"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
+               "g{i_3,i_4;a_3,a_4}:A * t{a_3;i_2}:A * t{a_4;i_1}:A", Eq, Plus},
               // 3: matching "constant" TNs (TNs without named indices)
               //    also needs canonicalization
-              {L"g{i_2,i_3;a_2,a_3}:A * t{a_2,a_3;i_2,i_3}:A",
-               L"g{i_4,i_1;a_2,a_3}:A * t{a_2,a_3;i_4,i_1}:A", Eq, Plus},
-              {L"g{i_2,i_3;a_2,a_3}:A * t{a_2,a_3;i_2,i_3}:A",
-               L"g{i_1,i_4;a_2,a_3}:A * t{a_2,a_3;i_4,i_1}:A", Eq, Minus},
+              {"g{i_2,i_3;a_2,a_3}:A * t{a_2,a_3;i_2,i_3}:A",
+               "g{i_4,i_1;a_2,a_3}:A * t{a_2,a_3;i_4,i_1}:A", Eq, Plus},
+              {"g{i_2,i_3;a_2,a_3}:A * t{a_2,a_3;i_2,i_3}:A",
+               "g{i_1,i_4;a_2,a_3}:A * t{a_2,a_3;i_4,i_1}:A", Eq, Minus},
               // 4: more complexity, with triples, CSV, and antisymmetry
-              {L"g{i_2,i_3;a_2,a_3}:A * t{a_1,a_2,a_3;i_1,i_2,i_3}:A",
-               L"g{i_1,i_3;a_2,a_3}:A * t{a_1,a_2,a_3;i_1,i_2,i_3}:A", Eq,
+              {"g{i_2,i_3;a_2,a_3}:A * t{a_1,a_2,a_3;i_1,i_2,i_3}:A",
+               "g{i_1,i_3;a_2,a_3}:A * t{a_1,a_2,a_3;i_1,i_2,i_3}:A", Eq,
                Minus},
-              {L"g{i_2,i_3;a_2,a_3}:A * t{a_1<i_1>,a_2,a_3;i_1,i_2,i_3}:A",
-               L"g{i_2,i_3;a_1,a_3}:A * t{a_3,a_2<i_1>,a_1;i_1,i_2,i_3}:A", Eq,
+              {"g{i_2,i_3;a_2,a_3}:A * t{a_1<i_1>,a_2,a_3;i_1,i_2,i_3}:A",
+               "g{i_2,i_3;a_1,a_3}:A * t{a_3,a_2<i_1>,a_1;i_1,i_2,i_3}:A", Eq,
                Plus},
-              {L"g{i_2,i_3;a_2,a_3}:A * "
-               L"t{a_1<i_1,i_4>,a_2,a_3;i_1,i_2,i_3}:A",
-               L"g{i_4,i_1;a_1,a_3}:A * "
-               L"t{a_3,a_2<i_5,i_2>,a_1;i_1,i_4,i_2}:A",
+              {"g{i_2,i_3;a_2,a_3}:A * "
+               "t{a_1<i_1,i_4>,a_2,a_3;i_1,i_2,i_3}:A",
+               "g{i_4,i_1;a_1,a_3}:A * "
+               "t{a_3,a_2<i_5,i_2>,a_1;i_1,i_4,i_2}:A",
                Eq, Minus},
 
               ///////////////////////////// tensors with PAOs
               // These produce same layout, but are different
-              {L"C{μ̃_1;a_3<i_3>}:N", L"C{a_1<i_2>;μ̃_1}:N", NEq, Plus},
+              {"C{μ̃_1;a_3<i_3>}:N", "C{a_1<i_2>;μ̃_1}:N", NEq, Plus},
           };
 
       ///////////////////// TNs with braket symmetries
-      tests.emplace_back(L"f{u3;u4}:N-S Y{u2,u3;u1,u5}",
-                         L"f{u3;u4}:N-S Y{u2,u4;u5,u1}", Eq, Plus);
-      tests.emplace_back(L"f{u3;u4}:N-S Y{u2,u3;u1,u5}",
-                         L"f{u3;u4}:N-S Y{u2,u4;u1,u5}", Eq, Plus);
-      tests.emplace_back(L"f{u3;u4}:N-S Y{u2,u4;u5,u1}",
-                         L"f{u3;u4}:N-S Y{u2,u4;u1,u5}", Eq, Plus);
-      tests.emplace_back(L"f{u4;u3}:N-S Y{u2,u4;u5,u1}",
-                         L"f{u3;u4}:N-S Y{u2,u4;u1,u5}", Eq, Plus);
+      tests.emplace_back("f{u3;u4}:N-S Y{u2,u3;u1,u5}",
+                         "f{u3;u4}:N-S Y{u2,u4;u5,u1}", Eq, Plus);
+      tests.emplace_back("f{u3;u4}:N-S Y{u2,u3;u1,u5}",
+                         "f{u3;u4}:N-S Y{u2,u4;u1,u5}", Eq, Plus);
+      tests.emplace_back("f{u3;u4}:N-S Y{u2,u4;u5,u1}",
+                         "f{u3;u4}:N-S Y{u2,u4;u1,u5}", Eq, Plus);
+      tests.emplace_back("f{u4;u3}:N-S Y{u2,u4;u5,u1}",
+                         "f{u3;u4}:N-S Y{u2,u4;u1,u5}", Eq, Plus);
 
       for (const auto& [input1, input2, eq, phase] : tests) {
-        CAPTURE(toUtf8(input1));
-        CAPTURE(toUtf8(input2));
+        CAPTURE(std::string(input1));
+        CAPTURE(std::string(input2));
 
         auto ex1 = deserialize(input1);
         auto ex2 = deserialize(input2);
@@ -190,7 +189,7 @@ TEST_CASE("tensor_network_shared", "[elements]") {
         INFO("tn1 - Canonical order of named indices: "
              << (cbp1.named_indices_canonical |
                  ranges::views::transform([](const auto& idx_it) {
-                   return toUtf8(idx_it->full_label());
+                   return std::string(idx_it->full_label());
                  }) |
                  ranges::views::join(", "sv) | ranges::to<std::string>()));
 
@@ -201,7 +200,7 @@ TEST_CASE("tensor_network_shared", "[elements]") {
         INFO("tn2 - Canonical order of named indices: "
              << (cbp2.named_indices_canonical |
                  ranges::views::transform([](const auto& idx_it) {
-                   return toUtf8(idx_it->full_label());
+                   return std::string(idx_it->full_label());
                  }) |
                  ranges::views::join(", "sv) | ranges::to<std::string>()));
 
@@ -219,10 +218,10 @@ TEST_CASE("tensor_network_shared", "[elements]") {
 
     SECTION("phase_difference") {
       const Product prod1 =
-          deserialize(L"g{i_2,i_3;a_2,a_3}:A-C-S * t{a_2;i_2}:A-C-S")
+          deserialize("g{i_2,i_3;a_2,a_3}:A-C-S * t{a_2;i_2}:A-C-S")
               ->as<Product>();
       const Product prod2 =
-          deserialize(L"g{i_2,i_3;a_2,a_3}:A-C-S * t{a_2;i_3}:A-C-S")
+          deserialize("g{i_2,i_3;a_2,a_3}:A-C-S * t{a_2;i_3}:A-C-S")
               ->as<Product>();
 
       TN tn1(prod1.factors());
@@ -245,13 +244,13 @@ TEST_CASE("tensor_network_shared", "[elements]") {
 
       const Product prod1 =
           deserialize(
-              L"g{i_2,i_3;a_19592,a_19593}:N-C-S * C{a_19592;a_2<i_1>}:N-C-S * "
-              L"C{a_19593;a_3<i_2,i_3>}:N-C-S")
+              "g{i_2,i_3;a_19592,a_19593}:N-C-S * C{a_19592;a_2<i_1>}:N-C-S * "
+              "C{a_19593;a_3<i_2,i_3>}:N-C-S")
               ->as<Product>();
       const Product prod2 =
           deserialize(
-              L"g{i_2,i_3;a_19594,a_19595}:N-C-S * C{a_19594;a_2<i_2>}:N-C-S * "
-              L"C{a_19595;a_3<i_1,i_3>}:N-C-S")
+              "g{i_2,i_3;a_19594,a_19595}:N-C-S * C{a_19594;a_2<i_2>}:N-C-S * "
+              "C{a_19595;a_3<i_1,i_3>}:N-C-S")
               ->as<Product>();
 
       TN tn1(prod1.factors());
@@ -270,32 +269,32 @@ TEST_CASE("tensor_network_shared", "[elements]") {
     SECTION("Named index ordering") {
       REQUIRE(IndexSpace("i") < IndexSpace("a"));
 
-      using idxvec_t = std::vector<std::wstring>;
-      std::vector<std::pair<std::wstring, std::vector<std::wstring>>> tests{
-          {L"G{;;a1,a2,a3,a4} T{;;i3,i2,a3,a4}",
-           idxvec_t{L"i_2", L"i_3", L"a_2", L"a_1"}},
-          {L"G{;;a1,a2,a3,a4} T{;;i2,i3,a3,a4}",
-           idxvec_t{L"i_3", L"i_2", L"a_2", L"a_1"}},
+      using idxvec_t = std::vector<std::string>;
+      std::vector<std::pair<std::string, std::vector<std::string>>> tests{
+          {"G{;;a1,a2,a3,a4} T{;;i3,i2,a3,a4}",
+           idxvec_t{"i_2", "i_3", "a_2", "a_1"}},
+          {"G{;;a1,a2,a3,a4} T{;;i2,i3,a3,a4}",
+           idxvec_t{"i_3", "i_2", "a_2", "a_1"}},
       };
 
       // TNs with braket symmetries
-      tests.emplace_back(L"f{u3;u4}:N-S Y{u2,u3;u1,u5}",
-                         idxvec_t{L"u_2", L"u_4", L"u_1", L"u_5"});
-      tests.emplace_back(L"f{u4;u3}:N-S Y{u2,u3;u1,u5}",
-                         idxvec_t{L"u_2", L"u_4", L"u_1", L"u_5"});
-      tests.emplace_back(L"f{u3;u4}:N-S Y{u2,u4;u1,u5}",
-                         idxvec_t{L"u_2", L"u_3", L"u_1", L"u_5"});
-      tests.emplace_back(L"f{u3;u4}:N-S Y{u2,u4;u5,u1}",
-                         idxvec_t{L"u_2", L"u_3", L"u_5", L"u_1"});
+      tests.emplace_back("f{u3;u4}:N-S Y{u2,u3;u1,u5}",
+                         idxvec_t{"u_2", "u_4", "u_1", "u_5"});
+      tests.emplace_back("f{u4;u3}:N-S Y{u2,u3;u1,u5}",
+                         idxvec_t{"u_2", "u_4", "u_1", "u_5"});
+      tests.emplace_back("f{u3;u4}:N-S Y{u2,u4;u1,u5}",
+                         idxvec_t{"u_2", "u_3", "u_1", "u_5"});
+      tests.emplace_back("f{u3;u4}:N-S Y{u2,u4;u5,u1}",
+                         idxvec_t{"u_2", "u_3", "u_5", "u_1"});
 
       for (const auto& [input, str_indices] : tests) {
         const std::vector<Index> expected_indices =
-            str_indices | ranges::views::transform([](const std::wstring& str) {
+            str_indices | ranges::views::transform([](const std::string& str) {
               return Index(str);
             }) |
             ranges::to<std::vector>();
 
-        INFO(toUtf8(input));
+        INFO(std::string(input));
         Product prod = deserialize(input)->as<Product>();
         TN tn(prod.factors());
 
@@ -314,9 +313,9 @@ TEST_CASE("tensor_network_shared", "[elements]") {
       {
         Index::reset_tmp_index();
         auto input1 = deserialize(
-            L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p6,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
+            "t{p1,p2;p3,p4}:N-C-S t{p4,p5;p6,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
         auto input2 = deserialize(
-            L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p11,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
+            "t{p1,p2;p3,p4}:N-C-S t{p4,p5;p11,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
 
         CAPTURE(input1);
         CAPTURE(input2);
@@ -327,17 +326,17 @@ TEST_CASE("tensor_network_shared", "[elements]") {
           TN tn2(*input2);
           tn2.canonicalize(get_default_context().cardinal_tensor_labels());
 
-          // std::wcout << "tn1[0] = " <<
+          // std::cout << "tn1[0] = " <<
           // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[0])) <<
-          // "\n"; std::wcout << "tn1[1] = " <<
+          // "\n"; std::cout << "tn1[1] = " <<
           // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[1])) <<
-          // "\n"; std::wcout << "tn1[2] = " <<
+          // "\n"; std::cout << "tn1[2] = " <<
           // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[2])) <<
-          // "\n"; std::wcout << "tn2[0] = " <<
+          // "\n"; std::cout << "tn2[0] = " <<
           // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[0])) <<
-          // "\n"; std::wcout << "tn2[1] = " <<
+          // "\n"; std::cout << "tn2[1] = " <<
           // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[1])) <<
-          // "\n"; std::wcout << "tn2[2] = " <<
+          // "\n"; std::cout << "tn2[2] = " <<
           // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[2])) <<
           // "\n";
 
@@ -346,9 +345,8 @@ TEST_CASE("tensor_network_shared", "[elements]") {
           // canonical(input1) by i6 -> i11 and i7 -> i6
           for (int i = 0; i != tn1.tensors().size(); ++i) {
             std::unique_ptr<AbstractTensor> t2_i(tn2.tensors()[i]->_clone());
-            container::map<Index, Index> idxrepl{
-                {Index{L"p_11"}, Index{L"p_6"}},
-                {Index{L"p_6"}, Index{L"p_7"}}};
+            container::map<Index, Index> idxrepl{{Index{"p_11"}, Index{"p_6"}},
+                                                 {Index{"p_6"}, Index{"p_7"}}};
             apply_index_replacements(*t2_i, idxrepl, false);
             REQUIRE(serialize(*(tn1.tensors()[i]), {.annot_symm = true}) ==
                     serialize(*t2_i, {.annot_symm = true}));
@@ -418,7 +416,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
     Vertex v7(Origin::Ket, 3, 1, Symmetry::Nonsymm);
     Vertex v8(Origin::Ket, 5, 0, Symmetry::Symm);
 
-    const Index dummy(L"a_1");
+    const Index dummy("a_1");
 
     REQUIRE_NOTHROW(Edge(v1, &dummy));
     Edge e1(v1, &dummy);
@@ -484,8 +482,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
   SECTION("constructors") {
     {  // with Tensors
-      auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
-      auto t2 = ex<Tensor>(L"t", bra{L"i_2"}, ket{L"i_1"});
+      auto t1 = ex<Tensor>("F", bra{"i_1"}, ket{"i_2"});
+      auto t2 = ex<Tensor>("t", bra{"i_2"}, ket{"i_1"});
       auto t1_x_t2 = t1 * t2;
       REQUIRE_NOTHROW(TN(*t1_x_t2));
 
@@ -501,20 +499,20 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
       // can use hyperedges with aux indices
       {
-        auto u1 = ex<Tensor>(L"u1", bra{L"i_1"}, ket{}, aux{L"p"});
-        auto u2 = ex<Tensor>(L"u2", bra{L"i_2"}, ket{}, aux{L"p"});
-        auto u3 = ex<Tensor>(L"u3", bra{L"i_3"}, ket{}, aux{L"p"});
+        auto u1 = ex<Tensor>("u1", bra{"i_1"}, ket{}, aux{"p"});
+        auto u2 = ex<Tensor>("u2", bra{"i_2"}, ket{}, aux{"p"});
+        auto u3 = ex<Tensor>("u3", bra{"i_3"}, ket{}, aux{"p"});
         REQUIRE_NOTHROW(TN(u1 * u2 * u3));
         TN tn(u1 * u2 * u3);
       }
 
       // can have empty slots, but only in nonsymm bra/ket
       {
-        auto u1 = ex<Tensor>(L"u1", bra{L"i_1", L""}, ket{L"", L"i_4"},
-                             aux{L"p"}, Symmetry::Nonsymm);
-        auto u2 = ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_4"}, ket{L"", L"i_1"},
-                             aux{L"p"}, Symmetry::Nonsymm);
-        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p"},
+        auto u1 = ex<Tensor>("u1", bra{"i_1", ""}, ket{"", "i_4"}, aux{"p"},
+                             Symmetry::Nonsymm);
+        auto u2 = ex<Tensor>("u2", bra{"i_2", "", "i_4"}, ket{"", "i_1"},
+                             aux{"p"}, Symmetry::Nonsymm);
+        auto u3 = ex<Tensor>("u3", bra{"i_3", "i_5"}, ket{}, aux{"p"},
                              Symmetry::Symm);
         REQUIRE_NOTHROW(TN(u1 * u2 * u3));
         TN tn(u1 * u2 * u3);
@@ -525,8 +523,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
     {  // with NormalOperators
       constexpr const auto V = Vacuum::SingleProduct;
-      auto t1 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
-      auto t2 = ex<FNOperator>(cre({L"i_2"}), ann({L"i_1"}), V);
+      auto t1 = ex<FNOperator>(cre({"i_1"}), ann({"i_2"}), V);
+      auto t2 = ex<FNOperator>(cre({"i_2"}), ann({"i_1"}), V);
       auto t1_x_t2 = t1 * t2;
       REQUIRE_NOTHROW(TN(*t1_x_t2));
     }
@@ -541,8 +539,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
   SECTION("accessors") {
     {
       constexpr const auto V = Vacuum::SingleProduct;
-      auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
-      auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_3"}), V);
+      auto t1 = ex<Tensor>("F", bra{"i_1"}, ket{"i_2"});
+      auto t2 = ex<FNOperator>(cre({"i_1"}), ann({"i_3"}), V);
       auto t1_x_t2 = t1 * t2;
       REQUIRE_NOTHROW(TN(*t1_x_t2));
       TN tn(*t1_x_t2);
@@ -575,8 +573,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       };
 
       // coefficient bra on the operator's annihilator (operator bra)
-      auto h = ex<Tensor>(L"h", bra{L"i_2"}, ket{L"i_3"});
-      auto op = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
+      auto h = ex<Tensor>("h", bra{"i_2"}, ket{"i_3"});
+      auto op = ex<FNOperator>(cre({"i_1"}), ann({"i_2"}), V);
       REQUIRE_THROWS_AS(canonicalize(h * op), Exception);
       try {
         canonicalize(h * op);
@@ -585,11 +583,11 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       }
 
       // coefficient bra on the creator, ket on the annihilator
-      auto h_ok = ex<Tensor>(L"h", bra{L"i_1"}, ket{L"i_2"});
+      auto h_ok = ex<Tensor>("h", bra{"i_1"}, ket{"i_2"});
       REQUIRE_NOTHROW(canonicalize(h_ok * op));
 
       // bra-ket symmetric coefficient can pair bra to bra
-      auto h_symm = ex<Tensor>(L"h", bra{L"i_2"}, ket{L"i_3"}, aux{},
+      auto h_symm = ex<Tensor>("h", bra{"i_2"}, ket{"i_3"}, aux{},
                                Symmetry::Nonsymm, BraKetSymmetry::Symm);
       REQUIRE_NOTHROW(canonicalize(h_symm * op));
 
@@ -600,14 +598,14 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
       // a named index in two bra (or two ket) slots is not a contraction: a
       // diagonal matrix element times an amplitude is an element-wise product
-      auto f_diag = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_1"});
-      auto t2 = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+      auto f_diag = ex<Tensor>("f", bra{"a_1"}, ket{"a_1"});
+      auto t2 = ex<Tensor>("t", bra{"a_1", "a_2"}, ket{"i_1", "i_2"});
       REQUIRE_THROWS_AS(canonicalize(f_diag * t2), Exception);
       {
         auto scope = sequant::tests::scoped_canonicalize_options(
             CanonicalizeOptions::default_options().copy_and_set(
-                container::set<Index>{Index{L"i_1"}, Index{L"i_2"},
-                                      Index{L"a_1"}, Index{L"a_2"}}));
+                container::set<Index>{Index{"i_1"}, Index{"i_2"}, Index{"a_1"},
+                                      Index{"a_2"}}));
         auto product = f_diag * t2;
         REQUIRE_NOTHROW(sequant::canonicalize(product));
         auto reordered = t2 * f_diag;
@@ -622,8 +620,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
     {  // with no external indices, hence no named indices whatsoever
       Index::reset_tmp_index();
       constexpr const auto V = Vacuum::SingleProduct;
-      auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
-      auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
+      auto t1 = ex<Tensor>("F", bra{"i_1"}, ket{"i_2"});
+      auto t2 = ex<FNOperator>(cre({"i_1"}), ann({"i_2"}), V);
       auto t1_x_t2 = t1 * t2;
       TN tn(*t1_x_t2);
       tn.canonicalize(get_default_context().cardinal_tensor_labels(),
@@ -632,22 +630,22 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       REQUIRE(size(tn.tensors()) == 2);
       REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
       REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
-      //        std::wcout <<
+      //        std::cout <<
       //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) <<
-      //        std::endl; std::wcout <<
+      //        std::endl; std::cout <<
       //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) <<
       //        std::endl;
       REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-              L"{F^{{i_2}}_{{i_1}}}");
+              "{F^{{i_2}}_{{i_1}}}");
       REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
-              L"{\\tilde{a}^{{i_1}}_{{i_2}}}");
+              "{\\tilde{a}^{{i_1}}_{{i_2}}}");
     }
 
     {
       Index::reset_tmp_index();
       constexpr const auto V = Vacuum::SingleProduct;
-      auto t1 = ex<Tensor>(L"F", bra{L"i_2"}, ket{L"i_17"});
-      auto t2 = ex<FNOperator>(cre({L"i_2"}), ann({L"i_3"}), V);
+      auto t1 = ex<Tensor>("F", bra{"i_2"}, ket{"i_17"});
+      auto t2 = ex<FNOperator>(cre({"i_2"}), ann({"i_3"}), V);
       auto t1_x_t2 = t1 * t2;
 
       // with all external named indices
@@ -659,15 +657,15 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         REQUIRE(size(tn.tensors()) == 2);
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
-        // std::wcout <<
+        // std::cout <<
         // to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) <<
-        // std::endl; std::wcout <<
+        // std::endl; std::cout <<
         // to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) <<
         // std::endl;
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
-                L"{\\tilde{a}^{{i_1}}_{{i_3}}}");
+                "{\\tilde{a}^{{i_1}}_{{i_3}}}");
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-                L"{F^{{i_{17}}}_{{i_1}}}");
+                "{F^{{i_{17}}}_{{i_1}}}");
       }
 
       // with explicit named indices
@@ -675,7 +673,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         Index::reset_tmp_index();
         TN tn(*t1_x_t2);
 
-        IndexList indices{L"i_17"};
+        IndexList indices{"i_17"};
         tn.canonicalize(get_default_context().cardinal_tensor_labels(),
                         {.method = CanonicalizationMethod::Complete,
                          .named_indices = indices});
@@ -683,23 +681,23 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         REQUIRE(size(tn.tensors()) == 2);
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
-        //        std::wcout <<
+        //        std::cout <<
         //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]))
-        //        << std::endl; std::wcout <<
+        //        << std::endl; std::cout <<
         //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]))
         //        << std::endl;
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
-                L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
+                "{\\tilde{a}^{{i_2}}_{{i_1}}}");
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-                L"{F^{{i_{17}}}_{{i_2}}}");
+                "{F^{{i_{17}}}_{{i_2}}}");
       }
     }
 
     SECTION("particle non-conserving") {
-      const auto input1 = deserialize(L"P{;a1,a3}");
-      const auto input2 = deserialize(L"P{a1,a3;}");
-      const std::wstring expected1 = L"{{P^{{a_1}{a_3}}_{}}}";
-      const std::wstring expected2 = L"{{P^{}_{{a_1}{a_3}}}}";
+      const auto input1 = deserialize("P{;a1,a3}");
+      const auto input2 = deserialize("P{a1,a3;}");
+      const std::string expected1 = "{{P^{{a_1}{a_3}}_{}}}";
+      const std::string expected2 = "{{P^{}_{{a_1}{a_3}}}}";
 
       for (int variant : {1, 2}) {
         for (bool fast : {true, false}) {
@@ -719,12 +717,12 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       // its bra (ket), making the term vanish against Â
       const auto input =
           deserialize(
-              L"Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N-N-N I2{;i9,i12;x5}:N-N-N")
+              "Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N-N-N I2{;i9,i12;x5}:N-N-N")
               .as<Product>()
               .factors();
-      const std::wstring expected =
-          L"Â{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N-N-N * "
-          L"I2{;i_1,i_2;x_1}:N-N-N";
+      const std::string expected =
+          "Â{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N-N-N * "
+          "I2{;i_1,i_2;x_1}:N-N-N";
 
       for (auto method :
            {CanonicalizationMethod::Rapid, CanonicalizationMethod::Complete}) {
@@ -737,15 +735,15 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
     }
 
     SECTION("particle-1,2-symmetry") {
-      const std::vector<std::pair<std::wstring, std::wstring>> pairs = {
-          {L"Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_2}:N * "
-           L"t{a_1,a_2,a_3;i_4,i_3,i_1}:N",
-           L"Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_1}:N * "
-           L"t{a_1,a_2,a_3;i_2,i_3,i_4}:N"},
-          {L"Γ{o_2,o_4;o_1,o_3}:N * g{i_1,o_1;o_2,e_1}:N * "
-           L"t{o_3,e_1;o_4,i_1}:N",
-           L"Γ{o_2,o_4;o_1,o_3}:N * g{i_1,o_3;o_4,e_1}:N * "
-           L"t{o_1,e_1;o_2,i_1}:N"}};
+      const std::vector<std::pair<std::string, std::string>> pairs = {
+          {"Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_2}:N * "
+           "t{a_1,a_2,a_3;i_4,i_3,i_1}:N",
+           "Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_1}:N * "
+           "t{a_1,a_2,a_3;i_2,i_3,i_4}:N"},
+          {"Γ{o_2,o_4;o_1,o_3}:N * g{i_1,o_1;o_2,e_1}:N * "
+           "t{o_3,e_1;o_4,i_1}:N",
+           "Γ{o_2,o_4;o_1,o_3}:N * g{i_1,o_3;o_4,e_1}:N * "
+           "t{o_1,e_1;o_2,i_1}:N"}};
       for (const auto& pair : pairs) {
         const auto first = deserialize(pair.first).as<Product>().factors();
         const auto second = deserialize(pair.second).as<Product>().factors();
@@ -756,7 +754,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         auto [second_graph, second_labels] =
             accessor.get_canonical_bliss_graph(TN(second));
         if (first_graph->cmp(*second_graph) != 0) {
-          std::wstringstream stream;
+          std::stringstream stream;
           stream << "First graph:\n";
           first_graph->write_dot(
               stream, {.labels = first_labels, .display_colors = true});
@@ -771,7 +769,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
                                         .texlabels = graph.vertex_texlabels,
                                         .display_colors = true});
 
-          FAIL(toUtf8(stream.str()));
+          FAIL(stream.str());
         }
 
         TN tn1(first);
@@ -792,16 +790,16 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
     }
 
     SECTION("miscellaneous") {
-      const std::vector<std::pair<std::wstring, std::wstring>> inputs = {
-          {L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
-           L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
-          {L"g{a_1,i_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
-           L"-1 g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
+      const std::vector<std::pair<std::string, std::string>> inputs = {
+          {"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
+           "g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
+          {"g{a_1,i_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
+           "-1 g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
 
-          {L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
-           L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N"},
-          {L"g{a_1,i_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
-           L"g{i_1,a_1;i_2,i_3}:N * I{i_3,i_2;i_1,a_1}:N"},
+          {"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
+           "g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N"},
+          {"g{a_1,i_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
+           "g{i_1,a_1;i_2,i_3}:N * I{i_3,i_2;i_1,a_1}:N"},
       };
 
       for (const auto& [input, expected] : inputs) {
@@ -824,8 +822,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
     SECTION("special") {
       auto factors = deserialize(
-                         L"Ŝ{i_1;a_1<i_1>} g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
-                         L"t{a_2<i_2>;i_2}:N-C-S")
+                         "Ŝ{i_1;a_1<i_1>} g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
+                         "t{a_2<i_2>;i_2}:N-C-S")
                          ->as<Product>()
                          .factors();
 
@@ -845,15 +843,14 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       // try 1
       ExprPtr result_1;
       {
-        auto u1 = ex<Tensor>(L"u1", bra{L"i_1", L""}, ket{L"", L"i_4"},
-                             aux{L"p_1"}, Symmetry::Nonsymm);
-        auto u2 =
-            ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_4"}, ket{L"", L"i_1", L""},
-                       aux{L"p"}, Symmetry::Nonsymm);
-        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p"},
+        auto u1 = ex<Tensor>("u1", bra{"i_1", ""}, ket{"", "i_4"}, aux{"p_1"},
+                             Symmetry::Nonsymm);
+        auto u2 = ex<Tensor>("u2", bra{"i_2", "", "i_4"}, ket{"", "i_1", ""},
+                             aux{"p"}, Symmetry::Nonsymm);
+        auto u3 = ex<Tensor>("u3", bra{"i_3", "i_5"}, ket{}, aux{"p"},
                              Symmetry::Symm);
-        auto u4 = ex<Tensor>(L"u4", bra{}, ket{L"i_3", L"i_5", L"i_6"},
-                             aux{L"p_1", L"p"}, Symmetry::Antisymm);
+        auto u4 = ex<Tensor>("u4", bra{}, ket{"i_3", "i_5", "i_6"},
+                             aux{"p_1", "p"}, Symmetry::Antisymm);
         TN tn(u1 * u2 * u3);
 
         ExprPtr factor =
@@ -867,15 +864,14 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       // try 2
       ExprPtr result_2;
       {
-        auto u1 = ex<Tensor>(L"u1", bra{L"i_4", L""}, ket{L"", L"i_1"},
-                             aux{L"p_1"}, Symmetry::Nonsymm);
-        auto u2 =
-            ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_1"}, ket{L"", L"i_4", L""},
-                       aux{L"p_2"}, Symmetry::Nonsymm);
-        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p_2"},
+        auto u1 = ex<Tensor>("u1", bra{"i_4", ""}, ket{"", "i_1"}, aux{"p_1"},
+                             Symmetry::Nonsymm);
+        auto u2 = ex<Tensor>("u2", bra{"i_2", "", "i_1"}, ket{"", "i_4", ""},
+                             aux{"p_2"}, Symmetry::Nonsymm);
+        auto u3 = ex<Tensor>("u3", bra{"i_3", "i_5"}, ket{}, aux{"p_2"},
                              Symmetry::Symm);
-        auto u4 = ex<Tensor>(L"u4", bra{}, ket{L"i_6", L"i_3", L"i_5"},
-                             aux{L"p_1", L"p_2"}, Symmetry::Antisymm);
+        auto u4 = ex<Tensor>("u4", bra{}, ket{"i_6", "i_3", "i_5"},
+                             aux{"p_1", "p_2"}, Symmetry::Antisymm);
         TN tn(u2 * u1 * u3);
 
         ExprPtr factor =
@@ -886,8 +882,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         }
       }
 
-      // std::wcout << "result_1 = " << result_1.to_latex() << std::endl;
-      // std::wcout << "result_2 = " << result_2.to_latex() << std::endl;
+      // std::cout << "result_1 = " << result_1.to_latex() << std::endl;
+      // std::cout << "result_2 = " << result_2.to_latex() << std::endl;
       REQUIRE(result_1.to_latex() == result_2.to_latex());
     }
 
@@ -898,7 +894,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       // writing it down, canonicalizes to the same exact form
       const Product expectedExpr =
           deserialize(
-              L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
+              "Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
               {.def_perm_symm = Symmetry::Antisymm})
               .as<Product>();
 
@@ -908,9 +904,9 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       const auto [canonical_graph, canonical_graph_labels] =
           accessor.get_canonical_bliss_graph(TN(expected));
 
-      //      std::wcout << "Canonical graph:\n";
-      //      canonical_graph->write_dot(std::wcout, {.labels =
-      //      canonical_graph_labels}); std::wcout << std::endl;
+      //      std::cout << "Canonical graph:\n";
+      //      canonical_graph->write_dot(std::cout, {.labels =
+      //      canonical_graph_labels}); std::cout << std::endl;
 
       std::vector<Index> indices;
       for (std::size_t i = 0; i < expected.size(); ++i) {
@@ -935,7 +931,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       std::sort(factors.begin(), factors.end());
 
       const auto is_occ = [](const Index& idx) {
-        return idx.space() == Index(L"i_1").space();
+        return idx.space() == Index("i_1").space();
       };
 
       // Iterate over all tensor permutations and all permutations of possible
@@ -976,11 +972,11 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
             const auto [current_graph, current_graph_labels] =
                 accessor.get_canonical_bliss_graph(tn);
             if (current_graph->cmp(*canonical_graph) != 0) {
-              std::wcout << "Canonical graph for "
-                         << serialize(ex<Product>(copy)) << ":\n";
-              current_graph->write_dot(std::wcout,
+              std::cout << "Canonical graph for "
+                        << serialize(ex<Product>(copy)) << ":\n";
+              current_graph->write_dot(std::cout,
                                        {.labels = current_graph_labels});
-              std::wcout << std::endl;
+              std::cout << std::endl;
             }
             REQUIRE(current_graph->cmp(*canonical_graph) == 0);
 
@@ -1002,20 +998,20 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
             REQUIRE(actual.size() == expected.size());
 
             if (!std::equal(expected.begin(), expected.end(), actual.begin())) {
-              std::wostringstream sstream;
+              std::ostringstream sstream;
               sstream
                   << "Expected all tensors to be equal (actual == expected), "
                      "but got:\n";
               for (std::size_t i = 0; i < expected.size(); ++i) {
-                std::wstring equality =
-                    actual[i] == expected[i] ? L" == " : L" != ";
+                std::string equality =
+                    actual[i] == expected[i] ? " == " : " != ";
 
                 sstream << serialize(actual[i]) << equality
                         << serialize(expected[i]) << "\n";
               }
               sstream << "\nInput was " << serialize(ex<Product>(factors))
                       << "\n";
-              FAIL(toUtf8(sstream.str()));
+              FAIL(sstream.str());
             }
           } while (std::next_permutation(indices.begin() + 4, indices.end()));
         } while (std::next_permutation(indices.begin(), indices.begin() + 4));
@@ -1027,16 +1023,16 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 #endif
 
     SECTION("idempotency") {
-      const std::vector<std::wstring> inputs = {
-          L"F{i1;i8} g{i8,i9;i1,i7}",
+      const std::vector<std::string> inputs = {
+          "F{i1;i8} g{i8,i9;i1,i7}",
           // column Nonsymm I1, I2: see SECTION("non-symmetric")
-          L"Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N-N-N I2{;i9,i12;x5}:N-N-N",
-          L"f{i4;i1}:N t{a1,a2,a3;i2,i3,i4}:N Ŝ{i1,i2,i3;a1,a2,a3}:N",
-          L"P{a1,a3;} k{i8;i2}",
-          L"L{x6;;x2} P{;a1,a3}",
+          "Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N-N-N I2{;i9,i12;x5}:N-N-N",
+          "f{i4;i1}:N t{a1,a2,a3;i2,i3,i4}:N Ŝ{i1,i2,i3;a1,a2,a3}:N",
+          "P{a1,a3;} k{i8;i2}",
+          "L{x6;;x2} P{;a1,a3}",
       };
 
-      for (const std::wstring& current : inputs) {
+      for (const std::string& current : inputs) {
         auto factors1 = deserialize(current).as<Product>().factors();
         auto factors2 = deserialize(current).as<Product>().factors();
 
@@ -1065,13 +1061,13 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
     }  // SECTION("idempotency")
 
     SECTION("label-specific canonicalizer") {
-      auto Q = [](std::initializer_list<std::wstring_view> b,
-                  std::initializer_list<std::wstring_view> k) {
-        return ex<Tensor>(L"Q", bra(b), ket(k), Symmetry::Antisymm);
+      auto Q = [](std::initializer_list<std::string_view> b,
+                  std::initializer_list<std::string_view> k) {
+        return ex<Tensor>("Q", bra(b), ket(k), Symmetry::Antisymm);
       };
       // canonical form of Q{i_2,i_1;a_1,a_2} and the phase relating the two
       auto canonicalized = [&Q] {
-        TN tn({Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"})});
+        TN tn({Q({"i_2", "i_1"}, {"a_1", "a_2"})});
         const auto byproduct =
             tn.canonicalize(get_default_context().cardinal_tensor_labels(),
                             {.method = CanonicalizationMethod::Complete});
@@ -1084,7 +1080,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       // the default canonicalizer sorts the bra and the ket of Q
       {
         const auto [tensor, phase] = canonicalized();
-        REQUIRE(*tensor == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+        REQUIRE(*tensor == *Q({"i_1", "i_2"}, {"a_1", "a_2"}));
         REQUIRE(phase == -1);
       }
 
@@ -1104,10 +1100,10 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         const auto counting = std::make_shared<CountingCanonicalizer>();
         auto scoped = set_scoped_default_context(
             Context(get_default_context())
-                .set_tensor_canonicalizer(L"Q", counting));
+                .set_tensor_canonicalizer("Q", counting));
         const auto [tensor, phase] = canonicalized();
         REQUIRE(*counting->calls > 0);
-        REQUIRE(*tensor == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+        REQUIRE(*tensor == *Q({"i_1", "i_2"}, {"a_1", "a_2"}));
         REQUIRE(phase == -1);
       }
     }
@@ -1118,15 +1114,15 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
     if (true) {
       Index::reset_tmp_index();
       // TN1 from manuscript
-      auto g = ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
+      auto g = ex<Tensor>("g", bra{"i_3", "i_4"}, ket{"a_3", "a_4"},
                           Symmetry::Antisymm);
-      auto ta = ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_1", L"i_2"},
+      auto ta = ex<Tensor>("t", bra{"a_1", "a_3"}, ket{"i_1", "i_2"},
                            Symmetry::Antisymm);
-      auto tb = ex<Tensor>(L"t", bra{L"a_2", L"a_4"}, ket{L"i_3", L"i_4"},
+      auto tb = ex<Tensor>("t", bra{"a_2", "a_4"}, ket{"i_3", "i_4"},
                            Symmetry::Antisymm);
 
       auto tmp = g * ta * tb;
-      // std::wcout << "TN1 = " << to_latex(tmp) << std::endl;
+      // std::cout << "TN1 = " << to_latex(tmp) << std::endl;
       TN tn(tmp->as<Product>().factors());
 
       // make graph
@@ -1155,10 +1151,10 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
       // create dot
       {
-        std::basic_ostringstream<wchar_t> oss;
+        std::basic_ostringstream<char> oss;
         REQUIRE_NOTHROW(
             graph.bliss_graph->write_dot(oss, {.labels = graph.vertex_labels}));
-        // std::wcout << "oss.str() = " << std::endl << oss.str() <<
+        // std::cout << "oss.str() = " << std::endl << oss.str() <<
         // std::endl;
       }
 
@@ -1175,15 +1171,15 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       CHECK(aut_generators.size() ==
             2);  // there are 2 generators, i1<->i2, i3<->i4
 
-      std::basic_ostringstream<wchar_t> oss;
+      std::basic_ostringstream<char> oss;
       bliss::print_auts(aut_generators, oss, graph.vertex_labels);
-      auto split_into_lines = [](const std::wstring& str) {
-        return str | ranges::views::split(L'\n') |
-               ranges::to<container::set<std::wstring>>();
+      auto split_into_lines = [](const std::string& str) {
+        return str | ranges::views::split('\n') |
+               ranges::to<container::set<std::string>>();
       };
       CHECK(split_into_lines(oss.str()) ==
-            split_into_lines(L"(ket_1,ket_2)(i_1,i_2)\n(bra_1,bra_2)(ket_1,ket_"
-                             L"2)(i_3,i_4)\n"));
+            split_into_lines("(ket_1,ket_2)(i_1,i_2)\n(bra_1,bra_2)(ket_1,ket_"
+                             "2)(i_3,i_4)\n"));
     }
   }
 }

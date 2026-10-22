@@ -6,7 +6,7 @@
 namespace sequant {
 
 IndexBasis::IndexBasis(IndexSpace space, optional_instance basis_instance,
-                       std::wstring name, std::optional<std::size_t> extent,
+                       std::string name, std::optional<std::size_t> extent,
                        IndexBasisMetric metric, std::optional<Field> field)
     : space_(std::move(space)),
       basis_instance_(basis_instance),
@@ -19,9 +19,9 @@ IndexBasis::IndexBasis(IndexSpace space, optional_instance basis_instance,
                  (!extent_ && metric_ == IndexBasisMetric::Unit && !field_));
 }
 
-std::wstring IndexBasis::instance_suffix() const {
-  return basis_instance_ ? L";" + std::to_wstring(*basis_instance_)
-                         : std::wstring{};
+std::string IndexBasis::instance_suffix() const {
+  return basis_instance_ ? ";" + std::to_string(*basis_instance_)
+                         : std::string{};
 }
 
 bool same_instance(const IndexBasis& b1, const IndexBasis& b2) noexcept {

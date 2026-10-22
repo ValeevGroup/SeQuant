@@ -79,7 +79,7 @@ bool is_valid(const ResultExpr &expr, std::string *msg = nullptr);
 /// @param expression The expression to modify
 /// @param label The label of the tensor that shall be removed
 /// @returns The removed tensor, if any occurrence has been found
-std::optional<ExprPtr> pop_tensor(ExprPtr &expression, std::wstring_view label);
+std::optional<ExprPtr> pop_tensor(ExprPtr &expression, std::string_view label);
 
 /// Removes the (anti)symmetrization operator, i.e. the tensor labeled
 /// reserved::symm_label() or, if there is none, the one labeled

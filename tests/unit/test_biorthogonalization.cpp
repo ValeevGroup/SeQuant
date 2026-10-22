@@ -22,14 +22,14 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
   auto resetter = set_scoped_default_context(ctx);
 
   SECTION("plain ExprPtr") {
-    const std::vector<std::wstring> inputs = {L"t{a1;i1}", L"g{a1,a2;i1,i2}",
-                                              L"t{i1,i2,i3;a1,a2,a3}"};
-    const std::vector<std::wstring> expected_outputs = {
-        L"1/2 t{a1;i1}", L"1/6 (2 g{a1,a2;i1,i2} + g{a2,a1;i1,i2})",
+    const std::vector<std::string> inputs = {"t{a1;i1}", "g{a1,a2;i1,i2}",
+                                             "t{i1,i2,i3;a1,a2,a3}"};
+    const std::vector<std::string> expected_outputs = {
+        "1/2 t{a1;i1}", "1/6 (2 g{a1,a2;i1,i2} + g{a2,a1;i1,i2})",
         // cmp. Wang & Knizia (2018), DOI: arXiv:1805.00565, Eq. (31): theirs
         // is normalized by 3!/rank(M) = 6/5 (1/120); this is the unnormalized
         // coefficient
-        L"1/144 ("
+        "1/144 ("
         "-7 t{i_1,i_2,i_3;a_2,a_3,a_1}:N-N-S "
         "- 7 t{i_1,i_2,i_3;a_3,a_1,a_2}:N-N-S "
         "- t{i_1,i_2,i_3;a_2,a_1,a_3}:N-N-S "
@@ -53,24 +53,23 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
   }
 
   SECTION("ResultExpr") {
-    const std::vector<std::vector<std::wstring>> inputs = {
-        {L"R{a1;i1} = t{a1;i1}"},
-        {L"R{i1,i2;a1,a2} = g{a1,a2;i1,i2}"},
-        {L"R{i1,u1;a1,a2} = g{i1,u1;a1,a2}"},
-        {L"R{i1,i2;a1,u1} = g{i1,i2;a1,u1}"},
-        {L"R{a1,a2;u1,i1} = 4 g{a1,a2;u2,i1} GAM0{u2;u1} "
+    const std::vector<std::vector<std::string>> inputs = {
+        {"R{a1;i1} = t{a1;i1}"},
+        {"R{i1,i2;a1,a2} = g{a1,a2;i1,i2}"},
+        {"R{i1,u1;a1,a2} = g{i1,u1;a1,a2}"},
+        {"R{i1,i2;a1,u1} = g{i1,i2;a1,u1}"},
+        {"R{a1,a2;u1,i1} = 4 g{a1,a2;u2,i1} GAM0{u2;u1} "
          "- 2 g{a2,a1;u2,i1} GAM0{u2;u1}"},
-        {L"R{i1,u1;a1,u2} = X{i1,u1;a1,u2}",
-         L"R{u1,i1;a1,u2} = Y{u1,i1;a1,u2}"},
+        {"R{i1,u1;a1,u2} = X{i1,u1;a1,u2}", "R{u1,i1;a1,u2} = Y{u1,i1;a1,u2}"},
     };
-    const std::vector<std::vector<std::wstring>> expected_outputs = {
-        {L"R{a1;i1} = 1/2 t{a1;i1}"},
-        {L"R{a1,a2;i1,i2} = 1/6 ( 2 g{a1,a2;i1,i2} + g{a2,a1;i1,i2} )"},
-        {L"R{i1,u1;a1,a2} = 1/6 ( 2 g{i1,u1;a1,a2} + g{i1,u1;a2,a1} )"},
-        {L"R{i1,i2;a1,u1} = 1/6 ( 2 g{i1,i2;a1,u1} + g{i2,i1;a1,u1} )"},
-        {L"R{a1,a2;u1,i1} = g{a1,a2;u2,i1} GAM0{u2;u1}"},
-        {L"R{i1,u1;a1,u2} = 1/3 X{i1,u1;a1,u2} + 1/6 Y{u1,i1;a1,u2}",
-         L"R{u1,i1;a1,u2} = 1/3 Y{u1,i1;a1,u2} + 1/6 X{i1,u1;a1,u2}"},
+    const std::vector<std::vector<std::string>> expected_outputs = {
+        {"R{a1;i1} = 1/2 t{a1;i1}"},
+        {"R{a1,a2;i1,i2} = 1/6 ( 2 g{a1,a2;i1,i2} + g{a2,a1;i1,i2} )"},
+        {"R{i1,u1;a1,a2} = 1/6 ( 2 g{i1,u1;a1,a2} + g{i1,u1;a2,a1} )"},
+        {"R{i1,i2;a1,u1} = 1/6 ( 2 g{i1,i2;a1,u1} + g{i2,i1;a1,u1} )"},
+        {"R{a1,a2;u1,i1} = g{a1,a2;u2,i1} GAM0{u2;u1}"},
+        {"R{i1,u1;a1,u2} = 1/3 X{i1,u1;a1,u2} + 1/6 Y{u1,i1;a1,u2}",
+         "R{u1,i1;a1,u2} = 1/3 Y{u1,i1;a1,u2} + 1/6 X{i1,u1;a1,u2}"},
     };
 
     REQUIRE(inputs.size() == expected_outputs.size());
@@ -132,15 +131,15 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
   }
 
   SECTION("error") {
-    const std::vector<std::vector<std::wstring>> inputs = {
-        {L"R{i1,u1;a1,u2} = X{i1,u1;a1,u2}"},
+    const std::vector<std::vector<std::string>> inputs = {
+        {"R{i1,u1;a1,u2} = X{i1,u1;a1,u2}"},
     };
 
-    for (const std::vector<std::wstring> &current_inputs : inputs) {
+    for (const std::vector<std::string> &current_inputs : inputs) {
       CAPTURE(current_inputs);
       container::svector<ResultExpr> expressions;
 
-      for (const std::wstring &str : current_inputs) {
+      for (const std::string &str : current_inputs) {
         expressions.push_back(deserialize<ResultExpr>(str));
       }
 

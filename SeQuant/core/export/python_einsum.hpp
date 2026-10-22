@@ -52,7 +52,7 @@ class PythonEinsumGeneratorContext : public ReorderingContext {
       return it->second;
     }
     // Default fallback - use a simple naming scheme
-    return "dim_" + toUtf8(space.base_key());
+    return "dim_" + std::string(space.base_key());
   }
 
   /// Get the shape tuple for a tensor
@@ -82,7 +82,7 @@ class PythonEinsumGeneratorContext : public ReorderingContext {
       return it->second;
     }
     // Default: use first character of base key
-    return toUtf8(space.base_key()).substr(0, 1);
+    return std::string(first_code_point(space.base_key()));
   }
 
   /// Set the tag for a given index space
@@ -152,7 +152,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
     // Convert index label to a single character for einsum notation
     // For einsum, we need single characters
-    std::string label = toUtf8(idx.full_label());
+    std::string label = std::string(idx.full_label());
 
     // Try to extract a single character representation
     // If the label is longer, use its first character (this may need
@@ -163,9 +163,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
     // Return first character preserving case to avoid conflicts
     // between index spaces that differ only in case (e.g., 'I' vs 'i')
-    char c = label[0];
-
-    return std::string(1, c);
+    return std::string(first_code_point(label));
   }
 
   std::string represent(const Tensor &tensor,
@@ -358,8 +356,8 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
   }
 
   /// Sanitize a label to be a valid Python identifier
-  std::string sanitize_python_name(std::wstring_view label) const {
-    std::string name = toUtf8(label);
+  std::string sanitize_python_name(std::string_view label) const {
+    std::string name = std::string(label);
 
     // Replace invalid characters with underscores
     // Python 3 supports unicode identifiers, so we only replace:
@@ -391,7 +389,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
       const Index &idx, const Context &,
       boost::unordered::unordered_map<std::string, std::string> &index_map,
       boost::unordered::unordered_set<std::string> &used_chars) const {
-    const std::string full_label = toUtf8(idx.full_label());
+    const std::string full_label = std::string(idx.full_label());
 
     // Check if we've already assigned a character to this index
     auto it = index_map.find(full_label);
@@ -399,8 +397,13 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
       return it->second;
     }
 
-    // Try to use the first character of the label, preserving case
-    char base_char = full_label.empty() ? 'i' : full_label[0];
+    // Try to use the first character of the label, preserving case (einsum
+    // only supports ASCII letters, so fall back to 'i' otherwise)
+    const char base_char =
+        full_label.empty() ||
+                !std::isalpha(static_cast<unsigned char>(full_label[0]))
+            ? 'i'
+            : full_label[0];
     std::string candidate(1, base_char);
 
     // Check if this character is already used (O(1) lookup)

@@ -101,7 +101,7 @@ static_assert(sequant::meta::can_evaluate<ScalarNode>);
 /// Identical to test_ordered_executor.cpp's ScalarLeafEvaluator.
 ///
 struct ScalarLeafEvaluator {
-  std::map<std::wstring, double> values;
+  std::map<std::string, double> values;
 
   [[nodiscard]] ResultPtr operator()(ScalarNode const& leaf) const {
     SEQUANT_ASSERT(leaf.leaf());
@@ -110,17 +110,17 @@ struct ScalarLeafEvaluator {
       return sequant::eval_result<ResultScalar<double>>(
           xpr->as<Constant>().value<double>());
     SEQUANT_ASSERT(xpr->is<Variable>());
-    auto const it = values.find(std::wstring(xpr->as<Variable>().label()));
+    auto const it = values.find(std::string(xpr->as<Variable>().label()));
     SEQUANT_ASSERT(it != values.end() && "unbound scalar leaf in test forest");
     return sequant::eval_result<ResultScalar<double>>(it->second);
   }
 };
 
 // One scalar equation deserialized+binarized into a ScalarNode tree.
-ScalarNode scalar_tree(std::wstring_view spec) {
+ScalarNode scalar_tree(std::string_view spec) {
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   return sequant::binarize<ScalarEvalExpr>(
-      sequant::deserialize<ExprPtr>(std::wstring(spec)));
+      sequant::deserialize<ExprPtr>(std::string(spec)));
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
@@ -203,15 +203,15 @@ TEST_CASE(
   // compiled out under this Release build's SEQUANT_ASSERT_BEHAVIOR_=IGNORE)
   // without weakening what THIS test verifies: A is still the identical
   // shared subexpression, built once and read (never mutated) by both roots.
-  ScalarNode const root1 = scalar_tree(L"c + (a * b)");
-  ScalarNode const root2 = scalar_tree(L"d + (a * b)");
+  ScalarNode const root1 = scalar_tree("c + (a * b)");
+  ScalarNode const root2 = scalar_tree("d + (a * b)");
   // A probed independently (never inserted into either root), purely to
   // learn its canonical hash for the cell/production-site counts below.
-  ScalarNode const a_probe = scalar_tree(L"a * b");
+  ScalarNode const a_probe = scalar_tree("a * b");
   std::size_t const a_hash = a_probe->hash_value();
 
   ScalarLeafEvaluator const yield{
-      {{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}, {L"d", -1.5}}};
+      {{"a", 2.0}, {"b", -3.5}, {"c", 7.25}, {"d", -1.5}}};
 
   // NO batchable index -- same no-batching BatchPolicy as
   // test_ordered_executor.cpp's unbatched-forest test.
@@ -283,8 +283,8 @@ TEST_CASE(
     "evaluate_ordered_multiroot on a single root is a regression anchor: "
     "identical to the existing single-forest ordered path for one root",
     "[eval][ordered]") {
-  ScalarNode const root = scalar_tree(L"2 * a * b - c");
-  ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
+  ScalarNode const root = scalar_tree("2 * a * b - c");
+  ScalarLeafEvaluator const yield{{{"a", 2.0}, {"b", -3.5}, {"c", 7.25}}};
 
   sequant::BatchPolicy const policy;
   SizeRegime const regime;
@@ -354,10 +354,10 @@ TEST_CASE(
   //   root2 = A * d       = (-7) * 1.5         = -10.5
   // With the in-place hazard UNGUARDED, (a*b + c) mutates A to 0.25, so root1
   // would wrongly yield 0.25 * 0.25 = 0.0625 (and root2 0.25 * 1.5 = 0.375).
-  ScalarNode const root1 = scalar_tree(L"((a * b) + c) * (a * b)");
-  ScalarNode const root2 = scalar_tree(L"(a * b) * d");
+  ScalarNode const root1 = scalar_tree("((a * b) + c) * (a * b)");
+  ScalarNode const root2 = scalar_tree("(a * b) * d");
   ScalarLeafEvaluator const yield{
-      {{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}, {L"d", 1.5}}};
+      {{"a", 2.0}, {"b", -3.5}, {"c", 7.25}, {"d", 1.5}}};
 
   sequant::BatchPolicy const policy;
   SizeRegime const regime;
@@ -464,15 +464,15 @@ TEST_CASE(
   // trailing "e * f" term is visited only after "(a*b)*d" has fully
   // finished, i.e. after A's exhausting read). "e"/"f" are otherwise inert
   // (unrelated to A, added only to create that observation point).
-  ScalarNode const root1 = scalar_tree(L"((a * b) + c) * (a * b)");
-  ScalarNode const root2 = scalar_tree(L"(a * b) * d + (e * f)");
-  ScalarNode const shared = scalar_tree(L"a * b");  // the CSE'd value A
-  ScalarLeafEvaluator const yield{{{L"a", 2.0},
-                                   {L"b", -3.5},
-                                   {L"c", 7.25},
-                                   {L"d", 1.5},
-                                   {L"e", 2.0},
-                                   {L"f", 0.5}}};
+  ScalarNode const root1 = scalar_tree("((a * b) + c) * (a * b)");
+  ScalarNode const root2 = scalar_tree("(a * b) * d + (e * f)");
+  ScalarNode const shared = scalar_tree("a * b");  // the CSE'd value A
+  ScalarLeafEvaluator const yield{{{"a", 2.0},
+                                   {"b", -3.5},
+                                   {"c", 7.25},
+                                   {"d", 1.5},
+                                   {"e", 2.0},
+                                   {"f", 0.5}}};
 
   // Leaf "a" is VOLATILE, so every value carrying it -- A included -- is a
   // non-persistent cell with a finite, spendable life, exactly as an
@@ -482,7 +482,7 @@ TEST_CASE(
   std::function<bool(ScalarNode const&)> const is_volatile =
       [](ScalarNode const& n) {
         return n.leaf() && n->expr()->is<Variable>() &&
-               n->expr()->as<Variable>().label() == L"a";
+               n->expr()->as<Variable>().label() == "a";
       };
 
   sequant::BatchPolicy const policy;
@@ -588,7 +588,7 @@ TEST_CASE(
   // max_life; a held NON-persistent single-use entry (max_life == 1), which
   // drains its buffer out on its sole read, must NOT be reported (so in-place
   // stays enabled for the private common case).
-  ScalarNode const node = scalar_tree(L"a * b");
+  ScalarNode const node = scalar_tree("a * b");
 
   SECTION("persistent, max_life == 1 -> shared") {
     svector<std::pair<ScalarNode, std::size_t>> const decaying{{node, 1}};

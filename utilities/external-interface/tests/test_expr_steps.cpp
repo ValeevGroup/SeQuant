@@ -22,14 +22,14 @@ using json = nlohmann::json;
 
 namespace {
 void seed_expr(ExecutionContext &ctx,
-               std::initializer_list<std::wstring_view> defs) {
+               std::initializer_list<std::string_view> defs) {
   ctx.set_data("in", 0, ProcessingData{test_support::expr_data(defs)});
 }
 }  // namespace
 
 TEST_CASE("simplify step", "[extint]") {
   ExecutionContext ctx;
-  seed_expr(ctx, {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+  seed_expr(ctx, {"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
 
   SECTION("produces an ExpressionData output") {
     SimplifyStep step;
@@ -62,7 +62,7 @@ TEST_CASE("substitute step", "[extint]") {
 
   SECTION("a matching substitution rewrites the expression") {
     ExecutionContext ctx;
-    seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
+    seed_expr(ctx, {"R1{a1;i1} = + f{a1;i1}:A-H-S"});
     SubstituteStep step;
     step.set_options(json{{"substitutions", {{"f{a1;i1}", "X{a1;i1}"}}}});
     REQUIRE(step.run("sub", ctx, {"in.0"}) == 1);
@@ -71,7 +71,7 @@ TEST_CASE("substitute step", "[extint]") {
 
   SECTION("an input left unchanged is dropped") {
     ExecutionContext ctx;
-    seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
+    seed_expr(ctx, {"R1{a1;i1} = + f{a1;i1}:A-H-S"});
     SubstituteStep step;
     step.set_options(json{{"substitutions", {{"q{a1;i1}", "X{a1;i1}"}}}});
     REQUIRE(step.run("sub", ctx, {"in.0"}) == 0);
@@ -80,7 +80,7 @@ TEST_CASE("substitute step", "[extint]") {
 
   SECTION("result_relabeling renames the result") {
     ExecutionContext ctx;
-    seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
+    seed_expr(ctx, {"R1{a1;i1} = + f{a1;i1}:A-H-S"});
     SubstituteStep step;
     step.set_options(json{{"substitutions", {{"f{a1;i1}", "X{a1;i1}"}}},
                           {"result_relabeling", {{"R1", "S1"}}}});
@@ -88,7 +88,7 @@ TEST_CASE("substitute step", "[extint]") {
     const ExpressionData &out =
         convert_data<ExpressionData>(ctx.get_data("sub.0").front().data.get());
     REQUIRE(out.expressions.size() == 1);
-    REQUIRE(out.expressions.front().label() == std::wstring(L"S1"));
+    REQUIRE(out.expressions.front().label() == std::string("S1"));
   }
 }
 
@@ -104,7 +104,7 @@ TEST_CASE("spintracing step", "[extint]") {
 
   SECTION("rigorous spintrace yields ExpressionData") {
     ExecutionContext ctx;
-    seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
+    seed_expr(ctx, {"R1{a1;i1} = + f{a1;i1}:A-H-S"});
     SpintracingStep step;
     REQUIRE(step.run("st", ctx, {"in.0"}) == 1);
     REQUIRE_NOTHROW(
@@ -151,7 +151,7 @@ TEST_CASE("output step", "[extint]") {
   SECTION("produces no output data") {
     test_support::ScopedStreamSilencer silence;
     ExecutionContext ctx;
-    seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
+    seed_expr(ctx, {"R1{a1;i1} = + f{a1;i1}:A-H-S"});
     OutputStep step;
     REQUIRE(step.run("o", ctx, {"in.0"}) == 0);
   }
@@ -169,7 +169,7 @@ TEST_CASE("filter step", "[extint]") {
 
   SECTION("splits terms into labelled groups") {
     ExecutionContext ctx;
-    seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
+    seed_expr(ctx, {"R1{a1;i1} = + f{a1;i1}:A-H-S"});
     FilterStep step;
     step.set_options(json{
         {"groups",
@@ -182,7 +182,7 @@ TEST_CASE("filter step", "[extint]") {
 
   SECTION("keep_empty=false drops empty groups") {
     ExecutionContext ctx;
-    seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
+    seed_expr(ctx, {"R1{a1;i1} = + f{a1;i1}:A-H-S"});
     FilterStep step;
     step.set_options(json{
         {"keep_empty", false},
@@ -208,7 +208,7 @@ TEST_CASE("optimize step", "[extint]") {
 
   SECTION("factorizes a contraction into ExpressionData") {
     ExecutionContext ctx;
-    seed_expr(ctx, {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+    seed_expr(ctx, {"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
     OptimizationStep step;
     REQUIRE(step.run("opt", ctx, {"in.0"}) == 1);
     REQUIRE_NOTHROW(
@@ -217,7 +217,7 @@ TEST_CASE("optimize step", "[extint]") {
 
   SECTION("replay splits each input into persistent and volatile parts") {
     ExecutionContext ctx;
-    seed_expr(ctx, {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+    seed_expr(ctx, {"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
     OptimizationStep step;
     step.set_options(json{{"replay", {{"volatile", "T.*"}}}});
     REQUIRE(step.run("opt", ctx, {"in.0"}) == 2);

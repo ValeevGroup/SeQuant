@@ -10,13 +10,13 @@
 #include <string>
 
 namespace sequant::mbpt {
-void OpRegistry::validate_op(const std::wstring& op) const {
+void OpRegistry::validate_op(const std::string& op) const {
   if (!reserved::is_nonreserved(op)) {
-    throw Exception("mbpt::OpRegistry::add: operator " + toUtf8(op) +
+    throw Exception("mbpt::OpRegistry::add: operator " + std::string(op) +
                     " uses a reserved label");
   }
   if (this->contains(op)) {
-    throw Exception("mbpt::OpRegistry::add: operator " + toUtf8(op) +
+    throw Exception("mbpt::OpRegistry::add: operator " + std::string(op) +
                     " already exists in registry");
   }
 }
@@ -35,13 +35,13 @@ OpRegistry& OpRegistry::operator=(OpRegistry&& other) noexcept {
   return *this;
 }
 
-OpRegistry& OpRegistry::add(const std::wstring& op, OpClass action) {
+OpRegistry& OpRegistry::add(const std::string& op, OpClass action) {
   this->validate_op(op);
   ops_->emplace(op, action);
   return *this;
 }
 
-OpRegistry& OpRegistry::add(const std::wstring& op, OpClass action,
+OpRegistry& OpRegistry::add(const std::string& op, OpClass action,
                             Hermiticity hermiticity) {
   this->validate_op(op);
   ops_->emplace(op, action);
@@ -49,25 +49,26 @@ OpRegistry& OpRegistry::add(const std::wstring& op, OpClass action,
   return *this;
 }
 
-OpRegistry& OpRegistry::set_hermiticity(const std::wstring& op,
+OpRegistry& OpRegistry::set_hermiticity(const std::string& op,
                                         Hermiticity hermiticity) {
   if (!this->contains(op)) {
     throw Exception("mbpt::OpRegistry::set_hermiticity: operator " +
-                    toUtf8(op) + " does not exist in registry");
+                    std::string(op) + " does not exist in registry");
   }
   herm_overrides_->insert_or_assign(op, hermiticity);
   return *this;
 }
 
-OpRegistry& OpRegistry::grant_basis(const std::wstring& op,
+OpRegistry& OpRegistry::grant_basis(const std::string& op,
                                     const IndexSpace& leg_space,
                                     IndexBasis::instance_type instance) {
   if (!this->contains(op)) {
-    throw Exception("mbpt::OpRegistry::grant_basis: operator " + toUtf8(op) +
-                    " does not exist in registry");
+    throw Exception("mbpt::OpRegistry::grant_basis: operator " +
+                    std::string(op) + " does not exist in registry");
   }
   if (this->to_class(op) == OpClass::Gen) {
-    throw Exception("mbpt::OpRegistry::grant_basis: operator " + toUtf8(op) +
+    throw Exception("mbpt::OpRegistry::grant_basis: operator " +
+                    std::string(op) +
                     " is a general operator; only (de)excitation operators "
                     "carry a basis instance");
   }
@@ -75,21 +76,21 @@ OpRegistry& OpRegistry::grant_basis(const std::wstring& op,
   return *this;
 }
 
-std::optional<std::wstring> OpRegistry::resolve(std::wstring_view op) const {
-  if (ops_->contains(std::wstring(op))) return std::wstring(op);
+std::optional<std::string> OpRegistry::resolve(std::string_view op) const {
+  if (ops_->contains(std::string(op))) return std::string(op);
   const auto base = detail::strip_pert_order(op);
-  if (base.size() != op.size() && ops_->contains(std::wstring(base)))
-    return std::wstring(base);
+  if (base.size() != op.size() && ops_->contains(std::string(base)))
+    return std::string(base);
   return std::nullopt;
 }
 
-bool OpRegistry::has_basis_grants(const std::wstring& op) const {
+bool OpRegistry::has_basis_grants(const std::string& op) const {
   const auto label = resolve(op);
   return label && basis_grants_->contains(*label);
 }
 
 IndexBasis::optional_instance OpRegistry::basis_grant(
-    const std::wstring& op, const IndexSpace& leg_space) const {
+    const std::string& op, const IndexSpace& leg_space) const {
   const auto label = resolve(op);
   if (!label) return std::nullopt;
   auto it = basis_grants_->find(*label);
@@ -99,9 +100,9 @@ IndexBasis::optional_instance OpRegistry::basis_grant(
   return leg->second;
 }
 
-OpRegistry& OpRegistry::remove(const std::wstring& op) {
+OpRegistry& OpRegistry::remove(const std::string& op) {
   if (!this->contains(op)) {
-    throw Exception("mbpt::OpRegistry::remove: operator " + toUtf8(op) +
+    throw Exception("mbpt::OpRegistry::remove: operator " + std::string(op) +
                     " does not exist in registry");
   }
   ops_->erase(op);
@@ -110,20 +111,20 @@ OpRegistry& OpRegistry::remove(const std::wstring& op) {
   return *this;
 }
 
-bool OpRegistry::contains(const std::wstring& op) const {
+bool OpRegistry::contains(const std::string& op) const {
   return ops_->contains(op);
 }
 
-OpClass OpRegistry::to_class(const std::wstring& op) const {
+OpClass OpRegistry::to_class(const std::string& op) const {
   auto it = ops_->find(op);
   if (it == ops_->end()) {
-    throw Exception("mbpt::OpRegistry::to_class: operator " + toUtf8(op) +
+    throw Exception("mbpt::OpRegistry::to_class: operator " + std::string(op) +
                     " does not exist in registry");
   }
   return it->second;
 }
 
-Hermiticity OpRegistry::hermiticity(const std::wstring& op) const {
+Hermiticity OpRegistry::hermiticity(const std::string& op) const {
   if (auto it = herm_overrides_->find(op); it != herm_overrides_->end())
     return it->second;
   return default_hermiticity(this->to_class(op));
@@ -131,9 +132,9 @@ Hermiticity OpRegistry::hermiticity(const std::wstring& op) const {
 
 OpRegistry OpRegistry::clone() const {
   OpRegistry result(*this);
-  result.ops_ = std::make_shared<container::map<std::wstring, OpClass>>(*ops_);
+  result.ops_ = std::make_shared<container::map<std::string, OpClass>>(*ops_);
   result.herm_overrides_ =
-      std::make_shared<container::map<std::wstring, Hermiticity>>(
+      std::make_shared<container::map<std::string, Hermiticity>>(
           *herm_overrides_);
   result.basis_grants_ = std::make_shared<BasisGrants>(*basis_grants_);
   return result;

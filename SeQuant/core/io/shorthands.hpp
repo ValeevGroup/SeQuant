@@ -38,14 +38,6 @@ decltype(auto) deserialize(
   return io::serialization::from_string<T>(input, options);
 }
 
-template <typename T = ExprPtr>
-  requires(io::deserializable<T>)
-decltype(auto) deserialize(
-    std::wstring_view input,
-    const io::serialization::DeserializationOptions &options = {}) {
-  return io::serialization::from_string<T>(input, options);
-}
-
 }  // namespace sequant
 
 #endif  // SEQUANT_CORE_IO_SHORTHANDS_HPP

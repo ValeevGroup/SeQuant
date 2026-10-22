@@ -114,14 +114,38 @@ enum class AssertStrictBraKetSymmetry { Yes, No };
 /// describes type of single-particle basis
 enum class SPBasis { Spinor, Spinfree };
 
-inline std::wstring to_wstring(Symmetry sym) {
+inline std::string to_string(Symmetry sym) {
   switch (sym) {
     case Symmetry::Symm:
-      return L"symmetric";
+      return "symmetric";
     case Symmetry::Antisymm:
-      return L"antisymmetric";
+      return "antisymmetric";
     case Symmetry::Nonsymm:
-      return L"nonsymmetric";
+      return "nonsymmetric";
+  }
+
+  SEQUANT_UNREACHABLE;
+}
+
+inline std::string to_string(ColumnSymmetry sym) {
+  switch (sym) {
+    case ColumnSymmetry::Symm:
+      return "symmetric";
+    case ColumnSymmetry::Nonsymm:
+      return "nonsymmetric";
+  }
+
+  SEQUANT_UNREACHABLE;
+}
+
+inline std::string to_string(BraKetSymmetry sym) {
+  switch (sym) {
+    case BraKetSymmetry::Symm:
+      return "symmetric";
+    case BraKetSymmetry::Conjugate:
+      return "conjugate";
+    case BraKetSymmetry::Nonsymm:
+      return "nonsymmetric";
   }
 
   SEQUANT_UNREACHABLE;
@@ -204,14 +228,14 @@ inline Action adjoint(Action action) {
 
 enum class Vacuum { Physical, SingleProduct, MultiProduct };
 
-inline std::wstring to_string(Vacuum V) {
+inline std::string to_string(Vacuum V) {
   switch (V) {
     case Vacuum::Physical:
-      return L"PhysicalVacuum";
+      return "PhysicalVacuum";
     case Vacuum::SingleProduct:
-      return L"SingleProductVacuum";
+      return "SingleProductVacuum";
     case Vacuum::MultiProduct:
-      return L"MultiProductVacuum";
+      return "MultiProductVacuum";
   }
 
   SEQUANT_UNREACHABLE;

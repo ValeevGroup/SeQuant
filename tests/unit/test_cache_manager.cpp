@@ -19,7 +19,7 @@ using node_type = sequant::EvalNode<sequant::EvalExpr>;
 using manager_type = sequant::CacheManager<node_type>;
 
 // Helper to create distinct EvalNode keys from expressions
-node_type make_node(std::wstring_view expr_str) {
+node_type make_node(std::string_view expr_str) {
   return sequant::binarize(sequant::deserialize<sequant::ResultExpr>(expr_str));
 }
 
@@ -38,10 +38,10 @@ TEST_CASE("cache_manager", "[cache_manager]") {
   size_t constexpr n_decaying = 4;  // arbitrary
 
   // Create distinct nodes to use as cache keys
-  auto const node0 = make_node(L"R{a1;i1} = f{a1;i1}");
-  auto const node1 = make_node(L"R{a1;i1} = g{a1;i1}");
-  auto const node2 = make_node(L"R{a1,a2;i1,i2} = g{a1,a2;i1,i2}");
-  auto const node3 = make_node(L"R = A");
+  auto const node0 = make_node("R{a1;i1} = f{a1;i1}");
+  auto const node1 = make_node("R{a1;i1} = g{a1;i1}");
+  auto const node2 = make_node("R{a1,a2;i1,i2} = g{a1,a2;i1,i2}");
+  auto const node3 = make_node("R = A");
 
   auto const decaying_keys =
       std::array<key_type, n_decaying>{node0, node1, node2, node3};
@@ -120,7 +120,7 @@ TEST_CASE("cache_manager", "[cache_manager]") {
     auto man = man_const;
 
     // A key never registered in the manager.
-    auto const stray = make_node(L"R = B");
+    auto const stray = make_node("R = B");
     REQUIRE_FALSE(man.exists(stray));
     REQUIRE_FALSE(man.alive(stray));
     REQUIRE(man.entry_size_in_bytes(stray) == 0);
@@ -180,8 +180,8 @@ TEST_CASE("cache_manager", "[cache_manager]") {
 
   SECTION("Hash collision safety") {
     // Two structurally different nodes
-    auto const n1 = make_node(L"R{a1;i1} = f{a1;i1}");
-    auto const n2 = make_node(L"R{a1,a2;i1,i2} = g{a1,a2;i1,i2}");
+    auto const n1 = make_node("R{a1;i1} = f{a1;i1}");
+    auto const n2 = make_node("R{a1,a2;i1,i2} = g{a1,a2;i1,i2}");
 
     // Build a CacheManager with force_hash_collisions = true
     // This forces all hashes to 0, so if the map relied only on hash equality,
@@ -231,8 +231,8 @@ TEST_CASE("cache manager scope chain fall-through", "[cache_manager]") {
     return sequant::eval_result<sequant::ResultScalar<int>>(x);
   };
 
-  auto const X = make_node(L"R{a1;i1} = f{a1;i1}");
-  auto const unregistered = make_node(L"R{a1;i1} = g{a1;i1}");
+  auto const X = make_node("R{a1;i1} = f{a1;i1}");
+  auto const unregistered = make_node("R{a1;i1} = g{a1;i1}");
 
   // parent registers node X with use-count 3 (NP); child is empty with parent
   // set. (Use-count 3, not 2: store_and_access() itself performs an implicit
@@ -282,8 +282,8 @@ TEST_CASE("cache manager scope chain read-through survives local registration",
     return sequant::eval_result<sequant::ResultScalar<int>>(x);
   };
 
-  auto const X = make_node(L"R{a1;i1} = f{a1;i1}");
-  auto const Y = make_node(L"R{a1;i1} = g{a1;i1}");
+  auto const X = make_node("R{a1;i1} = f{a1;i1}");
+  auto const Y = make_node("R{a1;i1} = g{a1;i1}");
 
   // outer registers and stores X (the hoisted, loop-invariant node).
   std::unordered_map<node_type, size_t, hasher_t, comp_t> outer_counts;
@@ -345,8 +345,8 @@ TEST_CASE("cache manager scope chain per-loop storage survives inner resets",
     return sequant::eval_result<sequant::ResultScalar<int>>(x);
   };
 
-  auto const X = make_node(L"R{a1;i1} = f{a1;i1}");
-  auto const Y = make_node(L"R{a1;i1} = g{a1;i1}");
+  auto const X = make_node("R{a1;i1} = f{a1;i1}");
+  auto const Y = make_node("R{a1;i1} = g{a1;i1}");
 
   // outer -> mid -> inner: a three-level loop-nest chain. X is registered at
   // every level (mirroring how a per-loop node-repeat scan may see the same
@@ -414,7 +414,7 @@ TEST_CASE("cache manager access_at surfaces the lifetime scope hop distance",
     return sequant::eval_result<sequant::ResultScalar<int>>(x);
   };
 
-  auto const X = make_node(L"R{a1;i1} = f{a1;i1}");
+  auto const X = make_node("R{a1;i1} = f{a1;i1}");
 
   // X is registered (and stored) ONLY at outer, so mid and inner miss locally
   // and fall through. A generous use-count keeps X alive across the reads
@@ -460,8 +460,8 @@ TEST_CASE("cache_manager_persistent", "[cache_manager]") {
     return sequant::eval_result<sequant::ResultScalar<int>>(x);
   };
 
-  auto const np = make_node(L"R{a1;i1} = f{a1;i1}");  // non-persistent
-  auto const p = make_node(L"R{a1;i1} = g{a1;i1}");   // persistent
+  auto const np = make_node("R{a1;i1} = f{a1;i1}");  // non-persistent
+  auto const p = make_node("R{a1;i1} = g{a1;i1}");   // persistent
 
   std::unordered_map<node_type, size_t, hasher_t, comp_t> counts;
   counts.emplace(np, 2);  // NP, drained after 2 accesses
@@ -519,8 +519,8 @@ TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
     return sequant::eval_result<sequant::ResultScalar<int>>(x);
   };
 
-  auto const np = make_node(L"R{a1;i1} = f{a1;i1}");  // non-persistent
-  auto const p = make_node(L"R{a1;i1} = g{a1;i1}");   // persistent
+  auto const np = make_node("R{a1;i1} = f{a1;i1}");  // non-persistent
+  auto const p = make_node("R{a1;i1} = g{a1;i1}");   // persistent
 
   std::unordered_map<node_type, size_t, hasher_t, comp_t> counts;
   counts.emplace(np, 3);  // enough life to survive several stores/accesses
@@ -577,10 +577,10 @@ TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
 
 TEST_CASE("cache_manager_volatility_frontier", "[cache_manager]") {
   // R = f * g * t : f,g constant (NV), t the amplitude (intrinsically V).
-  auto const node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
+  auto const node = make_node("R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
 
   auto is_volatile = [](node_type const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == "t";
   };
   std::function<bool(node_type const&)> has_t =
       [&](node_type const& n) -> bool {
@@ -609,9 +609,9 @@ TEST_CASE("cache_manager_volatility_frontier", "[cache_manager]") {
 TEST_CASE("cache_manager_footprint_gate", "[cache_manager]") {
   // R = f * g * t : the NV product (f*g) feeds the volatile root, so without a
   // footprint gate it is cached as a persistent (cross-iteration) entry.
-  auto const node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
+  auto const node = make_node("R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
   auto is_volatile = [](node_type const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == "t";
   };
   // footprint proxy: number of result indices (the NV frontier I{a1;a3} has 2).
   auto footprint_of = [](node_type const& n) -> double {
@@ -665,7 +665,7 @@ TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
   using sequant::BatchModeType;
 
   auto is_volatile = [](node_type const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == "t";
   };
   auto in = [](auto const& v, sequant::Index const& x) {
     return std::find(v.begin(), v.end(), x) != v.end();
@@ -684,7 +684,7 @@ TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
   // baseline: no node_slice_mask annotation -> all-full mask, veto inert; the
   // NV/V frontier is cached and persistent.
   {
-    auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
+    auto node = make_node("R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
     auto const a3 = find_a3(node);
     REQUIRE(a3);
     auto man = sequant::cache_manager(std::array{node}, is_volatile,
@@ -701,7 +701,7 @@ TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
   // cache
   // -- not registered in the cache map, not persistent.
   {
-    auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
+    auto node = make_node("R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
     auto const a3 = find_a3(node);
     REQUIRE(a3);
     node.left()->set_node_slice_mask({{*a3, BatchModeType::External}});
@@ -721,8 +721,8 @@ TEST_CASE("cache_manager residency", "[cache_manager]") {
     return sequant::eval_result<sequant::ResultScalar<int>>(x);
   };
 
-  auto const k0 = make_node(L"R{a1;i1} = f{a1;i1}");
-  auto const k1 = make_node(L"R{a1;i1} = g{a1;i1}");
+  auto const k0 = make_node("R{a1;i1} = f{a1;i1}");
+  auto const k1 = make_node("R{a1;i1} = g{a1;i1}");
 
   // Build a manager with two keys
   std::unordered_map<node_type, size_t, hasher_t, comp_t> key_count_pairs;
@@ -786,8 +786,8 @@ TEST_CASE("cache_manager chain_holds pointer identity", "[cache_manager]") {
     return sequant::eval_result<sequant::ResultScalar<int>>(x);
   };
 
-  auto const X = make_node(L"R{a1;i1} = f{a1;i1}");  // buffer lives at parent
-  auto const Y = make_node(L"R{a1;i1} = g{a1;i1}");  // buffer lives at child
+  auto const X = make_node("R{a1;i1} = f{a1;i1}");  // buffer lives at parent
+  auto const Y = make_node("R{a1;i1} = g{a1;i1}");  // buffer lives at child
 
   std::unordered_map<node_type, size_t, hasher_t, comp_t> parent_counts;
   parent_counts.emplace(

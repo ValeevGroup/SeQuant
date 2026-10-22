@@ -38,7 +38,7 @@ Field field_override = Field::Complex;
 
 /// sets IndexSpace::field on every space in @p reg to @p f
 void apply_field(auto& reg, Field f) {
-  std::vector<std::wstring> keys;
+  std::vector<std::string> keys;
   for (auto const& s : reg) keys.push_back(s.base_key());
   for (auto const& k : keys)
     if (!k.empty()) reg.field(k, f);
@@ -48,8 +48,8 @@ void apply_field(auto& reg, Field f) {
 enum class EqnType { t, λ };
 
 /// maps equation type to string
-inline const std::map<EqnType, std::wstring> type2str = {
-    {EqnType::t, L"t"}, {EqnType::λ, L"lambda"}};
+inline const std::map<EqnType, std::string> type2str = {{EqnType::t, "t"},
+                                                        {EqnType::λ, "lambda"}};
 
 /// maps equation type string to enum
 inline const std::map<std::string, EqnType> str2type = {{"t", EqnType::t},
@@ -87,10 +87,10 @@ class compute_cceqvec {
     }
     tpool.stop(N);
     const bool spinfree = get_default_context().spbasis() == SPBasis::Spinfree;
-    std::wcout << std::boolalpha << "CC equations [type=" << type2str.at(type)
-               << ",rank=" << N << ",spinfree=" << spinfree
-               << ",screen=" << screen << ",use_topology=" << use_topology
-               << "] computed in " << tpool.read(N) << " seconds" << std::endl;
+    std::cout << std::boolalpha << "CC equations [type=" << type2str.at(type)
+              << ",rank=" << N << ",spinfree=" << spinfree
+              << ",screen=" << screen << ",use_topology=" << use_topology
+              << "] computed in " << tpool.read(N) << " seconds" << std::endl;
 
     // validate spin-free equations against spin-traced spin-orbital equations
     std::vector<ExprPtr> eqvec_sf_ref;
@@ -139,9 +139,9 @@ class compute_cceqvec {
     }
 
     for (size_t R = PMIN; R <= P; ++R) {
-      std::wcout << "R" << R << "(expS" << N << ") has " << eqvec[R]->size()
-                 << " terms:" << std::endl;
-      if (print) std::wcout << to_latex_align(eqvec[R], 20, 1) << std::endl;
+      std::cout << "R" << R << "(expS" << N << ") has " << eqvec[R]->size()
+                << " terms:" << std::endl;
+      if (print) std::cout << to_latex_align(eqvec[R], 20, 1) << std::endl;
 
       // validate known sizes of some CC residuals
       // N.B. # of equations depends on whether we use symmetric or
@@ -178,15 +178,15 @@ class compute_cceqvec {
         // validate spin-free equations by spin-tracing spin-orbital equations
         const auto should_be_zero = simplify(eqvec_sf_ref[R] - eqvec[R]);
         if (should_be_zero != ex<Constant>(0))
-          std::wcout << "Spin-free equations do not match spin-traced "
-                        "spin-orbital equations: N="
-                     << N << " R=" << R << ":\n"
-                     << "spintraced-spinfree = "
-                     << to_latex_align(should_be_zero, 0, 1) << std::endl;
+          std::cout << "Spin-free equations do not match spin-traced "
+                       "spin-orbital equations: N="
+                    << N << " R=" << R << ":\n"
+                    << "spintraced-spinfree = "
+                    << to_latex_align(should_be_zero, 0, 1) << std::endl;
         else
-          std::wcout << "Spin-free equations match spin-traced "
-                        "spin-orbital equations"
-                     << std::endl;
+          std::cout << "Spin-free equations match spin-traced "
+                       "spin-orbital equations"
+                    << std::endl;
         runtime_assert(should_be_zero == ex<Constant>(0));
 
         // validate sizes of spin-free t equations after biorthogonal transform
@@ -196,9 +196,9 @@ class compute_cceqvec {
           // Biorthogonal transformation with factoring out NNS projector
           eqvec[R] = biorthogonal_transform_pre_nnsproject(eqvec[R], ext_idxs);
 
-          std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
-                     << ") has " << eqvec[R]->size() << " terms:" << std::endl;
-          if (print) std::wcout << to_latex_align(eqvec[R], 20, 1) << std::endl;
+          std::cout << "biorthogonal spin-free R" << R << "(expS" << N
+                    << ") has " << eqvec[R]->size() << " terms:" << std::endl;
+          if (print) std::cout << to_latex_align(eqvec[R], 20, 1) << std::endl;
 
           if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 26);
           if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 55);
@@ -232,8 +232,8 @@ class compute_all {
 }  // namespace
 
 int main(int argc, char* argv[]) {
-  std::wcout.precision(std::numeric_limits<double>::max_digits10);
-  std::wcerr.precision(std::numeric_limits<double>::max_digits10);
+  std::cout.precision(std::numeric_limits<double>::max_digits10);
+  std::cerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
 
   std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";

@@ -29,7 +29,7 @@ namespace {
 /// @return lowered position pairs
 template <typename Container>
 std::vector<std::pair<int, int>> lower_label_pairs(
-    const container::map<std::wstring, std::vector<int>>& oplbl2pos,
+    const container::map<std::string, std::vector<int>>& oplbl2pos,
     const Container& label_pairs) {
   std::vector<std::pair<int, int>> result;
   for (const auto& [op1_lbl, op2_lbl] : label_pairs) {
@@ -59,8 +59,8 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
 }  // namespace tensor
 
 ExprPtr expectation_value_impl(ExprPtr expr,
-                               const OpConnections<std::wstring>& connect,
-                               const OpConnections<std::wstring>& avoid,
+                               const OpConnections<std::string>& connect,
+                               const OpConnections<std::string>& avoid,
                                bool use_topology, bool screen, bool skip_clone,
                                bool full_contractions) {
   // use cloned expr to avoid side effects
@@ -76,7 +76,7 @@ ExprPtr expectation_value_impl(ExprPtr expr,
     OpConnections<int> t_connect;
     OpConnections<int> t_avoid;
     {
-      container::map<std::wstring, std::vector<int>>
+      container::map<std::string, std::vector<int>>
           oplbl2pos;  // maps operator labels to the operator positions in the
                       // product
       int pos = 0;
@@ -84,7 +84,7 @@ ExprPtr expectation_value_impl(ExprPtr expr,
       for (const auto& factor : expr.as<Product>()) {
         if (factor.is<op_t>()) {
           const auto& op = factor.as<op_t>();
-          const std::wstring op_lbl = std::wstring(op.label());
+          const std::string op_lbl = std::string(op.label());
           const auto it = oplbl2pos.find(op_lbl);
           if (it == oplbl2pos.end()) {  // new label
             oplbl2pos.emplace(op_lbl, std::vector<int>{pos});
@@ -157,7 +157,7 @@ ExprPtr expectation_value_impl(ExprPtr expr,
       "type");
 }
 
-ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts) {
+ExprPtr ref_av(ExprPtr expr, EVOptions<std::string> opts) {
   const bool full_contractions = detail::ref_av_full_contractions();
   detail::validate_ref_av_connections(opts, full_contractions);
   return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
@@ -165,7 +165,7 @@ ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts) {
                                 full_contractions);
 }
 
-ExprPtr vac_av(ExprPtr expr, EVOptions<std::wstring> opts) {
+ExprPtr vac_av(ExprPtr expr, EVOptions<std::string> opts) {
   return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
                                 opts.use_topology, opts.screen, opts.skip_clone,
                                 /* full_contractions */ true);

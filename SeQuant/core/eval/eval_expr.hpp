@@ -148,7 +148,7 @@ class EvalExpr {
   /// \return Returns the result of calling to_latex() on the ExprPtr object
   ///         contained by this object.
   ///
-  [[nodiscard]] std::wstring to_latex() const noexcept;
+  [[nodiscard]] std::string to_latex() const noexcept;
 
   ///
   /// \return The type id of the Expr held by this object.

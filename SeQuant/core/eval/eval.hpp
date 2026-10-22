@@ -396,7 +396,7 @@ std::string scope_annot(BatchContext const& active) {
   std::string scope;
   for (auto const& e : active) {
     if (!scope.empty()) scope += ",";
-    scope += toUtf8(e.axis.basis().base_key());
+    scope += std::string(e.axis.basis().base_key());
   }
   return std::format("scope={{{}}}", scope);
 }
@@ -419,7 +419,7 @@ std::string slice_home_annot(Node const& node, BatchContext const& active) {
   std::string canon, sliced;
   auto const& idxs = node->canon_indices();
   for (auto const& ix : idxs) {
-    canon += toUtf8(ix.full_label());
+    canon += std::string(ix.full_label());
     canon += " ";
   }
   container::svector<std::size_t> spos;
@@ -429,8 +429,7 @@ std::string slice_home_annot(Node const& node, BatchContext const& active) {
       spos.push_back(*p);
   std::sort(spos.begin(), spos.end());
   for (auto const p : spos)
-    sliced += std::format("{}:{} ", p,
-                          toUtf8(std::wstring(idxs[p].basis().base_key())));
+    sliced += std::format("{}:{} ", p, std::string(idxs[p].basis().base_key()));
   auto annot = std::format("canon=[{}] sliced=[{}] {}", canon, sliced,
                            scope_annot(active));
   // Append any schedule-derived per-node metadata (e.g. the value's home
@@ -765,7 +764,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
           Index const& ix = entry.axis;
           auto const& blk = entry.range;
           if (find_leaf_carrying(node, ix).has_value()) {
-            slice_sig += toUtf8(ix.full_label());
+            slice_sig += std::string(ix.full_label());
             slice_sig += ':';
             slice_sig += std::to_string(blk.first);
             slice_sig += ';';
@@ -1325,7 +1324,7 @@ ResultPtr evaluate(Node const& node,           //
 
   std::string xpr;
   if constexpr (detail::trace(EvalTrace)) {
-    xpr = toUtf8(io::serialization::to_string(to_expr(node)));
+    xpr = io::serialization::to_string(to_expr(node));
     log::term(log::TermMode::Begin, xpr);
   }
 
@@ -2068,7 +2067,7 @@ template <Trace EvalTrace = Trace::Default, typename F,
     // push site below).
     auto const synth_level = [&cache](Index const& ax) -> DagScopeLevel {
       return DagScopeLevel{.depth = cache.batch_context().size() + 1,
-                           .space = std::wstring(ax.basis().base_key())};
+                           .space = std::string(ax.basis().base_key())};
     };
     // Mode selection is sliceability-aware and realizes the optimizer's
     // multi-mode nesting one mode per depth level. candidate_axes lists this
@@ -2319,12 +2318,12 @@ template <Trace EvalTrace = Trace::Default, typename F,
     if (log::printing()) {
       std::string annot;
       for (auto const& [ix, knd] : node->node_slice_mask()) {
-        annot += toUtf8(ix.full_label());
+        annot += std::string(ix.full_label());
         annot += (knd == BatchModeType::External ? ":ext " : ":con ");
       }
       std::string res;
       for (auto const& ix : node->canon_indices()) {
-        res += toUtf8(ix.full_label());
+        res += std::string(ix.full_label());
         res += " ";
       }
       auto scope_ctx = cache.batch_context();
@@ -2333,7 +2332,7 @@ template <Trace EvalTrace = Trace::Default, typename F,
           "BatchAxes",
           std::format("depth={} picked={}:{} nbatches={} annot=[{}] "
                       "result=[{}] {}",
-                      depth, toUtf8(K.full_label()),
+                      depth, std::string(K.full_label()),
                       picked_kind == BatchModeType::External ? "ext" : "con",
                       batches.size(), annot, res, log::scope_annot(scope_ctx)));
     }
@@ -2393,7 +2392,7 @@ template <Trace EvalTrace = Trace::Default, typename F,
         // is in fact legitimate (1/nblocks of the work). Gated on printing() so
         // it is inert unless a trace is being emitted.
         if (log::printing())
-          log::log("BatchIter", toUtf8(std::wstring(K.full_label())), e_lo);
+          log::log("BatchIter", std::string(K.full_label()), e_lo);
         bs.cache.reset();
         // Extend the enclosing batch context by this block and set it on the
         // scratch, so the re-entry's Enter-stage slice-on-use (and its own
@@ -2516,7 +2515,7 @@ template <Trace EvalTrace = Trace::Default, typename F,
       for (auto const& layer : layers)
         for (auto const& mk : layer)
           log::log("BatchMember",
-                   toUtf8(io::serialization::to_string(to_expr(*mk.first))));
+                   io::serialization::to_string(to_expr(*mk.first)));
     }
 
     // RAII scope for the batched partial contractions; a backend-supplied
@@ -2563,7 +2562,7 @@ template <Trace EvalTrace = Trace::Default, typename F,
         // (single-mode-per-level) nesting. Gated on printing() so it is inert
         // unless a trace is being emitted.
         if (log::printing())
-          log::log("BatchIter", toUtf8(std::wstring(K.full_label())), e_lo);
+          log::log("BatchIter", std::string(K.full_label()), e_lo);
         bs.cache.reset();
         for (std::size_t m = 0; m != layer.size(); ++m) {
           auto const& [mem, Km] = layer[m];

@@ -26,7 +26,7 @@ class SequantEvalScf {
   inline static size_t const double_print_width = double_precision + 5;
 
   inline static size_t const time_print_width =
-      std::to_wstring(std::numeric_limits<std::intmax_t>::max()).length();
+      std::to_string(std::numeric_limits<std::intmax_t>::max()).length();
 
   SequantEvalScf(CalcInfo const& srcc_info) : info_{srcc_info} {}
 
@@ -43,7 +43,7 @@ class SequantEvalScf {
 
   [[nodiscard]] double energy() const;
 
-  void scf(std::basic_ostream<wchar_t>& log);
+  void scf(std::basic_ostream<char>& log);
 };
 
 }  // namespace sequant::eval

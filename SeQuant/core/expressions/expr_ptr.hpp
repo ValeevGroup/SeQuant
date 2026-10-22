@@ -135,7 +135,7 @@ class ExprPtr : public std::shared_ptr<Expr> {
   std::size_t size() const;
 
   /// @return an empty string if this is null
-  std::wstring to_latex() const;
+  std::string to_latex() const;
 };  // class ExprPtr
 
 /// make an ExprPtr to a new object of type T

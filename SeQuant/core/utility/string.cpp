@@ -1,9 +1,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
-#include <algorithm>
 #include <iterator>
-#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -12,45 +10,21 @@
 
 namespace sequant {
 
-std::string toUtf8(const std::wstring_view str) {
-  SEQUANT_ASSERT(std::none_of(str.begin(), str.end(), [](wchar_t c) {
-    return c > std::numeric_limits<char16_t>::max();
-  }));
-
-  std::u16string u16str(str.begin(), str.end());
-
-  auto stream = utf8::utf16to8(u16str);
-
-  return std::string(stream.begin(), stream.end());
-}
-
-std::string toUtf8(std::string_view str) { return std::string(str); }
-
-std::wstring toUtf16(const std::string_view str) {
-  auto stream = utf8::utf8to16(str);
-
-  static_assert(sizeof(wchar_t) >= sizeof(char16_t));
-
-  return std::wstring(stream.begin(), stream.end());
-}
-
-std::wstring toUtf16(std::wstring_view str) { return std::wstring(str); }
-
 bool is_valid_utf8(std::string_view str) { return utf8::is_valid(str); }
 
 void validate_utf8(std::string_view str) {
   if (!is_valid_utf8(str)) {
-    throw std::invalid_argument("String is not valid UTF-8 (invalid byte at "
-                                "offset " +
-                                std::to_string(utf8::find_invalid(str)) + ")");
+    throw std::invalid_argument(
+        "String is not valid UTF-8 (invalid byte at "
+        "offset " +
+        std::to_string(utf8::find_invalid(str)) + ")");
   }
 }
 
 std::u32string to_utf32(std::string_view str) {
   SEQUANT_ASSERT(is_valid_utf8(str));
   std::u32string result;
-  utf8::unchecked::utf8to32(str.begin(), str.end(),
-                            std::back_inserter(result));
+  utf8::unchecked::utf8to32(str.begin(), str.end(), std::back_inserter(result));
   return result;
 }
 

@@ -73,8 +73,8 @@ enum class EqnType { left, right };
 inline const container::map<std::string, EqnType> str2type = {
     {"L", EqnType::left}, {"R", EqnType::right}};
 
-inline const container::map<EqnType, std::wstring> type2wstr = {
-    {EqnType::left, L"L"}, {EqnType::right, L"R"}};
+inline const container::map<EqnType, std::string> type2wstr = {
+    {EqnType::left, "L"}, {EqnType::right, "R"}};
 
 class compute_eomcc {
   size_t N, np, nh;
@@ -102,15 +102,14 @@ class compute_eomcc {
     }
     timer_pool.stop(N);
 
-    std::wcout << std::boolalpha
-               << "EOM-CC Equations [type=" << type2wstr.at(type)
-               << ", CC rank=" << N
-               << ", manifold=" << sequant::toUtf16(manifold) << "]"
-               << " computed in " << timer_pool.read(N) << " s\n";
+    std::cout << std::boolalpha
+              << "EOM-CC Equations [type=" << type2wstr.at(type)
+              << ", CC rank=" << N << ", manifold=" << manifold << "]"
+              << " computed in " << timer_pool.read(N) << " s\n";
     for (auto i = 0; i < eqvec.size(); i++) {
       if (eqvec[i] == nullptr) continue;
-      std::wcout << "R[" << i << "] has " << eqvec[i].size() << " terms\n";
-      if (print) std::wcout << to_latex_align(eqvec[i], 20, 1) << "\n";
+      std::cout << "R[" << i << "] has " << eqvec[i].size() << " terms\n";
+      if (print) std::cout << to_latex_align(eqvec[i], 20, 1) << "\n";
       if (N == 2 && type == EqnType::right) {
         if (np == 2 && nh == 2) {  // EOM-CCSD(2h2p)
           if (i == 1) runtime_assert(eqvec[i].size() == 21);
@@ -152,8 +151,8 @@ class compute_eomcc {
 }  // namespace
 
 int main(int argc, char* argv[]) {
-  std::wcout.precision(std::numeric_limits<double>::max_digits10);
-  std::wcerr.precision(std::numeric_limits<double>::max_digits10);
+  std::cout.precision(std::numeric_limits<double>::max_digits10);
+  std::cerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
 
   std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";

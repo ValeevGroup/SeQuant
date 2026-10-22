@@ -411,13 +411,13 @@ TEST_CASE("schedule document compare covers the dag", "[schedule-document]") {
 
 namespace {
 
-sequant::ExprPtr pin_parse(std::wstring_view s) {
+sequant::ExprPtr pin_parse(std::string_view s) {
   return sequant::deserialize(s, {.def_perm_symm = sequant::Symmetry::Nonsymm});
 }
 
 /// extents: occupied 10, everything else 100
 std::size_t pin_extent(sequant::Index const& ix) {
-  return ix.space().base_key() == L"i" ? 10 : 100;
+  return ix.space().base_key() == "i" ? 10 : 100;
 }
 
 /// batched optimize of a canonical term; returns the optimized expression and
@@ -427,7 +427,7 @@ std::pair<sequant::ExprPtr,
 pin_optimize(sequant::ExprPtr const& canon) {
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"a";
+    return ix.space().base_key() == "a";
   };
   policy.is_batchable_external_index = [](sequant::Index const&) {
     return false;
@@ -456,14 +456,14 @@ pin_optimize(sequant::ExprPtr const& canon) {
 TEST_CASE("term key is stable under relabeling and factor order",
           "[schedule-document]") {
   using namespace sequant::opt::schedule;
-  auto a = pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_3,i_4}");
-  auto b = pin_parse(L"t{a_3,a_4;i_3,i_4} * g{i_1,i_2;a_3,a_4}");
+  auto a = pin_parse("g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_3,i_4}");
+  auto b = pin_parse("t{a_3,a_4;i_3,i_4} * g{i_1,i_2;a_3,a_4}");
   auto const a_text = sequant::serialize(a);
   REQUIRE(term_key(canonical_term(a)) == term_key(canonical_term(b)));
   // canonical_term works on a clone
   REQUIRE(sequant::serialize(a) == a_text);
   // different externals order
-  auto c = pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_4,i_3}");
+  auto c = pin_parse("g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_4,i_3}");
   REQUIRE(term_key(canonical_term(a)) != term_key(canonical_term(c)));
   // factors of a canonical Product in order
   REQUIRE(canonical_factors(canonical_term(a)).size() == 2);
@@ -472,8 +472,8 @@ TEST_CASE("term key is stable under relabeling and factor order",
 TEST_CASE("record_term then rebuild_pinned_term reproduces the optimized tree",
           "[schedule-document]") {
   using namespace sequant::opt::schedule;
-  auto canon = canonical_term(
-      pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
+  auto canon =
+      canonical_term(pin_parse("g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
   auto [optimized, annotations] = pin_optimize(canon);
   REQUIRE(annotations.size() == 2);
   // the policy forces slicing somewhere: the record carries real annotations
@@ -499,8 +499,8 @@ TEST_CASE("record_term then rebuild_pinned_term reproduces the optimized tree",
   }
 
   // a record survives re-canonicalizing a relabeled copy of the term
-  auto canon2 = canonical_term(
-      pin_parse(L"t{a_4;i_4} * g{i_1,i_2;a_3,a_4} * t{a_3;i_3}"));
+  auto canon2 =
+      canonical_term(pin_parse("t{a_4;i_4} * g{i_1,i_2;a_3,a_4} * t{a_3;i_3}"));
   REQUIRE(term_key(canon2) == rec.key);
   auto pinned2 = rebuild_pinned_term(rec, canon2);
   REQUIRE(*pinned2.expr == *optimized);
@@ -514,7 +514,7 @@ TEST_CASE(
   using Catch::Matchers::ContainsSubstring;
 
   SECTION("lone tensor") {
-    auto canon = canonical_term(pin_parse(L"t{a_1;i_1}"));
+    auto canon = canonical_term(pin_parse("t{a_1;i_1}"));
     REQUIRE(canonical_factors(canon).size() == 1);
     auto [optimized, annotations] = pin_optimize(canon);
     auto rec = record_term(canon, optimized, annotations);
@@ -546,7 +546,7 @@ TEST_CASE(
 
   SECTION("identical factors and a fractional scalar") {
     auto canon = canonical_term(
-        pin_parse(L"1/2 * t{a_1;i_1} * t{a_2;i_2} * f{i_1,i_2;a_1,a_2}"));
+        pin_parse("1/2 * t{a_1;i_1} * t{a_2;i_2} * f{i_1,i_2;a_1,a_2}"));
     REQUIRE(canonical_factors(canon).size() == 3);
     auto [optimized, annotations] = pin_optimize(canon);
     auto rec = record_term(canon, optimized, annotations);
@@ -561,7 +561,7 @@ TEST_CASE(
 
   SECTION("mixed product") {
     auto canon =
-        canonical_term(pin_parse(L"t{a_1;i_1} * (f{i_1;a_1} + g{i_1;a_1})"));
+        canonical_term(pin_parse("t{a_1;i_1} * (f{i_1;a_1} + g{i_1;a_1})"));
     REQUIRE(canon->is<sequant::Product>());
     REQUIRE_THROWS_WITH(record_term(canon, canon, {}),
                         ContainsSubstring("only tensor products"));
@@ -578,8 +578,8 @@ TEST_CASE("rebuild_pinned_term rejects foreign factors and unknown axis labels",
   using namespace sequant::opt::schedule;
   using Catch::Matchers::ContainsSubstring;
   auto canon_a =
-      canonical_term(pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_3,i_4}"));
-  auto canon_b = canonical_term(pin_parse(L"f{i_1;a_1} * t{a_1;i_2}"));
+      canonical_term(pin_parse("g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_3,i_4}"));
+  auto canon_b = canonical_term(pin_parse("f{i_1;a_1} * t{a_1;i_2}"));
   auto [optimized, annotations] = pin_optimize(canon_a);
   auto rec = record_term(canon_a, optimized, annotations);
   REQUIRE(rec.nodes.size() == 1);
@@ -601,7 +601,7 @@ TEST_CASE(
   // i_2 is contracted between X and Y only: the (X Y) subtree is fully
   // contracted unless binarize is told i_2 is external; the optimizer still
   // emits one annotation per inner node
-  auto canon = canonical_term(pin_parse(L"X{;;i_2} * Y{;;i_2} * Z{a_1;i_1}"));
+  auto canon = canonical_term(pin_parse("X{;;i_2} * Y{;;i_2} * Z{a_1;i_1}"));
   REQUIRE(canonical_factors(canon).size() == 3);
   auto [optimized, annotations] = pin_optimize(canon);
   REQUIRE(annotations.size() == 2);
@@ -617,8 +617,8 @@ TEST_CASE(
 TEST_CASE("record_term accepts an empty annotation vector",
           "[schedule-document]") {
   using namespace sequant::opt::schedule;
-  auto canon = canonical_term(
-      pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
+  auto canon =
+      canonical_term(pin_parse("g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
@@ -649,8 +649,8 @@ TEST_CASE(
   SECTION("a Variable factor") {
     auto canon =
         canonical_term(sequant::ex<sequant::Product>(sequant::ExprPtrList{
-            sequant::ex<sequant::Variable>(L"x"), pin_parse(L"f{i_1;a_1}"),
-            pin_parse(L"t{a_1;i_2}")}));
+            sequant::ex<sequant::Variable>("x"), pin_parse("f{i_1;a_1}"),
+            pin_parse("t{a_1;i_2}")}));
     REQUIRE(canon->is<sequant::Product>());
     REQUIRE_THROWS_WITH(record_term(canon, canon, {}),
                         ContainsSubstring("only tensor products"));
@@ -661,8 +661,8 @@ TEST_CASE(
                         ContainsSubstring("only tensor products"));
   }
 
-  auto canon = canonical_term(
-      pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
+  auto canon =
+      canonical_term(pin_parse("g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
   auto [optimized, annotations] = pin_optimize(canon);
   auto rec = record_term(canon, optimized, annotations);
   REQUIRE(rec.nodes.size() == 2);
@@ -714,7 +714,7 @@ using AxesMap = std::unordered_map<
 sequant::OptimizeOptions session_opts() {
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"a";
+    return ix.space().base_key() == "a";
   };
   policy.is_batchable_external_index = [](sequant::Index const&) {
     return false;
@@ -732,7 +732,7 @@ sequant::OptimizeOptions session_opts() {
 }
 
 /// a Sum of separately parsed summands (no simplification across them)
-sequant::ExprPtr session_sum(std::vector<std::wstring_view> const& terms) {
+sequant::ExprPtr session_sum(std::vector<std::string_view> const& terms) {
   std::vector<sequant::ExprPtr> summands;
   for (auto t : terms) summands.push_back(pin_parse(t));
   return sequant::ex<sequant::Sum>(summands);
@@ -740,10 +740,10 @@ sequant::ExprPtr session_sum(std::vector<std::wstring_view> const& terms) {
 
 /// the 4-summand root used by the round-trip tests (the last one a lone tensor)
 sequant::ExprPtr session_root() {
-  return session_sum({L"g{i_1,i_2;a_3,a_4} * t{a_3;i_3} * t{a_4;i_4}",
-                      L"1/2 * g{i_1,i_2;a_3,a_4} * t{a_3,a_4;i_3,i_4}",
-                      L"f{i_1;a_3} * t{a_3,a_4;i_3,i_4} * f{i_2;a_4}",
-                      L"X{i_1,i_2;i_3,i_4}"});
+  return session_sum({"g{i_1,i_2;a_3,a_4} * t{a_3;i_3} * t{a_4;i_4}",
+                      "1/2 * g{i_1,i_2;a_3,a_4} * t{a_3,a_4;i_3,i_4}",
+                      "f{i_1;a_3} * t{a_3,a_4;i_3,i_4} * f{i_2;a_4}",
+                      "X{i_1,i_2;i_3,i_4}"});
 }
 
 void require_same_annotations(
@@ -833,7 +833,7 @@ TEST_CASE("an axis with several proto indices survives JSON and pins",
           "[schedule-document]") {
   using namespace sequant::opt::schedule;
   auto canon = canonical_term(
-      pin_parse(L"g{i_1,i_2;a_1<i_1,i_2>} * t{a_1<i_1,i_2>;i_1}"));
+      pin_parse("g{i_1,i_2;a_1<i_1,i_2>} * t{a_1<i_1,i_2>;i_1}"));
   REQUIRE(canonical_factors(canon).size() == 2);
   auto [optimized, annotations] = pin_optimize(canon);
   // annotate the single contraction node with the PNO index
@@ -885,11 +885,10 @@ TEST_CASE("pinning is strict", "[schedule-document]") {
   SECTION("externals labeled differently than in the record") {
     // same terms, externals i_1,i_2 -> i_5,i_6: dummies are canonicalized
     // away, externals are not, so no key matches and the message says so
-    auto relabeled =
-        session_sum({L"g{i_5,i_6;a_3,a_4} * t{a_3;i_3} * t{a_4;i_4}",
-                     L"1/2 * g{i_5,i_6;a_3,a_4} * t{a_3,a_4;i_3,i_4}",
-                     L"f{i_5;a_3} * t{a_3,a_4;i_3,i_4} * f{i_6;a_4}",
-                     L"X{i_5,i_6;i_3,i_4}"});
+    auto relabeled = session_sum(
+        {"g{i_5,i_6;a_3,a_4} * t{a_3;i_3} * t{a_4;i_4}",
+         "1/2 * g{i_5,i_6;a_3,a_4} * t{a_3,a_4;i_3,i_4}",
+         "f{i_5;a_3} * t{a_3,a_4;i_3,i_4} * f{i_6;a_4}", "X{i_5,i_6;i_3,i_4}"});
     PinSession session(rr.record);
     auto opts2 = opts;
     opts2.pinned = &session;
@@ -901,7 +900,7 @@ TEST_CASE("pinning is strict", "[schedule-document]") {
 
   SECTION("an unused record") {
     auto other = record_root(
-        "O", session_sum({L"h{i_1;a_3} * t{a_3;i_2}", L"Y{i_1;i_2}"}), opts);
+        "O", session_sum({"h{i_1;a_3} * t{a_3;i_2}", "Y{i_1;i_2}"}), opts);
     auto doc = rr.record;
     doc.terms.push_back(other.record.terms[0]);
     PinSession session(doc);
@@ -914,9 +913,9 @@ TEST_CASE("pinning is strict", "[schedule-document]") {
 
   SECTION("a duplicate term") {
     auto twice =
-        session_sum({L"g{i_1;a_3} * t{a_3;i_2}", L"g{i_1;a_4} * t{a_4;i_2}"});
+        session_sum({"g{i_1;a_3} * t{a_3;i_2}", "g{i_1;a_4} * t{a_4;i_2}"});
     REQUIRE(twice->as<sequant::Sum>().size() == 2);
-    auto once = record_root("D", session_sum({L"g{i_1;a_3} * t{a_3;i_2}"}),
+    auto once = record_root("D", session_sum({"g{i_1;a_3} * t{a_3;i_2}"}),
                             session_opts());
     PinSession session(once.record);
     auto opts2 = opts;
@@ -928,8 +927,8 @@ TEST_CASE("pinning is strict", "[schedule-document]") {
 
   SECTION("a mixed product") {
     auto mixed = sequant::ex<sequant::Sum>(sequant::ExprPtrList{
-        pin_parse(L"t{a_1;i_1} * (f{i_1;a_1} + g{i_1;a_1})"),
-        pin_parse(L"h{i_1;a_1}")});
+        pin_parse("t{a_1;i_1} * (f{i_1;a_1} + g{i_1;a_1})"),
+        pin_parse("h{i_1;a_1}")});
     PinSession session(RootRecord{"M", {}});
     auto opts2 = opts;
     opts2.pinned = &session;
@@ -976,7 +975,7 @@ TEST_CASE("pinning is strict", "[schedule-document]") {
     auto doc = rr.record;
     auto const dropped = doc.terms[0].key;
     doc.terms.erase(doc.terms.begin());
-    auto other = record_root("O", session_sum({L"h{i_1;a_3} * t{a_3;i_2}"}),
+    auto other = record_root("O", session_sum({"h{i_1;a_3} * t{a_3;i_2}"}),
                              session_opts());
     doc.terms.push_back(other.record.terms[0]);
     PinSession session(doc);
@@ -1055,10 +1054,10 @@ TEST_CASE("pinned order is the document order, not the clustered order",
   using namespace sequant::opt::schedule;
   // summands 0 and 2 share the g*t contraction; reorder clusters them
   auto const sum =
-      session_sum({L"g{i_1,i_2;a_3,a_4} * t{a_3,a_4;i_3,i_4} * f{i_5;i_6}",
-                   L"h{i_1,i_2;i_3,i_4} * k{i_5;i_6}",
-                   L"g{i_1,i_2;a_3,a_4} * t{a_3,a_4;i_3,i_4} * s{i_5;i_6}",
-                   L"Z{i_1,i_2,i_5;i_3,i_4,i_6}"});
+      session_sum({"g{i_1,i_2;a_3,a_4} * t{a_3,a_4;i_3,i_4} * f{i_5;i_6}",
+                   "h{i_1,i_2;i_3,i_4} * k{i_5;i_6}",
+                   "g{i_1,i_2;a_3,a_4} * t{a_3,a_4;i_3,i_4} * s{i_5;i_6}",
+                   "Z{i_1,i_2,i_5;i_3,i_4,i_6}"});
   auto opts = session_opts();
   auto rr = record_root("R", sum, opts);
   REQUIRE(rr.record.terms.size() == 4);
@@ -1106,8 +1105,8 @@ std::vector<sequant::eval::dryrun::EvalNodeDryRun> fingerprint_forest(
     sequant::OptimizeOptions const& opts) {
   using sequant::eval::dryrun::EvalExprDryRun;
   std::vector<sequant::eval::dryrun::EvalNodeDryRun> forest;
-  for (auto s : {L"g{i_1,i_2;a_3,a_4} * t{a_3;i_3} * t{a_4;i_4}",
-                 L"f{i_1;a_3} * t{a_3,a_4;i_3,i_4} * f{i_2;a_4}"}) {
+  for (auto s : {"g{i_1,i_2;a_3,a_4} * t{a_3;i_3} * t{a_4;i_4}",
+                 "f{i_1;a_3} * t{a_3,a_4;i_3,i_4} * f{i_2;a_4}"}) {
     auto canon = sequant::opt::schedule::canonical_term(pin_parse(s));
     auto optimized = sequant::optimize(canon, opts);
     sequant::BinarizationOptions bopts;
@@ -1128,10 +1127,10 @@ TEST_CASE("fingerprint captures DAG-shaping inputs and nothing size-dependent",
   using namespace sequant::opt::schedule;
   auto opts = session_opts();
   opts.batch_policy.is_volatile_leaf = [](sequant::Tensor const& t) {
-    return t.label() == L"t";
+    return t.label() == "t";
   };
   auto const forest = fingerprint_forest(opts);
-  auto fp = fingerprint_of(forest, {"R"}, opts, {L"a", L"i"});
+  auto fp = fingerprint_of(forest, {"R"}, opts, {"a", "i"});
   REQUIRE(fp.roots == std::vector<std::string>{"R"});
   REQUIRE(fp.batchable.at("a") == std::pair{true, false});
   REQUIRE(fp.batchable.at("i") == std::pair{false, false});
@@ -1152,8 +1151,8 @@ TEST_CASE("fingerprint captures DAG-shaping inputs and nothing size-dependent",
     return std::size_t{7};
   };
   opts2.batch_policy.peak_threshold = 1e9;
-  REQUIRE_NOTHROW(check_fingerprint(
-      fp, fingerprint_of(forest, {"R"}, opts2, {L"a", L"i"})));
+  REQUIRE_NOTHROW(
+      check_fingerprint(fp, fingerprint_of(forest, {"R"}, opts2, {"a", "i"})));
 
   auto planner = planner_record(opts2);
   REQUIRE(planner.at("batch_target_size") == "set");
@@ -1176,7 +1175,7 @@ TEST_CASE("check_fingerprint names every differing field",
   using Catch::Matchers::ContainsSubstring;
   auto opts = session_opts();
   auto const forest = fingerprint_forest(opts);
-  auto a = fingerprint_of(forest, {"R"}, opts, {L"a", L"i"});
+  auto a = fingerprint_of(forest, {"R"}, opts, {"a", "i"});
   REQUIRE_NOTHROW(check_fingerprint(a, a));
 
   auto b = a;
@@ -1199,7 +1198,7 @@ TEST_CASE("check_fingerprint names every differing field",
               ? sequant::AssertStrictBraKetSymmetry::No
               : sequant::AssertStrictBraKetSymmetry::Yes);
   auto resetter = sequant::set_scoped_default_context(std::move(ctx));
-  auto live = fingerprint_of(forest, {"R"}, opts, {L"a", L"i"});
+  auto live = fingerprint_of(forest, {"R"}, opts, {"a", "i"});
   REQUIRE_THROWS_WITH(
       check_fingerprint(a, live),
       ContainsSubstring("fingerprint.context.strict_braket_symmetry"));
@@ -1257,7 +1256,7 @@ sequant::BatchPolicy external_occ_policy() {
     return false;
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"i";
+    return ix.space().base_key() == "i";
   };
   policy.batch_target_size = [](sequant::Index const&) -> std::size_t {
     return 2;
@@ -1272,9 +1271,9 @@ sequant::BatchPolicy external_occ_policy() {
 DagFixture two_root_fixture() {
   return dag_fixture(
       {{"R1",
-        session_sum({L"g{i_1;a_1} * t{a_1;i_2} * f{i_2;i_3}", L"h{i_1;i_3}"})},
+        session_sum({"g{i_1;a_1} * t{a_1;i_2} * f{i_2;i_3}", "h{i_1;i_3}"})},
        {"R2",
-        session_sum({L"g{i_1;a_1} * t{a_1;i_2} * f{i_3;i_1}", L"h{i_3;i_2}"})}},
+        session_sum({"g{i_1;a_1} * t{a_1;i_2} * f{i_3;i_1}", "h{i_3;i_2}"})}},
       external_occ_policy());
 }
 
@@ -1401,7 +1400,7 @@ TEST_CASE("record_dag takes persistence from the cell table",
   auto const dag1 =
       record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots,
                  [](EvalNodeDryRun const& n) {
-                   return n->is_tensor() && n->as_tensor().label() == L"t";
+                   return n->is_tensor() && n->as_tensor().label() == "t";
                  });
   std::size_t leaves = 0;
   for (auto const& v : dag1.values) {
@@ -1420,14 +1419,14 @@ TEST_CASE("record_dag persistence is the flag of the assembled form",
   using sequant::eval::dryrun::EvalNodeDryRun;
   // a contracted (a-batched) root: X = g * h is a partial sum per a-batch,
   // assembled whole at the root scope, then multiplied by the volatile t
-  auto const fx = dag_fixture(
-      {{"R1", pin_parse(L"g{i_1,i_2;a_3,a_4} * h{a_3,a_4;i_3,i_4} * "
-                        L"t{i_3,i_4;i_5,i_6}")}},
-      session_opts().batch_policy);
+  auto const fx =
+      dag_fixture({{"R1", pin_parse("g{i_1,i_2;a_3,a_4} * h{a_3,a_4;i_3,i_4} * "
+                                    "t{i_3,i_4;i_5,i_6}")}},
+                  session_opts().batch_policy);
   auto const dag =
       record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots,
                  [](EvalNodeDryRun const& n) {
-                   return n->is_tensor() && n->as_tensor().label() == L"t";
+                   return n->is_tensor() && n->as_tensor().label() == "t";
                  });
   std::map<std::string, ValueRecord const*> by_id;
   for (auto const& v : dag.values) by_id[v.id] = &v;
@@ -1453,8 +1452,8 @@ TEST_CASE("record_dag persistence is the flag of the assembled form",
 TEST_CASE("record_dag ids resolve for single-summand roots and scaled terms",
           "[schedule-document]") {
   auto const fx = dag_fixture(
-      {{"R1", pin_parse(L"1/2 * g{i_1;a_1} * t{a_1;i_2} * f{i_2;i_3}")},
-       {"R2", pin_parse(L"g{i_1;a_1} * t{a_1;i_2} * f{i_2;i_3}")}},
+      {{"R1", pin_parse("1/2 * g{i_1;a_1} * t{a_1;i_2} * f{i_2;i_3}")},
+       {"R2", pin_parse("g{i_1;a_1} * t{a_1;i_2} * f{i_2;i_3}")}},
       session_opts().batch_policy);
   auto const dag =
       record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
@@ -1526,8 +1525,8 @@ TEST_CASE("record_dag is deterministic and compare sees no difference",
 TEST_CASE("record_dag names an adjoint factor like a leaf, its operands below",
           "[schedule-document]") {
   auto const fx =
-      dag_fixture({{"R1", pin_parse(L"g{i_1;a_1} * t⁺{a_1;i_2} * f{i_2;i_3}")},
-                   {"R2", pin_parse(L"g{i_1;a_1} * s{a_1;i_2} * f{i_2;i_3}")}},
+      dag_fixture({{"R1", pin_parse("g{i_1;a_1} * t⁺{a_1;i_2} * f{i_2;i_3}")},
+                   {"R2", pin_parse("g{i_1;a_1} * s{a_1;i_2} * f{i_2;i_3}")}},
                   session_opts().batch_policy);
   DagRecord dag;
   REQUIRE_NOTHROW(
@@ -1554,11 +1553,11 @@ namespace {
 
 /// an index of each space the two-root fixture uses
 sequant::Index const& occ_index() {
-  static sequant::Index const ix{L"i_1"};
+  static sequant::Index const ix{"i_1"};
   return ix;
 }
 sequant::Index const& virt_index() {
-  static sequant::Index const ix{L"a_1"};
+  static sequant::Index const ix{"a_1"};
   return ix;
 }
 
@@ -1571,9 +1570,8 @@ sequant::container::svector<sequant::ResultPtr> dry_run(
   sequant::eval::dryrun::SizeRegime regime;
   // the sizes the fixture was optimized with (pin_extent)
   regime.space_extent = {
-      {std::wstring{occ_index().space().base_key()}, pin_extent(occ_index())},
-      {std::wstring{virt_index().space().base_key()},
-       pin_extent(virt_index())}};
+      {std::string{occ_index().space().base_key()}, pin_extent(occ_index())},
+      {std::string{virt_index().space().base_key()}, pin_extent(virt_index())}};
   auto const cm =
       std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
   sequant::eval::dryrun::DryRunLeafEvaluator const leaf_eval{cm};
@@ -1671,7 +1669,7 @@ TEST_CASE("write the viewer example document", "[.write-example]") {
   opts.idx_to_extent = pin_extent;
   opts.batch_policy = external_occ_policy();
   doc.fingerprint = sequant::opt::schedule::fingerprint_of(
-      fx.forest, {"R1", "R2"}, opts, {L"a", L"i"});
+      fx.forest, {"R1", "R2"}, opts, {"a", "i"});
   doc.roots = fx.roots;
   doc.dag = record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
 
@@ -1789,7 +1787,7 @@ Document build_document(sequant::ExprPtr const& sum,
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
+    return ix.space().base_key() == "Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const&) {
     return false;
@@ -1799,7 +1797,7 @@ Document build_document(sequant::ExprPtr const& sum,
     return batch_target;
   };
   policy.is_volatile_leaf = [](sequant::Tensor const& t) {
-    return t.label() == L"t";
+    return t.label() == "t";
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
@@ -1843,7 +1841,7 @@ Document build_document(sequant::ExprPtr const& sum,
 
   Document doc;
   doc.fingerprint =
-      sequant::opt::schedule::fingerprint_of(forest, {"R"}, opts, {L"Κ"});
+      sequant::opt::schedule::fingerprint_of(forest, {"R"}, opts, {"Κ"});
   doc.roots = {record};
   doc.dag = record_dag(rich, legality, ordered, forest, doc.roots);
   return doc;

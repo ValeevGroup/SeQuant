@@ -311,7 +311,7 @@ template <typename T, typename = std::void_t<>>
 struct has_memfn_to_latex : public std::false_type {};
 
 template <typename T>
-struct has_memfn_to_latex<T, std::void_t<decltype(static_cast<std::wstring>(
+struct has_memfn_to_latex<T, std::void_t<decltype(static_cast<std::string>(
                                  std::declval<const T &>().to_latex()))>>
     : public std::true_type {};
 

@@ -70,34 +70,34 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   };
 
   SECTION("cumulant_expand: ⟨{a†a†a}{a}⟩ = κ2") {
-    FNOperatorSeq in{FNOperator(cre({L"u_1", L"u_2"}), ann({L"u_3"})),
-                     FNOperator(cre({}), ann({L"u_4"}))};
+    FNOperatorSeq in{FNOperator(cre({"u_1", "u_2"}), ann({"u_3"})),
+                     FNOperator(cre({}), ann({"u_4"}))};
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
     auto result =
         detail::cumulant_expand<Statistics::FermiDirac>(wick_out, prov, {});
-    REQUIRE_THAT(result, EquivalentTo(L"κ{u_4,u_3;u_1,u_2}"));
+    REQUIRE_THAT(result, EquivalentTo("κ{u_4,u_3;u_1,u_2}"));
   }
 
   SECTION("cumulant_expand: ⟨{a†a}{a†a}⟩ = γη + κ2") {
-    FNOperatorSeq in{FNOperator(cre({L"u_1"}), ann({L"u_2"})),
-                     FNOperator(cre({L"u_3"}), ann({L"u_4"}))};
+    FNOperatorSeq in{FNOperator(cre({"u_1"}), ann({"u_2"})),
+                     FNOperator(cre({"u_3"}), ann({"u_4"}))};
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
     auto result =
         detail::cumulant_expand<Statistics::FermiDirac>(wick_out, prov, {});
-    REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1} * η{u_2;u_3} "
-                                      L"+ κ{u_2,u_4;u_1,u_3}"));
+    REQUIRE_THAT(result, EquivalentTo("γ{u_4;u_1} * η{u_2;u_3} "
+                                      "+ κ{u_2,u_4;u_1,u_3}"));
   }
 
   SECTION("cumulant_expand: max_cumulant_rank = 1 means pairs only") {
-    FNOperatorSeq in{FNOperator(cre({L"u_1"}), ann({L"u_2"})),
-                     FNOperator(cre({L"u_3"}), ann({L"u_4"}))};
+    FNOperatorSeq in{FNOperator(cre({"u_1"}), ann({"u_2"})),
+                     FNOperator(cre({"u_3"}), ann({"u_4"}))};
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
     auto result = detail::cumulant_expand<Statistics::FermiDirac>(
         wick_out, prov, {.max_cumulant_rank = 1});
-    REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1} * η{u_2;u_3}"));
+    REQUIRE_THAT(result, EquivalentTo("γ{u_4;u_1} * η{u_2;u_3}"));
     auto result0 = detail::cumulant_expand<Statistics::FermiDirac>(
         wick_out, prov, {.max_cumulant_rank = 0});
     REQUIRE(simplify(result - result0) == ex<Constant>(0));
@@ -110,23 +110,22 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(detail::cumulant_expand<Statistics::FermiDirac>(
                 ex<Constant>(0), {}, {}) == ex<Constant>(0));
     // a bare NormalOperator is expanded like a Product holding it
-    const auto nop =
-        ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({L"u_3", L"u_4"}));
-    const detail::OpProvenance prov{{Index(L"u_1"), 0},
-                                    {Index(L"u_3"), 0},
-                                    {Index(L"u_2"), 1},
-                                    {Index(L"u_4"), 1}};
+    const auto nop = ex<FNOperator>(cre({"u_1", "u_2"}), ann({"u_3", "u_4"}));
+    const detail::OpProvenance prov{{Index("u_1"), 0},
+                                    {Index("u_3"), 0},
+                                    {Index("u_2"), 1},
+                                    {Index("u_4"), 1}};
     const auto bare =
         detail::cumulant_expand<Statistics::FermiDirac>(nop, prov, {});
     REQUIRE(bare != ex<Constant>(0));
     REQUIRE(bare == detail::cumulant_expand<Statistics::FermiDirac>(
                         ex<Product>(ExprPtrList{nop}), prov, {}));
-    REQUIRE_THAT(bare, EquivalentTo(L"κ{u_3,u_4;u_1,u_2}"));
+    REQUIRE_THAT(bare, EquivalentTo("κ{u_3,u_4;u_1,u_2}"));
   }
 
   SECTION("cumulant_expand: unbalanced survivors vanish") {
-    FNOperatorSeq in{FNOperator(cre({L"u_1", L"u_2"}), ann({})),
-                     FNOperator(cre({}), ann({L"u_3"}))};
+    FNOperatorSeq in{FNOperator(cre({"u_1", "u_2"}), ann({})),
+                     FNOperator(cre({}), ann({"u_3"}))};
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
     auto result =
@@ -137,8 +136,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   SECTION("cumulant_expand: a block within one operator vanishes") {
     // {a†_u1 a†_u2 a_u3 a_u4}{a†_u5 a_u6}: the 4 legs of nop 0 may not form
     // a block by themselves; every κ must involve u_5 or u_6
-    FNOperatorSeq in{FNOperator(cre({L"u_1", L"u_2"}), ann({L"u_3", L"u_4"})),
-                     FNOperator(cre({L"u_5"}), ann({L"u_6"}))};
+    FNOperatorSeq in{FNOperator(cre({"u_1", "u_2"}), ann({"u_3", "u_4"})),
+                     FNOperator(cre({"u_5"}), ann({"u_6"}))};
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
     auto result =
@@ -149,13 +148,12 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       const ExprPtrList single{term};
       for (const auto& f :
            term->is<Product>() ? term->as<Product>().factors() : single) {
-        if (f->is<Tensor>() && f->as<Tensor>().label() == L"κ") {
+        if (f->is<Tensor>() && f->as<Tensor>().label() == "κ") {
           const auto& t = f->as<Tensor>();
           (t.bra_rank() == 2 ? nkappa2 : nkappa3) += 1;
           bool touches_nop1 = false;
           for (const auto& idx : t.const_braket())
-            if (idx == Index(L"u_5") || idx == Index(L"u_6"))
-              touches_nop1 = true;
+            if (idx == Index("u_5") || idx == Index("u_6")) touches_nop1 = true;
           REQUIRE(touches_nop1);
         }
       }
@@ -167,8 +165,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   SECTION("cumulant_expand: 3-body truncation") {
     // {a†a†a}{a†a a} has a κ3 term (all six legs) that max_cumulant_rank=2
     // must drop, leaving everything else unchanged
-    FNOperatorSeq in{FNOperator(cre({L"u_1", L"u_2"}), ann({L"u_3"})),
-                     FNOperator(cre({L"u_4"}), ann({L"u_5", L"u_6"}))};
+    FNOperatorSeq in{FNOperator(cre({"u_1", "u_2"}), ann({"u_3"})),
+                     FNOperator(cre({"u_4"}), ann({"u_5", "u_6"}))};
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
     auto full =
@@ -177,12 +175,12 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         wick_out, prov, {.max_cumulant_rank = 2});
     auto diff = simplify(full - trunc);
     // exactly the κ3 term
-    REQUIRE_THAT(diff, EquivalentTo(L"-κ{u_5,u_6,u_3;u_1,u_2,u_4}"));
+    REQUIRE_THAT(diff, EquivalentTo("-κ{u_5,u_6,u_3;u_1,u_2,u_4}"));
   }
 
   SECTION("cumulant_expand: partial contractions leave a GNO remainder") {
-    FNOperatorSeq in{FNOperator(cre({L"u_1"}), ann({L"u_2"})),
-                     FNOperator(cre({L"u_3"}), ann({L"u_4"}))};
+    FNOperatorSeq in{FNOperator(cre({"u_1"}), ann({"u_2"})),
+                     FNOperator(cre({"u_3"}), ann({"u_4"}))};
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
     auto result = detail::cumulant_expand<Statistics::FermiDirac>(
@@ -190,11 +188,11 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // Eq. (ext. Wick, 1-body×1-body): the Wick output's 4 terms plus κ2;
     // nothing else, because a block needs ≥2 ops from ≥2 nops and the only
     // such balanced set is all four legs
-    REQUIRE_THAT(result, EquivalentTo(L"ã{u_2,u_4;u_1,u_3} "
-                                      L"- γ{u_4;u_1} * ã{u_2;u_3} "
-                                      L"+ η{u_2;u_3} * ã{u_4;u_1} "
-                                      L"+ γ{u_4;u_1} * η{u_2;u_3} "
-                                      L"+ κ{u_2,u_4;u_1,u_3}"));
+    REQUIRE_THAT(result, EquivalentTo("ã{u_2,u_4;u_1,u_3} "
+                                      "- γ{u_4;u_1} * ã{u_2;u_3} "
+                                      "+ η{u_2;u_3} * ã{u_4;u_1} "
+                                      "+ γ{u_4;u_1} * η{u_2;u_3} "
+                                      "+ κ{u_2,u_4;u_1,u_3}"));
     for (const auto& term : *result)
       for (const auto& f : *term)
         if (f->is<FNOperator>())
@@ -204,8 +202,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   SECTION("cumulant_expand: an inactive survivor is not a cumulant leg") {
     // {a†_u1 a_i1}{a†_u2 a_u3}: the only balanced set of legs from both nops
     // includes the core annihilator i_1, so no κ forms
-    FNOperatorSeq in{FNOperator(cre({L"u_1"}), ann({L"i_1"})),
-                     FNOperator(cre({L"u_2"}), ann({L"u_3"}))};
+    FNOperatorSeq in{FNOperator(cre({"u_1"}), ann({"i_1"})),
+                     FNOperator(cre({"u_2"}), ann({"u_3"}))};
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
     REQUIRE(detail::cumulant_expand<Statistics::FermiDirac>(
@@ -219,29 +217,29 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // an operator normal-ordered relative to another vacuum is not a GNO
     // string; it is rejected rather than reinterpreted
     for (const auto vacuum : {Vacuum::Physical, Vacuum::SingleProduct}) {
-      auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"}), vacuum) *
-                ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}), vacuum);
+      auto in = ex<FNOperator>(cre({"u_1"}), ann({"u_2"}), vacuum) *
+                ex<FNOperator>(cre({"u_3"}), ann({"u_4"}), vacuum);
       REQUIRE_THROWS_AS(FWickTheorem{in}.compute(), Exception);
       REQUIRE_THROWS_AS(FWickTheorem{in}.full_contractions(false).compute(),
                         Exception);
     }
     // the elementary-operator spelling of the parser is Physical
     REQUIRE_THROWS_AS(
-        FWickTheorem{deserialize(L"a{u_1;u_2} a{u_3;u_4}")}.compute(),
+        FWickTheorem{deserialize("a{u_1;u_2} a{u_3;u_4}")}.compute(),
         Exception);
   }
 
   SECTION("WickTheorem: bosons are not supported") {
-    auto in = ex<BNOperator>(cre({L"u_1"}), ann({L"u_2"}), Vacuum::Physical) *
-              ex<BNOperator>(cre({L"u_3"}), ann({L"u_4"}), Vacuum::Physical);
+    auto in = ex<BNOperator>(cre({"u_1"}), ann({"u_2"}), Vacuum::Physical) *
+              ex<BNOperator>(cre({"u_3"}), ann({"u_4"}), Vacuum::Physical);
     REQUIRE_THROWS_MATCHES(BWickTheorem{in}.compute(), Exception,
                            Catch::Matchers::MessageMatches(
                                Catch::Matchers::ContainsSubstring("bosons")));
   }
 
   SECTION("WickTheorem: count_only is not supported") {
-    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    auto in = ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+              ex<FNOperator>(cre({"u_3"}), ann({"u_4"}));
     REQUIRE_THROWS_MATCHES(
         FWickTheorem{in}.compute(/*count_only=*/true), Exception,
         Catch::Matchers::MessageMatches(
@@ -252,8 +250,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     auto sf_ctx = get_default_context();
     sf_ctx.set(SPBasis::Spinfree);
     auto sf_resetter = set_scoped_default_context(sf_ctx);
-    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    auto in = ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+              ex<FNOperator>(cre({"u_3"}), ann({"u_4"}));
     REQUIRE_THROWS_MATCHES(
         FWickTheorem{in}.compute(), Exception,
         Catch::Matchers::MessageMatches(
@@ -262,19 +260,19 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
 
   SECTION("WickTheorem: the input is not modified") {
     // the coefficient's bra is paired with the creator, as mbpt builds them
-    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-              ex<Tensor>(L"h", bra{L"u_1"}, ket{L"u_2"}, Symmetry::Nonsymm,
+    auto in = ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+              ex<Tensor>("h", bra{"u_1"}, ket{"u_2"}, Symmetry::Nonsymm,
                          BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
     wick_mp(in);
     REQUIRE(in->as<Product>().factor(0)->is<FNOperator>());
   }
 
   SECTION("WickTheorem: pure-active identities via the wrapper") {
-    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    auto in = ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+              ex<FNOperator>(cre({"u_3"}), ann({"u_4"}));
     auto result = wick_mp(in);
-    REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1} * η{u_2;u_3} "
-                                      L"+ κ{u_2,u_4;u_1,u_3}"));
+    REQUIRE_THAT(result, EquivalentTo("γ{u_4;u_1} * η{u_2;u_3} "
+                                      "+ κ{u_2,u_4;u_1,u_3}"));
   }
 
   SECTION("WickTheorem: general indices split into core δ + active γ") {
@@ -283,8 +281,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // ann·cre pair over U = E: δ on virtual {a,g} + η on active u, where
     // {a,g} is not a registered space, so its δ splits into δ on a + δ on g;
     // plus κ2 on the all-active projection: 2 × 3 + 1 = 7 terms
-    auto in = ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"})) *
-              ex<FNOperator>(cre({L"p_3"}), ann({L"p_4"}));
+    auto in = ex<FNOperator>(cre({"p_1"}), ann({"p_2"})) *
+              ex<FNOperator>(cre({"p_3"}), ann({"p_4"}));
     auto result = wick_mp(in);
     // every γ/η/κ index is active, also with partial contractions
     auto require_active_densities = [](const ExprPtr& expr) {
@@ -293,9 +291,9 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         for (const auto& f : *term)
           if (f->is<Tensor>()) {
             const auto& t = f->as<Tensor>();
-            if (t.label() == L"γ" || t.label() == L"η" || t.label() == L"κ")
+            if (t.label() == "γ" || t.label() == "η" || t.label() == "κ")
               for (const auto& idx : t.const_braket())
-                REQUIRE(idx.space() == Index(L"u_1").space());
+                REQUIRE(idx.space() == Index("u_1").space());
           }
     };
     require_active_densities(result);
@@ -307,20 +305,20 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE_THAT(
         result,
         EquivalentTo(
-            L"κ{u_3,u_4;u_1,u_2} * δ{u_1;p_1}:N-S-S * "
-            L"δ{u_2;p_3}:N-S-S * δ{p_2;u_3}:N-S-S * δ{p_4;u_4}:N-S-S "
-            L"+ γ{u_2;u_1} * δ{u_1;p_1}:N-S-S * δ{a_1;p_3}:N-S-S * "
-            L"δ{p_2;a_1}:N-S-S * δ{p_4;u_2}:N-S-S "
-            L"+ γ{u_2;u_1} * δ{u_1;p_1}:N-S-S * δ{g_1;p_3}:N-S-S * "
-            L"δ{p_2;g_1}:N-S-S * δ{p_4;u_2}:N-S-S "
-            L"+ η{u_2;u_1} * δ{u_1;p_3}:N-S-S * δ{O_1;p_1}:N-S-S * "
-            L"δ{p_2;u_2}:N-S-S * δ{p_4;O_1}:N-S-S "
-            L"+ δ{a_1;p_3}:N-S-S * δ{O_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S * "
-            L"δ{p_4;O_1}:N-S-S "
-            L"+ δ{g_1;p_3}:N-S-S * δ{O_1;p_1}:N-S-S * δ{p_2;g_1}:N-S-S * "
-            L"δ{p_4;O_1}:N-S-S "
-            L"+ η{u_3;u_1} * γ{u_4;u_2} * δ{u_1;p_3}:N-S-S * "
-            L"δ{u_2;p_1}:N-S-S * δ{p_2;u_3}:N-S-S * δ{p_4;u_4}:N-S-S"));
+            "κ{u_3,u_4;u_1,u_2} * δ{u_1;p_1}:N-S-S * "
+            "δ{u_2;p_3}:N-S-S * δ{p_2;u_3}:N-S-S * δ{p_4;u_4}:N-S-S "
+            "+ γ{u_2;u_1} * δ{u_1;p_1}:N-S-S * δ{a_1;p_3}:N-S-S * "
+            "δ{p_2;a_1}:N-S-S * δ{p_4;u_2}:N-S-S "
+            "+ γ{u_2;u_1} * δ{u_1;p_1}:N-S-S * δ{g_1;p_3}:N-S-S * "
+            "δ{p_2;g_1}:N-S-S * δ{p_4;u_2}:N-S-S "
+            "+ η{u_2;u_1} * δ{u_1;p_3}:N-S-S * δ{O_1;p_1}:N-S-S * "
+            "δ{p_2;u_2}:N-S-S * δ{p_4;O_1}:N-S-S "
+            "+ δ{a_1;p_3}:N-S-S * δ{O_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S * "
+            "δ{p_4;O_1}:N-S-S "
+            "+ δ{g_1;p_3}:N-S-S * δ{O_1;p_1}:N-S-S * δ{p_2;g_1}:N-S-S * "
+            "δ{p_4;O_1}:N-S-S "
+            "+ η{u_3;u_1} * γ{u_4;u_2} * δ{u_1;p_3}:N-S-S * "
+            "δ{u_2;p_1}:N-S-S * δ{p_2;u_3}:N-S-S * δ{p_4;u_4}:N-S-S"));
   }
 
   SECTION("WickTheorem: an input density over a wider space is split") {
@@ -329,13 +327,13 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // produces it is δ on the core (virtual) space, γ (η) on the active one
     // and zero on the virtual (core) one
     auto h = [](const Index& b, const Index& k) {
-      return ex<Tensor>(L"h", bra{b}, ket{k}, Symmetry::Nonsymm,
+      return ex<Tensor>("h", bra{b}, ket{k}, Symmetry::Nonsymm,
                         BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
     };
-    const Index p1(L"p_1"), p2(L"p_2"), O1(L"O_1"), u5(L"u_5"), u6(L"u_6"),
-        a1(L"a_1"), g1(L"g_1");
-    auto ops = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    const Index p1("p_1"), p2("p_2"), O1("O_1"), u5("u_5"), u6("u_6"),
+        a1("a_1"), g1("g_1");
+    auto ops = ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+               ex<FNOperator>(cre({"u_3"}), ann({"u_4"}));
     const auto ops_av = wick_mp(ops);
     ExprPtr gamma_result;
     REQUIRE_NOTHROW(gamma_result =
@@ -355,10 +353,10 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // η{a_1<i_1>;a_2<i_2>}: its virtual block binds a_1 to an index in its
     // basis, so the result keeps the overlap between the two bases and every
     // δ is between indices of one basis
-    const Index i1(L"i_1"), i2(L"i_2"), a1(L"a_1", {i1}), a2(L"a_2", {i2});
+    const Index i1("i_1"), i2("i_2"), a1("a_1", {i1}), a2("a_2", {i2});
     auto in = density::make_hole_rdm(a1, a2) *
-              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
-              ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}));
+              ex<FNOperator>(cre({"u_3"}), ann({"u_4"})) *
+              ex<FNOperator>(cre({"u_5"}), ann({"u_6"}));
     ExprPtr result;
     REQUIRE_NOTHROW(result = wick_mp(in));
     std::size_t noverlaps = 0;
@@ -366,7 +364,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         [&](const ExprPtr& e) {
           if (!e->is<Tensor>()) return;
           const auto& t = e->as<Tensor>();
-          INFO(toUtf8(to_latex(e)));
+          INFO(to_latex(e));
           if (t.label() == reserved::kronecker_label())
             REQUIRE(t.bra()[0].proto_indices() == t.ket()[0].proto_indices());
           if (t.label() == reserved::overlap_label()) {
@@ -381,10 +379,10 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // as for an operator, a protoindexed index of a density must not reach
     // the active space
     if (assert_behavior() == AssertBehavior::Throw) {
-      const Index p1(L"p_1", {i1}), p2(L"p_2", {i2});
+      const Index p1("p_1", {i1}), p2("p_2", {i2});
       REQUIRE_THROWS_WITH(wick_mp(density::make_rdm(p1, p2) *
-                                  ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
-                                  ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}))),
+                                  ex<FNOperator>(cre({"u_3"}), ann({"u_4"})) *
+                                  ex<FNOperator>(cre({"u_5"}), ann({"u_6"}))),
                           Catch::Matchers::ContainsSubstring(
                               "must not reach the active space"));
     }
@@ -393,11 +391,11 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   SECTION("WickTheorem: dummy indices keep their provenance") {
     // a one-body h summed against its operator's indices, times an active
     // one-body operator: every op index of the first factor is a dummy
-    const Index p1(L"p_1"), p2(L"p_2");
-    auto in = ex<Tensor>(L"h", bra{p1}, ket{p2}, Symmetry::Nonsymm,
+    const Index p1("p_1"), p2("p_2");
+    auto in = ex<Tensor>("h", bra{p1}, ket{p2}, Symmetry::Nonsymm,
                          BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
               ex<FNOperator>(cre({p1}), ann({p2})) *
-              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+              ex<FNOperator>(cre({"u_3"}), ann({"u_4"}));
     ExprPtr result;
     REQUIRE_NOTHROW(result = wick_mp(in));
     // every γ/η/κ index is active
@@ -405,9 +403,9 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       for (const auto& f : *term)
         if (f->is<Tensor>()) {
           const auto& t = f->as<Tensor>();
-          if (t.label() == L"γ" || t.label() == L"η" || t.label() == L"κ")
+          if (t.label() == "γ" || t.label() == "η" || t.label() == "κ")
             for (const auto& idx : t.const_braket())
-              REQUIRE(idx.space() == Index(L"u_1").space());
+              REQUIRE(idx.space() == Index("u_1").space());
         }
     REQUIRE_NOTHROW(wick_mp(in, {.full_contractions = false}));
   }
@@ -417,23 +415,23 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // is applied, the external ones (see "general indices split into core δ +
     // active γ") are kept
     auto h = [](const Index& b, const Index& k) {
-      return ex<Tensor>(L"h", bra{b}, ket{k}, Symmetry::Nonsymm,
+      return ex<Tensor>("h", bra{b}, ket{k}, Symmetry::Nonsymm,
                         BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
     };
-    const Index p1(L"p_1"), p2(L"p_2"), O1(L"O_1"), u1(L"u_1"), u2(L"u_2"),
-        u3(L"u_3");
+    const Index p1("p_1"), p2("p_2"), O1("O_1"), u1("u_1"), u2("u_2"),
+        u3("u_3");
     auto in = h(p1, p2) * ex<FNOperator>(cre({p1}), ann({})) *
               ex<FNOperator>(cre({}), ann({p2}));
     auto result = wick_mp(in);
     REQUIRE(simplify(result - h(O1, O1) -
                      h(u2, u1) * density::make_rdm(u1, u2)) == ex<Constant>(0));
     // ... also for a δ that η = δ - γ introduces
-    auto in2 = h(u3, u2) * ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    auto in2 = h(u3, u2) * ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+               ex<FNOperator>(cre({"u_3"}), ann({"u_4"}));
     auto result2 = wick_mp(in2, {.eta_as_delta_minus_gamma = true});
     result2->visit(
         [](const ExprPtr& e) {
-          if (e->is<Tensor>()) REQUIRE(e->as<Tensor>().label() != L"δ");
+          if (e->is<Tensor>()) REQUIRE(e->as<Tensor>().label() != "δ");
         },
         /*atoms_only=*/true);
   }
@@ -441,7 +439,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   SECTION("WickTheorem: an index shared by two operators") {
     // ⟨{a†_u1 a†_u2}{a_u2 a_u1}⟩ is ⟨{a†_u1 a†_u2}{a_u3 a_u4}⟩ with u_3 = u_2
     // and u_4 = u_1
-    const Index u1(L"u_1"), u2(L"u_2"), u3(L"u_3"), u4(L"u_4");
+    const Index u1("u_1"), u2("u_2"), u3("u_3"), u4("u_4");
     const container::map<Index, Index> identify{{u3, u2}, {u4, u1}};
     auto rename = [&](ExprPtr expr) {
       expr->visit(
@@ -474,14 +472,14 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         const detail::ExtendedWickOptions opts{.full_contractions = full};
         auto result = wick_mp(shared, opts);
         auto expected = rename(wick_mp(distinct, opts));
-        INFO("input: " << toUtf8(to_latex(shared)) << "\nfull=" << full
-                       << "\nresult: " << toUtf8(to_latex(result))
-                       << "\nexpected: " << toUtf8(to_latex(expected)));
+        INFO("input: " << to_latex(shared) << "\nfull=" << full
+                       << "\nresult: " << to_latex(result)
+                       << "\nexpected: " << to_latex(expected));
         REQUIRE(simplify(result - expected) == ex<Constant>(0));
         bool has_kappa = false;
         result->visit(
             [&](const ExprPtr& e) {
-              if (e->is<Tensor>() && e->as<Tensor>().label() == L"κ")
+              if (e->is<Tensor>() && e->as<Tensor>().label() == "κ")
                 has_kappa = true;
             },
             /*atoms_only=*/true);
@@ -501,15 +499,14 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // operators carrying dummies of two different tensors: the result must
     // equal that of the same operators with external indices, times the
     // tensors
-    auto tensors = ex<Tensor>(L"h", bra{L"u_1", L"u_2"}, ket{L"u_3", L"u_4"},
-                              Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
-                              ColumnSymmetry::Symm) *
-                   ex<Tensor>(L"g", bra{L"u_5", L"u_6"}, ket{L"u_7", L"u_8"},
-                              Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
-                              ColumnSymmetry::Symm);
-    auto ops = ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({L"u_3", L"u_4"})) *
-               ex<FNOperator>(cre({L"u_5", L"u_6"}), ann({L"u_7", L"u_8"})) *
-               ex<FNOperator>(cre({L"u_9"}), ann({L"u_10"}));
+    auto tensors =
+        ex<Tensor>("h", bra{"u_1", "u_2"}, ket{"u_3", "u_4"}, Symmetry::Nonsymm,
+                   BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm) *
+        ex<Tensor>("g", bra{"u_5", "u_6"}, ket{"u_7", "u_8"}, Symmetry::Nonsymm,
+                   BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    auto ops = ex<FNOperator>(cre({"u_1", "u_2"}), ann({"u_3", "u_4"})) *
+               ex<FNOperator>(cre({"u_5", "u_6"}), ann({"u_7", "u_8"})) *
+               ex<FNOperator>(cre({"u_9"}), ann({"u_10"}));
     for (const bool full : {true, false}) {
       const detail::ExtendedWickOptions opts{.full_contractions = full};
       auto lhs = wick_mp(tensors * ops, opts);
@@ -523,39 +520,39 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // a_p = Σ_x δ(p,x) a_x over the active, core and virtual parts of p, so
     // each term of the pure-active result (see "partial contractions leave a
     // GNO remainder") reappears with its sign, its indices projected
-    auto in = ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"})) *
-              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    auto in = ex<FNOperator>(cre({"p_1"}), ann({"p_2"})) *
+              ex<FNOperator>(cre({"u_3"}), ann({"u_4"}));
     auto result = wick_mp(in, {.full_contractions = false});
     // result contains `term` exactly once, with its sign
-    auto contains = [&](std::wstring_view term) {
+    auto contains = [&](std::string_view term) {
       return simplify(result - deserialize(term))->size() == result->size() - 1;
     };
     // a_p2·a†_u3 contracted (adjacent, so +), p_1 of the surviving
     // {a†_p1 a_u4} projected onto active and onto virtual a
     REQUIRE(
-        contains(L"η{u_2;u_3} * δ{u_1;p_1}:N-S-S * δ{p_2;u_2}:N-S-S * "
-                 L"ã{u_4;u_1}"));
+        contains("η{u_2;u_3} * δ{u_1;p_1}:N-S-S * δ{p_2;u_2}:N-S-S * "
+                 "ã{u_4;u_1}"));
     REQUIRE(
-        contains(L"η{u_1;u_3} * δ{a_1;p_1}:N-S-S * δ{p_2;u_1}:N-S-S * "
-                 L"ã{u_4;a_1}"));
+        contains("η{u_1;u_3} * δ{a_1;p_1}:N-S-S * δ{p_2;u_1}:N-S-S * "
+                 "ã{u_4;a_1}"));
     // nothing contracted, p_1 and p_2 projected onto active: the four legs
     // form +κ{u_2,u_4;u_1,u_3} = -κ{u_4,u_2;u_1,u_3}
     REQUIRE(
-        contains(L"-1 κ{u_4,u_2;u_1,u_3} * δ{u_1;p_1}:N-S-S * "
-                 L"δ{p_2;u_2}:N-S-S"));
+        contains("-1 κ{u_4,u_2;u_1,u_3} * δ{u_1;p_1}:N-S-S * "
+                 "δ{p_2;u_2}:N-S-S"));
   }
 
   SECTION("WickTheorem: projected indices are fresh in their term") {
     // {a†_u1 a_i1}{a†_p1 a_A1}: the active projection of the surviving a†_p1
     // must not reuse the name the engine's reduction gave the dummy of
     // γ·δ(A_1), however far the global tmp-index counter has advanced
-    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"i_1"})) *
-              ex<FNOperator>(cre({L"p_1"}), ann({L"A_1"}));
+    auto in = ex<FNOperator>(cre({"u_1"}), ann({"i_1"})) *
+              ex<FNOperator>(cre({"p_1"}), ann({"A_1"}));
     Index::reset_tmp_index();
     ExprPtr first;
     REQUIRE_NOTHROW(first = wick_mp(in, {.full_contractions = false}));
     const auto& u =
-        get_default_context().index_basis_registry()->retrieve_space(L"u");
+        get_default_context().index_basis_registry()->retrieve_space("u");
     for (int i = 0; i != 1000; ++i) Index::make_tmp_index(u);
     const auto second = wick_mp(in, {.full_contractions = false});
     REQUIRE(simplify(first - second) == ex<Constant>(0));
@@ -564,9 +561,9 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   SECTION("WickTheorem: connectivity") {
     // partial contractions: with full ones, connecting 0 to 1 but not to 2
     // leaves 2 isolated, and no term survives
-    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
-              ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}));
+    auto in = ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+              ex<FNOperator>(cre({"u_3"}), ann({"u_4"})) *
+              ex<FNOperator>(cre({"u_5"}), ann({"u_6"}));
     auto all = wick_mp(in, {.full_contractions = false});
     auto filtered = wick_mp(in, {.full_contractions = false,
                                  .nop_connections = {{0, 1}},
@@ -576,8 +573,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(filtered->size() < all->size());
     auto ord = [](const Index& i) -> int {
       const auto l = i.label();
-      if (l == L"u_1" || l == L"u_2") return 0;
-      if (l == L"u_3" || l == L"u_4") return 1;
+      if (l == "u_1" || l == "u_2") return 0;
+      if (l == "u_3" || l == "u_4") return 1;
       return 2;
     };
     for (const auto& term : *filtered) {
@@ -600,9 +597,9 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   SECTION("WickTheorem: connectivity through a cumulant") {
     // partial contractions: a 0-2 connection can be realized by a cumulant
     // block alone, which no pair of operators expresses
-    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
-              ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}));
+    auto in = ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+              ex<FNOperator>(cre({"u_3"}), ann({"u_4"})) *
+              ex<FNOperator>(cre({"u_5"}), ann({"u_6"}));
     auto all = wick_mp(in, {.full_contractions = false});
     auto filtered =
         wick_mp(in, {.full_contractions = false, .nop_connections = {{0, 2}}});
@@ -611,8 +608,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(filtered->size() < all->size());
     auto ord = [](const Index& i) -> int {
       const auto l = i.label();
-      if (l == L"u_1" || l == L"u_2") return 0;
-      if (l == L"u_3" || l == L"u_4") return 1;
+      if (l == "u_1" || l == "u_2") return 0;
+      if (l == "u_3" || l == "u_4") return 1;
       return 2;
     };
     bool kappa_only = false;
@@ -626,7 +623,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         container::set<int> ords;
         for (const auto& idx : t.const_braket()) ords.insert(ord(idx));
         if (ords.contains(0) && ords.contains(2))
-          (t.label() == L"κ" ? by_kappa : by_pair) = true;
+          (t.label() == "κ" ? by_kappa : by_pair) = true;
       }
       REQUIRE((by_pair || by_kappa));
       if (by_kappa && !by_pair) kappa_only = true;
@@ -637,11 +634,11 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   SECTION("WickTheorem: a coefficient tensor is not a connection") {
     // h{u_1;u_6} spans operators 0 and 2, but only the factors the theorem
     // produces connect operators
-    auto h = ex<Tensor>(L"h", bra{L"u_1"}, ket{L"u_6"}, Symmetry::Nonsymm,
+    auto h = ex<Tensor>("h", bra{"u_1"}, ket{"u_6"}, Symmetry::Nonsymm,
                         BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
-    auto ops = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
-               ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}));
+    auto ops = ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+               ex<FNOperator>(cre({"u_3"}), ann({"u_4"})) *
+               ex<FNOperator>(cre({"u_5"}), ann({"u_6"}));
     for (const auto& opts :
          {detail::ExtendedWickOptions{.full_contractions = false,
          .nop_avoided_connections = {{0, 2}}},
@@ -657,11 +654,11 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   SECTION("WickTheorem: an input δ is an identification, not a connection") {
     // δ{u_2;u_5} (or s{u_2;u_5}) makes operators 0 and 2 share an index,
     // which neither realizes nor avoids a 0-2 connection
-    const Index u2(L"u_2"), u5(L"u_5");
+    const Index u2("u_2"), u5("u_5");
     auto ops = [](const Index& i5) {
-      return ex<FNOperator>(cre({Index(L"u_1")}), ann({Index(L"u_2")})) *
-             ex<FNOperator>(cre({Index(L"u_3")}), ann({Index(L"u_4")})) *
-             ex<FNOperator>(cre({i5}), ann({Index(L"u_6")}));
+      return ex<FNOperator>(cre({Index("u_1")}), ann({Index("u_2")})) *
+             ex<FNOperator>(cre({Index("u_3")}), ann({Index("u_4")})) *
+             ex<FNOperator>(cre({i5}), ann({Index("u_6")}));
     };
     for (const auto& opts :
          {detail::ExtendedWickOptions{.full_contractions = false,
@@ -672,9 +669,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       REQUIRE(shared->size() > 0);
       for (const auto& id : {make_kronecker(u2, u5), make_overlap(u2, u5)}) {
         auto result = wick_mp(id * ops(u5), opts);
-        INFO("δ: " << toUtf8(to_latex(id))
-                   << "\nresult: " << toUtf8(to_latex(result))
-                   << "\nexpected: " << toUtf8(to_latex(shared)));
+        INFO("δ: " << to_latex(id) << "\nresult: " << to_latex(result)
+                   << "\nexpected: " << to_latex(shared));
         // compared as is: simplify does not cancel a remainder carrying an
         // index as both a creator and an annihilator against itself
         REQUIRE(*result == *shared);
@@ -682,12 +678,12 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     }
     // a δ binding an op index to a coefficient's is a rename
     auto h = [](const Index& b) {
-      return ex<Tensor>(L"h", bra{b}, ket{L"p_2"}, Symmetry::Nonsymm,
+      return ex<Tensor>("h", bra{b}, ket{"p_2"}, Symmetry::Nonsymm,
                         BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
     };
-    const Index p1(L"p_1"), p7(L"p_7");
-    auto pops = ex<FNOperator>(cre({p1}), ann({Index(L"p_2")})) *
-                ex<FNOperator>(cre({Index(L"u_3")}), ann({Index(L"u_4")}));
+    const Index p1("p_1"), p7("p_7");
+    auto pops = ex<FNOperator>(cre({p1}), ann({Index("p_2")})) *
+                ex<FNOperator>(cre({Index("u_3")}), ann({Index("u_4")}));
     for (const bool full : {true, false}) {
       const detail::ExtendedWickOptions opts{.full_contractions = full};
       auto renamed = wick_mp(h(p1) * pops, opts);
@@ -695,7 +691,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       REQUIRE(simplify(result - renamed) == ex<Constant>(0));
     }
     // a δ between external indices multiplies the result
-    const auto ext = make_kronecker(Index(L"p_8"), Index(L"p_9"));
+    const auto ext = make_kronecker(Index("p_8"), Index("p_9"));
     for (const auto& opts :
          {detail::ExtendedWickOptions{.full_contractions = false,
          .nop_avoided_connections = {{0, 2}}},
@@ -710,17 +706,17 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   SECTION("WickTheorem: use_topology with a context-named dummy") {
     // the context may name an index that appears twice; it is then external,
     // so the pruning may not treat the operators carrying it as equivalent
-    auto coeff = [](std::wstring_view label, IndexList b, IndexList k) {
+    auto coeff = [](std::string_view label, IndexList b, IndexList k) {
       return ex<Tensor>(label, bra(b), ket(k), Symmetry::Antisymm,
                         BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
     };
-    auto in = coeff(L"g", {L"u_1", L"u_2"}, {L"u_3", L"u_4"}) *
-              ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({L"u_3", L"u_4"})) *
-              coeff(L"t", {L"u_5", L"u_6"}, {L"u_7", L"u_8"}) *
-              ex<FNOperator>(cre({L"u_5", L"u_6"}), ann({L"u_7", L"u_8"}));
+    auto in = coeff("g", {"u_1", "u_2"}, {"u_3", "u_4"}) *
+              ex<FNOperator>(cre({"u_1", "u_2"}), ann({"u_3", "u_4"})) *
+              coeff("t", {"u_5", "u_6"}, {"u_7", "u_8"}) *
+              ex<FNOperator>(cre({"u_5", "u_6"}), ann({"u_7", "u_8"}));
     auto scope = scoped_canonicalize_options(
         CanonicalizeOptions::default_options().copy_and_set(
-            container::set<Index>{Index(L"u_1"), Index(L"u_5")}));
+            container::set<Index>{Index("u_1"), Index("u_5")}));
     for (const bool full : {true, false}) {
       INFO("full=" << full);
       std::array<ExprPtr, 2> result;
@@ -728,7 +724,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         FWickTheorem wick{in->clone()};
         result[top] = wick.full_contractions(full).use_topology(top).compute();
       }
-      REQUIRE(get_used_indices_with_counts(result[1]).contains(Index(L"u_1")));
+      REQUIRE(get_used_indices_with_counts(result[1]).contains(Index("u_1")));
       REQUIRE(simplify(result[1] - result[0]) == ex<Constant>(0));
     }
   }
@@ -745,16 +741,16 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       auto result = wick.compute();
       return std::pair{result, wick.stats().num_attempted_contractions.load()};
     };
-    auto coeff = [](std::wstring_view label, IndexList b, IndexList k) {
+    auto coeff = [](std::string_view label, IndexList b, IndexList k) {
       return ex<Tensor>(label, bra(b), ket(k), Symmetry::Antisymm,
                         BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
     };
     // antisymmetric 2-body coefficients summed against all-active operators:
     // the creators (annihilators) of each operator are equivalent
-    auto g_op = coeff(L"g", {L"u_1", L"u_2"}, {L"u_3", L"u_4"}) *
-                ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({L"u_3", L"u_4"}));
-    auto t_op = coeff(L"t", {L"u_5", L"u_6"}, {L"u_7", L"u_8"}) *
-                ex<FNOperator>(cre({L"u_5", L"u_6"}), ann({L"u_7", L"u_8"}));
+    auto g_op = coeff("g", {"u_1", "u_2"}, {"u_3", "u_4"}) *
+                ex<FNOperator>(cre({"u_1", "u_2"}), ann({"u_3", "u_4"}));
+    auto t_op = coeff("t", {"u_5", "u_6"}, {"u_7", "u_8"}) *
+                ex<FNOperator>(cre({"u_5", "u_6"}), ann({"u_7", "u_8"}));
     for (const bool full : {true, false}) {
       INFO("full=" << full);
       const auto [on, attempted_on] = run(g_op * t_op, full, true);
@@ -766,7 +762,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
 
     // an index-free factor does not take part in the topology analysis
     {
-      const auto c_g_t = ex<Variable>(L"c") * g_op * t_op;
+      const auto c_g_t = ex<Variable>("c") * g_op * t_op;
       ExprPtr on, off;
       REQUIRE_NOTHROW(on = run(c_g_t, true, true).first);
       off = run(c_g_t, true, false).first;
@@ -774,12 +770,12 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     }
 
     // operators 1 and 2 are equivalent, but only 1 must connect to 0
-    auto t1_op = [&](std::wstring_view b, std::wstring_view k) {
-      return ex<Tensor>(L"t", bra{b}, ket{k}, Symmetry::Nonsymm,
+    auto t1_op = [&](std::string_view b, std::string_view k) {
+      return ex<Tensor>("t", bra{b}, ket{k}, Symmetry::Nonsymm,
                         BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm) *
              ex<FNOperator>(cre({b}), ann({k}));
     };
-    auto three = g_op * t1_op(L"u_5", L"u_6") * t1_op(L"u_7", L"u_8");
+    auto three = g_op * t1_op("u_5", "u_6") * t1_op("u_7", "u_8");
     for (const bool full : {true, false}) {
       INFO("full=" << full);
       const auto [on, attempted_on] = run(three, full, true, {{0, 1}});
@@ -794,10 +790,10 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // enumeration produces terms that each vanish by their own symmetry,
     // which the canonicalizer does not yet recognize
     {
-      auto zero = ex<Tensor>(L"X", bra{L"u_1", L"u_2"}, ket{L"u_3", L"u_4"},
-                             Symmetry::Symm, BraKetSymmetry::Nonsymm,
-                             ColumnSymmetry::Symm) *
-                  ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({L"u_3", L"u_4"}));
+      auto zero =
+          ex<Tensor>("X", bra{"u_1", "u_2"}, ket{"u_3", "u_4"}, Symmetry::Symm,
+                     BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm) *
+          ex<FNOperator>(cre({"u_1", "u_2"}), ann({"u_3", "u_4"}));
       for (const bool full : {true, false}) {
         INFO("full=" << full);
         const auto [on, attempted_on] = run(zero * t_op, full, true);
@@ -808,14 +804,14 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
 
     // a†_u1 and a†_u2 are only equivalent together with the tensors they
     // are attached to, so nothing is pruned
-    auto X = [](std::wstring_view b, std::wstring_view k) {
-      return ex<Tensor>(L"X", bra{b}, ket{k}, Symmetry::Nonsymm,
+    auto X = [](std::string_view b, std::string_view k) {
+      return ex<Tensor>("X", bra{b}, ket{k}, Symmetry::Nonsymm,
                         BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
     };
-    auto xx = X(L"u_1", L"u_3") * X(L"u_2", L"u_4") *
-              ex<FNOperator>(cre({}), ann({L"u_3"})) *
-              ex<FNOperator>(cre({}), ann({L"u_4"})) *
-              ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({}));
+    auto xx = X("u_1", "u_3") * X("u_2", "u_4") *
+              ex<FNOperator>(cre({}), ann({"u_3"})) *
+              ex<FNOperator>(cre({}), ann({"u_4"})) *
+              ex<FNOperator>(cre({"u_1", "u_2"}), ann({}));
     for (const bool full : {true, false}) {
       INFO("full=" << full);
       REQUIRE(simplify(run(xx, full, true).first -
@@ -828,9 +824,9 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // moment it is attempted (no later cumulant can undo it), so the engine
     // rejects it early and attempts fewer contractions; the result must still
     // be exactly what filtering the unconstrained result would give
-    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
-              ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}));
+    auto in = ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+              ex<FNOperator>(cre({"u_3"}), ann({"u_4"})) *
+              ex<FNOperator>(cre({"u_5"}), ann({"u_6"}));
     auto run = [](const ExprPtr& in,
                   const container::svector<std::pair<std::size_t, std::size_t>>&
                       avoided) {
@@ -846,8 +842,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // the terms of the unconstrained result without a 0-2 edge
     auto ord = [](const Index& i) -> int {
       const auto l = i.label();
-      if (l == L"u_1" || l == L"u_2") return 0;
-      if (l == L"u_3" || l == L"u_4") return 1;
+      if (l == "u_1" || l == "u_2") return 0;
+      if (l == "u_3" || l == "u_4") return 1;
       return 2;
     };
     auto expected = std::make_shared<Sum>();
@@ -871,14 +867,14 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   }
 
   SECTION("WickTheorem: connection ordinals must name input operators") {
-    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    auto in = ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+              ex<FNOperator>(cre({"u_3"}), ann({"u_4"}));
     REQUIRE_THROWS_AS(wick_mp(in, {.nop_connections = {{0, 2}}}), Exception);
     REQUIRE_THROWS_AS(wick_mp(in, {.nop_avoided_connections = {{2, 1}}}),
                       Exception);
     // a term without operators is kept, as under the other vacua
     const auto c = ex<Constant>(2) *
-                   ex<Tensor>(L"h", bra{L"u_5"}, ket{L"u_6"}, Symmetry::Nonsymm,
+                   ex<Tensor>("h", bra{"u_5"}, ket{"u_6"}, Symmetry::Nonsymm,
                               BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
     const detail::ExtendedWickOptions connected{.nop_connections = {{0, 1}}};
     REQUIRE(simplify(wick_mp(in + c, connected) - wick_mp(in, connected) - c) ==
@@ -886,41 +882,40 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   }
 
   SECTION("WickTheorem: Sum input") {
-    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-                  ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) +
-              ex<Constant>(2) * ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-                  ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    auto in = ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+                  ex<FNOperator>(cre({"u_3"}), ann({"u_4"})) +
+              ex<Constant>(2) * ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+                  ex<FNOperator>(cre({"u_3"}), ann({"u_4"}));
     auto result = wick_mp(in);
-    REQUIRE_THAT(result, EquivalentTo(L"3 γ{u_4;u_1} * η{u_2;u_3} "
-                                      L"+ 3 κ{u_2,u_4;u_1,u_3}"));
+    REQUIRE_THAT(result, EquivalentTo("3 γ{u_4;u_1} * η{u_2;u_3} "
+                                      "+ 3 κ{u_2,u_4;u_1,u_3}"));
   }
 
   SECTION("WickTheorem: η between two CSV bases is their overlap") {
     // the virtual block of η is the identity on the virtuals; between
     // cluster-specific virtuals of different pairs it is their overlap, as
     // under a single-product vacuum
-    const Index i1(L"i_1"), i2(L"i_2");
-    const Index a1(L"a_1", {i1}), a2(L"a_2", {i2}), a3(L"a_3", {i1});
+    const Index i1("i_1"), i2("i_2");
+    const Index a1("a_1", {i1}), a2("a_2", {i2}), a3("a_3", {i1});
     auto in =
         ex<FNOperator>(cre({}), ann({a1})) * ex<FNOperator>(cre({a2}), ann({}));
-    REQUIRE_THAT(wick_mp(in), EquivalentTo(L"s{a_1<i_1>;a_2<i_2>}"));
+    REQUIRE_THAT(wick_mp(in), EquivalentTo("s{a_1<i_1>;a_2<i_2>}"));
     in =
         ex<FNOperator>(cre({}), ann({a1})) * ex<FNOperator>(cre({a3}), ann({}));
-    REQUIRE_THAT(wick_mp(in), EquivalentTo(L"δ{a_1<i_1>;a_3<i_1>}"));
+    REQUIRE_THAT(wick_mp(in), EquivalentTo("δ{a_1<i_1>;a_3<i_1>}"));
   }
 
   SECTION("WickTheorem: η = δ - γ") {
-    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    auto in = ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+              ex<FNOperator>(cre({"u_3"}), ann({"u_4"}));
     auto result = wick_mp(in, {.eta_as_delta_minus_gamma = true});
-    REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1} * δ{u_2;u_3} "
-                                      L"- γ{u_4;u_1} * γ{u_2;u_3} "
-                                      L"+ κ{u_2,u_4;u_1,u_3}"));
+    REQUIRE_THAT(result, EquivalentTo("γ{u_4;u_1} * δ{u_2;u_3} "
+                                      "- γ{u_4;u_1} * γ{u_2;u_3} "
+                                      "+ κ{u_2,u_4;u_1,u_3}"));
     bool has_eta = false;
     result->visit(
         [&](const ExprPtr& e) {
-          if (e->is<Tensor>() && e->as<Tensor>().label() == L"η")
-            has_eta = true;
+          if (e->is<Tensor>() && e->as<Tensor>().label() == "η") has_eta = true;
         },
         /*atoms_only=*/true);
     REQUIRE(!has_eta);
@@ -930,15 +925,15 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // only the one-body η the theorem produces is δ - γ; a multi-body η in
     // the input (e.g. from an earlier result) is kept as is
     const auto eta2 = density::make_density(
-        density::hole_rdm_label(), bra{L"u_5", L"u_6"}, ket{L"u_7", L"u_8"});
-    auto in = eta2 * ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+        density::hole_rdm_label(), bra{"u_5", "u_6"}, ket{"u_7", "u_8"});
+    auto in = eta2 * ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+              ex<FNOperator>(cre({"u_3"}), ann({"u_4"}));
     ExprPtr result;
     REQUIRE_NOTHROW(result = wick_mp(in, {.eta_as_delta_minus_gamma = true}));
     std::size_t n_eta1 = 0, n_eta2 = 0;
     result->visit(
         [&](const ExprPtr& e) {
-          if (e->is<Tensor>() && e->as<Tensor>().label() == L"η")
+          if (e->is<Tensor>() && e->as<Tensor>().label() == "η")
             (e->as<Tensor>().rank() == 1 ? n_eta1 : n_eta2) += 1;
         },
         /*atoms_only=*/true);
@@ -956,10 +951,10 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
 
     // inputs carry their context's vacuum, so each is built per context
     auto make_input = [](std::size_t k) {
-      return k == 0 ? ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"})) *
-                          ex<FNOperator>(cre({L"a_2"}), ann({L"i_2"}))
-                    : ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"})) *
-                          ex<FNOperator>(cre({L"p_3"}), ann({L"p_4"}));
+      return k == 0 ? ex<FNOperator>(cre({"i_1"}), ann({"a_1"})) *
+                          ex<FNOperator>(cre({"a_2"}), ann({"i_2"}))
+                    : ex<FNOperator>(cre({"p_1"}), ann({"p_2"})) *
+                          ex<FNOperator>(cre({"p_3"}), ann({"p_4"}));
     };
     auto sr_ctx = get_default_context();
     sr_ctx.set(sr_ibr);
@@ -994,14 +989,14 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
             [&](const ExprPtr& e) {
               if (e->is<Tensor>()) {
                 const auto l = e->as<Tensor>().label();
-                REQUIRE(l != L"γ");
-                REQUIRE(l != L"η");
-                REQUIRE(l != L"κ");
+                REQUIRE(l != "γ");
+                REQUIRE(l != "η");
+                REQUIRE(l != "κ");
               }
             },
             /*atoms_only=*/true);
-        INFO("full=" << full << " k=" << k << "\nMP: " << toUtf8(to_latex(mp))
-                     << "\nSP: " << toUtf8(to_latex(sp)));
+        INFO("full=" << full << " k=" << k << "\nMP: " << to_latex(mp)
+                     << "\nSP: " << to_latex(sp));
         // The standard theorem spells a contraction as the overlap s, the
         // extended one as δ; they coincide for same-space indices.
         sp->visit(
@@ -1061,17 +1056,16 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
           /*atoms_only=*/true);
       return e;
     };
-    using Pairs = container::svector<std::pair<std::wstring, std::wstring>>;
+    using Pairs = container::svector<std::pair<std::string, std::string>>;
     struct Case {
       Pairs pairs;
       bool full;
       std::size_t nterms;
     };
     for (const auto& [pairs, full, nterms] :
-         {Case{Pairs{{L"u_1", L"u_2"}, {L"u_3", L"u_4"}, {L"u_5", L"u_6"}},
-               true, 9},
-          Case{Pairs{{L"p_1", L"p_2"}, {L"p_3", L"p_4"}}, true, 7},
-          Case{Pairs{{L"u_1", L"u_2"}, {L"u_3", L"u_4"}}, false, 5}}) {
+         {Case{Pairs{{"u_1", "u_2"}, {"u_3", "u_4"}, {"u_5", "u_6"}}, true, 9},
+          Case{Pairs{{"p_1", "p_2"}, {"p_3", "p_4"}}, true, 7},
+          Case{Pairs{{"u_1", "u_2"}, {"u_3", "u_4"}}, false, 5}}) {
       ExprPtr gno = ex<Constant>(1), elementary = ex<Constant>(1);
       for (const auto& [p, q] : pairs) {
         gno = gno * ex<FNOperator>(cre({Index(p)}), ann({Index(q)}));
@@ -1081,19 +1075,18 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       const detail::ExtendedWickOptions opts{.full_contractions = full};
       auto lhs = wick_mp(gno, opts);
       auto rhs = wick_mp(elementary, opts);
-      INFO("lhs: " << toUtf8(to_latex(lhs))
-                   << "\nrhs: " << toUtf8(to_latex(rhs)));
+      INFO("lhs: " << to_latex(lhs) << "\nrhs: " << to_latex(rhs));
       REQUIRE(lhs->size() == nterms);
       REQUIRE(simplify(lhs - rhs) == ex<Constant>(0));
     }
     // the three all-active strings have both a κ2 and a κ3
     container::set<std::size_t> kappa_ranks;
-    wick_mp(ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-            ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
-            ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"})))
+    wick_mp(ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+            ex<FNOperator>(cre({"u_3"}), ann({"u_4"})) *
+            ex<FNOperator>(cre({"u_5"}), ann({"u_6"})))
         ->visit(
             [&](const ExprPtr& e) {
-              if (e->is<Tensor>() && e->as<Tensor>().label() == L"κ")
+              if (e->is<Tensor>() && e->as<Tensor>().label() == "κ")
                 kappa_ranks.insert(e->as<Tensor>().bra_rank());
             },
             /*atoms_only=*/true);

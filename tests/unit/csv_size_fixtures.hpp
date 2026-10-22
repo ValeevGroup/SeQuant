@@ -130,10 +130,10 @@ inline eval::dryrun::MomentTable occupancy_adjusted_moments(
 inline eval::dryrun::SizeRegime df_size_regime(CsvProblemSize const& p) {
   eval::dryrun::SizeRegime r;
   r.space_extent = {
-      {L"i", p.i_occ},
-      {L"μ̃", p.mu_tilde},
-      {L"Κ", p.aux},
-      {L"a", p.mu_tilde},
+      {"i", p.i_occ},
+      {"μ̃", p.mu_tilde},
+      {"Κ", p.aux},
+      {"a", p.mu_tilde},
   };
   r.csv_pno_moment = occupancy_adjusted_moments(p.pno_M, p.pno_occupancy);
   r.csv_osv_moment = occupancy_adjusted_moments(p.osv_M, p.osv_occupancy);

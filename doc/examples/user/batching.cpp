@@ -22,14 +22,14 @@ int main() {
   auto ibr = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(ibr);
-  ibr->extent(L"i", 4);
-  ibr->extent(L"a", 8);
-  ibr->extent(L"Κ", 100'000);
+  ibr->extent("i", 4);
+  ibr->extent("a", 8);
+  ibr->extent("Κ", 100'000);
   set_default_context(get_default_context_snapshot().set(ibr));
 
-  auto expr = ex<Tensor>(L"B", bra{L"i_1"}, ket{L"a_1", L"Κ_1"}) *
-              ex<Tensor>(L"B", bra{L"i_2"}, ket{L"a_2", L"Κ_1"}) *
-              ex<Tensor>(L"S", bra{L"i_1"}, ket{L"i_2"});
+  auto expr = ex<Tensor>("B", bra{"i_1"}, ket{"a_1", "Κ_1"}) *
+              ex<Tensor>("B", bra{"i_2"}, ket{"a_2", "Κ_1"}) *
+              ex<Tensor>("S", bra{"i_1"}, ket{"i_2"});
   // end-snippet-1
 
   // start-snippet-2
@@ -40,7 +40,7 @@ int main() {
   // batch"
   BatchPolicy policy{
       .is_batchable_contracted_index =
-          [](Index const& ix) { return ix.space().base_key() == L"Κ"; },
+          [](Index const& ix) { return ix.space().base_key() == "Κ"; },
       .batch_target_size = [](Index const&) -> std::size_t { return 100; },
       .peak_threshold = 5'000'000.0};
 
@@ -58,7 +58,7 @@ int main() {
   for (auto const& [node, annotations] : *batch_axes)
     for (auto const& annotation : annotations)
       for (auto const& [axis, mode_type] : annotation.axes)
-        batched_kappa |= axis.space().base_key() == L"Κ" &&
+        batched_kappa |= axis.space().base_key() == "Κ" &&
                          mode_type == BatchModeType::Contracted;
   // end-snippet-2
 

@@ -54,7 +54,7 @@ namespace {
 /// -- stay valid without regenerating them.
 [[nodiscard]] auto scoped_hermitian_amplitudes() {
   auto reg = sequant::mbpt::get_default_mbpt_context().op_registry()->clone();
-  for (std::wstring lbl : {L"t", L"λ", L"R", L"L"})
+  for (std::string lbl : {"t", "λ", "R", "L"})
     if (reg.contains(lbl))
       reg.set_hermiticity(lbl, sequant::Hermiticity::Hermitian);
   return sequant::mbpt::set_scoped_default_mbpt_context(
@@ -74,7 +74,7 @@ sequant::Index external_in_base(
   const auto k = std::distance(externals.begin(), externals.find(idx));
   REQUIRE(external_in_base_ordinal + k < sequant::Index::min_tmp_index());
   return sequant::Index(
-      base.base_key() + L"_" + std::to_wstring(external_in_base_ordinal + k),
+      base.base_key() + "_" + std::to_string(external_in_base_ordinal + k),
       base);
 }
 
@@ -166,11 +166,11 @@ TEST_CASE("MBPT operator formatting", "[mbpt][format]") {
   const auto& op = ptr.as<mbpt::op_t>();
   const auto latex = to_latex(ptr);
 
-  REQUIRE(std::format("{:l}", op) == toUtf8(latex));
-  REQUIRE(std::format(L"{:latex}", ptr) == latex);
+  REQUIRE(std::format("{:l}", op) == std::string(latex));
+  REQUIRE(std::format("{:latex}", ptr) == latex);
   // mbpt::Operator does not support serialization
   REQUIRE_THROWS_AS(std::format("{}", op), Exception);
-  REQUIRE_THROWS_AS(std::format(L"{:s}", ptr), Exception);
+  REQUIRE_THROWS_AS(std::format("{:s}", ptr), Exception);
   std::ostringstream narrow;
   REQUIRE_THROWS_AS(narrow << op, Exception);
 
@@ -243,8 +243,8 @@ TEST_CASE("mbpt operator commutativity", "[mbpt]") {
     // normal operator itself rather than a product
     const auto cre_p = [] {
       return ex<mbpt::Operator<qns_t>>(
-          []() -> std::wstring_view { return L"c"; },
-          []() -> ExprPtr { return ex<FNOperator>(cre({L"p_1"}), ann({})); },
+          []() -> std::string_view { return "c"; },
+          []() -> ExprPtr { return ex<FNOperator>(cre({"p_1"}), ann({})); },
           [](qns_t& qns) {
             qns_t op;
             for (std::size_t s = 0; s != op.size() / 2; ++s)
@@ -285,16 +285,16 @@ TEST_CASE("mbpt multireference regressions", "[mbpt]") {
     for (const bool named : {false, true}) {
       auto opts = CanonicalizeOptions::default_options();
       if (named)
-        opts.named_indices = container::set<Index>{
-            Index(L"u_1"), Index(L"u_2"), Index(L"u_3"), Index(L"u_4")};
+        opts.named_indices = container::set<Index>{Index("u_1"), Index("u_2"),
+                                                   Index("u_3"), Index("u_4")};
       auto scope = set_scoped_modified_default_context(
           [&opts](sequant::Context& ctx) { ctx.set(opts); });
       CAPTURE(named);
-      CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1;u_2} * ã{u_3;u_4}")),
-                 EquivalentTo(L"γ{u_1,u_3;u_2,u_4}:A-C-S + "
-                              L"s{u_1;u_4} * γ{u_3;u_2}"));
-      CHECK_THAT(tensor::ref_av(deserialize(L"x{u_1;u_2} * ã{u_2;u_1}")),
-                 EquivalentTo(L"x{u_1;u_2} * γ{u_2;u_1}"));
+      CHECK_THAT(tensor::ref_av(deserialize("ã{u_1;u_2} * ã{u_3;u_4}")),
+                 EquivalentTo("γ{u_1,u_3;u_2,u_4}:A-C-S + "
+                              "s{u_1;u_4} * γ{u_3;u_2}"));
+      CHECK_THAT(tensor::ref_av(deserialize("x{u_1;u_2} * ã{u_2;u_1}")),
+                 EquivalentTo("x{u_1;u_2} * γ{u_2;u_1}"));
     }
   }
 
@@ -303,45 +303,45 @@ TEST_CASE("mbpt multireference regressions", "[mbpt]") {
       auto opts = CanonicalizeOptions::default_options();
       if (named)
         opts.named_indices =
-            container::set<Index>{Index(L"I_1"), Index(L"I_2"), Index(L"I_4"),
-                                  Index(L"I_6"), Index(L"p_1"), Index(L"p_2")};
+            container::set<Index>{Index("I_1"), Index("I_2"), Index("I_4"),
+                                  Index("I_6"), Index("p_1"), Index("p_2")};
       auto scope = set_scoped_modified_default_context(
           [&opts](sequant::Context& ctx) { ctx.set(opts); });
       CAPTURE(named);
-      CHECK_THAT(tensor::ref_av(deserialize(L"ã{I_1;I_2}")),
-                 EquivalentTo(L"γ{u_1;u_2} * δ{I_1;u_1} * δ{u_2;I_2}"));
-      CHECK_THAT(tensor::ref_av(deserialize(L"ã{p_1;p_2}")),
-                 EquivalentTo(L"γ{u_1;u_2} * δ{p_1;u_1} * δ{u_2;p_2}"));
-      CHECK_THAT(tensor::ref_av(deserialize(L"f{I_4;I_5} * ã{I_5;I_6}")),
-                 EquivalentTo(L"f{I_4;u_1} * γ{u_1;u_2} * δ{u_2;I_6}"));
+      CHECK_THAT(tensor::ref_av(deserialize("ã{I_1;I_2}")),
+                 EquivalentTo("γ{u_1;u_2} * δ{I_1;u_1} * δ{u_2;I_2}"));
+      CHECK_THAT(tensor::ref_av(deserialize("ã{p_1;p_2}")),
+                 EquivalentTo("γ{u_1;u_2} * δ{p_1;u_1} * δ{u_2;p_2}"));
+      CHECK_THAT(tensor::ref_av(deserialize("f{I_4;I_5} * ã{I_5;I_6}")),
+                 EquivalentTo("f{I_4;u_1} * γ{u_1;u_2} * δ{u_2;I_6}"));
       // only the RDM slot of an external index is restricted
       CHECK_THAT(
-          tensor::ref_av(deserialize(L"x{;;I_2} * ã{I_1;I_2}")),
-          EquivalentTo(L"x{;;I_2} * γ{u_1;u_2} * δ{I_1;u_1} * δ{u_2;I_2}"));
+          tensor::ref_av(deserialize("x{;;I_2} * ã{I_1;I_2}")),
+          EquivalentTo("x{;;I_2} * γ{u_1;u_2} * δ{I_1;u_1} * δ{u_2;I_2}"));
     }
   }
 
   SECTION("named indices must include every external bra/ket index") {
     if (assert_behavior() != AssertBehavior::Abort) {
       auto opts = CanonicalizeOptions::default_options();
-      opts.named_indices = container::set<Index>{Index(L"I_1")};
+      opts.named_indices = container::set<Index>{Index("I_1")};
       auto scope = set_scoped_modified_default_context(
           [&opts](sequant::Context& ctx) { ctx.set(opts); });
       CHECK_THROWS_MATCHES(
-          tensor::ref_av(deserialize(L"ã{I_1;I_2}")), Exception,
+          tensor::ref_av(deserialize("ã{I_1;I_2}")), Exception,
           Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring(
               "index I_2 occurs in a single bra or ket slot")));
       // an index in a single aux slot need not be named
       CHECK_NOTHROW(
-          tensor::ref_av(deserialize(L"x{;;u_5} * ã{I_1;u_2} * y{u_2;}")));
+          tensor::ref_av(deserialize("x{;;u_5} * ã{I_1;u_2} * y{u_2;}")));
     }
   }
 
   SECTION("a single normal operator becomes an RDM") {
-    CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1;u_2}")),
-               EquivalentTo(L"γ{u_1;u_2}"));
-    CHECK_THAT(tensor::ref_av(deserialize(L"ã{u_1,u_3;u_2,u_4}")),
-               EquivalentTo(L"γ{u_1,u_3;u_2,u_4}:A-C-S"));
+    CHECK_THAT(tensor::ref_av(deserialize("ã{u_1;u_2}")),
+               EquivalentTo("γ{u_1;u_2}"));
+    CHECK_THAT(tensor::ref_av(deserialize("ã{u_1,u_3;u_2,u_4}")),
+               EquivalentTo("γ{u_1,u_3;u_2,u_4}:A-C-S"));
   }
 
   SECTION("bare abstract operators retain their reference average") {
@@ -364,23 +364,23 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
     SECTION("empty-registry") {
       OpRegistry registry;
       REQUIRE(registry.ops().empty());
-      REQUIRE_FALSE(registry.contains(L"T"));
+      REQUIRE_FALSE(registry.contains("T"));
     }
 
     SECTION("add-operators") {
       OpRegistry registry;
-      registry.add(L"T", OpClass::Ex);
-      registry.add(L"L", OpClass::Deex);
-      registry.add(L"F", OpClass::Gen);
+      registry.add("T", OpClass::Ex);
+      registry.add("L", OpClass::Deex);
+      registry.add("F", OpClass::Gen);
 
-      REQUIRE(registry.contains(L"T"));
-      REQUIRE(registry.contains(L"L"));
-      REQUIRE(registry.contains(L"F"));
+      REQUIRE(registry.contains("T"));
+      REQUIRE(registry.contains("L"));
+      REQUIRE(registry.contains("F"));
       REQUIRE(registry.ops().size() == 3);
 
-      REQUIRE(registry.to_class(L"T") == OpClass::Ex);
-      REQUIRE(registry.to_class(L"L") == OpClass::Deex);
-      REQUIRE(registry.to_class(L"F") == OpClass::Gen);
+      REQUIRE(registry.to_class("T") == OpClass::Ex);
+      REQUIRE(registry.to_class("L") == OpClass::Deex);
+      REQUIRE(registry.to_class("F") == OpClass::Gen);
     }
 
     SECTION("add-operators-with-hermiticity") {
@@ -388,58 +388,58 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
       OpRegistry registry;
       // no explicit Hermiticity => default_hermiticity(class)
-      registry.add(L"T", OpClass::Ex);
-      registry.add(L"F", OpClass::Gen);
-      REQUIRE(registry.hermiticity(L"T") == Hermiticity::NonHermitian);
-      REQUIRE(registry.hermiticity(L"F") == Hermiticity::Hermitian);
+      registry.add("T", OpClass::Ex);
+      registry.add("F", OpClass::Gen);
+      REQUIRE(registry.hermiticity("T") == Hermiticity::NonHermitian);
+      REQUIRE(registry.hermiticity("F") == Hermiticity::Hermitian);
 
       // explicit Hermiticity overrides the class default
-      registry.add(L"Z", OpClass::Ex, Hermiticity::Hermitian);
-      registry.add(L"G", OpClass::Gen, Hermiticity::NonHermitian);
-      REQUIRE(registry.to_class(L"Z") == OpClass::Ex);
-      REQUIRE(registry.to_class(L"G") == OpClass::Gen);
-      REQUIRE(registry.hermiticity(L"Z") == Hermiticity::Hermitian);
-      REQUIRE(registry.hermiticity(L"G") == Hermiticity::NonHermitian);
+      registry.add("Z", OpClass::Ex, Hermiticity::Hermitian);
+      registry.add("G", OpClass::Gen, Hermiticity::NonHermitian);
+      REQUIRE(registry.to_class("Z") == OpClass::Ex);
+      REQUIRE(registry.to_class("G") == OpClass::Gen);
+      REQUIRE(registry.hermiticity("Z") == Hermiticity::Hermitian);
+      REQUIRE(registry.hermiticity("G") == Hermiticity::NonHermitian);
 
       // set_hermiticity overrides after the fact, in both directions
-      registry.set_hermiticity(L"T", Hermiticity::Hermitian);
-      registry.set_hermiticity(L"Z", Hermiticity::NonHermitian);
-      REQUIRE(registry.hermiticity(L"T") == Hermiticity::Hermitian);
-      REQUIRE(registry.hermiticity(L"Z") == Hermiticity::NonHermitian);
+      registry.set_hermiticity("T", Hermiticity::Hermitian);
+      registry.set_hermiticity("Z", Hermiticity::NonHermitian);
+      REQUIRE(registry.hermiticity("T") == Hermiticity::Hermitian);
+      REQUIRE(registry.hermiticity("Z") == Hermiticity::NonHermitian);
 
       // overrides survive cloning
       auto cloned = registry.clone();
-      REQUIRE(cloned.hermiticity(L"Z") == Hermiticity::NonHermitian);
-      REQUIRE(cloned.hermiticity(L"G") == Hermiticity::NonHermitian);
-      REQUIRE(cloned.hermiticity(L"F") == Hermiticity::Hermitian);
+      REQUIRE(cloned.hermiticity("Z") == Hermiticity::NonHermitian);
+      REQUIRE(cloned.hermiticity("G") == Hermiticity::NonHermitian);
+      REQUIRE(cloned.hermiticity("F") == Hermiticity::Hermitian);
     }
 
     SECTION("remove-operators") {
       OpRegistry registry;
-      registry.add(L"T", OpClass::Ex);
-      registry.add(L"L", OpClass::Deex);
+      registry.add("T", OpClass::Ex);
+      registry.add("L", OpClass::Deex);
 
-      REQUIRE(registry.contains(L"T"));
-      registry.remove(L"T");
-      REQUIRE_FALSE(registry.contains(L"T"));
-      REQUIRE(registry.contains(L"L"));
+      REQUIRE(registry.contains("T"));
+      registry.remove("T");
+      REQUIRE_FALSE(registry.contains("T"));
+      REQUIRE(registry.contains("L"));
     }
 
     SECTION("clone-registry") {
       OpRegistry registry;
-      registry.add(L"T", OpClass::Ex);
-      registry.add(L"L", OpClass::Deex);
+      registry.add("T", OpClass::Ex);
+      registry.add("L", OpClass::Deex);
 
       auto cloned = registry.clone();
-      REQUIRE(cloned.contains(L"T"));
-      REQUIRE(cloned.contains(L"L"));
+      REQUIRE(cloned.contains("T"));
+      REQUIRE(cloned.contains("L"));
       REQUIRE(cloned.ops().size() == registry.ops().size());
     }
 
     SECTION("purge-registry") {
       OpRegistry registry;
-      registry.add(L"T", OpClass::Ex);
-      registry.add(L"L", OpClass::Deex);
+      registry.add("T", OpClass::Ex);
+      registry.add("L", OpClass::Deex);
 
       REQUIRE_FALSE(registry.ops().empty());
       registry.purge();
@@ -458,9 +458,9 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
       SECTION("duplicate-operators") {
         OpRegistry registry;
-        registry.add(L"T", OpClass::Ex);
+        registry.add("T", OpClass::Ex);
         // should not be able to add duplicate
-        REQUIRE_THROWS(registry.add(L"T", OpClass::Deex));
+        REQUIRE_THROWS(registry.add("T", OpClass::Deex));
       }
     }
   }  // SECTION("registry")
@@ -504,7 +504,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     SECTION("clone-context") {
       auto reg = std::make_shared<OpRegistry>();
-      reg->add(L"T", OpClass::Ex);
+      reg->add("T", OpClass::Ex);
 
       auto ctx = Context(
           {.csv = CSV::Yes,
@@ -516,7 +516,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(cloned.normalization_convention() ==
               ctx.normalization_convention());
       REQUIRE(cloned.op_registry() != ctx.op_registry());  // Different pointer
-      REQUIRE(cloned.op_registry()->contains(L"T"));
+      REQUIRE(cloned.op_registry()->contains("T"));
     }
 
     SECTION("context-equality") {
@@ -550,8 +550,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
         auto current_ctx = get_default_mbpt_context();
         REQUIRE(current_ctx.csv() == CSV::Yes);
         REQUIRE(current_ctx.op_registry() == reg1);
-        REQUIRE(current_ctx.op_registry()->contains(L"t"));
-        REQUIRE(current_ctx.op_registry()->contains(L"λ"));
+        REQUIRE(current_ctx.op_registry()->contains("t"));
+        REQUIRE(current_ctx.op_registry()->contains("λ"));
       }
 
       // after scope, original context should be restored
@@ -623,7 +623,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     SECTION("chosen at tensor-form generation") {
       const auto regular = op::t(2);
-      const OpMaker<Statistics::FermiDirac> maker(L"t", 2);
+      const OpMaker<Statistics::FermiDirac> maker("t", 2);
       ExprPtr symmetric, projector;
       {
         auto guard = scoped_symmetric();
@@ -659,14 +659,14 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       {
         using namespace sequant::mbpt;
 
-        op_t f1([]() -> std::wstring_view { return L"f"; },
+        op_t f1([]() -> std::string_view { return "f"; },
                 []() -> ExprPtr {
-                  return ex<Tensor>(L"f", bra{L"p_1"}, ket{L"p_2"}) *
-                         ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"}));
+                  return ex<Tensor>("f", bra{"p_1"}, ket{"p_2"}) *
+                         ex<FNOperator>(cre({"p_1"}), ann({"p_2"}));
                 },
                 [](qns_t& qns) { qns += general_type_qns(1); });
 
-        REQUIRE(f1.label() == L"f");
+        REQUIRE(f1.label() == "f");
 
         {
           // exact compare of intervals
@@ -687,22 +687,22 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
         using namespace sequant::mbpt;
 
         // this is fock operator in terms of general spaces
-        op_t f_gg([]() -> std::wstring_view { return L"f"; },
+        op_t f_gg([]() -> std::string_view { return "f"; },
                   []() -> ExprPtr {
-                    return ex<Tensor>(L"f", bra{L"p_1"}, ket{L"p_2"}) *
-                           ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"}));
+                    return ex<Tensor>("f", bra{"p_1"}, ket{"p_2"}) *
+                           ex<FNOperator>(cre({"p_1"}), ann({"p_2"}));
                   },
                   [](qns_t& qns) { qns += mbpt::general_type_qns(1); });
         // excitation part of the Fock operator
-        op_t f_uo([]() -> std::wstring_view { return L"f"; },
+        op_t f_uo([]() -> std::string_view { return "f"; },
                   []() -> ExprPtr {
-                    return ex<Tensor>(L"f", bra{L"a_2"}, ket{L"i_2"}) *
-                           ex<FNOperator>(cre({L"a_1"}), ann({L"i_2"}));
+                    return ex<Tensor>("f", bra{"a_2"}, ket{"i_2"}) *
+                           ex<FNOperator>(cre({"a_1"}), ann({"i_2"}));
                   },
                   [](qns_t& qns) { qns += mbpt::excitation_type_qns(1); });
 
-        REQUIRE(f_gg.label() == L"f");
-        REQUIRE(f_uo.label() == L"f");
+        REQUIRE(f_gg.label() == "f");
+        REQUIRE(f_uo.label() == "f");
 
         {
           // comparison
@@ -786,36 +786,35 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       {
         using namespace sequant::mbpt;
 
-        op_t op_order0([]() -> std::wstring_view { return L"t"; },
+        op_t op_order0([]() -> std::string_view { return "t"; },
                        []() -> ExprPtr {
-                         return ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
-                                ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+                         return ex<Tensor>("t", bra{"a_1"}, ket{"i_1"}) *
+                                ex<FNOperator>(cre({"a_1"}), ann({"i_1"}));
                        },
                        [](qns_t& qns) { qns += excitation_type_qns(1); },
                        OpParams{.order = 0});
-        REQUIRE(op_order0.label() == L"t");
+        REQUIRE(op_order0.label() == "t");
         REQUIRE(op_order0.order() == 0);
 
-        op_t op_order1([]() -> std::wstring_view { return L"t"; },
+        op_t op_order1([]() -> std::string_view { return "t"; },
                        []() -> ExprPtr {
-                         return ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
-                                ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+                         return ex<Tensor>("t", bra{"a_1"}, ket{"i_1"}) *
+                                ex<FNOperator>(cre({"a_1"}), ann({"i_1"}));
                        },
                        [](qns_t& qns) { qns += excitation_type_qns(1); },
                        OpParams{.order = 1});
-        REQUIRE(op_order1.label() == L"t¹");
+        REQUIRE(op_order1.label() == "t¹");
         REQUIRE(op_order1.order() == 1);
 
-        op_t op_order2([]() -> std::wstring_view { return L"t"; },
-                       []() -> ExprPtr {
-                         return ex<Tensor>(L"t", bra{L"a_1", L"a_2"},
-                                           ket{L"i_1", L"i_2"}) *
-                                ex<FNOperator>(cre({L"a_1", L"a_2"}),
-                                               ann({L"i_1", L"i_2"}));
-                       },
-                       [](qns_t& qns) { qns += excitation_type_qns(2); },
-                       OpParams{.order = 2});
-        REQUIRE(op_order2.label() == L"t²");
+        op_t op_order2(
+            []() -> std::string_view { return "t"; },
+            []() -> ExprPtr {
+              return ex<Tensor>("t", bra{"a_1", "a_2"}, ket{"i_1", "i_2"}) *
+                     ex<FNOperator>(cre({"a_1", "a_2"}), ann({"i_1", "i_2"}));
+            },
+            [](qns_t& qns) { qns += excitation_type_qns(2); },
+            OpParams{.order = 2});
+        REQUIRE(op_order2.label() == "t²");
         REQUIRE(op_order2.order() == 2);
       }
     }  // SECTION("constructor")
@@ -832,24 +831,24 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto r_2_1 = r(nₚ(1), nₕ(2));
       auto r_1_2 = r(nₚ(2), nₕ(1));
       auto theta2 = θ(2);
-      REQUIRE(to_latex(theta2) == L"{\\hat{\\theta}_{2}}");
-      REQUIRE(to_latex(f) == L"{\\hat{f}}");
-      REQUIRE(to_latex(t1) == L"{\\hat{t}_{1}}");
-      REQUIRE(to_latex(t2) == L"{\\hat{t}_{2}}");
-      REQUIRE(to_latex(lambda1) == L"{\\hat{\\lambda}_{1}}");
-      REQUIRE(to_latex(lambda2) == L"{\\hat{\\lambda}_{2}}");
-      REQUIRE(to_latex(r_2_1) == L"{\\hat{R}_{2,1}}");
-      REQUIRE(to_latex(r_1_2) == L"{\\hat{R}_{1,2}}");
+      REQUIRE(to_latex(theta2) == "{\\hat{\\theta}_{2}}");
+      REQUIRE(to_latex(f) == "{\\hat{f}}");
+      REQUIRE(to_latex(t1) == "{\\hat{t}_{1}}");
+      REQUIRE(to_latex(t2) == "{\\hat{t}_{2}}");
+      REQUIRE(to_latex(lambda1) == "{\\hat{\\lambda}_{1}}");
+      REQUIRE(to_latex(lambda2) == "{\\hat{\\lambda}_{2}}");
+      REQUIRE(to_latex(r_2_1) == "{\\hat{R}_{2,1}}");
+      REQUIRE(to_latex(r_1_2) == "{\\hat{R}_{1,2}}");
 
       // projectors
       auto P2 = P(2);
       auto P_neg2 = P(-2);
       auto P_2_1 = P(nₚ(1), nₕ(2));
       auto P_neg_2_1 = P(nₚ(-1), nₕ(-2));
-      REQUIRE(to_latex(P2) == L"{\\hat{A}_{-2}}");
-      REQUIRE(to_latex(P_neg2) == L"{\\hat{A}_{2}}");
-      REQUIRE(to_latex(P_2_1) == L"{\\hat{A}_{-2,-1}}");
-      REQUIRE(to_latex(P_neg_2_1) == L"{\\hat{A}_{2,1}}");
+      REQUIRE(to_latex(P2) == "{\\hat{A}_{-2}}");
+      REQUIRE(to_latex(P_neg2) == "{\\hat{A}_{2}}");
+      REQUIRE(to_latex(P_2_1) == "{\\hat{A}_{-2,-1}}");
+      REQUIRE(to_latex(P_neg_2_1) == "{\\hat{A}_{2,1}}");
     }  // SECTION("to_latex")
 
     SECTION("canonicalize") {
@@ -874,9 +873,9 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(to_latex(simplify(t1 * l2)) != to_latex(simplify(l2 * t1)));
 
       REQUIRE(to_latex(simplify(l2 * t1)) ==
-              L"{{\\hat{\\lambda}_{2}}{\\hat{t}_{1}}}");
+              "{{\\hat{\\lambda}_{2}}{\\hat{t}_{1}}}");
       REQUIRE(to_latex(simplify(t1 * l2)) ==
-              L"{{\\hat{t}_{1}}{\\hat{\\lambda}_{2}}}");
+              "{{\\hat{t}_{1}}{\\hat{\\lambda}_{2}}}");
 
       REQUIRE(to_latex(simplify(t1 + t1)) ==
               to_latex(simplify(ex<Constant>(2) * t1)));
@@ -893,7 +892,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto t = t1 + t2;
 
       {
-        //      std::wcout << "to_latex(simplify(f * t * t)): "
+        //      std::cout << "to_latex(simplify(f * t * t)): "
         //                 << to_latex(simplify(f * t * t)) << std::endl;
         REQUIRE_THAT(simplify(f * t * t),
                      EquivalentTo(f * t2 * t2 + ex<Constant>(2) * f * t1 * t2 +
@@ -901,7 +900,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       }
 
       {
-        //      std::wcout << "to_latex(simplify(f * t * t * t): "
+        //      std::cout << "to_latex(simplify(f * t * t * t): "
         //                 << to_latex(simplify(f * t * t * t)) << std::endl;
         REQUIRE_THAT(simplify(f * t * t * t),
                      EquivalentTo(f * t1 * t1 * t1 + f * t2 * t2 * t2 +
@@ -943,20 +942,20 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
               simplify(adjoint(r_1_2.tensor_form())));
 
       // to_latex()
-      REQUIRE(to_latex(adjoint(f).as<Expr>()) == L"{\\hat{f⁺}}");
-      REQUIRE(to_latex(adjoint(t1).as<Expr>()) == L"{\\hat{t⁺}^{1}}");
+      REQUIRE(to_latex(adjoint(f).as<Expr>()) == "{\\hat{f⁺}}");
+      REQUIRE(to_latex(adjoint(t1).as<Expr>()) == "{\\hat{t⁺}^{1}}");
       REQUIRE(to_latex(adjoint(lambda2).as<Expr>()) ==
-              L"{\\hat{\\lambda⁺}^{2}}");
-      REQUIRE(to_latex(adjoint(r_1_2).as<Expr>()) == L"{\\hat{R⁺}^{1,2}}");
+              "{\\hat{\\lambda⁺}^{2}}");
+      REQUIRE(to_latex(adjoint(r_1_2).as<Expr>()) == "{\\hat{R⁺}^{1,2}}");
 
       // adjoint(adjoint(op)) == op
       auto t1_adj = adjoint(t1);
       auto r_1_2_adj = adjoint(r_1_2);
       auto lambda2_adj = adjoint(lambda2);
-      REQUIRE(to_latex(adjoint(t1_adj).as<Expr>()) == L"{\\hat{t}_{1}}");
-      REQUIRE(to_latex(adjoint(r_1_2_adj).as<Expr>()) == L"{\\hat{R}_{1,2}}");
+      REQUIRE(to_latex(adjoint(t1_adj).as<Expr>()) == "{\\hat{t}_{1}}");
+      REQUIRE(to_latex(adjoint(r_1_2_adj).as<Expr>()) == "{\\hat{R}_{1,2}}");
       REQUIRE(to_latex(adjoint(lambda2_adj).as<Expr>()) ==
-              L"{\\hat{\\lambda}_{2}}");
+              "{\\hat{\\lambda}_{2}}");
 
       // adjoint should preserve perturbation order
       auto t1_order2 = tʼ(1, {.order = 2});
@@ -1090,15 +1089,15 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       using namespace sequant::mbpt;
 
       auto theta1 = θ(1)->as<op_t>();
-      // std::wcout << "theta1: " << to_latex(simplify(theta1.tensor_form()));
+      // std::cout << "theta1: " << to_latex(simplify(theta1.tensor_form()));
       REQUIRE(to_latex(simplify(theta1.tensor_form())) ==
-              L"{{\\theta^{{p_2}}_{{p_1}}}{\\tilde{a}^{{p_1}}_{{p_2}}}}");
+              "{{\\theta^{{p_2}}_{{p_1}}}{\\tilde{a}^{{p_1}}_{{p_2}}}}");
 
       {
         // replacement operator: label "ã", lowering yields a bare
         // FNOperator with `rank` cre and `rank` ann over the complete space
         auto ã_2 = ã(2)->as<op_t>();
-        REQUIRE(ã_2.label() == L"ã");
+        REQUIRE(ã_2.label() == "ã");
 
         auto ã_2_tform = ã_2.tensor_form();
         REQUIRE(ã_2_tform->is<FNOperator>());
@@ -1114,11 +1113,11 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
         // callers depend on this exact free-index mapping
         REQUIRE(to_latex(ã_2_tform) ==
-                L"{\\tilde{a}^{{p_1}{p_2}}_{{p_3}{p_4}}}");
+                "{\\tilde{a}^{{p_1}{p_2}}_{{p_3}{p_4}}}");
 
         // regression: to_latex on the operator form throws if the label is
         // missing from the registry
-        REQUIRE(to_latex(ã(1)) == L"{\\hat{\\tilde{a}}}");
+        REQUIRE(to_latex(ã(1)) == "{\\hat{\\tilde{a}}}");
 
         // rank 0 is an assert, not a throw
         if (sequant::assert_behavior() == sequant::AssertBehavior::Throw)
@@ -1126,113 +1125,112 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       }
 
       auto R_2 = r(2)->as<op_t>();
-      //    std::wcout << "R_2: " << to_latex(simplify(R_2.tensor_form())) <<
+      //    std::cout << "R_2: " << to_latex(simplify(R_2.tensor_form())) <<
       //    std::endl;
       REQUIRE(
           to_latex(simplify(R_2.tensor_form())) ==
-          L"{{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^"
-          L"{{a_1}{"
-          L"a_2}}_{{i_1}{i_2}}}}");
+          "{{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^"
+          "{{a_1}{"
+          "a_2}}_{{i_1}{i_2}}}}");
 
       auto L_3 = l(3)->as<op_t>();
-      //    std::wcout << "L_3: " << to_latex(simplify(L_3.tensor_form())) <<
+      //    std::cout << "L_3: " << to_latex(simplify(L_3.tensor_form())) <<
       //    std::endl;
       REQUIRE(
           to_latex(simplify(L_3.tensor_form())) ==
-          L"{{{\\frac{1}{36}}}{\\bar{L}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{"
-          L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
+          "{{{\\frac{1}{36}}}{\\bar{L}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{"
+          "\\tilde{a}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
 
       auto R_2_3 = r(nₚ(3), nₕ(2))->as<op_t>();
-      //    std::wcout << "R_2_3: " << to_latex(simplify(R_2_3.tensor_form()))
+      //    std::cout << "R_2_3: " << to_latex(simplify(R_2_3.tensor_form()))
       //    << std::endl;
       REQUIRE(to_latex(simplify(R_2_3.tensor_form())) ==
-              L"{{{\\frac{1}{12}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}{"
-              L"\\tilde{a}^{"
-              L"{a_1}{a_2}{a_3}}_{\\textvisiblespace\\,{i_1}{i_2}}}}");
+              "{{{\\frac{1}{12}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}{"
+              "\\tilde{a}^{"
+              "{a_1}{a_2}{a_3}}_{\\textvisiblespace\\,{i_1}{i_2}}}}");
 
       auto L_1_2 = l(nₚ(1), nₕ(2))->as<op_t>();
-      // std::wcout << "l(1,2): " << to_latex(simplify(L_1_2.tensor_form())) <<
+      // std::cout << "l(1,2): " << to_latex(simplify(L_1_2.tensor_form())) <<
       // std::endl;
-      REQUIRE(
-          to_latex(simplify(L_1_2.tensor_form())) ==
-          L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{i_"
-          L"1}{i_2}}"
-          L"_{\\textvisiblespace\\,{a_1}}}}");
+      REQUIRE(to_latex(simplify(L_1_2.tensor_form())) ==
+              "{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{i_"
+              "1}{i_2}}"
+              "_{\\textvisiblespace\\,{a_1}}}}");
 
       auto A_2_1 = A(nₚ(2), nₕ(1))->as<op_t>();
-      //    std::wcout << "A_2_1: " << to_latex(simplify(A_2_1.tensor_form()))
+      //    std::cout << "A_2_1: " << to_latex(simplify(A_2_1.tensor_form()))
       //               << std::endl;
       REQUIRE(to_latex(simplify(A_2_1.tensor_form())) ==
-              L"{{\\hat{A}^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_"
-              L"1}{a_2}}"
-              L"_{\\textvisiblespace\\,{i_1}}}}");
+              "{{\\hat{A}^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_"
+              "1}{a_2}}"
+              "_{\\textvisiblespace\\,{i_1}}}}");
 
       auto P_0_1 = P(nₚ(0), nₕ(1))->as<op_t>();
-      //    std::wcout << "P_0_1: " << to_latex(simplify(P_0_1.tensor_form()))
+      //    std::cout << "P_0_1: " << to_latex(simplify(P_0_1.tensor_form()))
       //               << std::endl;
       REQUIRE(to_latex(simplify(P_0_1.tensor_form())) ==
-              L"{{\\hat{A}^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}}");
+              "{{\\hat{A}^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}}");
 
       auto P_2_1 = P(nₚ(2), nₕ(1))->as<op_t>();
-      //    std::wcout << "P_2_1: " << to_latex(simplify(P_2_1.tensor_form()))
+      //    std::cout << "P_2_1: " << to_latex(simplify(P_2_1.tensor_form()))
       //               << std::endl;
       REQUIRE(to_latex(simplify(P_2_1.tensor_form())) ==
-              L"{{\\hat{A}^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
-              L"\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}}");
+              "{{\\hat{A}^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
+              "\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}}");
 
       auto P_2_3 = P(nₚ(2), nₕ(3))->as<op_t>();
-      //    std::wcout << "P_2_3: " << to_latex(simplify(P_3_2.tensor_form()))
+      //    std::cout << "P_2_3: " << to_latex(simplify(P_3_2.tensor_form()))
       //               << std::endl;
       REQUIRE(to_latex(simplify(P_2_3.tensor_form())) ==
-              L"{{\\hat{A}^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{"
-              L"\\tilde{a}^{"
-              L"{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}}");
+              "{{\\hat{A}^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{"
+              "\\tilde{a}^{"
+              "{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}}");
 
       auto R33 = R(3);
       lower_to_tensor_form(R33);
       simplify(R33);
-      //    std::wcout << "R33: " << to_latex(R33) << std::endl;
+      //    std::cout << "R33: " << to_latex(R33) << std::endl;
       REQUIRE(to_latex(R33) ==
-              L"{ "
-              L"\\bigl({{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}} + "
-              L"{{{\\frac{1}{36}}}{\\bar{R}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}"
-              L"}{\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
-              L"{{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{"
-              L"a}^{{a_1}{a_2}}_{{i_1}{i_2}}}}\\bigr) }");
+              "{ "
+              "\\bigl({{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}} + "
+              "{{{\\frac{1}{36}}}{\\bar{R}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}"
+              "}{\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
+              "{{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{"
+              "a}^{{a_1}{a_2}}_{{i_1}{i_2}}}}\\bigr) }");
 
       auto R12 = R(nₚ(2), nₕ(1));
       lower_to_tensor_form(R12);
       simplify(R12);
-      //    std::wcout << "R12: " << to_latex(R12) << std::endl;
+      //    std::cout << "R12: " << to_latex(R12) << std::endl;
       REQUIRE(to_latex(R12) ==
-              L"{ \\bigl({{R^{}_{{a_1}}}{\\tilde{a}^{{a_1}}}} + "
-              L"{{{\\frac{1}{2}}}{\\bar{R}^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{"
-              L"a_1}{a_"
-              L"2}}_{\\textvisiblespace\\,{i_1}}}}\\bigr) }");
+              "{ \\bigl({{R^{}_{{a_1}}}{\\tilde{a}^{{a_1}}}} + "
+              "{{{\\frac{1}{2}}}{\\bar{R}^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{"
+              "a_1}{a_"
+              "2}}_{\\textvisiblespace\\,{i_1}}}}\\bigr) }");
 
       auto R21 = R(nₚ(1), nₕ(2));
       lower_to_tensor_form(R21);
       simplify(R21);
-      //    std::wcout << "R21: " << to_latex(R21) << std::endl;
+      //    std::cout << "R21: " << to_latex(R21) << std::endl;
       REQUIRE(to_latex(R21) ==
-              L"{ "
-              L"\\bigl({{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{"
-              L"\\tilde{a}^{"
-              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
-              L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
+              "{ "
+              "\\bigl({{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{"
+              "\\tilde{a}^{"
+              "\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
+              "{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
 
       auto L23 = L(nₚ(2), nₕ(3));
       lower_to_tensor_form(L23);
       simplify(L23);
-      // std::wcout << "L23: " << to_latex(L23) << std::endl;
+      // std::cout << "L23: " << to_latex(L23) << std::endl;
       REQUIRE(to_latex(L23) ==
-              L"{ "
-              L"\\bigl({{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
-              L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{"
-              L"i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}} + "
-              L"{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
-              L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
-              L"a_2}}}}\\bigr) }");
+              "{ "
+              "\\bigl({{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
+              "{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{"
+              "i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}} + "
+              "{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
+              "3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
+              "a_2}}}}\\bigr) }");
 
       // perturbation ops
       REQUIRE_NOTHROW(Hʼ(1, {.order = 1}));
@@ -1244,7 +1242,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       }
 
       auto h0 = Hʼ(1);
-      REQUIRE(to_latex(h0) == L"{\\hat{h¹}}");
+      REQUIRE(to_latex(h0) == "{\\hat{h¹}}");
       auto h1 = Hʼ(1, {.order = 1});
       auto h2 = Hʼ(1, {.order = 2});
       auto t2 = tʼ(2, {.order = 2});
@@ -1252,12 +1250,12 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(h1 != h2);
       REQUIRE(h0 == h1);
 
-      REQUIRE(to_latex(simplify(h0 + h1)) == L"{{{2}}{\\hat{h¹}}}");
+      REQUIRE(to_latex(simplify(h0 + h1)) == "{{{2}}{\\hat{h¹}}}");
       REQUIRE(to_latex(simplify(h1 + h2)) ==
-              L"{ \\bigl({\\hat{h¹}} + {\\hat{h²}}\\bigr) }");
+              "{ \\bigl({\\hat{h¹}} + {\\hat{h²}}\\bigr) }");
 
-      REQUIRE(to_latex(simplify(h1 * t2)) == L"{{\\hat{h¹}}{\\hat{t²}_{2}}}");
-      REQUIRE(to_latex(simplify(h2 * t2)) == L"{{\\hat{h²}}{\\hat{t²}_{2}}}");
+      REQUIRE(to_latex(simplify(h1 * t2)) == "{{\\hat{h¹}}{\\hat{t²}_{2}}}");
+      REQUIRE(to_latex(simplify(h2 * t2)) == "{{\\hat{h²}}{\\hat{t²}_{2}}}");
     }  // SECTION("predefined")
 
     SECTION("batching") {
@@ -1268,7 +1266,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
           set_scoped_default_context({.index_basis_registry_shared_ptr = ibr,
                                       .vacuum = Vacuum::SingleProduct});
       REQUIRE_NOTHROW(
-          get_default_context().index_basis_registry()->retrieve_space(L"z"));
+          get_default_context().index_basis_registry()->retrieve_space("z"));
 
       using namespace mbpt;
       REQUIRE_NOTHROW(op::Hʼ(1, {.order = 1, .nbatch = 1}));
@@ -1293,7 +1291,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
       // operations
       auto h0 = op::Hʼ(1);
-      REQUIRE(to_latex(h0) == L"{\\hat{h¹}}");
+      REQUIRE(to_latex(h0) == "{\\hat{h¹}}");
 
       auto h1 = op::Hʼ(1, {.order = 1, .nbatch = 1});
       auto h1_2 = op::Hʼ(1, {.order = 1, .batch_ordinals = {1, 2}});
@@ -1302,60 +1300,60 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto sum0 = h0 + h1;
       simplify(sum0);
       REQUIRE(to_latex(sum0) ==
-              L"{ \\bigl({\\hat{h¹}}{[{z}_{1}]} + {\\hat{h¹}}\\bigr) }");
+              "{ \\bigl({\\hat{h¹}}{[{z}_{1}]} + {\\hat{h¹}}\\bigr) }");
 
       auto sum1 = h1 + h1;
       simplify(sum1);
-      REQUIRE(to_latex(sum1) == L"{{{2}}{\\hat{h¹}}{[{z}_{1}]}}");
+      REQUIRE(to_latex(sum1) == "{{{2}}{\\hat{h¹}}{[{z}_{1}]}}");
       auto sum2 = h1 + pt1;
       simplify(sum2);
-      // std::wcout << "sum2:  " << to_latex(sum2) << std::endl;
+      // std::cout << "sum2:  " << to_latex(sum2) << std::endl;
       REQUIRE(to_latex(sum2) ==
-              L"{ \\bigl({\\hat{h¹}}{[{z}_{1}]} + {\\hat{t¹}_{2}}{[{z}_{1}]} + "
-              L"{\\hat{t¹}_{1}}{[{z}_{1}]}\\bigr) }");
+              "{ \\bigl({\\hat{h¹}}{[{z}_{1}]} + {\\hat{t¹}_{2}}{[{z}_{1}]} + "
+              "{\\hat{t¹}_{1}}{[{z}_{1}]}\\bigr) }");
 
       auto sum3 = h1 + h1_2;
       simplify(sum3);
-      // std::wcout << "sum3:  " << to_latex(sum3) << std::endl;
+      // std::cout << "sum3:  " << to_latex(sum3) << std::endl;
       REQUIRE(to_latex(sum3) ==
-              L"{ \\bigl({\\hat{h¹}}{[{z}_{1},{z}_{2}]} + "
-              L"{\\hat{h¹}}{[{z}_{1}]}\\bigr) }");
+              "{ \\bigl({\\hat{h¹}}{[{z}_{1},{z}_{2}]} + "
+              "{\\hat{h¹}}{[{z}_{1}]}\\bigr) }");
 
       auto pdt1 = h1 * h1_2;
       simplify(pdt1);
-      // std::wcout << "pdt1: " << to_latex(pdt1) << std::endl;
+      // std::cout << "pdt1: " << to_latex(pdt1) << std::endl;
       REQUIRE(to_latex(pdt1) ==
-              L"{{\\hat{h¹}}{[{z}_{1}]}{\\hat{h¹}}{[{z}_{1},{z}_{2}]}}");
+              "{{\\hat{h¹}}{[{z}_{1}]}{\\hat{h¹}}{[{z}_{1},{z}_{2}]}}");
 
       auto pdt2 = h1 * pt1;
       simplify(pdt2);
-      // std::wcout << "pdt1: " << to_latex(pdt2) << std::endl;
+      // std::cout << "pdt1: " << to_latex(pdt2) << std::endl;
       REQUIRE(to_latex(pdt2) ==
-              L"{ \\bigl({{\\hat{h¹}}{[{z}_{1}]}{\\hat{t¹}_{1}}{[{z}_{1}]}} + "
-              L"{{\\hat{h¹}}{[{z}_{1}]}{\\hat{t¹}_{2}}{[{z}_{1}]}}\\bigr) }");
+              "{ \\bigl({{\\hat{h¹}}{[{z}_{1}]}{\\hat{t¹}_{1}}{[{z}_{1}]}} + "
+              "{{\\hat{h¹}}{[{z}_{1}]}{\\hat{t¹}_{2}}{[{z}_{1}]}}\\bigr) }");
 
       // lowering to tensor form
       auto sum1_t = simplify(lower_to_tensor_form(sum1));
-      // std::wcout << "sum1_t: " << to_latex(simplify(sum1_t)) << std::endl;
-      REQUIRE_THAT(sum1_t, EquivalentTo(L"2 * h¹{κ1;κ2;z1}:A-C-S * ã{κ2;κ1}"));
+      // std::cout << "sum1_t: " << to_latex(simplify(sum1_t)) << std::endl;
+      REQUIRE_THAT(sum1_t, EquivalentTo("2 * h¹{κ1;κ2;z1}:A-C-S * ã{κ2;κ1}"));
 
       auto sum2_t = simplify(lower_to_tensor_form(sum2));
-      // std::wcout << "sum2_t: " << to_latex(sum2_t) << std::endl;
+      // std::cout << "sum2_t: " << to_latex(sum2_t) << std::endl;
       REQUIRE_THAT(
           sum2_t,
-          EquivalentTo(L"h¹{κ2;κ1;z1}:A-C-S * ã{κ1;κ2} + t¹{a1;i1;z1}:A-C-S * "
-                       L"ã{i1;a1} + "
+          EquivalentTo("h¹{κ2;κ1;z1}:A-C-S * ã{κ1;κ2} + t¹{a1;i1;z1}:A-C-S * "
+                       "ã{i1;a1} + "
                        "(1/4) * t¹{a1,a2;i1,i2;z1}:A-C-S * ã{i1,i2;a1,a2}"));
 
       auto expr3_t = simplify(lower_to_tensor_form(sum2 * h1_2));
-      // std::wcout << "expr3_t: " << to_latex(expr3_t) << std::endl;
+      // std::cout << "expr3_t: " << to_latex(expr3_t) << std::endl;
       REQUIRE_THAT(
           expr3_t,
           EquivalentTo(
-              L"1/4 ã{i1,i2;a1,a2} * t¹{a1,a2;i1,i2;z1}:A-C-S * "
-              L"h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ1;κ2} + h¹{κ2;κ1;z1,z2}:A-C-S * "
-              L"ã{i1;a1} * ã{κ1;κ2} * t¹{a1;i1;z1}:A-C-S + h¹{κ4;κ3;z1}:A-C-S "
-              L"* h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ3;κ4} * ã{κ1;κ2}"));
+              "1/4 ã{i1,i2;a1,a2} * t¹{a1,a2;i1,i2;z1}:A-C-S * "
+              "h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ1;κ2} + h¹{κ2;κ1;z1,z2}:A-C-S * "
+              "ã{i1;a1} * ã{κ1;κ2} * t¹{a1;i1;z1}:A-C-S + h¹{κ4;κ3;z1}:A-C-S "
+              "* h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ3;κ4} * ã{κ1;κ2}"));
 
       // batching + adjoint: verify batch_ordinals are preserved
       auto h1_adj = adjoint(h1);
@@ -1389,7 +1387,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(unconstrained != ex<Constant>(0));
       CHECK_THAT(o::vac_av(expr), EquivalentTo(unconstrained));
       CHECK_THAT(o::ref_av(expr), EquivalentTo(unconstrained));
-      CHECK(o::vac_av(expr, {.connect = {{L"f", L"t"}}}) == ex<Constant>(0));
+      CHECK(o::vac_av(expr, {.connect = {{"f", "t"}}}) == ex<Constant>(0));
     }
 
     SECTION("ref_av retains connectivity when reference equals vacuum") {
@@ -1403,7 +1401,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
             auto result = t::vac_av(t::A(nₚ(-2)) * t::H(2) * t::T(2) * t::T(2),
                                     {.connect = {{1, 2}, {1, 3}}});
 
-    //      std::wcout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
+    //      std::cout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
     //                 << std::endl;
     REQUIRE(result->size() == 15);
 
@@ -1422,7 +1420,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
     auto result = t::vac_av(t::A(nₚ(-4)) * t::h(2) * t::t(3) * t::t(3),
                             {.connect = {{1, 2}, {1, 3}}});
 
-    // std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
+    // std::cout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
     //            << std::endl;
     REQUIRE(result->size() == 4);
   }
@@ -1456,7 +1454,7 @@ SECTION("SRSO Fock") {
     auto input = t::l(nₚ(2), nₕ(1)) * t::H() * t::r(nₚ(2), nₕ(1));
     auto result = t::vac_av(input);
 
-    // std::wcout << "<2p1h|H|2p1h(c)> = " << to_latex(result)
+    // std::cout << "<2p1h|H|2p1h(c)> = " << to_latex(result)
     //            << std::endl;
     REQUIRE(result->is<Sum>());    // sub ...
     REQUIRE(result->size() == 4);  // ... of 4 factors
@@ -1467,19 +1465,19 @@ SECTION("vac_av with Power") {
   // keep amplitudes Hermitian so the reference equation below stays valid
   // (see scoped_hermitian_amplitudes)
   auto herm_amplitudes_guard = scoped_hermitian_amplitudes();
-  auto expr1 = ex<Power>(ex<Variable>(L"α"), rational{2}) * t::h(2) * t::t(2);
+  auto expr1 = ex<Power>(ex<Variable>("α"), rational{2}) * t::h(2) * t::t(2);
   auto vev1 = t::vac_av(expr1, {.connect = {{0, 1}}});
   simplify(vev1);
   REQUIRE_THAT(
       vev1, EquivalentTo(
-                L"1/4 * α^(2) * g{i1,i2;a1,a2}:A-C-S * t{a1,a2;i1,i2}:A-C-S"));
+                "1/4 * α^(2) * g{i1,i2;a1,a2}:A-C-S * t{a1,a2;i1,i2}:A-C-S"));
 
   auto expr2 = ex<Power>(ex<Constant>(2), rational{2}) * t::h(2) * t::t(2);
   auto vev2 = op::vac_av(expr2);
   simplify(vev2);
   // should not have Power object, 1/4 * 2^{2}
   REQUIRE_THAT(vev2,
-               EquivalentTo(L"g{i1,i2;a1,a2}:A-C-S * t{a1,a2;i1,i2}:A-C-S"));
+               EquivalentTo("g{i1,i2;a1,a2}:A-C-S * t{a1,a2;i1,i2}:A-C-S"));
 }
 
 SECTION("SRSO-PNO") {
@@ -1492,8 +1490,8 @@ SECTION("SRSO-PNO") {
     // the contracted occupied indices of h and t are identified, including
     // where they are protoindices of t's virtuals; their overlap must not stand
     REQUIRE_THAT(t::vac_av(t::h(2) * t::t(2)),
-                 EquivalentTo(L"1/4 g{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:A-C-S "
-                              L"* t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S"));
+                 EquivalentTo("1/4 g{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:A-C-S "
+                              "* t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S"));
   }
 
   // H2**T2**T2 -> R2
@@ -1515,7 +1513,7 @@ SECTION("SRSF") {
     auto result = t::vac_av(t::S(-2) * t::h(2));
 
     {
-      // std::wcout << "H2 -> R2 = " << to_latex_align(result, 0, 1)
+      // std::cout << "H2 -> R2 = " << to_latex_align(result, 0, 1)
       //            << std::endl;
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 2);
@@ -1528,14 +1526,14 @@ SECTION("SRSF") {
         t::vac_av(t::S(-2) * t::h(2) * t::t(2), {.connect = {{1, 2}}});
 
     {
-      // std::wcout << "H2**T2 -> R2 = " << to_latex_align(result, 0, 1)
+      // std::cout << "H2**T2 -> R2 = " << to_latex_align(result, 0, 1)
       //            << std::endl;
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 12);
     }
   }
   SECTION("S operator action") {
-    auto expr = tensor::S(2) * deserialize(L"f{a1,a2;i1,i2}");
+    auto expr = tensor::S(2) * deserialize("f{a1,a2;i1,i2}");
     simplify(expr);
     auto scalar = expr->as<Product>().scalar();
     REQUIRE(scalar == 1);
@@ -1566,10 +1564,10 @@ SECTION("MRSO") {
                              Exception, rejects_connections);
       // Operator requests must be rejected before screening or label lowering.
       REQUIRE_THROWS_MATCHES(
-          o::ref_av(ex<Constant>(0), {.connect = {{L"f", L"t"}}}), Exception,
+          o::ref_av(ex<Constant>(0), {.connect = {{"f", "t"}}}), Exception,
           rejects_connections);
       REQUIRE_THROWS_MATCHES(
-          o::ref_av(o::h(1) * o::t(1), {.do_not_connect = {{L"f", L"t"}}}),
+          o::ref_av(o::h(1) * o::t(1), {.do_not_connect = {{"f", "t"}}}),
           Exception, rejects_connections);
     }
   }
@@ -1612,12 +1610,12 @@ SECTION("MRSO") {
 
   // non-normal-ordered one-body operator in product form: h * a†_p * a_q
   SECTION("ref_av of non-normal-ordered one-body product") {
-    const Index p{L"p_1"};  // complete space (spans core + active + virtual)
-    const Index q{L"p_2"};
+    const Index p{"p_1"};  // complete space (spans core + active + virtual)
+    const Index q{"p_2"};
     // creator index (p) -> tensor bra, annihilator index (q) -> tensor ket
     // column symmetry is spelled out to match how mbpt::OpMaker builds h
     // everywhere else; the programmatic default is the conservative Nonsymm
-    auto H1 = ex<Tensor>(L"h", bra{p}, ket{q}, Symmetry::Nonsymm,
+    auto H1 = ex<Tensor>("h", bra{p}, ket{q}, Symmetry::Nonsymm,
                          BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
               fcrex(p) * fannx(q);
     ExprPtr result;
@@ -1625,8 +1623,8 @@ SECTION("MRSO") {
     REQUIRE_NOTHROW(result = t::ref_av(H1));
     // the active-first comparer is scoped to ref_av
     CHECK(&get_default_context().index_comparer() == index_comparer);
-    REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
-                                      L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
+    REQUIRE_THAT(result, SimplifiesTo("h{O_1;O_1}:N-C-S + "
+                                      "h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
   }
 
 #if 0
@@ -1635,7 +1633,7 @@ SECTION("MRSO") {
       auto result = t::ref_av(t::A(-2) * t::H() * t::t(2), {.connect = {{1, 2}}});
 
       {
-        std::wcout << "H*T2 -> R2 = " << to_latex_align(result, 0, 1)
+        std::cout << "H*T2 -> R2 = " << to_latex_align(result, 0, 1)
                    << std::endl;
       }
     }
@@ -1650,15 +1648,15 @@ SECTION("MRSO-MultiProduct") {
 
   // one-body: same expectation as the core-vacuum path at MRSO
   SECTION("ref_av of non-normal-ordered one-body product") {
-    const Index p{L"p_1"};
-    const Index q{L"p_2"};
-    auto H1 = ex<Tensor>(L"h", bra{p}, ket{q}, Symmetry::Nonsymm,
+    const Index p{"p_1"};
+    const Index q{"p_2"};
+    auto H1 = ex<Tensor>("h", bra{p}, ket{q}, Symmetry::Nonsymm,
                          BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
               fcrex(p) * fannx(q);
     ExprPtr result;
     REQUIRE_NOTHROW(result = t::ref_av(H1));
-    REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
-                                      L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
+    REQUIRE_THAT(result, SimplifiesTo("h{O_1;O_1}:N-C-S + "
+                                      "h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
   }
 
   // the mbpt operators (ã) are normal-ordered relative to the context vacuum,
@@ -1668,10 +1666,10 @@ SECTION("MRSO-MultiProduct") {
   // connect is not used: it means different things on the two paths (a core
   // or virtual δ between the operators vs any density linking them)
   SECTION("elementary operators match the core-vacuum path") {
-    const Index p1{L"p_1"}, p2{L"p_2"}, p3{L"p_3"}, p4{L"p_4"}, p5{L"p_5"},
-        p6{L"p_6"};
+    const Index p1{"p_1"}, p2{"p_2"}, p3{"p_3"}, p4{"p_4"}, p5{"p_5"},
+        p6{"p_6"};
     auto coeff = [](IndexList b, IndexList k) {
-      return ex<Tensor>(L"h", bra(b), ket(k), Symmetry::Nonsymm,
+      return ex<Tensor>("h", bra(b), ket(k), Symmetry::Nonsymm,
                         BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
     };
     // the operators carry the vacuum of the context they are built under,
@@ -1705,7 +1703,7 @@ SECTION("MRSO-MultiProduct") {
     });
 #ifndef SEQUANT_SKIP_LONG_TESTS
     // two two-body strings: up to κ₄
-    const Index p7{L"p_7"}, p8{L"p_8"};
+    const Index p7{"p_7"}, p8{"p_8"};
     check([&] {
       return coeff({p1, p2, p5, p6}, {p3, p4, p7, p8}) * fcrex(p1) * fcrex(p2) *
              fannx(p4) * fannx(p3) * fcrex(p5) * fcrex(p6) * fannx(p8) *
@@ -1816,7 +1814,7 @@ SECTION("MRSO-MultiProduct") {
                  (l.action == Action::Create ? fcrex(l.index) : fannx(l.index));
       auto contracted = FWickTheorem{string}.full_contractions(false).compute();
       const auto ibr = get_default_context().index_basis_registry();
-      const auto& active = ibr->retrieve_space(L"u");
+      const auto& active = ibr->retrieve_space("u");
       auto average = [&](ExprPtr& f) {
         if (f->is<FNOperator>()) {
           const auto& nop = f->as<FNOperator>();
@@ -1955,19 +1953,19 @@ SECTION("MRSO-MultiProduct") {
           [&](const ExprPtr& e) {
             if (!e->is<Tensor>()) return;
             const auto& t = e->as<Tensor>();
-            if (t.label() == L"γ" || t.label() == L"η" || t.label() == L"κ")
+            if (t.label() == "γ" || t.label() == "η" || t.label() == "κ")
               for (const auto& idx : t.const_braket())
                 active_only =
-                    active_only && idx.space() == ibr->retrieve_space(L"u");
+                    active_only && idx.space() == ibr->retrieve_space("u");
           },
           /*atoms_only=*/true);
-      INFO("mp: " << toUtf8(to_latex(mp)));
+      INFO("mp: " << to_latex(mp));
       CHECK(active_only);
       REQUIRE(simplify(in_base_spaces(mp, externals) -
                        in_base_spaces(sp, externals)) == ex<Constant>(0));
     };
-    const Index u1{L"u_1"}, u2{L"u_2"}, u3{L"u_3"}, u4{L"u_4"}, u5{L"u_5"},
-        u6{L"u_6"}, i1{L"i_1"}, i2{L"i_2"}, a1{L"a_1"}, a2{L"a_2"};
+    const Index u1{"u_1"}, u2{"u_2"}, u3{"u_3"}, u4{"u_4"}, u5{"u_5"},
+        u6{"u_6"}, i1{"i_1"}, i2{"i_2"}, a1{"a_1"}, a2{"a_2"};
     // number-conserving
     check({gno_string({u1}, {u2}), gno_string({u3}, {u4})});
     check({gno_string({u1}, {i1}), gno_string({a1}, {u2})});
@@ -1984,9 +1982,9 @@ SECTION("MRSO-MultiProduct") {
     check({gno_string({u1, u2}, {u4, u3}), gno_string({u5}, {u6})});
     check({gno_string({u1, u2}, {u3}), gno_string({u4}, {u6, u5})});
     // legs over unions of the active space with others
-    const Index I1{L"I_1"}, I2{L"I_2"}, A1{L"A_1"}, A2{L"A_2"}, M1{L"M_1"},
-        M2{L"M_2"}, E1{L"E_1"}, E2{L"E_2"}, p1{L"p_1"}, p2{L"p_2"}, p3{L"p_3"},
-        p4{L"p_4"};
+    const Index I1{"I_1"}, I2{"I_2"}, A1{"A_1"}, A2{"A_2"}, M1{"M_1"},
+        M2{"M_2"}, E1{"E_1"}, E2{"E_2"}, p1{"p_1"}, p2{"p_2"}, p3{"p_3"},
+        p4{"p_4"};
     check({gno_string({I1}, {A1}), gno_string({A2}, {I2})});
     check({gno_string({M1}, {E1}), gno_string({E2}, {M2})});
     check({gno_string({M1}, {M2}), gno_string({E1}, {E2})});
@@ -2080,8 +2078,7 @@ SECTION("MRSO-MultiProduct") {
           product = product * to_expr(gno_from_core_vacuum(legs));
         rhs = core_vacuum_normal_form(product);
       }
-      INFO("lhs: " << toUtf8(to_latex(lhs))
-                   << "\nrhs: " << toUtf8(to_latex(rhs)));
+      INFO("lhs: " << to_latex(lhs) << "\nrhs: " << to_latex(rhs));
       REQUIRE(!lhs->is<Constant>());
       REQUIRE(simplify(lhs - rhs) == ex<Constant>(0));
     };
@@ -2147,8 +2144,8 @@ SECTION("MRSO-MultiProduct") {
   SECTION("ref_av honors connectivity through densities and cumulants") {
     // ⟨{a†_u1 a_u2}{a†_u3 a_u4}⟩ = γ η + κ: every term connects the two
     // operators, through a density or a cumulant only
-    const auto x = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-                   ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    const auto x = ex<FNOperator>(cre({"u_1"}), ann({"u_2"})) *
+                   ex<FNOperator>(cre({"u_3"}), ann({"u_4"}));
     const auto all = t::ref_av(x);
     REQUIRE(all != ex<Constant>(0));
     REQUIRE(simplify(t::ref_av(x, {.connect = {{0, 1}}}) - all) ==
@@ -2170,9 +2167,9 @@ SECTION("MRSO-MultiProduct") {
     REQUIRE(simplify(t::vac_av(x, {.connect = {{1, 2}}}) - connected) ==
             ex<Constant>(0));
     const auto x_op = o::h(2) * o::t(1) * o::t(1);
-    REQUIRE(simplify(o::ref_av(x_op, {.connect = {{L"t", L"t"}}}) -
-                     connected) == ex<Constant>(0));
-    REQUIRE(simplify(o::ref_av(x_op, {.do_not_connect = {{L"t", L"t"}}}) -
+    REQUIRE(simplify(o::ref_av(x_op, {.connect = {{"t", "t"}}}) - connected) ==
+            ex<Constant>(0));
+    REQUIRE(simplify(o::ref_av(x_op, {.do_not_connect = {{"t", "t"}}}) -
                      disconnected) == ex<Constant>(0));
   }
 }  // SECTION("MRSO-MultiProduct")
@@ -2210,17 +2207,17 @@ SECTION("rules") {
   using namespace sequant;
 
   SECTION("density-fit") {
-    const std::vector<std::wstring> inputs = {
-        L"t{a1,a2;i1,i2} t{a3;i3}",
-        L"t{a1,a2;i1,i2} g{a3;i3}",
-        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
-        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
+    const std::vector<std::string> inputs = {
+        "t{a1,a2;i1,i2} t{a3;i3}",
+        "t{a1,a2;i1,i2} g{a3;i3}",
+        "t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
+        "t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
     };
-    const std::vector<std::wstring> expected = {
-        L"t{a1,a2;i1,i2} t{a3;i3}",
-        L"t{a1,a2;i1,i2} g{a3;i3}",
-        L"t{a1,a2;i1,i2} B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S",
-        L"t{a1,a2;i1,i2} (B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S "
+    const std::vector<std::string> expected = {
+        "t{a1,a2;i1,i2} t{a3;i3}",
+        "t{a1,a2;i1,i2} g{a3;i3}",
+        "t{a1,a2;i1,i2} B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S",
+        "t{a1,a2;i1,i2} (B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S "
         "- B{i2;a1;x_1}:N-C-S B{i1;a2;x_1}:N-C-S)",
     };
 
@@ -2232,26 +2229,26 @@ SECTION("rules") {
       ExprPtr input_expr = deserialize(inputs.at(i));
 
       const IndexSpace aux_space =
-          get_default_context().index_basis_registry()->retrieve_space(L"x");
+          get_default_context().index_basis_registry()->retrieve_space("x");
 
-      ExprPtr actual = mbpt::density_fit(input_expr, aux_space, L"g", L"B");
+      ExprPtr actual = mbpt::density_fit(input_expr, aux_space, "g", "B");
 
       REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
     }
   }
 
   SECTION("tensor-hypercontract") {
-    const std::vector<std::wstring> inputs = {
-        L"t{a1,a2;i1,i2} t{a3;i3}",
-        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
-        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
+    const std::vector<std::string> inputs = {
+        "t{a1,a2;i1,i2} t{a3;i3}",
+        "t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
+        "t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
     };
-    const std::vector<std::wstring> expected = {
-        L"t{a1,a2;i1,i2} t{a3;i3}",
-        L"t{a1,a2;i1,i2} B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i2;;x_2} "
-        L"B{;a2;x_2}",
-        L"t{a1,a2;i1,i2} (B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i2;;x_2} "
-        L"B{;a2;x_2}"
+    const std::vector<std::string> expected = {
+        "t{a1,a2;i1,i2} t{a3;i3}",
+        "t{a1,a2;i1,i2} B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i2;;x_2} "
+        "B{;a2;x_2}",
+        "t{a1,a2;i1,i2} (B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i2;;x_2} "
+        "B{;a2;x_2}"
         " - B{i2;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i1;;x_2} B{;a2;x_2})",
     };
 
@@ -2263,10 +2260,10 @@ SECTION("rules") {
       ExprPtr input_expr = deserialize(inputs.at(i));
 
       const IndexSpace aux_space =
-          get_default_context().index_basis_registry()->retrieve_space(L"x");
+          get_default_context().index_basis_registry()->retrieve_space("x");
 
       ExprPtr actual =
-          mbpt::tensor_hypercontract(input_expr, aux_space, L"g", L"B", L"C");
+          mbpt::tensor_hypercontract(input_expr, aux_space, "g", "B", "C");
 
       REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
     }
@@ -2291,8 +2288,8 @@ SECTION("manuscript-examples") {
   };
 
   SECTION("CCD Term") {
-    auto expr = ref_av(P(2) * H() * t(2) * t(2),
-                       {.connect = {{L"f", L"t"}, {L"g", L"t"}}});
+    auto expr =
+        ref_av(P(2) * H() * t(2) * t(2), {.connect = {{"f", "t"}, {"g", "t"}}});
     REQUIRE(expr.size() == 4);
   }
 
@@ -2301,9 +2298,9 @@ SECTION("manuscript-examples") {
     const auto t_connect = default_op_connections();
     const auto l_connect =
         concat(default_op_connections(),
-               OpConnections<std::wstring>{{L"h", antisymm_label()},
-                                           {L"f", antisymm_label()},
-                                           {L"g", antisymm_label()}});
+               OpConnections<std::string>{{"h", antisymm_label()},
+                                          {"f", antisymm_label()},
+                                          {"g", antisymm_label()}});
 
     auto t = ref_av(P(2) * H̅(), {.connect = t_connect});
     auto λ = ref_av((1 + Λ(2)) * H̅() * P(-2), {.connect = l_connect});
@@ -2318,7 +2315,7 @@ SECTION("manuscript-examples") {
 
     auto θ̅ = lst(θ(1), T(N), 2, {.use_connected_form = true});
     auto expr = (1 + Λ(N)) * θ̅ * Tʼ(N) + Λʼ(N) * θ̅;
-    auto result = ref_av(expr, {.connect = {{L"θ", L"t"}, {L"θ", L"t¹"}}});
+    auto result = ref_av(expr, {.connect = {{"θ", "t"}, {"θ", "t¹"}}});
     // number of terms is verified against MPQC4 implementation
     REQUIRE(result.size() == 21);
   }
@@ -2326,14 +2323,14 @@ SECTION("manuscript-examples") {
 #ifndef SEQUANT_SKIP_LONG_TESTS
   SECTION("EOM-CC Equations") {
     // connectivity info for right and left amplitude equations
-    const auto r_connect = concat(
-        default_op_connections(),
-        OpConnections<std::wstring>{{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
+    const auto r_connect =
+        concat(default_op_connections(),
+               OpConnections<std::string>{{"h", "R"}, {"f", "R"}, {"g", "R"}});
     const auto l_connect =
         concat(default_op_connections(),
-               OpConnections<std::wstring>{{L"h", antisymm_label()},
-                                           {L"f", antisymm_label()},
-                                           {L"g", antisymm_label()}});
+               OpConnections<std::string>{{"h", antisymm_label()},
+                                          {"f", antisymm_label()},
+                                          {"g", antisymm_label()}});
 
     // EE
     auto r_EE = ref_av(P(2) * H̅() * R(2), {.connect = r_connect});
@@ -2364,19 +2361,19 @@ SECTION("manuscript-examples") {
     // connectivity info for perturbed t and λ amplitude equations
     const auto t_connect =
         concat(default_op_connections(),
-               OpConnections<std::wstring>{
-                   {L"h", L"t¹"}, {L"f", L"t¹"}, {L"g", L"t¹"}, {L"h¹", L"t"}});
+               OpConnections<std::string>{
+                   {"h", "t¹"}, {"f", "t¹"}, {"g", "t¹"}, {"h¹", "t"}});
 
     const auto l_connect =
         concat(default_op_connections(),
-               OpConnections<std::wstring>{{L"h", L"t¹"},
-                                           {L"f", L"t¹"},
-                                           {L"g", L"t¹"},
-                                           {L"h¹", L"t"},
-                                           {L"h", antisymm_label()},
-                                           {L"f", antisymm_label()},
-                                           {L"g", antisymm_label()},
-                                           {L"h¹", antisymm_label()}});
+               OpConnections<std::string>{{"h", "t¹"},
+                                          {"f", "t¹"},
+                                          {"g", "t¹"},
+                                          {"h¹", "t"},
+                                          {"h", antisymm_label()},
+                                          {"f", antisymm_label()},
+                                          {"g", antisymm_label()},
+                                          {"h¹", antisymm_label()}});
 
     // perturbed t amplitudes (Eq 18 in SQ Manuscript #2)
     auto t = ref_av(P(2) * (H̅(1) + H̅() * Tʼ(2) - "ω" * tʼ(2)),
@@ -2400,31 +2397,31 @@ SECTION("manuscript-examples") {
     const auto& ann_space = get_hole_space(Spin::any);
 
     OpRegistry registry;
-    registry.add(L"f", OpClass::Gen, Hermiticity::Hermitian)
-        .add(L"g", OpClass::Gen, Hermiticity::Hermitian)
-        .add(L"t", OpClass::Ex, Hermiticity::NonHermitian)
-        .add(L"x", OpClass::Ex, Hermiticity::NonHermitian)
-        .add(L"y", OpClass::Ex, Hermiticity::NonHermitian);
+    registry.add("f", OpClass::Gen, Hermiticity::Hermitian)
+        .add("g", OpClass::Gen, Hermiticity::Hermitian)
+        .add("t", OpClass::Ex, Hermiticity::NonHermitian)
+        .add("x", OpClass::Ex, Hermiticity::NonHermitian)
+        .add("y", OpClass::Ex, Hermiticity::NonHermitian);
 
     // set MBPT context
     auto ctx_resetter = set_scoped_default_mbpt_context(
         {.csv = CSV::No, .op_registry = registry});
 
     // use OpMaker to define a custom excitation operator of rank 2
-    auto x = OpMaker<Statistics::FermiDirac>(L"x", 2)();
+    auto x = OpMaker<Statistics::FermiDirac>("x", 2)();
 
     // particle non-conserving excitation operator with custom IndexSpaces
-    auto y = OpMaker<Statistics::FermiDirac>(L"y", ncre(2), nann(1),
+    auto y = OpMaker<Statistics::FermiDirac>("y", ncre(2), nann(1),
                                              cre(cre_space), ann(ann_space))();
 
     auto expr = tensor::H() * x * y;
     REQUIRE_THAT(
         simplify(expr),
         EquivalentTo(
-            L"1/8 f{p1;p2}:A-C-S x{a1,a2;i1,i2}:A-N-S y{a3,a4;i3}:A-N-S "
-            L"ã{p2;p1} ã{i1,i2;a1,a2} ã{i3;a3,a4} + 1/32 g{p3,p4;p1,p2}:A-C-S "
-            L"x{a1,a2;i1,i2}:A-N-S y{a3,a4;i3}:A-N-S ã{p1,p2;p3,p4} "
-            L"ã{i1,i2;a1,a2} ã{i3;a3,a4}"));
+            "1/8 f{p1;p2}:A-C-S x{a1,a2;i1,i2}:A-N-S y{a3,a4;i3}:A-N-S "
+            "ã{p2;p1} ã{i1,i2;a1,a2} ã{i3;a3,a4} + 1/32 g{p3,p4;p1,p2}:A-C-S "
+            "x{a1,a2;i1,i2}:A-N-S y{a3,a4;i3}:A-N-S ã{p1,p2;p3,p4} "
+            "ã{i1,i2;a1,a2} ã{i3;a3,a4}"));
   }
 }  // SECTION("manuscript-examples")
 
@@ -2449,16 +2446,16 @@ SECTION("avoided-connections") {
   REQUIRE(res2_full.size() == 6);
   // only one term with no A-{f,g} connection
   REQUIRE(res2.is<sequant::Product>());
-  const std::wstring expected2 =
-      L"-1 Â{i_1;a_1} t{a_1,a_2;i_2,i_1}:A-C-S f{i_2;a_2}:A-C-S";
+  const std::string expected2 =
+      "-1 Â{i_1;a_1} t{a_1,a_2;i_2,i_1}:A-C-S f{i_2;a_2}:A-C-S";
   REQUIRE_THAT(sequant::simplify(res2), EquivalentTo(expected2));
 
   // same test as above but from Operator level and labels for connectivity
   using namespace sequant::mbpt::op;
   auto expr3 = op::P(1) * op::H(2) * op::T(2);
-  auto res3 = op::vac_av(expr3, {.connect = {{L"f", L"t"}, {L"g", L"t"}},
-                                 .do_not_connect = {{antisymm_label(), L"f"},
-                                                    {antisymm_label(), L"g"}}});
+  auto res3 = op::vac_av(expr3, {.connect = {{"f", "t"}, {"g", "t"}},
+                                 .do_not_connect = {{antisymm_label(), "f"},
+                                                    {antisymm_label(), "g"}}});
   REQUIRE_THAT(sequant::simplify(res3), EquivalentTo(expected2));
 
   // projectors are never connected
@@ -2469,9 +2466,9 @@ SECTION("avoided-connections") {
               .do_not_connect = {{antisymm_label(), antisymm_label()}}});
   REQUIRE(res4_full.size() == 4);
   REQUIRE(res4.is<sequant::Product>());  // only single term survives
-  const std::wstring expected4 =
-      L"Â{i_1;a_2} Â{a_1;i_2} g{i_3,i_2;a_3,a_1}:A-C-S "
-      L"t{a_3,a_2;i_3,i_1}:A-C-S";
+  const std::string expected4 =
+      "Â{i_1;a_2} Â{a_1;i_2} g{i_3,i_2;a_3,a_1}:A-C-S "
+      "t{a_3,a_2;i_3,i_1}:A-C-S";
   REQUIRE_THAT(simplify(res4), EquivalentTo(expected4));
 }
 
@@ -2488,35 +2485,35 @@ SECTION("rdm-decomposition symmetries") {
                .vacuum = Vacuum::SingleProduct}));
 
   const auto kappa =
-      density::make_cumulant(bra{Index(L"i_1")}, ket{Index(L"i_2")});
+      density::make_cumulant(bra{Index("i_1")}, ket{Index("i_2")});
   const auto gamma = mbpt::decompositions::cumulant_to_density(kappa);
   REQUIRE(gamma->is<Tensor>());
-  REQUIRE(gamma->as<Tensor>().label() == L"γ");
+  REQUIRE(gamma->as<Tensor>().label() == "γ");
   REQUIRE(gamma->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
   REQUIRE(gamma->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
 
   // the decomposition, the factory in SeQuant/core/density.hpp and the parser
   // agree on the spelling
-  const auto gamma_factory = density::make_rdm(Index(L"i_1"), Index(L"i_2"));
+  const auto gamma_factory = density::make_rdm(Index("i_1"), Index("i_2"));
   REQUIRE(*gamma == *gamma_factory);
-  REQUIRE(*deserialize(L"γ{i_1;i_2}") == *gamma_factory);
-  REQUIRE(*deserialize(L"κ{i_1;i_2}") == *kappa);
+  REQUIRE(*deserialize("γ{i_1;i_2}") == *gamma_factory);
+  REQUIRE(*deserialize("κ{i_1;i_2}") == *kappa);
 
-  const auto eta = density::make_hole_rdm(Index(L"i_1"), Index(L"i_2"));
-  REQUIRE(eta->as<Tensor>().label() == L"η");
+  const auto eta = density::make_hole_rdm(Index("i_1"), Index("i_2"));
+  REQUIRE(eta->as<Tensor>().label() == "η");
   REQUIRE(eta->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
   REQUIRE(eta->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
 
   // κ from a 2-body normal operator: bra = annihilators, ket = creators
-  const FNOperator nop2(cre({L"i_1", L"i_2"}), ann({L"i_3", L"i_4"}));
+  const FNOperator nop2(cre({"i_1", "i_2"}), ann({"i_3", "i_4"}));
   const auto kappa2 = density::make_cumulant(nop2);
-  REQUIRE(kappa2->as<Tensor>().label() == L"κ");
+  REQUIRE(kappa2->as<Tensor>().label() == "κ");
   REQUIRE(kappa2->as<Tensor>().symmetry() == Symmetry::Antisymm);
-  REQUIRE(kappa2->as<Tensor>().bra()[0] == Index(L"i_3"));
-  REQUIRE(kappa2->as<Tensor>().bra()[1] == Index(L"i_4"));
-  REQUIRE(kappa2->as<Tensor>().ket()[0] == Index(L"i_1"));
-  REQUIRE(kappa2->as<Tensor>().ket()[1] == Index(L"i_2"));
-  REQUIRE(*deserialize(L"κ{i_3,i_4;i_1,i_2}") == *kappa2);
+  REQUIRE(kappa2->as<Tensor>().bra()[0] == Index("i_3"));
+  REQUIRE(kappa2->as<Tensor>().bra()[1] == Index("i_4"));
+  REQUIRE(kappa2->as<Tensor>().ket()[0] == Index("i_1"));
+  REQUIRE(kappa2->as<Tensor>().ket()[1] == Index("i_2"));
+  REQUIRE(*deserialize("κ{i_3,i_4;i_1,i_2}") == *kappa2);
   // antisymmetrize() generates each distinct pairing once, also under the
   // topological canonicalization that the test suite defaults to
   {
@@ -2524,7 +2521,7 @@ SECTION("rdm-decomposition symmetries") {
     ctx.set(CanonicalizeOptions::default_options().copy_and_set(
         CanonicalizationMethod::Topological));
     auto topological = set_scoped_default_context(ctx);
-    const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3"), i4(L"i_4");
+    const Index i1("i_1"), i2("i_2"), i3("i_3"), i4("i_4");
     const auto kappa = density::make_cumulant(bra{i1, i3}, ket{i2, i4});
     const auto expected =
         density::make_rdm(bra{i1, i3}, ket{i2, i4}) -
@@ -2540,7 +2537,7 @@ SECTION("rdm-decomposition symmetries") {
   densities2->visit(
       [](const ExprPtr& e) {
         if (!e->is<Tensor>()) return;
-        REQUIRE(e->as<Tensor>().label() == L"γ");
+        REQUIRE(e->as<Tensor>().label() == "γ");
         REQUIRE(e->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
         REQUIRE(e->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
       },
@@ -2550,13 +2547,13 @@ SECTION("rdm-decomposition symmetries") {
   const auto gamma2 = density::rdm_from_nop(nop2, density::rdm_label());
   REQUIRE(simplify(densities2 - gamma2)->size() == densities2->size() - 1);
   // η is a reserved label, hence an mbpt operator label
-  REQUIRE(mbpt::to_op_class(L"η") == mbpt::OpClass::Gen);
+  REQUIRE(mbpt::to_op_class("η") == mbpt::OpClass::Gen);
 
   // every multi-body κ that a decomposition builds is the κ that the extended
   // Wick theorem builds
   {
-    const FNOperator nop3(cre({L"i_1", L"i_2", L"i_3"}),
-                          ann({L"i_4", L"i_5", L"i_6"}));
+    const FNOperator nop3(cre({"i_1", "i_2", "i_3"}),
+                          ann({"i_4", "i_5", "i_6"}));
     const auto decomp =
         simplify(mbpt::decompositions::three_body_decomp(ex<FNOperator>(nop3),
                                                          /*approx=*/false)
@@ -2564,7 +2561,7 @@ SECTION("rdm-decomposition symmetries") {
     std::size_t n_multibody_kappa = 0;
     decomp->visit(
         [&n_multibody_kappa](const ExprPtr& e) {
-          if (!e->is<Tensor>() || e->as<Tensor>().label() != L"κ" ||
+          if (!e->is<Tensor>() || e->as<Tensor>().label() != "κ" ||
               e->as<Tensor>().rank() < 2)
             return;
           ++n_multibody_kappa;
@@ -2591,22 +2588,21 @@ SECTION("cumulant-to-density decompositions") {
   };
 
   // κ₃ = γ₃ - Σ γ₁γ₂ (9 terms) + 2 Σ γ₁γ₁γ₁ (6 terms)
-  const FNOperator nop3(cre({L"i_1", L"i_2", L"i_3"}),
-                        ann({L"i_4", L"i_5", L"i_6"}));
+  const FNOperator nop3(cre({"i_1", "i_2", "i_3"}), ann({"i_4", "i_5", "i_6"}));
   const auto densities3 = simplify(
       mbpt::decompositions::cumulant3_to_density(density::make_cumulant(nop3)));
   REQUIRE(densities3->is<Sum>());
   std::size_t n_gamma3 = 0, n_gamma1_gamma2 = 0, n_gamma1_cubed = 0;
   for (const auto& term : *densities3) {
     if (term->is<Tensor>()) {
-      REQUIRE(term->as<Tensor>().label() == L"γ");
+      REQUIRE(term->as<Tensor>().label() == "γ");
       REQUIRE(term->as<Tensor>().rank() == 3);
       REQUIRE(term->as<Tensor>().symmetry() == Symmetry::Antisymm);
       ++n_gamma3;
       continue;
     }
     const auto& product = term->as<Product>();
-    for (const auto& f : product) REQUIRE(f->as<Tensor>().label() == L"γ");
+    for (const auto& f : product) REQUIRE(f->as<Tensor>().label() == "γ");
     if (product.size() == 2) {
       REQUIRE(abs(product.scalar()) == 1);
       ++n_gamma1_gamma2;
@@ -2621,17 +2617,17 @@ SECTION("cumulant-to-density decompositions") {
   REQUIRE(n_gamma1_cubed == 6);
   // the identity pairing of γ₁γ₁γ₁ comes with +2
   const auto identity = ex<Constant>(2) *
-                        density::make_rdm(Index(L"i_4"), Index(L"i_1")) *
-                        density::make_rdm(Index(L"i_5"), Index(L"i_2")) *
-                        density::make_rdm(Index(L"i_6"), Index(L"i_3"));
+                        density::make_rdm(Index("i_4"), Index("i_1")) *
+                        density::make_rdm(Index("i_5"), Index("i_2")) *
+                        density::make_rdm(Index("i_6"), Index("i_3"));
   REQUIRE(simplify(densities3 - identity)->size() == densities3->size() - 1);
 
   // the general cumulant_to_density reproduces the hand-derived κ₂ and κ₃
   {
     using mbpt::antisymmetrize;
     using mbpt::decompositions::cumulant_to_density;
-    const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3"), i4(L"i_4"), i5(L"i_5"),
-        i6(L"i_6");
+    const Index i1("i_1"), i2("i_2"), i3("i_3"), i4("i_4"), i5("i_5"),
+        i6("i_6");
     const auto kappa2_ref =
         gamma({i3, i4}, {i1, i2}) -
         antisymmetrize(gamma({i3}, {i1}) * gamma({i4}, {i2})).result;
@@ -2652,18 +2648,18 @@ SECTION("cumulant-to-density decompositions") {
   // as spelled, not only their Hermiticity: over a complex field a tensor is
   // bra-ket Symm without being Conjugate
   {
-    auto cidx = [](std::wstring_view label) {
+    auto cidx = [](std::string_view label) {
       Index i{label};
       IndexSpace space = i.space();
       space.field(Field::Complex);
       return Index(space, i.ordinal());
     };
-    auto t = [&](std::wstring_view b, std::wstring_view k) {
-      return ex<Tensor>(L"t", bra{cidx(b)}, ket{cidx(k)}, Symmetry::Nonsymm,
+    auto t = [&](std::string_view b, std::string_view k) {
+      return ex<Tensor>("t", bra{cidx(b)}, ket{cidx(k)}, Symmetry::Nonsymm,
                         BraKetSymmetry::Symm, ColumnSymmetry::Symm);
     };
     const auto permuted =
-        mbpt::antisymmetrize(t(L"i_3", L"i_1") * t(L"i_4", L"i_2")).result;
+        mbpt::antisymmetrize(t("i_3", "i_1") * t("i_4", "i_2")).result;
     REQUIRE(permuted->is<Sum>());
     REQUIRE(permuted->size() == 2);
     permuted->visit(
@@ -2676,20 +2672,20 @@ SECTION("cumulant-to-density decompositions") {
 
   // cumulants_to_densities rewrites every κ in an expression
   using mbpt::decompositions::cumulants_to_densities;
-  const FNOperator nop2(cre({L"i_1", L"i_2"}), ann({L"i_3", L"i_4"}));
+  const FNOperator nop2(cre({"i_1", "i_2"}), ann({"i_3", "i_4"}));
   const auto kappa2 = density::make_cumulant(nop2);
   const auto kappa1 =
-      density::make_cumulant(bra{Index(L"i_5")}, ket{Index(L"i_6")});
-  const auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"i_3", L"i_4"},
-                            Symmetry::Antisymm);
-  const auto h = ex<Tensor>(L"h", bra{L"i_6"}, ket{L"i_5"});
+      density::make_cumulant(bra{Index("i_5")}, ket{Index("i_6")});
+  const auto g =
+      ex<Tensor>("g", bra{"i_1", "i_2"}, ket{"i_3", "i_4"}, Symmetry::Antisymm);
+  const auto h = ex<Tensor>("h", bra{"i_6"}, ket{"i_5"});
   const auto expr = g * kappa2 + h * kappa1;
   const auto expected = g * mbpt::decompositions::cumulant2_to_density(kappa2) +
                         h * mbpt::decompositions::cumulant_to_density(kappa1);
   const auto result = cumulants_to_densities(expr);
   result->visit(
       [](const ExprPtr& e) {
-        if (e->is<Tensor>()) REQUIRE(e->as<Tensor>().label() != L"κ");
+        if (e->is<Tensor>()) REQUIRE(e->as<Tensor>().label() != "κ");
       },
       /*atoms_only=*/true);
   REQUIRE(simplify(result - expected) == ex<Constant>(0));
@@ -2699,8 +2695,8 @@ SECTION("cumulant-to-density decompositions") {
 
   // κ₄ = γ₄ - Σ γ₁γ₃ (4·4 terms) - Σ γ₂γ₂ (6·6/2 terms)
   //      + 2 Σ γ₁γ₁γ₂ (12·12/2 terms) - 6 Σ γ₁γ₁γ₁γ₁ (4!·4!/4! terms)
-  const FNOperator nop4(cre({L"i_1", L"i_2", L"i_3", L"i_4"}),
-                        ann({L"i_5", L"i_6", L"i_7", L"i_8"}));
+  const FNOperator nop4(cre({"i_1", "i_2", "i_3", "i_4"}),
+                        ann({"i_5", "i_6", "i_7", "i_8"}));
   const auto densities4 = simplify(
       mbpt::decompositions::cumulant_to_density(density::make_cumulant(nop4)));
   REQUIRE(densities4->is<Sum>());
@@ -2708,14 +2704,14 @@ SECTION("cumulant-to-density decompositions") {
               n_gamma1_gamma1_gamma2 = 0, n_gamma1_fourth = 0;
   for (const auto& term : *densities4) {
     if (term->is<Tensor>()) {
-      REQUIRE(term->as<Tensor>().label() == L"γ");
+      REQUIRE(term->as<Tensor>().label() == "γ");
       REQUIRE(term->as<Tensor>().rank() == 4);
       REQUIRE(term->as<Tensor>().symmetry() == Symmetry::Antisymm);
       ++n_gamma4;
       continue;
     }
     const auto& product = term->as<Product>();
-    for (const auto& f : product) REQUIRE(f->as<Tensor>().label() == L"γ");
+    for (const auto& f : product) REQUIRE(f->as<Tensor>().label() == "γ");
     switch (product.size()) {
       case 2:
         REQUIRE(abs(product.scalar()) == 1);
@@ -2741,8 +2737,8 @@ SECTION("cumulant-to-density decompositions") {
   REQUIRE(n_gamma1_fourth == 24);
   // the identity pairing of each product comes with (-1)^(m-1) (m-1)!
   {
-    const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3"), i4(L"i_4"), i5(L"i_5"),
-        i6(L"i_6"), i7(L"i_7"), i8(L"i_8");
+    const Index i1("i_1"), i2("i_2"), i3("i_3"), i4("i_4"), i5("i_5"),
+        i6("i_6"), i7("i_7"), i8("i_8");
     for (const auto& identity :
          {ex<Constant>(-1) * gamma({i5}, {i1}) *
               gamma({i6, i7, i8}, {i2, i3, i4}),
@@ -2780,4 +2776,24 @@ SECTION("cumulant-to-density decompositions") {
   REQUIRE(simplify(cumulants_to_densities(density::make_cumulant(nop4)) -
                    densities4) == ex<Constant>(0));
 }
+}
+
+TEST_CASE("perturbation order decoration", "[mbpt]") {
+  using namespace sequant::mbpt::detail;
+
+  REQUIRE(decorate_with_pert_order("t", 0) == "t");
+  REQUIRE(decorate_with_pert_order("t", 1) == "t¹");
+  REQUIRE(decorate_with_pert_order("t", 4) == "t⁴");
+  REQUIRE(decorate_with_pert_order("λ", 2) == "λ²");
+
+  for (int order = 1; order <= 9; ++order) {
+    CAPTURE(order);
+    REQUIRE(strip_pert_order(decorate_with_pert_order("t", order)) == "t");
+    REQUIRE(strip_pert_order(decorate_with_pert_order("λ", order)) == "λ");
+  }
+  REQUIRE(strip_pert_order("t") == "t");
+  REQUIRE(strip_pert_order("λ") == "λ");
+  REQUIRE(strip_pert_order("") == "");
+  // only a single trailing superscript is stripped
+  REQUIRE(strip_pert_order("t¹²") == "t¹");
 }

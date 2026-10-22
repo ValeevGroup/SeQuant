@@ -35,14 +35,16 @@ using DefaultSymmetries =
     std::tuple<Symmetry, std::variant<BraKetSymmetry, Hermiticity>,
                ColumnSymmetry>;
 
+/// @return the offset and length (in code units of the UTF-8 encoded input) of
+/// @p ast
 template <typename AST, typename PositionCache, typename Iterator>
 std::tuple<std::size_t, std::size_t> get_pos(const AST &ast,
                                              const PositionCache &cache,
                                              const Iterator &begin) {
   const auto range = cache.position_of(ast);
 
-  return {std::distance(begin, range.begin()),
-          std::distance(range.begin(), range.end())};
+  return {std::distance(begin.base(), range.begin().base()),
+          std::distance(range.begin().base(), range.end().base())};
 }
 
 /// @return the basis that @p label, with the optional explicit @p instance,
@@ -51,7 +53,7 @@ std::tuple<std::size_t, std::size_t> get_pos(const AST &ast,
 /// @throw SerializationError if @p label names a basis instance and
 /// @p instance is given
 template <typename LabelAST, typename PositionCache, typename Iterator>
-IndexBasis to_basis(const LabelAST &label_ast, const std::wstring &label,
+IndexBasis to_basis(const LabelAST &label_ast, const std::string &label,
                     const boost::optional<IndexBasis::instance_type> &instance,
                     const PositionCache &position_cache,
                     const Iterator &begin) {
@@ -62,7 +64,7 @@ IndexBasis to_basis(const LabelAST &label_ast, const std::wstring &label,
     auto [offset, length] = get_pos(label_ast, position_cache, begin);
     throw SerializationError(
         offset, length,
-        "label '" + toUtf8(label) +
+        "label '" + std::string(label) +
             "' names a basis instance; an explicit ';N' is not allowed");
   }
   return registry->resolve(IndexBasis{basis.space(), *instance});
@@ -95,14 +97,14 @@ Index to_index(const io::serialization::v1::ast::Index &index,
       auto [offset, length] = get_pos(current.label, position_cache, begin);
       throw SerializationError(offset, length,
                                "Unknown index space '" +
-                                   toUtf8(current.label.label) +
+                                   std::string(current.label.label) +
                                    "' in proto index specification");
     } catch (const Exception &e) {
       auto [offset, length] = get_pos(current.label, position_cache, begin);
-      throw SerializationError(offset, length,
-                               "Invalid index '" + toUtf8(current.label.label) +
-                                   "_" + std::to_string(current.label.id) +
-                                   ": " + e.what());
+      throw SerializationError(
+          offset, length,
+          "Invalid index '" + std::string(current.label.label) + "_" +
+              std::to_string(current.label.id) + ": " + e.what());
     }
   }
 
@@ -117,14 +119,14 @@ Index to_index(const io::serialization::v1::ast::Index &index,
     auto [offset, length] = get_pos(index.label, position_cache, begin);
     throw SerializationError(offset, length,
                              "Unknown index space '" +
-                                 toUtf8(index.label.label) +
+                                 std::string(index.label.label) +
                                  "' in index specification");
   } catch (const Exception &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
-    throw SerializationError(offset, length,
-                             "Invalid index '" + toUtf8(index.label.label) +
-                                 "_" + std::to_string(index.label.id) + ": " +
-                                 e.what());
+    throw SerializationError(
+        offset, length,
+        "Invalid index '" + std::string(index.label.label) + "_" +
+            std::to_string(index.label.id) + ": " + e.what());
   }
 }
 

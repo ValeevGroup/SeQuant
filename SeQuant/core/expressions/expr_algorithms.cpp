@@ -24,63 +24,63 @@
 
 namespace sequant {
 
-std::wstring to_latex_align(const ExprPtr& exprptr, size_t max_lines_per_align,
-                            size_t max_terms_per_line) {
-  std::wstring result = io::latex::to_string(exprptr);
+std::string to_latex_align(const ExprPtr& exprptr, size_t max_lines_per_align,
+                           size_t max_terms_per_line) {
+  std::string result = io::latex::to_string(exprptr);
   if (exprptr->is<Sum>()) {
     result.erase(0, 7);  // remove leading  "{ \bigl"
     result.replace(result.size() - 8, 8,
-                   L")");  // replace trailing "\bigr) }" with ")"
-    result = std::wstring(L"\\begin{align}\n& ") + result;
+                   ")");  // replace trailing "\bigr) }" with ")"
+    result = std::string("\\begin{align}\n& ") + result;
     // assume no inner sums
     size_t line_counter = 0;
     size_t term_counter = 0;
-    std::wstring::size_type pos = 0;
-    std::wstring::size_type plus_pos = 0;
-    std::wstring::size_type minus_pos = 0;
+    std::string::size_type pos = 0;
+    std::string::size_type plus_pos = 0;
+    std::string::size_type minus_pos = 0;
     bool last_pos_has_plus = false;
     bool have_next_term = true;
-    auto insert_into_result_at = [&](std::wstring::size_type at,
+    auto insert_into_result_at = [&](std::string::size_type at,
                                      const auto& str) {
-      SEQUANT_ASSERT(pos != std::wstring::npos);
+      SEQUANT_ASSERT(pos != std::string::npos);
       result.insert(at, str);
       const auto str_nchar = std::size(str) - 1;  // neglect end-of-string
       pos += str_nchar;
-      if (plus_pos != std::wstring::npos) plus_pos += str_nchar;
-      if (minus_pos != std::wstring::npos) minus_pos += str_nchar;
+      if (plus_pos != std::string::npos) plus_pos += str_nchar;
+      if (minus_pos != std::string::npos) minus_pos += str_nchar;
       if (pos != plus_pos)
-        SEQUANT_ASSERT(plus_pos == result.find(L" + ", plus_pos));
+        SEQUANT_ASSERT(plus_pos == result.find(" + ", plus_pos));
       if (pos != minus_pos)
-        SEQUANT_ASSERT(minus_pos == result.find(L" - ", minus_pos));
+        SEQUANT_ASSERT(minus_pos == result.find(" - ", minus_pos));
     };
     while (have_next_term) {
       if (max_lines_per_align > 0 &&
           line_counter == max_lines_per_align) {  // start new align block?
-        insert_into_result_at(pos + 1, L"\n\\end{align}\n\\begin{align}\n& ");
+        insert_into_result_at(pos + 1, "\n\\end{align}\n\\begin{align}\n& ");
         line_counter = 0;
       } else {
         // break the line if needed
         if (term_counter != 0 && term_counter % max_terms_per_line == 0) {
-          insert_into_result_at(pos + 1, L"\\\\\n& ");
+          insert_into_result_at(pos + 1, "\\\\\n& ");
           ++line_counter;
         }
       }
       // next term, plz
       if (plus_pos == 0 || last_pos_has_plus)
-        plus_pos = result.find(L" + ", plus_pos + 1);
+        plus_pos = result.find(" + ", plus_pos + 1);
       if (minus_pos == 0 || !last_pos_has_plus)
-        minus_pos = result.find(L" - ", minus_pos + 1);
+        minus_pos = result.find(" - ", minus_pos + 1);
       pos = std::min(plus_pos, minus_pos);
       last_pos_has_plus = (pos == plus_pos);
-      if (pos != std::wstring::npos)
+      if (pos != std::string::npos)
         ++term_counter;
       else
         have_next_term = false;
     }
   } else {
-    result = std::wstring(L"\\begin{align}\n& ") + result;
+    result = std::string("\\begin{align}\n& ") + result;
   }
-  result += L"\n\\end{align}";
+  result += "\n\\end{align}";
   return result;
 }
 
@@ -148,17 +148,17 @@ ResultExpr& canonicalize(ResultExpr&& expr) { return canonicalize(expr); }
 struct ExpandVisitor {
   void operator()(ExprPtr& expr) {
     if (Logger::instance().expand)
-      std::wcout << "expand_visitor received " << io::latex::to_string(expr)
-                 << std::endl;
+      std::cout << "expand_visitor received " << io::latex::to_string(expr)
+                << std::endl;
     // apply expand() iteratively until done
     while (expand(expr)) {
       if (Logger::instance().expand)
-        std::wcout << "after 1 round of expansion have "
-                   << io::latex::to_string(expr) << std::endl;
+        std::cout << "after 1 round of expansion have "
+                  << io::latex::to_string(expr) << std::endl;
     }
     if (Logger::instance().expand)
-      std::wcout << "expansion result = " << io::latex::to_string(expr)
-                 << std::endl;
+      std::cout << "expansion result = " << io::latex::to_string(expr)
+                << std::endl;
     // simplification and canonicalization are to be done by other visitors
   }
 
@@ -205,8 +205,8 @@ struct ExpandVisitor {
         result;  // will keep the result if one or more summands is expanded
     const auto nsubexpr = size(expr);
     if (Logger::instance().expand)
-      std::wcout << "in expand_sum: expr = " << io::latex::to_string(expr)
-                 << std::endl;
+      std::cout << "in expand_sum: expr = " << io::latex::to_string(expr)
+                << std::endl;
     for (std::size_t i = 0; i != nsubexpr; ++i) {
       // if summand is a Product, expand it
       if (expr_ref[i]->is<Product>()) {
@@ -220,11 +220,10 @@ struct ExpandVisitor {
         // if expr != expanded result append current subexpr
         if (result) result->append(expr_ref[i]);
         if (Logger::instance().expand)
-          std::wcout << "in expand_sum: after expand_product("
-                     << (this_term_expanded ? "true)" : "false)")
-                     << " result = "
-                     << io::latex::to_string(result ? result : expr)
-                     << std::endl;
+          std::cout << "in expand_sum: after expand_product("
+                    << (this_term_expanded ? "true)" : "false)") << " result = "
+                    << io::latex::to_string(result ? result : expr)
+                    << std::endl;
       }
       // if summand is a Sum, flatten it
       else if (expr_ref[i]->is<Sum>()) {
@@ -236,9 +235,9 @@ struct ExpandVisitor {
         }
         if (result) result->append(expr_ref[i]);
         if (Logger::instance().expand)
-          std::wcout << "in expand_sum: after flattening Sum summand result = "
-                     << io::latex::to_string(result ? result : expr)
-                     << std::endl;
+          std::cout << "in expand_sum: after flattening Sum summand result = "
+                    << io::latex::to_string(result ? result : expr)
+                    << std::endl;
       } else {  // nothing to expand? if expanded previously (i.e. result is
                 // nonnull) append to result
         if (result) result->append(expr_ref[i]);
@@ -341,17 +340,17 @@ ResultExpr& flatten(ResultExpr&& expr) { return flatten(expr); }
 struct RapidSimplifyVisitor {
   void operator()(ExprPtr& expr) {
     if (Logger::instance().simplify)
-      std::wcout << "rapid_simplify_visitor received "
-                 << io::latex::to_string(expr) << std::endl;
+      std::cout << "rapid_simplify_visitor received "
+                << io::latex::to_string(expr) << std::endl;
     // apply simplify() iteratively until done
     while (simplify(expr)) {
       if (Logger::instance().simplify)
-        std::wcout << "after 1 round of simplification have "
-                   << io::latex::to_string(expr) << std::endl;
+        std::cout << "after 1 round of simplification have "
+                  << io::latex::to_string(expr) << std::endl;
     }
     if (Logger::instance().simplify)
-      std::wcout << "simplification result = " << io::latex::to_string(expr)
-                 << std::endl;
+      std::cout << "simplification result = " << io::latex::to_string(expr)
+                << std::endl;
   }
 
   /// fuses the Powers of @p product with positive real Constant bases into
@@ -429,19 +428,19 @@ struct RapidSimplifyVisitor {
   /// @return the fused Product, or null if @p product is already in this form
   static ExprPtr fuse_variable_powers(const Product& product) {
     struct Key {
-      std::wstring label;
+      std::string label;
       bool conjugated;  // of the base combined with that of the Power
       bool operator==(const Key&) const = default;
     };
     auto key_of = [](const ExprPtr& factor) -> std::optional<Key> {
       if (factor->is<Variable>()) {
         const auto& v = factor->as<Variable>();
-        return Key{std::wstring(v.label()), v.conjugated()};
+        return Key{std::string(v.label()), v.conjugated()};
       }
       if (factor->is<Power>() && factor->as<Power>().base()->is<Variable>()) {
         const auto& pw = factor->as<Power>();
         const auto& v = pw.base()->as<Variable>();
-        return Key{std::wstring(v.label()), v.conjugated() != pw.conjugated()};
+        return Key{std::string(v.label()), v.conjugated() != pw.conjugated()};
       }
       return std::nullopt;
     };

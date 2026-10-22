@@ -88,13 +88,13 @@ class ScopedEnv {
   }
 };
 
-/// a wide stream buffer that may be written to from several threads at once:
+/// a stream buffer that may be written to from several threads at once:
 /// each thread's output is collected line by line, and only complete lines are
 /// appended to the shared contents, so that lines do not interleave
-class LineAtomicWStreamBuf : public std::wstreambuf {
+class LineAtomicStreamBuf : public std::streambuf {
  public:
   /// @return the complete lines written so far
-  std::wstring str() const {
+  std::string str() const {
     std::scoped_lock lock(mtx_);
     return contents_;
   }
@@ -113,14 +113,14 @@ class LineAtomicWStreamBuf : public std::wstreambuf {
 
  private:
   mutable std::mutex mtx_;
-  std::wstring contents_;
-  std::map<std::thread::id, std::wstring> lines_;
+  std::string contents_;
+  std::map<std::thread::id, std::string> lines_;
 
   void put(char_type ch) {
     std::scoped_lock lock(mtx_);
     auto &line = lines_[std::this_thread::get_id()];
     line.push_back(ch);
-    if (ch == L'\n') {
+    if (ch == '\n') {
       contents_ += line;
       line.clear();
     }
@@ -139,11 +139,11 @@ std::size_t count_product_canonicalizations(
                CanonicalizationMethod::Complete}) {
   struct Capture {
     bool logged = Logger::instance().canonicalize;
-    LineAtomicWStreamBuf buf;
-    std::wstreambuf *wcout_buf = std::wcout.rdbuf(&buf);
+    LineAtomicStreamBuf buf;
+    std::streambuf *cout_buf = std::cout.rdbuf(&buf);
     Capture() { Logger::instance().canonicalize = true; }
     ~Capture() {
-      std::wcout.rdbuf(wcout_buf);
+      std::cout.rdbuf(cout_buf);
       Logger::instance().canonicalize = logged;
     }
   } capture;
@@ -152,8 +152,8 @@ std::size_t count_product_canonicalizations(
   std::size_t count = 0;
   for (const auto method : methods) {
     const auto key =
-        L"Product canonicalization(" + to_wstring(method) + L") input: ";
-    for (auto pos = log.find(key); pos != std::wstring::npos;
+        "Product canonicalization(" + to_string(method) + ") input: ";
+    for (auto pos = log.find(key); pos != std::string::npos;
          pos = log.find(key, pos + key.size()))
       ++count;
   }
@@ -179,11 +179,11 @@ struct StringMaker<sequant::Expr> {
                              bool include_canonical = true) {
     std::string str;
     try {
-      str = sequant::toUtf8(sequant::serialize(expr, {.annot_symm = true}));
+      str = sequant::serialize(expr, {.annot_symm = true});
     } catch (const std::exception &) {
       // serialize doesn't support all kinds of expressions -> fall back to
       // LaTeX representation
-      str = sequant::toUtf8(sequant::to_latex(expr));
+      str = sequant::to_latex(expr);
     }
 
     if (include_canonical) {
@@ -217,7 +217,7 @@ struct StringMaker<sequant::Tensor> {
 template <>
 struct StringMaker<sequant::Index> {
   static std::string convert(const sequant::Index &idx) {
-    return sequant::toUtf8(idx.full_label());
+    return std::string(idx.full_label());
   }
 };
 
@@ -225,8 +225,7 @@ template <>
 struct StringMaker<sequant::ResultExpr> {
   static std::string convert(const sequant::ResultExpr &res,
                              bool include_canonical = true) {
-    std::string str =
-        sequant::toUtf8(sequant::serialize(res, {.annot_symm = true}));
+    std::string str = sequant::serialize(res, {.annot_symm = true});
 
     if (include_canonical) {
       sequant::ResultExpr clone = res.clone();
@@ -258,10 +257,10 @@ class StringDiffMatcher : public Catch::Matchers::MatcherGenericBase {
   StringDiffMatcher(const String &str) {
     if constexpr (std::is_same_v<String, std::string>) {
       expected_ = str;
-    } else if constexpr (std::is_same_v<String, std::wstring> ||
-                         std::is_same_v<String, std::wstring_view> ||
-                         std::is_same_v<String, wchar_t *>) {
-      expected_ = sequant::toUtf8(str);
+    } else if constexpr (std::is_same_v<String, std::string> ||
+                         std::is_same_v<String, std::string_view> ||
+                         std::is_same_v<String, char *>) {
+      expected_ = std::string(str);
     } else {
       expected_ = std::string(str);
     }
@@ -332,9 +331,9 @@ ExprVar to_expression(T &&expression) {
   using BaseT = std::remove_cvref_t<T>;
 
   if constexpr (std::is_convertible_v<BaseT, std::string>) {
-    std::wstring string = sequant::toUtf16(std::forward<T>(expression));
+    std::string string = std::string(std::forward<T>(expression));
 
-    if (std::find(begin(string), end(string), L'=') != end(string)) {
+    if (std::find(begin(string), end(string), '=') != end(string)) {
       return sequant::deserialize<sequant::ResultExpr>(
           std::string(std::forward<T>(expression)),
           {.def_perm_symm = sequant::Symmetry::Nonsymm});
@@ -343,15 +342,14 @@ ExprVar to_expression(T &&expression) {
           std::string(std::forward<T>(expression)),
           {.def_perm_symm = sequant::Symmetry::Nonsymm});
     }
-  } else if constexpr (std::is_convertible_v<BaseT, std::wstring>) {
-    if (std::find(begin(expression), end(expression), L'=') !=
-        end(expression)) {
+  } else if constexpr (std::is_convertible_v<BaseT, std::string>) {
+    if (std::find(begin(expression), end(expression), '=') != end(expression)) {
       return sequant::deserialize<sequant::ResultExpr>(
-          std::wstring(std::forward<T>(expression)),
+          std::string(std::forward<T>(expression)),
           {.def_perm_symm = sequant::Symmetry::Nonsymm});
     } else {
       return sequant::deserialize<sequant::ExprPtr>(
-          std::wstring(std::forward<T>(expression)),
+          std::string(std::forward<T>(expression)),
           {.def_perm_symm = sequant::Symmetry::Nonsymm});
     }
   } else if constexpr (std::same_as<BaseT, sequant::ResultExpr>) {

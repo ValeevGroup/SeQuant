@@ -1013,7 +1013,7 @@ namespace detail {
 [[nodiscard]] inline OrderedSchedule build_ordered_schedule(
     RichSchedule const& rich, LegalitySchedule const& legality,
     [[maybe_unused]] BatchPolicy const& policy,
-    std::initializer_list<std::wstring> mode_order = {}) {
+    std::initializer_list<std::string> mode_order = {}) {
   OrderedSchedule out;
   out.num_values = rich.cells.size();
 
@@ -1077,12 +1077,13 @@ namespace detail {
     int const fs = fusion_slot(cl, pos);
     if (fs < 0) {
       auto const vit = value_id_of.find(cl.hash);
-      throw Exception(
-          "build_ordered_schedule: value " +
-          (vit != value_id_of.end() ? std::to_string(vit->second)
-                                    : "key " + std::to_string(cl.hash)) +
-          " has no loop identity on " + toUtf8(cl.per_axis[pos].axis.label()) +
-          " (no loop_slot / reduced_slot stamped)");
+      throw Exception("build_ordered_schedule: value " +
+                      (vit != value_id_of.end()
+                           ? std::to_string(vit->second)
+                           : "key " + std::to_string(cl.hash)) +
+                      " has no loop identity on " +
+                      std::string(cl.per_axis[pos].axis.label()) +
+                      " (no loop_slot / reduced_slot stamped)");
     }
     return fs;
   };
@@ -1104,15 +1105,15 @@ namespace detail {
   // realized loop. The fusion slot is the occurrence-invariant identity: a
   // count of same-key per_axis modes with local 0..m-1 slots would be a
   // per-position numbering the atlas cannot match to a value's own frame.
-  std::map<std::wstring, std::set<int>> slots_of_space;
-  std::map<std::wstring, Index> rep;  // basis key -> representative axis
+  std::map<std::string, std::set<int>> slots_of_space;
+  std::map<std::string, Index> rep;  // basis key -> representative axis
   for (CellLegality const& cl : legality.cells)
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
-      std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
+      std::string const bk{cl.per_axis[pos].axis.basis().base_key()};
       rep.emplace(bk, cl.per_axis[pos].axis);
       slots_of_space[bk].insert(slot_of(cl, pos));
     }
-  auto const rank_of = [&](std::wstring const& bk) -> std::size_t {
+  auto const rank_of = [&](std::string const& bk) -> std::size_t {
     std::size_t i = 0;
     for (auto const& key : mode_order) {
       if (bk == key) return i;
@@ -1120,10 +1121,10 @@ namespace detail {
     }
     return static_cast<std::size_t>(-1);
   };
-  container::svector<std::wstring> spaces;
+  container::svector<std::string> spaces;
   for (auto const& [bk, s] : slots_of_space) spaces.push_back(bk);
   std::sort(spaces.begin(), spaces.end(),
-            [&](std::wstring const& a, std::wstring const& b) {
+            [&](std::string const& a, std::string const& b) {
               auto const ra = rank_of(a), rb = rank_of(b);
               if (ra != rb) return ra < rb;
               return a < b;
@@ -1145,9 +1146,9 @@ namespace detail {
   // silent choice.
   if (!rich.loop_order.empty()) {
     std::size_t const nn = types.size();
-    std::map<std::pair<std::wstring, int>, std::size_t> item_of;
+    std::map<std::pair<std::string, int>, std::size_t> item_of;
     for (std::size_t d = 0; d < nn; ++d)
-      item_of[{std::wstring{types[d].basis().base_key()}, type_slot[d]}] = d;
+      item_of[{std::string{types[d].basis().base_key()}, type_slot[d]}] = d;
     container::svector<container::svector<std::size_t>> succ(nn);
     container::svector<std::size_t> indeg(nn, 0);
     for (auto const& [pair, witness] : rich.loop_order) {
@@ -1184,9 +1185,9 @@ namespace detail {
         auto const b = item_of.find(pair.second);
         if (a == item_of.end() || b == item_of.end()) continue;
         if (indeg[a->second] == 0 && indeg[b->second] == 0) continue;
-        msg += " [" + toUtf8(pair.first.first) + "#" +
+        msg += " [" + std::string(pair.first.first) + "#" +
                std::to_string(pair.first.second) + " > " +
-               toUtf8(pair.second.first) + "#" +
+               std::string(pair.second.first) + "#" +
                std::to_string(pair.second.second) + " by v" +
                std::to_string(witness) + "]";
       }
@@ -1207,10 +1208,10 @@ namespace detail {
 
   std::size_t const n = types.size();
   // Depth of the loop for a given (basis key, slot within that key).
-  auto const depth_of_instance = [&](std::wstring const& bk,
+  auto const depth_of_instance = [&](std::string const& bk,
                                      int slot) -> std::optional<std::size_t> {
     for (std::size_t d = 0; d < n; ++d)
-      if (std::wstring(types[d].basis().base_key()) == bk &&
+      if (std::string(types[d].basis().base_key()) == bk &&
           type_slot[d] == slot)
         return d;
     return std::nullopt;
@@ -1238,7 +1239,7 @@ namespace detail {
     std::optional<std::size_t> anchor;
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       auto const dd = depth_of_instance(
-          std::wstring{cl.per_axis[pos].axis.basis().base_key()},
+          std::string{cl.per_axis[pos].axis.basis().base_key()},
           slot_of(cl, pos));
       if (!dd) continue;
       if (anchor)
@@ -1316,7 +1317,7 @@ namespace detail {
     std::optional<std::size_t> target;
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       if (cl.per_axis[pos].role != LoopRole::LoopLocal) continue;
-      std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
+      std::string const bk{cl.per_axis[pos].axis.basis().base_key()};
       int const fs = slot_of(cl, pos);
       auto const d = depth_of_instance(bk, fs);
       if (!d) continue;
@@ -1344,7 +1345,7 @@ namespace detail {
       [&](CellLegality const& cl) -> std::optional<std::size_t> {
     std::optional<std::size_t> target;
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
-      std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
+      std::string const bk{cl.per_axis[pos].axis.basis().base_key()};
       auto const d = depth_of_instance(bk, slot_of(cl, pos));
       if (!d) continue;
       if (!target || *d > *target) target = *d;
@@ -1378,7 +1379,7 @@ namespace detail {
     if (!rd) return false;
     for (std::size_t pos = 0; pos < scl.per_axis.size(); ++pos) {
       if (!on_axis(scl.per_axis[pos])) continue;
-      std::wstring const bk{scl.per_axis[pos].axis.basis().base_key()};
+      std::string const bk{scl.per_axis[pos].axis.basis().base_key()};
       auto const d = depth_of_instance(bk, slot_of(scl, pos));
       if (!d) continue;
       if (*rd >= *d && type_cluster[*rd] == type_cluster[*d]) return true;
@@ -1412,62 +1413,60 @@ namespace detail {
   // later-pass readers, and the carried set, each with home depth and nest.
   auto const dump_reject = [&](std::size_t v0, std::size_t nest,
                                container::svector<std::size_t> const& readers) {
-    auto const role_str = [](LoopRole r) -> wchar_t const* {
+    auto const role_str = [](LoopRole r) -> char const* {
       switch (r) {
         case LoopRole::LoopLocal:
-          return L"L";
+          return "L";
         case LoopRole::Reduction:
-          return L"R";
+          return "R";
         case LoopRole::LoopCarried:
-          return L"C";
+          return "C";
         default:
-          return L"I";
+          return "I";
       }
     };
     auto const describe = [&](std::size_t v) {
       auto const it2 = cl_by_vid.find(v);
-      std::wcerr << L"v" << v << L"(pass=" << pass_of(v);
+      std::cerr << "v" << v << "(pass=" << pass_of(v);
       if (it2 == cl_by_vid.end()) {
-        std::wcerr << L" no legality)";
+        std::cerr << " no legality)";
         return;
       }
       CellLegality const& c2 = *it2->second;
       auto const hd = local_home_depth(c2);
-      std::wcerr << L" home=";
+      std::cerr << " home=";
       if (hd)
-        std::wcerr << *hd << L"/nest" << type_cluster[*hd];
+        std::cerr << *hd << "/nest" << type_cluster[*hd];
       else
-        std::wcerr << L"root";
-      std::wcerr << L" axes={";
+        std::cerr << "root";
+      std::cerr << " axes={";
       for (std::size_t p2 = 0; p2 < c2.per_axis.size(); ++p2) {
-        std::wstring const bk2{c2.per_axis[p2].axis.basis().base_key()};
+        std::string const bk2{c2.per_axis[p2].axis.basis().base_key()};
         int const fs2 = fusion_slot(c2, p2);
         auto const d2 = fs2 >= 0 ? depth_of_instance(bk2, fs2) : std::nullopt;
-        std::wcerr << c2.per_axis[p2].axis.full_label() << L":"
-                   << role_str(c2.per_axis[p2].role) << L"@slot" << fs2
-                   << L"->d";
+        std::cerr << c2.per_axis[p2].axis.full_label() << ":"
+                  << role_str(c2.per_axis[p2].role) << "@slot" << fs2 << "->d";
         if (d2)
-          std::wcerr << *d2;
+          std::cerr << *d2;
         else
-          std::wcerr << L"?";
-        std::wcerr << L" ";
+          std::cerr << "?";
+        std::cerr << " ";
       }
-      std::wcerr << L"}" << (levels.carried.count(v) ? L" CARRIED" : L"")
-                 << L")";
+      std::cerr << "}" << (levels.carried.count(v) ? " CARRIED" : "") << ")";
     };
-    std::wcerr << L"[sched-reject] nest outermost depth "
-               << cluster_min.at(nest) << L" value: ";
+    std::cerr << "[sched-reject] nest outermost depth " << cluster_min.at(nest)
+              << " value: ";
     describe(v0);
-    std::wcerr << L"\n";
+    std::cerr << "\n";
     for (std::size_t u : readers) {
-      std::wcerr << L"[sched-reject]   later-pass reader ";
+      std::cerr << "[sched-reject]   later-pass reader ";
       describe(u);
-      std::wcerr << L"\n";
+      std::cerr << "\n";
     }
     for (std::size_t c : levels.carried) {
-      std::wcerr << L"[sched-reject]   carried ";
+      std::cerr << "[sched-reject]   carried ";
       describe(c);
-      std::wcerr << L"\n";
+      std::cerr << "\n";
     }
   };
 
@@ -1497,7 +1496,7 @@ namespace detail {
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       AxisClass const& ac = cl.per_axis[pos];
       if (ac.role == LoopRole::LoopLocal) continue;
-      std::wstring const bk{ac.axis.basis().base_key()};
+      std::string const bk{ac.axis.basis().base_key()};
       // A mode with no loop identity cannot have its escape placed: guessing
       // slot 0 would put it in whatever nest owns slot 0, not the loop the
       // operands were sliced on, and every batch would then contract the
@@ -1525,11 +1524,11 @@ namespace detail {
     // escapes collapsed to fewer escapes (one per depth == one per key).
     // Dump those cells (SEQUANT_DUMP_SCHEDULE) to expose the collapse.
     if (detail::dump_enabled("SEQUANT_DUMP_SCHEDULE")) {
-      container::svector<std::pair<Index, wchar_t const*>> nonlocal;
+      container::svector<std::pair<Index, char const*>> nonlocal;
       for (AxisClass const& ac : cl.per_axis)
         if (ac.role != LoopRole::LoopLocal)
           nonlocal.push_back(
-              {ac.axis, ac.role == LoopRole::Reduction ? L"R" : L"C"});
+              {ac.axis, ac.role == LoopRole::Reduction ? "R" : "C"});
       bool collapse = false;
       for (std::size_t a = 0; a < nonlocal.size() && !collapse; ++a)
         for (std::size_t b = a + 1; b < nonlocal.size(); ++b)
@@ -1572,7 +1571,7 @@ namespace detail {
                          return o.role == OccurrenceRole::Assembled;
                        }))
         continue;
-      std::wstring const bk{ac.axis.basis().base_key()};
+      std::string const bk{ac.axis.basis().base_key()};
       int const fs = slot_of(cl, pos);
       auto const d = depth_of_instance(bk, fs);
       SEQUANT_ASSERT(d.has_value());
@@ -1599,7 +1598,7 @@ namespace detail {
       std::size_t const home_nest = type_cluster[*home_depth];
       for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
         if (cl.per_axis[pos].role != LoopRole::LoopLocal) continue;
-        std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
+        std::string const bk{cl.per_axis[pos].axis.basis().base_key()};
         int const fs = slot_of(cl, pos);
         auto const d = depth_of_instance(bk, fs);
         if (!d || type_cluster[*d] != home_nest) continue;
@@ -1647,7 +1646,7 @@ namespace detail {
         // completeness then falls out for free, since the value is sliced
         // by exactly the instances this loop escapes.
         for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
-          std::wstring const bk{cl.per_axis[pos].axis.basis().base_key()};
+          std::string const bk{cl.per_axis[pos].axis.basis().base_key()};
           int const fs = slot_of(cl, pos);
           auto const d = depth_of_instance(bk, fs);
           if (!d || type_cluster[*d] != nest) continue;
@@ -1857,7 +1856,7 @@ namespace detail {
     block.axis = axis;
     block.latitude_ordinal = latitude_ordinal;
     block.level = DagScopeLevel{.depth = depth,
-                                .space = std::wstring{axis.basis().base_key()},
+                                .space = std::string{axis.basis().base_key()},
                                 .loop_slot = loop_slot,
                                 .latitude_ordinal = latitude_ordinal};
     // The block's kind is the kind of its loop instance (the open that
@@ -1866,12 +1865,12 @@ namespace detail {
     // one, so the per-key test (does the key appear on a root result?)
     // is only the fallback for an instance no open recorded.
     if (auto const kit = rich.loop_kind.find(
-            {std::wstring{axis.basis().base_key()}, loop_slot});
+            {std::string{axis.basis().base_key()}, loop_slot});
         kit != rich.loop_kind.end())
       block.kind = kit->second;
     else
       throw Exception("build_ordered_schedule: loop instance " +
-                      toUtf8(std::wstring(axis.basis().base_key())) + "#" +
+                      std::string(axis.basis().base_key()) + "#" +
                       std::to_string(loop_slot) +
                       " has no recorded kind (no open created it)");
     block.steps =
@@ -2208,7 +2207,7 @@ inline void populate_build_scope_walk(
 /// fixture.
 inline void assert_global_level_axis_uniqueness(
     ScopeBlock const& block,
-    std::map<std::tuple<std::size_t, std::wstring, int, int>, Index>& seen) {
+    std::map<std::tuple<std::size_t, std::string, int, int>, Index>& seen) {
   for (Step const& step : block.steps) {
     auto const* child = std::get_if<ScopeBlock>(&step.value);
     if (!child) continue;
@@ -2361,14 +2360,14 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
   // Debug safety net: the global (depth, space, ordinal) -> axis uniqueness
   // this construction (and the canonical level enumeration below) relies on.
   {
-    std::map<std::tuple<std::size_t, std::wstring, int, int>, Index> seen;
+    std::map<std::tuple<std::size_t, std::string, int, int>, Index> seen;
     detail::assert_global_level_axis_uniqueness(ordered.root, seen);
   }
 
   SlicedModeAssignment result;
   detail::enumerate_realized_levels(ordered.root, result.levels);
 
-  std::map<std::tuple<std::size_t, std::wstring, int, int>, LoopId> level_id;
+  std::map<std::tuple<std::size_t, std::string, int, int>, LoopId> level_id;
   for (std::size_t i = 0; i < result.levels.size(); ++i) {
     DagScopeLevel const& L = result.levels[i];
     level_id.emplace(
@@ -2478,7 +2477,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           int const occ_slot =
               pos < occ.loop_slot.size() ? occ.loop_slot[pos] : -1;
           if (occ_slot != lvl.loop_slot) continue;
-          if (std::wstring(occ.carried[pos].basis().base_key()) != lvl.space)
+          if (std::string(occ.carried[pos].basis().base_key()) != lvl.space)
             continue;
           result.occ_facts.push_back(
               std::make_tuple(w_vid, pos, id_of(lvl), consumer_vid, leg));
@@ -2515,7 +2514,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
               pit->second.occ->loop_slot[cp] >= 0)
             c_sliced = pit->second.occ->loop_slot[cp] == lvl.loop_slot;
           if (!c_sliced) continue;
-          if (std::wstring(c_carried[cp].basis().base_key()) != lvl.space)
+          if (std::string(c_carried[cp].basis().base_key()) != lvl.space)
             continue;
           Index const& M = c_carried[cp];  // the mode C is sliced on here
           // W carries M at some own-occurrence position (shared external,
@@ -2554,7 +2553,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           for (auto const& cocc : rich.cells[c_vid].occurrences) {
             for (auto const& [rm, rs] : cocc.reduced_slot) {
               if (rs != lvl.loop_slot) continue;
-              if (std::wstring(rm.basis().base_key()) != lvl.space) continue;
+              if (std::string(rm.basis().base_key()) != lvl.space) continue;
               std::size_t pos_a = occ.carried.size();
               for (std::size_t pa = 0; pa < occ.carried.size(); ++pa)
                 if (occ.carried[pa] == rm) {

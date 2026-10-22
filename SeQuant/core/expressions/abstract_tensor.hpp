@@ -235,10 +235,10 @@ class AbstractTensor {
   virtual bool _is_cnumber() const {
     throw missing_instantiation_for("_is_cnumber");
   }
-  virtual std::wstring_view _label() const {
+  virtual std::string_view _label() const {
     throw missing_instantiation_for("_label");
   }
-  virtual std::wstring _to_latex() const {
+  virtual std::string _to_latex() const {
     throw missing_instantiation_for("_to_latex");
   }
 
@@ -426,13 +426,13 @@ inline auto label(const AbstractTensor& t) { return t._label(); }
 /// @param[in] left_align if true, will typeset `bra[0]` above `ket[0]`,
 /// `bra[1]` above `ket[1]`, etc.; else will typeset `bra[-1]` above `ket[-1]`,
 /// etc.
-inline std::wstring to_latex_tensor(
-    const std::wstring& core_label, AbstractTensor::const_any_view_randsz bra,
+inline std::string to_latex_tensor(
+    const std::string& core_label, AbstractTensor::const_any_view_randsz bra,
     AbstractTensor::const_any_view_randsz ket,
     AbstractTensor::const_any_view_randsz aux,
     const BraKetTypesetting bkt = BraKetTypesetting::ContraSub,
     bool left_align = true) {
-  std::wstring result = L"{\\tensor*{" + core_label + L"}{";
+  std::string result = "{\\tensor*{" + core_label + "}{";
 
   const auto braket_rank_max = std::max(bra.size(), ket.size());
   const auto num_paired = std::min(bra.size(), ket.size());
@@ -446,22 +446,22 @@ inline std::wstring to_latex_tensor(
   if (!left_align && num_unpaired) {
     auto& unpaired_indices = unpaired_type == SlotType::Bra ? bra : ket;
     for (; col != num_unpaired; ++col) {
-      result += L"*^";
+      result += "*^";
       if ((bkt == BraKetTypesetting::BraSuper &&
            unpaired_type == SlotType::Bra) ||
           (bkt == BraKetTypesetting::KetSuper &&
            unpaired_type == SlotType::Ket)) {
         result += io::latex::to_string(unpaired_indices[col]);
       } else
-        result += L"{}";
-      result += L"_";
+        result += "{}";
+      result += "_";
       if ((bkt == BraKetTypesetting::BraSub &&
            unpaired_type == SlotType::Bra) ||
           (bkt == BraKetTypesetting::KetSub &&
            unpaired_type == SlotType::Ket)) {
         result += io::latex::to_string(unpaired_indices[col]);
       } else
-        result += L"{}";
+        result += "{}";
     }
   }
 
@@ -472,11 +472,11 @@ inline std::wstring to_latex_tensor(
       unpaired_type == SlotType::Ket && left_align == false ? col : 0;
   const auto paired_fence = col + num_paired;
   for (; col != paired_fence; ++col, ++paired_bra, ++paired_ket) {
-    result += L"*^";
+    result += "*^";
     result += (bkt == BraKetTypesetting::BraSuper)
                   ? io::latex::to_string(bra[paired_bra])
                   : io::latex::to_string(ket[paired_ket]);
-    result += L"_";
+    result += "_";
     result += (bkt == BraKetTypesetting::BraSub)
                   ? io::latex::to_string(bra[paired_bra])
                   : io::latex::to_string(ket[paired_ket]);
@@ -486,40 +486,40 @@ inline std::wstring to_latex_tensor(
   if (left_align && num_unpaired) {
     auto& unpaired_indices = unpaired_type == SlotType::Bra ? bra : ket;
     for (; col != braket_rank_max; ++col) {
-      result += L"*^";
+      result += "*^";
       if ((bkt == BraKetTypesetting::BraSuper &&
            unpaired_type == SlotType::Bra) ||
           (bkt == BraKetTypesetting::KetSuper &&
            unpaired_type == SlotType::Ket)) {
         result += io::latex::to_string(unpaired_indices[col]);
       } else
-        result += L"{}";
-      result += L"_";
+        result += "{}";
+      result += "_";
       if ((bkt == BraKetTypesetting::BraSub &&
            unpaired_type == SlotType::Bra) ||
           (bkt == BraKetTypesetting::KetSub &&
            unpaired_type == SlotType::Ket)) {
         result += io::latex::to_string(unpaired_indices[col]);
       } else
-        result += L"{}";
+        result += "{}";
     }
   }
-  result += L"}";
+  result += "}";
 
   // aux
   if (aux.size() != 0) {
-    result += L"[";
+    result += "[";
     const auto aux_rank = aux.size();
     for (std::size_t i = 0; i < aux_rank; ++i) {
       result += io::latex::to_string(aux[i]);
       if (i + 1 < aux_rank) {
-        result += L",";
+        result += ",";
       }
     }
-    result += L"]";
+    result += "]";
   }
 
-  result += L"}";
+  result += "}";
   return result;
 }
 
@@ -553,7 +553,7 @@ inline std::wstring to_latex_tensor(
 ///         commutes with other tensor of same color (tensors of different
 ///         colors are, for now, always assumed to commute)
 ///         - @c label(t) is a valid expression and its return is convertible to
-///         a std::wstring;
+///         a std::string;
 template <typename T>
 concept is_tensor = requires(const T& obj) {
   { braket(obj) } -> std::ranges::range;
@@ -568,7 +568,7 @@ concept is_tensor = requires(const T& obj) {
   { column_symmetry(obj) } -> std::convertible_to<ColumnSymmetry>;
   { color(obj) } -> std::convertible_to<std::size_t>;
   { is_cnumber(obj) } -> std::convertible_to<bool>;
-  { label(obj) } -> std::constructible_from<std::wstring>;
+  { label(obj) } -> std::constructible_from<std::string>;
 };
 static_assert(is_tensor<AbstractTensor>,
               "The AbstractTensor class does not fulfill the requirements of "
@@ -643,13 +643,13 @@ using AbstractTensorPtr = std::shared_ptr<AbstractTensor>;
 /// @param expr input expression
 /// @param label tensor label to find in the expression
 /// @return true if tensor with given label is found
-bool has_tensor(const ExprPtr& expr, std::wstring label);
+bool has_tensor(const ExprPtr& expr, std::string label);
 
 /// @brief Removes tensor with a certain label from an expression
 /// @param expr An expression pointer
 /// @param label Label of the tensor to remove
 /// @return ExprPtr with the tensor removed
-ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label);
+ExprPtr remove_tensor(const ExprPtr& expr, std::string label);
 
 }  // namespace sequant
 

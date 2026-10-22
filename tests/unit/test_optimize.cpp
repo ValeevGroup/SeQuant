@@ -189,8 +189,8 @@ TEST_CASE("optimize", "[optimize]") {
     auto reg = std::make_shared<IndexBasisRegistry>(
         *get_default_context().index_basis_registry());
 
-    reg->extent(L"i", 10).extent(L"a", 100).extent(L"x", 4);
-    REQUIRE(reg->retrieve_space(L"a").dimension() == 100);
+    reg->extent("i", 10).extent("a", 100).extent("x", 4);
+    REQUIRE(reg->retrieve_space("a").dimension() == 100);
     auto ctx_resetter =
         set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -225,7 +225,7 @@ TEST_CASE("optimize", "[optimize]") {
 
     SECTION("Single term optimization") {
       const auto prod1 = parse_expr_antisymm(
-                             L"g_{i3,i4}^{a3,a4}"     // T1
+                             "g_{i3,i4}^{a3,a4}"      // T1
                              " * t_{a1,a2}^{i3,i4}"   // T2
                              " * t_{a3,a4}^{i1,i2}")  // T3
                              ->as<Product>();
@@ -247,10 +247,10 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(extract(res1, {1}) == prod1.at(1));
 
       const auto prod2 = parse_expr_antisymm(
-                             L"   g_{i3,i4}^{a3,a4}"
-                             L" * t_{a3,a4}^{i1,i2}"
-                             L" * t_{a1}^{i3}"
-                             L" * t_{a2}^{i4}")
+                             "   g_{i3,i4}^{a3,a4}"
+                             " * t_{a3,a4}^{i1,i2}"
+                             " * t_{a1}^{i3}"
+                             " * t_{a2}^{i4}")
                              ->as<Product>();
 
       const auto res2 = single_term_opt(prod2);
@@ -261,7 +261,7 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(extract(res2, {1}) == prod2.at(3));
 
       const auto prod3 = parse_expr_antisymm(
-                             L""                   //
+                             ""                    //
                              " g_{i3,i4}^{a3,a4}"  //
                              " t_{a1}^{i3}"        //
                              " t_{a2}^{i4}"        //
@@ -281,7 +281,7 @@ TEST_CASE("optimize", "[optimize]") {
       // ========================
 
       auto prod4 =
-          parse_expr_antisymm(L"1/4 λ{i1;a1} g{i2,i3;a2,a3} t{a2,a3;i2,i3}")
+          parse_expr_antisymm("1/4 λ{i1;a1} g{i2,i3;a2,a3} t{a2,a3;i2,i3}")
               ->as<Product>();
       auto res4 = single_term_opt(prod4);
 
@@ -290,7 +290,7 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(extract(res4, {1, 1}) == prod4.at(2));
 
       auto prod5 =
-          parse_expr_antisymm(L"x{i1,i2;a3,a4} y{a1,a2;i1,i2} z{a3,a4;a1,a2}")
+          parse_expr_antisymm("x{i1,i2;a3,a4} y{a1,a2;i1,i2} z{a3,a4;a1,a2}")
               ->as<Product>();
       auto res5 = single_term_opt(prod5);
       REQUIRE(extract(res5, {0, 0}) == prod5.at(0));
@@ -301,7 +301,7 @@ TEST_CASE("optimize", "[optimize]") {
       // single-term optimization when sequant::Variables appear in a product
       //
       auto prod6 = deserialize(
-                       L"α * β * γ * "
+                       "α * β * γ * "
                        "g_{i3,i4}^{a3,a4}"      // T1
                        " * t_{a1,a2}^{i3,i4}"   // T2
                        " * t_{a3,a4}^{i1,i2}")  // T3
@@ -321,9 +321,9 @@ TEST_CASE("optimize", "[optimize]") {
       // single-term optimization including tensors with auxiliary indices
       //
       auto prod7 = deserialize(
-                       L"DF{a_1;a_3;x_1} "  // T1
-                       "DF{a_2;i_1;x_1} "   // T2
-                       "t{a_3;i_2}"         // T3
+                       "DF{a_1;a_3;x_1} "  // T1
+                       "DF{a_2;i_1;x_1} "  // T2
+                       "t{a_3;i_2}"        // T3
                        )
                        ->as<Product>();
       auto res7 = single_term_opt(prod7);
@@ -337,8 +337,8 @@ TEST_CASE("optimize", "[optimize]") {
 
       auto prod8 =
           deserialize(
-              L"T1{i_1;i_2;x_1,x_2,x_3,x_4} T2{i_2;i_1;x_5,x_6,x_7,x_8} "
-              L"T3{i_3;;x_1,x_2,x_3,x_4} T4{i_4;;x_5,x_6,x_7,x_8}")
+              "T1{i_1;i_2;x_1,x_2,x_3,x_4} T2{i_2;i_1;x_5,x_6,x_7,x_8} "
+              "T3{i_3;;x_1,x_2,x_3,x_4} T4{i_4;;x_5,x_6,x_7,x_8}")
               ->as<Product>();
       auto res8 = single_term_opt(prod8);
 
@@ -376,12 +376,12 @@ TEST_CASE("optimize", "[optimize]") {
       };
 
       auto prod = parse_expr_antisymm(
-                      L"g_{i1,a1}^{x1}"
-                      L" * g_{i2,a2}^{x1}"
-                      L" * t_{a1,a2}^{i1,i2}")
+                      "g_{i1,a1}^{x1}"
+                      " * g_{i2,a2}^{x1}"
+                      " * t_{a1,a2}^{i1,i2}")
                       ->as<Product>();
 
-      auto is_t = [](Tensor const& t) { return t.label() == L"t"; };
+      auto is_t = [](Tensor const& t) { return t.label() == "t"; };
 
       OptimizeOptions base;
       base.idx_to_extent = idxsz;
@@ -403,7 +403,7 @@ TEST_CASE("optimize", "[optimize]") {
       auto top_has_bare_t = [](ExprPtr const& e) {
         if (!e->is<Product>()) return false;
         for (auto const& c : *e)
-          if (c->is<Tensor>() && c->as<Tensor>().label() == L"t") return true;
+          if (c->is<Tensor>() && c->as<Tensor>().label() == "t") return true;
         return false;
       };
 
@@ -441,13 +441,13 @@ TEST_CASE("optimize", "[optimize]") {
       // flips the choice to (A*B)*C. Flip threshold here is footprint_weight >
       // ~5.2.
       auto sized = std::make_shared<IndexBasisRegistry>(*reg);
-      sized->extent(L"a", 4);     // virtual: SMALL
-      sized->extent(L"x", 1000);  // aux: LARGE
+      sized->extent("a", 4);     // virtual: SMALL
+      sized->extent("x", 1000);  // aux: LARGE
       auto sized_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(sized));
 
       auto const prod =
-          deserialize(L"A{i1;x1} B{x1;i2} C{i2;a1}")->as<Product>();
+          deserialize("A{i1;x1} B{x1;i2} C{i2;a1}")->as<Product>();
 
       // footprint_weight == 0 reproduces the pure-FLOPs choice ...
       auto res0 = optimize(ex<Product>(prod), OptimizeOptions{});
@@ -466,7 +466,7 @@ TEST_CASE("optimize", "[optimize]") {
     SECTION("Ensure single-value sums/products are not discarded") {
       auto sum = ex<Sum>();
       sum->as<Sum>().append(
-          ex<Product>(ExprPtrList{deserialize(L"f{a_1;i_1}")}));
+          ex<Product>(ExprPtrList{deserialize("f{a_1;i_1}")}));
       REQUIRE(sum->as<Sum>().summand(0).as<Product>().factors().size() == 1);
       auto optimized = optimize(sum);
       REQUIRE(optimized->is<Sum>());
@@ -476,33 +476,32 @@ TEST_CASE("optimize", "[optimize]") {
 
     SECTION("Non-covariant indices") {
       auto sized = std::make_shared<IndexBasisRegistry>(*reg);
-      sized->extent(L"x", 3 * reg->retrieve_space(L"a").dimension());
+      sized->extent("x", 3 * reg->retrieve_space("a").dimension());
       auto sized_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(sized));
 
       auto const G_abcd_thc =
-          deserialize(L"X{a1;;x1} X{;a2;x1} Y{;;x1,x2} X{a3;;x2} X{;a4;x2}")
+          deserialize("X{a1;;x1} X{;a2;x1} Y{;;x1,x2} X{a3;;x2} X{;a4;x2}")
               ->as<Product>();
       auto const G_abcd_thc_opt =
-          deserialize(
-              L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})")
+          deserialize("((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})")
               ->as<Product>();
       REQUIRE(single_term_opt(G_abcd_thc)->as<Product>() == G_abcd_thc_opt);
 
       auto const GT_abij_thc = deserialize(
-                                   L"X{a1;;x1} X{;a2;x1} Y{;;x1,x2} X{a3;;x2} "
-                                   L"X{;a4;x2} T{a2,a4;i1,i2}")
+                                   "X{a1;;x1} X{;a2;x1} Y{;;x1,x2} X{a3;;x2} "
+                                   "X{;a4;x2} T{a2,a4;i1,i2}")
                                    ->as<Product>();
       auto const GT_abij_thc_opt = deserialize(
-                                       L"(((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2}) ( "
-                                       L"X{;a4;x2} T{a2,a4;i1,i2} )) X{a3;;x2}")
+                                       "(((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2}) ( "
+                                       "X{;a4;x2} T{a2,a4;i1,i2} )) X{a3;;x2}")
                                        ->as<Product>();
       REQUIRE(single_term_opt(GT_abij_thc)->as<Product>() == GT_abij_thc_opt);
     }
 
     SECTION("OptimizeOptions: cost metric and reorder knobs") {
       auto const prod = parse_expr_antisymm(
-          L"g_{i3,i4}^{a3,a4} t_{a1,a2}^{i3,i4} t_{a3,a4}^{i1,i2}");
+          "g_{i3,i4}^{a3,a4} t_{a1,a2}^{i3,i4} t_{a3,a4}^{i1,i2}");
 
       // both metrics must binarize the 3-tensor product into a binary tree:
       // a 2-factor top product whose leaves are the 3 original tensors
@@ -520,8 +519,8 @@ TEST_CASE("optimize", "[optimize]") {
       // reorder knob: a two-summand sum is optimized either way, and the
       // optimize() default (reorder) matches an explicit Reorder request
       auto const sum = parse_expr_antisymm(
-          L"g_{i3,i4}^{a3,a4} t_{a1,a2}^{i3,i4} t_{a3,a4}^{i1,i2}"
-          L" + g_{i3,i4}^{a3,a4} t_{a3,a4}^{i1,i2} t_{a1}^{i3} t_{a2}^{i4}");
+          "g_{i3,i4}^{a3,a4} t_{a1,a2}^{i3,i4} t_{a3,a4}^{i1,i2}"
+          " + g_{i3,i4}^{a3,a4} t_{a3,a4}^{i1,i2} t_{a1}^{i3} t_{a2}^{i4}");
       REQUIRE(sum->is<Sum>());
 
       auto no_reorder = optimize(
@@ -542,9 +541,9 @@ TEST_CASE("optimize", "[optimize]") {
       // exercise optimize_impl(..., parallel_outer=true): a multi-summand sum
       // optimized concurrently must yield the same result as single-threaded.
       auto const sum = parse_expr_antisymm(
-          L"g_{i3,i4}^{a3,a4} t_{a1,a2}^{i3,i4} t_{a3,a4}^{i1,i2}"
-          L" + g_{i3,i4}^{a3,a4} t_{a3,a4}^{i1,i2} t_{a1}^{i3} t_{a2}^{i4}"
-          L" + g_{i3,i4}^{a3,a4} t_{a1}^{i3} t_{a2}^{i4} t_{a3,a4}^{i1,i2}");
+          "g_{i3,i4}^{a3,a4} t_{a1,a2}^{i3,i4} t_{a3,a4}^{i1,i2}"
+          " + g_{i3,i4}^{a3,a4} t_{a3,a4}^{i1,i2} t_{a1}^{i3} t_{a2}^{i4}"
+          " + g_{i3,i4}^{a3,a4} t_{a1}^{i3} t_{a2}^{i4} t_{a3,a4}^{i1,i2}");
       REQUIRE(sum->is<Sum>());
       REQUIRE(sum->as<Sum>().size() > 1);
 
@@ -566,16 +565,16 @@ TEST_CASE("optimize", "[optimize]") {
       using namespace sequant;
       // i occ (size 2); a virt (size 4). Tensors: g{a1;i1}, g{a2;i2}.
       auto sized = std::make_shared<IndexBasisRegistry>(*reg);
-      sized->extent(L"i", 2);
-      sized->extent(L"a", 4);
+      sized->extent("i", 2);
+      sized->extent("a", 4);
       auto sized_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(sized));
 
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
-      auto g1 = deserialize(L"g{a1;i1}", {.def_perm_symm = Symmetry::Nonsymm});
-      auto g2 = deserialize(L"g{a2;i2}", {.def_perm_symm = Symmetry::Nonsymm});
+      auto g1 = deserialize("g{a1;i1}", {.def_perm_symm = Symmetry::Nonsymm});
+      auto g2 = deserialize("g{a2;i2}", {.def_perm_symm = Symmetry::Nonsymm});
       TensorNetwork net{std::vector<ExprPtr>{g1, g2}};
       container::svector<Index> targets;  // empty: all indices remain open
       auto S = opt::detail::subset_footprints(net, targets, idxsz);
@@ -595,10 +594,10 @@ TEST_CASE("optimize", "[optimize]") {
       };
       // A 4-tensor chain whose intermediates differ in size by contraction
       // order.
-      auto t0 = deserialize(L"g{a1;i1}", {.def_perm_symm = Symmetry::Nonsymm});
-      auto t1 = deserialize(L"g{a1;a2}", {.def_perm_symm = Symmetry::Nonsymm});
-      auto t2 = deserialize(L"g{a2;a3}", {.def_perm_symm = Symmetry::Nonsymm});
-      auto t3 = deserialize(L"g{a3;i2}", {.def_perm_symm = Symmetry::Nonsymm});
+      auto t0 = deserialize("g{a1;i1}", {.def_perm_symm = Symmetry::Nonsymm});
+      auto t1 = deserialize("g{a1;a2}", {.def_perm_symm = Symmetry::Nonsymm});
+      auto t2 = deserialize("g{a2;a3}", {.def_perm_symm = Symmetry::Nonsymm});
+      auto t3 = deserialize("g{a3;i2}", {.def_perm_symm = Symmetry::Nonsymm});
       TensorNetwork net{std::vector<ExprPtr>{t0, t1, t2, t3}};
       container::svector<Index> targets;  // i1,i2 left open
       auto S = opt::detail::subset_footprints(net, targets, idxsz);
@@ -613,11 +612,11 @@ TEST_CASE("optimize", "[optimize]") {
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
-      std::vector<std::vector<std::wstring>> nets = {
-          {L"g{a1;i1}", L"g{a1;a2}", L"g{a2;i2}"},
-          {L"g{a1;i1}", L"g{a1;a2}", L"g{a2;a3}", L"g{a3;i2}"},
-          {L"g{i1;a1}", L"t{a1,a2;i1,i2}", L"g{a2;i2}"},
-          {L"g{a1,a2;i1,i2}", L"t{a1;i1}", L"t{a2;i2}"},
+      std::vector<std::vector<std::string>> nets = {
+          {"g{a1;i1}", "g{a1;a2}", "g{a2;i2}"},
+          {"g{a1;i1}", "g{a1;a2}", "g{a2;a3}", "g{a3;i2}"},
+          {"g{i1;a1}", "t{a1,a2;i1,i2}", "g{a2;i2}"},
+          {"g{a1,a2;i1,i2}", "t{a1;i1}", "t{a2;i2}"},
       };
       for (auto const& spec : nets) {
         std::vector<ExprPtr> ts;
@@ -673,10 +672,10 @@ TEST_CASE("optimize", "[optimize]") {
         }
         return peak;
       };
-      std::vector<std::vector<std::wstring>> nets = {
-          {L"g{a1;i1}", L"g{a1;a2}", L"g{a2;i2}"},
-          {L"g{a1;i1}", L"g{a1;a2}", L"g{a2;a3}", L"g{a3;i2}"},
-          {L"g{a1,a2;i1,i2}", L"t{a1;i1}", L"t{a2;i2}"},
+      std::vector<std::vector<std::string>> nets = {
+          {"g{a1;i1}", "g{a1;a2}", "g{a2;i2}"},
+          {"g{a1;i1}", "g{a1;a2}", "g{a2;a3}", "g{a3;i2}"},
+          {"g{a1,a2;i1,i2}", "t{a1;i1}", "t{a2;i2}"},
       };
       for (auto const& spec : nets) {
         std::vector<ExprPtr> ts;
@@ -700,18 +699,18 @@ TEST_CASE("optimize", "[optimize]") {
       // (0b0001..0b1000).
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
+              "F", IndexSpace::Type{0b10000}, {.dimension = 3})));
 
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
       auto is_batchable = [](Index const& ix) {
-        return ix.basis().base_key() == L"F";
+        return ix.basis().base_key() == "F";
       };
       auto t0 =
-          deserialize(L"g{a1;i1;F1}", {.def_perm_symm = Symmetry::Nonsymm});
+          deserialize("g{a1;i1;F1}", {.def_perm_symm = Symmetry::Nonsymm});
       auto t1 =
-          deserialize(L"g{a2;i1;F2}", {.def_perm_symm = Symmetry::Nonsymm});
+          deserialize("g{a2;i1;F2}", {.def_perm_symm = Symmetry::Nonsymm});
       TensorNetwork net{std::vector<ExprPtr>{t0, t1}};
       container::svector<Index> targets;
       auto aux = opt::detail::batchable_mode_list(net, is_batchable);
@@ -735,16 +734,16 @@ TEST_CASE("optimize", "[optimize]") {
       // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
+              "F", IndexSpace::Type{0b10000}, {.dimension = 3})));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
       auto is_batchable = [](Index const& ix) {
-        return ix.basis().base_key() == L"F";
+        return ix.basis().base_key() == "F";
       };
       std::size_t const batch = 1;
       std::vector<ExprPtr> ts;
-      for (auto s : {L"g{a1;i1;F1}", L"g{a2;i1;F1}", L"g{a2;i2;F2}"})
+      for (auto s : {"g{a1;i1;F1}", "g{a2;i1;F1}", "g{a2;i2;F2}"})
         ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
       TensorNetwork net{ts};
       container::svector<Index> targets;
@@ -785,17 +784,17 @@ TEST_CASE("optimize", "[optimize]") {
       using namespace sequant;
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
+              "F", IndexSpace::Type{0b10000}, {.dimension = 3})));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
       auto is_batchable = [](Index const& ix) {
-        return ix.basis().base_key() == L"F";
+        return ix.basis().base_key() == "F";
       };
       std::size_t const batch = 1;
-      std::vector<std::vector<std::wstring>> nets = {
-          {L"g{a1;i1;F1}", L"g{a2;i1;F1}", L"g{a2;i2;F2}"},  // shared F1
-          {L"g{a1;i1;F1}", L"g{a2;i1;F2}", L"g{a2;i2;F2}"},  // two distinct aux
+      std::vector<std::vector<std::string>> nets = {
+          {"g{a1;i1;F1}", "g{a2;i1;F1}", "g{a2;i2;F2}"},  // shared F1
+          {"g{a1;i1;F1}", "g{a2;i1;F2}", "g{a2;i2;F2}"},  // two distinct aux
       };
       for (auto const& spec : nets) {
         std::vector<ExprPtr> ts;
@@ -840,17 +839,17 @@ TEST_CASE("optimize", "[optimize]") {
       // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
+              "F", IndexSpace::Type{0b10000}, {.dimension = 3})));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
       auto is_batchable = [](Index const& ix) {
-        return ix.basis().base_key() == L"F";
+        return ix.basis().base_key() == "F";
       };
       std::size_t const batch = 1;
-      for (auto const& spec : std::vector<std::vector<std::wstring>>{
-               {L"g{a1;i1;F1}", L"g{a2;i1;F1}", L"g{a2;i2;F2}"},  // shared F1
-               {L"g{a1;i1;F1}", L"g{a2;i1;F2}", L"g{a2;i2;F2}"}}) {  // 2 aux
+      for (auto const& spec : std::vector<std::vector<std::string>>{
+               {"g{a1;i1;F1}", "g{a2;i1;F1}", "g{a2;i2;F2}"},     // shared F1
+               {"g{a1;i1;F1}", "g{a2;i1;F2}", "g{a2;i2;F2}"}}) {  // 2 aux
         std::vector<ExprPtr> ts;
         for (auto const& s : spec)
           ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
@@ -875,8 +874,8 @@ TEST_CASE("optimize", "[optimize]") {
       // product over the 3 leaves.
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
-      auto expr = deserialize(L"g{a1;i1;F1} * g{a2;i1;F1} * g{a2;i2;F2}",
+              "F", IndexSpace::Type{0b10000}, {.dimension = 3})));
+      auto expr = deserialize("g{a1;i1;F1} * g{a2;i1;F1} * g{a2;i2;F2}",
                               {.def_perm_symm = Symmetry::Nonsymm});
       OptimizeOptions opts;
       opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
@@ -884,7 +883,7 @@ TEST_CASE("optimize", "[optimize]") {
         return ix.basis().extent();
       };
       opts.batch_policy.is_batchable_contracted_index = [](Index const& ix) {
-        return ix.basis().base_key() == L"F";
+        return ix.basis().base_key() == "F";
       };
       opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
         return 1;
@@ -900,7 +899,7 @@ TEST_CASE("optimize", "[optimize]") {
       // this hits the SEQUANT_ASSERT(objective_function == DenseSize) in
       // opt_pure_product and fails; after Step 3 it returns a binarized
       // product.
-      auto expr = deserialize(L"g{a1;i1} * g{a1;a2} * g{a2;i2}");
+      auto expr = deserialize("g{a1;i1} * g{a1;a2} * g{a2;i2}");
       OptimizeOptions opts;
       opts.objective_function = ObjectiveFunction::DensePeakSize;
       opts.idx_to_extent = [](Index const& ix) -> std::size_t {
@@ -916,15 +915,15 @@ TEST_CASE("optimize", "[optimize]") {
       using namespace sequant;
       // Register F with dimension=3; two distinct aux indices F_1, F_2.
       // Index::label() returns base_key + "_" + ordinal, so the F1 ordinal-1
-      // index has label L"F_1" (not L"F1").
+      // index has label "F_1" (not "F1").
       auto f_resetter = set_scoped_default_context(
           get_default_context_snapshot().set(IndexBasisRegistry(*reg).add(
-              L"F", IndexSpace::Type{0b10000}, {.dimension = 3})));
+              "F", IndexSpace::Type{0b10000}, {.dimension = 3})));
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
       };
       auto is_batchable = [](Index const& ix) {
-        return ix.basis().base_key() == L"F";
+        return ix.basis().base_key() == "F";
       };
       // 3-tensor network where the connector tensor t1 carries BOTH F_1 and
       // F_2: F_1 is contracted between t0 and t1, while F_2 propagates
@@ -937,7 +936,7 @@ TEST_CASE("optimize", "[optimize]") {
       //   contracted: i1 (t0-t1), F1 (t0-t1), a2 (t1-t2), F2 (t1-t2)
       //   free (result): a1, i2   -> result size = 100*10 = 1000
       std::vector<ExprPtr> ts;
-      for (auto s : {L"g{a1;i1;F1}", L"g{a2;i1;F1,F2}", L"g{a2;i2;F2}"})
+      for (auto s : {"g{a1;i1;F1}", "g{a2;i1;F1,F2}", "g{a2;i2;F2}"})
         ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
       TensorNetwork net{ts};
       container::svector<Index> targets;
@@ -945,12 +944,12 @@ TEST_CASE("optimize", "[optimize]") {
       auto all1 = [](Index const&) -> std::size_t { return 1; };
       auto all2 = [](Index const&) -> std::size_t { return 2; };
       // mixed: F_1 gets batch=1, F_2 gets batch=2.  The discriminator uses
-      // the exact label returned by Index::label(), which is L"F_1" for
-      // ordinal-1 (not L"F1").  Because t1 carries both F_1 and F_2, any
+      // the exact label returned by Index::label(), which is "F_1" for
+      // ordinal-1 (not "F1").  Because t1 carries both F_1 and F_2, any
       // scalar implementation (same value for all indices) cannot reproduce
       // c_mixed; both per-index values participate in the optimum.
       auto mixed = [](Index const& ix) -> std::size_t {
-        return ix.label() == L"F_1" ? std::size_t{1} : std::size_t{2};
+        return ix.label() == "F_1" ? std::size_t{1} : std::size_t{2};
       };
       double c_all1 = opt::detail::peak_cost_batched(net, targets, idxsz,
                                                      is_batchable, all1, {});
@@ -1013,7 +1012,7 @@ TEST_CASE("optimize", "[optimize]") {
                                         /*subnet_cse=*/false};
 
       std::vector<ExprPtr> ts;
-      for (auto s : {L"g{a1;i1}", L"g{a1;a2}", L"g{a2;i2}"})
+      for (auto s : {"g{a1;i1}", "g{a1;a2}", "g{a2;i2}"})
         ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
       TensorNetwork net{ts};
       container::svector<Index> targets;
@@ -1067,7 +1066,7 @@ TEST_CASE("optimize", "[optimize]") {
 
     auto parse_inputs = [](auto&& inputs) {
       std::vector<EvalNode<EvalExpr>> expressions;
-      for (const std::wstring& current : inputs) {
+      for (const std::string& current : inputs) {
         expressions.push_back(binarize(deserialize<ResultExpr>(
             current, {.def_perm_symm = Symmetry::Nonsymm,
                       .def_braket_symm = BraKetSymmetry::Nonsymm,
@@ -1078,7 +1077,7 @@ TEST_CASE("optimize", "[optimize]") {
 
     auto parse_expected = [](auto&& outputs) {
       std::vector<ResultExpr> expected;
-      for (const std::wstring& current : outputs) {
+      for (const std::string& current : outputs) {
         expected.push_back(deserialize<ResultExpr>(
             current, {.def_perm_symm = Symmetry::Nonsymm,
                       .def_braket_symm = BraKetSymmetry::Nonsymm,
@@ -1091,52 +1090,51 @@ TEST_CASE("optimize", "[optimize]") {
       for (bool force_hash_collisions : {false, true}) {
         CAPTURE(force_hash_collisions);
 
-        for (const auto& [inputs, outputs] :
-             std::vector<std::pair<std::vector<std::wstring>,
-                                   std::vector<std::wstring>>>{
+        for (const auto& [inputs, outputs] : std::vector<
+                 std::pair<std::vector<std::string>, std::vector<std::string>>>{
                  // Basic example with only scalars
-                 {{L"R1 = (A B) C", L"R2 = D (A B)"},
-                  {L"CSE1 = A B", L"R1 = CSE1 C", L"R2 = D CSE1"}},
+                 {{"R1 = (A B) C", "R2 = D (A B)"},
+                  {"CSE1 = A B", "R1 = CSE1 C", "R2 = D CSE1"}},
                  // Test case in which the same intermediate is reused but
                  // requires different indexing
-                 {{L"R{a1,a3;i2,i3} = 2 GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3} - "
-                   L"GAM0{a1,a3;a4,a5} T2g{a4,a5;i3,i2}"},
-                  {L"CSE1{;;a3,a1,i2,i3} = GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3}",
-                   L"R{a1,a3;i2,i3} = 2 CSE1{;;a3,a1,i2,i3} - "
-                   L"CSE1{;;a3,a1,i3,i2}"}},
+                 {{"R{a1,a3;i2,i3} = 2 GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3} - "
+                   "GAM0{a1,a3;a4,a5} T2g{a4,a5;i3,i2}"},
+                  {"CSE1{;;a3,a1,i2,i3} = GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3}",
+                   "R{a1,a3;i2,i3} = 2 CSE1{;;a3,a1,i2,i3} - "
+                   "CSE1{;;a3,a1,i3,i2}"}},
                  // Scalar CSE with proto-index tensors
-                 {{L"R1 = (f{i1;a1<i1>} t{a1<i1>;i1}) A",
-                   L"R2 = B (f{i1;a1<i1>} t{a1<i1>;i1})"},
-                  {L"CSE1 = f{i1;a1<i1>} t{a1<i1>;i1}", L"R1 = CSE1 A",
-                   L"R2 = B CSE1"}},
+                 {{"R1 = (f{i1;a1<i1>} t{a1<i1>;i1}) A",
+                   "R2 = B (f{i1;a1<i1>} t{a1<i1>;i1})"},
+                  {"CSE1 = f{i1;a1<i1>} t{a1<i1>;i1}", "R1 = CSE1 A",
+                   "R2 = B CSE1"}},
                  // Tensor CSE with proto-index tensors: reused
                  // contraction with different external indexing
-                 {{L"R{i1;i2} = 2 g{i1;a1<i1>} t{a1<i1>;i2} - "
-                   L"g{i2;a1<i2>} t{a1<i2>;i1}"},
-                  {L"CSE1{;;i1,i2} = g{i1;a1<i1>} t{a1<i1>;i2}",
-                   L"R{i1;i2} = 2 CSE1{;;i1,i2} - CSE1{;;i2,i1}"}},
+                 {{"R{i1;i2} = 2 g{i1;a1<i1>} t{a1<i1>;i2} - "
+                   "g{i2;a1<i2>} t{a1<i2>;i1}"},
+                  {"CSE1{;;i1,i2} = g{i1;a1<i1>} t{a1<i1>;i2}",
+                   "R{i1;i2} = 2 CSE1{;;i1,i2} - CSE1{;;i2,i1}"}},
                  // ToT CSE: the intermediate itself has proto-indexed
                  // indices (tensor-of-tensor)
-                 {{L"R1{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) h{a1<i1>;i2}",
-                   L"R2{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) k{a1<i1>;i2}"},
-                  {L"CSE1{;;a1<i1>,i1} = g{i1;a1} C{a1;a1<i1>}",
-                   L"R1{i1;i2} = CSE1{;;a1<i1>,i1} h{a1<i1>;i2}",
-                   L"R2{i1;i2} = CSE1{;;a1<i1>,i1} k{a1<i1>;i2}"}},
+                 {{"R1{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) h{a1<i1>;i2}",
+                   "R2{i1;i2} = (g{i1;a1} C{a1;a1<i1>}) k{a1<i1>;i2}"},
+                  {"CSE1{;;a1<i1>,i1} = g{i1;a1} C{a1;a1<i1>}",
+                   "R1{i1;i2} = CSE1{;;a1<i1>,i1} h{a1<i1>;i2}",
+                   "R2{i1;i2} = CSE1{;;a1<i1>,i1} k{a1<i1>;i2}"}},
                  // In this case it is important that the computation of the
                  // subexpression isn't simply thrown at the beginning of the
                  // expression list as it depends on B, which has to be computed
                  // first.
-                 {{L"B = K J", L"R = (A B) C + (A B) D"},
-                  {L"B = K J", L"CSE1 = A B", L"R = CSE1 C + CSE1 D"}},
+                 {{"B = K J", "R = (A B) C + (A B) D"},
+                  {"B = K J", "CSE1 = A B", "R = CSE1 C + CSE1 D"}},
                  // CSE in the presence of bra-ket symmetry
-                 {{L"R2{u2,a1;u1,i1} = -2 f{u3;u4}:N-S Y{u2,u3;u1,u5} "
-                   L"t{a1,u5;i1,u4} + f{u3;u4}:N-S Y{u2,u4;u5,u1} "
-                   L"t{a1,u5;i1,u3} "
-                   L"+ f{u3;u4}:N-S Y{u2,u4;u1,u5} t{a1,u5;u3,i1}"},
-                  {L"CSE1{;;u4,u2,u1,u5} = f{u3;u4}:N-S Y{u2,u3;u1,u5}",
-                   L"R2{u2,a1;u1,i1} = -2 CSE1{;;u4,u2,u1,u5} t{a1,u5;i1,u4}"
-                   L" + CSE1{;;u3,u2,u5,u1} t{a1,u5;i1,u3}"
-                   L" + CSE1{;;u3,u2,u1,u5} t{a1,u5;u3,i1}"}},
+                 {{"R2{u2,a1;u1,i1} = -2 f{u3;u4}:N-S Y{u2,u3;u1,u5} "
+                   "t{a1,u5;i1,u4} + f{u3;u4}:N-S Y{u2,u4;u5,u1} "
+                   "t{a1,u5;i1,u3} "
+                   "+ f{u3;u4}:N-S Y{u2,u4;u1,u5} t{a1,u5;u3,i1}"},
+                  {"CSE1{;;u4,u2,u1,u5} = f{u3;u4}:N-S Y{u2,u3;u1,u5}",
+                   "R2{u2,a1;u1,i1} = -2 CSE1{;;u4,u2,u1,u5} t{a1,u5;i1,u4}"
+                   " + CSE1{;;u3,u2,u5,u1} t{a1,u5;i1,u3}"
+                   " + CSE1{;;u3,u2,u1,u5} t{a1,u5;u3,i1}"}},
              }) {
           CAPTURE(inputs);
 
@@ -1168,22 +1166,22 @@ TEST_CASE("optimize", "[optimize]") {
                                                         }};
 
       for (const auto& [inputs, outputs] : std::vector<
-               std::pair<std::vector<std::wstring>, std::vector<std::wstring>>>{
+               std::pair<std::vector<std::string>, std::vector<std::string>>>{
                // Can't eliminate any CSE due to differences in batching indices
-               {{L"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
-                 L"(A{i1;i6} B{i6;i2}) D{i2;i1}"},
-                {L"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
-                 L"(A{i1;i6} B{i6;i2}) D{i2;i1}"}},
-               {{L"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
-                 L"(A{i1;i3} B{i3;i2}) D{i2;i1}"},
-                {L"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
-                 L"(A{i1;i3} B{i3;i2}) D{i2;i1}"}},
+               {{"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
+                 "(A{i1;i6} B{i6;i2}) D{i2;i1}"},
+                {"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
+                 "(A{i1;i6} B{i6;i2}) D{i2;i1}"}},
+               {{"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
+                 "(A{i1;i3} B{i3;i2}) D{i2;i1}"},
+                {"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
+                 "(A{i1;i3} B{i3;i2}) D{i2;i1}"}},
                // Can eliminate if batched index is same
-               {{L"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
-                 L"(A{i3;i5} B{i5;i4}) D{i4;i3}"},
-                {L"CSE1{;;i1,i2} = A{i1;i5} B{i5;i2}",
-                 L"R = CSE1{;;i1,i2} C{i2;i1} + "
-                 L"CSE1{;;i3,i4} D{i4;i3}"}},
+               {{"R = (A{i1;i5} B{i5;i2}) C{i2;i1} + "
+                 "(A{i3;i5} B{i5;i4}) D{i4;i3}"},
+                {"CSE1{;;i1,i2} = A{i1;i5} B{i5;i2}",
+                 "R = CSE1{;;i1,i2} C{i2;i1} + "
+                 "CSE1{;;i3,i4} D{i4;i3}"}},
            }) {
         CAPTURE(inputs);
 
@@ -1208,8 +1206,8 @@ TEST_CASE("optimize", "[optimize]") {
     // μ̃ 50
     // Κ 90
     for (auto&& [k, v] :
-         std::initializer_list<std::pair<std::wstring_view, size_t>>{
-             {L"i", 10}, {L"a", 40}, {L"μ", 50}, {L"Κ", 90}}) {
+         std::initializer_list<std::pair<std::string_view, size_t>>{
+             {"i", 10}, {"a", 40}, {"μ", 50}, {"Κ", 90}}) {
       reg->extent(k, v);
     }
     auto ctx_resetter =
@@ -1260,8 +1258,8 @@ TEST_CASE("optimize", "[optimize]") {
       // Cost(...) * Y2 = 12*10*12 = 1440.
       // Total Unbalanced: 1440 + 1440 + 1440 = 4320.
       // 3168 < 4320 < 4608.
-      reg->extent(L"i", 12);
-      reg->extent(L"a", 10);
+      reg->extent("i", 12);
+      reg->extent("a", 10);
       auto ctx_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -1276,7 +1274,7 @@ TEST_CASE("optimize", "[optimize]") {
 
       // X{i1;a1} Y{a1;i2} X{i2;a2} Y{a2;i3}
       auto prod =
-          deserialize(L"X{i1;a1} Y{a1;i2} X{i2;a2} Y{a2;i3}")->as<Product>();
+          deserialize("X{i1;a1} Y{a1;i2} X{i2;a2} Y{a2;i3}")->as<Product>();
 
       auto res_cse = single_term_opt(prod, true);
       auto res_no_cse = single_term_opt(prod, false);
@@ -1297,8 +1295,8 @@ TEST_CASE("optimize", "[optimize]") {
           *get_default_context().index_basis_registry());
       // Same sizing trick as the section above: CSE prefers balanced,
       // no-CSE prefers unbalanced.
-      reg->extent(L"i", 12);
-      reg->extent(L"a", 10);
+      reg->extent("i", 12);
+      reg->extent("a", 10);
       auto ctx_resetter =
           set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -1307,7 +1305,7 @@ TEST_CASE("optimize", "[optimize]") {
       };
 
       auto prod =
-          deserialize(L"X{i1;a1} Y{a1;i2} X{i2;a2} Y{a2;i3}")->as<Product>();
+          deserialize("X{i1;a1} Y{a1;i2} X{i2;a2} Y{a2;i3}")->as<Product>();
       auto expr = ex<Product>(prod);
 
       auto res_cse =
@@ -1346,7 +1344,7 @@ TEST_CASE("optimize", "[optimize]") {
 
   /// verify that space changes did not leak
   auto reg_check = get_default_context().index_basis_registry();
-  auto uocc_check = reg_check->retrieve_space_ptr(L"a");
+  auto uocc_check = reg_check->retrieve_space_ptr("a");
   REQUIRE(uocc_check);
   REQUIRE(uocc_check->dimension() == 10);
 }
@@ -1358,46 +1356,46 @@ TEST_CASE("optimize", "[optimize]") {
 // #1.
 // ---------------------------------------------------------------------------
 namespace {
-std::wstring render_tree(sequant::ExprPtr const& e) {
+std::string render_tree(sequant::ExprPtr const& e) {
   using namespace sequant;
   if (e->is<Tensor>()) {
     auto const& t = e->as<Tensor>();
-    std::wstring s = std::wstring(t.label()) + L"{";
+    std::string s = std::string(t.label()) + "{";
     bool first = true;
     for (auto const& ix : t.bra()) {
-      if (!first) s += L",";
+      if (!first) s += ",";
       s += ix.full_label();
       first = false;
     }
-    s += L";";
+    s += ";";
     first = true;
     for (auto const& ix : t.ket()) {
-      if (!first) s += L",";
+      if (!first) s += ",";
       s += ix.full_label();
       first = false;
     }
     if (t.aux().size()) {
-      s += L";";
+      s += ";";
       first = true;
       for (auto const& ix : t.aux()) {
-        if (!first) s += L",";
+        if (!first) s += ",";
         s += ix.full_label();
         first = false;
       }
     }
-    return s + L"}";
+    return s + "}";
   }
   if (e->is<Product>()) {
-    std::wstring s = L"(";
+    std::string s = "(";
     bool first = true;
     for (auto const& f : e->as<Product>().factors()) {
-      if (!first) s += L" * ";
+      if (!first) s += " * ";
       s += render_tree(f);
       first = false;
     }
-    return s + L")";
+    return s + ")";
   }
-  return L"?";
+  return "?";
 }
 }  // namespace
 
@@ -1416,22 +1414,22 @@ TEST_CASE(
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->extent(L"i", 10).extent(L"a", 100);
+  reg->extent("i", 10).extent("a", 100);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
 
   auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"a";
+    return ix.basis().base_key() == "a";
   };
   std::function<bool(Index const&)> is_batchable_external =
-      [](Index const& ix) { return ix.basis().base_key() == L"i"; };
+      [](Index const& ix) { return ix.basis().base_key() == "i"; };
 
-  auto f = deserialize(L"f{i_1;i_2}", {.def_perm_symm = Symmetry::Nonsymm});
-  auto t = deserialize(L"t{i_2;a_1}", {.def_perm_symm = Symmetry::Nonsymm});
+  auto f = deserialize("f{i_1;i_2}", {.def_perm_symm = Symmetry::Nonsymm});
+  auto t = deserialize("t{i_2;a_1}", {.def_perm_symm = Symmetry::Nonsymm});
   TensorNetwork net{std::vector<ExprPtr>{f, t}};
 
-  auto i1 = Index{L"i_1"};
-  auto i2 = Index{L"i_2"};
+  auto i1 = Index{"i_1"};
+  auto i2 = Index{"i_2"};
 
   // Candidate list: roles unresolved, so BOTH occupied modes are admitted.
   auto aux = opt::detail::batchable_mode_list(net, is_batchable,
@@ -1484,17 +1482,17 @@ TEST_CASE("role filter: contracted mode sliced only in the contracted role",
   namespace o = sequant::opt::detail;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 8}));
+                   .add("F", IndexSpace::Type{0b10000}, {.dimension = 8}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto batch_fn = [](Index const&) -> std::size_t { return 2; };
   std::function<bool(Index const&)> is_F = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
+    return ix.basis().base_key() == "F";
   };
 
   std::vector<ExprPtr> ts;
-  for (auto s : {L"g{a1;F1}", L"h{F1;F2}", L"t{F2;a2}"})
+  for (auto s : {"g{a1;F1}", "h{F1;F2}", "t{F2;a2}"})
     ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
   TensorNetwork net{ts};
   container::svector<Index> const
@@ -1503,14 +1501,14 @@ TEST_CASE("role filter: contracted mode sliced only in the contracted role",
   auto count_F_modes = [](auto const& ctx) -> std::size_t {
     std::size_t n = 0;
     for (auto const& ix : ctx.batchable_modes)
-      if (ix.basis().base_key() == L"F") ++n;
+      if (ix.basis().base_key() == "F") ++n;
     return n;
   };
   // Number of DP cells whose sliced-set carries at least one "F" mode.
   auto n_F_sliced_cells = [](auto const& ctx) -> std::size_t {
     std::size_t mask = 0;
     for (std::size_t k = 0; k < ctx.m; ++k)
-      if (ctx.batchable_modes[k].basis().base_key() == L"F")
+      if (ctx.batchable_modes[k].basis().base_key() == "F")
         mask |= (std::size_t{1} << k);
     std::size_t count = 0;
     for (std::size_t id = 0; id < ctx.nCells; ++id)
@@ -1552,18 +1550,18 @@ TEST_CASE("role filter: external mode needs the external role, not a fallback",
   namespace o = sequant::opt::detail;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 8}));
+                   .add("F", IndexSpace::Type{0b10000}, {.dimension = 8}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto batch_fn = [](Index const&) -> std::size_t { return 2; };
   std::function<bool(Index const&)> is_F = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
+    return ix.basis().base_key() == "F";
   };
 
   // F1 occurs once (open on the root => EXTERNAL); a1 is shared (contracted).
   std::vector<ExprPtr> ts;
-  for (auto s : {L"g{a1;F1}", L"h{a1;a2}"})
+  for (auto s : {"g{a1;F1}", "h{a1;a2}"})
     ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
   TensorNetwork net{ts};
   container::svector<Index> const targets{};  // a2, F1 external; a1 contracted
@@ -1576,7 +1574,7 @@ TEST_CASE("role filter: external mode needs the external role, not a fallback",
   auto ctx = model.build_context(net, targets);
   std::size_t n_F = 0;
   for (auto const& ix : ctx.batchable_modes)
-    if (ix.basis().base_key() == L"F") ++n_F;
+    if (ix.basis().base_key() == "F") ++n_F;
   CHECK(n_F == 0);  // external F1 NOT admitted via a (now-removed) fallback
 }
 
@@ -1588,8 +1586,8 @@ TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
   mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 10}, {L"a", 40}, {L"μ", 50}, {L"Κ", 90}}) {
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 10}, {"a", 40}, {"μ", 50}, {"Κ", 90}}) {
     reg->extent(k, v);
   }
   auto ctx_resetter =
@@ -1600,41 +1598,40 @@ TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
 
   // motif from intermediate #1: g(μ̃μ̃Κ) · C(a<i>;μ̃) · C(μ̃;b<i,j>) · t(a<i>;i)
   auto prod =
-      deserialize(L"g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}")
+      deserialize("g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}")
           ->as<Product>();
-  std::wcout << L"\n=== INPUT: " << render_tree(ex<Product>(prod)) << L"\n";
+  std::cout << "\n=== INPUT: " << render_tree(ex<Product>(prod)) << "\n";
 
-  auto show = [&](auto metric, std::wstring name,
+  auto show = [&](auto metric, std::string name,
                   std::function<double(Index const&, std::size_t)> ip = {}) {
     auto res = opt::single_term_opt<decltype(metric)::value>(
         prod, idxsz, /*subnet_cse=*/false,
         CostParams{.volatile_weight = 1.0, .inner_pow = ip});
-    std::wcout << name << L":  " << render_tree(res) << L"\n";
+    std::cout << name << ":  " << render_tree(res) << "\n";
   };
   // Omitting inner_pow on a term with composite (CSV/PNO) indices used to
   // silently size the composite `a` at its full uocc extent (40), inverting
   // the factorization (this is the 4-PAO-integral class of bug). That path is
   // now forbidden: the sizing code throws instead of guessing.
-  std::wcout
-      << L"--- without inner_pow: now REJECTED (composite present) ---\n";
+  std::cout << "--- without inner_pow: now REJECTED (composite present) ---\n";
   CHECK_THROWS_AS(show(std::integral_constant<ObjectiveFunction,
                                               ObjectiveFunction::DenseFLOPs>{},
-                       L"FLOPs"),
+                       "FLOPs"),
                   sequant::Exception);
 
   auto ip = [](Index const&, std::size_t) -> double { return 12.0; };
-  std::wcout << L"--- with inner_pow (composite a<i> sized small=12, like a "
-                L"PNO/OSV domain) ---\n";
+  std::cout << "--- with inner_pow (composite a<i> sized small=12, like a "
+               "PNO/OSV domain) ---\n";
   show(std::integral_constant<ObjectiveFunction,
                               ObjectiveFunction::DenseFLOPs>{},
-       L"FLOPs", ip);
+       "FLOPs", ip);
   show(
       std::integral_constant<ObjectiveFunction, ObjectiveFunction::DenseSize>{},
-      L"Size ", ip);
+      "Size ", ip);
   show(std::integral_constant<ObjectiveFunction,
                               ObjectiveFunction::DensePeakSize>{},
-       L"Peak ", ip);
-  std::wcout << L"\n";
+       "Peak ", ip);
+  std::cout << "\n";
 }
 
 // The integer index-extent hook (has_index_extent) is a contract on
@@ -1654,8 +1651,8 @@ TEST_CASE("integer extent hook is never asked for a composite",
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
   mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 56}, {L"a", 12}, {L"μ", 602}, {L"Κ", 1652}}) {
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 56}, {"a", 12}, {"μ", 602}, {"Κ", 1652}}) {
     reg->extent(k, v);
   }
   auto ctx_resetter =
@@ -1670,7 +1667,7 @@ TEST_CASE("integer extent hook is never asked for a composite",
   };
   auto ip = [](Index const&, std::size_t) -> double { return 12.0; };
   auto prod =
-      deserialize(L"g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}")
+      deserialize("g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}")
           ->as<Product>();
 
   // unbatched objectives (AdditiveModel / PeakModel)
@@ -1709,7 +1706,7 @@ TEST_CASE("integer extent hook is never asked for a composite",
       .volatile_weight = 1.0,
       .peak_threshold = 1e6,
       .is_batchable_contracted_index =
-          [](Index const& ix) { return ix.basis().base_key() == L"Κ"; },
+          [](Index const& ix) { return ix.basis().base_key() == "Κ"; },
       .batch_target_size = [](Index const&) -> std::size_t { return 100; },
       .inner_pow = ip};
   auto res_b = opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
@@ -1736,11 +1733,11 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
   mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 56}, {L"a", 12}, {L"μ", 602}, {L"Κ", 1652}}) {
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 56}, {"a", 12}, {"μ", 602}, {"Κ", 1652}}) {
     reg->extent(k, v);
   }
-  auto aux_space = reg->retrieve_space(L"Κ");
+  auto aux_space = reg->retrieve_space("Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -1757,25 +1754,25 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
 
   // verbatim term #1 from the water-14 trace
   auto prod = deserialize(
-                  L"g{μ̃_1;i_3;Κ_1} C{a_3<i_2>;μ̃_1} g{μ̃_2;μ̃_3;Κ_1} "
-                  L"C{a_4<i_1>;μ̃_2} C{μ̃_3;a_1<i_1,i_2>} t{a_4<i_1>;i_1} "
-                  L"t{a_5<i_3>;i_3} t{a_3<i_2>;i_2} C{μ̃_5;a_5<i_3>} "
-                  L"s{μ̃_4;μ̃_5} C{a_2<i_1,i_2>;μ̃_4}")
+                  "g{μ̃_1;i_3;Κ_1} C{a_3<i_2>;μ̃_1} g{μ̃_2;μ̃_3;Κ_1} "
+                  "C{a_4<i_1>;μ̃_2} C{μ̃_3;a_1<i_1,i_2>} t{a_4<i_1>;i_1} "
+                  "t{a_5<i_3>;i_3} t{a_3<i_2>;i_2} C{μ̃_5;a_5<i_3>} "
+                  "s{μ̃_4;μ̃_5} C{a_2<i_1,i_2>;μ̃_4}")
                   ->as<Product>();
-  std::wcout << L"\n=== FULL TERM #1 (" << prod.factors().size()
-             << L" tensors) ===\n";
+  std::cout << "\n=== FULL TERM #1 (" << prod.factors().size()
+            << " tensors) ===\n";
 
   {
     auto res = opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
         prod, idxsz, false,
         CostParams{.volatile_weight = 1.0, .inner_pow = ip});
-    std::wcout << L"FLOPs:        " << render_tree(res) << L"\n";
+    std::cout << "FLOPs:        " << render_tree(res) << "\n";
   }
   {
     auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
         prod, idxsz, false,
         CostParams{.volatile_weight = 1.0, .inner_pow = ip});
-    std::wcout << L"PeakSize:     " << render_tree(res) << L"\n";
+    std::cout << "PeakSize:     " << render_tree(res) << "\n";
   }
   {
     auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
@@ -1784,10 +1781,10 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
                    .is_batchable_contracted_index = is_batch,
                    .batch_target_size = bts,
                    .inner_pow = ip});
-    std::wcout << L"PeakBatched:  " << render_tree(res) << L"\n";
+    std::cout << "PeakBatched:  " << render_tree(res) << "\n";
   }
-  std::wcout << L"\n  >>> looking for (C{a_4<i_1>;μ̃_1216} * t{a_4<i_1>;i_1}) "
-                L"contracted EARLY <<<\n\n";
+  std::cout << "\n  >>> looking for (C{a_4<i_1>;μ̃_1216} * t{a_4<i_1>;i_1}) "
+               "contracted EARLY <<<\n\n";
 }
 
 TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
@@ -1798,11 +1795,11 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
   mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 16}, {L"a", 12}, {L"μ", 170}, {L"Κ", 472}}) {
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 16}, {"a", 12}, {"μ", 170}, {"Κ", 472}}) {
     reg->extent(k, v);
   }
-  auto aux_space = reg->retrieve_space(L"Κ");
+  auto aux_space = reg->retrieve_space("Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -1819,13 +1816,13 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
   // tetramer trace term 3 (verbatim, indices renumbered to small ordinals)
   auto prod =
       deserialize(
-          L"C{a_3<i_1>;μ̃_1} C{μ̃_2;a_1<i_1>} g{μ̃_1;μ̃_2;Κ_1} g{μ̃_3;i_2;Κ_1} "
-          L"C{a_2<i_2>;μ̃_3} t{a_2<i_2>;i_2} t{a_3<i_1>;i_1}")
+          "C{a_3<i_1>;μ̃_1} C{μ̃_2;a_1<i_1>} g{μ̃_1;μ̃_2;Κ_1} g{μ̃_3;i_2;Κ_1} "
+          "C{a_2<i_2>;μ̃_3} t{a_2<i_2>;i_2} t{a_3<i_1>;i_1}")
           ->as<Product>();
-  std::wcout << L"\n=== TETRAMER TERM 3 (" << prod.factors().size()
-             << L" tensors) ===\n";
-  std::wcout << L"  trace chose: ...(g{μ̃μ̃Κ} * (...)) * t{a_3<i_1>;i_1}  "
-                L"[a_3<i_1> DEFERRED]\n";
+  std::cout << "\n=== TETRAMER TERM 3 (" << prod.factors().size()
+            << " tensors) ===\n";
+  std::cout << "  trace chose: ...(g{μ̃μ̃Κ} * (...)) * t{a_3<i_1>;i_1}  "
+               "[a_3<i_1> DEFERRED]\n";
   auto fp = opt::detail::footprint_counter(
       idxsz, std::function<double(Index const&, std::size_t)>(ip));
   auto fp_flops_c = opt::detail::flops_counter(
@@ -1841,10 +1838,10 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
         v.push_back(ix);
       return v;
     }
-    std::map<std::wstring, std::pair<int, Index>> cnt;
+    std::map<std::string, std::pair<int, Index>> cnt;
     for (auto const& fct : e->as<Product>().factors()) {
       for (auto const& ix : freeix(fct, mx)) {
-        auto k = std::wstring(ix.full_label());
+        auto k = std::string(ix.full_label());
         cnt[k].first++;
         cnt[k].second = ix;
       }
@@ -1860,7 +1857,7 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
   // max LEAF size: the raw DF integral g{μ̃,μ̃,Κ} is a huge leaf that is resident
   // during its own contraction, so it lower-bounds the peak of EVERY schedule.
   double max_leaf = 0.0;
-  std::wstring big;
+  std::string big;
   for (auto const& fct : prod.factors()) {
     std::vector<Index> v;
     for (auto const& ix : fct->as<Tensor>().const_braketaux_indices())
@@ -1871,14 +1868,13 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
       big = render_tree(fct);
     }
   }
-  std::wcout << L"max LEAF = " << (long long)max_leaf << L"  (" << big
-             << L")\n";
+  std::cout << "max LEAF = " << (long long)max_leaf << "  (" << big << ")\n";
   for (auto const& fct : prod.factors()) {
     std::vector<Index> v;
     for (auto const& ix : fct->as<Tensor>().const_braketaux_indices())
       v.push_back(ix);
-    std::wcout << L"   leaf " << render_tree(fct) << L" = " << (long long)fp(v)
-               << L"\n";
+    std::cout << "   leaf " << render_tree(fct) << " = " << (long long)fp(v)
+              << "\n";
   }
 
   // Replicate PeakModel::relax EXACTLY on a fixed binary tree.
@@ -1907,7 +1903,7 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
 
   // weighted flops of a fixed binary tree: w=vw when subtree contains a 't'.
   std::function<bool(ExprPtr const&)> has_t = [&](ExprPtr const& e) -> bool {
-    if (e->is<Tensor>()) return e->as<Tensor>().label() == L"t";
+    if (e->is<Tensor>()) return e->as<Tensor>().label() == "t";
     for (auto const& fct : e->as<Product>().factors())
       if (has_t(fct)) return true;
     return false;
@@ -1928,29 +1924,29 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
     return w * here + tree_flops(facs[0], vw) + tree_flops(facs[1], vw);
   };
 
-  auto report = [&](std::wstring name, sequant::ExprPtr res) -> double {
+  auto report = [&](std::string name, sequant::ExprPtr res) -> double {
     double mx = 0.0;
     freeix(res, mx);
     double tpk = tree_peak(res).peak;
-    std::wcout << name << L"  recurrence_PEAK=" << (long long)tpk
-               << L"  max_imed=" << (long long)mx << L"  wflops(vw1)="
-               << (long long)tree_flops(res, 1.0) << L"  wflops(vw100)="
-               << (long long)tree_flops(res, 100.0) << L"\n      "
-               << render_tree(res) << L"\n";
+    std::cout << name << "  recurrence_PEAK=" << (long long)tpk
+              << "  max_imed=" << (long long)mx
+              << "  wflops(vw1)=" << (long long)tree_flops(res, 1.0)
+              << "  wflops(vw100)=" << (long long)tree_flops(res, 100.0)
+              << "\n      " << render_tree(res) << "\n";
     return mx;
   };
   double flops_mx =
-      report(L"FLOPs:        ",
+      report("FLOPs:        ",
              opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
                  prod, idxsz, false,
                  CostParams{.volatile_weight = 1.0, .inner_pow = ip}));
   double peak_mx =
-      report(L"PeakSize:     ",
+      report("PeakSize:     ",
              opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
                  prod, idxsz, false,
                  CostParams{.volatile_weight = 1.0, .inner_pow = ip}));
   double pbat_mx =
-      report(L"PeakBatched:  ",
+      report("PeakBatched:  ",
              opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
                  prod, idxsz, false,
                  CostParams{.volatile_weight = 1.0,
@@ -1959,23 +1955,23 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
                             .inner_pow = ip}));
   // Real MPQC config: t is volatile, volatile_weight=100. The tie-break weights
   // volatile (replayed) flops, so it must STILL eliminate the OSV early.
-  auto is_t = [](Tensor const& t) { return t.label() == L"t"; };
+  auto is_t = [](Tensor const& t) { return t.label() == "t"; };
   // isolate volatile_weight: hold is_volatile_leaf=is_t FIXED, vary only vw.
-  double peak_v = report(L"PeakSize/is_t,vw1:   ",
+  double peak_v = report("PeakSize/is_t,vw1:   ",
                          opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
                              prod, idxsz, false,
                              CostParams{.is_volatile_leaf = is_t,
                                         .volatile_weight = 1.0,
                                         .inner_pow = ip}));
   double peak_v100 =
-      report(L"PeakSize/is_t,vw100: ",
+      report("PeakSize/is_t,vw100: ",
              opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
                  prod, idxsz, false,
                  CostParams{.is_volatile_leaf = is_t,
                             .volatile_weight = 100.0,
                             .inner_pow = ip}));
   double pbat_v =
-      report(L"PeakBatch/is_t,vw1:  ",
+      report("PeakBatch/is_t,vw1:  ",
              opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
                  prod, idxsz, false,
                  CostParams{.is_volatile_leaf = is_t,
@@ -1984,7 +1980,7 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
                             .batch_target_size = bts,
                             .inner_pow = ip}));
   double pbat_v100 =
-      report(L"PeakBatch/is_t,vw100:",
+      report("PeakBatch/is_t,vw100:",
              opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
                  prod, idxsz, false,
                  CostParams{.is_volatile_leaf = is_t,
@@ -1994,7 +1990,7 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
                             .inner_pow = ip}));
   (void)peak_v100;
   (void)pbat_v100;
-  std::wcout << L"\n";
+  std::cout << "\n";
   // The defect this guards against is the OSV-deferred *outer product*: folding
   // the volatile t-amplitude in before contracting the shared subtree forces a
   // ~5.5M-element intermediate (`osv_outer_product`, below). The peak
@@ -2039,7 +2035,7 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
   po_cost.inner_pow = ip;
   po_cost.batch_persistent_only = true;
   double pbat_po =
-      report(L"PeakBatch/persistent_only:",
+      report("PeakBatch/persistent_only:",
              opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
                  prod, idxsz, false, po_cost));
   CHECK(pbat_po >= osv_outer_product);  // gate restored -> OSV deferred again
@@ -2064,11 +2060,11 @@ TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
   // C60 cc-pVDZ-F12-ish extents: active occ 120, PNO domain 42, PAO 1800,
   // DF aux 6000 (sliced to batch 30 by the batched objective).
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 120}, {L"a", 42}, {L"μ", 1800}, {L"Κ", 6000}}) {
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 120}, {"a", 42}, {"μ", 1800}, {"Κ", 6000}}) {
     reg->extent(k, v);
   }
-  auto aux_space = reg->retrieve_space(L"Κ");
+  auto aux_space = reg->retrieve_space("Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -2086,8 +2082,8 @@ TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
   };
 
   auto prod = deserialize(
-                  L"g{i_3;i_1;Κ_1} C{a_1<i_1,i_2>;μ̃_1} "
-                  L"g{μ̃_1;μ̃_2;Κ_1} C{μ̃_2;a_3<i_2,i_3>}")
+                  "g{i_3;i_1;Κ_1} C{a_1<i_1,i_2>;μ̃_1} "
+                  "g{μ̃_1;μ̃_2;Κ_1} C{μ̃_2;a_3<i_2,i_3>}")
                   ->as<Product>();
 
   auto fp = opt::detail::footprint_counter(
@@ -2101,10 +2097,10 @@ TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
         v.push_back(ix);
       return v;
     }
-    std::map<std::wstring, std::pair<int, Index>> cnt;
+    std::map<std::string, std::pair<int, Index>> cnt;
     for (auto const& fct : e->as<Product>().factors())
       for (auto const& ix : freeix(fct, mx)) {
-        auto k = std::wstring(ix.full_label());
+        auto k = std::string(ix.full_label());
         cnt[k].first++;
         cnt[k].second = ix;
       }
@@ -2136,26 +2132,26 @@ TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
     double rfirst = std::max({L.leafsum + R.peak, R.S + L.peak, both});
     return TP{std::min(lfirst, rfirst), L.leafsum + R.leafsum, Snode};
   };
-  auto report = [&](std::wstring name, ExprPtr res) {
+  auto report = [&](std::string name, ExprPtr res) {
     double mx = 0.0;
     freeix(res, mx);
     double tpk = tree_peak(res).peak;
-    std::wcout << name << L"  max_imed(elems)=" << (long long)mx
-               << L"  recurrence_PEAK(elems)=" << (long long)tpk << L"\n      "
-               << render_tree(res) << L"\n";
+    std::cout << name << "  max_imed(elems)=" << (long long)mx
+              << "  recurrence_PEAK(elems)=" << (long long)tpk << "\n      "
+              << render_tree(res) << "\n";
   };
 
-  std::wcout
-      << L"\n=== C60 MEMBER-2 (i=120, a=42, μ̃=1800, Κ=6000, batch=30) ===\n";
-  report(L"FLOPs:       ",
+  std::cout
+      << "\n=== C60 MEMBER-2 (i=120, a=42, μ̃=1800, Κ=6000, batch=30) ===\n";
+  report("FLOPs:       ",
          opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
              prod, idxsz, false,
              CostParams{.volatile_weight = 1.0, .inner_pow = ip}));
-  report(L"PeakSize:    ",
+  report("PeakSize:    ",
          opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
              prod, idxsz, false,
              CostParams{.volatile_weight = 1.0, .inner_pow = ip}));
-  report(L"PeakBatched: ",
+  report("PeakBatched: ",
          opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
              prod, idxsz, false,
              CostParams{.volatile_weight = 1.0,
@@ -2165,14 +2161,14 @@ TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
   // Experiment: make PAO (μ̃) batchable TOO (batch 100). Prediction: STO
   // switches away from the double-proto to a g·g-first tree whose worst
   // intermediate carries μ̃ and is now sliceable.
-  auto mu_basis = reg->retrieve(L"μ̃");
+  auto mu_basis = reg->retrieve("μ̃");
   auto is_batch2 = [aux_space, mu_basis](Index const& ix) {
     return ix.space() == aux_space || ix.basis() == mu_basis;
   };
   std::function<std::size_t(Index const&)> bts2 = [aux_space](Index const& ix) {
     return ix.space() == aux_space ? std::size_t{30} : std::size_t{100};
   };
-  report(L"PeakBatched(+μ̃):",
+  report("PeakBatched(+μ̃):",
          opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
              prod, idxsz, false,
              CostParams{.volatile_weight = 1.0,
@@ -2182,10 +2178,10 @@ TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
   // Reference: the double-proto intermediate as the model sizes it, dense at
   // d=42 (== the block-sparse upper bound), with Κ at one batch of 30:
   //   i^3 * Κ_batch * a * a  elements.
-  std::wcout << L"double-proto imed (i^3*Κbatch*a^2) elems = "
-             << (long long)(120.0 * 120 * 120 * 30 * 42 * 42) << L"  (="
-             << (long long)(120.0 * 120 * 120 * 30 * 42 * 42 * 8)
-             << L" B dense)\n\n";
+  std::cout << "double-proto imed (i^3*Κbatch*a^2) elems = "
+            << (long long)(120.0 * 120 * 120 * 30 * 42 * 42)
+            << "  (=" << (long long)(120.0 * 120 * 120 * 30 * 42 * 42 * 8)
+            << " B dense)\n\n";
 }
 
 TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
@@ -2197,10 +2193,10 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
   mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 16}, {L"a", 12}, {L"μ", 170}, {L"Κ", 472}})
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 16}, {"a", 12}, {"μ", 170}, {"Κ", 472}})
     reg->extent(k, v);
-  auto aux = reg->retrieve_space(L"Κ");
+  auto aux = reg->retrieve_space("Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -2211,14 +2207,14 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   std::function<std::size_t(Index const&)> bts = [](Index const&) {
     return std::size_t{236};
   };
-  auto is_t = [](Tensor const& t) { return t.label() == L"t"; };
+  auto is_t = [](Tensor const& t) { return t.label() == "t"; };
 
   // PPL: R_ij^{a1 a2} = (a1 a3 | a2 a4) t_ij^{a3 a4}, DF: (a1 a3|K)=gCC, (a2
   // a4|K)=gCC
   auto prod = deserialize(
-                  L"C{a_1<i_1,i_2>;μ̃_1} g{μ̃_1;μ̃_2;Κ_1} C{μ̃_2;a_3<i_1,i_2>} "
-                  L"C{a_2<i_1,i_2>;μ̃_3} g{μ̃_3;μ̃_4;Κ_1} C{μ̃_4;a_4<i_1,i_2>} "
-                  L"t{a_3<i_1,i_2>,a_4<i_1,i_2>;i_1,i_2}")
+                  "C{a_1<i_1,i_2>;μ̃_1} g{μ̃_1;μ̃_2;Κ_1} C{μ̃_2;a_3<i_1,i_2>} "
+                  "C{a_2<i_1,i_2>;μ̃_3} g{μ̃_3;μ̃_4;Κ_1} C{μ̃_4;a_4<i_1,i_2>} "
+                  "t{a_3<i_1,i_2>,a_4<i_1,i_2>;i_1,i_2}")
                   ->as<Product>();
 
   auto fp = opt::detail::footprint_counter(
@@ -2233,10 +2229,10 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
         v.push_back(ix);
       return v;
     }
-    std::map<std::wstring, std::pair<int, Index>> c;
+    std::map<std::string, std::pair<int, Index>> c;
     for (auto const& f : e->as<Product>().factors())
       for (auto const& ix : freeix(f, mx)) {
-        auto k = std::wstring(ix.full_label());
+        auto k = std::string(ix.full_label());
         c[k].first++;
         c[k].second = ix;
       }
@@ -2248,7 +2244,7 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
     return r;
   };
   std::function<bool(ExprPtr const&)> has_t = [&](ExprPtr const& e) -> bool {
-    if (e->is<Tensor>()) return e->as<Tensor>().label() == L"t";
+    if (e->is<Tensor>()) return e->as<Tensor>().label() == "t";
     for (auto const& f : e->as<Product>().factors())
       if (has_t(f)) return true;
     return false;
@@ -2262,15 +2258,16 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
     double w = has_t(e) ? vw : 1.0;
     return w * fc(a, b, r) + wflops(f[0], vw) + wflops(f[1], vw);
   };
-  auto rep = [&](std::wstring name, ExprPtr res) -> double {
+  auto rep = [&](std::string name, ExprPtr res) -> double {
     double mx = 0;
     freeix(res, mx);
     double wf = wflops(res, 100.0);
-    std::wcout << name << L"  max_imed=" << (long long)mx << L"  wflops(vw100)="
-               << (long long)wf << L"\n      " << render_tree(res) << L"\n";
+    std::cout << name << "  max_imed=" << (long long)mx
+              << "  wflops(vw100)=" << (long long)wf << "\n      "
+              << render_tree(res) << "\n";
     return wf;
   };
-  std::wcout << L"\n=== PPL term: form-W vs fold-t ===\n";
+  std::cout << "\n=== PPL term: form-W vs fold-t ===\n";
   // The flop-optimal schedule forms the persistent 4-PNO integral W=(ac|bd)=gCC
   // *gCC once, then contracts the volatile amplitude t into it -- the volatile
   // (replayed) flops are the cheap step. The "fold-t" alternative folds t into
@@ -2279,20 +2276,20 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   // so it is slightly LARGER in peak than fold-t; only the peak_flops_tolerance
   // (default 0.10) lets the peak objectives accept that within-tolerance peak
   // bump in exchange for the large volatile-flop win, i.e. form W like FLOPs.
-  double flops_w = rep(L"FLOPs/vw100:  ",
-                       opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-                           prod, idxsz, false,
-                           CostParams{.is_volatile_leaf = is_t,
-                                      .volatile_weight = 100.0,
-                                      .inner_pow = ip}));
-  double peak_w = rep(L"PeakSize/vw100:",
+  double flops_w =
+      rep("FLOPs/vw100:  ", opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
+                                prod, idxsz, false,
+                                CostParams{.is_volatile_leaf = is_t,
+                                           .volatile_weight = 100.0,
+                                           .inner_pow = ip}));
+  double peak_w = rep("PeakSize/vw100:",
                       opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
                           prod, idxsz, false,
                           CostParams{.is_volatile_leaf = is_t,
                                      .volatile_weight = 100.0,
                                      .inner_pow = ip}));
   double pbat_w =
-      rep(L"PeakB/vw100:  ",
+      rep("PeakB/vw100:  ",
           opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
               prod, idxsz, false,
               CostParams{.is_volatile_leaf = is_t,
@@ -2300,7 +2297,7 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
                          .is_batchable_contracted_index = is_batch,
                          .batch_target_size = bts,
                          .inner_pow = ip}));
-  std::wcout << L"\n";
+  std::cout << "\n";
   // The epsilon-tolerant Pareto selection makes both peak objectives form W,
   // matching the flop-optimal volatile-weighted flop count.
   CHECK(peak_w == flops_w);
@@ -2308,7 +2305,7 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   // Strict peak-min (peak_flops_tolerance=0) instead defers to fold-t: it
   // refuses the W peak bump, paying the much larger volatile-flop ladder.
   double peak_w_strict =
-      rep(L"PeakSize/strict:",
+      rep("PeakSize/strict:",
           opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
               prod, idxsz, false,
               CostParams{.is_volatile_leaf = is_t,
@@ -2325,7 +2322,7 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   // eval:cache is off for exactly this reason.) A form-W tree would reproduce
   // flops_w; fold-t does not.
   double pbat_w_vw1 =
-      rep(L"PeakB/vw1:    ",
+      rep("PeakB/vw1:    ",
           opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
               prod, idxsz, false,
               CostParams{.is_volatile_leaf = is_t,
@@ -2340,7 +2337,7 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   // peak_threshold: its replay-weighted flop count equals the FLOPs optimum.
   // (Peak-first at strict tolerance did NOT: peak_w_strict > flops_w above.)
   double tbat_w =
-      rep(L"TimeSpaceB/vw100:",
+      rep("TimeSpaceB/vw100:",
           opt::single_term_opt<ObjectiveFunction::DenseTimeSpaceBatched>(
               prod, idxsz, false,
               CostParams{.is_volatile_leaf = is_t,
@@ -2359,7 +2356,7 @@ TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
   tight.batch_target_size = bts;
   tight.inner_pow = ip;
   double tbat_w_tight =
-      rep(L"TimeSpaceB/tight:",
+      rep("TimeSpaceB/tight:",
           opt::single_term_opt<ObjectiveFunction::DenseTimeSpaceBatched>(
               prod, idxsz, false, tight));
   CHECK(tbat_w_tight == flops_w);
@@ -2399,11 +2396,11 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
   mbpt::add_pao_basis(reg, mbpt::Spin::any);
   // water-20-scale extents (≈ water-14 OSV extents scaled by 20/14).
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 80}, {L"a", 12}, {L"μ", 860}, {L"Κ", 2360}}) {
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 80}, {"a", 12}, {"μ", 860}, {"Κ", 2360}}) {
     reg->extent(k, v);
   }
-  auto aux_space = reg->retrieve_space(L"Κ");
+  auto aux_space = reg->retrieve_space("Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -2421,12 +2418,12 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
   // form MPQC exposes. Externals: i_1,i_2,a_1<i_1,i_2>,a_2<i_1,i_2>; the halves
   // share/contract Κ_1, i_3, i_4.
   auto nested = deserialize(
-      L"( g{i_4;μ̃_1;Κ_1} * C{μ̃_1;a_3<i_1,i_3>}"
-      L"  * t{a_1<i_1,i_3>,a_3<i_1,i_3>;i_1,i_3}"
-      L"  * C{a_1<i_1,i_3>;μ̃_2} * s{μ̃_2;μ̃_3} * C{μ̃_3;a_1<i_1,i_2>} )"
-      L"* ( g{i_3;μ̃_4;Κ_1} * C{μ̃_4;a_4<i_2,i_4>}"
-      L"  * t{a_2<i_2,i_4>,a_4<i_2,i_4>;i_2,i_4}"
-      L"  * C{a_2<i_2,i_4>;μ̃_5} * s{μ̃_5;μ̃_6} * C{μ̃_6;a_2<i_1,i_2>} )",
+      "( g{i_4;μ̃_1;Κ_1} * C{μ̃_1;a_3<i_1,i_3>}"
+      "  * t{a_1<i_1,i_3>,a_3<i_1,i_3>;i_1,i_3}"
+      "  * C{a_1<i_1,i_3>;μ̃_2} * s{μ̃_2;μ̃_3} * C{μ̃_3;a_1<i_1,i_2>} )"
+      "* ( g{i_3;μ̃_4;Κ_1} * C{μ̃_4;a_4<i_2,i_4>}"
+      "  * t{a_2<i_2,i_4>,a_4<i_2,i_4>;i_2,i_4}"
+      "  * C{a_2<i_2,i_4>;μ̃_5} * s{μ̃_5;μ̃_6} * C{μ̃_6;a_2<i_1,i_2>} )",
       {.def_perm_symm = Symmetry::Nonsymm});
   Product flatp{};
   for (auto const& half : nested->as<Product>().factors())
@@ -2436,14 +2433,14 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
 
   // Subtree predicates (robust to scalar/constant factors).
   std::function<bool(ExprPtr const&)> has_g = [&](ExprPtr const& e) -> bool {
-    if (e->is<Tensor>()) return e->as<Tensor>().label() == L"g";
+    if (e->is<Tensor>()) return e->as<Tensor>().label() == "g";
     if (e->is<Product>())
       for (auto const& f : e->as<Product>().factors())
         if (has_g(f)) return true;
     return false;
   };
   std::function<bool(ExprPtr const&)> has_t = [&](ExprPtr const& e) -> bool {
-    if (e->is<Tensor>()) return e->as<Tensor>().label() == L"t";
+    if (e->is<Tensor>()) return e->as<Tensor>().label() == "t";
     if (e->is<Product>())
       for (auto const& f : e->as<Product>().factors())
         if (has_t(f)) return true;
@@ -2486,10 +2483,10 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
         return v;
       }
       if (!e->is<Product>()) return {};
-      std::map<std::wstring, std::pair<int, Index>> cnt;
+      std::map<std::string, std::pair<int, Index>> cnt;
       for (auto const& fct : e->as<Product>().factors())
         for (auto const& ix : freeix(fct)) {
-          auto k = std::wstring(ix.full_label());
+          auto k = std::string(ix.full_label());
           cnt[k].first++;
           cnt[k].second = ix;
         }
@@ -2546,14 +2543,14 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
         prod, idxsz, false, cost);
     bool integral = forms_integral(res);
     double gb = batched_peak(res, Kb) * 8.0 / 1e9;
-    std::wcout << L"  K_b=" << Kb << L"\tlambda=" << lambda
-               << (integral ? L"\tEARLY-K (integral)" : L"\tLATE-K  (t.(gC))")
-               << L"\tpeak=" << gb << L" GB\n";
+    std::cout << "  K_b=" << Kb << "\tlambda=" << lambda
+              << (integral ? "\tEARLY-K (integral)" : "\tLATE-K  (t.(gC))")
+              << "\tpeak=" << gb << " GB\n";
     return integral;
   };
 
-  std::wcout << L"\n=== quadratic bubble exchange: i=80 mu=860 K=2360 p=" << p
-             << L" (crossover K_b=p/2=" << p / 2 << L") ===\n";
+  std::cout << "\n=== quadratic bubble exchange: i=80 mu=860 K=2360 p=" << p
+            << " (crossover K_b=p/2=" << p / 2 << ") ===\n";
   // Crossover at K_b = p/2 = 6. With Kappa sliced to a tiny batch the
   // held-whole integral cannot win (o^4*p^2 > 2*o^4*p*K_b for K_b < p/2), so
   // the optimizer takes the batchable late-K route; with a peak-trading premium
@@ -2575,7 +2572,7 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
   // crossover it stays late-K; above it flips to early-K -- the suspected
   // real driver of the held-whole 4-occ/2-PNO object (the C60 OOM),
   // independent of accumulation.
-  auto is_t = [](Tensor const& t) { return t.label() == L"t"; };
+  auto is_t = [](Tensor const& t) { return t.label() == "t"; };
   auto real_config_integral = [&](std::size_t Kb) -> bool {
     std::function<std::size_t(Index const&)> bts = [Kb](Index const&) {
       return Kb;
@@ -2627,11 +2624,11 @@ TEST_CASE(
   mbpt::add_pao_basis(reg, mbpt::Spin::any);
   // water-20-scale extents (matches the "quadratic bubble" test above).
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 80}, {L"a", 12}, {L"μ", 860}, {L"Κ", 2360}}) {
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 80}, {"a", 12}, {"μ", 860}, {"Κ", 2360}}) {
     reg->extent(k, v);
   }
-  auto aux_space = reg->retrieve_space(L"Κ");
+  auto aux_space = reg->retrieve_space("Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -2644,12 +2641,12 @@ TEST_CASE(
   };
 
   auto nested = deserialize(
-      L"( g{i_4;μ̃_1;Κ_1} * C{μ̃_1;a_3<i_1,i_3>}"
-      L"  * t{a_1<i_1,i_3>,a_3<i_1,i_3>;i_1,i_3}"
-      L"  * C{a_1<i_1,i_3>;μ̃_2} * s{μ̃_2;μ̃_3} * C{μ̃_3;a_1<i_1,i_2>} )"
-      L"* ( g{i_3;μ̃_4;Κ_1} * C{μ̃_4;a_4<i_2,i_4>}"
-      L"  * t{a_2<i_2,i_4>,a_4<i_2,i_4>;i_2,i_4}"
-      L"  * C{a_2<i_2,i_4>;μ̃_5} * s{μ̃_5;μ̃_6} * C{μ̃_6;a_2<i_1,i_2>} )",
+      "( g{i_4;μ̃_1;Κ_1} * C{μ̃_1;a_3<i_1,i_3>}"
+      "  * t{a_1<i_1,i_3>,a_3<i_1,i_3>;i_1,i_3}"
+      "  * C{a_1<i_1,i_3>;μ̃_2} * s{μ̃_2;μ̃_3} * C{μ̃_3;a_1<i_1,i_2>} )"
+      "* ( g{i_3;μ̃_4;Κ_1} * C{μ̃_4;a_4<i_2,i_4>}"
+      "  * t{a_2<i_2,i_4>,a_4<i_2,i_4>;i_2,i_4}"
+      "  * C{a_2<i_2,i_4>;μ̃_5} * s{μ̃_5;μ̃_6} * C{μ̃_6;a_2<i_1,i_2>} )",
       {.def_perm_symm = Symmetry::Nonsymm});
   Product flatp{};
   for (auto const& half : nested->as<Product>().factors())
@@ -2658,14 +2655,14 @@ TEST_CASE(
   Product const& prod = flatp;
 
   std::function<bool(ExprPtr const&)> has_g = [&](ExprPtr const& e) -> bool {
-    if (e->is<Tensor>()) return e->as<Tensor>().label() == L"g";
+    if (e->is<Tensor>()) return e->as<Tensor>().label() == "g";
     if (e->is<Product>())
       for (auto const& f : e->as<Product>().factors())
         if (has_g(f)) return true;
     return false;
   };
   std::function<bool(ExprPtr const&)> has_t = [&](ExprPtr const& e) -> bool {
-    if (e->is<Tensor>()) return e->as<Tensor>().label() == L"t";
+    if (e->is<Tensor>()) return e->as<Tensor>().label() == "t";
     if (e->is<Product>())
       for (auto const& f : e->as<Product>().factors())
         if (has_t(f)) return true;
@@ -2684,7 +2681,7 @@ TEST_CASE(
     return false;
   };
 
-  auto is_t = [](Tensor const& t) { return t.label() == L"t"; };
+  auto is_t = [](Tensor const& t) { return t.label() == "t"; };
   auto integral_at = [&](std::size_t Kb, double peak_threshold) -> bool {
     std::function<std::size_t(Index const&)> bts = [Kb](Index const&) {
       return Kb;
@@ -2776,12 +2773,12 @@ TEST_CASE("batched DP peak matches oracle with two modes and accumulation",
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
   mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 20}, {L"a", 20}, {L"μ", 200}, {L"Κ", 300}}) {
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 20}, {"a", 20}, {"μ", 200}, {"Κ", 300}}) {
     reg->extent(k, v);
   }
-  auto aux = reg->retrieve_space(L"Κ");
-  auto pao = reg->retrieve(L"μ̃");
+  auto aux = reg->retrieve_space("Κ");
+  auto pao = reg->retrieve("μ̃");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -2799,8 +2796,8 @@ TEST_CASE("batched DP peak matches oracle with two modes and accumulation",
   // Two batchable contracted indices K and mu-tilde, contracted at different
   // nodes (nested accumulation).
   auto prod = deserialize(
-                  L"g{i_1;a_1;Κ_1} g{μ̃_1;μ̃_2;Κ_1} f{μ̃_1;a_2} "
-                  L"f{μ̃_2;a_3}")
+                  "g{i_1;a_1;Κ_1} g{μ̃_1;μ̃_2;Κ_1} f{μ̃_1;a_2} "
+                  "f{μ̃_2;a_3}")
                   ->as<Product>();
   TensorNetwork net(prod.factors());
   container::svector<Index> tidxs{};
@@ -2837,15 +2834,15 @@ TEST_CASE("ordered key prices the hoistable order (Carr != 0)",
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
+                   .add("F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
+    return ix.basis().base_key() == "F";
   };
   auto batch_fn = [](Index const&) -> std::size_t { return 1; };
   std::vector<ExprPtr> ts;
-  for (auto str : {L"g{a4;F1}", L"h{F1;F2}", L"s{F2;a2}", L"t{a2;a3}"})
+  for (auto str : {"g{a4;F1}", "h{F1;F2}", "s{F2;a2}", "t{a2;a3}"})
     ts.push_back(deserialize(str, {.def_perm_symm = Symmetry::Nonsymm}));
   TensorNetwork net{ts};
   container::svector<Index> targets;
@@ -2884,15 +2881,15 @@ TEST_CASE("ordered cells exclude external modes", "[optimize][ext-place]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
+                   .add("F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
+    return ix.basis().base_key() == "F";
   };
   auto batch_fn = [](Index const&) -> std::size_t { return 1; };
   std::vector<ExprPtr> ts;
-  for (auto s : {L"g{a1;F1}", L"h{F1;F2}"})
+  for (auto s : {"g{a1;F1}", "h{F1;F2}"})
     ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
   TensorNetwork net{ts};
   container::svector<Index> targets;  // empty: a1 and F2 both single-occurrence
@@ -2932,18 +2929,18 @@ TEST_CASE("the DP opens an external batch loop on an over-budget node",
   auto ctx_copy = get_default_context_snapshot();
   {
     IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
-    reg.add(L"F", IndexSpace::Type{0b10000}, {.dimension = 100});
-    reg.extent(L"a", 3ul);
+    reg.add("F", IndexSpace::Type{0b10000}, {.dimension = 100});
+    reg.extent("a", 3ul);
     ctx_copy.set(std::move(reg));
   }
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
+    return ix.basis().base_key() == "F";
   };
   auto batch_fn = [](Index const&) -> std::size_t { return 1; };
   std::vector<ExprPtr> ts;
-  for (auto s : {L"g{F1;a1}", L"h{a1;a2}", L"t{a2;a3}"})
+  for (auto s : {"g{F1;a1}", "h{a1;a2}", "t{a2;a3}"})
     ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
   TensorNetwork net{ts};
   container::svector<Index> targets;  // empty: F1 and a3 single-occurrence
@@ -3007,11 +3004,11 @@ TEST_CASE("perf-first peak_threshold gates contracted aux slicing",
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 30}, {"a", 30}, {"Κ", 500}}) {
     reg->extent(k, v);
   }
-  auto aux = reg->retrieve_space(L"Κ");
+  auto aux = reg->retrieve_space("Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -3023,7 +3020,7 @@ TEST_CASE("perf-first peak_threshold gates contracted aux slicing",
   // Κ_1 shared between the two g's is the only batchable contraction.
   std::vector<ExprPtr> ts;
   for (auto s :
-       {L"g{a_1;i_1;Κ_1}", L"g{a_2;i_2;Κ_1}", L"f{i_1;i_3}", L"f{i_2;i_4}"})
+       {"g{a_1;i_1;Κ_1}", "g{a_2;i_2;Κ_1}", "f{i_1;i_3}", "f{i_2;i_4}"})
     ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
   TensorNetwork net{ts};
   container::svector<Index> targets;
@@ -3090,11 +3087,11 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 30}, {"a", 30}, {"Κ", 500}}) {
     reg->extent(k, v);
   }
-  auto aux = reg->retrieve_space(L"Κ");
+  auto aux = reg->retrieve_space("Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -3108,7 +3105,7 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
   // 4-tensor network with Κ_1 shared between the two g's (the only batchable
   // contraction) so a forced-batching run must slice Κ at that node.
   auto expr =
-      deserialize(L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} f{i_1;i_3} f{i_2;i_4}");
+      deserialize("g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} f{i_1;i_3} f{i_2;i_4}");
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -3169,17 +3166,17 @@ TEST_CASE("NoReorder Sum re-keys batch annotations onto the final Sum",
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 30}, {L"a", 30}, {L"Κ", 500}})
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 30}, {"a", 30}, {"Κ", 500}})
     reg->extent(k, v);
-  auto aux = reg->retrieve_space(L"Κ");
+  auto aux = reg->retrieve_space("Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
 
   // two 4-tensor summands: 3 contraction nodes each, one annotation per node
   auto expr = deserialize(
-      L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} f{i_1;i_3} f{i_2;i_4} + "
-      L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} h{i_1;i_3} h{i_2;i_4}");
+      "g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} f{i_1;i_3} f{i_2;i_4} + "
+      "g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} h{i_1;i_3} h{i_2;i_4}");
   REQUIRE(expr->is<Sum>());
   REQUIRE(expr->as<Sum>().size() == 2);
 
@@ -3225,7 +3222,7 @@ TEST_CASE("binarize applies batch_loops_opened_here from node annotation",
 
   // Two-leaf single-contraction network: exactly one contraction node, so
   // node_batch_axes needs exactly one entry (the root contraction).
-  auto expr = deserialize(L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1}");
+  auto expr = deserialize("g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1}");
 
   Index const kappa = expr->as<Product>().factor(0)->as<Tensor>().aux().at(0);
 
@@ -3272,7 +3269,7 @@ TEST_CASE("binarize applies batch_loops_opened_here from node annotation",
 TEST_CASE("binarize marks accumulation Sum nodes in-place", "[binarize]") {
   using namespace sequant;
 
-  auto sum = deserialize(L"t1{i1;a1} + t2{i1;a1} + t3{i1;a1} + t4{i1;a1}");
+  auto sum = deserialize("t1{i1;a1} + t2{i1;a1} + t3{i1;a1} + t4{i1;a1}");
   REQUIRE(sum->is<Sum>());
   REQUIRE(sum->as<Sum>().summands().size() == 4);
 
@@ -3299,7 +3296,7 @@ TEST_CASE("binarize marks accumulation Sum nodes in-place", "[binarize]") {
 
   // A lone two-term sum (no shared operand yet) is markable too: its single
   // Sum's left operand is the private first term t1.
-  auto sum2 = deserialize(L"t1{i1;a1} + t2{i1;a1}");
+  auto sum2 = deserialize("t1{i1;a1} + t2{i1;a1}");
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto node2 = binarize(sum2);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
@@ -3340,11 +3337,11 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
       *get_default_context().index_basis_registry());
   mbpt::add_df_spaces(reg);
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 8}, {L"a", 8}, {L"Κ", 400}})
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 8}, {"a", 8}, {"Κ", 400}})
     reg->extent(k, v);
-  auto aux_space = reg->retrieve_space(L"Κ");
-  auto occ_space = reg->retrieve_space(L"i");
+  auto aux_space = reg->retrieve_space("Κ");
+  auto occ_space = reg->retrieve_space("i");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -3355,7 +3352,7 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
   // Chain network T1-T2-T3-T4: T1--(a_1,Kappa_1)--T2--(a_2)--T3--(a_4)--T4.
   // i_1 (on T1 only) and a_5 (on T4 only) are the root-external indices.
   auto expr =
-      deserialize(L"g{i_1;a_1;Κ_1} g{a_1;a_2;Κ_1} f{a_2;a_4} h{a_4;a_5}");
+      deserialize("g{i_1;a_1;Κ_1} g{a_1;a_2;Κ_1} f{a_2;a_4} h{a_4;a_5}");
 
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
@@ -3374,7 +3371,7 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
   // such modes were auto-admitted by an occupancy-specific special case in
   // batchable_mode_list; batchability is now role-based and caller-declared.)
   opts.batch_policy.is_batchable_external_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
   opts.batch_policy.batch_spectator_indices = true;
   opts.term_batch_axes = axes_map;
@@ -3520,10 +3517,10 @@ TEST_CASE("select_root_perf_first_ceiling", "[optimize][batch]") {
   mbpt::add_pao_basis(reg, mbpt::Spin::any);
   // water-20-scale extents (matches the "threshold gates batching" test).
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 80}, {L"a", 12}, {L"μ", 860}, {L"Κ", 2360}})
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 80}, {"a", 12}, {"μ", 860}, {"Κ", 2360}})
     reg->extent(k, v);
-  auto aux_space = reg->retrieve_space(L"Κ");
+  auto aux_space = reg->retrieve_space("Κ");
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -3542,12 +3539,12 @@ TEST_CASE("select_root_perf_first_ceiling", "[optimize][batch]") {
   // g(μ̃,μ̃,Κ) situation where slicing Κ lowers the peak (unlike a chain that
   // contracts Κ immediately). Flatten to a single 12-tensor product.
   auto nested = deserialize(
-      L"( g{i_4;μ̃_1;Κ_1} * C{μ̃_1;a_3<i_1,i_3>}"
-      L"  * t{a_1<i_1,i_3>,a_3<i_1,i_3>;i_1,i_3}"
-      L"  * C{a_1<i_1,i_3>;μ̃_2} * s{μ̃_2;μ̃_3} * C{μ̃_3;a_1<i_1,i_2>} )"
-      L"* ( g{i_3;μ̃_4;Κ_1} * C{μ̃_4;a_4<i_2,i_4>}"
-      L"  * t{a_2<i_2,i_4>,a_4<i_2,i_4>;i_2,i_4}"
-      L"  * C{a_2<i_2,i_4>;μ̃_5} * s{μ̃_5;μ̃_6} * C{μ̃_6;a_2<i_1,i_2>} )",
+      "( g{i_4;μ̃_1;Κ_1} * C{μ̃_1;a_3<i_1,i_3>}"
+      "  * t{a_1<i_1,i_3>,a_3<i_1,i_3>;i_1,i_3}"
+      "  * C{a_1<i_1,i_3>;μ̃_2} * s{μ̃_2;μ̃_3} * C{μ̃_3;a_1<i_1,i_2>} )"
+      "* ( g{i_3;μ̃_4;Κ_1} * C{μ̃_4;a_4<i_2,i_4>}"
+      "  * t{a_2<i_2,i_4>,a_4<i_2,i_4>;i_2,i_4}"
+      "  * C{a_2<i_2,i_4>;μ̃_5} * s{μ̃_5;μ̃_6} * C{μ̃_6;a_2<i_1,i_2>} )",
       {.def_perm_symm = Symmetry::Nonsymm});
   Product flatp{};
   for (auto const& half : nested->as<Product>().factors())
@@ -3607,9 +3604,9 @@ TEST_CASE("contractible_adjacency", "[optimize][pruning]") {
   namespace o = sequant::opt::detail;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->extent(L"i", 10);
-  reg->extent(L"a", 100);
-  reg->extent(L"x", 4);
+  reg->extent("i", 10);
+  reg->extent("a", 100);
+  reg->extent("x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto parse = [](auto const& s) {
@@ -3628,21 +3625,21 @@ TEST_CASE("contractible_adjacency", "[optimize][pruning]") {
   };
 
   // Chain: f-g share a1; g-h share a2. Targets {i1,i2}. 2 edges.
-  auto chain = net_of(parse(L"f_{i1}^{a1} g_{a1}^{a2} h_{a2}^{i2}"));
-  std::vector<Index> tgt2{Index{L"i_1"}, Index{L"i_2"}};
+  auto chain = net_of(parse("f_{i1}^{a1} g_{a1}^{a2} h_{a2}^{i2}"));
+  std::vector<Index> tgt2{Index{"i_1"}, Index{"i_2"}};
   auto adj_chain = o::contractible_adjacency(chain, tgt2);
   REQUIRE(adj_chain.size() == 3);
   CHECK(edge_count(adj_chain) == 2);
 
   // Hyperedge: p,q,r all carry summed a5 -> clique (3 edges).
-  auto hyper = net_of(parse(L"p_{i1}^{a5} q_{i2}^{a5} r_{i3}^{a5}"));
-  std::vector<Index> tgt3{Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"}};
+  auto hyper = net_of(parse("p_{i1}^{a5} q_{i2}^{a5} r_{i3}^{a5}"));
+  std::vector<Index> tgt3{Index{"i_1"}, Index{"i_2"}, Index{"i_3"}};
   auto adj_hyper = o::contractible_adjacency(hyper, tgt3);
   CHECK(edge_count(adj_hyper) == 3);
 
   // External-only: two tensors share only the target index i1 -> no edges.
-  auto spec = net_of(parse(L"u_{i1}^{a1} v_{i1}^{a2}"));
-  std::vector<Index> tgt_spec{Index{L"i_1"}, Index{L"a_1"}, Index{L"a_2"}};
+  auto spec = net_of(parse("u_{i1}^{a1} v_{i1}^{a2}"));
+  std::vector<Index> tgt_spec{Index{"i_1"}, Index{"a_1"}, Index{"a_2"}};
   auto adj_spec = o::contractible_adjacency(spec, tgt_spec);
   CHECK(edge_count(adj_spec) == 0);
 
@@ -3656,8 +3653,8 @@ TEST_CASE("contractible_adjacency", "[optimize][pruning]") {
   // Targets are the plain externals i3,i4 only -- neither the composite
   // indices nor their protoindices are targets, so a zero edge count here is
   // not merely an artifact of exclusion-via-target.
-  auto composite_diff = net_of(parse(L"u_{i3}^{a1<i1,i2>} v_{i4}^{g1<i1,i2>}"));
-  std::vector<Index> tgt_composite_diff{Index{L"i_3"}, Index{L"i_4"}};
+  auto composite_diff = net_of(parse("u_{i3}^{a1<i1,i2>} v_{i4}^{g1<i1,i2>}"));
+  std::vector<Index> tgt_composite_diff{Index{"i_3"}, Index{"i_4"}};
   auto adj_composite_diff =
       o::contractible_adjacency(composite_diff, tgt_composite_diff);
   CHECK(edge_count(adj_composite_diff) == 0);
@@ -3667,8 +3664,8 @@ TEST_CASE("contractible_adjacency", "[optimize][pruning]") {
   // must produce an edge. This confirms the zero count above is because the
   // composites differ, not because composite indices can never be
   // adjacency carriers at all.
-  auto composite_same = net_of(parse(L"u_{i5}^{a1<i1,i2>} v_{a1<i1,i2>}^{i6}"));
-  std::vector<Index> tgt_composite_same{Index{L"i_5"}, Index{L"i_6"}};
+  auto composite_same = net_of(parse("u_{i5}^{a1<i1,i2>} v_{a1<i1,i2>}^{i6}"));
+  std::vector<Index> tgt_composite_same{Index{"i_5"}, Index{"i_6"}};
   auto adj_composite_same =
       o::contractible_adjacency(composite_same, tgt_composite_same);
   CHECK(edge_count(adj_composite_same) == 1);
@@ -3699,18 +3696,18 @@ TEST_CASE("connected_subsets and outer_product_connectivity",
   // outer_product_connectivity: env-disabled -> all ones.
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->extent(L"i", 10);
-  reg->extent(L"a", 100);
-  reg->extent(L"x", 4);
+  reg->extent("i", 10);
+  reg->extent("a", 100);
+  reg->extent("x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
-  auto prod_expr = deserialize(L"f_{i1}^{a1} g_{a1}^{i2}",
+  auto prod_expr = deserialize("f_{i1}^{a1} g_{a1}^{i2}",
                                {.def_perm_symm = Symmetry::Antisymm});
   container::vector<ExprPtr> v;
   for (auto&& f : prod_expr->as<Product>().factors())
     if (f->is<Tensor>()) v.push_back(f);
   TensorNetwork tn{v};
-  std::vector<Index> tgt{Index{L"i_1"}, Index{L"i_2"}};
+  std::vector<Index> tgt{Index{"i_1"}, Index{"i_2"}};
   auto m_off = without_outer_product_pruning(
       [&] { return o::outer_product_connectivity(tn, tgt); });
   for (auto val : m_off) CHECK(val == 1);
@@ -3721,9 +3718,9 @@ TEST_CASE("outer-product pruning parity (pruned == unpruned)",
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->extent(L"i", 10);
-  reg->extent(L"a", 100);
-  reg->extent(L"x", 4);
+  reg->extent("i", 10);
+  reg->extent("a", 100);
+  reg->extent("x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
 
@@ -3747,17 +3744,17 @@ TEST_CASE("outer-product pruning parity (pruned == unpruned)",
       ObjectiveFunction::DensePeakSize,
       ObjectiveFunction::DensePeakSizeBatched};
 
-  std::vector<std::wstring> const terms{
-      L"1/4 g_{i2,i3}^{a2,a3} t_{a2,a3}^{i2,i3} t_{a1}^{i1}",
-      L"x_{i1,i2}^{a3,a4} y_{a1,a2}^{i1,i2} z_{a3,a4}^{a1,a2}",
-      L"g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2} t_{a3}^{i3}",
+  std::vector<std::string> const terms{
+      "1/4 g_{i2,i3}^{a2,a3} t_{a2,a3}^{i2,i3} t_{a1}^{i1}",
+      "x_{i1,i2}^{a3,a4} y_{a1,a2}^{i1,i2} z_{a3,a4}^{a1,a2}",
+      "g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2} t_{a3}^{i3}",
       // hyperedge-flavored: three tensors sharing a common summed index a5
-      L"p_{i1}^{a5} q_{i2}^{a5} r_{i3}^{a5} s_{a5}^{i4}",
+      "p_{i1}^{a5} q_{i2}^{a5} r_{i3}^{a5} s_{a5}^{i4}",
       // "star": g bridges both t's (whole network connected), but {t,t}
       // shares no index, so the {t,t} subset is a genuinely prunable outer
       // product. This is the fixture that actually exercises the pruning
       // skip -- see the non-vacuousness guard below.
-      L"g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2}",
+      "g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2}",
   };
 
   // Non-vacuousness guard: the parity checks below only prove pruning is
@@ -3768,7 +3765,7 @@ TEST_CASE("outer-product pruning parity (pruned == unpruned)",
   // disconnected proper subset -- i.e. its mask really does prune something.
   {
     namespace o = sequant::opt::detail;
-    auto star = deserialize(L"g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2}",
+    auto star = deserialize("g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2}",
                             {.def_perm_symm = Symmetry::Antisymm});
     container::vector<ExprPtr> sv;
     for (auto&& f : star->as<Product>().factors())
@@ -3783,7 +3780,7 @@ TEST_CASE("outer-product pruning parity (pruned == unpruned)",
     REQUIRE(has_pruned_subset);  // at least one subset is genuinely pruned
   }
 
-  auto run = [&](std::wstring const& term, ObjectiveFunction obj, bool prune) {
+  auto run = [&](std::string const& term, ObjectiveFunction obj, bool prune) {
     auto optimize_term = [&] {
       auto expr = deserialize(term, {.def_perm_symm = Symmetry::Antisymm});
       return optimize(expr, opts_for(obj));
@@ -3811,14 +3808,14 @@ TEST_CASE("prune_outer_products option controls pruning (default on)",
 
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->extent(L"i", 10);
-  reg->extent(L"a", 100);
-  reg->extent(L"x", 4);
+  reg->extent("i", 10);
+  reg->extent("a", 100);
+  reg->extent("x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   // "star" term: g bridges two mutually-disconnected t's, so the {t,t} subset
   // is a genuinely prunable outer product (the option's code path fires).
-  auto expr = deserialize(L"g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2}",
+  auto expr = deserialize("g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2}",
                           {.def_perm_symm = Symmetry::Antisymm});
   auto opts_for = [&](bool prune) {
     OptimizeOptions o;
@@ -3856,8 +3853,8 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
   mbpt::add_ao_basis(reg, mbpt::Spin::any);
   mbpt::add_pao_basis(reg, mbpt::Spin::any);
   for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 10}, {L"a", 40}, {L"μ", 50}, {L"Κ", 90}})
+       std::initializer_list<std::pair<std::string_view, size_t>>{
+           {"i", 10}, {"a", 40}, {"μ", 50}, {"Κ", 90}})
     reg->extent(k, v);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
@@ -3865,7 +3862,7 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
     return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
   };
   auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"Κ";
+    return ix.basis().base_key() == "Κ";
   };
   auto batch = [](Index const&) -> std::size_t { return 30; };
 
@@ -3881,9 +3878,9 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
   };
 
   bool composite_inner_checked = false;
-  for (std::wstring const& term :
-       {std::wstring(L"g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}"),
-        std::wstring(L"g{i1;a1;Κ1} g{i2;a2;Κ1} t{a1;i1} t{a2;i2}")}) {
+  for (std::string const& term :
+       {std::string("g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}"),
+        std::string("g{i1;a1;Κ1} g{i2;a2;Κ1} t{a1;i1} t{a2;i2}")}) {
     for (auto const* ip : {&ip_on, &ip_off}) {
       auto prod = deserialize(term)->as<Product>();
       std::vector<ExprPtr> ts;
@@ -3927,17 +3924,17 @@ TEST_CASE("outer-product pruning: large connected term optimizes quickly",
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->extent(L"i", 10);
-  reg->extent(L"a", 100);
-  reg->extent(L"x", 4);
+  reg->extent("i", 10);
+  reg->extent("a", 100);
+  reg->extent("x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   // A connected chain: each adjacent pair shares one summed index, so the whole
   // term is one connected component. The pruned DP explores only connected
   // subsets and finishes fast; the unpruned 3^n enumeration is far slower.
   auto expr = deserialize(
-      L"g_{a0,a1}^{a2,a3} t_{a2}^{a4} t_{a3}^{a5} t_{a4}^{a6} t_{a5}^{a7} "
-      L"t_{a6}^{a8} t_{a7}^{a9} v_{a8,a9}^{a0,a1}",
+      "g_{a0,a1}^{a2,a3} t_{a2}^{a4} t_{a3}^{a5} t_{a4}^{a6} t_{a5}^{a7} "
+      "t_{a6}^{a8} t_{a7}^{a9} v_{a8,a9}^{a0,a1}",
       {.def_perm_symm = Symmetry::Antisymm});
   OptimizeOptions o;
   o.objective_function = ObjectiveFunction::DensePeakSize;
@@ -3955,9 +3952,9 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
   namespace o = sequant::opt::detail;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
-  reg->extent(L"i", 10);
-  reg->extent(L"a", 100);
-  reg->extent(L"x", 4);
+  reg->extent("i", 10);
+  reg->extent("a", 100);
+  reg->extent("x", 4);
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
   auto net_of = [](ExprPtr const& p) {
@@ -3969,11 +3966,11 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
 
   // Two independent contractions sharing NO summed index: {f,g} over a1,
   // {p,q} over a2. The full adjacency graph has two components.
-  auto prod = deserialize(L"f_{i1}^{a1} g_{a1}^{i2} p_{i3}^{a2} q_{a2}^{i4}",
+  auto prod = deserialize("f_{i1}^{a1} g_{a1}^{i2} p_{i3}^{a2} q_{a2}^{i4}",
                           {.def_perm_symm = Symmetry::Antisymm});
   auto tn = net_of(prod);
-  std::vector<Index> tgt{Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"},
-                         Index{L"i_4"}};
+  std::vector<Index> tgt{Index{"i_1"}, Index{"i_2"}, Index{"i_3"},
+                         Index{"i_4"}};
   auto mask = o::outer_product_connectivity(tn, tgt);
   for (auto v : mask) CHECK(v == 1);  // disconnected full net -> all-connected
 
@@ -4013,7 +4010,7 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   // default context's registry would make them collide on the second add.
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
+                   .add("F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -4022,22 +4019,22 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   // batch BOTH the aux-like F and the occupied i
   auto is_batchable = [](Index const& ix) {
     auto const bk = ix.basis().base_key();
-    return bk == L"F" || bk == L"i";
+    return bk == "F" || bk == "i";
   };
   auto batch_fn = [](Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"F" ? std::size_t{1} : std::size_t{1};
+    return ix.basis().base_key() == "F" ? std::size_t{1} : std::size_t{1};
   };
 
   std::vector<ExprPtr> ts;
-  for (auto s : {L"g{i1;F1}", L"h{F1;a1}", L"s{a1;F2}", L"t{F2;a2}"})
+  for (auto s : {"g{i1;F1}", "h{F1;a1}", "s{a1;F2}", "t{F2;a2}"})
     ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
   TensorNetwork net{ts};
   container::svector<Index> targets;
 
   auto aux = opt::detail::batchable_mode_list(net, is_batchable);
-  std::wcerr << L"\n[loop-tree-probe] batchable modes (" << aux.size() << L"):";
-  for (auto const& ix : aux) std::wcerr << L" " << ix.full_label();
-  std::wcerr << L"\n";
+  std::cerr << "\n[loop-tree-probe] batchable modes (" << aux.size() << "):";
+  for (auto const& ix : aux) std::cerr << " " << ix.full_label();
+  std::cerr << "\n";
 
   opt::detail::PeakBatchedModel model{idxsz, batch_fn,
                                       /*is_volatile_leaf=*/{}};
@@ -4054,10 +4051,11 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   model.batch_spectator_indices = true;
   auto ctx = model.build_context(net, targets);
   for (std::size_t k = 0; k < ctx.m; ++k)
-    std::wcerr << L"[loop-tree-probe] mode "
-               << ctx.batchable_modes[k].full_label() << L" nbatches="
-               << ctx.nbatches[k] << L" external="
-               << (model.is_external_mode(ctx, k) ? 1 : 0) << L"\n";
+    std::cerr << "[loop-tree-probe] mode "
+              << ctx.batchable_modes[k].full_label()
+              << " nbatches=" << ctx.nbatches[k]
+              << " external=" << (model.is_external_mode(ctx, k) ? 1 : 0)
+              << "\n";
 
   auto st = opt::detail::solve_single_term(model, net, targets, ctx);
   // Emit walk with SEQUANT_DP_RECOMPUTE_DEBUG=1 set externally prints the
@@ -4080,22 +4078,22 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   REQUIRE(i_cell != std::numeric_limits<std::size_t>::max());
   double const unseeded = min_flops_at(0);
   double const seeded = min_flops_at(i_cell);
-  std::wcerr << L"[loop-tree-probe] min flops  B=0 (what emit prices) = "
-             << unseeded << L"\n[loop-tree-probe] min flops  B={"
-             << ctx.batchable_modes[i_bit].full_label()
-             << L"} (runtime truth)   = " << seeded << L"\n"
-             << L"[loop-tree-probe] ratio = " << (seeded / unseeded)
-             << L"  (nbatches=" << ctx.nbatches[i_bit] << L")\n";
+  std::cerr << "[loop-tree-probe] min flops  B=0 (what emit prices) = "
+            << unseeded << "\n[loop-tree-probe] min flops  B={"
+            << ctx.batchable_modes[i_bit].full_label()
+            << "} (runtime truth)   = " << seeded << "\n"
+            << "[loop-tree-probe] ratio = " << (seeded / unseeded)
+            << "  (nbatches=" << ctx.nbatches[i_bit] << ")\n";
 
   auto const emitted = model.reconstruct_batched_modes(ctx, st);
-  std::wcerr << L"[loop-tree-probe] emitted " << emitted.second.size()
-             << L" node stamps\n";
+  std::cerr << "[loop-tree-probe] emitted " << emitted.second.size()
+            << " node stamps\n";
   for (std::size_t n = 0; n < emitted.second.size(); ++n) {
-    std::wcerr << L"  node " << n << L":";
+    std::cerr << "  node " << n << ":";
     for (auto const& [ix, knd] : emitted.second[n].axes)
-      std::wcerr << L" " << ix.full_label()
-                 << (knd == BatchModeType::External ? L":ext" : L":con");
-    std::wcerr << L"\n";
+      std::cerr << " " << ix.full_label()
+                << (knd == BatchModeType::External ? ":ext" : ":con");
+    std::cerr << "\n";
   }
   // i_1 is EXTERNAL: free on the root, contracted nowhere. Opening its loop
   // does NOT raise the modeled flops on this network, and that is the ordered
@@ -4125,17 +4123,17 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
     auto s2 = opt::detail::solve_single_term(m2, net, targets, c2);
     auto e2 = m2.reconstruct_batched_modes(c2, s2);
     std::size_t n_ext_stamps = 0;
-    container::svector<std::wstring> ext_labels;
+    container::svector<std::string> ext_labels;
     for (std::size_t k = 0; k < c2.m; ++k)
       if (m2.is_external_mode(c2, k))
-        ext_labels.push_back(std::wstring(c2.batchable_modes[k].full_label()));
+        ext_labels.push_back(std::string(c2.batchable_modes[k].full_label()));
     for (auto const& nd : e2.second) {
       for (auto const& [ix, knd] : nd.axes)
         if (knd == BatchModeType::External) {
           ++n_ext_stamps;
           bool genuine = false;
           for (auto const& l : ext_labels)
-            if (l == std::wstring(ix.full_label())) genuine = true;
+            if (l == std::string(ix.full_label())) genuine = true;
           CHECK(genuine);  // never stamp External on a contracted mode
         }
       for (auto const& [ix, knd] : nd.opened_here) {
@@ -4145,8 +4143,8 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
         CHECK(in_axes);  // opened_here is a subset of axes
       }
     }
-    std::wcerr << L"[loop-tree] spectator-on, over-budget: External stamps = "
-               << n_ext_stamps << L"\n";
+    std::cerr << "[loop-tree] spectator-on, over-budget: External stamps = "
+              << n_ext_stamps << "\n";
     // The emit walk visits every contraction of the chosen tree exactly once.
     CHECK(e2.second.size() == ts.size() - 1);
   }
@@ -4174,14 +4172,14 @@ TEST_CASE("loop-tree charge must not bill a free hoist", "[.][loop-tree]") {
   // default context's registry would make them collide on the second add.
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
+                   .add("F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
     return ix.basis().extent();
   };
   auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
+    return ix.basis().base_key() == "F";
   };
   auto batch_fn = [](Index const&) -> std::size_t { return 1; };
 
@@ -4191,7 +4189,7 @@ TEST_CASE("loop-tree charge must not bill a free hoist", "[.][loop-tree]") {
   // NB: no occupied index anywhere -- batchable_mode_list's external-occ pass
   // admits a pure-occupied index that is open on the root REGARDLESS of
   // is_batchable, which would silently make ctx.m == 2.
-  for (auto str : {L"g{a4;F1}", L"h{F1;a1}", L"s{a1;a2}", L"t{a2;a3}"})
+  for (auto str : {"g{a4;F1}", "h{F1;a1}", "s{a1;a2}", "t{a2;a3}"})
     ts.push_back(deserialize(str, {.def_perm_symm = Symmetry::Nonsymm}));
   TensorNetwork net{ts};
   container::svector<Index> targets;
@@ -4216,9 +4214,9 @@ TEST_CASE("loop-tree charge must not bill a free hoist", "[.][loop-tree]") {
   };
   double const outside = min_flops(n_st, 0);   // no enclosing loop
   double const inside = min_flops(n_st, 0b1);  // inside the F_1 loop
-  std::wcerr << L"[loop-tree] free-hoist node {s,t}: flops outside F_1 loop = "
-             << outside << L", inside = " << inside << L"  (nBatch(F_1) = "
-             << ctx.nbatches[0] << L")\n";
+  std::cerr << "[loop-tree] free-hoist node {s,t}: flops outside F_1 loop = "
+            << outside << ", inside = " << inside
+            << "  (nBatch(F_1) = " << ctx.nbatches[0] << ")\n";
 
   // {s,t} carries no batchable mode, so slicing F_1 cannot shrink it and it can
   // be built once above the F_1 loop at unchanged footprint. rf must be 1.
@@ -4236,7 +4234,7 @@ TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
+                   .add("F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -4245,7 +4243,7 @@ TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
   // Both F1 and F2 are batchable and contracted (nestable) => two ordered
   // enclosing modes.
   auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
+    return ix.basis().base_key() == "F";
   };
   auto batch_fn = [](Index const&) -> std::size_t {
     return 1;  // batch tile 1 => nbatches == extent (4) > 1
@@ -4285,7 +4283,7 @@ TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
   // ---- Assertion 1: nested chain -- cross-check every emitted node ---------
   {
     std::vector<ExprPtr> ts;
-    for (auto s : {L"g{a4;F1}", L"h{F1;F2}", L"s{F2;a2}", L"t{a2;a3}"})
+    for (auto s : {"g{a4;F1}", "h{F1;F2}", "s{F2;a2}", "t{a2;a3}"})
       ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
     TensorNetwork net{ts};
     container::svector<Index> targets;
@@ -4336,7 +4334,7 @@ TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
   // ---- ascending batched-slot order (matches descend). -------------------
   {
     std::vector<ExprPtr> ts;
-    for (auto s : {L"x{a1;F1,F2}", L"y{F1,F2;a2}", L"z{a2;a3}"})
+    for (auto s : {"x{a1;F1,F2}", "y{F1,F2;a2}", "z{a2;a3}"})
       ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
     TensorNetwork net{ts};
     container::svector<Index> targets;
@@ -4392,8 +4390,8 @@ TEST_CASE(
   auto ctx_copy = get_default_context_snapshot();
   auto reg =
       std::make_shared<IndexBasisRegistry>(*ctx_copy.index_basis_registry());
-  reg->extent(L"i", 10);  // occupied, external, batched
-  reg->extent(L"a", 20);  // virtual, contracted, batched
+  reg->extent("i", 10);  // occupied, external, batched
+  reg->extent("a", 20);  // virtual, contracted, batched
   ctx_copy.set(reg);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
@@ -4404,14 +4402,14 @@ TEST_CASE(
   // co-carrying node emits an External axis (i) and a Contracted axis (a).
   auto is_batchable = [](Index const& ix) {
     auto const key = ix.basis().base_key();
-    return key == L"i" || key == L"a";
+    return key == "i" || key == "a";
   };
   auto batch_fn = [](Index const&) -> std::size_t {
     return 1;  // batch tile 1 => nbatches == extent (> 1 for both i and a)
   };
 
   std::vector<ExprPtr> ts;
-  for (auto s : {L"g{i1;a1}", L"k{i2;a1}"})
+  for (auto s : {"g{i1;a1}", "k{i2;a1}"})
     ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
   TensorNetwork net{ts};
   container::svector<Index> targets;
@@ -4469,19 +4467,19 @@ TEST_CASE("loop-tree probe: resident-scan peak of a hoisted node",
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
+                   .add("F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
     return ix.basis().extent();
   };
   auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
+    return ix.basis().base_key() == "F";
   };
   auto batch_fn = [](Index const&) -> std::size_t { return 1; };
 
   std::vector<ExprPtr> ts;
-  for (auto str : {L"g{a4;F1}", L"h{F1;a1}", L"s{a1;a2}", L"t{a2;a3}"})
+  for (auto str : {"g{a4;F1}", "h{F1;a1}", "s{a1;a2}", "t{a2;a3}"})
     ts.push_back(deserialize(str, {.def_perm_symm = Symmetry::Nonsymm}));
   TensorNetwork net{ts};
   container::svector<Index> targets;
@@ -4506,10 +4504,10 @@ TEST_CASE("loop-tree probe: resident-scan peak of a hoisted node",
     REQUIRE(ctx.m == 1u);
     std::size_t const f1_cell = ctx.descend(0, std::size_t{1});
     REQUIRE(f1_cell != std::numeric_limits<std::size_t>::max());
-    std::wcerr << L"[loop-tree-peak] sz{s,t}=" << ctx.sz(st_set, 0)
-               << L"  top.peak[cell=()]=" << min_peak(st[top][0])
-               << L"  top.peak[cell=(F_1)]=" << min_peak(st[top][f1_cell])
-               << L"\n";
+    std::cerr << "[loop-tree-peak] sz{s,t}=" << ctx.sz(st_set, 0)
+              << "  top.peak[cell=()]=" << min_peak(st[top][0])
+              << "  top.peak[cell=(F_1)]=" << min_peak(st[top][f1_cell])
+              << "\n";
   }
 }
 
@@ -4525,19 +4523,19 @@ TEST_CASE("loop-tree probe: order-dependent Carr != 0 cells",
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
+                   .add("F", IndexSpace::Type{0b10000}, {.dimension = 4}));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) -> std::size_t {
     return ix.basis().extent();
   };
   auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
+    return ix.basis().base_key() == "F";
   };
   auto batch_fn = [](Index const&) -> std::size_t { return 1; };
 
   std::vector<ExprPtr> ts;
-  for (auto str : {L"g{a4;F1}", L"h{F1;F2}", L"s{F2;a2}", L"t{a2;a3}"})
+  for (auto str : {"g{a4;F1}", "h{F1;F2}", "s{F2;a2}", "t{a2;a3}"})
     ts.push_back(deserialize(str, {.def_perm_symm = Symmetry::Nonsymm}));
   TensorNetwork net{ts};
   container::svector<Index> targets;
@@ -4547,16 +4545,16 @@ TEST_CASE("loop-tree probe: order-dependent Carr != 0 cells",
   model.is_batchable_contracted_index = is_batchable;
   model.charge_batch_recompute = true;
   auto ctx = model.build_context(net, targets);
-  std::wcerr << L"\n[loop-tree-order] modes:";
+  std::cerr << "\n[loop-tree-order] modes:";
   for (std::size_t k = 0; k < ctx.m; ++k)
-    std::wcerr << L" " << ctx.batchable_modes[k].full_label() << L"(bit" << k
-               << L",nB=" << ctx.nbatches[k] << L")";
-  std::wcerr << L"\n";
+    std::cerr << " " << ctx.batchable_modes[k].full_label() << "(bit" << k
+              << ",nB=" << ctx.nbatches[k] << ")";
+  std::cerr << "\n";
 
   auto st = opt::detail::solve_single_term(model, net, targets, ctx);
   std::size_t const n_st = 0b1100;  // {s,t}
-  std::wcerr << L"[loop-tree-order] subset {s,t} open modes bitmask = "
-             << ctx.open_modes[n_st] << L"\n";
+  std::cerr << "[loop-tree-order] subset {s,t} open modes bitmask = "
+            << ctx.open_modes[n_st] << "\n";
   auto min_flops = [&](std::size_t n, std::size_t cell) {
     double m = std::numeric_limits<double>::max();
     for (auto const& fp : st[n][cell]) m = std::min(m, fp.flops);
@@ -4566,9 +4564,9 @@ TEST_CASE("loop-tree probe: order-dependent Carr != 0 cells",
   // so enumerate cells and print each one's union; a bare bitmask index would
   // not name a cell at all.
   for (std::size_t cell = 0; cell < ctx.nCells; ++cell)
-    std::wcerr << L"[loop-tree-order]   st[{s,t}][cell=" << cell << L" union="
-               << ctx.cell_union(cell) << L"] min flops = "
-               << min_flops(n_st, cell) << L"\n";
+    std::cerr << "[loop-tree-order]   st[{s,t}][cell=" << cell
+              << " union=" << ctx.cell_union(cell)
+              << "] min flops = " << min_flops(n_st, cell) << "\n";
   // The whole point of the ordered key: the two orderings of {F_1,F_2} must
   // NOT price {s,t} the same. {s,t} carries F_2 and not F_1, so the ordering
   // with F_1 INNER lets it hoist (400) while F_1 OUTER charges it (1600).
@@ -4591,17 +4589,17 @@ TEST_CASE("loop-tree probe: resident-scan peak, nested",
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000},
+                   .add("F", IndexSpace::Type{0b10000},
                         {.dimension = 1000}));  // large: dominates peak
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
 
   auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
   auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
+    return ix.basis().base_key() == "F";
   };
 
   std::vector<ExprPtr> ts;
-  for (auto str : {L"g{a4;F1}", L"h{F1;F2}", L"s{F2;a2}", L"t{a2;a3}"})
+  for (auto str : {"g{a4;F1}", "h{F1;F2}", "s{F2;a2}", "t{a2;a3}"})
     ts.push_back(deserialize(str, {.def_perm_symm = Symmetry::Nonsymm}));
   TensorNetwork net{ts};
   container::svector<Index> targets;
@@ -4622,15 +4620,16 @@ TEST_CASE("loop-tree probe: resident-scan peak, nested",
     auto ctx = model.build_context(net, targets);
     auto st = opt::detail::solve_single_term(model, net, targets, ctx);
     std::size_t const top = (std::size_t{1} << ctx.nt) - 1;
-    std::wcerr << L"[peak-nested] m=" << ctx.m << L"  sz{s,t}[cell=()]="
-               << ctx.sz(0b1100, 0) << L"  sz{g,h}[cell=()]="
-               << ctx.sz(0b0011, 0);
+    std::cerr << "[peak-nested] m=" << ctx.m
+              << "  sz{s,t}[cell=()]=" << ctx.sz(0b1100, 0)
+              << "  sz{g,h}[cell=()]=" << ctx.sz(0b0011, 0);
     // Cells are ordered sequences; print the cell id with its union so the
     // label stays meaningful (a bare bitmask index would not be a cell).
     for (std::size_t cell = 0; cell < ctx.nCells; ++cell)
-      std::wcerr << L"  top.peak[cell=" << cell << L" union="
-                 << ctx.cell_union(cell) << L"]=" << min_peak(st[top][cell]);
-    std::wcerr << L"\n";
+      std::cerr << "  top.peak[cell=" << cell
+                << " union=" << ctx.cell_union(cell)
+                << "]=" << min_peak(st[top][cell]);
+    std::cerr << "\n";
   }
 }
 
@@ -4647,18 +4646,18 @@ TEST_CASE("batchability role-split building-block predicates",
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
   {
-    auto occ = reg->retrieve_space_ptr(L"i");
-    auto uocc = reg->retrieve_space_ptr(L"a");
+    auto occ = reg->retrieve_space_ptr("i");
+    auto uocc = reg->retrieve_space_ptr("a");
     REQUIRE(occ);
     REQUIRE(uocc);
   }
   auto ctx_resetter =
       set_scoped_default_context(get_default_context_snapshot().set(reg));
-  Index const a{L"a_1"};  // unoccupied space "a"
-  Index const i{L"i_1"};  // occupied space "i"
+  Index const a{"a_1"};  // unoccupied space "a"
+  Index const i{"i_1"};  // occupied space "i"
 
-  auto is_a = [](Index const& ix) { return ix.basis().base_key() == L"a"; };
-  auto is_i = [](Index const& ix) { return ix.basis().base_key() == L"i"; };
+  auto is_a = [](Index const& ix) { return ix.basis().base_key() == "a"; };
+  auto is_i = [](Index const& ix) { return ix.basis().base_key() == "i"; };
 
   SECTION("BatchPolicy::is_batchable_index() is the union of both roles") {
     BatchPolicy p;

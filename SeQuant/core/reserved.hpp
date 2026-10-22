@@ -14,34 +14,34 @@ namespace sequant {
 
 namespace reserved {
 /// @brief returns the reserved label for the antisymmetrization operator
-inline const std::wstring& antisymm_label() {
-  static const std::wstring label = L"Â";
+inline const std::string& antisymm_label() {
+  static const std::string label = "Â";
   return label;
 }
 
 /// @brief returns the reserved label for the symmetrization operator
-inline const std::wstring& symm_label() {
-  static const std::wstring label = L"Ŝ";
+inline const std::string& symm_label() {
+  static const std::string label = "Ŝ";
   return label;
 }
 
 /// @brief returns the reserved label for the transposition operator
-inline const std::wstring& transposition_label() {
-  static const std::wstring label = L"P̂";
+inline const std::string& transposition_label() {
+  static const std::string label = "P̂";
   return label;
 }
 
 /// @brief overlap/metric tensor label is reserved since it is used by low-level
 /// SeQuant machinery. Users can create overlap Tensor using make_overlap()
-inline const std::wstring& overlap_label() {
-  static const std::wstring label = L"s";
+inline const std::string& overlap_label() {
+  static const std::string label = "s";
   return label;
 }
 
 /// @brief kronecker tensor label is reserved since it is used by low-level
 /// SeQuant machinery. Users can create Kronecker Tensor using make_kronecker()
-inline const std::wstring& kronecker_label() {
-  static const std::wstring label = L"δ";
+inline const std::string& kronecker_label() {
+  static const std::string label = "δ";
   return label;
 }
 
@@ -49,27 +49,27 @@ inline const std::wstring& kronecker_label() {
 /// is reserved since the extended Wick theorem and mbpt produce it with fixed
 /// symmetries, which a Tensor with this label must have. Users can create one
 /// using the factories in SeQuant/core/density.hpp
-inline const std::wstring& rdm_label() {
-  static const std::wstring label = L"γ";
+inline const std::string& rdm_label() {
+  static const std::string label = "γ";
   return label;
 }
 
 /// @brief the 1-hole reduced density matrix label; reserved like rdm_label()
-inline const std::wstring& hole_rdm_label() {
-  static const std::wstring label = L"η";
+inline const std::string& hole_rdm_label() {
+  static const std::string label = "η";
   return label;
 }
 
 /// @brief the density cumulant label; reserved like rdm_label()
-inline const std::wstring& cumulant_label() {
-  static const std::wstring label = L"κ";
+inline const std::string& cumulant_label() {
+  static const std::string label = "κ";
   return label;
 }
 
 /// @brief the spin-free reduced density matrix label; reserved like
 /// rdm_label()
-inline const std::wstring& spinfree_rdm_label() {
-  static const std::wstring label = L"Γ";
+inline const std::string& spinfree_rdm_label() {
+  static const std::string label = "Γ";
   return label;
 }
 
@@ -90,7 +90,7 @@ inline const auto& labels() {
 }
 
 /// @brief checks if a label is not reserved
-inline bool is_nonreserved(const std::wstring& label) {
+inline bool is_nonreserved(const std::string& label) {
   return !ranges::contains(labels(), label);
 }
 

@@ -46,7 +46,7 @@ class ResultExpr {
   template <typename Range1, typename Range2, typename Range3>
   ResultExpr(bra<Range1> &&bra, ket<Range2> &&ket, aux<Range3> &&aux,
              Symmetry symm, BraKetSymmetry braket_symm,
-             ColumnSymmetry column_symm, std::optional<std::wstring> label,
+             ColumnSymmetry column_symm, std::optional<std::string> label,
              ExprPtr expr)
       : ResultExpr(std::forward<Range1>(bra), std::forward<Range2>(ket),
                    std::forward<Range3>(aux), symm, braket_symm, column_symm,
@@ -62,9 +62,9 @@ class ResultExpr {
   ResultExpr &operator=(ExprPtr expression);
 
   bool has_label() const;
-  const std::wstring &label() const;
+  const std::string &label() const;
 
-  void set_label(std::wstring label);
+  void set_label(std::string label);
 
   Symmetry symmetry() const;
   void set_symmetry(Symmetry symm);
@@ -147,13 +147,13 @@ class ResultExpr {
     return groups;
   }
 
-  Tensor result_as_tensor(std::wstring default_label = L"Unnamed") const {
+  Tensor result_as_tensor(std::string default_label = "Unnamed") const {
     return Tensor(m_label.has_value() ? m_label.value() : default_label,
                   sequant::bra(m_braIndices), sequant::ket(m_ketIndices),
                   sequant::aux(m_auxIndices), m_symm, m_bksymm, m_csymm);
   }
 
-  Variable result_as_variable(std::wstring default_label = L"Unnamed") const {
+  Variable result_as_variable(std::string default_label = "Unnamed") const {
     SEQUANT_ASSERT(!produces_tensor());
     return Variable(m_label.has_value() ? m_label.value() : default_label);
   }
@@ -174,7 +174,7 @@ class ResultExpr {
              !std::is_constructible_v<IndexContainer, Range3>)
   ResultExpr(Range1 &&bra, Range2 &&ket, Range3 &&aux, Symmetry symm,
              BraKetSymmetry braket_symm, ColumnSymmetry column_symm,
-             std::optional<std::wstring> label, ExprPtr expression)
+             std::optional<std::string> label, ExprPtr expression)
       : ResultExpr(IndexContainer(bra.begin(), bra.end()),
                    IndexContainer(ket.begin(), ket.end()),
                    IndexContainer(aux.begin(), aux.end()), symm, braket_symm,
@@ -182,7 +182,7 @@ class ResultExpr {
 
   ResultExpr(IndexContainer bra, IndexContainer ket, IndexContainer aux,
              Symmetry symm, BraKetSymmetry braket_symm,
-             ColumnSymmetry column_symm, std::optional<std::wstring> label,
+             ColumnSymmetry column_symm, std::optional<std::string> label,
              ExprPtr expression);
 
   Symmetry m_symm = Symmetry::Nonsymm;
@@ -191,7 +191,7 @@ class ResultExpr {
   IndexContainer m_braIndices;
   IndexContainer m_ketIndices;
   IndexContainer m_auxIndices;
-  std::optional<std::wstring> m_label;
+  std::optional<std::string> m_label;
 };
 
 }  // namespace sequant

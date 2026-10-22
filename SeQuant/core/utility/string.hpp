@@ -8,9 +8,15 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <cmath>
 #include <functional>
 #include <string>
 #include <string_view>
+
+// All strings in SeQuant are UTF-8 encoded narrow strings, which requires
+// narrow string literals to be UTF-8 encoded as well
+static_assert(sizeof("α") == 3,
+              "SeQuant requires the execution character set to be UTF-8");
 
 namespace sequant {
 
@@ -22,11 +28,6 @@ constexpr inline bool is_string_or_view_v =
     std::is_same_v<std::remove_cvref_t<T>, std::string_view>;
 
 template <typename T>
-constexpr inline bool is_wstring_or_view_v =
-    std::is_same_v<std::remove_cvref_t<T>, std::wstring> ||
-    std::is_same_v<std::remove_cvref_t<T>, std::wstring_view>;
-
-template <typename T>
 constexpr inline bool is_string_convertible_v =
     is_string_or_view_v<T> || std::is_same_v<std::remove_cvref_t<T>, char[]> ||
     std::is_same_v<std::remove_all_extents_t<std::remove_cvref_t<T>>, char> ||
@@ -34,61 +35,11 @@ constexpr inline bool is_string_convertible_v =
     std::is_same_v<std::remove_cvref_t<T>, const char *> ||
     std::is_same_v<std::remove_cvref_t<T>, char>;
 
-template <typename T>
-constexpr inline bool is_wstring_convertible_v =
-    is_wstring_or_view_v<T> ||
-    std::is_same_v<std::remove_cvref_t<T>, wchar_t[]> ||
-    std::is_same_v<std::remove_all_extents_t<std::remove_cvref_t<T>>,
-                   wchar_t> ||
-    std::is_same_v<std::remove_cvref_t<T>, wchar_t *> ||
-    std::is_same_v<std::remove_cvref_t<T>, const wchar_t *> ||
-    std::is_same_v<std::remove_cvref_t<T>, wchar_t>;
-
-template <typename T>
-constexpr inline bool is_basic_string_convertible_v =
-    is_string_convertible_v<T> || is_wstring_convertible_v<T>;
-
-template <typename T, typename Enabler = void>
-struct char_type;
-
-template <typename T>
-struct char_type<T, std::enable_if_t<is_basic_string_convertible_v<T>>> {
-  using type = std::conditional_t<is_string_convertible_v<T>, char, wchar_t>;
-};
-
-template <typename T>
-using char_t = typename char_type<T>::type;
-
 }  // namespace meta
 
 template <typename T>
-concept basic_string_convertible =
-    meta::is_basic_string_convertible_v<std::remove_cvref_t<T>>;
-
-/// Converts the given wide-string to a UTF-8 encoded narrow string
-std::string toUtf8(std::wstring_view str);
-
-/// Pass-through (only converts to std::string)
-std::string toUtf8(std::string_view str);
-
-inline std::string toUtf8(char c) { return toUtf8(std::string_view(&c, 1)); }
-
-inline std::string toUtf8(wchar_t c) {
-  return toUtf8(std::wstring_view(&c, 1));
-}
-
-/// Converts the given UTF-8 encoded narrow-string to a UTF-16 encoded
-/// wide-string
-std::wstring toUtf16(std::string_view str);
-
-/// Pass-through (only converts to std::wstring)
-std::wstring toUtf16(std::wstring_view str);
-
-inline std::wstring toUtf16(char c) { return toUtf16(std::string_view(&c, 1)); }
-
-inline std::wstring toUtf16(wchar_t c) {
-  return toUtf16(std::wstring_view(&c, 1));
-}
+concept string_convertible =
+    meta::is_string_convertible_v<std::remove_cvref_t<T>>;
 
 /// @return true if @p str is a valid UTF-8 encoded string
 bool is_valid_utf8(std::string_view str);
@@ -120,8 +71,8 @@ std::string_view last_code_point(std::string_view str);
 /// use on the individual code units of a UTF-8 encoded string
 constexpr bool is_ascii_digit(char c) { return c >= '0' && c <= '9'; }
 
-template <basic_string_convertible S>
-std::basic_string_view<meta::char_t<S>> to_basic_string_view(S &&str) {
+template <string_convertible S>
+std::string_view to_string_view(S &&str) {
   if constexpr (meta::is_char_v<std::remove_reference_t<S>>)
     return {&str, 1};
   else
@@ -148,51 +99,17 @@ String join_strings(
   return result;
 }
 
-/// Converts integral type to its std::wstring representation
-std::wstring to_wstring(meta::integral auto t) { return std::to_wstring(t); }
+/// Converts integral type to its std::string representation
+std::string to_string(meta::integral auto t) { return std::to_string(t); }
 
-/// Converts real type to its std::wstring representation, converting to integer
+/// Converts real type to its std::string representation, converting to integer
 /// if possible
-std::wstring to_wstring(std::floating_point auto t) {
+std::string to_string(std::floating_point auto t) {
   if (std::floor(t) == t)
-    return std::to_wstring(static_cast<long long>(t));
+    return std::to_string(static_cast<long long>(t));
   else
-    return std::to_wstring(t);
+    return std::to_string(t);
 }
-
-namespace detail {
-
-/// selects the string literal matching the code unit given by @p Char
-template <typename Char, std::size_t NChar, std::size_t NWChar,
-          std::size_t NChar8, std::size_t NChar16, std::size_t NChar32>
-constexpr decltype(auto) select_string_literal(
-    const char (&str)[NChar], const wchar_t (&wstr)[NWChar],
-    const char8_t (&u8str)[NChar8], const char16_t (&u16str)[NChar16],
-    const char32_t (&u32str)[NChar32]) {
-  if constexpr (std::is_same_v<Char, char>)
-    return str;
-  else if constexpr (std::is_same_v<Char, wchar_t>)
-    return wstr;
-  else if constexpr (std::is_same_v<Char, char8_t>)
-    return u8str;
-  else if constexpr (std::is_same_v<Char, char16_t>)
-    return u16str;
-  else if constexpr (std::is_same_v<Char, char32_t>)
-    return u32str;
-
-  SEQUANT_ABORT("Unhandled character type");
-}
-}  // namespace detail
-
-/// @brief Converts a base string literal to the desired code unit type
-/// @param code_unit The desired code unit type; either `char` or `wchar_t`
-/// @param char_string_literal `char`-based string literal
-#define SQ_STRLIT(code_unit, char_string_literal)                  \
-  ::sequant::detail::select_string_literal<code_unit>(             \
-      char_string_literal, SEQUANT_CONCAT(L, char_string_literal), \
-      SEQUANT_CONCAT(u8, char_string_literal),                     \
-      SEQUANT_CONCAT(u, char_string_literal),                      \
-      SEQUANT_CONCAT(U, char_string_literal))
 
 }  // namespace sequant
 

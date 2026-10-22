@@ -67,7 +67,7 @@ std::size_t outer_extent(Ixex const& ixex, Index const& ix) {
     throw Exception(
         "outer_extent: the integer index-extent hook was asked for a "
         "proto-indexed (CSV/PNO) composite index " +
-        toUtf8(ix.full_label()) +
+        std::string(ix.full_label()) +
         " -- composites have no integer extent and are sized by inner_pow");
   return ixex(ix);
 }

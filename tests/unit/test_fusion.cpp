@@ -14,31 +14,31 @@
 TEST_CASE("fusion", "[optimize]") {
   using sequant::opt::Fusion;
   using namespace sequant;
-  std::vector<std::array<std::wstring_view, 3>> fused_terms{
+  std::vector<std::array<std::string_view, 3>> fused_terms{
       {
-          L"1/2 f{i3;i1}          t{a1,a2;i2,i3}",             // lhs
-          L"1/2 f{i3;a3} t{a3;i1} t{a1,a2;i2,i3}",             // rhs
-          L"1/2(f{i3;i1} + f{i3;a3} t{a3;i1}) t{a1,a2;i2,i3}"  // fused form
+          "1/2 f{i3;i1}          t{a1,a2;i2,i3}",             // lhs
+          "1/2 f{i3;a3} t{a3;i1} t{a1,a2;i2,i3}",             // rhs
+          "1/2(f{i3;i1} + f{i3;a3} t{a3;i1}) t{a1,a2;i2,i3}"  // fused form
       },
 
-      {L"1/8 g{a1,a2;a3,a4} t{a3,a4;i1,i2}",
-       L"1/4 g{a1,a2;a3,a4} t{a3;i1} t{a4;i2}",
-       L"1/8 g{a1,a2;a3,a4}(t{a3,a4;i1,i2} + 2 t{a3;i1} t{a4;i2})"},
+      {"1/8 g{a1,a2;a3,a4} t{a3,a4;i1,i2}",
+       "1/4 g{a1,a2;a3,a4} t{a3;i1} t{a4;i2}",
+       "1/8 g{a1,a2;a3,a4}(t{a3,a4;i1,i2} + 2 t{a3;i1} t{a4;i2})"},
 
-      {L"1/4 g{a1,a2;a3,a4} t{a3;i1} t{a4;i2}",
-       L"1/4 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3;i1} t{a4;i2}",
-       L"1/4(g{a1,a2;a3,a4} + g{i3,i4;a3,a4} t{a1;i3} t{a2;i4}) t{a3;i1} "
-       L"t{a4;i2}"},
+      {"1/4 g{a1,a2;a3,a4} t{a3;i1} t{a4;i2}",
+       "1/4 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3;i1} t{a4;i2}",
+       "1/4(g{a1,a2;a3,a4} + g{i3,i4;a3,a4} t{a1;i3} t{a2;i4}) t{a3;i1} "
+       "t{a4;i2}"},
 
-      {L"1/8 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3,a4;i1,i2}",
-       L"1/4 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3;i1} t{a4;i2}",
-       L"1/8 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} "
-       L"                      (t{a3,a4;i1,i2} + 2 t{a3;i1} t{a4;i2})"},
+      {"1/8 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3,a4;i1,i2}",
+       "1/4 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3;i1} t{a4;i2}",
+       "1/8 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} "
+       "                      (t{a3,a4;i1,i2} + 2 t{a3;i1} t{a4;i2})"},
 
-      {L"-1/8 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3,a4;i1,i2}",
-       L"-1/4 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3;i1} t{a4;i2}",
-       L"-1/8 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} "
-       L"                      (t{a3,a4;i1,i2} + 2 t{a3;i1} t{a4;i2})"}
+      {"-1/8 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3,a4;i1,i2}",
+       "-1/4 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} t{a3;i1} t{a4;i2}",
+       "-1/8 g{i3,i4;a3,a4} t{a1;i3} t{a2;i4} "
+       "                      (t{a3,a4;i1,i2} + 2 t{a3;i1} t{a4;i2})"}
 
   };
 

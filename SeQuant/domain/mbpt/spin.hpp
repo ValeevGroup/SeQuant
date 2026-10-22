@@ -64,31 +64,39 @@ inline QuantumNumbersAttr spinannotation_remove(const QuantumNumbersAttr& t) {
   return t.intersection(QuantumNumbersAttr(~mask_v<Spin> & ~bitset::reserved));
 }
 
+/// the (UTF-8 encoded) annotation of labels with alpha spin
+inline constexpr std::string_view spin_alpha_annotation = "↑";
+/// the (UTF-8 encoded) annotation of labels with beta spin
+inline constexpr std::string_view spin_beta_annotation = "↓";
+
 /// removes spin annotation, if any
 template <typename WS, typename = std::enable_if_t<
-                           meta::is_wstring_or_view_v<std::decay_t<WS>>>>
-std::wstring spinannotation_remove(WS&& label) {
-  auto view = to_basic_string_view(label);
-  SEQUANT_ASSERT(!ranges::contains(view, L'_'));
-  const auto has_annotation = view.back() == L'↑' || view.back() == L'↓';
-  return std::wstring{view.data(),
-                      view.data() + view.size() - (has_annotation ? 1 : 0)};
+                           meta::is_string_or_view_v<std::decay_t<WS>>>>
+std::string spinannotation_remove(WS&& label) {
+  auto view = to_string_view(label);
+  SEQUANT_ASSERT(!ranges::contains(view, '_'));
+  if (view.ends_with(spin_alpha_annotation))
+    view.remove_suffix(spin_alpha_annotation.size());
+  else if (view.ends_with(spin_beta_annotation))
+    view.remove_suffix(spin_beta_annotation.size());
+  return std::string{view};
 }
 
 /// adds spin annotation to IndexSpace base label or Index (full) label
 template <typename WS, typename = std::enable_if_t<
-                           meta::is_wstring_or_view_v<std::decay_t<WS>>>>
-std::wstring spinannotation_add(WS&& label, Spin s) {
-  [[maybe_unused]] auto view = to_basic_string_view(label);
-  SEQUANT_ASSERT(!ranges::contains(view, L'_'));
-  SEQUANT_ASSERT(view.back() != L'↑' && view.back() != L'↓');
+                           meta::is_string_or_view_v<std::decay_t<WS>>>>
+std::string spinannotation_add(WS&& label, Spin s) {
+  [[maybe_unused]] auto view = to_string_view(label);
+  SEQUANT_ASSERT(!ranges::contains(view, '_'));
+  SEQUANT_ASSERT(!view.ends_with(spin_alpha_annotation) &&
+                 !view.ends_with(spin_beta_annotation));
   switch (s) {
     case Spin::any:
-      return std::wstring(std::forward<WS>(label));
+      return std::string(std::forward<WS>(label));
     case Spin::alpha:
-      return std::wstring(std::forward<WS>(label)) + L'↑';
+      return std::string(std::forward<WS>(label)).append(spin_alpha_annotation);
     case Spin::beta:
-      return std::wstring(std::forward<WS>(label)) + L'↓';
+      return std::string(std::forward<WS>(label)).append(spin_beta_annotation);
     case Spin::null:
       SEQUANT_ABORT("Invalid spin quantum number");
   }
@@ -98,8 +106,8 @@ std::wstring spinannotation_add(WS&& label, Spin s) {
 
 /// replaces spin annotation to
 template <typename WS, typename = std::enable_if_t<
-                           meta::is_wstring_or_view_v<std::decay_t<WS>>>>
-std::wstring spinannotation_replacе(WS&& label, Spin s) {
+                           meta::is_string_or_view_v<std::decay_t<WS>>>>
+std::string spinannotation_replace(WS&& label, Spin s) {
   auto label_sf = spinannotation_remove(std::forward<WS>(label));
   return spinannotation_add(label_sf, s);
 }

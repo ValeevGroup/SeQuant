@@ -43,7 +43,7 @@ ProductPtr create_random_network(const std::size_t testcase,
 
   container::vector<Index> bra_indices;
   for (auto i = 0; i != num_indices; ++i) {
-    bra_indices.emplace_back(std::format(L"i_{}", i));
+    bra_indices.emplace_back(std::format("i_{}", i));
   }
 
   auto ket_indices = bra_indices;
@@ -58,7 +58,7 @@ ProductPtr create_random_network(const std::size_t testcase,
       bra_indices | ranges::views::chunk(num_indices / n) |
       ranges::views::transform([&](const auto& idxs) {
         return ex<Tensor>(
-            L"u", bra(idxs), ket{},
+            "u", bra(idxs), ket{},
             (testcase == 3 ? Symmetry::Nonsymm
                            : ((n == 1) ? Symmetry::Symm : Symmetry::Nonsymm)));
       }) |
@@ -66,12 +66,11 @@ ProductPtr create_random_network(const std::size_t testcase,
 
   SEQUANT_ASSERT(utensors.size() == static_cast<std::size_t>(n));
 
-  auto dtensors =
-      ket_indices | ranges::views::chunk(num_indices) |
-      ranges::views::transform([&](const auto& idxs) {
-        return ex<Tensor>(L"d", bra{}, ket(idxs), Symmetry::Nonsymm);
-      }) |
-      ranges::to_vector;
+  auto dtensors = ket_indices | ranges::views::chunk(num_indices) |
+                  ranges::views::transform([&](const auto& idxs) {
+                    return ex<Tensor>("d", bra{}, ket(idxs), Symmetry::Nonsymm);
+                  }) |
+                  ranges::to_vector;
   SEQUANT_ASSERT(dtensors.size() == 1);
 
   ExprPtr expr;

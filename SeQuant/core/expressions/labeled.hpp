@@ -18,7 +18,7 @@ class Labeled {
   /// can be viewed as immutable string tags that for some object types can be
   /// used for sorting and other purposes.
   /// @sa to_latex() for producing unique string representation
-  virtual std::wstring_view label() const = 0;
+  virtual std::string_view label() const = 0;
 };
 
 /// A Labeled object that also allows changing the label
@@ -28,7 +28,7 @@ class MutatableLabeled : public Labeled {
 
   /// Sets the label of this object
   /// @param label The new label of this object
-  virtual void set_label(std::wstring label) = 0;
+  virtual void set_label(std::string label) = 0;
 };
 
 }  // namespace sequant

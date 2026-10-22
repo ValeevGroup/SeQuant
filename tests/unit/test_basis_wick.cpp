@@ -50,42 +50,42 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
 
   SECTION("K1: an integral leg meets a granted amplitude leg") {
     CHECK(serialize(vac_av(t::h(2) * with_leg_instance(t::t(2), 1))) ==
-          (yes ? L"1/4 g{i_1,i_2;a_1<i_1,i_2;1>,a_2<i_1,i_2;1>}:A-C-S * "
-                 L"t{a_1<i_1,i_2;1>,a_2<i_1,i_2;1>;i_1,i_2}:A-N-S"
-               : L"1/4 g{i_1,i_2;a_1<;1>,a_2<;1>}:A-C-S * "
-                 L"t{a_1<;1>,a_2<;1>;i_1,i_2}:A-N-S"));
+          (yes ? "1/4 g{i_1,i_2;a_1<i_1,i_2;1>,a_2<i_1,i_2;1>}:A-C-S * "
+                 "t{a_1<i_1,i_2;1>,a_2<i_1,i_2;1>;i_1,i_2}:A-N-S"
+               : "1/4 g{i_1,i_2;a_1<;1>,a_2<;1>}:A-C-S * "
+                 "t{a_1<;1>,a_2<;1>;i_1,i_2}:A-N-S"));
   }
 
   SECTION("K2: projector and amplitude legs of different pairs, one family") {
     CHECK(serialize(vac_av(with_leg_instance(t::P(nₚ(1)), 1) * t::h(1) *
                            with_leg_instance(t::t(2), 1))) ==
-          (yes ? L"-1 Â{i_1;a_1<i_1;1>}:A-N-S * f{i_2;a_2<i_1,i_2;1>}:A-C-S * "
-                 L"s{a_1<i_1;1>;a_3<i_1,i_2;1>}:N-C-S * "
-                 L"t{a_2<i_1,i_2;1>,a_3<i_1,i_2;1>;i_1,i_2}:A-N-S"
-               : L"Â{i_1;a_1<;1>}:A-N-S * f{i_2;a_2<;1>}:A-C-S * "
-                 L"t{a_1<;1>,a_2<;1>;i_1,i_2}:A-N-S"));
+          (yes ? "-1 Â{i_1;a_1<i_1;1>}:A-N-S * f{i_2;a_2<i_1,i_2;1>}:A-C-S * "
+                 "s{a_1<i_1;1>;a_3<i_1,i_2;1>}:N-C-S * "
+                 "t{a_2<i_1,i_2;1>,a_3<i_1,i_2;1>;i_1,i_2}:A-N-S"
+               : "Â{i_1;a_1<;1>}:A-N-S * f{i_2;a_2<;1>}:A-C-S * "
+                 "t{a_1<;1>,a_2<;1>;i_1,i_2}:A-N-S"));
   }
 
   SECTION("K3: λ and t legs of one family merge") {
     CHECK(serialize(vac_av(with_leg_instance(t::λ(2), 1) *
                            with_leg_instance(t::t(2), 1))) ==
-          (yes ? L"1/4 t{a_1<i_1,i_2;1>,a_2<i_1,i_2;1>;i_1,i_2}:A-N-S * "
-                 L"λ{i_1,i_2;a_1<i_1,i_2;1>,a_2<i_1,i_2;1>}:A-N-S"
-               : L"1/4 t{a_1<;1>,a_2<;1>;i_1,i_2}:A-N-S * "
-                 L"λ{i_1,i_2;a_1<;1>,a_2<;1>}:A-N-S"));
+          (yes ? "1/4 t{a_1<i_1,i_2;1>,a_2<i_1,i_2;1>;i_1,i_2}:A-N-S * "
+                 "λ{i_1,i_2;a_1<i_1,i_2;1>,a_2<i_1,i_2;1>}:A-N-S"
+               : "1/4 t{a_1<;1>,a_2<;1>;i_1,i_2}:A-N-S * "
+                 "λ{i_1,i_2;a_1<;1>,a_2<;1>}:A-N-S"));
   }
 
   SECTION("K4: λ and t legs of two families leave the overlaps standing") {
     const auto r =
         vac_av(with_leg_instance(t::λ(2), 2) * with_leg_instance(t::t(2), 1));
     CHECK(serialize(r) ==
-          (yes ? L"1/4 s{a_1<i_1,i_2;2>;a_2<i_1,i_2;1>}:N-C-S * "
-                 L"s{a_3<i_1,i_2;2>;a_4<i_1,i_2;1>}:N-C-S * "
-                 L"t{a_2<i_1,i_2;1>,a_4<i_1,i_2;1>;i_1,i_2}:A-N-S * "
-                 L"λ{i_1,i_2;a_1<i_1,i_2;2>,a_3<i_1,i_2;2>}:A-N-S"
-               : L"1/4 s{a_1<;2>;a_2<;1>}:N-C-S * s{a_3<;2>;a_4<;1>}:N-C-S * "
-                 L"t{a_2<;1>,a_4<;1>;i_1,i_2}:A-N-S * "
-                 L"λ{i_1,i_2;a_1<;2>,a_3<;2>}:A-N-S"));
+          (yes ? "1/4 s{a_1<i_1,i_2;2>;a_2<i_1,i_2;1>}:N-C-S * "
+                 "s{a_3<i_1,i_2;2>;a_4<i_1,i_2;1>}:N-C-S * "
+                 "t{a_2<i_1,i_2;1>,a_4<i_1,i_2;1>;i_1,i_2}:A-N-S * "
+                 "λ{i_1,i_2;a_1<i_1,i_2;2>,a_3<i_1,i_2;2>}:A-N-S"
+               : "1/4 s{a_1<;2>;a_2<;1>}:N-C-S * s{a_3<;2>;a_4<;1>}:N-C-S * "
+                 "t{a_2<;1>,a_4<;1>;i_1,i_2}:A-N-S * "
+                 "λ{i_1,i_2;a_1<;2>,a_3<;2>}:A-N-S"));
     CHECK(standing_metrics(r) == 2);
   }
 
@@ -94,10 +94,10 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
                            with_leg_instance(t::λ(2), 1) * t::t(2)};
     for (auto const& product : products) {
       CHECK(serialize(vac_av(product)) ==
-            (yes ? L"1/4 t{a_1<i_1,i_2;1>,a_2<i_1,i_2;1>;i_1,i_2}:A-N-S * "
-                   L"λ{i_1,i_2;a_1<i_1,i_2;1>,a_2<i_1,i_2;1>}:A-N-S"
-                 : L"1/4 t{a_1<;1>,a_2<;1>;i_1,i_2}:A-N-S * "
-                   L"λ{i_1,i_2;a_1<;1>,a_2<;1>}:A-N-S"));
+            (yes ? "1/4 t{a_1<i_1,i_2;1>,a_2<i_1,i_2;1>;i_1,i_2}:A-N-S * "
+                   "λ{i_1,i_2;a_1<i_1,i_2;1>,a_2<i_1,i_2;1>}:A-N-S"
+                 : "1/4 t{a_1<;1>,a_2<;1>;i_1,i_2}:A-N-S * "
+                   "λ{i_1,i_2;a_1<;1>,a_2<;1>}:A-N-S"));
     }
   }
 
@@ -106,9 +106,9 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
     // s{q<;1>;q'<;2>} δ{q'<;2>;p_2<;2>}: a projection onto the quasiparticle
     // space keeps the instance of the leg it projects, and the overlap
     // between the two families stands
-    const Index i1(L"i_1"), i2(L"i_2");
-    const auto p1 = Index(L"p_1").replace_basis_instance(1);
-    const auto p2 = Index(L"p_2").replace_basis_instance(2);
+    const Index i1("i_1"), i2("i_2");
+    const auto p1 = Index("p_1").replace_basis_instance(1);
+    const auto p2 = Index("p_2").replace_basis_instance(2);
     {
       const auto c = FWickTheorem::contract(FOp(p1, Action::Annihilate),
                                             FOp(p2, Action::Create));
@@ -124,15 +124,15 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
     {
       const auto c = FWickTheorem::contract(
           FOp(p1, Action::Annihilate),
-          FOp(Index(L"p_2").replace_basis_instance(1), Action::Create));
+          FOp(Index("p_2").replace_basis_instance(1), Action::Create));
       CHECK(tensors_labelled(c, reserved::overlap_label()).empty());
       CHECK(tensors_labelled(c, reserved::kronecker_label()).size() == 3);
     }
     // a generic leg contracts to an overlap: a delta of the input may yet
     // narrow it to an instance, so reduce() decides whether it is an identity
     for (auto const& [l, r] :
-         {std::pair{Index(L"p_1"), Index(L"p_2")},
-          std::pair{Index(L"p_1"), Index(L"p_2").replace_basis_instance(1)}}) {
+         {std::pair{Index("p_1"), Index("p_2")},
+          std::pair{Index("p_1"), Index("p_2").replace_basis_instance(1)}}) {
       const auto c = FWickTheorem::contract(FOp(l, Action::Annihilate),
                                             FOp(r, Action::Create));
       CHECK(tensors_labelled(c, reserved::overlap_label()).size() == 1);
@@ -144,11 +144,11 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
       auto vctx = get_default_context();
       vctx.set(vacuum);
       auto vctx_resetter = set_scoped_default_context(vctx);
-      const auto a1 = Index(L"a_1").replace_basis_instance(1);
-      const auto a2 = Index(L"a_2").replace_basis_instance(2);
-      const Index q1(L"p_1"), q2(L"p_2");
-      auto t = ex<Tensor>(L"t", bra{i1}, ket{a1}, Symmetry::Nonsymm);
-      auto u = ex<Tensor>(L"u", bra{a2}, ket{i2}, Symmetry::Nonsymm);
+      const auto a1 = Index("a_1").replace_basis_instance(1);
+      const auto a2 = Index("a_2").replace_basis_instance(2);
+      const Index q1("p_1"), q2("p_2");
+      auto t = ex<Tensor>("t", bra{i1}, ket{a1}, Symmetry::Nonsymm);
+      auto u = ex<Tensor>("u", bra{a2}, ket{i2}, Symmetry::Nonsymm);
       // both legs generic, or one generic and one specific
       for (auto const& expr :
            {t * make_kronecker(a1, q1) * ex<FNOperator>(cre{}, ann{q1}) *
@@ -165,9 +165,9 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
         CHECK(metrics[0]->_ket()[0] == a2);
       }
     }
-    const auto expr = ex<Tensor>(L"t", bra{i1}, ket{p1}, Symmetry::Nonsymm) *
+    const auto expr = ex<Tensor>("t", bra{i1}, ket{p1}, Symmetry::Nonsymm) *
                       ex<FNOperator>(cre{i1}, ann{p1}) *
-                      ex<Tensor>(L"u", bra{p2}, ket{i2}, Symmetry::Nonsymm) *
+                      ex<Tensor>("u", bra{p2}, ket{i2}, Symmetry::Nonsymm) *
                       ex<FNOperator>(cre{p2}, ann{i2});
     Index::reset_tmp_index();
     ExprPtr r;
@@ -188,23 +188,23 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
     // in p̃ (p in instance 1) onto the particle space is in instance 1 of a,
     // i.e. in ã if that is registered, not in p̃
     auto ibr = make_min_sr_spaces();
-    ibr->add(L"p̃", L"p", 1);
-    ibr->add(L"ã", L"a", 1);
+    ibr->add("p̃", "p", 1);
+    ibr->add("ã", "a", 1);
     auto nctx = get_default_context();
     nctx.set(std::move(ibr));
     auto nctx_resetter = set_scoped_default_context(nctx);
-    const Index x(L"p̃_1");
-    REQUIRE(x.basis().name() == L"p̃");
+    const Index x("p̃_1");
+    REQUIRE(x.basis().name() == "p̃");
     const auto c = FWickTheorem::contract(
         FOp(x, Action::Annihilate),
-        FOp(Index(L"p_2").replace_basis_instance(2), Action::Create));
+        FOp(Index("p_2").replace_basis_instance(2), Action::Create));
     const auto deltas = tensors_labelled(c, reserved::kronecker_label());
     REQUIRE(deltas.size() == 2);
     std::size_t projected = 0;
     for (auto const* t : deltas)
       for (auto const& idx : t->_slots())
         if (idx.basis().basis_instance() == 1 && idx != x) {
-          CHECK(idx.basis().name() == L"ã");
+          CHECK(idx.basis().name() == "ã");
           ++projected;
         }
     CHECK(projected == 1);
@@ -212,19 +212,19 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
 
   SECTION("K0: no instance anywhere") {
     CHECK(serialize(vac_av(t::h(2) * t::t(2))) ==
-          (yes ? L"1/4 g{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:A-C-S * "
-                 L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S"
-               : L"1/4 g{i_1,i_2;a_1,a_2}:A-C-S * t{a_1,a_2;i_1,i_2}:A-N-S"));
+          (yes ? "1/4 g{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:A-C-S * "
+                 "t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S"
+               : "1/4 g{i_1,i_2;a_1,a_2}:A-C-S * t{a_1,a_2;i_1,i_2}:A-N-S"));
     CHECK(serialize(vac_av(t::P(nₚ(1)) * t::h(1) * t::t(2))) ==
-          (yes ? L"-1 Â{i_1;a_1<i_1>}:A-N-S * f{i_2;a_2<i_1,i_2>}:A-C-S * "
-                 L"s{a_1<i_1>;a_3<i_1,i_2>}:N-C-S * "
-                 L"t{a_2<i_1,i_2>,a_3<i_1,i_2>;i_1,i_2}:A-N-S"
-               : L"Â{i_1;a_1}:A-N-S * f{i_2;a_2}:A-C-S * "
-                 L"t{a_1,a_2;i_1,i_2}:A-N-S"));
+          (yes ? "-1 Â{i_1;a_1<i_1>}:A-N-S * f{i_2;a_2<i_1,i_2>}:A-C-S * "
+                 "s{a_1<i_1>;a_3<i_1,i_2>}:N-C-S * "
+                 "t{a_2<i_1,i_2>,a_3<i_1,i_2>;i_1,i_2}:A-N-S"
+               : "Â{i_1;a_1}:A-N-S * f{i_2;a_2}:A-C-S * "
+                 "t{a_1,a_2;i_1,i_2}:A-N-S"));
     CHECK(serialize(vac_av(t::λ(2) * t::t(2))) ==
-          (yes ? L"1/4 t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S * "
-                 L"λ{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:A-N-S"
-               : L"1/4 t{a_1,a_2;i_1,i_2}:A-N-S * λ{i_1,i_2;a_1,a_2}:A-N-S"));
+          (yes ? "1/4 t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S * "
+                 "λ{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:A-N-S"
+               : "1/4 t{a_1,a_2;i_1,i_2}:A-N-S * λ{i_1,i_2;a_1,a_2}:A-N-S"));
   }
 
   SECTION("K14: CSV mode without instances, legacy registry") {
@@ -233,7 +233,7 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
           {.csv = CSV::Yes, .op_registry_ptr = make_legacy_registry()}));
       Index::reset_tmp_index();
       CHECK(serialize(op::vac_av(op::H(1) * op::T(1))) ==
-            L"f{i_1;a_1<i_1>}:A-C-S * t{a_1<i_1>;i_1}:A-N-S");
+            "f{i_1;a_1<i_1>}:A-C-S * t{a_1<i_1>;i_1}:A-N-S");
     }
   }
 }
@@ -249,8 +249,7 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
        .vacuum = Vacuum::SingleProduct,
        .spbasis = SPBasis::Spinor}));
 
-  const Index p1(L"p_1"), q1(L"p_2"), a1(L"a_1"), a2(L"a_2"), i1(L"i_1"),
-      i2(L"i_2");
+  const Index p1("p_1"), q1("p_2"), a1("a_1"), a2("a_2"), i1("i_1"), i2("i_2");
   const auto a1_1 = a1.replace_basis_instance(1);
   const auto a2_1 = a2.replace_basis_instance(1);
   const auto a2_2 = a2.replace_basis_instance(2);
@@ -261,7 +260,7 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
     return expr;
   };
   auto g = [&](Index const& x, Index const& y) {
-    return ex<Tensor>(L"g", bra{x, y}, ket{i1, i2}, Symmetry::Nonsymm);
+    return ex<Tensor>("g", bra{x, y}, ket{i1, i2}, Symmetry::Nonsymm);
   };
   auto instances = [](AbstractTensor const& t) {
     container::svector<IndexBasis::optional_instance> result;
@@ -282,7 +281,7 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
     for (auto const& product : {s1 * s2 * g(a1, a2_1), s2 * s1 * g(a1, a2_1)}) {
       const auto r = reduce(product);
       REQUIRE(tensors_labelled(r, reserved::overlap_label()).empty());
-      const auto gs = tensors_labelled(r, L"g");
+      const auto gs = tensors_labelled(r, "g");
       REQUIRE(gs.size() == 1);
       const auto g_slots = slots(*gs[0]);
       CHECK(g_slots[0] == g_slots[1]);
@@ -303,7 +302,7 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
       const auto metrics = tensors_labelled(r, reserved::overlap_label());
       REQUIRE(metrics.size() == 1);
       CHECK(standing_metrics(r) == 1);
-      const auto gs = tensors_labelled(r, L"g");
+      const auto gs = tensors_labelled(r, "g");
       REQUIRE(gs.size() == 1);
       CHECK(instances(*gs[0]) ==
             container::svector<IndexBasis::optional_instance>{1, 2, {}, {}});
@@ -325,13 +324,13 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
     for (auto const& product :
          {d1 * d2 * s * g(a1_1, a2_2), d1 * s * d2 * g(a1_1, a2_2),
           s * d1 * d2 * g(a1_1, a2_2)}) {
-      INFO(toUtf8(serialize(product)));
+      INFO(serialize(product));
       ExprPtr r;
       REQUIRE_NOTHROW(r = reduce(product));
       CHECK(tensors_labelled(r, reserved::kronecker_label()).empty());
       const auto metrics = tensors_labelled(r, reserved::overlap_label());
       REQUIRE(metrics.size() == 1);
-      const auto gs = tensors_labelled(r, L"g");
+      const auto gs = tensors_labelled(r, "g");
       REQUIRE(gs.size() == 1);
       CHECK(instances(*gs[0]) ==
             container::svector<IndexBasis::optional_instance>{1, 2, {}, {}});
@@ -348,8 +347,8 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
     CHECK(is_kronecker_equivalent(a1, a2_2));
     // f{i_1;a_1<;1>} s{a_1<;1>;a_2<;2>} t{a_2<;2>;i_1}: the overlap stands
     const auto r =
-        reduce(ex<Tensor>(L"f", bra{i1}, ket{a1_1}) * make_overlap(a1_1, a2_2) *
-               ex<Tensor>(L"t", bra{a2_2}, ket{i1}));
+        reduce(ex<Tensor>("f", bra{i1}, ket{a1_1}) * make_overlap(a1_1, a2_2) *
+               ex<Tensor>("t", bra{a2_2}, ket{i1}));
     const auto metrics = tensors_labelled(r, reserved::overlap_label());
     REQUIRE(metrics.size() == 1);
     CHECK(slots(*metrics[0]) == container::svector<Index>{a1_1, a2_2});
@@ -359,34 +358,34 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
     // ã: a basis of a with a general metric; an overlap between two of its
     // functions is the metric, a Kronecker delta is still an identity
     auto ibr = mbpt::make_min_sr_spaces();
-    ibr->add(L"ã", L"a", 1, {.metric = IndexBasisMetric::General});
+    ibr->add("ã", "a", 1, {.metric = IndexBasisMetric::General});
     auto gctx = get_default_context();
     gctx.set(std::move(ibr));
     auto gctx_resetter = set_scoped_default_context(gctx);
-    const Index x1(L"ã_1"), x2(L"ã_2"), x3(L"ã_3");
+    const Index x1("ã_1"), x2("ã_2"), x3("ã_3");
     REQUIRE(x1.basis().metric() == IndexBasisMetric::General);
-    auto t = [&](Index const& x) { return ex<Tensor>(L"t", bra{i1}, ket{x}); };
+    auto t = [&](Index const& x) { return ex<Tensor>("t", bra{i1}, ket{x}); };
     // int + ext and int + int: the overlap stands
     auto r = reduce(t(x1) * make_overlap(x1, x2));
     CHECK(tensors_labelled(r, reserved::overlap_label()).size() == 1);
-    CHECK(slots(*tensors_labelled(r, L"t")[0])[1] == x1);
+    CHECK(slots(*tensors_labelled(r, "t")[0])[1] == x1);
     r = reduce(t(x1) * make_overlap(x1, x3) *
-               ex<Tensor>(L"g", bra{x3}, ket{i2}));
+               ex<Tensor>("g", bra{x3}, ket{i2}));
     CHECK(tensors_labelled(r, reserved::overlap_label()).size() == 1);
     // a Kronecker delta between its functions reduces
     r = reduce(t(x1) * make_kronecker(x1, x2));
     CHECK(tensors_labelled(r, reserved::kronecker_label()).empty());
-    CHECK(slots(*tensors_labelled(r, L"t")[0])[1] == x2);
+    CHECK(slots(*tensors_labelled(r, "t")[0])[1] == x2);
     // the same overlap in an orthonormal instance of a is an identity
     r = reduce(t(a1_1) * make_overlap(a1_1, a2_1));
     CHECK(tensors_labelled(r, reserved::overlap_label()).empty());
-    CHECK(slots(*tensors_labelled(r, L"t")[0])[1] == a2_1);
+    CHECK(slots(*tensors_labelled(r, "t")[0])[1] == a2_1);
   }
 
   SECTION("a delta or overlap between disjoint spaces is zero in any bases") {
     const auto i1_1 = i1.replace_basis_instance(1);
     const auto a1_2 = a1.replace_basis_instance(2);
-    auto t = [&] { return ex<Tensor>(L"t", bra{a1_2}, ket{i1_1}); };
+    auto t = [&] { return ex<Tensor>("t", bra{a1_2}, ket{i1_1}); };
     CHECK(reduce(make_overlap(i1_1, a1_2) * t()) == ex<Constant>(0));
     CHECK(reduce(make_kronecker(i1_1, a1_2) * t()) == ex<Constant>(0));
     // also when the spaces become disjoint through a rule
@@ -413,10 +412,10 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
     // the overlap stands
     {
       const auto r =
-          reduce(make_overlap(a1, a2_1) * ex<Tensor>(L"t", bra{a2_1}, ket{i1}));
+          reduce(make_overlap(a1, a2_1) * ex<Tensor>("t", bra{a2_1}, ket{i1}));
       const auto metrics = tensors_labelled(r, reserved::overlap_label());
       REQUIRE(metrics.size() == 1);
-      const auto ts = tensors_labelled(r, L"t");
+      const auto ts = tensors_labelled(r, "t");
       REQUIRE(ts.size() == 1);
       const auto t_slots = slots(*ts[0]);
       CHECK(t_slots[0] != a1);
@@ -426,9 +425,9 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
     // s{a_1<;1>;a_2} t{a_2;i_1}, a_1<;1> external: a_2 becomes a_1<;1>
     {
       const auto r =
-          reduce(make_overlap(a1_1, a2) * ex<Tensor>(L"t", bra{a2}, ket{i1}));
+          reduce(make_overlap(a1_1, a2) * ex<Tensor>("t", bra{a2}, ket{i1}));
       CHECK(tensors_labelled(r, reserved::overlap_label()).empty());
-      const auto ts = tensors_labelled(r, L"t");
+      const auto ts = tensors_labelled(r, "t");
       REQUIRE(ts.size() == 1);
       CHECK(slots(*ts[0]) == container::svector<Index>{a1_1, i1});
     }
@@ -454,7 +453,7 @@ TEST_CASE("basis-wick-bernoulli-commutator", "[algorithms][wick][basis]") {
   const auto ab = bernoulli::detail::wick_commutator(
       op::tensor::h(2), with_leg_instance(op::tensor::t(2), 3));
 
-  const auto ts = tensors_labelled(ab, L"t");
+  const auto ts = tensors_labelled(ab, "t");
   REQUIRE(!ts.empty());
   std::size_t misses = 0;
   for (auto const* t : ts)
@@ -493,9 +492,9 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
   SECTION("a contraction between two instances leaves an overlap standing") {
     for (IndexBasis::instance_type ket_instance : {1, 2}) {
       CAPTURE(ket_instance);
-      const auto p1 = Index(L"p_1").replace_basis_instance(1);
-      const auto p2 = Index(L"p_2").replace_basis_instance(ket_instance);
-      const auto expr = ex<Tensor>(L"h", bra{p1}, ket{p2}, Symmetry::Nonsymm) *
+      const auto p1 = Index("p_1").replace_basis_instance(1);
+      const auto p2 = Index("p_2").replace_basis_instance(ket_instance);
+      const auto expr = ex<Tensor>("h", bra{p1}, ket{p2}, Symmetry::Nonsymm) *
                         ex<FNOperator>(cre{p1}, ann{}) *
                         ex<FNOperator>(cre{}, ann{p2});
       ExprPtr r;
@@ -509,8 +508,8 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
   SECTION("η = δ - γ between two instances is an overlap minus γ") {
     for (IndexBasis::instance_type bra_instance : {1, 2}) {
       CAPTURE(bra_instance);
-      const auto u1 = Index(L"u_1").replace_basis_instance(1);
-      const auto u2 = Index(L"u_2").replace_basis_instance(bra_instance);
+      const auto u1 = Index("u_1").replace_basis_instance(1);
+      const auto u2 = Index("u_2").replace_basis_instance(bra_instance);
       const auto expr =
           ex<FNOperator>(cre{}, ann{u2}) * ex<FNOperator>(cre{u1}, ann{});
       FWickTheorem wick{expr};
@@ -526,11 +525,11 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
   SECTION("η = δ - γ in a non-orthonormal basis is an overlap minus γ") {
     // ũ: a basis of the active space with a general metric
     auto ibr = mbpt::make_mr_spaces();
-    ibr->add(L"ũ", L"u", 1, {.metric = IndexBasisMetric::General});
+    ibr->add("ũ", "u", 1, {.metric = IndexBasisMetric::General});
     auto metric_ctx = get_default_context();
     metric_ctx.set(std::move(ibr));
     auto metric_resetter = set_scoped_default_context(metric_ctx);
-    const Index u1(L"ũ_1"), u2(L"ũ_2");
+    const Index u1("ũ_1"), u2("ũ_2");
     REQUIRE(u1.basis().metric() == IndexBasisMetric::General);
     const auto expr =
         ex<FNOperator>(cre{}, ann{u2}) * ex<FNOperator>(cre{u1}, ann{});

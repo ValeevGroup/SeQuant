@@ -17,7 +17,7 @@ std::string ItfContext::index_name(const IndexSpace &space,
   SEQUANT_ASSERT(ordinal >= m_idx_offset);
   ordinal -= m_idx_offset;
 
-  std::string base_key = toUtf8(space.base_key());
+  std::string base_key = std::string(space.base_key());
 
   char limit = [&]() -> char {
     auto it = m_index_label_limits.find(space);
@@ -51,7 +51,7 @@ std::string ItfContext::get_name(const IndexSpace &space) const {
 
   if (it == m_space_names.end()) {
     throw Exception("No name known for index space '" +
-                    toUtf8(space.base_key()) + "'");
+                    std::string(space.base_key()) + "'");
   }
 
   return it->second;
@@ -62,7 +62,7 @@ std::string ItfContext::get_tag(const IndexSpace &space) const {
 
   if (it == m_tags.end()) {
     throw Exception("No tag known for index space '" +
-                    toUtf8(space.base_key()) + "'");
+                    std::string(space.base_key()) + "'");
   }
 
   return it->second;
@@ -146,7 +146,7 @@ bool ItfContext::rewrite(Tensor &tensor) const {
       std::swap(ket[0], ket[1]);
     }
 
-    std::wstring label;
+    std::string label;
 
     // Look at the index space patterns to figure out whether
     // this is a K or a J integral. If the previously attempted sorting
@@ -160,7 +160,7 @@ bool ItfContext::rewrite(Tensor &tensor) const {
     Index *p2_2 = nullptr;
     if (is_exceptional_J(bra, ket) ||
         needs_swap(bra[1].basis(), ket[0].basis())) {
-      label = L"J";
+      label = "J";
       std::swap(bra[1], ket[0]);
 
       p1_1 = &bra[0];
@@ -168,7 +168,7 @@ bool ItfContext::rewrite(Tensor &tensor) const {
       p1_2 = &bra[1];
       p2_2 = &ket[1];
     } else {
-      label = L"K";
+      label = "K";
 
       p1_1 = &bra[0];
       p2_1 = &bra[1];

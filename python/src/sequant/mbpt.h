@@ -8,7 +8,6 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/utility/string.hpp>
 
 #include "python.h"
 
@@ -27,21 +26,7 @@ using PyEVOptions = sequant::mbpt::EVOptions<std::string>;
 ExprPtr VacuumAverage(const ExprPtr& e) { return sequant::mbpt::op::vac_av(e); }
 
 ExprPtr VacuumAverage(const ExprPtr& e, const PyEVOptions& opts) {
-  // helper for converting connections lists
-  auto convert = [](const sequant::mbpt::OpConnections<std::string>& pairs) {
-    sequant::mbpt::OpConnections<std::wstring> result;
-    result.reserve(pairs.size());
-    for (const auto& [a, b] : pairs) {
-      result.emplace_back(sequant::toUtf16(a), sequant::toUtf16(b));
-    }
-    return result;
-  };
-  return sequant::mbpt::op::vac_av(
-      e, {.connect = convert(opts.connect),
-          .do_not_connect = convert(opts.do_not_connect),
-          .screen = opts.screen,
-          .use_topology = opts.use_topology,
-          .skip_clone = opts.skip_clone});
+  return sequant::mbpt::op::vac_av(e, opts);
 }
 
 #define SR_OP(OP) \

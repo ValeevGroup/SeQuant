@@ -8,10 +8,10 @@
 
 namespace sequant {
 
-void IndexBasisRegistry::validate_label(std::wstring_view label,
+void IndexBasisRegistry::validate_label(std::string_view label,
                                         std::string_view caller) {
   if (!io::serialization::v1::is_base_key(label))
-    throw Exception(std::string(caller) + ": label '" + toUtf8(label) +
+    throw Exception(std::string(caller) + ": label '" + std::string(label) +
                     "' is not an index space name: it must be nonempty and "
                     "made of letters, ⁺, ⁻, combining diacritics, arrows and "
                     "primes only, so that indices in it can be printed and "

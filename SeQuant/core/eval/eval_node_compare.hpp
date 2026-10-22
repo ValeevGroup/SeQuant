@@ -305,7 +305,7 @@ using SubexpressionUsageCounts =
 /// intermediate
 template <typename TreeNode, bool force_hash_collisions = false>
 using SubexpressionNames =
-    std::unordered_map<TreeNode, std::wstring,
+    std::unordered_map<TreeNode, std::string,
                        TreeNodeHasher<TreeNode, force_hash_collisions>,
                        TreeNodeEqualityComparator<TreeNode>>;
 

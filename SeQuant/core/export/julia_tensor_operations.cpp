@@ -18,7 +18,7 @@ std::string JuliaTensorOperationsGeneratorContext::get_tag(
 
   if (it == m_index_tags.end()) {
     throw Exception("No known tags for indices of space \"" +
-                    toUtf8(space.base_key()) + "\"");
+                    std::string(space.base_key()) + "\"");
   }
 
   return it->second;

@@ -49,7 +49,7 @@ void load(Convention conv = Convention::Minimal,
           SpinConvention spconv = SpinConvention::Default);
 
 /// @brief decorate IndexSpace labels with spin
-std::wstring decorate_label(std::wstring label, bool up);
+std::string decorate_label(std::string label, bool up);
 
 /// @brief add fermionic spin spaces to registry
 void add_fermi_spin(IndexBasisRegistry& ibr);
@@ -140,9 +140,9 @@ inline constexpr IndexBasis::instance_type default_pao_basis_instance =
 /// particle space: each member is given by name, and each has a default
 struct PAOBasisSpec {
   /// the label the PAO basis is registered under
-  std::wstring_view label = L"μ̃";
+  std::string_view label = "μ̃";
   /// the label of the AO basis the PAOs are projected from, which they follow
-  std::wstring_view ao_basis = L"μ";
+  std::string_view ao_basis = "μ";
   /// the basis instance of the PAO basis
   IndexBasis::instance_type instance = default_pao_basis_instance;
 };
@@ -165,7 +165,7 @@ struct PAOBasisSpec {
 /// they follow the same basis, since the AOs do not depend on spin.
 /// @param spin_any the quantum numbers of the spin-agnostic particle space
 /// @param spec the label, the AO basis and the instance of the PAO basis, by
-///        name (see PAOBasisSpec), e.g. `{.ao_basis = L"Γ"}`
+///        name (see PAOBasisSpec), e.g. `{.ao_basis = "Γ"}`
 /// @throw Exception if the label is that of the AO basis or it or a
 ///        spin-annotated version of it is already registered, if the
 ///        instance of a particle space is already named, if the AO basis is
@@ -229,7 +229,7 @@ make_fermi_and_bose_spaces(SpinConvention spconv = SpinConvention::Default);
 /// @throws Assertion failure if batching space "z" is not found in the registry
 inline void check_for_batching_space() {
   SEQUANT_ASSERT(
-      sequant::get_default_context().index_basis_registry()->contains(L"z"));
+      sequant::get_default_context().index_basis_registry()->contains("z"));
 }
 
 }  // namespace mbpt

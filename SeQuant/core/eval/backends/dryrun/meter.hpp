@@ -477,7 +477,7 @@ inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
     cache.set_custom_evaluator(sequant::make_evaluator<Trace::On>(
         policy, yield, sequant::make_no_scope_guard{}));
 
-  (void)sequant::evaluate<Trace::On>(forest, policy, std::wstring{}, yield,
+  (void)sequant::evaluate<Trace::On>(forest, policy, std::string{}, yield,
                                      cache, {}, sequant::make_no_scope_guard{});
 
   return assemble_report(cache, mon, rich, forest, is_volatile,

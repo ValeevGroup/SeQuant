@@ -18,16 +18,16 @@ int main() {
 
   // start-snippet-2
   IndexBasisRegistry ibr;
-  ibr.add(L"y", 0b01, {.vacuum_occupied = true});
+  ibr.add("y", 0b01, {.vacuum_occupied = true});
   // end-snippet-2
 
   // reset ibr for the next example to work
   ibr.clear();
 
   // start-snippet-3
-  ibr.add(L"y", 0b01, {.vacuum_occupied = true})
-      .add(L"z", 0b10)
-      .add(L"p", 0b11, {.complete = true});
+  ibr.add("y", 0b01, {.vacuum_occupied = true})
+      .add("z", 0b10)
+      .add("p", 0b11, {.complete = true});
   // end-snippet-3
 
   return 0;

@@ -25,7 +25,7 @@ namespace sequant {
 Tensor::~Tensor() = default;
 
 void Tensor::assert_nonreserved_label(
-    [[maybe_unused]] std::wstring_view label) const {
+    [[maybe_unused]] std::string_view label) const {
   SEQUANT_ASSERT(!ranges::contains(FNOperator::labels(), label) &&
                  !ranges::contains(BNOperator::labels(), label));
 }
@@ -55,8 +55,9 @@ void Tensor::check_density_symmetries() const {
             ? "density::make_cumulant"
             : "density::make_density(reserved::spinfree_rdm_label(), ...)";
     throw Exception(
-        "Tensor: " + toUtf8(label_) + " is a reserved density label; a rank-" +
-        std::to_string(rank) + " " + toUtf8(label_) +
+        "Tensor: " + std::string(label_) +
+        " is a reserved density label; a rank-" + std::to_string(rank) + " " +
+        std::string(label_) +
         " must have equal bra and ket ranks, no aux indices and be " +
         (multibody_spinorbital ? "antisymmetric (or perm-nonsymmetric), "
                                : "perm-nonsymmetric, ") +
@@ -112,7 +113,7 @@ ExprPtr Tensor::canonicalize(CanonicalizeOptions opts) {
     SEQUANT_ASSERT(canonical);
     *this = *canonical;
   } else {
-    const auto canonicalizer = ctx.tensor_canonicalizer_ptr(L"");
+    const auto canonicalizer = ctx.tensor_canonicalizer_ptr("");
     if (!canonicalizer)
       throw Exception(
           "Tensor::canonicalize: the current context has no default tensor "

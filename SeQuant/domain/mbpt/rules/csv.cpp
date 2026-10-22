@@ -26,7 +26,7 @@ namespace sequant::mbpt {
 /// @param orthonormal whether @p csv_basis is orthonormal
 ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
                            bool orthonormal,
-                           std::wstring_view coeff_tensor_label) {
+                           std::string_view coeff_tensor_label) {
   using ranges::views::transform;
   using sequant::reserved::overlap_label;
 
@@ -43,9 +43,9 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
   auto require_in_basis_space = [&csv_basis](const Index& leg) {
     if (csv_basis.has_basis_instance() && leg.space() != csv_basis.space())
       throw Exception("csv_transform: a CSV leg is in space " +
-                      toUtf8(leg.space().base_key()) +
+                      std::string(leg.space().base_key()) +
                       ", not in the target basis instance's space " +
-                      toUtf8(csv_basis.space().base_key()));
+                      std::string(csv_basis.space().base_key()));
   };
 
   // shortcut for the CSV overlap if csv_basis is orthonormal
@@ -124,8 +124,8 @@ namespace {
 
 ExprPtr csv_transform_rec(
     ExprPtr const& expr, const IndexBasis& csv_basis, bool orthonormal,
-    std::wstring const& coeff_tensor_label,
-    container::svector<std::wstring> const& tensor_labels) {
+    std::string const& coeff_tensor_label,
+    container::svector<std::string> const& tensor_labels) {
   using ranges::views::transform;
   if (expr->is<Sum>())
     return ex<Sum>(
@@ -165,8 +165,8 @@ ExprPtr csv_transform_rec(
 }  // namespace
 
 ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
-                      std::wstring const& coeff_tensor_label,
-                      container::svector<std::wstring> const& tensor_labels) {
+                      std::string const& coeff_tensor_label,
+                      container::svector<std::string> const& tensor_labels) {
   if (!csv_basis.has_basis_instance())
     return csv_transform_rec(expr, csv_basis, /*orthonormal=*/true,
                              coeff_tensor_label, tensor_labels);
@@ -174,7 +174,7 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
   if (!registry || !registry->basis_label(csv_basis))
     throw Exception(
         "csv_transform: the target basis instance " +
-        toUtf8(csv_basis.space().base_key()) + ";" +
+        std::string(csv_basis.space().base_key()) + ";" +
         std::to_string(*csv_basis.basis_instance()) +
         " is not registered under a name; indices minted in it would print "
         "and be keyed as the space's own basis");

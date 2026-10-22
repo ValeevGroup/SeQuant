@@ -60,11 +60,11 @@ std::size_t OutputStep::process(std::string_view, std::size_t,
                                 const ExpressionData &data) {
   for (const auto &expr : data.expressions) {
     if (latex_) {
-      std::wcout << io::latex::to_string(expr) << std::endl;
+      std::cout << io::latex::to_string(expr) << std::endl;
     } else {
-      std::wcout << io::serialization::to_string(expr,
-                                                 {.annot_symm = annot_symm_})
-                 << std::endl;
+      std::cout << io::serialization::to_string(expr,
+                                                {.annot_symm = annot_symm_})
+                << std::endl;
     }
   }
 

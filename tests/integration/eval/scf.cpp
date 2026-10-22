@@ -21,17 +21,17 @@ double SequantEvalScf::energy() const { return energy_; }
 //
 // todo separate logging functions
 //
-void SequantEvalScf::scf(std::basic_ostream<wchar_t>& log) {
+void SequantEvalScf::scf(std::basic_ostream<char>& log) {
   using HRC = std::chrono::high_resolution_clock;
 
   size_t const iter_print_width =
-      std::to_wstring(info_.scf_opts.max_iter).length();
+      std::to_string(info_.scf_opts.max_iter).length();
 
   size_t const norm_precision = 10;
   size_t const norm_print_width = double_print_width;
 
-  static std::wstring const header_str = [iter_print_width]() {
-    auto oss = std::wostringstream{};
+  static std::string const header_str = [iter_print_width]() {
+    auto oss = std::ostringstream{};
 
     oss << std::setw(iter_print_width) << std::right << "Iter"
         << "  " << std::setw(double_print_width) << std::left << "Energy"
@@ -40,7 +40,7 @@ void SequantEvalScf::scf(std::basic_ostream<wchar_t>& log) {
         << "  " << std::setw(time_print_width) << std::left
         << "Time(micro sec)";
     auto const dash_count = oss.str().length();
-    oss << "\n" << std::wstring(dash_count, L'-');
+    oss << "\n" << std::string(dash_count, '-');
     return oss.str();
   }();
 
@@ -91,7 +91,7 @@ void SequantEvalScf::scf(std::basic_ostream<wchar_t>& log) {
   } while (!converged_ && iter < info_.scf_opts.max_iter);
   //  reset_cache_all();
   if (info_.log_opts.level > 0)
-    log << std::wstring(20, L'-') << "\n"
+    log << std::string(20, '-') << "\n"
         << "Delta(CC) = " << std::setprecision(double_precision)
         << std::setw(double_print_width) << energy_ << "\n"
         << "Num iters = " << iter << "\n"

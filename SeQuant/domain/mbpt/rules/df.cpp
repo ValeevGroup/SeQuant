@@ -16,7 +16,7 @@
 namespace sequant::mbpt {
 
 ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx,
-                         std::wstring_view factor_label) {
+                         std::string_view factor_label) {
   SEQUANT_ASSERT(tnsr.bra_rank() == 2     //
                  && tnsr.ket_rank() == 2  //
                  && tnsr.aux_rank() == 0);
@@ -56,8 +56,8 @@ ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx,
 }
 
 ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
-                    std::wstring_view tensor_label,
-                    std::wstring_view factor_label) {
+                    std::string_view tensor_label,
+                    std::string_view factor_label) {
   using ranges::views::transform;
 
   auto process_tensor = [&](const Tensor& tensor,

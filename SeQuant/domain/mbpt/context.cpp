@@ -127,15 +127,15 @@ std::shared_ptr<OpRegistry> make_minimal_registry() {
   auto registry = std::make_shared<OpRegistry>();
 
   registry
-      ->add(L"h", OpClass::Gen)   /// 1-body Hamiltonian
-      .add(L"g", OpClass::Gen)    /// 2-body Coulomb
-      .add(L"f", OpClass::Gen)    /// Fock operator
-      .add(L"θ", OpClass::Gen)    /// general fock space operator
-      .add(L"ã", OpClass::Gen)    /// replacement operator
-      .add(L"t", OpClass::Ex)     /// cluster operator
-      .add(L"λ", OpClass::Deex)   /// deexcitation cluster operator
-      .add(L"R", OpClass::Ex)     /// right-hand eigenstate
-      .add(L"L", OpClass::Deex);  /// left-hand eigenstate
+      ->add("h", OpClass::Gen)   /// 1-body Hamiltonian
+      .add("g", OpClass::Gen)    /// 2-body Coulomb
+      .add("f", OpClass::Gen)    /// Fock operator
+      .add("θ", OpClass::Gen)    /// general fock space operator
+      .add("ã", OpClass::Gen)    /// replacement operator
+      .add("t", OpClass::Ex)     /// cluster operator
+      .add("λ", OpClass::Deex)   /// deexcitation cluster operator
+      .add("R", OpClass::Ex)     /// right-hand eigenstate
+      .add("L", OpClass::Deex);  /// left-hand eigenstate
 
   return registry;
 }
@@ -143,27 +143,27 @@ std::shared_ptr<OpRegistry> make_minimal_registry() {
 std::shared_ptr<OpRegistry> make_legacy_registry() {
   auto registry = std::make_shared<OpRegistry>();
 
-  registry->add(L"h", OpClass::Gen)
-      .add(L"f", OpClass::Gen)
+  registry->add("h", OpClass::Gen)
+      .add("f", OpClass::Gen)
       /// closed Fock operator (i.e. Fock operator due to fully-occupied
       /// orbitals)
-      .add(L"f̃", OpClass::Gen)
-      .add(L"g", OpClass::Gen)
-      .add(L"θ", OpClass::Gen)
-      .add(L"ã", OpClass::Gen)  /// replacement operator
-      .add(L"t", OpClass::Ex)
-      .add(L"λ", OpClass::Deex)
-      .add(L"R", OpClass::Ex)
-      .add(L"L", OpClass::Deex)
+      .add("f̃", OpClass::Gen)
+      .add("g", OpClass::Gen)
+      .add("θ", OpClass::Gen)
+      .add("ã", OpClass::Gen)  /// replacement operator
+      .add("t", OpClass::Ex)
+      .add("λ", OpClass::Deex)
+      .add("R", OpClass::Ex)
+      .add("L", OpClass::Deex)
       /// R12
-      .add(L"F", OpClass::Gen)
-      .add(L"GR", OpClass::Gen)
-      .add(L"C", OpClass::Gen);
+      .add("F", OpClass::Gen)
+      .add("GR", OpClass::Gen)
+      .add("C", OpClass::Gen);
 
   return registry;
 }
 
-OpClass to_op_class(const std::wstring& op) {
+OpClass to_op_class(const std::string& op) {
   // check reserved labels first
   if (ranges::contains(reserved::labels(), op)) {
     return OpClass::Gen;  // all reserved labels are Gen
@@ -172,7 +172,7 @@ OpClass to_op_class(const std::wstring& op) {
   }
 }
 
-Hermiticity op_hermiticity(const std::wstring& op) {
+Hermiticity op_hermiticity(const std::string& op) {
   if (op == reserved::antisymm_label() || op == reserved::symm_label()) {
     // Symmetrization operators are non-hermitian
     return Hermiticity::NonHermitian;

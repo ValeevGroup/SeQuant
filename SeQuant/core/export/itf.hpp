@@ -77,11 +77,11 @@ class ItfContext : public ReorderingContext {
   virtual void set_import_name(const Variable &variable, std::string name);
 
   /// @returns The label of the 2-electron integral tensor
-  virtual const std::wstring two_electron_integral_label() const {
+  virtual const std::string two_electron_integral_label() const {
     return m_integral_label;
   }
   /// Sets the label of the 2-electron integral tensor
-  virtual void set_two_electron_integral_label(std::wstring label) {
+  virtual void set_two_electron_integral_label(std::string label) {
     m_integral_label = std::move(label);
   }
 
@@ -106,7 +106,7 @@ class ItfContext : public ReorderingContext {
   TensorImportMap m_tensor_imports;
   VariableImportMap m_variable_imports;
   container::map<IndexSpace, char> m_index_label_limits;
-  std::wstring m_integral_label = L"g";
+  std::string m_integral_label = "g";
   std::size_t m_idx_offset = 0;
   std::map<std::size_t, std::vector<Index>> m_batch_indices;
 
@@ -166,7 +166,7 @@ class ItfGenerator : public Generator<Context> {
   }
 
   std::string get_name(const Tensor &tensor, const Context &ctx) const {
-    std::string name = toUtf8(tensor.label());
+    std::string name = std::string(tensor.label());
 
     if (tensor.num_indices() > 0) {
       name += ":";
@@ -200,7 +200,7 @@ class ItfGenerator : public Generator<Context> {
 
   std::string represent(const Variable &variable,
                         const Context &) const override {
-    return toUtf8(variable.label()) + "[]";
+    return std::string(variable.label()) + "[]";
   }
 
   std::string represent(const Constant &constant,
@@ -342,7 +342,7 @@ class ItfGenerator : public Generator<Context> {
       if (import_name.has_value()) {
         append(import_name.value());
       } else {
-        append(toUtf8(variable.label()));
+        append(std::string(variable.label()));
       }
     } else {
       append("!Create{type:scalar}");
@@ -396,7 +396,7 @@ class ItfGenerator : public Generator<Context> {
       return entry + ctx.any_irreps_name();
     }
     if (irreps.empty()) {
-      throw Exception("Tensor " + toUtf8(tensor.label()) +
+      throw Exception("Tensor " + std::string(tensor.label()) +
                       " spans no IRREP (i.e. it vanishes by symmetry)");
     }
 

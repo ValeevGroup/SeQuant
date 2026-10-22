@@ -143,7 +143,7 @@ TEST_CASE("home_depth_of resolves the deepest enclosing loop in home_modes",
           "[peak_profile]") {
   // Three enclosing loops, outermost-first (matches BatchContext's documented
   // order): o (level 0), i (level 1), a (level 2, innermost).
-  Index const o1{L"o_1"}, i1{L"i_1"}, a1{L"a_1"}, x1{L"x_1"};
+  Index const o1{"o_1"}, i1{"i_1"}, a1{"a_1"}, x1{"x_1"};
   BatchContext const ectx{
       {o1, {0, 1}},
       {i1, {0, 1}},
@@ -169,15 +169,15 @@ TEST_CASE("cell_footprint sizes enclosing-home modes at BLOCK, others FULL",
           "[peak_profile]") {
   // full(i) = full(a) = 10; block(i) = 2 (a fake per-mode slice extent).
   SizeRegime r;
-  r.space_extent = {{L"i", 10}, {L"a", 10}};
+  r.space_extent = {{"i", 10}, {"a", 10}};
   CostModel const cm{r};
 
-  Index const p{L"i_1"};  // the mode with an enclosing loop
-  Index const q{L"a_1"};  // unbatched: no enclosing loop, no override
+  Index const p{"i_1"};  // the mode with an enclosing loop
+  Index const q{"a_1"};  // unbatched: no enclosing loop, no override
   svector<Index> const carried{p, q};
 
   auto const block_of = [](Index const& ix) -> std::size_t {
-    return ix == Index{L"i_1"} ? 2 : 10;
+    return ix == Index{"i_1"} ? 2 : 10;
   };
 
   // Cell homed AT p (home_modes = {p}) -> p is in the meet -> p sized at
@@ -216,12 +216,12 @@ TEST_CASE(
   // replication recompute is a separate report-only term. So cell_footprint
   // IGNORES divergent_modes -- passing it never changes the size.
   SizeRegime r;
-  r.space_extent = {{L"i", 10}, {L"a", 10}};
+  r.space_extent = {{"i", 10}, {"a", 10}};
   CostModel const cm{r};
-  Index const p{L"i_1"}, q{L"a_1"};
+  Index const p{"i_1"}, q{"a_1"};
   svector<Index> const carried{p, q};
   auto const block_of = [](Index const& ix) -> std::size_t {
-    return ix == Index{L"i_1"} ? 2 : 10;
+    return ix == Index{"i_1"} ? 2 : 10;
   };
   svector<Index> const home_modes{p};
 
@@ -297,7 +297,7 @@ TEST_CASE("compute_dag_boulevard threads the value hash onto each ValueCell",
   auto P2 = inode("P{i_1;a_3}", make_V(), leaf("W{a_1;a_3}"));
 
   SizeRegime r;
-  r.space_extent = {{L"i", 5}, {L"a", 10}};
+  r.space_extent = {{"i", 5}, {"a", 10}};
   CostModel const cm{r};
   auto const block_of = [](Index const&) -> std::size_t { return 1; };
   std::vector<EvalNode<EvalExpr>> forest{P1, P2};
@@ -374,7 +374,7 @@ TEST_CASE(
     "peak_profile_replay == sweep on linearized forests (incl. a CSE fold)",
     "[peak_profile]") {
   SizeRegime r;
-  r.space_extent = {{L"i", 5}, {L"a", 10}};
+  r.space_extent = {{"i", 5}, {"a", 10}};
   CostModel const cm{r};
   auto const block_of = [](Index const&) -> std::size_t { return 1; };
 
@@ -420,14 +420,14 @@ TEST_CASE(
   // P carries i_1, as an External open site must: the DP opens an external
   // loop only at a node that carries its mode.
   auto P = inode("P{i_1,i_2;a_1}", make_V(), leaf("W{i_1;a_1}"));
-  stamp_ext(P, Index{L"i_1"});  // realized i_1 loop above V in tree 1
+  stamp_ext(P, Index{"i_1"});  // realized i_1 loop above V in tree 1
   auto Q = inode("Q{i_1;i_2}", make_V(), leaf("U{i_2;i_1}"));  // no loop
 
   SizeRegime r;
-  r.space_extent = {{L"i", 10}, {L"a", 10}, {L"x", 10}};
+  r.space_extent = {{"i", 10}, {"a", 10}, {"x", 10}};
   CostModel const cm{r};
   auto const block_of = [](Index const& ix) -> std::size_t {
-    return ix == Index{L"i_1"} ? 2 : 10;
+    return ix == Index{"i_1"} ? 2 : 10;
   };
 
   std::vector<EvalNode<EvalExpr>> forest{P, Q};
@@ -455,7 +455,7 @@ TEST_CASE(
 namespace {
 SizeRegime anchor_regime() {
   SizeRegime r;
-  r.space_extent = {{L"i", 10}, {L"a", 20}};
+  r.space_extent = {{"i", 10}, {"a", 20}};
   double const pno = 4.0;
   for (std::size_t k = 0; k <= sequant::eval::dryrun::kMaxCompositeGroup; ++k)
     r.csv_pno_moment[k] = std::pow(pno, k);
@@ -509,9 +509,9 @@ TEST_CASE("peak-profile anchor: static sweep vs metered replay co-resident sum",
   // Both static algorithms agree (oracle == sweep holds here too).
   CHECK(peak_profile_replay(sched) == sweep.peak_bytes);
 
-  std::wcerr << L"\n[peak_profile-anchor] static sweep peak_bytes="
-             << sweep.peak_bytes << L"  metered replay peak_bytes="
-             << replay_peak_bytes << L"\n";
+  std::cerr << "\n[peak_profile-anchor] static sweep peak_bytes="
+            << sweep.peak_bytes
+            << "  metered replay peak_bytes=" << replay_peak_bytes << "\n";
 
   // THE anchor: the static continuous-liveness sweep over seed cells must match
   // the runtime co-resident-sum measurement on this non-demoted forest.
@@ -535,7 +535,7 @@ void check_split_propagates(std::vector<EvalNode<EvalExpr>> const& forest,
                             std::size_t expected_cells,
                             std::size_t collide_hash) {
   SizeRegime r;
-  r.space_extent = {{L"i", 5}, {L"a", 10}};
+  r.space_extent = {{"i", 5}, {"a", 10}};
   CostModel const cm{r};
   auto const block_of = [](Index const&) -> std::size_t { return 1; };
 
@@ -738,7 +738,7 @@ TEST_CASE(
   // stamp_occurrence_homes + the post-order linearizing walk, all three of
   // which were converted.
   SizeRegime r;
-  r.space_extent = {{L"i", 5}, {L"a", 10}};
+  r.space_extent = {{"i", 5}, {"a", 10}};
   CostModel const cm{r};
   auto const block_of = [](Index const&) -> std::size_t { return 1; };
   RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);

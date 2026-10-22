@@ -21,9 +21,9 @@ namespace {
 /// @return the symbol of @p basis in a cost: its base key, followed by `<;N>`
 /// for an unnamed instance `N`
 std::string symbol(IndexBasis const &basis) {
-  auto result = toUtf8(basis.base_key());
+  auto result = std::string(basis.base_key());
   if (basis.unnamed_instance())
-    result += "<" + toUtf8(basis.instance_suffix()) + ">";
+    result += "<" + std::string(basis.instance_suffix()) + ">";
   return result;
 }
 
@@ -299,17 +299,16 @@ bool operator>=(AsyCost const &lhs, AsyCost const &rhs) {
   return lhs > rhs || lhs == rhs;
 }
 
-std::wstring AsyCost::to_latex() const {
-  auto oss = std::wostringstream{};
+std::string AsyCost::to_latex() const {
+  auto oss = std::ostringstream{};
   if (cost_.empty())
     oss << 0;
   else {
     //
     // stream out in reverse so that more expensive terms appear first
     auto rev = ranges::views::reverse(cost_);
-    oss << toUtf16(ranges::front(rev).to_latex());
-    for (auto &&c : ranges::views::tail(rev))
-      oss << L" + " << toUtf16(c.to_latex());
+    oss << ranges::front(rev).to_latex();
+    for (auto &&c : ranges::views::tail(rev)) oss << " + " << c.to_latex();
   }
   return oss.str();
 }

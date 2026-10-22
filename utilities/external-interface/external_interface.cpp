@@ -249,7 +249,8 @@ ExportNode<> prepareForExport(const ResultExpr &result,
   } else {
     if (opts.importResult) {
       SEQUANT_ASSERT(result.has_label());
-      ctx.set_import_name(result.result_as_variable(), toUtf8(result.label()));
+      ctx.set_import_name(result.result_as_variable(),
+                          std::string(result.label()));
     }
     if (opts.createResult) {
       ctx.setLoadStrategy(result.result_as_variable(), LoadStrategy::Create,
@@ -332,7 +333,8 @@ void generateITF(const json &blocks, std::string_view out_file,
           sequant::deserialize<sequant::ResultExpr>(input, deserialize_opts);
 
       if (current_result.contains("name")) {
-        result.set_label(toUtf16(current_result.at("name").get<std::string>()));
+        result.set_label(
+            std::string(current_result.at("name").get<std::string>()));
       }
 
       if (current_result.contains("replace")) {
@@ -424,7 +426,7 @@ void generateITF(const json &blocks, std::string_view out_file,
                                 current.column_symmetry());
             tensorsToSymmetrize.insert(resultTensor);
 
-            current.set_label(current.label() + L"u");
+            current.set_label(current.label() + "u");
 
             spdlog::debug("After popping S tensor:\n{}", current);
 
@@ -449,7 +451,7 @@ void generateITF(const json &blocks, std::string_view out_file,
 
       for (const Tensor &current : tensorsToSymmetrize) {
         ExprPtr symmetrization = generateResultSymmetrization(
-            current, std::wstring(current.label()) + L"u");
+            current, std::string(current.label()) + "u");
 
         ResultExpr symmetrizedResult(current, std::move(symmetrization));
 
@@ -602,7 +604,7 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
       *get_default_context().index_basis_registry());
   IndexBasisRegistry &registry = *registry_ptr;
 
-  std::vector<std::pair<std::wstring, IndexSpaceMeta::Entry>> spaceList;
+  std::vector<std::pair<std::string, IndexSpaceMeta::Entry>> spaceList;
   spaceList.reserve(spaces.size());
 
   for (std::size_t i = 0; i < spaces.size(); ++i) {
@@ -614,13 +616,13 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
       throw Exception("Index space sizes must be > 0");
     }
 
-    std::wstring label = toUtf16(current.at("label").get<std::string>());
+    std::string label = std::string(current.at("label").get<std::string>());
     Field field =
         current.value("real_valued", false) ? Field::Real : Field::Complex;
     registry.add(label, type,
                  {.dimension = size, .qns = mbpt::Spin::any, .field = field});
 
-    spdlog::debug("Registered index '{}' with size {}", toUtf8(label), size);
+    spdlog::debug("Registered index '{}' with size {}", label, size);
 
     if (version == 1) {
       IndexSpaceMeta::Entry entry;
@@ -635,7 +637,7 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
   set_default_context(get_default_context_snapshot().set(registry_ptr));
 
   for (auto &[label, entry] : spaceList) {
-    meta.registerSpace(Index(label + L"_1").space(), std::move(entry));
+    meta.registerSpace(Index(label + "_1").space(), std::move(entry));
   }
 }
 
