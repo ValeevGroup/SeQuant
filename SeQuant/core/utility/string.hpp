@@ -67,6 +67,20 @@ std::string_view first_code_point(std::string_view str);
 /// @pre @p str is valid UTF-8
 std::string_view last_code_point(std::string_view str);
 
+/// Translates a regular expression (ECMAScript syntax) written in terms of
+/// (Unicode) characters into an equivalent one that can be used with
+/// `std::regex` (or `boost::regex`) to match UTF-8 encoded strings. In the
+/// returned pattern, `.`, negated bracket expressions and `\D`, `\W` and `\S`
+/// match entire code points (rather than individual bytes), quantifiers
+/// apply to entire (multi-byte) characters and bracket expressions may contain
+/// non-ASCII characters.
+/// @param pattern UTF-8 encoded regular expression
+/// @return the translated regular expression
+/// @throw Exception if @p pattern contains ranges of non-ASCII
+/// characters or negated character class escapes inside bracket expressions
+/// (neither is supported)
+std::string utf8_regex_pattern(std::string_view pattern);
+
 /// @return true if @p c is an ASCII digit; unlike std::isdigit, this is safe to
 /// use on the individual code units of a UTF-8 encoded string
 constexpr bool is_ascii_digit(char c) { return c >= '0' && c <= '9'; }

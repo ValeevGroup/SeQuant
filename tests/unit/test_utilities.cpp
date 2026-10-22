@@ -30,6 +30,7 @@
 #include <limits>
 #include <numeric>
 #include <ranges>
+#include <regex>
 #include <span>
 #include <string>
 #include <string_view>
@@ -272,6 +273,50 @@ TEST_CASE("utf8", "[utilities]") {
     REQUIRE(last_code_point(str) == "\u0303");
     REQUIRE(last_code_point("a↑") == "↑");
     REQUIRE(last_code_point("a𝛼") == "𝛼");
+  }
+
+  SECTION("regex") {
+    auto matches = [](std::string_view pattern, const std::string& str) {
+      return std::regex_match(str, std::regex(utf8_regex_pattern(pattern)));
+    };
+
+    // ASCII-only patterns are unchanged
+    REQUIRE(utf8_regex_pattern("t_?[ia]\\d+") == "t_?[ia]\\d+");
+
+    // . matches a single (multi-byte) character
+    REQUIRE(matches("t.", "tx"));
+    REQUIRE(matches("t.", "t⁺"));
+    REQUIRE(matches("t.", "t𝛼"));
+    REQUIRE_FALSE(matches("t.", "t"));
+    REQUIRE_FALSE(matches("t.", "tλx"));
+    REQUIRE(matches("t.*", "tλ𝛼x"));
+
+    // quantifiers apply to entire characters
+    REQUIRE(matches("λ+", "λλλ"));
+    REQUIRE_FALSE(matches("tλ?", "tλλ"));
+    REQUIRE(matches("tλ?", "t"));
+
+    // bracket expressions
+    REQUIRE(matches("[αβ]", "α"));
+    REQUIRE(matches("[αβ]", "β"));
+    REQUIRE_FALSE(matches("[αβ]", "γ"));
+    REQUIRE(matches("[a-cλ]+", "abλc"));
+    REQUIRE(matches("[^_]", "λ"));
+    REQUIRE_FALSE(matches("[^_]", "_"));
+    REQUIRE(matches("[^αβ]", "γ"));
+    REQUIRE(matches("[^αβ]", "x"));
+    REQUIRE_FALSE(matches("[^αβ]", "α"));
+    REQUIRE(matches("t[\\]]", "t]"));
+
+    // escapes
+    REQUIRE(matches("\\D", "λ"));
+    REQUIRE_FALSE(matches("\\D", "1"));
+    REQUIRE(matches("\\S\\s\\W", "λ ↑"));
+    REQUIRE(matches("t\\.", "t."));
+    REQUIRE_FALSE(matches("t\\.", "tλ"));
+
+    REQUIRE_THROWS_AS(utf8_regex_pattern("[α-ω]"), Exception);
+    REQUIRE_THROWS_AS(utf8_regex_pattern("[\\D]"), Exception);
   }
 
   SECTION("is_ascii_digit") {
