@@ -73,6 +73,7 @@ A driver is written by the program whose planning is to be replayed (MPQC:
 | `spaces` | `[{key, size, type?, qns?}]`: the extent of each index space; `type`/`qns`, when given, are checked against the registry the convention builds |
 | `slices` | `{key: [extents]}`: the batch partition of each batched space (uniform `target_size` blocks when absent) |
 | `csv.moments` | `{rank: [M_0, …, M_4]}`: the power means of the per-cluster domain sizes of the CSV composites of each cluster rank |
+| `csv.occupancy` | `{rank: p}`: the fraction of each rank's dense cluster grid (`nocc^rank`) whose clusters are genuinely nonnull; 1 when absent |
 | `csv.union_composites` | whether a spin-free composite spans both Kramers flavours' members (twice the domain) |
 | `optimize` | the `OptimizeOptions` as the optimizer receives them: `objective_function` (`dense_flops`, `dense_size`, `dense_space_time[_batched]`, `dense_time_space[_batched]`), `volatile_weight`, `cse_subnet`, `peak_flops_tolerance`, `footprint_weight`, `prune_outer_products`, `term_batch_axes`, `roofline` |
 | `batch` | the `BatchPolicy`: `enabled`, `scheduler` (`ordered` or `forest_descent`), `peak_threshold` (`null` = none), `accumulation_factor`, `persistent_only`, `spectator_indices`, and `spaces: {key: {target_size, contracted, external}}` |
@@ -82,8 +83,9 @@ A driver is written by the program whose planning is to be replayed (MPQC:
 | `expected` | what the producer's planning made: `eval_tree_fingerprint` (all blocks), and `meter` when it ran its own dry run |
 
 A composite index of cluster rank `r` in a group of `k` composites of one
-cluster is sized by `max(2, M_k)` of its rank's moments, a pair (`r >= 2`)
-never by less than its RMS (`k >= 2`); `csv.union_composites` doubles it for a
+cluster is sized by `p^(1/k) * max(2, M_k)` of its rank's moments and
+occupancy `p`, a pair (`r >= 2`) never by less than its RMS (`k >= 2`), so the
+group carries the grid's sparsity once; `csv.union_composites` doubles it for a
 spin-free composite.
 
 > [!IMPORTANT]

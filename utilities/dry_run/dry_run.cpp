@@ -96,6 +96,9 @@ struct Driver {
   std::vector<SpaceSpec> spaces;
   std::map<std::wstring, container::svector<std::size_t>> slices;
   std::map<std::size_t, std::array<double, 5>> csv_moments;  // raw M_0..M_4
+  // the fraction of each rank's dense cluster grid that is nonnull (1 when
+  // the driver does not say)
+  std::map<std::size_t, double> csv_occupancy;
   bool csv_union_composites = false;
   // optimize: the options as the optimizer receives them
   bool optimize = true;
@@ -184,6 +187,11 @@ void read_sizes(const json& d, Driver& c) {
         for (std::size_t k = 0; k != 5; ++k) M[k] = arr[k].get<double>();
         c.csv_moments[std::stoul(rank)] = M;
       }
+    }
+    if (csv.contains("occupancy")) {
+      c.csv_occupancy.clear();
+      for (const auto& [rank, p] : csv.at("occupancy").items())
+        c.csv_occupancy[std::stoul(rank)] = p.get<double>();
     }
     if (csv.contains("union_composites"))
       c.csv_union_composites = csv.at("union_composites").get<bool>();
@@ -385,7 +393,9 @@ void setup_context(const Driver& cfg) {
 
 /// the size of a composite's domain: the k-th power mean of the per-cluster
 /// domain sizes, never below 2, and for a pair (or larger cluster) never below
-/// the RMS (k = 2)
+/// the RMS (k = 2), times the k-th root of the rank's cluster-grid occupancy
+/// (so k composites on one cluster carry the grid's sparsity once), as
+/// MPQC's CSVSizeMoments::extent sizes it
 double csv_extent(const Driver& cfg, std::size_t rank, std::size_t k) {
   static const std::array<double, 5> ones{1, 1, 1, 1, 1};
   auto it = cfg.csv_moments.find(std::max<std::size_t>(rank, 1));
@@ -393,7 +403,10 @@ double csv_extent(const Driver& cfg, std::size_t rank, std::size_t k) {
   const auto& M = it != cfg.csv_moments.end() ? it->second : ones;
   std::size_t k_eff = rank >= 2 ? std::max<std::size_t>(k, 2) : k;
   k_eff = std::clamp<std::size_t>(k_eff, 1, 4);
-  return std::max(2.0, M[k_eff]);
+  auto const po = cfg.csv_occupancy.find(std::max<std::size_t>(rank, 1));
+  const double p = po != cfg.csv_occupancy.end() ? po->second : 1.0;
+  const double k_occ = static_cast<double>(std::max<std::size_t>(k, 1));
+  return std::pow(p, 1.0 / k_occ) * std::max(2.0, M[k_eff]);
 }
 
 std::array<double, 5> csv_floored(const Driver& cfg, std::size_t rank) {
