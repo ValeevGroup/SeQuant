@@ -126,6 +126,30 @@ namespace detail {
     double pseudoinverse_threshold =
         default_biorthogonalizer_pseudoinverse_threshold);
 
+/// \brief Computes the biorthogonalizer matrix, the pseudoinverse of the
+/// permutational overlap matrix of \p n_particles particles
+///
+/// \param n_particles The rank of external index pairs
+/// \param pseudoinverse_threshold The threshold to compute the pseudoinverse
+///        matrix (set to default_biorthogonalizer_pseudoinverse_threshold)
+///
+/// \return The matrix flattened row-major; for `n_particles <= 5`
+///         hardcoded_biorthogonalizer_coeffs tabulates it exactly
+[[nodiscard]] std::vector<double> compute_biorthogonalizer_coeffs(
+    std::size_t n_particles,
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold);
+
+/// \brief Provides the biorthogonalizer matrix hardcoded from Mathematica to
+/// avoid numerical precision loss (see the definition of
+/// hardcoded_biorthogonalizer_row for its derivation)
+///
+/// \param n_particles The rank of external index pairs, in the range [1,5]
+///
+/// \return The matrix flattened row-major
+[[nodiscard]] std::vector<rational> hardcoded_biorthogonalizer_coeffs(
+    std::size_t n_particles);
+
 /// \brief Provides permuted indices using libperm unrank function
 ///
 /// \param indices The indices to permute

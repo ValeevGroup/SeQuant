@@ -708,6 +708,7 @@ std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
   auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
   auto pinv = compute_biorthogonalizer_matrix(n_particles, threshold);
   Eigen::MatrixXd nns_matrix = perm_ovlp_mat * pinv;
+  SEQUANT_ASSERT((nns_matrix * nns_matrix).isApprox(nns_matrix));
 
   auto num_perms = nns_matrix.rows();
   std::vector<double> coeffs;
@@ -716,6 +717,27 @@ std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
     coeffs.push_back(nns_matrix(num_perms - 1, i));
   }
   return coeffs;
+}
+
+template <typename Matrix>
+auto flatten_row_major(const Matrix& matrix) {
+  std::vector<typename Matrix::Scalar> coeffs;
+  coeffs.reserve(matrix.size());
+  for (Eigen::Index row = 0; row < matrix.rows(); ++row)
+    for (Eigen::Index col = 0; col < matrix.cols(); ++col)
+      coeffs.push_back(matrix(row, col));
+  return coeffs;
+}
+
+std::vector<double> compute_biorthogonalizer_coeffs(std::size_t n_particles,
+                                                    double threshold) {
+  return flatten_row_major(
+      compute_biorthogonalizer_matrix(n_particles, threshold));
+}
+
+std::vector<rational> hardcoded_biorthogonalizer_coeffs(
+    std::size_t n_particles) {
+  return flatten_row_major(hardcoded_biorthogonalizer_matrix(n_particles));
 }
 
 container::svector<size_t> compute_permuted_indices(

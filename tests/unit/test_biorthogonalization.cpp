@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
@@ -96,6 +97,36 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
       for (std::size_t k = 0; k < expected.size(); ++k) {
         CAPTURE(k);
         REQUIRE_THAT(expected.at(k), EquivalentTo(expressions.at(k)));
+      }
+    }
+  }
+
+  SECTION("hardcoded tables match the computed pseudoinverse") {
+    using Catch::Matchers::WithinAbs;
+    constexpr double tolerance = 1e-12;
+
+    for (std::size_t n = 1; n <= 5; ++n) {
+      CAPTURE(n);
+
+      const auto hardcoded = mbpt::detail::hardcoded_biorthogonalizer_coeffs(n);
+      const auto computed = mbpt::detail::compute_biorthogonalizer_coeffs(n);
+      REQUIRE(hardcoded.size() == computed.size());
+      for (std::size_t i = 0; i < hardcoded.size(); ++i) {
+        CAPTURE(i);
+        REQUIRE_THAT(hardcoded[i].convert_to<double>(),
+                     WithinAbs(computed[i], tolerance));
+      }
+
+      const auto hardcoded_nns =
+          mbpt::detail::hardcoded_nns_projector<double>(n);
+      REQUIRE(hardcoded_nns.has_value());
+      // asserts that the computed projector is idempotent
+      const auto computed_nns = mbpt::detail::compute_nns_p_coeffs(n);
+      REQUIRE(hardcoded_nns->size() == computed_nns.size());
+      for (std::size_t i = 0; i < computed_nns.size(); ++i) {
+        CAPTURE(i);
+        REQUIRE_THAT((*hardcoded_nns)[i],
+                     WithinAbs(computed_nns[i], tolerance));
       }
     }
   }
