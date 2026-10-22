@@ -19,7 +19,6 @@ namespace sequant_boost = boost;
 #endif
 
 #include <SeQuant/core/meta.hpp>
-#include <SeQuant/core/utility/string.hpp>
 
 #include <string>
 #include <string_view>
@@ -197,6 +196,13 @@ struct _<T, std::enable_if_t<!(!(has_hash_value_v<T>)&&meta::is_range_v<T>)>> {
   std::size_t operator()(T const& v) const { return hash_value(v); }
 };
 
+namespace detail {
+/// @return the hash of the sequence of code points of the UTF-8 encoded
+/// string @p str (equals `boost::hash_range` over its decoded code points)
+/// @pre @p str is valid UTF-8
+std::size_t hash_code_points(std::string_view str);
+}  // namespace detail
+
 /// UTF-8 encoded strings are hashed as sequences of their code points (rather
 /// than of their bytes). This reproduces the hash values of the formerly used
 /// UTF-32 encoded wide strings and thus keeps hash-dependent orderings (e.g.
@@ -204,8 +210,7 @@ struct _<T, std::enable_if_t<!(!(has_hash_value_v<T>)&&meta::is_range_v<T>)>> {
 template <>
 struct _<std::string, void> {
   std::size_t operator()(std::string_view str) const {
-    const auto code_points = to_utf32(str);
-    return sequant_boost::hash_range(code_points.begin(), code_points.end());
+    return detail::hash_code_points(str);
   }
 };
 

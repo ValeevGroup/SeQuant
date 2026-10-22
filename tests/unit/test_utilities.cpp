@@ -6,6 +6,7 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/reserved.hpp>
@@ -273,6 +274,18 @@ TEST_CASE("utf8", "[utilities]") {
     REQUIRE(last_code_point(str) == "\u0303");
     REQUIRE(last_code_point("a↑") == "↑");
     REQUIRE(last_code_point("a𝛼") == "𝛼");
+  }
+
+  SECTION("hashing") {
+    // strings are hashed as the sequence of their code points
+    for (const std::string s : {"", "t", "aα↑𝛼a\u0303"}) {
+      CAPTURE(s);
+      const std::u32string code_points = to_utf32(s);
+      const auto expected =
+          sequant_boost::hash_range(code_points.begin(), code_points.end());
+      REQUIRE(hash::value(s) == expected);
+      REQUIRE(hash::value(std::string_view(s)) == expected);
+    }
   }
 
   SECTION("regex") {
