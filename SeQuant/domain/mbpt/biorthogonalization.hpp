@@ -141,7 +141,7 @@ container::svector<size_t> compute_permuted_indices(
 /// hardcoded from Mathematica to avoid numerical precision loss.
 ///
 /// The NNS projector is the idempotent projector onto the range of M,
-/// NNS projector = M_pinv · M.
+/// NNS projector = M · M_pinv (= M_pinv · M since M is symmetric).
 /// It must be applied to residuals evaluated from the V2 (WK-compacted)
 /// equations to reconstruct the terms dropped by the compaction.
 /// See

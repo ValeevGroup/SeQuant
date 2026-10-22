@@ -610,8 +610,10 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
     }
   }
 
-  // the idempotent NNS projector rebuilds a group from its kept term scaled by
-  // rank(M)/n!, so the kept term carries n!/rank(M); rank(M) = Catalan(n)
+  // the diagonal of the idempotent NNS projector is rank(M)/n!, so each kept
+  // term carries the reciprocal for the projector to rebuild its group at full
+  // weight; all terms tied for the largest coefficient are kept and scaled
+  // alike
   const auto n = ext_idxs.size();
   const auto rank = catalan(n);
   const rational normalization(factorial(n), rank);
