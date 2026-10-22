@@ -2543,18 +2543,20 @@ TEST_CASE(
   // dominated by the GENUINE 4-PNO intermediate the perf-first schedule forms
   // -- the CC doubles W node {a_1<i,i> a_2<i,i> a_3<i,i> a_4<i,i>} with FOUR
   // distinct PNO legs over one occ-pair (see SEQUANT_UT_DRYRUN_PERF_TREE
-  // dump). With the FAITHFUL measured moments (kC60_pVDZF12), it is sized
-  // occ^2 * M_4^4 = 120^2 * 53.151^4 * 8 ~= 0.92 TB (dense occ^2 pairs; the
-  // screened ~6300 CC pairs would give ~0.40 TB). This is the CORRECT,
-  // moment-aware size (df_regime's csv_pno_moment[k] are power means), NOT a
-  // naive-product artifact and NOT a mis-sized twin R{a<i,i>,a<i,i>} (which
-  // would be occ^2*M_2^2 ~= 0.3 GB). The Kappa mode is CONTRACTED at this
-  // node, so batching cannot shrink W -- it is the irreducible peak floor of
-  // the flop-optimal factorization, and precisely why perf-first (which forms
-  // it) OOMs C60 while peak-first (which does not) does not. A 0.5..2 TB band
-  // brackets the real-moment value with margin and is non-flaky.
-  CHECK(perf_first.peak_bytes < 2e12);
-  CHECK(perf_first.peak_bytes > 5e11);
+  // dump). With the FAITHFUL measured moments and pair occupancy
+  // (kC60_pVDZF12), it is sized occ^2 * p * M_4^4 = 120^2 * 0.4375 *
+  // 53.151^4 * 8 ~= 0.40 TB (the ~6300 stored CC pairs of 120^2; the dense
+  // pair grid, p = 1, would give ~0.92 TB). This is the CORRECT, moment- and
+  // occupancy-aware size (df_regime's csv_pno_moment[k] are the
+  // occupancy-folded power means), NOT a naive-product artifact and NOT a
+  // mis-sized twin R{a<i,i>,a<i,i>} (which would be occ^2*p*M_2^2 ~= 0.15
+  // GB). The Kappa mode is CONTRACTED at this node, so batching cannot shrink
+  // W -- it is the irreducible peak floor of the flop-optimal factorization,
+  // and precisely why perf-first (which forms it) OOMs C60 while peak-first
+  // (which does not) does not. A 0.2..1 TB band brackets the real value with
+  // margin and is non-flaky.
+  CHECK(perf_first.peak_bytes < 1e12);
+  CHECK(perf_first.peak_bytes > 2e11);
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
