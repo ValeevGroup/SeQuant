@@ -92,6 +92,8 @@
 #include <vector>
 
 using namespace sequant;
+using sequant::eval::dryrun::kMaxCompositeGroup;
+using sequant::eval::dryrun::MomentTable;
 using sequant::eval::dryrun::SizeRegime;
 
 namespace {
@@ -116,7 +118,7 @@ SizeRegime probe_regime() {
   };
   // CC-average PNO ~58, OSV ~20 (order-of-magnitude stand-ins; see report).
   double const pno = 58.0, osv = 20.0;
-  for (std::size_t k = 0; k <= 4; ++k) {
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
     r.csv_pno_moment[k] = std::pow(pno, double(k));
     r.csv_osv_moment[k] = std::pow(osv, double(k));
   }
@@ -243,11 +245,35 @@ TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
 // extent, so asking for one is refused rather than answered with the extent
 // registered under the composite's base key (which names the space it is
 // expanded in, e.g. the PAO count, not its size).
+// A group of more than four composites on one cluster is priced by its own
+// column, p * M_k^k, not by reusing column 4 (which under-priced it by
+// p^((k - 4)/4)); a group beyond the table is an error, not an extrapolation.
+TEST_CASE("SizeRegime prices groups up to kMaxCompositeGroup, refuses beyond",
+          "[dryrun][sizing][extent-contract]") {
+  SizeRegime r;
+  r.space_extent = {{L"i", 10u}};
+  double const p = 0.25;
+  for (std::size_t k = 1; k <= kMaxCompositeGroup; ++k)
+    r.csv_pno_moment[k] = std::pow(p, 1.0 / double(k)) * (20.0 + 2.0 * k);
+  Index const i1(L"i_1"), i2(L"i_2");
+  Index const a(L"a_1", {i1, i2});
+  for (std::size_t k = 1; k <= kMaxCompositeGroup; ++k) {
+    double prod = 1.0;
+    for (std::size_t m = 0; m < k; ++m) prod *= r.inner_pow(a, k);
+    CHECK(prod == Catch::Approx(p * std::pow(20.0 + 2.0 * k, double(k))));
+  }
+  CHECK_THROWS_AS(r.inner_pow(a, kMaxCompositeGroup + 1), sequant::Exception);
+  CHECK_THROWS_AS(r.inner_pow(a, 0), sequant::Exception);
+  // a plain index is unaffected by the table bound
+  CHECK(r.inner_pow(i1, 5) == Catch::Approx(1e5));
+}
+
 TEST_CASE("SizeRegime refuses the integer extent of a composite",
           "[dryrun][sizing][extent-contract]") {
   SizeRegime r;
   r.space_extent = {{L"i", 10u}, {L"a", 300u}};
-  for (std::size_t k = 0; k <= 4; ++k) r.csv_pno_moment[k] = 7.0;
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k)
+    r.csv_pno_moment[k] = 7.0;
   Index const i1(L"i_1"), i2(L"i_2");
   Index const a_i1i2(L"a_1", {i1, i2});
   CHECK(r.extent(i1) == 10);
@@ -262,8 +288,9 @@ TEST_CASE("dryrun power-mean sizing contract", "[dryrun][sizing]") {
   SizeRegime r;
   const std::size_t occ = 10;
   r.space_extent[L"i"] = occ;  // occupied index extent
-  const std::array<double, 5> Mk{1.0, 30.0, 40.0, 55.0, 75.0};  // M_0..M_4
-  for (std::size_t k = 0; k <= 4; ++k) {
+  // M_0..M_8 (heavy tail, non-decreasing)
+  const MomentTable Mk{1.0, 30.0, 40.0, 55.0, 75.0, 90.0, 100.0, 108.0, 115.0};
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
     r.csv_pno_moment[k] = Mk[k];
     r.csv_osv_moment[k] = Mk[k];
   }
@@ -301,7 +328,7 @@ TEST_CASE("dryrun power-mean sizing contract", "[dryrun][sizing]") {
 // behavior where every proto-rank >= 2 used the PNO table).
 TEST_CASE("dryrun rank-general CSV moment dispatch", "[dryrun][sizing]") {
   SizeRegime r;
-  for (std::size_t k = 0; k <= 4; ++k) {
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
     r.csv_osv_moment[k] = 3.0;   // rank-1 table (flat, distinct value)
     r.csv_pno_moment[k] = 30.0;  // rank-2 table (flat, distinct value)
   }
@@ -370,8 +397,7 @@ inline constexpr auto const& kWater20_pVDZF12 =
 // Regime for the post-transform (mu~ + K) residual from explicit extents and
 // moments (occupancy 1 unless given): see df_size_regime for the shape.
 SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux, std::size_t i_occ,
-                     std::array<double, 5> const& pno_M,
-                     std::array<double, 5> const& osv_M,
+                     MomentTable const& pno_M, MomentTable const& osv_M,
                      double pno_occupancy = 1.0, double osv_occupancy = 1.0) {
   return sequant::tests::csv_sizes::df_size_regime(ProblemSize{
       mu_tilde, aux, i_occ, pno_M, osv_M, pno_occupancy, osv_occupancy});
@@ -978,8 +1004,11 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
   auto regime = df_regime(
       /*mu_tilde=*/kC60_pVDZF12.mu_tilde, /*aux=*/kC60_pVDZF12.aux,
       /*i_occ=*/occ_ext,
-      std::array<double, 5>{1.0, pno_mom, pno_m2, pno_m3, pno_m4},
-      std::array<double, 5>{1.0, osv_mom, osv_m2, osv_m3, osv_m4});
+      // M_5..M_8 flat at M_4 (unmeasured; see csv_size_fixtures.hpp)
+      MomentTable{1.0, pno_mom, pno_m2, pno_m3, pno_m4, pno_m4, pno_m4, pno_m4,
+                  pno_m4},
+      MomentTable{1.0, osv_mom, osv_m2, osv_m3, osv_m4, osv_m4, osv_m4, osv_m4,
+                  osv_m4});
   std::wcerr << L"[dryrun-df] moments: PNO M_1..M_4=" << pno_mom << L","
              << pno_m2 << L"," << pno_m3 << L"," << pno_m4 << L"  OSV M_1..M_4="
              << osv_mom << L"," << osv_m2 << L"," << osv_m3 << L"," << osv_m4
@@ -1365,7 +1394,7 @@ SizeRegime backend_test_regime() {
       {L"a", 20},
   };
   double const pno = 4.0;
-  for (std::size_t k = 0; k <= 4; ++k)
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k)
     r.csv_pno_moment[k] = std::pow(pno, double(k));
   r.csv_osv_moment = r.csv_pno_moment;
   return r;
@@ -4441,7 +4470,7 @@ TEST_CASE("occupancy-adjusted moments satisfy the group-volume identity",
   for (double p : {1.0, w20.pno_occupancy, 0.01}) {
     auto const adj = occupancy_adjusted_moments(w20.pno_M, p);
     CHECK(adj[0] == 1.0);
-    for (std::size_t k = 1; k <= 4; ++k) {
+    for (std::size_t k = 1; k <= kMaxCompositeGroup; ++k) {
       double prod = 1.0;
       for (std::size_t member = 0; member < k; ++member) prod *= adj[k];
       CHECK(prod == Catch::Approx(p * std::pow(w20.pno_M[k], double(k))));
