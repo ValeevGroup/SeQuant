@@ -9,7 +9,6 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -17,7 +16,6 @@
 #include <functional>
 #include <iostream>
 #include <memory>
-#include <optional>
 #include <ranges>
 #include <string>
 #include <type_traits>
@@ -214,83 +212,6 @@ struct LegalitySchedule {
       add_if_new(ix);
   (void)policy;
   return result;
-}
-
-///
-/// \brief A batch-loop instance: (IndexBasis::base_key(), fusion loop_slot),
-/// the key of \c RichSchedule::loop_kind. Loop identity is established once,
-/// by \c compute_dag_boulevard's union-find, and stamped on every occurrence
-/// (\c OccurrenceRec::loop_slot / \c reduced_slot); nothing here rederives it.
-///
-using LoopInstance = std::pair<std::wstring, int>;
-
-///
-/// \brief The loop instance an occurrence opens on mode \p ix with kind \p
-/// kind, read off the opener's own stamps: a Contracted open is the \c
-/// reduced_slot entry for \p ix, an External open the \c loop_slot of \p ix's
-/// carried position. Nullopt when the opener carries no stamp for it.
-///
-[[nodiscard]] inline std::optional<LoopInstance> opened_instance(
-    OccurrenceRec const& opener, Index const& ix, BatchModeType kind) {
-  std::wstring const bk{ix.basis().base_key()};
-  if (kind == BatchModeType::Contracted) {
-    for (auto const& [rm, rs] : opener.reduced_slot)
-      if (rm == ix) return LoopInstance{bk, rs};
-    return std::nullopt;
-  }
-  for (std::size_t p = 0; p < opener.carried.size(); ++p)
-    if (opener.carried[p] == ix)
-      return p < opener.loop_slot.size() && opener.loop_slot[p] >= 0
-                 ? std::optional<LoopInstance>{{bk, opener.loop_slot[p]}}
-                 : std::nullopt;
-  return std::nullopt;
-}
-
-///
-/// \brief The loop instances enclosing \p occ, one per \c OccurrenceRec::ectx
-/// entry, each resolved through the occurrence that opened it (\c
-/// ectx_opener_point) and that opener's stamps (\c opened_instance). \p
-/// point_occ is \c point_occurrences of the forest's rich schedule.
-///
-/// Throws \c Exception when an entry cannot be resolved: the record names no
-/// opener for it, the opener is not in \p point_occ, opens no such mode, or
-/// carries no stamp for it. Each of those is a defect in the boulevard's
-/// record, and a guess here (a label-only comparison, say) would turn it into
-/// a silently wrong schedule.
-///
-[[nodiscard]] inline container::svector<LoopInstance> enclosing_instances(
-    OccurrenceRec const& occ,
-    std::unordered_map<std::size_t, PointOccurrence> const& point_occ) {
-  container::svector<LoopInstance> out;
-  if (occ.ectx.size() != occ.ectx_opener_point.size())
-    throw Exception(
-        "enclosing_instances: the occurrence at point " +
-        std::to_string(occ.point) + " records " +
-        std::to_string(occ.ectx.size()) + " enclosing loop(s) but " +
-        std::to_string(occ.ectx_opener_point.size()) + " opener(s)");
-  for (std::size_t k = 0; k < occ.ectx.size(); ++k) {
-    auto const pit = point_occ.find(occ.ectx_opener_point[k]);
-    if (pit == point_occ.end())
-      throw Exception(
-          "enclosing_instances: the opener of an enclosing loop (point " +
-          std::to_string(occ.ectx_opener_point[k]) + ") is not an occurrence");
-    OccurrenceRec const& opener = *pit->second.occ;
-    Index const& L = occ.ectx[k].first;
-    std::optional<LoopInstance> inst;
-    for (auto const& [oix, okind] : opener.opens)
-      if (oix == L) {
-        inst = opened_instance(opener, oix, okind);
-        break;
-      }
-    if (!inst)
-      throw Exception("enclosing_instances: the enclosing loop over " +
-                      toUtf8(L.label()) + " at point " +
-                      std::to_string(occ.point) +
-                      " has no loop identity at its opener (point " +
-                      std::to_string(occ.ectx_opener_point[k]) + ")");
-    out.push_back(*inst);
-  }
-  return out;
 }
 
 ///
