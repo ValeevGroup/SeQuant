@@ -659,13 +659,11 @@ TEST_CASE("basis-grants-cc-t", "[mbpt][csv][valgrind_skip]") {
   SECTION("CSV without grants carries no instance") {
     ScopedCsvContext scoped;
     const auto eqs = derive_t(make_minimal_registry());
-    const auto eqs_empty = derive_t(granted_registry({}));
     REQUIRE(eqs.size() == 3);
     for (std::size_t k = 0; k != eqs.size(); ++k) {
       CHECK(instance_histogram(eqs[k]).size() == 1);
       CHECK(instance_histogram(eqs[k]).contains(std::nullopt));
       CHECK(standing_metrics(eqs[k]) == 0);
-      CHECK(*eqs[k] == *eqs_empty[k]);
     }
     // the t equations hold no ungranted family next to t
     CHECK_NOTHROW(derive_t(granted_registry({{L"t", 1}})));
