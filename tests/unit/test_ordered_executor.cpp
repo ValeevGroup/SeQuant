@@ -359,9 +359,11 @@ sequant::eval::dryrun::SizeRegime orderedexec_witness_df_regime(
 // kind a test probes may not arise. Each test therefore scales its dense
 // budget by p^n, with n the smallest power that restores its probed schedule
 // shape (the shape is not monotone in the budget, so n is per test).
-double orderedexec_structure_budget(double dense_budget,
-                                    OrderedExecWater20ProblemSize const& p,
-                                    int occupancy_power) {
+// [[maybe_unused]]: every caller is a long test, compiled out under
+// SEQUANT_SKIP_LONG_TESTS (the Debug CI configuration).
+[[maybe_unused]] double orderedexec_structure_budget(
+    double dense_budget, OrderedExecWater20ProblemSize const& p,
+    int occupancy_power) {
   return dense_budget *
          std::pow(p.pno_occupancy, static_cast<double>(occupancy_power));
 }
