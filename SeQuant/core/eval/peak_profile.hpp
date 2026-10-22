@@ -54,6 +54,26 @@ namespace detail {
 using BatchContext =
     container::svector<std::pair<Index, std::pair<std::size_t, std::size_t>>>;
 
+/// Flips every Kramers-flavoured loop axis of \p ectx to its partner in place
+/// (deep; a partnerless axis is its own image): the context an
+/// \c EvalOp::KramersFlip node's operand sees, since that operand is binarized
+/// from the flipped spelling. Under the Kramers-blind loop fusion a flipped
+/// axis names the same loop (same \c loop_space_key, same batches).
+inline void kramers_flip_loop_axes(BatchContext& ectx) {
+  auto const isr = get_default_context().index_basis_registry();
+  if (!isr) return;
+  for (auto& [axis, block] : ectx) axis = kramers_flipped_deep(axis, *isr);
+}
+
+/// The deep Kramers image of \p ix (\c kramers_flipped_deep), or \p ix itself
+/// without a registry or a partner: the label under which the operand of an
+/// \c EvalOp::KramersFlip node carries, and sees, a mode its parent spells as
+/// \p ix.
+[[nodiscard]] inline Index kramers_image(Index const& ix) {
+  auto const isr = get_default_context().index_basis_registry();
+  return isr ? kramers_flipped_deep(ix, *isr) : ix;
+}
+
 ///
 /// \brief Resolve a residency mode-set to an enclosing-batch-context loop
 /// depth.
@@ -605,8 +625,14 @@ RichSchedule compute_dag_boulevard(R const& forest,
       if (stage == 0) {
         // `enter` copies the two context arguments before it grows the stack,
         // so reading them out of stack[top] here is safe.
-        if (!n.leaf())
-          enter(n.left(), stack[top].child_ectx, stack[top].child_opener);
+        if (!n.leaf()) {
+          // a KramersFlip's operand sees the enclosing loops under their
+          // flipped axes (it is binarized from the flipped spelling)
+          detail::BatchContext child_ectx = stack[top].child_ectx;
+          if (n->op_type() == EvalOp::KramersFlip)
+            detail::kramers_flip_loop_axes(child_ectx);
+          enter(n.left(), std::move(child_ectx), stack[top].child_opener);
+        }
         continue;
       }
       if (stage == 1) {
@@ -826,7 +852,14 @@ RichSchedule compute_dag_boulevard(R const& forest,
       if (!is_batched(r, m)) continue;
       (void)find(encode(i, pV));
       if (!par) continue;
-      auto const pj = std::find(par->carried.begin(), par->carried.end(), m);
+      auto pj = std::find(par->carried.begin(), par->carried.end(), m);
+      // a KramersFlip parent carries the child's modes as their Kramers
+      // images (the child is binarized from the flipped spelling): the same
+      // physical loop, under the parent's label
+      if (pj == par->carried.end() && par->node &&
+          (*par->node)->op_type() == EvalOp::KramersFlip)
+        pj = std::find(par->carried.begin(), par->carried.end(),
+                       detail::kramers_image(m));
       if (pj == par->carried.end()) {
         std::size_t const rn = reduction_node(par_idx, m);
         if (try_unite(encode(i, pV), rn))
@@ -880,15 +913,22 @@ RichSchedule compute_dag_boulevard(R const& forest,
         [&](std::size_t opener_idx,
             Index const& ix) -> std::optional<std::size_t> {
       NodeRec const& op = recs[opener_idx];
-      for (auto const& [oix, okind] : op.opens)
-        if (oix == ix) {
-          if (okind == BatchModeType::Contracted)
-            return reduction_node(opener_idx, ix);
-          for (std::size_t pV = 0; pV < op.carried.size(); ++pV)
-            if (op.carried[pV] == ix) return encode(opener_idx, pV);
-          return std::nullopt;
-        }
-      return std::nullopt;
+      auto const match = [&](Index const& want) -> std::optional<std::size_t> {
+        for (auto const& [oix, okind] : op.opens)
+          if (oix == want) {
+            if (okind == BatchModeType::Contracted)
+              return reduction_node(opener_idx, want);
+            for (std::size_t pV = 0; pV < op.carried.size(); ++pV)
+              if (op.carried[pV] == want) return encode(opener_idx, pV);
+            return std::nullopt;
+          }
+        return std::nullopt;
+      };
+      if (auto const nd = match(ix)) return nd;
+      // below a KramersFlip the enclosing loop is seen under its flipped
+      // label; the opener spells it unflipped
+      Index const img = detail::kramers_image(ix);
+      return img == ix ? std::nullopt : match(img);
     };
     for (std::size_t i = 0; i < nrec; ++i) {
       NodeRec const& o = recs[i];
@@ -926,15 +966,22 @@ RichSchedule compute_dag_boulevard(R const& forest,
         [&](std::size_t opener_idx,
             Index const& ix) -> std::optional<std::size_t> {
       NodeRec const& op = recs[opener_idx];
-      for (auto const& [oix, okind] : op.opens)
-        if (oix == ix) {
-          if (okind == BatchModeType::Contracted)
-            return reduction_node(opener_idx, ix);
-          for (std::size_t pV = 0; pV < op.carried.size(); ++pV)
-            if (op.carried[pV] == ix) return encode(opener_idx, pV);
-          return std::nullopt;
-        }
-      return std::nullopt;
+      auto const match = [&](Index const& want) -> std::optional<std::size_t> {
+        for (auto const& [oix, okind] : op.opens)
+          if (oix == want) {
+            if (okind == BatchModeType::Contracted)
+              return reduction_node(opener_idx, want);
+            for (std::size_t pV = 0; pV < op.carried.size(); ++pV)
+              if (op.carried[pV] == want) return encode(opener_idx, pV);
+            return std::nullopt;
+          }
+        return std::nullopt;
+      };
+      if (auto const nd = match(ix)) return nd;
+      // below a KramersFlip the enclosing loop is seen under its flipped
+      // label; the opener spells it unflipped
+      Index const img = detail::kramers_image(ix);
+      return img == ix ? std::nullopt : match(img);
     };
     for (std::size_t i = 0; i < nrec; ++i) {
       NodeRec const& o = recs[i];

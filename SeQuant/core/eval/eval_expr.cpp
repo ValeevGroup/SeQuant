@@ -1494,8 +1494,22 @@ std::optional<EvalExprNode> maybe_kramers_fold(ExprPtr const& expr,
   IndexSet flipped_uncontract;
   for (auto const& ix : uncontract)
     flipped_uncontract.emplace(kramers_flipped_deep(ix, *isr));
+  // The optimizer's per-node batch annotations (node_batch_axes) name the
+  // family's own indices. The inner tree is binarized from the flipped
+  // spelling, so the entries it consumes -- from node_counter on, in the
+  // same left-first post-order -- follow the flip; a flavourless axis (the
+  // DF auxiliary index) is its own image. Without this the inner nodes bind
+  // none of their sliced modes under a batch loop over a flavoured space and
+  // are built whole against sliced partners.
+  BinarizationOptions fopts = opts;
+  for (std::size_t n = node_counter; n < fopts.node_batch_axes.size(); ++n) {
+    for (auto& [ix, kind] : fopts.node_batch_axes[n].axes)
+      ix = kramers_flipped_deep(ix, *isr);
+    for (auto& [ix, kind] : fopts.node_batch_axes[n].opened_here)
+      ix = kramers_flipped_deep(ix, *isr);
+  }
   auto inner =
-      impl::binarize(flipped_expr, flipped_uncontract, opts, node_counter);
+      impl::binarize(flipped_expr, flipped_uncontract, fopts, node_counter);
   SEQUANT_ASSERT(inner->is_tensor());
   // the union free legs as OUTER mode positions (the proto-free indices in
   // canonical order, see EvalExpr::indices_annot)
@@ -1547,6 +1561,34 @@ EvalExprNode make_kramers_flip_node(EvalExprNode inner,
     auto id = inner->identity_indices();
     if (isr) kramers_flip_deep(id, *isr);
     wrap.set_identity_indices(std::move(id));
+  }
+  // Batch annotations: the wrapper is the family's root in its own spelling.
+  // It is sliced where its operand is on the External batch axes, flipped
+  // back to that spelling, and it is the site that opens their loops (an
+  // External loop opens at the term root, which the fold moved up by one
+  // node). A Contracted axis is reduced inside the flip and stays with its
+  // node. The use count and the order-aware gate are the operand's.
+  {
+    using axes_t = container::svector<std::pair<Index, BatchModeType>>;
+    auto const image = [&](Index const& ix) {
+      return isr ? kramers_flipped_deep(ix, *isr) : ix;
+    };
+    axes_t mask, opens, inner_opens;
+    for (auto const& [ix, kind] : inner->node_slice_mask())
+      if (kind == BatchModeType::External) mask.push_back({image(ix), kind});
+    for (auto const& [ix, kind] : inner->batch_loops_opened_here()) {
+      if (kind == BatchModeType::External)
+        opens.push_back({image(ix), kind});
+      else
+        inner_opens.push_back({ix, kind});
+    }
+    if (!mask.empty()) wrap.set_node_slice_mask(std::move(mask));
+    if (!opens.empty()) {
+      wrap.set_batch_loops_opened_here(std::move(opens));
+      inner->set_batch_loops_opened_here(std::move(inner_opens));
+    }
+    wrap.set_batch_effective_count(inner->batch_effective_count());
+    wrap.set_batch_order_aware(inner->batch_order_aware());
   }
   EvalExprNode sentinel{EvalExpr{Constant{1}}};
   return EvalExprNode{std::move(wrap), std::move(inner), std::move(sentinel)};

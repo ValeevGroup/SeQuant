@@ -21,6 +21,19 @@ namespace eval {
 
 namespace detail {
 
+/// Flips every Kramers-flavoured label of \p loops to its partner in place
+/// (deep: the pair labels inside a composite follow). The operand of an
+/// \c EvalOp::KramersFlip node is binarized from the flipped spelling, so the
+/// loops opened above the flip reach it under their flipped labels; under the
+/// Kramers-blind loop fusion (\c loop_space_key) a flipped label names the
+/// same loop. A label without a partner (the DF auxiliary index) is its own
+/// image; without a registry nothing is flipped.
+inline void kramers_flip_loop_labels(container::svector<Index>& loops) {
+  auto const isr = get_default_context().index_basis_registry();
+  if (!isr) return;
+  for (auto& ix : loops) ix = kramers_flipped_deep(ix, *isr);
+}
+
 /// Intersect \p acc in place with \p other by \c Index identity (operator==):
 /// keep only elements of \p acc that also appear in \p other, preserving
 /// \p acc's order. Used to accumulate the cross-occurrence meet.
@@ -122,6 +135,8 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
       occ.push_back({&n, &it->second});
     }
     if (!n->is_unary_op()) stack.push_back({&n.right(), acc});  // no sentinel
+    // a KramersFlip's operand carries the enclosing loops' flipped labels
+    if (n->op_type() == EvalOp::KramersFlip) kramers_flip_loop_labels(acc);
     stack.push_back({&n.left(), std::move(acc)});
   };
   for (auto const& tree : forest) {
@@ -259,6 +274,9 @@ void stamp_occurrence_homes(R const& forest) {
         home.push_back(m);
     const_cast<Data&>(*n).set_occurrence_home(std::move(home));
     if (!n->is_unary_op()) stack.push_back({&n.right(), acc});  // no sentinel
+    // a KramersFlip's operand carries the enclosing loops' flipped labels
+    if (n->op_type() == EvalOp::KramersFlip)
+      eval::detail::kramers_flip_loop_labels(acc);
     stack.push_back({&n.left(), std::move(acc)});
   };
   for (auto const& tree : forest) {

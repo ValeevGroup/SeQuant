@@ -2373,3 +2373,93 @@ TEST_CASE("kramers_fold_intermediates", "[eval_expr][kramers-flip]") {
   for (auto const& l : R) REQUIRE((L.contains(l) || T.contains(l)));
   for (auto const& l : L) REQUIRE((R.contains(l) || T.contains(l)));
 }
+
+TEST_CASE("kramers_fold_batch_annotations",
+          "[eval_expr][kramers-flip][batched-here]") {
+  auto lax_braket = sequant::tests::scoped_lax_braket_pairing();
+  // The optimizer's per-node batch annotations
+  // (BinarizationOptions::node_batch_axes) name the term's own indices. A
+  // folded family is binarized from its flipped spelling, so the entries its
+  // nodes consume must be flipped with it; the KramersFlip wrapper -- the
+  // family's root in the original spelling -- takes the root's External
+  // slicing and loop opens in that spelling, while a Contracted open stays at
+  // its reduction node inside the flip.
+  using namespace sequant;
+  using namespace sequant::eval;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  const Index i1(L"i↑_1"), i2(L"i↑_2");
+  const Index au(L"a↑_1", {i1, i2}), ad(L"a↓_1", {i1, i2});
+  const Index a1(L"a_1"), a2(L"a_2"), a3(L"a_3");
+  auto mk = [](std::wstring_view lbl, std::initializer_list<Index> b,
+               std::initializer_list<Index> k) {
+    return ex<Tensor>(lbl, bra(b), ket(k), Symmetry::Nonsymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm,
+                      KramersSymmetry::TimeReversal);
+  };
+  BinarizationOptions opts{
+      .kramers_blindness = {
+          .blind_slot =
+              [](Tensor const& t, std::size_t slot) {
+                return t.label() == L"C" && slot == 1;
+              },
+          .erase_space =
+              [](IndexSpace const& s) {
+                if (mbpt::to_spin(s.qns()) == mbpt::Spin::any) return s;
+                return mbpt::make_spinalpha(Index(s, 1)).space();
+              }},
+      .kramers_fold_intermediates = true};
+  // one DP node, I{a_2,a_3;a<i,i>} = g{a_1;a_2,a_3} * C{a_1;a<i,i>}: sliced
+  // on the pair label i↑_1 (External, opened here) and on a_1 (Contracted:
+  // its reduction is here)
+  using axes_t = container::svector<std::pair<Index, BatchModeType>>;
+  NodeBatchAnnotation ann;
+  ann.axes =
+      axes_t{{i1, BatchModeType::External}, {a1, BatchModeType::Contracted}};
+  ann.opened_here = ann.axes;
+  ann.effective_count = 3;
+  ann.order_aware = true;
+  opts.node_batch_axes = {ann};
+  auto rhs = [&](Index const& comp) {
+    return ex<Product>(
+        ExprPtrList{mk(L"g", {a1}, {a2, a3}), mk(L"C", {a1}, {comp})});
+  };
+  auto bin = [](ExprPtr const& e, IndexSet const& ext,
+                BinarizationOptions const& o) {
+    std::size_t counter = 0;
+    auto node = impl::binarize(e, ext, o, counter);
+    REQUIRE(counter == o.node_batch_axes.size());
+    return node;
+  };
+  // the canonical (up) family keeps its annotation as given
+  auto up = bin(rhs(au), IndexSet{au, a2, a3}, opts);
+  REQUIRE(up->op_type() == EvalOp::Product);
+  CHECK(up->node_slice_mask() == ann.axes);
+  CHECK(up->batch_loops_opened_here() == ann.opened_here);
+
+  // the down family: a KramersFlip over the up family's node
+  auto dn = bin(rhs(ad), IndexSet{ad, a2, a3}, opts);
+  REQUIRE(dn->op_type() == EvalOp::KramersFlip);
+  REQUIRE(dn.left()->hash_value() == up->hash_value());
+  Index const i1_flipped = kramers_flipped_deep(i1, *isr);
+  REQUIRE(i1_flipped != i1);
+  // the inner node reads its annotation in the flipped spelling: sliced on
+  // the flipped pair label, on the unflavoured a_1 as is; the External loop
+  // is no longer opened here, the Contracted one still is
+  CHECK(dn.left()->node_slice_mask() ==
+        axes_t{{i1_flipped, BatchModeType::External},
+               {a1, BatchModeType::Contracted}});
+  CHECK(dn.left()->batch_loops_opened_here() ==
+        axes_t{{a1, BatchModeType::Contracted}});
+  CHECK(dn.left()->batch_effective_count() == 3);
+  CHECK(dn.left()->batch_order_aware());
+  // the wrapper is the family root in the original spelling: sliced on the
+  // External axis, which it opens
+  CHECK(dn->node_slice_mask() == axes_t{{i1, BatchModeType::External}});
+  CHECK(dn->batch_loops_opened_here() == axes_t{{i1, BatchModeType::External}});
+  CHECK(dn->batch_effective_count() == 3);
+  CHECK(dn->batch_order_aware());
+}
