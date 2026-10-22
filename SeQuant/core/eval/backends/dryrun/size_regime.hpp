@@ -3,6 +3,8 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
 #include <array>
@@ -58,10 +60,20 @@ struct SizeRegime {
   // are not expected here (an entry for 1 or 2 is ignored by inner_pow()).
   std::map<std::size_t, std::array<double, 5>> csv_moment_by_rank;
 
-  /// \return the flat extent of \p ix's \c IndexBasis::base_key(); throws
-  ///         \c std::out_of_range if the key is not present in
-  ///         \c space_extent (fail loud rather than silently defaulting to 1).
+  /// \return the flat extent of the proto-free index \p ix's
+  ///         \c IndexBasis::base_key(); throws \c std::out_of_range if the
+  ///         key is not present in \c space_extent (fail loud rather than
+  ///         silently defaulting to 1), and \c sequant::Exception for a
+  ///         proto-indexed composite: a composite has no integer extent (its
+  ///         base key names the space it is expanded in, not its size) and is
+  ///         sized by \ref inner_pow alone.
   [[nodiscard]] std::size_t extent(Index const& ix) const {
+    if (ix.has_proto_indices())
+      throw Exception(
+          "SizeRegime::extent: asked for the integer extent of the "
+          "proto-indexed (CSV/PNO) composite " +
+          toUtf8(ix.full_label()) +
+          " -- composites are sized by inner_pow, not by base-space extent");
     return space_extent.at(std::wstring{ix.basis().base_key()});
   }
 

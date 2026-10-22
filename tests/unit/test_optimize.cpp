@@ -1637,6 +1637,96 @@ TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
   std::wcout << L"\n";
 }
 
+// The integer index-extent hook (has_index_extent) is a contract on
+// proto-FREE indices: a CSV/PNO composite is sized by inner_pow alone, and no
+// cost model may ask the hook for a composite's extent (a backend has nothing
+// meaningful to answer -- a composite's size is a power mean times an
+// occupancy, not an integer). Witness: an idxsz that THROWS on any composite
+// must drive every objective, unbatched and batched, to completion on a
+// composite-bearing term; and a composite-bearing term without inner_pow is
+// refused by the batched model exactly as by the unbatched ones.
+TEST_CASE("integer extent hook is never asked for a composite",
+          "[optimize][osv][extent-contract]") {
+  using namespace sequant;
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
+  mbpt::add_df_spaces(reg);
+  mbpt::add_ao_basis(reg, mbpt::Spin::any);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 56}, {L"a", 12}, {L"μ", 602}, {L"Κ", 1652}}) {
+    reg->extent(k, v);
+  }
+  auto ctx_resetter =
+      set_scoped_default_context(get_default_context_snapshot().set(reg));
+  std::size_t composite_asks = 0;
+  auto idxsz = [&composite_asks](Index const& ix) -> std::size_t {
+    if (ix.has_proto_indices()) {
+      ++composite_asks;
+      throw std::logic_error("integer extent asked for a composite");
+    }
+    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
+  };
+  auto ip = [](Index const&, std::size_t) -> double { return 12.0; };
+  auto prod =
+      deserialize(L"g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}")
+          ->as<Product>();
+
+  // unbatched objectives (AdditiveModel / PeakModel)
+  for (auto obj :
+       {ObjectiveFunction::DenseFLOPs, ObjectiveFunction::DenseSize,
+        ObjectiveFunction::DensePeakSize, ObjectiveFunction::DenseTimeSpace}) {
+    auto run = [&](auto tag) {
+      return opt::single_term_opt<decltype(tag)::value>(
+          prod, idxsz, /*subnet_cse=*/false,
+          CostParams{.volatile_weight = 1.0, .inner_pow = ip});
+    };
+    ExprPtr res;
+    switch (obj) {
+      case ObjectiveFunction::DenseFLOPs:
+        res = run(std::integral_constant<ObjectiveFunction,
+                                         ObjectiveFunction::DenseFLOPs>{});
+        break;
+      case ObjectiveFunction::DenseSize:
+        res = run(std::integral_constant<ObjectiveFunction,
+                                         ObjectiveFunction::DenseSize>{});
+        break;
+      case ObjectiveFunction::DensePeakSize:
+        res = run(std::integral_constant<ObjectiveFunction,
+                                         ObjectiveFunction::DensePeakSize>{});
+        break;
+      default:
+        res = run(std::integral_constant<ObjectiveFunction,
+                                         ObjectiveFunction::DenseTimeSpace>{});
+    }
+    CHECK(res);
+  }
+  CHECK(composite_asks == 0);
+
+  // batched (PeakBatchedModel): slice Κ under a finite budget
+  auto batched = CostParams{
+      .volatile_weight = 1.0,
+      .peak_threshold = 1e6,
+      .is_batchable_contracted_index =
+          [](Index const& ix) { return ix.basis().base_key() == L"Κ"; },
+      .batch_target_size = [](Index const&) -> std::size_t { return 100; },
+      .inner_pow = ip};
+  auto res_b = opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+      prod, idxsz, /*subnet_cse=*/false, batched);
+  CHECK(res_b);
+  CHECK(composite_asks == 0);
+
+  // and the batched model refuses a composite-bearing term with no inner_pow,
+  // instead of falling back to the integer hook
+  auto no_ip = batched;
+  no_ip.inner_pow = {};
+  CHECK_THROWS_AS(opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
+                      prod, idxsz, /*subnet_cse=*/false, no_ip),
+                  sequant::Exception);
+  CHECK(composite_asks == 0);
+}
+
 TEST_CASE("OSV early-contraction reproducer (full term #1)",
           "[optimize][osv]") {
   using namespace sequant;

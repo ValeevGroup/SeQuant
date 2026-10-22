@@ -236,6 +236,24 @@ TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
 // raw moments would be caught even though the CURRENT SizeRegime factories
 // in this file (probe_regime/df_regime) all use a constant domain, for which
 // M_k == d for every k and the bug would otherwise be invisible.
+// SizeRegime::extent is the integer extent of a proto-FREE index; a composite
+// (proto-indexed CSV/PNO index) is sized by inner_pow and has no integer
+// extent, so asking for one is refused rather than answered with the extent
+// registered under the composite's base key (which names the space it is
+// expanded in, e.g. the PAO count, not its size).
+TEST_CASE("SizeRegime refuses the integer extent of a composite",
+          "[dryrun][sizing][extent-contract]") {
+  SizeRegime r;
+  r.space_extent = {{L"i", 10u}, {L"a", 300u}};
+  for (std::size_t k = 0; k <= 4; ++k) r.csv_pno_moment[k] = 7.0;
+  Index const i1(L"i_1"), i2(L"i_2");
+  Index const a_i1i2(L"a_1", {i1, i2});
+  CHECK(r.extent(i1) == 10);
+  CHECK_THROWS_AS(r.extent(a_i1i2), sequant::Exception);
+  CHECK_THROWS_AS(r.idx_to_extent()(a_i1i2), sequant::Exception);
+  CHECK(r.inner_pow(a_i1i2, 1) == Catch::Approx(7.0));
+}
+
 TEST_CASE("dryrun power-mean sizing contract", "[dryrun][sizing]") {
   // Heavy-tailed PNO domain: power means strictly increasing in k.
   // (For any non-degenerate distribution, M_1 < M_2 < M_3 < M_4 by Jensen.)
