@@ -5649,12 +5649,20 @@ TEST_CASE(
 
   // W is the only CSE-shared non-leaf value: two occurrences, one under an
   // enclosing a loop (term 1) and one with none (term 2, W opens the loop).
+  // This pins the cost model's choice at this budget; if the optimizer ever
+  // shares a second intermediate here, or none, the fixture no longer
+  // produces the issue's shape and needs a new budget, not a new assertion.
   std::optional<std::size_t> w_vid;
   for (auto const& vc : rich.cells) {
     if (vc.is_leaf || vc.occurrences.size() != 2) continue;
+    INFO("a second CSE-shared non-leaf value ("
+         << vc.value_id << "): the fixture no longer isolates W");
     REQUIRE_FALSE(w_vid.has_value());
     w_vid = vc.value_id;
   }
+  INFO(
+      "no CSE-shared non-leaf value: the optimizer no longer shares W at "
+      "this budget");
   REQUIRE(w_vid.has_value());
   auto const& w_cell = rich.cells[*w_vid];
   {
