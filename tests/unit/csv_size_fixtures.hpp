@@ -23,7 +23,8 @@ namespace sequant::tests::csv_sizes {
 /// model: base-space extents, the measured heavy-tailed CSV power means, and
 /// the per-rank cluster-grid occupancy.
 ///
-/// `pno_M[k]` / `osv_M[k]` (k in [1,4]; index 0 unused, kept 1) are the
+/// `pno_M[k]` / `osv_M[k]` (k in [1, kMaxCompositeGroup]; index 0 unused,
+/// kept 1) are the
 /// per-NONNULL-cluster power means `M_k = (mean over nonnull clusters of
 /// d^k)^(1/k)` of the per-pair PNO / per-orbital OSV domain size d, exactly as
 /// mpqc's PaoPnoRMP2 prints them ("PNO domain power means M_1..M_4 per pair",
@@ -32,14 +33,26 @@ namespace sequant::tests::csv_sizes {
 /// grids whose clusters are genuinely nonnull (element level: a nested TA tile
 /// stores nothing for a null inner cell).
 struct CsvProblemSize {
-  std::size_t mu_tilde;         // PAO extent (the DP's extent of mu~ and a)
-  std::size_t aux;              // DF aux (K) extent
-  std::size_t i_occ;            // active occupied extent
-  std::array<double, 5> pno_M;  // per-nonnull-pair PNO power means M_0..M_4
-  std::array<double, 5> osv_M;  // per-nonnull-orbital OSV power means
-  double pno_occupancy;         // nonnull ordered pairs / i_occ^2
-  double osv_occupancy;         // orbitals with a nonnull OSV domain / i_occ
+  std::size_t mu_tilde;             // PAO extent (the DP's extent of mu~ and a)
+  std::size_t aux;                  // DF aux (K) extent
+  std::size_t i_occ;                // active occupied extent
+  eval::dryrun::MomentTable pno_M;  // per-nonnull-pair PNO power means M_0..M_K
+  eval::dryrun::MomentTable osv_M;  // per-nonnull-orbital OSV power means
+  double pno_occupancy;             // nonnull ordered pairs / i_occ^2
+  double osv_occupancy;  // orbitals with a nonnull OSV domain / i_occ
 };
+
+/// M_5..M_8 were not printed by the runs these fixtures were taken from (the
+/// producer measured M_1..M_4 at the time). They are filled FLAT with M_4 --
+/// a lower bound for a heavy-tailed domain (M_k is non-decreasing in k), i.e.
+/// exactly what the former column-4 clamp priced -- so a group of five to
+/// eight composites on one cluster is sized as the clamp used to size it
+/// rather than rejected. Replace with measured values when a run prints
+/// them; a test that depends on a k >= 5 group should say so.
+inline constexpr double kUnmeasured_w20_pno_M4 = 30.03848680550367;
+inline constexpr double kUnmeasured_w20_osv_M4 = 59.872014818179686;
+inline constexpr double kUnmeasured_c60_pno_M4 = 53.151291880343109;
+inline constexpr double kUnmeasured_c60_osv_M4 = 166.85553430303926;
 
 /// (H2O)20 / cc-pVDZ-F12 / aug-cc-pVDZ-RI, frozen core (80 active occupied),
 /// PNO-CCSD with tIJ = 3e-5. Three provenances, kept apart on purpose:
@@ -60,10 +73,12 @@ inline constexpr CsvProblemSize kWater20_pVDZF12{
     /*i_occ=*/80u,
     /*pno_M=*/
     {1.0, 23.175775480059084, 25.865548281212597, 28.171416142614103,
-     30.03848680550367},
+     30.03848680550367, kUnmeasured_w20_pno_M4, kUnmeasured_w20_pno_M4,
+     kUnmeasured_w20_pno_M4, kUnmeasured_w20_pno_M4},
     /*osv_M=*/
     {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
-     59.872014818179686},
+     59.872014818179686, kUnmeasured_w20_osv_M4, kUnmeasured_w20_osv_M4,
+     kUnmeasured_w20_osv_M4, kUnmeasured_w20_osv_M4},
     /*pno_occupancy=*/1354.0 / 6400.0,
     /*osv_occupancy=*/1.0};
 
@@ -82,9 +97,12 @@ inline constexpr CsvProblemSize kC60_pVDZF12{
     /*i_occ=*/120u,
     /*pno_M=*/
     {1.0, 42.029069767441861, 46.039206412923569, 49.766252354482994,
-     53.151291880343109},
+     53.151291880343109, kUnmeasured_c60_pno_M4, kUnmeasured_c60_pno_M4,
+     kUnmeasured_c60_pno_M4, kUnmeasured_c60_pno_M4},
     /*osv_M=*/
-    {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926},
+    {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926,
+     kUnmeasured_c60_osv_M4, kUnmeasured_c60_osv_M4, kUnmeasured_c60_osv_M4,
+     kUnmeasured_c60_osv_M4},
     /*pno_occupancy=*/6300.0 / 14400.0,
     /*osv_occupancy=*/1.0};
 
@@ -99,9 +117,9 @@ inline constexpr CsvProblemSize kC60_pVDZF12{
 /// \param M per-nonnull-cluster power means, index 0 unused
 /// \param p the cluster grid's occupancy, in (0, 1]
 /// \return the adjusted table, index 0 untouched
-inline std::array<double, 5> occupancy_adjusted_moments(std::array<double, 5> M,
-                                                        double p) {
-  for (std::size_t k = 1; k <= 4; ++k)
+inline eval::dryrun::MomentTable occupancy_adjusted_moments(
+    eval::dryrun::MomentTable M, double p) {
+  for (std::size_t k = 1; k <= eval::dryrun::kMaxCompositeGroup; ++k)
     M[k] *= std::pow(p, 1.0 / static_cast<double>(k));
   return M;
 }

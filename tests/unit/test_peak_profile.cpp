@@ -455,7 +455,8 @@ SizeRegime anchor_regime() {
   SizeRegime r;
   r.space_extent = {{L"i", 10}, {L"a", 20}};
   double const pno = 4.0;
-  for (std::size_t k = 0; k <= 4; ++k) r.csv_pno_moment[k] = std::pow(pno, k);
+  for (std::size_t k = 0; k <= sequant::eval::dryrun::kMaxCompositeGroup; ++k)
+    r.csv_pno_moment[k] = std::pow(pno, k);
   r.csv_osv_moment = r.csv_pno_moment;
   return r;
 }
