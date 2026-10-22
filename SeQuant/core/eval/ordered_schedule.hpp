@@ -2410,23 +2410,18 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
   // value sliced on one mode by two sibling loops via two consumers has no
   // single consumer-blind answer anyway.
   (void)g;  // the dependency graph is not consulted by this pass
-  std::unordered_map<std::size_t, std::size_t> point_owner;
-  for (ValueCell const& vc : rich.cells)
-    for (OccurrenceRec const& occ : vc.occurrences)
-      point_owner[occ.point] = vc.value_id;
-
-  // point -> that occurrence record (to reach the parent occurrence on an
-  // edge: the consumer's occurrence in the same tree as the operand's).
-  std::unordered_map<std::size_t, OccurrenceRec const*> point_occ;
-  for (ValueCell const& vc : rich.cells)
-    for (OccurrenceRec const& occ : vc.occurrences) point_occ[occ.point] = &occ;
+  // point -> that occurrence record and its value (to reach the parent
+  // occurrence on an edge: the consumer's occurrence in the same tree as the
+  // operand's).
+  auto const point_occ = point_occurrences(rich);
 
   for (ValueCell const& w : rich.cells) {
     std::size_t const w_vid = w.value_id;
     for (OccurrenceRec const& occ : w.occurrences) {
       if (occ.consumer_point == occ.point) continue;  // forest root
-      auto const oit = point_owner.find(occ.consumer_point);
-      if (oit == point_owner.end()) continue;  // defensive
+      auto const oit = point_occ.find(occ.consumer_point);
+      if (oit == point_occ.end()) continue;  // defensive
+      std::size_t const consumer_vid = oit->second.value_id;
       // production edge only: a consumer value is produced once,
       // from its canonical (front) occurrence's tree; its other occurrences
       // are reads of the finished value, and the W->C edges inside those
@@ -2447,11 +2442,11 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
       // (operand, consumer) facts, so every leg comes from one tree and the
       // legs cannot be crossed. Relaxing the guard to admit non-production
       // edges would mix the two spellings' legs and mis-pair them.
-      if (rich.cells[oit->second].occurrences.empty() ||
-          rich.cells[oit->second].occurrences.front().point !=
+      if (rich.cells[consumer_vid].occurrences.empty() ||
+          rich.cells[consumer_vid].occurrences.front().point !=
               occ.consumer_point)
         continue;
-      auto const sit = build_scope.find(oit->second);
+      auto const sit = build_scope.find(consumer_vid);
       if (sit == build_scope.end()) continue;  // consumer has no enclosing loop
       container::svector<detail::ScopeBlockAxisLevel> const& scope =
           sit->second;
@@ -2469,7 +2464,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
       std::size_t leg = static_cast<std::size_t>(-1);
       {
         auto const& cpts =
-            rich.cells[oit->second].occurrences.front().operand_points;
+            rich.cells[consumer_vid].occurrences.front().operand_points;
         for (std::size_t li = 0; li < cpts.size(); ++li)
           if (cpts[li] == occ.point) leg = li;
       }
@@ -2486,7 +2481,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           if (std::wstring(occ.carried[pos].basis().base_key()) != lvl.space)
             continue;
           result.occ_facts.push_back(
-              std::make_tuple(w_vid, pos, id_of(lvl), oit->second, leg));
+              std::make_tuple(w_vid, pos, id_of(lvl), consumer_vid, leg));
           self_sliced = true;
           break;  // one W-position per enclosing loop
         }
@@ -2502,7 +2497,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         // for both. Bounded to a mode C actually slices (conformability), not
         // every carried-mode coincidence, so a genuinely invariant shared
         // operand is not sliced.
-        std::size_t const c_vid = oit->second;
+        std::size_t const c_vid = consumer_vid;
         auto const& c_carried = rich.cells[c_vid].carried;
         bool recorded = false;
         for (std::size_t cp = 0; cp < c_carried.size(); ++cp) {
@@ -2515,9 +2510,10 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           // at once).
           bool c_sliced = false;
           if (auto const pit = point_occ.find(occ.consumer_point);
-              pit != point_occ.end() && cp < pit->second->loop_slot.size() &&
-              pit->second->loop_slot[cp] >= 0)
-            c_sliced = pit->second->loop_slot[cp] == lvl.loop_slot;
+              pit != point_occ.end() &&
+              cp < pit->second.occ->loop_slot.size() &&
+              pit->second.occ->loop_slot[cp] >= 0)
+            c_sliced = pit->second.occ->loop_slot[cp] == lvl.loop_slot;
           if (!c_sliced) continue;
           if (std::wstring(c_carried[cp].basis().base_key()) != lvl.space)
             continue;
@@ -2535,12 +2531,12 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
             // fetch by C is correctly unsliced on this loop. Record that
             // explicitly so the guard does not mistake it for a gap.
             result.occ_invariant.push_back(
-                std::make_tuple(w_vid, id_of(lvl), oit->second, leg));
+                std::make_tuple(w_vid, id_of(lvl), consumer_vid, leg));
             recorded = true;
             continue;
           }
           result.occ_facts.push_back(
-              std::make_tuple(w_vid, pos_a, id_of(lvl), oit->second, leg));
+              std::make_tuple(w_vid, pos_a, id_of(lvl), consumer_vid, leg));
           recorded = true;
           if (detail::dump_enabled("SEQUANT_DUMP_USEINDUCED"))
             detail::dump_use_induced(rich.cells[w_vid].hash % 100000, M, pos_a,
@@ -2567,10 +2563,10 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
                 }
               if (pos_a == occ.carried.size())
                 result.occ_invariant.push_back(
-                    std::make_tuple(w_vid, id_of(lvl), oit->second, leg));
+                    std::make_tuple(w_vid, id_of(lvl), consumer_vid, leg));
               else
                 result.occ_facts.push_back(std::make_tuple(
-                    w_vid, pos_a, id_of(lvl), oit->second, leg));
+                    w_vid, pos_a, id_of(lvl), consumer_vid, leg));
               recorded = true;
               break;
             }
@@ -2584,7 +2580,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         // enforced by the dry-run/wet backends themselves.
         if (!recorded)
           result.occ_invariant.push_back(
-              std::make_tuple(w_vid, id_of(lvl), oit->second, leg));
+              std::make_tuple(w_vid, id_of(lvl), consumer_vid, leg));
       }
     }
   }
