@@ -2,8 +2,8 @@
 # This will define the following CMake cache variables
 #
 #    SEQUANT_FOUND        - true if SeQuant library were found
-#    SEQUANT_VERSION      - the x.y.z SeQuant version
-#    SEQUANT_EXT_VERSION  - the x.y.z(-buildid) SeQuant version, where the (optional) buildid is smth like beta.3
+#    SEQUANT_VERSION      - the YY.N[.P] SeQuant version
+#    SEQUANT_EXT_VERSION  - the YY.N[.P](-buildid) SeQuant version, where the (optional) buildid is smth like beta.3
 #
 # and the following imported targets
 #
