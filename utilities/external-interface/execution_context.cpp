@@ -4,9 +4,9 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
-#include <cctype>
 #include <limits>
 #include <ranges>
 #include <sstream>
@@ -115,7 +115,7 @@ std::vector<ExecutionContext::Data<ProcessingData>> ExecutionContext::get_data(
 bool ExecutionContext::is_valid_id(std::string_view id, bool allow_selectors) {
   auto validate_non_selector = [](std::string_view part) -> bool {
     for (char c : part) {
-      if (!std::isalnum(c) & c != '_' && c != '.') {
+      if (!is_ascii_letter(c) && !is_ascii_digit(c) && c != '_' && c != '.') {
         return false;
       }
     }
@@ -125,7 +125,7 @@ bool ExecutionContext::is_valid_id(std::string_view id, bool allow_selectors) {
 
   auto validate_range_component = [](std::string_view comp) -> bool {
     for (char c : comp) {
-      if (!std::isdigit(c)) {
+      if (!is_ascii_digit(c)) {
         return false;
       }
     }
