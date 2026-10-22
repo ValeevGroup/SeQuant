@@ -275,14 +275,11 @@ struct OccurrenceRec {
   container::svector<std::pair<Index, int>> reduced_slot;
   /// Modes this occurrence's value contracts in batches at its own node
   /// (the legality \c build_site_of contracted test, mirrored -- see \c
-  /// NodeRec::contracted_batched). A mode here owns a loop identity even
-  /// when no operand of the contraction is itself home-sliced on it (an
-  /// all-input reduction): the union-find below seeds a component for every
-  /// entry here that \c classify_axis would actually call \c Reduction (no
-  /// carried index of the same basis key as the mode), instead of relying
-  /// solely on a home-sliced child to create one; an entry beside a
-  /// same-key carried index is \c classify_axis LoopLocal/LoopCarried, not
-  /// Reduction, and is left to the ordinary carried-position path.
+  /// NodeRec::contracted_batched). Every entry owns a loop identity: the
+  /// union-find seeds a reduction component for each one, so a mode no
+  /// operand is home-sliced on (an all-input reduction) is stamped in \c
+  /// reduced_slot like any other, instead of relying on a home-sliced child
+  /// to create the component.
   container::svector<Index> contracted_batched;
 };
 
@@ -307,8 +304,13 @@ struct ValueCell {
                          //!< with the home-sliced canonical positions,
                          //!< "Loop identity and value identity") -- the
                          //!< identity that folds occurrences into this cell.
-                         //!< 0 (a hand-built cell) means "== hash"; read it
-                         //!< through \c value_key_of(ValueCell const&).
+                         //!< Because the (position, slot) and (mode, slot)
+                         //!< stamps enter the key, every occurrence of a
+                         //!< cell carries the same \c loop_slot and \c
+                         //!< reduced_slot: a reader may take them off any
+                         //!< one occurrence. 0 (a hand-built cell) means
+                         //!< "== hash"; read it through \c
+                         //!< value_key_of(ValueCell const&).
   int home_depth;        //!< \c home_depth_of(home_scope, ectx) at the
                          //!< first occurrence -- informational, as \c
                          //!< Cell::home_depth
