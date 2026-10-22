@@ -77,6 +77,16 @@ inline std::string role_name(LoopRole r) {
   throw Exception("record_dag: unknown LoopRole");
 }
 
+inline std::string role_name(OccurrenceRole r) {
+  switch (r) {
+    case OccurrenceRole::Lockstep:
+      return "Lockstep";
+    case OccurrenceRole::Assembled:
+      return "Assembled";
+  }
+  throw Exception("record_dag: unknown OccurrenceRole");
+}
+
 inline std::string output_kind_name(OutputKind k) {
   switch (k) {
     case OutputKind::Transient:

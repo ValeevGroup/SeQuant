@@ -106,9 +106,9 @@ by the recorded nesting constraints; there is no cost search over nest orders.
 Legality classifies a value relative to each loop as ``LoopLocal``, ``Reduction``, or ``LoopCarried``. A reduction is
 a property of the value's own node. The other two are decided per occurrence, against the recorded loop instances: an
 occurrence whose enclosing loops include the instance that slices the value's position reads it in lockstep, per
-batch; one they do not reads it assembled. A value with a lockstep occurrence is ``LoopLocal`` and a ``BuildStep`` in
-its home block; if it also has assembled readers it escapes from that block as well. A value with no lockstep
-occurrence is ``LoopCarried``. A reduction or loop-carried value escapes through the block's outputs:
+batch; one they do not reads it assembled (``OccurrenceRole``). A value with a lockstep occurrence is ``LoopLocal``
+and a ``BuildStep`` in its home block; if it also has assembled readers it escapes from that block as well. A value
+with no lockstep occurrence is ``LoopCarried``. A reduction or loop-carried value escapes through the block's outputs:
 ``AccumulateSum`` for reduction, ``AccumulateScatter`` for carried result modes. Multiple escapes form a chain, with
 raw production at the deepest site and forwarding at shallower sites. An escape can skip an interposed loop on which
 the value is invariant.

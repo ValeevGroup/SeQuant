@@ -625,6 +625,7 @@ TEST_CASE(
   using sequant::eval::LoopRole;
   using sequant::eval::OccurrenceAxisRole;
   using sequant::eval::OccurrenceRec;
+  using sequant::eval::OccurrenceRole;
 
   auto const i_1 = Index{L"i_1"};
   auto const i_2 = Index{L"i_2"};
@@ -656,13 +657,13 @@ TEST_CASE(
                       &per_occ) == LoopRole::LoopLocal);
   REQUIRE(per_occ.size() == 1);
   CHECK(per_occ.front().point == 7);
-  CHECK(per_occ.front().role == LoopRole::LoopLocal);
+  CHECK(per_occ.front().role == OccurrenceRole::Lockstep);
 
   per_occ.clear();
   CHECK(classify_axis(carried, contracted_below, i_2, occurrences, enclosing,
                       &per_occ) == LoopRole::LoopCarried);
   REQUIRE(per_occ.size() == 1);
-  CHECK(per_occ.front().role == LoopRole::LoopCarried);
+  CHECK(per_occ.front().role == OccurrenceRole::Assembled);
 
   // A batched position with no recorded loop identity is a defect of the
   // record, not a case to guess at.
@@ -677,14 +678,14 @@ TEST_CASE(
 // classify_axis: a value with two occurrences, one read inside the loop
 // instance that slices it (lockstep) and one read where that instance is not
 // running (the value opens the loop itself; its consumer reads it whole).
-// The value is LoopLocal -- it has a lockstep reader -- and the outside read
-// is recorded per occurrence, so the scheduler also escapes it assembled.
+// The value is LoopLocal -- it has a lockstep reader -- and the assembled
+// read is recorded per occurrence, so the scheduler also escapes it.
 // (Issue #720: the outside occurrence used to be skipped, and the value was
 // built inside the loop only.)
 // ===========================================================================
 TEST_CASE(
-    "classify_axis: one lockstep and one outside occurrence of a value give "
-    "LoopLocal with a per-occurrence LoopCarried verdict",
+    "classify_axis: one lockstep and one assembled occurrence of a value give "
+    "LoopLocal with a per-occurrence Assembled verdict",
     "[legality]") {
   using sequant::Index;
   using sequant::container::svector;
@@ -693,6 +694,7 @@ TEST_CASE(
   using sequant::eval::LoopRole;
   using sequant::eval::OccurrenceAxisRole;
   using sequant::eval::OccurrenceRec;
+  using sequant::eval::OccurrenceRole;
 
   auto const a_2 = Index{L"a_2"};
   svector<Index> const carried{Index{L"i_3"}, Index{L"i_1"}, a_2,
@@ -726,9 +728,9 @@ TEST_CASE(
                       &per_occ) == LoopRole::LoopLocal);
   REQUIRE(per_occ.size() == 2);
   CHECK(per_occ[0].point == 3);
-  CHECK(per_occ[0].role == LoopRole::LoopLocal);
+  CHECK(per_occ[0].role == OccurrenceRole::Lockstep);
   CHECK(per_occ[1].point == 11);
-  CHECK(per_occ[1].role == LoopRole::LoopCarried);
+  CHECK(per_occ[1].role == OccurrenceRole::Assembled);
 
   // Only the outside occurrence: the value is LoopCarried as a whole.
   per_occ.clear();
@@ -736,7 +738,7 @@ TEST_CASE(
                       svector<OccurrenceRec>{at_root}, enclosing,
                       &per_occ) == LoopRole::LoopCarried);
   REQUIRE(per_occ.size() == 1);
-  CHECK(per_occ.front().role == LoopRole::LoopCarried);
+  CHECK(per_occ.front().role == OccurrenceRole::Assembled);
 }
 
 // ===========================================================================

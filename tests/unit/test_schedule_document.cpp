@@ -269,7 +269,7 @@ Document make_dag_doc() {
     o.home = {"i_1"};
     o.enclosing = {"a_1"};
     o.opens = {{"i_1", ModeKind::External}};
-    o.roles = {{"i_1", "LoopLocal"}};
+    o.roles = {{"i_1", "Lockstep"}};
     v.occurrences = {o};
     v.siblings = {id == "v0" ? "v1" : "v0"};
     dag.values.push_back(std::move(v));
@@ -318,7 +318,7 @@ TEST_CASE("schedule document round-trips the dag and run sections",
   REQUIRE(back.run->planner.at("peak") == "1e9");
   REQUIRE(back.dag->values[0].occurrences[0].consumer == 1);
   REQUIRE(back.dag->values[0].occurrences[0].roles.size() == 1);
-  REQUIRE(back.dag->values[0].occurrences[0].roles[0].role == "LoopLocal");
+  REQUIRE(back.dag->values[0].occurrences[0].roles[0].role == "Lockstep");
   REQUIRE(back.dag->blocks[1].outputs[0].second == "AccumulateSum");
   REQUIRE(std::get<2>(back.dag->loop_order[0]) == 2);
   REQUIRE(summary_line(d) == "roots=1 terms=1 values=2 blocks=2 depth=1");

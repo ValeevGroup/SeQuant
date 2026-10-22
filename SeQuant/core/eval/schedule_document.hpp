@@ -134,9 +134,9 @@ struct OccurrenceRecord {
   std::optional<std::size_t> consumer;
   std::vector<std::string> home, enclosing;
   std::vector<AxisRecord> opens;
-  /// the value's batched result modes at this occurrence, each LoopLocal
-  /// (read inside the loop instance that slices it) or LoopCarried (read
-  /// where that instance is not running: assembled)
+  /// the value's batched result modes at this occurrence, each Lockstep
+  /// (read inside the loop instance that slices it) or Assembled (read
+  /// where that instance is not running)
   std::vector<PerAxisRecord> roles;
 };
 

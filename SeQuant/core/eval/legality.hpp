@@ -46,14 +46,23 @@ enum class LoopRole {
 };
 
 ///
-/// \brief The role of one occurrence of a value with respect to one of the
-/// value's batched positions: \c LoopLocal when the loop instance that slices
-/// the position encloses the occurrence (a lockstep, per-batch read), \c
-/// LoopCarried when it does not (the reader needs the assembled value).
+/// \brief How one occurrence of a value reads one of the value's batched
+/// positions.
+///
+enum class OccurrenceRole {
+  Lockstep,   //!< the loop instance that slices the position encloses the
+              //!< occurrence: the reader takes the current batch
+  Assembled,  //!< it does not: the reader needs the value assembled over the
+              //!< position (the value opens the loop itself there, or the
+              //!< reader sits after it or in a sibling nest)
+};
+
+///
+/// \brief The \c OccurrenceRole of one occurrence on one batched position.
 ///
 struct OccurrenceAxisRole {
   std::size_t point;  //!< the occurrence (\c OccurrenceRec::point)
-  LoopRole role;      //!< \c LoopLocal or \c LoopCarried
+  OccurrenceRole role;
 };
 
 ///
@@ -62,11 +71,11 @@ struct OccurrenceAxisRole {
 struct AxisClass {
   Index axis;
   /// The value's summary role: \c Reduction or \c LoopInvariant from the
-  /// value's own node, else \c LoopLocal if any occurrence is lockstep with
-  /// the axis's loop instance and \c LoopCarried if none is.
+  /// value's own node, else \c LoopLocal if any occurrence reads the axis
+  /// in lockstep and \c LoopCarried if none does.
   LoopRole role;
-  /// The role at each occurrence (empty for \c Reduction / \c
-  /// LoopInvariant). A \c LoopLocal axis may still list \c LoopCarried
+  /// How each occurrence reads the axis (empty for \c Reduction / \c
+  /// LoopInvariant). A \c LoopLocal axis may still list \c Assembled
   /// occurrences: the value is built inside the loop for its lockstep
   /// readers and also escapes assembled for the others.
   container::svector<OccurrenceAxisRole> per_occurrence = {};
@@ -323,17 +332,17 @@ enclosing_instances_of(RichSchedule const& rich) {
 ///       \p axis's carried position (the occurrence's own \c loop_slot at that
 ///       position) among the instances enclosing the occurrence (\p
 ///       enclosing_instances)? Enclosed -> the occurrence reads the value
-///       inside its own loop, per batch (\c LoopLocal at that occurrence);
-///       not enclosed -> the occurrence reads it where that loop is not
-///       running: the value opens the loop itself, or the reader sits after
-///       it, or in a sibling nest -- in every case the reader needs the
-///       assembled value (\c LoopCarried at that occurrence).
+///       inside its own loop, per batch (\c OccurrenceRole::Lockstep); not
+///       enclosed -> the occurrence reads it where that loop is not running:
+///       the value opens the loop itself, or the reader sits after it, or in
+///       a sibling nest -- in every case the reader needs the assembled value
+///       (\c OccurrenceRole::Assembled).
 ///     The value's role is \c LoopLocal if any occurrence is enclosed and \c
 ///     LoopCarried otherwise (also with no occurrences at all). The
 ///     per-occurrence verdicts are appended to \p per_occurrence when given;
-///     a \c LoopLocal value with \c LoopCarried occurrences is built inside
-///     its loop for the former and additionally escapes assembled for the
-///     latter (\c build_ordered_schedule).
+///     a \c LoopLocal value with \c Assembled occurrences is built inside its
+///     loop for the former and additionally escapes assembled for the latter
+///     (\c build_ordered_schedule).
 ///
 /// Positions, not labels, align the occurrences: every occurrence's \c
 /// carried list is positionally aligned with \p carried (each occurrence's
@@ -389,8 +398,9 @@ enclosing_instances_of(RichSchedule const& rich) {
         std::find(encl.begin(), encl.end(), own) != encl.end();
     any_lockstep = any_lockstep || lockstep;
     if (per_occurrence)
-      per_occurrence->push_back(
-          {occ.point, lockstep ? LoopRole::LoopLocal : LoopRole::LoopCarried});
+      per_occurrence->push_back({occ.point, lockstep
+                                                ? OccurrenceRole::Lockstep
+                                                : OccurrenceRole::Assembled});
   }
   return any_lockstep ? LoopRole::LoopLocal : LoopRole::LoopCarried;
 }

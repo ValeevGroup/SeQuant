@@ -5687,8 +5687,8 @@ TEST_CASE(
   {
     std::size_t n_lockstep = 0, n_outside = 0;
     for (auto const& o : ac.per_occurrence) {
-      if (o.role == sequant::eval::LoopRole::LoopLocal) ++n_lockstep;
-      if (o.role == sequant::eval::LoopRole::LoopCarried) ++n_outside;
+      if (o.role == sequant::eval::OccurrenceRole::Lockstep) ++n_lockstep;
+      if (o.role == sequant::eval::OccurrenceRole::Assembled) ++n_outside;
     }
     CHECK(n_lockstep == 1);
     CHECK(n_outside == 1);

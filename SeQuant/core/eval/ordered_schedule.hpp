@@ -646,8 +646,8 @@ inline ForcedSplitLevels forced_split_levels(
   r.pinned = r.carried;
 
   // A reader bumped by a carried source is one that reads the source where
-  // the source's own loop is not running (classify_axis's per-occurrence
-  // LoopCarried verdict): it needs the assembled value. Readers of a
+  // the source's own loop is not running (OccurrenceRole::Assembled): it
+  // needs the assembled value. Readers of a
   // LoopLocal source through its lockstep occurrences read the per-batch
   // form in the same pass and are not bumped; a value LoopCarried as a whole
   // has only such reading occurrences, so every one of its readers is.
@@ -658,7 +658,7 @@ inline ForcedSplitLevels forced_split_levels(
     if (it == g.value_id_of.end()) continue;
     for (AxisClass const& ac : cl.per_axis)
       for (OccurrenceAxisRole const& o : ac.per_occurrence) {
-        if (o.role != LoopRole::LoopCarried) continue;
+        if (o.role != OccurrenceRole::Assembled) continue;
         auto const pit = points.find(o.point);
         if (pit == points.end()) continue;
         std::size_t const cp = pit->second.occ->consumer_point;
@@ -1516,21 +1516,20 @@ namespace detail {
     // value is invariant to is simply skipped.
     bool materialized_across_split = false;
     std::optional<std::size_t> const home_depth = local_home_depth(cl);
-    // A LoopLocal axis with an occurrence that reads the value outside its
-    // loop instance (classify_axis's per-occurrence LoopCarried verdict: the
-    // value opens the loop itself there, or the reader sits after it or in
-    // a sibling nest) is the same shape: the value keeps its Build step for
-    // its lockstep readers and escapes assembled, as a Scatter, at that
-    // instance for the others. A Sum escape that a Reduction mode already
-    // placed at that depth is upgraded to a Scatter, as the materialization
-    // rule below does: the lockstep instance's batches are disjoint and must
-    // not be summed.
+    // A LoopLocal axis with an occurrence that reads the value assembled
+    // (OccurrenceRole::Assembled: the value opens the loop itself there, or
+    // the reader sits after it or in a sibling nest) is the same shape: the
+    // value keeps its Build step for its lockstep readers and escapes
+    // assembled, as a Scatter, at that instance for the others. A Sum escape
+    // that a Reduction mode already placed at that depth is upgraded to a
+    // Scatter, as the materialization rule below does: the lockstep instance's
+    // batches are disjoint and must not be summed.
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       AxisClass const& ac = cl.per_axis[pos];
       if (ac.role != LoopRole::LoopLocal) continue;
       if (std::none_of(ac.per_occurrence.begin(), ac.per_occurrence.end(),
                        [](OccurrenceAxisRole const& o) {
-                         return o.role == LoopRole::LoopCarried;
+                         return o.role == OccurrenceRole::Assembled;
                        }))
         continue;
       std::wstring const bk{ac.axis.basis().base_key()};
