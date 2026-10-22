@@ -549,7 +549,13 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
     for (OccurrenceRec const& occ : vc.occurrences) {
       if (occ.consumer_point == occ.point) continue;  // forest root
       auto const it = points.find(occ.consumer_point);
-      if (it == points.end()) continue;  // defensive
+      // every consumer point is some cell's occurrence: a miss is a defect
+      // of the record, and skipping it would drop a dependency edge
+      if (it == points.end())
+        throw Exception("ordered_schedule_dep_graph: the consumer (point " +
+                        std::to_string(occ.consumer_point) + ") of value " +
+                        std::to_string(vc.value_id) + " (point " +
+                        std::to_string(occ.point) + ") is not an occurrence");
       std::size_t const parent = it->second.value_id;
       auto& deps = g.depends_on[parent];
       if (std::find(deps.begin(), deps.end(), vc.value_id) == deps.end()) {
