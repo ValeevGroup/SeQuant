@@ -192,6 +192,26 @@ TEST_CASE("filter step", "[extint]") {
            {{"rules", {{{"type", "contains"}, {"label", "g"}}}}}}}}});
     REQUIRE(step.run("flt", ctx, {"in.0"}) == 1);
   }
+
+  SECTION("label patterns operate on (Unicode) characters") {
+    ExecutionContext ctx;
+    seed_expr(ctx, {"R1{a1;i1} = + λ⁺{a1;i1}:A-H-S"});
+    FilterStep step;
+    step.set_options(json{
+        {"keep_empty", false},
+        {"groups",
+         {{"lambda", {{"rules", {{{"type", "contains"}, {"label", "λ."}}}}}},
+          {"greek",
+           {{"rules", {{{"type", "contains"}, {"label", "[αβγ]."}}}}}}}}});
+    REQUIRE(step.run("flt", ctx, {"in.0"}) == 1);
+
+    REQUIRE_THROWS_WITH(
+        step.set_options(json{
+            {"groups",
+             {{"greek",
+               {{"rules", {{{"type", "contains"}, {"label", "[α-ω]"}}}}}}}}}),
+        Catch::Matchers::ContainsSubstring("Unsupported label regex"));
+  }
 }
 
 TEST_CASE("optimize step", "[extint]") {
