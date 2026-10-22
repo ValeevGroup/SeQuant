@@ -630,15 +630,16 @@ struct ForcedSplitLevels {
 /// Assigns every value of \p rich its pass level (see \c ForcedSplitLevels),
 /// reading the carried/reduction roles from \p legality, the dependency edges
 /// from \p g, and deciding with \p inside whether a reader is produced inside
-/// a source's own reduced loop instance.
+/// a source's own reduced loop instance and with \p inside_assembled whether
+/// it is produced inside a loop-local instance it reads the source assembled
+/// over.
 inline ForcedSplitLevels forced_split_levels(
     RichSchedule const& rich, LegalitySchedule const& legality,
     OrderedScheduleDepGraph const& g,
     std::function<bool(std::size_t /*reader_vid*/,
                        std::size_t /*source_vid*/)> const& inside,
     std::function<bool(std::size_t /*reader_vid*/,
-                       std::size_t /*source_vid*/)> const& inside_assembled =
-        {}) {
+                       std::size_t /*source_vid*/)> const& inside_assembled) {
   ForcedSplitLevels r;
   std::unordered_set<std::size_t> reduction_sources;
   for (CellLegality const& cl : legality.cells) {
@@ -716,9 +717,9 @@ inline ForcedSplitLevels forced_split_levels(
     auto const it = g.depends_on.find(v);
     if (it != g.depends_on.end())
       for (std::size_t o : it->second) {
-        bool const carried_read = r.carried.count(o) != 0 ||
-                                  (outside.count({v, o}) != 0 &&
-                                   inside_assembled && inside_assembled(v, o));
+        bool const carried_read =
+            r.carried.count(o) != 0 ||
+            (outside.count({v, o}) != 0 && inside_assembled(v, o));
         bool const bump =
             carried_read || (reduction_sources.count(o) != 0 && inside(v, o));
         if (bump) r.pinned.insert(o);

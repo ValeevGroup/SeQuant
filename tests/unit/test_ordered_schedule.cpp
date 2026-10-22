@@ -939,9 +939,9 @@ sequant::eval::CellLegality orderedsched_levels_legality(
 // forced_split_levels's `inside` predicate for a fixture with no Reduction
 // role at all: no Reduction source exists, so it is never consulted; always
 // false is the only well-defined answer.
-bool orderedsched_no_reduction_inside(std::size_t, std::size_t) {
-  return false;
-}
+// No reader is produced inside a source's reduced or assembled instance:
+// the raw-levels tests below have no such edge, so both predicates are this.
+bool orderedsched_never_inside(std::size_t, std::size_t) { return false; }
 
 }  // namespace
 
@@ -968,7 +968,7 @@ TEST_CASE("forced_split_levels: a carried chain gives consecutive passes",
       orderedsched_levels_legality(1003, LoopRole::LoopLocal));
   auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
   auto const lv = sequant::eval::detail::forced_split_levels(
-      rich, legality, g, orderedsched_no_reduction_inside);
+      rich, legality, g, orderedsched_never_inside, orderedsched_never_inside);
   CHECK(lv.carried == std::unordered_set<std::size_t>{0, 1, 2});
   CHECK(lv.pass(0) == 0);
   CHECK(lv.pass(1) == 1);
@@ -1012,7 +1012,7 @@ TEST_CASE(
         orderedsched_levels_legality(h, LoopRole::LoopLocal));
   auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
   auto const lv = sequant::eval::detail::forced_split_levels(
-      rich, legality, g, orderedsched_no_reduction_inside);
+      rich, legality, g, orderedsched_never_inside, orderedsched_never_inside);
   CHECK(lv.pass(0) == 0);  // L0
   CHECK(lv.pass(1) == 1);  // C1
   CHECK(lv.pass(4) == 2);  // A reads C1
@@ -1371,7 +1371,8 @@ TEST_CASE("forced_split_levels: two levels reproduce the two-set partition",
   auto const [old_carried, old_consumer_pass] =
       orderedsched_old_partition(L"i", fx.legality, g);
   auto const lv = sequant::eval::detail::forced_split_levels(
-      fx.rich, fx.legality, g, orderedsched_no_reduction_inside);
+      fx.rich, fx.legality, g, orderedsched_never_inside,
+      orderedsched_never_inside);
   REQUIRE(!old_carried.empty());
   CHECK(lv.carried == old_carried);
   CHECK(lv.max_pass >= 1);
@@ -1721,7 +1722,7 @@ TEST_CASE(
     return reader_vid == 1 && source_vid == 0;  // u inside V's instance
   };
   auto const lv = sequant::eval::detail::forced_split_levels(
-      fx.rich, fx.legality, g, inside);
+      fx.rich, fx.legality, g, inside, orderedsched_never_inside);
   CHECK(lv.pass(0) == 0);  // V
   CHECK(lv.pass(1) == 1);  // u: bumped, produced inside V's reduced instance
   CHECK(lv.pass(2) == 0);  // w: root reader, not bumped
