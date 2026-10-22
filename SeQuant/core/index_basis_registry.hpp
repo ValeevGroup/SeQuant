@@ -88,7 +88,7 @@ concept index_space_extent =
     !std::same_as<std::remove_cvref_t<T>, char> &&
     !std::same_as<std::remove_cvref_t<T>, signed char> &&
     !std::same_as<std::remove_cvref_t<T>, unsigned char> &&
-    !std::same_as<std::remove_cvref_t<T>, char> &&
+    !std::same_as<std::remove_cvref_t<T>, wchar_t> &&
     !std::same_as<std::remove_cvref_t<T>, char8_t> &&
     !std::same_as<std::remove_cvref_t<T>, char16_t> &&
     !std::same_as<std::remove_cvref_t<T>, char32_t>;
