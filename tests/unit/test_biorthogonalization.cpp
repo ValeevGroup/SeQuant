@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
@@ -25,8 +26,10 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
                                               L"t{i1,i2,i3;a1,a2,a3}"};
     const std::vector<std::wstring> expected_outputs = {
         L"1/2 t{a1;i1}", L"1/6 (2 g{a1,a2;i1,i2} + g{a2,a1;i1,i2})",
-        // cmp. Wang & Knizia (2018), DOI: arXiv:1805.00565
-        L"1/120 ("
+        // cmp. Wang & Knizia (2018), DOI: arXiv:1805.00565, Eq. (31): theirs
+        // is normalized by 3!/rank(M) = 6/5 (1/120); this is the unnormalized
+        // coefficient
+        L"1/144 ("
         "-7 t{i_1,i_2,i_3;a_2,a_3,a_1}:N-N-S "
         "- 7 t{i_1,i_2,i_3;a_3,a_1,a_2}:N-N-S "
         "- t{i_1,i_2,i_3;a_2,a_1,a_3}:N-N-S "
@@ -94,6 +97,36 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
       for (std::size_t k = 0; k < expected.size(); ++k) {
         CAPTURE(k);
         REQUIRE_THAT(expected.at(k), EquivalentTo(expressions.at(k)));
+      }
+    }
+  }
+
+  SECTION("hardcoded tables match the computed pseudoinverse") {
+    using Catch::Matchers::WithinAbs;
+    constexpr double tolerance = 1e-12;
+
+    for (std::size_t n = 1; n <= 5; ++n) {
+      CAPTURE(n);
+
+      const auto hardcoded = mbpt::detail::hardcoded_biorthogonalizer_coeffs(n);
+      const auto computed = mbpt::detail::compute_biorthogonalizer_coeffs(n);
+      REQUIRE(hardcoded.size() == computed.size());
+      for (std::size_t i = 0; i < hardcoded.size(); ++i) {
+        CAPTURE(i);
+        REQUIRE_THAT(hardcoded[i].convert_to<double>(),
+                     WithinAbs(computed[i], tolerance));
+      }
+
+      const auto hardcoded_nns =
+          mbpt::detail::hardcoded_nns_projector<double>(n);
+      REQUIRE(hardcoded_nns.has_value());
+      // asserts that the computed projector is idempotent
+      const auto computed_nns = mbpt::detail::compute_nns_p_coeffs(n);
+      REQUIRE(hardcoded_nns->size() == computed_nns.size());
+      for (std::size_t i = 0; i < computed_nns.size(); ++i) {
+        CAPTURE(i);
+        REQUIRE_THAT((*hardcoded_nns)[i],
+                     WithinAbs(computed_nns[i], tolerance));
       }
     }
   }
