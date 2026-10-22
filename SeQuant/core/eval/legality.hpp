@@ -36,9 +36,14 @@ namespace sequant::eval {
 /// fills \c CellLegality::per_axis with these).
 ///
 enum class LoopRole {
-  LoopLocal,      //!< the axis is fully consumed within the value's own build
+  LoopLocal,      //!< a carried axis some occurrence reads in lockstep, inside
+                  //!< the loop instance that slices it: the value is built
+                  //!< per batch there (and also escapes assembled when
+                  //!< another occurrence reads it where that instance is not
+                  //!< running, see \c OccurrenceRole)
   Reduction,      //!< the axis is summed (contracted) at or below the value
-  LoopCarried,    //!< the axis survives into the value's own result indices
+  LoopCarried,    //!< a carried axis no occurrence reads in lockstep: the
+                  //!< value is needed only assembled over it
   LoopInvariant,  //!< the axis encloses the value but the value does not
                   //!< depend on it (a pure replication context)
 };
@@ -105,8 +110,10 @@ struct CellLegality {
   container::svector<AxisClass> per_axis;
 
   /// The shallowest legal home mode-set for this value: the \c per_axis
-  /// axes whose role is \c LoopLocal (the axes the value stays sliced on --
-  /// the value is homed inside these). Every other \c build_site axis --
+  /// axes whose role is \c LoopLocal (the axes the value is built sliced on
+  /// -- the value is homed inside these; on any of them with an \c
+  /// OccurrenceRole::Assembled reader it also escapes assembled). Every other
+  /// \c build_site axis --
   /// \c Reduction, \c LoopCarried -- is lifted out (the value is homed
   /// above it), as is any axis absent from \c build_site altogether (the
   /// implicit \c LoopInvariant case: the value never depended on it, so it
