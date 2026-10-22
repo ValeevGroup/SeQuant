@@ -474,14 +474,7 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
       for (std::string_view current :
            ranges::views::concat(data.at(idx).associated_ids,
                                  data.at(idx).associated_group_ids)) {
-        auto pos = current.find('.');
-        if (pos != std::string_view::npos) {
-          // Strip step name from ID to allow referencing e.g. 'res' instead of
-          // 'step5.res'
-          current = current.substr(pos + 1);
-        }
-
-        auto it = group_assoc_.find(current);
+        auto it = group_assoc_.find(detail::strip_step_prefix(current));
         if (it != group_assoc_.end()) {
           return it->second;
         }
