@@ -39,6 +39,8 @@
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 
+#include "csv_size_fixtures.hpp"
+
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/context.hpp>
@@ -337,65 +339,29 @@ namespace {
 // ...) sizes a k-composite group as mean(d^k), the true block-sparse volume.
 // pno_M[k]/osv_M[k] for k in [1,4]; index 0 unused (kept 1). Rank >= 3
 // (CSV-CCSDT) is not populated here (CCSD is ranks 1-2).
+// The named problem sizes (kWater20_pVDZF12, kC60_pVDZF12), their provenance
+// and the occupancy adjustment mpqc applies to the moment tables live in
+// csv_size_fixtures.hpp; the aliases below keep this file's historical names.
+using sequant::tests::csv_sizes::occupancy_adjusted_moments;
+using ProblemSize = sequant::tests::csv_sizes::CsvProblemSize;
+inline constexpr auto const& kC60_pVDZF12 =
+    sequant::tests::csv_sizes::kC60_pVDZF12;
+inline constexpr auto const& kWater20_pVDZF12 =
+    sequant::tests::csv_sizes::kWater20_pVDZF12;
+
+// Regime for the post-transform (mu~ + K) residual from explicit extents and
+// moments (occupancy 1 unless given): see df_size_regime for the shape.
 SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux, std::size_t i_occ,
                      std::array<double, 5> const& pno_M,
-                     std::array<double, 5> const& osv_M) {
-  SizeRegime r;
-  r.space_extent = {
-      {L"i", i_occ},
-      {L"μ̃", mu_tilde},
-      {L"Κ", aux},
-      {L"a", mu_tilde},
-  };
-  r.csv_pno_moment = pno_M;
-  r.csv_osv_moment = osv_M;
-  return r;
+                     std::array<double, 5> const& osv_M,
+                     double pno_occupancy = 1.0, double osv_occupancy = 1.0) {
+  return sequant::tests::csv_sizes::df_size_regime(ProblemSize{
+      mu_tilde, aux, i_occ, pno_M, osv_M, pno_occupancy, osv_occupancy});
 }
-
-// One named (molecule, basis, parameter-set) problem size for the DryRun cost
-// model: base-space extents + the measured heavy-tailed CSV power means. Single
-// source of truth -- use df_regime(kFoo) at every call site instead of
-// repeating the literals, so a moment re-measurement is a one-line edit.
-struct ProblemSize {
-  std::size_t mu_tilde;         // PAO domain extent (= #AO)
-  std::size_t aux;              // DF aux (K) extent
-  std::size_t i_occ;            // active occupied extent
-  std::array<double, 5> pno_M;  // per-pair PNO power means M_0..M_4 (0 unused)
-  std::array<double, 5> osv_M;  // per-orbital OSV power means M_0..M_4
-};
-
-// C60, cc-pVDZ-F12, TCUTPNO=1e-8 / TCUTOSV=1e-9. Extents from the Owl job log;
-// PNO/OSV power means M_1..M_4 measured by mpqc PaoPnoRMP2 (job 617809 -- the
-// TRUE pVDZ-F12 values; NOTE the earlier 48.60/64.35 PNO + 206/234 OSV numbers
-// were from job 617653, which was mis-configured with an aug-cc-pVTZ OBS).
-inline constexpr ProblemSize kC60_pVDZF12{
-    /*mu_tilde=*/1800u,
-    /*aux=*/4320u,
-    /*i_occ=*/120u,
-    /*pno_M=*/
-    {1.0, 42.029069767441861, 46.039206412923569, 49.766252354482994,
-     53.151291880343109},
-    /*osv_M=*/
-    {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926}};
-
-// Water-20 (H2O)20 / cc-pVDZ-F12, extracted from Owl job 649160:
-//   ext(i)=80 (active occ), ext(K)=1682 (DF aux; from g(i,i,K)=86.1MB),
-//   ext(mu~)=896 (PAO; from g(mu~,mu~,K)=10.8GB), and the measured heavy-tailed
-//   CSV moments (PNO M_1..M_4 per pair, OSV M_1..M_4 per orbital).
-inline constexpr ProblemSize kWater20_pVDZF12{
-    /*mu_tilde=*/896u,
-    /*aux=*/1682u,
-    /*i_occ=*/80u,
-    /*pno_M=*/
-    {1.0, 23.175775480059084, 25.865548281212597, 28.171416142614103,
-     30.03848680550367},
-    /*osv_M=*/
-    {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
-     59.872014818179686}};
 
 // Build a SizeRegime from a named ProblemSize.
 SizeRegime df_regime(ProblemSize const& p) {
-  return df_regime(p.mu_tilde, p.aux, p.i_occ, p.pno_M, p.osv_M);
+  return sequant::tests::csv_sizes::df_size_regime(p);
 }
 
 // Batchable = the two modes mpqc's runtime batches on the CSV path: PAO (mu~)
@@ -2530,18 +2496,20 @@ TEST_CASE(
   // dominated by the GENUINE 4-PNO intermediate the perf-first schedule forms
   // -- the CC doubles W node {a_1<i,i> a_2<i,i> a_3<i,i> a_4<i,i>} with FOUR
   // distinct PNO legs over one occ-pair (see SEQUANT_UT_DRYRUN_PERF_TREE
-  // dump). With the FAITHFUL measured moments (kC60_pVDZF12), it is sized
-  // occ^2 * M_4^4 = 120^2 * 53.151^4 * 8 ~= 0.92 TB (dense occ^2 pairs; the
-  // screened ~6300 CC pairs would give ~0.40 TB). This is the CORRECT,
-  // moment-aware size (df_regime's csv_pno_moment[k] are power means), NOT a
-  // naive-product artifact and NOT a mis-sized twin R{a<i,i>,a<i,i>} (which
-  // would be occ^2*M_2^2 ~= 0.3 GB). The Kappa mode is CONTRACTED at this
-  // node, so batching cannot shrink W -- it is the irreducible peak floor of
-  // the flop-optimal factorization, and precisely why perf-first (which forms
-  // it) OOMs C60 while peak-first (which does not) does not. A 0.5..2 TB band
-  // brackets the real-moment value with margin and is non-flaky.
-  CHECK(perf_first.peak_bytes < 2e12);
-  CHECK(perf_first.peak_bytes > 5e11);
+  // dump). With the FAITHFUL measured moments and pair occupancy
+  // (kC60_pVDZF12), it is sized occ^2 * p * M_4^4 = 120^2 * 0.4375 *
+  // 53.151^4 * 8 ~= 0.40 TB (the ~6300 stored CC pairs of 120^2; the dense
+  // pair grid, p = 1, would give ~0.92 TB). This is the CORRECT, moment- and
+  // occupancy-aware size (df_regime's csv_pno_moment[k] are the
+  // occupancy-folded power means), NOT a naive-product artifact and NOT a
+  // mis-sized twin R{a<i,i>,a<i,i>} (which would be occ^2*p*M_2^2 ~= 0.15
+  // GB). The Kappa mode is CONTRACTED at this node, so batching cannot shrink
+  // W -- it is the irreducible peak floor of the flop-optimal factorization,
+  // and precisely why perf-first (which forms it) OOMs C60 while peak-first
+  // (which does not) does not. A 0.2..1 TB band brackets the real value with
+  // margin and is non-flaky.
+  CHECK(perf_first.peak_bytes < 1e12);
+  CHECK(perf_first.peak_bytes > 2e11);
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
@@ -4445,4 +4413,27 @@ TEST_CASE(
   CHECK(fd_report.peak_bytes > 0.0);
   CHECK(fd_report.builds_total > 0);
   CHECK(fd_report.scheduler == sequant::BatchScheduler::forest_descent);
+}
+
+// The contract the fixtures share with mpqc's CSVSizeMoments::extent: a group
+// of k composites on one cluster, each sized by the occupancy-adjusted M_k,
+// has the per-member product p * M_k^k, so nocc^rank times it is the
+// block-sparse volume sum_{nonnull clusters} d^k. Occupancy 1 is the identity.
+TEST_CASE("occupancy-adjusted moments satisfy the group-volume identity",
+          "[dryrun][sizing]") {
+  auto const& w20 = kWater20_pVDZF12;
+  for (double p : {1.0, w20.pno_occupancy, 0.01}) {
+    auto const adj = occupancy_adjusted_moments(w20.pno_M, p);
+    CHECK(adj[0] == 1.0);
+    for (std::size_t k = 1; k <= 4; ++k) {
+      double prod = 1.0;
+      for (std::size_t member = 0; member < k; ++member) prod *= adj[k];
+      CHECK(prod == Catch::Approx(p * std::pow(w20.pno_M[k], double(k))));
+    }
+  }
+  // The regime builder applies it to both tables, and an occupancy of 1
+  // leaves the moments untouched.
+  auto const r = df_regime(w20);
+  CHECK(r.csv_pno_moment[1] == Catch::Approx(w20.pno_occupancy * w20.pno_M[1]));
+  CHECK(r.csv_osv_moment[2] == Catch::Approx(w20.osv_M[2]));
 }
