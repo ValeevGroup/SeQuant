@@ -241,26 +241,31 @@ using LoopInstance = std::pair<std::wstring, int>;
 /// \brief The loop instances enclosing \p occ, one per \c OccurrenceRec::ectx
 /// entry, each resolved through the occurrence that opened it (\c
 /// ectx_opener_point) and that opener's stamps (\c opened_instance). \p
-/// point_occ maps a static point to its occurrence (every occurrence of the
-/// forest, as \c analyze_legality builds it).
+/// point_occ is \c point_occurrences of the forest's rich schedule.
 ///
-/// Throws \c Exception when an entry cannot be resolved: the opener is not in
-/// \p point_occ, opens no such mode, or carries no stamp for it. Each of those
-/// is a defect in the boulevard's record, and a guess here (a label-only
-/// comparison, say) would turn it into a silently wrong schedule.
+/// Throws \c Exception when an entry cannot be resolved: the record names no
+/// opener for it, the opener is not in \p point_occ, opens no such mode, or
+/// carries no stamp for it. Each of those is a defect in the boulevard's
+/// record, and a guess here (a label-only comparison, say) would turn it into
+/// a silently wrong schedule.
 ///
 [[nodiscard]] inline container::svector<LoopInstance> enclosing_instances(
     OccurrenceRec const& occ,
-    std::unordered_map<std::size_t, OccurrenceRec const*> const& point_occ) {
+    std::unordered_map<std::size_t, PointOccurrence> const& point_occ) {
   container::svector<LoopInstance> out;
-  SEQUANT_ASSERT(occ.ectx.size() == occ.ectx_opener_point.size());
+  if (occ.ectx.size() != occ.ectx_opener_point.size())
+    throw Exception(
+        "enclosing_instances: the occurrence at point " +
+        std::to_string(occ.point) + " records " +
+        std::to_string(occ.ectx.size()) + " enclosing loop(s) but " +
+        std::to_string(occ.ectx_opener_point.size()) + " opener(s)");
   for (std::size_t k = 0; k < occ.ectx.size(); ++k) {
     auto const pit = point_occ.find(occ.ectx_opener_point[k]);
     if (pit == point_occ.end())
       throw Exception(
           "enclosing_instances: the opener of an enclosing loop (point " +
           std::to_string(occ.ectx_opener_point[k]) + ") is not an occurrence");
-    OccurrenceRec const& opener = *pit->second;
+    OccurrenceRec const& opener = *pit->second.occ;
     Index const& L = occ.ectx[k].first;
     std::optional<LoopInstance> inst;
     for (auto const& [oix, okind] : opener.opens)
@@ -281,19 +286,25 @@ using LoopInstance = std::pair<std::wstring, int>;
 
 ///
 /// \brief The \c classify_axis resolver of enclosing loop instances over every
-/// occurrence of \p rich (\c enclosing_instances with the point -> occurrence
-/// map of the whole forest). \p rich must outlive the returned function.
+/// occurrence of \p rich: \c enclosing_instances over \c point_occurrences of
+/// the forest, memoized per occurrence (one value's axes all ask about the
+/// same occurrences). \p rich must outlive the returned function.
 ///
 [[nodiscard]] inline std::function<
     container::svector<LoopInstance>(OccurrenceRec const&)>
 enclosing_instances_of(RichSchedule const& rich) {
-  auto point_occ =
-      std::make_shared<std::unordered_map<std::size_t, OccurrenceRec const*>>();
-  for (ValueCell const& vc : rich.cells)
-    for (OccurrenceRec const& occ : vc.occurrences)
-      (*point_occ)[occ.point] = &occ;
-  return [point_occ](OccurrenceRec const& occ) {
-    return enclosing_instances(occ, *point_occ);
+  struct State {
+    std::unordered_map<std::size_t, PointOccurrence> point_occ;
+    std::unordered_map<std::size_t, container::svector<LoopInstance>> memo;
+  };
+  auto st = std::make_shared<State>();
+  st->point_occ = point_occurrences(rich);
+  return [st](OccurrenceRec const& occ) {
+    auto const it = st->memo.find(occ.point);
+    if (it != st->memo.end()) return it->second;
+    auto inst = enclosing_instances(occ, st->point_occ);
+    st->memo.emplace(occ.point, inst);
+    return inst;
   };
 }
 
@@ -328,8 +339,9 @@ enclosing_instances_of(RichSchedule const& rich) {
 /// carried list is positionally aligned with \p carried (each occurrence's
 /// frame relabels the same slots), so \p axis's position in \p carried is
 /// the one read at every occurrence. Loop identity is the recorded one
-/// (\c OccurrenceRec::loop_slot and the openers' stamps); a batched position
-/// with no stamp is a defect of the record and throws.
+/// (\c OccurrenceRec::loop_slot and the openers' stamps). An occurrence that
+/// is not aligned, or a batched position with no stamp, is a defect of the
+/// record and throws.
 ///
 [[nodiscard]] inline LoopRole classify_axis(
     container::svector<Index> const& carried,
@@ -357,9 +369,13 @@ enclosing_instances_of(RichSchedule const& rich) {
 
   bool any_lockstep = false;
   for (OccurrenceRec const& occ : occurrences) {
-    SEQUANT_ASSERT(axis_slot < occ.carried.size() &&
-                   occ.carried[axis_slot].basis().base_key() == bk &&
-                   "classify_axis: occurrence not positionally aligned");
+    if (axis_slot >= occ.carried.size() ||
+        occ.carried[axis_slot].basis().base_key() != bk)
+      throw Exception("classify_axis: the occurrence at point " +
+                      std::to_string(occ.point) +
+                      " is not positionally aligned with the value's carried "
+                      "list at position " +
+                      std::to_string(axis_slot));
     int const own_slot =
         axis_slot < occ.loop_slot.size() ? occ.loop_slot[axis_slot] : -1;
     if (own_slot < 0)

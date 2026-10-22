@@ -544,17 +544,13 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
   for (ValueCell const& vc : rich.cells)
     g.value_id_of.emplace(value_key_of(vc), vc.value_id);
 
-  std::unordered_map<std::size_t, std::size_t> point_owner;
-  for (ValueCell const& vc : rich.cells)
-    for (OccurrenceRec const& occ : vc.occurrences)
-      point_owner[occ.point] = vc.value_id;
-
+  auto const points = point_occurrences(rich);
   for (ValueCell const& vc : rich.cells)
     for (OccurrenceRec const& occ : vc.occurrences) {
       if (occ.consumer_point == occ.point) continue;  // forest root
-      auto const it = point_owner.find(occ.consumer_point);
-      if (it == point_owner.end()) continue;  // defensive
-      std::size_t const parent = it->second;
+      auto const it = points.find(occ.consumer_point);
+      if (it == points.end()) continue;  // defensive
+      std::size_t const parent = it->second.value_id;
       auto& deps = g.depends_on[parent];
       if (std::find(deps.begin(), deps.end(), vc.value_id) == deps.end()) {
         deps.push_back(vc.value_id);
@@ -655,12 +651,7 @@ inline ForcedSplitLevels forced_split_levels(
   // LoopLocal source through its lockstep occurrences read the per-batch
   // form in the same pass and are not bumped; a value LoopCarried as a whole
   // has only such reading occurrences, so every one of its readers is.
-  std::unordered_map<std::size_t, std::size_t> point_owner, point_consumer;
-  for (ValueCell const& vc : rich.cells)
-    for (OccurrenceRec const& occ : vc.occurrences) {
-      point_owner[occ.point] = vc.value_id;
-      point_consumer[occ.point] = occ.consumer_point;
-    }
+  auto const points = point_occurrences(rich);
   std::set<std::pair<std::size_t, std::size_t>> outside;  // (reader, source)
   for (CellLegality const& cl : legality.cells) {
     auto const it = g.value_id_of.find(cl.hash);
@@ -668,11 +659,13 @@ inline ForcedSplitLevels forced_split_levels(
     for (AxisClass const& ac : cl.per_axis)
       for (OccurrenceAxisRole const& o : ac.per_occurrence) {
         if (o.role != LoopRole::LoopCarried) continue;
-        auto const cp = point_consumer.find(o.point);
-        if (cp == point_consumer.end() || cp->second == o.point) continue;
-        auto const rd = point_owner.find(cp->second);
-        if (rd == point_owner.end()) continue;
-        outside.insert({rd->second, it->second});
+        auto const pit = points.find(o.point);
+        if (pit == points.end()) continue;
+        std::size_t const cp = pit->second.occ->consumer_point;
+        if (cp == o.point) continue;  // forest root
+        auto const rd = points.find(cp);
+        if (rd == points.end()) continue;
+        outside.insert({rd->second.value_id, it->second});
       }
   }
 

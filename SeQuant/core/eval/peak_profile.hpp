@@ -387,6 +387,23 @@ struct RichSchedule {
       loop_order;
 };
 
+/// One occurrence of a rich schedule, with the value it belongs to.
+struct PointOccurrence {
+  std::size_t value_id;
+  OccurrenceRec const* occ;
+};
+
+/// Every occurrence of \p rich by its static point. The pointers refer into
+/// \p rich, which must outlive the map.
+[[nodiscard]] inline std::unordered_map<std::size_t, PointOccurrence>
+point_occurrences(RichSchedule const& rich) {
+  std::unordered_map<std::size_t, PointOccurrence> out;
+  for (ValueCell const& vc : rich.cells)
+    for (OccurrenceRec const& occ : vc.occurrences)
+      out[occ.point] = {vc.value_id, &occ};
+  return out;
+}
+
 ///
 /// \brief Linearize an eval \p forest into a \c RichSchedule of rich value
 /// cells over a single post-order static-point timeline.

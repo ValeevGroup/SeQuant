@@ -740,6 +740,77 @@ TEST_CASE(
 }
 
 // ===========================================================================
+// enclosing_instances resolves each enclosing loop through the occurrence
+// that opened it and that opener's stamps, and throws on every way the
+// record can fail to name the instance -- never falling back to a label.
+// ===========================================================================
+TEST_CASE(
+    "enclosing_instances: resolved through the opener's stamps; an opener "
+    "the record does not name, cannot find, or that carries no stamp throws",
+    "[legality]") {
+  using sequant::Index;
+  using sequant::container::svector;
+  using sequant::eval::enclosing_instances;
+  using sequant::eval::LoopInstance;
+  using sequant::eval::OccurrenceRec;
+  using sequant::eval::PointOccurrence;
+
+  auto const i_1 = Index{L"i_1"}, k_1 = Index{L"a_1"};
+
+  // The opener (point 1): carries i_1 sliced by (i, 2) and opens that loop as
+  // External; also opens a Contracted loop over a_1 stamped (a, 0).
+  OccurrenceRec opener;
+  opener.point = 1;
+  opener.consumer_point = 1;
+  opener.carried = {i_1};
+  opener.home = {i_1};
+  opener.loop_slot = {2};
+  opener.opens = {{i_1, sequant::BatchModeType::External},
+                  {k_1, sequant::BatchModeType::Contracted}};
+  opener.reduced_slot = {{k_1, 0}};
+  std::unordered_map<std::size_t, PointOccurrence> points;
+  points[1] = {0, &opener};
+
+  // An occurrence under both loops names the opener for each.
+  OccurrenceRec occ;
+  occ.point = 5;
+  occ.consumer_point = 1;
+  occ.ectx = {{i_1, {0u, 4u}}, {k_1, {0u, 8u}}};
+  occ.ectx_opener_point = {1, 1};
+  auto const inst = enclosing_instances(occ, points);
+  REQUIRE(inst.size() == 2);
+  CHECK(inst[0] == LoopInstance{L"i", 2});
+  CHECK(inst[1] == LoopInstance{L"a", 0});
+
+  // Fewer opener points than enclosing loops: the record is inconsistent.
+  OccurrenceRec short_rec = occ;
+  short_rec.ectx_opener_point = {1};
+  REQUIRE_THROWS_AS(enclosing_instances(short_rec, points), sequant::Exception);
+
+  // An opener point that is no occurrence.
+  OccurrenceRec lost = occ;
+  lost.ectx_opener_point = {1, 7};
+  REQUIRE_THROWS_AS(enclosing_instances(lost, points), sequant::Exception);
+
+  // An opener that does not open the loop the occurrence says it does.
+  OccurrenceRec mislabeled = occ;
+  mislabeled.ectx = {{Index{L"i_2"}, {0u, 4u}}};
+  mislabeled.ectx_opener_point = {1};
+  REQUIRE_THROWS_AS(enclosing_instances(mislabeled, points),
+                    sequant::Exception);
+
+  // An opener that opens the loop but carries no stamp for it.
+  OccurrenceRec unstamped_opener = opener;
+  unstamped_opener.loop_slot = {-1};
+  std::unordered_map<std::size_t, PointOccurrence> points2;
+  points2[1] = {0, &unstamped_opener};
+  OccurrenceRec under_i = occ;
+  under_i.ectx = {{i_1, {0u, 4u}}};
+  under_i.ectx_opener_point = {1};
+  REQUIRE_THROWS_AS(enclosing_instances(under_i, points2), sequant::Exception);
+}
+
+// ===========================================================================
 // classify_axis (spectator): a value carrying a batched, lockstep-bound index
 // (i_1) BESIDE a same-space FULL spectator dimension (i_4 -- NOT batched, no
 // enclosing loop) must classify the batched axis LoopLocal. The spectator is
