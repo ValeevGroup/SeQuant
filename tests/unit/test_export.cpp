@@ -633,8 +633,8 @@ TEST_CASE("export", "[export]") {
                         generator, ctx);
 
       REQUIRE_THAT(generator.get_generated_code(),
-                   DiffedStringEquals("Declare variable v1\n"
-                                      "Declare variable v2\n"
+                   DiffedStringEquals("Declare variable v2\n"
+                                      "Declare variable v1\n"
                                       "\n"
                                       "Create v1 and initialize to zero\n"
                                       "Load v2\n"
@@ -649,8 +649,8 @@ TEST_CASE("export", "[export]") {
             generator, ctx);
 
         REQUIRE_THAT(generator.get_generated_code(),
-                     DiffedStringEquals("Declare variable v1\n"
-                                        "Declare variable v2\n"
+                     DiffedStringEquals("Declare variable v2\n"
+                                        "Declare variable v1\n"
                                         "Declare variable v3\n"
                                         "\n"
                                         "Create v1 and initialize to zero\n"

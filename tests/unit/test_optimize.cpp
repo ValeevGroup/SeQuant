@@ -1099,9 +1099,9 @@ TEST_CASE("optimize", "[optimize]") {
                  // requires different indexing
                  {{"R{a1,a3;i2,i3} = 2 GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3} - "
                    "GAM0{a1,a3;a4,a5} T2g{a4,a5;i3,i2}"},
-                  {"CSE1{;;a3,a1,i2,i3} = GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3}",
-                   "R{a1,a3;i2,i3} = 2 CSE1{;;a3,a1,i2,i3} - "
-                   "CSE1{;;a3,a1,i3,i2}"}},
+                  {"CSE1{;;a1,a3,i3,i2} = GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3}",
+                   "R{a1,a3;i2,i3} = 2 CSE1{;;a1,a3,i3,i2} - "
+                   "CSE1{;;a1,a3,i2,i3}"}},
                  // Scalar CSE with proto-index tensors
                  {{"R1 = (f{i1;a1<i1>} t{a1<i1>;i1}) A",
                    "R2 = B (f{i1;a1<i1>} t{a1<i1>;i1})"},
@@ -1131,10 +1131,10 @@ TEST_CASE("optimize", "[optimize]") {
                    "t{a1,u5;i1,u4} + f{u3;u4}:N-S Y{u2,u4;u5,u1} "
                    "t{a1,u5;i1,u3} "
                    "+ f{u3;u4}:N-S Y{u2,u4;u1,u5} t{a1,u5;u3,i1}"},
-                  {"CSE1{;;u4,u2,u1,u5} = f{u3;u4}:N-S Y{u2,u3;u1,u5}",
-                   "R2{u2,a1;u1,i1} = -2 CSE1{;;u4,u2,u1,u5} t{a1,u5;i1,u4}"
-                   " + CSE1{;;u3,u2,u5,u1} t{a1,u5;i1,u3}"
-                   " + CSE1{;;u3,u2,u1,u5} t{a1,u5;u3,i1}"}},
+                  {"CSE1{;;u4,u2,u5,u1} = f{u3;u4}:N-S Y{u2,u3;u1,u5}",
+                   "R2{u2,a1;u1,i1} = -2 CSE1{;;u4,u2,u5,u1} t{a1,u5;i1,u4}"
+                   " + CSE1{;;u3,u2,u1,u5} t{a1,u5;i1,u3}"
+                   " + CSE1{;;u3,u2,u5,u1} t{a1,u5;u3,i1}"}},
              }) {
           CAPTURE(inputs);
 

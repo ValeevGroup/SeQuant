@@ -1,4 +1,3 @@
-#include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -160,16 +159,6 @@ std::string utf8_regex_pattern(std::string_view pattern) {
   }
 
   return result;
-}
-
-std::size_t hash::detail::hash_code_points(std::string_view str) {
-  SEQUANT_ASSERT(is_valid_utf8(str));
-  std::size_t seed = 0;
-  for (auto it = str.begin(); it != str.end();) {
-    const char32_t code_point = utf8::unchecked::next(it);
-    sequant_boost::hash_combine(seed, code_point);
-  }
-  return seed;
 }
 
 }  // namespace sequant

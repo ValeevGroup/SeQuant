@@ -272,9 +272,9 @@ TEST_CASE("tensor_network_shared", "[elements]") {
       using idxvec_t = std::vector<std::string>;
       std::vector<std::pair<std::string, std::vector<std::string>>> tests{
           {"G{;;a1,a2,a3,a4} T{;;i3,i2,a3,a4}",
-           idxvec_t{"i_2", "i_3", "a_2", "a_1"}},
+           idxvec_t{"i_3", "i_2", "a_1", "a_2"}},
           {"G{;;a1,a2,a3,a4} T{;;i2,i3,a3,a4}",
-           idxvec_t{"i_3", "i_2", "a_2", "a_1"}},
+           idxvec_t{"i_2", "i_3", "a_1", "a_2"}},
       };
 
       // TNs with braket symmetries

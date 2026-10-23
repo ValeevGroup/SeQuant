@@ -196,10 +196,6 @@ Labels can contain any Unicode character, and many real ones are not ASCII:
   offset and length count bytes. Constructors and setters that take labels
   only check this with `SEQUANT_ASSERT`, so that release builds stay fast;
   passing invalid UTF-8 is a precondition violation.
-- Strings are hashed as the sequence of their code points
-  (`SeQuant/core/hash.hpp`), not of their bytes. Hash labels through
-  `hash::value`/`hash::combine`; hashing them differently changes canonical
-  orderings.
 - Unicode normalization is not performed: a precomposed `ã` and `a` followed by
   U+0303 are different labels.
 

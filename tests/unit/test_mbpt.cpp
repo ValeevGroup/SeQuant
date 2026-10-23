@@ -1192,11 +1192,11 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       //    std::cout << "R33: " << to_latex(R33) << std::endl;
       REQUIRE(to_latex(R33) ==
               "{ "
-              "\\bigl({{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}} + "
+              "\\bigl({{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{"
+              "\\tilde{a}^{{a_1}{a_2}}_{{i_1}{i_2}}}} + "
               "{{{\\frac{1}{36}}}{\\bar{R}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}"
               "}{\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
-              "{{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{"
-              "a}^{{a_1}{a_2}}_{{i_1}{i_2}}}}\\bigr) }");
+              "{{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}}\\bigr) }");
 
       auto R12 = R(nₚ(2), nₕ(1));
       lower_to_tensor_form(R12);
@@ -1214,10 +1214,10 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       //    std::cout << "R21: " << to_latex(R21) << std::endl;
       REQUIRE(to_latex(R21) ==
               "{ "
-              "\\bigl({{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{"
+              "\\bigl({{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}} + "
+              "{{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{"
               "\\tilde{a}^{"
-              "\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
-              "{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
+              "\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}}\\bigr) }");
 
       auto L23 = L(nₚ(2), nₕ(3));
       lower_to_tensor_form(L23);
@@ -1225,12 +1225,12 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       // std::cout << "L23: " << to_latex(L23) << std::endl;
       REQUIRE(to_latex(L23) ==
               "{ "
-              "\\bigl({{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
+              "\\bigl({{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
+              "3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
+              "a_2}}}} + "
               "{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{"
               "i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}} + "
-              "{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
-              "3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
-              "a_2}}}}\\bigr) }");
+              "{{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}}\\bigr) }");
 
       // perturbation ops
       REQUIRE_NOTHROW(Hʼ(1, {.order = 1}));
@@ -1252,7 +1252,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
       REQUIRE(to_latex(simplify(h0 + h1)) == "{{{2}}{\\hat{h¹}}}");
       REQUIRE(to_latex(simplify(h1 + h2)) ==
-              "{ \\bigl({\\hat{h¹}} + {\\hat{h²}}\\bigr) }");
+              "{ \\bigl({\\hat{h²}} + {\\hat{h¹}}\\bigr) }");
 
       REQUIRE(to_latex(simplify(h1 * t2)) == "{{\\hat{h¹}}{\\hat{t²}_{2}}}");
       REQUIRE(to_latex(simplify(h2 * t2)) == "{{\\hat{h²}}{\\hat{t²}_{2}}}");
@@ -1316,8 +1316,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       simplify(sum3);
       // std::cout << "sum3:  " << to_latex(sum3) << std::endl;
       REQUIRE(to_latex(sum3) ==
-              "{ \\bigl({\\hat{h¹}}{[{z}_{1},{z}_{2}]} + "
-              "{\\hat{h¹}}{[{z}_{1}]}\\bigr) }");
+              "{ \\bigl({\\hat{h¹}}{[{z}_{1}]} + "
+              "{\\hat{h¹}}{[{z}_{1},{z}_{2}]}\\bigr) }");
 
       auto pdt1 = h1 * h1_2;
       simplify(pdt1);
@@ -1624,7 +1624,7 @@ SECTION("MRSO") {
     // the active-first comparer is scoped to ref_av
     CHECK(&get_default_context().index_comparer() == index_comparer);
     REQUIRE_THAT(result, SimplifiesTo("h{O_1;O_1}:N-C-S + "
-                                      "h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
+                                      "γ{u_2;u_1} * h{u_1;u_2}:N-C-S"));
   }
 
 #if 0
@@ -1656,7 +1656,7 @@ SECTION("MRSO-MultiProduct") {
     ExprPtr result;
     REQUIRE_NOTHROW(result = t::ref_av(H1));
     REQUIRE_THAT(result, SimplifiesTo("h{O_1;O_1}:N-C-S + "
-                                      "h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
+                                      "γ{u_2;u_1} * h{u_1;u_2}:N-C-S"));
   }
 
   // the mbpt operators (ã) are normal-ordered relative to the context vacuum,

@@ -272,12 +272,10 @@ TEST_CASE("utf8", "[utilities]") {
   }
 
   SECTION("hashing") {
-    // strings are hashed as the sequence of their code points
+    // strings and string views are hashed as the sequence of their bytes
     for (const std::string s : {"", "t", "aα↑𝛼a\u0303"}) {
       CAPTURE(s);
-      const std::u32string code_points = to_utf32(s);
-      const auto expected =
-          sequant_boost::hash_range(code_points.begin(), code_points.end());
+      const auto expected = sequant_boost::hash_range(s.begin(), s.end());
       REQUIRE(hash::value(s) == expected);
       REQUIRE(hash::value(std::string_view(s)) == expected);
     }
