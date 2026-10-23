@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1schedule_1abc8f922ab1bb55eee0f5410bb2a87a1f:
+
+Function sequant::eval::schedule::leaf_permutation_error
+========================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_schedule_document.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::schedule::leaf_permutation_error(TreeShape const&, std::size_t)
+   :project: SeQuant

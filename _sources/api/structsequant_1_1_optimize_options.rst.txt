@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_optimize_options:
+
+Struct OptimizeOptions
+======================
+
+- Defined in :ref:`file_SeQuant_core_optimize_options.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::OptimizeOptions
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

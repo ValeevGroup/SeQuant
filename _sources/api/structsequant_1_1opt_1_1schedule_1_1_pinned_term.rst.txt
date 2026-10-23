@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1opt_1_1schedule_1_1_pinned_term:
+
+Struct PinnedTerm
+=================
+
+- Defined in :ref:`file_SeQuant_core_optimize_schedule_pin.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::opt::schedule::PinnedTerm
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1ac54d861468872b617b6f4f08c01259ef:
+
+Function sequant::eval::detail::ordered_forgo_reads
+===================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::ordered_forgo_reads(CellRegistry&, ForgoPlan const&, CellId, std::size_t)
+   :project: SeQuant

@@ -1,0 +1,46 @@
+
+.. _namespace_sequant__expr_type_rank:
+
+Namespace sequant::expr_type_rank
+=================================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+Detailed Description
+--------------------
+
+ranks (``type_rank``) of SeQuant's own :ref:`exhale_class_classsequant_1_1_expr` types; Expr::operator< orders unlike types by rank first, so this is their order. Spaced so that a new type can be inserted between them; types of Expr::default_type_rank sort between ``power`` and ``boperator``. 
+
+
+
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a5fba96e2961eea50308823949eac91bc`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a75ab50661e968eee56d414ef9c8d2081`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a4f92f537d9cef2004f20db996fe8687e`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a399d1e670c7867496adfa200a262e934`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a76a32ebeea82821a67f103d751107682`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1aa93d298c014df76707828233d56bdc85`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a4abc5de53e8f62e94480e780d2d03e7c`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a9ea0e86fdae455eec3c6e27927e03421`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1a908cd2a66e29d524cdc283a20c5f71ca`
+
+- :ref:`exhale_variable_namespacesequant_1_1expr__type__rank_1ab383199e34955d8313ca78e3587133ec`

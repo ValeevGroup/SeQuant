@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a26ab15f1005ac9533f62dd4eacabe482:
+
+Function sequant::eval::detail::current_scope(eval::BatchContext const&, ScopeBlock const&)
+===========================================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::current_scope(eval::BatchContext const&, ScopeBlock const&)
+   :project: SeQuant

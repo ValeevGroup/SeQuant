@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a170d5e4f6eb25be053461101a0cf8ca4:
+
+Function sequant::detail::cumulant_expand< Statistics::FermiDirac >
+===================================================================
+
+- Defined in :ref:`file_SeQuant_core_wick_extended.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::cumulant_expand< Statistics::FermiDirac >(const ExprPtr&, const OpProvenance&, const ExtendedWickOptions&)
+   :project: SeQuant

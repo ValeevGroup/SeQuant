@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a01140de3851d6c63a10f254bc4be9098:
+
+Enum TensorComparison
+=====================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr_matcher.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::TensorComparison
+   :project: SeQuant

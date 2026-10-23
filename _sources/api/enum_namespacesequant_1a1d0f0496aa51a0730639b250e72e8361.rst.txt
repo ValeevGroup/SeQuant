@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a1d0f0496aa51a0730639b250e72e8361:
+
+Enum OrderType
+==============
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_utils.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::OrderType
+   :project: SeQuant

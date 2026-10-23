@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1a76f57db232ae0886c67cf07a48c044ca:
+
+Function sequant::eval::point_occurrences
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_peak_profile.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::point_occurrences(RichSchedule const&)
+   :project: SeQuant

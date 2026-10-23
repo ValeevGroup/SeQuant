@@ -1,0 +1,109 @@
+
+.. _file_SeQuant_core_irreps_z2_algebra.hpp:
+
+File z2_algebra.hpp
+===================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_irreps>` (``SeQuant/core/irreps``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/irreps/z2_algebra.hpp``)
+---------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_irreps_z2_algebra.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/irreps/algebra.hpp`` (:ref:`file_SeQuant_core_irreps_algebra.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``array`` (:ref:`file_SeQuant_core_eval_backends_tiledarray_array_ops.hpp`)
+
+- ``bit`` (:ref:`file_SeQuant_core_bitset.hpp`)
+
+- ``compare`` (:ref:`file_SeQuant_core_eval_eval_node_compare.hpp`)
+
+- ``concepts`` (:ref:`file_SeQuant_core_io_concepts.hpp`)
+
+- ``cstdint``
+
+- ``format`` (:ref:`file_SeQuant_core_io_format.hpp`)
+
+- ``iterator`` (:ref:`file_SeQuant_core_expressions_expr_iterator.hpp`)
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+- ``vector``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__point_groups`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_no_concrete_group`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_c1`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_c2`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_c2h`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_c2v`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_ci`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_cs`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_d2`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_d2h`
+
+- :ref:`exhale_class_classsequant_1_1_z2_algebra`
+
+- :ref:`exhale_class_classsequant_1_1_z2_irrep`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1afee497da8584b79899cacfb9925fba4f`
+

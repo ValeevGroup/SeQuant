@@ -1,0 +1,344 @@
+
+.. _program_listing_file_SeQuant_core_eval_legality.hpp:
+
+Program Listing for File legality.hpp
+=====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_legality.hpp>` (``SeQuant/core/eval/legality.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_LEGALITY_HPP
+   #define SEQUANT_EVAL_LEGALITY_HPP
+   
+   #include <SeQuant/core/batch_policy.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/eval.hpp>
+   #include <SeQuant/core/eval/eval_expr.hpp>
+   #include <SeQuant/core/eval/peak_profile.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/utility/exception.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <algorithm>
+   #include <cstddef>
+   #include <cstdlib>
+   #include <functional>
+   #include <iostream>
+   #include <memory>
+   #include <ranges>
+   #include <string>
+   #include <type_traits>
+   #include <unordered_map>
+   #include <utility>
+   #include <vector>
+   
+   namespace sequant::eval {
+   
+   
+   enum class LoopRole {
+     LoopLocal,      
+     Reduction,      
+     LoopCarried,    
+     LoopInvariant,  
+   };
+   
+   enum class OccurrenceRole {
+     Lockstep,   
+     Assembled,  
+   };
+   
+   struct OccurrenceAxisRole {
+     std::size_t point;  
+     OccurrenceRole role;
+   };
+   
+   struct AxisClass {
+     Index axis;
+     LoopRole role;
+     container::svector<OccurrenceAxisRole> per_occurrence = {};
+   };
+   
+   struct CellLegality {
+     std::size_t hash = 0;  
+   
+     container::svector<Index> build_site;
+   
+     container::svector<AxisClass> per_axis;
+   
+     container::svector<Index> home_floor;
+   
+     container::svector<Index> forced_split_axes;
+   };
+   
+   struct LegalitySchedule {
+     container::svector<CellLegality> cells;
+   };
+   
+   [[nodiscard]] inline container::svector<Index> forced_split_types(
+       CellLegality const& cell) {
+     container::svector<Index> out;
+     for (Index const& ix : cell.forced_split_axes) {
+       auto const same_type = [&](Index const& o) {
+         return o.basis().base_key() == ix.basis().base_key();
+       };
+       if (std::find_if(out.begin(), out.end(), same_type) == out.end())
+         out.push_back(ix);
+     }
+     return out;
+   }
+   
+   [[nodiscard]] inline container::svector<Index> build_site_of(
+       meta::eval_node auto const& node, BatchPolicy const& policy) {
+     container::svector<Index> result;
+     auto const add_if_new = [&](Index const& ix) {
+       if (std::find(result.begin(), result.end(), ix) == result.end())
+         result.push_back(ix);
+     };
+   
+     // Source the build-site axes from the cost model's actual per-node decision,
+     // not from policy.is_batchable_index() (what could be batched). Using the
+     // predicate made the ordered schedule loop over every batchable axis (e.g.
+     // aux whenever batch:aux_target_size>0) at every node carrying/contracting
+     // it, regardless of whether the peak-constrained optimizer decided to slice
+     // it -- always-on batching independent of peak_threshold, and over-scoping
+     // relative to the DP even under a finite budget. The two authoritative
+     // sources are:
+     //   - a result (carried) index is a build-site axis iff it slices this node's
+     //     own result slots per the cross-occurrence meet (\c sliced_modes, which
+     //     already folds in ancestor batch loops the value is variant to); and
+     //   - a contracted-at-node index iff the DP batched it here (a \c Contracted
+     //     \c node_slice_mask stamp == the node's chosen aprime).
+     // With an infinite budget (or no batchable axis) the DP emits no stamps, so
+     // both are empty and the schedule is flat -- matching forest descent.
+     auto const& sliced = sequant::home_scope(node);
+     auto const& stamps = node->node_slice_mask();
+     for (Index const& ix : node->canon_indices())
+       if (std::find(sliced.begin(), sliced.end(), ix) != sliced.end())
+         add_if_new(ix);
+     for (Index const& ix : contracted_indices(node))
+       if (std::any_of(stamps.begin(), stamps.end(), [&](auto const& p) {
+             return p.second == BatchModeType::Contracted && p.first == ix;
+           }))
+         add_if_new(ix);
+     (void)policy;
+     return result;
+   }
+   
+   [[nodiscard]] inline std::function<
+       container::svector<LoopInstance>(OccurrenceRec const&)>
+   enclosing_instances_of(RichSchedule const& rich) {
+     struct State {
+       std::unordered_map<std::size_t, PointOccurrence> point_occ;
+       std::unordered_map<std::size_t, container::svector<LoopInstance>> memo;
+     };
+     auto st = std::make_shared<State>();
+     st->point_occ = point_occurrences(rich);
+     return [st](OccurrenceRec const& occ) {
+       auto const it = st->memo.find(occ.point);
+       if (it != st->memo.end()) return it->second;
+       auto inst = enclosing_instances(occ, st->point_occ);
+       st->memo.emplace(occ.point, inst);
+       return inst;
+     };
+   }
+   
+   [[nodiscard]] inline LoopRole classify_axis(
+       container::svector<Index> const& carried,
+       container::svector<Index> const& contracted_below, Index const& axis,
+       container::svector<OccurrenceRec> const& occurrences,
+       std::function<container::svector<LoopInstance>(OccurrenceRec const&)> const&
+           enclosing_instances,
+       container::svector<OccurrenceAxisRole>* per_occurrence = nullptr) {
+     // The role is decided for this axis, by identity, not for its basis key: a
+     // value may carry one index of a basis key (loop-local on that instance) and
+     // contract another index of the same key in batches (a reduction over a
+     // different instance) -- e.g. a residual-pair intermediate carrying the
+     // external pair ij while reducing over a contracted pair kl, once the
+     // occupied space is batchable in both roles.
+     auto const carried_pos = std::find(carried.begin(), carried.end(), axis);
+     if (carried_pos == carried.end()) {
+       bool const reduces_axis =
+           std::find(contracted_below.begin(), contracted_below.end(), axis) !=
+           contracted_below.end();
+       return reduces_axis ? LoopRole::Reduction : LoopRole::LoopInvariant;
+     }
+     std::size_t const axis_slot =
+         static_cast<std::size_t>(carried_pos - carried.begin());
+     std::wstring const bk{axis.basis().base_key()};
+   
+     bool any_lockstep = false;
+     for (OccurrenceRec const& occ : occurrences) {
+       if (axis_slot >= occ.carried.size() ||
+           occ.carried[axis_slot].basis().base_key() != bk)
+         throw Exception("classify_axis: the occurrence at point " +
+                         std::to_string(occ.point) +
+                         " is not positionally aligned with the value's carried "
+                         "list at position " +
+                         std::to_string(axis_slot));
+       int const own_slot =
+           axis_slot < occ.loop_slot.size() ? occ.loop_slot[axis_slot] : -1;
+       if (own_slot < 0)
+         throw Exception("classify_axis: batched position " +
+                         std::to_string(axis_slot) + " of the value at point " +
+                         std::to_string(occ.point) +
+                         " has no loop identity (loop_slot unstamped)");
+       LoopInstance const own{bk, own_slot};
+       auto const encl = enclosing_instances(occ);
+       bool const lockstep =
+           std::find(encl.begin(), encl.end(), own) != encl.end();
+       any_lockstep = any_lockstep || lockstep;
+       if (per_occurrence)
+         per_occurrence->push_back({occ.point, lockstep
+                                                   ? OccurrenceRole::Lockstep
+                                                   : OccurrenceRole::Assembled});
+     }
+     return any_lockstep ? LoopRole::LoopLocal : LoopRole::LoopCarried;
+   }
+   
+   template <meta::eval_node_range R>
+   [[nodiscard]] inline LegalitySchedule analyze_legality(
+       RichSchedule const& rich, R const& forest, BatchPolicy const& policy) {
+     using Node = std::ranges::range_value_t<R>;
+   
+     auto const enclosing = enclosing_instances_of(rich);
+   
+     // One representative forest node per value (keyed by value id, not node
+     // id): a value's roles are read off one of its own occurrences' nodes -- a
+     // node of the same hash home-sliced elsewhere carries that frame's slice
+     // annotations, not this value's.
+     //
+     // Held by pointer, not by value: \c Node's copy constructor deep-copies the
+     // whole subtree, so one entry per node costs O(subtree) and a by-value map is
+     // O(n^2) in forest size -- gigabytes on a thousand-summand spine, which is
+     // OOM long before any stack limit matters. \p forest outlives
+     // this call (it is the caller's), so the pointees stay valid; the entries are
+     // read-only here.
+     //
+     // Taking addresses requires the range to yield references to the caller's
+     // nodes; a range of prvalues (a transform view, say) would hand us dangling
+     // pointers. Same guard, same reason, as cache_manager()'s pointer-keyed DAG
+     // walk (cache_manager.hpp) and the value->node bridges
+     // (value_node_map.hpp).
+     // `R const`, not `R`: the walk below iterates `forest`, which is bound as
+     // `R const&`, so the const-qualified range's reference type is the one that
+     // has to be a reference. A range that yields references when mutable and
+     // prvalues when const would slip past the unqualified form.
+     static_assert(
+         std::is_reference_v<std::ranges::range_reference_t<R const>>,
+         "analyze_legality(): the forest range must yield references to nodes "
+         "that outlive the call (the value->node map keys on their addresses)");
+     std::unordered_map<std::size_t, Node const*> node_of;
+     {
+       // Iterative pre-order: the residual's Sum spine is as deep as the number
+       // of terms, so a recursive descent would overflow the call stack. Right
+       // child pushed before left, so the pop order is the recursion's.
+       std::vector<Node const*> stack;
+       for (auto const& tree : forest) {
+         stack.push_back(&tree);
+         while (!stack.empty()) {
+           Node const& n = *stack.back();
+           stack.pop_back();
+           node_of.emplace(value_key_of(n), &n);
+           if (!n.leaf()) {
+             stack.push_back(&n.right());
+             stack.push_back(&n.left());
+           }
+         }
+       }
+     }
+   
+     (void)policy;  // build-site now sourced from the DP decision, not the policy
+   
+     // The single classification round over every cell.
+     auto const build_cells = [&]() -> LegalitySchedule {
+       LegalitySchedule out;
+       out.cells.reserve(rich.cells.size());
+       for (ValueCell const& vc : rich.cells) {
+         CellLegality cl;
+         cl.hash = value_key_of(vc);
+   
+         // Every RichSchedule cell was produced by walking this same forest (see
+         // compute_dag_boulevard), so its hash must resolve here; a miss would
+         // silently leave contracted_below empty and misclassify the cell rather
+         // than surface the underlying bug.
+         auto const it = node_of.find(value_key_of(vc));
+         SEQUANT_ASSERT(it != node_of.end());
+         container::svector<Index> contracted_below;
+         for (Index const& ix : contracted_indices(*it->second))
+           contracted_below.push_back(ix);
+   
+         // Build-site axes come from the cost model's actual per-node decision,
+         // not policy.is_batchable_index() (what could be batched). Sourcing from
+         // the predicate made the ordered schedule loop over every batchable axis
+         // (e.g. aux whenever batch:aux_target_size>0) regardless of whether the
+         // peak-constrained optimizer sliced it -- always-on batching independent
+         // of peak_threshold, and over-scoping relative to the DP under a finite
+         // budget. A result (carried) axis is a build-site axis iff it slices this
+         // node's own result slots per the cross-occurrence meet (sliced_modes,
+         // which folds in the ancestor batch loops the value is variant to); a
+         // contracted-at-node axis iff the DP batched it here (a Contracted
+         // node_slice_mask stamp == the node's chosen aprime). With an infinite
+         // budget (or no batchable axis) the DP emits no stamps, so the site is
+         // empty and the schedule is flat -- identical to forest descent.
+         container::svector<Index> site;
+         auto const add_if_new = [&](Index const& ix) {
+           if (std::find(site.begin(), site.end(), ix) == site.end())
+             site.push_back(ix);
+         };
+         auto const& dp_sliced = sequant::home_scope(*it->second);
+         auto const& dp_stamps = (*it->second)->node_slice_mask();
+         // Positional: the representative node's home is labeled in its tree's
+         // frame, vc.carried in the first occurrence's; positions are canonical
+         // across occurrences ("Loop identity and value identity"), labels are
+         // not.
+         {
+           auto const& rep_carried = (*it->second)->canon_indices();
+           for (std::size_t p = 0; p < vc.carried.size() && p < rep_carried.size();
+                ++p)
+             if (std::find(dp_sliced.begin(), dp_sliced.end(), rep_carried[p]) !=
+                 dp_sliced.end())
+               add_if_new(vc.carried[p]);
+         }
+         for (Index const& ix : contracted_below)
+           if (std::any_of(dp_stamps.begin(), dp_stamps.end(), [&](auto const& p) {
+                 return p.second == BatchModeType::Contracted && p.first == ix;
+               }))
+             add_if_new(ix);
+   
+         for (Index const& axis : site) {
+           AxisClass ac;
+           ac.axis = axis;
+           ac.role = classify_axis(vc.carried, contracted_below, axis,
+                                   vc.occurrences, enclosing, &ac.per_occurrence);
+           cl.per_axis.push_back(std::move(ac));
+         }
+   
+         for (AxisClass const& ac : cl.per_axis) {
+           // home_floor: the LoopLocal subset of per_axis -- the axes the value
+           // stays sliced on (homed inside). Every other build-site axis
+           // (Reduction, LoopCarried) is lifted out, as is any axis outside
+           // build_site altogether (the implicit LoopInvariant case).
+           if (ac.role == LoopRole::LoopLocal) cl.home_floor.push_back(ac.axis);
+           // forced_split_axes: the LoopCarried subset. The value survives the
+           // axis into its own result, so its producing loop must close before
+           // any cross-iteration consumer -- the loop cannot stay a single
+           // unbroken pass around this value.
+           if (ac.role == LoopRole::LoopCarried)
+             cl.forced_split_axes.push_back(ac.axis);
+         }
+   
+         cl.build_site = std::move(site);
+         out.cells.push_back(std::move(cl));
+       }
+       return out;
+     };
+   
+     return build_cells();
+   }
+   
+   }  // namespace sequant::eval
+   
+   #endif  // SEQUANT_EVAL_LEGALITY_HPP

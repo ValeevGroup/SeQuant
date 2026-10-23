@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a410aa5d9a87f440a298d9ae44b106e4e:
+
+Function sequant::mbpt::add_pao_basis
+=====================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::add_pao_basis(std::shared_ptr<IndexBasisRegistry>&, IndexSpace::QuantumNumbers, const PAOBasisSpec&)
+   :project: SeQuant

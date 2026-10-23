@@ -1,0 +1,122 @@
+
+.. _file_SeQuant_core_io_serialization_v1_serialize.cpp:
+
+File serialize.cpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_io_serialization_v1>` (``SeQuant/core/io/serialization/v1``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/io/serialization/v1/serialize.cpp``)
+---------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_io_serialization_v1_serialize.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/complex.hpp`` (:ref:`file_SeQuant_core_complex.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/io/serialization/serialization.hpp`` (:ref:`file_SeQuant_core_io_serialization_serialization.hpp`)
+
+- ``SeQuant/core/op.hpp`` (:ref:`file_SeQuant_core_op.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``cstddef``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+- ``vector``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__io`
+
+- :ref:`namespace_sequant__io__serialization`
+
+- :ref:`namespace_sequant__io__serialization__v1`
+
+- :ref:`namespace_sequant__io__serialization__v1__detail`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1detail_1a013c1a49e3746cedfe568077d39c7e17`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1detail_1adfdb3fd5c29367033a5f75ee92fe5cba`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1detail_1ab480245a1977f37313c753790065bfab`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1detail_1a8d095de6a0b49d3ca850f339778c99b9`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1detail_1aa5416fce3e9138aab1fdfa67eaf37ffe`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1detail_1a0f37f62124fd5110a9287ce66eb3520d`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1detail_1ac9a15711f452186bfeb0b2b383fa84c1`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1detail_1ae179183abd91736fff431b9505b0fbd7`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1detail_1a90090b466a0b8a3903a4b572662cfbce`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1detail_1a46a83115827517219eeb380adfc48ede`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1detail_1a812276126c2369a3082592a06204f0f8`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1detail_1a7bb1220930eb4b5ee6d7a8b8b2f9513a`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a81633a58ff067a5283282cb97b279a2e`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a932079018da3e4fb50b2438a0b2e7e39`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a227a954de3036f84f82338cd7a158f07`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1adfdd953c42ae01494a75ad6abd75ae61`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a39e57ba2378387f545591d41191d286e`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1adb0d57475601cf4c07dd93a54c25324b`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1aae311d2a77759e329e25e889fcc5bd2e`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1aa8f1f9cf378817e5a7f1dfa2e5b1bb7c`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a67ac20ee2db4c0899846815b06ae69cd`
+

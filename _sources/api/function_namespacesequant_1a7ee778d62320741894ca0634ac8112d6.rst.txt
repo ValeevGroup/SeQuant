@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a7ee778d62320741894ca0634ac8112d6:
+
+Function sequant::to_string(const rational&)
+============================================
+
+- Defined in :ref:`file_SeQuant_core_rational.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_string(const rational&)
+   :project: SeQuant

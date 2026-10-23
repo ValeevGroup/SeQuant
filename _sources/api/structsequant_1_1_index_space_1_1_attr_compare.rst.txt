@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1_index_space_1_1_attr_compare:
+
+Struct IndexSpace::AttrCompare
+==============================
+
+- Defined in :ref:`file_SeQuant_core_space.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_index_space`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::IndexSpace::AttrCompare
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

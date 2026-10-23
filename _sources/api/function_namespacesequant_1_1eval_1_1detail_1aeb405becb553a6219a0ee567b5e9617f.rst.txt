@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1aeb405becb553a6219a0ee567b5e9617f:
+
+Function sequant::eval::detail::ordered_skip_closure
+====================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::ordered_skip_closure(CellTable const&, container::vector<char>)
+   :project: SeQuant

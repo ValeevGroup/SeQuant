@@ -1,0 +1,89 @@
+
+.. _file_SeQuant_core_expressions_expr.cpp:
+
+File expr.cpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_expressions>` (``SeQuant/core/expressions``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expressions/expr.cpp``)
+--------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expressions_expr.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/context.hpp`` (:ref:`file_SeQuant_core_context.hpp`)
+
+- ``SeQuant/core/expressions/constant.hpp`` (:ref:`file_SeQuant_core_expressions_constant.hpp`)
+
+- ``SeQuant/core/expressions/expr_algorithms.hpp`` (:ref:`file_SeQuant_core_expressions_expr_algorithms.hpp`)
+
+- ``SeQuant/core/expressions/expr_iterator.hpp`` (:ref:`file_SeQuant_core_expressions_expr_iterator.hpp`)
+
+- ``SeQuant/core/expressions/expr_ptr.hpp`` (:ref:`file_SeQuant_core_expressions_expr_ptr.hpp`)
+
+- ``SeQuant/core/expressions/product.hpp`` (:ref:`file_SeQuant_core_expressions_product.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/options.hpp`` (:ref:`file_SeQuant_core_options.hpp`)
+
+- ``SeQuant/core/tree_index.hpp`` (:ref:`file_SeQuant_core_tree_index.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``atomic`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+- ``boost/core/demangle.hpp``
+
+- ``cstdint``
+
+- ``cstring``
+
+- ``map`` (:ref:`file_SeQuant_core_eval_value_node_map.hpp`)
+
+- ``mutex``
+
+- ``optional``
+
+- ``sstream``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``typeindex``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+

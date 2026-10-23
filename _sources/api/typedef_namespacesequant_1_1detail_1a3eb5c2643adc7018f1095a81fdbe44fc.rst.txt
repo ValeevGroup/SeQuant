@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1detail_1a3eb5c2643adc7018f1095a81fdbe44fc:
+
+Typedef sequant::detail::ImplicitContextOverlays
+================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_context.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::detail::ImplicitContextOverlays
+   :project: SeQuant

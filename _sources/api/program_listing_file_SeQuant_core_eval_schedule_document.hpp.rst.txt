@@ -1,0 +1,220 @@
+
+.. _program_listing_file_SeQuant_core_eval_schedule_document.hpp:
+
+Program Listing for File schedule_document.hpp
+==============================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_schedule_document.hpp>` (``SeQuant/core/eval/schedule_document.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Plain data types of the JSON "schedule document": the reproducible record of
+   // a batched-evaluation schedule (fingerprint, per-term tree shapes and node
+   // annotations, the value/block DAG and an optional run section), plus its
+   // reader, writer, shape validation and a structural comparison.
+   //
+   
+   #ifndef SEQUANT_EVAL_SCHEDULE_DOCUMENT_HPP
+   #define SEQUANT_EVAL_SCHEDULE_DOCUMENT_HPP
+   
+   #include <cstddef>
+   #include <iosfwd>
+   #include <map>
+   #include <memory>
+   #include <optional>
+   #include <string>
+   #include <string_view>
+   #include <tuple>
+   #include <utility>
+   #include <vector>
+   
+   namespace sequant {
+   class Index;
+   }  // namespace sequant
+   
+   namespace sequant::eval::schedule {
+   
+   std::string index_label(Index const& index);
+   
+   inline constexpr char const* kFormat = "sequant.schedule/1";
+   
+   enum class ModeKind { Contracted, External };
+   
+   struct AxisRecord {
+     std::string label;
+     ModeKind kind;
+   };
+   
+   struct NodeAnnotationRecord {
+     std::vector<AxisRecord> axes, opened_here;
+     bool order_aware = false;
+   };
+   
+   struct TreeShape {
+     std::optional<std::size_t> leaf;
+     std::unique_ptr<TreeShape> left, right;
+   
+     TreeShape() = default;
+     TreeShape(std::size_t ordinal) : leaf(ordinal) {}
+     TreeShape(TreeShape const& other)
+         : leaf(other.leaf),
+           left(other.left ? std::make_unique<TreeShape>(*other.left) : nullptr),
+           right(other.right ? std::make_unique<TreeShape>(*other.right)
+                             : nullptr) {}
+     TreeShape(TreeShape&&) noexcept = default;
+     TreeShape& operator=(TreeShape const& other) {
+       if (this != &other) {
+         TreeShape tmp(other);
+         *this = std::move(tmp);
+       }
+       return *this;
+     }
+     TreeShape& operator=(TreeShape&&) noexcept = default;
+   };
+   
+   std::optional<std::string> leaf_permutation_error(TreeShape const& tree,
+                                                     std::size_t nfactors);
+   
+   struct TermRecord {
+     std::string key;
+     std::vector<std::string> factors;
+     std::string scalar;
+     std::optional<TreeShape> tree;  // nullopt = pure scalar term, or !pinnable
+     std::vector<NodeAnnotationRecord> nodes;
+     bool pinnable = true;
+   };
+   
+   struct RootRecord {
+     std::string label;
+     std::vector<TermRecord> terms;
+   };
+   
+   struct ContextRecord {
+     std::string vacuum, spbasis;
+     bool strict_braket_symmetry = false;
+     std::vector<std::string> cardinal_tensor_labels;
+     std::string canonicalization_method;
+     bool ignore_named_index_labels = false;
+   };
+   
+   struct Fingerprint {
+     std::vector<std::string> roots;
+     std::map<std::string, std::pair<bool, bool>> batchable;
+     std::vector<std::string> volatile_leaves;
+     bool persistent_only = false, batch_spectator_indices = false;
+     double accumulation_factor = 1;
+     std::string scheduler, objective_function, reorder;
+     std::map<std::string, std::string> cse;  // CSEOptions fields as strings
+     std::vector<std::string> mode_order;
+     ContextRecord context;
+   };
+   
+   struct PerAxisRecord {
+     std::string mode;
+     std::string role;
+   };
+   
+   struct OccurrenceRecord {
+     std::string term;
+     std::size_t node = 0;
+     std::optional<std::size_t> consumer;
+     std::vector<std::string> home, enclosing;
+     std::vector<AxisRecord> opens;
+     std::vector<PerAxisRecord> roles;
+   };
+   
+   struct ValueRecord {
+     std::string id;
+     std::string name;
+     std::string expr;
+     std::string hash, key;
+     bool leaf = false;
+     std::vector<std::string> result_modes, home_modes, enclosing_modes,
+         divergent_modes;
+     std::size_t home_block = 0;
+     int home_depth = 0;
+     bool persistent = false;
+     std::size_t first_use = 0, last_use = 0;
+     std::vector<std::string> build_site, home_floor, forced_split_axes;
+     std::vector<PerAxisRecord> per_axis;
+     std::vector<OccurrenceRecord> occurrences;
+     std::vector<std::string> siblings;
+   };
+   
+   struct StepRecord {
+     std::optional<std::string> build;
+     std::optional<std::size_t> block;
+   };
+   
+   struct BlockRecord {
+     std::size_t id = 0;
+     std::optional<std::size_t> parent;
+     std::optional<std::string> axis;
+     std::string kind;  // "root" | "contracted" | "external"
+     std::size_t depth = 0;
+     int slot = 0, altitude = 0, pass = 0;
+     std::vector<StepRecord> steps;
+     std::vector<std::pair<std::string, std::string>> outputs;
+   };
+   
+   struct LoopRecord {
+     std::string space;
+     std::size_t depth = 0;
+     std::string kind;
+   };
+   
+   struct EdgeRecord {
+     std::string from, to;
+     bool sliced = false;
+   };
+   
+   struct DagRecord {
+     std::vector<ValueRecord> values;
+     std::vector<BlockRecord> blocks;
+     std::vector<LoopRecord> loops;
+     std::vector<std::tuple<LoopRecord, LoopRecord, std::size_t>> loop_order;
+     std::vector<EdgeRecord> edges;
+   };
+   
+   struct RunRecord {
+     std::map<std::string, std::size_t> extents, batch_targets;  // by space
+     std::map<std::size_t, std::size_t> n_batches;  // block id -> count
+     std::map<std::string, std::size_t> footprint;
+     std::map<std::string, std::size_t> size;
+     std::map<std::string, std::size_t> builds;  // value id -> build count
+     std::map<std::string, std::string> planner;
+   };
+   
+   struct Document {
+     std::string producer_version, producer_date;
+     Fingerprint fingerprint;
+     std::vector<RootRecord> roots;
+     std::optional<DagRecord> dag;
+     std::optional<RunRecord> run;
+   };
+   
+   std::string to_json(Document const&);
+   void write(Document const&, std::ostream&);
+   
+   Document from_json(std::string_view);
+   Document read(std::istream&);
+   
+   RunRecord run_from_json(std::string_view);
+   std::string to_json(RunRecord const&);
+   
+   std::string escape_for_html_script(std::string_view json);
+   
+   struct Difference {
+     std::string path, left, right;
+   };
+   
+   std::vector<Difference> compare(Document const& a, Document const& b);
+   
+   std::string summary_line(Document const&);
+   
+   }  // namespace sequant::eval::schedule
+   
+   #endif  // SEQUANT_EVAL_SCHEDULE_DOCUMENT_HPP

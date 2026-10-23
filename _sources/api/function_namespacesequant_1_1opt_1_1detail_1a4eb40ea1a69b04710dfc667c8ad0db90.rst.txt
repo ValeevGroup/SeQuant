@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a4eb40ea1a69b04710dfc667c8ad0db90:
+
+Template Function sequant::opt::detail::outer_extent
+====================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term_detail.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::outer_extent(Ixex const&, Index const&)
+   :project: SeQuant

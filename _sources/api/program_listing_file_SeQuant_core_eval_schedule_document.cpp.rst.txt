@@ -1,0 +1,1060 @@
+
+.. _program_listing_file_SeQuant_core_eval_schedule_document.cpp:
+
+Program Listing for File schedule_document.cpp
+==============================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_schedule_document.cpp>` (``SeQuant/core/eval/schedule_document.cpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #include <SeQuant/core/eval/schedule_document.hpp>
+   
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/io/serialization/serialization.hpp>
+   #include <SeQuant/core/utility/exception.hpp>
+   #include <SeQuant/core/utility/string.hpp>
+   
+   #include <nlohmann/json.hpp>
+   
+   #include <algorithm>
+   #include <charconv>
+   #include <cstdint>
+   #include <initializer_list>
+   #include <istream>
+   #include <iterator>
+   #include <limits>
+   #include <ostream>
+   #include <set>
+   #include <sstream>
+   
+   namespace sequant::eval::schedule {
+   
+   std::string index_label(Index const& index) {
+     return toUtf8(io::serialization::v1::to_string(index));
+   }
+   
+   namespace {
+   
+   using json = nlohmann::ordered_json;
+   
+   [[noreturn]] void fail(std::string const& where, std::string const& what) {
+     throw Exception("schedule document: " + where + ": " + what);
+   }
+   
+   // A role is one of the names record_dag writes (detail::role_name).
+   void check_role(std::string const& role,
+                   std::initializer_list<char const*> allowed,
+                   std::string const& where) {
+     for (char const* a : allowed)
+       if (role == a) return;
+     fail(where, "unknown role \"" + role + "\"");
+   }
+   
+   // ---------------------------------------------------------------- writing
+   
+   template <typename T>
+   json to_j(T const& x);
+   
+   template <typename T>
+   json vec_j(std::vector<T> const& v) {
+     json a = json::array();
+     for (auto const& x : v) a.push_back(to_j(x));
+     return a;
+   }
+   
+   json strs_j(std::vector<std::string> const& v) {
+     json a = json::array();
+     for (auto const& x : v) a.push_back(x);
+     return a;
+   }
+   
+   template <typename T>
+   json opt_j(std::optional<T> const& o) {
+     return o ? json(*o) : json(nullptr);
+   }
+   
+   json mode_kind_j(ModeKind k) {
+     return k == ModeKind::Contracted ? "contracted" : "external";
+   }
+   
+   json tree_j(TreeShape const& t) {
+     if (t.leaf) return *t.leaf;
+     json a = json::array();
+     a.push_back(tree_j(*t.left));
+     a.push_back(tree_j(*t.right));
+     return a;
+   }
+   
+   template <>
+   json to_j(AxisRecord const& a) {
+     json j;
+     j["label"] = a.label;
+     j["kind"] = mode_kind_j(a.kind);
+     return j;
+   }
+   
+   template <>
+   json to_j(NodeAnnotationRecord const& n) {
+     json j;
+     j["axes"] = vec_j(n.axes);
+     j["opened_here"] = vec_j(n.opened_here);
+     j["order_aware"] = n.order_aware;
+     return j;
+   }
+   
+   template <>
+   json to_j(TermRecord const& t) {
+     json j;
+     j["key"] = t.key;
+     j["factors"] = strs_j(t.factors);
+     j["scalar"] = t.scalar;
+     j["tree"] = t.tree ? tree_j(*t.tree) : json(nullptr);
+     j["nodes"] = vec_j(t.nodes);
+     j["pinnable"] = t.pinnable;
+     return j;
+   }
+   
+   template <>
+   json to_j(RootRecord const& r) {
+     json j;
+     j["label"] = r.label;
+     j["terms"] = vec_j(r.terms);
+     return j;
+   }
+   
+   template <>
+   json to_j(ContextRecord const& c) {
+     json j;
+     j["vacuum"] = c.vacuum;
+     j["spbasis"] = c.spbasis;
+     j["strict_braket_symmetry"] = c.strict_braket_symmetry;
+     j["cardinal_tensor_labels"] = strs_j(c.cardinal_tensor_labels);
+     j["canonicalization_method"] = c.canonicalization_method;
+     j["ignore_named_index_labels"] = c.ignore_named_index_labels;
+     return j;
+   }
+   
+   json batchable_j(std::map<std::string, std::pair<bool, bool>> const& m) {
+     json o = json::object();
+     for (auto const& [k, v] : m) o[k] = json::array({v.first, v.second});
+     return o;
+   }
+   
+   json strmap_j(std::map<std::string, std::string> const& m) {
+     json o = json::object();
+     for (auto const& [k, v] : m) o[k] = v;
+     return o;
+   }
+   
+   json sizemap_j(std::map<std::string, std::size_t> const& m) {
+     json o = json::object();
+     for (auto const& [k, v] : m) o[k] = v;
+     return o;
+   }
+   
+   template <>
+   json to_j(Fingerprint const& f) {
+     json j;
+     j["roots"] = strs_j(f.roots);
+     j["batchable"] = batchable_j(f.batchable);
+     j["volatile_leaves"] = strs_j(f.volatile_leaves);
+     j["persistent_only"] = f.persistent_only;
+     j["batch_spectator_indices"] = f.batch_spectator_indices;
+     j["accumulation_factor"] = f.accumulation_factor;
+     j["scheduler"] = f.scheduler;
+     j["objective_function"] = f.objective_function;
+     j["reorder"] = f.reorder;
+     j["cse"] = strmap_j(f.cse);
+     j["mode_order"] = strs_j(f.mode_order);
+     j["context"] = to_j(f.context);
+     return j;
+   }
+   
+   template <>
+   json to_j(PerAxisRecord const& p) {
+     json j;
+     j["mode"] = p.mode;
+     j["role"] = p.role;
+     return j;
+   }
+   
+   template <>
+   json to_j(OccurrenceRecord const& o) {
+     json j;
+     j["term"] = o.term;
+     j["node"] = o.node;
+     j["consumer"] = opt_j(o.consumer);
+     j["home"] = strs_j(o.home);
+     j["enclosing"] = strs_j(o.enclosing);
+     j["opens"] = vec_j(o.opens);
+     j["roles"] = vec_j(o.roles);
+     return j;
+   }
+   
+   template <>
+   json to_j(ValueRecord const& v) {
+     json j;
+     j["id"] = v.id;
+     j["name"] = v.name;
+     j["expr"] = v.expr;
+     j["hash"] = v.hash;
+     j["key"] = v.key;
+     j["leaf"] = v.leaf;
+     j["result_modes"] = strs_j(v.result_modes);
+     j["home_modes"] = strs_j(v.home_modes);
+     j["enclosing_modes"] = strs_j(v.enclosing_modes);
+     j["divergent_modes"] = strs_j(v.divergent_modes);
+     j["home_block"] = v.home_block;
+     j["home_depth"] = v.home_depth;
+     j["persistent"] = v.persistent;
+     j["first_use"] = v.first_use;
+     j["last_use"] = v.last_use;
+     j["build_site"] = strs_j(v.build_site);
+     j["home_floor"] = strs_j(v.home_floor);
+     j["forced_split_axes"] = strs_j(v.forced_split_axes);
+     j["per_axis"] = vec_j(v.per_axis);
+     j["occurrences"] = vec_j(v.occurrences);
+     j["siblings"] = strs_j(v.siblings);
+     return j;
+   }
+   
+   template <>
+   json to_j(StepRecord const& s) {
+     json j;
+     j["build"] = opt_j(s.build);
+     j["block"] = opt_j(s.block);
+     return j;
+   }
+   
+   template <>
+   json to_j(BlockRecord const& b) {
+     json j;
+     j["id"] = b.id;
+     j["parent"] = opt_j(b.parent);
+     j["axis"] = opt_j(b.axis);
+     j["kind"] = b.kind;
+     j["depth"] = b.depth;
+     j["slot"] = b.slot;
+     j["altitude"] = b.altitude;
+     j["pass"] = b.pass;
+     j["steps"] = vec_j(b.steps);
+     json outs = json::array();
+     for (auto const& [id, kind] : b.outputs)
+       outs.push_back(json::array({id, kind}));
+     j["outputs"] = std::move(outs);
+     return j;
+   }
+   
+   template <>
+   json to_j(LoopRecord const& l) {
+     json j;
+     j["space"] = l.space;
+     j["depth"] = l.depth;
+     j["kind"] = l.kind;
+     return j;
+   }
+   
+   template <>
+   json to_j(EdgeRecord const& e) {
+     json j;
+     j["from"] = e.from;
+     j["to"] = e.to;
+     j["sliced"] = e.sliced;
+     return j;
+   }
+   
+   json loop_order_item_j(
+       std::tuple<LoopRecord, LoopRecord, std::size_t> const& t) {
+     return json::array(
+         {to_j(std::get<0>(t)), to_j(std::get<1>(t)), std::get<2>(t)});
+   }
+   
+   template <>
+   json to_j(DagRecord const& d) {
+     json j;
+     j["values"] = vec_j(d.values);
+     j["blocks"] = vec_j(d.blocks);
+     j["loops"] = vec_j(d.loops);
+     json lo = json::array();
+     for (auto const& t : d.loop_order) lo.push_back(loop_order_item_j(t));
+     j["loop_order"] = std::move(lo);
+     j["edges"] = vec_j(d.edges);
+     return j;
+   }
+   
+   template <>
+   json to_j(RunRecord const& r) {
+     json j;
+     j["extents"] = sizemap_j(r.extents);
+     j["batch_targets"] = sizemap_j(r.batch_targets);
+     json nb = json::object();
+     for (auto const& [k, v] : r.n_batches) nb[std::to_string(k)] = v;
+     j["n_batches"] = std::move(nb);
+     j["footprint"] = sizemap_j(r.footprint);
+     j["size"] = sizemap_j(r.size);
+     j["builds"] = sizemap_j(r.builds);
+     j["planner"] = strmap_j(r.planner);
+     return j;
+   }
+   
+   json document_j(Document const& d) {
+     json j;
+     j["format"] = kFormat;
+     j["producer_version"] = d.producer_version;
+     j["producer_date"] = d.producer_date;
+     j["fingerprint"] = to_j(d.fingerprint);
+     j["roots"] = vec_j(d.roots);
+     if (d.dag) j["dag"] = to_j(*d.dag);
+     if (d.run) j["run"] = to_j(*d.run);
+     return j;
+   }
+   
+   // ---------------------------------------------------------------- reading
+   
+   json const& need(json const& j, char const* key, std::string const& where) {
+     if (!j.is_object()) fail(where, "expected an object");
+     auto it = j.find(key);
+     if (it == j.end()) fail(where, std::string("missing key '") + key + "'");
+     return *it;
+   }
+   
+   std::string get_str(json const& j, char const* key, std::string const& where) {
+     auto const& v = need(j, key, where);
+     if (!v.is_string())
+       fail(where, std::string("'") + key + "' must be a string");
+     return v.get<std::string>();
+   }
+   
+   bool get_bool(json const& j, char const* key, std::string const& where) {
+     auto const& v = need(j, key, where);
+     if (!v.is_boolean())
+       fail(where, std::string("'") + key + "' must be a boolean");
+     return v.get<bool>();
+   }
+   
+   std::size_t as_size(json const& v, std::string const& what,
+                       std::string const& where) {
+     if (!v.is_number_unsigned())
+       fail(where, what + " must be a non-negative integer");
+     return v.get<std::size_t>();
+   }
+   
+   std::size_t get_size(json const& j, char const* key, std::string const& where) {
+     return as_size(need(j, key, where), std::string("'") + key + "'", where);
+   }
+   
+   int get_int(json const& j, char const* key, std::string const& where) {
+     auto const& v = need(j, key, where);
+     if (!v.is_number_integer())
+       fail(where, std::string("'") + key + "' must be an integer");
+     bool fits = false;
+     if (v.is_number_unsigned()) {
+       fits = v.get<std::uint64_t>() <=
+              static_cast<std::uint64_t>(std::numeric_limits<int>::max());
+     } else {
+       auto const n = v.get<std::int64_t>();
+       fits = n >= std::numeric_limits<int>::min() &&
+              n <= std::numeric_limits<int>::max();
+     }
+     if (!fits) fail(where, std::string("'") + key + "' does not fit an int");
+     return v.get<int>();
+   }
+   
+   json const& get_arr(json const& j, char const* key, std::string const& where) {
+     auto const& v = need(j, key, where);
+     if (!v.is_array()) fail(where, std::string("'") + key + "' must be an array");
+     return v;
+   }
+   
+   json const& get_obj(json const& j, char const* key, std::string const& where) {
+     auto const& v = need(j, key, where);
+     if (!v.is_object())
+       fail(where, std::string("'") + key + "' must be an object");
+     return v;
+   }
+   
+   std::vector<std::string> get_strs(json const& j, char const* key,
+                                     std::string const& where) {
+     std::vector<std::string> r;
+     for (auto const& e : get_arr(j, key, where)) {
+       if (!e.is_string())
+         fail(where, std::string("'") + key + "' must hold strings");
+       r.push_back(e.get<std::string>());
+     }
+     return r;
+   }
+   
+   std::optional<std::size_t> get_opt_size(json const& j, char const* key,
+                                           std::string const& where) {
+     auto const& v = need(j, key, where);
+     if (v.is_null()) return std::nullopt;
+     return as_size(v, std::string("'") + key + "'", where);
+   }
+   
+   std::optional<std::string> get_opt_str(json const& j, char const* key,
+                                          std::string const& where) {
+     auto const& v = need(j, key, where);
+     if (v.is_null()) return std::nullopt;
+     if (!v.is_string())
+       fail(where, std::string("'") + key + "' must be a string");
+     return v.get<std::string>();
+   }
+   
+   ModeKind get_kind(json const& j, std::string const& where) {
+     auto const s = get_str(j, "kind", where);
+     if (s == "contracted") return ModeKind::Contracted;
+     if (s == "external") return ModeKind::External;
+     fail(where, "unknown mode kind '" + s + "'");
+   }
+   
+   AxisRecord axis_r(json const& j, std::string const& where) {
+     return {get_str(j, "label", where), get_kind(j, where)};
+   }
+   
+   std::vector<AxisRecord> axes_r(json const& j, char const* key,
+                                  std::string const& where) {
+     std::vector<AxisRecord> r;
+     for (auto const& e : get_arr(j, key, where)) r.push_back(axis_r(e, where));
+     return r;
+   }
+   
+   TreeShape tree_r(json const& j, std::string const& where) {
+     TreeShape t;
+     if (j.is_number_unsigned()) {
+       t.leaf = j.get<std::size_t>();
+     } else if (j.is_array() && j.size() == 2) {
+       t.left = std::make_unique<TreeShape>(tree_r(j[0], where));
+       t.right = std::make_unique<TreeShape>(tree_r(j[1], where));
+     } else {
+       fail(where, "tree node must be an ordinal or a two-element array");
+     }
+     return t;
+   }
+   
+   // Adds to `out` the index labels in `text`, a comma/semicolon-separated list
+   // of V1 index spellings, and (recursively) the proto indices of each. The
+   // labels are taken from the text rather than from Index objects because the
+   // reader must work without the registry the document was produced with
+   // (`sequant-schedule validate` has none); the set matches what
+   // rebuild_pinned_term collects from the rebuilt factors (schedule_pin.cpp,
+   // for_each_index): every slot index and every proto index, each spelled by
+   // index_label.
+   void add_index_labels(std::string_view text, std::set<std::string>& out) {
+     auto const trimmed = [](std::string_view s) {
+       auto const b = s.find_first_not_of(' ');
+       if (b == std::string_view::npos) return std::string_view{};
+       return s.substr(b, s.find_last_not_of(' ') - b + 1);
+     };
+     auto const add = [&](std::string_view tok) {
+       tok = trimmed(tok);
+       if (tok.empty()) return;
+       out.emplace(tok);
+       auto const lt = tok.find('<');
+       if (lt != std::string_view::npos && tok.back() == '>') {
+         // "<protos>", "<protos;N>" or "<;N>": N is a basis instance, not an
+         // index, so the recursion stops at the top-level ';'
+         auto inner = tok.substr(lt + 1, tok.size() - lt - 2);
+         int nest = 0;
+         for (std::size_t k = 0; k < inner.size(); ++k) {
+           if (inner[k] == '<')
+             ++nest;
+           else if (inner[k] == '>')
+             --nest;
+           else if (inner[k] == ';' && nest == 0) {
+             inner = inner.substr(0, k);
+             break;
+           }
+         }
+         add_index_labels(inner, out);
+       }
+     };
+     int depth = 0;
+     std::size_t start = 0;
+     for (std::size_t k = 0; k < text.size(); ++k) {
+       char const c = text[k];
+       if (c == '<')
+         ++depth;
+       else if (c == '>')
+         --depth;
+       else if (depth == 0 && (c == ',' || c == ';')) {
+         add(text.substr(start, k - start));
+         start = k + 1;
+       }
+     }
+     add(text.substr(start));
+   }
+   
+   // the index labels of a factor string "<label>{<bra>;<ket>;<aux>}[:<symm>]",
+   // proto indices included
+   std::set<std::string> factor_index_labels(std::string const& factor) {
+     std::set<std::string> out;
+     auto const open = factor.find('{');
+     if (open == std::string::npos) return out;
+     int depth = 0;
+     for (std::size_t k = open + 1; k < factor.size(); ++k) {
+       char const c = factor[k];
+       if (c == '<')
+         ++depth;
+       else if (c == '>')
+         --depth;
+       else if (c == '}' && depth == 0) {
+         add_index_labels(std::string_view{factor}.substr(open + 1, k - open - 1),
+                          out);
+         break;
+       }
+     }
+     return out;
+   }
+   
+   // validates ordinals and axis labels of `t`, consuming node annotations in
+   // left-first post-order; returns the factor ordinals under `t`
+   std::vector<std::size_t> check_tree(TreeShape const& t, TermRecord const& term,
+                                       std::size_t& next_node) {
+     if (t.leaf) {
+       if (*t.leaf >= term.factors.size())
+         fail(term.key, "tree ordinal " + std::to_string(*t.leaf) +
+                            " out of range (factors: " +
+                            std::to_string(term.factors.size()) + ")");
+       return {*t.leaf};
+     }
+     auto ords = check_tree(*t.left, term, next_node);
+     auto const r = check_tree(*t.right, term, next_node);
+     ords.insert(ords.end(), r.begin(), r.end());
+     auto const n = next_node++;
+     if (n < term.nodes.size()) {
+       auto const& node = term.nodes[n];
+       std::set<std::string> labels;
+       for (auto o : ords) labels.merge(factor_index_labels(term.factors[o]));
+       auto const check = [&](std::vector<AxisRecord> const& axes,
+                              char const* what) {
+         for (auto const& a : axes) {
+           if (!labels.contains(a.label))
+             fail(term.key, "nodes[" + std::to_string(n) + "]." + what +
+                                " label '" + a.label +
+                                "' does not occur in the node's factors");
+         }
+       };
+       check(node.axes, "axes");
+       check(node.opened_here, "opened_here");
+     }
+     return ords;
+   }
+   
+   TermRecord term_r(json const& j, std::string const& where) {
+     TermRecord t;
+     t.key = get_str(j, "key", where);
+     t.factors = get_strs(j, "factors", t.key);
+     t.scalar = get_str(j, "scalar", t.key);
+     auto const& tj = need(j, "tree", t.key);
+     if (!tj.is_null()) t.tree = tree_r(tj, t.key);
+     for (auto const& n : get_arr(j, "nodes", t.key)) {
+       NodeAnnotationRecord r;
+       r.axes = axes_r(n, "axes", t.key);
+       r.opened_here = axes_r(n, "opened_here", t.key);
+       r.order_aware = get_bool(n, "order_aware", t.key);
+       t.nodes.push_back(std::move(r));
+     }
+     // absent = pinnable, so documents written before the key read as before
+     if (auto const it = j.find("pinnable"); it != j.end()) {
+       if (!it->is_boolean()) fail(t.key, "'pinnable' must be a boolean");
+       t.pinnable = it->get<bool>();
+     }
+     if (!t.pinnable && (t.tree || !t.nodes.empty()))
+       fail(t.key, "a term that is not pinnable has no tree and no nodes");
+     std::size_t inner = 0;
+     if (t.tree) {
+       if (auto const err = leaf_permutation_error(*t.tree, t.factors.size()))
+         fail(t.key, *err);
+       check_tree(*t.tree, t, inner);
+     }
+     // a tree-only record (non-batched objective) has no node annotations
+     if (!t.nodes.empty() && inner != t.nodes.size())
+       fail(t.key, "nodes has " + std::to_string(t.nodes.size()) +
+                       " entries but the tree has " + std::to_string(inner) +
+                       " inner nodes");
+     return t;
+   }
+   
+   ContextRecord context_r(json const& j, std::string const& where) {
+     ContextRecord c;
+     c.vacuum = get_str(j, "vacuum", where);
+     c.spbasis = get_str(j, "spbasis", where);
+     c.strict_braket_symmetry = get_bool(j, "strict_braket_symmetry", where);
+     c.cardinal_tensor_labels = get_strs(j, "cardinal_tensor_labels", where);
+     c.canonicalization_method = get_str(j, "canonicalization_method", where);
+     c.ignore_named_index_labels = get_bool(j, "ignore_named_index_labels", where);
+     return c;
+   }
+   
+   std::map<std::string, std::size_t> sizemap_r(json const& j, char const* key,
+                                                std::string const& where) {
+     std::map<std::string, std::size_t> m;
+     for (auto const& [k, v] : get_obj(j, key, where).items())
+       m[k] = as_size(v, "'" + k + "'", where);
+     return m;
+   }
+   
+   std::map<std::string, std::string> strmap_r(json const& j, char const* key,
+                                               std::string const& where) {
+     std::map<std::string, std::string> m;
+     for (auto const& [k, v] : get_obj(j, key, where).items()) {
+       if (!v.is_string()) fail(where, "'" + k + "' must be a string");
+       m[k] = v.get<std::string>();
+     }
+     return m;
+   }
+   
+   Fingerprint fingerprint_r(json const& j) {
+     std::string const w = "fingerprint";
+     Fingerprint f;
+     f.roots = get_strs(j, "roots", w);
+     for (auto const& [k, v] : get_obj(j, "batchable", w).items()) {
+       if (!v.is_array() || v.size() != 2 || !v[0].is_boolean() ||
+           !v[1].is_boolean())
+         fail(w, "batchable['" + k + "'] must be [bool, bool]");
+       f.batchable[k] = {v[0].get<bool>(), v[1].get<bool>()};
+     }
+     f.volatile_leaves = get_strs(j, "volatile_leaves", w);
+     f.persistent_only = get_bool(j, "persistent_only", w);
+     f.batch_spectator_indices = get_bool(j, "batch_spectator_indices", w);
+     auto const& af = need(j, "accumulation_factor", w);
+     if (!af.is_number()) fail(w, "'accumulation_factor' must be a number");
+     f.accumulation_factor = af.get<double>();
+     f.scheduler = get_str(j, "scheduler", w);
+     f.objective_function = get_str(j, "objective_function", w);
+     f.reorder = get_str(j, "reorder", w);
+     f.cse = strmap_r(j, "cse", w);
+     f.mode_order = get_strs(j, "mode_order", w);
+     f.context = context_r(need(j, "context", w), w + ".context");
+     return f;
+   }
+   
+   LoopRecord loop_r(json const& j, std::string const& where) {
+     return {get_str(j, "space", where), get_size(j, "depth", where),
+             get_str(j, "kind", where)};
+   }
+   
+   ValueRecord value_r(json const& j) {
+     ValueRecord v;
+     v.id = get_str(j, "id", "dag.values");
+     std::string const w = "dag.values[" + v.id + "]";
+     v.name = get_str(j, "name", w);
+     v.expr = get_str(j, "expr", w);
+     v.hash = get_str(j, "hash", w);
+     v.key = get_str(j, "key", w);
+     v.leaf = get_bool(j, "leaf", w);
+     v.result_modes = get_strs(j, "result_modes", w);
+     v.home_modes = get_strs(j, "home_modes", w);
+     v.enclosing_modes = get_strs(j, "enclosing_modes", w);
+     v.divergent_modes = get_strs(j, "divergent_modes", w);
+     v.home_block = get_size(j, "home_block", w);
+     v.home_depth = get_int(j, "home_depth", w);
+     v.persistent = get_bool(j, "persistent", w);
+     v.first_use = get_size(j, "first_use", w);
+     v.last_use = get_size(j, "last_use", w);
+     v.build_site = get_strs(j, "build_site", w);
+     v.home_floor = get_strs(j, "home_floor", w);
+     v.forced_split_axes = get_strs(j, "forced_split_axes", w);
+     for (auto const& p : get_arr(j, "per_axis", w)) {
+       std::string role = get_str(p, "role", w);
+       check_role(role, {"LoopLocal", "Reduction", "LoopCarried", "LoopInvariant"},
+                  w + ".per_axis");
+       v.per_axis.push_back({get_str(p, "mode", w), std::move(role)});
+     }
+     for (auto const& o : get_arr(j, "occurrences", w)) {
+       OccurrenceRecord r;
+       r.term = get_str(o, "term", w);
+       r.node = get_size(o, "node", w);
+       r.consumer = get_opt_size(o, "consumer", w);
+       r.home = get_strs(o, "home", w);
+       r.enclosing = get_strs(o, "enclosing", w);
+       r.opens = axes_r(o, "opens", w);
+       // absent in documents written before the per-occurrence roles existed
+       if (o.contains("roles"))
+         for (auto const& p : get_arr(o, "roles", w)) {
+           std::string role = get_str(p, "role", w);
+           check_role(role, {"Lockstep", "Assembled"}, w + ".occurrences.roles");
+           r.roles.push_back({get_str(p, "mode", w), std::move(role)});
+         }
+       v.occurrences.push_back(std::move(r));
+     }
+     v.siblings = get_strs(j, "siblings", w);
+     return v;
+   }
+   
+   BlockRecord block_r(json const& j) {
+     std::string const w = "dag.blocks";
+     BlockRecord b;
+     b.id = get_size(j, "id", w);
+     std::string const bw = w + "[" + std::to_string(b.id) + "]";
+     b.parent = get_opt_size(j, "parent", bw);
+     b.axis = get_opt_str(j, "axis", bw);
+     b.kind = get_str(j, "kind", bw);
+     b.depth = get_size(j, "depth", bw);
+     b.slot = get_int(j, "slot", bw);
+     b.altitude = get_int(j, "altitude", bw);
+     b.pass = get_int(j, "pass", bw);
+     for (auto const& s : get_arr(j, "steps", bw))
+       b.steps.push_back(
+           {get_opt_str(s, "build", bw), get_opt_size(s, "block", bw)});
+     for (auto const& o : get_arr(j, "outputs", bw)) {
+       if (!o.is_array() || o.size() != 2 || !o[0].is_string() ||
+           !o[1].is_string())
+         fail(bw, "outputs entries must be [value id, kind]");
+       b.outputs.emplace_back(o[0].get<std::string>(), o[1].get<std::string>());
+     }
+     return b;
+   }
+   
+   DagRecord dag_r(json const& j) {
+     std::string const w = "dag";
+     DagRecord d;
+     for (auto const& v : get_arr(j, "values", w)) d.values.push_back(value_r(v));
+     for (auto const& b : get_arr(j, "blocks", w)) d.blocks.push_back(block_r(b));
+     for (auto const& l : get_arr(j, "loops", w)) d.loops.push_back(loop_r(l, w));
+     for (auto const& t : get_arr(j, "loop_order", w)) {
+       if (!t.is_array() || t.size() != 3)
+         fail(w, "loop_order entries must be [loop, loop, count]");
+       d.loop_order.emplace_back(loop_r(t[0], w), loop_r(t[1], w),
+                                 as_size(t[2], "loop_order count", w));
+     }
+     for (auto const& e : get_arr(j, "edges", w))
+       d.edges.push_back(
+           {get_str(e, "from", w), get_str(e, "to", w), get_bool(e, "sliced", w)});
+     return d;
+   }
+   
+   RunRecord run_r(json const& j) {
+     std::string const w = "run";
+     RunRecord r;
+     r.extents = sizemap_r(j, "extents", w);
+     r.batch_targets = sizemap_r(j, "batch_targets", w);
+     for (auto const& [k, v] : get_obj(j, "n_batches", w).items()) {
+       // the whole key must be a decimal block id: no sign, space or suffix
+       std::size_t key = 0;
+       auto const [end, ec] = std::from_chars(k.data(), k.data() + k.size(), key);
+       if (k.empty() || ec != std::errc{} || end != k.data() + k.size())
+         fail(w, "n_batches key '" + k + "' is not a block id");
+       r.n_batches[key] = as_size(v, "'" + k + "'", w);
+     }
+     r.footprint = sizemap_r(j, "footprint", w);
+     // absent in run files written before the key
+     if (j.contains("size")) r.size = sizemap_r(j, "size", w);
+     r.builds = sizemap_r(j, "builds", w);
+     r.planner = strmap_r(j, "planner", w);
+     return r;
+   }
+   
+   Document document_r(json const& j) {
+     std::string const w = "document";
+     if (!j.is_object()) fail(w, "expected a JSON object");
+     auto const fmt = j.find("format");
+     if (fmt == j.end() || !fmt->is_string() || fmt->get<std::string>() != kFormat)
+       fail("format", std::string("expected '") + kFormat + "'");
+     Document d;
+     d.producer_version = get_str(j, "producer_version", w);
+     d.producer_date = get_str(j, "producer_date", w);
+     d.fingerprint = fingerprint_r(need(j, "fingerprint", w));
+     for (auto const& r : get_arr(j, "roots", w)) {
+       RootRecord rr;
+       rr.label = get_str(r, "label", w);
+       for (auto const& t : get_arr(r, "terms", rr.label))
+         rr.terms.push_back(term_r(t, rr.label));
+       d.roots.push_back(std::move(rr));
+     }
+     if (auto it = j.find("dag"); it != j.end() && !it->is_null())
+       d.dag = dag_r(*it);
+     if (auto it = j.find("run"); it != j.end() && !it->is_null())
+       d.run = run_r(*it);
+     return d;
+   }
+   
+   // Nesting cap for parsing. A document nests a handful of levels around the
+   // `tree` arrays, whose depth is bounded by a term's factor count. The DOM
+   // parser copies a container's earlier members recursively whenever the
+   // container grows, so an unbounded depth exhausts the stack before validation
+   // sees the document.
+   constexpr int kMaxDepth = 256;
+   
+   json parse_checked(std::string_view text, std::string const& where) {
+     try {
+       return json::parse(text, [&](int depth, json::parse_event_t, json&) {
+         if (depth > kMaxDepth)
+           fail(where,
+                "nesting deeper than " + std::to_string(kMaxDepth) + " levels");
+         return true;
+       });
+     } catch (json::exception const& e) {
+       fail(where, std::string("not valid JSON: ") + e.what());
+     }
+   }
+   
+   // ---------------------------------------------------------------- compare
+   
+   struct Differ {
+     std::vector<Difference> out;
+   
+     void leaf(std::string const& path, json const& a, json const& b) {
+       auto const l = a.dump(), r = b.dump();
+       if (l != r) out.push_back({path, l, r});
+     }
+   
+     template <typename T>
+     void field(std::string const& path, T const& a, T const& b) {
+       leaf(path, to_j(a), to_j(b));
+     }
+   
+     void strs(std::string const& path, std::vector<std::string> const& a,
+               std::vector<std::string> const& b) {
+       leaf(path, strs_j(a), strs_j(b));
+     }
+   
+     void one_sided(std::string const& path, bool in_left) {
+       out.push_back(
+           {path, in_left ? "present" : "absent", in_left ? "absent" : "present"});
+     }
+   
+     // set difference of serialized items
+     template <typename T, typename F>
+     void set(std::string const& path, std::vector<T> const& a,
+              std::vector<T> const& b, F&& ser) {
+       std::set<std::string> sa, sb;
+       for (auto const& x : a) sa.insert(ser(x));
+       for (auto const& x : b) sb.insert(ser(x));
+       for (auto const& s : sa)
+         if (!sb.count(s)) out.push_back({path, s, ""});
+       for (auto const& s : sb)
+         if (!sa.count(s)) out.push_back({path, "", s});
+     }
+   
+     void term(std::string const& path, TermRecord const& a, TermRecord const& b) {
+       strs(path + ".factors", a.factors, b.factors);
+       leaf(path + ".scalar", json(a.scalar), json(b.scalar));
+       leaf(path + ".tree", a.tree ? tree_j(*a.tree) : json(nullptr),
+            b.tree ? tree_j(*b.tree) : json(nullptr));
+       leaf(path + ".pinnable", a.pinnable, b.pinnable);
+       if (a.nodes.size() != b.nodes.size()) {
+         leaf(path + ".nodes", vec_j(a.nodes), vec_j(b.nodes));
+         return;
+       }
+       for (std::size_t i = 0; i < a.nodes.size(); ++i) {
+         auto const p = path + ".nodes[" + std::to_string(i) + "]";
+         leaf(p + ".axes", vec_j(a.nodes[i].axes), vec_j(b.nodes[i].axes));
+         leaf(p + ".opened_here", vec_j(a.nodes[i].opened_here),
+              vec_j(b.nodes[i].opened_here));
+         leaf(p + ".order_aware", a.nodes[i].order_aware, b.nodes[i].order_aware);
+       }
+     }
+   
+     void value(std::string const& path, ValueRecord const& a,
+                ValueRecord const& b) {
+       // all fields except hash, key, first_use, last_use
+       auto ja = to_j(a), jb = to_j(b);
+       for (auto const* k : {"hash", "key", "first_use", "last_use"}) {
+         ja.erase(k);
+         jb.erase(k);
+       }
+       for (auto const& [k, v] : ja.items()) leaf(path + "." + k, v, jb[k]);
+     }
+   
+     void dag(DagRecord const& a, DagRecord const& b) {
+       std::map<std::string, ValueRecord const*> va, vb;
+       for (auto const& v : a.values) va[v.id] = &v;
+       for (auto const& v : b.values) vb[v.id] = &v;
+       for (auto const& [id, v] : va) {
+         auto it = vb.find(id);
+         if (it == vb.end())
+           one_sided("dag.values[" + id + "]", true);
+         else
+           value("dag.values[" + id + "]", *v, *it->second);
+       }
+       for (auto const& [id, v] : vb)
+         if (!va.count(id)) one_sided("dag.values[" + id + "]", false);
+   
+       if (a.blocks.size() != b.blocks.size()) {
+         leaf("dag.blocks", json(a.blocks.size()), json(b.blocks.size()));
+       } else {
+         for (std::size_t i = 0; i < a.blocks.size(); ++i) {
+           auto ja = to_j(a.blocks[i]), jb = to_j(b.blocks[i]);
+           for (auto const& [k, v] : ja.items())
+             leaf("dag.blocks[" + std::to_string(i) + "]." + k, v, jb[k]);
+         }
+       }
+       set("dag.edges", a.edges, b.edges,
+           [](EdgeRecord const& e) { return to_j(e).dump(); });
+       set("dag.loops", a.loops, b.loops,
+           [](LoopRecord const& l) { return to_j(l).dump(); });
+       set("dag.loop_order", a.loop_order, b.loop_order,
+           [](auto const& t) { return loop_order_item_j(t).dump(); });
+     }
+   };
+   
+   }  // namespace
+   
+   std::optional<std::string> leaf_permutation_error(TreeShape const& tree,
+                                                     std::size_t nfactors) {
+     std::vector<bool> seen(nfactors, false);
+     std::size_t count = 0;
+     std::optional<std::string> err;
+     auto const visit = [&](auto const& self, TreeShape const& t) -> void {
+       if (err) return;
+       if (t.leaf) {
+         if (*t.leaf >= nfactors || seen[*t.leaf]) {
+           err = "tree leaf " + std::to_string(*t.leaf) +
+                 " is out of range or repeated";
+           return;
+         }
+         seen[*t.leaf] = true;
+         ++count;
+         return;
+       }
+       if (!t.left || !t.right) {
+         err = "tree node lacks a child";
+         return;
+       }
+       self(self, *t.left);
+       self(self, *t.right);
+     };
+     visit(visit, tree);
+     if (!err && count != nfactors) err = "tree does not use every factor";
+     return err;
+   }
+   
+   std::string to_json(Document const& d) { return document_j(d).dump(2) + "\n"; }
+   
+   void write(Document const& d, std::ostream& os) { os << to_json(d); }
+   
+   Document from_json(std::string_view text) {
+     json const j = parse_checked(text, "document");
+     try {
+       return document_r(j);
+     } catch (json::exception const& e) {
+       fail("document", std::string("malformed: ") + e.what());
+     }
+   }
+   
+   Document read(std::istream& is) {
+     std::string text((std::istreambuf_iterator<char>(is)),
+                      std::istreambuf_iterator<char>());
+     return from_json(text);
+   }
+   
+   RunRecord run_from_json(std::string_view text) {
+     json const j = parse_checked(text, "run");
+     if (!j.is_object()) fail("run", "expected a JSON object");
+     try {
+       return run_r(j);
+     } catch (json::exception const& e) {
+       fail("run", std::string("malformed: ") + e.what());
+     }
+   }
+   
+   std::string to_json(RunRecord const& r) { return to_j(r).dump(2) + "\n"; }
+   
+   std::string escape_for_html_script(std::string_view json) {
+     std::string out;
+     out.reserve(json.size());
+     for (std::size_t k = 0; k < json.size(); ++k) {
+       char const c = json[k];
+       // U+2028 and U+2029 are E2 80 A8 and E2 80 A9 in UTF-8
+       if (c == '\xE2' && k + 2 < json.size() && json[k + 1] == '\x80' &&
+           (json[k + 2] == '\xA8' || json[k + 2] == '\xA9')) {
+         out += json[k + 2] == '\xA8' ? "\\u2028" : "\\u2029";
+         k += 2;
+       } else if (c == '<') {
+         out += "\\u003c";
+       } else {
+         out += c;
+       }
+     }
+     return out;
+   }
+   
+   std::vector<Difference> compare(Document const& a, Document const& b) {
+     Differ d;
+     auto const& fa = a.fingerprint;
+     auto const& fb = b.fingerprint;
+     d.strs("fingerprint.roots", fa.roots, fb.roots);
+     d.leaf("fingerprint.batchable", batchable_j(fa.batchable),
+            batchable_j(fb.batchable));
+     d.strs("fingerprint.volatile_leaves", fa.volatile_leaves, fb.volatile_leaves);
+     d.leaf("fingerprint.persistent_only", fa.persistent_only, fb.persistent_only);
+     d.leaf("fingerprint.batch_spectator_indices", fa.batch_spectator_indices,
+            fb.batch_spectator_indices);
+     d.leaf("fingerprint.accumulation_factor", fa.accumulation_factor,
+            fb.accumulation_factor);
+     d.leaf("fingerprint.scheduler", fa.scheduler, fb.scheduler);
+     d.leaf("fingerprint.objective_function", fa.objective_function,
+            fb.objective_function);
+     d.leaf("fingerprint.reorder", fa.reorder, fb.reorder);
+     d.leaf("fingerprint.cse", strmap_j(fa.cse), strmap_j(fb.cse));
+     d.strs("fingerprint.mode_order", fa.mode_order, fb.mode_order);
+     d.field("fingerprint.context", fa.context, fb.context);
+   
+     auto const labels = [](Document const& x) {
+       std::vector<std::string> l;
+       for (auto const& r : x.roots) l.push_back(r.label);
+       return l;
+     };
+     if (labels(a) != labels(b)) {
+       d.strs("roots", labels(a), labels(b));
+     } else {
+       for (std::size_t i = 0; i < a.roots.size(); ++i) {
+         auto const& ra = a.roots[i];
+         auto const& rb = b.roots[i];
+         auto const rp = "roots[" + ra.label + "]";
+         auto const keys = [](RootRecord const& r) {
+           std::vector<std::string> k;
+           for (auto const& t : r.terms) k.push_back(t.key);
+           return k;
+         };
+         if (keys(ra) != keys(rb)) {
+           d.strs(rp + ".terms", keys(ra), keys(rb));
+           continue;
+         }
+         for (std::size_t k = 0; k < ra.terms.size(); ++k)
+           d.term(rp + ".terms[" + ra.terms[k].key + "]", ra.terms[k],
+                  rb.terms[k]);
+       }
+     }
+   
+     if (a.dag && b.dag)
+       d.dag(*a.dag, *b.dag);
+     else if (a.dag || b.dag)
+       d.one_sided("dag", static_cast<bool>(a.dag));
+     return std::move(d.out);
+   }
+   
+   std::string summary_line(Document const& d) {
+     std::size_t terms = 0;
+     for (auto const& r : d.roots) terms += r.terms.size();
+     std::ostringstream os;
+     os << "roots=" << d.roots.size() << " terms=" << terms;
+     if (d.dag) {
+       // nesting depth = number of ancestors; bounded walk tolerates a
+       // malformed parent chain
+       std::map<std::size_t, std::optional<std::size_t>> parent_of;
+       for (auto const& b : d.dag->blocks) parent_of[b.id] = b.parent;
+       std::size_t depth = 0;
+       for (auto const& b : d.dag->blocks) {
+         std::size_t n = 0;
+         auto p = b.parent;
+         while (p && n < d.dag->blocks.size()) {
+           ++n;
+           auto it = parent_of.find(*p);
+           p = it == parent_of.end() ? std::nullopt : it->second;
+         }
+         depth = std::max(depth, n);
+       }
+       os << " values=" << d.dag->values.size()
+          << " blocks=" << d.dag->blocks.size() << " depth=" << depth;
+     } else {
+       os << " values=- blocks=- depth=-";
+     }
+     return os.str();
+   }
+   
+   }  // namespace sequant::eval::schedule

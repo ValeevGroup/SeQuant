@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a3bf194e4efdf09398aafc90e88e10067:
+
+Function sequant::eval::detail::dump_block_build
+================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_dump.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::dump_block_build(Index const&, std::size_t, std::size_t, std::size_t, std::size_t, std::size_t)
+   :project: SeQuant

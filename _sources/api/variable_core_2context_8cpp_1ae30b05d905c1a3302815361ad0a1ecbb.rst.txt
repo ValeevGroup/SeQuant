@@ -1,0 +1,14 @@
+.. _exhale_variable_core_2context_8cpp_1ae30b05d905c1a3302815361ad0a1ecbb:
+
+Variable spbasis
+================
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: spbasis
+   :project: SeQuant

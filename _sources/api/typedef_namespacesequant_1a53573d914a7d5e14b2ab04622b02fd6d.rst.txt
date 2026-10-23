@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a53573d914a7d5e14b2ab04622b02fd6d:
+
+Typedef sequant::ratio
+======================
+
+- Defined in :ref:`file_SeQuant_core_rational.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::ratio
+   :project: SeQuant

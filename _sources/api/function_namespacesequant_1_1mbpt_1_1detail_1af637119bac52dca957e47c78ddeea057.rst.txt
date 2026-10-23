@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1detail_1af637119bac52dca957e47c78ddeea057:
+
+Function sequant::mbpt::detail::ref_av_full_contractions
+========================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::detail::ref_av_full_contractions()
+   :project: SeQuant

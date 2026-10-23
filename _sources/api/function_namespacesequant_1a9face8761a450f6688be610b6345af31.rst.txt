@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9face8761a450f6688be610b6345af31:
+
+Template Function sequant::tot_indices
+======================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::tot_indices(Rng const&)
+   :project: SeQuant

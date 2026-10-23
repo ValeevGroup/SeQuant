@@ -1,0 +1,31 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_detail_concepts.hpp:
+
+Program Listing for File concepts.hpp
+=====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_detail_concepts.hpp>` (``SeQuant/domain/mbpt/detail/concepts.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_DOMAIN_MBPT_DETAIL_CONCEPTS_HPP
+   #define SEQUANT_DOMAIN_MBPT_DETAIL_CONCEPTS_HPP
+   
+   #include <SeQuant/core/index.hpp>
+   
+   #include <ranges>
+   
+   namespace sequant::mbpt::detail {
+   
+   template <typename T>
+   concept index_group_range =
+       std::ranges::range<T> &&
+       std::ranges::range<std::ranges::range_value_t<T>> &&
+       std::convertible_to<
+           std::ranges::range_value_t<std::ranges::range_value_t<T>>, Index>;
+   
+   }  // namespace sequant::mbpt::detail
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_DETAIL_CONCEPTS_HPP

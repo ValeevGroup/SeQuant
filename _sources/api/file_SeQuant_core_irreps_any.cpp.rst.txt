@@ -1,0 +1,56 @@
+
+.. _file_SeQuant_core_irreps_any.cpp:
+
+File any.cpp
+============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_irreps>` (``SeQuant/core/irreps``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/irreps/any.cpp``)
+--------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_irreps_any.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/irreps/any.hpp`` (:ref:`file_SeQuant_core_irreps_any.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1ad8220ef680529a66ab3c553336fcac20`
+
+- :ref:`exhale_function_namespacesequant_1acbd2d3128f8c29f9cd54d7dd907a42c2`
+

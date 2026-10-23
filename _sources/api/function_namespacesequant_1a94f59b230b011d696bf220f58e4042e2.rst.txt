@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a94f59b230b011d696bf220f58e4042e2:
+
+Function sequant::operator&(TreeTraversal, TreeTraversal)
+=========================================================
+
+- Defined in :ref:`file_SeQuant_core_binary_node.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator&(TreeTraversal, TreeTraversal)
+   :project: SeQuant

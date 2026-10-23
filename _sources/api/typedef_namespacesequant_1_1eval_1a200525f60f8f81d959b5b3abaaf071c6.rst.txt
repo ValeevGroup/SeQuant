@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1eval_1a200525f60f8f81d959b5b3abaaf071c6:
+
+Typedef sequant::eval::LoopInstance
+===================================
+
+- Defined in :ref:`file_SeQuant_core_eval_peak_profile.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::eval::LoopInstance
+   :project: SeQuant

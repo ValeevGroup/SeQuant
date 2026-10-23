@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a5b1d206f21168e6622ea9b9b27f1ab89:
+
+Function sequant::detail::statistics_name
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::statistics_name(Statistics)
+   :project: SeQuant

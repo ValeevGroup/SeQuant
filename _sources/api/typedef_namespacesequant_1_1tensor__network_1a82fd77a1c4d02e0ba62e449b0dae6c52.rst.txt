@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1tensor__network_1a82fd77a1c4d02e0ba62e449b0dae6c52:
+
+Typedef sequant::tensor_network::NamedIndexColorMap
+===================================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_typedefs.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::tensor_network::NamedIndexColorMap
+   :project: SeQuant

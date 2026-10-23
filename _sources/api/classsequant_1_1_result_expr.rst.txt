@@ -1,0 +1,27 @@
+.. _exhale_class_classsequant_1_1_result_expr:
+
+Class ResultExpr
+================
+
+- Defined in :ref:`file_SeQuant_core_expressions_result_expr.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1_result_expr_1_1_result_cmp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::ResultExpr
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

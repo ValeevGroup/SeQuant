@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1detail_1a013c1a49e3746cedfe568077d39c7e17:
+
+Template Function sequant::io::serialization::v1::detail::serialize_indices
+===========================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_serialize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::detail::serialize_indices(Range&&, const SerializationOptions&)
+   :project: SeQuant

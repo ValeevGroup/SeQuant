@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a71193609bb892c00c382bed025bdc03b:
+
+Template Function sequant::is_annihilator
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::is_annihilator(const Op<S>&)
+   :project: SeQuant

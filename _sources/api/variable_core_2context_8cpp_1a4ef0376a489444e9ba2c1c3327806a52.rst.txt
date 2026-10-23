@@ -1,0 +1,14 @@
+.. _exhale_variable_core_2context_8cpp_1a4ef0376a489444e9ba2c1c3327806a52:
+
+Variable cardinal_labels
+========================
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: cardinal_labels
+   :project: SeQuant

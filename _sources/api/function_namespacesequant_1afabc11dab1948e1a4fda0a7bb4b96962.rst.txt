@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1afabc11dab1948e1a4fda0a7bb4b96962:
+
+Function sequant::operator|(SlotType, SlotType)
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator|(SlotType, SlotType)
+   :project: SeQuant

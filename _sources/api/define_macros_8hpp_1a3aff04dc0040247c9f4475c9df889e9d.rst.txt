@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1a3aff04dc0040247c9f4475c9df889e9d:
+
+Define SEQUANT_ASSERT_BEHAVIOR
+==============================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_ASSERT_BEHAVIOR
+   :project: SeQuant

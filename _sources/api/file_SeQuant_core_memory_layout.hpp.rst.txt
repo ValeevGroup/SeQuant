@@ -1,0 +1,45 @@
+
+.. _file_SeQuant_core_memory_layout.hpp:
+
+File memory_layout.hpp
+======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/memory_layout.hpp``)
+-----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_memory_layout.hpp.rst
+
+
+
+
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_export_reordering_context.hpp`
+
+
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_memory__layout_8hpp_1a8206a04f26f57965d9cb369acafa33d7`
+

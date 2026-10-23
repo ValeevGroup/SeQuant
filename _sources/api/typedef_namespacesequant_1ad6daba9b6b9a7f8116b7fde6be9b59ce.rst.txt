@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1ad6daba9b6b9a7f8116b7fde6be9b59ce:
+
+Typedef sequant::expr_range
+===========================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr_range.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::expr_range
+   :project: SeQuant

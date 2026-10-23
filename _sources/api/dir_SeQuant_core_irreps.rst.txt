@@ -1,0 +1,28 @@
+.. _dir_SeQuant_core_irreps:
+
+
+Directory irreps
+================
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/core/irreps``
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_core_irreps_algebra.hpp`
+- :ref:`file_SeQuant_core_irreps_any.cpp`
+- :ref:`file_SeQuant_core_irreps_any.hpp`
+- :ref:`file_SeQuant_core_irreps_eval_tree.hpp`
+- :ref:`file_SeQuant_core_irreps_propagation.hpp`
+- :ref:`file_SeQuant_core_irreps_table_algebra.cpp`
+- :ref:`file_SeQuant_core_irreps_table_algebra.hpp`
+- :ref:`file_SeQuant_core_irreps_z2_algebra.hpp`
+
+

@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_no_concrete_group:
+
+Struct NoConcreteGroup
+======================
+
+- Defined in :ref:`file_SeQuant_core_irreps_z2_algebra.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::NoConcreteGroup
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

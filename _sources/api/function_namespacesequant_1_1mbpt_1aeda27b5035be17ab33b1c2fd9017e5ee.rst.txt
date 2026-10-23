@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1aeda27b5035be17ab33b1c2fd9017e5ee:
+
+Function sequant::mbpt::WK_biorthogonalization_filter(ExprPtr, const container::svector<container::svector<Index>>&)
+====================================================================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::WK_biorthogonalization_filter(ExprPtr, const container::svector<container::svector<Index>>&)
+   :project: SeQuant

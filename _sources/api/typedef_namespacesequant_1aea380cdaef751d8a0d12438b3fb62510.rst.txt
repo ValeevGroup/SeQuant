@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1aea380cdaef751d8a0d12438b3fb62510:
+
+Typedef sequant::BOperator
+==========================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::BOperator
+   :project: SeQuant

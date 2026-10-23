@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1ad0e3a1745d5e29e2ba929f3c6e1494b6:
+
+Function sequant::detail::implicit_context_overlays
+===================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_context.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::implicit_context_overlays()
+   :project: SeQuant

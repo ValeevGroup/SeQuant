@@ -1,0 +1,122 @@
+
+.. _file_SeQuant_core_irreps_propagation.hpp:
+
+File propagation.hpp
+====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_irreps>` (``SeQuant/core/irreps``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/irreps/propagation.hpp``)
+----------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_irreps_propagation.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/irreps/algebra.hpp`` (:ref:`file_SeQuant_core_irreps_algebra.hpp`)
+
+- ``SeQuant/core/reserved.hpp`` (:ref:`file_SeQuant_core_reserved.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``SeQuant/core/utility/expr_matcher.hpp`` (:ref:`file_SeQuant_core_utility_expr_matcher.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/tensor.hpp`` (:ref:`file_SeQuant_core_utility_tensor.hpp`)
+
+- ``concepts`` (:ref:`file_SeQuant_core_io_concepts.hpp`)
+
+- ``functional``
+
+- ``map`` (:ref:`file_SeQuant_core_eval_value_node_map.hpp`)
+
+- ``range/v3/algorithm/contains.hpp``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``type_traits``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_irreps_any.hpp`
+
+- :ref:`file_SeQuant_core_irreps_eval_tree.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1_no_op_irrep_callback`
+
+- :ref:`exhale_struct_structsequant_1_1_irrep_node_traits`
+
+- :ref:`exhale_struct_structsequant_1_1_irrep_node_traits_3_01_expr_01_4`
+
+- :ref:`exhale_class_classsequant_1_1_irrep_context`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1abd8d365568b66f389edb4a70d73c1fb8`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a79e7136e9ef3dbb5b48167dbf690831f`
+
+- :ref:`exhale_function_namespacesequant_1aed6f650287625fd8ed6f5127b7cb4732`
+
+- :ref:`exhale_function_namespacesequant_1aec5d89f2f5ecf1f49f0d5ab6b677c924`
+
+- :ref:`exhale_function_namespacesequant_1a5c349df2e2aff230df205feccb512e2c`
+
+- :ref:`exhale_function_namespacesequant_1a62318c8873485a5aa666f265e8911852`
+
+- :ref:`exhale_function_namespacesequant_1a69796940b405b6af127c830e11410f86`
+

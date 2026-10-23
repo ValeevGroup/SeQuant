@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1point__groups_1_1_c2h:
+
+Struct C2h
+==========
+
+- Defined in :ref:`file_SeQuant_core_irreps_z2_algebra.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::point_groups::C2h
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a485f7f955a0a2adc2374ed645ede0699:
+
+Function sequant::set_scoped_default_context()
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::set_scoped_default_context()
+   :project: SeQuant

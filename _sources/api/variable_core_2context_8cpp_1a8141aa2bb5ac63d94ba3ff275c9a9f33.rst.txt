@@ -1,0 +1,14 @@
+.. _exhale_variable_core_2context_8cpp_1a8141aa2bb5ac63d94ba3ff275c9a9f33:
+
+Variable registry
+=================
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: registry
+   :project: SeQuant

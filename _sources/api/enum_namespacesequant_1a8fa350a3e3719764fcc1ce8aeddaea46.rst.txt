@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46:
+
+Enum BraKetSymmetry
+===================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::BraKetSymmetry
+   :project: SeQuant

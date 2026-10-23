@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1density_1a0ff31301512c8cc790cfca35f3e8f919:
+
+Template Function sequant::density::make_density
+================================================
+
+- Defined in :ref:`file_SeQuant_core_density.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::density::make_density(std::wstring_view, const bra<IndexRange1>&, const ket<IndexRange2>&)
+   :project: SeQuant

@@ -1,0 +1,110 @@
+
+.. _program_listing_file_SeQuant_core_density.hpp:
+
+Program Listing for File density.hpp
+====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_density.hpp>` (``SeQuant/core/density.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_DENSITY_HPP
+   #define SEQUANT_CORE_DENSITY_HPP
+   
+   #include <SeQuant/core/attr.hpp>
+   #include <SeQuant/core/expressions/tensor.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/op.hpp>
+   #include <SeQuant/core/reserved.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <range/v3/algorithm/contains.hpp>
+   #include <range/v3/range/conversion.hpp>
+   #include <range/v3/view/transform.hpp>
+   
+   #include <cstddef>
+   #include <string>
+   #include <string_view>
+   
+   namespace sequant::density {
+   
+   inline const std::wstring &rdm_label() { return reserved::rdm_label(); }
+   inline const std::wstring &hole_rdm_label() {
+     return reserved::hole_rdm_label();
+   }
+   inline const std::wstring &cumulant_label() {
+     return reserved::cumulant_label();
+   }
+   inline const std::wstring &spinfree_rdm_label() {
+     return reserved::spinfree_rdm_label();
+   }
+   
+   inline constexpr TensorSymmetries rdm_symmetries{
+       .hermiticity = Hermiticity::Hermitian, .column = ColumnSymmetry::Symm};
+   inline constexpr TensorSymmetries cumulant_symmetries{
+       .perm = Symmetry::Antisymm,
+       .hermiticity = Hermiticity::Hermitian,
+       .column = ColumnSymmetry::Symm};
+   
+   inline TensorSymmetries symmetries(std::wstring_view label, std::size_t rank) {
+     return rank > 1 && label != spinfree_rdm_label() ? cumulant_symmetries
+                                                      : rdm_symmetries;
+   }
+   
+   template <range_of_castables_to_index IndexRange1,
+             range_of_castables_to_index IndexRange2>
+   ExprPtr make_density(std::wstring_view label,
+                        const bra<IndexRange1> &bra_indices,
+                        const ket<IndexRange2> &ket_indices) {
+     SEQUANT_ASSERT(ranges::contains(reserved::density_labels(), label));
+     SEQUANT_ASSERT(bra_indices.size() == ket_indices.size());
+     return ex<Tensor>(std::wstring(label), bra_indices, ket_indices,
+                       symmetries(label, bra_indices.size()));
+   }
+   
+   inline ExprPtr make_rdm(const Index &ann, const Index &cre) {
+     return make_density(rdm_label(), bra{ann}, ket{cre});
+   }
+   
+   template <range_of_castables_to_index IndexRange1,
+             range_of_castables_to_index IndexRange2>
+   ExprPtr make_rdm(const bra<IndexRange1> &ann, const ket<IndexRange2> &cre) {
+     return make_density(rdm_label(), ann, cre);
+   }
+   
+   inline ExprPtr make_hole_rdm(const Index &ann, const Index &cre) {
+     return make_density(hole_rdm_label(), bra{ann}, ket{cre});
+   }
+   
+   template <Statistics S>
+   ExprPtr rdm_from_nop(const NormalOperator<S> &nop, std::wstring_view label) {
+     using index_container = container::svector<Index>;
+     auto braidxs =
+         nop.annihilators() |
+         ranges::views::transform([](const auto &op) { return op.index(); }) |
+         ranges::to<index_container>();
+     auto ketidxs =
+         nop.creators() |
+         ranges::views::transform([](const auto &op) { return op.index(); }) |
+         ranges::to<index_container>();
+     return make_density(label, bra(std::move(braidxs)), ket(std::move(ketidxs)));
+   }
+   
+   template <range_of_castables_to_index IndexRange1,
+             range_of_castables_to_index IndexRange2>
+   ExprPtr make_cumulant(const bra<IndexRange1> &ann,
+                         const ket<IndexRange2> &cre) {
+     return make_density(cumulant_label(), ann, cre);
+   }
+   
+   template <Statistics S>
+   ExprPtr make_cumulant(const NormalOperator<S> &nop) {
+     SEQUANT_ASSERT(nop.rank() >= 2);
+     return rdm_from_nop(nop, cumulant_label());
+   }
+   
+   }  // namespace sequant::density
+   
+   #endif  // SEQUANT_CORE_DENSITY_HPP
