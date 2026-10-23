@@ -6,7 +6,6 @@ if (NOT TARGET range-v3::range-v3)
         GIT_REPOSITORY "https://github.com/ericniebler/range-v3.git"
         GIT_TAG "${SEQUANT_TRACKED_RANGEV3_TAG}"
         GIT_SHALLOW
-        EXCLUDE_FROM_ALL
         SYSTEM
         FIND_PACKAGE_ARGS NAMES range-v3
     )

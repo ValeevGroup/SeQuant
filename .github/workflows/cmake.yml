@@ -63,6 +63,7 @@ jobs:
         -DCMAKE_UNITY_BUILD=${{ !matrix.sanitize && (matrix.build_type == 'Debug' || matrix.valgrind) }}
         -DMPIEXEC_PREFLAGS='--bind-to;none;--allow-run-as-root'
         -DCMAKE_PREFIX_PATH='/usr/local/opt/boost'
+        -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/install
         -DSEQUANT_TESTS=ON
         -DSEQUANT_EVAL_TESTS=${{ !matrix.valgrind && !matrix.sanitize && !startswith(matrix.os, 'windows') }}
         -DSEQUANT_USE_SYSTEM_BOOST_HASH=OFF
@@ -176,6 +177,18 @@ jobs:
       working-directory: ${{github.workspace}}/build
       shell: bash
       run: ctest --output-on-failure -R "^sequant"
+
+    - name: Test consuming installed SeQuant
+      if: ${{ !matrix.valgrind && !matrix.sanitize }}
+      shell: bash
+      env:
+        VCPKG_CMAKE_CONFIG: ${{ steps.vcpkg.outputs.vcpkg-cmake-config }}
+      run: |
+        cmake --install build
+        cmake -S tests/consumer -B $RUNNER_TEMP/consumer -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/install;/usr/local/opt/boost" $VCPKG_CMAKE_CONFIG
+        cmake --build $RUNNER_TEMP/consumer
+        $RUNNER_TEMP/consumer/consumer
 
     - name: Ensure benchmarks not broken
       if: ${{ !matrix.valgrind && !matrix.sanitize }}
