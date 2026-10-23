@@ -423,6 +423,14 @@ given, they are merged and jointly ordered before being exported together.
        and emitted into the generated code. See below for the sub-schema.
      - -
      - No
+   * - :code:`recycle_intermediates`
+     - Whether to reuse the names (and thereby the storage) of intermediates introduced by the :code:`cse` step once they are no longer needed.
+       A later intermediate takes over the name of an earlier one if the earlier one's last use precedes its definition, both are batched over the
+       same indices, both span the same IRREPs (if :code:`irreps` is given) and their shapes are compatible. Either a boolean or an object with the
+       property :code:`shape`, which is :code:`multiset` (default; same index spaces up to permutation, the indices of the later intermediate are
+       rearranged accordingly) or :code:`block` (same index spaces in the same order).
+     - false
+     - No
    * - :code:`meta`
      - Additional, language-specific metadata. See below for the sub-schema accepted when :code:`language` is :code:`itf`.
      - :code:`{}`
