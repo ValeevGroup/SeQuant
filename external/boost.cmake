@@ -23,7 +23,6 @@ set(required_components
         dynamic_bitset
         fusion
         hana
-        locale
         multiprecision
         #          numeric_conversion
         #          numeric_interval

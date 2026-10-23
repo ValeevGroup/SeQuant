@@ -24,9 +24,6 @@ IndexSpace retrieve_space(StrView label) {
 IndexSpace::IndexSpace(std::string_view label)
     : IndexSpace(retrieve_space(label)) {}
 
-IndexSpace::IndexSpace(std::wstring_view label)
-    : IndexSpace(retrieve_space(label)) {}
-
 std::string to_string(IndexSpace::Type type) {
   std::ostringstream oss;
   oss << "0x" << std::hex << type.to_int32();
@@ -50,7 +47,7 @@ std::string to_string(const IndexSpace& space) {
   std::ostringstream oss;
   oss << "{attr=" << to_string(space.attr());
   if (space.base_key().empty() == false) {
-    oss << ",base_key=" << toUtf8(space.base_key());
+    oss << ",base_key=" << space.base_key();
   }
   oss << ",dimension=" << std::to_string(space.dimension()) << "}";
   return oss.str();

@@ -34,7 +34,7 @@ namespace sequant::opt::schedule {
 /// works on. \p term itself is not modified.
 ExprPtr canonical_term(ExprPtr const& term);
 
-/// toUtf8(v1::to_string(canonical)) -- the identity of a term in the document.
+/// v1::to_string(canonical) -- the identity of a term in the document.
 /// Canonicalization renames the dummy (contracted) indices only: the external
 /// indices keep the caller's labels and are part of the key, so a root must be
 /// spelled with the same external labels on every run that pins it. The key
@@ -193,8 +193,8 @@ namespace detail {
 /// volatile_leaf_labels the labels of the volatile leaf tensors
 eval::schedule::Fingerprint make_fingerprint(
     std::vector<std::string> root_labels, OptimizeOptions const& opts,
-    std::vector<std::wstring> const& mode_order,
-    std::map<std::wstring, Index> const& representatives,
+    std::vector<std::string> const& mode_order,
+    std::map<std::string, Index> const& representatives,
     std::set<std::string> const& volatile_leaf_labels);
 
 }  // namespace detail
@@ -220,8 +220,8 @@ eval::schedule::Fingerprint make_fingerprint(
 template <meta::eval_node_range R>
 eval::schedule::Fingerprint fingerprint_of(
     R const& forest, std::vector<std::string> root_labels,
-    OptimizeOptions const& opts, std::vector<std::wstring> const& mode_order) {
-  std::map<std::wstring, Index> representatives;
+    OptimizeOptions const& opts, std::vector<std::string> const& mode_order) {
+  std::map<std::string, Index> representatives;
   std::set<std::string> volatile_leaf_labels;
   auto const& is_volatile = opts.batch_policy.is_volatile_leaf;
   auto walk = [&](auto const& self, auto const& node) -> void {
@@ -235,7 +235,7 @@ eval::schedule::Fingerprint fingerprint_of(
       representatives.try_emplace(ix.basis().base_key(), ix);
     auto const& t = node->as_tensor();
     if (is_volatile && is_volatile(t))
-      volatile_leaf_labels.insert(toUtf8(t.label()));
+      volatile_leaf_labels.insert(std::string(t.label()));
   };
   for (auto const& root : forest) walk(walk, root);
   return detail::make_fingerprint(std::move(root_labels), opts, mode_order,

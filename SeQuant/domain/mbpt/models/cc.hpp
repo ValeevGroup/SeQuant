@@ -166,7 +166,7 @@ class CC {
   /// `default_op_connections()` when H̄ is built from connected products
   /// (non-unitary ansatz, reference equal to the Wick vacuum), empty otherwise.
   /// The class uses it, or a superset, for its own equations.
-  [[nodiscard]] OpConnections<std::wstring> hbar_connections() const;
+  [[nodiscard]] OpConnections<std::string> hbar_connections() const;
 
   /// @brief derives the CC energy expression \f$ \langle 0|\bar{H}|0 \rangle
   /// \f$ at the requested commutator truncation, WITHOUT deriving the
@@ -333,7 +333,7 @@ class CC {
   /// @note Uses use_topology() and screen() from the CC instance to set other
   /// EVOptions
   auto ref_av(const ExprPtr& expr,
-              const OpConnections<std::wstring>& connect) const {
+              const OpConnections<std::string>& connect) const {
     return op::ref_av(expr, {.connect = connect,
                              .screen = this->screen(),
                              .use_topology = this->use_topology()});

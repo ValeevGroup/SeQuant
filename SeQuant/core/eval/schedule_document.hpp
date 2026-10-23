@@ -101,7 +101,7 @@ struct ContextRecord {
   std::string vacuum, spbasis;
   bool strict_braket_symmetry = false;
   std::vector<std::string> cardinal_tensor_labels;
-  /// CanonicalizeOptions::method, as to_wstring spells it, and
+  /// CanonicalizeOptions::method, as to_string spells it, and
   /// CanonicalizeOptions::ignore_named_index_labels, of the Context's
   /// canonicalization options (the defaults when it sets none)
   std::string canonicalization_method;

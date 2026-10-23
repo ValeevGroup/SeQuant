@@ -38,7 +38,7 @@ ResultExpr::ResultExpr(const Variable &variable, ExprPtr expression)
 ResultExpr::ResultExpr(IndexContainer bra, IndexContainer ket,
                        IndexContainer aux, Symmetry symm,
                        BraKetSymmetry braket_symm, ColumnSymmetry column_symm,
-                       std::optional<std::wstring> label, ExprPtr expression)
+                       std::optional<std::string> label, ExprPtr expression)
     : m_expr(std::move(expression)),
       m_symm(symm),
       m_bksymm(braket_symm),
@@ -56,9 +56,9 @@ ResultExpr &ResultExpr::operator=(ExprPtr expression) {
 
 bool ResultExpr::has_label() const { return m_label.has_value(); }
 
-const std::wstring &ResultExpr::label() const { return m_label.value(); }
+const std::string &ResultExpr::label() const { return m_label.value(); }
 
-void ResultExpr::set_label(std::wstring label) { m_label = std::move(label); }
+void ResultExpr::set_label(std::string label) { m_label = std::move(label); }
 
 Symmetry ResultExpr::symmetry() const { return m_symm; }
 

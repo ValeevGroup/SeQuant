@@ -71,10 +71,10 @@ struct CanonicalizationKey {
   ObjectRef registry;
   /// determines the symmetry of NormalOperator
   SPBasis spbasis = Context::Defaults::spbasis;
-  container::vector<std::pair<std::wstring, ObjectRef>> canonicalizers;
+  container::vector<std::pair<std::string, ObjectRef>> canonicalizers;
   ObjectRef index_comparer;
   ObjectRef index_pair_comparer;
-  container::vector<std::wstring> cardinal_labels;
+  container::vector<std::string> cardinal_labels;
   std::optional<CanonicalizeOptions> options;
 
   bool alive() const {
@@ -152,7 +152,7 @@ std::shared_ptr<const Comparer> make_comparer(Comparer comparer) {
 }
 
 void check_cardinal_tensor_labels(
-    [[maybe_unused]] const container::vector<std::wstring>& labels) {
+    [[maybe_unused]] const container::vector<std::string>& labels) {
   SEQUANT_ASSERT(!has_duplicates(labels) &&
                  "cardinal tensor labels must not contain duplicates");
 }
@@ -408,8 +408,7 @@ Context::Context(Options options)
       check_tensor_canonicalizer(canonicalizer);
     config->tensor_canonicalizers = std::move(*options.tensor_canonicalizers);
   }
-  config->tensor_canonicalizers.try_emplace(L"",
-                                            default_tensor_canonicalizer());
+  config->tensor_canonicalizers.try_emplace("", default_tensor_canonicalizer());
   config->index_comparer =
       options.index_comparer ? make_comparer(std::move(*options.index_comparer))
                              : default_index_comparer();
@@ -517,21 +516,21 @@ ColumnSymmetry Context::deserialization_column_symmetry() const {
 }
 
 std::shared_ptr<TensorCanonicalizer> Context::tensor_canonicalizer_ptr(
-    std::wstring_view label) const {
+    std::string_view label) const {
   auto result = nondefault_tensor_canonicalizer_ptr(label);
-  if (!result) result = nondefault_tensor_canonicalizer_ptr(L"");
+  if (!result) result = nondefault_tensor_canonicalizer_ptr("");
   return result;
 }
 
 std::shared_ptr<TensorCanonicalizer>
-Context::nondefault_tensor_canonicalizer_ptr(std::wstring_view label) const {
+Context::nondefault_tensor_canonicalizer_ptr(std::string_view label) const {
   const auto& map = canonicalization_config_->tensor_canonicalizers;
-  auto it = map.find(std::wstring{label});
+  auto it = map.find(std::string{label});
   return it != map.end() ? it->second : nullptr;
 }
 
 const TensorCanonicalizer& Context::tensor_canonicalizer(
-    std::wstring_view label) const {
+    std::string_view label) const {
   auto ptr = tensor_canonicalizer_ptr(label);
   if (!ptr)
     throw Exception(
@@ -559,7 +558,7 @@ Context::index_pair_comparer_ptr() const {
   return canonicalization_config_->index_pair_comparer;
 }
 
-const container::vector<std::wstring>& Context::cardinal_tensor_labels() const {
+const container::vector<std::string>& Context::cardinal_tensor_labels() const {
   return canonicalization_config_->cardinal_labels;
 }
 
@@ -631,18 +630,18 @@ Context& Context::set(ColumnSymmetry column_symmetry) {
 }
 
 Context& Context::set_tensor_canonicalizer(
-    std::wstring_view label,
+    std::string_view label,
     std::shared_ptr<TensorCanonicalizer> canonicalizer) {
   check_tensor_canonicalizer(canonicalizer);
   mutable_canonicalization_config().tensor_canonicalizers.insert_or_assign(
-      std::wstring{label}, std::move(canonicalizer));
+      std::string{label}, std::move(canonicalizer));
   invalidate_version();
   return *this;
 }
 
-Context& Context::unset_tensor_canonicalizer(std::wstring_view label) {
+Context& Context::unset_tensor_canonicalizer(std::string_view label) {
   mutable_canonicalization_config().tensor_canonicalizers.erase(
-      std::wstring{label});
+      std::string{label});
   invalidate_version();
   return *this;
 }
@@ -679,7 +678,7 @@ Context& Context::set_index_pair_comparer(
 }
 
 Context& Context::set_cardinal_tensor_labels(
-    container::vector<std::wstring> labels) {
+    container::vector<std::string> labels) {
   check_cardinal_tensor_labels(labels);
   mutable_canonicalization_config().cardinal_labels = std::move(labels);
   invalidate_version();

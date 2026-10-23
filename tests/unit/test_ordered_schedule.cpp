@@ -64,7 +64,7 @@ TEST_CASE(
     "well_formed accepts a root block with one build step and one child "
     "loop block carrying an AccumulateSum output",
     "[ordered-schedule]") {
-  Index const i1{L"i_1"};
+  Index const i1{"i_1"};
 
   // value_id 1 is the per-iteration transient built inside the loop; value_id
   // 2 is the DISTINCT accumulator that the block's own AccumulateSum output
@@ -94,7 +94,7 @@ TEST_CASE(
 // side kept only when it has surviving steps.
 TEST_CASE("fork_subchain forks an inner sub-chain by consumer-pass membership",
           "[ordered-schedule][fork]") {
-  Index const ax{L"i_1"};
+  Index const ax{"i_1"};
 
   // Inner sub-chain: BuildStep{0}, a nested Κ-loop whose two builds straddle
   // the split (1 producer, 2 consumer) and whose two AccumulateSum outputs
@@ -152,7 +152,7 @@ TEST_CASE("fork_subchain forks an inner sub-chain by consumer-pass membership",
 // and NOT emitted (empty) on the other.
 TEST_CASE("fork_subchain drops the empty side of a one-sided nested loop",
           "[ordered-schedule][fork]") {
-  Index const ax{L"i_1"};
+  Index const ax{"i_1"};
 
   ScopeBlock inner;
   inner.axis = ax;
@@ -183,8 +183,8 @@ TEST_CASE("fork_subchain drops the empty side of a one-sided nested loop",
 // escaping at two blocks WHEN they nest (inner is a descendant of outer).
 TEST_CASE("well_formed accepts a nested multi-level escape chain",
           "[ordered-schedule][escape-chain]") {
-  Index const outer{L"i_1"};
-  Index const inner{L"i_2"};
+  Index const outer{"i_1"};
+  Index const inner{"i_2"};
 
   // value_id 2 escapes: AccumulateSum on the inner block's close (partial ->
   // accumulator), then AccumulateScatter on the outer block's close (-> full).
@@ -211,7 +211,7 @@ TEST_CASE("well_formed accepts a nested multi-level escape chain",
 // it is duplicate production, rejected.
 TEST_CASE("well_formed rejects the same escape in two sibling blocks",
           "[ordered-schedule][escape-chain]") {
-  Index const ax{L"i_2"};
+  Index const ax{"i_2"};
 
   ScopeBlock a;
   a.axis = ax;
@@ -246,8 +246,8 @@ TEST_CASE("well_formed rejects an out-of-range BuildStep::value_id",
 TEST_CASE(
     "well_formed rejects duplicate ordinals among same-axis sibling blocks",
     "[ordered-schedule]") {
-  Index const i1{L"i_1"};
-  Index const i2{L"i_2"};  // same TYPE ("i") as i1, different physical label
+  Index const i1{"i_1"};
+  Index const i2{"i_2"};  // same TYPE ("i") as i1, different physical label
 
   ScopeBlock child_a;
   child_a.axis = i1;
@@ -271,7 +271,7 @@ TEST_CASE(
 TEST_CASE("well_formed rejects an out-of-range output value_id",
           "[ordered-schedule]") {
   ScopeBlock child;
-  child.axis = Index{L"i_1"};
+  child.axis = Index{"i_1"};
   child.outputs.push_back({7, OutputKind::AccumulateScatter});
 
   OrderedSchedule sched;
@@ -291,7 +291,7 @@ TEST_CASE(
   // production sites for the same value_id, which is never legal regardless
   // of how far apart in the tree they sit.
   ScopeBlock child;
-  child.axis = Index{L"i_1"};
+  child.axis = Index{"i_1"};
   child.outputs.push_back({0, OutputKind::AccumulateSum});
 
   OrderedSchedule sched;
@@ -345,7 +345,7 @@ sequant::ExprPtr orderedsched_witness_flatten_product(
 // is `axis_key` -- used to confirm relative ORDER (not just presence) among
 // a block's steps.
 std::optional<std::size_t> orderedsched_index_of_child_block(
-    ScopeBlock const& block, std::wstring const& axis_key) {
+    ScopeBlock const& block, std::string const& axis_key) {
   for (std::size_t i = 0; i < block.steps.size(); ++i) {
     if (auto const* child = std::get_if<ScopeBlock>(&block.steps[i].value))
       if (child->axis.basis().base_key() == axis_key) return i;
@@ -437,7 +437,7 @@ TEST_CASE(
     "escape by that slot, and the resulting cell-table reads slice both "
     "operands on it",
     "[ordered-schedule][cell_table]") {
-  Index const i1{L"i_1"};
+  Index const i1{"i_1"};
 
   auto A = orderedsched_leaf("A{i_1;}");
   auto B = orderedsched_leaf("B{;i_1}");
@@ -449,11 +449,11 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
 
   sequant::eval::dryrun::SizeRegime regime;
-  regime.space_extent = {{L"i", 6u}};
+  regime.space_extent = {{"i", 6u}};
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
 
   std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{P};
@@ -492,15 +492,15 @@ TEST_CASE(
   // output of the {i} block, with no BuildStep anywhere (single production
   // site: the escape itself).
   sequant::eval::OrderedSchedule sched;
-  REQUIRE_NOTHROW(sched = sequant::eval::build_ordered_schedule(
-                      rich, legality, policy, {L"i"}));
+  REQUIRE_NOTHROW(sched = sequant::eval::build_ordered_schedule(rich, legality,
+                                                                policy, {"i"}));
   REQUIRE(well_formed(sched));
 
-  auto const i_child_idx = orderedsched_index_of_child_block(sched.root, L"i");
+  auto const i_child_idx = orderedsched_index_of_child_block(sched.root, "i");
   REQUIRE(i_child_idx.has_value());
   ScopeBlock const& i_block =
       std::get<ScopeBlock>(sched.root.steps[*i_child_idx].value);
-  CHECK(i_block.axis.basis().base_key() == L"i");
+  CHECK(i_block.axis.basis().base_key() == "i");
 
   auto const p_out_it =
       std::find_if(i_block.outputs.begin(), i_block.outputs.end(),
@@ -575,7 +575,7 @@ TEST_CASE(
     "contracted mode the value also carries another index of the SAME "
     "SPACE for; the schedule keeps its previous (slot-0-fallback) shape",
     "[ordered-schedule]") {
-  Index const i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
+  Index const i1{"i_1"}, i2{"i_2"}, i3{"i_3"};
 
   // R{i_1;i_2} = A{i_1;i_3} * B{i_3;i_2}, contracting i_3 -- but R carries
   // i_1 AND i_2, both the SAME SPACE ("i") as the contracted i_3. A and B
@@ -589,11 +589,11 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
 
   sequant::eval::dryrun::SizeRegime regime;
-  regime.space_extent = {{L"i", 6u}};
+  regime.space_extent = {{"i", 6u}};
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
 
   std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{R};
@@ -639,8 +639,8 @@ TEST_CASE(
   // build_ordered_schedule must NOT throw (the Reduction resolves to the
   // stamped reduced_slot) and places R as an AccumulateSum output.
   sequant::eval::OrderedSchedule sched;
-  REQUIRE_NOTHROW(sched = sequant::eval::build_ordered_schedule(
-                      rich, legality, policy, {L"i"}));
+  REQUIRE_NOTHROW(sched = sequant::eval::build_ordered_schedule(rich, legality,
+                                                                policy, {"i"}));
   REQUIRE(well_formed(sched));
 
   bool found_sum = false;
@@ -669,7 +669,7 @@ TEST_CASE(
     "throws instead of guessing loop_slot 0",
     "[ordered-schedule]") {
   using sequant::eval::LoopRole;
-  Index const i1{L"i_1"};
+  Index const i1{"i_1"};
 
   sequant::eval::RichSchedule rich;
   {
@@ -696,11 +696,11 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
 
   REQUIRE_THROWS_WITH(
-      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"}),
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {"i"}),
       Catch::Matchers::ContainsSubstring("no loop identity"));
 }
 
@@ -722,10 +722,10 @@ void orderedsched_stamp_2axis(sequant::EvalNode<sequant::EvalExpr>& n) {
   using sequant::BatchModeType;
   sequant::container::svector<std::pair<Index, BatchModeType>> stamps;
   for (auto const& ix : n->canon_indices())
-    if (ix.basis().base_key() == L"i")
+    if (ix.basis().base_key() == "i")
       stamps.push_back({ix, BatchModeType::External});
   for (auto const& ix : sequant::contracted_indices(n))
-    if (ix.basis().base_key() == L"Κ")
+    if (ix.basis().base_key() == "Κ")
       stamps.push_back({ix, BatchModeType::Contracted});
   if (!stamps.empty()) n->set_node_slice_mask(stamps);
   // Loop-OPENS (peak_profile builds ectx from these): the aux (Κ) Contracted
@@ -755,7 +755,7 @@ void orderedsched_stamp_all(sequant::EvalNode<sequant::EvalExpr>& n) {
   sequant::container::svector<std::pair<Index, BatchModeType>> opens(
       n->batch_loops_opened_here().begin(), n->batch_loops_opened_here().end());
   for (auto const& ix : n->canon_indices())
-    if (ix.basis().base_key() == L"i")
+    if (ix.basis().base_key() == "i")
       opens.push_back({ix, BatchModeType::External});
   n->set_batch_loops_opened_here(opens);
 }
@@ -815,15 +815,15 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"Κ";
+    return ix.basis().base_key() == "Κ";
   };
   policy.is_batchable_external_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
   policy.batch_spectator_indices = true;
 
   sequant::eval::dryrun::SizeRegime regime;
-  regime.space_extent = {{L"i", 8u}, {L"Κ", 6u}};
+  regime.space_extent = {{"i", 8u}, {"Κ", 6u}};
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
 
   std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{B};
@@ -876,12 +876,12 @@ void orderedsched_record_loop_kinds(sequant::eval::RichSchedule& rich) {
       for (std::size_t p = 0; p < occ.loop_slot.size(); ++p)
         if (occ.loop_slot[p] >= 0)
           rich.loop_kind.emplace(
-              std::make_pair(std::wstring{occ.carried[p].basis().base_key()},
+              std::make_pair(std::string{occ.carried[p].basis().base_key()},
                              occ.loop_slot[p]),
               sequant::BatchModeType::External);
       for (auto const& [m, slot] : occ.reduced_slot)
         rich.loop_kind.emplace(
-            std::make_pair(std::wstring{m.basis().base_key()}, slot),
+            std::make_pair(std::string{m.basis().base_key()}, slot),
             sequant::BatchModeType::Contracted);
     }
 }
@@ -905,7 +905,7 @@ sequant::eval::ValueCell orderedsched_levels_cell(
 
 sequant::eval::CellLegality orderedsched_levels_legality(
     std::size_t hash, sequant::eval::LoopRole role) {
-  sequant::Index const i{L"i_1"};
+  sequant::Index const i{"i_1"};
   sequant::eval::CellLegality cl;
   cl.hash = hash;
   sequant::eval::AxisClass ac;
@@ -1077,7 +1077,7 @@ struct OrderedSchedFixture {
   // AUX+OCC: Kappa batchable-contracted (aux), i batchable-EXTERNAL (occ).
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"\x39a";
+    return ix.basis().base_key() == "\u039A";
   };
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
     auto const reg = sequant::get_default_context().index_basis_registry();
@@ -1088,10 +1088,10 @@ struct OrderedSchedFixture {
   // (which changes the schedule structure -- occ-outer hoisting).
   policy.batch_spectator_indices = true;
   policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"\x39a" ? 256 : 16;
+    return ix.basis().base_key() == "\u039A" ? 256 : 16;
   };
   policy.is_volatile_leaf = [](sequant::Tensor const& t) {
-    return t.label() == L"t";
+    return t.label() == "t";
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
@@ -1132,7 +1132,7 @@ struct OrderedSchedFixture {
   REQUIRE(!forest.empty());
 
   auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"\x39a" ? 256 : 16;
+    return ix.basis().base_key() == "\u039A" ? 256 : 16;
   };
   auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
   REQUIRE(!rich.cells.empty());
@@ -1141,11 +1141,11 @@ struct OrderedSchedFixture {
   REQUIRE(legality.cells.size() == rich.cells.size());
 
   // MPQC passes an EMPTY mode_order (cck.ipp: the ordered driver
-  // calls evaluate(..., std::initializer_list<std::wstring>{}, ...)), letting
+  // calls evaluate(..., std::initializer_list<std::string>{}, ...)), letting
   // build_ordered_schedule DERIVE the forced-split axes from the legality --
-  // NOT an explicit {L"Κ", L"i"}. Match that.
+  // NOT an explicit {"Κ", "i"}. Match that.
   auto sched = sequant::eval::build_ordered_schedule(
-      rich, legality, policy, std::initializer_list<std::wstring>{});
+      rich, legality, policy, std::initializer_list<std::string>{});
 
   return OrderedSchedFixture{std::move(forest), std::move(rich),
                              std::move(legality), std::move(sched)};
@@ -1200,15 +1200,15 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"\x39a";  // Kappa
+    return ix.basis().base_key() == "\u039A";  // Kappa
   };
   policy.is_batchable_external_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
   policy.batch_spectator_indices = true;
 
   sequant::eval::dryrun::SizeRegime regime;
-  regime.space_extent = {{L"i", 8u}, {L"\x39a", 6u}};
+  regime.space_extent = {{"i", 8u}, {"\u039A", 6u}};
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
 
   std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{B};
@@ -1218,7 +1218,7 @@ TEST_CASE(
   REQUIRE(!rich.cells.empty());
   auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
   auto const sched =
-      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {"i"});
 
   // Persisted edges == the dep graph the topo-sort consumes (its documented
   // source), and there is at least one computed value with operands.
@@ -1269,7 +1269,7 @@ namespace {
 [[maybe_unused]] std::pair<std::unordered_set<std::size_t>,
                            std::unordered_set<std::size_t>>
 orderedsched_old_partition(
-    std::wstring const& axis_key,
+    std::string const& axis_key,
     sequant::eval::LegalitySchedule const& legality,
     sequant::eval::detail::OrderedScheduleDepGraph const& g) {
   std::unordered_set<std::size_t> carried;
@@ -1350,7 +1350,7 @@ TEST_CASE("forced_split_levels: two levels reproduce the two-set partition",
   auto const fx = orderedsched_water20_auxocc_fixture();
   auto const g = sequant::eval::detail::ordered_schedule_dep_graph(fx.rich);
   auto const [old_carried, old_consumer_pass] =
-      orderedsched_old_partition(L"i", fx.legality, g);
+      orderedsched_old_partition("i", fx.legality, g);
   auto const lv = sequant::eval::detail::forced_split_levels(
       fx.rich, fx.legality, g, orderedsched_never_inside,
       orderedsched_never_inside);
@@ -1377,8 +1377,8 @@ TEST_CASE(
     "genuine build without the more-than-one-forced-space assertion",
     "[ordered-schedule][levels]") {
   using sequant::eval::LoopRole;
-  sequant::Index const i1{L"i_1"};
-  sequant::Index const a1{L"a_1"};
+  sequant::Index const i1{"i_1"};
+  sequant::Index const a1{"a_1"};
 
   sequant::eval::RichSchedule rich;
   // L_i (carried on "i"): produced at point 0, read by Reader_i at point 1.
@@ -1425,12 +1425,12 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"i" || ix.basis().base_key() == L"a";
+    return ix.basis().base_key() == "i" || ix.basis().base_key() == "a";
   };
 
   sequant::eval::OrderedSchedule sched;
   REQUIRE_NOTHROW(sched = sequant::eval::build_ordered_schedule(
-                      rich, legality, policy, {L"i", L"a"}));
+                      rich, legality, policy, {"i", "a"}));
   CHECK(sequant::eval::well_formed(sched));
 }
 
@@ -1467,9 +1467,9 @@ TEST_CASE(
     "mis-scheduling",
     "[ordered-schedule][levels]") {
   using sequant::eval::LoopRole;
-  sequant::Index const i1{L"i_1"};
-  sequant::Index const i2{L"i_2"};
-  sequant::Index const i3{L"i_3"};
+  sequant::Index const i1{"i_1"};
+  sequant::Index const i2{"i_2"};
+  sequant::Index const i3{"i_3"};
 
   sequant::eval::RichSchedule rich;
   {
@@ -1541,11 +1541,11 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
 
   REQUIRE_THROWS_WITH(
-      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"}),
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {"i"}),
       Catch::Matchers::ContainsSubstring("outside its nest"));
 }
 
@@ -1660,7 +1660,7 @@ struct OrderedSchedReductionInLoopFixture {
 // that helper only sets carried/home/loop_slot from `modes`.
 OrderedSchedReductionInLoopFixture orderedsched_reduction_in_loop_fixture() {
   using sequant::eval::LoopRole;
-  sequant::Index const i1{L"i_1"};
+  sequant::Index const i1{"i_1"};
 
   OrderedSchedReductionInLoopFixture fx;
   auto v = orderedsched_nest_cell(0, 9300, {}, {}, {{110, 200}, {111, 300}});
@@ -1719,10 +1719,10 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
   auto const sched = sequant::eval::build_ordered_schedule(fx.rich, fx.legality,
-                                                           policy, {L"i"});
+                                                           policy, {"i"});
   REQUIRE(well_formed(sched));
 
   // Two root blocks of the same loop (slot 0), latitudes 0 and 1.
@@ -1769,7 +1769,7 @@ TEST_CASE(
     "[ordered-schedule][per-nest-split]") {
   using sequant::eval::LoopRole;
   using sequant::eval::OutputKind;
-  sequant::Index const i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"}, i4{L"i_4"};
+  sequant::Index const i1{"i_1"}, i2{"i_2"}, i3{"i_3"}, i4{"i_4"};
   std::vector<sequant::Index> const ab{i1, i2}, cd{i3, i4};
 
   sequant::eval::RichSchedule rich;
@@ -1809,10 +1809,10 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
   auto const sched =
-      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {"i"});
   REQUIRE(well_formed(sched));
 
   // Chain: four depths of one space (slots 0..3), two nests {0,1} and {2,3}.
@@ -1898,7 +1898,7 @@ TEST_CASE("per-nest split: a carried chain gives three pass blocks",
           "[ordered-schedule][per-nest-split]") {
   using sequant::eval::LoopRole;
   using sequant::eval::OutputKind;
-  sequant::Index const i1{L"i_1"}, i2{L"i_2"};
+  sequant::Index const i1{"i_1"}, i2{"i_2"};
   std::vector<sequant::Index> const ab{i1, i2};
   sequant::eval::RichSchedule rich;
   rich.cells.push_back(orderedsched_nest_cell(0, 3000, ab, {0, 1}, {{0, 10}}));
@@ -1914,10 +1914,10 @@ TEST_CASE("per-nest split: a carried chain gives three pass blocks",
       orderedsched_nest_legality(3002, ab, LoopRole::LoopLocal));
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
   auto const sched =
-      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {"i"});
   REQUIRE(well_formed(sched));
   auto const roots = orderedsched_root_blocks(sched);
   REQUIRE(roots.size() == 3);
@@ -1961,7 +1961,7 @@ TEST_CASE(
     "scattered to a root-resident form",
     "[ordered-schedule][per-nest-split]") {
   using sequant::eval::LoopRole;
-  sequant::Index const i1{L"i_1"}, i2{L"i_2"};
+  sequant::Index const i1{"i_1"}, i2{"i_2"};
   std::vector<sequant::Index> const ab{i1, i2}, b{i2};
   sequant::eval::RichSchedule rich;
   rich.cells.push_back(orderedsched_nest_cell(0, 4000, ab, {0, 1}, {{0, 30}}));
@@ -1988,10 +1988,10 @@ TEST_CASE(
       orderedsched_nest_legality(4003, ab, LoopRole::LoopCarried));
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
   auto const sched =
-      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {"i"});
   REQUIRE(well_formed(sched));
   auto const roots = orderedsched_root_blocks(sched);
   REQUIRE(roots.size() == 2);  // one nest, passes 0 and 1
@@ -2036,7 +2036,7 @@ TEST_CASE(
     "sum then a scatter to root",
     "[ordered-schedule][per-nest-split]") {
   using sequant::eval::LoopRole;
-  sequant::Index const i1{L"i_1"}, i2{L"i_2"};
+  sequant::Index const i1{"i_1"}, i2{"i_2"};
   std::vector<sequant::Index> const ab{i1, i2};
   sequant::eval::RichSchedule rich;
   rich.cells.push_back(orderedsched_nest_cell(0, 5000, ab, {0, 1}, {{0, 30}}));
@@ -2077,10 +2077,10 @@ TEST_CASE(
       orderedsched_nest_legality(5003, ab, LoopRole::LoopCarried));
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
   auto const sched =
-      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {"i"});
   REQUIRE(well_formed(sched));
   auto const roots = orderedsched_root_blocks(sched);
   REQUIRE(roots.size() == 2);  // one nest, passes 0 and 1
@@ -2135,7 +2135,7 @@ TEST_CASE(
     "upgrades the escape to a scatter",
     "[ordered-schedule][per-nest-split]") {
   using sequant::eval::LoopRole;
-  sequant::Index const i1{L"i_1"}, i2{L"i_2"};
+  sequant::Index const i1{"i_1"}, i2{"i_2"};
   std::vector<sequant::Index> const ab{i1, i2};
   sequant::eval::RichSchedule rich;
   rich.cells.push_back(orderedsched_nest_cell(0, 6000, ab, {0, 1}, {{0, 30}}));
@@ -2169,10 +2169,10 @@ TEST_CASE(
       orderedsched_nest_legality(6003, ab, LoopRole::LoopCarried));
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
   auto const sched =
-      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {"i"});
   REQUIRE(well_formed(sched));
   auto const roots = orderedsched_root_blocks(sched);
   REQUIRE(roots.size() == 2);
@@ -2207,7 +2207,7 @@ TEST_CASE(
     "a value outside its nest, throws",
     "[ordered-schedule][per-nest-split]") {
   using sequant::eval::LoopRole;
-  sequant::Index const i4{L"i_4"}, i5{L"i_5"}, i6{L"i_6"};
+  sequant::Index const i4{"i_4"}, i5{"i_5"}, i6{"i_6"};
 
   sequant::eval::RichSchedule rich;
   {
@@ -2278,11 +2278,11 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
 
   REQUIRE_THROWS_WITH(
-      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"}),
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {"i"}),
       Catch::Matchers::ContainsSubstring("legality and the schedule disagree"));
 }
 
@@ -2303,7 +2303,7 @@ TEST_CASE(
     "instance in one nest, read later from a different nest, throws",
     "[ordered-schedule][per-nest-split]") {
   using sequant::eval::LoopRole;
-  sequant::Index const i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
+  sequant::Index const i1{"i_1"}, i2{"i_2"}, i3{"i_3"};
   std::vector<sequant::Index> const ab{i1, i2};
   sequant::eval::RichSchedule rich;
   rich.cells.push_back(orderedsched_nest_cell(0, 8000, ab, {0, 1}, {{0, 30}}));
@@ -2336,10 +2336,10 @@ TEST_CASE(
       orderedsched_nest_legality(8003, {i3}, LoopRole::LoopLocal));
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
   REQUIRE_THROWS_WITH(
-      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"}),
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {"i"}),
       Catch::Matchers::ContainsSubstring("legality and the schedule disagree"));
 }
 
@@ -2363,7 +2363,7 @@ TEST_CASE(
   using sequant::eval::LoopRole;
   using sequant::eval::OccurrenceRole;
   using sequant::eval::OutputKind;
-  Index const a1{L"a_1"}, a2{L"a_2"};
+  Index const a1{"a_1"}, a2{"a_2"};
 
   sequant::eval::RichSchedule rich;
   // W: point 0, read by R (point 10); R: read by the root (point 20).
@@ -2373,8 +2373,8 @@ TEST_CASE(
   rich.cells.push_back(orderedsched_nest_cell(2, 7002, {}, {}, {{20, 20}}));
   for (auto& vc : rich.cells)
     if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
-  rich.loop_kind[{L"a", 0}] = sequant::BatchModeType::External;
-  rich.loop_kind[{L"a", 1}] = sequant::BatchModeType::External;
+  rich.loop_kind[{"a", 0}] = sequant::BatchModeType::External;
+  rich.loop_kind[{"a", 1}] = sequant::BatchModeType::External;
 
   sequant::eval::LegalitySchedule legality;
   {
@@ -2403,10 +2403,10 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"a";
+    return ix.basis().base_key() == "a";
   };
   auto const sched =
-      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"a"});
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {"a"});
   REQUIRE(well_formed(sched));
 
   // One traversal of the a_1 loop.
@@ -2457,7 +2457,7 @@ TEST_CASE(
   using sequant::eval::LoopRole;
   using sequant::eval::OccurrenceRole;
   using sequant::eval::OutputKind;
-  Index const a1{L"a_1"}, a2{L"a_2"};
+  Index const a1{"a_1"}, a2{"a_2"};
 
   sequant::eval::RichSchedule rich;
   // W: point 0 read by L (point 10), point 1 read by R (point 20); L and R
@@ -2470,8 +2470,8 @@ TEST_CASE(
   rich.cells.push_back(orderedsched_nest_cell(3, 7103, {}, {}, {{30, 30}}));
   for (auto& vc : rich.cells)
     if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
-  rich.loop_kind[{L"a", 0}] = sequant::BatchModeType::External;
-  rich.loop_kind[{L"a", 1}] = sequant::BatchModeType::External;
+  rich.loop_kind[{"a", 0}] = sequant::BatchModeType::External;
+  rich.loop_kind[{"a", 1}] = sequant::BatchModeType::External;
 
   sequant::eval::LegalitySchedule legality;
   {
@@ -2514,10 +2514,10 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"a";
+    return ix.basis().base_key() == "a";
   };
   auto const sched =
-      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"a"});
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {"a"});
   REQUIRE(well_formed(sched));
 
   // Two passes of the a_1 loop: W and L in pass 0, R in pass 1.

@@ -24,10 +24,10 @@ int main() {
   using sequant::mbpt::qns_t;
 
   // constructor takes label, tensor form and QuantumNumberChange
-  op_t fock_op([]() -> std::wstring_view { return L"f"; },
+  op_t fock_op([]() -> std::string_view { return "f"; },
                []() -> ExprPtr {
-                 return ex<Tensor>(L"f", bra{L"p_1"}, ket{L"p_2"}) *
-                        ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"}));
+                 return ex<Tensor>("f", bra{"p_1"}, ket{"p_2"}) *
+                        ex<FNOperator>(cre({"p_1"}), ann({"p_2"}));
                },
                [](qns_t& qns) { qns += sequant::mbpt::general_type_qns(1); });
   // end-snippet-1
@@ -76,34 +76,34 @@ int main() {
   auto expr = op::H(2) * op::T(2) * op::T(2);
   // connect the Hamiltonian with every t: H(2) is written in terms of f or h,
   // depending on the vacuum, and default_op_connections() covers both
-  const EVOptions<std::wstring> opts{.connect = default_op_connections()};
+  const EVOptions<std::string> opts{.connect = default_op_connections()};
   auto result = op::vac_av(op::P(2) * expr, opts);
   // vac_av is equivalent to ref_av for single-determinant reference:
   // auto result = op::ref_av(op::P(2) * expr, opts);
 
-  std::wcout << "Result: " << result << "\n";
+  std::cout << "Result: " << result << "\n";
   // end-snippet-4
 
   // start-snippet-5
   // Create a custom operator registry with a new operator
   auto custom_registry = std::make_shared<OpRegistry>();
 
-  custom_registry->add(L"f", OpClass::Gen)
-      .add(L"g", OpClass::Gen)
-      .add(L"t", OpClass::Ex)
-      .add(L"λ", OpClass::Deex)
-      .add(L"X", OpClass::Ex);  // Custom excitation operator
+  custom_registry->add("f", OpClass::Gen)
+      .add("g", OpClass::Gen)
+      .add("t", OpClass::Ex)
+      .add("λ", OpClass::Deex)
+      .add("X", OpClass::Ex);  // Custom excitation operator
 
   // Use the custom registry to set the default MBPT context
   set_default_mbpt_context({.op_registry_ptr = custom_registry});
 
   // Create custom operator using OpMaker
-  auto X2_tensor = OpMaker<Statistics::FermiDirac>(L"X", 2)();
+  auto X2_tensor = OpMaker<Statistics::FermiDirac>("X", 2)();
 
   // Create custom operator using mbpt::Operator
   auto X2_op = ex<op_t>(
-      []() -> std::wstring_view { return L"X"; },
-      []() -> ExprPtr { return OpMaker<Statistics::FermiDirac>(L"X", 2)(); },
+      []() -> std::string_view { return "X"; },
+      []() -> ExprPtr { return OpMaker<Statistics::FermiDirac>("X", 2)(); },
       [](qns_t& qns) { qns += excitation_type_qns(2); });
 
   // Use in expressions

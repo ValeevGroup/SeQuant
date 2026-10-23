@@ -31,10 +31,10 @@ auto eval_node(sequant::ExprPtr const& expr) {
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
-static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?_?(\\d+)"};
+static auto const idx_rgx = boost::regex{"([ia])(↑|↓)?_?(\\d+)"};
 auto tensor_to_key(sequant::Tensor const& tnsr) {
-  auto formatter = [](boost::wsmatch mo) -> std::wstring {
-    return (mo[1].str() == L"i" ? L"o" : L"v") + mo[2].str();
+  auto formatter = [](boost::smatch mo) -> std::string {
+    return (mo[1].str() == "i" ? "o" : "v") + mo[2].str();
   };
 
   auto const tnsr_deparsed =
@@ -42,7 +42,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
   return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
 }
 
-[[maybe_unused]] auto tensor_to_key(std::wstring_view spec) {
+[[maybe_unused]] auto tensor_to_key(std::string_view spec) {
   return tensor_to_key(
       sequant::deserialize(spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
           ->as<sequant::Tensor>());
@@ -55,7 +55,7 @@ class rand_tensor_yield {
  private:
   size_t const nocc_;
   size_t const nvirt_;
-  mutable std::map<std::wstring, sequant::ResultPtr> label_to_tnsr_;
+  mutable std::map<std::string, sequant::ResultPtr> label_to_tnsr_;
 
  public:
   rand_tensor_yield(size_t noccupied, size_t nvirtual)
@@ -69,15 +69,15 @@ class rand_tensor_yield {
     SEQUANT_ASSERT(
         ranges::all_of(tnsr.const_braket_indices(),
                        [&ibr](auto const& idx) {
-                         return idx.space() == ibr->retrieve_space(L"i") ||
-                                idx.space() == ibr->retrieve_space(L"a");
+                         return idx.space() == ibr->retrieve_space("i") ||
+                                idx.space() == ibr->retrieve_space("a");
                        }) &&
         "Unsupported IndexSpace type found while generating tensor.");
 
     auto extents =
         tnsr.const_braket_indices() | transform([this, &ibr](auto const& idx) {
           return static_cast<int64_t>(
-              idx.space() == ibr->retrieve_space(L"i") ? nocc_ : nvirt_);
+              idx.space() == ibr->retrieve_space("i") ? nocc_ : nvirt_);
         }) |
         ranges::to<sequant::container::svector<int64_t>>;
 
@@ -98,7 +98,7 @@ class rand_tensor_yield {
 
   sequant::ResultPtr operator()(sequant::Tensor const& tnsr) const {
     using namespace sequant;
-    std::wstring const label = tensor_to_key(tnsr);
+    std::string const label = tensor_to_key(tnsr);
     if (auto&& found = label_to_tnsr_.find(label);
         found != label_to_tnsr_.end()) {
       return found->second;
@@ -131,8 +131,8 @@ class rand_tensor_yield {
   /// \note The tensor should be already present in the yielder cache
   ///       otherwise throws assertion error. To avoid that use the other
   ///       overload of operator() that takes sequant::Tensor const&
-  sequant::ResultPtr operator()(std::wstring_view label) const {
-    auto&& found = label_to_tnsr_.find(std::wstring{label});
+  sequant::ResultPtr operator()(std::string_view label) const {
+    auto&& found = label_to_tnsr_.find(std::string{label});
     if (found == label_to_tnsr_.end()) {
       SEQUANT_ASSERT(false && "attempted access of non-existent tensor!");
     }
@@ -147,8 +147,8 @@ template <
     std::enable_if_t<
         std::is_convertible_v<sequant::meta::range_value_t<Iterable>, Index> &&
             !sequant::meta::is_statically_castable_v<
-                Iterable const&, std::wstring>  // prefer the ctor taking the
-                                                // std::wstring
+                Iterable const&, std::string>  // prefer the ctor taking the
+                                               // std::string
         ,
         bool> = true>
 container::svector<int64_t> tidxs(Iterable const& indices) noexcept {
@@ -169,20 +169,20 @@ container::svector<int64_t> tidxs(
   return tidxs(tnsr_p->as<Tensor>());
 }
 
-auto terse_index = [](std::wstring const& spec) {
-  auto formatter = [](boost::wsmatch mo) -> std::wstring {
-    return mo[1].str() + mo[2].str() + L"_" + mo[3].str();
+auto terse_index = [](std::string const& spec) {
+  auto formatter = [](boost::smatch mo) -> std::string {
+    return mo[1].str() + mo[2].str() + "_" + mo[3].str();
   };
   return boost::regex_replace(spec, idx_rgx, formatter);
 };
 
-container::svector<int64_t> tidxs(std::wstring const& csv) noexcept {
+container::svector<int64_t> tidxs(std::string const& csv) noexcept {
   using ranges::views::all;
   using ranges::views::split;
   using ranges::views::transform;
   auto const detersed = terse_index(csv);
-  return tidxs(detersed | split(L',') |
-               transform([](auto&& v) { return ranges::to<std::wstring>(v); }));
+  return tidxs(detersed | split(',') |
+               transform([](auto&& v) { return ranges::to<std::string>(v); }));
 }
 
 }  // namespace
@@ -198,7 +198,7 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
   std::srand(2023);
   const size_t nocc = 2, nvirt = 20;
   auto yield_ = rand_tensor_yield<TAPPTensorD>{nocc, nvirt};
-  auto yield = [&yield_](std::wstring_view lbl) -> TAPPTensorD const& {
+  auto yield = [&yield_](std::string_view lbl) -> TAPPTensorD const& {
     return yield_(lbl)->get<TAPPTensorD>();
   };
 
@@ -234,25 +234,25 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
   };
 
   SECTION("Summation") {
-    auto expr1 = parse_antisymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
+    auto expr1 = parse_antisymm("t_{a1}^{i1} + f_{i1}^{a1}");
     auto const tidx1 = tidxs(expr1, {0});
     auto eval1 = eval(expr1, tidx1);
 
-    auto man1 = yield(L"t{v;o}");
+    auto man1 = yield("t{v;o}");
     TAPPTensorD f_permuted;
-    tapp_ops::permute(yield(L"f{o;v}"), {0, 1}, f_permuted, {1, 0});
+    tapp_ops::permute(yield("f{o;v}"), {0, 1}, f_permuted, {1, 0});
     man1 += f_permuted;
 
     REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
 
-    auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
+    auto expr2 = parse_antisymm("2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
     auto const tidx2 = tidxs(expr2, {0, 0});
     auto eval2 = eval(expr2, tidx2);
 
-    auto man2 = yield(L"t{v;o}");
+    auto man2 = yield("t{v;o}");
     tapp_ops::scal(2.0, man2);
     TAPPTensorD temp;
-    tapp_ops::permute(yield(L"f{o;v}"), {0, 1}, temp, {1, 0});
+    tapp_ops::permute(yield("f{o;v}"), {0, 1}, temp, {1, 0});
     tapp_ops::scal(1.5, temp);
     man2 += temp;
 
@@ -261,8 +261,8 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
 
   SECTION("Product") {
     auto expr1 =
-        parse_antisymm(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{ i1, i2}");
-    auto const tidx1 = tidxs(L"i1,i4,a1,a4");
+        parse_antisymm("1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{ i1, i2}");
+    auto const tidx1 = tidxs("i1,i4,a1,a4");
     auto eval1 = eval(expr1, tidx1);
 
     // mnemonics
@@ -271,16 +271,16 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
     // a looks like 7
 
     TAPPTensorD man1;
-    auto const& g = yield(L"g{o,o;v,v}");
-    auto const& t2 = yield(L"t{v,v;o,o}");
+    auto const& g = yield("g{o,o;v,v}");
+    auto const& t2 = yield("t{v,v;o,o}");
     tapp_ops::contract(0.5, g, {12, 14, 72, 74}, t2, {71, 72, 11, 12}, 0.0,
                        man1, {11, 14, 71, 74});
     REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
 
     auto expr2 = parse_antisymm(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a1,a3}^{i3,i4} * t_{a2,a4}^{ i1, "
-        L"i2}");
-    auto tidx2 = tidxs(L"i1,i2,a1,a2");
+        "-1/4 * g_{i3,i4}^{a3,a4} * t_{a1,a3}^{i3,i4} * t_{a2,a4}^{ i1, "
+        "i2}");
+    auto tidx2 = tidxs("i1,i2,a1,a2");
     auto eval2 = eval(expr2, tidx2);
 
     TAPPTensorD man2, temp2;
@@ -293,15 +293,15 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
 
   SECTION("Summation and Product") {
     auto expr1 = parse_antisymm(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
+        "-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
         " + "
         " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * "
         "t_{a3,a4}^{i1,i2}");
-    auto tidx1 = tidxs(L"i1,i2,a1,a2");
+    auto tidx1 = tidxs("i1,i2,a1,a2");
     auto eval1 = eval(expr1, tidx1);
 
-    auto const& g = yield(L"g{o,o;v,v}");
-    auto const& t2 = yield(L"t{v,v;o,o}");
+    auto const& g = yield("g{o,o;v,v}");
+    auto const& t2 = yield("t{v,v;o,o}");
     TAPPTensorD temp1, man1;
     tapp_ops::contract(1.0, g, {13, 14, 73, 74}, t2, {71, 73, 13, 14}, 0.0,
                        temp1, {71, 74});
@@ -320,11 +320,11 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
   }
 
   SECTION("Antisymmetrization") {
-    auto expr1 = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
-    auto tidx1 = tidxs(L"i_1,i_2,a_1,a_2");
+    auto expr1 = parse_antisymm("g_{i1, i2}^{a1, a2}");
+    auto tidx1 = tidxs("i_1,i_2,a_1,a_2");
     auto eval1 = eval_antisymm(expr1, tidx1);
 
-    auto const& g = yield(L"g{o,o;v,v}");
+    auto const& g = yield("g{o,o;v,v}");
     TAPPTensorD man1{g.extents()};
     man1.fill(0);
     TAPPTensorD temp_as{g.extents()};
@@ -349,11 +349,11 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
 
     REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
 
-    auto expr2 = parse_antisymm(L"R_{a1,a2}^{i1}");
-    auto tidx2 = tidxs(L"a_1,a_2,i_1");
+    auto expr2 = parse_antisymm("R_{a1,a2}^{i1}");
+    auto tidx2 = tidxs("a_1,a_2,i_1");
     auto eval2 = eval_antisymm(expr2, tidx2);
 
-    auto const& r = yield(L"R{v,v;o}");
+    auto const& r = yield("R{v,v;o}");
     TAPPTensorD man2{r.extents()};
     man2.fill(0.0);
     TAPPTensorD temp2_as{r.extents()};
@@ -371,11 +371,11 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
   }
 
   SECTION("Symmetrization") {
-    auto expr1 = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
-    auto tidx1 = tidxs(L"i_1,i_2,a_1,a_2");
+    auto expr1 = parse_antisymm("g_{i1, i2}^{a1, a2}");
+    auto tidx1 = tidxs("i_1,i_2,a_1,a_2");
     auto eval1 = eval_symm(expr1, tidx1);
 
-    auto const& g = yield(L"g{o,o;v,v}");
+    auto const& g = yield("g{o,o;v,v}");
 
     TAPPTensorD man1{g.extents()};
     man1.fill(0);
@@ -392,10 +392,10 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
 
   SECTION("Biorthogonal Cleanup") {
     // low-rank residuals: skip cleanup
-    auto expr1 = parse_antisymm(L"R_{a1, a2}^{i1, i2}");
-    auto tidx1 = tidxs(L"a_1,a_2,i_1,i_2");
+    auto expr1 = parse_antisymm("R_{a1, a2}^{i1, i2}");
+    auto tidx1 = tidxs("a_1,a_2,i_1,i_2");
     auto eval1 = eval_biorthogonal_nns_project(expr1, tidx1);
-    auto const& r1 = yield(L"R{v,v;o,o}");
+    auto const& r1 = yield("R{v,v;o,o}");
 
     TAPPTensorD man1{r1.extents()};
     man1.fill(0);
@@ -412,10 +412,10 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
     // high-rank residuals: cleanup applies:
     // result = 5/6 * identity - 1/6 * sum of the other ket permutations
     // (the idempotent NNS projector row)
-    auto expr2 = parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}");
-    auto tidx2 = tidxs(L"a_1,a_2,a_3,i_1,i_2,i_3");
+    auto expr2 = parse_antisymm("R_{a1, a2, a3}^{i1, i2, i3}");
+    auto tidx2 = tidxs("a_1,a_2,a_3,i_1,i_2,i_3");
     auto eval2 = eval_biorthogonal_nns_project(expr2, tidx2);
-    auto const& r2 = yield(L"R{v,v,v;o,o,o}");
+    auto const& r2 = yield("R{v,v,v;o,o,o}");
 
     TAPPTensorD man2{r2.extents()};
     for (size_t i = 0; i < r2.volume(); ++i)
@@ -448,12 +448,12 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
 
   SECTION("Others") {
     auto expr1 = parse_antisymm(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
+        "-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
         " + "
         " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * "
         "t_{a3,a4}^{i1,i2}");
 
-    auto tidx1 = tidxs(L"i1,i2,a1,a2");
+    auto tidx1 = tidxs("i1,i2,a1,a2");
 
     auto const eval1 =
         evaluate(eval_node(expr1), tidx1, yield_)->get<TAPPTensorD>();
@@ -485,11 +485,11 @@ TEST_CASE("eval_adjoint_complex_tapp", "[eval_tapp]") {
   // must conjugate-transpose the operand. With genuinely complex data the
   // conjugation is observable (a missing conj would leave imaginary parts
   // unflipped — a pure transpose would still pass a norm-only check).
-  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+  Tensor t("t", bra{"a_1"}, ket{"i_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
   Tensor t_adj = t;
   t_adj.adjoint();
-  REQUIRE(t_adj.label() == L"t⁺");
+  REQUIRE(t_adj.label() == "t⁺");
 
   auto node = eval_node(ex<Tensor>(t_adj));
   REQUIRE(node->op_type() == EvalOp::Adjoint);
@@ -528,7 +528,7 @@ TEST_CASE("evaluate consults the custom evaluator and short-circuits",
 
   // A two-tensor product binarizes to a single non-leaf (Product) root with two
   // tensor leaves.
-  auto node = eval_node(deserialize(L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i1,i2}",
+  auto node = eval_node(deserialize("g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i1,i2}",
                                     {.def_perm_symm = Symmetry::Antisymm}));
   REQUIRE_FALSE(node.leaf());
 
@@ -572,7 +572,7 @@ TEST_CASE("evaluate consults the custom evaluator and short-circuits",
 TEST_CASE("eval_tapp_annotation_tells_basis_instances_apart",
           "[eval_tapp][basis]") {
   using namespace sequant;
-  const Index a1(L"a_1");
+  const Index a1("a_1");
   const std::vector<Index> idxs{a1, a1.replace_basis_instance(1),
                                 a1.replace_basis_instance(2)};
   const auto annot = sequant::EvalExprTAPP::index_hash(idxs) |

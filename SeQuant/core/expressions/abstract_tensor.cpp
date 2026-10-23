@@ -21,7 +21,7 @@ void reset_tags(const ExprPtr& expr) {
       /* atoms_only = */ true);
 }
 
-bool has_tensor(const ExprPtr& expr, std::wstring label) {
+bool has_tensor(const ExprPtr& expr, std::string label) {
   if (expr->is<Constant>() || expr->is<Variable>()) return false;
 
   auto check_product = [&label](const Product& p) {
@@ -42,7 +42,7 @@ bool has_tensor(const ExprPtr& expr, std::wstring label) {
     return false;
 }
 
-ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label) {
+ExprPtr remove_tensor(const ExprPtr& expr, std::string label) {
   if (expr->is<Sum>()) {
     Sum result{};
     for (auto& term : *expr) {
@@ -50,7 +50,7 @@ ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label) {
     }
     return ex<Sum>(result);
   } else if (expr->is<Product>()) {
-    return [](const Product& product, std::wstring label) {
+    return [](const Product& product, std::string label) {
       // filter out tensors with specified label
       auto new_product = std::make_shared<Product>();
       new_product->scale(product.scalar());

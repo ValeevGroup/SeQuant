@@ -335,6 +335,12 @@ T transform_reduce(SizedRange&& rng, T init, const BinaryReductionOp& reduce,
 #endif
 }
 
+/// Sets the global C and C++ locales (and the locale of the standard C++
+/// streams) to `C.UTF-8`, if available.
+/// @note SeQuant's strings are UTF-8 encoded `std::string`s and its I/O does
+/// not depend on the locale; this merely makes locale-dependent facilities of
+/// the C and C++ standard libraries (e.g. `std::isalpha`) consistent with
+/// UTF-8 encoded text.
 void set_locale();
 
 }  // namespace sequant

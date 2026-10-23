@@ -61,8 +61,7 @@ struct LoopKey {
 /// doc/developer/batched_evaluation.rst, "Loop identity and value identity".
 struct DagScopeLevel {
   std::size_t depth;  //!< which loop-group (identity)
-  std::wstring
-      space;          //!< the axis' IndexBasis::base_key(); color, not identity
+  std::string space;  //!< the axis' IndexBasis::base_key(); color, not identity
   int loop_slot = 0;  //!< which member-slot within the group (identity)
   int altitude_ordinal =
       0;  //!< layout: nesting rank of the slot within its group

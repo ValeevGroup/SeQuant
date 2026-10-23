@@ -6,8 +6,8 @@ int main() {
   using namespace sequant::mbpt;
   load(Convention::Minimal);
 
-  Index i1(L"i_1");  // (active) occupied/hole
-  Index a1(L"a_1");  // (active) unoccupied/particle
-  Index p1(L"p_1");  // any state in computational basis
+  Index i1("i_1");  // (active) occupied/hole
+  Index a1("a_1");  // (active) unoccupied/particle
+  Index p1("p_1");  // any state in computational basis
   // etc.
 }

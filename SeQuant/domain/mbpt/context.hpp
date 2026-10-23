@@ -167,7 +167,7 @@ std::shared_ptr<OpRegistry> make_legacy_registry();
 /// @param op the operator label
 /// @return the OpClass of the operator
 /// @note returns OpClass::Gen for reserved operator labels
-OpClass to_op_class(const std::wstring& op);
+OpClass to_op_class(const std::string& op);
 
 /// @brief returns the Hermiticity of an operator label using the default MBPT
 /// context
@@ -176,7 +176,7 @@ OpClass to_op_class(const std::wstring& op);
 ///         default_hermiticity(to_op_class(op)))
 /// @note returns Hermiticity::Hermitian for reserved operator labels (they are
 ///       OpClass::Gen)
-Hermiticity op_hermiticity(const std::wstring& op);
+Hermiticity op_hermiticity(const std::string& op);
 
 }  // namespace sequant::mbpt
 

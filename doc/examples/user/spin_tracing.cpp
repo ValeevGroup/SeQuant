@@ -15,13 +15,13 @@ int main() {
   // quantum chemistry (see the User Guide's "Context and configuration" page)
   load(Convention::SR);
 
-  Index i1(L"i_1"), a1(L"a_1");
+  Index i1("i_1"), a1("a_1");
   TensorSymmetries particle_symmetric{.column = ColumnSymmetry::Symm};
 
   // a spin-orbital expression: indices carry no explicit spin label, so each
   // one implicitly ranges over both alpha and beta spin-orbitals
-  auto expr = ex<Tensor>(L"t", bra{i1}, ket{a1}, particle_symmetric) *
-              ex<Tensor>(L"F", bra{a1}, ket{i1}, particle_symmetric);
+  auto expr = ex<Tensor>("t", bra{i1}, ket{a1}, particle_symmetric) *
+              ex<Tensor>("F", bra{a1}, ket{i1}, particle_symmetric);
 
   // spintrace() sums a spin-orbital expression over spin, producing its
   // spin-free (spatial-orbital) form; the summation over the 2 spin cases
@@ -29,7 +29,7 @@ int main() {
   auto expr_st = spintrace(expr);
   simplify(expr_st);
 
-  std::wcout << expr_st << std::endl;
+  std::cout << expr_st << std::endl;
   // end-snippet-1
 
   SEQUANT_ASSERT(expr_st.is<Product>());

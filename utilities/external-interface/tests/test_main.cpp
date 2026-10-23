@@ -17,8 +17,8 @@ int main(int argc, char* argv[]) {
 
   Catch::Session session;
 
-  std::wcout.precision(std::numeric_limits<double>::max_digits10);
-  std::wcerr.precision(std::numeric_limits<double>::max_digits10);
+  std::cout.precision(std::numeric_limits<double>::max_digits10);
+  std::cerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
 
   // Mirror the standard unit-test harness context so pipeline steps that need

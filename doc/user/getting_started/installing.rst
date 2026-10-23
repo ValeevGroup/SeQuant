@@ -34,7 +34,6 @@ Mandatory
 .. note:: SeQuant can download and build Boost if configured with :code:`Boost_FETCH_IF_MISSING=ON`, but the use of Boost provided by the system package manager is recommended. The following non-header-only Boost libraries are required, hence Boost must be configured/built:
 
     * :code:`Boost.Regex`
-    * :code:`Boost.Locale`
 
 
 Optional

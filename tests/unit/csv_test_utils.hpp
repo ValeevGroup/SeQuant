@@ -94,24 +94,23 @@ inline void assert_amplitudes_carry_granted_basis(ExprPtr const& expr) {
   auto instance_text = [](IndexBasis::optional_instance const& i) {
     return i ? std::to_string(*i) : std::string("none");
   };
-  auto check_slot = [&](AbstractTensor const& t, std::wstring const& label,
+  auto check_slot = [&](AbstractTensor const& t, std::string const& label,
                         Index const& idx) {
     const auto grant = reg.basis_grant(label, idx.space());
     const auto& instance = idx.basis().basis_instance();
     if (!grant || instance == grant) return;
     throw Exception("assert_amplitudes_carry_granted_basis: slot " +
-                    toUtf8(idx.full_label()) + " of " +
-                    toUtf8(std::wstring(t._label())) +
-                    " carries basis instance " + instance_text(instance) +
-                    " but the grant of " + toUtf8(label) + " on its space is " +
-                    instance_text(grant));
+                    std::string(idx.full_label()) + " of " +
+                    std::string(t._label()) + " carries basis instance " +
+                    instance_text(instance) + " but the grant of " + label +
+                    " on its space is " + instance_text(grant));
   };
   expr->visit(
       [&](ExprPtr const& x) {
         if (!x->is<AbstractTensor>()) return;
         auto const& t = x->as<AbstractTensor>();
         if (!mbpt::is_amplitude_tensor(t, reg)) return;
-        const std::wstring label(strip_adjoint_label(t._label()));
+        const std::string label(strip_adjoint_label(t._label()));
         for (Index const& idx : t._bra()) check_slot(t, label, idx);
         for (Index const& idx : t._ket()) check_slot(t, label, idx);
       },
@@ -157,13 +156,13 @@ inline sequant::Context csv_cc_context() {
 
 /// every tensor of @p expr labelled @p label
 inline std::vector<AbstractTensor const*> tensors_labelled(
-    ExprPtr const& expr, std::wstring_view label) {
+    ExprPtr const& expr, std::string_view label) {
   std::vector<AbstractTensor const*> result;
   expr->visit(
       [&](ExprPtr const& x) {
         if (!x->is<AbstractTensor>()) return;
         auto const& t = x->as<AbstractTensor>();
-        if (std::wstring_view(t._label()) == label) result.push_back(&t);
+        if (std::string_view(t._label()) == label) result.push_back(&t);
       },
       /* atoms_only = */ true);
   return result;
@@ -193,15 +192,15 @@ inline std::vector<Index> projector_slots(ExprPtr const& term) {
 /// perturbed amplitude (t¹, λ¹) first registers t¹, λ¹ and h¹ where absent
 /// @pre the Context the registry will be used under is installed
 inline std::shared_ptr<mbpt::OpRegistry> granted_registry(
-    std::vector<std::pair<std::wstring, IndexBasis::instance_type>> const&
+    std::vector<std::pair<std::string, IndexBasis::instance_type>> const&
         grants,
     std::shared_ptr<mbpt::OpRegistry> base = mbpt::make_minimal_registry()) {
   const auto particles = get_particle_space(mbpt::Spin::any);
   for (auto const& [op, instance] : grants) {
-    if ((op == L"t¹" || op == L"λ¹") && !base->contains(L"t¹"))
-      base->add(L"t¹", mbpt::OpClass::Ex)
-          .add(L"λ¹", mbpt::OpClass::Deex)
-          .add(L"h¹", mbpt::OpClass::Gen);
+    if ((op == "t¹" || op == "λ¹") && !base->contains("t¹"))
+      base->add("t¹", mbpt::OpClass::Ex)
+          .add("λ¹", mbpt::OpClass::Deex)
+          .add("h¹", mbpt::OpClass::Gen);
     base->grant_basis(op, particles, instance);
   }
   return base;

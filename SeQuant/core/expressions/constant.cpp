@@ -7,8 +7,8 @@
 
 namespace sequant {
 
-std::wstring Constant::to_latex() const {
-  return L"{" + io::latex::to_string(value()) + L"}";
+std::string Constant::to_latex() const {
+  return "{" + io::latex::to_string(value()) + "}";
 }
 
 Expr::type_id_type Constant::type_id() const { return get_type_id<Constant>(); }

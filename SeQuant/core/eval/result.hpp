@@ -135,8 +135,7 @@ void symmetric_permutation(SymmetricParticleRange const& rng, F call_back) {
 
 template <typename RngOfOrdinals>
 std::string ords_to_annot(RngOfOrdinals const& ords) {
-  return join_strings<std::string>(ords, ",",
-                                   [](auto x) { return std::to_string(x); });
+  return join_strings(ords, ",", [](auto x) { return std::to_string(x); });
 }
 
 /// Maps an integer annot value to a short symbolic name (i0, i1, ...).
@@ -154,7 +153,7 @@ inline std::string annot_label(std::int64_t key) noexcept {
 
 template <typename RngOfOrdinals>
 std::string ords_to_labels(RngOfOrdinals const& ords) {
-  return join_strings<std::string>(ords, ",", [](auto x) {
+  return join_strings(ords, ",", [](auto x) {
     return annot_label(static_cast<std::int64_t>(x));
   });
 }

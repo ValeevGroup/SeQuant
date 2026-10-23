@@ -18,8 +18,8 @@
 
 #include <algorithm>
 #include <atomic>
+#include <charconv>
 #include <cstdint>
-#include <cwchar>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
@@ -48,13 +48,13 @@
 namespace sequant {
 
 class Index;
-using WstrList = std::initializer_list<std::wstring_view>;
+using StrList = std::initializer_list<std::string_view>;
 using IndexList = std::initializer_list<Index>;
 
 template <typename T>
 concept index_or_index_label =
     (std::is_same_v<std::remove_cvref_t<T>, Index> ||
-     meta::is_basic_string_convertible_v<std::remove_cvref_t<T>>);
+     meta::is_string_convertible_v<std::remove_cvref_t<T>>);
 
 template <typename T>
 concept range_of_castables_to_index =
@@ -80,15 +80,10 @@ concept range_of_castables_to_index =
 /// (IndexBasis::base_key()) if the Index's IndexBasis carries it, as one obtained from the registry
 /// does (see IndexBasis::name()); the label does not depend on the registry current when it is printed.
 ///
-/// @note Index and other SeQuant classes currently use wide characters to
-/// represent labels and other strings; this goes against some popular
-/// recommendations to use narrow strings (bytestrings) everywhere. The
-/// rationale for such a choice is that this makes "character"-centric operations easy without
-/// the need to grok Unicode and to introduce extra dependencies such as
-/// <a href="https://github.com/unicode-org/icu">ICU</a>. Many functions accept
-/// bytestrings as input, but they are recoded to wide (but UTF-8 encoded)
-/// strings. For optimal efficiency and simplicity users are recommended to use
-/// wide strings until further notice.
+/// @note Index and other SeQuant classes represent labels and other strings as
+/// UTF-8 encoded narrow strings (`std::string`). Hence, a single (visible)
+/// character may span multiple `char`s and character-centric operations must
+/// operate on code points (or substrings) rather than on individual `char`s.
 // clang-format on
 class Index : public Taggable {
  public:
@@ -128,15 +123,17 @@ class Index : public Taggable {
 
   /// @returns Ordinal of the index corresponding to the provided label. If the
   /// label is malformed, returns nullopt.
-  static std::optional<std::size_t> get_ordinal(std::wstring_view label) {
-    const auto underscore_position = label.rfind(L'_');
-    if (underscore_position != std::wstring::npos) {
+  static std::optional<std::size_t> get_ordinal(std::string_view label) {
+    const auto underscore_position = label.rfind('_');
+    if (underscore_position != std::string::npos) {
       SEQUANT_ASSERT(underscore_position + 1 <
                      label.size());  // check that there is at least one char
                                      // past the underscore
-      return std::wcstol(
-          label.substr(underscore_position + 1, std::wstring::npos).data(),
-          NULL, 10);
+      const auto ordinal_str = label.substr(underscore_position + 1);
+      std::size_t ordinal = 0;
+      std::from_chars(ordinal_str.data(),
+                      ordinal_str.data() + ordinal_str.size(), ordinal);
+      return ordinal;
     } else
       return {};
   }
@@ -332,7 +329,7 @@ class Index : public Taggable {
   /// is an rvalue reference will scavenge it for the label of the new index
   /// @warning nonexplicit to make Index creation as ergonomic as possible, at
   /// the cost of slightly increased danger
-  template <basic_string_convertible String>
+  template <string_convertible String>
   Index(String &&label)
       : Index(obtain_default_index_registry()
                   ? obtain_default_index_registry()->retrieve(label)
@@ -341,7 +338,7 @@ class Index : public Taggable {
                         IndexSpace::QuantumNumbers::reserved}},
               to_ordinal(label), {}) {
     check_nonreserved();
-    if constexpr (std::is_same_v<String, std::wstring>) {
+    if constexpr (std::is_same_v<String, std::string>) {
       label_ = std::move(label);
     }
   }
@@ -351,7 +348,7 @@ class Index : public Taggable {
 
   /// @tparam IndexOrIndexLabel either Index or a type that can be
   /// viewed/converted to a string (i.e.,
-  /// `meta::is_basic_string_convertible_v<std::decay_t<IndexOrIndexLabel>>==true`)
+  /// `meta::is_string_convertible_v<std::decay_t<IndexOrIndexLabel>>==true`)
   /// @tparam I either Index or a type that can be converted to Index
   /// @param index_or_index_label an Index or a label, does not need to be
   /// unique; if @p index_or_index_label is a label
@@ -393,7 +390,7 @@ class Index : public Taggable {
 
   /// @tparam IndexOrIndexLabel either Index or a type that can be
   /// viewed/converted to a string (i.e.,
-  /// `meta::is_basic_string_convertible_v<std::decay_t<IndexOrIndexLabel>>==true`)
+  /// `meta::is_string_convertible_v<std::decay_t<IndexOrIndexLabel>>==true`)
   /// @param index_or_index_label an Index or a label, does not need to be
   /// unique; if @p index_or_index_label is a label
   /// and an rvalue reference will scavenge it for the label of the new index
@@ -428,7 +425,7 @@ class Index : public Taggable {
 
   /// @tparam IndexOrIndexLabel either Index or a type that can be
   /// viewed/converted to a string (i.e.,
-  /// `meta::is_basic_string_convertible_v<std::decay_t<IndexOrIndexLabel>>==true`)
+  /// `meta::is_string_convertible_v<std::decay_t<IndexOrIndexLabel>>==true`)
   /// @param[in] index_or_index_label an Index object or a label
   /// @param space (a const ref to) the IndexSpace object that specifies the
   /// space to which ths object refers to
@@ -522,77 +519,40 @@ class Index : public Taggable {
     return result;
   }
 
-  template <std::ranges::contiguous_range View>
-    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          char> ||
-             std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          wchar_t>)
-  static auto base_label_end(View &&label) {
-    using std::ranges::begin;
-    using std::ranges::end;
-    using CharT = std::remove_cvref_t<std::ranges::range_value_t<View>>;
-
-    auto it = std::ranges::find(label, static_cast<CharT>('_'));
-    if (it != end(label)) {
-      return it;
+  /// @return the position (in @p label) at which the base part of the Index
+  /// label @p label ends
+  static std::size_t base_label_end(std::string_view label) {
+    if (const auto pos = label.find('_'); pos != std::string_view::npos) {
+      return pos;
     }
 
-    it = std::ranges::find_if(label, [](CharT c) {
-      if constexpr (std::same_as<CharT, char>) {
-        return c >= 0 && std::isdigit(static_cast<unsigned char>(c));
-      }
-      return std::iswdigit(c) != 0;
-    });
-
-    if (it != end(label) && it != begin(label)) {
-      return it;
+    const auto it = std::ranges::find_if(label, is_ascii_digit);
+    if (it != label.end() && it != label.begin()) {
+      return std::distance(label.begin(), it);
     }
 
-    return end(label);
+    return label.size();
   }
 
   /// @param label an Index label (e.g., returned by Index::label())
   /// @return base part of @p label
-  template <std::ranges::contiguous_range View>
-    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          char> ||
-             std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          wchar_t>)
-  static std::wstring base_label(View &&label) {
-    using std::ranges::begin;
-    auto end = base_label_end(label);
-
-    if constexpr (std::same_as<
-                      std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                      char>) {
-      return toUtf16(std::string_view(
-          &(*begin(label)), std::ranges::distance(begin(label), end)));
-    } else {
-      return std::wstring(begin(label), end);
-    }
+  static std::string base_label(std::string_view label) {
+    return std::string(label.substr(0, base_label_end(label)));
   }
 
-  template <typename CharT>
-  static std::wstring base_label(const CharT *label) {
-    return base_label(std::basic_string_view<CharT>{label});
-  }
+  static std::string base_label(char label) { return std::string(1, label); }
 
-  template <typename Char, typename = std::enable_if_t<meta::is_char_v<Char>>>
-  static std::wstring base_label(Char label) {
-    return toUtf16(label);
-  }
-
-  /// @return the memoized label as a UTF-8 encoded wide-character string
+  /// @return the memoized label as a UTF-8 encoded string
   /// @note label format is `base` or `base_ordinal`, `base` being
   /// basis().base_key()
   /// @warning this does not include the proto index labels, use
   /// Index::full_label() instead
-  std::wstring_view label() const {
+  std::string_view label() const {
     if (!label_) {
       label_ = basis_.base_key();
       if (ordinal_) {
-        *label_ += L'_';
-        *label_ += std::to_wstring(*ordinal_);
+        *label_ += '_';
+        *label_ += std::to_string(*ordinal_);
       }
     }
     return *label_;
@@ -603,7 +563,7 @@ class Index : public Taggable {
 
   /// @return A string label representable in ASCII encoding
   /// @warning not to be used with proto indices
-  /// @brief Replaces non-ascii wstring characters with human-readable analogs,
+  /// @brief Replaces non-ASCII characters with human-readable analogs,
   ///        each such UTF-8 character will be encoded by one or more chars.
   /// @note Maps: `↑` -> `a`, `↓` -> `b`, and all greek characters to their
   ///       english language equivalents (e.g. `α` -> `alpha`, `Ξ` -> `XI`,
@@ -613,27 +573,27 @@ class Index : public Taggable {
       "representation")]] std::string
   ascii_label() const;
 
-  /// @return A UTF-8 encoded narrow-character string label
+  /// @return the label as a UTF-8 encoded string
   /// @warning not to be used with proto indices
   std::string to_string() const;
 
-  /// @return the full label as a UTF-8 encoded wide-character string
+  /// @return the full label as a UTF-8 encoded string
   /// @warning this includes the proto index labels (if any), use
   /// Index::label() instead if only want the label
-  std::wstring_view full_label() const {
+  std::string_view full_label() const {
     if (!has_proto_indices() && !basis_.unnamed_instance()) return label();
     if (full_label_) return *full_label_;
-    std::wstring result(label());
-    result += L"<";
+    std::string result(label());
+    result += "<";
     using namespace std::literals;
     result +=
         ranges::views::transform(proto_indices_,
-                                 [](const Index &idx) -> std::wstring_view {
+                                 [](const Index &idx) -> std::string_view {
                                    return idx.full_label();
                                  }) |
-        ranges::views::join(L", "sv) | ranges::to<std::wstring>();
+        ranges::views::join(", "sv) | ranges::to<std::string>();
     if (basis_.unnamed_instance()) result += basis_.instance_suffix();
-    result += L">";
+    result += ">";
     full_label_ = result;
     return *full_label_;
   }
@@ -644,11 +604,9 @@ class Index : public Taggable {
   /// composite)
   /// @param suffix a string to append to the label
   /// @return `this->label()` with @p suffix appended
-  template <typename WS, typename = std::enable_if_t<(
-                             meta::is_wstring_convertible_v<std::decay_t<WS>>)>>
-  [[nodiscard]] std::wstring make_label_plus_suffix(WS &&suffix) const {
-    return Index::make_label_plus_suffix(this->label(),
-                                         std::forward<WS>(suffix));
+  [[nodiscard]] std::string make_label_plus_suffix(
+      std::string_view suffix) const {
+    return Index::make_label_plus_suffix(this->label(), suffix);
   }
 
   /// @brief makes a new label by appending a suffix to the label
@@ -658,22 +616,13 @@ class Index : public Taggable {
   /// @param label the label to append the suffix to
   /// @param suffix a string to append to the label
   /// @return `this->label()` with @p suffix appended
-  template <typename WS1, typename WS2,
-            typename = std::enable_if_t<
-                (meta::is_wstring_or_view_v<std::decay_t<WS1>> &&
-                 meta::is_wstring_convertible_v<std::decay_t<WS2>>)>>
-  [[nodiscard]] static std::wstring make_label_plus_suffix(WS1 &&label,
-                                                           WS2 &&suffix) {
-    auto underscore_position = label.find(L'_');
-    std::wstring result;
-    if (underscore_position == std::wstring::npos) {
-      result = std::forward<WS1>(label);
-      result += suffix;
-    } else {
-      result = label.substr(0, underscore_position);
-      result += suffix;
+  [[nodiscard]] static std::string make_label_plus_suffix(
+      std::string_view label, std::string_view suffix) {
+    const auto underscore_position = label.find('_');
+    std::string result(label.substr(0, underscore_position));
+    result += suffix;
+    if (underscore_position != std::string_view::npos)
       result += label.substr(underscore_position);
-    }
     return result;
   }
 
@@ -683,11 +632,9 @@ class Index : public Taggable {
   /// composite)
   /// @param substr a string to remove from the label
   /// @return `this->label()` with @p substr removed
-  template <typename WS, typename = std::enable_if_t<(
-                             meta::is_wstring_convertible_v<std::decay_t<WS>>)>>
-  [[nodiscard]] std::wstring make_label_minus_substring(WS &&substr) const {
-    return Index::make_label_minus_substring(this->label(),
-                                             std::forward<WS>(substr));
+  [[nodiscard]] std::string make_label_minus_substring(
+      std::string_view substr) const {
+    return Index::make_label_minus_substring(this->label(), substr);
   }
 
   /// @brief makes a new label by removing a substring from the label
@@ -697,42 +644,14 @@ class Index : public Taggable {
   /// @param label the label to remove the substring from
   /// @param substr a string to remove from the label
   /// @return `this->label()` with @p substr removed
-  template <typename WS1, typename WS2,
-            typename = std::enable_if_t<
-                (meta::is_wstring_or_view_v<std::decay_t<WS1>> &&
-                 meta::is_wstring_convertible_v<std::decay_t<WS2>>)>>
-  [[nodiscard]] static std::wstring make_label_minus_substring(WS1 &&label,
-                                                               WS2 &&substr) {
-    auto underscore_position = label.find(L'_');
-    std::wstring result;
-
-    auto erase = [](auto &result, const auto &substr) {
-      auto pos = result.find(substr);
-      if (pos != std::wstring::npos) {
-        if constexpr (std::is_same_v<std::decay_t<WS2>, std::wstring> ||
-                      std::is_same_v<std::decay_t<WS2>, std::wstring_view>) {
-          result.erase(pos, substr.size());
-        } else if constexpr (std::is_same_v<std::decay_t<WS2>,
-                                            const wchar_t[]> ||
-                             std::is_same_v<std::decay_t<WS2>, wchar_t[]> ||
-                             std::is_same_v<std::decay_t<WS2>,
-                                            const wchar_t *> ||
-                             std::is_same_v<std::decay_t<WS2>, wchar_t *>) {
-          result.erase(pos, std::strlen(substr));
-        } else {
-          result.erase(pos, 1);
-        }
-      }
-    };
-
-    if (underscore_position == std::wstring::npos) {
-      result = std::forward<WS1>(label);
-      erase(result, substr);
-    } else {
-      result = label.substr(0, underscore_position);
-      erase(result, substr);
+  [[nodiscard]] static std::string make_label_minus_substring(
+      std::string_view label, std::string_view substr) {
+    const auto underscore_position = label.find('_');
+    std::string result(label.substr(0, underscore_position));
+    if (const auto pos = result.find(substr); pos != std::string::npos)
+      result.erase(pos, substr.size());
+    if (underscore_position != std::string_view::npos)
       result += label.substr(underscore_position);
-    }
     return result;
   }
 
@@ -767,7 +686,7 @@ class Index : public Taggable {
                     : Index(basis_);
   }
 
-  std::wstring to_latex() const noexcept;
+  std::string to_latex() const noexcept;
 
   /// @param protoindex_range a range of Index objects
   /// @return the color of the protoindices
@@ -960,8 +879,8 @@ class Index : public Taggable {
   index_vector proto_indices_{};
   bool symmetric_proto_indices_ = true;
 
-  mutable std::optional<std::wstring> label_;
-  mutable std::optional<std::wstring> full_label_;
+  mutable std::optional<std::string> label_;
+  mutable std::optional<std::string> full_label_;
 
   /// sorts proto_indices_ if symmetric_proto_indices_
   inline void canonicalize_proto_indices() noexcept;
@@ -982,38 +901,25 @@ class Index : public Taggable {
     }
   }
 
-  template <typename Char, typename = std::enable_if_t<meta::is_char_v<Char>>>
-  static inline std::optional<ordinal_type> to_ordinal(Char) noexcept {
+  static std::optional<ordinal_type> to_ordinal(char) noexcept {
     return std::nullopt;
   }
 
-  template <std::ranges::contiguous_range View>
-    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          char> ||
-             std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          wchar_t>)
-  static std::optional<ordinal_type> to_ordinal(View &&label) noexcept {
+  static std::optional<ordinal_type> to_ordinal(
+      std::string_view label) noexcept {
     auto end = base_label_end(label);
 
-    if (end == std::ranges::end(label)) {
+    if (end == label.size()) {
       return std::nullopt;
     }
 
-    if (*end == '_') {
+    if (label[end] == '_') {
       ++end;
     }
 
-    SEQUANT_ASSERT(end != std::ranges::end(label));
+    SEQUANT_ASSERT(end != label.size());
 
-    std::basic_string_view<
-        std::remove_cvref_t<std::ranges::range_value_t<View>>>
-        view(&(*end), std::ranges::distance(end, std::ranges::end(label)));
-    return string_to<ordinal_type>(view);
-  }
-
-  template <typename CharT>
-  static std::optional<ordinal_type> to_ordinal(const CharT *label) noexcept {
-    return to_ordinal(std::basic_string_view<CharT>{label});
+    return string_to<ordinal_type>(label.substr(end));
   }
 
   friend class IndexFactory;
@@ -1245,7 +1151,7 @@ inline auto hash_value(const Index &idx) {
 }
 
 template <typename Container>
-auto make_indices(WstrList index_labels = {}) {
+auto make_indices(StrList index_labels = {}) {
   Container result;
   for (const auto &label : index_labels) {
     result.push_back(Index{label});

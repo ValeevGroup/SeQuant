@@ -58,16 +58,16 @@ class index_repl_dst_t {
   explicit index_repl_dst_t(Index dst, Index src)
       : dst_(std::move(dst)), src_{std::move(src)} {
     if (Logger::instance().wick_reduce) {
-      sequant::wprintf("index_repl_dst_t: ctor, src=", src.to_latex(),
-                       " dst=", dst_.to_latex(), "\n");
+      sequant::printf("index_repl_dst_t: ctor, src=", src.to_latex(),
+                      " dst=", dst_.to_latex(), "\n");
     }
   }
 
   const Index &dst() const { return dst_; }
   void update_dst(Index idx) {
     if (Logger::instance().wick_reduce) {
-      sequant::wprintf("index_repl_dst_t: changing dst=", dst_.to_latex(),
-                       " to dst=", idx.to_latex(), "\n");
+      sequant::printf("index_repl_dst_t: changing dst=", dst_.to_latex(),
+                      " to dst=", idx.to_latex(), "\n");
     }
     dst_ = std::move(idx);
   }
@@ -76,8 +76,8 @@ class index_repl_dst_t {
   index_repl_dst_t &append_src(Index src) {
     SEQUANT_ASSERT(ranges::contains(src_, src) == false);
     if (Logger::instance().wick_reduce) {
-      sequant::wprintf("index_repl_dst_t: appended src=", src.to_latex(),
-                       " -> dst=", dst_.to_latex(), "\n");
+      sequant::printf("index_repl_dst_t: appended src=", src.to_latex(),
+                      " -> dst=", dst_.to_latex(), "\n");
     }
     src_.emplace_back(std::move(src));
     return *this;
@@ -471,8 +471,8 @@ compute_index_replacement_rules(
         return Outcome::Zero;
       if (is_kronecker)
         throw Exception("WickTheorem::reduce: Kronecker delta between " +
-                        toUtf8(bra.full_label()) + " and " +
-                        toUtf8(ket.full_label()) +
+                        std::string(bra.full_label()) + " and " +
+                        std::string(ket.full_label()) +
                         ", whose bases resolve to different basis instances (" +
                         std::to_string(*bra_basis.basis_instance()) + " and " +
                         std::to_string(*ket_basis.basis_instance()) + ")");
@@ -743,13 +743,12 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
   using sequant::reserved::overlap_label;
 
   if (Logger::instance().wick_reduce) {
-    sequant::wprintf(
-        "reduce_wick_impl(expr, external_indices):\n input expr = ",
-        expr->to_latex(), "\n  external_indices = ");
+    sequant::printf("reduce_wick_impl(expr, external_indices):\n input expr = ",
+                    expr->to_latex(), "\n  external_indices = ");
     ranges::for_each(external_indices, [](auto &index) {
-      sequant::wprintf(index.full_label(), " ");
+      sequant::printf(index.full_label(), " ");
     });
-    sequant::wprintf("\n");
+    sequant::printf("\n");
   }
 
   std::int64_t pass = -1;
@@ -825,11 +824,11 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
         }
       });
       if (Logger::instance().wick_reduce) {
-        sequant::wprintf("all_noncovariant_indices = ");
+        sequant::printf("all_noncovariant_indices = ");
         for (auto &idx : all_noncovariant_indices) {
-          sequant::wprintf(" ", idx.to_latex());
+          sequant::printf(" ", idx.to_latex());
         }
-        sequant::wprintf("\n");
+        sequant::printf("\n");
       }
     }
 
@@ -840,16 +839,16 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
     const auto &[replacement_rules, found_kroneckers] = *nonnull_result_opt;
 
     if (Logger::instance().wick_reduce) {
-      sequant::wprintf("reduce_wick_impl(expr, external_indices) pass=", pass,
-                       ":\n  expr = ", expr->to_latex(),
-                       "\n  external_indices = ");
+      sequant::printf("reduce_wick_impl(expr, external_indices) pass=", pass,
+                      ":\n  expr = ", expr->to_latex(),
+                      "\n  external_indices = ");
       ranges::for_each(external_indices, [](auto &index) {
-        sequant::wprintf(index.full_label(), " ");
+        sequant::printf(index.full_label(), " ");
       });
-      sequant::wprintf("\n  replrules = ");
+      sequant::printf("\n  replrules = ");
       ranges::for_each(replacement_rules, [](auto &index) {
-        sequant::wprintf(io::latex::to_string(index.first), "\\to",
-                         io::latex::to_string(index.second), "\\,");
+        sequant::printf(io::latex::to_string(index.first), "\\to",
+                        io::latex::to_string(index.second), "\\,");
       });
     }
 
@@ -873,7 +872,7 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
     }
 
     if (Logger::instance().wick_reduce) {
-      sequant::wprintf("\n  result = ", expr->to_latex(), "\n");
+      sequant::printf("\n  result = ", expr->to_latex(), "\n");
     }
   } while (pass_mutated);  // keep reducing until stop changing
 
@@ -951,8 +950,8 @@ typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
   TopologicalPartitions result;
 
   if (Logger::instance().wick_topology)
-    std::wcout << "WickTheorem<S>::compute: input to topology computation = "
-               << io::latex::to_string(product) << std::endl;
+    std::cout << "WickTheorem<S>::compute: input to topology computation = "
+              << io::latex::to_string(product) << std::endl;
 
   // construct graph representation of the tensor product
   using TN = TensorNetwork;
@@ -992,11 +991,11 @@ typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
   };
 
   if (Logger::instance().wick_topology) {
-    std::basic_ostringstream<wchar_t> oss;
+    std::basic_ostringstream<char> oss;
     graph->write_dot(oss, {.labels = vlabels});
-    std::wcout << "WickTheorem<S>::compute: colored graph produced from TN = "
-               << std::endl
-               << oss.str() << std::endl;
+    std::cout << "WickTheorem<S>::compute: colored graph produced from TN = "
+              << std::endl
+              << oss.str() << std::endl;
   }
 
   // identify vertex indices of NormalOperator objects and Indices
@@ -1065,11 +1064,11 @@ typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
                               &save_aut);
 
     if (Logger::instance().wick_topology) {
-      std::basic_ostringstream<wchar_t> oss2;
+      std::basic_ostringstream<char> oss2;
       bliss::print_auts(aut_generators, oss2, vlabels);
-      std::wcout << "WickTheorem<S>::compute: colored graph "
-                    "automorphism generators = \n"
-                 << oss2.str() << std::endl;
+      std::cout << "WickTheorem<S>::compute: colored graph "
+                   "automorphism generators = \n"
+                << oss2.str() << std::endl;
     }
   }
 
@@ -1252,13 +1251,13 @@ typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
         extract_partitions(nop_vidx2pidx, nop_npartitions, nop_vidx_ord);
 
     if (Logger::instance().wick_topology) {
-      std::wcout << "WickTheorem<S>::compute: topological nop partitions:{\n";
+      std::cout << "WickTheorem<S>::compute: topological nop partitions:{\n";
       ranges::for_each(nop_partitions, [](auto &&part) {
-        std::wcout << "{";
-        ranges::for_each(part, [](auto &&p) { std::wcout << p << " "; });
-        std::wcout << "}";
+        std::cout << "{";
+        ranges::for_each(part, [](auto &&p) { std::cout << p << " "; });
+        std::cout << "}";
       });
-      std::wcout << "}" << std::endl;
+      std::cout << "}" << std::endl;
     }
 
     result.nop_partitions = std::move(nop_partitions);
@@ -1368,8 +1367,8 @@ typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
         extract_partitions(index_vidx2pidx, index_npartitions, index_vidx_ord);
 
     if (Logger::instance().wick_topology) {
-      std::wcout << "WickTheorem<S>::compute: topological index "
-                    "partitions:{\n";
+      std::cout << "WickTheorem<S>::compute: topological index "
+                   "partitions:{\n";
       ranges::for_each(index_vidx2pidx,
                        [&idx_vertex_to_edge_ptr](auto &&vidx_pidx) {
                          auto &&[vidx, pidx] = vidx_pidx;
@@ -1377,11 +1376,11 @@ typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
                          // skip pure proto indices
                          if (edge_ptr) {
                            auto &idx = edge_ptr->idx();
-                           std::wcout << "Index " << idx.full_label()
-                                      << " -> partition " << pidx << "\n";
+                           std::cout << "Index " << idx.full_label()
+                                     << " -> partition " << pidx << "\n";
                          }
                        });
-      std::wcout << "}" << std::endl;
+      std::cout << "}" << std::endl;
     }
 
     result.op_partitions = std::move(index_partitions);
@@ -1464,12 +1463,12 @@ ExprPtr WickTheorem<S>::compute_contractions(
   if (expr_input_) {
     /// expand, then apply recursively to products
     if (Logger::instance().wick_harness)
-      std::wcout << "WickTheorem<S>::compute: input (before expand) = "
-                 << to_latex_align(expr_input_) << std::endl;
+      std::cout << "WickTheorem<S>::compute: input (before expand) = "
+                << to_latex_align(expr_input_) << std::endl;
     expand(expr_input_);
     if (Logger::instance().wick_harness)
-      std::wcout << "WickTheorem<S>::compute: input (after expand) = "
-                 << to_latex_align(expr_input_) << std::endl;
+      std::cout << "WickTheorem<S>::compute: input (after expand) = "
+                << to_latex_align(expr_input_) << std::endl;
     // if sum, canonicalize and apply to each summand ...
     if (expr_input_->is<Sum>()) {
       if (!skip_input_canonicalization) {
@@ -1493,9 +1492,9 @@ ExprPtr WickTheorem<S>::compute_contractions(
       auto summands = expr_input_->as<Sum>().summands();
 
       if (Logger::instance().wick_harness)
-        std::wcout << "WickTheorem<S>::compute: input (after canonicalize) has "
-                   << summands.size()
-                   << " terms = " << to_latex_align(expr_input_) << std::endl;
+        std::cout << "WickTheorem<S>::compute: input (after canonicalize) has "
+                  << summands.size()
+                  << " terms = " << to_latex_align(expr_input_) << std::endl;
 
       auto wick_task = [&result_acc, &result_mtx, this,
                         &count_only](const ExprPtr &input) {
@@ -1572,11 +1571,11 @@ ExprPtr WickTheorem<S>::compute_contractions(
 
         if (!input_->empty()) {
           if (Logger::instance().wick_contract) {
-            std::wcout
+            std::cout
                 << "WickTheorem<S>::compute: input to compute_nopseq = {\n";
             for (auto &&nop : input_)
-              std::wcout << io::latex::to_string(nop) << "\n";
-            std::wcout << "}" << std::endl;
+              std::cout << io::latex::to_string(nop) << "\n";
+            std::cout << "}" << std::endl;
           }
 
           prefactor_ = prefactor;
@@ -1636,8 +1635,8 @@ void WickTheorem<S>::reduce(ExprPtr &expr,
                             const container::set<Index> &noncovariant,
                             const Context &ctx) const {
   if (Logger::instance().wick_reduce) {
-    std::wcout << "WickTheorem<S>::reduce: input = "
-               << to_latex_align(expr, 20, 1) << std::endl;
+    std::cout << "WickTheorem<S>::reduce: input = "
+              << to_latex_align(expr, 20, 1) << std::endl;
   }
 
   // there are 2 possibilities: expr is a single Product, or it's a Sum of
@@ -1662,7 +1661,7 @@ void WickTheorem<S>::reduce(ExprPtr &expr,
   }
 
   if (Logger::instance().wick_reduce) {
-    sequant::wprintf(
+    sequant::printf(
         "WickTheorem<S>::reduce: result = ", to_latex_align(expr, 20, 1), "\n");
   }
 }

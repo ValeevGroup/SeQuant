@@ -23,8 +23,8 @@ constexpr TensorSymmetries particle_symmetric{.column = ColumnSymmetry::Symm};
 
 ExprPtr tensor_hypercontract_impl(Tensor const& tnsr, Index const& aux_idx_1,
                                   Index const& aux_idx_2,
-                                  std::wstring_view factor_label,
-                                  std::wstring_view aux_label) {
+                                  std::string_view factor_label,
+                                  std::string_view aux_label) {
   SEQUANT_ASSERT(tnsr.bra_rank() == 2     //
                  && tnsr.ket_rank() == 2  //
                  && tnsr.aux_rank() == 0);
@@ -53,9 +53,9 @@ ExprPtr tensor_hypercontract_impl(Tensor const& tnsr, Index const& aux_idx_1,
 }
 
 ExprPtr tensor_hypercontract(ExprPtr const& expr, IndexSpace aux_space,
-                             std::wstring_view tensor_label,
-                             std::wstring_view outer_factor_label,
-                             std::wstring_view core_tensor_label) {
+                             std::string_view tensor_label,
+                             std::string_view outer_factor_label,
+                             std::string_view core_tensor_label) {
   using ranges::views::transform;
 
   if (expr->is<Sum>())

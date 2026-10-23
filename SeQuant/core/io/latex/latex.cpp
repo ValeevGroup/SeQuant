@@ -12,6 +12,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <algorithm>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -20,34 +21,34 @@
 
 namespace sequant::io::latex {
 
-std::wstring to_string(const ExprPtr& expr) { return expr.to_latex(); }
+std::string to_string(const ExprPtr& expr) { return expr.to_latex(); }
 
-std::wstring to_string(const rational& t) {
+std::string to_string(const rational& t) {
   // n.b. skip enclosing braces to make Constant::to_latex to produce same
-  // output as before std::wstring result = L"{";
-  std::wstring result;
+  // output as before std::string result = "{";
+  std::string result;
   if (denominator(t) == 1)
-    result += L"{" + to_wstring(numerator(t)) + L"}";
+    result += "{" + ::sequant::to_string(numerator(t)) + "}";
   else {
     const auto num = numerator(t);
-    // n.b. extra braces around \frac and use of to_wstring instead of to_latex
+    // n.b. extra braces around \frac and use of to_string instead of to_latex
     // to avoid extra braces around args to \frac
     if (num > 0) {
-      result += L"{\\frac{" + to_wstring(numerator(t)) + L"}{" +
-                to_wstring(denominator(t)) + L"}}";
+      result += "{\\frac{" + ::sequant::to_string(numerator(t)) + "}{" +
+                ::sequant::to_string(denominator(t)) + "}}";
     } else if (num < 0) {
-      result += L"{-\\frac{" + to_wstring(-num) + L"}{" +
-                to_wstring(denominator(t)) + L"}}";
+      result += "{-\\frac{" + ::sequant::to_string(decltype(num)(-num)) + "}{" +
+                ::sequant::to_string(denominator(t)) + "}}";
     } else
-      result += L"0";
+      result += "0";
   }
   // n.b.
-  // result += L"}";
+  // result += "}";
   return result;
 }
 
-std::wstring to_string(const Power& power) {
-  std::wstring result;
+std::string to_string(const Power& power) {
+  std::string result;
   const auto& base = power.base();
   const auto& exp = power.exponent();
 
@@ -61,18 +62,19 @@ std::wstring to_string(const Power& power) {
     result = base->to_latex();
   } else if (base_nr_1) {
     // render (1/k)^n as \frac{1}{k^n}
-    result = L"{\\frac{1}{" +
-             to_wstring(denominator(base->as<Constant>().value().real())) +
-             L"^" + to_string(exp) + L"}}";
+    result =
+        "{\\frac{1}{" +
+        ::sequant::to_string(denominator(base->as<Constant>().value().real())) +
+        "^" + to_string(exp) + "}}";
   } else {
-    result = base->to_latex() + L"^" + to_string(exp);
+    result = base->to_latex() + "^" + to_string(exp);
   }
-  if (power.conjugated()) result = L"{" + result + L"^*}";
+  if (power.conjugated()) result = "{" + result + "^*}";
   return result;
 }
 
-std::wstring to_string(const ResultExpr& expr) {
-  std::wstringstream stream;
+std::string to_string(const ResultExpr& expr) {
+  std::stringstream stream;
   if (expr.produces_tensor()) {
     stream << to_string(expr.result_as_tensor());
   } else {
@@ -84,256 +86,157 @@ std::wstring to_string(const ResultExpr& expr) {
   return stream.str();
 }
 
-namespace detail {
+namespace {
 
-template <typename Char, typename Traits, typename Alloc>
-std::basic_string<Char, Traits, Alloc> greek_characters_to_string_impl(
-    std::basic_string_view<Char, Traits> str) {
+// n.b. the implementations operate on decoded code points (UTF-32)
+
+std::u32string greek_characters_to_string_impl(std::u32string_view str) {
   // lower-case greek characters in the order of their appearance in Unicode
   // chart https://www.unicode.org/charts/PDF/U0370.pdf
-  const std::vector<std::basic_string<Char, Traits, Alloc>> lc = {
-      SQ_STRLIT(Char, "\\alpha"),   SQ_STRLIT(Char, "\\beta"),
-      SQ_STRLIT(Char, "\\gamma"),   SQ_STRLIT(Char, "\\delta"),
-      SQ_STRLIT(Char, "\\epsilon"), SQ_STRLIT(Char, "\\zeta"),
-      SQ_STRLIT(Char, "\\eta"),     SQ_STRLIT(Char, "\\theta"),
-      SQ_STRLIT(Char, "\\iota"),    SQ_STRLIT(Char, "\\kappa"),
-      SQ_STRLIT(Char, "\\lambda"),  SQ_STRLIT(Char, "\\mu"),
-      SQ_STRLIT(Char, "\\nu"),      SQ_STRLIT(Char, "\\xi"),
-      SQ_STRLIT(Char, "o"),         SQ_STRLIT(Char, "\\pi"),
-      SQ_STRLIT(Char, "\\rho"),     SQ_STRLIT(Char, "\\varsigma"),
-      SQ_STRLIT(Char, "\\sigma"),   SQ_STRLIT(Char, "\\tau"),
-      SQ_STRLIT(Char, "\\upsilon"), SQ_STRLIT(Char, "\\phi"),
-      SQ_STRLIT(Char, "\\chi"),     SQ_STRLIT(Char, "\\psi"),
-      SQ_STRLIT(Char, "\\omega")};
-  const std::vector<std::basic_string<Char, Traits, Alloc>> uc = {
-      SQ_STRLIT(Char, "A"),         SQ_STRLIT(Char, "B"),
-      SQ_STRLIT(Char, "\\Gamma"),   SQ_STRLIT(Char, "\\Delta"),
-      SQ_STRLIT(Char, "E"),         SQ_STRLIT(Char, "Z"),
-      SQ_STRLIT(Char, "H"),         SQ_STRLIT(Char, "\\Theta"),
-      SQ_STRLIT(Char, "I"),         SQ_STRLIT(Char, "K"),
-      SQ_STRLIT(Char, "\\Lambda"),  SQ_STRLIT(Char, "M"),
-      SQ_STRLIT(Char, "N"),         SQ_STRLIT(Char, "\\Xi"),
-      SQ_STRLIT(Char, "O"),         SQ_STRLIT(Char, "\\Pi"),
-      SQ_STRLIT(Char, "P"),         SQ_STRLIT(Char, ""),
-      SQ_STRLIT(Char, "\\Sigma"),   SQ_STRLIT(Char, "T"),
-      SQ_STRLIT(Char, "\\Upsilon"), SQ_STRLIT(Char, "\\Phi"),
-      SQ_STRLIT(Char, "X"),         SQ_STRLIT(Char, "\\Psi"),
-      SQ_STRLIT(Char, "\\Omega")};
-  auto is_lc = [](Char ch) {
-    return ch >= static_cast<Char>(0x3B1)     // alpha
-           && ch <= static_cast<Char>(0x3C9)  // omega
+  const std::vector<std::u32string> lc = {
+      U"\\alpha",   U"\\beta", U"\\gamma",    U"\\delta", U"\\epsilon",
+      U"\\zeta",    U"\\eta",  U"\\theta",    U"\\iota",  U"\\kappa",
+      U"\\lambda",  U"\\mu",   U"\\nu",       U"\\xi",    U"o",
+      U"\\pi",      U"\\rho",  U"\\varsigma", U"\\sigma", U"\\tau",
+      U"\\upsilon", U"\\phi",  U"\\chi",      U"\\psi",   U"\\omega"};
+  const std::vector<std::u32string> uc = {
+      U"A",         U"B",     U"\\Gamma", U"\\Delta", U"E",
+      U"Z",         U"H",     U"\\Theta", U"I",       U"K",
+      U"\\Lambda",  U"M",     U"N",       U"\\Xi",    U"O",
+      U"\\Pi",      U"P",     U"",        U"\\Sigma", U"T",
+      U"\\Upsilon", U"\\Phi", U"X",       U"\\Psi",   U"\\Omega"};
+  auto is_lc = [](char32_t ch) {
+    return ch >= 0x3B1     // alpha
+           && ch <= 0x3C9  // omega
         ;
   };
-  auto is_uc = [](Char ch) {
-    return ch >= static_cast<Char>(0x391)     // Alpha
-           && ch <= static_cast<Char>(0x3A9)  // Omega
-           && ch != static_cast<Char>(0x3A2)  // gap in the table
+  auto is_uc = [](char32_t ch) {
+    return ch >= 0x391     // Alpha
+           && ch <= 0x3A9  // Omega
+           && ch != 0x3A2  // gap in the table
         ;
   };
 
-  std::basic_string<Char, Traits, Alloc> result;
-  const auto begin = cbegin(str);
-  const auto end = cend(str);
-  /// TODO iterate over characters (graphemes)
-  for (auto it = begin; it != end; ++it) {
-    auto append = [&result, &str, &it, &begin](const auto& s) {
-      if (result.empty()) result = str.substr(0, it - begin);
-      result += s;
-    };
-    auto is_ascii = [](Char c) { return static_cast<unsigned int>(c) <= 0x7F; };
-
-    const Char ch = *it;
-    if (sizeof(Char) == 1 && !is_ascii(ch))
-      throw Exception(
-          "greek_characters_to_string<Char,...>(str): currently only supports "
-          "non-ASCII characters in str if Char is a wide character (wchar_t, "
-          "char16_t, or char32_t)");
-
-    // skip ASCII characters
-    if (!is_ascii(ch)) {
-      if (is_lc(ch)) {
-        const auto ch_addr = static_cast<long>(ch) - static_cast<long>(0x3B1);
-        SEQUANT_ASSERT(ch_addr >= 0 &&
-                       static_cast<std::size_t>(ch_addr) < lc.size());
-        const auto& lc_str = lc[static_cast<std::size_t>(ch_addr)];
-        SEQUANT_ASSERT(lc_str.size() > 0);
-        append(lc_str);
-      } else if (is_uc(ch)) {
-        const auto ch_addr = static_cast<long>(ch) - static_cast<long>(0x391);
-        SEQUANT_ASSERT(ch_addr >= 0 &&
-                       static_cast<std::size_t>(ch_addr) < uc.size());
-        const auto& uc_str = uc[static_cast<std::size_t>(ch_addr)];
-        SEQUANT_ASSERT(uc_str.size() > 0);
-        append(uc_str);
-      } else {  // pass through unknown non-ASCII characters
-        if (!result.empty()) result.push_back(ch);
-      }
-    } else {  // ASCII character
-      if (!result.empty()) result.push_back(ch);
+  std::u32string result;
+  result.reserve(str.size());
+  /// TODO iterate over graphemes
+  for (const char32_t ch : str) {
+    if (is_lc(ch)) {
+      const auto& lc_str = lc[ch - 0x3B1];
+      SEQUANT_ASSERT(lc_str.size() > 0);
+      result += lc_str;
+    } else if (is_uc(ch)) {
+      const auto& uc_str = uc[ch - 0x391];
+      SEQUANT_ASSERT(uc_str.size() > 0);
+      result += uc_str;
+    } else {  // pass through all other characters
+      result.push_back(ch);
     }
   }
 
-  if (!result.empty())
-    return result;
-  else
-    return decltype(result)(str);
+  return result;
 }
 
-template <typename Char, typename Traits, typename Alloc>
-std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
-    std::basic_string_view<Char, Traits> str) {
-  using str_t = std::basic_string<Char, Traits, Alloc>;
+std::u32string diactrics_to_string_impl(std::u32string_view str) {
+  // precomposed characters with diacritics
+  static const container::map<char32_t, std::u32string_view> precomposed = {
+      // lower-case characters with tilde
+      {U'ã', U"\\tilde{a}"},
+      {U'ẽ', U"\\tilde{e}"},
+      {U'ñ', U"\\tilde{n}"},
+      {U'õ', U"\\tilde{o}"},
+      {U'ũ', U"\\tilde{u}"},
+      {U'ṽ', U"\\tilde{v}"},
+      // upper-case characters with tilde
+      {U'Ã', U"\\tilde{A}"},
+      {U'Ẽ', U"\\tilde{E}"},
+      {U'Ñ', U"\\tilde{N}"},
+      {U'Õ', U"\\tilde{O}"},
+      {U'Ũ', U"\\tilde{U}"},
+      {U'Ṽ', U"\\tilde{V}"},
+      // lower-case characters with circumflex
+      {U'â', U"\\hat{a}"},
+      {U'ê', U"\\hat{e}"},
+      {U'î', U"\\hat{i}"},
+      {U'ô', U"\\hat{o}"},
+      // upper-case characters with circumflex
+      {U'Â', U"\\hat{A}"},
+      {U'Ê', U"\\hat{E}"},
+      {U'Î', U"\\hat{I}"},
+      {U'Ô', U"\\hat{O}"},
+      {U'Ŝ', U"\\hat{S}"}};
 
-  str_t result;
-  const auto begin = cbegin(str);
-  const auto end = cend(str);
-  /// TODO iterate over characters (graphemes)
-  for (auto it = begin; it != end; ++it) {
-    auto append = [&result, &str, &it, &begin](const auto& s) {
-      if (result.empty()) result = str.substr(0, it - begin);
-      result += s;
-    };
-    auto is_ascii = [](Char c) { return static_cast<unsigned int>(c) <= 0x7F; };
-
-    const Char ch = *it;
-    std::optional<Char> next_ch;
-    if (it + 1 != end) next_ch = *(it + 1);
-    if (sizeof(Char) == 1 &&
-        ((it == begin && !is_ascii(ch)) || (next_ch && !is_ascii(*next_ch)))) {
-      throw Exception(
-          "diactrics_to_string<Char,...>(str): currently only supports "
-          "non-ASCII characters in str if Char is a wide character (wchar_t, "
-          "char16_t, or char32_t)");
+  // Combining diacritics:
+  // https://www.ncbi.nlm.nih.gov/staff/beck/charents/accents.html
+  auto combining_prefix = [](char32_t ch) -> std::u32string_view {
+    switch (ch) {
+      case 0x303:  // tilde
+        return U"\\tilde{";
+      case 0x301:  // acute
+        return U"\\acute{";
+      case 0x300:  // grave
+        return U"\\grave{";
+      case 0x30C:  // caron
+        return U"\\check{";
+      case 0x302:  // hat/circumflex
+        return U"\\hat{";
+      default:
+        return {};
     }
-    // Combining diacritics:
-    // https://www.ncbi.nlm.nih.gov/staff/beck/charents/accents.html
-    if (next_ch && !is_ascii(*next_ch)) {
-      auto append_latex = [&](auto prefix) {
-        append(prefix);
-        append(ch);
-        append(SQ_STRLIT(Char, "}"));
-        it += 1;
-      };
+  };
 
-      switch (static_cast<std::int64_t>(*next_ch)) {
-        // tilde
-        case 0x303:
-          append_latex(SQ_STRLIT(Char, "\\tilde{"));
-          continue;
+  std::u32string result;
+  result.reserve(str.size());
+  /// TODO iterate over graphemes
+  for (auto it = str.begin(); it != str.end(); ++it) {
+    const char32_t ch = *it;
 
-        // acute
-        case 0x301:
-          append_latex(SQ_STRLIT(Char, "\\acute{"));
-          continue;
-
-        // grave
-        case 0x300:
-          append_latex(SQ_STRLIT(Char, "\\grave{"));
-          continue;
-
-        // caron
-        case 0x30C:
-          append_latex(SQ_STRLIT(Char, "\\check{"));
-          continue;
-
-        // hat/circumflex
-        case 0x302:
-          append_latex(SQ_STRLIT(Char, "\\hat{"));
-          continue;
+    if (it + 1 != str.end()) {
+      if (const auto prefix = combining_prefix(*(it + 1)); !prefix.empty()) {
+        result += prefix;
+        result.push_back(ch);
+        result += U"}";
+        ++it;
+        continue;
       }
     }
 
-    if (!is_ascii(ch)) {  // check for combined characters
-      bool replaced = false;
-      {  // tilde
-         // lower-case characters with tilde
-        const container::map<str_t, str_t> lc = {
-            {SQ_STRLIT(Char, "ã"), SQ_STRLIT(Char, "\\tilde{a}")},
-            {SQ_STRLIT(Char, "ẽ"), SQ_STRLIT(Char, "\\tilde{e}")},
-            {SQ_STRLIT(Char, "ñ"), SQ_STRLIT(Char, "\\tilde{n}")},
-            {SQ_STRLIT(Char, "õ"), SQ_STRLIT(Char, "\\tilde{o}")},
-            {SQ_STRLIT(Char, "ũ"), SQ_STRLIT(Char, "\\tilde{u}")},
-            {SQ_STRLIT(Char, "ṽ"), SQ_STRLIT(Char, "\\tilde{v}")}};
-        auto lc_it = lc.find(str_t{ch});
-        if (lc_it != lc.end()) {
-          append(lc_it->second);
-          replaced = true;
-        } else {
-          // upper-case characters with tilde
-          const container::map<str_t, str_t> uc = {
-              {SQ_STRLIT(Char, "Ã"), SQ_STRLIT(Char, "\\tilde{A}")},
-              {SQ_STRLIT(Char, "Ẽ"), SQ_STRLIT(Char, "\\tilde{E}")},
-              {SQ_STRLIT(Char, "Ñ"), SQ_STRLIT(Char, "\\tilde{N}")},
-              {SQ_STRLIT(Char, "Õ"), SQ_STRLIT(Char, "\\tilde{O}")},
-              {SQ_STRLIT(Char, "Ũ"), SQ_STRLIT(Char, "\\tilde{U}")},
-              {SQ_STRLIT(Char, "Ṽ"), SQ_STRLIT(Char, "\\tilde{V}")}};
-          auto uc_it = uc.find(str_t{ch});
-          if (uc_it != uc.end()) {
-            append(uc_it->second);
-            replaced = true;
-          }
-        }
-      }  // tilde
-      {  // circumflex/hat
-         // lower-case characters with circumflex
-        const container::map<str_t, str_t> lc = {
-            {SQ_STRLIT(Char, "â"), SQ_STRLIT(Char, "\\hat{a}")},
-            {SQ_STRLIT(Char, "ê"), SQ_STRLIT(Char, "\\hat{e}")},
-            {SQ_STRLIT(Char, "î"), SQ_STRLIT(Char, "\\hat{i}")},
-            {SQ_STRLIT(Char, "ô"), SQ_STRLIT(Char, "\\hat{o}")}};
-        auto lc_it = lc.find(str_t{ch});
-        if (lc_it != lc.end()) {
-          append(lc_it->second);
-          replaced = true;
-        } else {
-          // upper-case characters with circumflex
-          const container::map<str_t, str_t> uc = {
-              {SQ_STRLIT(Char, "Â"), SQ_STRLIT(Char, "\\hat{A}")},
-              {SQ_STRLIT(Char, "Ê"), SQ_STRLIT(Char, "\\hat{E}")},
-              {SQ_STRLIT(Char, "Î"), SQ_STRLIT(Char, "\\hat{I}")},
-              {SQ_STRLIT(Char, "Ô"), SQ_STRLIT(Char, "\\hat{O}")},
-              {SQ_STRLIT(Char, "Ŝ"), SQ_STRLIT(Char, "\\hat{S}")}};
-          auto uc_it = uc.find(str_t{ch});
-          if (uc_it != uc.end()) {
-            append(uc_it->second);
-            replaced = true;
-          }
-        }
-      }  // circumflex/hat
-      // pass through other non-ASCII characters
-      if (!replaced && !result.empty()) result.push_back(ch);
-    } else {  // ASCII character
-      if (!result.empty()) result.push_back(ch);
+    if (auto pc_it = precomposed.find(ch); pc_it != precomposed.end()) {
+      result += pc_it->second;
+    } else {  // pass through all other characters
+      result.push_back(ch);
     }
   }
 
-  if (!result.empty())
-    return result;
-  else
-    return decltype(result)(str);
+  return result;
 }
 
-#define SQ_IMPL1(CHAR)                                              \
-  template std::basic_string<CHAR> greek_characters_to_string_impl< \
-      CHAR, std::char_traits<CHAR>, std::allocator<CHAR>>(          \
-      std::basic_string_view<CHAR>);
+bool is_ascii(std::string_view str) {
+  return std::ranges::all_of(
+      str, [](char c) { return static_cast<unsigned char>(c) <= 0x7F; });
+}
 
-SQ_IMPL1(char);
-SQ_IMPL1(wchar_t);
-SQ_IMPL1(char8_t);
-SQ_IMPL1(char16_t);
-SQ_IMPL1(char32_t);
+}  // namespace
 
-#define SQ_IMPL2(CHAR)                                       \
-  template std::basic_string<CHAR> diactrics_to_string_impl< \
-      CHAR, std::char_traits<CHAR>, std::allocator<CHAR>>(   \
-      std::basic_string_view<CHAR>);
+std::string greek_characters_to_string(std::string_view str) {
+  // fast path: no non-ASCII characters to replace
+  if (is_ascii(str)) return std::string(str);
+  return to_utf8(greek_characters_to_string_impl(to_utf32(str)));
+}
 
-SQ_IMPL2(char);
-SQ_IMPL2(wchar_t);
-SQ_IMPL2(char8_t);
-SQ_IMPL2(char16_t);
-SQ_IMPL2(char32_t);
+std::string diactrics_to_string(std::string_view str) {
+  // fast path: no non-ASCII characters to replace
+  if (is_ascii(str)) return std::string(str);
+  return to_utf8(diactrics_to_string_impl(to_utf32(str)));
+}
 
-}  // namespace detail
+std::string utf_to_string(std::string_view str) {
+  // fast path: no non-ASCII characters to replace
+  if (is_ascii(str)) return std::string(str);
+  // replace diacritics first since it relies on combining characters following
+  // their base character
+  return to_utf8(
+      greek_characters_to_string_impl(diactrics_to_string_impl(to_utf32(str))));
+}
+
 }  // namespace sequant::io::latex

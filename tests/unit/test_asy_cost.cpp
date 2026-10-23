@@ -28,8 +28,8 @@ struct MatFlops {
 // Two distinct index spaces used to build occupied/virtual costs. The type
 // bits make `virt_space` order above `occ_space`, so the virtual exponent
 // dominates cost comparison (and base_key drives how each space prints).
-sequant::IndexSpace const occ_space{L"O", 0b01};
-sequant::IndexSpace const virt_space{L"V", 0b10};
+sequant::IndexSpace const occ_space{"O", 0b01};
+sequant::IndexSpace const virt_space{"V", 0b10};
 
 sequant::AsyCost occ_virt_cost(sequant::rational prefactor, std::size_t nocc,
                                std::size_t nvirt) {
@@ -168,26 +168,26 @@ TEST_CASE("asy_cost", "[AsyCost]") {
 
   SECTION("LaTeX") {
     auto cost = occ_virt_cost(rational{1, 4}, 2, 3);
-    REQUIRE(cost.to_latex() == L"\\frac{1}{4}O^{2}V^{3}");
+    REQUIRE(cost.to_latex() == "\\frac{1}{4}O^{2}V^{3}");
     cost = occ_virt_cost(2, 3);
-    REQUIRE(cost.to_latex() == L"O^{2}V^{3}");
+    REQUIRE(cost.to_latex() == "O^{2}V^{3}");
     cost = occ_virt_cost(rational{1, 1}, 2, 3);
-    REQUIRE(cost.to_latex() == L"O^{2}V^{3}");
+    REQUIRE(cost.to_latex() == "O^{2}V^{3}");
     cost = occ_virt_cost(rational{-1, 1}, 2, 3);
-    REQUIRE(cost.to_latex() == L"- O^{2}V^{3}");
+    REQUIRE(cost.to_latex() == "- O^{2}V^{3}");
     cost = occ_virt_cost(rational{-1, 4}, 2, 3);
-    REQUIRE(cost.to_latex() == L"- \\frac{1}{4}O^{2}V^{3}");
+    REQUIRE(cost.to_latex() == "- \\frac{1}{4}O^{2}V^{3}");
   }
 
   SECTION("generalized spaces") {
     using sequant::IndexSpace;
     // Exercise > 2 spaces, including one whose base_key is multi-character.
     // Type bits set the ordering O < U < V < K < Q.
-    IndexSpace const O{L"O", 0b00001};
-    IndexSpace const U{L"U", 0b00010};
-    IndexSpace const V{L"V", 0b00100};
-    IndexSpace const K{L"K", 0b01000};
-    IndexSpace const Q{L"(qq)", 0b10000};
+    IndexSpace const O{"O", 0b00001};
+    IndexSpace const U{"U", 0b00010};
+    IndexSpace const V{"V", 0b00100};
+    IndexSpace const K{"K", 0b01000};
+    IndexSpace const Q{"(qq)", 0b10000};
 
     AsyCost::ExponentMap m;
     m.emplace(O, 2);
@@ -198,18 +198,18 @@ TEST_CASE("asy_cost", "[AsyCost]") {
     auto const c = AsyCost{m};
 
     auto const tex = c.to_latex();
-    REQUIRE(tex.find(L"O^{2}") != std::wstring::npos);
-    REQUIRE(tex.find(L"V^{3}") != std::wstring::npos);
-    REQUIRE(tex.find(L"K^{2}") != std::wstring::npos);
-    REQUIRE(tex.find(L"(qq)") != std::wstring::npos);
-    REQUIRE(tex.find(L"U^{") == std::wstring::npos);     // exp 1: no caret
-    REQUIRE(tex.find(L"(qq)^{") == std::wstring::npos);  // exp 1: no caret
+    REQUIRE(tex.find("O^{2}") != std::string::npos);
+    REQUIRE(tex.find("V^{3}") != std::string::npos);
+    REQUIRE(tex.find("K^{2}") != std::string::npos);
+    REQUIRE(tex.find("(qq)") != std::string::npos);
+    REQUIRE(tex.find("U^{") == std::string::npos);     // exp 1: no caret
+    REQUIRE(tex.find("(qq)^{") == std::string::npos);  // exp 1: no caret
 
     // Pin down the full rendered string, not just substring presence: within a
     // term the spaces print in IndexSpace order (O < U < V < K < Q), so the
     // sequence is fixed regardless of construction order.
     REQUIRE(c.text() == "O^2UV^3K^2(qq)");
-    REQUIRE(c.to_latex() == L"O^{2}UV^{3}K^{2}(qq)");
+    REQUIRE(c.to_latex() == "O^{2}UV^{3}K^{2}(qq)");
 
     // Equal costs constructed in two different orders compare equal.
     AsyCost::ExponentMap m2;
@@ -282,8 +282,8 @@ TEST_CASE("asy_cost", "[AsyCost]") {
 
   SECTION("max() sentinel") {
     using sequant::IndexSpace;
-    IndexSpace const O{L"O", 0b01};
-    IndexSpace const V{L"V", 0b10};
+    IndexSpace const O{"O", 0b01};
+    IndexSpace const V{"V", 0b10};
 
     // max() flows through ops() as infinity, regardless of supplied extents.
     REQUIRE(std::isinf(AsyCost::max().ops()));
@@ -304,10 +304,10 @@ TEST_CASE("asy_cost", "[AsyCost]") {
   // each basis of a space is a symbol of its own, sized by its own extent
   SECTION("basis instances") {
     using sequant::IndexSpace;
-    IndexSpace const V{L"V", 0b10, sequant::QuantumNumbersAttr{0}, 100};
+    IndexSpace const V{"V", 0b10, sequant::QuantumNumbersAttr{0}, 100};
     sequant::IndexBasisRegistry registry;
-    registry.add(V).add(L"P", V, 2, {.extent = 400});
-    IndexBasis const own{V}, unnamed{V, 1}, named = registry.retrieve(L"P");
+    registry.add(V).add("P", V, 2, {.extent = 400});
+    IndexBasis const own{V}, unnamed{V, 1}, named = registry.retrieve("P");
 
     AsyCost::ExponentMap m;
     m.emplace(own, 2);
@@ -315,14 +315,14 @@ TEST_CASE("asy_cost", "[AsyCost]") {
     m.emplace(named, 3);
     auto const c = AsyCost{m};
     REQUIRE(c.text() == "V^2V<;1>P^3");
-    REQUIRE(c.to_latex() == L"V^{2}V<;1>P^{3}");
+    REQUIRE(c.to_latex() == "V^{2}V<;1>P^{3}");
     REQUIRE(c.ops() == 100.0 * 100.0 * 100.0 * std::pow(400.0, 3));
     AsyCost::ExtentMap const ext{{named, 7}};
     REQUIRE(c.ops(ext) == 100.0 * 100.0 * 100.0 * std::pow(7.0, 3));
     // the name is part of the symbol's identity, the extent is not
     REQUIRE(AsyCost{AsyCost::ExponentMap{{IndexBasis{V, 2}, 3}}} !=
             AsyCost{AsyCost::ExponentMap{{named, 3}}});
-    REQUIRE(AsyCost{AsyCost::ExponentMap{{IndexBasis{V, 2, L"P"}, 3}}} ==
+    REQUIRE(AsyCost{AsyCost::ExponentMap{{IndexBasis{V, 2, "P"}, 3}}} ==
             AsyCost{AsyCost::ExponentMap{{named, 3}}});
   }
 }

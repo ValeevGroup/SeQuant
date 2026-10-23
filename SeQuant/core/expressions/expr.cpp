@@ -178,7 +178,7 @@ std::optional<std::size_t> Expr::canonical_subtree_digest() const {
   return digest;
 }
 
-std::wstring Expr::to_latex() const {
+std::string Expr::to_latex() const {
   throw Exception("to_latex not implemented for " + type_name());
 }
 

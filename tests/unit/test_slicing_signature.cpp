@@ -41,7 +41,7 @@ EvalNodeDryRun sig_test_leaf(ExprPtr const& t) {
 }
 
 ExprPtr sig_test_g(svector<Index> const& idxs) {
-  return ex<Tensor>(L"g", bra(idxs), ket{}, Symmetry::Nonsymm, std::nullopt,
+  return ex<Tensor>("g", bra(idxs), ket{}, Symmetry::Nonsymm, std::nullopt,
                     ColumnSymmetry::Nonsymm);
 }
 
@@ -49,7 +49,7 @@ ExprPtr sig_test_g(svector<Index> const& idxs) {
 
 TEST_CASE("slicing_signature: relabeled mode diverges, shared-label agrees",
           "[slicing-signature]") {
-  Index i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"}, i4{L"i_4"};
+  Index i1{"i_1"}, i2{"i_2"}, i3{"i_3"}, i4{"i_4"};
   // A carries i_3 on a result slot; B carries i_4 there (the g.C legs' shape).
   auto A = sig_test_leaf(sig_test_g({i1, i2, i3}));
   auto B = sig_test_leaf(sig_test_g({i1, i2, i4}));

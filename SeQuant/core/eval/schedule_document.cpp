@@ -21,7 +21,7 @@
 namespace sequant::eval::schedule {
 
 std::string index_label(Index const& index) {
-  return toUtf8(io::serialization::v1::to_string(index));
+  return io::serialization::v1::to_string(index);
 }
 
 namespace {

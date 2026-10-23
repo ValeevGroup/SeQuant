@@ -42,7 +42,7 @@ CanonicalizationMethod operator&(CanonicalizationMethod m1,
                                  CanonicalizationMethod m2);
 CanonicalizationMethod operator|(CanonicalizationMethod m1,
                                  CanonicalizationMethod m2);
-std::wstring to_wstring(CanonicalizationMethod m);
+std::string to_string(CanonicalizationMethod m);
 
 /// @brief options that control behavior of `canonicalize()`
 struct CanonicalizeOptions {

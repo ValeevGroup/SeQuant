@@ -12,12 +12,15 @@
 #include <SeQuant/core/io/serialization/v1/ast_conversions.hpp>
 #include <SeQuant/core/io/serialization/v1/semantic_actions.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #define BOOST_SPIRIT_X3_UNICODE
 #include <boost/core/demangle.hpp>
 #include <boost/spirit/home/x3.hpp>
 #include <boost/spirit/home/x3/support/utility/error_reporting.hpp>
 #include <boost/variant.hpp>
+
+#include <utf8/unchecked.h>
 
 #include <algorithm>
 #include <cassert>
@@ -33,6 +36,11 @@
 namespace sequant::io::serialization::v1 {
 
 namespace x3 = boost::spirit::x3;
+
+/// The parser operates on code points obtained by decoding the (UTF-8 encoded)
+/// input on the fly; the underlying input position is accessible via base()
+using iterator_type =
+    utf8::unchecked::iterator<std::string_view::const_iterator>;
 
 namespace parse {
 
@@ -63,7 +71,8 @@ x3::rule<ExprRule, ast::Sum> expr{"Expression"};
 x3::rule<ResultExprRule, ast::ResultExpr> resultExpr{"ResultExpr"};
 
 // Auxiliaries
-x3::rule<struct NameRule, std::wstring> name{"Name"};
+x3::rule<struct NameRule, std::string> name{"Name"};
+x3::rule<struct BaseKeyRule, std::string> base_key{"BaseKey"};
 x3::rule<IndexLabelRule, ast::IndexLabel> index_label{"IndexLabel"};
 x3::rule<ProtoLabelRule, ast::ProtoLabel> proto_label{"ProtoLabel"};
 x3::rule<IndexRule, ast::Index> index{"Index"};
@@ -74,23 +83,31 @@ auto to_char_type = [](auto c) {
   return static_cast<x3::unicode::char_type::char_type>(c);
 };
 
+/// semantic action that sets the rule's attribute to the (UTF-8 encoded) input
+/// that has been matched by the subject parser (which has to be wrapped in
+/// x3::raw)
+auto set_matched_input = [](auto &ctx) {
+  const auto &range = x3::_attr(ctx);
+  x3::_val(ctx) = std::string(range.begin().base(), range.end().base());
+};
+
 // clang-format off
 auto word_components = x3::unicode::alnum
-                       | x3::char_('_') | x3::unicode::char_(L'⁔')
+                       | x3::char_('_') | x3::unicode::char_(U'⁔')
                        | x3::unicode::char_(to_char_type(0x0303)) // combining tilde
                        | x3::unicode::char_(to_char_type(0x0302)) // combining circumflex/hat
                        // Superscript and Subscript block
                        | (x3::unicode::char_(to_char_type(0x2070), to_char_type(0x209F)) - x3::unicode::unassigned)
                        // These are defined in the Latin-1 Supplement block and thus need to be listed explicitly
-                       | x3::unicode::char_(L'¹') | x3::unicode::char_(L'²') | x3::unicode::char_(L'³')
+                       | x3::unicode::char_(U'¹') | x3::unicode::char_(U'²') | x3::unicode::char_(U'³')
                        // Arrow block
                        | (x3::unicode::char_(to_char_type(0x2190), to_char_type(0x21FF)) - x3::unicode::unassigned);
 // A name begins with a letter, then can container letters, digits and
 // underscores, but can not end with an underscore (to not confuse the parser
 // with tensors á la t_{…}^{…}.
-auto name_def         = x3::lexeme[
+auto name_def         = x3::raw[x3::lexeme[
                             x3::unicode::alpha >> -( *(word_components >> &word_components) >> (word_components - '_') )
-                        ];
+                        ]][set_matched_input];
 
 auto number_def       = x3::double_ >> -('/' >> x3::double_);
 
@@ -98,11 +115,13 @@ auto variable_def     = x3::lexeme[name >> -(x3::lit('^') >> '*' >> x3::attr(tru
 
 // letters, ⁺/⁻, combining diacritics (e.g. μ̃, f̌), arrows (e.g. ↑/↓) and
 // primes (e.g. α')
-auto base_key         = +(  x3::unicode::alpha | x3::unicode::char_(L'⁺') | x3::unicode::char_(L'⁻')
+auto base_key_chars   = +(  x3::unicode::alpha | x3::unicode::char_(U'⁺') | x3::unicode::char_(U'⁻')
                           | x3::unicode::char_(to_char_type(0x0300), to_char_type(0x036F))
                           | (x3::unicode::char_(to_char_type(0x2190), to_char_type(0x21FF)) - x3::unicode::unassigned)
-                          | x3::unicode::char_(L'\'')
+                          | x3::unicode::char_('\'')
                          );
+
+auto base_key_def     = x3::raw[base_key_chars][set_matched_input];
 
 auto index_label_def  = x3::lexeme[
                                base_key >> -x3::lit('_') >> x3::uint_
@@ -121,8 +140,10 @@ auto index_def        = x3::lexeme[
                         ];
 
 const std::vector<ast::Index> noIndices;
-auto index_groups_def =   L"_{" > -(index % ',') > L"}^{" > -(index % ',')  > L"}" >> x3::attr(noIndices) >> x3::attr(false)
-                        | L"^{" > -(index % ',') > L"}_{" > -(index % ',')  > L"}" >> x3::attr(noIndices) >> x3::attr(true)
+// n.b. multi-character string literals have to be (UTF-32) Unicode literals as
+// they are matched against the decoded code points of the input
+auto index_groups_def =   x3::unicode::lit(U"_{") > -(index % ',') > x3::unicode::lit(U"}^{") > -(index % ',')  > '}' >> x3::attr(noIndices) >> x3::attr(false)
+                        | x3::unicode::lit(U"^{") > -(index % ',') > x3::unicode::lit(U"}_{") > -(index % ',')  > '}' >> x3::attr(noIndices) >> x3::attr(true)
                         |  '{'  > -(index % ',') > -( ';' > -(index % ',')) > -(';' > -(index % ','))     >  '}'  >> x3::attr(false);
 
 auto symmetry_spec_def= x3::lexeme[
@@ -136,9 +157,9 @@ auto tensor_def       = x3::lexeme[
 // TODO(power): per comments on PR #513, promote `^` to a binary operator (with higher precedence than *) and then reject unsupported cases while traversing the AST.
 // Two forms are accepted: b^(e) and (b^(e))^*
 auto power_core       = (('(' >> (number | variable) >> ')') | number | variable)
-                        >> x3::lit(L"^") >> '(' >> number >> ')';
+                        >> x3::lit('^') >> '(' >> number >> ')';
 auto power_def        = (power_core >> x3::attr(false))
-                        | ('(' >> power_core >> ')' >> x3::lit(L"^*") >> x3::attr(true));
+                        | ('(' >> power_core >> ')' >> x3::unicode::lit(U"^*") >> x3::attr(true));
 
 auto nullary          = number | tensor | variable;
 
@@ -154,11 +175,11 @@ auto sum_def          = first_addend >> *addend;
 
 auto expr_def         = -sum > x3::eoi;
 
-auto resultExpr_def       = (tensor | variable) > (L'=' | x3::lit(L"->")) >> expr;
+auto resultExpr_def       = (tensor | variable) > ('=' | x3::unicode::lit(U"->")) >> expr;
 // clang-format on
 
-BOOST_SPIRIT_DEFINE(name, number, variable, index_label, proto_label, index,
-                    index_groups, tensor, power, product, sum, expr,
+BOOST_SPIRIT_DEFINE(name, base_key, number, variable, index_label, proto_label,
+                    index, index_groups, tensor, power, product, sum, expr,
                     symmetry_spec, resultExpr);
 
 struct position_cache_tag;
@@ -210,7 +231,7 @@ struct ErrorHandler {
   ErrorHandler(Iterator begin) : begin(std::move(begin)) {}
 
   void operator()(Iterator where, std::string expected) const {
-    std::size_t offset = std::distance(begin, where);
+    std::size_t offset = std::distance(begin.base(), where.base());
     throw SerializationError(offset, 1,
                              std::string("Parse failure at offset ") +
                                  std::to_string(offset) + ": expected " +
@@ -219,21 +240,22 @@ struct ErrorHandler {
 };
 
 template <typename AST, typename StartRule, typename PositionCache>
-AST parse(const StartRule &start, std::wstring_view input,
+AST parse(const StartRule &start, std::string_view input,
           PositionCache &positions) {
-  using iterator_type = decltype(input)::iterator;
+  const iterator_type input_begin(input.begin());
+  const iterator_type input_end(input.end());
 
-  ErrorHandler<iterator_type> error_handler(input.begin());
+  ErrorHandler<iterator_type> error_handler(input_begin);
 
   AST ast;
 
   const auto parser = x3::with<error_handler_tag>(std::ref(
       error_handler))[x3::with<position_cache_tag>(std::ref(positions))[start]];
 
-  auto begin = input.begin();
+  auto begin = input_begin;
   try {
     bool success =
-        x3::phrase_parse(begin, input.end(), parser, x3::unicode::space, ast);
+        x3::phrase_parse(begin, input_end, parser, x3::unicode::space, ast);
 
     if (!success) {
       // Normally, this shouldn't happen as any error should itself throw a
@@ -241,15 +263,15 @@ AST parse(const StartRule &start, std::wstring_view input,
       throw SerializationError(
           0, input.size(), "Parsing was unsuccessful for an unknown reason");
     }
-    if (begin != input.end()) {
+    if (begin != input_end) {
       // This should also not happen as the parser requires matching EOI
-      throw SerializationError(std::distance(input.begin(), begin),
-                               std::distance(begin, input.end()),
+      throw SerializationError(std::distance(input.begin(), begin.base()),
+                               std::distance(begin.base(), input.end()),
                                "Couldn't parse the entire input");
     }
   } catch ([[maybe_unused]] const boost::spirit::x3::expectation_failure<
            iterator_type> &e) {
-    // std::wcout << "Caught expectation_failure\nwhere: " << e.where()
+    // std::cout << "Caught expectation_failure\nwhere: " << e.where()
     //           << "\nwhat: " << e.what() << "\nwhich: " << e.which().data()
     //           << std::endl;
     throw;
@@ -260,9 +282,11 @@ AST parse(const StartRule &start, std::wstring_view input,
 
 }  // namespace parse
 
-bool is_base_key(std::wstring_view label) {
-  auto begin = label.begin();
-  return x3::parse(begin, label.end(), parse::base_key) && begin == label.end();
+bool is_base_key(std::string_view label) {
+  if (!is_valid_utf8(label)) return false;
+  auto begin = iterator_type(label.begin());
+  const auto end = iterator_type(label.end());
+  return x3::parse(begin, end, parse::base_key_chars) && begin == end;
 }
 
 transform::DefaultSymmetries to_default_symms(
@@ -291,17 +315,28 @@ transform::DefaultSymmetries to_default_symms(
   return symms;
 }
 
+/// @throw SerializationError if @p input is not valid UTF-8
+void validate_input(std::string_view input) {
+  if (!is_valid_utf8(input)) {
+    const auto invalid_pos = std::distance(
+        input.begin(), utf8::find_invalid(input.begin(), input.end()));
+    throw SerializationError(
+        invalid_pos, 1,
+        "Invalid UTF-8 at offset " + std::to_string(invalid_pos));
+  }
+}
+
 #define SEQUANT_DESERIALIZATION_SPECIALIZATION(ExprType, StartRule, ASTType, \
                                                transformFunc)                \
   template <>                                                                \
-  ExprType from_string<ExprType>(std::wstring_view input,                    \
+  ExprType from_string<ExprType>(std::string_view input,                     \
                                  const DeserializationOptions &options) {    \
-    using iterator_type = decltype(input)::iterator;                         \
-    x3::position_cache<std::vector<iterator_type>> positions(input.begin(),  \
-                                                             input.end());   \
+    validate_input(input);                                                   \
+    x3::position_cache<std::vector<iterator_type>> positions(                \
+        iterator_type(input.begin()), iterator_type(input.end()));           \
     auto ast = parse::parse<ASTType>(StartRule, input, positions);           \
                                                                              \
-    return transformFunc(ast, positions, input.begin(),                      \
+    return transformFunc(ast, positions, iterator_type(input.begin()),       \
                          to_default_symms(options));                         \
   }
 
@@ -310,16 +345,5 @@ SEQUANT_DESERIALIZATION_SPECIALIZATION(ResultExpr, parse::resultExpr,
                                        transform::ast_to_result)
 SEQUANT_DESERIALIZATION_SPECIALIZATION(ExprPtr, parse::expr, ast::Sum,
                                        transform::ast_to_expr)
-
-template <>
-ResultExpr from_string<ResultExpr>(std::string_view input,
-                                   const DeserializationOptions &options) {
-  return v1::from_string<ResultExpr>(toUtf16(input), options);
-}
-template <>
-ExprPtr from_string<ExprPtr>(std::string_view input,
-                             const DeserializationOptions &options) {
-  return v1::from_string<ExprPtr>(toUtf16(input), options);
-}
 
 }  // namespace sequant::io::serialization::v1

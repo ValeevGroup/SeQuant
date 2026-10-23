@@ -59,11 +59,11 @@ void print_auts(const PermutationSequence& aut_generators, Stream& stream,
         }
         if (!is_first) continue;
         stream << "("
-               << (use_labels ? vlabels.at(i) : std::to_wstring(i + offset))
+               << (use_labels ? vlabels.at(i) : std::to_string(i + offset))
                << ",";
         j = perm[i];
         while (j != i) {
-          stream << (use_labels ? vlabels.at(j) : std::to_wstring(j + offset));
+          stream << (use_labels ? vlabels.at(j) : std::to_string(j + offset));
           j = perm[j];
           if (j != i) stream << ",";
         }

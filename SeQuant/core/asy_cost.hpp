@@ -157,7 +157,7 @@ class AsyCost {
 
   /// \return A LaTeX rendering of the whole cost: its terms joined by ` + `,
   ///         most expensive first. The zero cost renders as `0`.
-  [[nodiscard]] std::wstring to_latex() const;
+  [[nodiscard]] std::string to_latex() const;
 
   /// \return A plain-text rendering of the whole cost: its terms joined by
   ///         ` + `, most expensive first. The zero cost renders as `0`.

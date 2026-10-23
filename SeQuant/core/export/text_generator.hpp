@@ -82,15 +82,15 @@ class TextGenerator : public Generator<Context> {
   }
 
   std::string represent(const Index &idx, const Context &) const override {
-    std::string result = toUtf8(idx.label());
+    std::string result = std::string(idx.label());
     if (idx.basis().unnamed_instance())
-      result += "<" + toUtf8(idx.basis().instance_suffix()) + ">";
+      result += "<" + std::string(idx.basis().instance_suffix()) + ">";
     return result;
   }
 
   std::string represent(const Tensor &tensor,
                         const Context &ctx) const override {
-    std::string representation = toUtf8(tensor.label()) + "[";
+    std::string representation = std::string(tensor.label()) + "[";
 
     using namespace std::literals;
     representation += tensor.const_indices() |
@@ -106,7 +106,7 @@ class TextGenerator : public Generator<Context> {
 
   std::string represent(const Variable &variable,
                         const Context &) const override {
-    return toUtf8(variable.label());
+    return std::string(variable.label());
   }
 
   std::string represent(const Constant &constant,

@@ -38,13 +38,13 @@ namespace sequant {
 /// map and call this.
 template <typename FlatArray, typename ToTArray = FlatArray>
 [[nodiscard]] BackendArrayOps make_ta_array_ops(
-    std::map<std::wstring, TA::TiledRange1> tr1_of_base, TA::World& world) {
-  auto map = std::make_shared<std::map<std::wstring, TA::TiledRange1>>(
+    std::map<std::string, TA::TiledRange1> tr1_of_base, TA::World& world) {
+  auto map = std::make_shared<std::map<std::string, TA::TiledRange1>>(
       std::move(tr1_of_base));
   BackendArrayOps aops;
   aops.axis_batches = [map](Index const& axis, std::size_t target_batch_size) {
     return mode_batches_of_trange1(
-        map->at(std::wstring(axis.basis().base_key())), target_batch_size);
+        map->at(std::string(axis.basis().base_key())), target_batch_size);
   };
   aops.make_zeros =
       [map, &world](container::vector<Index> const& descriptor) -> ResultPtr {
@@ -56,7 +56,7 @@ template <typename FlatArray, typename ToTArray = FlatArray>
         nested = true;  // an inner (nested) mode -- not an outer trange mode
         continue;
       }
-      outer.push_back(map->at(std::wstring(ix.basis().base_key())));
+      outer.push_back(map->at(std::string(ix.basis().base_key())));
     }
     TA::TiledRange otr(outer.begin(), outer.end());
     auto make_flat = [&]() -> ResultPtr {

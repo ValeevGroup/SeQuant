@@ -31,14 +31,14 @@ class Power : public Expr {
 
   /// @overload constructs a `Variable` base from @p label
   template <typename L>
-    requires std::constructible_from<std::wstring, L> &&
+    requires std::constructible_from<std::string, L> &&
              (!std::convertible_to<L, ExprPtr>)
   Power(L&& label, exponent_type exponent)
       : Power(ex<Variable>(std::forward<L>(label)), std::move(exponent)) {}
 
   /// @overload constructs a `Constant` base from scalar @p value
   template <typename V>
-    requires(!std::constructible_from<std::wstring, V> &&
+    requires(!std::constructible_from<std::string, V> &&
              !std::convertible_to<V, ExprPtr> &&
              std::constructible_from<Constant::scalar_type, V>)
   Power(V&& value, exponent_type exponent)
@@ -68,7 +68,7 @@ class Power : public Expr {
   /// treated as 1.
   bool is_zero() const override;
 
-  std::wstring to_latex() const override;
+  std::string to_latex() const override;
 
   /// @brief Attempts to flatten a Power, mutating @p expr in place. Folds
   /// when @p expr holds a Power and any of:

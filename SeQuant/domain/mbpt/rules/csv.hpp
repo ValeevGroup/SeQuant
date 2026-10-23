@@ -34,9 +34,9 @@ namespace sequant::mbpt {
 /// \throw Exception if @p csv_basis has a basis instance that the default
 ///        context's registry does not name
 ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
-                      std::wstring const& coeff_tensor_label = L"C",
-                      container::svector<std::wstring> const& tensor_labels = {
-                          L"f", L"g", sequant::reserved::overlap_label()});
+                      std::string const& coeff_tensor_label = "C",
+                      container::svector<std::string> const& tensor_labels = {
+                          "f", "g", sequant::reserved::overlap_label()});
 
 }  // namespace sequant::mbpt
 

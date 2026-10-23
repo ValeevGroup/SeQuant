@@ -109,7 +109,7 @@ jobs:
       if: ${{ startswith(matrix.os, 'ubuntu') }}
       run: |
         sudo apt-get update
-        sudo apt-get install ninja-build g++-14 liblapack-dev libboost-dev libboost-locale-dev libboost-random-dev libboost-regex-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache valgrind catch2 libbenchmark-dev
+        sudo apt-get install ninja-build g++-14 liblapack-dev libboost-dev libboost-random-dev libboost-regex-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache valgrind catch2 libbenchmark-dev
 
     - name: Enable TBB
       if: ${{ startswith(matrix.os, 'ubuntu') && !matrix.valgrind && !matrix.sanitize }}
@@ -132,7 +132,7 @@ jobs:
       id: vcpkg
       uses: johnwason/vcpkg-action@v8
       with:
-        pkgs: eigen3 boost-locale boost-random boost-regex boost-container boost-container-hash boost-hana boost-multiprecision boost-conversion boost-interval boost-range boost-spirit catch2 benchmark
+        pkgs: eigen3 boost-random boost-regex boost-container boost-container-hash boost-hana boost-multiprecision boost-conversion boost-interval boost-range boost-spirit catch2 benchmark
         triplet: x64-windows
         token: ${{ github.token }}
 

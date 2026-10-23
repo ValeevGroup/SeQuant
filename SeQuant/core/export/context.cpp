@@ -360,9 +360,9 @@ void ExportContext::register_irreps(const Tensor &tensor, AnyIrrepSet irreps,
   if (origin == IrrepOrigin::Result) {
     entry.irreps.unite(irreps);
   } else if (entry.irreps != irreps) {
-    throw Exception("Conflicting IRREPs for tensor " +
-                    toUtf8(tensor.to_latex()) + ": " +
-                    entry.irreps.to_string() + " vs. " + irreps.to_string());
+    throw Exception("Conflicting IRREPs for tensor " + tensor.to_latex() +
+                    ": " + entry.irreps.to_string() + " vs. " +
+                    irreps.to_string());
   }
 }
 

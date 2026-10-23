@@ -202,7 +202,7 @@ three_body_decomp(ExprPtr ex_, bool approx) {
 
   auto temp_result = sum_of_terms.result;
   simplify(temp_result);
-  // std::wcout << "result before substitiutions: " <<
+  // std::cout << "result before substitiutions: " <<
   // to_latex_align(temp_result) << std::endl;
 
   for (auto&& product :
@@ -234,7 +234,7 @@ three_body_decomp(ExprPtr ex_, bool approx) {
   std::pair<ExprPtr, std::pair<std::vector<Index>, std::vector<Index>>> result(
       temp_result, initial_pairing);
   // simplify(temp_result);
-  // std::wcout << "result before substitiutions: " <<
+  // std::cout << "result before substitiutions: " <<
   // to_latex_align(temp_result,20,7) << std::endl;
   return result;
 }
@@ -291,11 +291,11 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
       initial_pairing.second = initial_upper;
       // make tensors which can be decomposed into the constituent pieces later
       // in the procedure.
-      auto DE2 = ex<Tensor>(L"DE2", bra{down_0, down_1, down_2},
+      auto DE2 = ex<Tensor>("DE2", bra{down_0, down_1, down_2},
                             ket{up_0, up_1, up_2}, particle_symmetric);
-      auto DDE = ex<Tensor>(L"DDE", bra{down_0, down_1, down_2},
+      auto DDE = ex<Tensor>("DDE", bra{down_0, down_1, down_2},
                             ket{up_0, up_1, up_2}, particle_symmetric);
-      auto D2E = ex<Tensor>(L"D2E", bra{down_0, down_1, down_2},
+      auto D2E = ex<Tensor>("D2E", bra{down_0, down_1, down_2},
                             ket{up_0, up_1, up_2}, particle_symmetric);
       auto result = DE2 + D2E - ex<Constant>(2) * DDE;
       return {result, initial_pairing};
@@ -327,7 +327,7 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
       }
     }
     simplify(ex_);
-    // std::wcout << " cumulant replacment: " << to_latex_align(_ex,20, 7) <<
+    // std::cout << " cumulant replacment: " << to_latex_align(_ex,20, 7) <<
     // std::endl;
   } else if (rank == 1) {
     auto ex_pair = three_body_decomp(ex_, true);
@@ -450,7 +450,7 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast) {
     input = fac_pair.first;
     initial_pairing = fac_pair.second;
     if (get_default_context().spbasis() == SPBasis::Spinfree) {
-      // std::wcout << to_latex_align(input,20) << std::endl;
+      // std::cout << to_latex_align(input,20) << std::endl;
       input = antisymm::spin_sum(initial_pairing.second, initial_pairing.first,
                                  input);
       non_canon_simplify(input);

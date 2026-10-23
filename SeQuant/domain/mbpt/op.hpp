@@ -73,7 +73,7 @@ Normalization normalization(OpClass opclass);
 /// NormalizationConvention
 /// @pre @p label is reserved (e.g. Â, Ŝ) or registered in the active
 /// OpRegistry
-Normalization normalization(const std::wstring& label);
+Normalization normalization(const std::string& label);
 
 /// @brief the rank pairs of a sum of operators truncated at ranks
 /// (@p n1, @p n2), highest first
@@ -139,7 +139,7 @@ struct OpParams {
 
 /// @return the tensor labels in the cardinal order, starting with the
 /// reserved labels that Context uses by default
-std::vector<std::wstring> cardinal_tensor_labels();
+std::vector<std::string> cardinal_tensor_labels();
 
 //////////////////////////////
 
@@ -177,7 +177,7 @@ class Operator<void, S> : public Expr, public Labeled {
   /// @param label_generator A function that generates a label for the operator
   /// @param tensor_form_generator A function that generates the tensor form of
   /// the operator
-  Operator(std::function<std::wstring_view()> label_generator,
+  Operator(std::function<std::string_view()> label_generator,
            std::function<ExprPtr()> tensor_form_generator)
       : label_generator_(std::move(label_generator)),
         tensor_form_generator_(tensor_form_generator) {}
@@ -186,7 +186,7 @@ class Operator<void, S> : public Expr, public Labeled {
   virtual ~Operator() = default;
 
   /// @return label of the operator
-  std::wstring_view label() const override {
+  std::string_view label() const override {
     SEQUANT_ASSERT(label_generator_);
     return label_generator_();
   }
@@ -202,7 +202,7 @@ class Operator<void, S> : public Expr, public Labeled {
   bool is_cnumber() const override { return false; }
 
  protected:
-  std::function<std::wstring_view()> label_generator_;
+  std::function<std::string_view()> label_generator_;
   std::function<ExprPtr()> tensor_form_generator_;
 };
 
@@ -618,7 +618,7 @@ class OpMaker {
   /// @param[in] cre_list list of creator indices
   /// @param[in] ann_list list of annihilator indices
   template <typename IndexSpaceTypeRange1, typename IndexSpaceTypeRange2>
-  OpMaker(const std::wstring& label, const cre<IndexSpaceTypeRange1>& cre_list,
+  OpMaker(const std::string& label, const cre<IndexSpaceTypeRange1>& cre_list,
           const ann<IndexSpaceTypeRange2>& ann_list, size_t order = 0)
       : label_(label),
         order_(order),
@@ -630,20 +630,20 @@ class OpMaker {
   /// @param[in] op the operator type
   /// @param[in] nc number of bra indices/creators
   /// @param[in] na number of ket indices/annihilators
-  OpMaker(const std::wstring& label, ncre nc, nann na);
+  OpMaker(const std::string& label, ncre nc, nann na);
 
   /// @brief creates a particle-conserving replacement operator
   /// @param[in] op the operator type
   /// @param[in] rank particle rank of the operator (# of creators = # of
   /// annihilators = @p rank )
-  OpMaker(const std::wstring& label, std::size_t rank);
+  OpMaker(const std::string& label, std::size_t rank);
 
   /// @param[in] op the operator type
   /// @param[in] nc number of bra indices/creators
   /// @param[in] na number of ket indices/annihilators
   /// @param[in] cre_space IndexSpace referred to be the creator
   /// @param[in] ann_space IndexSpace referred to be the annihilators
-  OpMaker(const std::wstring& label, ncre nc, nann na,
+  OpMaker(const std::string& label, ncre nc, nann na,
           const cre<IndexSpace>& cre_space, const ann<IndexSpace>& ann_space);
 
   /// @brief Creates operator from OpParams
@@ -651,7 +651,7 @@ class OpMaker {
   /// @param[in] nc number of bra indices/creators
   /// @param[in] na number of ket indices/annihilators
   /// @param[in] params named parameters for operator construction
-  OpMaker(const std::wstring& label, ncre nc, nann na, const OpParams& params);
+  OpMaker(const std::string& label, ncre nc, nann na, const OpParams& params);
 
   enum class UseDepIdx {
     /// bra/cre indices depend on ket
@@ -686,7 +686,7 @@ class OpMaker {
   // clang-format on
   ExprPtr operator()(std::optional<UseDepIdx> dep_opt = {},
                      std::optional<Symmetry> opsymm_opt = {},
-                     std::optional<std::wstring> grants_of = {}) const;
+                     std::optional<std::string> grants_of = {}) const;
 
   /// @brief Creates an OpInfo struct containing creator and annihilator
   /// indices, normalization factor, symmetry, and dependency information.
@@ -848,7 +848,7 @@ class OpMaker {
     mbpt::check_for_batching_space();
     SEQUANT_ASSERT(!batch_indices.empty());
     [[maybe_unused]] auto batch_space =
-        get_default_context().index_basis_registry()->retrieve_space(L"z");
+        get_default_context().index_basis_registry()->retrieve_space("z");
     // assumes that there are no more than one type of batch space
     for ([[maybe_unused]] const auto& idx : batch_indices) {
       SEQUANT_ASSERT(idx.space() == batch_space);
@@ -865,13 +865,13 @@ class OpMaker {
   }
 
  protected:
-  std::wstring label_;
+  std::string label_;
   size_t order_ = 0;
   IndexSpaceContainer cre_spaces_;
   IndexSpaceContainer ann_spaces_;
   std::optional<IndexContainer> batch_indices_ = std::nullopt;
 
-  OpMaker(const std::wstring& op);
+  OpMaker(const std::string& op);
 
   [[nodiscard]] auto ncreators() const { return cre_spaces_.size(); };
   [[nodiscard]] auto nannihilators() const { return ann_spaces_.size(); };
@@ -898,11 +898,11 @@ class Operator : public Operator<void, S> {
   /// @param tensor_form_generator a function that generates the tensor form of
   /// the operator
   /// @param qn_action a function that modifies the quantum numbers
-  Operator(std::function<std::wstring_view()> label_generator,
+  Operator(std::function<std::string_view()> label_generator,
            std::function<ExprPtr()> tensor_form_generator,
            std::function<void(QuantumNumbers&)> qn_action);
 
-  Operator(std::function<std::wstring_view()> label_generator,
+  Operator(std::function<std::string_view()> label_generator,
            std::function<ExprPtr()> tensor_form_generator,
            std::function<void(QuantumNumbers&)> qn_action,
            const OpParams& params);
@@ -980,7 +980,7 @@ class Operator : public Operator<void, S> {
 
   ExprPtr clone() const override;
 
-  std::wstring to_latex() const override;
+  std::string to_latex() const override;
 
   Expr::hash_type memoizing_hash() const override;
 
@@ -1013,7 +1013,7 @@ ExprPtr H(std::size_t k = 2);
 /// construction requires user to specify the IndexSpace corresponding to all
 /// orbitals which may have non-zero density.
 ExprPtr F(bool use_tensor = true,
-          const IndexSpace& reference_occupied = {L"", 0});
+          const IndexSpace& reference_occupied = {"", 0});
 
 /// A general operator of rank \p K
 ExprPtr θ(std::size_t K);
@@ -1074,7 +1074,7 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
 /// else supports particle non-conserving operators and returns `A(-np, -nh)`
 // clang-format on
-ExprPtr P(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
+ExprPtr P(nₚ np, nₕ nh, std::optional<std::string> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 
 // clang-format off
@@ -1085,14 +1085,14 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 /// @param grants_of if given, the operator label whose basis grants the legs carry
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
+ExprPtr A(nₚ np, nₕ nh, std::optional<std::string> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`
 /// @param grants_of if given, the operator label whose basis grants the legs
 /// carry
-ExprPtr S(std::int64_t K, std::optional<std::wstring> grants_of = {});
+ExprPtr S(std::int64_t K, std::optional<std::string> grants_of = {});
 
 /// @brief Makes perturbation operator
 /// @param R rank of the perturbation operator
@@ -1153,7 +1153,7 @@ ExprPtr H(std::size_t k = 2);
 /// construction requires user to specify the IndexSpace corresponding to all
 /// orbitals which may have non-zero density.
 ExprPtr F(bool use_tensor = true,
-          const IndexSpace& reference_occupied = {L"", 0});
+          const IndexSpace& reference_occupied = {"", 0});
 
 /// A general operator of rank \p K
 ExprPtr θ(std::size_t K);
@@ -1258,7 +1258,7 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L);
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
 /// else supports particle non-conserving operators and returns `A(-np, -nh)`
 // clang-format on
-ExprPtr P(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
+ExprPtr P(nₚ np, nₕ nh, std::optional<std::string> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 
 // clang-format off
@@ -1268,14 +1268,14 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 /// @param grants_of if given, the operator label whose basis grants the legs carry
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
+ExprPtr A(nₚ np, nₕ nh, std::optional<std::string> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`
 /// @param grants_of if given, the operator label whose basis grants the legs
 /// carry
-ExprPtr S(std::int64_t K, std::optional<std::wstring> grants_of = {});
+ExprPtr S(std::int64_t K, std::optional<std::string> grants_of = {});
 
 /// @brief Makes perturbation operator
 /// @param R rank of the perturbation operator

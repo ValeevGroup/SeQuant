@@ -68,7 +68,7 @@ class Constant : public Expr {
       throw Exception("Constant::value<T>: cannot convert value to type T");
   }
 
-  std::wstring to_latex() const override;
+  std::string to_latex() const override;
 
   static constexpr type_rank_type type_rank = expr_type_rank::constant;
   static constexpr std::string static_type_name(

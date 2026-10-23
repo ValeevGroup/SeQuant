@@ -62,7 +62,7 @@ bool extract_subtrees_visit(Node& n, Pred& pred, ResultSet& result) {
 ///   auto pred = [](EvalNode<EvalExpr> const& n, bool pl, bool pr) -> bool {
 ///     if (n.leaf()) return false;
 ///     auto child_ok = [](EvalNode<EvalExpr> const& c, bool pc) {
-///       return c.leaf() ? c->is_tensor() && c->as_tensor().label() != L"t"
+///       return c.leaf() ? c->is_tensor() && c->as_tensor().label() != "t"
 ///                       : pc;
 ///     };
 ///     return child_ok(n.left(), pl) && child_ok(n.right(), pr);

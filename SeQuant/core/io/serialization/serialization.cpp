@@ -22,20 +22,18 @@ SerializationError::SerializationError(std::size_t offset, std::size_t length,
     SEQUANT_UNREACHABLE;                                                  \
   }
 
-SEQUANT_RESOLVE_DESERIALIZATION_FUNC(std::wstring_view, ExprPtr)
 SEQUANT_RESOLVE_DESERIALIZATION_FUNC(std::string_view, ExprPtr)
-SEQUANT_RESOLVE_DESERIALIZATION_FUNC(std::wstring_view, ResultExpr)
 SEQUANT_RESOLVE_DESERIALIZATION_FUNC(std::string_view, ResultExpr)
 
-#define SEQUANT_RESOLVE_SERIALIZE_FUNC(argType)                 \
-  std::wstring to_string(const argType &arg,                    \
-                         const SerializationOptions &options) { \
-    switch (options.syntax) {                                   \
-      case SerializationSyntax::V1:                             \
-        return serialization::v1::to_string(arg, options);      \
-    }                                                           \
-                                                                \
-    SEQUANT_UNREACHABLE;                                        \
+#define SEQUANT_RESOLVE_SERIALIZE_FUNC(argType)                \
+  std::string to_string(const argType &arg,                    \
+                        const SerializationOptions &options) { \
+    switch (options.syntax) {                                  \
+      case SerializationSyntax::V1:                            \
+        return serialization::v1::to_string(arg, options);     \
+    }                                                          \
+                                                               \
+    SEQUANT_UNREACHABLE;                                       \
   }
 
 SEQUANT_RESOLVE_SERIALIZE_FUNC(ResultExpr)

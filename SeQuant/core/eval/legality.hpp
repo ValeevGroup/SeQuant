@@ -302,7 +302,7 @@ enclosing_instances_of(RichSchedule const& rich) {
   }
   std::size_t const axis_slot =
       static_cast<std::size_t>(carried_pos - carried.begin());
-  std::wstring const bk{axis.basis().base_key()};
+  std::string const bk{axis.basis().base_key()};
 
   bool any_lockstep = false;
   for (OccurrenceRec const& occ : occurrences) {

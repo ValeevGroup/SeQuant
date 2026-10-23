@@ -93,7 +93,7 @@ ExprPtr &ExprPtr::operator*=(const ExprPtr &other) {
 
 std::size_t ExprPtr::size() const { return this->get()->size(); }
 
-std::wstring ExprPtr::to_latex() const {
+std::string ExprPtr::to_latex() const {
   if (!*this) return {};
   return as_shared_ptr()->to_latex();
 }

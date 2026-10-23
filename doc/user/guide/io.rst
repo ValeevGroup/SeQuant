@@ -9,6 +9,11 @@ different sub-namespaces. E.g. :func:`sequant::io::latex::to_string` yields a La
    shorthands live directly in the :code:`sequant` namespace. The example from above could be achieved via :func:`sequant::to_latex` once that
    header is included.
 
+.. note::
+   All strings consumed and produced by SeQuant (labels, LaTeX, serialized expressions, ...) are UTF-8 encoded ``std::string``\ s (or
+   ``std::string_view``\ s). Hence, a single (visible) character may span multiple ``char``\ s. Plain (narrow) string literals are UTF-8
+   encoded as long as the compiler's execution character set is UTF-8 (the default for GCC and Clang; MSVC requires ``/utf-8``).
+
 LaTeX
 =====
 
@@ -33,7 +38,7 @@ Formatting and streams
 
 Include :file:`SeQuant/core/io/format.hpp` to print :class:`sequant::Expr`, its subclasses, :class:`sequant::ExprPtr`,
 and :class:`sequant::ResultExpr` with ``std::format`` or stream insertion (``<<``). Both default to serialization and
-support narrow and wide characters; narrow output is UTF-8. An empty ``ExprPtr`` produces an empty string in both modes
+produce UTF-8 encoded output. An empty ``ExprPtr`` produces an empty string with ``std::format``
 and with stream insertion, matching the LaTeX and serialization converters. Deserializing that empty string
 returns an empty ``ExprPtr``.
 
@@ -42,8 +47,8 @@ serialization. An empty specifier selects serialization. These are the only supp
 apply string formatting to the rendered string if width, alignment, or precision is needed.
 
 Stream insertion of :class:`sequant::Expr`, :class:`sequant::ExprPtr` and :class:`sequant::ResultExpr` produces
-serialization. For explicit LaTeX, insert the result of :func:`sequant::io::latex::to_string` into a wide stream, or
-use ``std::format`` with ``l`` or ``latex`` for a narrow string. Wide formatting is available with wide format strings.
+serialization. For explicit LaTeX, insert the result of :func:`sequant::io::latex::to_string` into the stream, or
+use ``std::format`` with ``l`` or ``latex``.
 The :doc:`expressions` examples demonstrate stream insertion and default formatting.
 
 Formatting uses the existing LaTeX and serialization converters and preserves their limitations. In particular,
@@ -67,7 +72,8 @@ Functions associated with this live in the :code:`sequant::io::serialization` na
 :func:`to_string` and :func:`from_string`. More formats may be added at a later point. It is important to note that in order to work with C++'s
 type system, :func:`from_string` is a template that takes in the type of object it is supposed to produce. The most important variants are
 :func:`from_string<ExprPtr>` and :func:`from_string<ResultExpr>` where the former also allows to deserialize any :class:`Expr` subclass.
-Depending on the used template type, the expected format of the input will change accordingly.
+Depending on the used template type, the expected format of the input will change accordingly. The input has to be valid UTF-8; otherwise,
+a :class:`SerializationError` is thrown. Offsets and lengths reported by a :class:`SerializationError` are given in bytes (code units).
 
 As SeQuant's capabilities develop over time, it can be necessary to adapt the syntax of the serialization format.
 By default, the abovementioned functions will always adhere to the latest parse syntax specification. However, they can be

@@ -59,8 +59,8 @@ namespace detail {
 
 Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   // sanity check: make sure have only one spin label
-  SEQUANT_ASSERT(!(idx.label().find(L'↑') != std::wstring::npos &&
-                   idx.label().find(L'↓') != std::wstring::npos));
+  SEQUANT_ASSERT(!(idx.label().find("↑") != std::string::npos &&
+                   idx.label().find("↓") != std::string::npos));
 
   // to preserve rest of bits first unset spin bit, then set them to the desired
   // state
@@ -68,7 +68,7 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
 
   IndexSpace space;
   // try looking up space in registry
-  const auto label = mbpt::spinannotation_replacе(idx.space().base_key(), s);
+  const auto label = mbpt::spinannotation_replace(idx.space().base_key(), s);
   if (auto ibr = get_default_context().index_basis_registry()) {
     auto* space_ptr = ibr->retrieve_space_ptr(label);
     if (space_ptr && space_ptr->type() == idx.space().type() &&
@@ -89,13 +89,13 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   IndexBasis basis = default_registry_resolved(
       IndexBasis{space, idx.basis().basis_instance()});
   if (idx.basis().has_name() && !basis.has_name())
-    throw Exception(
-        "make_index_with_spincase: the basis " + toUtf8(idx.basis().name()) +
-        " of index " + toUtf8(idx.full_label()) +
-        " has no registered counterpart in space " + toUtf8(space.base_key()) +
-        "; register it (e.g. as " +
-        toUtf8(mbpt::spinannotation_replacе(idx.basis().name(), s)) +
-        ") before spin-casing");
+    throw Exception("make_index_with_spincase: the basis " +
+                    idx.basis().name() + " of index " +
+                    std::string(idx.full_label()) +
+                    " has no registered counterpart in space " +
+                    space.base_key() + "; register it (e.g. as " +
+                    mbpt::spinannotation_replace(idx.basis().name(), s) +
+                    ") before spin-casing");
   auto protoindices = idx.proto_indices();
   for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, s);
   return Index{std::move(basis), idx.ordinal(), protoindices,
@@ -1105,7 +1105,7 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
   }
 
   simplify(st_expr);
-  // std::wcout << "final eqs after symm: "
+  // std::cout << "final eqs after symm: "
   //            << sequant::to_latex_align(
   //                   sequant::ex<sequant::Sum>(
   //                       sequant::opt::reorder(st_expr->as<sequant::Sum>())),
@@ -1234,9 +1234,9 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
     ranges::for_each(spin_ket, [](const Index& i) { i.reset_tag(); });
     result.at(i) = ex<Tensor>(Tensor(reserved::antisymm_label(), spin_bra,
                                      spin_ket, A.aux(), Symmetry::Antisymm));
-    // std::wcout << to_latex(result.at(i)) << " ";
+    // std::cout << to_latex(result.at(i)) << " ";
   }
-  // std::wcout << "\n" << std::endl;
+  // std::cout << "\n" << std::endl;
   return result;
 }
 

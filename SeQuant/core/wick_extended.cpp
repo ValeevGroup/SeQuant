@@ -40,10 +40,10 @@ using Blocks = container::svector<container::svector<std::size_t>>;
 /// dummies named by reduction and canonicalization come from IndexFactory
 /// objects that count from the same ordinal
 IndexFactory fresh_index_factory(const Expr &expr) {
-  container::set<std::wstring> labels;
+  container::set<std::string> labels;
   for (const auto &idx : get_used_indices(expr)) labels.emplace(idx.label());
   return IndexFactory([labels = std::move(labels)](const Index &idx) {
-    return !labels.contains(std::wstring(idx.label()));
+    return !labels.contains(std::string(idx.label()));
   });
 }
 
@@ -98,7 +98,7 @@ void for_each_block_assignment(const NormalOperator<S> &survivors,
     auto it = provenance.find(survivors[i].index());
     if (it == provenance.end())
       throw Exception("cumulant_expand: surviving operator index " +
-                      toUtf8(survivors[i].index().full_label()) +
+                      std::string(survivors[i].index().full_label()) +
                       " has no provenance");
     return it->second;
   };
@@ -441,14 +441,14 @@ bool satisfies_connectivity(const Product &term, const OpProvenance &prov,
   const auto edge = [](std::size_t a, std::size_t b) {
     return Edge{std::min(a, b), std::max(a, b)};
   };
-  const container::set<std::wstring> connecting{
+  const container::set<std::string> connecting{
       density::rdm_label(), density::hole_rdm_label(),
       density::cumulant_label(), reserved::kronecker_label(),
       reserved::overlap_label()};
   container::set<Edge> edges;
   for (const auto &f : term.factors()) {
     if (!f->is<Tensor>() ||
-        !connecting.contains(std::wstring(f->as<Tensor>().label())))
+        !connecting.contains(std::string(f->as<Tensor>().label())))
       continue;
     container::svector<std::size_t> ords;
     for (const auto &idx : f->as<Tensor>().const_braket())

@@ -41,7 +41,7 @@ namespace sequant::eval::schedule {
 
 /// "<label>:<base_key>" spelling used for every mode list in the DAG record
 inline std::string mode_spelling(Index const& ix) {
-  return index_label(ix) + ":" + toUtf8(ix.basis().base_key());
+  return index_label(ix) + ":" + ix.basis().base_key();
 }
 
 namespace detail {
@@ -135,9 +135,9 @@ struct NodePlace {
 /// constant
 template <typename Node>
 std::string bare_label(Node const& n) {
-  if (n->is_tensor()) return toUtf8(n->as_tensor().label());
-  if (n->is_variable()) return toUtf8(n->as_variable().label());
-  return toUtf8(io::serialization::v1::to_string(n->expr()));
+  if (n->is_tensor()) return std::string(n->as_tensor().label());
+  if (n->is_variable()) return std::string(n->as_variable().label());
+  return io::serialization::v1::to_string(n->expr());
 }
 
 /// UTF-8 "\u03a3", the partial-sum marker of a reduced loop axis in `expr`
@@ -613,12 +613,12 @@ DagRecord record_dag(
   }
 
   // ---- 7. loops and loop order
-  auto const loop_rec = [&](std::pair<std::wstring, int> const& k) {
+  auto const loop_rec = [&](std::pair<std::string, int> const& k) {
     if (k.second < 0)
-      throw Exception("record_dag: loop " + toUtf8(k.first) + " has no slot (" +
+      throw Exception("record_dag: loop " + k.first + " has no slot (" +
                       std::to_string(k.second) + ")");
     auto const it = rich.loop_kind.find(k);
-    return LoopRecord{toUtf8(k.first), static_cast<std::size_t>(k.second),
+    return LoopRecord{k.first, static_cast<std::size_t>(k.second),
                       it == rich.loop_kind.end()
                           ? std::string{}
                           : detail::kind_name(it->second)};

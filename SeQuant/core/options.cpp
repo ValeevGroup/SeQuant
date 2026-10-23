@@ -19,14 +19,14 @@ CanonicalizationMethod operator|(CanonicalizationMethod m1,
                                              static_cast<int>(m2));
 }
 
-std::wstring to_wstring(CanonicalizationMethod m) {
+std::string to_string(CanonicalizationMethod m) {
   switch (m) {
     case CanonicalizationMethod::Topological:
-      return L"topological";
+      return "topological";
     case CanonicalizationMethod::Lexicographic:
-      return L"lexicographic";
+      return "lexicographic";
     case CanonicalizationMethod::Complete:
-      return L"complete";
+      return "complete";
   }
 
   SEQUANT_UNREACHABLE;

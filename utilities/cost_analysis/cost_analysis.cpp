@@ -22,7 +22,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
-#include <SeQuant/core/utility/string.hpp>     // toUtf16
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>  // make_min_sr_spaces
 
 #include <filesystem>
@@ -142,15 +142,15 @@ void setup_context(const Config& cfg) {
   // (complex) and its tensors canonicalize wrongly over a real field. Collect
   // keys first (iteration is const) then set by label.
   const Field field = cfg.real_field ? Field::Real : Field::Complex;
-  std::vector<std::wstring> keys;
+  std::vector<std::string> keys;
   for (const auto& sp : *ibr) keys.push_back(sp.base_key());
   for (const auto& key : keys)
     if (!key.empty()) ibr->field(key, field);
 
   for (const auto& [label, size] : cfg.sizes) {
-    if (!ibr->retrieve_space_ptr(toUtf16(label)))
+    if (!ibr->retrieve_space_ptr(label))
       throw Exception("unknown index space: " + label);
-    ibr->extent(toUtf16(label), size);
+    ibr->extent(label, size);
   }
 
   auto ctx = get_default_context_snapshot();
@@ -240,7 +240,7 @@ OptimizeOptions make_opts(const Config& cfg) {
   o.CSE.subnet = cfg.optimize.cse_subnet;
   // volatile leaf (label match), MPQC-style volatile weighting.
   if (!cfg.optimize.volatile_leaf.empty()) {
-    const std::wstring vl = toUtf16(cfg.optimize.volatile_leaf);
+    const std::string vl = cfg.optimize.volatile_leaf;
     o.batch_policy.is_volatile_leaf = [vl](const Tensor& t) {
       return t.label() == vl;
     };
@@ -316,7 +316,7 @@ EquationResult process(const Config& cfg, const ExprPtr& rhs,
 
 /// Cache Simulation
 
-bool is_leaf_labeled(const TreeNode& n, const std::wstring& label) {
+bool is_leaf_labeled(const TreeNode& n, const std::string& label) {
   return n.leaf() && n->is_tensor() && n->as_tensor().label() == label;
 }
 
@@ -327,7 +327,7 @@ SimResult simulate_cache(
   for (const auto& [name, cell] : results)
     for (const auto& tree : cell.trees) forest.push_back(tree);
 
-  const std::wstring vl = toUtf16(cfg.optimize.volatile_leaf);
+  const std::string vl = cfg.optimize.volatile_leaf;
   auto is_volatile = [vl](const TreeNode& n) { return is_leaf_labeled(n, vl); };
   auto cm = cache_manager(
       forest, is_volatile, cfg.cache.min_repeats,

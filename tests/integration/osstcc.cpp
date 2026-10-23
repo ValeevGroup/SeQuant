@@ -24,8 +24,8 @@ using namespace sequant;
   }
 
 int main(int argc, char* argv[]) {
-  std::wcout.precision(std::numeric_limits<double>::max_digits10);
-  std::wcerr.precision(std::numeric_limits<double>::max_digits10);
+  std::cout.precision(std::numeric_limits<double>::max_digits10);
+  std::cerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
 
   std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";

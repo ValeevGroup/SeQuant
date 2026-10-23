@@ -8,8 +8,8 @@ Declare index i_2
 Declare index a_1
 Declare index a_2
 
-Declare variable Z
 Declare variable R
+Declare variable Z
 Declare variable Z2
 
 Declare tensor A[a_1, i_1]

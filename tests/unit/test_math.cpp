@@ -29,8 +29,8 @@ TEST_CASE("math", "[elements]") {
 
   SECTION("rational") {
     [[maybe_unused]] auto print = [](rational r) {
-      return sequant::to_wstring(numerator(r)) + L"/" +
-             sequant::to_wstring(denominator(r));
+      return sequant::to_string(numerator(r)) + "/" +
+             sequant::to_string(denominator(r));
     };
     SECTION("to_rational") {
       REQUIRE(to_rational(1. / 3) == rational{1, 3});

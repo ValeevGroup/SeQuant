@@ -8,7 +8,6 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/utility/string.hpp>
 
 #include "python.h"
 
@@ -22,26 +21,11 @@ auto make_sr_op(F f) {
   return op;
 }
 
-using PyEVOptions = sequant::mbpt::EVOptions<std::string>;
-
 ExprPtr VacuumAverage(const ExprPtr& e) { return sequant::mbpt::op::vac_av(e); }
 
-ExprPtr VacuumAverage(const ExprPtr& e, const PyEVOptions& opts) {
-  // helper for converting connections lists
-  auto convert = [](const sequant::mbpt::OpConnections<std::string>& pairs) {
-    sequant::mbpt::OpConnections<std::wstring> result;
-    result.reserve(pairs.size());
-    for (const auto& [a, b] : pairs) {
-      result.emplace_back(sequant::toUtf16(a), sequant::toUtf16(b));
-    }
-    return result;
-  };
-  return sequant::mbpt::op::vac_av(
-      e, {.connect = convert(opts.connect),
-          .do_not_connect = convert(opts.do_not_connect),
-          .screen = opts.screen,
-          .use_topology = opts.use_topology,
-          .skip_clone = opts.skip_clone});
+ExprPtr VacuumAverage(const ExprPtr& e,
+                      const sequant::mbpt::EVOptions<std::string>& opts) {
+  return sequant::mbpt::op::vac_av(e, opts);
 }
 
 #define SR_OP(OP) \
@@ -85,18 +69,23 @@ inline void __init__(py::module m) {
   m.def(SR_OP(T));
   m.def(SR_OP(t));
 
-  py::class_<PyEVOptions>(m, "EVOptions")
+  py::class_<sequant::mbpt::EVOptions<std::string>>(m, "EVOptions")
       .def(py::init<>())
-      .def_readwrite("connect", &PyEVOptions::connect)
-      .def_readwrite("do_not_connect", &PyEVOptions::do_not_connect)
-      .def_readwrite("screen", &PyEVOptions::screen)
-      .def_readwrite("use_topology", &PyEVOptions::use_topology)
-      .def_readwrite("skip_clone", &PyEVOptions::skip_clone);
+      .def_readwrite("connect", &sequant::mbpt::EVOptions<std::string>::connect)
+      .def_readwrite("do_not_connect",
+                     &sequant::mbpt::EVOptions<std::string>::do_not_connect)
+      .def_readwrite("screen", &sequant::mbpt::EVOptions<std::string>::screen)
+      .def_readwrite("use_topology",
+                     &sequant::mbpt::EVOptions<std::string>::use_topology)
+      .def_readwrite("skip_clone",
+                     &sequant::mbpt::EVOptions<std::string>::skip_clone);
 
   m.def("VacuumAverage", py::overload_cast<const ExprPtr&>(&VacuumAverage),
         py::arg("expr"));
   m.def("VacuumAverage",
-        py::overload_cast<const ExprPtr&, const PyEVOptions&>(&VacuumAverage),
+        py::overload_cast<const ExprPtr&,
+                          const sequant::mbpt::EVOptions<std::string>&>(
+            &VacuumAverage),
         py::arg("expr"), py::arg("options"));
 }
 

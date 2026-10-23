@@ -38,7 +38,7 @@ inline constexpr MomentTable unit_moment_table() {
 struct SizeRegime {
   /// element extent per IndexBasis::base_key(); an unnamed basis instance
   /// shares its space's entry (see IndexBasis)
-  std::map<std::wstring, std::size_t> space_extent;
+  std::map<std::string, std::size_t> space_extent;
 
   /// Optional per-key batch partition: the element extent of each realized
   /// batch slice along the key's batch axis, keyed by IndexBasis::base_key(),
@@ -54,7 +54,7 @@ struct SizeRegime {
   /// them here, so a new backend model is supported without touching dry-run
   /// eval internals. For a tile-based wet backend, \c batch_slice_extents_from_
   /// tiles is the ready-made converter. The extents must sum to space_extent.
-  std::map<std::wstring, container::svector<std::size_t>> space_slice_extents;
+  std::map<std::string, container::svector<std::size_t>> space_slice_extents;
 
   // csv_pno_moment[k] / csv_osv_moment[k] hold the k-th power mean
   // M_k = (mean_over_pairs d^k)^(1/k) of the per-pair PNO / per-orbital OSV
@@ -88,9 +88,9 @@ struct SizeRegime {
       throw Exception(
           "SizeRegime::extent: asked for the integer extent of the "
           "proto-indexed (CSV/PNO) composite " +
-          toUtf8(ix.full_label()) +
+          std::string(ix.full_label()) +
           " -- composites are sized by inner_pow, not by base-space extent");
-    return space_extent.at(std::wstring{ix.basis().base_key()});
+    return space_extent.at(std::string{ix.basis().base_key()});
   }
 
   /// \return \p ix's \c IndexBasis::base_key() batch-slice-extent sequence, or
@@ -101,7 +101,7 @@ struct SizeRegime {
       Index const& ix) const {
     static const container::svector<std::size_t> empty;
     auto const it =
-        space_slice_extents.find(std::wstring{ix.basis().base_key()});
+        space_slice_extents.find(std::string{ix.basis().base_key()});
     return it != space_slice_extents.end() ? it->second : empty;
   }
 

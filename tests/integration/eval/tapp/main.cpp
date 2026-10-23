@@ -70,8 +70,8 @@ int main(int argc, char* argv[]) {
   {
     auto reg = std::make_shared<IndexBasisRegistry>(
         *get_default_context().index_basis_registry());
-    reg->extent(L"i", 10).extent(L"a", 100);
-    SEQUANT_ASSERT(reg->retrieve_space(L"a").dimension() == 100);
+    reg->extent("i", 10).extent("a", 100);
+    SEQUANT_ASSERT(reg->retrieve_space("a").dimension() == 100);
     set_default_context(get_default_context_snapshot().set(reg));
   }
 
@@ -86,7 +86,7 @@ int main(int argc, char* argv[]) {
   auto const calc_info =
       eval::make_calc_info(calc_config, fock_file, eri_file, out_file);
   auto scf_tapp = eval::tapp::SequantEvalScfTAPP<TAPPTensorD>{calc_info};
-  scf_tapp.scf(std::wcout);
+  scf_tapp.scf(std::cout);
 
   double const expected{-0.07068045196165902};
   double const threshold = calc_info.scf_opts.conv;

@@ -39,16 +39,16 @@ struct Complex {
   constexpr bool is_zero() const { return real() == 0 && imag() == 0; }
   constexpr bool is_identity() const { return real() == 1 && imag() == 0; }
 
-  std::wstring to_latex() const {
-    std::wstring result = L"{";
+  std::string to_latex() const {
+    std::string result = "{";
     result += io::latex::to_string(this->real());
     if (this->imag() > 0) {
-      result = L"\\bigl(" + result + L" + i " +
-               io::latex::to_string(this->imag()) + L"\\bigr)";
+      result = "\\bigl(" + result + " + i " +
+               io::latex::to_string(this->imag()) + "\\bigr)";
     } else if (this->imag() < 0)
-      result = L"\\bigl(" + result + L" - i " +
-               io::latex::to_string(-this->imag()) + L"\\bigr)";
-    result += L"}";
+      result = "\\bigl(" + result + " - i " +
+               io::latex::to_string(-this->imag()) + "\\bigr)";
+    result += "}";
     return result;
   }
 

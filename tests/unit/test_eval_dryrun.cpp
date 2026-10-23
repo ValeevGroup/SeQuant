@@ -113,8 +113,8 @@ std::string slurp(std::string const& path) {
 SizeRegime probe_regime() {
   SizeRegime r;
   r.space_extent = {
-      {L"i", 120},   // active occupied (order-of-magnitude stand-in)
-      {L"a", 1800},  // generic base virtual (order-of-magnitude stand-in)
+      {"i", 120},   // active occupied (order-of-magnitude stand-in)
+      {"a", 1800},  // generic base virtual (order-of-magnitude stand-in)
   };
   // CC-average PNO ~58, OSV ~20 (order-of-magnitude stand-ins; see report).
   double const pno = 58.0, osv = 20.0;
@@ -146,11 +146,11 @@ container::vector<Index> batch_axes_indices(Range const& entries) {
   return out;
 }
 
-std::wstring describe_indices(std::vector<Index> const& ixs) {
-  std::wstring s;
+std::string describe_indices(std::vector<Index> const& ixs) {
+  std::string s;
   for (auto const& ix : ixs) {
-    s += std::wstring(ix.full_label());
-    s += L" ";
+    s += std::string(ix.full_label());
+    s += " ";
   }
   return s;
 }
@@ -160,30 +160,30 @@ std::wstring describe_indices(std::vector<Index> const& ixs) {
 TEST_CASE("dryrun size regime basic extents", "[dryrun-probe]") {
   auto r = probe_regime();
   // A bare occ index resolves to its space extent.
-  auto i = Index{L"i_1"};
+  auto i = Index{"i_1"};
   CHECK(r.extent(i) == 120);
-  auto a = Index{L"a_1"};
+  auto a = Index{"a_1"};
   CHECK(r.extent(a) == 1800);
-  CHECK_THROWS_AS(r.extent(Index{L"x_1"}), std::out_of_range);
+  CHECK_THROWS_AS(r.extent(Index{"x_1"}), std::out_of_range);
 }
 
 TEST_CASE("dryrun size regime keys a named basis by its label",
           "[dryrun][sizing][basis]") {
   using namespace sequant;
   auto ibr = mbpt::make_min_sr_spaces();
-  const IndexSpace a = ibr->retrieve_space(L"a");
+  const IndexSpace a = ibr->retrieve_space("a");
   constexpr IndexBasis::instance_type P =
       std::numeric_limits<IndexBasis::instance_type>::max();
-  ibr->add(L"μ̃", a, P);  // before the Context adopts the registry
+  ibr->add("μ̃", a, P);  // before the Context adopts the registry
   auto ctx = set_scoped_default_context(
       Context({.index_basis_registry_shared_ptr = std::move(ibr),
                .vacuum = Vacuum::SingleProduct}));
   const auto& registry = *get_default_context().index_basis_registry();
   eval::dryrun::SizeRegime r;
-  r.space_extent[L"a"] = 40;
-  r.space_extent[L"μ̃"] = 300;
-  r.space_slice_extents[L"μ̃"] = {100, 100, 100};
-  const Index pao(registry.retrieve(L"μ̃"), 1), virt(a, 1),
+  r.space_extent["a"] = 40;
+  r.space_extent["μ̃"] = 300;
+  r.space_slice_extents["μ̃"] = {100, 100, 100};
+  const Index pao(registry.retrieve("μ̃"), 1), virt(a, 1),
       unnamed = Index(a, 2).replace_basis_instance(1);
   CHECK(r.extent(pao) == 300);
   CHECK(r.extent(virt) == 40);
@@ -207,8 +207,8 @@ TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
   // A dense operand: two occ + two bare (base-virtual) indices, e.g. the
   // ladder term's g{i,i;a,a}.
   {
-    std::vector<Index> ixs{Index{L"i_1"}, Index{L"i_2"}, Index{L"a_1"},
-                           Index{L"a_2"}};
+    std::vector<Index> ixs{Index{"i_1"}, Index{"i_2"}, Index{"a_1"},
+                           Index{"a_2"}};
     double const expected = 120.0 * 120.0 * 1800.0 * 1800.0;  // i * i * a * a
     double const got = memsize(ixs, std::vector<Index>{}, std::vector<Index>{});
     CHECK(got == Catch::Approx(expected));
@@ -222,8 +222,8 @@ TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
   // genuinely free tensor slots the composite depends on), so the expected
   // volume is i_1 * i_2 * <#PNO^1>, not just one occ factor.
   {
-    Index i1{L"i_1"}, i2{L"i_2"};
-    Index pno_leg{L"a_1", {i1, i2}};
+    Index i1{"i_1"}, i2{"i_2"};
+    Index pno_leg{"a_1", {i1, i2}};
     std::vector<Index> ixs{pno_leg};
     double const expected = 120.0 * 120.0 * 58.0;  // i * i * <#PNO^1>
     double const got = memsize(ixs, std::vector<Index>{}, std::vector<Index>{});
@@ -251,12 +251,12 @@ TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
 TEST_CASE("SizeRegime prices groups up to kMaxCompositeGroup, refuses beyond",
           "[dryrun][sizing][extent-contract]") {
   SizeRegime r;
-  r.space_extent = {{L"i", 10u}};
+  r.space_extent = {{"i", 10u}};
   double const p = 0.25;
   for (std::size_t k = 1; k <= kMaxCompositeGroup; ++k)
     r.csv_pno_moment[k] = std::pow(p, 1.0 / double(k)) * (20.0 + 2.0 * k);
-  Index const i1(L"i_1"), i2(L"i_2");
-  Index const a(L"a_1", {i1, i2});
+  Index const i1("i_1"), i2("i_2");
+  Index const a("a_1", {i1, i2});
   for (std::size_t k = 1; k <= kMaxCompositeGroup; ++k) {
     double prod = 1.0;
     for (std::size_t m = 0; m < k; ++m) prod *= r.inner_pow(a, k);
@@ -271,11 +271,11 @@ TEST_CASE("SizeRegime prices groups up to kMaxCompositeGroup, refuses beyond",
 TEST_CASE("SizeRegime refuses the integer extent of a composite",
           "[dryrun][sizing][extent-contract]") {
   SizeRegime r;
-  r.space_extent = {{L"i", 10u}, {L"a", 300u}};
+  r.space_extent = {{"i", 10u}, {"a", 300u}};
   for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k)
     r.csv_pno_moment[k] = 7.0;
-  Index const i1(L"i_1"), i2(L"i_2");
-  Index const a_i1i2(L"a_1", {i1, i2});
+  Index const i1("i_1"), i2("i_2");
+  Index const a_i1i2("a_1", {i1, i2});
   CHECK(r.extent(i1) == 10);
   CHECK_THROWS_AS(r.extent(a_i1i2), sequant::Exception);
   CHECK_THROWS_AS(r.idx_to_extent()(a_i1i2), sequant::Exception);
@@ -287,7 +287,7 @@ TEST_CASE("dryrun power-mean sizing contract", "[dryrun][sizing]") {
   // (For any non-degenerate distribution, M_1 < M_2 < M_3 < M_4 by Jensen.)
   SizeRegime r;
   const std::size_t occ = 10;
-  r.space_extent[L"i"] = occ;  // occupied index extent
+  r.space_extent["i"] = occ;  // occupied index extent
   // M_0..M_8 (heavy tail, non-decreasing)
   const MomentTable Mk{1.0, 30.0, 40.0, 55.0, 75.0, 90.0, 100.0, 108.0, 115.0};
   for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
@@ -297,9 +297,9 @@ TEST_CASE("dryrun power-mean sizing contract", "[dryrun][sizing]") {
   auto ip = r.inner_pow_fn();
 
   // A composite PNO index a<i_1,i_2> has a 2-proto (PNO) domain.
-  Index i1{L"i_1"}, i2{L"i_2"};
-  Index a1{L"a_1", {i1, i2}};
-  Index a2{L"a_2", {i1, i2}};
+  Index i1{"i_1"}, i2{"i_2"};
+  Index a1{"a_1", {i1, i2}};
+  Index a2{"a_2", {i1, i2}};
 
   // Two composites sharing the SAME proto-set => a k=2 group.
   // inner_aware_volume multiplies ip(c,2) once per member => M_2^2.
@@ -336,11 +336,11 @@ TEST_CASE("dryrun rank-general CSV moment dispatch", "[dryrun][sizing]") {
   r.csv_moment_by_rank[3] = {1.0, 100.0, 100.0, 100.0, 100.0};
   auto ip = r.inner_pow_fn();
 
-  Index i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"}, i4{L"i_4"};
-  Index osv{L"a_1", {i1}};               // rank-1 composite
-  Index pno{L"a_2", {i1, i2}};           // rank-2 composite
-  Index triple{L"a_3", {i1, i2, i3}};    // rank-3 composite
-  Index quad{L"a_4", {i1, i2, i3, i4}};  // rank-4 composite (no table)
+  Index i1{"i_1"}, i2{"i_2"}, i3{"i_3"}, i4{"i_4"};
+  Index osv{"a_1", {i1}};               // rank-1 composite
+  Index pno{"a_2", {i1, i2}};           // rank-2 composite
+  Index triple{"a_3", {i1, i2, i3}};    // rank-3 composite
+  Index quad{"a_4", {i1, i2, i3, i4}};  // rank-4 composite (no table)
 
   // Each rank draws from its own table.
   CHECK(ip(osv, 2) == Catch::Approx(3.0));
@@ -414,7 +414,7 @@ SizeRegime df_regime(ProblemSize const& p) {
 // alike.
 bool is_df_batchable(Index const& ix) {
   auto const k = ix.basis().base_key();
-  return k == L"μ̃" || k == L"Κ";
+  return k == "μ̃" || k == "Κ";
 }
 
 }  // namespace
@@ -500,10 +500,10 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
   auto regime = df_regime(kWater20_pVDZF12);
   BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"Κ";
+    return ix.basis().base_key() == "Κ";
   };
   policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
-  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == "t"; };
   policy.peak_threshold = 100e9;
 
   auto axes_map = std::make_shared<std::unordered_map<
@@ -554,9 +554,9 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
     // a_2<i_1,i_2>; i_1, i_2}. A count mismatch trips binarize's
     // node_counter == node_batch_axes.size() assertion (the water-20 SIGABRT on
     // an ABORT build; a no-op under IGNORE).
-    std::vector<Index> occ{Index(L"i_1"), Index(L"i_2")};
-    std::vector<Index> vir{Index(L"a_1", occ), Index(L"a_2", occ)};
-    Tensor head(L"R", bra(vir), ket(occ), Symmetry::Nonsymm,
+    std::vector<Index> occ{Index("i_1"), Index("i_2")};
+    std::vector<Index> vir{Index("a_1", occ), Index("a_2", occ)};
+    Tensor head("R", bra(vir), ket(occ), Symmetry::Nonsymm,
                 BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
     ResultExpr rexpr{head, res.expr};
     CHECK_NOTHROW(binarize<EvalExpr>(rexpr, bopts));
@@ -592,10 +592,10 @@ TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
   auto regime = df_regime(kWater20_pVDZF12);
   BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"Κ";
+    return ix.basis().base_key() == "Κ";
   };
   policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
-  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == "t"; };
   policy.peak_threshold = 100e9;
 
   auto axes_map = std::make_shared<std::unordered_map<
@@ -636,9 +636,9 @@ TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
   CHECK(na == bc);
 
   // And the head-pinned binarize MPQC uses must not trip its count assertion.
-  std::vector<Index> occ{Index(L"i_1")};
-  std::vector<Index> vir{Index(L"a_1", occ)};
-  Tensor head(L"R", bra(vir), ket(occ), Symmetry::Nonsymm,
+  std::vector<Index> occ{Index("i_1")};
+  std::vector<Index> vir{Index("a_1", occ)};
+  Tensor head("R", bra(vir), ket(occ), Symmetry::Nonsymm,
               BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
   ResultExpr rexpr{head, res.expr};
   CHECK_NOTHROW(binarize<EvalExpr>(rexpr, bopts));
@@ -680,15 +680,15 @@ TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
   auto regime = df_regime(kC60_pVDZF12);
   auto idxsz = regime.idx_to_extent();
   std::function<std::size_t(Index const&)> bts = [](Index const& ix) {
-    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == "μ̃" ? std::size_t{256} : std::size_t{72};
   };
   opt::detail::PeakBatchedModel model{idxsz, bts, {}, regime.inner_pow_fn()};
   model.is_batchable_contracted_index = is_df_batchable;
   auto ctx = model.build_context(net, targets);
-  std::wcerr << L"[ordered-key-c60-m] giant (summand " << gi << L", "
-             << giant->as<Product>().factors().size() << L" factors): m="
-             << ctx.m << L" ordered=" << ctx.ordered << L" nCells="
-             << ctx.nCells << L" (nB=" << ctx.nB << L")\n";
+  std::cerr << "[ordered-key-c60-m] giant (summand " << gi << ", "
+            << giant->as<Product>().factors().size() << " factors): m=" << ctx.m
+            << " ordered=" << ctx.ordered << " nCells=" << ctx.nCells
+            << " (nB=" << ctx.nB << ")\n";
 }
 
 // Diagnostic + regression ([.]): scan EVERY summand of the C60 CSV-CCSD doubles
@@ -734,19 +734,19 @@ TEST_CASE("C60 residual peak per summand under the recommended batching",
   auto idxsz = regime.idx_to_extent();
   auto inner_pow = regime.inner_pow_fn();
   std::function<bool(Tensor const&)> is_vol = [](Tensor const& t) {
-    return t.label() == L"t";
+    return t.label() == "t";
   };
   // aux + occ are contracted-batchable; PAOs are not batchable at all.
   auto is_batchable_contracted = [](Index const& ix) {
     auto const k = ix.basis().base_key();
-    return k == L"Κ" || k == L"i";  // DF aux (Greek Kappa) + occupied
+    return k == "Κ" || k == "i";  // DF aux (Greek Kappa) + occupied
   };
   // occ is additionally batchable in the external (spectator) role.
   std::function<bool(Index const&)> is_batchable_external =
-      [](Index const& ix) { return ix.basis().base_key() == L"i"; };
+      [](Index const& ix) { return ix.basis().base_key() == "i"; };
   std::function<std::size_t(Index const&)> bts =
       [](Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"i" ? std::size_t{8} : std::size_t{72};
+    return ix.basis().base_key() == "i" ? std::size_t{8} : std::size_t{72};
   };
 
   auto measure = [&](TensorNetwork const& net,
@@ -789,15 +789,14 @@ TEST_CASE("C60 residual peak per summand under the recommended batching",
       arg_on = gi;
     }
     if (p_off > 50.0 || p_on != p_off)
-      std::wcerr << L"[occ-driver] summand " << gi << L": peak " << p_off
-                 << L" -> " << p_on << L" GB   flops " << f_off << L" -> "
-                 << f_on << L"\n";
+      std::cerr << "[occ-driver] summand " << gi << ": peak " << p_off << " -> "
+                << p_on << " GB   flops " << f_off << " -> " << f_on << "\n";
   }
-  std::wcerr << L"[occ-driver] MAX peak=" << max_on << L" GB (summand "
-             << arg_on << L"), budget 100 GB;  total flops " << tot_off
-             << L" -> " << tot_on << L" (added compute "
-             << (tot_off > 0.0 ? (tot_on - tot_off) / tot_off * 100.0 : 0.0)
-             << L"%)\n";
+  std::cerr << "[occ-driver] MAX peak=" << max_on << " GB (summand " << arg_on
+            << "), budget 100 GB;  total flops " << tot_off << " -> " << tot_on
+            << " (added compute "
+            << (tot_off > 0.0 ? (tot_on - tot_off) / tot_off * 100.0 : 0.0)
+            << "%)\n";
   // Batching an external/spectator mode is work-neutral: no recompute is added.
   CHECK(tot_on == tot_off);
 }
@@ -845,13 +844,13 @@ TEST_CASE("no 4-PAO integral with correct composite sizing (C60 giant)",
   auto regime = df_regime(kC60_pVDZF12);
   auto idxsz = regime.idx_to_extent();
   std::function<std::size_t(Index const&)> bts = [](Index const& ix) {
-    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == "μ̃" ? std::size_t{256} : std::size_t{72};
   };
   auto is_aux = [](Index const& ix) {
-    return ix.basis().base_key() == L"Κ";  // K only; PAO NOT batchable
+    return ix.basis().base_key() == "Κ";  // K only; PAO NOT batchable
   };
   std::function<bool(Tensor const&)> is_vol = [](Tensor const& t) {
-    return t.label() == L"t";
+    return t.label() == "t";
   };
 
   // (1) Omitting inner_pow on this composite network is now a hard error.
@@ -873,8 +872,8 @@ TEST_CASE("no 4-PAO integral with correct composite sizing (C60 giant)",
   auto st = opt::detail::solve_single_term(model, net, targets, ctx);
   double peak_bytes = 0.0;
   (void)model.reconstruct_batched_modes(ctx, st, &peak_bytes);
-  std::wcerr << L"[roofline-4pao] K-only modeled peak=" << (peak_bytes / 1e9)
-             << L" GB (a 4-PAO mu~^4 node would be ~84000 GB)\n";
+  std::cerr << "[roofline-4pao] K-only modeled peak=" << (peak_bytes / 1e9)
+            << " GB (a 4-PAO mu~^4 node would be ~84000 GB)\n";
   // A μ̃^4 node is 1800^4*8 ≈ 84000 GB; correct sizing keeps the peak far below.
   CHECK(peak_bytes < 10000e9);
 }
@@ -924,8 +923,8 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
   else
     terms.push_back(flatten_product(expr));
   REQUIRE(!terms.empty());
-  std::wcout << L"\n=== POST-TRANSFORM DOUBLES RESIDUAL: " << terms.size()
-             << L" summands (mu~ + K present) ===\n";
+  std::cout << "\n=== POST-TRANSFORM DOUBLES RESIDUAL: " << terms.size()
+            << " summands (mu~ + K present) ===\n";
 
   // One regime (C60-scale mu~ domain) at the C60 peak_threshold. Per-term
   // progress + timing to std::cerr (unbuffered) so a slow/pathological term is
@@ -986,13 +985,13 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
   bool const aux_only = env_u("SEQUANT_UT_DRYRUN_AUX_ONLY", 0u) != 0;
   auto is_batchable = [aux_only](Index const& ix) {
     auto const k = ix.basis().base_key();
-    return aux_only ? (k == L"Κ") : (k == L"μ̃" || k == L"Κ");
+    return aux_only ? (k == "Κ") : (k == "μ̃" || k == "Κ");
   };
-  std::wcerr << L"[dryrun-df] config: occ=" << occ_ext << L" pno=" << pno_mom
-             << L" osv=" << osv_mom << L" pao_ts=" << pao_ts << L" aux_ts="
-             << aux_ts << L" vw=" << vol_weight << L" roofline="
-             << (use_roofline ? 1 : 0) << L" aux_only=" << (aux_only ? 1 : 0)
-             << L"\n";
+  std::cerr << "[dryrun-df] config: occ=" << occ_ext << " pno=" << pno_mom
+            << " osv=" << osv_mom << " pao_ts=" << pao_ts
+            << " aux_ts=" << aux_ts << " vw=" << vol_weight
+            << " roofline=" << (use_roofline ? 1 : 0)
+            << " aux_only=" << (aux_only ? 1 : 0) << "\n";
   // C60 pVDZ-F12 scale, REAL run dimensions (from the 614336 Owl job log):
   //   active occupied = 120 (tiles [0,120), elements [60,180))
   //   #PAO = #AO = 1800 (872/pair is a sparsity metric, NOT the dense cost)
@@ -1009,13 +1008,12 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
                   pno_m4},
       MomentTable{1.0, osv_mom, osv_m2, osv_m3, osv_m4, osv_m4, osv_m4, osv_m4,
                   osv_m4});
-  std::wcerr << L"[dryrun-df] moments: PNO M_1..M_4=" << pno_mom << L","
-             << pno_m2 << L"," << pno_m3 << L"," << pno_m4 << L"  OSV M_1..M_4="
-             << osv_mom << L"," << osv_m2 << L"," << osv_m3 << L"," << osv_m4
-             << L"  objective="
-             << (obj == "perf" ? L"perf(dense_time_space)"
-                               : L"peak(dense_space_time)")
-             << L"\n";
+  std::cerr << "[dryrun-df] moments: PNO M_1..M_4=" << pno_mom << "," << pno_m2
+            << "," << pno_m3 << "," << pno_m4 << "  OSV M_1..M_4=" << osv_mom
+            << "," << osv_m2 << "," << osv_m3 << "," << osv_m4 << "  objective="
+            << (obj == "perf" ? "perf(dense_time_space)"
+                              : "peak(dense_space_time)")
+            << "\n";
   auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
                                                        regime.inner_pow_fn());
   // Static NOMINAL flops per contraction node (slicing does not reduce total
@@ -1025,7 +1023,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
                                                    regime.inner_pow_fn());
   auto has_free_mu_tilde = [](std::vector<Index> const& ixs) {
     for (auto const& ix : ixs)
-      if (ix.basis().base_key() == L"μ̃") return true;
+      if (ix.basis().base_key() == "μ̃") return true;
     return false;
   };
 
@@ -1044,11 +1042,11 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
   // The gap between them is CSE destroyed by inconsistent batching, which is
   // invisible to the per-term nominal-flops metric.
   std::map<std::size_t, double> cse_by_expr;  // hash -> flops
-  std::map<std::pair<std::size_t, std::wstring>, double> cse_by_expr_and_axes;
+  std::map<std::pair<std::size_t, std::string>, double> cse_by_expr_and_axes;
   std::size_t overall_internal_nodes = 0;
   double overall_biggest = 0.0;
   bool overall_biggest_has_mu = false, overall_biggest_has_k = false;
-  std::wstring overall_biggest_desc, overall_biggest_axes,
+  std::string overall_biggest_desc, overall_biggest_axes,
       overall_biggest_sources;
 
   for (std::size_t ti = 0; ti < terms.size(); ++ti) {
@@ -1077,11 +1075,11 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
     //   dflt)
     opts.batch_policy.batch_target_size =
         [pao_ts, aux_ts](Index const& ix) -> std::size_t {
-      return ix.basis().base_key() == L"μ̃" ? pao_ts   // pao_target_size
-                                           : aux_ts;  // aux_target_size
+      return ix.basis().base_key() == "μ̃" ? pao_ts   // pao_target_size
+                                          : aux_ts;  // aux_target_size
     };
     opts.batch_policy.is_volatile_leaf = [](Tensor const& t) {
-      return t.label() == L"t";
+      return t.label() == "t";
     };
     opts.batch_policy.accumulation_factor = 1.0;
     opts.batch_policy.peak_threshold = peak_threshold;
@@ -1114,18 +1112,18 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
     // carrying active = union of ancestor node_slice_mask (by FULL label, so
     // mu~_1241 sliced above only reduces the SAME mu~_1241 below, not a
     // different mu~_j).
-    auto keyof = [](Index const& ix) { return std::wstring(ix.full_label()); };
+    auto keyof = [](Index const& ix) { return std::string(ix.full_label()); };
     auto ext_of = [](Index const& ix) -> double {
       auto bk = ix.basis().base_key();
-      if (bk == L"μ̃") return 1800.0;
-      if (bk == L"Κ") return 4320.0;
+      if (bk == "μ̃") return 1800.0;
+      if (bk == "Κ") return 4320.0;
       return 0.0;
     };
     auto tgt_of = [pao_ts, aux_ts](Index const& ix) -> double {
-      return ix.basis().base_key() == L"μ̃" ? double(pao_ts) : double(aux_ts);
+      return ix.basis().base_key() == "μ̃" ? double(pao_ts) : double(aux_ts);
     };
     double term_biggest = 0.0;  // max REALIZED bytes over free-mu~ nodes
-    std::wstring term_biggest_desc, term_biggest_axes, term_biggest_sources;
+    std::string term_biggest_desc, term_biggest_axes, term_biggest_sources;
     bool term_biggest_has_mu = false;  // its free mu~ ESCAPED slicing
     bool term_biggest_has_k = false;   // its free K ESCAPED slicing
     std::size_t term_mu_nodes = 0;
@@ -1142,7 +1140,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
     std::size_t term_internal_nodes = 0;    // all contraction (non-leaf) nodes
     // Per-term batch-mode multiset (which modes get sliced, and on how many
     // nodes) -- the term-level source of "more batch groups".
-    std::map<std::wstring, std::size_t> term_axis_hist;
+    std::map<std::string, std::size_t> term_axis_hist;
     // active maps a sliced index's FULL label -> a descriptor of the ANCESTOR
     // node that slices it (its result free-index signature + its
     // node_slice_mask). This is the node-dump: it turns "escaped={}" from an
@@ -1151,10 +1149,10 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
     // count (extent / batch_target_size) -- the executed-flops recompute
     // factor.
     std::function<void(std::remove_cvref_t<decltype(node)> const&,
-                       std::map<std::wstring, std::wstring>,
-                       std::map<std::wstring, double>)>
-        walk = [&](auto const& n, std::map<std::wstring, std::wstring> active,
-                   std::map<std::wstring, double> nbatches) {
+                       std::map<std::string, std::string>,
+                       std::map<std::string, double>)>
+        walk = [&](auto const& n, std::map<std::string, std::string> active,
+                   std::map<std::string, double> nbatches) {
           auto free_ixs = node_free_indices(*n);
           if (has_free_mu_tilde(free_ixs)) {
             ++term_mu_nodes;
@@ -1164,33 +1162,32 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
                 8.0;
             double factor = 1.0;
             std::vector<Index> escaped;  // batchable free ixs NOT sliced above
-            std::wstring sources;        // per-free-batchable-index provenance
+            std::string sources;         // per-free-batchable-index provenance
             for (auto const& ix : free_ixs) {
               auto bk = ix.basis().base_key();
-              if (bk != L"μ̃" && bk != L"Κ") continue;
+              if (bk != "μ̃" && bk != "Κ") continue;
               auto it = active.find(keyof(ix));
               if (it != active.end()) {
                 factor *= tgt_of(ix) / ext_of(ix);
-                sources += L"\n      " + keyof(ix) + L": SLICED by ancestor " +
+                sources += "\n      " + keyof(ix) + ": SLICED by ancestor " +
                            it->second;
               } else {
                 escaped.push_back(ix);
-                sources += L"\n      " + keyof(ix) +
-                           L": ESCAPED (no ancestor "
-                           L"slices it)";
+                sources += "\n      " + keyof(ix) +
+                           ": ESCAPED (no ancestor "
+                           "slices it)";
               }
             }
             double const realized = nominal * factor;
             bool mu_esc = false, k_esc = false;
             for (auto const& ix : escaped)
-              (ix.basis().base_key() == L"μ̃" ? mu_esc : k_esc) = true;
+              (ix.basis().base_key() == "μ̃" ? mu_esc : k_esc) = true;
             if (mu_esc) ++total_mu_nodes_with_mu_axis;  // repurposed: escaped
             if (k_esc && !mu_esc) ++total_mu_nodes_with_k_only;
             if (realized > 5e10) {
-              std::wcerr << L"\n  [GIANT realized=" << (realized / 1e9)
-                         << L"GB nominal=" << (nominal / 1e9) << L"GB] free={"
-                         << describe_indices(free_ixs) << L"}" << sources
-                         << L"\n";
+              std::cerr << "\n  [GIANT realized=" << (realized / 1e9)
+                        << "GB nominal=" << (nominal / 1e9) << "GB] free={"
+                        << describe_indices(free_ixs) << "}" << sources << "\n";
             }
             if (realized > term_biggest) {
               term_biggest = realized;
@@ -1215,7 +1212,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
             // k (in either operand or the result) means the slice divides the
             // work and the batches sum back to nominal; not touching it means
             // the whole contraction is redone once per batch of k.
-            auto touches = [&](std::wstring const& k) {
+            auto touches = [&](std::string const& k) {
               auto has = [&](auto const& v) {
                 for (auto const& ix : v)
                   if (keyof(ix) == k) return true;
@@ -1231,17 +1228,17 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
             if (!n->node_slice_mask().empty()) ++term_batched_nodes;
             ++term_internal_nodes;
             for (auto const& ax : n->node_slice_mask())
-              term_axis_hist[std::wstring(ax.first.basis().base_key())]++;
+              term_axis_hist[ax.first.basis().base_key()]++;
             // Forest-level CSE bookkeeping (see declarations above). The mode
             // signature includes the ancestor-sliced context, not just this
             // node's own modes: the same expression evaluated under a different
             // ancestor slicing is a different cache entry.
             ++overall_internal_nodes;
-            std::wstring axsig;
-            for (auto const& [k, nb] : nbatches) axsig += k + L";";
-            axsig += L"|";
+            std::string axsig;
+            for (auto const& [k, nb] : nbatches) axsig += k + ";";
+            axsig += "|";
             for (auto const& ax : n->node_slice_mask())
-              axsig += std::wstring(ax.first.full_label()) + L",";
+              axsig += std::string(ax.first.full_label()) + ",";
             auto const h = n->hash_value();
             cse_by_expr.emplace(h, nf);
             cse_by_expr_and_axes.emplace(std::pair{h, axsig}, nf);
@@ -1255,13 +1252,13 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
             double const traffic = memsize(lf, rf, free_ixs);
             double const Q = std::max(traffic, nf / std::sqrt(1e6 / 3.0));
             term_exec += std::max(nf, 200.0 * Q);
-            std::map<std::wstring, std::wstring> child_active = active;
-            std::wstring const self_desc =
-                L"[free={" + describe_indices(node_free_indices(*n)) +
-                L"} node_slice_mask={" +
+            std::map<std::string, std::string> child_active = active;
+            std::string const self_desc =
+                "[free={" + describe_indices(node_free_indices(*n)) +
+                "} node_slice_mask={" +
                 describe_indices(batch_axes_indices(n->node_slice_mask())) +
-                L"}]";
-            std::map<std::wstring, double> child_nbatch = nbatches;
+                "}]";
+            std::map<std::string, double> child_nbatch = nbatches;
             for (auto const& ax : n->node_slice_mask()) {
               child_active[keyof(ax.first)] = self_desc;
               double const e = ext_of(ax.first);
@@ -1298,66 +1295,65 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
               << " flops=" << (term_flops / 1e12) << "T\n";
     // Machine-readable per-term line for cross-objective join. modes= lists the
     // batch-mode multiset by index-space base key (e.g. mu~:3,K:5).
-    std::wstring axes_str;
+    std::string axes_str;
     for (auto const& [k, c] : term_axis_hist)
-      axes_str +=
-          (axes_str.empty() ? L"" : L",") + k + L":" + std::to_wstring(c);
-    std::wcerr << L"PERTERM " << ti << L" nodes=" << term_internal_nodes
-               << L" batched=" << term_batched_nodes << L" recomp="
-               << term_recomputed_nodes << L" flopsT=" << (term_flops / 1e12)
-               << L" execT=" << (term_exec / 1e12) << L" modes=["
-               << (axes_str.empty() ? L"-" : axes_str) << L"]\n";
+      axes_str += (axes_str.empty() ? "" : ",") + k + ":" + std::to_string(c);
+    std::cerr << "PERTERM " << ti << " nodes=" << term_internal_nodes
+              << " batched=" << term_batched_nodes
+              << " recomp=" << term_recomputed_nodes
+              << " flopsT=" << (term_flops / 1e12)
+              << " execT=" << (term_exec / 1e12) << " modes=["
+              << (axes_str.empty() ? "-" : axes_str) << "]\n";
   }
 
-  std::wcerr << L"\n=== POST-TRANSFORM VERDICT (REALIZED peak, mu~=1800, "
-                L"thr=40GB) ===\n"
-             << L"terms with a free-mu~ intermediate: " << n_terms_with_giant
-             << L"/" << terms.size() << L"\n"
-             << L"TOTAL SCHEDULE FLOPS (nominal, all terms): "
-             << (overall_flops / 1e12) << L" Tflop\n"
-             << L"TOTAL EXECUTED FLOPS (recompute-charged): "
-             << (overall_flops_exec / 1e12) << L" Tflop  (x"
-             << (overall_flops_exec / std::max(1.0, overall_flops))
-             << L" vs nominal; batched nodes=" << overall_batched_nodes
-             << L", recomputed nodes=" << overall_recomputed_nodes << L")\n"
-             << L"FOREST CSE: internal nodes=" << overall_internal_nodes
-             << L" distinct-by-expr=" << cse_by_expr.size()
-             << L" distinct-by-expr+modes=" << cse_by_expr_and_axes.size()
-             << L"\n  CSE'd forest flops (ideal, by expr):  "
-             << (std::accumulate(
-                     cse_by_expr.begin(), cse_by_expr.end(), 0.0,
-                     [](double a, auto const& p) { return a + p.second; }) /
-                 1e12)
-             << L" Tflop\n  CSE'd forest flops (achievable, expr+modes): "
-             << (std::accumulate(
-                     cse_by_expr_and_axes.begin(), cse_by_expr_and_axes.end(),
-                     0.0,
-                     [](double a, auto const& p) { return a + p.second; }) /
-                 1e12)
-             << L" Tflop\n"
-             << L"TOTAL ROOFLINE EXEC COST (the DP's real mode): "
-             << (overall_exec / 1e12) << L" (mb=200, batch-independent)\n"
-             << L"free-mu~ contraction nodes: " << total_mu_nodes << L"\n"
-             << L"  ... with a free mu~ that ESCAPED slicing: "
-             << total_mu_nodes_with_mu_axis << L"\n"
-             << L"  ... with only a free K that escaped:      "
-             << total_mu_nodes_with_k_only << L"\n"
-             << L"LARGEST REALIZED free-mu~ intermediate: {"
-             << overall_biggest_desc << L"} = " << (overall_biggest / 1e9)
-             << L" GB (realized, after ancestor slices)\n"
-             << L"  escaped (un-sliced) indices = {" << overall_biggest_axes
-             << L"}\n"
-             << L"  -> free mu~ escaped: "
-             << (overall_biggest_has_mu ? L"YES" : L"NO")
-             << L" | free K escaped: "
-             << (overall_biggest_has_k ? L"YES" : L"NO") << L"\n"
-             << L"  NODE-DUMP (per free batchable index, which ancestor slices "
-                L"it):"
-             << overall_biggest_sources << L"\n"
-             << L"INTERPRETATION: realized peak = what the runtime actually "
-                L"materializes. If it is >> 40GB with mu~ escaped=YES, the DP "
-                L"left the giant's free mu~ un-sliced at its contracting "
-                L"ancestor -> reproduces the C60 OOM in predicted space.\n";
+  std::cerr << "\n=== POST-TRANSFORM VERDICT (REALIZED peak, mu~=1800, "
+               "thr=40GB) ===\n"
+            << "terms with a free-mu~ intermediate: " << n_terms_with_giant
+            << "/" << terms.size() << "\n"
+            << "TOTAL SCHEDULE FLOPS (nominal, all terms): "
+            << (overall_flops / 1e12) << " Tflop\n"
+            << "TOTAL EXECUTED FLOPS (recompute-charged): "
+            << (overall_flops_exec / 1e12) << " Tflop  (x"
+            << (overall_flops_exec / std::max(1.0, overall_flops))
+            << " vs nominal; batched nodes=" << overall_batched_nodes
+            << ", recomputed nodes=" << overall_recomputed_nodes << ")\n"
+            << "FOREST CSE: internal nodes=" << overall_internal_nodes
+            << " distinct-by-expr=" << cse_by_expr.size()
+            << " distinct-by-expr+modes=" << cse_by_expr_and_axes.size()
+            << "\n  CSE'd forest flops (ideal, by expr):  "
+            << (std::accumulate(
+                    cse_by_expr.begin(), cse_by_expr.end(), 0.0,
+                    [](double a, auto const& p) { return a + p.second; }) /
+                1e12)
+            << " Tflop\n  CSE'd forest flops (achievable, expr+modes): "
+            << (std::accumulate(
+                    cse_by_expr_and_axes.begin(), cse_by_expr_and_axes.end(),
+                    0.0, [](double a, auto const& p) { return a + p.second; }) /
+                1e12)
+            << " Tflop\n"
+            << "TOTAL ROOFLINE EXEC COST (the DP's real mode): "
+            << (overall_exec / 1e12) << " (mb=200, batch-independent)\n"
+            << "free-mu~ contraction nodes: " << total_mu_nodes << "\n"
+            << "  ... with a free mu~ that ESCAPED slicing: "
+            << total_mu_nodes_with_mu_axis << "\n"
+            << "  ... with only a free K that escaped:      "
+            << total_mu_nodes_with_k_only << "\n"
+            << "LARGEST REALIZED free-mu~ intermediate: {"
+            << overall_biggest_desc << "} = " << (overall_biggest / 1e9)
+            << " GB (realized, after ancestor slices)\n"
+            << "  escaped (un-sliced) indices = {" << overall_biggest_axes
+            << "}\n"
+            << "  -> free mu~ escaped: "
+            << (overall_biggest_has_mu ? "YES" : "NO")
+            << " | free K escaped: " << (overall_biggest_has_k ? "YES" : "NO")
+            << "\n"
+            << "  NODE-DUMP (per free batchable index, which ancestor slices "
+               "it):"
+            << overall_biggest_sources << "\n"
+            << "INTERPRETATION: realized peak = what the runtime actually "
+               "materializes. If it is >> 40GB with mu~ escaped=YES, the DP "
+               "left the giant's free mu~ un-sliced at its contracting "
+               "ancestor -> reproduces the C60 OOM in predicted space.\n";
 
   REQUIRE(total_mu_nodes > 0);
   SUCCEED();
@@ -1390,8 +1386,8 @@ using sequant::eval::dryrun::ResultDryRunNested;
 SizeRegime backend_test_regime() {
   SizeRegime r;
   r.space_extent = {
-      {L"i", 10},
-      {L"a", 20},
+      {"i", 10},
+      {"a", 20},
   };
   double const pno = 4.0;
   for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k)
@@ -1413,7 +1409,7 @@ TEST_CASE("dryrun cost model memsize matches memsize_counter",
           "[dryrun-costmodel]") {
   auto r = backend_test_regime();
   CostModel cm{r};
-  container::svector<Index> idx{Index{L"i_1"}, Index{L"i_2"}, Index{L"a_4"}};
+  container::svector<Index> idx{Index{"i_1"}, Index{"i_2"}, Index{"a_4"}};
   auto direct = sequant::opt::detail::memsize_counter(
       r.idx_to_extent(), r.inner_pow_fn())(idx, container::svector<Index>{},
                                            container::svector<Index>{});
@@ -1424,7 +1420,7 @@ TEST_CASE("dryrun cost model memsize honors an extent override",
           "[dryrun-costmodel]") {
   auto r = backend_test_regime();
   CostModel cm{r};
-  container::svector<Index> idx{Index{L"a_3"}, Index{L"i_1"}};
+  container::svector<Index> idx{Index{"a_3"}, Index{"i_1"}};
   auto const full = cm.memsize(idx);
   ExtentOverrides ov;
   ov[0] = 5;  // mode 0 (a_3) narrowed from 20 to 5
@@ -1437,8 +1433,8 @@ TEST_CASE("dryrun cost model flops and exec_cost are finite/positive",
           "[dryrun-costmodel]") {
   auto r = backend_test_regime();
   CostModel cm{r};
-  container::svector<Index> out{Index{L"a_3"}, Index{L"i_1"}};
-  container::svector<Index> contracted{Index{L"i_2"}};
+  container::svector<Index> out{Index{"a_3"}, Index{"i_1"}};
+  container::svector<Index> contracted{Index{"i_2"}};
   auto const f = cm.flops(out, contracted);
   CHECK(f > 0.0);
   // exec_cost takes the op's FULL compulsory traffic: both operand footprints
@@ -1469,7 +1465,7 @@ TEST_CASE(
   auto const regime = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(regime, rp);
 
-  Index const i1{L"i_1"}, i2{L"i_2"}, a3{L"a_3"}, a4{L"a_4"};
+  Index const i1{"i_1"}, i2{"i_2"}, a3{"a_3"}, a4{"a_4"};
   // Deliberately lopsided operands: big = 20*20*10 = 4000 elements,
   // small = 10*10 = 100 elements, result = 20*20*10 = 4000 elements.
   container::svector<Index> const big{a3, a4, i2};
@@ -1546,7 +1542,7 @@ TEST_CASE("dryrun flat result size delegates to cost model",
   // them on a concrete object must do the same -- via a `Result const&`.
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
-  container::svector<Index> idx{Index{L"i_1"}, Index{L"i_2"}, Index{L"a_4"}};
+  container::svector<Index> idx{Index{"i_1"}, Index{"i_2"}, Index{"a_4"}};
   ResultDryRun t{idx, cm};
   Result const& rt = t;
   CHECK(rt.size_in_bytes() == cm->memsize(idx));
@@ -1556,10 +1552,10 @@ TEST_CASE("dryrun flat result prod yields the result annotation index set",
           "[dryrun-result]") {
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
-  ResultDryRun l{{Index{L"a_3"}, Index{L"i_2"}}, cm};
-  ResultDryRun rr{{Index{L"i_2"}, Index{L"i_1"}}, cm};
+  ResultDryRun l{{Index{"a_3"}, Index{"i_2"}}, cm};
+  ResultDryRun rr{{Index{"i_2"}, Index{"i_1"}}, cm};
   Result const& rl = l;
-  container::svector<Index> res{Index{L"a_3"}, Index{L"i_1"}};
+  container::svector<Index> res{Index{"a_3"}, Index{"i_1"}};
   auto out = rl.prod(rr, annot3(l.indices(), rr.indices(), res), DeNest::False);
   REQUIRE(out);
   bool const is_flat = out->is<ResultDryRun>();
@@ -1573,8 +1569,8 @@ TEST_CASE("dryrun flat result full contraction yields a scalar",
           "[dryrun-result]") {
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
-  ResultDryRun l{{Index{L"i_1"}}, cm};
-  ResultDryRun rr{{Index{L"i_1"}}, cm};
+  ResultDryRun l{{Index{"i_1"}}, cm};
+  ResultDryRun rr{{Index{"i_1"}}, cm};
   Result const& rl = l;
   auto out = rl.prod(rr, annot3(l.indices(), rr.indices(), {}), DeNest::False);
   REQUIRE(out);
@@ -1586,7 +1582,7 @@ TEST_CASE("dryrun flat result slice_mode shrinks the sliced mode",
           "[dryrun-result]") {
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
-  ResultDryRun t{{Index{L"a_3"}, Index{L"i_2"}}, cm};  // mu~ extent 20
+  ResultDryRun t{{Index{"a_3"}, Index{"i_2"}}, cm};  // mu~ extent 20
   Result const& rt = t;
   auto const full = rt.size_in_bytes();
   auto sliced = rt.slice_mode(0, 0, 5);  // quarter of mu~
@@ -1600,7 +1596,7 @@ TEST_CASE("dryrun axis_batches tiles the axis space extent",
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
   auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
-  auto batches = aops.axis_batches(Index{L"a_3"}, 5);  // 20 / 5 = 4 batches
+  auto batches = aops.axis_batches(Index{"a_3"}, 5);  // 20 / 5 = 4 batches
   CHECK(batches.size() == 4);
   CHECK(batches.front().first == 0);
   CHECK(batches.back().second == 20);
@@ -1615,7 +1611,7 @@ TEST_CASE("dryrun make_zeros builds a full-extent flat scatter destination",
   // pre_sized_zeros_over_mode: no block partial, no carrier.
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
-  Index i1{L"i_1"}, a3{L"a_3"};
+  Index i1{"i_1"}, a3{"a_3"};
   container::svector<Index> idx{i1, a3};  // i_1 extent 10, a_3 extent 20
 
   ResultDryRun full{idx, cm};  // reference: the fully-realized token
@@ -1635,8 +1631,8 @@ TEST_CASE("dryrun make_zeros builds a full-extent nested scatter destination",
   // destination when the descriptor carries a proto-indexed (composite) leg.
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
-  Index i1{L"i_1"}, i2{L"i_2"}, a3{L"a_3"};
-  Index a_pno{L"a_1", {i1, i2}};
+  Index i1{"i_1"}, i2{"i_2"}, a3{"a_3"};
+  Index a_pno{"a_1", {i1, i2}};
   container::svector<Index> outer{i1, a3};
   container::svector<Index> inner{a_pno};
   container::svector<Index> canon{i1, a3, a_pno};
@@ -1662,8 +1658,8 @@ TEST_CASE(
   // A ToT template whose outer batch mode (position 0) is the occupied index
   // i_1 (extent 10). Its full modelled size is the reference we must
   // reconstruct by assembling disjoint outer-mode blocks.
-  Index i1{L"i_1"}, i2{L"i_2"}, a3{L"a_3"};
-  Index a_pno{L"a_1", {i1, i2}};  // proto-indexed composite (CSV/PNO) leg
+  Index i1{"i_1"}, i2{"i_2"}, a3{"a_3"};
+  Index a_pno{"a_1", {i1, i2}};  // proto-indexed composite (CSV/PNO) leg
   container::svector<Index> outer{i1, a3};
   container::svector<Index> inner{a_pno};
   container::svector<Index> canon{i1, a3, a_pno};
@@ -1719,8 +1715,8 @@ TEST_CASE(
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
 
-  Index i1{L"i_1"}, i2{L"i_2"}, a3{L"a_3"};
-  Index a_pno{L"a_1", {i1, i2}};
+  Index i1{"i_1"}, i2{"i_2"}, a3{"a_3"};
+  Index a_pno{"a_1", {i1, i2}};
   container::svector<Index> outer{i1, a3};
   container::svector<Index> inner{a_pno};
   container::svector<Index> canon{i1, a3, a_pno};
@@ -1763,9 +1759,9 @@ TEST_CASE("dryrun nested result uses moment-aware inner extent, not extent^k",
   r.csv_pno_moment[2] = 4.0 * 4.0 * 1.5;
   auto cm = std::make_shared<CostModel const>(r);
 
-  Index i1{L"i_1"}, i2{L"i_2"};
-  Index a_pno{L"a_1", {i1, i2}};  // proto-indexed (CSV/PNO composite) leg
-  container::svector<Index> outer{i1, i2, Index{L"a_3"}};
+  Index i1{"i_1"}, i2{"i_2"};
+  Index a_pno{"a_1", {i1, i2}};  // proto-indexed (CSV/PNO composite) leg
+  container::svector<Index> outer{i1, i2, Index{"a_3"}};
   container::svector<Index> inner{a_pno};
   ResultDryRunNested c{outer, inner, cm};
 
@@ -1791,10 +1787,10 @@ TEST_CASE("dryrun make_dryrun_result dispatches flat vs nested by content",
           "[dryrun-nested]") {
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
-  Index i1{L"i_1"}, i2{L"i_2"};
-  Index a_pno{L"a_1", {i1, i2}};
+  Index i1{"i_1"}, i2{"i_2"};
+  Index a_pno{"a_1", {i1, i2}};
 
-  auto flat = make_dryrun_result({Index{L"i_1"}, Index{L"i_2"}}, cm);
+  auto flat = make_dryrun_result({Index{"i_1"}, Index{"i_2"}}, cm);
   CHECK(flat->is<ResultDryRun>());
 
   auto nested = make_dryrun_result({i1, i2, a_pno}, cm);
@@ -1825,7 +1821,7 @@ TEST_CASE("dryrun leaf yielder builds a sized token from a tensor leaf",
   bool const is_flat = res->is<ResultDryRun>();
   CHECK(is_flat);
 
-  container::svector<Index> idx{Index{L"i_1"}, Index{L"i_2"}, Index{L"a_4"}};
+  container::svector<Index> idx{Index{"i_1"}, Index{"i_2"}, Index{"a_4"}};
   CHECK(res->size_in_bytes() == cm->memsize(idx));
 }
 
@@ -1877,7 +1873,7 @@ TEST_CASE(
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
   auto const occ =
-      get_default_context().index_basis_registry()->retrieve_space(L"i");
+      get_default_context().index_basis_registry()->retrieve_space("i");
   auto accept_occ = [occ](Index const& ix) {
     return ix.space() == occ && !ix.has_proto_indices();
   };
@@ -2045,10 +2041,10 @@ TEST_CASE(
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = is_df_batchable;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"μ̃" ? std::size_t{256}  // pao_target_size
-                                         : std::size_t{72};  // aux_target_size
+    return ix.basis().base_key() == "μ̃" ? std::size_t{256}  // pao_target_size
+                                        : std::size_t{72};  // aux_target_size
   };
-  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == "t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40e9;  // DP-side knob only; the runtime evaluator
                                  // never consults peak_threshold.
@@ -2095,11 +2091,11 @@ TEST_CASE(
       regime.idx_to_extent(), regime.inner_pow_fn());
   auto has_free_mu_tilde = [](std::vector<Index> const& ixs) {
     for (auto const& ix : ixs)
-      if (ix.basis().base_key() == L"μ̃") return true;
+      if (ix.basis().base_key() == "μ̃") return true;
     return false;
   };
   double giant_nominal_bytes = 0.0;
-  std::wstring giant_desc, giant_axes_desc;
+  std::string giant_desc, giant_axes_desc;
   node.visit_internal([&](auto const& n) {
     auto free_ixs = node_free_indices(*n);
     if (!has_free_mu_tilde(free_ixs)) return;
@@ -2223,29 +2219,28 @@ TEST_CASE(
     }
   }
 
-  std::wcout << L"\n=== [dryrun-eval] GIANT TERM RUNTIME REPLAY ===\n"
-             << L"optimize(): " << opt_ms << L"ms, evaluate(): " << eval_ms
-             << L"ms\n"
-             << L"DP-annotated giant: free={" << giant_desc << L"} nominal="
-             << (giant_nominal_bytes / 1e9) << L" GB node_slice_mask={"
-             << giant_axes_desc << L"}\n"
-             << L"root result size = " << root_bytes << L" bytes ("
-             << (double(root_bytes) / 1e9) << L" GB)\n"
-             << L"cache.working_set_hwmark() = " << peak << L" bytes ("
-             << (double(peak) / 1e9) << L" GB)\n"
-             << L"max single result= observed in trace = "
-             << max_single_result_bytes << L" bytes ("
-             << (double(max_single_result_bytes) / 1e9) << L" GB)\n"
-             << L"trace ops: " << n_eval_lines << L" Eval lines, "
-             << n_batch_group_begin << L" BatchGroup interceptions, "
-             << n_results_over_100mb << L" results >=100MB\n"
-             << L"=> giant realized at (>=90% of) its FULL nominal size during "
-                L"replay: "
-             << (giant_realized_full
-                     ? L"YES (mu~ NOT sliced in practice -- bug "
-                       L"reproduced)"
-                     : L"NO (sliced down from nominal)")
-             << L"\n";
+  std::cout << "\n=== [dryrun-eval] GIANT TERM RUNTIME REPLAY ===\n"
+            << "optimize(): " << opt_ms << "ms, evaluate(): " << eval_ms
+            << "ms\n"
+            << "DP-annotated giant: free={" << giant_desc
+            << "} nominal=" << (giant_nominal_bytes / 1e9)
+            << " GB node_slice_mask={" << giant_axes_desc << "}\n"
+            << "root result size = " << root_bytes << " bytes ("
+            << (double(root_bytes) / 1e9) << " GB)\n"
+            << "cache.working_set_hwmark() = " << peak << " bytes ("
+            << (double(peak) / 1e9) << " GB)\n"
+            << "max single result= observed in trace = "
+            << max_single_result_bytes << " bytes ("
+            << (double(max_single_result_bytes) / 1e9) << " GB)\n"
+            << "trace ops: " << n_eval_lines << " Eval lines, "
+            << n_batch_group_begin << " BatchGroup interceptions, "
+            << n_results_over_100mb << " results >=100MB\n"
+            << "=> giant realized at (>=90% of) its FULL nominal size during "
+               "replay: "
+            << (giant_realized_full ? "YES (mu~ NOT sliced in practice -- bug "
+                                      "reproduced)"
+                                    : "NO (sliced down from nominal)")
+            << "\n";
 
   CHECK(peak > 0);
 }
@@ -2297,8 +2292,8 @@ TEST_CASE(
   // 4-PNO integral) can be located by eye.
   if (std::getenv("SEQUANT_UT_DRYRUN_LIST_TERMS")) {
     for (std::size_t s = 0; s < summands.size(); ++s)
-      std::wcerr << L"[term " << s << L"] "
-                 << to_latex(flatten_product(summands[s])) << L"\n";
+      std::cerr << "[term " << s << "] "
+                << to_latex(flatten_product(summands[s])) << "\n";
   }
   // Term selector (default 38): SEQUANT_UT_DRYRUN_TERM.
   std::size_t giant_idx = 38;
@@ -2307,8 +2302,8 @@ TEST_CASE(
   if (giant_idx >= summands.size()) giant_idx = 0;
   ExprPtr giant = flatten_product(summands[giant_idx]);
   REQUIRE(giant);
-  std::wcerr << L"[dryrun-objective] selected term " << giant_idx << L" = "
-             << to_latex(giant) << L"\n";
+  std::cerr << "[dryrun-objective] selected term " << giant_idx << " = "
+            << to_latex(giant) << "\n";
 
   // FAITHFUL real C60 config: the measured heavy-tailed CSV moments in
   // kC60_pVDZF12, NOT a flat scalar -- so the 4-PNO PPL node is sized
@@ -2318,19 +2313,19 @@ TEST_CASE(
                                                        regime.inner_pow_fn());
   auto ext_of = [](Index const& ix) -> double {
     auto bk = ix.basis().base_key();
-    if (bk == L"μ̃") return double(kC60_pVDZF12.mu_tilde);
-    if (bk == L"Κ") return double(kC60_pVDZF12.aux);
+    if (bk == "μ̃") return double(kC60_pVDZF12.mu_tilde);
+    if (bk == "Κ") return double(kC60_pVDZF12.aux);
     return 0.0;
   };
   auto tgt_of = [](Index const& ix) -> double {
-    return ix.basis().base_key() == L"μ̃" ? 256.0 : 72.0;
+    return ix.basis().base_key() == "μ̃" ? 256.0 : 72.0;
   };
-  auto keyof = [](Index const& ix) { return std::wstring(ix.full_label()); };
+  auto keyof = [](Index const& ix) { return std::string(ix.full_label()); };
 
   struct Analysis {
     std::size_t max_free_mu = 0;       // >= 4 => 4-PAO AO integral formed
     double largest_realized_gb = 0.0;  // DP-model realized free-mu~ (static)
-    std::wstring largest_desc;
+    std::string largest_desc;
     // Cost of the chosen factorization: a STATIC per-internal-node flops walk
     // (order-/batching-blind, so it depends only on the factorization the DP
     // picked) plus the metered dry-run replay's peak (dryrun::meter).
@@ -2350,9 +2345,9 @@ TEST_CASE(
     sequant::BatchPolicy policy;
     policy.is_batchable_contracted_index = is_df_batchable;
     policy.batch_target_size = [](Index const& ix) -> std::size_t {
-      return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+      return ix.basis().base_key() == "μ̃" ? std::size_t{256} : std::size_t{72};
     };
-    policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+    policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == "t"; };
     policy.accumulation_factor = 1.0;
     policy.peak_threshold =
         (std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB")
@@ -2392,20 +2387,20 @@ TEST_CASE(
     // that node), in post-order-ish indentation, so the exact schedule is
     // inspectable.
     if (std::getenv("SEQUANT_UT_DRYRUN_PERF_TREE")) {
-      wchar_t const* on = (obj == ObjectiveFunction::DenseTimeSpaceBatched)
-                              ? L"perf-first (DenseTimeSpaceBatched)"
-                              : L"peak-first (DenseSpaceTimeBatched)";
-      std::wcerr << L"\n[dryrun-objective] TREE for " << on << L":\n";
+      char const* on = (obj == ObjectiveFunction::DenseTimeSpaceBatched)
+                           ? "perf-first (DenseTimeSpaceBatched)"
+                           : "peak-first (DenseSpaceTimeBatched)";
+      std::cerr << "\n[dryrun-objective] TREE for " << on << ":\n";
       std::function<void(std::remove_cvref_t<decltype(node)> const&, int)>
           dump = [&](auto const& n, int depth) {
-            std::wstring const pad(2 * depth + 2, L' ');
+            std::string const pad(2 * depth + 2, ' ');
             auto const free = node_free_indices(*n);
             container::vector<Index> const bax =
                 batch_axes_indices(n->node_slice_mask());
             std::size_t nmu = 0, nk = 0, npno = 0, nosv = 0;
             for (auto const& ix : free) {
-              if (ix.basis().base_key() == L"μ̃") ++nmu;
-              if (ix.basis().base_key() == L"Κ") ++nk;
+              if (ix.basis().base_key() == "μ̃") ++nmu;
+              if (ix.basis().base_key() == "Κ") ++nk;
               if (ix.has_proto_indices()) {
                 if (ix.proto_indices().size() >= 2)
                   ++npno;  // 2-proto (or higher) = PNO composite
@@ -2413,11 +2408,11 @@ TEST_CASE(
                   ++nosv;  // 1-proto = OSV composite
               }
             }
-            std::wcerr << pad << (n.leaf() ? L"leaf  " : L"CONTRACT ")
-                       << L"free={" << describe_indices(free) << L"} (mu~="
-                       << nmu << L" K=" << nk << L" PNO=" << npno << L" OSV="
-                       << nosv << L")  node_slice_mask={"
-                       << describe_indices(bax) << L"}\n";
+            std::cerr << pad << (n.leaf() ? "leaf  " : "CONTRACT ") << "free={"
+                      << describe_indices(free) << "} (mu~=" << nmu
+                      << " K=" << nk << " PNO=" << npno << " OSV=" << nosv
+                      << ")  node_slice_mask={" << describe_indices(bax)
+                      << "}\n";
             if (!n.leaf()) {
               dump(n.left(), depth + 1);
               dump(n.right(), depth + 1);
@@ -2428,12 +2423,12 @@ TEST_CASE(
 
     Analysis a;
     std::function<void(std::remove_cvref_t<decltype(node)> const&,
-                       std::map<std::wstring, std::wstring>)>
-        walk = [&](auto const& n, std::map<std::wstring, std::wstring> active) {
+                       std::map<std::string, std::string>)>
+        walk = [&](auto const& n, std::map<std::string, std::string> active) {
           auto free_ixs = node_free_indices(*n);
           std::size_t nmu = 0;
           for (auto const& ix : free_ixs)
-            if (ix.basis().base_key() == L"μ̃") ++nmu;
+            if (ix.basis().base_key() == "μ̃") ++nmu;
           if (nmu > a.max_free_mu) a.max_free_mu = nmu;
           if (nmu > 0) {
             double nominal =
@@ -2442,7 +2437,7 @@ TEST_CASE(
             double factor = 1.0;
             for (auto const& ix : free_ixs) {
               auto bk = ix.basis().base_key();
-              if (bk != L"μ̃" && bk != L"Κ") continue;
+              if (bk != "μ̃" && bk != "Κ") continue;
               if (active.find(keyof(ix)) != active.end())
                 factor *= tgt_of(ix) / ext_of(ix);
             }
@@ -2453,9 +2448,9 @@ TEST_CASE(
             }
           }
           if (!n.leaf()) {
-            std::map<std::wstring, std::wstring> child_active = active;
+            std::map<std::string, std::string> child_active = active;
             for (auto const& ax : n->node_slice_mask())
-              child_active[keyof(ax.first)] = L"y";
+              child_active[keyof(ax.first)] = "y";
             walk(n.left(), child_active);
             walk(n.right(), child_active);
           }
@@ -2492,21 +2487,22 @@ TEST_CASE(
     cfg.min_repeats = 1;
     cfg.is_volatile = [](EvalNodeDryRun const& n) {
       if (!n.leaf() || !n->is_tensor()) return false;
-      return n->as_tensor().label() == L"t";
+      return n->as_tensor().label() == "t";
     };
     a.peak_bytes = sequant::eval::dryrun::meter(
                        std::vector<EvalNodeDryRun>{node}, policy, regime, cfg)
                        .peak_bytes;
 
-    wchar_t const* obj_name = (obj == ObjectiveFunction::DenseTimeSpaceBatched)
-                                  ? L"perf-first (DenseTimeSpaceBatched)"
-                                  : L"peak-first (DenseSpaceTimeBatched)";
-    std::wcerr << L"[dryrun-objective] " << obj_name << L": optimize " << opt_ms
-               << L"ms  max free-mu~ on a node=" << a.max_free_mu
-               << L"  largest realized free-mu~={" << a.largest_desc << L"}="
-               << a.largest_realized_gb << L" GB\n               modeled cost: "
-               << L"n_ops=" << a.model_n_ops << L" flops=" << a.model_flops
-               << L" peak_bytes=" << (a.peak_bytes / 1e9) << L" GB\n";
+    char const* obj_name = (obj == ObjectiveFunction::DenseTimeSpaceBatched)
+                               ? "perf-first (DenseTimeSpaceBatched)"
+                               : "peak-first (DenseSpaceTimeBatched)";
+    std::cerr << "[dryrun-objective] " << obj_name << ": optimize " << opt_ms
+              << "ms  max free-mu~ on a node=" << a.max_free_mu
+              << "  largest realized free-mu~={" << a.largest_desc
+              << "}=" << a.largest_realized_gb
+              << " GB\n               modeled cost: "
+              << "n_ops=" << a.model_n_ops << " flops=" << a.model_flops
+              << " peak_bytes=" << (a.peak_bytes / 1e9) << " GB\n";
 
     return a;
   };
@@ -2514,18 +2510,19 @@ TEST_CASE(
   auto peak_first = analyze(ObjectiveFunction::DenseSpaceTimeBatched);
   auto perf_first = analyze(ObjectiveFunction::DenseTimeSpaceBatched);
 
-  auto report = [](wchar_t const* tag, Analysis const& a) {
-    std::wcerr << tag << L": 4-PAO node formed = "
-               << (a.max_free_mu >= 4 ? L"YES" : L"NO") << L" (max free mu~="
-               << a.max_free_mu << L")\n    DP-model largest realized free-mu~="
-               << a.largest_realized_gb << L" GB {" << a.largest_desc << L"}\n"
-               << L"    modeled cost: n_ops=" << a.model_n_ops << L" flops="
-               << a.model_flops << L" peak_bytes=" << (a.peak_bytes / 1e9)
-               << L" GB\n";
+  auto report = [](char const* tag, Analysis const& a) {
+    std::cerr << tag
+              << ": 4-PAO node formed = " << (a.max_free_mu >= 4 ? "YES" : "NO")
+              << " (max free mu~=" << a.max_free_mu
+              << ")\n    DP-model largest realized free-mu~="
+              << a.largest_realized_gb << " GB {" << a.largest_desc << "}\n"
+              << "    modeled cost: n_ops=" << a.model_n_ops
+              << " flops=" << a.model_flops
+              << " peak_bytes=" << (a.peak_bytes / 1e9) << " GB\n";
   };
-  std::wcerr << L"\n=== [dryrun-objective] VERDICT (C60 giant, index 38) ===\n";
-  report(L"peak-first (DenseSpaceTimeBatched)", peak_first);
-  report(L"perf-first (DenseTimeSpaceBatched)", perf_first);
+  std::cerr << "\n=== [dryrun-objective] VERDICT (C60 giant, index 38) ===\n";
+  report("peak-first (DenseSpaceTimeBatched)", peak_first);
+  report("perf-first (DenseTimeSpaceBatched)", perf_first);
 
   // STRUCTURAL PROOF (the direct in-harness proof of the fix), read from the
   // static tree walk above -- NOT from the metered replay: perf-first, being
@@ -2613,12 +2610,12 @@ TEST_CASE(
     BModel m{regime.idx_to_extent(),
              [](Index const& ix) -> std::size_t {
                auto const k = ix.basis().base_key();
-               if (k == L"μ̃") return std::size_t{256};  // pao_target_size
-               if (k == L"i") return std::size_t{8};    // occ_target_size: occ
+               if (k == "μ̃") return std::size_t{256};  // pao_target_size
+               if (k == "i") return std::size_t{8};    // occ_target_size: occ
                // blocks are small; the aux value 72 must NOT leak to the occ.
                return std::size_t{72};  // aux_target_size (DF Κ)
              },
-             [](Tensor const& t) { return t.label() == L"t"; },
+             [](Tensor const& t) { return t.label() == "t"; },
              regime.inner_pow_fn(),
              /*volatile_weight=*/20.0,
              /*machine_balance=*/200.0,
@@ -2639,7 +2636,7 @@ TEST_CASE(
     // ctx.batchable_modes, leaving the spectator seed nothing to adopt.
     m.is_batchable_external_index = [](Index const& ix) {
       auto const k = ix.basis().base_key();
-      return k == L"μ̃" || k == L"Κ" || k == L"i";
+      return k == "μ̃" || k == "Κ" || k == "i";
     };
     m.batch_spectator_indices = spectator_on;
     return m;
@@ -2663,9 +2660,9 @@ TEST_CASE(
   double const peak_off = reported_peak(false, ax_off);
   double const peak_on = reported_peak(true, ax_on);
 
-  std::wcerr << L"[dryrun-extmode] reported root peak flag-off="
-             << (peak_off / 1e9) << L" GB  flag-on=" << (peak_on / 1e9)
-             << L" GB\n";
+  std::cerr << "[dryrun-extmode] reported root peak flag-off="
+            << (peak_off / 1e9) << " GB  flag-on=" << (peak_on / 1e9)
+            << " GB\n";
 
   // The giant is genuinely over the 40 GB budget (else nothing to batch).
   REQUIRE(peak_off > 40.0 * 1e9);
@@ -2698,13 +2695,13 @@ TEST_CASE(
   // Flag ON: External stamped, and ONLY on an external occ (space "i") -- the
   // chosen seed modes -- never on a contracted DF-aux/PAO mode (emit follows
   // selection). BOTH external occ (i_1 and i_2) must be stamped (joint seed).
-  auto occ_space = ibr->retrieve_space(L"i");
-  std::set<std::wstring> external_labels;
+  auto occ_space = ibr->retrieve_space("i");
+  std::set<std::string> external_labels;
   for (auto const& axs : ax_on)
     for (auto const& e : axs.axes)
       if (e.second == BatchModeType::External) {
         CHECK(e.first.space() == occ_space);
-        external_labels.insert(std::wstring(e.first.full_label()));
+        external_labels.insert(std::string(e.first.full_label()));
       }
   CHECK(external_labels.size() == 2);  // both i_1 and i_2 seeded jointly
 }
@@ -2770,9 +2767,9 @@ TEST_CASE(
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = is_df_batchable;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == "μ̃" ? std::size_t{256} : std::size_t{72};
   };
-  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == "t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40.0 * 1e9;
 
@@ -2811,7 +2808,7 @@ TEST_CASE(
   // we land on the ladder intermediate, not a tiny scalar.
   auto memsize_full = sequant::opt::detail::memsize_counter(
       regime.idx_to_extent(), regime.inner_pow_fn());
-  auto free_has_bare = [](std::vector<Index> const& ixs, std::wstring_view bk) {
+  auto free_has_bare = [](std::vector<Index> const& ixs, std::string_view bk) {
     for (auto const& ix : ixs)
       if (ix.basis().base_key() == bk) return true;
     return false;
@@ -2826,7 +2823,7 @@ TEST_CASE(
   std::vector<Index> giant_free;
   node.visit_internal([&](auto const& n) {
     auto free_ixs = node_free_indices(*n);
-    if (free_has_bare(free_ixs, L"μ̃") || free_has_bare(free_ixs, L"Κ")) return;
+    if (free_has_bare(free_ixs, "μ̃") || free_has_bare(free_ixs, "Κ")) return;
     if (count_pno(free_ixs) < 2) return;
     double const bytes =
         memsize_full(free_ixs, std::vector<Index>{}, std::vector<Index>{}) *
@@ -2846,19 +2843,19 @@ TEST_CASE(
   std::vector<Index> ext_occ;
   for (auto const& ix : giant_free)
     for (auto const& p : ix.proto_indices())
-      if (p.basis().base_key() == L"i") {
+      if (p.basis().base_key() == "i") {
         bool seen = false;
         for (auto const& e : ext_occ)
           if (e.full_label() == p.full_label()) seen = true;
         if (!seen) ext_occ.push_back(p);
       }
 
-  std::wcerr << L"\n=== [dryrun-occ-sizing] P1 SIZING GATE (C60 giant, term "
-             << giant_idx << L") ===\n"
-             << L"giant node free indices = {" << describe_indices(giant_free)
-             << L"}\n"
-             << L"external occ protos found (" << ext_occ.size() << L") = {"
-             << describe_indices(ext_occ) << L"}\n";
+  std::cerr << "\n=== [dryrun-occ-sizing] P1 SIZING GATE (C60 giant, term "
+            << giant_idx << ") ===\n"
+            << "giant node free indices = {" << describe_indices(giant_free)
+            << "}\n"
+            << "external occ protos found (" << ext_occ.size() << ") = {"
+            << describe_indices(ext_occ) << "}\n";
   REQUIRE(!ext_occ.empty());
 
   // Slice exactly ONE external occ index to a block (rank-general design:
@@ -2866,17 +2863,17 @@ TEST_CASE(
   // tile size; full occ extent = kC60_pVDZF12.i_occ = 120).
   std::size_t const occ_block = 10;
   Index const sliced = ext_occ.front();
-  std::wstring const sliced_label(sliced.full_label());
-  std::wcerr << L"slicing ONE external occ index {" << sliced_label
-             << L"} to occ_block=" << occ_block << L" (full occ extent="
-             << kC60_pVDZF12.i_occ << L")\n";
+  std::string const sliced_label(sliced.full_label());
+  std::cerr << "slicing ONE external occ index {" << sliced_label
+            << "} to occ_block=" << occ_block
+            << " (full occ extent=" << kC60_pVDZF12.i_occ << ")\n";
 
   // Sliced extent function: identical to the regime's, except the ONE chosen
   // external occ index returns min(full, occ_block).
   auto full_ext = regime.idx_to_extent();
   auto sliced_ext = [full_ext, sliced_label,
                      occ_block](Index const& ix) -> std::size_t {
-    if (std::wstring(ix.full_label()) == sliced_label)
+    if (std::string(ix.full_label()) == sliced_label)
       return std::min<std::size_t>(full_ext(ix), occ_block);
     return full_ext(ix);
   };
@@ -2888,17 +2885,17 @@ TEST_CASE(
       8.0;
   double const ratio = sliced_bytes / giant_full_bytes;
 
-  std::wcerr << L"full   footprint = " << giant_full_bytes << L" bytes ("
-             << (giant_full_bytes / 1e9) << L" GB)\n"
-             << L"sliced footprint = " << sliced_bytes << L" bytes ("
-             << (sliced_bytes / 1e9) << L" GB)\n"
-             << L"sliced/full ratio = " << ratio
-             << L"  (expected ~ occ_block/occ = "
-             << (double(occ_block) / double(kC60_pVDZF12.i_occ)) << L")\n"
-             << L"VERDICT: external-occ slicing "
-             << (ratio < 0.6 ? L"SHRINKS the PPL W footprint => GO"
-                             : L"does NOT shrink the footprint => NO-GO")
-             << L"\n";
+  std::cerr << "full   footprint = " << giant_full_bytes << " bytes ("
+            << (giant_full_bytes / 1e9) << " GB)\n"
+            << "sliced footprint = " << sliced_bytes << " bytes ("
+            << (sliced_bytes / 1e9) << " GB)\n"
+            << "sliced/full ratio = " << ratio
+            << "  (expected ~ occ_block/occ = "
+            << (double(occ_block) / double(kC60_pVDZF12.i_occ)) << ")\n"
+            << "VERDICT: external-occ slicing "
+            << (ratio < 0.6 ? "SHRINKS the PPL W footprint => GO"
+                            : "does NOT shrink the footprint => NO-GO")
+            << "\n";
 
   // GO criterion: the modelled footprint must scale EXACTLY with the sliced
   // occ extent, not just "shrink". The outer (idx_to_extent) factor scales
@@ -2967,9 +2964,9 @@ TEST_CASE(
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = is_df_batchable;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == "μ̃" ? std::size_t{256} : std::size_t{72};
   };
-  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == "t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40.0 * 1e9;
 
@@ -3003,7 +3000,7 @@ TEST_CASE(
   // as protoindices -- the external mode the forest batching targets.
   auto memsize_full = sequant::opt::detail::memsize_counter(
       regime.idx_to_extent(), regime.inner_pow_fn());
-  auto free_has_bare = [](std::vector<Index> const& ixs, std::wstring_view bk) {
+  auto free_has_bare = [](std::vector<Index> const& ixs, std::string_view bk) {
     for (auto const& ix : ixs)
       if (ix.basis().base_key() == bk) return true;
     return false;
@@ -3019,7 +3016,7 @@ TEST_CASE(
   node.visit_internal([&](auto const& n) {
     if (!n->is_tensor()) return;
     auto free_ixs = node_free_indices(*n);
-    if (free_has_bare(free_ixs, L"μ̃") || free_has_bare(free_ixs, L"Κ")) return;
+    if (free_has_bare(free_ixs, "μ̃") || free_has_bare(free_ixs, "Κ")) return;
     if (count_pno(free_ixs) < 2) return;
     double const bytes =
         memsize_full(free_ixs, std::vector<Index>{}, std::vector<Index>{}) *
@@ -3038,7 +3035,7 @@ TEST_CASE(
   std::vector<Index> ext_occ;
   for (auto const& ix : giant_tensor->as<Tensor>().const_braketaux_indices())
     for (auto const& p : ix.proto_indices())
-      if (p.basis().base_key() == L"i") {
+      if (p.basis().base_key() == "i") {
         bool seen = false;
         for (auto const& e : ext_occ)
           if (e.full_label() == p.full_label()) seen = true;
@@ -3056,15 +3053,15 @@ TEST_CASE(
       sequant::opt::detail::batchable_mode_list(tn, is_df_batchable);
 
   std::vector<Index> batchable_v(batchable.begin(), batchable.end());
-  std::wcerr << L"\n=== [dryrun-occ-recognize] P1 RECOGNITION GATE (C60 giant, "
-             << L"term " << giant_idx << L") ===\n"
-             << L"external occ protos on giant (" << ext_occ.size() << L") = {"
-             << describe_indices(ext_occ) << L"}\n"
-             << L"batchable_mode_list (" << batchable_v.size() << L") = {"
-             << describe_indices(batchable_v) << L"}\n";
+  std::cerr << "\n=== [dryrun-occ-recognize] P1 RECOGNITION GATE (C60 giant, "
+            << "term " << giant_idx << ") ===\n"
+            << "external occ protos on giant (" << ext_occ.size() << ") = {"
+            << describe_indices(ext_occ) << "}\n"
+            << "batchable_mode_list (" << batchable_v.size() << ") = {"
+            << describe_indices(batchable_v) << "}\n";
 
   auto is_active_occ = [](Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
   // The giant's external occ must now be a batchable mode, even though it has
   // no top-level slot on the node.
@@ -3132,15 +3129,15 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
   auto regime = df_regime(kC60_pVDZF12);
   auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
                                                        regime.inner_pow_fn());
-  auto keyof = [](Index const& ix) { return std::wstring(ix.full_label()); };
+  auto keyof = [](Index const& ix) { return std::string(ix.full_label()); };
   auto tgt_of = [](Index const& ix) -> double {
-    return ix.basis().base_key() == L"μ̃" ? 256.0 : 72.0;
+    return ix.basis().base_key() == "μ̃" ? 256.0 : 72.0;
   };
   auto ext_of = [&](Index const& ix) -> double {
     return double(regime.idx_to_extent()(ix));
   };
   auto batch_target = [](Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == "μ̃" ? std::size_t{256} : std::size_t{72};
   };
 
   // The over-budget threshold: peak_threshold (a node must batch to fit).
@@ -3159,13 +3156,13 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
   bool const no_pao = std::getenv("SEQUANT_UT_AUDIT_NO_PAO") != nullptr;
   auto audit_batchable = [no_pao](Index const& ix) -> bool {
     auto const k = ix.basis().base_key();
-    return no_pao ? (k == L"Κ") : (k == L"μ̃" || k == L"Κ");
+    return no_pao ? (k == "Κ") : (k == "μ̃" || k == "Κ");
   };
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = audit_batchable;
   policy.batch_target_size = batch_target;
-  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == "t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = kThrGB * 1e9;
 
@@ -3176,34 +3173,34 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
     bool biggest_has_ext_occ = false;  // biggest node carries occ protos
     bool biggest_escaped_mu = false;  // biggest node: free mu~ no ancestor slic
     bool biggest_escaped_k = false;
-    std::wstring biggest_desc;
-    std::wstring escaped_desc;
+    std::string biggest_desc;
+    std::string escaped_desc;
   };
   std::vector<TermVerdict> verdicts;
 
   auto const full_ext = regime.idx_to_extent();
 
   // classify a term by whether P3 external-occ batching bounds its biggest node
-  auto classify = [&](TermVerdict const& v) -> std::wstring {
-    if (v.biggest_realized_gb <= kThrGB) return L"OK (under budget)";
+  auto classify = [&](TermVerdict const& v) -> std::string {
+    if (v.biggest_realized_gb <= kThrGB) return "OK (under budget)";
     // over-budget: does slicing ONE result-external occ bring it under budget?
     if (v.biggest_has_ext_occ && v.biggest_occ_sliced_gb <= kThrGB)
-      return L"BOUNDED-by-P3 (occ slice fits)";
-    if (v.biggest_escaped_mu) return L"NEEDS-mu-forest (escaped free mu~)";
-    if (v.biggest_escaped_k) return L"NEEDS-k-forest (escaped free K)";
-    return L"GAP? (over budget, occ slice insufficient, no escaped mu~/K)";
+      return "BOUNDED-by-P3 (occ slice fits)";
+    if (v.biggest_escaped_mu) return "NEEDS-mu-forest (escaped free mu~)";
+    if (v.biggest_escaped_k) return "NEEDS-k-forest (escaped free K)";
+    return "GAP? (over budget, occ slice insufficient, no escaped mu~/K)";
   };
 
-  std::wcerr << L"\n=== [dryrun-c60-batchability-audit] perf-first, "
-             << summands.size() << L" C60 terms, budget=" << kThrGB
-             << L" GB, occ_block=" << occ_block << L" ===\n";
+  std::cerr << "\n=== [dryrun-c60-batchability-audit] perf-first, "
+            << summands.size() << " C60 terms, budget=" << kThrGB
+            << " GB, occ_block=" << occ_block << " ===\n";
 
   // Optional term subset: SEQUANT_UT_AUDIT_TERMS="3,38,41" limits the sweep.
   std::set<std::size_t> term_filter;
   if (auto* e = std::getenv("SEQUANT_UT_AUDIT_TERMS")) {
-    std::wstringstream ss(std::wstring(e, e + std::strlen(e)));
-    std::wstring tok;
-    while (std::getline(ss, tok, L',')) {
+    std::stringstream ss(std::string(e, e + std::strlen(e)));
+    std::string tok;
+    while (std::getline(ss, tok, ',')) {
       if (!tok.empty()) term_filter.insert((std::size_t)std::stoul(tok));
     }
   }
@@ -3214,8 +3211,8 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
     if (!giant) continue;
 
     std::size_t nfac = giant->is<Product>() ? giant->as<Product>().size() : 0;
-    std::wcerr << L"[audit] term " << t << L" (nfac=" << nfac
-               << L") optimizing..." << std::endl;
+    std::cerr << "[audit] term " << t << " (nfac=" << nfac << ") optimizing..."
+              << std::endl;
 
     // LOCAL DIAGNOSTIC (never committed): quantify how much outer-product
     // pruning reduces the DP subset space for this term, and count the
@@ -3236,26 +3233,25 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
         if (conn[n]) ++connected_ge2;
       }
       // batchable-index degree m: distinct batchable top-level indices.
-      std::set<std::wstring> batch_ixs;
+      std::set<std::string> batch_ixs;
       for (auto const& f : gts) {
         auto const& tp = f->as<Tensor>();
         for (auto const& ix : tp.const_braket())
-          if (audit_batchable(ix)) batch_ixs.insert(std::wstring(ix.label()));
+          if (audit_batchable(ix)) batch_ixs.insert(std::string(ix.label()));
         for (auto const& ix : tp.aux())
-          if (audit_batchable(ix)) batch_ixs.insert(std::wstring(ix.label()));
+          if (audit_batchable(ix)) batch_ixs.insert(std::string(ix.label()));
       }
-      std::wcerr << L"[prune-stats] term " << t << L" nt=" << nt
-                 << L" subsets(>=2)=" << total_ge2 << L" connected="
-                 << connected_ge2 << L" pruned=" << (total_ge2 - connected_ge2)
-                 << L" ("
-                 << (total_ge2 ? 100.0 * double(total_ge2 - connected_ge2) /
-                                     double(total_ge2)
-                               : 0.0)
-                 << L"%) full_net_connected=" << (conn.back() ? 1 : 0)
-                 << L" batchable_m=" << batch_ixs.size() << L" -> 2^m="
-                 << (double)(1ull
-                             << std::min<std::size_t>(batch_ixs.size(), 62))
-                 << std::endl;
+      std::cerr << "[prune-stats] term " << t << " nt=" << nt
+                << " subsets(>=2)=" << total_ge2
+                << " connected=" << connected_ge2
+                << " pruned=" << (total_ge2 - connected_ge2) << " ("
+                << (total_ge2 ? 100.0 * double(total_ge2 - connected_ge2) /
+                                    double(total_ge2)
+                              : 0.0)
+                << "%) full_net_connected=" << (conn.back() ? 1 : 0)
+                << " batchable_m=" << batch_ixs.size() << " -> 2^m="
+                << (double)(1ull << std::min<std::size_t>(batch_ixs.size(), 62))
+                << std::endl;
       continue;  // skip the expensive optimize; stats only
     }
 
@@ -3279,10 +3275,10 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
       // LOCAL DIAGNOSTIC (never committed): print the found factorization so a
       // pruned vs SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING run can be diffed.
       if (std::getenv("SEQUANT_UT_AUDIT_PRINT_SOLN"))
-        std::wcerr << L"[soln] term " << t << L" prune="
-                   << (std::getenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING") ? 0
-                                                                            : 1)
-                   << L" : " << to_latex(optimized) << std::endl;
+        std::cerr << "[soln] term " << t << " prune="
+                  << (std::getenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING") ? 0
+                                                                           : 1)
+                  << " : " << to_latex(optimized) << std::endl;
       auto it = axes_map->find(optimized.get());
       container::vector<NodeBatchAnnotation> node_axes;
       if (it != axes_map->end()) node_axes = it->second;
@@ -3302,8 +3298,8 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
       double biggest_occ_sliced = 0;
       bool biggest_has_occ = false;
       std::function<void(std::remove_cvref_t<decltype(node)> const&,
-                         std::map<std::wstring, int>)>
-          walk = [&](auto const& n, std::map<std::wstring, int> active) {
+                         std::map<std::string, int>)>
+          walk = [&](auto const& n, std::map<std::string, int> active) {
             auto free_ixs = node_free_indices(*n);
             double nominal =
                 memsize(free_ixs, std::vector<Index>{}, std::vector<Index>{}) *
@@ -3312,7 +3308,7 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
             std::vector<Index> escaped;
             for (auto const& ix : free_ixs) {
               auto bk = ix.basis().base_key();
-              if (bk != L"μ̃" && bk != L"Κ") continue;
+              if (bk != "μ̃" && bk != "Κ") continue;
               if (active.count(keyof(ix)))
                 factor *= tgt_of(ix) / ext_of(ix);
               else
@@ -3325,11 +3321,11 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
               biggest_escaped = escaped;
               // pick ONE result-external occ proto on this node's composite
               // legs
-              std::wstring occ_label;
+              std::string occ_label;
               for (auto const& ix : free_ixs) {
                 for (auto const& p : ix.proto_indices())
-                  if (p.basis().base_key() == L"i") {
-                    occ_label = std::wstring(p.full_label());
+                  if (p.basis().base_key() == "i") {
+                    occ_label = std::string(p.full_label());
                     break;
                   }
                 if (!occ_label.empty()) break;
@@ -3340,7 +3336,7 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
               } else {
                 auto sliced_ext = [full_ext, occ_label,
                                    occ_block](Index const& ix) -> std::size_t {
-                  if (std::wstring(ix.full_label()) == occ_label)
+                  if (std::string(ix.full_label()) == occ_label)
                     return std::min<std::size_t>(full_ext(ix),
                                                  std::size_t(occ_block));
                   return full_ext(ix);
@@ -3355,7 +3351,7 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
               }
             }
             if (!n.leaf()) {
-              std::map<std::wstring, int> child_active = active;
+              std::map<std::string, int> child_active = active;
               for (auto const& ax : n->node_slice_mask())
                 child_active[keyof(ax.first)] = 1;
               walk(n.left(), child_active);
@@ -3370,23 +3366,24 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
       v.biggest_desc = describe_indices(biggest_free);
       v.escaped_desc = describe_indices(biggest_escaped);
       for (auto const& ix : biggest_escaped) {
-        if (ix.basis().base_key() == L"μ̃") v.biggest_escaped_mu = true;
-        if (ix.basis().base_key() == L"Κ") v.biggest_escaped_k = true;
+        if (ix.basis().base_key() == "μ̃") v.biggest_escaped_mu = true;
+        if (ix.basis().base_key() == "Κ") v.biggest_escaped_k = true;
       }
     } catch (std::exception const&) {
-      std::wcerr << L"[audit] term " << t << L": skipped (exception)\n";
+      std::cerr << "[audit] term " << t << ": skipped (exception)\n";
       continue;
     } catch (...) {
-      std::wcerr << L"[audit] term " << t << L": skipped (unknown)\n";
+      std::cerr << "[audit] term " << t << ": skipped (unknown)\n";
       continue;
     }
     verdicts.push_back(v);
     // Inline verdict so a partial (timed-out) run still yields data.
-    std::wcerr << L"[audit] term " << v.t << L" DONE: biggest_realized="
-               << v.biggest_realized_gb << L" GB  occ_sliced="
-               << v.biggest_occ_sliced_gb << L" GB  ext_occ="
-               << (v.biggest_has_ext_occ ? 1 : 0) << L"  escaped={"
-               << v.escaped_desc << L"}  => " << classify(v) << std::endl;
+    std::cerr << "[audit] term " << v.t
+              << " DONE: biggest_realized=" << v.biggest_realized_gb
+              << " GB  occ_sliced=" << v.biggest_occ_sliced_gb
+              << " GB  ext_occ=" << (v.biggest_has_ext_occ ? 1 : 0)
+              << "  escaped={" << v.escaped_desc << "}  => " << classify(v)
+              << std::endl;
   }
 
   int n_ok = 0, n_p3 = 0, n_mu = 0, n_k = 0, n_gap = 0;
@@ -3398,43 +3395,42 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
     if (v.biggest_occ_sliced_gb > max_occ_sliced)
       max_occ_sliced = v.biggest_occ_sliced_gb;
     if (v.biggest_realized_gb > kThrGB) {
-      std::wcerr << L"term " << v.t << L": biggest_realized="
-                 << v.biggest_realized_gb << L" GB  occ_sliced="
-                 << v.biggest_occ_sliced_gb << L" GB  ext_occ="
-                 << (v.biggest_has_ext_occ ? 1 : 0) << L"  escaped={"
-                 << v.escaped_desc << L"}\n    free={" << v.biggest_desc
-                 << L"}\n    => " << cls << L"\n";
+      std::cerr << "term " << v.t
+                << ": biggest_realized=" << v.biggest_realized_gb
+                << " GB  occ_sliced=" << v.biggest_occ_sliced_gb
+                << " GB  ext_occ=" << (v.biggest_has_ext_occ ? 1 : 0)
+                << "  escaped={" << v.escaped_desc << "}\n    free={"
+                << v.biggest_desc << "}\n    => " << cls << "\n";
     }
-    if (cls.rfind(L"OK", 0) == 0)
+    if (cls.rfind("OK", 0) == 0)
       ++n_ok;
-    else if (cls.rfind(L"BOUNDED-by-P3", 0) == 0)
+    else if (cls.rfind("BOUNDED-by-P3", 0) == 0)
       ++n_p3;
-    else if (cls.rfind(L"NEEDS-mu", 0) == 0)
+    else if (cls.rfind("NEEDS-mu", 0) == 0)
       ++n_mu;
-    else if (cls.rfind(L"NEEDS-k", 0) == 0)
+    else if (cls.rfind("NEEDS-k", 0) == 0)
       ++n_k;
     else
       ++n_gap;
   }
 
-  std::wcerr
-      << L"\n=== [dryrun-c60-batchability-audit] VERDICT ===\n"
-      << L"terms analyzed=" << verdicts.size() << L"\n"
-      << L"  OK (under budget)          = " << n_ok << L"\n"
-      << L"  BOUNDED-by-P3 (occ forest) = " << n_p3 << L"\n"
-      << L"  NEEDS-mu-forest            = " << n_mu << L"\n"
-      << L"  NEEDS-k-forest             = " << n_k << L"\n"
-      << L"  GAP (no known lever)       = " << n_gap << L"\n"
-      << L"max biggest-realized (node-local only)  = " << max_biggest
-      << L" GB\n"
-      << L"max biggest after ext-occ slice         = " << max_occ_sliced
-      << L" GB\n"
-      << L"P4 GO/NO-GO: "
-      << ((n_mu + n_k + n_gap) == 0
-              ? L"GO -- every "
-                L"over-budget giant is bounded by P3 external-occ batching"
-              : L"REVIEW -- some giants escape P3 (see NEEDS-*/GAP above)")
-      << L"\n";
+  std::cerr << "\n=== [dryrun-c60-batchability-audit] VERDICT ===\n"
+            << "terms analyzed=" << verdicts.size() << "\n"
+            << "  OK (under budget)          = " << n_ok << "\n"
+            << "  BOUNDED-by-P3 (occ forest) = " << n_p3 << "\n"
+            << "  NEEDS-mu-forest            = " << n_mu << "\n"
+            << "  NEEDS-k-forest             = " << n_k << "\n"
+            << "  GAP (no known lever)       = " << n_gap << "\n"
+            << "max biggest-realized (node-local only)  = " << max_biggest
+            << " GB\n"
+            << "max biggest after ext-occ slice         = " << max_occ_sliced
+            << " GB\n"
+            << "P4 GO/NO-GO: "
+            << ((n_mu + n_k + n_gap) == 0
+                    ? "GO -- every "
+                      "over-budget giant is bounded by P3 external-occ batching"
+                    : "REVIEW -- some giants escape P3 (see NEEDS-*/GAP above)")
+            << "\n";
 
   REQUIRE(verdicts.size() > 0);
 }
@@ -3493,9 +3489,9 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = is_df_batchable;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == "μ̃" ? std::size_t{256} : std::size_t{72};
   };
-  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == "t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40e9;
 
@@ -3553,11 +3549,11 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   double const global_peak = peak.load();
   double const outer_hwmark = double(cache.working_set_hwmark());
 
-  std::wcerr << L"\n[dryrun-peak] global scratch-folded peak="
-             << (global_peak / 1e9) << L" GB  outer working_set_hwmark="
-             << (outer_hwmark / 1e9) << L" GB  ratio="
-             << (outer_hwmark > 0.0 ? global_peak / outer_hwmark : 0.0)
-             << L"\n";
+  std::cerr << "\n[dryrun-peak] global scratch-folded peak="
+            << (global_peak / 1e9)
+            << " GB  outer working_set_hwmark=" << (outer_hwmark / 1e9)
+            << " GB  ratio="
+            << (outer_hwmark > 0.0 ? global_peak / outer_hwmark : 0.0) << "\n";
 
   // The sink must have captured something (batched replay ran).
   CHECK(global_peak > 0.0);
@@ -3572,7 +3568,7 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
     std::vector<std::size_t> leaf_extents;  // proto-free leaf slots, sorted
     // pre-order: (op type, -1 for a leaf; sorted extents of canon_indices())
     std::vector<std::pair<int, std::vector<double>>> nodes;
-    std::wstring dump;  // nodes with their index labels
+    std::string dump;  // nodes with their index labels
     double peak = 0;
   };
   static std::map<bool, Record> records;
@@ -3581,7 +3577,7 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   // a sized as the C60 virtuals (nAO - nocc = 1800 - 180), apart from mu~, so
   // that a PAO keyed as a is told apart
   SizeRegime probe = regime;
-  probe.space_extent[L"a"] = 1620;
+  probe.space_extent["a"] = 1620;
   for (auto const& f : giant->as<Product>().factors())
     if (f->is<Tensor>())
       for (auto const& ix : f->as<Tensor>().const_braket_indices())
@@ -3591,14 +3587,14 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   node.visit([&](auto const& n) {
     const int op = n->op_type() ? static_cast<int>(*n->op_type()) : -1;
     std::vector<double> extents;
-    rec.dump += std::to_wstring(op) + L":";
+    rec.dump += std::to_string(op) + ":";
     for (auto const& ix : n->canon_indices()) {
       extents.push_back(ix.has_proto_indices() ? probe.inner_pow(ix, 1)
                                                : double(probe.extent(ix)));
-      rec.dump += L" " + std::wstring(ix.full_label()) + L"=" +
-                  std::to_wstring(extents.back());
+      rec.dump += " " + std::string(ix.full_label()) + "=" +
+                  std::to_string(extents.back());
     }
-    rec.dump += L"\n";
+    rec.dump += "\n";
     std::ranges::sort(extents);
     rec.nodes.emplace_back(op, std::move(extents));
   });
@@ -3608,8 +3604,8 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
     Record const& basis = records.at(true);
     CHECK(space.leaf_extents == basis.leaf_extents);
     INFO("space encoding:\n"
-         << toUtf8(space.dump) << "basis encoding:\n"
-         << toUtf8(basis.dump));
+         << space.dump << "basis encoding:\n"
+         << basis.dump);
     CHECK(space.nodes == basis.nodes);
     CHECK(space.peak == basis.peak);
   }
@@ -3663,7 +3659,7 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][peak]") {
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
   auto const occ =
-      get_default_context().index_basis_registry()->retrieve_space(L"i");
+      get_default_context().index_basis_registry()->retrieve_space("i");
   auto accept_occ = [occ](Index const& ix) {
     return ix.space() == occ && !ix.has_proto_indices();
   };
@@ -3830,9 +3826,9 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = is_df_batchable;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
+    return ix.basis().base_key() == "μ̃" ? std::size_t{256} : std::size_t{72};
   };
-  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == "t"; };
   policy.accumulation_factor = 1.0;
   policy.peak_threshold = 40e9;
 
@@ -3904,7 +3900,7 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
 
   // is_volatile for the gated factory (the amplitude leaves are volatile).
   auto is_vol = [](EvalNodeDryRun const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == "t";
   };
 
   using sequant::eval::dryrun::build_dryrun_cache;
@@ -3958,15 +3954,14 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
                                                // resident
   CHECK_FALSE(task_cache.alive(giant_node));
 
-  std::wcerr
-      << L"\n=== [dryrun][cache] footprint-gate verdict (C60 giant, index "
-      << giant_idx << L") ===\n  giant free-batchable node footprint = "
-      << (giant_bytes / 1e9) << L" GB\n  ref (no gate)  exists(giant) = "
-      << (ref_cache.exists(giant_node) ? L"YES" : L"no")
-      << L"\n  task config    exists(giant) = "
-      << (task_cache.exists(giant_node) ? L"YES" : L"no")
-      << L"\n  small intermediate exists (task) = "
-      << (task_cache.exists(small_node) ? L"YES" : L"no") << L"\n";
+  std::cerr << "\n=== [dryrun][cache] footprint-gate verdict (C60 giant, index "
+            << giant_idx << ") ===\n  giant free-batchable node footprint = "
+            << (giant_bytes / 1e9) << " GB\n  ref (no gate)  exists(giant) = "
+            << (ref_cache.exists(giant_node) ? "YES" : "no")
+            << "\n  task config    exists(giant) = "
+            << (task_cache.exists(giant_node) ? "YES" : "no")
+            << "\n  small intermediate exists (task) = "
+            << (task_cache.exists(small_node) ? "YES" : "no") << "\n";
 }
 
 // PNO-CCSD water-20 aux-batching FRAGMENTATION surrogate. Faithfully mirrors
@@ -4022,12 +4017,12 @@ TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
   // pao_target=0, occ_target=0): K is the ONLY batchable mode, contracted role.
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"Κ";
+    return ix.basis().base_key() == "Κ";
   };
   policy.is_batchable_external_index = [](Index const&) { return false; };
   policy.batch_spectator_indices = false;
   policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
-  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == "t"; };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
@@ -4065,18 +4060,17 @@ TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
     for (auto const& na : it->second)
       for (auto const& e : na.axes)
         if (e.second == sequant::BatchModeType::Contracted &&
-            e.first.basis().base_key() == L"Κ")
+            e.first.basis().base_key() == "Κ")
           ++n_kcon;
   }
-  std::wcerr
-      << L"\n=== [dryrun-water-frag] water-20 aux-only, " << n_terms_ok
-      << L" terms optimized ===\n  K-contracted batched-member "
-         L"annotations: "
-      << n_kcon
-      << L"\n  (SEQUANT_DP_RECOMPUTE_DEBUG=1 dumps per-node rf; CONFIRMED "
-         L"all 91 K-carrying gC composites -- largest 34 GB -- priced "
-         L"rf==1 while the 46 K-escaping nodes are charged rf==7: the DP "
-         L"prices slicing the gC giants as free, cost_model.hpp:1811)\n";
+  std::cerr << "\n=== [dryrun-water-frag] water-20 aux-only, " << n_terms_ok
+            << " terms optimized ===\n  K-contracted batched-member "
+               "annotations: "
+            << n_kcon
+            << "\n  (SEQUANT_DP_RECOMPUTE_DEBUG=1 dumps per-node rf; CONFIRMED "
+               "all 91 K-carrying gC composites -- largest 34 GB -- priced "
+               "rf==1 while the 46 K-escaping nodes are charged rf==7: the DP "
+               "prices slicing the gC giants as free, cost_model.hpp:1811)\n";
   CHECK(n_terms_ok > 0);
   // Reproduces the MPQC-log fragmentation (~35 distinct batched-member shapes):
   // aux batching promotes MANY nodes to K-batched members. The mechanism is the
@@ -4106,35 +4100,30 @@ TEST_CASE("canon_indices preserves distinct composite proto pairs",
   ctx.set(ibr);
   auto resetter = set_scoped_default_context(std::move(ctx));
 
-  Index const i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
-  auto const a_space = Index{L"a_1"}.space();
+  Index const i1{"i_1"}, i2{"i_2"}, i3{"i_3"};
+  auto const a_space = Index{"a_1"}.space();
   Index const a1{a_space, container::vector<Index>{i1, i2}};  // pair (i_1,i_2)
   Index const a2{a_space, container::vector<Index>{i2, i3}};  // pair (i_2,i_3)
-  Tensor const t(L"I", bra{a1}, ket{a2}, Symmetry::Nonsymm);
+  Tensor const t("I", bra{a1}, ket{a2}, Symmetry::Nonsymm);
   REQUIRE(a1.has_proto_indices());
   REQUIRE(a2.has_proto_indices());
 
   EvalExpr const ev{t};
   auto const& ci = ev.canon_indices();
 
-  auto nar = [](std::wstring_view w) {
-    std::string s;
-    for (wchar_t c : w) s += (c < 128 ? static_cast<char>(c) : '#');
-    return s;
-  };
-  std::set<std::wstring> distinct_protos;
-  std::vector<std::set<std::wstring>> pairs;
+  std::set<std::string> distinct_protos;
+  std::vector<std::set<std::string>> pairs;
   for (auto const& ix : ci)
     if (ix.has_proto_indices()) {
-      std::set<std::wstring> p;
+      std::set<std::string> p;
       for (auto const& px : ix.proto_indices()) {
-        p.insert(std::wstring(px.full_label()));
-        distinct_protos.insert(std::wstring(px.full_label()));
+        p.insert(std::string(px.full_label()));
+        distinct_protos.insert(std::string(px.full_label()));
       }
       pairs.push_back(p);
     }
   std::string dump;
-  for (auto const& ix : ci) dump += nar(ix.full_label()) + " ";
+  for (auto const& ix : ci) dump += std::string(ix.full_label()) + " ";
   INFO("canon_indices = [" << dump << "]");
   REQUIRE(pairs.size() == 2);
   // Physical form spans THREE distinct occ (i_1,i_2,i_3); a collapse => TWO.
@@ -4151,13 +4140,13 @@ TEST_CASE("canon_indices preserves distinct composite proto pairs",
       "i_4}");
   auto const node = binarize(expr);
   auto const& cci = node->canon_indices();
-  std::set<std::wstring> bprotos;
+  std::set<std::string> bprotos;
   std::string bdump;
   for (auto const& ix : cci) {
-    bdump += nar(ix.full_label()) + " ";
+    bdump += std::string(ix.full_label()) + " ";
     if (ix.has_proto_indices())
       for (auto const& px : ix.proto_indices())
-        bprotos.insert(std::wstring(px.full_label()));
+        bprotos.insert(std::string(px.full_label()));
   }
   INFO("binary node canon_indices = [" << bdump << "]");
   CHECK(bprotos.size() == 3);  // NOT 2 -- a collapse would merge the pairs
@@ -4199,8 +4188,8 @@ TEST_CASE(
   // indexed) legs involved, so no CSV/PNO moments are needed.
   SizeRegime regime;
   regime.space_extent = {
-      {L"i", 10},
-      {L"a", 20},
+      {"i", 10},
+      {"a", 20},
   };
   auto cm = std::make_shared<CostModel const>(regime);
 
@@ -4266,8 +4255,8 @@ TEST_CASE(
 
   SizeRegime regime;
   regime.space_extent = {
-      {L"i", 10},
-      {L"a", 20},
+      {"i", 10},
+      {"a", 20},
   };
   auto cm = std::make_shared<CostModel const>(regime);
 
@@ -4298,7 +4287,7 @@ TEST_CASE(
   REQUIRE_FALSE(node.left().leaf());  // X == g * h (persistent)
   REQUIRE(node.right().leaf());       // t (volatile)
 
-  sequant::Index const mode{L"i_1"};
+  sequant::Index const mode{"i_1"};
   REQUIRE(sequant::index_position(node, mode).has_value());
   REQUIRE(sequant::index_position(node.left(), mode).has_value());
   // Stamp the ROOT's own External loop over i_1. Plain (non-scope)
@@ -4321,7 +4310,7 @@ TEST_CASE(
   cache.set_peak_monitor(&mon);
 
   auto const is_volatile = [](EvalNodeDryRun const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == "t";
   };
 
   auto const block_of = [](sequant::Index const&) -> std::size_t {
@@ -4415,8 +4404,8 @@ TEST_CASE(
   // doubles as the batch-axis space here (target_size 5 => 4 blocks).
   SizeRegime regime;
   regime.space_extent = {
-      {L"i", 10},
-      {L"a", 20},
+      {"i", 10},
+      {"a", 20},
   };
 
   // A single-root, fully-contracted product -- a_3 is a genuine operand
@@ -4426,8 +4415,7 @@ TEST_CASE(
   // batch-annotation recipe): the driver entry rebuilds its schedule from the
   // forest's OWN stamps, not from BatchPolicy predicates, so these two stamps
   // are enough for it to realize a non-root-only loop nest.
-  auto expr =
-      sequant::deserialize<sequant::ExprPtr>(L"g{i_1;a_3} * h{a_3;i_1}");
+  auto expr = sequant::deserialize<sequant::ExprPtr>("g{i_1;a_3} * h{a_3;i_1}");
   REQUIRE(static_cast<bool>(expr));
 
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
@@ -4435,7 +4423,7 @@ TEST_CASE(
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   REQUIRE_FALSE(node.leaf());
 
-  Index const a3{L"a_3"};
+  Index const a3{"a_3"};
   node->set_node_slice_mask({{a3, BatchModeType::Contracted}});
   // The root reduces a_3 in batches, so it is also the node that opens that
   // loop; the DP records both (NodeBatchAnnotation::opened_here), and the
@@ -4448,7 +4436,7 @@ TEST_CASE(
 
   BatchPolicy policy;
   policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"a" ? std::size_t{5} : std::size_t{1};
+    return ix.basis().base_key() == "a" ? std::size_t{5} : std::size_t{1};
   };
 
   // ---- ordered: exercises the nested batch-scratch walk. ----

@@ -19,9 +19,6 @@ void set_locale() {
   std::cout.imbue(target_locale);
   std::cerr.imbue(target_locale);
   std::clog.imbue(target_locale);
-  std::wcout.imbue(target_locale);
-  std::wcerr.imbue(target_locale);
-  std::wclog.imbue(target_locale);
   std::ios_base::sync_with_stdio(true);
 }
 

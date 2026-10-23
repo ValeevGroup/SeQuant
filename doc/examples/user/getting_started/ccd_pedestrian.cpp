@@ -14,18 +14,18 @@ int main() {
 
   // start-snippet-1
   auto t2 = ex<Constant>(rational(1, 4)) *
-            ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+            ex<Tensor>("t", bra{"a_1", "a_2"}, ket{"i_1", "i_2"},
                        Symmetry::Antisymm) *
-            ex<FNOperator>(cre{L"a_1", L"a_2"}, ann{L"i_1", L"i_2"});
+            ex<FNOperator>(cre{"a_1", "a_2"}, ann{"i_1", "i_2"});
   // end-snippet-1
 
   // start-snippet-2
-  auto H = ex<Tensor>(L"f", bra{L"p_1"}, ket{L"p_2"}, Symmetry::Nonsymm) *
-               ex<FNOperator>(cre{L"p_1"}, ann{L"p_2"}) +
+  auto H = ex<Tensor>("f", bra{"p_1"}, ket{"p_2"}, Symmetry::Nonsymm) *
+               ex<FNOperator>(cre{"p_1"}, ann{"p_2"}) +
            ex<Constant>(rational(1, 4)) *
-               ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
+               ex<Tensor>("g", bra{"p_1", "p_2"}, ket{"p_3", "p_4"},
                           Symmetry::Antisymm) *
-               ex<FNOperator>(cre{L"p_1", L"p_2"}, ann{L"p_3", L"p_4"});
+               ex<FNOperator>(cre{"p_1", "p_2"}, ann{"p_3", "p_4"});
   // end-snippet-2
 
   // start-snippet-3
@@ -43,14 +43,14 @@ int main() {
 
   // start-snippet-5
   auto t2_0 = ex<Constant>(rational(1, 4)) *
-              ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+              ex<Tensor>("t", bra{"a_1", "a_2"}, ket{"i_1", "i_2"},
                          Symmetry::Antisymm) *
-              ex<FNOperator>(cre{L"a_1", L"a_2"}, ann{L"i_1", L"i_2"});
+              ex<FNOperator>(cre{"a_1", "a_2"}, ann{"i_1", "i_2"});
 
   auto t2_1 = ex<Constant>(rational(1, 4)) *
-              ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_3", L"i_4"},
+              ex<Tensor>("t", bra{"a_3", "a_4"}, ket{"i_3", "i_4"},
                          Symmetry::Antisymm) *
-              ex<FNOperator>(cre{L"a_3", L"a_4"}, ann{L"i_3", L"i_4"});
+              ex<FNOperator>(cre{"a_3", "a_4"}, ann{"i_3", "i_4"});
 
   auto c_htt =
       ex<Constant>(rational(1, 4)) * commutator(commutator(H, t2_0), t2_1);

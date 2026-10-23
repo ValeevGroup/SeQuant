@@ -94,9 +94,9 @@ concept IrrepPropagationContext =
 /// Tensors whose label is not in the map are taken to span any IRREP.
 template <typename Irrep>
 std::function<IrrepSet<Irrep>(const Tensor &)> resolve_by_label(
-    container::map<std::wstring, IrrepSet<Irrep>> map) {
+    container::map<std::string, IrrepSet<Irrep>> map) {
   return [map = std::move(map)](const Tensor &tensor) {
-    auto it = map.find(std::wstring(tensor.label()));
+    auto it = map.find(std::string(tensor.label()));
     return it == map.end() ? IrrepSet<Irrep>::any() : it->second;
   };
 }

@@ -220,7 +220,6 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
         6, FullBinaryNode<int>{1}, FullBinaryNode<int>{take_nums(2, 2), ms}};
 
     auto label_gen_str = [](auto const& n) { return std::to_string(*n); };
-    auto label_gen_wstr = [](auto const& n) { return std::to_wstring(*n); };
 
     REQUIRE(node1.digraph(label_gen_str, "node1") ==
             std::string{"digraph node1{\n"
@@ -235,31 +234,31 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
                                                         "node0 -> node2;\n"
                                                         "}"});
 
-    REQUIRE(node3.digraph(label_gen_wstr, L"node3") ==
-            std::wstring{L"digraph node3{\n"
-                         "node0[label=6];\n"
-                         "node1[label=3];\n"
-                         "node2[label=1];\n"
-                         "node3[label=2];\n"
-                         "node1 -> node2;\n"
-                         "node1 -> node3;\n"
-                         "node4[label=3];\n"
-                         "node0 -> node1;\n"
-                         "node0 -> node4;\n"
-                         "}"});
+    REQUIRE(node3.digraph(label_gen_str, "node3") ==
+            std::string{"digraph node3{\n"
+                        "node0[label=6];\n"
+                        "node1[label=3];\n"
+                        "node2[label=1];\n"
+                        "node3[label=2];\n"
+                        "node1 -> node2;\n"
+                        "node1 -> node3;\n"
+                        "node4[label=3];\n"
+                        "node0 -> node1;\n"
+                        "node0 -> node4;\n"
+                        "}"});
 
-    REQUIRE(node4.digraph(label_gen_wstr, L"node4") ==
-            std::wstring{L"digraph node4{\n"
-                         "node0[label=6];\n"
-                         "node1[label=1];\n"
-                         "node2[label=5];\n"
-                         "node3[label=2];\n"
-                         "node4[label=3];\n"
-                         "node2 -> node3;\n"
-                         "node2 -> node4;\n"
-                         "node0 -> node1;\n"
-                         "node0 -> node2;\n"
-                         "}"});
+    REQUIRE(node4.digraph(label_gen_str, "node4") ==
+            std::string{"digraph node4{\n"
+                        "node0[label=6];\n"
+                        "node1[label=1];\n"
+                        "node2[label=5];\n"
+                        "node3[label=2];\n"
+                        "node4[label=3];\n"
+                        "node2 -> node3;\n"
+                        "node2 -> node4;\n"
+                        "node0 -> node1;\n"
+                        "node0 -> node2;\n"
+                        "}"});
 
     /*
        tree from node1:
