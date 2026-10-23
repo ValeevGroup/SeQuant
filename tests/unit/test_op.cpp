@@ -12,6 +12,8 @@
 #include <type_traits>
 #include <utility>
 
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
 
 TEST_CASE("op", "[elements]") {
@@ -693,5 +695,31 @@ TEST_CASE("op", "[elements]") {
     REQUIRE(!ip.commutes_with(ip));
     REQUIRE(adjoint(FNOperator(nop1)).commutes_with(ip));
     REQUIRE(ip.commutes_with(adjoint(FNOperator(nop1))));
+  }
+
+  SECTION("canonicalization") {
+    // a bare normal operator canonicalizes to the same form as it does as
+    // the only factor of a product, so that all spellings of an operator
+    // combine
+    using namespace std::string_literals;
+    for (const auto &spelling :
+         {"ã{i_1,a_2;a_1,i_2}"s, "ã{a_2,i_1;i_2,a_1}"s,
+          "ã{i_1,a_2,i_3;a_1,i_2}"s, "ã{i_3,a_2,i_1;i_2,a_1}"s}) {
+      CAPTURE(spelling);
+      const auto x = deserialize(spelling);
+      REQUIRE(simplify(x->clone() - x->clone()) == ex<Constant>(0));
+
+      auto atom = x->clone();
+      auto product = ex<Constant>(1) * x->clone();
+      const auto atom_phase = atom->canonicalize();
+      product->canonicalize();
+      REQUIRE(product.as<Product>().factors().size() == 1);
+      REQUIRE(*atom == *product.as<Product>().factors().front());
+      REQUIRE(product.as<Product>().scalar() ==
+              (atom_phase ? atom_phase.as<Constant>().value() : 1));
+    }
+    // spellings that differ by an odd permutation of the creators cancel
+    REQUIRE(simplify(deserialize("ã{i_1,a_2;a_1,i_2}") +
+                     deserialize("ã{a_2,i_1;a_1,i_2}")) == ex<Constant>(0));
   }
 }

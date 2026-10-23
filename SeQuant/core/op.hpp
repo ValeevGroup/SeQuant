@@ -475,6 +475,13 @@ class VectorExprAccess {
   }
 };
 
+/// canonicalizes @p expr, which is a single tensor (e.g. a NormalOperator), as
+/// a tensor network that consists of this tensor only, i.e. exactly as it is
+/// canonicalized as the only factor of a Product
+/// @return the canonical tensor and the byproduct of canonicalization
+std::pair<AbstractTensorPtr, ExprPtr> canonicalize_as_tensor_network(
+    const Expr &expr, const CanonicalizeOptions &opts);
+
 }  // namespace detail
 
 /// @brief Operator is a sequence of Op objects
@@ -890,6 +897,23 @@ class NormalOperator : public Operator<S>,
 
   ExprPtr clone() const override {
     return std::make_shared<NormalOperator>(*this);
+  }
+
+  /// canonicalizes this exactly as it is canonicalized as the only factor of
+  /// a Product, so that both spellings of an operator have the same canonical
+  /// form
+  ExprPtr canonicalize(CanonicalizeOptions opts =
+                           CanonicalizeOptions::default_options()) override {
+    if (this->is_canonical(opts)) return {};
+    const auto contexts_version = current_contexts_version();
+    auto [canonical, byproduct] =
+        detail::canonicalize_as_tensor_network(*this, opts);
+    const auto canonical_nop =
+        std::dynamic_pointer_cast<NormalOperator>(canonical);
+    SEQUANT_ASSERT(canonical_nop);
+    *this = *canonical_nop;
+    this->mark_canonical(opts, contexts_version);
+    return byproduct;
   }
 
   virtual void adjoint() override {
