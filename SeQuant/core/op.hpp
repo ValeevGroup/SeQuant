@@ -31,6 +31,7 @@
 #include <utility>
 
 #include <range/v3/algorithm/adjacent_find.hpp>
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/sort.hpp>
@@ -1067,12 +1068,15 @@ class NormalOperator : public Operator<S>,
     if (this->_bra_rank() != this->_ket_rank())
       return Hermiticity::NonHermitian;
     auto sorted_indices = [](auto &&idx_view) {
-      container::svector<Index> indices;
-      for (const Index &idx : idx_view) indices.push_back(idx);
-      ranges::sort(indices);
+      container::svector<const Index *> indices;
+      for (const Index &idx : idx_view) indices.push_back(&idx);
+      ranges::sort(indices,
+                   [](const Index *a, const Index *b) { return *a < *b; });
       return indices;
     };
-    return sorted_indices(this->_bra()) == sorted_indices(this->_ket())
+    return ranges::equal(
+               sorted_indices(this->_bra()), sorted_indices(this->_ket()),
+               [](const Index *a, const Index *b) { return *a == *b; })
                ? Hermiticity::Hermitian
                : Hermiticity::NonHermitian;
   }
