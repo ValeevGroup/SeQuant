@@ -518,7 +518,7 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   }
 
   for (std::size_t i = 0; i < result_exprs.size(); ++i) {
-    result_exprs.at(i).expression() = ex<Constant>(0);
+    HashingAccumulator result_acc;
     perm::Permutation reference = perm::unrank(ranks.at(i), n_particles);
     reference->invert();
 
@@ -532,11 +532,15 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
               : to_rational((*computed_coefficients)(ranks.at(i), rank),
                             threshold);
 
-      result_exprs.at(i).expression() +=
+      auto contribution =
           ex<Constant>(coeff) *
           create_expr_for(externals.at(i), perm, externals, original_exprs);
+      // Merge canonical terms before retaining the next permuted expression.
+      simplify(contribution);
+      result_acc.append(std::move(contribution));
     }
 
+    result_exprs.at(i).expression() = result_acc.make_expr();
     simplify(result_exprs.at(i).expression());
   }
 }
