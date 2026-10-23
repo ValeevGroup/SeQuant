@@ -4298,6 +4298,10 @@ bool Graph::is_automorphism(const std::vector<unsigned int>& perm) const {
   std::vector<unsigned int> edges2;
 
   for (unsigned int i = 0; i < get_nof_vertices(); i++) {
+    // Fixed-fixed edges are unchanged; every other undirected edge is
+    // checked from a moved endpoint.
+    if (perm[i] == i) continue;
+
     const Vertex& v1 = vertices[i];
     edges1.clear();
     for (auto ei = v1.edges.begin(); ei != v1.edges.end(); ei++)
