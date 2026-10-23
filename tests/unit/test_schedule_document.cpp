@@ -1323,9 +1323,12 @@ TEST_CASE(
   REQUIRE(xs[0].home_block != xs[1].home_block);
   for (auto const& v : xs) REQUIRE(v.home_modes.size() == 1);  // neither whole
   REQUIRE(dag.blocks[0].kind == "root");
+  // each root loops over at least one external mode (which and how many of
+  // its external modes a root batches is a tie-break among equal-cost choices
+  // of the optimizer)
   REQUIRE(std::ranges::count_if(dag.blocks, [](auto const& b) {
             return b.kind == "external";
-          }) == 2);
+          }) >= 2);
   // both roots are two-summand Sums: one partial sum each, the root itself
   std::set<std::string> ids;
   for (auto const& v : dag.values) ids.insert(v.id);
@@ -1606,7 +1609,11 @@ TEST_CASE("ordered dry run fills the run record", "[schedule-document]") {
       external_occ_policy().batch_target_size(occ_index());
   REQUIRE(occ_target < occ_extent);  // a genuine batching
 
-  REQUIRE(run.n_batches.size() == 2);  // two external blocks
+  // every external block (at least one per root) is batched
+  auto const n_external = std::ranges::count_if(
+      dag.blocks, [](auto const& b) { return b.kind == "external"; });
+  REQUIRE(n_external >= 2);
+  REQUIRE(run.n_batches.size() == static_cast<std::size_t>(n_external));
   // each external block loops over occ: ceil(extent(occ) / target(occ))
   for (auto const& [blk, n] : run.n_batches) {
     REQUIRE(blk < dag.blocks.size());
@@ -1632,7 +1639,7 @@ TEST_CASE("ordered dry run fills the run record", "[schedule-document]") {
         ++scattered;
         REQUIRE(run.size.at(id) > run.footprint.at(id));
       }
-  REQUIRE(scattered == 2);
+  REQUIRE(scattered == static_cast<std::size_t>(n_external));
   // the caller's sections are left alone
   REQUIRE(run.extents.empty());
   REQUIRE(run.batch_targets.empty());
