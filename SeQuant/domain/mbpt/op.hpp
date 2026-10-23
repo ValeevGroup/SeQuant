@@ -310,7 +310,8 @@ class QuantumNumberChange
           "QuantumNumberChange<N>(initializer_list<initializer_list> i): each "
           "element of i must contain 2 elements");
     }
-    for (std::size_t c = 0; c != size(); ++c) {
+    const auto n = size();
+    for (std::size_t c = 0; c != n; ++c) {
       this->operator[](c) = interval_t{*((i.begin() + c)->begin()),
                                        *((i.begin() + c)->begin() + 1)};
     }
@@ -381,7 +382,8 @@ class QuantumNumberChange
   /// @param i an array of N intervals
   /// @return true if `i[k]` overlaps with `*this[k]` for all `k`
   bool overlaps_with(base_type i) {
-    for (std::size_t c = 0; c != this->size(); ++c) {
+    const auto n = this->size();
+    for (std::size_t c = 0; c != n; ++c) {
       if (!boost::numeric::overlap(i[c], this->operator[](c))) {
         return false;
       }
@@ -392,7 +394,8 @@ class QuantumNumberChange
   auto hash_value() const {
     SEQUANT_ASSERT(size() > 0);
     auto val = sequant::hash::value(this->operator[](0));
-    for (std::size_t c = 1; c != size(); ++c) {
+    const auto n = size();
+    for (std::size_t c = 1; c != n; ++c) {
       sequant::hash::combine(val, sequant::hash::value(this->operator[](c)));
     }
     return val;
