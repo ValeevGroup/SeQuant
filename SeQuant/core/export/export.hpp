@@ -14,6 +14,7 @@
 #include <SeQuant/core/irreps/any.hpp>
 #include <SeQuant/core/irreps/eval_tree.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/optimize/name_recycling.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
@@ -42,6 +43,15 @@ struct PreprocessResult {
 
   std::map<Tensor, std::size_t, TensorBlockLessThanComparator> tensorReferences;
   std::map<Variable, std::size_t> variableReferences;
+
+  /// Names of all tensors and variables encountered so far, where everything
+  /// that is currently referenced is considered to be in use. Labels are
+  /// generated as basename, basename2, basename3, ...
+  opt::IntermediateNamePool names{
+      [](std::wstring_view basename, std::size_t counter) {
+        return counter == 1 ? std::wstring(basename)
+                            : std::wstring(basename) + std::to_wstring(counter);
+      }};
 
   /// The IRREPs of the result of every node (only if an IRREP context is set)
   std::unordered_map<std::size_t, AnyIrrepSet> nodeIrreps;
@@ -604,11 +614,13 @@ void track_usage(const EvalNode<T> &node, PreprocessResult &result) {
     result.indices.insert(indices.begin(), indices.end());
 
     result.tensorReferences[tensor]++;
+    result.names.occupy(tensor);
   };
   auto handle_variable = [&](const Variable &variable) {
     result.variables[variable] |= usage;
 
     result.variableReferences[variable]++;
+    result.names.occupy(variable);
   };
 
   if (expr.is<Tensor>()) {
@@ -853,12 +865,18 @@ class PreprocessVisitor {
 
   void release_used_terms(ExportNode<T> &node) {
     auto handle_tensor = [&](const Tensor &tensor) {
-      SEQUANT_ASSERT(m_result.tensorReferences[tensor] > 0);
-      m_result.tensorReferences[tensor]--;
+      std::size_t &references = m_result.tensorReferences[tensor];
+      SEQUANT_ASSERT(references > 0);
+      if (--references == 0) {
+        m_result.names.release(tensor);
+      }
     };
     auto handle_variable = [&](const Variable &variable) {
-      SEQUANT_ASSERT(m_result.variableReferences[variable] > 0);
-      m_result.variableReferences[variable]--;
+      std::size_t &references = m_result.variableReferences[variable];
+      SEQUANT_ASSERT(references > 0);
+      if (--references == 0) {
+        m_result.names.release(variable);
+      }
     };
 
     // Mark tensors/variables as no longer in use

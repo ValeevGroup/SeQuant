@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -695,24 +696,31 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res,
 }
 
 ///
-/// Converts an `EvalExpr` to `ExprPtr`.
+/// Converts an `EvalExpr` to `ExprPtr`, passing the expression of every
+/// terminal through @p leaf_map.
 ///
-ExprPtr to_expr(meta::eval_node auto const& node) {
+/// @param leaf_map Callable mapping the (shared) expression of a terminal to
+/// the expression that shall represent it in the result. It must not mutate its
+/// argument as that is shared with @p node.
+///
+template <typename LeafMap>
+  requires std::is_invocable_r_v<ExprPtr, LeafMap&, ExprPtr const&>
+ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
   auto const op = node->op_type();
   auto const& evxpr = *node;
 
-  if (node.leaf()) return evxpr.expr();
+  if (node.leaf()) return leaf_map(evxpr.expr());
 
   // Adjoint is unary and stores the marker-bearing tensor directly in its
   // own ExprPtr; the bare-leaf left child and Constant(1) right child are
   // structural plumbing for the IR, not part of the symbolic form.
-  if (op == EvalOp::Adjoint) return evxpr.expr();
+  if (op == EvalOp::Adjoint) return leaf_map(evxpr.expr());
 
   if (op == EvalOp::Product) {
     auto prod = Product{};
 
-    ExprPtr lexpr = to_expr(node.left());
-    ExprPtr rexpr = to_expr(node.right());
+    ExprPtr lexpr = to_expr(node.left(), leaf_map);
+    ExprPtr rexpr = to_expr(node.right(), leaf_map);
 
     prod.append(1, lexpr, Product::Flatten::No);
     prod.append(1, rexpr, Product::Flatten::No);
@@ -728,8 +736,16 @@ ExprPtr to_expr(meta::eval_node auto const& node) {
 
   } else {
     SEQUANT_ASSERT(op == EvalOp::Sum && "unsupported operation type");
-    return ex<Sum>(Sum{to_expr(node.left()), to_expr(node.right())});
+    return ex<Sum>(
+        Sum{to_expr(node.left(), leaf_map), to_expr(node.right(), leaf_map)});
   }
+}
+
+///
+/// Converts an `EvalExpr` to `ExprPtr`.
+///
+ExprPtr to_expr(meta::eval_node auto const& node) {
+  return to_expr(node, std::identity{});
 }
 
 /// \brief The indices contracted at a binary evaluation node.

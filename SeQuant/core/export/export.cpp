@@ -3,70 +3,30 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <cwctype>
 #include <string>
 
 namespace sequant::detail {
-
-auto get_with_default(const auto &map, const auto &key, auto def_value) {
-  auto it = map.find(key);
-
-  return it == map.end() ? def_value : it->second;
-}
 
 bool rename(Tensor &tensor, PreprocessResult &result,
             const std::function<bool(const Tensor &)> &acceptable) {
   SEQUANT_ASSERT(acceptable || result.tensorReferences.at(tensor) > 0);
 
-  std::wstring basename = [&tensor]() {
-    std::size_t size = tensor.label().size();
+  auto allocation = result.names.allocate_lowest(
+      opt::detail::label_basename(tensor.label()), tensor, acceptable);
+  tensor.set_label(std::move(allocation.label));
 
-    while (size > 0 && std::iswdigit(tensor.label().at(size - 1))) {
-      size--;
-    }
-    SEQUANT_ASSERT(size > 0);
-
-    return std::wstring(tensor.label().substr(0, size));
-  }();
-
-  tensor.set_label(basename);
-
-  std::size_t counter = 2;
-  while (get_with_default(result.tensorReferences, tensor, 0) > 0 ||
-         (acceptable && !acceptable(tensor))) {
-    tensor.set_label(basename + std::to_wstring(counter));
-    counter++;
-  }
-
-  return result.tensorReferences.find(tensor) != result.tensorReferences.end();
+  return allocation.recycled;
 }
 
 bool rename(Variable &variable, PreprocessResult &result,
             const std::function<bool(const Variable &)> &acceptable) {
   SEQUANT_ASSERT(acceptable || result.variableReferences.at(variable) > 0);
 
-  std::wstring basename = [&variable]() {
-    std::size_t size = variable.label().size();
+  auto allocation = result.names.allocate_lowest(
+      opt::detail::label_basename(variable.label()), variable, acceptable);
+  variable.set_label(std::move(allocation.label));
 
-    while (size > 0 && std::iswdigit(variable.label().at(size - 1))) {
-      size--;
-    }
-    SEQUANT_ASSERT(size > 0);
-
-    return std::wstring(variable.label().substr(0, size));
-  }();
-
-  variable.set_label(basename);
-
-  std::size_t counter = 2;
-  while (get_with_default(result.variableReferences, variable, 0) > 0 ||
-         (acceptable && !acceptable(variable))) {
-    variable.set_label(basename + std::to_wstring(counter));
-    counter++;
-  }
-
-  return result.variableReferences.find(variable) !=
-         result.variableReferences.end();
+  return allocation.recycled;
 }
 
 RegisteredIrrepContext::RegisteredIrrepContext(const ExportContext &ctx)

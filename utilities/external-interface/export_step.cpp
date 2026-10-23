@@ -11,6 +11,7 @@
 #include <SeQuant/core/export/generation_optimizer.hpp>
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/export/itf.hpp>
+#include <SeQuant/core/export/name_recycling.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/irreps/any.hpp>
@@ -481,6 +482,8 @@ void ExportStep::set_options(const nlohmann::json &options) {
                         {.tensor_cmp = TensorComparison::Block}),
             name.get<std::string>());
       }
+    } else if (key == "recycle_intermediates") {
+      recycle_intermediates_ = parse_recycling(value);
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
     }
@@ -594,6 +597,37 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
     std::vector<ExpressionGroup<>> groups =
         prepare_expressions(exctx, inputs, genctx, always_create_ids);
 
+    if (recycle_intermediates_.has_value()) {
+      // Entries flagged to overwrite their previous result (CSE
+      // intermediates) are the ones whose names may be recycled
+      auto overwrites = [&always_create_ids](const ExportNode<> &tree) {
+        return always_create_ids.contains(tree->id());
+      };
+
+      for (ExpressionGroup<> &group : groups) {
+        recycle_intermediate_names(group, genctx, overwrites,
+                                   recycle_intermediates_.value());
+
+        // Renamed results need the same zero strategy as the one set for
+        // their original names in prepare_expressions
+        for (const ExportNode<> &tree : group) {
+          if (!overwrites(tree)) {
+            continue;
+          }
+
+          if (tree->is_tensor()) {
+            Tensor result = tree->as_tensor();
+            genctx.rewrite(result);
+            genctx.setZeroStrategy(result, ZeroStrategy::ZeroOnCreate);
+          } else {
+            Variable result = tree->as_variable();
+            genctx.rewrite(result);
+            genctx.setZeroStrategy(result, ZeroStrategy::ZeroOnCreate);
+          }
+        }
+      }
+    }
+
     for (const ExpressionGroup<> &current_group : groups) {
       std::set<Tensor> created_tensors;
       std::set<Variable> created_variables;
@@ -685,6 +719,45 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
   stream << generated;
 
   return 0;
+}
+
+std::optional<opt::ShapeCompatibility> ExportStep::parse_recycling(
+    const nlohmann::json &value) {
+  if (value.is_boolean()) {
+    if (!value.get<bool>()) {
+      return std::nullopt;
+    }
+    return opt::ShapeCompatibility::IndexMultiset;
+  }
+
+  if (!value.is_object()) {
+    throw Exception(
+        "Value for export option 'recycle_intermediates' must be a boolean or "
+        "an object");
+  }
+
+  opt::ShapeCompatibility compatibility =
+      opt::ShapeCompatibility::IndexMultiset;
+  for (const auto &[key, entry] : value.items()) {
+    if (key != "shape") {
+      throw Exception(
+          "Unknown key in export option 'recycle_intermediates': '" + key +
+          "'");
+    }
+
+    const std::string shape = entry.is_string() ? entry.get<std::string>() : "";
+    if (shape == "multiset") {
+      compatibility = opt::ShapeCompatibility::IndexMultiset;
+    } else if (shape == "block") {
+      compatibility = opt::ShapeCompatibility::ExactBlock;
+    } else {
+      throw Exception(
+          "Value for 'recycle_intermediates.shape' must be either 'multiset' "
+          "or 'block'");
+    }
+  }
+
+  return compatibility;
 }
 
 ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
