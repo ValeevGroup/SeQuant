@@ -151,6 +151,83 @@ TEST_CASE("template expansion namespaces internal step IDs", "[extint]") {
   }
 }
 
+TEST_CASE("template expansion projects keys and values of an object",
+          "[extint]") {
+  const json templates = {
+      {"t",
+       {{"parameters", {{"map", {{"default", nullptr}}}}},
+        {"steps", json::array({{{"id", "s"},
+                                {"kind", "export"},
+                                {"inputs", "in"},
+                                {"options",
+                                 {{"names", "${keys(map)}"},
+                                  {"vals", "${values(map)}"}}}}})}}},
+      {"keys_named",
+       {{"parameters", {{"keys", {{"required", true}}}}},
+        {"steps", json::array({{{"id", "s"},
+                                {"kind", "export"},
+                                {"inputs", "in"},
+                                {"options", {{"v", "${keys}"}}}}})}}},
+      {"bad",
+       {{"parameters", {{"p", {{"default", nullptr}}}}},
+        {"steps", json::array({{{"id", "s"},
+                                {"kind", "export"},
+                                {"inputs", "in"},
+                                {"options", {{"v", "${keys(p)}"}}}}})}}},
+      {"embedded",
+       {{"parameters", {{"p", {{"required", true}}}}},
+        {"steps", json::array({{{"id", "s"},
+                                {"kind", "export"},
+                                {"inputs", "in"},
+                                {"options", {{"v", "x_${keys(p)}"}}}}})}}}};
+
+  auto use = [&](const char *tmpl, const json &parameters) {
+    return expand(
+        templates,
+        json::array(
+            {{{"template", tmpl}, {"id", "x"}, {"parameters", parameters}}}));
+  };
+
+  SECTION("keys and values correspond and keep their JSON types") {
+    const json map = {{"a", 1}, {"b", "str"}, {"c", json::array({true})}};
+    const json opts = use("t", {{"map", map}}).at(0).at("options");
+
+    const json &names = opts.at("names");
+    const json &vals = opts.at("vals");
+    REQUIRE(names.is_array());
+    REQUIRE(vals.is_array());
+    REQUIRE(names.size() == map.size());
+    REQUIRE(vals.size() == map.size());
+    for (std::size_t i = 0; i < names.size(); ++i) {
+      REQUIRE(vals.at(i) == map.at(names.at(i).get<std::string>()));
+    }
+  }
+
+  SECTION("an empty object gives empty arrays") {
+    const json opts = use("t", {{"map", json::object()}}).at(0).at("options");
+    REQUIRE(opts.at("names") == json::array());
+    REQUIRE(opts.at("vals") == json::array());
+  }
+
+  SECTION("a null parameter omits the option") {
+    REQUIRE_FALSE(use("t", json::object()).at(0).contains("options"));
+  }
+
+  SECTION("a parameter may itself be named keys") {
+    const json opts =
+        use("keys_named", {{"keys", json::array({1})}}).at(0).at("options");
+    REQUIRE(opts.at("v") == json::array({1}));
+  }
+
+  SECTION("a non-object parameter is rejected") {
+    REQUIRE_THROWS_AS(use("bad", {{"p", json::array({1})}}), Exception);
+  }
+
+  SECTION("an array cannot be interpolated into a string") {
+    REQUIRE_THROWS_AS(use("embedded", {{"p", {{"a", 1}}}}), Exception);
+  }
+}
+
 TEST_CASE("template expansion rejects malformed uses", "[extint]") {
   const json templates = {
       {"t",

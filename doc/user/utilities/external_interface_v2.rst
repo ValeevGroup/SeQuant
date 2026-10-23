@@ -105,6 +105,9 @@ There are two forms:
   boolean, a number stays a number, and an array or object is spliced in as-is.
 * A placeholder embedded in a longer string (e.g. :code:`"file_${name}.itfaa"`) is substituted textually; the parameter must be a scalar (a boolean
   renders as :code:`true`/:code:`false`).
+* A whole-value :code:`"${keys(name)}"` or :code:`"${values(name)}"` is replaced by an array holding the keys or the values, respectively, of the
+  object parameter :code:`name`. The :code:`i`-th key and the :code:`i`-th value belong together; otherwise their order is unspecified.
+  These forms cannot be embedded in a longer string.
 
 If a whole-value placeholder resolves to :code:`null`, its enclosing object member is dropped (and an :code:`options` object left empty this way is
 removed entirely). This lets a single template serve both the "option present" and "option absent" cases: give the parameter a :code:`default` of
@@ -269,6 +272,10 @@ step rather than after it (see the note under :code:`dependencies`).
      - No
    * - :code:`merge_inputs`
      - Whether multiple inputs shall be merged together in order to undergo combined rather than individual CSE.
+       Instead of a boolean, an array of input IDs/aliases can be given, in which case merging happens only within the
+       inputs matching each listed ID (matched like the groups of the :code:`grouping` option of the export step). Each
+       listed ID yields one output, aliased to :code:`<step>.<ID>`. Inputs matching none of the IDs undergo individual
+       CSE; inputs matching more than one ID are an error.
      - false
      - No
 

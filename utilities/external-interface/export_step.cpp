@@ -878,14 +878,7 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
       for (std::string_view current :
            ranges::views::concat(data.at(idx).associated_ids,
                                  data.at(idx).associated_group_ids)) {
-        auto pos = current.find('.');
-        if (pos != std::string_view::npos) {
-          // Strip step name from ID to allow referencing e.g. 'res' instead of
-          // 'step5.res'
-          current = current.substr(pos + 1);
-        }
-
-        auto it = group_assoc_.find(current);
+        auto it = group_assoc_.find(detail::strip_step_prefix(current));
         if (it != group_assoc_.end()) {
           return it->second;
         }
@@ -913,10 +906,10 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
       group.add(current.tree);
 
       if (current.overwrite_previous.has_value()) {
-        ZeroStrategy strategy =
-            current.overwrite_previous.value()
-                ? ZeroStrategy::ZeroOnReuse | ZeroStrategy::ZeroOnCreate
-                : ZeroStrategy::ZeroOnCreate;
+        // Never ZeroOnReuse: the summands of a sum all accumulate into the same
+        // result, so zeroing on every reappearance would discard what the
+        // earlier summands have already added.
+        constexpr ZeroStrategy strategy = ZeroStrategy::ZeroOnCreate;
         // Key the strategy by the rewritten result, as every other strategy
         // set-site does (and as the code generator's lookup expects):
         // genctx.rewrite() may reorder a tensor's slots, so setting it on the

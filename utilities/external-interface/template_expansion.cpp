@@ -44,20 +44,47 @@ bool is_valid_parameter_name(std::string_view name) {
       name, [](unsigned char c) { return std::isalnum(c) || c == '_'; });
 }
 
-/// @returns The parameter name iff @p str consists of exactly a single
-/// (unescaped) `${name}` placeholder and nothing else.
-std::optional<std::string> as_whole_placeholder(const std::string &str) {
+/// How a placeholder projects the referenced parameter: `${name}` yields the
+/// value itself, `${keys(name)}` / `${values(name)}` the keys / values of an
+/// object parameter as an array.
+enum class Accessor { Value, Keys, Values };
+
+struct Reference {
+  Accessor accessor;
+  std::string name;
+};
+
+/// @returns The reference denoted by the inside of a placeholder (the text
+/// between `${` and `}`), or nullopt if it is not well-formed.
+std::optional<Reference> parse_reference(std::string_view inner) {
+  constexpr std::pair<std::string_view, Accessor> accessors[] = {
+      {"keys(", Accessor::Keys}, {"values(", Accessor::Values}};
+  for (const auto &[prefix, accessor] : accessors) {
+    if (inner.starts_with(prefix) && inner.ends_with(')')) {
+      std::string name(
+          inner.substr(prefix.size(), inner.size() - prefix.size() - 1));
+      if (!is_valid_parameter_name(name)) {
+        return std::nullopt;
+      }
+      return Reference{accessor, std::move(name)};
+    }
+  }
+
+  if (!is_valid_parameter_name(inner)) {
+    return std::nullopt;
+  }
+  return Reference{Accessor::Value, std::string(inner)};
+}
+
+/// @returns The reference iff @p str consists of exactly a single (unescaped)
+/// placeholder and nothing else.
+std::optional<Reference> as_whole_placeholder(const std::string &str) {
   if (str.size() < 4 || str.front() != '$' || str[1] != '{' ||
       str.back() != '}') {
     return std::nullopt;
   }
 
-  std::string name = str.substr(2, str.size() - 3);
-  if (!is_valid_parameter_name(name)) {
-    return std::nullopt;
-  }
-
-  return name;
+  return parse_reference(std::string_view(str).substr(2, str.size() - 3));
 }
 
 std::string scalar_to_string(const json &value, std::string_view name) {
@@ -105,6 +132,12 @@ std::string interpolate(const std::string &str, const ParameterMap &params) {
       }
 
       std::string name = str.substr(i + 2, close - (i + 2));
+      if (std::optional<Reference> ref = parse_reference(name);
+          ref && ref->accessor != Accessor::Value) {
+        throw Exception("Template placeholder '${" + name +
+                        "}' yields an array and cannot be interpolated into '" +
+                        str + "'");
+      }
       if (!is_valid_parameter_name(name)) {
         throw Exception("Invalid template parameter name '" + name + "' in '" +
                         str + "'");
@@ -122,6 +155,27 @@ std::string interpolate(const std::string &str, const ParameterMap &params) {
   return result;
 }
 
+/// @returns The value @p ref denotes, or nullopt if the parameter is @c null.
+std::optional<json> resolve(const Reference &ref, const ParameterMap &params) {
+  const json &value = lookup(params, ref.name);
+  if (value.is_null()) {
+    return std::nullopt;
+  }
+  if (ref.accessor == Accessor::Value) {
+    return value;
+  }
+
+  if (!value.is_object()) {
+    throw Exception("Template parameter '" + ref.name +
+                    "' is not an object, so its keys/values cannot be taken");
+  }
+  json result = json::array();
+  for (const auto &[key, member] : value.items()) {
+    result.push_back(ref.accessor == Accessor::Keys ? json(key) : member);
+  }
+  return result;
+}
+
 /// Recursively substitutes template placeholders in @p node. An unset optional
 /// signals that the node is to be omitted entirely: this happens when a whole
 /// placeholder resolves to @c null, so that an optional template option simply
@@ -130,12 +184,8 @@ std::optional<json> substitute(const json &node, const ParameterMap &params) {
   if (node.is_string()) {
     const std::string str = node.get<std::string>();
 
-    if (std::optional<std::string> name = as_whole_placeholder(str)) {
-      const json &value = lookup(params, *name);
-      if (value.is_null()) {
-        return std::nullopt;
-      }
-      return value;
+    if (std::optional<Reference> ref = as_whole_placeholder(str)) {
+      return resolve(*ref, params);
     }
 
     return json(interpolate(str, params));
