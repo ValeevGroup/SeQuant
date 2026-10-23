@@ -2,6 +2,7 @@
 #define SEQUANT_CORE_EXPORT_GENERATOR_HPP
 
 #include <SeQuant/core/export/context.hpp>
+#include <SeQuant/core/export/memory_model.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/power.hpp>
@@ -60,6 +61,19 @@ class Generator {
   /// that a given tensor expression is computed for fixed batches of one
   /// or more of the involved indices instead of all at once.
   virtual bool supports_index_batching() const = 0;
+
+  /// @returns The memory model this generator's target requires. A
+  /// consumer driving this generator from a schedule (e.g.
+  /// ScheduleWalkingGenerationVisitor, schedule_export.hpp) queries this to
+  /// decide whether it may keep a shared intermediate resident across
+  /// non-adjacent reads (MemoryModel::RandomAccess) or must instead
+  /// force-persist and independently reload it at each read so that every
+  /// allocation/deallocation stays properly stack-nested
+  /// (MemoryModel::Stack) -- this is a fixed property of the target
+  /// language/runtime (e.g. ITF only ever supports stack-like allocation),
+  /// not a per-run configuration choice, which is why it is queried from
+  /// the generator rather than passed in by whoever drives it.
+  virtual MemoryModel memory_model() const = 0;
 
   /// @returns The scope at which this generator would like declare indices
   virtual DeclarationScope index_declaration_scope() const = 0;
