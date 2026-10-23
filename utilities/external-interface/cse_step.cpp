@@ -71,6 +71,10 @@ std::optional<ExportTreeData> perform_cse(ExprRange &&exprs,
                                           InputRange &&inputs,
                                           Expr2Inp &&expr_to_input,
                                           std::size_t min_usage) {
+  if (std::ranges::empty(exprs)) {
+    return {};
+  }
+
   ExportTreeData output;
   output.entries.reserve(exprs.size());
 
@@ -175,6 +179,9 @@ std::optional<ExportTreeData> perform_cse(ExprRange &&exprs,
         // preceding dependencies step). CSE only introduces new intermediate
         // trees and leaves the root IDs these refer to intact.
         dependencies = assoc_entry.dependencies;
+        // Rewriting a root (e.g. replacing it by a CSE) creates a new node.
+        // Restore the original ID, as other entries may depend on it.
+        exprs[i]->set_id(assoc_entry.tree->id());
         ++entry_offset;
       } else if (!cse_positions.empty()) {
         cse_positions.pop_back();

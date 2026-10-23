@@ -178,6 +178,59 @@ The :code:`base` use produces steps :code:`base_opt` and :code:`base_tree` (its 
 :code:`replay_tree`.
 
 
+Conditional steps and optional references
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A step inside a template (including a nested template use) may carry a :code:`when` property. The step is only part of the expansion if its value
+is *truthy*. Usually :code:`when` is a whole-value placeholder such as :code:`"${replay_input}"`; any other value is taken literally. Everything
+except :code:`null`, :code:`false` and empty strings, arrays and objects is truthy. This is decided while expanding the template, so a skipped step
+never exists at run time.
+
+Steps that process the output of a skipped step would then refer to something that isn't there. A reference (an entry of :code:`inputs`, the value
+of :code:`inherit_options_from`, or an ID inside the :code:`grouping`, :code:`merge_inputs` or :code:`relative_order` options) can be marked as
+*optional* by a trailing :code:`?`. After all templates have been expanded:
+
+* An optional reference to an existing step (the part before the first :code:`.`) loses its :code:`?` and is otherwise unchanged. Whether the
+  output the reference names exists is not checked.
+* An optional reference to a step that doesn't exist is removed from the array or object it is part of. If nothing is left of
+  :code:`inputs`, the whole step is removed, which in turn makes optional references to it unresolvable. If nothing is left of
+  :code:`inherit_options_from`, :code:`grouping`, :code:`merge_inputs` or :code:`relative_order`, that property is omitted.
+* References without a :code:`?` are never touched, so a misspelled ID is still an error.
+
+Because output aliases only propagate along steps that exist, there is no implicit pass-through for a skipped step: either a downstream reference is
+optional, or the step is skipped for good.
+
+Together with :code:`null` defaults, this lets one template cover variants that differ in additional steps. In the following, :code:`replay_input`
+selects inputs that are optimized with :code:`replay` and exported with the remaining ones, if there are any:
+
+.. code-block:: json
+
+   {
+     "templates": {
+       "variant": {
+         "parameters": {
+           "source": { "required": true },
+           "replay_input": { "default": [] },
+           "replay": { "default": null }
+         },
+         "steps": [
+           { "id": "opt", "kind": "optimize", "inputs": "${source}" },
+           { "id": "opt_replay", "kind": "optimize", "inputs": "${replay_input}",
+             "options": { "replay": "${replay}" }, "when": "${replay_input}" },
+           { "id": "tree", "kind": "to_export_tree", "inputs": "opt" },
+           { "id": "tree_replay", "kind": "to_export_tree", "inputs": "opt_replay", "when": "${replay_input}" },
+           { "id": "export", "kind": "export", "inputs": ["tree", "tree_replay?"],
+             "options": { "language": "itf", "output": "out.itfaa" } }
+         ]
+       }
+     }
+   }
+
+Without :code:`replay_input` only :code:`opt`, :code:`tree` and :code:`export` remain, and :code:`export` has the single input :code:`tree`.
+
+As IDs inside option values are not namespaced (see the note above), optional references there are meant to be passed in through parameters, e.g.
+a :code:`grouping` parameter containing :code:`"Init": "my_variant_opt_replay.persistent?"`, where :code:`my_variant` is the :code:`id` of the use.
+
 .. _external_interface_step_kinds:
 
 Available Processing Step Kinds
