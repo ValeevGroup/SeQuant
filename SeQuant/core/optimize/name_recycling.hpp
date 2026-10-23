@@ -10,6 +10,7 @@
 #include <SeQuant/core/utility/tensor.hpp>
 
 #include <algorithm>
+#include <concepts>
 #include <cstddef>
 #include <cwctype>
 #include <functional>
@@ -214,11 +215,14 @@ inline Variable relabeled(const Variable &variable, std::wstring_view label) {
 }
 
 /// Orders Tensors and Variables by the identity of the object they refer to,
-/// i.e. tensors are compared by label and block, variables by label
+/// i.e. tensors are compared by label and block, variables by label. Supports
+/// heterogeneous lookup via Expr objects.
 struct ResultObjectLess {
-  bool operator()(const ExprPtr &lhs, const ExprPtr &rhs) const {
-    const bool lhs_tensor = lhs->is<Tensor>();
-    const bool rhs_tensor = rhs->is<Tensor>();
+  using is_transparent = void;
+
+  bool operator()(const Expr &lhs, const Expr &rhs) const {
+    const bool lhs_tensor = lhs.is<Tensor>();
+    const bool rhs_tensor = rhs.is<Tensor>();
 
     if (lhs_tensor != rhs_tensor) {
       return lhs_tensor;
@@ -226,12 +230,22 @@ struct ResultObjectLess {
 
     if (lhs_tensor) {
       // Same notion of tensor identity as used by the export
-      return TensorBlockLessThanComparator{}(lhs->as<Tensor>(),
-                                             rhs->as<Tensor>());
+      return TensorBlockLessThanComparator{}(lhs.as<Tensor>(),
+                                             rhs.as<Tensor>());
     }
 
     // A variable and its complex conjugate refer to the same object
-    return result_label(*lhs) < result_label(*rhs);
+    return result_label(lhs) < result_label(rhs);
+  }
+
+  bool operator()(const ExprPtr &lhs, const ExprPtr &rhs) const {
+    return (*this)(*lhs, *rhs);
+  }
+  bool operator()(const ExprPtr &lhs, const Expr &rhs) const {
+    return (*this)(*lhs, rhs);
+  }
+  bool operator()(const Expr &lhs, const ExprPtr &rhs) const {
+    return (*this)(lhs, *rhs);
   }
 };
 
@@ -306,19 +320,17 @@ struct TreeBindings {
 
 }  // namespace detail
 
-/// Keeps track of names of intermediates that are no longer needed and
-/// hands them out to new intermediates of compatible shape. It also
-/// generates fresh names that don't collide with any reserved name.
+/// Keeps track of the names of intermediates and how often they are currently
+/// in use. Names that are no longer in use are handed out to new intermediates
+/// of compatible shape and fresh names are generated such that they don't
+/// collide with any reserved or previously used name.
 ///
 /// Tensors are identified by their label and their block, i.e. tensors with
 /// the same label but different blocks refer to different objects. Hence, the
 /// same label can be handed out for tensors of different blocks.
-///
-/// When several freed names are compatible, the one that was first handed
-/// out by this pool (or released to it) is chosen, which makes the result
-/// independent of the order of release.
 class IntermediateNamePool {
  public:
+  /// Generates a label from a basename and a counter (starting at 1)
   using LabelGenerator =
       std::function<std::wstring(std::wstring_view basename, std::size_t)>;
 
@@ -327,6 +339,13 @@ class IntermediateNamePool {
   struct RecycledTensor {
     Tensor tensor;
     SlotMap slot_map;
+  };
+
+  /// The outcome of lowest_available
+  struct Allocation {
+    std::wstring label;
+    /// Whether the label refers to an object that has been in use before
+    bool recycled;
   };
 
   /// @returns A LabelGenerator that appends the counter to the basename
@@ -341,14 +360,26 @@ class IntermediateNamePool {
       : label_gen_(std::move(label_gen)) {}
 
   /// Marks @p label as being in use by something that isn't managed by this
-  /// pool such that it will never be handed out as a fresh name
+  /// pool such that it will never be handed out
   void reserve(std::wstring label) { reserved_.insert(std::move(label)); }
+
+  /// Registers a use of @p object (a Tensor or Variable)
+  void occupy(const Expr &object) { ++entry(object).uses; }
+
+  /// Ends a use of @p object (a Tensor or Variable). Once all of its uses have
+  /// ended, the object's name is available for reuse.
+  void release(const Expr &object) {
+    State &state = entry(object);
+    SEQUANT_ASSERT(state.uses > 0);
+    --state.uses;
+  }
 
   /// @param basename The basename to derive the label from via the pool's
   /// LabelGenerator
   /// @param candidate The Tensor or Variable the label is meant for
   /// @returns A label that has not been reserved and that, together with the
-  /// block of @p candidate, has not been handed out before
+  /// block of @p candidate, has not been known to this pool before. The
+  /// respective object is marked as being in use.
   std::wstring fresh_label(std::wstring_view basename, const Expr &candidate) {
     ExprPtr object = candidate.clone();
 
@@ -359,108 +390,133 @@ class IntermediateNamePool {
       }
 
       set_label(*object, label);
-      if (order_.contains(object)) {
+      if (objects_.contains(*object)) {
         continue;
       }
 
-      order_.emplace(std::move(object), next_order_++);
+      occupy(*object);
       return label;
     }
   }
 
-  /// Makes the name (and block) of @p tensor available for reuse
-  void release(const Tensor &tensor) {
-    free_tensors_.push_back(tensor);
-    register_order(tensor);
+  /// Determines the first label (in the order of the pool's LabelGenerator)
+  /// that, together with the block of @p candidate, refers to an object that
+  /// is not in use and for which @p acceptable (if provided) returns true.
+  /// Contrary to fresh_label and acquire, the respective object is not marked
+  /// as being in use (see occupy).
+  /// @param basename The basename to derive labels from
+  /// @param candidate The Tensor or Variable the label is meant for
+  /// @param acceptable Predicate invoked with @p candidate relabeled to the
+  /// label under consideration
+  template <typename T>
+    requires std::same_as<T, Tensor> || std::same_as<T, Variable>
+  Allocation lowest_available(
+      std::wstring_view basename, const T &candidate,
+      const std::function<bool(const T &)> &acceptable = {}) const {
+    T object = candidate;
+
+    for (std::size_t counter = 1;; ++counter) {
+      std::wstring label = label_gen_(basename, counter);
+      if (reserved_.contains(label)) {
+        continue;
+      }
+
+      object.set_label(label);
+      auto it = objects_.find(static_cast<const Expr &>(object));
+      if ((it != objects_.end() && it->second.uses > 0) ||
+          (acceptable && !acceptable(object))) {
+        continue;
+      }
+
+      return Allocation{.label = std::move(label),
+                        .recycled = it != objects_.end()};
+    }
   }
 
-  /// Makes the name of @p variable available for reuse
-  void release(const Variable &variable) {
-    free_variables_.push_back(variable);
-    register_order(variable);
-  }
-
-  /// Searches for a released name whose block is compatible with
-  /// @p candidate under @p compatibility and for which @p acceptable (if
-  /// provided) returns true. If found, it is removed from the pool.
+  /// Searches for an object that is not in use, whose block is compatible
+  /// with @p candidate under @p compatibility and for which @p acceptable (if
+  /// provided) returns true. Of all such objects, the one that has become known
+  /// to this pool first is chosen and marked as being in use.
   /// @returns @p candidate relabeled (and rearranged) to the recycled name, or
   /// std::nullopt if no suitable name is available
   std::optional<RecycledTensor> acquire(
       const Tensor &candidate, ShapeCompatibility compatibility,
       const std::function<bool(const Tensor &)> &acceptable = {}) {
-    std::optional<std::size_t> best;
+    const Tensor *best = nullptr;
+    std::size_t best_order = 0;
     SlotMap best_map;
 
-    for (std::size_t i = 0; i < free_tensors_.size(); ++i) {
-      const Tensor &freed = free_tensors_[i];
-      if (best.has_value() &&
-          order_of(freed) >= order_of(free_tensors_[*best])) {
+    for (const auto &[object, state] : objects_) {
+      if (state.uses > 0 || !object->is<Tensor>() ||
+          (best && state.order >= best_order)) {
         continue;
       }
 
+      const Tensor &freed = object->as<Tensor>();
       std::optional<SlotMap> slot_map =
           detail::slot_map_onto(freed, candidate, compatibility);
       if (!slot_map.has_value() || (acceptable && !acceptable(freed))) {
         continue;
       }
 
-      best = i;
+      best = &freed;
+      best_order = state.order;
       best_map = std::move(slot_map.value());
     }
 
-    if (!best.has_value()) {
+    if (!best) {
       return std::nullopt;
     }
 
-    RecycledTensor result{
-        .tensor = detail::relabeled(candidate, free_tensors_[*best].label(),
-                                    best_map),
-        .slot_map = std::move(best_map)};
-    free_tensors_.erase(free_tensors_.begin() + *best);
+    occupy(*best);
 
-    return result;
+    return RecycledTensor{
+        .tensor = detail::relabeled(candidate, best->label(), best_map),
+        .slot_map = std::move(best_map)};
   }
 
   /// Variable equivalent of the Tensor overload of acquire
   std::optional<Variable> acquire(
       const Variable &candidate,
       const std::function<bool(const Variable &)> &acceptable = {}) {
-    std::optional<std::size_t> best;
+    const Variable *best = nullptr;
+    std::size_t best_order = 0;
 
-    for (std::size_t i = 0; i < free_variables_.size(); ++i) {
-      const Variable &freed = free_variables_[i];
-      if (best.has_value() &&
-          order_of(freed) >= order_of(free_variables_[*best])) {
+    for (const auto &[object, state] : objects_) {
+      if (state.uses > 0 || !object->is<Variable>() ||
+          (best && state.order >= best_order)) {
         continue;
       }
 
+      const Variable &freed = object->as<Variable>();
       if (acceptable && !acceptable(freed)) {
         continue;
       }
 
-      best = i;
+      best = &freed;
+      best_order = state.order;
     }
 
-    if (!best.has_value()) {
+    if (!best) {
       return std::nullopt;
     }
 
-    Variable result =
-        detail::relabeled(candidate, free_variables_[*best].label());
-    free_variables_.erase(free_variables_.begin() + *best);
+    occupy(*best);
 
-    return result;
+    return detail::relabeled(candidate, best->label());
   }
 
  private:
+  struct State {
+    /// Time at which the object became known to the pool
+    std::size_t order;
+    /// Number of current uses
+    std::size_t uses;
+  };
+
   LabelGenerator label_gen_;
   std::set<std::wstring, std::less<>> reserved_;
-  /// Every object that has been handed out by or released to this pool along
-  /// with the time of its first appearance
-  std::map<ExprPtr, std::size_t, detail::ResultObjectLess> order_;
-  std::size_t next_order_ = 0;
-  std::vector<Tensor> free_tensors_;
-  std::vector<Variable> free_variables_;
+  std::map<ExprPtr, State, detail::ResultObjectLess> objects_;
 
   static void set_label(Expr &object, std::wstring label) {
     if (object.is<Tensor>()) {
@@ -470,16 +526,15 @@ class IntermediateNamePool {
     }
   }
 
-  void register_order(const Expr &object) {
-    ExprPtr copy = object.clone();
-    if (!order_.contains(copy)) {
-      order_.emplace(std::move(copy), next_order_++);
+  State &entry(const Expr &object) {
+    SEQUANT_ASSERT(object.is<Tensor>() || object.is<Variable>());
+    auto it = objects_.find(object);
+    if (it == objects_.end()) {
+      it = objects_
+               .emplace(object.clone(),
+                        State{.order = objects_.size(), .uses = 0})
+               .first;
     }
-  }
-
-  std::size_t order_of(const Expr &object) const {
-    auto it = order_.find(object.clone());
-    SEQUANT_ASSERT(it != order_.end());
     return it->second;
   }
 };
@@ -666,7 +721,7 @@ NameRecyclingResult recycle_intermediate_names(
     if (!opts.extra_compatible) {
       return true;
     }
-    auto it = holder.find(freed.clone());
+    auto it = holder.find(freed);
     SEQUANT_ASSERT(it != holder.end());
     return opts.extra_compatible(tree_at(values.at(it->second).first_def),
                                  tree_at(value.first_def));
@@ -683,11 +738,7 @@ NameRecyclingResult recycle_intermediate_names(
 
     while (!active.empty() && active.begin()->first < value.first_def) {
       const Value &done = values.at(active.begin()->second);
-      if (done.renamed->is<Tensor>()) {
-        pool.release(done.renamed->as<Tensor>());
-      } else {
-        pool.release(done.renamed->as<Variable>());
-      }
+      pool.release(*done.renamed);
       active.erase(active.begin());
     }
 

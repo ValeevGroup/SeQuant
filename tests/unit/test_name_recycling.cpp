@@ -304,6 +304,34 @@ TEST_CASE("intermediate name recycling", "[optimize]") {
     }
   }
 
+  SECTION("name pool") {
+    opt::IntermediateNamePool pool([](std::wstring_view basename,
+                                      std::size_t counter) {
+      return counter == 1 ? std::wstring(basename)
+                          : std::wstring(basename) + std::to_wstring(counter);
+    });
+
+    // A variable and its conjugate are the same object and every use counts
+    Variable variable(L"I");
+    Variable conjugated = variable;
+    conjugated.conjugate();
+
+    pool.occupy(variable);
+    pool.occupy(conjugated);
+    pool.release(variable);
+    auto allocation = pool.lowest_available(L"I", variable);
+    CHECK(allocation.label == L"I2");
+    CHECK_FALSE(allocation.recycled);
+
+    pool.release(conjugated);
+    allocation = pool.lowest_available(L"I", variable);
+    CHECK(allocation.label == L"I");
+    CHECK(allocation.recycled);
+
+    // lowest_available doesn't occupy
+    CHECK(pool.lowest_available(L"I", variable).label == L"I");
+  }
+
   SECTION("extra compatibility") {
     const std::vector<std::wstring> inputs = {L"X1 = A B", L"R1 = X1 C",
                                               L"X2 = D E", L"R2 = X2 F"};
