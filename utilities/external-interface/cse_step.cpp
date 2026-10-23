@@ -71,6 +71,10 @@ std::optional<ExportTreeData> perform_cse(ExprRange &&exprs,
                                           InputRange &&inputs,
                                           Expr2Inp &&expr_to_input,
                                           std::size_t min_usage) {
+  if (std::ranges::empty(exprs)) {
+    return {};
+  }
+
   ExportTreeData output;
   output.entries.reserve(exprs.size());
 

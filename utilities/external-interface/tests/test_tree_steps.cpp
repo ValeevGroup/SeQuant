@@ -54,6 +54,18 @@ TEST_CASE("cse step", "[extint]") {
         convert_data<ExportTreeData>(ctx.get_data("cse.0").front().data.get()));
   }
 
+  SECTION("an input without entries is passed through") {
+    ExecutionContext ctx;
+    ctx.set_data("in", 0, ProcessingData{ExportTreeData{}});
+
+    CSEStep step;
+    REQUIRE_NOTHROW(step.run("cse", ctx, {"in.0"}));
+    REQUIRE(ctx.has_data("cse.0"));
+    REQUIRE(
+        convert_data<ExportTreeData>(ctx.get_data("cse.0").front().data.get())
+            .entries.empty());
+  }
+
   SECTION("merge_inputs with group IDs merges only within each group") {
     const std::wstring expr =
         L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S";
