@@ -23,7 +23,6 @@ if (NOT TARGET tiledarray)
         GIT_REPOSITORY "https://github.com/ValeevGroup/tiledarray.git"
         GIT_TAG "${SEQUANT_TRACKED_TILEDARRAY_TAG}"
         GIT_SHALLOW
-        EXCLUDE_FROM_ALL
         SYSTEM
         FIND_PACKAGE_ARGS NAMES TiledArray COMPONENTS tiledarray
     )
