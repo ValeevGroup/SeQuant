@@ -293,14 +293,10 @@ Product::type_id_type Product::type_id() const {
 ExprPtr Product::clone() const { return ex<Product>(this->deep_copy()); }
 
 Product Product::deep_copy() const {
-  auto cloned_factors =
-      factors() | ranges::views::transform([](const ExprPtr &ptr) {
-        return ptr ? ptr->clone() : nullptr;
-      });
   Product result(this->scalar(), ExprPtrList{});
-  ranges::for_each(cloned_factors, [&](const auto &cloned_factor) {
-    result.append(1, std::move(cloned_factor), Flatten::No);
-  });
+  for (const auto &factor : factors()) {
+    result.append(1, factor, Flatten::No);
+  }
   result.copy_canonical_mark(*this);
   return result;
 }
