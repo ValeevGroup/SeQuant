@@ -2,6 +2,7 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -14,6 +15,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -242,6 +244,36 @@ TEST_CASE("intermediate name recycling", "[optimize]") {
             L"R{a1;i1} = I1{;;a2,i1} I1{;;a1,a2}",
         },
         {.is_recyclable = recyclable_prefixes({L"I"})}, 2, 2);
+  }
+
+  SECTION("normalized identity") {
+    // Tensors of different blocks that become the same object once normalized
+    // must not share a label while both are alive
+    const std::vector<std::wstring> inputs = {
+        L"I1{;;a1,i1} = A{a1;i2} B{i2;i1}",
+        L"I2{;;i1,a1} = C{i1;a2} D{a2;a1}",
+        L"R{a1;a2} = I1{;;a1,i1} I2{;;i1,a2}",
+    };
+
+    check(
+        inputs,
+        {L"I1{;;a1,i1} = A{a1;i2} B{i2;i1}", L"I1{;;i1,a1} = C{i1;a2} D{a2;a1}",
+         L"R{a1;a2} = I1{;;a1,i1} I1{;;i1,a2}"},
+        {.is_recyclable = recyclable_prefixes({L"I"})}, 2, 2);
+
+    auto sort_aux = [](Tensor& tensor) {
+      container::svector<Index> indices(tensor.aux().begin(),
+                                        tensor.aux().end());
+      std::ranges::stable_sort(indices, std::less<>{},
+                               [](const Index& idx) { return idx.basis(); });
+      tensor = Tensor(std::wstring(tensor.label()), bra(), ket(),
+                      aux(std::move(indices)), Symmetry::Nonsymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    };
+
+    check(inputs, inputs,
+          {.is_recyclable = recyclable_prefixes({L"I"}), .normalize = sort_aux},
+          2, 2);
   }
 
   SECTION("conjugated and adjoint uses") {
