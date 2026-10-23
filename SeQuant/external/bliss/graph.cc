@@ -5,6 +5,7 @@
 #include <list>
 #include <numeric>
 #include <set>
+#include <vector>
 
 #include "defs.hh"
 #include "graph.hh"
@@ -4293,20 +4294,24 @@ bool Graph::is_automorphism(const std::vector<unsigned int>& perm) const {
   if (!(perm.size() == get_nof_vertices() and is_permutation(perm)))
     return false;
 
-  std::set<unsigned int, std::less<unsigned int> > edges1;
-  std::set<unsigned int, std::less<unsigned int> > edges2;
+  std::vector<unsigned int> edges1;
+  std::vector<unsigned int> edges2;
 
   for (unsigned int i = 0; i < get_nof_vertices(); i++) {
     const Vertex& v1 = vertices[i];
     edges1.clear();
     for (auto ei = v1.edges.begin(); ei != v1.edges.end(); ei++)
-      edges1.insert(perm[*ei]);
+      edges1.push_back(perm[*ei]);
 
     const Vertex& v2 = vertices[perm[i]];
     edges2.clear();
     for (auto ei = v2.edges.begin(); ei != v2.edges.end(); ei++)
-      edges2.insert(*ei);
+      edges2.push_back(*ei);
 
+    std::sort(edges1.begin(), edges1.end());
+    edges1.erase(std::unique(edges1.begin(), edges1.end()), edges1.end());
+    std::sort(edges2.begin(), edges2.end());
+    edges2.erase(std::unique(edges2.begin(), edges2.end()), edges2.end());
     if (!(edges1 == edges2)) return false;
   }
 
