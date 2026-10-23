@@ -66,6 +66,32 @@ TEST_CASE("cse step", "[extint]") {
             .entries.empty());
   }
 
+  SECTION("CSE retains the IDs of the original results") {
+    // Both results are the same contraction, so CSE rewrites their roots
+    ExportTreeData data = test_support::tree_data(
+        {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+         L"R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+    REQUIRE(data.entries.size() == 2);
+    const std::vector<std::size_t> original_ids = {data.entries[0].tree->id(),
+                                                   data.entries[1].tree->id()};
+
+    ExecutionContext ctx;
+    ctx.set_data("in", 0, ProcessingData{std::move(data)});
+
+    CSEStep step;
+    REQUIRE(step.run("cse", ctx, {"in.0"}) == 1);
+
+    const ExportTreeData &result =
+        convert_data<ExportTreeData>(ctx.get_data("cse.0").front().data.get());
+    REQUIRE(result.entries.size() > 2);
+
+    for (std::size_t id : original_ids) {
+      REQUIRE(std::ranges::any_of(result.entries, [id](const auto &entry) {
+        return entry.tree->id() == id;
+      }));
+    }
+  }
+
   SECTION("merge_inputs with group IDs merges only within each group") {
     const std::wstring expr =
         L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S";
