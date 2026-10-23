@@ -213,13 +213,43 @@ inline Variable relabeled(const Variable &variable, std::wstring_view label) {
   return result;
 }
 
+/// Brings a tensor into the form in which it is identified (e.g. by
+/// reordering its slots the way a code generator would)
+using TensorNormalizer = std::function<void(Tensor &)>;
+
 /// Orders Tensors and Variables by the identity of the object they refer to,
 /// i.e. tensors are compared by label and block, variables by label. Supports
 /// heterogeneous lookup via Expr objects.
 struct ResultObjectLess {
   using is_transparent = void;
 
+  /// If set, tensors are compared in the form produced by this normalizer
+  TensorNormalizer normalize = {};
+
   bool operator()(const Expr &lhs, const Expr &rhs) const {
+    if (normalize && lhs.is<Tensor>() && rhs.is<Tensor>()) {
+      Tensor normalized_lhs = lhs.as<Tensor>();
+      Tensor normalized_rhs = rhs.as<Tensor>();
+      normalize(normalized_lhs);
+      normalize(normalized_rhs);
+      return compare(normalized_lhs, normalized_rhs);
+    }
+
+    return compare(lhs, rhs);
+  }
+
+  bool operator()(const ExprPtr &lhs, const ExprPtr &rhs) const {
+    return (*this)(*lhs, *rhs);
+  }
+  bool operator()(const ExprPtr &lhs, const Expr &rhs) const {
+    return (*this)(*lhs, rhs);
+  }
+  bool operator()(const Expr &lhs, const ExprPtr &rhs) const {
+    return (*this)(lhs, *rhs);
+  }
+
+ private:
+  static bool compare(const Expr &lhs, const Expr &rhs) {
     const bool lhs_tensor = lhs.is<Tensor>();
     const bool rhs_tensor = rhs.is<Tensor>();
 
@@ -255,16 +285,6 @@ struct ResultObjectLess {
     }
 
     return false;
-  }
-
-  bool operator()(const ExprPtr &lhs, const ExprPtr &rhs) const {
-    return (*this)(*lhs, *rhs);
-  }
-  bool operator()(const ExprPtr &lhs, const Expr &rhs) const {
-    return (*this)(*lhs, rhs);
-  }
-  bool operator()(const Expr &lhs, const ExprPtr &rhs) const {
-    return (*this)(lhs, *rhs);
   }
 };
 
@@ -314,7 +334,7 @@ struct RecyclableValue {
 /// The values referenced by the leaves of a tree and the value defined by it
 struct TreeBindings {
   ObjectMap uses;
-  std::optional<std::size_t> defines;
+  std::optional<std::size_t> defines = {};
 };
 
 }  // namespace detail
@@ -354,9 +374,15 @@ class IntermediateNamePool {
     };
   }
 
+  /// @param label_gen Generator for labels
+  /// @param normalize If set, tensors are identified by the form produced by
+  /// this normalizer, i.e. tensors whose normalized forms have the same label
+  /// and block refer to the same object
   explicit IntermediateNamePool(
-      LabelGenerator label_gen = default_label_generator())
-      : label_gen_(std::move(label_gen)) {}
+      LabelGenerator label_gen = default_label_generator(),
+      detail::TensorNormalizer normalize = {})
+      : label_gen_(std::move(label_gen)),
+        objects_(detail::ResultObjectLess{.normalize = std::move(normalize)}) {}
 
   /// Marks @p label as being in use by something that isn't managed by this
   /// pool such that it will never be handed out
@@ -560,6 +586,11 @@ struct NameRecyclingOptions {
   /// trailing digits) of their original label and a counter
   IntermediateNamePool::LabelGenerator label_gen =
       IntermediateNamePool::default_label_generator();
+  /// If set, tensors are identified by the form produced by this normalizer
+  /// rather than by their form in the trees. This is needed if tensors are
+  /// later rewritten (e.g. by a code generator reordering their slots) such
+  /// that tensors of different blocks may end up referring to the same object.
+  detail::TensorNormalizer normalize = {};
   /// Called for every tree that had to be rebuilt in order to reflect the new
   /// names with the original and the rebuilt tree (e.g. to transfer
   /// annotations)
@@ -631,10 +662,13 @@ NameRecyclingResult recycle_intermediate_names(
     return last;
   };
 
+  const detail::ResultObjectLess identity{.normalize = opts.normalize};
+
   std::vector<Value> values;
-  std::vector<TreeBindings> bindings(num_trees);
+  std::vector<TreeBindings> bindings(
+      num_trees, TreeBindings{.uses = detail::ObjectMap(identity)});
   std::set<std::wstring> reserved;
-  detail::ObjectMap current_values;
+  detail::ObjectMap current_values(identity);
 
   // 1. Determine values and their live ranges
   for (std::size_t i = 0; i < num_trees; ++i) {
@@ -686,7 +720,7 @@ NameRecyclingResult recycle_intermediate_names(
   }
 
   // 2. Assign names
-  IntermediateNamePool pool(opts.label_gen);
+  IntermediateNamePool pool(opts.label_gen, opts.normalize);
   for (const Value &value : values) {
     if (value.pinned) {
       reserved.emplace(detail::result_label(*value.original));
@@ -699,7 +733,7 @@ NameRecyclingResult recycle_intermediate_names(
   // Values that hold a name, ordered by the end of their live range
   std::multimap<std::size_t, std::size_t> active;
   // Value currently (or most recently) holding a given name
-  detail::ObjectMap holder;
+  detail::ObjectMap holder(identity);
 
   auto previous_def_compatible = [&](const Expr &freed, const Value &value) {
     if (!opts.extra_compatible) {
@@ -712,7 +746,7 @@ NameRecyclingResult recycle_intermediate_names(
   };
 
   NameRecyclingResult stats;
-  std::set<ExprPtr, detail::ResultObjectLess> used_names;
+  std::set<ExprPtr, detail::ResultObjectLess> used_names(identity);
 
   for (std::size_t v = 0; v < values.size(); ++v) {
     Value &value = values[v];

@@ -154,7 +154,8 @@ std::unordered_map<std::size_t, AnyIrrepSet> result_irreps(
 /// share a name if they are batched over the same indices and, if @p ctx has an
 /// IRREP context, span the same IRREPs. Loops over batch indices are taken into
 /// account when determining the lifetime of intermediates (see
-/// batch_loop_regions). Trees that need rebuilding are rebuilt via
+/// batch_loop_regions). Tensors are identified the way the export does, i.e.
+/// after being rewritten by @p ctx. Trees that need rebuilding are rebuilt via
 /// to_export_tree, retaining their IDs such that information associated with
 /// them (e.g. batch indices) stays valid.
 ///
@@ -206,6 +207,8 @@ opt::NameRecyclingResult recycle_intermediate_names(
               },
           .repeated_regions = batch_loop_regions(expressions, ctx),
           .label_gen = std::move(label_gen),
+          // Tensors are identified by their rewritten form during export
+          .normalize = [&ctx](Tensor &tensor) { ctx.rewrite(tensor); },
           .on_rebuilt =
               [](const TreeNode &original, TreeNode &rebuilt) {
                 rebuilt->set_id(original->id());
