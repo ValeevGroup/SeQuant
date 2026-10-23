@@ -26,6 +26,7 @@
 #include <boost/hana/ext/std/integral_constant.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <concepts>
 #include <cstddef>
@@ -1419,6 +1420,9 @@ class IndexBasisRegistry {
   /// @return (memoized) set of base IndexSpace objects, sorted in the order of
   /// increasing type()
   const std::vector<IndexSpace>& base_spaces() const {
+    if (const auto* cached =
+            base_spaces_published_.load(std::memory_order_acquire))
+      return *cached;
     std::scoped_lock guard{mtx_memoized_};
     if (!base_spaces_) {
       const SpacesView space_entries = spaces();
@@ -1430,6 +1434,8 @@ class IndexBasisRegistry {
                    [](auto s1, auto s2) { return s1.type() < s2.type(); });
       base_spaces_ =
           std::make_shared<std::vector<IndexSpace>>(std::move(spaces));
+      base_spaces_published_.store(base_spaces_.get(),
+                                   std::memory_order_release);
     }
     return *base_spaces_;
   }
@@ -2050,11 +2056,16 @@ class IndexBasisRegistry {
   // memoized data
   mutable std::shared_ptr<std::vector<IndexSpace::Type>> base_space_types_;
   mutable std::shared_ptr<std::vector<IndexSpace>> base_spaces_;
+  // Publish fully initialized data to concurrent readers. Registry mutation,
+  // like destruction, requires callers to exclude concurrent readers.
+  mutable std::atomic<const std::vector<IndexSpace>*> base_spaces_published_{
+      nullptr};
   mutable std::recursive_mutex
-      mtx_memoized_;  // guards every access to the memoized data
+      mtx_memoized_;  // guards cache initialization and invalidation
   IndexBasisRegistry& clear_memoized_data_and_return_this() {
     std::scoped_lock guard{mtx_memoized_};
     base_space_types_.reset();
+    base_spaces_published_.store(nullptr, std::memory_order_release);
     base_spaces_.reset();
     return *this;
   }
