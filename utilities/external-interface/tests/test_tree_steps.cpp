@@ -591,4 +591,147 @@ TEST_CASE("export step", "[extint]") {
     CHECK(code.find("+=") != std::string::npos);
     CHECK(code.find(":= 0") == std::string::npos);
   }
+
+  SECTION("names of CSE intermediates are recycled on request") {
+    // Two common subexpressions with compatible shapes whose lifetimes don't
+    // overlap: the second can reuse the name (and storage) of the first
+    auto generate = [](const json &recycle) {
+      ExportTreeData data = test_support::tree_data(
+          {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+           L"R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+           L"R3{a1;i1} = + g{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+           L"R4{a1;i1} = + g{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+
+      ExecutionContext ctx;
+      ctx.set_data("in", 0, ProcessingData{std::move(data)});
+
+      CSEStep cse;
+      REQUIRE(cse.run("cse", ctx, {"in.0"}) == 1);
+
+      const std::filesystem::path out = std::filesystem::temp_directory_path() /
+                                        "extint_cse_name_recycling_test.itfaa";
+
+      json options{{"language", "itf"},
+                   {"output", out.string()},
+                   {"meta",
+                    {{"index_spaces",
+                      {{"i", {{"name", "Closed"}, {"tag", "c"}}},
+                       {"a", {{"name", "External"}, {"tag", "e"}}}}}}}};
+      if (!recycle.is_null()) {
+        options["recycle_intermediates"] = recycle;
+      }
+
+      ExportStep step;
+      step.set_options(options);
+
+      {
+        test_support::ScopedStreamSilencer silencer;
+        step.run("exp", ctx, {"cse.0"});
+      }
+
+      std::ifstream stream(out);
+      REQUIRE(stream.good());
+      std::stringstream buffer;
+      buffer << stream.rdbuf();
+      stream.close();
+      std::filesystem::remove(out);
+
+      return buffer.str();
+    };
+
+    const std::string plain = generate(nullptr);
+    CAPTURE(plain);
+    CHECK(plain.find("CSE1") != std::string::npos);
+    CHECK(plain.find("CSE2") != std::string::npos);
+    CHECK(generate(false) == plain);
+
+    for (const json &recycle :
+         {json(true), json{{"shape", "block"}}, json{{"shape", "multiset"}}}) {
+      const std::string recycled = generate(recycle);
+      CAPTURE(recycle.dump(), recycled);
+      CHECK(recycled.find("CSE1") != std::string::npos);
+      CHECK(recycled.find("CSE2") == std::string::npos);
+      // Every definition of the intermediate is a fresh allocation
+      std::size_t num_allocs = 0;
+      for (std::size_t pos = recycled.find("alloc CSE1");
+           pos != std::string::npos;
+           pos = recycled.find("alloc CSE1", pos + 1)) {
+        ++num_allocs;
+      }
+      CHECK(num_allocs == 2);
+    }
+
+    ExportStep step;
+    CHECK_THROWS(step.set_options(json{{"language", "itf"},
+                                       {"output", "out.itfaa"},
+                                       {"recycle_intermediates", 1}}));
+    CHECK_THROWS(step.set_options(
+        json{{"language", "itf"},
+             {"output", "out.itfaa"},
+             {"recycle_intermediates", {{"shape", "triangle"}}}}));
+  }
+
+  SECTION("recycling with IRREPs uses results of earlier groups") {
+    // P is computed in its own group and used by the CSE intermediates of a
+    // later group. Its IRREPs are not specified but have to be determined from
+    // its definition.
+    auto generate = [](bool recycle) {
+      ExecutionContext ctx;
+      ctx.set_data("P", 1,
+                   ProcessingData{test_support::tree_data(
+                       {L"P{a1;i1} = + f{a1;a2}:N-N-N t{a2;i1}:N-N-N"})});
+      ctx.set_data("in", 0,
+                   ProcessingData{test_support::tree_data(
+                       {L"R1{a1;i1} = + P{a1;i2}:N-N-N g{i2;i1}:N-N-N",
+                        L"R2{a1;i1} = + P{a1;i2}:N-N-N g{i2;i1}:N-N-N",
+                        L"R3{a1;i1} = + P{a1;i2}:N-N-N h{i2;i1}:N-N-N",
+                        L"R4{a1;i1} = + P{a1;i2}:N-N-N h{i2;i1}:N-N-N"})});
+
+      CSEStep cse;
+      REQUIRE(cse.run("cse", ctx, {"in.0"}) == 1);
+
+      const std::filesystem::path out = std::filesystem::temp_directory_path() /
+                                        "extint_recycling_irreps_test.itfaa";
+
+      json options{{"language", "itf"},
+                   {"output", out.string()},
+                   // Note: groups are matched by the IDs without step prefix
+                   {"grouping", {{"Init", "1"}, {"Residual", "0"}}},
+                   {"irreps",
+                    {{"group", "D2h"},
+                     {"default", "error"},
+                     {"tensors",
+                      {{"f", "Ag"}, {"t", "B1u"}, {"g", "Ag"}, {"h", "Ag"}}}}},
+                   {"recycle_intermediates", recycle},
+                   {"meta",
+                    {{"index_spaces",
+                      {{"i", {{"name", "Closed"}, {"tag", "c"}}},
+                       {"a", {{"name", "External"}, {"tag", "e"}}}}}}}};
+
+      ExportStep step;
+      step.set_options(options);
+      {
+        test_support::ScopedStreamSilencer silencer;
+        step.run("exp", ctx, {"P.1", "cse.0"});
+      }
+
+      std::ifstream stream(out);
+      REQUIRE(stream.good());
+      std::stringstream buffer;
+      buffer << stream.rdbuf();
+      stream.close();
+      std::filesystem::remove(out);
+
+      return buffer.str();
+    };
+
+    const std::string plain = generate(false);
+    CAPTURE(plain);
+    REQUIRE(plain.find("CSE2") != std::string::npos);
+
+    const std::string recycled = generate(true);
+    CAPTURE(recycled);
+    CHECK(recycled.find("CSE1") != std::string::npos);
+    CHECK(recycled.find("CSE2") == std::string::npos);
+  }
 }
