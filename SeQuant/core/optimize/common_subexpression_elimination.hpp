@@ -272,6 +272,12 @@ std::function<bool(const TreeNode &, std::size_t)> min_usage_filter(
 /// into suitable evaluation trees
 /// @param filter_predicate A predicate to filter out subexpressions that shall
 /// not be eliminated
+/// @returns The positions of the inserted intermediate definitions
+///
+/// @note Every intermediate gets its own name. Once the final order of
+/// evaluation is known, opt::recycle_intermediate_names (see
+/// name_recycling.hpp) can be used to reuse names of intermediates that are
+/// no longer needed.
 template <std::ranges::range VectorLike,
           std::regular_invocable<ExprPtr> Transformer,
           bool force_hash_collisions = false>
