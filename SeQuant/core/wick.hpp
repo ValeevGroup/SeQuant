@@ -892,6 +892,11 @@ class WickTheorem {
           nop_adjacency_matrix(ntri(nopseq.size()), 0),
           nop_nconnections(nopseq.size(), 0) {
       init_topological_partitions();
+      op_input_ordinals.reserve(nopseq_size);
+      auto operators =
+          flattened_rangenest<NormalOperatorSequence<S>>(&this->nopseq);
+      for (const auto &op : operators)
+        op_input_ordinals.push_back(wick.op_to_input_ordinal_.find(op)->second);
     }
 
     NontensorWickState(const NontensorWickState &) = delete;
@@ -901,8 +906,10 @@ class WickTheorem {
 
     const WickTheorem<S> &wick;        //!< the WickTheorem object using this
     NormalOperatorSequence<S> nopseq;  //!< current state of operator sequence
-    std::size_t nopseq_size;           //!< current size of nopseq
-    Context ctx;                       //!< current context
+    // Original input positions, erased and restored alongside the active ops.
+    container::svector<std::size_t> op_input_ordinals;
+    std::size_t nopseq_size;                 //!< current size of nopseq
+    Context ctx;                             //!< current context
     container::set<Index> external_indices;  //!< external indices of the input
     container::set<Index>
         noncovariant_indices;         //!< noncovariant indices of the input
@@ -1344,16 +1351,20 @@ class WickTheorem {
     for (; op_left_iter != op_left_iter_fence;
          ++op_left_iter, ++left_op_offset) {
       auto &op_left_cursor = ranges::get_cursor(op_left_iter);
+      const auto op_left_ordinal = op_left_cursor.ordinal();
       const auto op_left_input_ordinal =
-          op_to_input_ordinal_.find(*op_left_iter)
-              ->second;  // ordinal of op_left in input_
+          state.op_input_ordinals[op_left_ordinal];
+      SEQUANT_ASSERT(op_left_input_ordinal ==
+                     op_to_input_ordinal_.find(*op_left_iter)->second);
 
       auto op_right_iter = ranges::next(op_left_iter);
       for (; op_right_iter != end(nopseq_view);) {
         auto &op_right_cursor = ranges::get_cursor(op_right_iter);
+        const auto op_right_ordinal = op_right_cursor.ordinal();
         const auto op_right_input_ordinal =
-            op_to_input_ordinal_.find(*op_right_iter)
-                ->second;  // ordinal of op_left in input_
+            state.op_input_ordinals[op_right_ordinal];
+        SEQUANT_ASSERT(op_right_input_ordinal ==
+                       op_to_input_ordinal_.find(*op_right_iter)->second);
 
         if (op_right_iter != op_left_iter &&
             op_left_cursor.range_iter() !=
@@ -1588,9 +1599,13 @@ class WickTheorem {
                 // remove from back to front
                 Op<S> right = *op_right_iter;
                 ranges::get_cursor(op_right_iter).erase();
+                state.op_input_ordinals.erase(state.op_input_ordinals.begin() +
+                                              op_right_ordinal);
                 --state.nopseq_size;
                 Op<S> left = *op_left_iter;
                 ranges::get_cursor(op_left_iter).erase();
+                state.op_input_ordinals.erase(state.op_input_ordinals.begin() +
+                                              op_left_ordinal);
                 --state.nopseq_size;
 
                 // std::wcout << "  nopseq after contraction = " <<
@@ -1705,8 +1720,14 @@ class WickTheorem {
                 state.sp = std::move(sp_copy);
                 // restore from front to back
                 ranges::get_cursor(op_left_iter).insert(std::move(left));
+                state.op_input_ordinals.insert(
+                    state.op_input_ordinals.begin() + op_left_ordinal,
+                    op_left_input_ordinal);
                 ++state.nopseq_size;
                 ranges::get_cursor(op_right_iter).insert(std::move(right));
+                state.op_input_ordinals.insert(
+                    state.op_input_ordinals.begin() + op_right_ordinal,
+                    op_right_input_ordinal);
                 ++state.nopseq_size;
                 state.disconnect(target_connections,
                                  ranges::get_cursor(op_left_iter),
