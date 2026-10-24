@@ -124,6 +124,11 @@ template <Statistics S1, Statistics S2>
 inline bool operator<(const Op<S1> &op1, const Op<S2> &op2) {
   if constexpr (S1 == S2) {
     if (op1.action() == op2.action()) {
+      // Equality ignores tags, while ordering can distinguish two tagged
+      // indices.
+      if (!op1.index().tag().has_value() || !op2.index().tag().has_value()) {
+        return op1.index() < op2.index();
+      }
       if (op1.index() == op2.index()) {
         return false;
       } else {
