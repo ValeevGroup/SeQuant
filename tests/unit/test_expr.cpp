@@ -1761,6 +1761,30 @@ TEST_CASE("expr", "[elements]") {
   }
 }
 
+TEST_CASE("sum_move_omits_zeros_and_combines_constants", "[elements]") {
+  using namespace sequant;
+
+  SECTION("merging the final constant") {
+    Sum result(Sum::summands_type{ex<Constant>(1), ex<Constant>(2)},
+               Sum::move_only_tag{});
+    REQUIRE(result.size() == 1);
+    REQUIRE(result.front().as<Constant>().value() == 3);
+  }
+
+  SECTION("constants and zeros interleaved with variables") {
+    Sum result(
+        Sum::summands_type{ex<Constant>(0), ex<Variable>(L"x"), ex<Constant>(1),
+                           ex<Constant>(2), ex<Constant>(0), ex<Variable>(L"y"),
+                           ex<Constant>(3)},
+        Sum::move_only_tag{});
+    const auto constant =
+        std::find_if(result.begin(), result.end(),
+                     [](const ExprPtr &term) { return term->is<Constant>(); });
+    REQUIRE(constant != result.end());
+    REQUIRE(constant->as<Constant>().value() == 6);
+  }
+}
+
 // CProduct before Product: a derived type computed first must not take, or
 // collide with, its base's id
 TEST_CASE("expr_type_id_derived", "[elements]") {

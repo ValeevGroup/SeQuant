@@ -18,7 +18,7 @@ Sum::Sum(ExprPtrList summands) {
 Sum::Sum(summands_type &&summands, move_only_tag)
     : summands_(std::move(summands)) {
   std::size_t pos = 0;
-  for (auto it = summands_.begin(); it != summands_.end(); ++it) {
+  for (auto it = summands_.begin(); it != summands_.end();) {
     auto &summand = *it;
     bool do_erase = false;
     if (summand->is_zero()) {
@@ -36,11 +36,11 @@ Sum::Sum(summands_type &&summands, move_only_tag)
 
     // erase if needed
     if (do_erase) {
-      summands_.erase(it);
-      it = summands_.begin();
-      std::advance(it, pos);
-    } else
+      it = summands_.erase(it);
+    } else {
+      ++it;
       ++pos;
+    }
   }
 }
 
