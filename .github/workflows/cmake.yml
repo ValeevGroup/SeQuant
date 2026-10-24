@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         build_type : [ Release, Debug ]
-        os : [ macos-26, ubuntu-24.04, windows-2025 ]
+        os : [ macos-26, ubuntu-26.04, windows-2025 ]
         valgrind: [ true, false ]
         sanitize: [ true, false ]
         exclude:
@@ -41,7 +41,7 @@ jobs:
           - os: windows-2025
             valgrind: true
         include:
-          - os: ubuntu-24.04
+          - os: ubuntu-26.04
             cxx: /usr/bin/g++-14
             sanitize_flags: -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
           - os: macos-26
