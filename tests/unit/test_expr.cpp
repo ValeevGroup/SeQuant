@@ -1946,6 +1946,38 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_THAT(L"B" - a, EquivalentTo("B - A"));
       REQUIRE_THAT(a * L"B", EquivalentTo("A * B"));
     }
+    SECTION("Sum and Product of a single ExprHolder") {
+      const ExprHolder var = Variable("A");
+
+      Sum sum(var);
+      REQUIRE(sum.size() == 1);
+      REQUIRE(sum.summand(0)->is<Variable>());
+      REQUIRE(sum.summand(0).get() != &*var);
+
+      ExprPtr sum_ptr = ex<Sum>(var);
+      REQUIRE(sum_ptr->size() == 1);
+
+      Product prod(var);
+      REQUIRE(prod.size() == 1);
+      REQUIRE(prod.factor(0)->is<Variable>());
+
+      ExprPtr prod_ptr = ex<Product>(var);
+      REQUIRE(prod_ptr->size() == 1);
+
+      // nested sums and products are flattened
+      const ExprHolder holder_sum = Variable("A") + Variable("B");
+      REQUIRE(Sum(holder_sum).size() == 2);
+
+      const ExprHolder holder_prod =
+          Constant(2) * Variable("A") * Variable("B");
+      Product flattened(holder_prod);
+      REQUIRE(flattened.size() == 2);
+      REQUIRE(flattened.scalar() == 2);
+
+      // rvalue holders
+      ExprHolder to_move = Variable("A") + Variable("B");
+      REQUIRE(Sum(std::move(to_move)).size() == 2);
+    }
     SECTION("Conversion to ExprPtr") {
       ExprHolder holder = Constant(3);
 

@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_holder.hpp>
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/meta.hpp>
@@ -46,7 +47,9 @@ class Product : public Expr {
   Product(ExprPtrList factors, Flatten flatten_tag = Flatten::Yes);
 
   /// construct a Product out of zero or more factors (multiplied by 1)
-  /// @param rng a range of factors; if rng is a Product, it will be flattened
+  /// @param rng a range of factors; if rng is an expression (or an ExprPtr or
+  /// ExprHolder to one), it is treated as a single factor rather than as the
+  /// range of its subexpressions; if that is a Product, it will be flattened
   /// into this Product and its scalar prefactor will be preserved
   /// @param flatten_tag if Flatten::Yes, flatten the factors
   template <typename Range>
@@ -58,10 +61,14 @@ class Product : public Expr {
         meta::is_base_of_v<Expr, std::remove_cvref_t<Range>>;
     constexpr auto rng_is_exprptr =
         meta::is_same_v<ExprPtr, std::remove_cvref_t<Range>>;
-    if constexpr (rng_is_expr || rng_is_exprptr) {
+    constexpr auto rng_is_exprholder =
+        meta::is_same_v<ExprHolder, std::remove_cvref_t<Range>>;
+    if constexpr (rng_is_expr || rng_is_exprptr || rng_is_exprholder) {
       ExprPtr rng_as_exprptr;
       if constexpr (rng_is_expr) {
         rng_as_exprptr = rng.clone();
+      } else if constexpr (rng_is_exprholder) {
+        rng_as_exprptr = ExprPtr(std::forward<Range>(rng));
       } else {
         rng_as_exprptr = rng;
       }

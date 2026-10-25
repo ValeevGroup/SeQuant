@@ -57,7 +57,9 @@ class Sum : public Expr {
   }
 
   /// construct a Sum out of a range of summands
-  /// @param rng a range
+  /// @param rng a range; if rng is an expression (or an ExprPtr or ExprHolder
+  /// to one), it is treated as a single summand rather than as the range of
+  /// its subexpressions
   template <std::ranges::range Range>
     requires(!std::same_as<std::remove_cvref_t<Range>, ExprPtrList>)
   explicit Sum(Range &&rng) {
@@ -65,11 +67,15 @@ class Sum : public Expr {
     constexpr auto rng_is_expr = is_an_expr_v<std::remove_cvref_t<Range>>;
     constexpr auto rng_is_exprptr =
         std::same_as<ExprPtr, std::remove_cvref_t<Range>>;
+    constexpr auto rng_is_exprholder =
+        std::same_as<ExprHolder, std::remove_cvref_t<Range>>;
 
-    if constexpr (rng_is_expr || rng_is_exprptr) {
+    if constexpr (rng_is_expr || rng_is_exprptr || rng_is_exprholder) {
       ExprPtr rng_as_exprptr;
       if constexpr (rng_is_expr) {
         rng_as_exprptr = rng.clone();
+      } else if constexpr (rng_is_exprholder) {
+        rng_as_exprptr = ExprPtr(std::forward<Range>(rng));
       } else {
         rng_as_exprptr = rng;
       }
