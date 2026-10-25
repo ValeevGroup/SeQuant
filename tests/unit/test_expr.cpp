@@ -1189,6 +1189,42 @@ TEST_CASE("expr", "[elements]") {
       CHECK(x->is<Constant>());
       CHECK(x->as<Constant>().value() == 84);
     }
+
+    // a root managed by shared_ptr is passed to ExprPtr visitors as-is
+    {
+      ExprPtr root = ex<Variable>(L"A");
+      std::size_t n_visited = 0;
+      root->visit([&](const ExprPtr &expr) {
+        REQUIRE(expr.get() == root.get());
+        expr->as<Variable>().set_label(L"B");
+        ++n_visited;
+      });
+      REQUIRE(n_visited == 1);
+      REQUIRE(root->as<Variable>().label() == L"B");
+    }
+
+    // visiting expressions not managed by shared_ptr
+    {
+      const Sum sum(ExprPtrList{ex<Variable>(L"A"), ex<Variable>(L"B")});
+
+      std::wstring labels;
+      sum.visit(
+          [&](const ExprPtr &expr) { labels += expr->as<Variable>().label(); },
+          /* atoms_only = */ true);
+      REQUIRE(labels == L"AB");
+
+      std::size_t n_visited = 0;
+      sum.visit([&](const Expr &) { ++n_visited; });
+      // two summands + the sum itself
+      REQUIRE(n_visited == 3);
+
+      // root is passed as a non-owning pointer to ExprPtr visitors
+      const Variable var(L"A");
+      var.visit([&](const ExprPtr &expr) {
+        REQUIRE(expr.get() == &var);
+        REQUIRE(expr.use_count() == 0);
+      });
+    }
   }
 
   SECTION("range") {
@@ -1508,6 +1544,14 @@ TEST_CASE("expr", "[elements]") {
     auto hasher2 = [](const Expr &) -> unsigned int { return 2; };
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     REQUIRE_NOTHROW(ex<Constant>(1)->hash_value(hasher1) == 0);
+    {
+      // an expression managed by shared_ptr is passed to the hasher as-is
+      const ExprPtr c = ex<Constant>(1);
+      REQUIRE(c->hash_value(
+                  [&c](const std::shared_ptr<const Expr> &ptr) -> std::size_t {
+                    return ptr.get() == c.get() ? 1 : 0;
+                  }) == 1);
+    }
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE_NOTHROW(ex<Constant>(1)->hash_value(hasher2) == 2);
 
@@ -1996,6 +2040,64 @@ TEST_CASE("expr", "[elements]") {
                     sequant::AssertBehavior::Throw) {
         REQUIRE_THROWS(std::move(holder).take_expr());
       }
+    }
+    SECTION("iteration") {
+      ExprHolder holder = Variable("A") + Variable("B") + Variable("C");
+
+      std::wstring labels;
+      for (const ExprPtr &summand : std::as_const(holder)) {
+        labels += summand->as<Variable>().label();
+      }
+      REQUIRE(labels == L"ABC");
+
+      for (ExprPtr &summand : holder) {
+        summand = ex<Constant>(1);
+      }
+      REQUIRE(std::ranges::all_of(holder, [](const ExprPtr &summand) {
+        return summand->is<Constant>();
+      }));
+
+      ExprHolder atom = Variable("A");
+      REQUIRE(atom.begin() == atom.end());
+      REQUIRE(atom.cbegin() == atom.cend());
+    }
+    SECTION("adjoint") {
+      const ExprHolder holder = Variable("A");
+      ExprHolder adj = adjoint(holder);
+
+      REQUIRE(adj->as<Variable>().conjugated());
+      REQUIRE_FALSE(holder->as<Variable>().conjugated());
+    }
+    SECTION("Power") {
+      const ExprHolder base = Variable("x");
+      Power pw(base, rational{2});
+      REQUIRE(pw.base() == ex<Variable>("x"));
+      REQUIRE(&*pw.base() != &*base);
+
+      // copies retain the conjugation and are independent of the original
+      pw.conjugate();
+      ExprHolder copy(pw);
+      REQUIRE(copy->as<Power>().conjugated());
+      REQUIRE(copy->as<Power>().exponent() == rational{2});
+      REQUIRE(&*copy->as<Power>().base() != &*pw.base());
+      ExprPtr clone = pw.clone();
+      REQUIRE(clone->as<Power>().conjugated());
+      REQUIRE(*clone == pw);
+
+      ExprHolder folded = Power(2, 3);
+      Power::flatten(folded);
+      REQUIRE(folded->is<Constant>());
+      REQUIRE(folded->as<Constant>().value() == 8);
+
+      ExprHolder unfolded = Power(L"x", 2);
+      Power::flatten(unfolded);
+      REQUIRE(unfolded->is<Power>());
+
+      ExprHolder lifted = Power(L"x", 1);
+      lifted->as<Power>().conjugate();
+      Power::flatten(lifted);
+      REQUIRE(lifted->is<Variable>());
+      REQUIRE(lifted->as<Variable>().conjugated());
     }
     SECTION("Sum and Product of a single ExprHolder") {
       const ExprHolder var = Variable("A");
