@@ -16,6 +16,44 @@ arithmetic operators (``+``, ``-``, ``*``) used to build up expressions programm
 immediate subexpressions, so an expression tree can be walked, matched, or rewritten generically without knowing the concrete type of
 every node.
 
+Since ``ExprPtr`` has pointer semantics, copying an ``ExprPtr`` does not copy the expression it points to: all copies refer to (and
+modify) the same object. To obtain an independent copy, call ``clone()``.
+
+``ExprHolder``: expressions as values
+--------------------------------------
+
+:class:`sequant::ExprHolder` stores a single expression with *value semantics*: copying an ``ExprHolder`` copies the held expression,
+so no two holders ever share an expression and modifying one never affects another. It is a regular (``std::copyable``) type and can
+thus be stored in standard containers and used with standard ranges and algorithms.
+
+- An ``ExprHolder`` can be created from any expression object, e.g. ``ExprHolder h = Variable(L"x");``. Passing an rvalue moves the
+  expression into the holder; creating one from an lvalue copies it and has to be spelled out explicitly (``ExprHolder h(expr);``).
+- Creating an ``ExprHolder`` from an ``ExprPtr`` always copies the pointed-to expression (as other ``ExprPtr`` objects may still refer
+  to it) and is therefore explicit as well. Conversely, an rvalue ``ExprHolder`` converts to an ``ExprPtr`` without copying.
+- An ``ExprHolder`` converts to ``Expr &`` (``const Expr &`` if it is ``const``), so it can be passed to every function that takes an
+  expression by reference; ``*h`` and ``h->`` give access to the held expression as well. Like ``ExprPtr``, it is iterable over the
+  immediate subexpressions of the held expression.
+- The arithmetic operators (``+``, ``-``, ``*``, and ``^`` for non-commutative products) work on ``ExprHolder`` and expression objects
+  (as well as scalars) alike and return a new ``ExprHolder``; the operands remain untouched.
+- After an ``ExprHolder`` has been moved from, the only valid operation on it is assigning a new expression to it.
+
+``ExprHolder`` is a recent addition to SeQuant and most of its API still uses ``ExprPtr``.
+
+Traversing an expression
+------------------------
+
+:func:`sequant::Expr::visit` calls a visitor on all subexpressions of an expression (with ``atoms_only = true``: only on its leaves).
+The signature of the visitor determines what it may do:
+
+- A visitor taking ``ExprPtr &`` can *replace* the visited subexpressions. Since the visited expression itself can't be replaced, it is
+  not invoked on it.
+- A visitor taking ``Expr &`` can *modify* the visited expressions in-place, and one taking ``const Expr &`` can only *inspect* them
+  (it is the only kind of visitor accepted when visiting a ``const`` expression). Both are invoked on the visited expression itself
+  as well.
+
+Visitors taking ``const ExprPtr &`` are deprecated. They are still invoked on the visited expression itself, but receive a
+*non-owning* pointer to it, which must not be retained beyond the visitor's invocation.
+
 Leaves: ``Tensor``, ``Constant``, ``Variable``
 -----------------------------------------------
 
