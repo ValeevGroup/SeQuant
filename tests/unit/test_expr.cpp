@@ -1739,6 +1739,24 @@ TEST_CASE("expr", "[elements]") {
     }
   }
 
+  SECTION("Sum::filter") {
+    const Sum sum(
+        ExprPtrList{ex<Variable>("A"), ex<Constant>(2), ex<Variable>("B")});
+
+    SECTION("predicate on Expr") {
+      ExprPtr filtered =
+          sum.filter([](const Expr &e) { return e.is<Variable>(); });
+      REQUIRE_THAT(filtered, EquivalentTo("A + B"));
+    }
+    SECTION("predicate on ExprPtr") {
+      ExprPtr filtered =
+          sum.filter([](const ExprPtr &e) { return e->is<Constant>(); });
+      REQUIRE(filtered->is<Sum>());
+      REQUIRE(filtered->size() == 1);
+      REQUIRE(filtered->as<Sum>().summand(0)->is<Constant>());
+    }
+  }
+
   SECTION("ExprHolder") {
     SECTION("Constructors") {
       SECTION("from conrete") {

@@ -119,13 +119,19 @@ class Sum : public Expr {
   /// offset
   ExprPtr take_n(size_t offset, size_t count) const;
 
-  /// @param f Boolean predicate
+  /// @param f Boolean predicate taking either a `const Expr &` or a
+  /// `const ExprPtr &`
   /// @returns A sum containing only the summands for which f was true.
-  template <std::predicate<const Expr &> Filter>
+  template <typename Filter>
+    requires(std::predicate<Filter &, const Expr &> ||
+             std::predicate<Filter &, const ExprPtr &>)
   ExprPtr filter(Filter &&f) const {
-    return ex<Sum>(summands_ |
-                   ranges::views::transform([](const auto &e) { return *e; }) |
-                   ranges::views::filter(f));
+    if constexpr (std::predicate<Filter &, const ExprPtr &>) {
+      return ex<Sum>(summands_ | ranges::views::filter(f));
+    } else {
+      return ex<Sum>(summands_ | ranges::views::filter(
+                                     [&f](const ExprPtr &e) { return f(*e); }));
+    }
   }
 
   /// @return true if the number of factors is zero
