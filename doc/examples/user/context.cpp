@@ -33,7 +33,7 @@ int main() {
   mbpt::set_default_mbpt_context(
       {.op_registry_ptr = mbpt::make_legacy_registry()});
 
-  SEQUANT_ASSERT(mbpt::to_op_class(L"t") == mbpt::OpClass::Ex);
+  SEQUANT_ASSERT(mbpt::to_op_class("t") == mbpt::OpClass::Ex);
   // end-snippet-2
 
   // start-snippet-4
@@ -52,19 +52,19 @@ int main() {
   // runs over that basis of the space. The instance is written after the
   // proto indices: i_1<;1>
   const auto& ibr = get_default_context().index_basis_registry();
-  const IndexSpace occ = ibr->retrieve_space(L"i");
+  const IndexSpace occ = ibr->retrieve_space("i");
   const Index i_canonical(occ, 1);
   const Index i_localized(IndexBasis(occ, 1), 1);
   SEQUANT_ASSERT(i_canonical.space() == i_localized.space());
   SEQUANT_ASSERT(i_canonical != i_localized);
-  SEQUANT_ASSERT(i_localized.full_label() == L"i_1<;1>");
+  SEQUANT_ASSERT(i_localized.full_label() == "i_1<;1>");
 
   // a (de)excitation operator's legs take an instance through its registry
   // entry: here the unoccupied legs of t are in basis instance 1, so the
   // amplitudes OpMaker builds, and the projectors of the equations solved for
   // them, carry it
   auto granted_registry = mbpt::make_legacy_registry();
-  granted_registry->grant_basis(L"t", ibr->retrieve_space(L"a"), 1);
+  granted_registry->grant_basis("t", ibr->retrieve_space("a"), 1);
   auto grant_resetter = mbpt::set_scoped_default_mbpt_context(
       {.op_registry_ptr = granted_registry});
   const ExprPtr t1 = mbpt::op::tensor::t(1);
@@ -88,27 +88,27 @@ int main() {
 
   // start-snippet-5
   // the Context also owns the canonicalizer configuration: within the scope,
-  // tensors labeled "A" are canonicalized by the null canonicalizer, so their
+  // tensors labeled "B" are canonicalized by the null canonicalizer, so their
   // slots keep the order the graph-based canonicalization of the product gives
   // them, here the input order (hence no phase is produced); a lone
   // Tensor::canonicalize() would use the canonicalizer of the empty label
   // instead
   auto make_product = [] {
-    return ex<Tensor>(L"A", bra{L"a_1", L"i_1"}, ket{L"i_2", L"a_2"},
+    return ex<Tensor>("B", bra{"a_1", "i_1"}, ket{"i_2", "a_2"},
                       Symmetry::Antisymm) *
-           ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_3"});
+           ex<Tensor>("t", bra{"a_3"}, ket{"i_3"});
   };
   {
     auto resetter = set_scoped_modified_default_context([](Context& scoped) {
       scoped.set_tensor_canonicalizer(
-          L"A", std::make_shared<NullTensorCanonicalizer>());
+          "B", std::make_shared<NullTensorCanonicalizer>());
     });
     auto product = make_product();
     product->canonicalize();
     SEQUANT_ASSERT(product.as<Product>().scalar() == 1);
   }
 
-  // outside of the scope the default canonicalizer reorders the indices of A,
+  // outside of the scope the default canonicalizer reorders the indices of B,
   // picking up a sign
   auto product = make_product();
   product->canonicalize();

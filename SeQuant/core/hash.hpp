@@ -20,6 +20,9 @@ namespace sequant_boost = boost;
 
 #include <SeQuant/core/meta.hpp>
 
+#include <string>
+#include <string_view>
+
 namespace sequant {
 
 class ExprPtr;
@@ -192,6 +195,18 @@ template <typename T>
 struct _<T, std::enable_if_t<!(!(has_hash_value_v<T>)&&meta::is_range_v<T>)>> {
   std::size_t operator()(T const& v) const { return hash_value(v); }
 };
+
+/// strings are hashed as sequences of bytes (using Boost's optimized
+/// implementation for contiguous ranges of bytes)
+template <>
+struct _<std::string, void> {
+  std::size_t operator()(std::string_view str) const {
+    return sequant_boost::hash_range(str.begin(), str.end());
+  }
+};
+
+template <>
+struct _<std::string_view, void> : _<std::string, void> {};
 
 template <typename T>
 auto value(const T& obj) {

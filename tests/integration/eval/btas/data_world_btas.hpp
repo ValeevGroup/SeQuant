@@ -117,7 +117,7 @@ class DataWorldBTAS {
   Tensor_t operator()(sequant::Tensor const& tensor) const {
     using namespace ranges::views;
 
-    SEQUANT_ASSERT(tensor.label() != L"t");
+    SEQUANT_ASSERT(tensor.label() != "t");
 
     auto r1_limits = range1_limits(tensor, nocc, nvirt);
     SEQUANT_ASSERT(r1_limits.size() == DataInfo::fock_rank ||
@@ -130,9 +130,9 @@ class DataWorldBTAS {
         });
 
     auto const tlabel = tensor.label();
-    SEQUANT_ASSERT(tlabel == L"g" || tlabel == L"f");
+    SEQUANT_ASSERT(tlabel == "g" || tlabel == "f");
 
-    auto const& big_tensor = tlabel == L"g" ? G_pqrs : F_pq;
+    auto const& big_tensor = tlabel == "g" ? G_pqrs : F_pq;
 
     auto slice = Tensor_t{::btas::Range{r1_limits | ranges::to_vector}};
     if (iter_limits.size() == DataInfo::fock_rank) {
@@ -171,7 +171,7 @@ class DataWorldBTAS {
     SEQUANT_ASSERT(n->result_type() == ResultType::Tensor &&
                    n->expr()->template is<Tensor>());
 
-    if (auto t = n->as_tensor(); t.label() == L"t") {
+    if (auto t = n->as_tensor(); t.label() == "t") {
       auto rank = t.rank();
       SEQUANT_ASSERT(rank <= Ts.size());
       return Ts[rank - 1];

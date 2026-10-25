@@ -115,7 +115,7 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
           }
           auto new_Nop = ex<FNOperator>(cre(new_crea), ann(new_anni));
           new_product = new_product * new_Nop;
-          // std::wcout << "product:  " << to_latex(new_product) << std::endl;
+          // std::cout << "product:  " << to_latex(new_product) << std::endl;
           new_product->canonicalize(canon_opts);
         }
 
@@ -279,7 +279,7 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
                        ExprPtr expression) {
   // index pairing is originally understood as a position in the original
   // vectors, but for this case, a map may do better.
-  container::map<std::wstring, std::wstring> original_map;
+  container::map<std::string, std::string> original_map;
   for (int i = 0; i < original_upper.size(); i++) {
     original_map.emplace(original_upper[i].to_latex(),
                          original_lower[i].to_latex());
@@ -374,7 +374,7 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
                  std::vector<Index> original_lower, ExprPtr expression,
                  bool singlet_state) {
   if (singlet_state) {
-    // std::wcout << "before spin sum! :" << std::endl <<
+    // std::cout << "before spin sum! :" << std::endl <<
     // to_latex_align(expression) << std::endl;
     auto init_upper = original_upper;
     auto init_lower = original_lower;
@@ -390,7 +390,7 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
       std::vector<Index> new_upper;
       std::vector<Index> new_lower;
       for (auto&& factor : product->as<Product>().factors()) {
-        if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"γ") {
+        if (factor->is<Tensor>() && factor->as<Tensor>().label() == "γ") {
           // prefactor = ex<Constant>(-0.5) *
           // ex<Constant>(factor->as<Tensor>().rank()) * prefactor;
           for (int i = 0; i < factor->as<Tensor>().rank(); i++) {
@@ -410,10 +410,10 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
           }
         }
       }
-      // std::wcout << to_latex_align(product) << std::endl;
+      // std::cout << to_latex_align(product) << std::endl;
       int nloops =
           num_closed_loops(init_upper, init_lower, new_upper, new_lower);
-      // std::wcout  << "nloops: " << nloops << std::endl;
+      // std::cout  << "nloops: " << nloops << std::endl;
       if (nloops == 0) {
       } else {
         prefactor = ex<Constant>(pow2(nloops)) * prefactor;

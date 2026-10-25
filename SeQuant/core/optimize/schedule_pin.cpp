@@ -35,7 +35,7 @@ using eval::schedule::TreeShape;
   throw Exception("schedule pin: term " + key + ": " + what);
 }
 
-std::string expr_string(ExprPtr const& e) { return toUtf8(v1::to_string(e)); }
+std::string expr_string(ExprPtr const& e) { return v1::to_string(e); }
 
 /// the scalar spelled the way the V1 serializer prints a Constant
 std::string scalar_string(Constant::scalar_type const& s) {
@@ -559,18 +559,17 @@ std::string spbasis_name(SPBasis b) {
 
 eval::schedule::Fingerprint make_fingerprint(
     std::vector<std::string> root_labels, OptimizeOptions const& opts,
-    std::vector<std::wstring> const& mode_order,
-    std::map<std::wstring, Index> const& representatives,
+    std::vector<std::string> const& mode_order,
+    std::map<std::string, Index> const& representatives,
     std::set<std::string> const& volatile_leaf_labels) {
   eval::schedule::Fingerprint fp;
   fp.roots = std::move(root_labels);
   auto const& policy = opts.batch_policy;
   for (auto const& [basis_key, ix] : representatives) {
-    fp.batchable[toUtf8(basis_key)] = {
-        policy.is_batchable_contracted_index &&
-            policy.is_batchable_contracted_index(ix),
-        policy.is_batchable_external_index &&
-            policy.is_batchable_external_index(ix)};
+    fp.batchable[basis_key] = {policy.is_batchable_contracted_index &&
+                                   policy.is_batchable_contracted_index(ix),
+                               policy.is_batchable_external_index &&
+                                   policy.is_batchable_external_index(ix)};
   }
   fp.volatile_leaves.assign(volatile_leaf_labels.begin(),
                             volatile_leaf_labels.end());
@@ -581,16 +580,16 @@ eval::schedule::Fingerprint make_fingerprint(
   fp.objective_function = objective_name(opts.objective_function);
   fp.reorder = reorder_name(opts.reorder);
   fp.cse["subnet"] = opts.CSE.subnet ? "true" : "false";
-  for (auto const& m : mode_order) fp.mode_order.push_back(toUtf8(m));
+  for (auto const& m : mode_order) fp.mode_order.push_back(m);
   auto const& ctx = get_default_context();
   fp.context.vacuum = vacuum_name(ctx.vacuum());
   fp.context.spbasis = spbasis_name(ctx.spbasis());
   fp.context.strict_braket_symmetry = ctx.assert_strict_braket_symmetry();
   for (auto const& l : ctx.cardinal_tensor_labels())
-    fp.context.cardinal_tensor_labels.push_back(toUtf8(l));
+    fp.context.cardinal_tensor_labels.push_back(l);
   auto const copts = ctx.canonicalization_options().value_or(
       CanonicalizeOptions::default_options());
-  fp.context.canonicalization_method = toUtf8(to_wstring(copts.method));
+  fp.context.canonicalization_method = std::string(to_string(copts.method));
   fp.context.ignore_named_index_labels =
       copts.ignore_named_index_labels ==
       CanonicalizeOptions::IgnoreNamedIndexLabel::Yes;

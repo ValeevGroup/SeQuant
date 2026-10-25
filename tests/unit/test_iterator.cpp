@@ -27,9 +27,9 @@ TEST_CASE("iterators", "[elements]") {
     }
 
     {
-      auto opseq1 = FNOperatorSeq{
-          {FNOperator(cre({L"i_1", L"i_3"}), ann({L"i_2", L"i_4"})),
-           FNOperator(cre({L"i_5"}), ann({L"i_6"}))}};
+      auto opseq1 =
+          FNOperatorSeq{{FNOperator(cre({"i_1", "i_3"}), ann({"i_2", "i_4"})),
+                         FNOperator(cre({"i_5"}), ann({"i_6"}))}};
 
       REQUIRE_NOTHROW(flattened_rangenest<FNOperatorSeq>{&opseq1});
       auto rng1 = flattened_rangenest<FNOperatorSeq>{&opseq1};
@@ -40,27 +40,27 @@ TEST_CASE("iterators", "[elements]") {
         REQUIRE(ranges::get_cursor(it1).ordinal() == i);
         switch (i) {
           case 0: {
-            REQUIRE(*it1 == fcre(L"i_1"));
+            REQUIRE(*it1 == fcre("i_1"));
             break;
           }
           case 1: {
-            REQUIRE(*it1 == fcre(L"i_3"));
+            REQUIRE(*it1 == fcre("i_3"));
             break;
           }
           case 2: {
-            REQUIRE(*it1 == fann(L"i_4"));
+            REQUIRE(*it1 == fann("i_4"));
             break;
           }
           case 3: {
-            REQUIRE(*it1 == fann(L"i_2"));
+            REQUIRE(*it1 == fann("i_2"));
             break;
           }
           case 4: {
-            REQUIRE(*it1 == fcre(L"i_5"));
+            REQUIRE(*it1 == fcre("i_5"));
             break;
           }
           case 5: {
-            REQUIRE(*it1 == fann(L"i_6"));
+            REQUIRE(*it1 == fann("i_6"));
             break;
           }
         }
@@ -75,11 +75,10 @@ TEST_CASE("iterators", "[elements]") {
     // flatten recursively
     {
       auto opseq1 = std::vector<FNOperatorSeq>{
-          FNOperatorSeq{
-              {FNOperator(cre({L"i_1", L"i_3"}), ann({L"i_2", L"i_4"})),
-               FNOperator(cre({L"i_5"}), ann({L"i_6"}))}},
-          FNOperatorSeq{{FNOperator(cre({L"i_7"}), ann({L"i_8"})),
-                         FNOperator(cre({L"i_9"}), ann({L"i_10"}))}}};
+          FNOperatorSeq{{FNOperator(cre({"i_1", "i_3"}), ann({"i_2", "i_4"})),
+                         FNOperator(cre({"i_5"}), ann({"i_6"}))}},
+          FNOperatorSeq{{FNOperator(cre({"i_7"}), ann({"i_8"})),
+                         FNOperator(cre({"i_9"}), ann({"i_10"}))}}};
 
       auto rng1 = flattened_rangenest<decltype(opseq1)>{&opseq1};
       auto rng2 = flattened_rangenest<decltype(rng1)>{&rng1};
@@ -96,43 +95,43 @@ TEST_CASE("iterators", "[elements]") {
         REQUIRE(ranges::get_cursor(it2).ordinal() == i);
         switch (i) {
           case 0: {
-            REQUIRE(*it2 == fcre(L"i_1"));
+            REQUIRE(*it2 == fcre("i_1"));
             break;
           }
           case 1: {
-            REQUIRE(*it2 == fcre(L"i_3"));
+            REQUIRE(*it2 == fcre("i_3"));
             break;
           }
           case 2: {
-            REQUIRE(*it2 == fann(L"i_4"));
+            REQUIRE(*it2 == fann("i_4"));
             break;
           }
           case 3: {
-            REQUIRE(*it2 == fann(L"i_2"));
+            REQUIRE(*it2 == fann("i_2"));
             break;
           }
           case 4: {
-            REQUIRE(*it2 == fcre(L"i_5"));
+            REQUIRE(*it2 == fcre("i_5"));
             break;
           }
           case 5: {
-            REQUIRE(*it2 == fann(L"i_6"));
+            REQUIRE(*it2 == fann("i_6"));
             break;
           }
           case 6: {
-            REQUIRE(*it2 == fcre(L"i_7"));
+            REQUIRE(*it2 == fcre("i_7"));
             break;
           }
           case 7: {
-            REQUIRE(*it2 == fann(L"i_8"));
+            REQUIRE(*it2 == fann("i_8"));
             break;
           }
           case 8: {
-            REQUIRE(*it2 == fcre(L"i_9"));
+            REQUIRE(*it2 == fcre("i_9"));
             break;
           }
           case 9: {
-            REQUIRE(*it2 == fann(L"i_10"));
+            REQUIRE(*it2 == fann("i_10"));
             break;
           }
         }

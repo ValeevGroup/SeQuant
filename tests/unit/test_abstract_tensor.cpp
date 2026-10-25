@@ -17,15 +17,15 @@
 TEST_CASE("abstract_tensor", "[elements]") {
   using namespace sequant;
 
-  std::map<SlotType, std::array<const wchar_t*, 3>> orig_idxs;
-  std::array braidxs{L"p_1", L"p_2", L"p_3"};
-  std::array ketidxs{L"p_4", L"p_5", L"p_6"};
-  std::array auxidxs{L"p_7", L"p_8", L"p_9"};
+  std::map<SlotType, std::array<const char*, 3>> orig_idxs;
+  std::array braidxs{"p_1", "p_2", "p_3"};
+  std::array ketidxs{"p_4", "p_5", "p_6"};
+  std::array auxidxs{"p_7", "p_8", "p_9"};
   orig_idxs[SlotType::Bra] = braidxs;
   orig_idxs[SlotType::Ket] = ketidxs;
   orig_idxs[SlotType::Aux] = auxidxs;
   std::shared_ptr<AbstractTensor> tensor = std::make_shared<Tensor>(
-      L"t", bra<decltype(braidxs)>{braidxs}, ket<decltype(ketidxs)>{ketidxs},
+      "t", bra<decltype(braidxs)>{braidxs}, ket<decltype(ketidxs)>{ketidxs},
       aux<decltype(auxidxs)>{auxidxs});
   std::shared_ptr<AbstractTensor> nop = std::make_shared<FNOperator>(
       cre<decltype(ketidxs)>{ketidxs}, ann<decltype(braidxs)>{braidxs});
@@ -49,7 +49,7 @@ TEST_CASE("abstract_tensor", "[elements]") {
         // permute 1-index slots
         for (auto slottype : {SlotType::Bra, SlotType::Ket, SlotType::Aux}) {
           // skip aux for nop
-          if (t._label() != L"t" && slottype == SlotType::Aux) continue;
+          if (t._label() != "t" && slottype == SlotType::Aux) continue;
 
           auto idxs = [&]() {
             switch (slottype) {

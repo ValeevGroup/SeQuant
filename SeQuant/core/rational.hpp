@@ -124,16 +124,6 @@ inline std::string to_string(const boost::multiprecision::number<Backend>& i) {
   return boost::lexical_cast<std::string>(i);
 }
 
-inline std::wstring to_wstring(const rational& i) {
-  return toUtf16(boost::lexical_cast<std::string>(i));
-}
-
-template <typename Backend>
-inline std::wstring to_wstring(
-    const boost::multiprecision::number<Backend>& i) {
-  return toUtf16(boost::lexical_cast<std::string>(i));
-}
-
 }  // namespace sequant
 
 #endif  // SEQUANT_CORE_RATIONAL_H

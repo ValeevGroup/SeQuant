@@ -26,35 +26,33 @@ ExprPtr get_op_sequence(std::size_t i) {
 
   switch (i) {
     case 1:
-      return deserialize<ExprPtr>(L"f{p1;p2} t{p3;p4}") *
-             ex<Op>(cre({L"p_1"}), ann({L"p_2"})) *
-             ex<Op>(cre({L"p_3"}), ann({L"p_4"}));
+      return deserialize<ExprPtr>("f{p1;p2} t{p3;p4}") *
+             ex<Op>(cre({"p_1"}), ann({"p_2"})) *
+             ex<Op>(cre({"p_3"}), ann({"p_4"}));
     case 2:
-      return deserialize<ExprPtr>(L"Â{p1,p2;p3,p4}:A g{p5,p6;p7,p8}:A") *
-             ex<Op>(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"})) *
-             ex<Op>(cre({L"p_5", L"p_6"}), ann({L"p_7", L"p_8"}));
+      return deserialize<ExprPtr>("Â{p1,p2;p3,p4}:A g{p5,p6;p7,p8}:A") *
+             ex<Op>(cre({"p_1", "p_2"}), ann({"p_3", "p_4"})) *
+             ex<Op>(cre({"p_5", "p_6"}), ann({"p_7", "p_8"}));
     case 3:
-      return deserialize<ExprPtr>(L"Â{p1,p2,p3;p4,p5,p6}:A g{p7,p8;p9,p10}:A") *
-             ex<Op>(cre({L"p_1", L"p_2", L"p_3"}),
-                    ann({L"p_4", L"p_5", L"p_6"})) *
-             ex<Op>(cre({L"p_7", L"p_8"}), ann({L"p_9", L"p_10"}));
+      return deserialize<ExprPtr>("Â{p1,p2,p3;p4,p5,p6}:A g{p7,p8;p9,p10}:A") *
+             ex<Op>(cre({"p_1", "p_2", "p_3"}), ann({"p_4", "p_5", "p_6"})) *
+             ex<Op>(cre({"p_7", "p_8"}), ann({"p_9", "p_10"}));
     case 4:
       return deserialize<ExprPtr>(
-                 L"Â{p1,p2,p3;p4,p5,p6}:A g{p7,p8;p9,p10}:A "
-                 L"t{p11,p12,p13;p14,p15,p16}:A") *
-             ex<Op>(cre({L"p_1", L"p_2", L"p_3"}),
-                    ann({L"p_4", L"p_5", L"p_6"})) *
-             ex<Op>(cre({L"p_7", L"p_8"}), ann({L"p_9", L"p_10"})) *
-             ex<Op>(cre({L"p_11", L"p_12", L"p_13"}),
-                    ann({L"p_14", L"p_15", L"p_16"}));
+                 "Â{p1,p2,p3;p4,p5,p6}:A g{p7,p8;p9,p10}:A "
+                 "t{p11,p12,p13;p14,p15,p16}:A") *
+             ex<Op>(cre({"p_1", "p_2", "p_3"}), ann({"p_4", "p_5", "p_6"})) *
+             ex<Op>(cre({"p_7", "p_8"}), ann({"p_9", "p_10"})) *
+             ex<Op>(cre({"p_11", "p_12", "p_13"}),
+                    ann({"p_14", "p_15", "p_16"}));
     case 5:
       return deserialize<ExprPtr>(
-                 L"Â{p1,p2;p3,p4}:A g{p5,p6;p7,p8}:A "
-                 L"t{p9,p10;p11,p12}:A t{p13,p14;p15,p16}:A") *
-             ex<Op>(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"})) *
-             ex<Op>(cre({L"p_5", L"p_6"}), ann({L"p_7", L"p_8"})) *
-             ex<Op>(cre({L"p_9", L"p_10"}), ann({L"p_11", L"p_12"})) *
-             ex<Op>(cre({L"p_13", L"p_14"}), ann({L"p_15", L"p_16"}));
+                 "Â{p1,p2;p3,p4}:A g{p5,p6;p7,p8}:A "
+                 "t{p9,p10;p11,p12}:A t{p13,p14;p15,p16}:A") *
+             ex<Op>(cre({"p_1", "p_2"}), ann({"p_3", "p_4"})) *
+             ex<Op>(cre({"p_5", "p_6"}), ann({"p_7", "p_8"})) *
+             ex<Op>(cre({"p_9", "p_10"}), ann({"p_11", "p_12"})) *
+             ex<Op>(cre({"p_13", "p_14"}), ann({"p_15", "p_16"}));
   }
 
   throw sequant::Exception("Invalid index");

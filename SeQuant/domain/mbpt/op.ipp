@@ -23,7 +23,7 @@ Operator<QuantumNumbers, S>::Operator() = default;
 
 template <typename QuantumNumbers, Statistics S>
 Operator<QuantumNumbers, S>::Operator(
-    std::function<std::wstring_view()> label_generator,
+    std::function<std::string_view()> label_generator,
     std::function<ExprPtr()> tensor_form_generator,
     std::function<void(QuantumNumbers&)> qn_action)
     : base_type(std::move(label_generator), std::move(tensor_form_generator)),
@@ -31,7 +31,7 @@ Operator<QuantumNumbers, S>::Operator(
 
 template <typename QuantumNumbers, Statistics S>
 Operator<QuantumNumbers, S>::Operator(
-    std::function<std::wstring_view()> label_generator,
+    std::function<std::string_view()> label_generator,
     std::function<ExprPtr()> tensor_form_generator,
     std::function<void(QuantumNumbers&)> qn_action, const OpParams& params)
     : Operator(std::move(label_generator), std::move(tensor_form_generator),
@@ -43,7 +43,7 @@ Operator<QuantumNumbers, S>::Operator(
     auto decorated = detail::decorate_with_pert_order(this->label_generator_(),
                                                       static_cast<int>(order_));
     this->label_generator_ =
-        [label = std::move(decorated)]() -> std::wstring_view { return label; };
+        [label = std::move(decorated)]() -> std::string_view { return label; };
   }
   // set up batch ordinals if any
   if (!params.batch_ordinals.empty()) {
@@ -98,12 +98,12 @@ bool Operator<QuantumNumbers, S>::static_less_than(const Expr& that) const {
   if (this_label == that_label) return this->less_than_rank_of(that_op);
   const auto this_is_cardinal_it = ranges::find_if(
       cardinal_tensor_labels,
-      [&this_label](const std::wstring& l) { return l == this_label; });
+      [&this_label](const std::string& l) { return l == this_label; });
   const auto this_is_cardinal =
       this_is_cardinal_it != ranges::end(cardinal_tensor_labels);
   const auto that_is_cardinal_it = ranges::find_if(
       cardinal_tensor_labels,
-      [&that_label](const std::wstring& l) { return l == that_label; });
+      [&that_label](const std::string& l) { return l == that_label; });
   const auto that_is_cardinal =
       that_is_cardinal_it != ranges::end(cardinal_tensor_labels);
   if (this_is_cardinal && that_is_cardinal) {
@@ -197,7 +197,7 @@ void Operator<QuantumNumbers, S>::adjoint() {
                 "mbpt::Operator::adjoint: QuantumNumbers type mismatch");
 
   // grab label and update according to adjoint flag
-  auto lbl = std::wstring(this->label());
+  auto lbl = std::string(this->label());
   SEQUANT_ASSERT(sequant::is_adjoint_label(lbl) == is_adjoint_);
   sequant::toggle_adjoint_label(lbl);
 
@@ -211,7 +211,7 @@ void Operator<QuantumNumbers, S>::adjoint() {
   auto base_tensor_form = this->tensor_form_generator_;
   const auto adjoint_dN = sequant::adjoint(dN);
   *this = Operator{
-      [=]() -> std::wstring_view { return lbl; },  // label_generator
+      [=]() -> std::string_view { return lbl; },  // label_generator
       [=]() -> ExprPtr {
         return sequant::adjoint(base_tensor_form());  // tensor_form_generator
       },
@@ -256,7 +256,7 @@ ExprPtr Operator<QuantumNumbers, S>::clone() const {
 // hole_space, this notation is unsuitable, and we default to level printing of
 // the operator.
 template <typename QuantumNumbers, Statistics S>
-std::wstring Operator<QuantumNumbers, S>::to_latex() const {
+std::string Operator<QuantumNumbers, S>::to_latex() const {
   return sequant::to_latex(*this);
 }
 
@@ -267,7 +267,7 @@ Expr::hash_type Operator<QuantumNumbers, S>::memoizing_hash() const {
     using std::end;
     auto qns = (*this)(QuantumNumbers{});
     auto val = sequant::hash::value(qns);
-    sequant::hash::combine(val, std::wstring(this->label()));
+    sequant::hash::combine(val, std::string(this->label()));
     if (batch_ordinals()) {
       const auto ordinals = batch_ordinals().value();
       sequant::hash::range(val, begin(ordinals), end(ordinals));

@@ -12,11 +12,11 @@ static constexpr std::size_t nInputs = 2;
 static ExprPtr get_expression(std::size_t i) {
   switch (i) {
     case 1:
-      return deserialize<ExprPtr>(L"2 t{i1;a1<i1>} F{a1<i1>;i1}");
+      return deserialize<ExprPtr>("2 t{i1;a1<i1>} F{a1<i1>;i1}");
     case 2:
       return deserialize<ExprPtr>(
-          L"f{i1;a1} t{a1;i1} + 1/2 g{i1,i2;a1,a2}:A t{a1;i1} t{a2;i2} "
-          L"+ 1/4 g{i1,i2;a1,a2}:A t{a1,a2;i1,i2}:A");
+          "f{i1;a1} t{a1;i1} + 1/2 g{i1,i2;a1,a2}:A t{a1;i1} t{a2;i2} "
+          "+ 1/4 g{i1,i2;a1,a2}:A t{a1,a2;i1,i2}:A");
   }
 
   throw sequant::Exception("Invalid index");

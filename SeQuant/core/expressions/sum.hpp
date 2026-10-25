@@ -124,7 +124,7 @@ class Sum : public Expr {
   /// @return the number of summands in a Sum
   std::size_t size() const;
 
-  std::wstring to_latex() const override;
+  std::string to_latex() const override;
 
   static constexpr type_rank_type type_rank = expr_type_rank::sum;
   static constexpr std::string static_type_name(std::type_identity<Sum> = {}) {

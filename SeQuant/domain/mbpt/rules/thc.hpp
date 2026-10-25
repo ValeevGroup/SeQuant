@@ -30,9 +30,9 @@ namespace sequant::mbpt {
 // clang-format on
 [[nodiscard]] ExprPtr tensor_hypercontract(ExprPtr const& expr,
                                            IndexSpace aux_space,
-                                           std::wstring_view tensor_label,
-                                           std::wstring_view outer_factor_label,
-                                           std::wstring_view core_tensor_label);
+                                           std::string_view tensor_label,
+                                           std::string_view outer_factor_label,
+                                           std::string_view core_tensor_label);
 
 }  // namespace sequant::mbpt
 

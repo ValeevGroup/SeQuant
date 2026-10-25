@@ -157,13 +157,13 @@ class GenerationOptimizer final : public Generator<MainContext> {
 
       if (std::holds_alternative<Tensor>(m_object)) {
         const Tensor &tensor = std::get<Tensor>(m_object);
-        str += toUtf8(tensor.label());
+        str += std::string(tensor.label());
         str += ":";
         for (const Index &idx : tensor.indices()) {
-          str += toUtf8(idx.space().reduce_key(idx.label()));
+          str += std::string(idx.space().reduce_key(idx.label()));
         }
       } else {
-        str += toUtf8(std::get<Variable>(m_object).label());
+        str += std::string(std::get<Variable>(m_object).label());
       }
 
       return str;

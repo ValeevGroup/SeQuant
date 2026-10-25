@@ -171,9 +171,9 @@ TEST_CASE("bliss", "[elements]") {
     g.add_edge(0, 1);
     g.add_edge(1, 2);
 
-    std::wostringstream oss;
-    g.write_dot(oss, {.labels = {L"a", L"b", L"c"},
-                      .texlabels = {L"$a$", L"$b$", L"$c$"},
+    std::ostringstream oss;
+    g.write_dot(oss, {.labels = {"a", "b", "c"},
+                      .texlabels = {"$a$", "$b$", "$c$"},
                       .display_colors = false,
                       .vertex_to_subgraph =
                           [](std::size_t v) -> std::optional<std::uint64_t> {
@@ -183,15 +183,15 @@ TEST_CASE("bliss", "[elements]") {
     // vertices outside any subgraph come first; an edge is emitted once, from
     // the vertex whose subgraph (or, within one subgraph, ordinal) is lower
     REQUIRE(oss.str() ==
-            L"graph g {\n"
-            L"node [ style=filled, penwidth=2, margin=0];\n"
-            L"v2 [ label=\"c\", texlbl=\"$c$:0\"];\n"
-            L"v2 -- v1\n"
-            L"subgraph cluster0 {\n"
-            L"v0 [ label=\"a\", texlbl=\"$a$:0\"];\n"
-            L"v0 -- v1\n"
-            L"v1 [ label=\"b\", texlbl=\"$b$:0\"];\n"
-            L"}\n"
-            L"}\n");
+            "graph g {\n"
+            "node [ style=filled, penwidth=2, margin=0];\n"
+            "v2 [ label=\"c\", texlbl=\"$c$:0\"];\n"
+            "v2 -- v1\n"
+            "subgraph cluster0 {\n"
+            "v0 [ label=\"a\", texlbl=\"$a$:0\"];\n"
+            "v0 -- v1\n"
+            "v1 [ label=\"b\", texlbl=\"$b$:0\"];\n"
+            "}\n"
+            "}\n");
   }
 }

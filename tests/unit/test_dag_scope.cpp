@@ -34,7 +34,7 @@ sequant::eval::dryrun::EvalNodeDryRun dag_leaf(sequant::ExprPtr const& t) {
 
 sequant::ExprPtr dag_g(
     sequant::container::svector<sequant::Index> const& idxs) {
-  return sequant::ex<sequant::Tensor>(L"g", sequant::bra(idxs), sequant::ket{},
+  return sequant::ex<sequant::Tensor>("g", sequant::bra(idxs), sequant::ket{},
                                       sequant::Symmetry::Nonsymm, std::nullopt,
                                       sequant::ColumnSymmetry::Nonsymm);
 }
@@ -53,7 +53,7 @@ TEST_CASE(
   // A rank-4 node whose canon_indices are, in order, [i_4, mu (a
   // stand-in for a PNO-like mu-tilde mode), i_1, i_2] -- i_2 (the chosen
   // loop axis) sits at position 3.
-  Index i1{L"i_1"}, i2{L"i_2"}, i4{L"i_4"}, mu{L"i_5"};
+  Index i1{"i_1"}, i2{"i_2"}, i4{"i_4"}, mu{"i_5"};
   auto node = dag_leaf(dag_g({i4, mu, i1, i2}));
 
   std::size_t const rank = node->canon_indices().size();
@@ -64,7 +64,7 @@ TEST_CASE(
   REQUIRE(sig[0].has_value());
   CHECK(*sig[0] == 3);
 
-  DagScopeLevel level_i2{1, L"aux", 0};
+  DagScopeLevel level_i2{1, "aux", 0};
   auto m2l = sequant::mode_to_level_from_signature(
       rank, sig, svector<DagScopeLevel>{level_i2});
 

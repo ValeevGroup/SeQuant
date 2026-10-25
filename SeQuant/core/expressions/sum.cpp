@@ -121,26 +121,26 @@ bool Sum::empty() const { return summands_.empty(); }
 
 std::size_t Sum::size() const { return summands_.size(); }
 
-std::wstring Sum::to_latex() const {
-  std::wstring result;
-  result = L"{ \\bigl(";
+std::string Sum::to_latex() const {
+  std::string result;
+  result = "{ \\bigl(";
   std::size_t counter = 0;
   for (const auto &i : summands()) {
     const auto i_is_product = i->is<Product>();
     if (!i_is_product) {
-      result += (counter == 0) ? i->to_latex() : (L" + " + i->to_latex());
+      result += (counter == 0) ? i->to_latex() : (" + " + i->to_latex());
     } else {  // i_is_product
       const auto i_prod = i->as<Product>();
       const auto scalar = i_prod.scalar();
       if (scalar.real() < 0 || (scalar.real() == 0 && scalar.imag() < 0)) {
-        result += L" - " + i_prod.to_latex(true);
+        result += " - " + i_prod.to_latex(true);
       } else {
-        result += (counter == 0) ? i->to_latex() : (L" + " + i->to_latex());
+        result += (counter == 0) ? i->to_latex() : (" + " + i->to_latex());
       }
     }
     ++counter;
   }
-  result += L"\\bigr) }";
+  result += "\\bigr) }";
   return result;
 }
 
@@ -166,8 +166,8 @@ void Sum::adjoint() {
 
 ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
   if (Logger::instance().canonicalize)
-    std::wcout << "Sum::canonicalize_impl: input = "
-               << to_latex_align(shared_from_this()) << std::endl;
+    std::cout << "Sum::canonicalize_impl: input = "
+              << to_latex_align(shared_from_this()) << std::endl;
 
   // options of the rapid and of the full canonicalization of the summands;
   // canonicalizing TNs in a sum requires treating named indices as
@@ -204,9 +204,9 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
       }
     });
     if (Logger::instance().canonicalize)
-      std::wcout << "Sum::canonicalize_impl (pass=" << pass
-                 << "): after canonicalizing summands = "
-                 << to_latex_align(shared_from_this()) << std::endl;
+      std::cout << "Sum::canonicalize_impl (pass=" << pass
+                << "): after canonicalizing summands = "
+                << to_latex_align(shared_from_this()) << std::endl;
 
     HashingAccumulator acc;
     for (auto &summand : summands_) {
@@ -222,9 +222,9 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     swap(*this, *new_sum);
 
     if (Logger::instance().canonicalize)
-      std::wcout << "Sum::canonicalize_impl (pass=" << pass
-                 << "): after reducing summands = "
-                 << to_latex_align(shared_from_this()) << std::endl;
+      std::cout << "Sum::canonicalize_impl (pass=" << pass
+                << "): after reducing summands = "
+                << to_latex_align(shared_from_this()) << std::endl;
   }
 
   return {};  // side effects are absorbed into summands

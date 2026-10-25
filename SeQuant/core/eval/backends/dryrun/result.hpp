@@ -176,7 +176,7 @@ inline void check_shared_ranges(char const* op, annot_t const& lannot,
     if (llo == rlo && (lext == rext || lext == 0 || rext == 0)) continue;
     auto lbls = [](annot_t const& a) {
       std::string s;
-      for (auto const& x : a) s += toUtf8(x.full_label()) + " ";
+      for (auto const& x : a) s += std::string(x.full_label()) + " ";
       return s;
     };
     throw Exception(std::format(
@@ -184,7 +184,7 @@ inline void check_shared_ranges(char const* op, annot_t const& lannot,
         "operands: L[{}]=[{},{}) vs R[{}]=[{},{}) -- a whole operand against "
         "a sliced partner (extent) or two slices of different batches "
         "(lobound); L=({}) R=({})",
-        op, toUtf8(lannot[lp].full_label()), lp, llo, llo + lext, rp, rlo,
+        op, std::string(lannot[lp].full_label()), lp, llo, llo + lext, rp, rlo,
         rlo + rext, lbls(lannot), lbls(rannot)));
   }
 }
@@ -211,7 +211,8 @@ inline void check_accumulate_ranges(
         "[dryrun] add_inplace: mode {} ({}) accumulator range [{},{}) vs "
         "partial range [{},{}) -- accumulating a partial of a different "
         "slicing/batch into this cell",
-        pos, toUtf8(idx[pos].full_label()), lo, lo + ext, olo, olo + oext));
+        pos, std::string(idx[pos].full_label()), lo, lo + ext, olo,
+        olo + oext));
   }
 }
 
@@ -416,10 +417,11 @@ struct DryRunOps {
     }();
     if (block_extent != block_hi - block_lo) {
       std::cerr << "[scatter-mismatch] result idx=[";
-      for (auto const& x : idx) std::cerr << toUtf8(x.full_label()) << " ";
-      std::cerr << "] slice mode=" << mode << " (" << toUtf8(mix.full_label())
-                << ") block idx=[";
-      for (auto const& x : bidx) std::cerr << toUtf8(x.full_label()) << " ";
+      for (auto const& x : idx) std::cerr << std::string(x.full_label()) << " ";
+      std::cerr << "] slice mode=" << mode << " ("
+                << std::string(mix.full_label()) << ") block idx=[";
+      for (auto const& x : bidx)
+        std::cerr << std::string(x.full_label()) << " ";
       std::cerr << "] block_extent=" << block_extent << " expected slice=["
                 << block_lo << "," << block_hi << ")=" << (block_hi - block_lo)
                 << " regime_extent(mix)=" << cm->regime().extent(mix)
@@ -432,7 +434,8 @@ struct DryRunOps {
       throw Exception(std::format(
           "[dryrun] write_into_slice: block extent {} on mode {} ({}) != "
           "destination slice [{},{})",
-          block_extent, mode, toUtf8(mix.full_label()), block_lo, block_hi));
+          block_extent, mode, std::string(mix.full_label()), block_lo,
+          block_hi));
     // The block's absolute position on this mode (if it is a slice) must be
     // the destination slice it is written into.
     {
@@ -443,7 +446,7 @@ struct DryRunOps {
           throw Exception(std::format(
               "[dryrun] write_into_slice: block lobound {} on mode {} ({}) != "
               "destination slice lobound {}",
-              lit->second, mode, toUtf8(mix.full_label()), block_lo));
+              lit->second, mode, std::string(mix.full_label()), block_lo));
       }
     }
     // Merge the block's range into the assembled coverage, requiring
@@ -471,7 +474,7 @@ struct DryRunOps {
             "[dryrun] write_into_slice: block [{},{}) on mode {} ({}) neither "
             "appends after nor prepends before the assembled coverage [{},{}) "
             "-- a gapped or overlapping scatter",
-            block_lo, block_hi, mode, toUtf8(mix.full_label()), lohi.first,
+            block_lo, block_hi, mode, std::string(mix.full_label()), lohi.first,
             lohi.second));
       if (append)
         lohi.second = block_hi;

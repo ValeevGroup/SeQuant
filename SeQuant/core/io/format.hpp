@@ -26,30 +26,17 @@ namespace sequant::io::detail {
 // a bad specifier, the compiler's diagnostic names this function.
 inline void invalid_expression_format_specifier() {}
 
-template <typename Char, typename T>
+template <typename T>
   requires(std::same_as<T, Expr> || std::same_as<T, ResultExpr>)
-std::basic_string<Char> expression_string(const T* expr, bool serialize) {
-  auto text = expr ? (serialize ? serialization::to_string(*expr)
-                                : latex::to_string(*expr))
-                   : L"";
-  if constexpr (std::same_as<Char, char>) {
-    return toUtf8(text);
-  } else {
-    return text;
-  }
+std::string expression_string(const T* expr, bool serialize) {
+  return expr ? (serialize ? serialization::to_string(*expr)
+                           : latex::to_string(*expr))
+              : std::string{};
 }
 
-template <typename T, typename Char, typename Traits>
-std::basic_ostream<Char, Traits>& insert_expression(
-    std::basic_ostream<Char, Traits>& stream, const T* expr, bool serialize) {
-  const auto text = expression_string<Char>(expr, serialize);
-  return stream << std::basic_string_view<Char, Traits>(text.data(),
-                                                        text.size());
-}
-
-template <typename Char, bool SerializeDefault>
+template <bool SerializeDefault>
 struct expression_formatter {
-  constexpr auto parse(std::basic_format_parse_context<Char>& ctx) {
+  constexpr auto parse(std::format_parse_context& ctx) {
     const auto begin = ctx.begin();
     auto end = begin;
     while (end != ctx.end() && *end != '}') ++end;
@@ -73,12 +60,12 @@ struct expression_formatter {
   auto format(const T& expr, FormatContext& ctx) const {
     const auto text = [&] {
       if constexpr (std::same_as<T, sequant::ExprPtr>) {
-        return expression_string<Char>(expr.get(), serialize_);
+        return expression_string(expr.get(), serialize_);
       } else if constexpr (std::same_as<T, sequant::ResultExpr>) {
-        return expression_string<Char>(std::addressof(expr), serialize_);
+        return expression_string(std::addressof(expr), serialize_);
       } else {
-        return expression_string<Char, sequant::Expr>(std::addressof(expr),
-                                                      serialize_);
+        return expression_string<sequant::Expr>(std::addressof(expr),
+                                                serialize_);
       }
     }();
     return std::copy(text.begin(), text.end(), ctx.out());
@@ -92,40 +79,29 @@ struct expression_formatter {
 
 namespace sequant {
 
-/// Inserts the expression's serialized representation into a narrow or wide
-/// stream.
-template <typename Char, typename Traits>
-  requires(std::same_as<Char, char> || std::same_as<Char, wchar_t>)
-std::basic_ostream<Char, Traits>& operator<<(
-    std::basic_ostream<Char, Traits>& stream, const Expr& expr) {
-  return io::detail::insert_expression(stream, &expr, true);
+/// Inserts the expression's serialized representation into a stream.
+inline std::ostream& operator<<(std::ostream& stream, const Expr& expr) {
+  return stream << io::detail::expression_string(&expr, true);
 }
 
 /// Inserts serialization, or an empty string for an empty expression pointer.
-template <typename Char, typename Traits>
-  requires(std::same_as<Char, char> || std::same_as<Char, wchar_t>)
-std::basic_ostream<Char, Traits>& operator<<(
-    std::basic_ostream<Char, Traits>& stream, const ExprPtr& expr) {
-  return io::detail::insert_expression(stream, expr.get(), true);
+inline std::ostream& operator<<(std::ostream& stream, const ExprPtr& expr) {
+  return stream << io::detail::expression_string(expr.get(), true);
 }
 
 /// Inserts the result expression's serialized representation.
-template <typename Char, typename Traits>
-  requires(std::same_as<Char, char> || std::same_as<Char, wchar_t>)
-std::basic_ostream<Char, Traits>& operator<<(
-    std::basic_ostream<Char, Traits>& stream, const ResultExpr& expr) {
-  return io::detail::insert_expression(stream, &expr, true);
+inline std::ostream& operator<<(std::ostream& stream, const ResultExpr& expr) {
+  return stream << io::detail::expression_string(&expr, true);
 }
 
 }  // namespace sequant
 
-template <typename T, typename Char>
-  requires((std::derived_from<T, sequant::Expr> ||
-            std::same_as<T, sequant::ExprPtr> ||
-            std::same_as<T, sequant::ResultExpr>) &&
-           (std::same_as<Char, char> || std::same_as<Char, wchar_t>))
-struct std::formatter<T, Char>
-    : sequant::io::detail::expression_formatter<Char, true> {};
+template <typename T>
+  requires(std::derived_from<T, sequant::Expr> ||
+           std::same_as<T, sequant::ExprPtr> ||
+           std::same_as<T, sequant::ResultExpr>)
+struct std::formatter<T, char>
+    : sequant::io::detail::expression_formatter<true> {};
 
 #if defined(__cpp_lib_format_ranges)
 // Expressions iterate over their subexpressions; without this the standard

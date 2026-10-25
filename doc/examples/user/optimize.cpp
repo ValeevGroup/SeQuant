@@ -15,9 +15,9 @@ int main() {
 
   // a chain of 3 tensors written as one flat Product; SeQuant does not
   // commit to a pairwise evaluation order until one is asked for
-  auto expr = ex<Tensor>(L"A", bra{L"a_1"}, ket{L"i_1"}) *
-              ex<Tensor>(L"B", bra{L"i_1"}, ket{L"i_2"}) *
-              ex<Tensor>(L"C", bra{L"i_2"}, ket{L"a_2"});
+  auto expr = ex<Tensor>("A", bra{"a_1"}, ket{"i_1"}) *
+              ex<Tensor>("B", bra{"i_1"}, ket{"i_2"}) *
+              ex<Tensor>("C", bra{"i_2"}, ket{"a_2"});
 
   // optimize() picks a pairwise contraction order (and, for a Sum, reorders
   // summands to share intermediates) that minimizes a cost metric -- by
@@ -25,7 +25,7 @@ int main() {
   // IndexBasis::extent() for index extents
   auto optimized = optimize(expr);
 
-  std::wcout << optimized << std::endl;
+  std::cout << optimized << std::endl;
   // end-snippet-1
 
   SEQUANT_ASSERT(optimized.is<Product>());

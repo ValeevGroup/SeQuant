@@ -161,12 +161,12 @@ struct IndexSpaceSpec {
 /// IndexSpaceSpec, a bare value in the brace list is rejected
 struct IndexBasisSpec {
   SEQUANT_DESIGNATED_INIT_ONLY;
-  /// a label given in a spec: any string type (see basic_string_convertible),
+  /// a label given in a spec: any string type (see string_convertible),
   /// kept as the registry keeps labels
   struct Label {
-    std::wstring value;
-    template <basic_string_convertible S>
-    Label(S&& label) : value(toUtf16(std::forward<S>(label))) {}
+    std::string value;
+    template <string_convertible S>
+    Label(S&& label) : value(to_string_view(label)) {}
   };
 
   /// the number of functions in the basis; if not given, the dimension of its
@@ -240,7 +240,7 @@ class IndexBasisRegistry {
  public:
   /// label -> basis: a space is the entry under its base_key() with a null
   /// instance, a named basis instance any other entry
-  using table_type = container::map<std::wstring, IndexBasis, std::less<>>;
+  using table_type = container::map<std::string, IndexBasis, std::less<>>;
 
   /// exception type thrown when a label names a basis instance where a space
   /// is required
@@ -405,9 +405,9 @@ class IndexBasisRegistry {
   /// of an Index (see Index::label() )
   /// @return pointer to the IndexBasis registered under that key, or nullptr
   /// if not found
-  template <basic_string_convertible S>
+  template <string_convertible S>
   const IndexBasis* retrieve_ptr(S&& label) const {
-    auto it = bases_.find(IndexBasis::reduce_key(to_basic_string_view(label)));
+    auto it = bases_.find(IndexBasis::reduce_key(to_string_view(label)));
     return it != bases_.end() ? &it->second : nullptr;
   }
 
@@ -416,7 +416,7 @@ class IndexBasisRegistry {
   /// of an Index (see Index::label() )
   /// @return the IndexBasis registered under that key
   /// @throw IndexBasis::bad_key if no entry is registered under that key
-  template <basic_string_convertible S>
+  template <string_convertible S>
   const IndexBasis& retrieve(S&& label) const {
     if (const auto* b = retrieve_ptr(label)) return *b;
     throw IndexBasis::bad_key(label);
@@ -425,11 +425,11 @@ class IndexBasisRegistry {
   /// @return the label under which the space and instance of @p b are
   /// registered (see same_instance()), or std::nullopt if @p b has no basis
   /// instance or they are not named
-  std::optional<std::wstring_view> basis_label(const IndexBasis& b) const {
+  std::optional<std::string_view> basis_label(const IndexBasis& b) const {
     if (!b.has_basis_instance() || named_count_ == 0) return std::nullopt;
     for (auto const& [label, basis] : bases_)
       if (basis.has_basis_instance() && same_instance(basis, b))
-        return std::wstring_view(label);
+        return std::string_view(label);
     return std::nullopt;
   }
 
@@ -451,7 +451,7 @@ class IndexBasisRegistry {
   /// @param n the extent
   /// @return reference to `this`
   /// @throw IndexBasis::bad_key if no entry is registered under @p label
-  template <basic_string_convertible S>
+  template <string_convertible S>
   IndexBasisRegistry& extent(S&& label, std::size_t n) {
     auto& entry = entry_or_throw(label);
     if (entry.has_basis_instance()) {
@@ -464,7 +464,7 @@ class IndexBasisRegistry {
   }
 
   /// @deprecated use extent(label, n)
-  template <basic_string_convertible S>
+  template <string_convertible S>
   [[deprecated("use extent(label, n)")]] IndexBasisRegistry& approximate_size(
       S&& label, std::size_t n) {
     return extent(std::forward<S>(label), n);
@@ -477,7 +477,7 @@ class IndexBasisRegistry {
   /// @param f the Field
   /// @return reference to `this`
   /// @throw IndexBasis::bad_key if no entry is registered under @p label
-  template <basic_string_convertible S>
+  template <string_convertible S>
   IndexBasisRegistry& field(S&& label, Field f) {
     auto& entry = entry_or_throw(label);
     if (entry.has_basis_instance()) {
@@ -497,11 +497,12 @@ class IndexBasisRegistry {
   /// @throw IndexBasis::bad_key if no entry is registered under @p label
   /// @throw Exception if @p label is that of a space: the own basis of a
   /// space is orthonormal
-  template <basic_string_convertible S>
+  template <string_convertible S>
   IndexBasisRegistry& metric(S&& label, IndexBasisMetric m) {
     auto& entry = entry_or_throw(label);
     if (!entry.has_basis_instance())
-      throw Exception("IndexBasisRegistry::metric: '" + toUtf8(label) +
+      throw Exception("IndexBasisRegistry::metric: '" +
+                      std::string(to_string_view(label)) +
                       "' is a space, whose own basis is orthonormal; register "
                       "a non-orthonormal basis of it under a name");
     throw_if_follower(entry, "metric");
@@ -522,27 +523,29 @@ class IndexBasisRegistry {
   /// @throw Exception if either entry is a space, if the two are one, if
   ///        @p source follows an entry itself or if @p label is followed by
   ///        one (an entry follows directly, not through another)
-  template <basic_string_convertible S1, basic_string_convertible S2>
+  template <string_convertible S1, string_convertible S2>
   IndexBasisRegistry& follow(S1&& label, S2&& source) {
     const IndexBasis& follower = entry_or_throw(label);
     const IndexBasis& followed = entry_or_throw(source);
     if (!follower.has_basis_instance() || !followed.has_basis_instance())
-      throw Exception("IndexBasisRegistry::follow: '" + toUtf8(label) +
-                      "' and '" + toUtf8(source) +
+      throw Exception("IndexBasisRegistry::follow: '" +
+                      std::string(to_string_view(label)) + "' and '" +
+                      std::string(to_string_view(source)) +
                       "' must both be named basis instances");
     if (follower.name() == followed.name())
-      throw Exception("IndexBasisRegistry::follow: '" + toUtf8(label) +
+      throw Exception("IndexBasisRegistry::follow: '" +
+                      std::string(to_string_view(label)) +
                       "' cannot follow itself");
     if (auto it = follows_.find(followed.name()); it != follows_.end())
-      throw Exception("IndexBasisRegistry::follow: '" + toUtf8(source) +
-                      "' follows '" + toUtf8(it->second) +
-                      "' itself; follow that one instead");
+      throw Exception("IndexBasisRegistry::follow: '" +
+                      std::string(to_string_view(source)) + "' follows '" +
+                      it->second + "' itself; follow that one instead");
     for (const auto& [f, s] : follows_)
       if (s == follower.name())
-        throw Exception("IndexBasisRegistry::follow: '" + toUtf8(label) +
-                        "' is followed by '" + toUtf8(f) +
-                        "'; make that one follow '" + toUtf8(source) +
-                        "' instead");
+        throw Exception("IndexBasisRegistry::follow: '" +
+                        std::string(to_string_view(label)) +
+                        "' is followed by '" + f + "'; make that one follow '" +
+                        std::string(to_string_view(source)) + "' instead");
     follows_.insert_or_assign(follower.name(), followed.name());
     refresh_followers();
     return clear_memoized_data_and_return_this();
@@ -551,10 +554,9 @@ class IndexBasisRegistry {
   /// @return a copy of the label of the entry the named basis instance
   /// registered under @p label follows (see follow()), std::nullopt if it
   /// follows none
-  template <basic_string_convertible S>
-  std::optional<std::wstring> follows(S&& label) const {
-    auto it =
-        follows_.find(IndexBasis::reduce_key(to_basic_string_view(label)));
+  template <string_convertible S>
+  std::optional<std::string> follows(S&& label) const {
+    auto it = follows_.find(IndexBasis::reduce_key(to_string_view(label)));
     if (it == follows_.end()) return std::nullopt;
     return it->second;
   }
@@ -566,7 +568,7 @@ class IndexBasisRegistry {
   /// found or if the key names a basis instance
   /// @note a space's metadata is written with extent(label, n) and
   /// field(label, f), which also reach its named basis instances
-  template <basic_string_convertible S>
+  template <string_convertible S>
   const IndexSpace* retrieve_space_ptr(S&& label) const {
     const auto* b = retrieve_ptr(std::forward<S>(label));
     return b && !b->has_basis_instance() ? &b->space() : nullptr;
@@ -578,7 +580,7 @@ class IndexBasisRegistry {
   /// @return IndexSpace associated with that key
   /// @throw not_a_space if the key names a basis instance
   /// @throw IndexBasis::bad_key if matching space is not found
-  template <basic_string_convertible S>
+  template <string_convertible S>
   const IndexSpace& retrieve_space(S&& label) const {
     if (const auto* ptr = retrieve_space_ptr(label)) {
       return *ptr;
@@ -653,7 +655,7 @@ class IndexBasisRegistry {
   /// @param label a @c base_key of an IndexSpace, a label of a named basis
   /// instance, or a label of an Index (see Index::label() )
   /// @return true, if an entry with key @p label is registered
-  template <basic_string_convertible S>
+  template <string_convertible S>
   bool contains(S&& label) const {
     return retrieve_ptr(std::forward<S>(label)) != nullptr;
   }
@@ -707,7 +709,7 @@ class IndexBasisRegistry {
       throw Exception(
           (std::string("IndexBasisRegistry::add(index_space): an entry with "
                        "index_space.base_key()=") +
-           toUtf8(IS.base_key()) +
+           IS.base_key() +
            " already in the registry; if you are trying to replace the "
            "IndexSpace use "
            "IndexBasisRegistry::replace(is)"));
@@ -736,12 +738,12 @@ class IndexBasisRegistry {
   ///                   must be convertible to a std::string
   /// @param type an IndexSpace::Type
   /// @param spec the rest of the space, by name (see IndexSpaceSpec), e.g.
-  /// `add(L"i", 0b01, {.qns = Spin::any, .vacuum_occupied = true})`
+  /// `add("i", 0b01, {.qns = Spin::any, .vacuum_occupied = true})`
   /// @return reference to `this`
   /// @throw Exception if `type_label` or `type` matches
   /// an already registered IndexSpace, or if @p spec carries a negative
   /// dimension
-  template <basic_string_convertible S>
+  template <string_convertible S>
   IndexBasisRegistry& add(S&& type_label, IndexSpace::Type type,
                           const IndexSpaceSpec& spec = {}) {
     IndexSpace space(std::forward<S>(type_label), type,
@@ -749,7 +751,7 @@ class IndexBasisRegistry {
     if (spec.dimension) {
       if (*spec.dimension < 0)
         throw Exception("IndexBasisRegistry::add: the dimension of '" +
-                        toUtf8(space.base_key()) + "' must not be negative");
+                        space.base_key() + "' must not be negative");
       space.dimension(*spec.dimension);
     }
     if (spec.field) space.field(*spec.field);
@@ -768,7 +770,7 @@ class IndexBasisRegistry {
   ///   is_hole , is_particle }
   /// @note same as `add(type_label, type, spec)` with @p args gathered into
   /// an IndexSpaceSpec
-  template <basic_string_convertible S, typename... OptionalArgs>
+  template <string_convertible S, typename... OptionalArgs>
     requires(sizeof...(OptionalArgs) > 0 &&
              (index_space_argument<OptionalArgs> && ...))
   [[deprecated(
@@ -782,7 +784,7 @@ class IndexBasisRegistry {
   /// @note does not compile: @p args holds what neither spelling takes (e.g.
   /// a Spin enumerator in place of an IndexSpace::QuantumNumbers), so the
   /// diagnostic points to the spec spelling
-  template <basic_string_convertible S, typename... Args>
+  template <string_convertible S, typename... Args>
     requires(sizeof...(Args) > 0 && !(index_space_argument<Args> && ...) &&
              !(sizeof...(Args) == 1 &&
                (std::same_as<std::remove_cvref_t<Args>, IndexSpaceSpec> &&
@@ -798,11 +800,11 @@ class IndexBasisRegistry {
 
   /// @overload
   /// @note does not compile: a bare value in the spec's brace list,
-  /// `add(L"i", 0b01, {10})`, is positional initialization, which
+  /// `add("i", 0b01, {10})`, is positional initialization, which
   /// IndexSpaceSpec rejects (SEQUANT_DESIGNATED_INIT_ONLY); the diagnostic
   /// points to the spec spelling (see detail::BareSpecValues for what binds
   /// here and what does not)
-  template <basic_string_convertible S>
+  template <string_convertible S>
   IndexBasisRegistry& add(S&&, IndexSpace::Type, detail::BareSpecValues) {
     static_assert(meta::always_false<S>::value,
                   "IndexBasisRegistry::add(label, type, {...}): give the "
@@ -822,7 +824,7 @@ class IndexBasisRegistry {
   /// @p basis_instance, named @p label
   /// @param basis_instance the basis instance
   /// @param spec the metadata of the basis, by name (see IndexBasisSpec),
-  /// e.g. `add(L"μ̃", L"a", 1, {.metric = IndexBasisMetric::General})`
+  /// e.g. `add("μ̃", "a", 1, {.metric = IndexBasisMetric::General})`
   /// @return reference to `this`
   /// @throw Exception if @p label is not a valid label or is already
   /// registered, if @p space is not registered, if its instance
@@ -830,19 +832,19 @@ class IndexBasisRegistry {
   /// extent, if it names an entry to follow and also carries an extent, a
   /// metric or a field, or if that entry cannot be followed (see follow());
   /// the registry is then left untouched
-  template <basic_string_convertible S>
+  template <string_convertible S>
   IndexBasisRegistry& add(S&& label, const IndexSpace& space,
                           IndexBasis::instance_type basis_instance,
                           const IndexBasisSpec& spec = {}) {
     constexpr const char* caller =
         "IndexBasisRegistry::add(label, space, instance)";
-    std::wstring key = toUtf16(std::forward<S>(label));
+    std::string key(to_string_view(label));
     if (spec.extent && *spec.extent < 0)
-      throw Exception(std::string(caller) + ": the extent of '" + toUtf8(key) +
+      throw Exception(std::string(caller) + ": the extent of '" + key +
                       "' must not be negative");
     if (spec.follows && (spec.extent || spec.metric || spec.field))
-      throw Exception(std::string(caller) + ": '" + toUtf8(key) +
-                      "' follows '" + toUtf8(spec.follows->value) +
+      throw Exception(std::string(caller) + ": '" + key + "' follows '" +
+                      spec.follows->value +
                       "', whose extent, metric and field it mirrors, so it "
                       "cannot be given its own");
     emplace_named(
@@ -865,7 +867,7 @@ class IndexBasisRegistry {
   /// @throw not_a_space if @p space_label is that of a named basis instance
   /// @throw IndexBasis::bad_key if nothing is registered under
   /// @p space_label
-  template <basic_string_convertible S1, basic_string_convertible S2>
+  template <string_convertible S1, string_convertible S2>
   IndexBasisRegistry& add(S1&& label, S2&& space_label,
                           IndexBasis::instance_type basis_instance,
                           const IndexBasisSpec& spec = {}) {
@@ -876,11 +878,11 @@ class IndexBasisRegistry {
 
   /// @overload
   /// @note does not compile: a bare value in the spec's brace list,
-  /// `add(L"x", L"a", 1, {IndexBasisMetric::General})`, is positional
+  /// `add("x", "a", 1, {IndexBasisMetric::General})`, is positional
   /// initialization, which IndexBasisSpec rejects
   /// (SEQUANT_DESIGNATED_INIT_ONLY); the diagnostic points to the spec
   /// spelling
-  template <basic_string_convertible S, index_space_or_label Space>
+  template <string_convertible S, index_space_or_label Space>
   IndexBasisRegistry& add(S&&, Space&&, IndexBasis::instance_type,
                           detail::BareSpecValues) {
     static_assert(meta::always_false<S>::value,
@@ -901,7 +903,7 @@ class IndexBasisRegistry {
   /// so @p spec may not carry them
   /// @return reference to `this`
   /// @throw Exception if @p spec carries a qns, a dimension or a field
-  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel>
+  template <string_convertible S, index_space_or_label IndexSpaceOrLabel>
   IndexBasisRegistry& add_unIon(
       S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
       const IndexSpaceSpec& spec = {}) {
@@ -945,7 +947,7 @@ class IndexBasisRegistry {
   /// is_complete , is_hole , is_particle }
   /// @note same as `add_unIon(type_label, components, spec)` with @p args
   /// gathered into an IndexSpaceSpec
-  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
+  template <string_convertible S, index_space_or_label IndexSpaceOrLabel,
             typename... OptionalArgs>
     requires(sizeof...(OptionalArgs) > 0 &&
              (index_space_role_tag<OptionalArgs> && ...))
@@ -959,11 +961,11 @@ class IndexBasisRegistry {
 
   /// @overload
   /// @note does not compile: a bare value in the spec's brace list,
-  /// `add_unIon(L"p", {L"i", L"a"}, {true})`, is positional
+  /// `add_unIon("p", {"i", "a"}, {true})`, is positional
   /// initialization, which IndexSpaceSpec rejects
   /// (SEQUANT_DESIGNATED_INIT_ONLY); the diagnostic points to the spec
   /// spelling
-  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel>
+  template <string_convertible S, index_space_or_label IndexSpaceOrLabel>
   IndexBasisRegistry& add_unIon(S&&, std::initializer_list<IndexSpaceOrLabel>,
                                 detail::BareSpecValues) {
     static_assert(meta::always_false<S>::value,
@@ -974,7 +976,7 @@ class IndexBasisRegistry {
   }
 
   /// alias to add_unIon
-  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel>
+  template <string_convertible S, index_space_or_label IndexSpaceOrLabel>
   IndexBasisRegistry& add_union(
       S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
       const IndexSpaceSpec& spec = {}) {
@@ -982,7 +984,7 @@ class IndexBasisRegistry {
   }
 
   /// @overload
-  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
+  template <string_convertible S, index_space_or_label IndexSpaceOrLabel,
             typename... OptionalArgs>
     requires(sizeof...(OptionalArgs) > 0 &&
              (index_space_role_tag<OptionalArgs> && ...))
@@ -996,11 +998,11 @@ class IndexBasisRegistry {
 
   /// @overload
   /// @note does not compile: a bare value in the spec's brace list,
-  /// `add_union(L"p", {L"i", L"a"}, {true})`, is positional
+  /// `add_union("p", {"i", "a"}, {true})`, is positional
   /// initialization, which IndexSpaceSpec rejects
   /// (SEQUANT_DESIGNATED_INIT_ONLY); the diagnostic points to the spec
   /// spelling
-  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel>
+  template <string_convertible S, index_space_or_label IndexSpaceOrLabel>
   IndexBasisRegistry& add_union(S&&, std::initializer_list<IndexSpaceOrLabel>,
                                 detail::BareSpecValues) {
     static_assert(meta::always_false<S>::value,
@@ -1020,7 +1022,7 @@ class IndexBasisRegistry {
   /// @p components, so @p spec may not carry them
   /// @return reference to `this`
   /// @throw Exception if @p spec carries a qns, a dimension or a field
-  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel>
+  template <string_convertible S, index_space_or_label IndexSpaceOrLabel>
   IndexBasisRegistry& add_intersection(
       S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
       const IndexSpaceSpec& spec = {}) {
@@ -1064,7 +1066,7 @@ class IndexBasisRegistry {
   /// is_complete , is_hole , is_particle }
   /// @note same as `add_intersection(type_label, components, spec)` with
   /// @p args gathered into an IndexSpaceSpec
-  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
+  template <string_convertible S, index_space_or_label IndexSpaceOrLabel,
             typename... OptionalArgs>
     requires(sizeof...(OptionalArgs) > 0 &&
              (index_space_role_tag<OptionalArgs> && ...))
@@ -1079,11 +1081,11 @@ class IndexBasisRegistry {
 
   /// @overload
   /// @note does not compile: a bare value in the spec's brace list,
-  /// `add_intersection(L"R", {L"q", L"i"}, {true})`, is positional
+  /// `add_intersection("R", {"q", "i"}, {true})`, is positional
   /// initialization, which IndexSpaceSpec rejects
   /// (SEQUANT_DESIGNATED_INIT_ONLY); the diagnostic points to the spec
   /// spelling
-  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel>
+  template <string_convertible S, index_space_or_label IndexSpaceOrLabel>
   IndexBasisRegistry& add_intersection(S&&,
                                        std::initializer_list<IndexSpaceOrLabel>,
                                        detail::BareSpecValues) {
@@ -1107,10 +1109,9 @@ class IndexBasisRegistry {
       std::string named;
       for (auto const& [label, basis] : bases_)
         if (basis.has_basis_instance() && basis.space() == it->second.space())
-          named += (named.empty() ? "" : ", ") + toUtf8(label);
+          named += (named.empty() ? "" : ", ") + label;
       if (!named.empty())
-        throw Exception("IndexBasisRegistry::remove: space " +
-                        toUtf8(IS.base_key()) +
+        throw Exception("IndexBasisRegistry::remove: space " + IS.base_key() +
                         " still has named basis instances: " + named);
       bases_.erase(it);
     }
@@ -1121,12 +1122,12 @@ class IndexBasisRegistry {
   /// equivalent to `remove(this->retrieve_space(label))`
   /// @param label label of a space or of a named basis instance
   /// @return reference to `this`
-  template <basic_string_convertible S>
+  template <string_convertible S>
   IndexBasisRegistry& remove(S&& label) {
-    auto it = bases_.find(IndexBasis::reduce_key(to_basic_string_view(label)));
+    auto it = bases_.find(IndexBasis::reduce_key(to_string_view(label)));
     if (it != bases_.end() && !is_space(*it)) {
       // its followers keep the values they mirror and follow no more
-      const std::wstring name = it->first;
+      const std::string name = it->first;
       follows_.erase(name);
       for (auto f = follows_.begin(); f != follows_.end();)
         f = f->second == name ? follows_.erase(f) : std::next(f);
@@ -1175,7 +1176,7 @@ class IndexBasisRegistry {
   /// @return true if
   /// `valid_intersection(retrieve_space(space1_key),retrieve_space(space2_key))`
   /// is nonnull and registered
-  template <basic_string_convertible S1, basic_string_convertible S2>
+  template <string_convertible S1, string_convertible S2>
   bool valid_intersection(S1&& space1_key, S2&& space2_key) const {
     const auto& space1 = retrieve_or_throw(
         space1_key, "IndexBasisRegistry::valid_intersection(s1,s2): s1=");
@@ -1228,7 +1229,7 @@ class IndexBasisRegistry {
   /// @return the intersection of @p space1 and @p space2
   /// @note can return nullspace
   /// @note throw invalid_argument if the nonnull intersection is not registered
-  template <basic_string_convertible S1, basic_string_convertible S2>
+  template <string_convertible S1, string_convertible S2>
   const IndexSpace& intersection(S1&& space1_key, S2&& space2_key) const {
     const auto& space1 = retrieve_or_throw(
         space1_key, "IndexBasisRegistry::intersection(s1,s2): s1=");
@@ -1276,7 +1277,7 @@ class IndexBasisRegistry {
   /// @return true if
   /// `valid_unIon(retrieve_space(space1_key),retrieve_space(space2_key))` is
   /// registered
-  template <basic_string_convertible S1, basic_string_convertible S2>
+  template <string_convertible S1, string_convertible S2>
   bool valid_unIon(S1&& space1_key, S2&& space2_key) const {
     const auto& space1 = retrieve_or_throw(
         space1_key, "IndexBasisRegistry::valid_unIon(s1,s2): s1=");
@@ -1336,7 +1337,7 @@ class IndexBasisRegistry {
   /// @return the union of two spaces.
   /// @note can only return registered spaces
   /// @note never returns nullspace
-  template <basic_string_convertible S1, basic_string_convertible S2>
+  template <string_convertible S1, string_convertible S2>
   const IndexSpace& unIon(S1&& space1_key, S2&& space2_key) const {
     const auto& space1 =
         retrieve_or_throw(space1_key, "IndexBasisRegistry::unIon(s1,s2): s1=");
@@ -1449,7 +1450,7 @@ class IndexBasisRegistry {
   /// instance, which stands for its space
   /// @return true if the space registered with \p space_key is in the basis
   /// @sa base_spaces
-  template <basic_string_convertible S>
+  template <string_convertible S>
   bool is_base(S&& space_key) const {
     return this->is_base(
         retrieve_or_throw(space_key, "IndexBasisRegistry::is_base(s): s="));
@@ -1494,7 +1495,7 @@ class IndexBasisRegistry {
   /// instance, which stands for its space
   /// @return `is_pure_occupied(retrieve_space(space_key))`
   /// @sa base_spaces
-  template <basic_string_convertible S>
+  template <string_convertible S>
   bool is_pure_occupied(S&& space_key) const {
     return this->is_pure_occupied(retrieve_or_throw(
         space_key, "IndexBasisRegistry::is_pure_occupied(s): s="));
@@ -1522,7 +1523,7 @@ class IndexBasisRegistry {
   /// instance, which stands for its space
   /// @return `is_pure_unoccupied(retrieve_space(space_key))`
   /// @sa base_spaces
-  template <basic_string_convertible S>
+  template <string_convertible S>
   bool is_pure_unoccupied(S&& space_key) const {
     return this->is_pure_unoccupied(retrieve_or_throw(
         space_key, "IndexBasisRegistry::is_pure_unoccupied(s): s="));
@@ -1542,7 +1543,7 @@ class IndexBasisRegistry {
   /// instance, which stands for its space
   /// @return `contains_occupied(retrieve_space(space_key))`
   /// @sa base_spaces
-  template <basic_string_convertible S>
+  template <string_convertible S>
   bool contains_occupied(S&& space_key) const {
     return this->contains_occupied(retrieve_or_throw(
         space_key, "IndexBasisRegistry::contains_occupied(s): s="));
@@ -1563,7 +1564,7 @@ class IndexBasisRegistry {
   /// instance, which stands for its space
   /// @return `contains_occupied(retrieve_space(space_key))`
   /// @sa base_spaces
-  template <basic_string_convertible S>
+  template <string_convertible S>
   bool contains_unoccupied(S&& space_key) const {
     return this->contains_unoccupied(retrieve_or_throw(
         space_key, "IndexBasisRegistry::contains_unoccupied(s): s="));
@@ -1607,7 +1608,7 @@ class IndexBasisRegistry {
   /// equivalent to `vacuum_occupied_space(retrieve_space(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <basic_string_convertible S>
+  template <string_convertible S>
   IndexBasisRegistry& vacuum_occupied_space(S&& l) {
     return vacuum_occupied_space(
         this->retrieve_space(std::forward<S>(l)).type());
@@ -1684,7 +1685,7 @@ class IndexBasisRegistry {
   /// equivalent to `reference_occupied_space(retrieve_space(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <basic_string_convertible S>
+  template <string_convertible S>
   IndexBasisRegistry& reference_occupied_space(S&& l) {
     return reference_occupied_space(
         this->retrieve_space(std::forward<S>(l)).type());
@@ -1756,7 +1757,7 @@ class IndexBasisRegistry {
   /// equivalent to `complete_space(retrieve_space(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <basic_string_convertible S>
+  template <string_convertible S>
   IndexBasisRegistry& complete_space(S&& l) {
     return complete_space(this->retrieve_space(std::forward<S>(l)).type());
   }
@@ -1839,7 +1840,7 @@ class IndexBasisRegistry {
   /// equivalent to `hole_space(retrieve_space(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <basic_string_convertible S>
+  template <string_convertible S>
   IndexBasisRegistry& hole_space(S&& l) {
     return hole_space(this->retrieve_space(std::forward<S>(l)).type());
   }
@@ -1907,7 +1908,7 @@ class IndexBasisRegistry {
   /// equivalent to `particle_space(retrieve_space(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <basic_string_convertible S>
+  template <string_convertible S>
   IndexBasisRegistry& particle_space(S&& l) {
     return particle_space(this->retrieve_space(std::forward<S>(l)).type());
   }
@@ -1945,7 +1946,7 @@ class IndexBasisRegistry {
   table_type bases_;
   std::size_t named_count_ = 0;  // the number of named basis instances
   // follower label -> label of the named basis instance it follows
-  container::map<std::wstring, std::wstring, std::less<>> follows_;
+  container::map<std::string, std::string, std::less<>> follows_;
 
   /// writes into every follower the extent, metric and field of the entry it
   /// follows
@@ -1964,14 +1965,14 @@ class IndexBasisRegistry {
   void throw_if_follower(const IndexBasis& entry, const char* what) const {
     if (auto it = follows_.find(entry.name()); it != follows_.end())
       throw Exception(std::string("IndexBasisRegistry::") + what + ": '" +
-                      toUtf8(it->first) + "' follows '" + toUtf8(it->second) +
-                      "'; set the " + what + " of that one");
+                      it->first + "' follows '" + it->second + "'; set the " +
+                      what + " of that one");
   }
 
   /// @throw Exception, naming @p caller, unless @p label is a valid label of
   /// a space or of a named basis instance, one that indices can be parsed
   /// with (see io::serialization::v1::is_base_key())
-  static void validate_label(std::wstring_view label, std::string_view caller);
+  static void validate_label(std::string_view label, std::string_view caller);
 
   static bool is_space(const table_type::value_type& e) {
     return !e.second.has_basis_instance();
@@ -1999,9 +2000,9 @@ class IndexBasisRegistry {
 
   /// @return the entry registered under @p label
   /// @throw IndexBasis::bad_key if no entry is registered under @p label
-  template <basic_string_convertible S>
+  template <string_convertible S>
   IndexBasis& entry_or_throw(S&& label) {
-    auto it = bases_.find(IndexBasis::reduce_key(to_basic_string_view(label)));
+    auto it = bases_.find(IndexBasis::reduce_key(to_string_view(label)));
     if (it == bases_.end()) throw IndexBasis::bad_key(label);
     return it->second;
   }
@@ -2108,12 +2109,13 @@ class IndexBasisRegistry {
   /// itself, or the space of a named basis instance
   /// @throw Exception if no entry is registered under @p label; its message
   /// is @p message_prefix followed by the label
-  template <basic_string_convertible S>
+  template <string_convertible S>
   const IndexSpace& retrieve_or_throw(const S& label,
                                       std::string_view message_prefix) const {
     const auto* ptr = this->retrieve_ptr(label);
     if (!ptr)
-      throw Exception(std::string(message_prefix) + toUtf8(label) +
+      throw Exception(std::string(message_prefix) +
+                      std::string(to_string_view(label)) +
                       " is not registered");
     return ptr->space();
   }
@@ -2288,7 +2290,7 @@ class IndexBasisRegistry {
   /// the shared tail of the registrations of a named basis instance: checks
   /// the label, the space and the instance, then inserts the entry
   /// @return reference to `this`
-  IndexBasisRegistry& emplace_named(std::wstring key, const IndexSpace& space,
+  IndexBasisRegistry& emplace_named(std::string key, const IndexSpace& space,
                                     IndexBasis::instance_type instance,
                                     std::optional<std::size_t> extent,
                                     IndexBasisMetric metric,
@@ -2296,22 +2298,21 @@ class IndexBasisRegistry {
                                     const char* caller) {
     validate_label(key, caller);
     if (bases_.contains(key))
-      throw Exception(std::string(caller) + ": label '" + toUtf8(key) +
+      throw Exception(std::string(caller) + ": label '" + key +
                       "' is already registered");
     const auto* registered = retrieve_space_ptr(space.type(), space.qns());
     if (!registered)
-      throw Exception(std::string(caller) + ": the space '" +
-                      toUtf8(space.base_key()) + "' of '" + toUtf8(key) +
-                      "' is not registered");
+      throw Exception(std::string(caller) + ": the space '" + space.base_key() +
+                      "' of '" + key + "' is not registered");
     if (*registered != space)
-      throw Exception(std::string(caller) + ": the space '" +
-                      toUtf8(space.base_key()) + "' of '" + toUtf8(key) +
-                      "' differs from '" + toUtf8(registered->base_key()) +
+      throw Exception(std::string(caller) + ": the space '" + space.base_key() +
+                      "' of '" + key + "' differs from '" +
+                      registered->base_key() +
                       "', the registered space of its type and quantum "
                       "numbers");
     if (auto taken = basis_label(IndexBasis{space, instance}))
-      throw Exception(std::string(caller) + ": the basis of '" + toUtf8(key) +
-                      "' is already named '" + toUtf8(*taken) + "'");
+      throw Exception(std::string(caller) + ": the basis of '" + key +
+                      "' is already named '" + std::string(*taken) + "'");
     IndexBasis named{*registered, instance, key, extent, metric, field};
     bases_.emplace(std::move(key), std::move(named));
     ++named_count_;

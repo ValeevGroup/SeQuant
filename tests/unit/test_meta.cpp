@@ -23,18 +23,15 @@ TEST_CASE("meta", "[meta]") {
   SECTION("std_array_size") {
     STATIC_REQUIRE((std_array_size_v<std::array<int, 3>> == 3));
     STATIC_REQUIRE(
-        (std_array_size_v<decltype(std::array{L"a_1", L"a_12", L"a_123"})> ==
-         3));
+        (std_array_size_v<decltype(std::array{"a_1", "a_12", "a_123"})> == 3));
   }
 
   SECTION("literal_to_string") {
+    STATIC_REQUIRE((std::is_same_v<literal_to_string_t<char[4]>, std::string>));
+    STATIC_REQUIRE((std::is_same_v<literal_to_string_t<char[]>, std::string>));
     STATIC_REQUIRE(
-        (std::is_same_v<literal_to_string_t<wchar_t[4]>, std::wstring>));
+        (std::is_same_v<literal_to_string_t<const char[]>, std::string>));
     STATIC_REQUIRE(
-        (std::is_same_v<literal_to_string_t<wchar_t[]>, std::wstring>));
-    STATIC_REQUIRE(
-        (std::is_same_v<literal_to_string_t<const wchar_t[]>, std::wstring>));
-    STATIC_REQUIRE(
-        (std::is_same_v<literal_to_string_t<const wchar_t*>, std::wstring>));
+        (std::is_same_v<literal_to_string_t<const char*>, std::string>));
   }
 }

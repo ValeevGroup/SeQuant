@@ -33,7 +33,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   using namespace sequant::mbpt;
 
   [[maybe_unused]] auto has_tensor = [](const ExprPtr& e,
-                                        const std::wstring& label) {
+                                        const std::string& label) {
     bool found = false;
     e->visit(
         [&](const ExprPtr& n) {
@@ -70,11 +70,11 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
         // element 0 is the λ pseudoenergy: the CC energy with T → Λ⁺, i.e. the
         // CC energy expression with the cluster amplitudes replaced by Λ⁺
         REQUIRE_THAT(λ_eqs[0],
-                     EquivalentTo(L"f{i_1;a_1}:A-C-S λ⁺{a_1;i_1}:A-N-S "
-                                  L"+ 1/4 g{i_1,i_2;a_1,a_2}:A-C-S "
-                                  L"λ⁺{a_1,a_2;i_1,i_2}:A-N-S "
-                                  L"+ 1/2 g{i_1,i_2;a_1,a_2}:A-C-S "
-                                  L"λ⁺{a_1;i_1}:A-N-S λ⁺{a_2;i_2}:A-N-S"));
+                     EquivalentTo("f{i_1;a_1}:A-C-S λ⁺{a_1;i_1}:A-N-S "
+                                  "+ 1/4 g{i_1,i_2;a_1,a_2}:A-C-S "
+                                  "λ⁺{a_1,a_2;i_1,i_2}:A-N-S "
+                                  "+ 1/2 g{i_1,i_2;a_1,a_2}:A-C-S "
+                                  "λ⁺{a_1;i_1}:A-N-S λ⁺{a_2;i_2}:A-N-S"));
       }
     }  // SECTION("λ")
   }
@@ -227,7 +227,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     auto h0 = bernoulli::hbar(2, 0, false);
     auto h1 = bernoulli::hbar(2, 1, false);
     auto h2 = bernoulli::hbar(2, 2, false);
-    auto has_f = [&](const ExprPtr& e) { return has_tensor(e, L"f"); };
+    auto has_f = [&](const ExprPtr& e) { return has_tensor(e, "f"); };
     REQUIRE(has_f(simplify(h1 - h0)));  // [F,σ]
     REQUIRE_FALSE(has_f(simplify(h2 - h1)));
     REQUIRE_THAT(h0,  // H̄⁰ = F + V, Eq. (46)
@@ -244,18 +244,18 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     // <0|H̄¹|0>: g-content is exactly 1/8 <ij||ab> σ_ij^ab + h.c.; the remainder
     // is the [F,σ] Brillouin terms, which vanish at an HF reference.
     const auto E1_g_closed = deserialize(
-        L"1/8 t{a_1,a_2;i_1,i_2}:A-N-S * g{i_1,i_2;a_1,a_2}:A-C-S "
-        L"+ 1/8 t⁺{i_1,i_2;a_1,a_2}:A-N-S * g{a_1,a_2;i_1,i_2}:A-C-S");
+        "1/8 t{a_1,a_2;i_1,i_2}:A-N-S * g{i_1,i_2;a_1,a_2}:A-C-S "
+        "+ 1/8 t⁺{i_1,i_2;a_1,a_2}:A-N-S * g{a_1,a_2;i_1,i_2}:A-C-S");
     const auto E1_brillouin = simplify(E1_contrib - E1_g_closed);
-    REQUIRE_FALSE(has_tensor(E1_brillouin, L"g"));
-    REQUIRE(has_tensor(E1_brillouin, L"f"));
+    REQUIRE_FALSE(has_tensor(E1_brillouin, "g"));
+    REQUIRE(has_tensor(E1_brillouin, "f"));
 
     // <0|H̄²|0> = 1/12 <ij||ab> σ_i^a σ_j^b + h.c.
     REQUIRE_THAT(E2_contrib,
-                 EquivalentTo(L"1/12 t{a_1;i_1}:A-N-S * t{a_2;i_2}:A-N-S "
-                              L"* g{i_1,i_2;a_1,a_2}:A-C-S "
-                              L"+ 1/12 t⁺{i_1;a_1}:A-N-S * t⁺{i_2;a_2}:A-N-S "
-                              L"* g{a_1,a_2;i_1,i_2}:A-C-S"));
+                 EquivalentTo("1/12 t{a_1;i_1}:A-N-S * t{a_2;i_2}:A-N-S "
+                              "* g{i_1,i_2;a_1,a_2}:A-C-S "
+                              "+ 1/12 t⁺{i_1;a_1}:A-N-S * t⁺{i_2;a_2}:A-N-S "
+                              "* g{a_1,a_2;i_1,i_2}:A-C-S"));
   }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
@@ -304,21 +304,21 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
                            .at(2);
     REQUIRE_THAT(
         R2_h1,
-        EquivalentTo(L"1/2 Â{i_1,i_2;a_1,a_2} * g{a_1,a_2;a_3,a_4}:A-C-S "
-                     L"* t{a_3,a_4;i_1,i_2}:A-N-S "
-                     L"+ Â{i_1,i_2;a_1,a_2} * g{a_1,a_2;i_1,i_2}:A-C-S "
-                     L"+ 1/2 Â{i_1,i_2;a_1,a_2} * g{i_3,i_4;i_1,i_2}:A-C-S "
-                     L"* t{a_1,a_2;i_3,i_4}:A-N-S "
-                     L"+ 2 Â{i_1,i_2;a_1,a_2} * f{i_3;i_1}:A-C-S "
-                     L"* t{a_1,a_2;i_2,i_3}:A-N-S "
-                     L"- 2 Â{i_1,i_2;a_1,a_2} * f{a_1;a_3}:A-C-S "
-                     L"* t{a_2,a_3;i_1,i_2}:A-N-S "
-                     L"+ 2 Â{i_1,i_2;a_1,a_2} * g{a_1,a_2;i_1,a_3}:A-C-S "
-                     L"* t{a_3;i_2}:A-N-S "
-                     L"+ 2 Â{i_1,i_2;a_1,a_2} * g{i_3,a_1;i_1,i_2}:A-C-S "
-                     L"* t{a_2;i_3}:A-N-S "
-                     L"- 4 Â{i_1,i_2;a_1,a_2} * g{i_3,a_1;i_1,a_3}:A-C-S "
-                     L"* t{a_2,a_3;i_2,i_3}:A-N-S"));
+        EquivalentTo("1/2 Â{i_1,i_2;a_1,a_2} * g{a_1,a_2;a_3,a_4}:A-C-S "
+                     "* t{a_3,a_4;i_1,i_2}:A-N-S "
+                     "+ Â{i_1,i_2;a_1,a_2} * g{a_1,a_2;i_1,i_2}:A-C-S "
+                     "+ 1/2 Â{i_1,i_2;a_1,a_2} * g{i_3,i_4;i_1,i_2}:A-C-S "
+                     "* t{a_1,a_2;i_3,i_4}:A-N-S "
+                     "+ 2 Â{i_1,i_2;a_1,a_2} * f{i_3;i_1}:A-C-S "
+                     "* t{a_1,a_2;i_2,i_3}:A-N-S "
+                     "- 2 Â{i_1,i_2;a_1,a_2} * f{a_1;a_3}:A-C-S "
+                     "* t{a_2,a_3;i_1,i_2}:A-N-S "
+                     "+ 2 Â{i_1,i_2;a_1,a_2} * g{a_1,a_2;i_1,a_3}:A-C-S "
+                     "* t{a_3;i_2}:A-N-S "
+                     "+ 2 Â{i_1,i_2;a_1,a_2} * g{i_3,a_1;i_1,i_2}:A-C-S "
+                     "* t{a_2;i_3}:A-N-S "
+                     "- 4 Â{i_1,i_2;a_1,a_2} * g{i_3,a_1;i_1,a_3}:A-C-S "
+                     "* t{a_2,a_3;i_2,i_3}:A-N-S"));
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
     const auto E = cc.energy(3);
@@ -448,7 +448,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     // so the BCH expansion at rank 2 and up exceeds several GB, hence rank 1
     const auto screened = CC(2, {.hbar_comm_rank = 1}).t();
     const auto unscreened = CC(2, {.screen = false, .hbar_comm_rank = 1}).t();
-    REQUIRE(has_tensor(screened.at(1), L"t"));
+    REQUIRE(has_tensor(screened.at(1), "t"));
     for (std::size_t p = 0; p != screened.size(); ++p)
       REQUIRE_THAT(screened.at(p), EquivalentTo(unscreened.at(p)));
 
@@ -493,24 +493,24 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       REQUIRE_THAT(
           g,
           EquivalentTo(
-              L"t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S "
-              L"+ λ{i_1;a_1}:A-N-S * δ{a_1;p_1}:N-S-S * δ{p_2;i_1}:N-S-S "
-              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-S-S * "
-              L"δ{p_2;i_3}:N-S-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
-              L"- 1 t{a_1;i_1}:A-N-S * t{a_2;i_2}:A-N-S * λ{i_1;a_2}:A-N-S * "
-              L"δ{p_2;a_1}:N-S-S * δ{i_2;p_1}:N-S-S "
-              L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-S-S * "
-              L"δ{p_2;a_3}:N-S-S * λ{i_1,i_2;a_1,a_2}:A-N-S "
-              L"- 1 t{a_1;i_1}:A-N-S * λ{i_2;a_1}:A-N-S * δ{i_1;p_1}:N-S-S * "
-              L"δ{p_2;i_2}:N-S-S "
-              L"- 1/2 t{a_3;i_3}:A-N-S * t{a_1,a_2;i_1,i_2}:A-N-S * "
-              L"δ{i_2;p_1}:N-S-S * δ{p_2;a_3}:N-S-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
-              L"- 1/2 t{a_2;i_3}:A-N-S * t{a_1,a_3;i_1,i_2}:A-N-S * "
-              L"δ{i_3;p_1}:N-S-S * δ{p_2;a_3}:N-S-S * λ{i_1,i_2;a_1,a_2}:A-N-S "
-              L"+ t{a_1;i_1}:A-N-S * λ{i_1;a_2}:A-N-S * δ{p_2;a_1}:N-S-S * "
-              L"δ{a_2;p_1}:N-S-S "
-              L"+ t{a_1,a_2;i_1,i_2}:A-N-S * λ{i_2;a_2}:A-N-S * "
-              L"δ{i_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S"));
+              "t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S "
+              "+ λ{i_1;a_1}:A-N-S * δ{a_1;p_1}:N-S-S * δ{p_2;i_1}:N-S-S "
+              "- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-S-S * "
+              "δ{p_2;i_3}:N-S-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
+              "- 1 t{a_1;i_1}:A-N-S * t{a_2;i_2}:A-N-S * λ{i_1;a_2}:A-N-S * "
+              "δ{p_2;a_1}:N-S-S * δ{i_2;p_1}:N-S-S "
+              "+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-S-S * "
+              "δ{p_2;a_3}:N-S-S * λ{i_1,i_2;a_1,a_2}:A-N-S "
+              "- 1 t{a_1;i_1}:A-N-S * λ{i_2;a_1}:A-N-S * δ{i_1;p_1}:N-S-S * "
+              "δ{p_2;i_2}:N-S-S "
+              "- 1/2 t{a_3;i_3}:A-N-S * t{a_1,a_2;i_1,i_2}:A-N-S * "
+              "δ{i_2;p_1}:N-S-S * δ{p_2;a_3}:N-S-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
+              "- 1/2 t{a_2;i_3}:A-N-S * t{a_1,a_3;i_1,i_2}:A-N-S * "
+              "δ{i_3;p_1}:N-S-S * δ{p_2;a_3}:N-S-S * λ{i_1,i_2;a_1,a_2}:A-N-S "
+              "+ t{a_1;i_1}:A-N-S * λ{i_1;a_2}:A-N-S * δ{p_2;a_1}:N-S-S * "
+              "δ{a_2;p_1}:N-S-S "
+              "+ t{a_1,a_2;i_1,i_2}:A-N-S * λ{i_2;a_2}:A-N-S * "
+              "δ{i_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S"));
       REQUIRE(size(G) == 94);
       // 94 terms is not worth spelling out, so check number of terms and
       // external indices
@@ -520,8 +520,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       auto ext_braket = ext.bra;
       ext_braket.insert(ext_braket.end(), ext.ket.begin(), ext.ket.end());
       REQUIRE(std::ranges::is_permutation(
-          ext_braket,
-          container::svector<Index>{L"p_1", L"p_2", L"p_3", L"p_4"}));
+          ext_braket, container::svector<Index>{"p_1", "p_2", "p_3", "p_4"}));
       REQUIRE(ext.aux.empty());
       // an explicit comm_rank truncates early: cutting Γ at the 2nd nested
       // commutator drops the terms the default (4th, exact) picks up
@@ -542,20 +541,20 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       REQUIRE_THAT(
           g,
           EquivalentTo(
-              L"t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S "
-              L"+ δ{a_1;p_1}:N-S-S * δ{p_2;i_1}:N-S-S * t⁺{i_1;a_1}:A-N-S "
-              L"+ t{a_2;i_1}:A-N-S * δ{a_1;p_1}:N-S-S * δ{p_2;a_2}:N-S-S * "
-              L"t⁺{i_1;a_1}:A-N-S "
-              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_1;p_1}:N-S-S * "
-              L"δ{p_2;a_2}:N-S-S * t⁺{i_2;a_1}:A-N-S "
-              L"- 1 t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-S-S * δ{p_2;i_2}:N-S-S * "
-              L"t⁺{i_2;a_1}:A-N-S "
-              L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-S-S * "
-              L"δ{p_2;a_3}:N-S-S * t⁺{i_1,i_2;a_1,a_2}:A-N-S "
-              L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-S-S * "
-              L"δ{p_2;i_3}:N-S-S * t⁺{i_1,i_3;a_1,a_2}:A-N-S "
-              L"- 1/2 t{a_2;i_1}:A-N-S * δ{a_1;p_1}:N-S-S * δ{p_2;i_2}:N-S-S * "
-              L"t⁺{i_1,i_2;a_1,a_2}:A-N-S"));
+              "t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-S-S * δ{p_2;a_1}:N-S-S "
+              "+ δ{a_1;p_1}:N-S-S * δ{p_2;i_1}:N-S-S * t⁺{i_1;a_1}:A-N-S "
+              "+ t{a_2;i_1}:A-N-S * δ{a_1;p_1}:N-S-S * δ{p_2;a_2}:N-S-S * "
+              "t⁺{i_1;a_1}:A-N-S "
+              "- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_1;p_1}:N-S-S * "
+              "δ{p_2;a_2}:N-S-S * t⁺{i_2;a_1}:A-N-S "
+              "- 1 t{a_1;i_1}:A-N-S * δ{i_1;p_1}:N-S-S * δ{p_2;i_2}:N-S-S * "
+              "t⁺{i_2;a_1}:A-N-S "
+              "+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-S-S * "
+              "δ{p_2;a_3}:N-S-S * t⁺{i_1,i_2;a_1,a_2}:A-N-S "
+              "- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-S-S * "
+              "δ{p_2;i_3}:N-S-S * t⁺{i_1,i_3;a_1,a_2}:A-N-S "
+              "- 1/2 t{a_2;i_1}:A-N-S * δ{a_1;p_1}:N-S-S * δ{p_2;i_2}:N-S-S * "
+              "t⁺{i_1,i_2;a_1,a_2}:A-N-S"));
       REQUIRE(size(G) == 24);
     }
     // regression: op::Λ used to add to a null ExprPtr when singles are skipped
@@ -564,10 +563,10 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       // the doubles-only subset of the CCSD γ pinned above
       REQUIRE_THAT(
           ccd.rdm(1),
-          EquivalentTo(L"- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-S-S * "
-                       L"δ{p_2;i_3}:N-S-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
-                       L"+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-S-S * "
-                       L"δ{p_2;a_3}:N-S-S * λ{i_1,i_2;a_1,a_2}:A-N-S"));
+          EquivalentTo("- 1/2 t{a_1,a_2;i_1,i_2}:A-N-S * δ{i_2;p_1}:N-S-S * "
+                       "δ{p_2;i_3}:N-S-S * λ{i_1,i_3;a_1,a_2}:A-N-S "
+                       "+ 1/2 t{a_1,a_3;i_1,i_2}:A-N-S * δ{a_2;p_1}:N-S-S * "
+                       "δ{p_2;a_3}:N-S-S * λ{i_1,i_2;a_1,a_2}:A-N-S"));
       // Ansatz::oT forces skip_singles, so it reaches the same path
       REQUIRE_THAT(
           ccd.rdm(1),
@@ -622,9 +621,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   // row I's terms in the rank-J eigenvector amplitude carry 1/m_J under
   // Default and 1/sqrt(m_I m_J) under Symmetric, with m_K = c! a!; t of
   // rank > 1 is rescaled as well, so only terms without it are compared
-  auto amplitude_rank_part = [](const ExprPtr& eq, std::wstring_view label,
+  auto amplitude_rank_part = [](const ExprPtr& eq, std::string_view label,
                                 std::size_t rank) {
-    auto has = [](const ExprPtr& term, std::wstring_view label,
+    auto has = [](const ExprPtr& term, std::string_view label,
                   auto&& rank_matches) {
       SEQUANT_ENFORCE(term->is<Product>());
       return ranges::any_of(term->as<Product>().factors(), [&](auto& f) {
@@ -637,7 +636,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     ExprPtr result = ex<Constant>(0);
     for (const auto& term : eq->as<Sum>().summands())
       if (has(term, label, [rank](auto r) { return r == rank; }) &&
-          !has(term, L"t", [](auto r) { return r > 1; }))
+          !has(term, "t", [](auto r) { return r > 1; }))
         result += term;
     REQUIRE(!simplify(result)->is<Constant>());
     return result;
@@ -665,7 +664,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     const auto symmetric_eqs =
         symmetric([&cc] { return cc.eom_r(nₚ(2), nₕ(2)); });
     auto r_rank_part = [&](const ExprPtr& eq, std::size_t rank) {
-      return amplitude_rank_part(eq, L"R", rank);
+      return amplitude_rank_part(eq, "R", rank);
     };
     REQUIRE(equal(r_rank_part(symmetric_eqs[1], 1), r_rank_part(eqs[1], 1)));
     REQUIRE(equal(r_rank_part(symmetric_eqs[1], 2),
@@ -688,7 +687,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     const auto symmetric_eqs =
         symmetric([&cc] { return cc.eom_r(nₚ(1), nₕ(2)); });
     auto r_rank_part = [&](const ExprPtr& eq, std::size_t rank) {
-      return amplitude_rank_part(eq, L"R", rank);
+      return amplitude_rank_part(eq, "R", rank);
     };
     const auto sqrt_half = ex<Power>(rational{1, 2}, rational{1, 2});
     REQUIRE(equal(r_rank_part(symmetric_eqs[0], 1), r_rank_part(eqs[0], 1)));
@@ -748,7 +747,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     const auto symmetric_eqs =
         symmetric([&cc] { return cc.eom_l(nₚ(2), nₕ(2)); });
     auto l_rank_part = [&](const ExprPtr& eq, std::size_t rank) {
-      return amplitude_rank_part(eq, L"L", rank);
+      return amplitude_rank_part(eq, "L", rank);
     };
     REQUIRE(equal(l_rank_part(symmetric_eqs[1], 1), l_rank_part(eqs[1], 1)));
     REQUIRE(equal(l_rank_part(symmetric_eqs[1], 2),

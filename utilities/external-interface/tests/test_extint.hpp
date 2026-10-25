@@ -16,28 +16,21 @@
 
 namespace sequant::util::extint::test_support {
 
-/// Redirects std::cout and std::wcout into throwaway buffers for its lifetime
-/// so that the pipeline's progress chatter and the output step's dumps do not
-/// clutter the test report. Restores the original buffers on destruction.
+/// Redirects std::cout into a throwaway buffer for its lifetime so that the
+/// pipeline's progress chatter and the output step's dumps do not clutter the
+/// test report. Restores the original buffer on destruction.
 class ScopedStreamSilencer {
  public:
-  ScopedStreamSilencer()
-      : cout_(std::cout.rdbuf(sink_.rdbuf())),
-        wcout_(std::wcout.rdbuf(wsink_.rdbuf())) {}
+  ScopedStreamSilencer() : cout_(std::cout.rdbuf(sink_.rdbuf())) {}
 
-  ~ScopedStreamSilencer() {
-    std::cout.rdbuf(cout_);
-    std::wcout.rdbuf(wcout_);
-  }
+  ~ScopedStreamSilencer() { std::cout.rdbuf(cout_); }
 
   ScopedStreamSilencer(const ScopedStreamSilencer &) = delete;
   ScopedStreamSilencer &operator=(const ScopedStreamSilencer &) = delete;
 
  private:
   std::ostringstream sink_;
-  std::wostringstream wsink_;
   std::streambuf *cout_;
-  std::wstreambuf *wcout_;
 };
 
 /// Absolute path to a file under tests/inputs/, independent of the working
@@ -49,10 +42,10 @@ inline std::string input_path(std::string_view name) {
 
 /// Builds an ExpressionData from serialized ResultExpr definitions.
 inline ExpressionData expr_data(
-    std::initializer_list<std::wstring_view> definitions) {
+    std::initializer_list<std::string_view> definitions) {
   ExpressionData data;
   data.expressions.reserve(definitions.size());
-  for (std::wstring_view def : definitions) {
+  for (std::string_view def : definitions) {
     data.expressions.push_back(deserialize<ResultExpr>(def));
   }
   return data;
@@ -61,7 +54,7 @@ inline ExpressionData expr_data(
 /// Converts serialized ResultExpr definitions into ExportTreeData (one entry
 /// per definition) via the to_export_tree step.
 inline ExportTreeData tree_data(
-    std::initializer_list<std::wstring_view> definitions) {
+    std::initializer_list<std::string_view> definitions) {
   ExecutionContext ctx;
   ctx.set_data("in", 0, ProcessingData{expr_data(definitions)});
   ToExportTreeStep step;

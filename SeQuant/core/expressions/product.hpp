@@ -301,11 +301,11 @@ class Product : public Expr {
   /// factors, with complex-conjugated scalar
   virtual void adjoint() override;
 
-  std::wstring to_latex() const override;
+  std::string to_latex() const override;
 
   /// just like Expr::to_latex() , but can negate before conversion
   /// @param[in] negate if true, scalar will be before conversion
-  std::wstring to_latex(bool negate) const;
+  std::string to_latex(bool negate) const;
 
   static constexpr type_rank_type type_rank = expr_type_rank::product;
   static constexpr std::string static_type_name(

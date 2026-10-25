@@ -38,7 +38,7 @@ bool Power::is_zero() const {
          base_->as<Constant>().is_zero();
 }
 
-std::wstring Power::to_latex() const { return io::latex::to_string(*this); }
+std::string Power::to_latex() const { return io::latex::to_string(*this); }
 
 void Power::flatten(ExprPtr& expr) {
   if (!expr || !expr->is<Power>()) return;

@@ -663,7 +663,6 @@ target_link_libraries(SeQuant-symb
         PUBLIC
         range-v3::range-v3
         Boost::headers
-        Boost::locale
         polymorphic_variant::polymorphic_variant
         PRIVATE
         SeQuant-bliss

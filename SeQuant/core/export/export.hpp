@@ -904,8 +904,7 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
     std::cout << "Tree before preprocessing:\n"
               << tree.tikz(
                      [](const ExportNode<T> &node) {
-                       return "$" + toUtf8(io::latex::to_string(node->expr())) +
-                              "$";
+                       return "$" + io::latex::to_string(node->expr()) + "$";
                      },
                      [](const ExportNode<T>) -> std::string { return ""; })
               << "\n";
@@ -922,8 +921,7 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
     std::cout << "Tree after pre-processing:\n"
               << tree.tikz(
                      [](const ExportNode<T> &node) {
-                       return "$" + toUtf8(io::latex::to_string(node->expr())) +
-                              "$";
+                       return "$" + io::latex::to_string(node->expr()) + "$";
                      },
                      [](const ExportNode<T>) -> std::string { return ""; })
               << "\n";

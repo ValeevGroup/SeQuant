@@ -238,7 +238,7 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
 /// Deliberately non-identifier label prefix used to stand in for non-Tensor,
 /// non-scalar factors during single-term optimization. Chosen so that no
 /// user-defined tensor label can collide with it.
-inline constexpr std::wstring_view placeholder_label_prefix = L"@__opt_";
+inline constexpr std::string_view placeholder_label_prefix = "@__opt_";
 
 /// Optimize a Product that contains some non-Tensor, non-scalar factors by
 /// substituting placeholder tensors with target indices, optimizing the
@@ -264,7 +264,7 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
       non_tensors[i] = f;
       auto target_idxs = get_unique_indices(f);
       new_factors.emplace_back(ex<Tensor>(
-          std::wstring(placeholder_label_prefix) + std::to_wstring(i),
+          std::string(placeholder_label_prefix) + std::to_string(i),
           bra(target_idxs.bra), ket(target_idxs.ket), aux(target_idxs.aux)));
     }
   }
@@ -283,9 +283,9 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
     auto suffix_view = label.substr(placeholder_label_prefix.size());
     SEQUANT_ASSERT(!suffix_view.empty());
     std::size_t suffix = 0;
-    for (wchar_t c : suffix_view) {
-      SEQUANT_ASSERT(c >= L'0' && c <= L'9');
-      suffix = suffix * 10 + static_cast<std::size_t>(c - L'0');
+    for (char c : suffix_view) {
+      SEQUANT_ASSERT(c >= '0' && c <= '9');
+      suffix = suffix * 10 + static_cast<std::size_t>(c - '0');
     }
     SEQUANT_ASSERT(suffix < non_tensors.size() && non_tensors[suffix]);
     out = non_tensors[suffix].clone();

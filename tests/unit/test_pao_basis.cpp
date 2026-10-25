@@ -25,7 +25,7 @@ constexpr std::size_t n_pao = 300;
 /// a Context adopts it, since a registry inside a Context is immutable
 std::shared_ptr<IndexBasisRegistry> sized_registry() {
   auto ibr = csv::csv_cc_registry();
-  ibr->extent(L"μ", n_pao);
+  ibr->extent("μ", n_pao);
   return ibr;
 }
 
@@ -43,15 +43,15 @@ std::vector<ExprPtr> derive() {
   auto core = set_scoped_default_context(csv::csv_cc_context(sized_registry()));
   auto mbpt_ctx = mbpt::set_scoped_default_mbpt_context(
       mbpt::Context({.csv = mbpt::CSV::Yes,
-                     .op_registry_ptr = csv::granted_registry({{L"t", 0}})}));
+                     .op_registry_ptr = csv::granted_registry({{"t", 0}})}));
   const auto& ibr = get_default_context().index_basis_registry();
   Index::reset_tmp_index();
   std::vector<ExprPtr> out;
   for (auto const& eq : mbpt::CC{2}.t(2, 0)) {
     ExprPtr e = mbpt::closed_shell_CC_spintrace(
         eq, {.method = mbpt::BiorthogonalizationMethod::V1});
-    e = mbpt::density_fit(e, ibr->retrieve_space(L"Κ"), L"g", L"g");
-    e = mbpt::csv_transform(e, ibr->retrieve(L"μ̃"));
+    e = mbpt::density_fit(e, ibr->retrieve_space("Κ"), "g", "g");
+    e = mbpt::csv_transform(e, ibr->retrieve("μ̃"));
     flatten(e);
     out.push_back(e);
   }
@@ -66,26 +66,25 @@ TEST_CASE("pao-named-basis", "[mbpt][csv][basis][valgrind_skip]") {
   REQUIRE(eqs.size() == 3);
 
   const Context ctx = gate_context();
-  const IndexBasis pao = ctx.index_basis_registry()->retrieve(L"μ̃");
+  const IndexBasis pao = ctx.index_basis_registry()->retrieve("μ̃");
   auto scoped = set_scoped_default_context(ctx);
 
   SECTION("round trip and metadata") {
     for (auto const& e : eqs) CHECK(deserialize<ExprPtr>(serialize(e)) == e);
-    CHECK(Index(L"μ̃_3") == Index(pao, 3));
-    CHECK(Index(pao, 3).full_label() == L"μ̃_3");
-    CHECK(Index(pao, 3).basis().base_key() == L"μ̃");
+    CHECK(Index("μ̃_3") == Index(pao, 3));
+    CHECK(Index(pao, 3).full_label() == "μ̃_3");
+    CHECK(Index(pao, 3).basis().base_key() == "μ̃");
     CHECK(Index(pao, 3).basis().extent() == n_pao);
     CHECK(Index(pao, 3).basis().metric() == IndexBasisMetric::General);
     // the bare (space, instance) pair that operator grants and the integral
     // projection build resolves to the basis as registered
-    const IndexBasis bare{ctx.index_basis_registry()->retrieve_space(L"a"),
+    const IndexBasis bare{ctx.index_basis_registry()->retrieve_space("a"),
                           pao.basis_instance()};
     REQUIRE(bare.extent() != n_pao);
     CHECK(default_registry_resolved(bare) == pao);
     CHECK(default_registry_resolved(bare).extent() == n_pao);
-    CHECK(ctx.index_basis_registry()->retrieve_space(L"a").dimension() !=
-          n_pao);
-    CHECK_THROWS_AS(ctx.index_basis_registry()->retrieve_space(L"μ̃"),
+    CHECK(ctx.index_basis_registry()->retrieve_space("a").dimension() != n_pao);
+    CHECK_THROWS_AS(ctx.index_basis_registry()->retrieve_space("μ̃"),
                     IndexBasisRegistry::not_a_space);
   }
   SECTION("the committed fixture: every μ̃ index is the named basis") {
@@ -93,10 +92,10 @@ TEST_CASE("pao-named-basis", "[mbpt][csv][basis][valgrind_skip]") {
                      "/data/csv_ccsd_doubles_residual_df.txt");
     std::string line;
     REQUIRE(std::getline(in, line));
-    const ExprPtr fixture = deserialize<ExprPtr>(toUtf16(line));
+    const ExprPtr fixture = deserialize<ExprPtr>(line);
     std::size_t n = 0;
     for (auto const& idx : get_used_indices(fixture))
-      if (idx.basis().base_key() == L"μ̃") {
+      if (idx.basis().base_key() == "μ̃") {
         ++n;
         CHECK(idx.basis() == pao);
         CHECK_FALSE(idx.has_proto_indices());
@@ -104,11 +103,11 @@ TEST_CASE("pao-named-basis", "[mbpt][csv][basis][valgrind_skip]") {
     CHECK(n > 0);
   }
   SECTION("slot layout: the PAO basis sorts after every basis of a") {
-    const IndexSpace a = ctx.index_basis_registry()->retrieve_space(L"a");
+    const IndexSpace a = ctx.index_basis_registry()->retrieve_space("a");
     CHECK((IndexBasis{a} < pao && IndexBasis{a, 0} < pao &&
            IndexBasis{a, 2} < pao && IndexBasis{a, 10} < pao));
-    for (std::wstring text :
-         {L"C{μ̃_1;a_1<i_1,i_2;0>}:N-C-S", L"C{μ̃_1;a_1<i_1>}:N-C-S"}) {
+    for (std::string text :
+         {"C{μ̃_1;a_1<i_1,i_2;0>}:N-C-S", "C{μ̃_1;a_1<i_1>}:N-C-S"}) {
       const ExprPtr expr = deserialize<ExprPtr>(text);
       const EvalExpr node(expr->as<Tensor>());
       const auto slots = node.canon_indices();

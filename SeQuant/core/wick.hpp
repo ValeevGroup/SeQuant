@@ -973,7 +973,7 @@ class WickTheorem {
         const auto *qpann_op_ptr = &qpann_op;
         const auto *qpcre_op_ptr = &qpcre_op;
 
-        //        std::wcout << "make_target_partner_indices: qpann_op="
+        //        std::cout << "make_target_partner_indices: qpann_op="
         //                   << qpann_op_ptr->to_latex()
         //                   << " qpcre_op=" << qpcre_op_ptr->to_latex() <<
         //                   "\n";
@@ -984,7 +984,7 @@ class WickTheorem {
                   p.second == qpcre_op_ptr->index());
         });
         if (ann_it != result.end()) {
-          //          std::wcout << "make_target_partner_indices: found ann_it =
+          //          std::cout << "make_target_partner_indices: found ann_it =
           //          {"
           //                     << ann_it->first.to_latex() << ", "
           //                     << ann_it->second.to_latex() << "}\n";
@@ -995,7 +995,7 @@ class WickTheorem {
                     p.first == qpann_op_ptr->index());
           });
           if (cre_it != result.end()) {
-            //            std::wcout << "make_target_partner_indices: found
+            //            std::cout << "make_target_partner_indices: found
             //            cre_it = {"
             //                       << cre_it->first.to_latex() << ", "
             //                       << cre_it->second.to_latex() << "}\n";
@@ -1261,15 +1261,15 @@ class WickTheorem {
     // TODO extract index->particle maps
 
     if (Logger::instance().wick_contract) {
-      std::wcout << "nop topological partitions: {\n";
+      std::cout << "nop topological partitions: {\n";
       for (auto &&toppart : state.nop_partitions) {
-        std::wcout << "{" << std::endl;
+        std::cout << "{" << std::endl;
         for (auto &&op_idx : toppart) {
-          std::wcout << op_idx << std::endl;
+          std::cout << op_idx << std::endl;
         }
-        std::wcout << "}" << std::endl;
+        std::cout << "}" << std::endl;
       }
-      std::wcout << "}" << std::endl;
+      std::cout << "}" << std::endl;
     }
 
     recursive_nontensor_wick(result_plus_mutex, state);
@@ -1555,13 +1555,13 @@ class WickTheorem {
                                 ranges::get_cursor(op_left_iter),
                                 ranges::get_cursor(op_right_iter))) {
                 if (Logger::instance().wick_contract) {
-                  std::wcout << "level " << state.level << ":contracting "
-                             << io::latex::to_string(*op_left_iter) << " with "
-                             << io::latex::to_string(*op_right_iter)
-                             << " (nop_top_degen=" << nop_top_degen << ")"
-                             << std::endl;
-                  std::wcout << " current nopseq = "
-                             << io::latex::to_string(state.nopseq) << std::endl;
+                  std::cout << "level " << state.level << ":contracting "
+                            << io::latex::to_string(*op_left_iter) << " with "
+                            << io::latex::to_string(*op_right_iter)
+                            << " (nop_top_degen=" << nop_top_degen << ")"
+                            << std::endl;
+                  std::cout << " current nopseq = "
+                            << io::latex::to_string(state.nopseq) << std::endl;
                 }
 
                 // update the phase, if needed
@@ -1593,7 +1593,7 @@ class WickTheorem {
                 ranges::get_cursor(op_left_iter).erase();
                 --state.nopseq_size;
 
-                // std::wcout << "  nopseq after contraction = " <<
+                // std::cout << "  nopseq after contraction = " <<
                 // io::latex::to_string(state.nopseq) << std::endl;
 
                 // if have a nonzero result ...
@@ -1632,11 +1632,11 @@ class WickTheorem {
                         prefactor *= bp;
 
                         result.second->lock();
-                        //              std::wcout << "got " <<
+                        //              std::cout << "got " <<
                         //              io::latex::to_string(state.sp)
                         //              << std::endl;
                         result.first->append(std::move(prefactor));
-                        //              std::wcout << "now up to " <<
+                        //              std::cout << "now up to " <<
                         //              result.first->size()
                         //              << " terms" << std::endl;
                         result.second->unlock();
@@ -1711,7 +1711,7 @@ class WickTheorem {
                 state.disconnect(target_connections,
                                  ranges::get_cursor(op_left_iter),
                                  ranges::get_cursor(op_right_iter));
-                //            std::wcout << "  restored nopseq = " <<
+                //            std::cout << "  restored nopseq = " <<
                 //            io::latex::to_string(state.opseq) << std::endl;
               }  // connect succeeded
             }    // topologically-unique contraction

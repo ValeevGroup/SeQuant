@@ -48,9 +48,7 @@ class TreeIndex {
   bool operator==(const TreeIndex &) const = default;
   std::strong_ordering operator<=>(const TreeIndex &) const = default;
 
-  template <typename CharT>
-  friend std::basic_ostream<CharT> &operator<<(
-      std::basic_ostream<CharT> &stream, const TreeIndex &idx) {
+  friend std::ostream &operator<<(std::ostream &stream, const TreeIndex &idx) {
     stream << "{";
 
     for (std::size_t i = 0; i < idx.positions_.size(); ++i) {

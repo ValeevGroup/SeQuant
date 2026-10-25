@@ -46,7 +46,7 @@ TEST_CASE("cse step", "[extint]") {
     ExecutionContext ctx;
     ctx.set_data("in", 0,
                  ProcessingData{test_support::tree_data(
-                     {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"})});
+                     {"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"})});
     CSEStep step;
     REQUIRE(step.run("cse", ctx, {"in.0"}) == 1);
     REQUIRE(ctx.has_data("cse.0"));
@@ -93,8 +93,8 @@ TEST_CASE("cse step", "[extint]") {
   }
 
   SECTION("merge_inputs with group IDs merges only within each group") {
-    const std::wstring expr =
-        L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S";
+    const std::string expr =
+        "R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S";
     ExecutionContext ctx;
     for (std::size_t i = 0; i < 3; ++i) {
       ctx.set_data("in", i, ProcessingData{test_support::tree_data({expr})});
@@ -123,8 +123,8 @@ TEST_CASE("cse step", "[extint]") {
     // Two identical contractions share a common subexpression, so CSE
     // introduces an intermediate (the result grows by one entry).
     ExportTreeData data = test_support::tree_data(
-        {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
-         L"R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+        {"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+         "R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
     REQUIRE(data.entries.size() == 2);
 
     // Wire a dependency onto each original result. The CSE step copies these
@@ -180,7 +180,7 @@ TEST_CASE("batch_indices step", "[extint]") {
     ExecutionContext ctx;
     ctx.set_data("in", 0,
                  ProcessingData{test_support::tree_data(
-                     {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"})});
+                     {"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"})});
     IndexBatchingStep
         step;  // min_unbatched defaults to 2, result has 2 indices
     REQUIRE(step.run("b", ctx, {"in.0"}) == 1);
@@ -262,8 +262,8 @@ TEST_CASE("export step", "[extint]") {
 
   SECTION("IRREPs are emitted in the generated code") {
     ExportTreeData data = test_support::tree_data(
-        {L"R{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i3}:A-H-S "
-         L"Y{i3;i2}:N-N-N"});
+        {"R{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i3}:A-H-S "
+         "Y{i3;i2}:N-N-N"});
 
     ExecutionContext ctx;
     ctx.set_data("in", 0, ProcessingData{std::move(data)});
@@ -314,8 +314,8 @@ TEST_CASE("export step", "[extint]") {
     ExecutionContext ctx2;
     ctx2.set_data("in", 0,
                   ProcessingData{test_support::tree_data(
-                      {L"R{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i3}:A-H-S "
-                       L"Y{i3;i2}:N-N-N"})});
+                      {"R{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i3}:A-H-S "
+                       "Y{i3;i2}:N-N-N"})});
     ExportStep strict;
     strict.set_options(options);
     test_support::ScopedStreamSilencer silencer;
@@ -331,8 +331,8 @@ TEST_CASE("export step", "[extint]") {
       ExecutionContext ctx;
       ctx.set_data("in", 0,
                    ProcessingData{test_support::tree_data(
-                       {L"R{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i3}:A-H-S "
-                        L"Y{i3;i2}:N-N-N"})});
+                       {"R{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i3}:A-H-S "
+                        "Y{i3;i2}:N-N-N"})});
 
       const std::filesystem::path out = std::filesystem::temp_directory_path() /
                                         "extint_irreps_matching_test.itfaa";
@@ -395,8 +395,8 @@ TEST_CASE("export step", "[extint]") {
   SECTION("a dependency cycle is rejected when ordering the results") {
     // Build two independent trees, then wire a mutual dependency between them.
     ExportTreeData two = test_support::tree_data(
-        {L"X{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
-         L"Y{a1;i1} = + g{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+        {"X{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+         "Y{a1;i1} = + g{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
     REQUIRE(two.entries.size() == 2);
 
     ExportTreeData data_a;
@@ -437,11 +437,11 @@ TEST_CASE("export step", "[extint]") {
     // export both inputs into one section and require that the shared
     // intermediate is allocated afresh for each definition.
     ExportTreeData data_a = test_support::tree_data(
-        {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
-         L"R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+        {"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+         "R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
     ExportTreeData data_b = test_support::tree_data(
-        {L"R3{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
-         L"R4{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+        {"R3{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+         "R4{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
 
     ExecutionContext ctx;
     ctx.set_data("A", 0, ProcessingData{std::move(data_a)});
@@ -543,12 +543,12 @@ TEST_CASE("export step", "[extint]") {
     // Both results contain the same two-term sum, so CSE factors it out as an
     // intermediate whose summands all accumulate into that one tensor.
     ExportTreeData data = test_support::tree_data(
-        {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"
-         L" + g{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"
-         L" + h{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
-         L"R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"
-         L" + g{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"
-         L" + k{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+        {"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"
+         " + g{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"
+         " + h{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+         "R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"
+         " + g{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"
+         " + k{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
 
     ExecutionContext ctx;
     ctx.set_data("in", 0, ProcessingData{std::move(data)});

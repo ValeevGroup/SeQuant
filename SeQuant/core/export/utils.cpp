@@ -33,7 +33,7 @@ std::string block_tag(std::string space_tag, const Index &idx) {
       (std::isdigit(static_cast<unsigned char>(space_tag.back())) ||
        space_tag.back() == '_'))
     throw Exception("export: the tag '" + space_tag + "' of the space of " +
-                    toUtf8(idx.full_label()) +
+                    std::string(idx.full_label()) +
                     " ends in a digit or '_', so a basis instance appended to "
                     "it cannot be told from the tag; tag the space otherwise");
   return space_tag += instance;
@@ -44,7 +44,7 @@ std::string dim_name(std::string space_dim, const Index &idx) {
   if (instance.empty()) return space_dim;
   if (!space_dim.empty() && space_dim.back() == '_')
     throw Exception("export: the dimension name '" + space_dim +
-                    "' of the space of " + toUtf8(idx.full_label()) +
+                    "' of the space of " + std::string(idx.full_label()) +
                     " ends in '_', so the name of a basis instance appended "
                     "to it is ambiguous; name the dimension otherwise");
   return space_dim += "_" + instance;

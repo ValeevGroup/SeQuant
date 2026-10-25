@@ -81,7 +81,7 @@ class IndexBasis {
   /// @param name the label @p basis_instance is registered under
   /// @pre @p name is empty or @p basis_instance is non-null
   IndexBasis(IndexSpace space, optional_instance basis_instance,
-             std::wstring name)
+             std::string name)
       : IndexBasis(std::move(space), basis_instance, std::move(name), {},
                    IndexBasisMetric::Unit, {}) {}
 
@@ -97,13 +97,13 @@ class IndexBasis {
 
   /// @return the name the basis instance is registered under, empty if it
   /// carries none
-  const std::wstring& name() const noexcept { return name_; }
+  const std::string& name() const noexcept { return name_; }
 
   bool has_name() const noexcept { return !name_.empty(); }
 
   /// @return name() if the basis carries a name, else space().base_key();
   /// the unnamed instances of a space share its key
-  const std::wstring& base_key() const noexcept {
+  const std::string& base_key() const noexcept {
     return has_name() ? name_ : space_.base_key();
   }
 
@@ -142,8 +142,8 @@ class IndexBasis {
   /// IndexBasisRegistry::field(label, f) for the space's label then sets)
   const std::optional<Field>& own_field() const noexcept { return field_; }
 
-  /// @return `L";N"` for a non-null instance `N`, else an empty string
-  std::wstring instance_suffix() const;
+  /// @return `";N"` for a non-null instance `N`, else an empty string
+  std::string instance_suffix() const;
 
   /// compares space, instance and name; the extent, metric and field are
   /// ignored
@@ -180,18 +180,7 @@ class IndexBasis {
   /// @param key a label of a space, of a named basis instance, or of an
   /// Index in either
   /// @return the base key of @p key, as `IndexSpace::reduce_key(key)`
-  template <std::ranges::contiguous_range View>
-    requires(std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          char> ||
-             std::same_as<std::remove_cvref_t<std::ranges::range_value_t<View>>,
-                          wchar_t>)
-  static auto reduce_key(View&& key) {
-    return IndexSpace::reduce_key(key);
-  }
-
-  /// @overload
-  template <typename CharT>
-  static auto reduce_key(const CharT* key) {
+  static std::string_view reduce_key(std::string_view key) {
     return IndexSpace::reduce_key(key);
   }
 
@@ -207,7 +196,7 @@ class IndexBasis {
  private:
   IndexSpace space_;
   optional_instance basis_instance_;
-  std::wstring name_;
+  std::string name_;
   std::optional<std::size_t> extent_;
   IndexBasisMetric metric_ = IndexBasisMetric::Unit;
   std::optional<Field> field_;
@@ -225,7 +214,7 @@ class IndexBasis {
   ///      non-empty or every other argument is at its default (an unnamed
   ///      basis is the space's own basis up to an orthonormal rotation)
   IndexBasis(IndexSpace space, optional_instance basis_instance,
-             std::wstring name, std::optional<std::size_t> extent,
+             std::string name, std::optional<std::size_t> extent,
              IndexBasisMetric metric, std::optional<Field> field);
   void extent(std::size_t n) noexcept { extent_ = n; }
   void metric(IndexBasisMetric m) noexcept { metric_ = m; }

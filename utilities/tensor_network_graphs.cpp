@@ -34,18 +34,18 @@ std::optional<TN> make_tn(const ExprPtr &expr) {
 }
 
 void print_help() {
-  std::wcout << "Helper to generate dot (GraphViz) representations of tensor "
-                "network graphs.\n";
-  std::wcout << "Usage:\n";
-  std::wcout
+  std::cout << "Helper to generate dot (GraphViz) representations of tensor "
+               "network graphs.\n";
+  std::cout << "Usage:\n";
+  std::cout
       << "  <exe> [options] <network 1> [<network 2> [... [<network N>] ] ]\n";
-  std::wcout << "Options:\n";
-  std::wcout << "  --help      Shows this help message\n";
-  std::wcout << "  --canonical Print out canonical form of the graph\n";
-  std::wcout << "  --perm      Also print the canonicalize permutation\n";
-  std::wcout << "  --no-named  Treat all indices as unnamed (even if they are "
-                "external)\n";
-  std::wcout << "  --v3        Accepted for compatibility; has no effect\n";
+  std::cout << "Options:\n";
+  std::cout << "  --help      Shows this help message\n";
+  std::cout << "  --canonical Print out canonical form of the graph\n";
+  std::cout << "  --perm      Also print the canonicalize permutation\n";
+  std::cout << "  --no-named  Treat all indices as unnamed (even if they are "
+               "external)\n";
+  std::cout << "  --v3        Accepted for compatibility; has no effect\n";
 }
 
 int main(int argc, char **argv) {
@@ -65,20 +65,20 @@ int main(int argc, char **argv) {
   }
 
   for (std::size_t i = 1; i < static_cast<std::size_t>(argc); ++i) {
-    std::wstring current = toUtf16(argv[i]);
-    if (current == L"--help") {
+    std::string current = std::string(argv[i]);
+    if (current == "--help") {
       print_help();
       return 0;
-    } else if (current == L"--no-named") {
+    } else if (current == "--no-named") {
       use_named_indices = false;
       continue;
-    } else if (current == L"--canonical") {
+    } else if (current == "--canonical") {
       canonical = true;
       continue;
-    } else if (current == L"--perm") {
+    } else if (current == "--perm") {
       print_perm = true;
       continue;
-    } else if (current == L"--v3") {
+    } else if (current == "--v3") {
       continue;
     }
 
@@ -86,8 +86,8 @@ int main(int argc, char **argv) {
     try {
       expr = deserialize<ExprPtr>(current);
     } catch (const io::serialization::SerializationError &e) {
-      std::wcout << "Failed to deserialize expression '" << current
-                 << "': " << e.what() << std::endl;
+      std::cout << "Failed to deserialize expression '" << current
+                << "': " << e.what() << std::endl;
       return 1;
     }
     SEQUANT_ASSERT(expr);
@@ -95,8 +95,8 @@ int main(int argc, char **argv) {
     using TN = TensorNetworkV3;
     std::optional<TN> network = make_tn<TN>(expr);
     if (!network.has_value()) {
-      std::wcout << "Failed to construct tensor network for input '"
-                 << to_latex(expr) << "'" << std::endl;
+      std::cout << "Failed to construct tensor network for input '"
+                << to_latex(expr) << "'" << std::endl;
       return 3;
     }
 
@@ -109,18 +109,18 @@ int main(int argc, char **argv) {
       graph.vertex_labels = permute(graph.vertex_labels, perm);
 
       if (print_perm) {
-        std::wcout << "Canonicalization permutation:\n";
+        std::cout << "Canonicalization permutation:\n";
         for (std::size_t i = 0; i < graph.vertex_labels.size(); ++i) {
-          std::wcout << i << " -> " << perm[i] << "\n";
+          std::cout << i << " -> " << perm[i] << "\n";
         }
-        std::wcout << std::endl;
+        std::cout << std::endl;
       }
 
       // Note: deleting the original bliss_graph also invalidates perm
       graph.bliss_graph.reset(cgraph);
     }
 
-    std::wcout << "Graph for '" << to_latex(expr) << "'\n";
-    graph.bliss_graph->write_dot(std::wcout, {.labels = graph.vertex_labels});
+    std::cout << "Graph for '" << to_latex(expr) << "'\n";
+    graph.bliss_graph->write_dot(std::cout, {.labels = graph.vertex_labels});
   }
 }

@@ -4,6 +4,7 @@
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/labeled.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <string>
 #include <string_view>
@@ -26,18 +27,19 @@ class Variable : public Expr, public MutatableLabeled {
     requires(!is_variable_v<U> && !is_an_expr_v<std::remove_reference_t<U>> &&
              !Expr::is_shared_ptr_of_expr_or_derived<
                  std::remove_reference_t<U>>::value &&
-             std::constructible_from<std::wstring, U>)
-  explicit Variable(U &&label) : label_(std::forward<U>(label)) {}
+             std::constructible_from<std::string, U>)
+  explicit Variable(U &&label) : label_(std::forward<U>(label)) {
+    SEQUANT_ASSERT(is_valid_utf8(label_),
+                   "Variable label must be UTF-8 encoded");
+  }
 
-  Variable(std::wstring label);
-
-  Variable(const std::string &label);
+  Variable(std::string label);
 
   /// @return variable label
   /// @warning conjugation does not change it
-  std::wstring_view label() const override;
+  std::string_view label() const override;
 
-  void set_label(std::wstring label) override;
+  void set_label(std::string label) override;
 
   /// complex-conjugates this
   void conjugate();
@@ -45,7 +47,7 @@ class Variable : public Expr, public MutatableLabeled {
   /// @return whether this object has been conjugated
   bool conjugated() const;
 
-  std::wstring to_latex() const override;
+  std::string to_latex() const override;
 
   static constexpr type_rank_type type_rank = expr_type_rank::variable;
   static constexpr std::string static_type_name(
@@ -63,7 +65,7 @@ class Variable : public Expr, public MutatableLabeled {
   virtual void adjoint() override;
 
  private:
-  std::wstring label_;
+  std::string label_;
   bool conjugated_ = false;
 
   hash_type memoizing_hash() const override;

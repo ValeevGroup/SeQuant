@@ -10,13 +10,13 @@ using namespace sequant;
 
 std::vector<Tensor> get_tensors() {
   static std::vector<Tensor> tensors = {
-      deserialize<ExprPtr>(L"t{a1}")->as<Tensor>(),
-      deserialize<ExprPtr>(L"K{i1,a4,a2;i2,i3}")->as<Tensor>(),
-      deserialize<ExprPtr>(L"t{i1,a4,a2;i2,i3;i5,i6}")->as<Tensor>(),
-      deserialize<ExprPtr>(L"K{i2,a3,a2;i4,i1}")->as<Tensor>(),
-      deserialize<ExprPtr>(L"t{a1,a2;i1,i2}")->as<Tensor>(),
-      deserialize<ExprPtr>(L"t{a4,a5;i3,i7}")->as<Tensor>(),
-      deserialize<ExprPtr>(L"t{a4<i3,i7>,a5<i3,i7>;i3,i7}")->as<Tensor>(),
+      deserialize<ExprPtr>("t{a1}")->as<Tensor>(),
+      deserialize<ExprPtr>("K{i1,a4,a2;i2,i3}")->as<Tensor>(),
+      deserialize<ExprPtr>("t{i1,a4,a2;i2,i3;i5,i6}")->as<Tensor>(),
+      deserialize<ExprPtr>("K{i2,a3,a2;i4,i1}")->as<Tensor>(),
+      deserialize<ExprPtr>("t{a1,a2;i1,i2}")->as<Tensor>(),
+      deserialize<ExprPtr>("t{a4,a5;i3,i7}")->as<Tensor>(),
+      deserialize<ExprPtr>("t{a4<i3,i7>,a5<i3,i7>;i3,i7}")->as<Tensor>(),
   };
 
   return tensors;

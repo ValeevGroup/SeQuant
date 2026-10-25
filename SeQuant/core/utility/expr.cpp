@@ -53,7 +53,7 @@ std::string toplevel_diff(const Variable &lhs, const Variable &rhs) {
   }
 
   if (lhs.label() != rhs.label()) {
-    return toUtf8(lhs.label()) + " vs. " + toUtf8(rhs.label());
+    return std::string(lhs.label()) + " vs. " + std::string(rhs.label());
   }
 
   return (lhs.conjugated() ? "conjugated"
@@ -117,8 +117,8 @@ std::string diff_spaces(const IndexSpace &lhs, const IndexSpace &rhs) {
     stream << "QNs differ: " << AttrSet(lhs.qns().to_int32()) << " vs. "
            << AttrSet(rhs.qns().to_int32());
   } else if (lhs.base_key() != rhs.base_key()) {
-    stream << "Base key differs: " << toUtf8(lhs.base_key()) << " vs. "
-           << toUtf8(rhs.base_key());
+    stream << "Base key differs: " << lhs.base_key() << " vs. "
+           << rhs.base_key();
   } else if (lhs.dimension() != rhs.dimension()) {
     stream << "Size differs: " << std::to_string(lhs.dimension()) << " vs. "
            << std::to_string(rhs.dimension());
@@ -136,7 +136,8 @@ std::string toplevel_diff(const Index &lhs, const Index &rhs) {
   }
 
   if (lhs.full_label() != rhs.full_label()) {
-    return toUtf8(lhs.full_label()) + " vs. " + toUtf8(rhs.full_label());
+    return std::string(lhs.full_label()) + " vs. " +
+           std::string(rhs.full_label());
   }
 
   if (lhs.space() != rhs.space()) {
@@ -169,8 +170,8 @@ std::string toplevel_diff(const Tensor &lhs, const Tensor &rhs) {
   }
 
   if (lhs.label() != rhs.label()) {
-    return "Names differ: " + toUtf8(lhs.label()) + " vs. " +
-           toUtf8(rhs.label());
+    return "Names differ: " + std::string(lhs.label()) + " vs. " +
+           std::string(rhs.label());
   }
 
   if (lhs.slots().size() != rhs.slots().size()) {
@@ -179,18 +180,16 @@ std::string toplevel_diff(const Tensor &lhs, const Tensor &rhs) {
   }
 
   if (lhs.symmetry() != rhs.symmetry()) {
-    return "Symmetry differs: " + toUtf8(to_wstring(lhs.symmetry())) + " vs. " +
-           toUtf8(to_wstring(rhs.symmetry()));
+    return "Symmetry differs: " + to_string(lhs.symmetry()) + " vs. " +
+           to_string(rhs.symmetry());
   }
   if (lhs.column_symmetry() != rhs.column_symmetry()) {
-    return "Particle-Symmetry differs: " +
-           toUtf8(to_wstring(lhs.column_symmetry())) + " vs. " +
-           toUtf8(to_wstring(rhs.column_symmetry()));
+    return "Particle-Symmetry differs: " + to_string(lhs.column_symmetry()) +
+           " vs. " + to_string(rhs.column_symmetry());
   }
   if (lhs.braket_symmetry() != rhs.braket_symmetry()) {
-    return "BraKet-Symmetry differs: " +
-           toUtf8(to_wstring(lhs.braket_symmetry())) + " vs. " +
-           toUtf8(to_wstring(rhs.braket_symmetry()));
+    return "BraKet-Symmetry differs: " + to_string(lhs.braket_symmetry()) +
+           " vs. " + to_string(rhs.braket_symmetry());
   }
 
   if (lhs.bra() != rhs.bra()) {
@@ -388,7 +387,7 @@ bool is_valid(const Expr &expr, std::string *msg) {
 
     for (const auto &[idx, count] : index_counter) {
       if (count > 2) {
-        SEQUANT_EXPR_INVALID("Index " + toUtf8(idx.full_label()) +
+        SEQUANT_EXPR_INVALID("Index " + std::string(idx.full_label()) +
                              " appears more than 2 times");
       }
     }
@@ -575,8 +574,7 @@ ExprPtr transform_expr(const Expr &expr,
   }
 }
 
-std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
-                                  std::wstring_view label) {
+std::optional<ExprPtr> pop_tensor(ExprPtr &expression, std::string_view label) {
   std::optional<ExprPtr> tensor;
 
   if (expression->is<Sum>()) {
@@ -746,7 +744,7 @@ ResultExpr &replace(ResultExpr &expr, const ExprMatcher &target,
         ResultExpr(bra(std::move(externals.bra)), ket(std::move(externals.ket)),
                    aux(std::move(externals.aux)), expr.symmetry(),
                    expr.braket_symmetry(), expr.column_symmetry(),
-                   expr.has_label() ? std::optional<std::wstring>(expr.label())
+                   expr.has_label() ? std::optional<std::string>(expr.label())
                                     : std::nullopt,
                    std::move(expr.expression()));
   }

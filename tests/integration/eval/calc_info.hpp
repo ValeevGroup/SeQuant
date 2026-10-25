@@ -28,7 +28,7 @@ namespace sequant::eval {
 struct NoCacheAmplitudeTensor {
   template <typename N>
   [[nodiscard]] bool operator()(N&& node) const noexcept {
-    return node->tensor().label() != L"t";
+    return node->tensor().label() != "t";
   }
 };
 

@@ -68,7 +68,7 @@ struct ContainsRule : ExpressionFilter::Rule {
 };
 
 struct LabelRule : ExpressionFilter::Rule {
-  LabelRule(std::vector<std::wregex> patterns)
+  LabelRule(std::vector<std::regex> patterns)
       : patterns_(std::move(patterns)) {}
 
   bool matches(const Expr &expr) const override {
@@ -77,15 +77,15 @@ struct LabelRule : ExpressionFilter::Rule {
         return false;
       }
 
-      std::wstring_view label = sub.as<Labeled>().label();
+      std::string_view label = sub.as<Labeled>().label();
 
-      return std::ranges::any_of(patterns_, [&](const std::wregex &pattern) {
+      return std::ranges::any_of(patterns_, [&](const std::regex &pattern) {
         return std::regex_match(label.begin(), label.end(), pattern);
       });
     });
   }
 
-  std::vector<std::wregex> patterns_;
+  std::vector<std::regex> patterns_;
 };
 
 SEQUANT_EXTINT_REGISTER_STEP_TYPE(FilterStep);
@@ -151,17 +151,22 @@ std::unique_ptr<ExpressionFilter::Rule> parse_contains_expr(
 
 std::unique_ptr<ExpressionFilter::Rule> parse_contains_label(
     const nlohmann::json &spec) {
-  std::vector<std::wregex> patterns;
+  std::vector<std::regex> patterns;
 
   auto add_pattern = [&](const nlohmann::json &value) {
     if (!value.is_string()) {
       throw Exception("Entries in \"label\" must be strings");
     }
 
+    // labels are UTF-8 encoded; the pattern is translated such that it
+    // operates on (Unicode) characters rather than on bytes
     try {
-      patterns.emplace_back(toUtf16(value.get<std::string>()));
+      patterns.emplace_back(utf8_regex_pattern(value.get<std::string>()));
     } catch (const std::regex_error &e) {
       throw Exception("Invalid label regex '" + value.get<std::string>() +
+                      "': " + e.what());
+    } catch (const Exception &e) {
+      throw Exception("Unsupported label regex '" + value.get<std::string>() +
                       "': " + e.what());
     }
   };

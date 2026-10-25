@@ -20,8 +20,8 @@ int main() {
       H(2) + commutator(H(2), t(2)) +
       ex<Constant>(rational(1, 2)) * commutator(commutator(H(2), t(2)), t(2));
   auto ccd_eq = vac_av(P(2) * hbar);
-  std::wcout << "<" << to_latex(P(2) * hbar) << "> = " << to_latex(ccd_eq)
-             << std::endl;
+  std::cout << "<" << to_latex(P(2) * hbar) << "> = " << to_latex(ccd_eq)
+            << std::endl;
 
   return 0;
 }

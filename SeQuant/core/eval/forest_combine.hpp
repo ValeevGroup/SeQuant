@@ -66,7 +66,7 @@ template <Trace EvalTrace, meta::can_evaluate node_t, typename N, bool FHC>
     // evaluate_impl + permute.
     std::string xpr;
     if constexpr (sequant::detail::trace(EvalTrace)) {
-      xpr = toUtf8(io::serialization::to_string(to_expr(n)));
+      xpr = io::serialization::to_string(to_expr(n));
       log::term(log::TermMode::Begin, xpr);
     }
 

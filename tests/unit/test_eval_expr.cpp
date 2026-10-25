@@ -26,12 +26,12 @@
 
 namespace sequant {
 Tensor parse_tensor(
-    std::wstring_view tnsr,
+    std::string_view tnsr,
     const io::serialization::DeserializationOptions& options = {}) {
   return deserialize(tnsr, options)->as<Tensor>();
 }
 
-Constant parse_constant(std::wstring_view c) {
+Constant parse_constant(std::string_view c) {
   return deserialize(c)->as<Constant>();
 }
 
@@ -52,51 +52,49 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
   using namespace sequant;
 
   SECTION("Constructors") {
-    auto t1 = parse_tensor(L"t_{i1, i2}^{a1, a2}");
+    auto t1 = parse_tensor("t_{i1, i2}^{a1, a2}");
 
     REQUIRE_NOTHROW(EvalExpr{t1});
 
-    auto p1 = deserialize(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
+    auto p1 = deserialize("g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
 
     const auto& c2 = EvalExpr{p1->at(0)->as<Tensor>()};
     const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
 
-    REQUIRE_NOTHROW(EvalExpr{Variable{L"λ"}});
+    REQUIRE_NOTHROW(EvalExpr{Variable{"λ"}});
 
     REQUIRE_NOTHROW(EvalExpr{Constant{1}});
 
     REQUIRE_NOTHROW(
         EvalExpr{Power(ex<Constant>(rational{1, 2}), rational{1, 2})});
-    REQUIRE_NOTHROW(EvalExpr{Power(ex<Variable>(L"x"), rational{3, 1})});
+    REQUIRE_NOTHROW(EvalExpr{Power(ex<Variable>("x"), rational{3, 1})});
   }
 
   SECTION("EvalExpr::EvalOp types") {
-    auto t1 = parse_tensor(L"t_{i1, i2}^{a1, a2}");
+    auto t1 = parse_tensor("t_{i1, i2}^{a1, a2}");
 
     auto x1 = EvalExpr(t1);
 
     REQUIRE(!x1.op_type());
 
-    auto p1 = deserialize(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
+    auto p1 = deserialize("g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
 
     const auto& c2 = EvalExpr{p1->at(0)->as<Tensor>()};
     const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
 
-    auto x2 = EvalExpr(deserialize(L"1/2")->as<Constant>());
+    auto x2 = EvalExpr(deserialize("1/2")->as<Constant>());
     REQUIRE(!x2.op_type());
 
-    REQUIRE(!EvalExpr{Variable{L"λ"}}.op_type());
+    REQUIRE(!EvalExpr{Variable{"λ"}}.op_type());
 
     REQUIRE(!EvalExpr{Power(ex<Constant>(rational{1, 2}), rational{1, 2})}
                  .op_type());
   }
 
   SECTION("ResultType types") {
-    auto T = [](std::wstring_view xpr) { return EvalExpr{parse_tensor(xpr)}; };
+    auto T = [](std::string_view xpr) { return EvalExpr{parse_tensor(xpr)}; };
 
-    auto C = [](std::wstring_view xpr) {
-      return EvalExpr{parse_constant(xpr)};
-    };
+    auto C = [](std::string_view xpr) { return EvalExpr{parse_constant(xpr)}; };
 
     auto result_type = [](EvalExpr const& left,   //
                           EvalExpr const& right,  //
@@ -104,52 +102,52 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
       return result_expr(left, right, op).result_type();
     };
 
-    REQUIRE(result_type(         //
-                T(L"X{i1;a1}"),  //
-                T(L"Y{i1;a1}"),  //
-                EvalOp::Sum      //
+    REQUIRE(result_type(        //
+                T("X{i1;a1}"),  //
+                T("Y{i1;a1}"),  //
+                EvalOp::Sum     //
                 ) == ResultType::Tensor);
 
     REQUIRE(result_type(         //
-                T(L"X{i1;a1}"),  //
-                T(L"Y{a1;i1}"),  //
+                T("X{i1;a1}"),   //
+                T("Y{a1;i1}"),   //
                 EvalOp::Product  //
                 ) == ResultType::Scalar);
 
-    REQUIRE(result_type(                //
-                T(L"X{i1,i2; a3,a4}"),  //
-                T(L"Y{a3,a4; a1,a2}"),  //
-                EvalOp::Product         //
+    REQUIRE(result_type(               //
+                T("X{i1,i2; a3,a4}"),  //
+                T("Y{a3,a4; a1,a2}"),  //
+                EvalOp::Product        //
                 ) == ResultType::Tensor);
 
     REQUIRE(result_type(         //
-                T(L"X{i1;a1}"),  //
-                C(L"2.5"),       //
+                T("X{i1;a1}"),   //
+                C("2.5"),        //
                 EvalOp::Product  //
                 ) == ResultType::Tensor);
 
     REQUIRE(result_type(         //
-                C(L"1.5"),       //
-                C(L"2.5"),       //
+                C("1.5"),        //
+                C("2.5"),        //
                 EvalOp::Product  //
                 ) == ResultType::Scalar);
 
     REQUIRE(result_type(     //
-                C(L"1.5"),   //
-                C(L"2.5"),   //
+                C("1.5"),    //
+                C("2.5"),    //
                 EvalOp::Sum  //
                 ) == ResultType::Scalar);
   }
 
   SECTION("result expr") {
-    ExprPtr expr = deserialize(L"2 var");
+    ExprPtr expr = deserialize("2 var");
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     ExprPtr root_expr = binarize(expr)->expr();
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr->is<Variable>());
     REQUIRE(*root_expr != *expr);
 
-    expr = deserialize(L"2 t{a1;i1}");
+    expr = deserialize("2 t{a1;i1}");
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(expr)->expr();
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
@@ -158,46 +156,46 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // The binarized tree shall respect the label of the ResultExpr
     ResultExpr res =
-        deserialize<ResultExpr>(L"E = g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
+        deserialize<ResultExpr>("E = g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
     root_expr = binarize(res)->expr();
     REQUIRE(root_expr.is<Variable>());
-    REQUIRE(root_expr.as<Variable>().label() == L"E");
+    REQUIRE(root_expr.as<Variable>().label() == "E");
 
     // The binarized tree shall respect the indexing of the ResultExpr
     res = deserialize<ResultExpr>(
-        L"Result{a2;i2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
+        "Result{a2;i2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
     root_expr = binarize(res)->expr();
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() ==
-            Tensor(L"Result", bra(IndexList{L"a_2"}), ket(IndexList{L"i_2"}),
+            Tensor("Result", bra(IndexList{"a_2"}), ket(IndexList{"i_2"}),
                    Symmetry::Antisymm, BraKetSymmetry::Symm,
                    ColumnSymmetry::Symm));
 
     // continued ->  check that changing indexing in result changes indexing in
     // tree
     res = deserialize<ResultExpr>(
-        L"Result{i2;a2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
+        "Result{i2;a2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
     root_expr = binarize(res)->expr();
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() ==
-            Tensor(L"Result", bra(IndexList{L"i_2"}), ket(IndexList{L"a_2"}),
+            Tensor("Result", bra(IndexList{"i_2"}), ket(IndexList{"a_2"}),
                    Symmetry::Antisymm, BraKetSymmetry::Symm,
                    ColumnSymmetry::Symm));
 
     // The name-respecting property shall also hold for terminals
-    res = deserialize<ResultExpr>(L"Other = Var");
+    res = deserialize<ResultExpr>("Other = Var");
     root_expr = binarize(res)->expr();
     REQUIRE(root_expr.is<Variable>());
-    REQUIRE(root_expr.as<Variable>().label() == L"Other");
+    REQUIRE(root_expr.as<Variable>().label() == "Other");
 
-    res = deserialize<ResultExpr>(L"Amplitude{i1;a1} = t{a1;i1}");
+    res = deserialize<ResultExpr>("Amplitude{i1;a1} = t{a1;i1}");
     root_expr = binarize(res)->expr();
     REQUIRE(root_expr.is<Tensor>());
     // the deserialized ResultExpr's Amplitude picks up the Context's column
     // symmetry (Symm), so the programmatic reference must request it too --
     // programmatic ctors are Context-independent (see Tensor::Defaults)
     REQUIRE(root_expr.as<Tensor>() ==
-            Tensor(L"Amplitude", bra(IndexList{L"i_1"}), ket(IndexList{L"a_1"}),
+            Tensor("Amplitude", bra(IndexList{"i_1"}), ket(IndexList{"a_1"}),
                    TensorSymmetries{.column = ColumnSymmetry::Symm}));
   }
 
@@ -207,9 +205,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // nodes instead of inheriting the tensor operand's real phase.
     // Subexpression reuse relies on that phase to reconcile sign-differing
     // duplicates, so the wrong phase silently produced a wrong result.
-    auto check_phase_inheritance = [](std::wstring_view expr_str) {
+    auto check_phase_inheritance = [](std::string_view expr_str) {
       auto res = deserialize<ResultExpr>(
-          std::wstring{L"Result{a3;i1,i2} = "} + std::wstring{expr_str},
+          std::string{"Result{a3;i1,i2} = "} + std::string{expr_str},
           {.def_perm_symm = Symmetry::Antisymm});
       auto root = binarize(res);
       auto const& tensor_operand =
@@ -220,9 +218,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
       CHECK((int)root->canon_phase() == (int)tensor_operand->canon_phase());
     };
     check_phase_inheritance(
-        L"1/2 R{a2;i1,i3} g{i3,a3;i2,a2}");  // numeric scalar
-    check_phase_inheritance(
-        L"R{a2;i1,i3} g{i3,a3;i2,a2} λ");  // Variable scalar
+        "1/2 R{a2;i1,i3} g{i3,a3;i2,a2}");                    // numeric scalar
+    check_phase_inheritance("R{a2;i1,i3} g{i3,a3;i2,a2} λ");  // Variable scalar
   }
 
   SECTION("Adjoint op") {
@@ -231,14 +228,14 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // reaches binarize, the resulting eval-tree should expose the adjoint as
     // a first-class IR op (EvalOp::Adjoint) holding the bare-label tensor as
     // its single operand — not as a leaf with the marker still in the label.
-    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+    Tensor t("t", bra{"a_1"}, ket{"i_1"}, Symmetry::Nonsymm,
              BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-    REQUIRE(t.label() == L"t");
+    REQUIRE(t.label() == "t");
     Tensor t_adj = t;
     t_adj.adjoint();
-    REQUIRE(t_adj.label() == L"t⁺");
-    REQUIRE(t_adj.bra().at(0).label() == L"i_1");
-    REQUIRE(t_adj.ket().at(0).label() == L"a_1");
+    REQUIRE(t_adj.label() == "t⁺");
+    REQUIRE(t_adj.bra().at(0).label() == "i_1");
+    REQUIRE(t_adj.ket().at(0).label() == "a_1");
 
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto tree = binarize(ex<Tensor>(t_adj));
@@ -254,9 +251,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // swapped back to the operand's natural orientation.
     REQUIRE(tree.left().leaf());
     REQUIRE(tree.left()->is_tensor());
-    REQUIRE(tree.left()->as_tensor().label() == L"t");
-    REQUIRE(tree.left()->as_tensor().bra().at(0).label() == L"a_1");
-    REQUIRE(tree.left()->as_tensor().ket().at(0).label() == L"i_1");
+    REQUIRE(tree.left()->as_tensor().label() == "t");
+    REQUIRE(tree.left()->as_tensor().bra().at(0).label() == "a_1");
+    REQUIRE(tree.left()->as_tensor().ket().at(0).label() == "i_1");
 
     // Right child: a Constant(1) sentinel — present so the full-binary-tree
     // invariant holds (every non-leaf has both children); ignored by
@@ -270,14 +267,14 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // sees as the operand's slot order.
     auto const& adj_canon = tree->canon_indices();
     REQUIRE(adj_canon.size() == 2);
-    REQUIRE(adj_canon[0].label() == L"i_1");
-    REQUIRE(adj_canon[1].label() == L"a_1");
+    REQUIRE(adj_canon[0].label() == "i_1");
+    REQUIRE(adj_canon[1].label() == "a_1");
 
     // The bare-leaf operand's canon_indices are the swapped order.
     auto const& bare_canon = tree.left()->canon_indices();
     REQUIRE(bare_canon.size() == 2);
-    REQUIRE(bare_canon[0].label() == L"a_1");
-    REQUIRE(bare_canon[1].label() == L"i_1");
+    REQUIRE(bare_canon[0].label() == "a_1");
+    REQUIRE(bare_canon[1].label() == "i_1");
 
     // Hash uniqueness: Adjoint(t) and the bare t leaf must have distinct
     // hashes (else cache collisions). And Adjoint(Adjoint(t)) ≡ t.
@@ -291,11 +288,11 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // Hermitian (BraKetSymmetry::Conjugate/Symm) tensors don't carry the
     // marker — Tensor::adjoint() guards the relabel on Nonsymm only — so
     // binarize gives a plain leaf (no Adjoint op).
-    Tensor g(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"}, Symmetry::Nonsymm,
+    Tensor g("g", bra{"p_1", "p_2"}, ket{"p_3", "p_4"}, Symmetry::Nonsymm,
              BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
     Tensor g_adj = g;
     g_adj.adjoint();
-    REQUIRE(g_adj.label() == L"g");  // no marker added for Conjugate
+    REQUIRE(g_adj.label() == "g");  // no marker added for Conjugate
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto g_tree = binarize(ex<Tensor>(g_adj));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
@@ -312,14 +309,14 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // EvalOp::Adjoint (see the "Adjoint op" section above), stripping the
     // marker via Tensor::adjoint(). That path must tolerate a leaf that never
     // went through Tensor::adjoint().
-    auto expr = deserialize(L"1/2 g{i_1,i_2;a_1,a_2} t⁺{a_1;i_1} t{a_2;i_2}",
+    auto expr = deserialize("1/2 g{i_1,i_2;a_1,a_2} t⁺{a_1;i_1} t{a_2;i_2}",
                             {.def_braket_symm = BraKetSymmetry::Nonsymm});
     REQUIRE(expr->is<Product>());
 
     bool has_marker_leaf = false;
     for (auto const& factor : expr->as<Product>().factors())
       has_marker_leaf |=
-          factor->is<Tensor>() && factor->as<Tensor>().label() == L"t⁺";
+          factor->is<Tensor>() && factor->as<Tensor>().label() == "t⁺";
     REQUIRE(has_marker_leaf);
 
     // binarize() must not throw on this term:
@@ -331,7 +328,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
   SECTION("external hyperindices") {
     // t{i1,i2;a1,a3} T2{a2,a3;i1,i2}: i1,i2 appear in bra of t and ket of
     // T2 (multiply-appearing), a3 also multiply-appearing
-    auto expr = deserialize(L"t{i1,i2;a1,a3} T2{a2,a3;i1,i2}");
+    auto expr = deserialize("t{i1,i2;a1,a3} T2{a2,a3;i1,i2}");
 
     // without external indices: i1,i2,a3 are all contracted
     // result has only {a1,a2}
@@ -342,9 +339,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
       REQUIRE(tree->is_tensor());
       auto const& ixs = tree->as_tensor().const_braket() |
                         ranges::views::transform(&Index::label) |
-                        ranges::to<container::set<std::wstring_view>>;
-      auto expected = std::initializer_list<std::wstring_view>{L"a_1", L"a_2"} |
-                      ranges::to<container::set<std::wstring_view>>;
+                        ranges::to<container::set<std::string_view>>;
+      auto expected = std::initializer_list<std::string_view>{"a_1", "a_2"} |
+                      ranges::to<container::set<std::string_view>>;
       REQUIRE(ixs == expected);
     }
 
@@ -352,8 +349,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // result has {a1,a2,i1,i2} with i1,i2 in aux
     {
       IndexSet ext;
-      ext.emplace(Index{L"i_1"});
-      ext.emplace(Index{L"i_2"});
+      ext.emplace(Index{"i_1"});
+      ext.emplace(Index{"i_2"});
       SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
       auto tree = binarize(expr, ext);
       SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
@@ -361,22 +358,22 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
       auto const& t = tree->as_tensor();
       auto all_labels = t.const_indices() |
                         ranges::views::transform(&Index::label) |
-                        ranges::to<container::set<std::wstring_view>>;
-      auto expected = std::initializer_list<std::wstring_view>{L"a_1", L"a_2",
-                                                               L"i_1", L"i_2"} |
-                      ranges::to<container::set<std::wstring_view>>;
+                        ranges::to<container::set<std::string_view>>;
+      auto expected =
+          std::initializer_list<std::string_view>{"a_1", "a_2", "i_1", "i_2"} |
+          ranges::to<container::set<std::string_view>>;
       REQUIRE(all_labels == expected);
       // hyperindices should be in aux (they appear in multiple slots)
       auto aux_labels = t.aux() | ranges::views::transform(&Index::label) |
-                        ranges::to<container::set<std::wstring_view>>;
-      REQUIRE(aux_labels.contains(L"i_1"));
-      REQUIRE(aux_labels.contains(L"i_2"));
+                        ranges::to<container::set<std::string_view>>;
+      REQUIRE(aux_labels.contains("i_1"));
+      REQUIRE(aux_labels.contains("i_2"));
     }
   }
 
   SECTION("Sequant expression") {
-    const auto& str_t1 = L"g_{a1,a2}^{a3,a4}";
-    const auto& str_t2 = L"t_{a3,a4}^{i1,i2}";
+    const auto& str_t1 = "g_{a1,a2}^{a3,a4}";
+    const auto& str_t2 = "t_{a3,a4}^{i1,i2}";
     const auto& t1 = deserialize(str_t1);
 
     const auto& t2 = deserialize(str_t2);
@@ -394,33 +391,32 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto& prod_indices =
         x3.expr()->as<Tensor>().const_braket() |
         ranges::views::transform([](const auto& x) { return x.label(); }) |
-        ranges::to<container::set<std::wstring_view>>;
+        ranges::to<container::set<std::string_view>>;
 
     const auto& expected_indices =
-        std::initializer_list<std::wstring_view>{L"i_1", L"i_2", L"a_1",
-                                                 L"a_2"} |
-        ranges::to<container::set<std::wstring_view>>;
+        std::initializer_list<std::string_view>{"i_1", "i_2", "a_1", "a_2"} |
+        ranges::to<container::set<std::string_view>>;
 
     REQUIRE(x3.op_type() == EvalOp::Product);
 
     REQUIRE(prod_indices == expected_indices);
 
-    const auto t4 = parse_tensor(L"g_{i3,i4}^{a3,a4}");
-    const auto t5 = parse_tensor(L"I_{a1,a2,a3,a4}^{i1,i2,i3,i4}");
+    const auto t4 = parse_tensor("g_{i3,i4}^{a3,a4}");
+    const auto t5 = parse_tensor("I_{a1,a2,a3,a4}^{i1,i2,i3,i4}");
 
     const auto& x45 = result_expr(EvalExpr{t4}, EvalExpr{t5}, EvalOp::Product);
     const auto& x54 = result_expr(EvalExpr{t5}, EvalExpr{t4}, EvalOp::Product);
 
-    REQUIRE(x45.to_latex() == deserialize(L"I_{a1,a2}^{i1,i2}")->to_latex());
+    REQUIRE(x45.to_latex() == deserialize("I_{a1,a2}^{i1,i2}")->to_latex());
     REQUIRE(x45.to_latex() == x54.to_latex());
   }
 
   SECTION("Hash value") {
     const auto t1 =
-        parse_tensor(L"t_{i1}^{a1}", {.def_perm_symm = Symmetry::Antisymm});
+        parse_tensor("t_{i1}^{a1}", {.def_perm_symm = Symmetry::Antisymm});
     const auto t2 =
-        parse_tensor(L"t_{i2}^{a2}", {.def_perm_symm = Symmetry::Antisymm});
-    const auto t3 = parse_tensor(L"t_{i1,i2}^{a1,a2}",
+        parse_tensor("t_{i2}^{a2}", {.def_perm_symm = Symmetry::Antisymm});
+    const auto t3 = parse_tensor("t_{i1,i2}^{a1,a2}",
                                  {.def_perm_symm = Symmetry::Antisymm});
 
     const auto& x1 = EvalExpr{t1};
@@ -437,8 +433,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE_FALSE(x1.hash_value() == x3.hash_value());
     REQUIRE_FALSE(x12.hash_value() == x3.hash_value());
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    auto tree1 = binarize(deserialize(L"A C"));
-    auto tree2 = binarize(deserialize(L"A t{a1;i1}"));
+    auto tree1 = binarize(deserialize("A C"));
+    auto tree2 = binarize(deserialize("A t{a1;i1}"));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
     REQUIRE(tree1->hash_value() != tree2->hash_value());
@@ -446,9 +442,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
   SECTION("Symmetry of product") {
     // whole bra <-> ket contraction between two antisymmetric tensors
-    const auto t1 = parse_tensor(L"g_{i3,i4}^{i1,i2}",
+    const auto t1 = parse_tensor("g_{i3,i4}^{i1,i2}",
                                  {.def_perm_symm = Symmetry::Antisymm});
-    const auto t2 = parse_tensor(L"t_{a1,a2}^{i3,i4}",
+    const auto t2 = parse_tensor("t_{a1,a2}^{i3,i4}",
                                  {.def_perm_symm = Symmetry::Antisymm});
 
     const auto x12 = result_expr(EvalExpr{t1}, EvalExpr{t2}, EvalOp::Product);
@@ -459,10 +455,10 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // whole bra <-> ket contraction between two symmetric tensors
     const auto t3 =
-        deserialize(L"g_{i3,i4}^{i1,i2}", {.def_perm_symm = Symmetry::Symm})
+        deserialize("g_{i3,i4}^{i1,i2}", {.def_perm_symm = Symmetry::Symm})
             ->as<Tensor>();
     const auto t4 =
-        deserialize(L"t_{a1,a2}^{i3,i4}", {.def_perm_symm = Symmetry::Symm})
+        deserialize("t_{a1,a2}^{i3,i4}", {.def_perm_symm = Symmetry::Symm})
             ->as<Tensor>();
 
     const auto x34 = result_expr(EvalExpr{t3}, EvalExpr{t4}, EvalOp::Product);
@@ -473,10 +469,10 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // outer product of the same tensor
     const auto t5 =
-        deserialize(L"f_{i1}^{a1}", {.def_perm_symm = Symmetry::Nonsymm})
+        deserialize("f_{i1}^{a1}", {.def_perm_symm = Symmetry::Nonsymm})
             ->as<Tensor>();
     const auto t6 =
-        deserialize(L"f_{i2}^{a2}", {.def_perm_symm = Symmetry::Nonsymm})
+        deserialize("f_{i2}^{a2}", {.def_perm_symm = Symmetry::Nonsymm})
             ->as<Tensor>();
 
     const auto& x56 = result_expr(EvalExpr{t5}, EvalExpr{t6}, EvalOp::Product);
@@ -486,20 +482,20 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(x56.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
 
     // contraction of some indices from a bra to a ket
-    const auto t7 = parse_tensor(L"g_{a1,a2}^{i1,a3}",
+    const auto t7 = parse_tensor("g_{a1,a2}^{i1,a3}",
                                  {.def_perm_symm = Symmetry::Antisymm});
     const auto t8 =
-        parse_tensor(L"t_{a3}^{i2}", {.def_perm_symm = Symmetry::Antisymm});
+        parse_tensor("t_{a3}^{i2}", {.def_perm_symm = Symmetry::Antisymm});
 
     const auto x78 = result_expr(EvalExpr{t7}, EvalExpr{t8}, EvalOp::Product);
     REQUIRE(x78.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
 
     // whole bra <-> ket contraction between symmetric and antisymmetric tensors
     auto const t9 =
-        deserialize(L"g_{a1,a2}^{a3,a4}", {.def_perm_symm = Symmetry::Antisymm})
+        deserialize("g_{a1,a2}^{a3,a4}", {.def_perm_symm = Symmetry::Antisymm})
             ->as<Tensor>();
     auto const t10 =
-        deserialize(L"t_{a3,a4}^{i1,i2}", {.def_perm_symm = Symmetry::Symm})
+        deserialize("t_{a3,a4}^{i1,i2}", {.def_perm_symm = Symmetry::Symm})
             ->as<Tensor>();
     auto const x910 = result_expr(EvalExpr{t9}, EvalExpr{t10}, EvalOp::Product);
     // todo:
@@ -510,7 +506,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 #if 0
   SECTION("Symmetry of sum") {
     auto tensor = [](Symmetry s) {
-      return deserialize(L"I_{i1,i2}^{a1,a2}", s)->as<Tensor>();
+      return deserialize("I_{i1,i2}^{a1,a2}", s)->as<Tensor>();
     };
 
     auto symmetry = [](const EvalExpr& x) {
@@ -551,10 +547,10 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 #endif
 
   SECTION("Debug") {
-    auto t1 = EvalExpr{deserialize(L"O{a_1<i_1,i_2>;a_1<i_3,i_2>}",
+    auto t1 = EvalExpr{deserialize("O{a_1<i_1,i_2>;a_1<i_3,i_2>}",
                                    {.def_perm_symm = Symmetry::Nonsymm})
                            ->as<Tensor>()};
-    auto t2 = EvalExpr{deserialize(L"O{a_2<i_1,i_2>;a_2<i_3,i_2>}",
+    auto t2 = EvalExpr{deserialize("O{a_2<i_1,i_2>;a_2<i_3,i_2>}",
                                    {.def_perm_symm = Symmetry::Nonsymm})
                            ->as<Tensor>()};
 
@@ -565,11 +561,11 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 TEST_CASE("eval_expr_node_slice_mask_typed", "[EvalExpr][batched-here]") {
   using namespace sequant;
   auto const tnsr =
-      parse_tensor(L"g{i_1,a_1;i_2,a_2}", {.def_perm_symm = Symmetry::Nonsymm});
+      parse_tensor("g{i_1,a_1;i_2,a_2}", {.def_perm_symm = Symmetry::Nonsymm});
   EvalExpr node{tnsr};
   container::svector<std::pair<Index, BatchModeType>> modes{
-      {Index{L"a_1"}, BatchModeType::Contracted},
-      {Index{L"i_1"}, BatchModeType::External}};
+      {Index{"a_1"}, BatchModeType::Contracted},
+      {Index{"i_1"}, BatchModeType::External}};
   node.set_node_slice_mask(modes);
   REQUIRE(node.node_slice_mask().size() == 2);
   REQUIRE(node.node_slice_mask()[0].second == BatchModeType::Contracted);
@@ -589,16 +585,16 @@ TEST_CASE("Sum-node hash is sensitive to every summand",
           "[eval][binarize][hash]") {
   using namespace sequant;
 
-  auto const root = [](std::wstring_view s) {
+  auto const root = [](std::string_view s) {
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     return binarize(deserialize(s));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   };
 
-  auto const last_a = root(L"(a * b) + c");  // differ in LAST summand
-  auto const last_b = root(L"(a * b) - c");
-  auto const first_a = root(L"c + (a * b)");  // differ in FIRST summand
-  auto const first_b = root(L"d + (a * b)");  // (already worked pre-fix)
+  auto const last_a = root("(a * b) + c");  // differ in LAST summand
+  auto const last_b = root("(a * b) - c");
+  auto const first_a = root("c + (a * b)");  // differ in FIRST summand
+  auto const first_b = root("d + (a * b)");  // (already worked pre-fix)
 
   CHECK(last_a->hash_value() != last_b->hash_value());
   CHECK(first_a->hash_value() != first_b->hash_value());
@@ -612,14 +608,14 @@ TEST_CASE("proto-index-liveness", "[eval]") {
   // an energy term with proto-carrying indices: past g, i_2 appears only in
   // the proto tuples of a_3 and a_4, so it must stay live on the g * (...) node
   auto const expr = deserialize<ExprPtr>(
-      L"(((("
-      L"g{a5,a6;i1,i2}"
-      L" * (C{a3<i1,i2>;a5}"
-      L"    * ((C{a1<i2>;a7} * t{a1<i2>;i2}) * C{a7;a3<i1,i2>})))"
-      L" * C{a4<i1,i2>;a6})"
-      L" * C{a8;a4<i1,i2>})"
-      L" * C{a2<i1>;a8})"
-      L" * t{a2<i1>;i1}",
+      "(((("
+      "g{a5,a6;i1,i2}"
+      " * (C{a3<i1,i2>;a5}"
+      "    * ((C{a1<i2>;a7} * t{a1<i2>;i2}) * C{a7;a3<i1,i2>})))"
+      " * C{a4<i1,i2>;a6})"
+      " * C{a8;a4<i1,i2>})"
+      " * C{a2<i1>;a8})"
+      " * t{a2<i1>;i1}",
       // fixture contracts bra-with-bra, so tensors must be bra-ket symmetric
       {.def_braket_symm = BraKetSymmetry::Symm});
 
@@ -630,13 +626,13 @@ TEST_CASE("proto-index-liveness", "[eval]") {
   // root = (((((g * B) * C) * C) * C) * t); descend to the g * B node.
   auto const& g_node = root.left().left().left().left();
   REQUIRE(g_node.left()->is_tensor());
-  CHECK(g_node.left()->as_tensor().label() == L"g");
+  CHECK(g_node.left()->as_tensor().label() == "g");
 
-  auto const has_label = [](auto const& ixs, std::wstring_view lbl) {
+  auto const has_label = [](auto const& ixs, std::string_view lbl) {
     return ranges::any_of(ixs,
                           [lbl](auto const& ix) { return ix.label() == lbl; });
   };
   // i_1 is a slot index of the trailing t; i_2 is live only via proto tuples.
-  CHECK(has_label(g_node->canon_indices(), L"i_1"));
-  CHECK(has_label(g_node->canon_indices(), L"i_2"));
+  CHECK(has_label(g_node->canon_indices(), "i_1"));
+  CHECK(has_label(g_node->canon_indices(), "i_2"));
 }

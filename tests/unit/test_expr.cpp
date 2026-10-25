@@ -38,7 +38,7 @@
 
 struct Dummy : public sequant::Expr {
   virtual ~Dummy() = default;
-  std::wstring to_latex() const override { return L"{\\text{Dummy}}"; }
+  std::string to_latex() const override { return "{\\text{Dummy}}"; }
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
   sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
   void adjoint() override {}
@@ -58,16 +58,16 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
   template <typename Iter>
   VecExpr(Iter begin, Iter end) : std::vector<T>(begin, end) {}
   virtual ~VecExpr() = default;
-  std::wstring to_latex() const override {
-    std::wstring result = L"{\\text{VecExpr}\\{";
+  std::string to_latex() const override {
+    std::string result = "{\\text{VecExpr}\\{";
     for (const auto &e : *this) {
       if constexpr (sequant::Expr::is_shared_ptr_of_expr_or_derived<T>::value) {
-        result += e->to_latex() + L" ";
+        result += e->to_latex() + " ";
       } else {
-        result += std::to_wstring(e) + L" ";
+        result += std::to_string(e) + " ";
       }
     }
-    result += L"\\}}";
+    result += "\\}}";
     return result;
   }
 
@@ -122,8 +122,8 @@ struct Adjointable : public sequant::Expr {
   Adjointable() = default;
   Adjointable(int v) : v(v) {}
   virtual ~Adjointable() = default;
-  std::wstring to_latex() const override {
-    return L"{\\text{Adjointable}{" + std::to_wstring(v) + L"}}";
+  std::string to_latex() const override {
+    return "{\\text{Adjointable}{" + std::to_string(v) + "}}";
   }
   type_id_type type_id() const override { return get_type_id<Adjointable>(); };
   sequant::ExprPtr clone() const override {
@@ -141,7 +141,7 @@ struct latex_visitor {
   void operator()(const std::shared_ptr<sequant::Expr> &expr) {
     result += expr->to_latex();
   }
-  std::wstring result{};
+  std::string result{};
 };
 
 template <typename Derived>
@@ -183,8 +183,8 @@ TEST_CASE("expr", "[elements]") {
   SECTION("constructors") {
     REQUIRE_NOTHROW(std::make_shared<Constant>(2));
     const auto ex2 = std::make_shared<Constant>(2);
-    REQUIRE_NOTHROW(std::make_shared<Variable>(L"q"));
-    const auto ex_q = std::make_shared<Variable>(L"q");
+    REQUIRE_NOTHROW(std::make_shared<Variable>("q"));
+    const auto ex_q = std::make_shared<Variable>("q");
     REQUIRE_NOTHROW(std::make_shared<VecExpr<double>>());
     const auto ex3 = std::make_shared<VecExpr<double>>();
     REQUIRE_NOTHROW(std::make_shared<VecExpr<double>>(
@@ -209,7 +209,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(ex->is_atom());
     }
     {
-      const auto ex = std::make_shared<Variable>(L"q");
+      const auto ex = std::make_shared<Variable>("q");
       REQUIRE(ex->is_atom());
     }
     {
@@ -307,7 +307,7 @@ TEST_CASE("expr", "[elements]") {
   SECTION("mixed const/non-const iteration") {
     // N.B. Sum folds Constant summands together, so use Variables to get a
     // Sum that actually holds two subexpressions
-    auto e = ex<Sum>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")});
+    auto e = ex<Sum>(ExprPtrList{ex<Variable>("x"), ex<Variable>("y")});
 
     // a mutable iterator converts to a const iterator ...
     ConstExprIterator cit = e->begin();
@@ -334,13 +334,13 @@ TEST_CASE("expr", "[elements]") {
     // N.B. unlike operator[], at()/front()/back() must throw regardless of
     // whether SEQUANT_ASSERT is enabled, so this also pins down the behavior
     // of builds configured with SEQUANT_ASSERT_BEHAVIOR=IGNORE
-    auto sum = ex<Sum>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")});
+    auto sum = ex<Sum>(ExprPtrList{ex<Variable>("x"), ex<Variable>("y")});
     const Expr &const_sum = *sum;
 
-    REQUIRE(sum->at(0) == ex<Variable>(L"x"));
-    REQUIRE(sum->at(1) == ex<Variable>(L"y"));
-    REQUIRE(sum->front() == ex<Variable>(L"x"));
-    REQUIRE(sum->back() == ex<Variable>(L"y"));
+    REQUIRE(sum->at(0) == ex<Variable>("x"));
+    REQUIRE(sum->at(1) == ex<Variable>("y"));
+    REQUIRE(sum->front() == ex<Variable>("x"));
+    REQUIRE(sum->back() == ex<Variable>("y"));
     REQUIRE_THROWS_AS(sum->at(2), Exception);
     REQUIRE_THROWS_AS(const_sum.at(2), Exception);
     // ... including an index that used to be a negative one
@@ -368,14 +368,14 @@ TEST_CASE("expr", "[elements]") {
       // this is the only accessor called before the mutation, so it alone is
       // responsible for invalidating the memoized hash
       auto it = via_end ? expr->end() : expr->begin();
-      *(via_end ? std::prev(it) : it) = ex<Variable>(L"mutated");
+      *(via_end ? std::prev(it) : it) = ex<Variable>("mutated");
       REQUIRE(expr->hash_value() != hash_before);
     };
 
     for (bool via_end : {false, true}) {
-      check(ex<Sum>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")}),
+      check(ex<Sum>(ExprPtrList{ex<Variable>("x"), ex<Variable>("y")}),
             via_end);
-      check(ex<Product>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")}),
+      check(ex<Product>(ExprPtrList{ex<Variable>("x"), ex<Variable>("y")}),
             via_end);
     }
   }
@@ -418,15 +418,15 @@ TEST_CASE("expr", "[elements]") {
 
   SECTION("power") {
     const auto c2 = ex<Constant>(rational{1, 2});
-    const auto vx = ex<Variable>(L"x");
+    const auto vx = ex<Variable>("x");
 
     {  // constructors
       REQUIRE_NOTHROW(Power(c2, rational{1, 2}));
       REQUIRE_NOTHROW(Power(vx, rational{3, 1}));
 
       // convenience ctors:
-      REQUIRE(Power(L"x", 2) == Power(vx, rational{2}));
-      REQUIRE(Power(L"x", rational{1, 2}) == Power(vx, rational{1, 2}));
+      REQUIRE(Power("x", 2) == Power(vx, rational{2}));
+      REQUIRE(Power("x", rational{1, 2}) == Power(vx, rational{1, 2}));
       REQUIRE(Power(2, 3) == Power(ex<Constant>(2), rational{3}));
       REQUIRE(Power(rational{2, 3}, 2) ==
               Power(ex<Constant>(rational{2, 3}), rational{2}));
@@ -490,7 +490,7 @@ TEST_CASE("expr", "[elements]") {
       // also conjugated)
       Power pc_conj(vx, rational{1, 2});
       pc_conj.conjugate();
-      Variable vx_conj(L"x");
+      Variable vx_conj("x");
       vx_conj.conjugate();
       pc_conj *= vx_conj;
       REQUIRE(pc_conj.conjugated());
@@ -519,13 +519,13 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(prod->as<Product>().scalar() == 1);
 
       // simplify folds a foldable Power-in-Product into the Product scalar
-      auto pwf = ex<Power>(2, 2) * ex<Variable>(L"x");
+      auto pwf = ex<Power>(2, 2) * ex<Variable>("x");
       simplify(pwf);
       REQUIRE(pwf->is<Product>());
       REQUIRE(pwf->as<Product>().scalar() == 4);
 
       // non-foldable Power stays as a factor; scalar is 1
-      auto pwnf = ex<Power>(2, rational{1, 2}) * ex<Variable>(L"x");
+      auto pwnf = ex<Power>(2, rational{1, 2}) * ex<Variable>("x");
       simplify(pwnf);
       REQUIRE(pwnf->is<Product>());
       REQUIRE(pwnf->as<Product>().scalar() == 1);
@@ -740,7 +740,7 @@ TEST_CASE("expr", "[elements]") {
     {  // simplify fuses the Variable factors of a Product, bare or in
        // Powers, into one factor per Variable
       const auto half = rational{1, 2};
-      const auto vy = ex<Variable>(L"y");
+      const auto vy = ex<Variable>("y");
       const auto factors = [](const ExprPtr &e) {
         return e->as<Product>().factors();
       };
@@ -871,10 +871,10 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->value() == Constant::scalar_type{1, -2});
     }
     {  // Variable
-      const auto e = std::make_shared<Variable>(L"q");
+      const auto e = std::make_shared<Variable>("q");
       REQUIRE(e->conjugated() == false);
       REQUIRE_NOTHROW(e->adjoint());
-      REQUIRE(e->label() == L"q");
+      REQUIRE(e->label() == "q");
       REQUIRE(e->conjugated() == true);
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->conjugated() == false);
@@ -915,7 +915,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->summands()[1]->as<Adjointable>().v == 2);
     }
     {  // Power: adjoint flips the conjugation flag; base/exponent unchanged
-      Power pv(ex<Variable>(L"z"), rational{1, 2});
+      Power pv(ex<Variable>("z"), rational{1, 2});
       REQUIRE(!pv.conjugated());
       pv.adjoint();
       REQUIRE(pv.conjugated());
@@ -946,7 +946,7 @@ TEST_CASE("expr", "[elements]") {
 
   SECTION("clone") {
     {  // Variable
-      const auto e = std::make_shared<Variable>(L"q");
+      const auto e = std::make_shared<Variable>("q");
       REQUIRE_NOTHROW(e->adjoint());
       const auto e_clone = e->clone();
       REQUIRE(e_clone.is<Variable>());
@@ -981,42 +981,42 @@ TEST_CASE("expr", "[elements]") {
     REQUIRE(ExprPtr{}.to_latex().empty());
 
     {  // Variable
-      const auto e = std::make_shared<Variable>(L"q");
-      REQUIRE(e->to_latex() == L"{q}");
+      const auto e = std::make_shared<Variable>("q");
+      REQUIRE(e->to_latex() == "{q}");
       REQUIRE_NOTHROW(e->adjoint());
-      REQUIRE(e->to_latex() == L"{{q}^*}");
+      REQUIRE(e->to_latex() == "{{q}^*}");
       REQUIRE_NOTHROW(e->adjoint());
-      REQUIRE(e->to_latex() == L"{q}");
+      REQUIRE(e->to_latex() == "{q}");
     }
 
     {  // Power
       const auto c2 = ex<Constant>(rational{1, 2});
 
       Power p1(c2, rational{1, 2});
-      REQUIRE(to_latex(p1) == L"{\\frac{1}{2^{\\frac{1}{2}}}}");
+      REQUIRE(to_latex(p1) == "{\\frac{1}{2^{\\frac{1}{2}}}}");
 
       Power p_exp1(c2, rational{1});
-      REQUIRE(to_latex(p_exp1) == L"{{{\\frac{1}{2}}}}");
+      REQUIRE(to_latex(p_exp1) == "{{{\\frac{1}{2}}}}");
 
-      Power pv(ex<Variable>(L"x"), rational{2, 1});
-      REQUIRE(to_latex(pv) == L"{x}^{2}");
+      Power pv(ex<Variable>("x"), rational{2, 1});
+      REQUIRE(to_latex(pv) == "{x}^{2}");
 
       const Expr &expr = pv;
-      REQUIRE(to_latex(expr) == L"{x}^{2}");
-      REQUIRE(expr.to_latex() == L"{x}^{2}");
+      REQUIRE(to_latex(expr) == "{x}^{2}");
+      REQUIRE(expr.to_latex() == "{x}^{2}");
       const auto ptr = pv.clone();
-      REQUIRE(to_latex(ptr) == L"{x}^{2}");
-      REQUIRE(ptr.to_latex() == L"{x}^{2}");
-      REQUIRE(to_latex(std::make_shared<Power>(pv)) == L"{x}^{2}");
-      REQUIRE(to_latex(ex<Product>(ExprPtrList{ptr, ex<Variable>(L"y")})) ==
-              L"{{x}^{2}{y}}");
-      REQUIRE(to_latex(ex<Sum>(ExprPtrList{ptr, ex<Variable>(L"y")})) ==
-              L"{ \\bigl({x}^{2} + {y}\\bigr) }");
+      REQUIRE(to_latex(ptr) == "{x}^{2}");
+      REQUIRE(ptr.to_latex() == "{x}^{2}");
+      REQUIRE(to_latex(std::make_shared<Power>(pv)) == "{x}^{2}");
+      REQUIRE(to_latex(ex<Product>(ExprPtrList{ptr, ex<Variable>("y")})) ==
+              "{{x}^{2}{y}}");
+      REQUIRE(to_latex(ex<Sum>(ExprPtrList{ptr, ex<Variable>("y")})) ==
+              "{ \\bigl({x}^{2} + {y}\\bigr) }");
     }
 
     Product sp0{};
     sp0.append(2, std::make_shared<Dummy>());
-    REQUIRE(to_latex(sp0) == L"{{{2}}{\\text{Dummy}}}");
+    REQUIRE(to_latex(sp0) == "{{{2}}{\\text{Dummy}}}");
 
     // VecExpr<ExprPtr>
     {
@@ -1026,7 +1026,7 @@ TEST_CASE("expr", "[elements]") {
       auto ex6 =
           std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
       REQUIRE(ex6->to_latex() ==
-              L"{\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} \\}}");
+              "{\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} \\}}");
     }
 
     // to_latex_align
@@ -1036,29 +1036,29 @@ TEST_CASE("expr", "[elements]") {
       e->append(ex<Adjointable>(2));
       e->append(ex<Adjointable>(3));
       e->append(ex<Adjointable>(4));
-      // std::wcout << "to_latex(e) = " << to_latex(e) << std::endl;
+      // std::cout << "to_latex(e) = " << to_latex(e) << std::endl;
       REQUIRE(to_latex(*e) ==
-              L"{ \\bigl({\\text{Adjointable}{1}} + {\\text{Adjointable}{2}} + "
-              L"{\\text{Adjointable}{3}} + {\\text{Adjointable}{4}}\\bigr) }");
-      // std::wcout << "to_latex_align(e) = " << to_latex_align(e) << std::endl;
+              "{ \\bigl({\\text{Adjointable}{1}} + {\\text{Adjointable}{2}} + "
+              "{\\text{Adjointable}{3}} + {\\text{Adjointable}{4}}\\bigr) }");
+      // std::cout << "to_latex_align(e) = " << to_latex_align(e) << std::endl;
       REQUIRE(to_latex_align(e) ==
-              L"\\begin{align}\n"
+              "\\begin{align}\n"
               "& ({\\text{Adjointable}{1}} \\\\\n"
               "& + {\\text{Adjointable}{2}} \\\\\n"
               "& + {\\text{Adjointable}{3}} \\\\\n"
               "& + {\\text{Adjointable}{4}})\n"
               "\\end{align}");
-      // std::wcout << "to_latex_align(e,5,2) = " << to_latex_align(e,5,2) <<
+      // std::cout << "to_latex_align(e,5,2) = " << to_latex_align(e,5,2) <<
       // std::endl;
       REQUIRE(to_latex_align(e, 5, 2) ==
-              L"\\begin{align}\n"
+              "\\begin{align}\n"
               "& ({\\text{Adjointable}{1}} + {\\text{Adjointable}{2}} \\\\\n"
               "& + {\\text{Adjointable}{3}} + {\\text{Adjointable}{4}})\n"
               "\\end{align}");
-      // std::wcout << "to_latex_align(e,1,2) = " << to_latex_align(e,1,2) <<
+      // std::cout << "to_latex_align(e,1,2) = " << to_latex_align(e,1,2) <<
       // std::endl;
       REQUIRE(to_latex_align(e, 1, 2) ==
-              L"\\begin{align}\n"
+              "\\begin{align}\n"
               "& ({\\text{Adjointable}{1}} + {\\text{Adjointable}{2}} \\\\\n"
               "& + {\\text{Adjointable}{3}} \n"
               "\\end{align}\n"
@@ -1082,20 +1082,20 @@ TEST_CASE("expr", "[elements]") {
       latex_visitor v1{};
       ex->visit(v1);
 
-      //      std::wcout << "v1.result = " << v1.result << std::endl;
+      //      std::cout << "v1.result = " << v1.result << std::endl;
       REQUIRE(
           v1.result ==
-          L"{{{1}}}{{{2}}}{{{3}}}{\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} "
-          L"\\}}{{{1}}}{{{2}}}{{{3}}}{\\text{VecExpr}\\{{{{1}}} {{{2}}} "
-          L"{{{3}}} \\}}{ \\bigl({\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} "
-          L"\\}} + {\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} \\}}\\bigr) }");
+          "{{{1}}}{{{2}}}{{{3}}}{\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} "
+          "\\}}{{{1}}}{{{2}}}{{{3}}}{\\text{VecExpr}\\{{{{1}}} {{{2}}} "
+          "{{{3}}} \\}}{ \\bigl({\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} "
+          "\\}} + {\\text{VecExpr}\\{{{{1}}} {{{2}}} {{{3}}} \\}}\\bigr) }");
 
       latex_visitor v2{};
       ex->visit(v2, /* atoms_only = */ true);
-      //      std::wcout << "v2.result = " << v2.result << std::endl;
+      //      std::cout << "v2.result = " << v2.result << std::endl;
       REQUIRE(v2.result ==
-              L"{{{1}}}{{{2}}}{{{3}}}{{{1}}}{{{"
-              L"2}}}{{{3}}}");
+              "{{{1}}}{{{2}}}{{{3}}}{{{1}}}{{{"
+              "2}}}{{{3}}}");
     }
 
     // mutating visitor
@@ -1147,12 +1147,12 @@ TEST_CASE("expr", "[elements]") {
       for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
         switch (i) {
           case 0:
-            REQUIRE(to_latex(*it) == L"{{{3}}}");
+            REQUIRE(to_latex(*it) == "{{{3}}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {0, 0}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 0);
             break;
           case 1:
-            REQUIRE(to_latex(*it) == L"{{{7}}}");
+            REQUIRE(to_latex(*it) == "{{{7}}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {1, 0}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 1);
             break;
@@ -1174,34 +1174,34 @@ TEST_CASE("expr", "[elements]") {
       for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
         switch (i) {
           case 0:
-            REQUIRE(to_latex(*it) == L"{{{1}}}");
+            REQUIRE(to_latex(*it) == "{{{1}}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {0, 0}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 0);
             break;
           case 1:
-            REQUIRE(to_latex(*it) == L"{{{3}}}");
+            REQUIRE(to_latex(*it) == "{{{3}}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {0, 1, 0, 0}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 1);
             break;
           case 2:
-            REQUIRE(to_latex(*it) == L"{\\text{Dummy}}");
+            REQUIRE(to_latex(*it) == "{\\text{Dummy}}");
             REQUIRE(compare(
                 ranges::get_cursor(it).address(),
                 {0, 1, 0, 1, 0}));  // -1 x Dummy = Product(-1){Dummy}!!!
             REQUIRE(ranges::get_cursor(it).ordinal() == 2);
             break;
           case 3:
-            REQUIRE(to_latex(*it) == L"{{{5}}}");
+            REQUIRE(to_latex(*it) == "{{{5}}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {1, 0}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 3);
             break;
           case 4:
-            REQUIRE(to_latex(*it) == L"{{{6}}}");
+            REQUIRE(to_latex(*it) == "{{{6}}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {1, 1, 0, 0}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 4);
             break;
           case 5:
-            REQUIRE(to_latex(*it) == L"{\\text{Dummy}}");
+            REQUIRE(to_latex(*it) == "{\\text{Dummy}}");
             REQUIRE(compare(ranges::get_cursor(it).address(), {1, 1, 0, 1}));
             REQUIRE(ranges::get_cursor(it).ordinal() == 5);
             break;
@@ -1216,12 +1216,12 @@ TEST_CASE("expr", "[elements]") {
       auto x =
           (ex<Constant>(1) + ex<Dummy>()) * (ex<Constant>(3) + ex<Dummy>());
       REQUIRE(to_latex(x) ==
-              L"{{ \\bigl({{{1}}} + {\\text{Dummy}}\\bigr) }{ \\bigl({{{3}}} "
-              L"+ {\\text{Dummy}}\\bigr) }}");
+              "{{ \\bigl({{{1}}} + {\\text{Dummy}}\\bigr) }{ \\bigl({{{3}}} "
+              "+ {\\text{Dummy}}\\bigr) }}");
       expand(x);
       REQUIRE(to_latex(x) ==
-              L"{ \\bigl({{{3}}} + {{\\text{Dummy}}} + {{{3}}"
-              L"{\\text{Dummy}}} + {{\\text{Dummy}}{\\text{Dummy}}}\\bigr) }");
+              "{ \\bigl({{{3}}} + {{\\text{Dummy}}} + {{{3}}"
+              "{\\text{Dummy}}} + {{\\text{Dummy}}{\\text{Dummy}}}\\bigr) }");
       rapid_simplify(x);
     }
     {
@@ -1230,18 +1230,18 @@ TEST_CASE("expr", "[elements]") {
            ex<Constant>(2) * (ex<Constant>(3) - ex<Dummy>())) *
           (ex<Constant>(5) * (ex<Constant>(6) + ex<Dummy>()) + ex<Dummy>());
       REQUIRE(to_latex(x) ==
-              L"{{ \\bigl({{{1}}} + {{{2}}{ \\bigl({{{3}}} - {"
-              L"{\\text{Dummy}}}\\bigr) }}\\bigr) }{ \\bigl({{{5}}"
-              L"{ \\bigl({{{6}}} + {\\text{Dummy}}\\bigr) }} + "
-              L"{\\text{Dummy}}\\bigr) }}");
+              "{{ \\bigl({{{1}}} + {{{2}}{ \\bigl({{{3}}} - {"
+              "{\\text{Dummy}}}\\bigr) }}\\bigr) }{ \\bigl({{{5}}"
+              "{ \\bigl({{{6}}} + {\\text{Dummy}}\\bigr) }} + "
+              "{\\text{Dummy}}\\bigr) }}");
       expand(x);
       REQUIRE(to_latex(x) ==
-              L"{ \\bigl({{{30}}} + {{{5}}{\\text{Dummy}}} + "
-              L"{{\\text{Dummy}}} + {{{180}}} + {{{30}}"
-              L"{\\text{Dummy}}} + {{{6}}{\\text{Dummy}}} - {{{60}}"
-              L"{\\text{Dummy}}} - {{{10}}"
-              L"{\\text{Dummy}}{\\text{Dummy}}} - {{{2}}"
-              L"{\\text{Dummy}}{\\text{Dummy}}}\\bigr) }");
+              "{ \\bigl({{{30}}} + {{{5}}{\\text{Dummy}}} + "
+              "{{\\text{Dummy}}} + {{{180}}} + {{{30}}"
+              "{\\text{Dummy}}} + {{{6}}{\\text{Dummy}}} - {{{60}}"
+              "{\\text{Dummy}}} - {{{10}}"
+              "{\\text{Dummy}}{\\text{Dummy}}} - {{{2}}"
+              "{\\text{Dummy}}{\\text{Dummy}}}\\bigr) }");
     }
   }
 
@@ -1249,7 +1249,7 @@ TEST_CASE("expr", "[elements]") {
     {  // sums of sums
       auto x = ex<Constant>(1) + (ex<Dummy>() + ex<Constant>(3)) + ex<Dummy>();
       REQUIRE(to_latex(x) ==
-              L"{ \\bigl({\\text{Dummy}} + {{{4}}} + {\\text{Dummy}}\\bigr) }");
+              "{ \\bigl({\\text{Dummy}} + {{{4}}} + {\\text{Dummy}}\\bigr) }");
       // make nested sums by visitation
       x->visit([](ExprPtr &e) {
         if (e.is<Dummy>()) {
@@ -1257,17 +1257,17 @@ TEST_CASE("expr", "[elements]") {
         }
       });
       REQUIRE(to_latex(x) ==
-              L"{ \\bigl({ \\bigl({\\text{Dummy}} + {\\text{Dummy}}\\bigr) } + "
-              L"{{{4}}} + { \\bigl({\\text{Dummy}} + {\\text{Dummy}}\\bigr) "
-              L"}\\bigr) }");
+              "{ \\bigl({ \\bigl({\\text{Dummy}} + {\\text{Dummy}}\\bigr) } + "
+              "{{{4}}} + { \\bigl({\\text{Dummy}} + {\\text{Dummy}}\\bigr) "
+              "}\\bigr) }");
       flatten(x);
       REQUIRE(to_latex(x) ==
-              L"{ \\bigl({\\text{Dummy}} + {\\text{Dummy}} + {{{4}}} + "
-              L"{\\text{Dummy}} + {\\text{Dummy}}\\bigr) }");
+              "{ \\bigl({\\text{Dummy}} + {\\text{Dummy}} + {{{4}}} + "
+              "{\\text{Dummy}} + {\\text{Dummy}}\\bigr) }");
     }
     {  // products of products
       auto x = ex<Constant>(1) * (ex<Dummy>() * ex<Constant>(3)) * ex<Dummy>();
-      REQUIRE(to_latex(x) == L"{{{3}}{\\text{Dummy}}{\\text{Dummy}}}");
+      REQUIRE(to_latex(x) == "{{{3}}{\\text{Dummy}}{\\text{Dummy}}}");
       // make nested sums by visitation
       x->visit([](ExprPtr &e) {
         if (e.is<Dummy>()) {
@@ -1275,16 +1275,16 @@ TEST_CASE("expr", "[elements]") {
         }
       });
       REQUIRE(to_latex(x) ==
-              L"{{{3}}\\bigl({{\\text{Dummy}}{\\text{Dummy}}}\\bigr)\\bigl({{"
-              L"\\text{Dummy}}{\\text{Dummy}}}\\bigr)}");
+              "{{{3}}\\bigl({{\\text{Dummy}}{\\text{Dummy}}}\\bigr)\\bigl({{"
+              "\\text{Dummy}}{\\text{Dummy}}}\\bigr)}");
       flatten(x);
       REQUIRE(to_latex(x) ==
-              L"{{{3}}{\\text{Dummy}}{\\text{Dummy}}{\\text{Dummy}}{\\text{"
-              L"Dummy}}}");
+              "{{{3}}{\\text{Dummy}}{\\text{Dummy}}{\\text{Dummy}}{\\text{"
+              "Dummy}}}");
     }
     {  // products of products and sums
       auto x = ex<Constant>(1) * (ex<Dummy>() * ex<Constant>(3)) * ex<Dummy>();
-      REQUIRE(to_latex(x) == L"{{{3}}{\\text{Dummy}}{\\text{Dummy}}}");
+      REQUIRE(to_latex(x) == "{{{3}}{\\text{Dummy}}{\\text{Dummy}}}");
       // make nested sums by visitation
       x->visit([](ExprPtr &e) {
         if (e.is<Dummy>()) {
@@ -1292,14 +1292,14 @@ TEST_CASE("expr", "[elements]") {
         }
       });
       REQUIRE(to_latex(x) ==
-              L"{{{3}}\\bigl({{\\text{Dummy}}{ \\bigl({\\text{Dummy}} + "
-              L"{\\text{Dummy}}\\bigr) }}\\bigr)\\bigl({{\\text{Dummy}}{ "
-              L"\\bigl({\\text{Dummy}} + {\\text{Dummy}}\\bigr) }}\\bigr)}");
+              "{{{3}}\\bigl({{\\text{Dummy}}{ \\bigl({\\text{Dummy}} + "
+              "{\\text{Dummy}}\\bigr) }}\\bigr)\\bigl({{\\text{Dummy}}{ "
+              "\\bigl({\\text{Dummy}} + {\\text{Dummy}}\\bigr) }}\\bigr)}");
       flatten(x);
       REQUIRE(to_latex(x) ==
-              L"{{{3}}{\\text{Dummy}}{ \\bigl({\\text{Dummy}} + "
-              L"{\\text{Dummy}}\\bigr) }{\\text{Dummy}}{ "
-              L"\\bigl({\\text{Dummy}} + {\\text{Dummy}}\\bigr) }}");
+              "{{{3}}{\\text{Dummy}}{ \\bigl({\\text{Dummy}} + "
+              "{\\text{Dummy}}\\bigr) }{\\text{Dummy}}{ "
+              "\\bigl({\\text{Dummy}} + {\\text{Dummy}}\\bigr) }}");
     }
 
     {  // Power::flatten
@@ -1315,12 +1315,12 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(pf2->is<Power>());
 
       // Variable base is a no-op
-      auto pf3 = ex<Power>(L"x", 2);
+      auto pf3 = ex<Power>("x", 2);
       Power::flatten(pf3);
       REQUIRE(pf3->is<Power>());
 
       // Variable base, zero exponent: x^0 = 1
-      auto pf4 = ex<Power>(L"x", 0);
+      auto pf4 = ex<Power>("x", 0);
       Power::flatten(pf4);
       REQUIRE(pf4 == ex<Constant>(rational{1}));
 
@@ -1406,11 +1406,11 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(pf13i->is<Power>());
 
       // (b^1)* = conj(b):
-      auto pf14 = ex<Power>(L"y", rational{1});
+      auto pf14 = ex<Power>("y", rational{1});
       pf14->as<Power>().conjugate();
       Power::flatten(pf14);
       REQUIRE(pf14->is<Variable>());
-      REQUIRE(pf14->as<Variable>().label() == L"y");
+      REQUIRE(pf14->as<Variable>().label() == "y");
       REQUIRE(pf14->as<Variable>().conjugated());
     }
   }
@@ -1431,7 +1431,7 @@ TEST_CASE("expr", "[elements]") {
 
     {  // Power
       const auto c2 = ex<Constant>(rational{1, 2});
-      const auto vx = ex<Variable>(L"x");
+      const auto vx = ex<Variable>("x");
 
       Power p1(c2, rational{1, 2});
       Power p3(c2, rational{1, 3});  // different exponent
@@ -1440,12 +1440,12 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(sequant::hash::value(p1) != sequant::hash::value(p4));
 
       // Power(b, 1) has the same hash as b
-      const auto v = ex<Variable>(L"u");
+      const auto v = ex<Variable>("u");
       Power p_one(v, rational{1});
       REQUIRE(sequant::hash::value(p_one) == sequant::hash::value(*v));
 
       // mutating the ExprPtr does not affect the Power's cached hash.
-      auto shared = ex<Variable>(L"s");
+      auto shared = ex<Variable>("s");
       Power ps(shared, rational{2});
       const auto ps_hash_before = sequant::hash::value(ps);
       shared->as<Variable>().conjugate();
@@ -1457,11 +1457,10 @@ TEST_CASE("expr", "[elements]") {
     // Product::factors() non-const hands out a mutable reference into
     // factors_, so it must invalidate the memoized hash, exactly as the
     // non-const begin_subexpr()/end_subexpr() do
-    auto prod =
-        ex<Product>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")});
+    auto prod = ex<Product>(ExprPtrList{ex<Variable>("x"), ex<Variable>("y")});
     const auto hash_before = prod->hash_value();
 
-    prod->as<Product>().factors()[0] = ex<Variable>(L"mutated");
+    prod->as<Product>().factors()[0] = ex<Variable>("mutated");
 
     REQUIRE(prod->hash_value() != hash_before);
   }
@@ -1473,7 +1472,7 @@ TEST_CASE("expr", "[elements]") {
     auto prod = ex<Product>(ExprPtrList{});
     const auto hash_before = prod->hash_value();
 
-    prod->as<Product>().factors().push_back(ex<Variable>(L"x"));
+    prod->as<Product>().factors().push_back(ex<Variable>("x"));
 
     REQUIRE(prod->hash_value() != hash_before);
   }
@@ -1627,18 +1626,18 @@ TEST_CASE("expr", "[elements]") {
         auto One = ex<Constant>(1);
         auto Two = ex<Constant>(2);
 
-        ExprPtr res1 = One + L"x";
+        ExprPtr res1 = One + "x";
         simplify(res1);
-        REQUIRE_THAT(res1, EquivalentTo(One + ex<Variable>(L"x")));
-        REQUIRE_THAT(simplify(L"x" + One), EquivalentTo(res1));
+        REQUIRE_THAT(res1, EquivalentTo(One + ex<Variable>("x")));
+        REQUIRE_THAT(simplify("x" + One), EquivalentTo(res1));
 
         ExprPtr res2 = res1 - "x";
         simplify(res2);
         REQUIRE(res2 == One);
 
-        ExprPtr res3 = L"x" - One;
+        ExprPtr res3 = "x" - One;
         simplify(res3);
-        REQUIRE_THAT(res3, EquivalentTo(ex<Variable>(L"x") - One));
+        REQUIRE_THAT(res3, EquivalentTo(ex<Variable>("x") - One));
 
         ExprPtr res4 = Two * "y";
         simplify(res4);
@@ -1660,33 +1659,33 @@ TEST_CASE("expr", "[elements]") {
   SECTION("ResultExpr") {
     SECTION("accessors") {
       SECTION("as_variable") {
-        REQUIRE_THAT(deserialize<ResultExpr>(L"R = Var").result_as_variable(),
-                     EquivalentTo(L"R"));
+        REQUIRE_THAT(deserialize<ResultExpr>("R = Var").result_as_variable(),
+                     EquivalentTo("R"));
 
-        REQUIRE_THAT(deserialize<ResultExpr>(L"R = Var").result_as_tensor(),
-                     EquivalentTo(L"R{}:N-N-N"));
+        REQUIRE_THAT(deserialize<ResultExpr>("R = Var").result_as_tensor(),
+                     EquivalentTo("R{}:N-N-N"));
       }
       SECTION("as_tensor") {
-        REQUIRE_THAT(deserialize<ResultExpr>(L"R{a1;i2;p3} = T{a1;i2;p3}")
+        REQUIRE_THAT(deserialize<ResultExpr>("R{a1;i2;p3} = T{a1;i2;p3}")
                          .result_as_tensor(),
-                     EquivalentTo(L"R{a1;i2;p3}"));
+                     EquivalentTo("R{a1;i2;p3}"));
       }
     }
     SECTION("particle pairings") {
-      std::vector<std::pair<Index, Index>> expected = {{L"a_1", L"i_1"}};
-      auto pairings = deserialize<ResultExpr>(L"R{a1;i1} = t{a1;i1}")
+      std::vector<std::pair<Index, Index>> expected = {{"a_1", "i_1"}};
+      auto pairings = deserialize<ResultExpr>("R{a1;i1} = t{a1;i1}")
                           .index_particle_grouping<std::pair<Index, Index>>();
       REQUIRE_THAT(pairings, ::Catch::Matchers::UnorderedRangeEquals(expected));
 
-      expected = {{L"a_1", L"i_1"}, {L"a_2", L"i_2"}};
-      pairings = deserialize<ResultExpr>(L"R{a1,a2;i1,i2} = t{a1,a2;i1,i2}")
+      expected = {{"a_1", "i_1"}, {"a_2", "i_2"}};
+      pairings = deserialize<ResultExpr>("R{a1,a2;i1,i2} = t{a1,a2;i1,i2}")
                      .index_particle_grouping<std::pair<Index, Index>>();
       REQUIRE_THAT(pairings, ::Catch::Matchers::UnorderedRangeEquals(expected));
 
       // aux indices are ignored
-      expected = {{L"a_1", L"i_1"}, {L"a_2", L"i_2"}};
+      expected = {{"a_1", "i_1"}, {"a_2", "i_2"}};
       pairings =
-          deserialize<ResultExpr>(L"R{a1,a2;i1,i2;p1} = t{a1,a2;i1,i2;p1}")
+          deserialize<ResultExpr>("R{a1,a2;i1,i2;p1} = t{a1,a2;i1,i2;p1}")
               .index_particle_grouping<std::pair<Index, Index>>();
       REQUIRE_THAT(pairings, ::Catch::Matchers::UnorderedRangeEquals(expected));
     }
@@ -1772,7 +1771,7 @@ TEST_CASE("expr_type_id_derived", "[elements]") {
   REQUIRE(ncid != pid);
   REQUIRE(cid != ncid);
   const auto c = ex<Constant>(1);
-  const auto p = ex<Variable>(L"x") * ex<Variable>(L"y");
+  const auto p = ex<Variable>("x") * ex<Variable>("y");
   REQUIRE_NOTHROW(c->is<CProduct>());
   REQUIRE_NOTHROW(c->is<NCProduct>());
   REQUIRE_NOTHROW(p->is<CProduct>());
@@ -1894,8 +1893,8 @@ TEST_CASE("expr_type_id", "[elements]") {
 
   SECTION("operator< orders unlike types by rank") {
     const auto c = ex<Constant>(1);
-    const auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"});
-    const auto op = ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"}));
+    const auto t = ex<Tensor>("t", bra{"i_1"}, ket{"a_1"});
+    const auto op = ex<FNOperator>(cre({"i_1"}), ann({"a_1"}));
     REQUIRE(*t < *c);
     REQUIRE(!(*c < *t));
     REQUIRE(*t < *op);
@@ -1913,11 +1912,11 @@ TEST_CASE("canonical_mark", "[elements]") {
 
   auto make_product = [] {
     return ex<Constant>(rational{1, 2}) *
-           ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
-           ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+           ex<Tensor>("g", bra{"i_1", "i_2"}, ket{"a_1", "a_2"}) *
+           ex<Tensor>("t", bra{"a_1", "a_2"}, ket{"i_1", "i_2"});
   };
   auto make_sum = [&] {
-    return make_product() + ex<Tensor>(L"f", bra{L"i_1"}, ket{L"i_1"}) +
+    return make_product() + ex<Tensor>("f", bra{"i_1"}, ket{"i_1"}) +
            ex<Constant>(3);
   };
 
@@ -1934,7 +1933,7 @@ TEST_CASE("canonical_mark", "[elements]") {
     REQUIRE(!e->is_canonical(
         opts.copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No)));
     REQUIRE(!e->is_canonical(
-        opts.copy_and_set(container::set<Index>{Index{L"i_1"}})));
+        opts.copy_and_set(container::set<Index>{Index{"i_1"}})));
     // ... and never for rapid canonicalization
     REQUIRE(!e->is_canonical(rapid_opts));
     // only full canonicalization marks
@@ -1973,7 +1972,7 @@ TEST_CASE("canonical_mark", "[elements]") {
       return e->is_canonical(opts);
     };
     CHECK(!check([](ExprPtr &e) {
-      e->as<Product>().append(1, ex<Tensor>(L"f", bra{L"i_3"}, ket{L"i_4"}));
+      e->as<Product>().append(1, ex<Tensor>("f", bra{"i_3"}, ket{"i_4"}));
     }));
     CHECK(!check([](ExprPtr &e) { e->as<Product>().scale(2); }));
     CHECK(!check(
@@ -1983,18 +1982,18 @@ TEST_CASE("canonical_mark", "[elements]") {
     CHECK(!check([](ExprPtr &e) { e->adjoint(); }));
     // replacing or reordering factors
     CHECK(!check([](ExprPtr &e) {
-      (*e)[0] = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+      (*e)[0] = ex<Tensor>("g", bra{"i_1", "i_2"}, ket{"a_1", "a_2"});
     }));
     CHECK(!check([](ExprPtr &e) { std::swap((*e)[0], (*e)[1]); }));
     CHECK(!check([](ExprPtr &e) {
-      e->as<Product>().factors().push_back(ex<Variable>(L"x"));
+      e->as<Product>().factors().push_back(ex<Variable>("x"));
     }));
     // mutating a factor in place, also via a pointer obtained without
     // mutable access to the Product
     CHECK(!check([](ExprPtr &e) {
       const auto &t = e->as<Product>().factor(0);
       t->as<Tensor>().transform_indices(
-          container::map<Index, Index>{{Index{L"i_1"}, Index{L"i_3"}}});
+          container::map<Index, Index>{{Index{"i_1"}, Index{"i_3"}}});
     }));
     CHECK(!check([](ExprPtr &e) { e->as<Product>().factor(1)->adjoint(); }));
     // non-mutating access does not invalidate
@@ -2007,18 +2006,18 @@ TEST_CASE("canonical_mark", "[elements]") {
   }
 
   SECTION("mutations of operators invalidate") {
-    auto e = ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
-             ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+    auto e = ex<Tensor>("t", bra{"a_1"}, ket{"i_1"}) *
+             ex<FNOperator>(cre({"a_1"}), ann({"i_1"}));
     e->mark_canonical(opts);
     REQUIRE(e->is_canonical(opts));
-    e->as<Product>().factor(1)->as<FNOperator>()[0] = fcre(L"a_7");
+    e->as<Product>().factor(1)->as<FNOperator>()[0] = fcre("a_7");
     REQUIRE(!e->is_canonical(opts));
 
-    auto s = ex<FNOperatorSeq>(FNOperator(cre({L"a_1"}), ann({L"i_1"})),
-                               FNOperator(cre({L"a_2"}), ann({L"i_2"})));
+    auto s = ex<FNOperatorSeq>(FNOperator(cre({"a_1"}), ann({"i_1"})),
+                               FNOperator(cre({"a_2"}), ann({"i_2"})));
     s->mark_canonical(opts);
     REQUIRE(s->is_canonical(opts));
-    s->as<FNOperatorSeq>()[1] = FNOperator(cre({L"a_3"}), ann({L"i_3"}));
+    s->as<FNOperatorSeq>()[1] = FNOperator(cre({"a_3"}), ann({"i_3"}));
     REQUIRE(!s->is_canonical(opts));
   }
 
@@ -2034,17 +2033,17 @@ TEST_CASE("canonical_mark", "[elements]") {
       return e->is_canonical(opts);
     };
     CHECK(!check([](ExprPtr &e) {
-      e->as<Sum>().append(ex<Tensor>(L"f", bra{L"i_3"}, ket{L"i_4"}));
+      e->as<Sum>().append(ex<Tensor>("f", bra{"i_3"}, ket{"i_4"}));
     }));
     CHECK(!check([](ExprPtr &e) { e->as<Sum>().append(ex<Constant>(1)); }));
-    CHECK(!check([](ExprPtr &e) { e += ex<Variable>(L"x"); }));
-    CHECK(!check([](ExprPtr &e) { (*e)[1] = ex<Variable>(L"x"); }));
+    CHECK(!check([](ExprPtr &e) { e += ex<Variable>("x"); }));
+    CHECK(!check([](ExprPtr &e) { (*e)[1] = ex<Variable>("x"); }));
     CHECK(!check([](ExprPtr &e) { std::swap((*e)[0], (*e)[1]); }));
     // a deep mutation, via a pointer to the subexpression
     CHECK(!check([](ExprPtr &e) {
       const auto &product = e->as<Sum>().summand(0);
       product->as<Product>().factor(0)->as<Tensor>().transform_indices(
-          container::map<Index, Index>{{Index{L"a_1"}, Index{L"a_3"}}});
+          container::map<Index, Index>{{Index{"a_1"}, Index{"a_3"}}});
     }));
     CHECK(!check(
         [](ExprPtr &e) { e->as<Sum>().summand(0)->as<Product>().scale(2); }));
@@ -2068,7 +2067,7 @@ TEST_CASE("canonical_mark", "[elements]") {
       e->adjoint();
       REQUIRE(c2->is_canonical(opts));
     }
-    auto t = ex<Tensor>(L"f", bra{L"i_1"}, ket{L"i_1"});
+    auto t = ex<Tensor>("f", bra{"i_1"}, ket{"i_1"});
     t->mark_canonical(opts);
     REQUIRE(t->clone()->is_canonical(opts));
     auto c = ex<Constant>(2);

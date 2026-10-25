@@ -14,6 +14,7 @@
 
 #include <range/v3/view/map.hpp>
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <string>
@@ -22,30 +23,35 @@
 namespace sequant::mbpt {
 
 namespace detail {
-inline constexpr std::wstring_view pert_superscripts = L"⁰¹²³⁴⁵⁶⁷⁸⁹";
+/// the (UTF-8 encoded) superscript digits, indexed by their value
+inline constexpr std::array<std::string_view, 10> pert_superscripts = {
+    "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"};
 
 /// @brief decorates a base label with perturbation order as superscript
 /// @param base_label the base label to decorate
 /// @param pert_order the perturbation order to decorate with
 /// @return the decorated label
-inline std::wstring decorate_with_pert_order(std::wstring_view base_label,
-                                             int pert_order = 0) {
-  if (pert_order == 0) return std::wstring(base_label);
+inline std::string decorate_with_pert_order(std::string_view base_label,
+                                            int pert_order = 0) {
+  if (pert_order == 0) return std::string(base_label);
   SEQUANT_ASSERT(
       pert_order >= 0 && pert_order <= 9,
       "decorate_with_pert_order: perturbation order out of range [0,9]");
 
-  std::wstring result(base_label);
+  std::string result(base_label);
   result += detail::pert_superscripts[pert_order];
   return result;
 }
 
 /// @return @p label without its trailing perturbation-order superscript, if
 /// any (the inverse of decorate_with_pert_order)
-inline std::wstring_view strip_pert_order(std::wstring_view label) {
-  if (!label.empty() &&
-      pert_superscripts.find(label.back()) != std::wstring_view::npos)
-    label.remove_suffix(1);
+inline std::string_view strip_pert_order(std::string_view label) {
+  for (const auto superscript : pert_superscripts) {
+    if (label.ends_with(superscript)) {
+      label.remove_suffix(superscript.size());
+      break;
+    }
+  }
   return label;
 }
 }  // namespace detail
@@ -76,17 +82,17 @@ class OpRegistry {
  public:
   /// default constructor, creates an empty registry
   OpRegistry()
-      : ops_(std::make_shared<container::map<std::wstring, OpClass>>()),
+      : ops_(std::make_shared<container::map<std::string, OpClass>>()),
         herm_overrides_(
-            std::make_shared<container::map<std::wstring, Hermiticity>>()),
+            std::make_shared<container::map<std::string, Hermiticity>>()),
         basis_grants_(std::make_shared<BasisGrants>()) {}
 
   /// constructs an OpRegistry from an existing map of operators and their
   /// classes
-  OpRegistry(std::shared_ptr<container::map<std::wstring, OpClass>> ops)
+  OpRegistry(std::shared_ptr<container::map<std::string, OpClass>> ops)
       : ops_(std::move(ops)),
         herm_overrides_(
-            std::make_shared<container::map<std::wstring, Hermiticity>>()),
+            std::make_shared<container::map<std::string, Hermiticity>>()),
         basis_grants_(std::make_shared<BasisGrants>()) {}
 
   /// copy constructor
@@ -120,62 +126,62 @@ class OpRegistry {
   /// @param op the operator label
   /// @param action the class of the operator
   /// @note the operator's Hermiticity defaults to default_hermiticity(action)
-  OpRegistry& add(const std::wstring& op, OpClass action);
+  OpRegistry& add(const std::string& op, OpClass action);
 
   /// @brief Adds a new operator to the registry with an explicit Hermiticity
   /// @param op the operator label
   /// @param action the class of the operator
   /// @param hermiticity the operator's Hermiticity (overrides the default
   ///        implied by @p action)
-  OpRegistry& add(const std::wstring& op, OpClass action,
+  OpRegistry& add(const std::string& op, OpClass action,
                   Hermiticity hermiticity);
 
   /// @brief Overrides the Hermiticity of an already-registered operator
   /// @param op the operator label (must already be registered)
   /// @param hermiticity the operator's Hermiticity
-  OpRegistry& set_hermiticity(const std::wstring& op, Hermiticity hermiticity);
+  OpRegistry& set_hermiticity(const std::string& op, Hermiticity hermiticity);
 
   /// @brief Grants the basis instance @p instance to the legs of @p op that
   /// OpMaker mints in @p leg_space
   /// @param op the operator label (must be a registered Ex or Deex operator)
   /// @throw Exception if @p op is not registered or is a general operator
-  OpRegistry& grant_basis(const std::wstring& op, const IndexSpace& leg_space,
+  OpRegistry& grant_basis(const std::string& op, const IndexSpace& leg_space,
                           IndexBasis::instance_type instance);
 
   /// @return the registered label that @p op stands for: @p op itself if
   /// registered, else its base label (perturbation-order superscript
   /// stripped) if that is, e.g. `t¹` stands for `t` unless `t¹` is registered;
   /// null if neither is. Never throws
-  [[nodiscard]] std::optional<std::wstring> resolve(std::wstring_view op) const;
+  [[nodiscard]] std::optional<std::string> resolve(std::string_view op) const;
 
   /// @return true if the label @p op stands for (see resolve) has a basis
   /// grant on any leg space; never throws
-  [[nodiscard]] bool has_basis_grants(const std::wstring& op) const;
+  [[nodiscard]] bool has_basis_grants(const std::string& op) const;
 
   /// @return the basis instance granted to the legs of the label @p op stands
   /// for (see resolve) in exactly @p leg_space, if any; never throws
   [[nodiscard]] IndexBasis::optional_instance basis_grant(
-      const std::wstring& op, const IndexSpace& leg_space) const;
+      const std::string& op, const IndexSpace& leg_space) const;
 
   /// @brief Removes an operator from the registry
-  OpRegistry& remove(const std::wstring& op);
+  OpRegistry& remove(const std::string& op);
 
   /// @brief Checks if the registry contains an operator with the given label
   /// @param op the operator label
   /// @return true if the operator exists, false otherwise
-  bool contains(const std::wstring& op) const;
+  bool contains(const std::string& op) const;
 
   /// @brief Returns the class of the operator corresponding to the given label
   /// if it exists
   /// @param op the operator label
   /// @return the class of the operator
-  [[nodiscard]] OpClass to_class(const std::wstring& op) const;
+  [[nodiscard]] OpClass to_class(const std::string& op) const;
 
   /// @brief Returns the Hermiticity of the operator with the given label
   /// @param op the operator label
   /// @return the operator's Hermiticity (the per-operator override if set,
   ///         else default_hermiticity(to_class(op)))
-  [[nodiscard]] Hermiticity hermiticity(const std::wstring& op) const;
+  [[nodiscard]] Hermiticity hermiticity(const std::string& op) const;
 
   /// @brief returns a view of registered operator labels
   [[nodiscard]] auto ops() const { return ranges::views::keys(*ops_); }
@@ -189,13 +195,13 @@ class OpRegistry {
   }
 
  private:
-  std::shared_ptr<container::map<std::wstring, OpClass>> ops_;
+  std::shared_ptr<container::map<std::string, OpClass>> ops_;
   /// sparse per-operator Hermiticity overrides; absence means
   /// default_hermiticity(to_class(op)). Shared (shallow copy) like ops_.
-  std::shared_ptr<container::map<std::wstring, Hermiticity>> herm_overrides_;
+  std::shared_ptr<container::map<std::string, Hermiticity>> herm_overrides_;
   /// sparse per-operator, per-leg-space basis grants. Shared like ops_.
   using BasisGrants =
-      container::map<std::wstring,
+      container::map<std::string,
                      container::map<IndexSpace, IndexBasis::instance_type>>;
   std::shared_ptr<BasisGrants> basis_grants_;
 
@@ -203,7 +209,7 @@ class OpRegistry {
   /// registered
   /// @param op the operator label to validate
   /// @throws std::runtime_error if the label is reserved or already exists
-  void validate_op(const std::wstring& op) const;
+  void validate_op(const std::string& op) const;
 
   /// @brief Equality operator for OpRegistry
   friend bool operator==(const OpRegistry& reg1, const OpRegistry& reg2) {

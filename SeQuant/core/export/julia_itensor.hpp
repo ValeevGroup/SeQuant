@@ -89,7 +89,7 @@ class JuliaITensorGenerator : public JuliaTensorOperationsGenerator<Context> {
   }
 
   void declare(const Index &idx, const Context &ctx) override {
-    std::string currentindex = toUtf8(idx.full_label());
+    std::string currentindex = std::string(idx.full_label());
     Base::m_generated += currentindex;
     Base::m_generated += " = Index(";
     Base::m_generated += ctx.get_dim(idx.space());

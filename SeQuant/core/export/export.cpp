@@ -2,8 +2,8 @@
 #include <SeQuant/core/export/export.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
-#include <cwctype>
 #include <string>
 
 namespace sequant::detail {
@@ -18,15 +18,15 @@ bool rename(Tensor &tensor, PreprocessResult &result,
             const std::function<bool(const Tensor &)> &acceptable) {
   SEQUANT_ASSERT(acceptable || result.tensorReferences.at(tensor) > 0);
 
-  std::wstring basename = [&tensor]() {
+  std::string basename = [&tensor]() {
     std::size_t size = tensor.label().size();
 
-    while (size > 0 && std::iswdigit(tensor.label().at(size - 1))) {
+    while (size > 0 && is_ascii_digit(tensor.label().at(size - 1))) {
       size--;
     }
     SEQUANT_ASSERT(size > 0);
 
-    return std::wstring(tensor.label().substr(0, size));
+    return std::string(tensor.label().substr(0, size));
   }();
 
   tensor.set_label(basename);
@@ -34,7 +34,7 @@ bool rename(Tensor &tensor, PreprocessResult &result,
   std::size_t counter = 2;
   while (get_with_default(result.tensorReferences, tensor, 0) > 0 ||
          (acceptable && !acceptable(tensor))) {
-    tensor.set_label(basename + std::to_wstring(counter));
+    tensor.set_label(basename + std::to_string(counter));
     counter++;
   }
 
@@ -45,15 +45,15 @@ bool rename(Variable &variable, PreprocessResult &result,
             const std::function<bool(const Variable &)> &acceptable) {
   SEQUANT_ASSERT(acceptable || result.variableReferences.at(variable) > 0);
 
-  std::wstring basename = [&variable]() {
+  std::string basename = [&variable]() {
     std::size_t size = variable.label().size();
 
-    while (size > 0 && std::iswdigit(variable.label().at(size - 1))) {
+    while (size > 0 && is_ascii_digit(variable.label().at(size - 1))) {
       size--;
     }
     SEQUANT_ASSERT(size > 0);
 
-    return std::wstring(variable.label().substr(0, size));
+    return std::string(variable.label().substr(0, size));
   }();
 
   variable.set_label(basename);
@@ -61,7 +61,7 @@ bool rename(Variable &variable, PreprocessResult &result,
   std::size_t counter = 2;
   while (get_with_default(result.variableReferences, variable, 0) > 0 ||
          (acceptable && !acceptable(variable))) {
-    variable.set_label(basename + std::to_wstring(counter));
+    variable.set_label(basename + std::to_string(counter));
     counter++;
   }
 

@@ -136,13 +136,13 @@ class Context {
       ColumnSymmetry deserialization_column_symmetry =
         Defaults::deserialization_column_symmetry;
       /// label -> TensorCanonicalizer map, without null entries; the empty label maps to a DefaultTensorCanonicalizer unless given
-      std::optional<container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>> tensor_canonicalizers = std::nullopt;
+      std::optional<container::map<std::string, std::shared_ptr<TensorCanonicalizer>>> tensor_canonicalizers = std::nullopt;
       /// the Index comparer used by tensor canonicalizers; if not set, TensorCanonicalizer::default_index_comparer()
       std::optional<tensor_index_comparer_t> index_comparer = std::nullopt;
       /// the Index pair comparer used by tensor canonicalizers; if not set, TensorCanonicalizer::default_index_pair_comparer()
       std::optional<tensor_index_pair_comparer_t> index_pair_comparer = std::nullopt;
       /// the cardinal Tensor labels; if not set, the reserved labels
-      std::optional<container::vector<std::wstring>> cardinal_tensor_labels = std::nullopt;
+      std::optional<container::vector<std::string>> cardinal_tensor_labels = std::nullopt;
   };
   static Options make_default_options() { return {}; }
 
@@ -238,12 +238,12 @@ class Context {
   /// @return the TensorCanonicalizer for @p label if any, else the one for
   /// the empty label; null if neither exists
   std::shared_ptr<TensorCanonicalizer> tensor_canonicalizer_ptr(
-      std::wstring_view label) const;
+      std::string_view label) const;
   /// @param label a Tensor label
   /// @return the TensorCanonicalizer for exactly @p label, or null
   /// @sa tensor_canonicalizer_ptr
   std::shared_ptr<TensorCanonicalizer> nondefault_tensor_canonicalizer_ptr(
-      std::wstring_view label) const;
+      std::string_view label) const;
   /// @param label a Tensor label
   /// @return the TensorCanonicalizer that `tensor_canonicalizer_ptr(label)`
   /// points to
@@ -252,7 +252,7 @@ class Context {
   /// exists in this context; use tensor_canonicalizer_ptr() if this context
   /// may change
   const TensorCanonicalizer& tensor_canonicalizer(
-      std::wstring_view label) const;
+      std::string_view label) const;
   /// \return the object used by tensor canonicalizers to compare Index objects
   const tensor_index_comparer_t& index_comparer() const;
   /// \return the object used by tensor canonicalizers to compare pairs of
@@ -267,7 +267,7 @@ class Context {
   std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer_ptr()
       const;
   /// \return Tensor labels with lexicographic preference (in order)
-  const container::vector<std::wstring>& cardinal_tensor_labels() const;
+  const container::vector<std::string>& cardinal_tensor_labels() const;
 
   /// Sets the Vacuum for this context, convenient for chaining
   /// \param vacuum Vacuum
@@ -335,10 +335,10 @@ class Context {
   /// with a no-op deleter) makes the version change when the shared_ptr, not
   /// the object, dies
   Context& set_tensor_canonicalizer(
-      std::wstring_view label, std::shared_ptr<TensorCanonicalizer> canonicalizer);
+      std::string_view label, std::shared_ptr<TensorCanonicalizer> canonicalizer);
   /// Removes the TensorCanonicalizer for @p label , if any
   /// \return ref to `*this`, for chaining
-  Context& unset_tensor_canonicalizer(std::wstring_view label);
+  Context& unset_tensor_canonicalizer(std::string_view label);
   /// Sets the Index comparer used by tensor canonicalizers
   /// \param comparer a nonempty Index comparer
   /// \return ref to `*this`, for chaining
@@ -371,7 +371,7 @@ class Context {
   /// they should keep their precedence (mbpt::cardinal_tensor_labels() returns
   /// such a complete list)
   /// \return ref to `*this`, for chaining
-  Context& set_cardinal_tensor_labels(container::vector<std::wstring> labels);
+  Context& set_cardinal_tensor_labels(container::vector<std::string> labels);
 
  private:
   /// the settings that control canonicalization (which also reads the index
@@ -382,11 +382,11 @@ class Context {
   /// comparers are held by shared_ptr so that equality can be decided by
   /// identity
   struct CanonicalizationConfig {
-    container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
+    container::map<std::string, std::shared_ptr<TensorCanonicalizer>>
         tensor_canonicalizers;
     std::shared_ptr<const tensor_index_comparer_t> index_comparer;
     std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer;
-    container::vector<std::wstring> cardinal_labels;
+    container::vector<std::string> cardinal_labels;
     std::optional<CanonicalizeOptions> options;
 
     /// canonicalizers and comparers compare by identity, labels and options

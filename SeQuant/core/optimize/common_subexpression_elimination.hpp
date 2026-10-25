@@ -125,9 +125,9 @@ class SubexpressionReplacer {
 
     auto label_it = cse_names.find(tree);
 
-    std::wstring label = label_it == end(cse_names)
-                             ? toUtf16(label_gen(tree, name_counter++))
-                             : label_it->second;
+    std::string label = label_it == end(cse_names)
+                            ? std::string(label_gen(tree, name_counter++))
+                            : label_it->second;
 
     ExprPtr expr = [&]() {
       if (tree->is_tensor()) {

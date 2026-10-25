@@ -26,8 +26,8 @@ namespace sequant::mbpt {
 /// if the target tensor was not contained in the given expression)
 ///
 [[nodiscard]] ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
-                                  std::wstring_view tensor_label,
-                                  std::wstring_view factor_label);
+                                  std::string_view tensor_label,
+                                  std::string_view factor_label);
 
 }  // namespace sequant::mbpt
 

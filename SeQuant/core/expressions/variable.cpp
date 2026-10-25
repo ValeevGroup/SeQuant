@@ -9,11 +9,10 @@
 
 namespace sequant {
 
-Variable::Variable(std::wstring label)
-    : label_(std::move(label)), conjugated_(false) {}
-
-Variable::Variable(const std::string &label)
-    : label_(sequant::toUtf16(label)), conjugated_(false) {}
+Variable::Variable(std::string label)
+    : label_(std::move(label)), conjugated_(false) {
+  SEQUANT_ASSERT(is_valid_utf8(label_), "Variable label must be UTF-8 encoded");
+}
 
 Expr::type_id_type Variable::type_id() const { return get_type_id<Variable>(); }
 
@@ -40,9 +39,10 @@ bool Variable::static_equal(const Expr &that) const {
          conjugated_ == static_cast<const Variable &>(that).conjugated_;
 }
 
-std::wstring_view Variable::label() const { return label_; }
+std::string_view Variable::label() const { return label_; }
 
-void Variable::set_label(std::wstring label) {
+void Variable::set_label(std::string label) {
+  SEQUANT_ASSERT(is_valid_utf8(label), "Variable label must be UTF-8 encoded");
   label_ = std::move(label);
   reset_hash_value();
 }
@@ -54,9 +54,9 @@ void Variable::conjugate() {
 
 bool Variable::conjugated() const { return conjugated_; }
 
-std::wstring Variable::to_latex() const {
-  std::wstring result = L"{" + io::latex::utf_to_string(label_) + L"}";
-  if (conjugated_) result = L"{" + result + L"^*" + L"}";
+std::string Variable::to_latex() const {
+  std::string result = "{" + io::latex::utf_to_string(label_) + "}";
+  if (conjugated_) result = "{" + result + "^*" + "}";
   return result;
 }
 

@@ -63,48 +63,44 @@ struct SerializationOptions {
   SerializationSyntax syntax = SerializationSyntax::Latest;
 };
 
-#define SEQUANT_DECLARE_DESERIALIZATION_FUNC                          \
-  template <typename T = ExprPtr>                                     \
-  T from_string(std::string_view input,                               \
-                const DeserializationOptions &options = {}) = delete; \
-  template <typename T = ExprPtr>                                     \
-  T from_string(std::wstring_view input,                              \
+#define SEQUANT_DECLARE_DESERIALIZATION_FUNC \
+  template <typename T = ExprPtr>            \
+  T from_string(std::string_view input,      \
                 const DeserializationOptions &options = {}) = delete;
 
-#define SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprType)    \
-  template <>                                                            \
-  ExprType from_string<ExprType>(std::string_view input,                 \
-                                 const DeserializationOptions &options); \
-  template <>                                                            \
-  ExprType from_string<ExprType>(std::wstring_view input,                \
+#define SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprType) \
+  template <>                                                         \
+  ExprType from_string<ExprType>(std::string_view input,              \
                                  const DeserializationOptions &options);
 
 /// \brief Construct expressions from string representations
 ///
-/// \param input The input to deserialize
+/// \param input The (UTF-8 encoded) input to deserialize
 /// \param options Customization options
 /// \return SeQuant expression.
+/// \throw SerializationError if \p input is malformed (including if it is not
+/// valid UTF-8); the error's offset and length are given in bytes
 SEQUANT_DECLARE_DESERIALIZATION_FUNC;
 
 SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprPtr);
 SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
 
-#define SEQUANT_DECLARE_SERIALIZATION_FUNC                          \
-  std::wstring to_string(const ResultExpr &expr,                    \
-                         const SerializationOptions &options = {}); \
-  std::wstring to_string(const ExprPtr &expr,                       \
-                         const SerializationOptions &options = {}); \
-  std::wstring to_string(const Expr &expr,                          \
-                         const SerializationOptions &options = {}); \
-  std::wstring to_string(const AbstractTensor &expr,                \
-                         const SerializationOptions &options = {}); \
-  std::wstring to_string(const Tensor &expr,                        \
-                         const SerializationOptions &options = {}); \
-  std::wstring to_string(const Index &index,                        \
-                         const SerializationOptions &options = {}); \
-  template <Statistics S>                                           \
-  std::wstring to_string(const NormalOperator<S> &nop,              \
-                         const SerializationOptions &options = {});
+#define SEQUANT_DECLARE_SERIALIZATION_FUNC                         \
+  std::string to_string(const ResultExpr &expr,                    \
+                        const SerializationOptions &options = {}); \
+  std::string to_string(const ExprPtr &expr,                       \
+                        const SerializationOptions &options = {}); \
+  std::string to_string(const Expr &expr,                          \
+                        const SerializationOptions &options = {}); \
+  std::string to_string(const AbstractTensor &expr,                \
+                        const SerializationOptions &options = {}); \
+  std::string to_string(const Tensor &expr,                        \
+                        const SerializationOptions &options = {}); \
+  std::string to_string(const Index &index,                        \
+                        const SerializationOptions &options = {}); \
+  template <Statistics S>                                          \
+  std::string to_string(const NormalOperator<S> &nop,              \
+                        const SerializationOptions &options = {});
 
 ///
 /// Get a serialized string from an expression.
@@ -119,7 +115,7 @@ SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
 ///
 /// \param expr Expression to serialize
 /// \param options Customization options
-/// \return wstring of the expression.
+/// \return UTF-8 encoded string of the expression.
 SEQUANT_DECLARE_SERIALIZATION_FUNC
 
 // Versioned variants
@@ -135,7 +131,7 @@ SEQUANT_DECLARE_SERIALIZATION_FUNC
 /// label that an index can be parsed with: nonempty, and made of letters,
 /// `⁺`, `⁻`, combining diacritics (U+0300 to U+036F, e.g. the tilde of `μ̃`),
 /// arrows (U+2190 to U+21FF, e.g. `↑`, `↓`) and primes (`'`) only
-bool is_base_key(std::wstring_view label);
+bool is_base_key(std::string_view label);
 }  // namespace v1
 
 #undef SEQUANT_DECLARE_DESERIALIZATION_FUNC

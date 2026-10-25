@@ -115,7 +115,7 @@ std::size_t n_cache_keys(auto const& man) {
 }  // namespace
 
 TEST_CASE("lifetime mask cross-occurrence meet", "[lifetime_mask]") {
-  Index const i{L"i_1"}, j{L"i_2"};
+  Index const i{"i_1"}, j{"i_2"};
 
   // node_full: sliced by i in occurrence A, left full in occurrence B => the
   // meet demotes it to all-full (sliced /\ full = full).
@@ -160,9 +160,8 @@ TEST_CASE(
     "lifetime mask does NOT proto-expand a batched composite index (array "
     "semantics)",
     "[lifetime_mask][proto]") {
-  Index const i{L"i_1"}, j{L"i_2"};
-  Index const a_pno{L"a_5",
-                    {i, j}};  // PNO composite tied to the occ pair (i,j)
+  Index const i{"i_1"}, j{"i_2"};
+  Index const a_pno{"a_5", {i, j}};  // PNO composite tied to the occ pair (i,j)
 
   // In array land a composite a<i,j> is just mode `a` over an <i,j>-tied range;
   // slicing the i/j occ loops does nothing to mode `a` (see slot_modes_of in
@@ -198,7 +197,7 @@ TEST_CASE(
 // hashes were captured at an ancestor commit and are fragile to reproduce).
 TEST_CASE("lifetime mask survey ground-truth semantics",
           "[lifetime_mask][survey]") {
-  Index const i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
+  Index const i1{"i_1"}, i2{"i_2"}, i3{"i_3"};
 
   // (1) s*C-class node (survey hash 1989507463377952644): all-full. Across its
   // occurrences it is sliced by DIFFERENT concrete occ pairs and left full in
@@ -239,7 +238,7 @@ TEST_CASE(
     "lifetime mask filters to a node's own slots (loop-invariant sibling stays "
     "all-full)",
     "[lifetime_mask]") {
-  Index const i1{L"i_1"};
+  Index const i1{"i_1"};
 
   // A scatter-like tree  R = A * B  under an External i_1 loop stamped at the
   // root. Only A carries i_1 on its own result; B is invariant to the i_1 loop
@@ -276,7 +275,7 @@ TEST_CASE(
 }
 
 TEST_CASE("lifetime mask gates the run-scope veto", "[lifetime_mask][veto]") {
-  Index const i{L"i_1"};
+  Index const i{"i_1"};
 
   auto is_volatile = [](EvalNode<EvalExpr> const&) { return false; };
 
@@ -317,7 +316,7 @@ TEST_CASE(
     "both residency stamps keep Contracted modes (no External-only filter) "
     "(Contracted-mode discriminator)",
     "[lifetime_mask][seed]") {
-  Index const i{L"i_1"}, j{L"i_2"};
+  Index const i{"i_1"}, j{"i_2"};
 
   // node_con: sliced by a Contracted (NOT External) mode i on its own result
   // slot in EVERY occurrence. If stamp_lifetime_masks had accidentally kept
@@ -401,7 +400,7 @@ TEST_CASE("home_scope is the per-occurrence home, not the sliced_modes meet",
   // doc/developer/batched_evaluation.rst). This case pins BOTH halves: the
   // accessor identity and
   // the deliberate divergence from the meet.
-  Index const i{L"i_1"}, j{L"i_2"};
+  Index const i{"i_1"}, j{"i_2"};
 
   // Two occurrences of the SAME canonical node (same product string, so the
   // meet groups them), sliced DIFFERENTLY: A opens both contracted loops, B
@@ -445,7 +444,7 @@ TEST_CASE(
     "stamp_lifetime_masks keeps a mode sliced (any batch kind) in EVERY "
     "occurrence",
     "[lifetime_mask][seed]") {
-  Index const i{L"i_1"};
+  Index const i{"i_1"};
 
   // Occurrence A slices i as External; occurrence B slices the SAME index i
   // as Contracted. The kind differs, but the mode is batched (some kind) on
@@ -467,7 +466,7 @@ TEST_CASE(
     "stamp_lifetime_masks drops a mode carried full (unbatched) in ONE "
     "occurrence",
     "[lifetime_mask][seed]") {
-  Index const i{L"i_1"};
+  Index const i{"i_1"};
 
   // Occurrence A is Contracted-sliced by i on its own slot; occurrence B
   // carries i on the SAME slot but is NOT batched there at all (full) =>
@@ -488,7 +487,7 @@ TEST_CASE(
 TEST_CASE(
     "stamp_lifetime_masks leaves a loop-invariant sibling unstamped (empty)",
     "[lifetime_mask][seed]") {
-  Index const i1{L"i_1"};
+  Index const i1{"i_1"};
 
   // Same scatter shape as the dedicated per-slot-filter test above, but
   // driven through stamp_lifetime_masks, with a Contracted (not External)
@@ -517,7 +516,7 @@ TEST_CASE(
     "stamp_lifetime_masks contains BOTH an External and a Contracted mode "
     "on a mixed node",
     "[lifetime_mask][seed]") {
-  Index const i{L"i_1"}, j{L"i_2"};
+  Index const i{"i_1"}, j{"i_2"};
 
   // Every occurrence stamps i as External AND j as Contracted on the SAME
   // node's own result slots => the meet keeps both, proving the union of
@@ -545,8 +544,8 @@ TEST_CASE(
     "stamp_lifetime_masks does NOT proto-expand a batched composite index "
     "(array semantics)",
     "[lifetime_mask][seed][proto]") {
-  Index const i{L"i_1"}, j{L"i_2"};
-  Index const a_pno{L"a_5", {i, j}};  // PNO composite tied to the occ pair
+  Index const i{"i_1"}, j{"i_2"};
+  Index const a_pno{"a_5", {i, j}};  // PNO composite tied to the occ pair
 
   // Mirrors the dedicated [lifetime_mask][proto] case above, but driven through
   // stamp_lifetime_masks and tagged Contracted (not External) to also
@@ -588,8 +587,8 @@ TEST_CASE("product operand order is not part of node identity",
   // binarizer put them (nothing below reorders children).
   REQUIRE(ab->op_type() == sequant::EvalOp::Product);
   REQUIRE(ba->op_type() == sequant::EvalOp::Product);
-  REQUIRE(ab.left()->as_tensor().label() == L"g");
-  REQUIRE(ba.left()->as_tensor().label() == L"t");
+  REQUIRE(ab.left()->as_tensor().label() == "g");
+  REQUIRE(ba.left()->as_tensor().label() == "t");
 
   // The node id folds the operand order already (it is an unordered
   // combination of the factor hashes plus the canonical graph) ...

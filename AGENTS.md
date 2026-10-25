@@ -153,6 +153,52 @@ enabled, so it aborts under `ABORT`, and throws `sequant::Exception` under
 `THROW` so that a failed check raises a Python exception: `SEQUANT_PYTHON=ON`
 makes it the default, and any other value warns at configure time.
 
+## Strings are UTF-8, labels are Unicode
+
+All strings in this tree — labels of tensors, variables, operators, index
+spaces and bases, LaTeX, serialized expressions, log output — are UTF-8
+encoded `std::string`s / `std::string_view`s. Do not introduce wide strings
+(`std::wstring`, `wchar_t`, `L"..."`, `std::wcout`) or `char8_t`-based ones
+(`std::u8string`, `u8"..."`, which do not convert to `std::string`). Write
+non-ASCII text as plain literals (`"λ"`); `SeQuant/core/utility/string.hpp`
+`static_assert`s that the execution character set is UTF-8.
+
+Labels can contain any Unicode character, and many real ones are not ASCII:
+`α`, `μ̃`, `i↑`, `t¹`, `λ⁺`. Hence one `char` is not one character:
+
+- A character can span up to 4 bytes (`α` 2, `↑` 3, `𝛼` 4), and what is one
+  visible character can be several code points (`f̃` is `f` followed by the
+  combining tilde U+0303). Do not inspect or modify "characters" through
+  `size()`, `[i]`, `front()`/`back()`, `pop_back()`, `substr(0, 1)` or
+  per-`char` loops. Non-ASCII `char` literals (`'↑'`) are ill-formed or
+  multi-character literals; use strings (`"↑"`).
+- Searching for, splitting at, or adding/removing an ASCII character or any
+  UTF-8 substring is safe (`find('_')`, `ends_with("↑")`, `remove_suffix`
+  by the substring's size): in UTF-8, ASCII bytes and complete sequences never
+  match inside another character. Comparing `std::string`s orders by code
+  point.
+- Never call `std::isalpha`/`std::isdigit`/`std::toupper`/... on a raw
+  `char`: that is undefined behavior for non-ASCII bytes and the result is
+  locale-dependent. Use `is_ascii_digit`/`is_ascii_letter`, or decode first.
+- `std::regex`/`boost::regex` match bytes: `.`, `[^...]`, `\D`/`\W`/`\S`
+  match a single byte and a bracket expression with non-ASCII members holds
+  bytes. Spell alternatives out (`(↑|↓)`, not `[↑↓]`) or translate a pattern
+  with `utf8_regex_pattern`.
+- Character-level processing goes through decoded code points. Use the
+  helpers in `SeQuant/core/utility/string.hpp` rather than rolling your own:
+  `is_valid_utf8`, `to_utf32` / `to_utf8` (decode to / encode from
+  `char32_t`), `first_code_point` / `last_code_point`, `is_ascii_digit`,
+  `is_ascii_letter`, `utf8_regex_pattern` and `to_string_view` (also accepts a
+  single `char`). The UTF-8 library (utfcpp) is a private dependency, so it may
+  only be used in `.cpp` files of the library.
+- Labels must be valid UTF-8. Input from outside the program (the
+  deserializer) is validated and rejected with a `SerializationError`, whose
+  offset and length count bytes. Constructors and setters that take labels
+  only check this with `SEQUANT_ASSERT`, so that release builds stay fast;
+  passing invalid UTF-8 is a precondition violation.
+- Unicode normalization is not performed: a precomposed `ã` and `a` followed by
+  U+0303 are different labels.
+
 ## Check includes with a non-unity build
 
 Some CI configurations build with `CMAKE_UNITY_BUILD=ON`, which concatenates

@@ -146,7 +146,7 @@ AnyIrrepContext make_irrep_context(A algebra, const json &config,
   };
   std::vector<TensorRule> blocks;
   std::vector<TensorRule> labels;
-  container::map<std::wstring, Set> literal_labels;
+  container::map<std::string, Set> literal_labels;
   if (config.contains("tensors")) {
     const json &tensors = config.at("tensors");
     if (!tensors.is_object()) {
@@ -158,7 +158,7 @@ AnyIrrepContext make_irrep_context(A algebra, const json &config,
                                                         "tensor '" + key + "'");
 
       if (key.find('{') == std::string::npos) {
-        literal_labels.emplace(toUtf16(key), set);
+        literal_labels.emplace(std::string(key), set);
         labels.push_back(
             TensorRule{.key = key,
                        .rule = parse_contains_label(json{{"label", key}}),
@@ -204,9 +204,9 @@ AnyIrrepContext make_irrep_context(A algebra, const json &config,
         }
 
         if (match && match->irreps != current.irreps) {
-          throw Exception("Ambiguous IRREPs for tensor " +
-                          toUtf8(tensor.to_latex()) + ": matched by '" +
-                          match->key + "' and '" + current.key + "'");
+          throw Exception("Ambiguous IRREPs for tensor " + tensor.to_latex() +
+                          ": matched by '" + match->key + "' and '" +
+                          current.key + "'");
         }
         match = match ? match : &current;
       }
@@ -219,7 +219,7 @@ AnyIrrepContext make_irrep_context(A algebra, const json &config,
     }
 
     // A key spelling out the label literally takes precedence over patterns
-    if (auto it = literal_labels.find(std::wstring(tensor.label()));
+    if (auto it = literal_labels.find(std::string(tensor.label()));
         it != literal_labels.end()) {
       return it->second;
     }
@@ -229,8 +229,7 @@ AnyIrrepContext make_irrep_context(A algebra, const json &config,
     }
 
     if (!fallback.has_value()) {
-      throw Exception("No IRREPs specified for tensor " +
-                      toUtf8(tensor.to_latex()));
+      throw Exception("No IRREPs specified for tensor " + tensor.to_latex());
     }
 
     return fallback.value();

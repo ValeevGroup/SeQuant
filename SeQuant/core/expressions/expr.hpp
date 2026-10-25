@@ -26,25 +26,27 @@
 
 namespace sequant {
 
-/// @brief the wchar used for labeling adjoints, i.e. the superscript + sign
-static const wchar_t adjoint_label = L'\u207A';
+/// @brief the (UTF-8 encoded) marker used for labeling adjoints, i.e. the
+/// superscript + sign
+inline constexpr std::string_view adjoint_label = "\u207A";
 
 /// @return true if @p label ends with the adjoint marker ::adjoint_label
-inline bool is_adjoint_label(std::wstring_view label) {
-  return !label.empty() && label.back() == adjoint_label;
+inline bool is_adjoint_label(std::string_view label) {
+  return label.ends_with(adjoint_label);
 }
 
 /// @return @p label without its trailing adjoint marker, if present
-inline std::wstring_view strip_adjoint_label(std::wstring_view label) {
-  return is_adjoint_label(label) ? label.substr(0, label.size() - 1) : label;
+inline std::string_view strip_adjoint_label(std::string_view label) {
+  if (is_adjoint_label(label)) label.remove_suffix(adjoint_label.size());
+  return label;
 }
 
 /// appends the adjoint marker to @p label, or removes it if already present
-inline void toggle_adjoint_label(std::wstring &label) {
+inline void toggle_adjoint_label(std::string &label) {
   if (is_adjoint_label(label))
-    label.pop_back();
+    label.resize(label.size() - adjoint_label.size());
   else
-    label.push_back(adjoint_label);
+    label += adjoint_label;
 }
 
 namespace detail {
@@ -196,7 +198,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   virtual bool is_zero() const { return false; }
 
   /// @return the string representation of @c this in the LaTeX format
-  virtual std::wstring to_latex() const;
+  virtual std::string to_latex() const;
 
   /// @return a clone of this object, i.e. an object that is equal to @c this
   virtual ExprPtr clone() const = 0;

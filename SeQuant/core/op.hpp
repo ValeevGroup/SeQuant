@@ -70,20 +70,20 @@ class Op {
   /// @brief changes this to its (Hermitian) adjoint
   void adjoint() { action_ = sequant::adjoint(action_); }
 
-  static std::wstring core_label() {
+  static std::string core_label() {
     return get_default_context(S).spbasis() == SPBasis::Spinor
-               ? (S == Statistics::FermiDirac ? L"a" : L"b")
-               : L"E";
+               ? (S == Statistics::FermiDirac ? "a" : "b")
+               : "E";
   }
 
   /// @return the string representation of @c this in LaTeX format
-  std::wstring to_latex() const {
-    std::wstring result;
-    result = L"{";
+  std::string to_latex() const {
+    std::string result;
+    result = "{";
     result += core_label();
-    result += (action() == Action::Create ? L"^{\\dagger}_" : L"_");
+    result += (action() == Action::Create ? "^{\\dagger}_" : "_");
     result += index().to_latex();
-    result += L"}";
+    result += "}";
     return result;
   }
 
@@ -475,6 +475,13 @@ class VectorExprAccess {
   }
 };
 
+/// canonicalizes @p expr, which is a single tensor (e.g. a NormalOperator), as
+/// a tensor network that consists of this tensor only, i.e. exactly as it is
+/// canonicalized as the only factor of a Product
+/// @return the canonical tensor and the byproduct of canonicalization
+std::pair<AbstractTensorPtr, ExprPtr> canonicalize_as_tensor_network(
+    const Expr &expr, const CanonicalizeOptions &opts);
+
 }  // namespace detail
 
 /// @brief Operator is a sequence of Op objects
@@ -534,11 +541,11 @@ class Operator
   }
 
   /// @return the string representation of @c this in LaTeX format
-  std::wstring to_latex() const override {
-    std::wstring result;
-    result = L"{";
+  std::string to_latex() const override {
+    std::string result;
+    result = "{";
     for (const auto &o : *this) result += o.to_latex();
-    result += L"}";
+    result += "}";
     return result;
   }
 
@@ -563,7 +570,7 @@ class Operator
     return result;
   }
 
-  base_type make_ops(Action action, WstrList index_labels) {
+  base_type make_ops(Action action, StrList index_labels) {
     base_type result;
     result.reserve(index_labels.size());
     for (const auto &idx_label : index_labels)
@@ -786,65 +793,65 @@ class NormalOperator : public Operator<S>,
   /// @return all possible values returned by label() for this operator type
   /// @internal labels()[0] is the label used for physical vacuum, and
   /// labels()[1] for independent-particle vacuum
-  static const container::svector<std::wstring> &labels();
+  static const container::svector<std::string> &labels();
 
-  std::wstring_view label() const override {
+  std::string_view label() const override {
     return vacuum() == Vacuum::Physical ? labels()[0] : labels()[1];
   }
 
-  std::wstring to_latex() const override {
+  std::string to_latex() const override {
     const auto &ctx = get_default_context();
     const auto bkt = ctx.braket_typesetting();
     const auto bkst = ctx.braket_slot_typesetting();
 
-    std::wstring core_label;
+    std::string core_label;
     if (vacuum() == Vacuum::Physical) {
       core_label += Op<S>::core_label();
     } else {
-      core_label += L"\\tilde{";
+      core_label += "\\tilde{";
       core_label += Op<S>::core_label();
-      core_label += L"}";
+      core_label += "}";
     }
 
     switch (bkst) {
       case BraKetSlotTypesetting::Naive: {
-        std::wstring result = L"{";
+        std::string result = "{";
         result += core_label;
         const auto ncreators = this->ncreators();
         const auto nannihilators = this->nannihilators();
         if (ncreators > 0) {
-          result += (bkt == BraKetTypesetting::KetSub ? L"_" : L"^");
-          result += L"{";
+          result += (bkt == BraKetTypesetting::KetSub ? "_" : "^");
+          result += "{";
           if (ncreators < nannihilators) {  // if have more annihilators than
                                             // creators pad on
             // the left with square underbrackets, i.e. ⎵
             const auto iend = nannihilators - ncreators;
-            if (iend > 0) result += L"\\textvisiblespace";
+            if (iend > 0) result += "\\textvisiblespace";
             for (size_t i = 1; i != iend; ++i) {
-              result += L"\\,\\textvisiblespace";
+              result += "\\,\\textvisiblespace";
             }
-            result += L"\\,";
+            result += "\\,";
           }
           for (const auto &o : creators()) result += o.index().to_latex();
-          result += L"}";
+          result += "}";
         }
         if (nannihilators > 0) {
-          result += (bkt == BraKetTypesetting::BraSub ? L"_" : L"^");
-          result += L"{";
+          result += (bkt == BraKetTypesetting::BraSub ? "_" : "^");
+          result += "{";
           if (ncreators > nannihilators) {  // if have more creators than
                                             // annihilators pad on
             // the left with square underbrackets, i.e. ⎵
             const auto iend = ncreators - nannihilators;
-            if (iend > 0) result += L"\\textvisiblespace";
+            if (iend > 0) result += "\\textvisiblespace";
             for (size_t i = 1; i != iend; ++i) {
-              result += L"\\,\\textvisiblespace";
+              result += "\\,\\textvisiblespace";
             }
-            result += L"\\,";
+            result += "\\,";
           }
           for (const auto &o : annihilators()) result += o.index().to_latex();
-          result += L"}";
+          result += "}";
         }
-        result += L"}";
+        result += "}";
         return result;
       }
 
@@ -890,6 +897,23 @@ class NormalOperator : public Operator<S>,
 
   ExprPtr clone() const override {
     return std::make_shared<NormalOperator>(*this);
+  }
+
+  /// canonicalizes this exactly as it is canonicalized as the only factor of
+  /// a Product, so that both spellings of an operator have the same canonical
+  /// form
+  ExprPtr canonicalize(CanonicalizeOptions opts =
+                           CanonicalizeOptions::default_options()) override {
+    if (this->is_canonical(opts)) return {};
+    const auto contexts_version = current_contexts_version();
+    auto [canonical, byproduct] =
+        detail::canonicalize_as_tensor_network(*this, opts);
+    const auto canonical_nop =
+        std::dynamic_pointer_cast<NormalOperator>(canonical);
+    SEQUANT_ASSERT(canonical_nop);
+    *this = *canonical_nop;
+    this->mark_canonical(opts, contexts_version);
+    return byproduct;
   }
 
   virtual void adjoint() override {
@@ -1086,8 +1110,8 @@ class NormalOperator : public Operator<S>,
     return S == Statistics::FermiDirac ? 1 : 2;
   }
   bool _is_cnumber() const override final { return false; }
-  std::wstring_view _label() const override final { return label(); }
-  std::wstring _to_latex() const override final { return to_latex(); }
+  std::string_view _label() const override final { return label(); }
+  std::string _to_latex() const override final { return to_latex(); }
   std::size_t _hash_value() const override final { return this->hash_value(); }
   bool _transform_indices(
       const container::map<Index, Index> &index_map) override final {
@@ -1128,10 +1152,10 @@ class NormalOperator : public Operator<S>,
 };
 
 template <>
-const container::svector<std::wstring> &
+const container::svector<std::string> &
 NormalOperator<Statistics::BoseEinstein>::labels();
 template <>
-const container::svector<std::wstring> &
+const container::svector<std::string> &
 NormalOperator<Statistics::FermiDirac>::labels();
 
 static_assert(
@@ -1261,11 +1285,11 @@ class NormalOperatorSequence
     reset_hash_value();
   }
 
-  std::wstring to_latex() const override {
-    std::wstring result;
-    result = L"{";
+  std::string to_latex() const override {
+    std::string result;
+    result = "{";
     for (const auto &op : *this) result += op.to_latex();
-    result += L"}";
+    result += "}";
     return result;
   }
 

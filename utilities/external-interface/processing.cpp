@@ -27,9 +27,9 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
 
   if (options.density_fitting) {
     IndexSpace aux_space =
-        get_default_context().index_basis_registry()->retrieve_space(L"F");
+        get_default_context().index_basis_registry()->retrieve_space("F");
     result.expression() =
-        mbpt::density_fit(result.expression(), aux_space, L"g", L"DF");
+        mbpt::density_fit(result.expression(), aux_space, "g", "DF");
 
     result = expand(result);
 

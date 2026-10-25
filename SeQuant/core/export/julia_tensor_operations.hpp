@@ -85,7 +85,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
       throw Exception("Proto Indices are not (yet) supported!");
     }
 
-    return toUtf8(idx.label()) + instance_suffix(idx);
+    return std::string(idx.label()) + instance_suffix(idx);
   }
 
   std::string represent(const Tensor &tensor,
@@ -108,7 +108,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
   std::string represent(const Variable &variable,
                         const Context &) const override {
-    return toUtf8(variable.label());
+    return std::string(variable.label());
   }
 
   std::string represent(const Constant &constant,
@@ -342,7 +342,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   }
 
   std::string tensor_name(const Tensor &tensor, const Context &ctx) const {
-    std::string representation = toUtf8(tensor.label());
+    std::string representation = std::string(tensor.label());
 
     representation += "_";
     representation += ctx.get_tags(tensor);

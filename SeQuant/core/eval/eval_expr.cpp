@@ -47,8 +47,8 @@ bool is_tot(Tensor const& t) noexcept {
 }  // namespace
 
 namespace detail {
-inline constexpr std::wstring_view label_tensor{L"I"};
-inline constexpr std::wstring_view label_scalar{L"Z"};
+inline constexpr std::string_view label_tensor{"I"};
+inline constexpr std::string_view label_scalar{"Z"};
 
 template <std::ranges::range Bra, std::ranges::range Ket,
           std::ranges::range Aux>
@@ -208,7 +208,7 @@ bool EvalExpr::tot() const noexcept {
   return ranges::any_of(canon_indices(), &Index::has_proto_indices);
 }
 
-std::wstring EvalExpr::to_latex() const noexcept { return expr_->to_latex(); }
+std::string EvalExpr::to_latex() const noexcept { return expr_->to_latex(); }
 
 Expr::type_id_type EvalExpr::type_id() const noexcept {
   return expr_->type_id();
@@ -254,13 +254,13 @@ Power const& EvalExpr::as_power() const { return expr().as<Power>(); }
 
 std::string EvalExpr::label() const noexcept {
   if (is_tensor())
-    return toUtf8(as_tensor().label()) + "(" + indices_annot() + ")";
+    return std::string(as_tensor().label()) + "(" + indices_annot() + ")";
   else if (is_constant()) {
-    return toUtf8(io::serialization::to_string(as_constant()));
+    return io::serialization::to_string(as_constant());
   } else if (is_power()) {
-    return toUtf8(io::serialization::to_string(as_power()));
+    return io::serialization::to_string(as_power());
   } else if (is_variable()) {
-    return toUtf8(as_variable().label());
+    return std::string(as_variable().label());
   } else {
     SEQUANT_ABORT("EvalExpr::label: unhandled expression type");
   }

@@ -26,7 +26,7 @@ class ResultExpr;
 namespace sequant::io::latex {
 
 /// @returns an empty string if @p expr is null.
-std::wstring to_string(const ExprPtr& expr);
+std::string to_string(const ExprPtr& expr);
 
 template <typename T>
 concept has_to_latex_member = requires(const T& t) { t.to_latex(); };
@@ -36,31 +36,31 @@ concept pointer_can_call_to_latex = requires(const T& t) { t->to_latex(); };
 
 template <typename T>
   requires(has_to_latex_member<T>)
-std::wstring to_string(const T& t) {
+std::string to_string(const T& t) {
   return t.to_latex();
 }
 
 template <typename T>
   requires(!has_to_latex_member<T> && pointer_can_call_to_latex<T>)
-std::wstring to_string(const T& t) {
+std::string to_string(const T& t) {
   return t->to_latex();
 }
 
 template <typename T>
   requires(!has_to_latex_member<T> && !pointer_can_call_to_latex<T> &&
            requires(const T& t) { t._to_latex(); })
-std::wstring to_string(const T& t) {
+std::string to_string(const T& t) {
   return t._to_latex();
 }
 
 template <typename T>
 std::enable_if_t<std::is_arithmetic_v<std::decay_t<T>> &&
                      !std::is_floating_point_v<std::decay_t<T>>,
-                 std::wstring>
+                 std::string>
 to_string(T&& t) {
-  std::wstring result = L"{";
-  using ::sequant::to_wstring;
-  result += to_wstring(t) + L"}";
+  std::string result = "{";
+  using ::sequant::to_string;
+  result += to_string(t) + "}";
   return result;
 }
 
@@ -68,17 +68,17 @@ template <typename T>
 std::enable_if_t<std::is_arithmetic_v<std::decay_t<T>> &&
                      std::is_floating_point_v<std::decay_t<T>> &&
                      !std::is_same_v<std::decay_t<T>, rational>,
-                 std::wstring>
+                 std::string>
 to_string(T&& t) {
   using Real = std::decay_t<T>;
   static const auto eps_sqrt = std::sqrt(std::numeric_limits<Real>::epsilon());
 
-  std::wstring result = L"{";
-  using ::sequant::to_wstring;
+  std::string result = "{";
+  using ::sequant::to_string;
 
   const long round_t = std::lround(t);
   if (std::abs(round_t - t) < eps_sqrt)  // exact integer
-    result += to_wstring(round_t) + L"}";
+    result += to_string(round_t) + "}";
   else {
     const auto inv_t = Real(1) / t;
     const long round_inv_t = std::lround(inv_t);
@@ -86,121 +86,54 @@ to_string(T&& t) {
                                                      // integer
       long denom = round_inv_t;
       using namespace std::literals;
-      result += (std::signbit(t) ? L"-"s : L""s) + L"\\frac{1}{"s +
-                std::to_wstring(std::abs(denom)) + L"}}"s;
+      result += (std::signbit(t) ? "-"s : ""s) + "\\frac{1}{"s +
+                std::to_string(std::abs(denom)) + "}}"s;
     } else
-      result += to_wstring(t) + L"}";
+      result += to_string(t) + "}";
   }
   return result;
 }
 
 template <typename T>
-std::wstring to_string(const std::complex<T>& t) {
-  std::wstring result = L"{";
+std::string to_string(const std::complex<T>& t) {
+  std::string result = "{";
   result += to_string(t.real());
   if (t.imag() > 0) {
-    result += L" + i " + to_string(t.imag());
+    result += " + i " + to_string(t.imag());
   } else if (t.imag() < 0)
-    result += L" - i " + to_string(-t.imag());
-  result += L"}";
+    result += " - i " + to_string(-t.imag());
+  result += "}";
   return result;
 }
 
-std::wstring to_string(const rational& num);
+std::string to_string(const rational& num);
 
-std::wstring to_string(const Power& power);
+std::string to_string(const Power& power);
 
-std::wstring to_string(const ResultExpr& expr);
-
-namespace detail {
-
-template <typename Char, typename Traits, typename Alloc>
-std::basic_string<Char, Traits, Alloc> greek_characters_to_string_impl(
-    std::basic_string_view<Char, Traits> str);
-
-}  // namespace detail
+std::string to_string(const ResultExpr& expr);
 
 /// replaces certain greek characters in a string with their (math-mode) LaTeX
 /// equivalents
-/// @tparam Char character type
-/// @tparam Traits character traits type
-/// @param str input string
-/// @return string with greek characters contained within Unicode ranges
-/// `[0x3B1,0x3C9]`
-///         and `[0391,03A9]`replaced with their LaTeX equivalents
-/// @warning if @p str contains non-ASCII characters `Char` must be `wchar_t`
-/// @throw Exception if @p Char is narrow and @p str contains
-/// non-ASCII characters
-template <typename Char, typename Traits>
-std::basic_string<Char, Traits> greek_characters_to_string(
-    const std::basic_string_view<Char, Traits>& str) {
-  return detail::greek_characters_to_string_impl<Char, Traits,
-                                                 std::allocator<Char>>(str);
-}
-
-template <typename Char, typename Traits, typename Alloc>
-std::basic_string<Char, Traits, Alloc> greek_characters_to_string(
-    const std::basic_string<Char, Traits, Alloc>& str) {
-  return detail::greek_characters_to_string_impl<Char, Traits, Alloc>(str);
-}
-
-namespace detail {
-
-template <typename Char, typename Traits, typename Alloc>
-std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
-    std::basic_string_view<Char, Traits> str);
-
-}  // namespace detail
+/// @param str UTF-8 encoded input string
+/// @return @p str with greek characters contained within Unicode ranges
+/// `[0x3B1,0x3C9]` and `[0391,03A9]` replaced with their LaTeX equivalents
+std::string greek_characters_to_string(std::string_view str);
 
 /// replaces certain diactric marks with their (math-mode) LaTeX equivalents
-/// @tparam Char character type
-/// @tparam Traits character traits type
-/// @param str input string
-/// @return with some diactrics replaced with their LaTeX equivalents
-/// @warning if @p str contains non-ASCII characters `Char` must be `wchar_t`
-/// @throw Exception if @p Char is narrow and @p str contains
-/// non-ASCII characters
+/// @param str UTF-8 encoded input string
+/// @return @p str with some diactrics replaced with their LaTeX equivalents
 /// @note only some combined Unicode characters are currently supported
-template <typename Char, typename Traits>
-std::basic_string<Char, Traits> diactrics_to_string(
-    const std::basic_string_view<Char, Traits>& str) {
-  return detail::diactrics_to_string_impl<Char, Traits, std::allocator<Char>>(
-      str);
-}
-
-template <typename Char, typename Traits, typename Alloc>
-std::basic_string<Char, Traits, Alloc> diactrics_to_string(
-    const std::basic_string<Char, Traits, Alloc>& str) {
-  return detail::diactrics_to_string_impl<Char, Traits, Alloc>(str);
-}
+std::string diactrics_to_string(std::string_view str);
 
 /// replaces certain Unicode characters with their (math-mode) LaTeX equivalents
-/// @tparam Char character type
-/// @tparam Traits character traits type
-/// @param str input string
+/// @param str UTF-8 encoded input string
 /// @return @p str with some Unicode characters replaced by their LaTeX
 /// equivalents
-/// @warning if @p str contains non-ASCII characters `Char` must be `wchar_t`
-/// @throw Exception if @p Char is narrow and @p str contains
-/// non-ASCII characters
 /// @note only some combined Unicode characters are currently supported
 /// @internal useful resources
 /// - https://milde.users.sourceforge.net/LUCR/Math/unimathsymbols.pdf
 /// - https://www.unicode.org/charts/PDF/U1D400.pdf
-template <typename Char, typename Traits>
-std::basic_string<Char, Traits> utf_to_string(
-    const std::basic_string_view<Char, Traits>& str) {
-  // replace diacritics first since it relies on wide character structure
-  auto tmp = diactrics_to_string(str);
-  return greek_characters_to_string(tmp);
-}
-
-template <typename Char, typename Traits, typename Alloc>
-std::basic_string<Char, Traits, Alloc> utf_to_string(
-    const std::basic_string<Char, Traits, Alloc>& str) {
-  auto tmp = diactrics_to_string(str);
-  return greek_characters_to_string(tmp);
-}
+std::string utf_to_string(std::string_view str);
 
 }  // namespace sequant::io::latex
 

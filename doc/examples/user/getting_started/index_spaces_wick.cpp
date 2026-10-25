@@ -7,19 +7,19 @@ int main() {
 
   set_default_context(
       {.index_basis_registry = IndexBasisRegistry{}
-                                   .add(L"y", 0b01, {.vacuum_occupied = true})
-                                   .add(L"z", 0b10)
-                                   .add(L"p", 0b11, {.complete = true}),
+                                   .add("y", 0b01, {.vacuum_occupied = true})
+                                   .add("z", 0b10)
+                                   .add("p", 0b11, {.complete = true}),
        .vacuum = Vacuum::SingleProduct});
 
-  auto cp1 = fcrex(L"p_1"), cp2 = fcrex(L"p_2");
-  auto ap3 = fannx(L"p_3"), ap4 = fannx(L"p_4");
+  auto cp1 = fcrex("p_1"), cp2 = fcrex("p_2");
+  auto ap3 = fannx("p_3"), ap4 = fannx("p_4");
 
-  std::wcout << to_latex(ap3 * cp1 * ap4 * cp2) << " = "
-             << to_latex(FWickTheorem{ap3 * cp1 * ap4 * cp2}
-                             .full_contractions(false)
-                             .compute())
-             << std::endl;
+  std::cout << to_latex(ap3 * cp1 * ap4 * cp2) << " = "
+            << to_latex(FWickTheorem{ap3 * cp1 * ap4 * cp2}
+                            .full_contractions(false)
+                            .compute())
+            << std::endl;
 
   return 0;
 }

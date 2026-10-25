@@ -83,7 +83,7 @@ struct ProjectionOptions {
   /// the instance of a selected cell's integral legs; required for `Integral`
   std::function<IndexBasis::instance_type(ProjectionTerms cell)> cell_instance =
       {};
-  std::wstring integral_label = L"g";
+  std::string integral_label = "g";
 };
 
 /// In each R2 term (residual rank read off the `Ŝ`/`Â` symmetrizer; other

@@ -19,15 +19,6 @@ void printf(Args&&... args) {
   std::printf("%s", oss.str().c_str());
 }
 
-/// uses std::wostringstream + std::wprintf to print to stdout even if wcout is
-/// captured (e.g., by Catch2)
-template <typename... Args>
-void wprintf(Args&&... args) {
-  std::wostringstream oss;
-  (oss << ... << std::forward<Args>(args));
-  std::wprintf(L"%ls", oss.str().c_str());
-}
-
 }  // namespace sequant
 
 #endif  // SEQUANT_CORE_UTILITY_DEBUG_HPP

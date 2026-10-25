@@ -15,7 +15,7 @@ namespace py = pybind11;
 
 namespace sequant::python {
 
-inline std::vector<Index> make_index(std::vector<std::wstring> labels) {
+inline std::vector<Index> make_index(std::vector<std::string> labels) {
   std::vector<Index> index;
   for (auto l : labels) {
     index.push_back(Index{l});
@@ -23,10 +23,10 @@ inline std::vector<Index> make_index(std::vector<std::wstring> labels) {
   return index;
 }
 
-std::shared_ptr<Tensor> make_tensor(std::wstring label,
-                                    std::vector<std::wstring> b,
-                                    std::vector<std::wstring> k,
-                                    std::vector<std::wstring> a) {
+std::shared_ptr<Tensor> make_tensor(std::string label,
+                                    std::vector<std::string> b,
+                                    std::vector<std::string> k,
+                                    std::vector<std::string> a) {
   return std::make_shared<Tensor>(label, bra(make_index(b)), ket(make_index(k)),
                                   aux(make_index(a)));
 }

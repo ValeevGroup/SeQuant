@@ -18,62 +18,62 @@ namespace sequant::io::serialization::v1 {
 namespace detail {
 
 template <typename Range>
-std::wstring serialize_indices(Range&& indices,
-                               const SerializationOptions& options) {
-  return join_strings<std::wstring>(indices, L",", [&](const Index& idx) {
+std::string serialize_indices(Range&& indices,
+                              const SerializationOptions& options) {
+  return join_strings(indices, ",", [&](const Index& idx) {
     return v1::to_string(idx, options);
   });
 }
 
 template <typename Range>
-std::wstring serialize_ops(const Range& ops,
-                           const SerializationOptions& options) {
-  return join_strings<std::wstring>(ops, L",", [&](const auto& op) {
+std::string serialize_ops(const Range& ops,
+                          const SerializationOptions& options) {
+  return join_strings(ops, ",", [&](const auto& op) {
     return v1::to_string(op.index(), options);
   });
 }
 
-std::wstring serialize_symm(Symmetry symm, const SerializationOptions&) {
+std::string serialize_symm(Symmetry symm, const SerializationOptions&) {
   switch (symm) {
     case Symmetry::Symm:
-      return L"S";
+      return "S";
     case Symmetry::Antisymm:
-      return L"A";
+      return "A";
     case Symmetry::Nonsymm:
-      return L"N";
+      return "N";
   }
 
   SEQUANT_UNREACHABLE;
 }
 
-std::wstring serialize_symm(BraKetSymmetry symm, const SerializationOptions&) {
+std::string serialize_symm(BraKetSymmetry symm, const SerializationOptions&) {
   switch (symm) {
     case BraKetSymmetry::Conjugate:
-      return L"C";
+      return "C";
     case BraKetSymmetry::Symm:
-      return L"S";
+      return "S";
     case BraKetSymmetry::Nonsymm:
-      return L"N";
+      return "N";
   }
 
   SEQUANT_UNREACHABLE;
 }
 
-std::wstring serialize_symm(ColumnSymmetry symm, const SerializationOptions&) {
+std::string serialize_symm(ColumnSymmetry symm, const SerializationOptions&) {
   switch (symm) {
     case ColumnSymmetry::Symm:
-      return L"S";
+      return "S";
     case ColumnSymmetry::Nonsymm:
-      return L"N";
+      return "N";
   }
 
   SEQUANT_UNREACHABLE;
 }
 
-std::wstring serialize_scalar(const Constant::scalar_type& scalar,
-                              const SerializationOptions&) {
+std::string serialize_scalar(const Constant::scalar_type& scalar,
+                             const SerializationOptions&) {
   if (scalar == 0) {
-    return L"0";
+    return "0";
   }
 
   const auto& real = scalar.real();
@@ -110,48 +110,47 @@ std::wstring serialize_scalar(const Constant::scalar_type& scalar,
 
   SEQUANT_ASSERT(!serialized.empty());
 
-  return toUtf16(serialized);
+  return serialized;
 }
 
-std::wstring to_string(Tensor const& tensor,
-                       const SerializationOptions& options) {
+std::string to_string(Tensor const& tensor,
+                      const SerializationOptions& options) {
   return to_string(static_cast<const AbstractTensor&>(tensor), options);
 }
 
-std::wstring to_string(const Constant& constant,
-                       const SerializationOptions& options) {
+std::string to_string(const Constant& constant,
+                      const SerializationOptions& options) {
   return detail::serialize_scalar(constant.value(), options);
 }
 
-std::wstring to_string(const Variable& variable, const SerializationOptions&) {
-  return std::wstring(variable.label()) + (variable.conjugated() ? L"^*" : L"");
+std::string to_string(const Variable& variable, const SerializationOptions&) {
+  return std::string(variable.label()) + (variable.conjugated() ? "^*" : "");
 }
 
-std::wstring to_string(const Power& power,
-                       const SerializationOptions& options) {
-  std::wstring core;
+std::string to_string(const Power& power, const SerializationOptions& options) {
+  std::string core;
   const auto& base = power.base();
   // parenthesize bases for Constants and conjugated Variables
   const bool parenthesize_base =
       base->is<Constant>() ||
       (base->is<Variable>() && base->as<Variable>().conjugated());
-  if (parenthesize_base) core += L"(";
+  if (parenthesize_base) core += "(";
   core += v1::to_string(*base, options);
-  if (parenthesize_base) core += L")";
-  core += L"^(";
+  if (parenthesize_base) core += ")";
+  core += "^(";
   core += serialize_scalar(Constant::scalar_type{power.exponent()}, options);
-  core += L")";
-  if (power.conjugated()) return L"(" + std::move(core) + L")^*";
+  core += ")";
+  if (power.conjugated()) return "(" + std::move(core) + ")^*";
   return core;
 }
 
-std::wstring to_string(Product const& prod,
-                       const SerializationOptions& options) {
-  std::wstring serialized;
+std::string to_string(Product const& prod,
+                      const SerializationOptions& options) {
+  std::string serialized;
 
   const auto& scal = prod.scalar();
   if (scal != Product::scalar_type{1}) {
-    serialized += detail::serialize_scalar(scal, options) + L" ";
+    serialized += detail::serialize_scalar(scal, options) + " ";
   }
 
   for (std::size_t i = 0; i < prod.size(); ++i) {
@@ -159,45 +158,45 @@ std::wstring to_string(Product const& prod,
     bool parenthesize = false;
     if (current->is<Product>() || current->is<Sum>()) {
       parenthesize = true;
-      serialized += L"(";
+      serialized += "(";
     }
 
     serialized += to_string(current, options);
 
     if (parenthesize) {
-      serialized += L")";
+      serialized += ")";
     }
 
     if (i + 1 < prod.size()) {
-      serialized += L" * ";
+      serialized += " * ";
     }
   }
 
   return serialized;
 }
 
-std::wstring to_string(Sum const& sum, const SerializationOptions& options) {
-  std::wstring serialized;
+std::string to_string(Sum const& sum, const SerializationOptions& options) {
+  std::string serialized;
 
   for (std::size_t i = 0; i < sum.size(); ++i) {
     const ExprPtr& current = sum[i];
 
     const bool parenthesize = current->is<Sum>();
 
-    std::wstring current_serialized = to_string(current, options);
+    std::string current_serialized = to_string(current, options);
 
     bool is_negative = false;
     if (parenthesize) {
-      current_serialized = L"(" + current_serialized + L")";
+      current_serialized = "(" + current_serialized + ")";
     } else {
-      is_negative = current_serialized.front() == L'-';
+      is_negative = current_serialized.front() == '-';
     }
 
     if (i > 0) {
       if (is_negative) {
-        serialized += L" - " + current_serialized.substr(1);
+        serialized += " - " + current_serialized.substr(1);
       } else {
-        serialized += L" + " + current_serialized;
+        serialized += " + " + current_serialized;
       }
     } else {
       serialized = std::move(current_serialized);
@@ -208,14 +207,14 @@ std::wstring to_string(Sum const& sum, const SerializationOptions& options) {
 
 }  // namespace detail
 
-std::wstring to_string(const ExprPtr& expr,
-                       const SerializationOptions& options) {
+std::string to_string(const ExprPtr& expr,
+                      const SerializationOptions& options) {
   if (!expr) return {};
 
   return v1::to_string(*expr, options);
 }
 
-std::wstring to_string(const Expr& expr, const SerializationOptions& options) {
+std::string to_string(const Expr& expr, const SerializationOptions& options) {
   using namespace detail;
   if (expr.is<Tensor>())
     return detail::to_string(expr.as<Tensor>(), options);
@@ -240,86 +239,86 @@ std::wstring to_string(const Expr& expr, const SerializationOptions& options) {
         "type provides it");
 }
 
-std::wstring to_string(const ResultExpr& result,
-                       const SerializationOptions& options) {
-  std::wstring serialized;
+std::string to_string(const ResultExpr& result,
+                      const SerializationOptions& options) {
+  std::string serialized;
   if (result.produces_tensor()) {
-    serialized = detail::to_string(result.result_as_tensor(L"?"), options);
+    serialized = detail::to_string(result.result_as_tensor("?"), options);
   } else {
-    serialized = detail::to_string(result.result_as_variable(L"?"), options);
+    serialized = detail::to_string(result.result_as_variable("?"), options);
   }
 
-  return serialized + L" = " + v1::to_string(result.expression(), options);
+  return serialized + " = " + v1::to_string(result.expression(), options);
 }
 
-std::wstring to_string(const Index& index, const SerializationOptions&) {
-  std::wstring serialized(index.label());
+std::string to_string(const Index& index, const SerializationOptions&) {
+  std::string serialized(index.label());
 
   const bool unnamed_instance = index.basis().unnamed_instance().has_value();
   if (index.has_proto_indices() || unnamed_instance) {
-    serialized += L"<";
-    serialized += join_strings<std::wstring>(
-        index.proto_indices(), L",", [](const Index& proto) -> std::wstring {
-          std::wstring label(proto.label());
+    serialized += "<";
+    serialized += join_strings(
+        index.proto_indices(), ",", [](const Index& proto) -> std::string {
+          std::string label(proto.label());
           if (proto.basis().unnamed_instance())
-            label += L"<" + proto.basis().instance_suffix() + L">";
+            label += "<" + proto.basis().instance_suffix() + ">";
           return label;
         });
     if (unnamed_instance) serialized += index.basis().instance_suffix();
-    serialized += L">";
+    serialized += ">";
   }
 
   return serialized;
 }
 
-std::wstring to_string(AbstractTensor const& tensor,
-                       const SerializationOptions& options) {
-  std::wstring serialized(tensor._label());
-  serialized += L"{" + detail::serialize_indices(tensor._bra(), options);
+std::string to_string(AbstractTensor const& tensor,
+                      const SerializationOptions& options) {
+  std::string serialized(tensor._label());
+  serialized += "{" + detail::serialize_indices(tensor._bra(), options);
   if (tensor._ket_rank() > 0) {
-    serialized += L";" + detail::serialize_indices(tensor._ket(), options);
+    serialized += ";" + detail::serialize_indices(tensor._ket(), options);
   }
   if (tensor._aux_rank() > 0) {
     if (tensor._ket_rank() == 0) {
-      serialized += L";";
+      serialized += ";";
     }
-    serialized += L";" + detail::serialize_indices(tensor._aux(), options);
+    serialized += ";" + detail::serialize_indices(tensor._aux(), options);
   }
-  serialized += L"}";
+  serialized += "}";
 
   if (options.annot_symm) {
-    serialized += L":" + detail::serialize_symm(tensor._symmetry(), options);
+    serialized += ":" + detail::serialize_symm(tensor._symmetry(), options);
     serialized +=
-        L"-" + detail::serialize_symm(tensor._braket_symmetry(), options);
+        "-" + detail::serialize_symm(tensor._braket_symmetry(), options);
     serialized +=
-        L"-" + detail::serialize_symm(tensor._column_symmetry(), options);
+        "-" + detail::serialize_symm(tensor._column_symmetry(), options);
   }
 
   return serialized;
 }
 
-std::wstring to_string(Tensor const& tensor,
-                       const SerializationOptions& options) {
+std::string to_string(Tensor const& tensor,
+                      const SerializationOptions& options) {
   return v1::to_string(static_cast<const Expr&>(tensor), options);
 }
 
 template <Statistics S>
-std::wstring to_string(NormalOperator<S> const& nop,
-                       const SerializationOptions& options) {
-  std::wstring serialized(nop.label());
-  serialized += L"{" + detail::serialize_ops(nop.annihilators(), options);
+std::string to_string(NormalOperator<S> const& nop,
+                      const SerializationOptions& options) {
+  std::string serialized(nop.label());
+  serialized += "{" + detail::serialize_ops(nop.annihilators(), options);
   if (nop.ncreators() > 0) {
-    serialized += L";" + detail::serialize_ops(nop.creators(), options);
+    serialized += ";" + detail::serialize_ops(nop.creators(), options);
   }
-  serialized += L"}";
+  serialized += "}";
 
   return serialized;
 }
 
-template std::wstring to_string<Statistics::FermiDirac>(
+template std::string to_string<Statistics::FermiDirac>(
     NormalOperator<Statistics::FermiDirac> const& nop,
     const SerializationOptions& options);
-template std::wstring to_string<Statistics::BoseEinstein>(
+template std::string to_string<Statistics::BoseEinstein>(
     NormalOperator<Statistics::BoseEinstein> const& nop,
     const SerializationOptions& options);
 

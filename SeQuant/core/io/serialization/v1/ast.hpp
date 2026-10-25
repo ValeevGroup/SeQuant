@@ -21,10 +21,10 @@
 namespace sequant::io::serialization::v1::ast {
 
 struct IndexLabel : boost::spirit::x3::position_tagged {
-  std::wstring label;
+  std::string label;
   unsigned int id;
 
-  IndexLabel(std::wstring label = {}, unsigned int id = {})
+  IndexLabel(std::string label = {}, unsigned int id = {})
       : label(std::move(label)), id(id) {}
 };
 
@@ -66,10 +66,10 @@ struct Number : boost::spirit::x3::position_tagged {
 };
 
 struct Variable : boost::spirit::x3::position_tagged {
-  std::wstring name;
+  std::string name;
   bool conjugated;
 
-  Variable(std::wstring name = {}, bool conjugated = false)
+  Variable(std::string name = {}, bool conjugated = false)
       : name(std::move(name)), conjugated(conjugated) {}
 
   // Required to use as a container
@@ -99,11 +99,11 @@ struct SymmetrySpec : boost::spirit::x3::position_tagged {
 
 // represents AbstractTensor, i.e. Tensor or NormalOperator
 struct Tensor : boost::spirit::x3::position_tagged {
-  std::wstring name;
+  std::string name;
   IndexGroups indices;
   boost::optional<SymmetrySpec> symmetry;
 
-  Tensor(std::wstring name = {}, IndexGroups indices = {},
+  Tensor(std::string name = {}, IndexGroups indices = {},
          boost::optional<SymmetrySpec> symmetry = {})
       : name(std::move(name)),
         indices(std::move(indices)),

@@ -122,12 +122,11 @@ TEST_CASE(
   auto make_head = [](std::size_t rank) -> Tensor {
     std::vector<Index> occ, vir;
     for (std::size_t k = 1; k <= rank; ++k)
-      occ.emplace_back(L"i_" + std::to_wstring(k));
+      occ.emplace_back("i_" + std::to_string(k));
     for (std::size_t k = 1; k <= rank; ++k)
-      vir.emplace_back(L"a_" + std::to_wstring(k), occ);
-    return Tensor(rank == 0 ? L"E" : L"R", bra(vir), ket(occ),
-                  Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
-                  ColumnSymmetry::Symm);
+      vir.emplace_back("a_" + std::to_string(k), occ);
+    return Tensor(rank == 0 ? "E" : "R", bra(vir), ket(occ), Symmetry::Nonsymm,
+                  BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
   };
 
   struct Eqn {
@@ -157,33 +156,9 @@ TEST_CASE(
         tex << "% forest of the optimized (factorized) equations; needs "
                "\\usepackage{breqn}\n";
       }
-      auto const w2s = [](std::wstring const& w) {
-        std::string out;
-        for (wchar_t c : w) {
-          if (c < 0x80) {
-            out += static_cast<char>(c);
-          } else {  // UTF-8 encode
-            unsigned int const u = static_cast<unsigned int>(c);
-            if (u < 0x800) {
-              out += static_cast<char>(0xC0 | (u >> 6));
-              out += static_cast<char>(0x80 | (u & 0x3F));
-            } else if (u < 0x10000) {
-              out += static_cast<char>(0xE0 | (u >> 12));
-              out += static_cast<char>(0x80 | ((u >> 6) & 0x3F));
-              out += static_cast<char>(0x80 | (u & 0x3F));
-            } else {
-              out += static_cast<char>(0xF0 | (u >> 18));
-              out += static_cast<char>(0x80 | ((u >> 12) & 0x3F));
-              out += static_cast<char>(0x80 | ((u >> 6) & 0x3F));
-              out += static_cast<char>(0x80 | (u & 0x3F));
-            }
-          }
-        }
-        return out;
-      };
       tex << "\\begin{dmath*}\n"
-          << w2s(make_head(eq.rank).to_latex()) << " = "
-          << w2s(res.expr->to_latex()) << "\n\\end{dmath*}\n\n";
+          << make_head(eq.rank).to_latex() << " = " << res.expr->to_latex()
+          << "\n\\end{dmath*}\n\n";
     }
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     forest.push_back(binarize<EvalExprDryRun>(rexpr, BinarizationOptions{}));

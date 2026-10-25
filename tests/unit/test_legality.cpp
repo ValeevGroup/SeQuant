@@ -58,7 +58,7 @@ TEST_CASE(
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"a";
+    return ix.basis().base_key() == "a";
   };
 
   // build_site_of now reads the DP's ACTUAL per-node decision (a Contracted
@@ -66,17 +66,17 @@ TEST_CASE(
   // (legality.hpp) -- so stamp a_3 as the DP would when it batches this
   // contraction here. i_1 is left unstamped (not batched), so it stays out.
   node->set_node_slice_mask(
-      {{sequant::Index{L"a_3"}, sequant::BatchModeType::Contracted}});
+      {{sequant::Index{"a_3"}, sequant::BatchModeType::Contracted}});
 
   auto const site = sequant::eval::build_site_of(node, policy);
 
-  auto const contains = [&](std::wstring const& key) {
+  auto const contains = [&](std::string const& key) {
     return std::any_of(site.begin(), site.end(), [&](sequant::Index const& ix) {
       return ix.basis().base_key() == key;
     });
   };
-  CHECK(contains(L"a"));
-  CHECK_FALSE(contains(L"i"));
+  CHECK(contains("a"));
+  CHECK_FALSE(contains("i"));
 }
 
 TEST_CASE(
@@ -90,7 +90,7 @@ TEST_CASE(
   // value V{i_1;a_1} = sum_{i_2} X{i_1,i_2;a_1} * Y{i_2}: carries i_1 (sliced,
   // lockstep with an enclosing i_1 loop) and contracts i_2 at its own node
   // (sliced there by the DP). Both indices are of the occupied space.
-  Index const i1{L"i_1"}, i2{L"i_2"}, a1{L"a_1"};
+  Index const i1{"i_1"}, i2{"i_2"}, a1{"a_1"};
   sequant::container::svector<Index> const carried{i1, a1};
   sequant::container::svector<Index> const contracted_below{i2};
   OccurrenceRec occ;
@@ -102,14 +102,14 @@ TEST_CASE(
   sequant::container::svector<OccurrenceRec> const occurrences{occ};
   // the enclosing i_1 loop is the instance (i, 0) that slices position 0
   auto const enclosing = [](OccurrenceRec const&) {
-    return sequant::container::svector<sequant::eval::LoopInstance>{{L"i", 0}};
+    return sequant::container::svector<sequant::eval::LoopInstance>{{"i", 0}};
   };
   CHECK(sequant::eval::classify_axis(carried, contracted_below, i1, occurrences,
                                      enclosing) == LoopRole::LoopLocal);
   CHECK(sequant::eval::classify_axis(carried, contracted_below, i2, occurrences,
                                      enclosing) == LoopRole::Reduction);
   // and an axis the value neither carries nor contracts is invariant
-  CHECK(sequant::eval::classify_axis(carried, contracted_below, Index{L"i_3"},
+  CHECK(sequant::eval::classify_axis(carried, contracted_below, Index{"i_3"},
                                      occurrences,
                                      enclosing) == LoopRole::LoopInvariant);
 }
@@ -196,7 +196,7 @@ TEST_CASE(
   // the only batchable mode, contracted role.
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"Κ";
+    return ix.basis().base_key() == "Κ";
   };
   policy.is_batchable_external_index = [](sequant::Index const&) {
     return false;
@@ -206,7 +206,7 @@ TEST_CASE(
     return 256;
   };
   policy.is_volatile_leaf = [](sequant::Tensor const& t) {
-    return t.label() == L"t";
+    return t.label() == "t";
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
@@ -258,7 +258,7 @@ TEST_CASE(
   REQUIRE(legality.cells.size() == rich.cells.size());
 
   auto const is_K = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"Κ";
+    return ix.basis().base_key() == "Κ";
   };
   auto const carries_type =
       [&](sequant::container::svector<sequant::Index> const& v,
@@ -287,7 +287,7 @@ TEST_CASE(
       return carried.size() == 2 &&
              std::all_of(carried.begin(), carried.end(),
                          [](sequant::Index const& ix) {
-                           return ix.basis().base_key() == L"μ̃";
+                           return ix.basis().base_key() == "μ̃";
                          });
     };
 
@@ -531,13 +531,13 @@ TEST_CASE(
   // occ ("i") batchable in the EXTERNAL role -> i_3/i_4 are batch axes.
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
 
   // Minimal DryRun cost model: compute_dag_boulevard prices no footprints, and
   // block_of only sizes enclosing-loop entries (there are none here).
   sequant::eval::dryrun::SizeRegime regime;
-  regime.space_extent = {{L"i", 8u}, {L"a", 16u}};
+  regime.space_extent = {{"i", 8u}, {"a", 16u}};
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
 
   std::vector<Node> forest{node};
@@ -550,7 +550,7 @@ TEST_CASE(
   REQUIRE(legality.cells.size() == rich.cells.size());
 
   auto const is_i = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"i";
+    return ix.basis().base_key() == "i";
   };
   auto const has_i = [&](auto const& v) {
     return std::any_of(v.begin(), v.end(), is_i);
@@ -605,8 +605,8 @@ TEST_CASE(
   using sequant::eval::OccurrenceRec;
   using sequant::eval::OccurrenceRole;
 
-  auto const i_1 = Index{L"i_1"};
-  auto const i_2 = Index{L"i_2"};
+  auto const i_1 = Index{"i_1"};
+  auto const i_2 = Index{"i_2"};
 
   // B{i_1,i_2} = A{;i_1} * A{;i_2}: an outer product carrying two DISTINCT
   // occ indices into its own result, each sliced by its own loop instance
@@ -627,7 +627,7 @@ TEST_CASE(
   // The enclosing instances, as analyze_legality resolves them through the
   // openers: only (i, 0) is running at this occurrence.
   auto const enclosing = [](OccurrenceRec const&) {
-    return svector<LoopInstance>{{L"i", 0}};
+    return svector<LoopInstance>{{"i", 0}};
   };
 
   svector<OccurrenceAxisRole> per_occ;
@@ -674,9 +674,8 @@ TEST_CASE(
   using sequant::eval::OccurrenceRec;
   using sequant::eval::OccurrenceRole;
 
-  auto const a_2 = Index{L"a_2"};
-  svector<Index> const carried{Index{L"i_3"}, Index{L"i_1"}, a_2,
-                               Index{L"a_3"}};
+  auto const a_2 = Index{"a_2"};
+  svector<Index> const carried{Index{"i_3"}, Index{"i_1"}, a_2, Index{"a_3"}};
   svector<Index> const contracted_below{};
 
   OccurrenceRec in_loop;
@@ -698,7 +697,7 @@ TEST_CASE(
   svector<OccurrenceRec> const occurrences{in_loop, at_root};
   auto const enclosing = [](OccurrenceRec const& occ) {
     return occ.ectx.empty() ? svector<LoopInstance>{}
-                            : svector<LoopInstance>{{L"a", 0}};
+                            : svector<LoopInstance>{{"a", 0}};
   };
 
   svector<OccurrenceAxisRole> per_occ;
@@ -735,7 +734,7 @@ TEST_CASE(
   using sequant::eval::OccurrenceRec;
   using sequant::eval::PointOccurrence;
 
-  auto const i_1 = Index{L"i_1"}, k_1 = Index{L"a_1"};
+  auto const i_1 = Index{"i_1"}, k_1 = Index{"a_1"};
 
   // The opener (point 1): carries i_1 sliced by (i, 2) and opens that loop as
   // External; also opens a Contracted loop over a_1 stamped (a, 0).
@@ -759,8 +758,8 @@ TEST_CASE(
   occ.ectx_opener_point = {1, 1};
   auto const inst = enclosing_instances(occ, points);
   REQUIRE(inst.size() == 2);
-  CHECK(inst[0] == LoopInstance{L"i", 2});
-  CHECK(inst[1] == LoopInstance{L"a", 0});
+  CHECK(inst[0] == LoopInstance{"i", 2});
+  CHECK(inst[1] == LoopInstance{"a", 0});
 
   // Fewer opener points than enclosing loops: the record is inconsistent.
   OccurrenceRec short_rec = occ;
@@ -774,7 +773,7 @@ TEST_CASE(
 
   // An opener that does not open the loop the occurrence says it does.
   OccurrenceRec mislabeled = occ;
-  mislabeled.ectx = {{Index{L"i_2"}, {0u, 4u}}};
+  mislabeled.ectx = {{Index{"i_2"}, {0u, 4u}}};
   mislabeled.ectx_opener_point = {1};
   REQUIRE_THROWS_AS(enclosing_instances(mislabeled, points),
                     sequant::Exception);
@@ -808,8 +807,8 @@ TEST_CASE(
   using sequant::eval::LoopRole;
   using sequant::eval::OccurrenceRec;
 
-  auto const i_1 = Index{L"i_1"};
-  auto const i_4 = Index{L"i_4"};
+  auto const i_1 = Index{"i_1"};
+  auto const i_4 = Index{"i_4"};
 
   // Value carries i_4 (a full, un-batched occ dimension) and i_1 (batched).
   svector<Index> const carried{i_4, i_1};
@@ -829,7 +828,7 @@ TEST_CASE(
   // Only i_1 is a batched (sliced) mode, by loop instance (i, 0); i_4 is a
   // full spectator dimension with no loop identity.
   auto const enclosing = [](OccurrenceRec const&) {
-    return svector<sequant::eval::LoopInstance>{{L"i", 0}};
+    return svector<sequant::eval::LoopInstance>{{"i", 0}};
   };
 
   // i_1 is lockstep with its enclosing loop instance, so the axis is
@@ -859,11 +858,11 @@ TEST_CASE(
   // Two DISTINCT occ Index instances, both LoopCarried on the same space --
   // the per-instance record the synthetic B{i_3,i_4} = A{;i_3} * A{;i_4}
   // outer product produces.
-  cl.forced_split_axes = {Index{L"i_3"}, Index{L"i_4"}};
+  cl.forced_split_axes = {Index{"i_3"}, Index{"i_4"}};
 
   auto const types = forced_split_types(cl);
   REQUIRE(types.size() == 1);
-  CHECK(types.front().basis().base_key() == L"i");
+  CHECK(types.front().basis().base_key() == "i");
 
   // A cell with no forced splits collapses to an empty list.
   CellLegality const empty_cl;
@@ -874,7 +873,7 @@ TEST_CASE(
   // in the default context without any scoped registry setup, unlike the DF
   // aux space "Κ", which needs a scoped registry.)
   CellLegality mixed_cl;
-  mixed_cl.forced_split_axes = {Index{L"i_3"}, Index{L"i_4"}, Index{L"a_1"}};
+  mixed_cl.forced_split_axes = {Index{"i_3"}, Index{"i_4"}, Index{"a_1"}};
   auto const mixed_types = forced_split_types(mixed_cl);
   REQUIRE(mixed_types.size() == 2);
 }
@@ -883,12 +882,12 @@ TEST_CASE("forced_split_types keeps a named basis apart from its space",
           "[legality][basis]") {
   using namespace sequant;
   auto ibr = mbpt::make_min_sr_spaces();
-  const IndexSpace a = ibr->retrieve_space(L"a"), i = ibr->retrieve_space(L"i");
-  ibr->add(L"μ̃", a, std::numeric_limits<IndexBasis::instance_type>::max());
+  const IndexSpace a = ibr->retrieve_space("a"), i = ibr->retrieve_space("i");
+  ibr->add("μ̃", a, std::numeric_limits<IndexBasis::instance_type>::max());
   auto ctx = set_scoped_default_context(
       Context({.index_basis_registry_shared_ptr = std::move(ibr),
                .vacuum = Vacuum::SingleProduct}));
-  const Index pao(get_default_context().index_basis_registry()->retrieve(L"μ̃"),
+  const Index pao(get_default_context().index_basis_registry()->retrieve("μ̃"),
                   1);
   const Index composite(a, 2, {Index(i, 1), Index(i, 2)});
   eval::CellLegality cell;
@@ -977,7 +976,7 @@ TEST_CASE(
 
     sequant::BatchPolicy policy;
     policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-      return ix.basis().base_key() == L"Κ";
+      return ix.basis().base_key() == "Κ";
     };
     policy.is_batchable_external_index = [](sequant::Index const&) {
       return false;
@@ -987,7 +986,7 @@ TEST_CASE(
       return 256;
     };
     policy.is_volatile_leaf = [](sequant::Tensor const& t) {
-      return t.label() == L"t";
+      return t.label() == "t";
     };
     policy.accumulation_factor = 1.0;
     policy.persistent_only = false;
@@ -1044,7 +1043,7 @@ TEST_CASE(
     }
 
     auto const is_K = [](sequant::Index const& ix) {
-      return ix.basis().base_key() == L"Κ";
+      return ix.basis().base_key() == "Κ";
     };
     auto const carries_K =
         [&](sequant::container::svector<sequant::Index> const& v) {
@@ -1114,11 +1113,11 @@ TEST_CASE(
 
     sequant::BatchPolicy policy;
     policy.is_batchable_external_index = [](sequant::Index const& ix) {
-      return ix.basis().base_key() == L"i";
+      return ix.basis().base_key() == "i";
     };
 
     sequant::eval::dryrun::SizeRegime regime;
-    regime.space_extent = {{L"i", 8u}, {L"a", 16u}};
+    regime.space_extent = {{"i", 8u}, {"a", 16u}};
     auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
 
     std::vector<Node> forest{node};

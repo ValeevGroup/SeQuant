@@ -91,8 +91,8 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
   });
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "Product canonicalization(" << to_wstring(opts.method)
-               << ") input: " << to_latex() << std::endl;
+    std::cout << "Product canonicalization(" << to_string(opts.method)
+              << ") input: " << to_latex() << std::endl;
   }
 
   // pull out all scalar factors to the front
@@ -176,11 +176,11 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
         if (first_label == second_label) return *first < *second;
         const auto first_is_cardinal_it = ranges::find_if(
             cardinal_tensor_labels,
-            [&first_label](const std::wstring &l) { return l == first_label; });
+            [&first_label](const std::string &l) { return l == first_label; });
         const auto first_is_cardinal =
             first_is_cardinal_it != ranges::end(cardinal_tensor_labels);
         const auto second_is_cardinal_it = ranges::find_if(
-            cardinal_tensor_labels, [&second_label](const std::wstring &l) {
+            cardinal_tensor_labels, [&second_label](const std::string &l) {
               return l == second_label;
             });
         const auto second_is_cardinal =
@@ -225,8 +225,8 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
   // TODO evaluate product of Tensors (turn this into Products of Products)
 
   if (Logger::instance().canonicalize)
-    std::wcout << "Product canonicalization(" << to_wstring(opts.method)
-               << ") result: " << to_latex() << std::endl;
+    std::cout << "Product canonicalization(" << to_string(opts.method)
+              << ") result: " << to_latex() << std::endl;
 
   return {};  // side effects are absorbed into the scalar_
 }
@@ -257,11 +257,11 @@ ExprPtr Product::rapid_canonicalize(CanonicalizeOptions opt) {
 
 bool Product::static_commutativity() const { return false; }
 
-std::wstring Product::to_latex() const { return to_latex(false); }
+std::string Product::to_latex() const { return to_latex(false); }
 
-std::wstring Product::to_latex(bool negate) const {
-  std::wstring result;
-  result = L"{";
+std::string Product::to_latex(bool negate) const {
+  std::string result;
+  result = "{";
   if (!scalar().is_zero()) {
     const auto scal = negate ? -scalar() : scalar();
     if (!scal.is_identity()) {
@@ -269,17 +269,17 @@ std::wstring Product::to_latex(bool negate) const {
       if (!(negate ? scalar() : -scalar()).is_identity()) {
         result += io::latex::to_string(scal);
       } else {
-        result += L"{-}";
+        result += "{-}";
       }
     }
     for (const auto &i : factors()) {
       if (i->is<Product>())
-        result += L"\\bigl(" + i->to_latex() + L"\\bigr)";
+        result += "\\bigl(" + i->to_latex() + "\\bigr)";
       else
         result += i->to_latex();
     }
   }
-  result += L"}";
+  result += "}";
   return result;
 }
 

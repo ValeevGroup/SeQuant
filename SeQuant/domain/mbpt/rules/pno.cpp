@@ -108,7 +108,7 @@ ExprPtr projection_move_legs(ExprPtr const& node, projection_scope& scope) {
   if (tnsr._aux_rank() != 0)
     throw Exception(
         "mbpt::project_integral_domains: the integral " +
-        toUtf8(tnsr._label()) +
+        std::string(tnsr._label()) +
         " carries auxiliary indices; run the projection BEFORE density "
         "fitting");
   const ProjectionTerms cell = projection_cell(tnsr, scope.order);

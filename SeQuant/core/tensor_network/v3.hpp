@@ -168,9 +168,9 @@ class TensorNetworkV3 {
     using VertexColor = std::uint32_t;
 
     std::unique_ptr<bliss::Graph> bliss_graph;
-    std::vector<std::wstring> vertex_labels;
-    std::vector<std::optional<std::wstring>> vertex_xlabels;
-    std::vector<std::optional<std::wstring>> vertex_texlabels;
+    std::vector<std::string> vertex_labels;
+    std::vector<std::optional<std::string>> vertex_xlabels;
+    std::vector<std::optional<std::string>> vertex_texlabels;
     std::vector<VertexColor> vertex_colors;
     std::vector<VertexType> vertex_types;
     container::map<Index, std::size_t> idx_to_vertex;
@@ -285,7 +285,7 @@ class TensorNetworkV3 {
   /// to be zero by symmetry (see Graph::automorphism_phase()), in which case
   /// the tensors are left as they were
   ExprPtr canonicalize(
-      const container::vector<std::wstring> &cardinal_tensor_labels = {},
+      const container::vector<std::string> &cardinal_tensor_labels = {},
       const CanonicalizeOptions &options =
           CanonicalizeOptions::default_options());
 
@@ -351,7 +351,7 @@ class TensorNetworkV3 {
   /// leaves the canonicalization at the space-only named coloring.
   /// @return the computed canonicalization metadata
   SlotCanonicalizationMetadata canonicalize_slots(
-      const container::vector<std::wstring> &cardinal_tensor_labels = {},
+      const container::vector<std::string> &cardinal_tensor_labels = {},
       const NamedIndexSet *named_indices = nullptr,
       SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
           default_idxptr_slottype_lesscompare{},
@@ -420,9 +420,9 @@ class TensorNetworkV3 {
     bool make_xlabels = false;
 
     /// callable that maps vertex index to xlabel
-    std::function<std::wstring(std::size_t)> xlabel_maker =
+    std::function<std::string(std::size_t)> xlabel_maker =
         [](std::size_t vertex_ordinal) {
-          return std::to_wstring(vertex_ordinal);
+          return std::to_string(vertex_ordinal);
         };
 
     /// if false, will not generate the TeX labels

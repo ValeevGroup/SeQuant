@@ -42,10 +42,10 @@ auto eval_node(sequant::ExprPtr const& expr) {
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
-static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?_?(\\d+)"};
+static auto const idx_rgx = boost::regex{"([ia])(↑|↓)?_?(\\d+)"};
 auto tensor_to_key(sequant::Tensor const& tnsr) {
-  auto formatter = [](boost::wsmatch mo) -> std::wstring {
-    return (mo[1].str() == L"i" ? L"o" : L"v") + mo[2].str();
+  auto formatter = [](boost::smatch mo) -> std::string {
+    return (mo[1].str() == "i" ? "o" : "v") + mo[2].str();
   };
 
   auto const tnsr_deparsed =
@@ -53,7 +53,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
   return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
 }
 
-[[maybe_unused]] auto tensor_to_key(std::wstring_view spec) {
+[[maybe_unused]] auto tensor_to_key(std::string_view spec) {
   return tensor_to_key(sequant::deserialize<sequant::ExprPtr>(
                            spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
                            ->as<sequant::Tensor>());
@@ -64,7 +64,7 @@ class rand_tensor_yield {
  private:
   size_t const nocc_;
   size_t const nvirt_;
-  mutable std::map<std::wstring, sequant::ResultPtr> label_to_tnsr_;
+  mutable std::map<std::string, sequant::ResultPtr> label_to_tnsr_;
 
  public:
   rand_tensor_yield(size_t noccupied, size_t nvirtual)
@@ -79,14 +79,14 @@ class rand_tensor_yield {
     SEQUANT_ASSERT(
         ranges::all_of(tnsr.const_braket_indices(),
                        [&ibr](auto const& idx) {
-                         return idx.space() == ibr->retrieve_space(L"i") ||
-                                idx.space() == ibr->retrieve_space(L"a");
+                         return idx.space() == ibr->retrieve_space("i") ||
+                                idx.space() == ibr->retrieve_space("a");
                        }) &&
         "Unsupported IndexSpace type found while generating tensor.");
 
     auto rng = btas::Range{
         tnsr.const_braket_indices() | transform([this, &ibr](auto const& idx) {
-          return idx.space() == ibr->retrieve_space(L"i") ? nocc_ : nvirt_;
+          return idx.space() == ibr->retrieve_space("i") ? nocc_ : nvirt_;
         }) |
         ranges::to_vector};
 
@@ -107,10 +107,10 @@ class rand_tensor_yield {
 
   sequant::ResultPtr operator()(sequant::Tensor const& tnsr) const {
     using namespace sequant;
-    std::wstring const label = tensor_to_key(tnsr);
+    std::string const label = tensor_to_key(tnsr);
     if (auto&& found = label_to_tnsr_.find(label);
         found != label_to_tnsr_.end()) {
-      //      std::wcout << "label = [" << label << "] FOUND in cache.
+      //      std::cout << "label = [" << label << "] FOUND in cache.
       //      Returning.."
       //                 << std::endl;
       return found->second;
@@ -119,7 +119,7 @@ class rand_tensor_yield {
     auto&& success = label_to_tnsr_.emplace(
         label, eval_result<ResultTensorBTAS<Tensor_t>>(std::move(t)));
     SEQUANT_ASSERT(success.second && "couldn't store tensor!");
-    //    std::wcout << "label = [" << label << "] NotFound in cache.
+    //    std::cout << "label = [" << label << "] NotFound in cache.
     //    Creating.."
     //               << std::endl;
     return success.first->second;
@@ -146,8 +146,8 @@ class rand_tensor_yield {
   /// \note The tensor should be already present in the yielder cache
   ///       otherwise throws assertion error. To avoid that use the other
   ///       overload of operator() that takes sequant::Tensor const&
-  sequant::ResultPtr operator()(std::wstring_view label) const {
-    auto&& found = label_to_tnsr_.find(std::wstring{label});
+  sequant::ResultPtr operator()(std::string_view label) const {
+    auto&& found = label_to_tnsr_.find(std::string{label});
     if (found == label_to_tnsr_.end()) {
       SEQUANT_ASSERT(false && "attempted access of non-existent tensor!");
     }
@@ -163,21 +163,21 @@ template <typename Tensor_t>
 class aux_rand_tensor_yield {
  private:
   size_t const nocc_, nvirt_, nz_;
-  mutable std::map<std::wstring, sequant::ResultPtr> cache_;
+  mutable std::map<std::string, sequant::ResultPtr> cache_;
 
-  static std::wstring key(sequant::Tensor const& t) {
+  static std::string key(sequant::Tensor const& t) {
     // normalize away specific index ordinals within a space so a canonicalized
     // leaf and the original deserialized tensor map to the same entry
     return boost::regex_replace(
         sequant::serialize(t.clone(), {.annot_symm = false}),
-        boost::wregex{L"([iaz])[↑↓]?_?\\d+"}, L"$1");
+        boost::regex{"([iaz])(?:↑|↓)?_?\\d+"}, "$1");
   }
 
   size_t extent(sequant::Index const& idx) const {
     auto ibr = sequant::get_default_context().index_basis_registry();
-    if (idx.space() == ibr->retrieve_space(L"i")) return nocc_;
-    if (idx.space() == ibr->retrieve_space(L"a")) return nvirt_;
-    if (idx.space() == ibr->retrieve_space(L"z")) return nz_;
+    if (idx.space() == ibr->retrieve_space("i")) return nocc_;
+    if (idx.space() == ibr->retrieve_space("a")) return nvirt_;
+    if (idx.space() == ibr->retrieve_space("z")) return nz_;
     SEQUANT_ASSERT(false && "aux_rand_tensor_yield: unsupported IndexSpace");
     return 0;
   }
@@ -219,8 +219,8 @@ template <
     std::enable_if_t<
         std::is_convertible_v<sequant::meta::range_value_t<Iterable>, Index> &&
             !sequant::meta::is_statically_castable_v<
-                Iterable const&, std::wstring>  // prefer the ctor taking the
-                                                // std::wstring
+                Iterable const&, std::string>  // prefer the ctor taking the
+                                               // std::string
         ,
         bool> = true>
 container::svector<long> tidxs(Iterable const& indices) noexcept {
@@ -241,20 +241,20 @@ container::svector<long> tidxs(
   return tidxs(tnsr_p->as<Tensor>());
 }
 
-auto terse_index = [](std::wstring const& spec) {
-  auto formatter = [](boost::wsmatch mo) -> std::wstring {
-    return mo[1].str() + mo[2].str() + L"_" + mo[3].str();
+auto terse_index = [](std::string const& spec) {
+  auto formatter = [](boost::smatch mo) -> std::string {
+    return mo[1].str() + mo[2].str() + "_" + mo[3].str();
   };
   return boost::regex_replace(spec, idx_rgx, formatter);
 };
 
-container::svector<long> tidxs(std::wstring const& csv) noexcept {
+container::svector<long> tidxs(std::string const& csv) noexcept {
   using ranges::views::all;
   using ranges::views::split;
   using ranges::views::transform;
   auto const detersed = terse_index(csv);
-  return tidxs(detersed | split(L',') |
-               transform([](auto&& v) { return ranges::to<std::wstring>(v); }));
+  return tidxs(detersed | split(',') |
+               transform([](auto&& v) { return ranges::to<std::string>(v); }));
 }
 
 }  // namespace
@@ -273,7 +273,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
   std::srand(2023);
   const size_t nocc = 2, nvirt = 20;
   auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
-  auto yield = [&yield_](std::wstring_view lbl) -> BTensorD const& {
+  auto yield = [&yield_](std::string_view lbl) -> BTensorD const& {
     return yield_(lbl)->get<BTensorD>();
   };
 
@@ -309,22 +309,22 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
   };
 
   SECTION("Summation") {
-    auto expr1 = parse_antisymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
+    auto expr1 = parse_antisymm("t_{a1}^{i1} + f_{i1}^{a1}");
     auto const tidx1 = tidxs(expr1, {0});
     auto eval1 = eval(expr1, tidx1);
 
-    auto man1 = yield(L"t{v;o}");
-    man1 += BTensorD{btas::permute(yield(L"f{o;v}"), {1, 0})};
+    auto man1 = yield("t{v;o}");
+    man1 += BTensorD{btas::permute(yield("f{o;v}"), {1, 0})};
 
     REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
 
-    auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
+    auto expr2 = parse_antisymm("2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
     auto const tidx2 = tidxs(expr2, {0, 0});
     auto eval2 = eval(expr2, tidx2);
 
-    auto man2 = yield(L"t{v;o}");
+    auto man2 = yield("t{v;o}");
     btas::scal(2.0, man2);
-    auto temp = BTensorD{btas::permute(yield(L"f{o;v}"), {1, 0})};
+    auto temp = BTensorD{btas::permute(yield("f{o;v}"), {1, 0})};
     btas::scal(1.5, temp);
     man2 += temp;
 
@@ -333,8 +333,8 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 
   SECTION("Product") {
     auto expr1 =
-        parse_antisymm(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{ i1, i2}");
-    auto const tidx1 = tidxs(L"i1,i4,a1,a4");
+        parse_antisymm("1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{ i1, i2}");
+    auto const tidx1 = tidxs("i1,i4,a1,a4");
     auto eval1 = eval(expr1, tidx1);
 
     // mnemonics
@@ -343,15 +343,15 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     // a looks like 7
 
     BTensorD man1;
-    auto const& g = yield(L"g{o,o;v,v}");
-    auto const& t2 = yield(L"t{v,v;o,o}");
+    auto const& g = yield("g{o,o;v,v}");
+    auto const& t2 = yield("t{v,v;o,o}");
     btas::contract(0.5, g, {12, 14, 72, 74}, t2, {71, 72, 11, 12}, 0.0, man1,
                    {11, 14, 71, 74});
     REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
 
     auto expr2 = parse_antisymm(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a1,a3}^{i3,i4} * t_{a2,a4}^{ i1, i2}");
-    auto tidx2 = tidxs(L"i1,i2,a1,a2");
+        "-1/4 * g_{i3,i4}^{a3,a4} * t_{a1,a3}^{i3,i4} * t_{a2,a4}^{ i1, i2}");
+    auto tidx2 = tidxs("i1,i2,a1,a2");
     auto eval2 = eval(expr2, tidx2);
 
     BTensorD man2, temp;
@@ -364,14 +364,14 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 
   SECTION("Summation and Product") {
     auto expr1 = parse_antisymm(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
+        "-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
         " + "
         " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
-    auto tidx1 = tidxs(L"i1,i2,a1,a2");
+    auto tidx1 = tidxs("i1,i2,a1,a2");
     auto eval1 = eval(expr1, tidx1);
 
-    auto const& g = yield(L"g{o,o;v,v}");
-    auto const& t2 = yield(L"t{v,v;o,o}");
+    auto const& g = yield("g{o,o;v,v}");
+    auto const& t2 = yield("t{v,v;o,o}");
     BTensorD temp1, man1;
     btas::contract(1.0, g, {13, 14, 73, 74}, t2, {71, 73, 13, 14}, 0.0, temp1,
                    {71, 74});
@@ -392,11 +392,11 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
   SECTION("Antisymmetrization") {
     using btas::permute;
 
-    auto expr1 = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
-    auto tidx1 = tidxs(L"i_1,i_2,a_1,a_2");
+    auto expr1 = parse_antisymm("g_{i1, i2}^{a1, a2}");
+    auto tidx1 = tidxs("i_1,i_2,a_1,a_2");
     auto eval1 = eval_antisymm(expr1, tidx1);
 
-    auto const& g = yield(L"g{o,o;v,v}");
+    auto const& g = yield("g{o,o;v,v}");
     BTensorD man1{g.range()}, temp{g.range()};
     man1.fill(0);
     temp.fill(0);
@@ -419,11 +419,11 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 
     REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
 
-    auto expr2 = parse_antisymm(L"R_{a1,a2}^{i1}");
-    auto tidx2 = tidxs(L"a_1,a_2,i_1");
+    auto expr2 = parse_antisymm("R_{a1,a2}^{i1}");
+    auto tidx2 = tidxs("a_1,a_2,i_1");
     auto eval2 = eval_antisymm(expr2, tidx2);
 
-    auto const& r = yield(L"R{v,v;o}");
+    auto const& r = yield("R{v,v;o}");
     BTensorD man2{r.range()}, temp2{r.range()};
     man2.fill(0.0);
     temp2.fill(0.0);
@@ -442,11 +442,11 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
   SECTION("Symmetrization") {
     using btas::permute;
 
-    auto expr1 = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
-    auto tidx1 = tidxs(L"i_1,i_2,a_1,a_2");
+    auto expr1 = parse_antisymm("g_{i1, i2}^{a1, a2}");
+    auto tidx1 = tidxs("i_1,i_2,a_1,a_2");
     auto eval1 = eval_symm(expr1, tidx1);
 
-    auto const& g = yield(L"g{o,o;v,v}");
+    auto const& g = yield("g{o,o;v,v}");
 
     BTensorD man1{g.range()};
     man1.fill(0);
@@ -461,11 +461,10 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
   SECTION("Biorthogonal Cleanup") {
     using btas::permute;
     // low-rank residuals: skip cleanup
-    auto expr1 = parse_antisymm(L"R_{a1, a2}^{i1, i2}");
-    auto tidx1 = tidxs(L"a_1,a_2,i_1,i_2");
+    auto expr1 = parse_antisymm("R_{a1, a2}^{i1, i2}");
+    auto tidx1 = tidxs("a_1,a_2,i_1,i_2");
     auto eval1 = eval_biorthogonal_nns_project(expr1, tidx1);
-    auto const& r1 =
-        yield(L"R{v,v;o,o}");  // Assuming v = virtual, o = occupied
+    auto const& r1 = yield("R{v,v;o,o}");  // Assuming v = virtual, o = occupied
 
     BTensorD man1{r1.range()};
     man1.fill(0);
@@ -481,10 +480,10 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     // high-rank residuals: cleanup applies:
     // result = 5/6 * identity - 1/6 * sum of the other ket permutations
     // (the idempotent NNS projector row)
-    auto expr2 = parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}");
-    auto tidx2 = tidxs(L"a_1,a_2,a_3,i_1,i_2,i_3");
+    auto expr2 = parse_antisymm("R_{a1, a2, a3}^{i1, i2, i3}");
+    auto tidx2 = tidxs("a_1,a_2,a_3,i_1,i_2,i_3");
     auto eval2 = eval_biorthogonal_nns_project(expr2, tidx2);
-    auto const& r2 = yield(L"R{v,v,v;o,o,o}");
+    auto const& r2 = yield("R{v,v,v;o,o,o}");
 
     BTensorD man2{r2.range()};
     man2.fill(0);
@@ -512,11 +511,11 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 
   SECTION("Others") {
     auto expr1 = parse_antisymm(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
+        "-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
         " + "
         " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
 
-    auto tidx1 = tidxs(L"i1,i2,a1,a2");
+    auto tidx1 = tidxs("i1,i2,a1,a2");
 
     auto const eval1 =
         evaluate(eval_node(expr1), tidx1, yield_)->get<BTensorD>();
@@ -592,7 +591,7 @@ TEST_CASE("eval_sum_accumulate_in_place_btas", "[eval_btas]") {
   const size_t nocc = 2, nvirt = 3;
   auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
 
-  auto sum = deserialize(L"t1{i1;a1} + t2{i1;a1} + t3{i1;a1} + t4{i1;a1}");
+  auto sum = deserialize("t1{i1;a1} + t2{i1;a1} + t3{i1;a1} + t4{i1;a1}");
   REQUIRE(sum->is<Sum>());
   auto const& summands = sum->as<Sum>().summands();
   REQUIRE(summands.size() == 4);
@@ -691,11 +690,11 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
   // must conjugate-transpose the operand. With genuinely complex data the
   // conjugation is observable (a missing conj would leave imaginary parts
   // unflipped — a pure transpose would still pass a norm-only check).
-  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+  Tensor t("t", bra{"a_1"}, ket{"i_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
   Tensor t_adj = t;
   t_adj.adjoint();
-  REQUIRE(t_adj.label() == L"t⁺");
+  REQUIRE(t_adj.label() == "t⁺");
 
   auto node = eval_node(ex<Tensor>(t_adj));
   REQUIRE(node->op_type() == EvalOp::Adjoint);
@@ -805,13 +804,13 @@ TEST_CASE("binarize_highorder_aux_hyperindex", "[eval_btas][hyperindex]") {
   auto ctx_resetter =
       set_scoped_default_context(Context{get_default_context()}.set(ibr));
 
-  const std::wstring e_a_expr =
-      L"E{;;z1} = w{;;z1} * g{μ5,μ6;μ7,μ8;z1} * c{μ1;i1;z1} * ć{i1;μ5;z1} * "
-      L"d{μ7;μ3;z1} * c{μ2;i2;z1} * ć{i2;μ6;z1} * d{μ8;μ4;z1} * "
-      L"g{μ3,μ4;μ1,μ2;z1}"
-      L" - w{;;z1} * g{μ5,μ6;μ7,μ8;z1} * c{μ1;i1;z1} * ć{i1;μ5;z1} * "
-      L"d{μ7;μ3;z1} * c{μ2;i2;z1} * ć{i2;μ6;z1} * d{μ8;μ4;z1} * "
-      L"g{μ4,μ3;μ1,μ2;z1}";
+  const std::string e_a_expr =
+      "E{;;z1} = w{;;z1} * g{μ5,μ6;μ7,μ8;z1} * c{μ1;i1;z1} * ć{i1;μ5;z1} * "
+      "d{μ7;μ3;z1} * c{μ2;i2;z1} * ć{i2;μ6;z1} * d{μ8;μ4;z1} * "
+      "g{μ3,μ4;μ1,μ2;z1}"
+      " - w{;;z1} * g{μ5,μ6;μ7,μ8;z1} * c{μ1;i1;z1} * ć{i1;μ5;z1} * "
+      "d{μ7;μ3;z1} * c{μ2;i2;z1} * ć{i2;μ6;z1} * d{μ8;μ4;z1} * "
+      "g{μ4,μ3;μ1,μ2;z1}";
 
   auto res = deserialize<ResultExpr>(e_a_expr);
 
@@ -820,7 +819,7 @@ TEST_CASE("binarize_highorder_aux_hyperindex", "[eval_btas][hyperindex]") {
   REQUIRE_NOTHROW(binarize<EvalExprBTAS>(res));
   auto node = binarize<EvalExprBTAS>(res);
 
-  const auto z1 = Index{L"z_1"};
+  const auto z1 = Index{"z_1"};
   auto has_aux_z1 = [&z1](Tensor const& t) {
     return ranges::any_of(t.aux(), [&z1](Index const& ix) { return ix == z1; });
   };
@@ -962,19 +961,19 @@ TEST_CASE("eval_btas_batched_over_aux", "[eval_btas][hyperindex]") {
   aux_rand_tensor_yield<BTensorD> yield_{nocc, nvirt, nz};
 
   auto res = deserialize<ResultExpr>(
-      L"R{;;z1} = A{;a1;z1} * B{a1;a2;z1} * C{a2;;z1}", opts);
+      "R{;;z1} = A{;a1;z1} * B{a1;a2;z1} * C{a2;;z1}", opts);
   auto node = binarize<EvalExprBTAS>(res);
 
   auto got = evaluate(node, node->annot(), yield_)->get<BTensorD>();
   REQUIRE(got.rank() == 1);
   REQUIRE(got.extent(0) == nz);
 
-  auto leaf = [&](std::wstring_view s) -> BTensorD const& {
+  auto leaf = [&](std::string_view s) -> BTensorD const& {
     return yield_(deserialize<ExprPtr>(s, opts)->as<Tensor>())->get<BTensorD>();
   };
-  auto const& A = leaf(L"A{;a1;z1}");    // [a1, z]
-  auto const& B = leaf(L"B{a1;a2;z1}");  // [a1, a2, z]
-  auto const& C = leaf(L"C{a2;;z1}");    // [a2, z]
+  auto const& A = leaf("A{;a1;z1}");    // [a1, z]
+  auto const& B = leaf("B{a1;a2;z1}");  // [a1, a2, z]
+  auto const& C = leaf("C{a2;;z1}");    // [a2, z]
 
   for (size_t z = 0; z < nz; ++z) {
     double ref = 0.0;
@@ -997,7 +996,7 @@ TEST_CASE("result_size_in_bytes_btas", "[eval_btas]") {
 TEST_CASE("eval_btas_annotation_tells_basis_instances_apart",
           "[eval_btas][basis]") {
   using namespace sequant;
-  const Index a1(L"a_1");
+  const Index a1("a_1");
   const std::vector<Index> idxs{a1, a1.replace_basis_instance(1),
                                 a1.replace_basis_instance(2)};
   const auto annot =
