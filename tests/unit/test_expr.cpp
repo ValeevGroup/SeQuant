@@ -1964,6 +1964,39 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_THAT(L"B" - a, EquivalentTo("B - A"));
       REQUIRE_THAT(a * L"B", EquivalentTo("A * B"));
     }
+    SECTION("moved-from ExprHolder") {
+      ExprHolder holder = Variable("A");
+      ExprHolder other = std::move(holder);
+      REQUIRE(other->is<Variable>());
+
+      if constexpr (sequant::assert_behavior() ==
+                    sequant::AssertBehavior::Throw) {
+        REQUIRE_THROWS(*holder);
+        REQUIRE_THROWS(holder->is_atom());
+        REQUIRE_THROWS(ExprHolder(holder));
+        REQUIRE_THROWS(holder.copy());
+        REQUIRE_THROWS(holder.begin());
+        REQUIRE_THROWS(static_cast<const Expr &>(holder));
+        REQUIRE_THROWS(ExprHolder(ExprPtr{}));
+      }
+
+      // a moved-from holder can be assigned to
+      holder = Constant(1);
+      REQUIRE(holder->is<Constant>());
+    }
+    SECTION("take_expr") {
+      ExprHolder holder = Variable("A");
+      const Expr *held = &*holder;
+
+      std::unique_ptr<Expr> taken = std::move(holder).take_expr();
+      REQUIRE(taken.get() == held);
+      REQUIRE(taken->is<Variable>());
+
+      if constexpr (sequant::assert_behavior() ==
+                    sequant::AssertBehavior::Throw) {
+        REQUIRE_THROWS(std::move(holder).take_expr());
+      }
+    }
     SECTION("Sum and Product of a single ExprHolder") {
       const ExprHolder var = Variable("A");
 

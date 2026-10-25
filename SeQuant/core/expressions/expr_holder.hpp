@@ -65,6 +65,12 @@ class ExprHolder {
  private:
   std::unique_ptr<Expr> expr_;
 
+  /// @return the held expression
+  /// @pre this is not in a moved-from state
+  Expr &get();
+  /// @copydoc get()
+  const Expr &get() const;
+
   ExprHolder(std::unique_ptr<Expr> expr);
 };
 
