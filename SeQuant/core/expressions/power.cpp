@@ -178,6 +178,10 @@ std::unique_ptr<Expr> Power::unique_copy() const {
   return copy;
 }
 
+std::unique_ptr<Expr> Power::unique_move() && {
+  return std::make_unique<Power>(std::move(*this));
+}
+
 Expr::hash_type Power::memoizing_hash() const {
   auto compute_hash = [this]() {
     if (exponent_ == 1 && !conjugated_) return hash::value(*base_);

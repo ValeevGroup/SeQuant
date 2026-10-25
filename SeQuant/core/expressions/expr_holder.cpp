@@ -27,7 +27,7 @@ ExprHolder::ExprHolder(std::unique_ptr<Expr> expr) : expr_(std::move(expr)) {
 ExprHolder::ExprHolder(const Expr &expr) : ExprHolder(expr.unique_copy()) {}
 
 ExprHolder::ExprHolder(Expr &&expr)
-    : ExprHolder(std::move(expr).unique_copy()) {}
+    : ExprHolder(std::move(expr).unique_move()) {}
 
 ExprHolder::ExprHolder(const ExprPtr &ptr) : ExprHolder(ptr->unique_copy()) {}
 

@@ -72,6 +72,10 @@ std::unique_ptr<Expr> Variable::unique_copy() const {
   return std::make_unique<Variable>(*this);
 }
 
+std::unique_ptr<Expr> Variable::unique_move() && {
+  return std::make_unique<Variable>(std::move(*this));
+}
+
 void Variable::adjoint() { conjugate(); }
 
 }  // namespace sequant

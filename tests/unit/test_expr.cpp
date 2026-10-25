@@ -45,6 +45,9 @@ struct Dummy : public sequant::Expr {
   std::unique_ptr<sequant::Expr> unique_copy() const override {
     return std::make_unique<Dummy>();
   }
+  std::unique_ptr<sequant::Expr> unique_move() && override {
+    return std::make_unique<Dummy>(std::move(*this));
+  }
   void adjoint() override {}
   bool static_equal(const sequant::Expr &) const override { return true; }
   std::weak_ordering static_lexicographic_compare(
@@ -142,6 +145,9 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
   std::unique_ptr<sequant::Expr> unique_copy() const override {
     return std::make_unique<VecExpr>(this->begin(), this->end());
   }
+  std::unique_ptr<sequant::Expr> unique_move() && override {
+    return std::make_unique<VecExpr>(std::move(*this));
+  }
 };
 
 struct Adjointable : public sequant::Expr {
@@ -154,6 +160,9 @@ struct Adjointable : public sequant::Expr {
   type_id_type type_id() const override { return get_type_id<Adjointable>(); };
   std::unique_ptr<sequant::Expr> unique_copy() const override {
     return std::make_unique<Adjointable>(v);
+  }
+  std::unique_ptr<sequant::Expr> unique_move() && override {
+    return std::make_unique<Adjointable>(std::move(*this));
   }
   bool static_equal(const sequant::Expr &that) const override {
     return v == that.as<Adjointable>().v;
@@ -179,6 +188,9 @@ template <typename Derived>
 struct MinimalExpr : public sequant::Expr {
   type_id_type type_id() const override { return get_type_id<Derived>(); };
   std::unique_ptr<sequant::Expr> unique_copy() const override {
+    return std::make_unique<Derived>();
+  }
+  std::unique_ptr<sequant::Expr> unique_move() && override {
     return std::make_unique<Derived>();
   }
   void adjoint() override {}
@@ -1774,6 +1786,25 @@ TEST_CASE("expr", "[elements]") {
         REQUIRE(holder4->is<Sum>());
         REQUIRE(holder4->as<Sum>() == sum);
       }
+    }
+    SECTION("moving in an expression does not copy it") {
+      Sum sum(
+          ExprPtrList{ex<Variable>("A"), ex<Variable>("B"), ex<Variable>("C")});
+      const Expr *first_summand = sum.summand(0).get();
+
+      ExprHolder holder = std::move(sum);
+      REQUIRE(holder->is<Sum>());
+      REQUIRE(holder->as<Sum>().size() == 3);
+      // a copy would have deep-copied the summands
+      REQUIRE(holder->as<Sum>().summand(0).get() == first_summand);
+
+      // also when moving through a reference to the base class
+      Product prod(ExprPtrList{ex<Variable>("A"), ex<Variable>("B")});
+      const Expr *first_factor = prod.factor(0).get();
+      Expr &prod_ref = prod;
+      holder = std::move(prod_ref);
+      REQUIRE(holder->is<Product>());
+      REQUIRE(holder->as<Product>().factor(0).get() == first_factor);
     }
     SECTION("Assignment") {
       ExprHolder holder = Constant(1);

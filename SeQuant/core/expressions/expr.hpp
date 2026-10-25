@@ -740,7 +740,13 @@ class Expr : public std::enable_shared_from_this<Expr> {
     return true;
   }
 
+  /// @return a (deep) copy of this object allocated on the heap
   virtual std::unique_ptr<Expr> unique_copy() const = 0;
+
+  /// @return a heap-allocated object of the same type as this object into
+  /// which the contents of this object have been moved
+  /// @post this object is left in a valid but unspecified (moved-from) state
+  virtual std::unique_ptr<Expr> unique_move() && = 0;
 
  private:
   /// records that type @p type , named @p name , has type id @p id

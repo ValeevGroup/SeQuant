@@ -961,6 +961,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
  protected:
   std::unique_ptr<Expr> unique_copy() const override;
+  std::unique_ptr<Expr> unique_move() && override;
 
  private:
   std::wstring label_{};

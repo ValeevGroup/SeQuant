@@ -962,6 +962,7 @@ class Operator : public Operator<void, S> {
 
  protected:
   std::unique_ptr<Expr> unique_copy() const override;
+  std::unique_ptr<Expr> unique_move() && override;
 
  private:
   std::function<void(QuantumNumbers&)> qn_action_;

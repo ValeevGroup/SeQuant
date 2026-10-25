@@ -575,6 +575,10 @@ class Operator
     return std::make_unique<Operator>(*this);
   }
 
+  std::unique_ptr<Expr> unique_move() && override {
+    return std::make_unique<Operator>(std::move(*this));
+  }
+
  private:
   base_type make_ops(Action action, IndexList indices) {
     base_type result;
@@ -956,6 +960,10 @@ class NormalOperator : public Operator<S>,
  protected:
   std::unique_ptr<Expr> unique_copy() const override {
     return std::make_unique<NormalOperator>(*this);
+  }
+
+  std::unique_ptr<Expr> unique_move() && override {
+    return std::make_unique<NormalOperator>(std::move(*this));
   }
 
  private:
@@ -1361,6 +1369,10 @@ class NormalOperatorSequence
  protected:
   std::unique_ptr<Expr> unique_copy() const override {
     return std::make_unique<NormalOperatorSequence>(*this);
+  }
+
+  std::unique_ptr<Expr> unique_move() && override {
+    return std::make_unique<NormalOperatorSequence>(std::move(*this));
   }
 
  private:

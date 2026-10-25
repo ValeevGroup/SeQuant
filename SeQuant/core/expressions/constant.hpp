@@ -102,6 +102,7 @@ class Constant : public Expr {
 
  protected:
   std::unique_ptr<Expr> unique_copy() const override;
+  std::unique_ptr<Expr> unique_move() && override;
 
  private:
   scalar_type value_;

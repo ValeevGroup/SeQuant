@@ -311,6 +311,10 @@ std::unique_ptr<Expr> Sum::unique_copy() const {
   return result;
 }
 
+std::unique_ptr<Expr> Sum::unique_move() && {
+  return std::make_unique<Sum>(std::move(*this));
+}
+
 Expr::hash_type Sum::memoizing_hash() const {
   auto compute_hash = [this]() {
     if (summands_.size() == 1)

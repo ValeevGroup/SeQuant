@@ -154,6 +154,7 @@ class Sum : public Expr {
 
  protected:
   std::unique_ptr<Expr> unique_copy() const override;
+  std::unique_ptr<Expr> unique_move() && override;
 
  private:
   summands_type summands_{};

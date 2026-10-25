@@ -80,6 +80,10 @@ std::unique_ptr<Expr> Constant::unique_copy() const {
   return result;
 }
 
+std::unique_ptr<Expr> Constant::unique_move() && {
+  return std::make_unique<Constant>(std::move(*this));
+}
+
 Expr::hash_type Constant::memoizing_hash() const {
   if (!hash_value_) {
     hash_value_ = hash::value(value_);

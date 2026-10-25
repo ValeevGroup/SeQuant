@@ -21,6 +21,9 @@ struct LatexOnlyExpr : sequant::Expr {
   std::unique_ptr<sequant::Expr> unique_copy() const override {
     return std::make_unique<LatexOnlyExpr>();
   }
+  std::unique_ptr<sequant::Expr> unique_move() && override {
+    return std::make_unique<LatexOnlyExpr>();
+  }
   void adjoint() override {}
   // stateless; operator== has already matched the type id
   bool static_equal(const sequant::Expr&) const override { return true; }

@@ -345,6 +345,7 @@ class Product : public Expr {
 
  protected:
   std::unique_ptr<Expr> unique_copy() const override;
+  std::unique_ptr<Expr> unique_move() && override;
 
  private:
   scalar_type scalar_ = {1, 0};
@@ -398,6 +399,7 @@ class CProduct : public Product {
   ///       plain Product, whose adjoint() reverses the factors and whose
   ///       commutativity is only decided by a recursive pairwise check
   std::unique_ptr<Expr> unique_copy() const override;
+  std::unique_ptr<Expr> unique_move() && override;
 
  private:
   bool static_commutativity() const override;
@@ -429,6 +431,7 @@ class NCProduct : public Product {
   ///       plain Product, which is no longer unconditionally non-commutative
   ///       and hence may have its factors reordered by canonicalization
   std::unique_ptr<Expr> unique_copy() const override;
+  std::unique_ptr<Expr> unique_move() && override;
 
  private:
   bool static_commutativity() const override;

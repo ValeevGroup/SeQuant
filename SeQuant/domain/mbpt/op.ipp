@@ -244,6 +244,11 @@ std::unique_ptr<Expr> Operator<QuantumNumbers, S>::unique_copy() const {
   return std::make_unique<this_type>(*this);
 }
 
+template <typename QuantumNumbers, Statistics S>
+std::unique_ptr<Expr> Operator<QuantumNumbers, S>::unique_move() && {
+  return std::make_unique<this_type>(std::move(*this));
+}
+
 // Expresses general operators in human interpretable form. for example:
 // \hat{T}_2 is a particle conserving 2-body excitation operator a non-particle
 // conserving operator \hat{R}_2_1 implies that two particles are created

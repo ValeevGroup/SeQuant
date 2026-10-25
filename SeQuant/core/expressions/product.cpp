@@ -261,6 +261,10 @@ std::unique_ptr<Expr> Product::unique_copy() const {
   return std::make_unique<Product>(deep_copy());
 }
 
+std::unique_ptr<Expr> Product::unique_move() && {
+  return std::make_unique<Product>(std::move(*this));
+}
+
 std::wstring Product::to_latex() const { return to_latex(false); }
 
 std::wstring Product::to_latex(bool negate) const {
@@ -434,6 +438,10 @@ std::unique_ptr<Expr> CProduct::unique_copy() const {
   return std::make_unique<CProduct>(this->deep_copy());
 }
 
+std::unique_ptr<Expr> CProduct::unique_move() && {
+  return std::make_unique<CProduct>(std::move(*this));
+}
+
 void CProduct::adjoint() {
   auto adj_scalar = conj(scalar());
   using namespace ranges;
@@ -454,6 +462,10 @@ bool NCProduct::is_commutative() const { return false; }
 
 std::unique_ptr<Expr> NCProduct::unique_copy() const {
   return std::make_unique<NCProduct>(this->deep_copy());
+}
+
+std::unique_ptr<Expr> NCProduct::unique_move() && {
+  return std::make_unique<NCProduct>(std::move(*this));
 }
 
 void NCProduct::adjoint() {
