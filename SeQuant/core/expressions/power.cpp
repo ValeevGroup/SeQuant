@@ -42,7 +42,7 @@ bool Power::is_zero() const {
 std::wstring Power::to_latex() const { return io::latex::to_string(*this); }
 
 template <expr_holder E>
-void flatt_impl(E& expr) {
+void flatten_impl(E& expr) {
   auto create_constant = [](const auto& val) {
     if constexpr (std::same_as<std::remove_cvref_t<E>, ExprHolder>) {
       return Constant(val);
@@ -124,13 +124,13 @@ void flatt_impl(E& expr) {
 void Power::flatten(ExprPtr& expr) {
   if (!expr || !expr->is<Power>()) return;
 
-  flatt_impl(expr);
+  flatten_impl(expr);
 }
 
 void Power::flatten(ExprHolder& expr) {
   if (!expr->is<Power>()) return;
 
-  flatt_impl(expr);
+  flatten_impl(expr);
 }
 
 Expr::type_id_type Power::type_id() const { return get_type_id<Power>(); }

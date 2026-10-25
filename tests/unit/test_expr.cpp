@@ -920,7 +920,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->value() == Constant::scalar_type{1, -2});
     }
-    SECTION("Variabkle") {
+    SECTION("Variable") {
       const auto e = std::make_shared<Variable>(L"q");
       REQUIRE(e->conjugated() == false);
       REQUIRE_NOTHROW(e->adjoint());
@@ -1759,7 +1759,7 @@ TEST_CASE("expr", "[elements]") {
 
   SECTION("ExprHolder") {
     SECTION("Constructors") {
-      SECTION("from conrete") {
+      SECTION("from concrete") {
         ExprHolder holder1(Constant(1));
         REQUIRE(holder1->is<Constant>());
         REQUIRE(holder1->as<Constant>() == Constant(1));
@@ -1778,7 +1778,7 @@ TEST_CASE("expr", "[elements]") {
         REQUIRE(holder4->is<Sum>());
         REQUIRE(holder4->as<Sum>() == sum);
       }
-      SECTION("from  base") {
+      SECTION("from base") {
         ExprPtr expr = ex<Constant>(42);
 
         ExprHolder holder(*expr);
