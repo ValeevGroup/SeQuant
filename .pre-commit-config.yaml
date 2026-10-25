@@ -35,3 +35,8 @@ repos:
                 files: \.(c|cc|cxx|cpp|h|hpp|hxx|ipp)$
                 entry: bin/admin/clang-format.sh
                 args: [--style=file -i]
+            -   id: forbid-export-eval-runtime-includes
+                name: Forbid SeQuant/core/export from including eval's runtime execution headers (cell_registry.hpp, ordered_executor.hpp)
+                language: system
+                files: ^SeQuant/core/export/.*\.(c|cc|cxx|cpp|h|hpp|hxx|ipp)$
+                entry: perl -ne 'print if $m = /#\s*include\s*[<"][^>"]*\b(?:cell_registry|ordered_executor)\.hpp[>"]/; $t ||= $m; END{{exit $t}}'
