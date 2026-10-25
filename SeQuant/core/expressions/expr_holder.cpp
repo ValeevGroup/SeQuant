@@ -158,63 +158,75 @@ ExprHolder &ExprHolder::operator^=(const Expr &other) {
 void swap(ExprHolder &lhs, ExprHolder &rhs) { std::swap(lhs.expr_, rhs.expr_); }
 
 ExprHolder operator+(const Expr &lhs, const Expr &rhs) {
-  ExprHolder holder(lhs);
-  holder += rhs;
-
-  return holder;
+  return ExprHolder(lhs) + rhs;
 }
 
-ExprHolder operator+(const ExprHolder &lhs, const Expr &rhs) {
-  return static_cast<const Expr &>(lhs) + rhs;
+ExprHolder operator+(ExprHolder lhs, const Expr &rhs) {
+  lhs += rhs;
+
+  return lhs;
 }
 
 ExprHolder operator+(const Expr &lhs, const ExprHolder &rhs) {
-  return lhs + static_cast<const Expr &>(rhs);
+  return lhs + *rhs;
+}
+
+ExprHolder operator+(ExprHolder lhs, const ExprHolder &rhs) {
+  return std::move(lhs) + *rhs;
 }
 
 ExprHolder operator-(const Expr &lhs, const Expr &rhs) {
-  ExprHolder holder(lhs);
-  holder -= rhs;
-
-  return holder;
+  return ExprHolder(lhs) - rhs;
 }
 
-ExprHolder operator-(const ExprHolder &lhs, const Expr &rhs) {
-  return static_cast<const Expr &>(lhs) - rhs;
+ExprHolder operator-(ExprHolder lhs, const Expr &rhs) {
+  lhs -= rhs;
+
+  return lhs;
 }
 
 ExprHolder operator-(const Expr &lhs, const ExprHolder &rhs) {
-  return lhs - static_cast<const Expr &>(rhs);
+  return lhs - *rhs;
+}
+
+ExprHolder operator-(ExprHolder lhs, const ExprHolder &rhs) {
+  return std::move(lhs) - *rhs;
 }
 
 ExprHolder operator*(const Expr &lhs, const Expr &rhs) {
-  ExprHolder holder(lhs);
-  holder *= rhs;
-
-  return holder;
+  return ExprHolder(lhs) * rhs;
 }
 
-ExprHolder operator*(const ExprHolder &lhs, const Expr &rhs) {
-  return static_cast<const Expr &>(lhs) * rhs;
+ExprHolder operator*(ExprHolder lhs, const Expr &rhs) {
+  lhs *= rhs;
+
+  return lhs;
 }
 
 ExprHolder operator*(const Expr &lhs, const ExprHolder &rhs) {
-  return lhs * static_cast<const Expr &>(rhs);
+  return lhs * *rhs;
+}
+
+ExprHolder operator*(ExprHolder lhs, const ExprHolder &rhs) {
+  return std::move(lhs) * *rhs;
 }
 
 ExprHolder operator^(const Expr &lhs, const Expr &rhs) {
-  ExprHolder holder(lhs);
-  holder ^= rhs;
-
-  return holder;
+  return ExprHolder(lhs) ^ rhs;
 }
 
-ExprHolder operator^(const ExprHolder &lhs, const Expr &rhs) {
-  return static_cast<const Expr &>(lhs) ^ rhs;
+ExprHolder operator^(ExprHolder lhs, const Expr &rhs) {
+  lhs ^= rhs;
+
+  return lhs;
 }
 
 ExprHolder operator^(const Expr &lhs, const ExprHolder &rhs) {
-  return lhs ^ static_cast<const Expr &>(rhs);
+  return lhs ^ *rhs;
+}
+
+ExprHolder operator^(ExprHolder lhs, const ExprHolder &rhs) {
+  return std::move(lhs) ^ *rhs;
 }
 
 bool operator==(const ExprHolder &lhs, const ExprPtr &rhs) {

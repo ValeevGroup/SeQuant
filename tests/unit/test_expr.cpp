@@ -1892,6 +1892,59 @@ TEST_CASE("expr", "[elements]") {
       res *= Constant(3);
 
       REQUIRE_THAT(res, EquivalentTo("(1 + A - B) * 3"));
+
+      ExprHolder ncprod = Variable("A");
+      ncprod ^= Variable("B");
+      // N.B. NCProduct reports the type id of Product
+      REQUIRE(ncprod->is<Product>());
+      REQUIRE_FALSE(ncprod->as<Product>().is_commutative());
+      REQUIRE(ncprod->size() == 2);
+      REQUIRE(ncprod->as<Product>().factor(0)->as<Variable>().label() == L"A");
+      REQUIRE(ncprod->as<Product>().factor(1)->as<Variable>().label() == L"B");
+    }
+    SECTION("ExprHolder with ExprHolder arithmetic") {
+      const ExprHolder a = Variable("A");
+      const ExprHolder b = Variable("B");
+
+      REQUIRE_THAT(a + b, EquivalentTo("A + B"));
+      REQUIRE_THAT(a - b, EquivalentTo("A - B"));
+      REQUIRE_THAT(a * b, EquivalentTo("A * B"));
+
+      ExprHolder nc = a ^ b;
+      REQUIRE(nc->is<Product>());
+      REQUIRE_FALSE(nc->as<Product>().is_commutative());
+      REQUIRE(nc->as<Product>().factor(0)->as<Variable>().label() == L"A");
+      REQUIRE(nc->as<Product>().factor(1)->as<Variable>().label() == L"B");
+
+      // operands are left untouched
+      REQUIRE(a->as<Variable>().label() == L"A");
+      REQUIRE(b->as<Variable>().label() == L"B");
+
+      // rvalue operands
+      REQUIRE_THAT(ExprHolder(Variable("A")) + b, EquivalentTo("A + B"));
+      REQUIRE_THAT(a * ExprHolder(Variable("B")), EquivalentTo("A * B"));
+
+      // mixed with Expr
+      REQUIRE_THAT(a + Variable("C"), EquivalentTo("A + C"));
+      REQUIRE_THAT(Variable("C") - a, EquivalentTo("C - A"));
+      REQUIRE_THAT(Variable("C") * a, EquivalentTo("C * A"));
+    }
+    SECTION("ExprHolder with scalar arithmetic") {
+      const ExprHolder a = Variable("A");
+
+      REQUIRE_THAT(a + 2, EquivalentTo("A + 2"));
+      REQUIRE_THAT(2 + a, EquivalentTo("2 + A"));
+      REQUIRE_THAT(a - 2, EquivalentTo("A - 2"));
+      REQUIRE_THAT(2 - a, EquivalentTo("2 - A"));
+      REQUIRE_THAT(a * 2, EquivalentTo("2 A"));
+      REQUIRE_THAT(2 * a, EquivalentTo("2 A"));
+      REQUIRE_THAT(a / 2, EquivalentTo("1/2 A"));
+      REQUIRE_THAT(a / Constant(2), EquivalentTo("1/2 A"));
+      REQUIRE_THAT(a + Constant(2), EquivalentTo("A + 2"));
+
+      REQUIRE_THAT(a + L"B", EquivalentTo("A + B"));
+      REQUIRE_THAT(L"B" - a, EquivalentTo("B - A"));
+      REQUIRE_THAT(a * L"B", EquivalentTo("A * B"));
     }
     SECTION("Conversion to ExprPtr") {
       ExprHolder holder = Constant(3);

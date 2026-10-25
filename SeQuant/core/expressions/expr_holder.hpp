@@ -70,21 +70,29 @@ class ExprHolder {
 
 using ExprHolderList = std::initializer_list<ExprHolder>;
 
+// N.B. the left-hand side is taken by value such that an rvalue ExprHolder
+// is reused for the result instead of being copied. The overloads taking
+// ExprHolder for both arguments are needed to disambiguate between the ones
+// taking ExprHolder for only one of the arguments.
 ExprHolder operator+(const Expr &lhs, const Expr &rhs);
-ExprHolder operator+(const ExprHolder &lhs, const Expr &rhs);
+ExprHolder operator+(ExprHolder lhs, const Expr &rhs);
 ExprHolder operator+(const Expr &lhs, const ExprHolder &rhs);
+ExprHolder operator+(ExprHolder lhs, const ExprHolder &rhs);
 
 ExprHolder operator-(const Expr &lhs, const Expr &rhs);
-ExprHolder operator-(const ExprHolder &lhs, const Expr &rhs);
+ExprHolder operator-(ExprHolder lhs, const Expr &rhs);
 ExprHolder operator-(const Expr &lhs, const ExprHolder &rhs);
+ExprHolder operator-(ExprHolder lhs, const ExprHolder &rhs);
 
 ExprHolder operator*(const Expr &lhs, const Expr &rhs);
-ExprHolder operator*(const ExprHolder &lhs, const ExprHolder &rhs);
-ExprHolder operator*(const Expr &lhs, const Expr &rhs);
+ExprHolder operator*(ExprHolder lhs, const Expr &rhs);
+ExprHolder operator*(const Expr &lhs, const ExprHolder &rhs);
+ExprHolder operator*(ExprHolder lhs, const ExprHolder &rhs);
 
 ExprHolder operator^(const Expr &lhs, const Expr &rhs);
-ExprHolder operator^(const ExprHolder &lhs, const Expr &rhs);
+ExprHolder operator^(ExprHolder lhs, const Expr &rhs);
 ExprHolder operator^(const Expr &lhs, const ExprHolder &rhs);
+ExprHolder operator^(ExprHolder lhs, const ExprHolder &rhs);
 
 bool operator==(const ExprHolder &lhs, const ExprPtr &rhs);
 bool operator==(const ExprPtr &lhs, const ExprHolder &rhs);
