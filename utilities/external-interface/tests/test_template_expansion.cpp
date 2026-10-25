@@ -7,6 +7,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include <string>
+#include <vector>
+
 using namespace sequant;
 using namespace sequant::util::extint;
 using json = nlohmann::json;
@@ -292,5 +295,139 @@ TEST_CASE("template expansion rejects malformed uses", "[extint]") {
                                         {"id", "a.b"},
                                         {"parameters", {{"needed", 1}}}}})),
         Exception);
+  }
+}
+
+TEST_CASE("template expansion handles conditional steps", "[extint]") {
+  const json templates = json::parse(R"({
+    "variant": {
+      "parameters": {
+        "src": { "required": true },
+        "replay_src": { "default": [] },
+        "replay": { "default": null }
+      },
+      "steps": [
+        { "id": "opt", "kind": "optimize", "inputs": "${src}" },
+        { "id": "opt_replay", "kind": "optimize", "inputs": "${replay_src}",
+          "when": "${replay_src}", "options": { "replay": "${replay}" } },
+        { "id": "tree", "kind": "to_export_tree", "inputs": "opt" },
+        { "id": "tree_replay", "kind": "to_export_tree",
+          "inputs": "opt_replay", "when": "${replay_src}" }
+      ]
+    },
+    "export": {
+      "parameters": { "trees": { "required": true },
+                      "grouping": { "required": true } },
+      "steps": [
+        { "id": "deps", "kind": "dependencies", "inputs": "${trees}" },
+        { "id": "cse", "kind": "cse", "inputs": "deps",
+          "options": { "merge_inputs": "${values(grouping)}" } },
+        { "id": "out", "kind": "export", "inputs": "cse",
+          "options": { "grouping": "${grouping}" } }
+      ]
+    }
+  })");
+
+  auto ids = [](const json &steps) {
+    std::vector<std::string> result;
+    for (const json &step : steps) {
+      result.push_back(step.at("id"));
+    }
+    return result;
+  };
+  using Ids = std::vector<std::string>;
+
+  SECTION("a step is kept iff its condition is truthy") {
+    json out = expand(templates, json::parse(R"([
+      { "template": "variant", "id": "a", "parameters": { "src": "x" } }
+    ])"));
+    REQUIRE(ids(out) == Ids{"a_opt", "a_tree"});
+    REQUIRE_FALSE(out.at(0).contains("when"));
+
+    out = expand(templates, json::parse(R"([
+      { "template": "variant", "id": "a", "parameters":
+        { "src": "x", "replay_src": ["y"], "replay": { "weight": 3 } } }
+    ])"));
+    REQUIRE(ids(out) ==
+            Ids{"a_opt", "a_opt_replay", "a_tree", "a_tree_replay"});
+    REQUIRE(out.at(1).at("inputs") == json::array({"y"}));
+    REQUIRE(out.at(1).at("options").at("replay").at("weight") == 3);
+    REQUIRE_FALSE(out.at(3).contains("when"));
+  }
+
+  SECTION("a literal condition is taken as is") {
+    const json lit = json::parse(R"({
+      "t": { "steps": [
+        { "id": "a", "kind": "validate", "inputs": "x", "when": false },
+        { "id": "b", "kind": "validate", "inputs": "x", "when": true }
+      ] }
+    })");
+    REQUIRE(ids(expand(lit, json::parse(R"([{"template":"t","id":"p"}])"))) ==
+            Ids{"p_b"});
+  }
+
+  SECTION("a reference to a skipped step is namespaced, not captured") {
+    const json t = json::parse(R"({
+      "t": { "steps": [
+        { "id": "a", "kind": "validate", "inputs": "x", "when": false },
+        { "id": "b", "kind": "validate", "inputs": "a" }
+      ] }
+    })");
+    // The top-level 'a' must not be mistaken for the skipped one
+    const json out = expand(t, json::parse(R"([
+      { "id": "a", "kind": "validate", "inputs": "x" },
+      { "template": "t", "id": "p" }
+    ])"));
+    REQUIRE(ids(out) == Ids{"a", "p_b"});
+    REQUIRE(out.at(1).at("inputs") == "p_a");
+  }
+
+  SECTION("optional references resolve against the expanded steps") {
+    const json use_export = json::parse(R"({
+      "template": "export", "id": "e", "parameters": {
+        "trees": ["a_tree", "a_tree_replay?"],
+        "grouping": { "Main": "a_opt", "Init": "a_opt_replay.persistent?" } }
+    })");
+
+    json steps =
+        json::array({json::parse(
+                         R"({ "template": "variant", "id": "a", "parameters":
+                  { "src": "x" } })"),
+                     use_export});
+    json out = expand(templates, steps);
+    REQUIRE(ids(out) == Ids{"a_opt", "a_tree", "e_deps", "e_cse", "e_out"});
+    REQUIRE(out.at(2).at("inputs") == json::array({"a_tree"}));
+    REQUIRE(out.at(3).at("options").at("merge_inputs") ==
+            json::array({"a_opt"}));
+    REQUIRE(out.at(4).at("options").at("grouping") ==
+            json::parse(R"({ "Main": "a_opt" })"));
+
+    steps[0]["parameters"]["replay_src"] = json::array({"y"});
+    out = expand(templates, steps);
+    REQUIRE(out.size() == 7);
+    REQUIRE(out.at(4).at("inputs") == json::array({"a_tree", "a_tree_replay"}));
+    REQUIRE(out.at(6).at("options").at("grouping") ==
+            json::parse(R"({ "Main": "a_opt",
+                             "Init": "a_opt_replay.persistent" })"));
+  }
+
+  SECTION("a step without any remaining input is removed in turn") {
+    const json out = expand(json::object(), json::parse(R"([
+      { "id": "a", "kind": "validate", "inputs": "x" },
+      { "id": "b", "kind": "cse", "inputs": ["gone?", "nope.sub?"] },
+      { "id": "c", "kind": "export", "inputs": "b?",
+        "inherit_options_from": "b?" },
+      { "id": "d", "kind": "export", "inputs": "a",
+        "inherit_options_from": "c?" }
+    ])"));
+    REQUIRE(ids(out) == Ids{"a", "d"});
+    REQUIRE_FALSE(out.at(1).contains("inherit_options_from"));
+  }
+
+  SECTION("a reference without a marker is left alone") {
+    const json out = expand(json::object(), json::parse(R"([
+      { "id": "a", "kind": "cse", "inputs": ["missing"] }
+    ])"));
+    REQUIRE(out.at(0).at("inputs") == json::array({"missing"}));
   }
 }
