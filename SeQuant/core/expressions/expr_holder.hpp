@@ -11,9 +11,13 @@ namespace sequant {
 class Expr;
 class ExprPtr;
 
+/// Holds a single expression with value semantics: copying an ExprHolder
+/// copies the held expression (deep copy) and no two ExprHolder objects ever
+/// share an expression. ExprHolder is a regular, std::copyable type and can
+/// therefore be used in standard containers and ranges.
 class ExprHolder {
  public:
-  explicit ExprHolder(const ExprHolder &holder);
+  ExprHolder(const ExprHolder &holder);
   ExprHolder(ExprHolder &&holder) = default;
 
   explicit ExprHolder(const Expr &expr);

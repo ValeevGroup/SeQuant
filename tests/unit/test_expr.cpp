@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <compare>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -1763,8 +1764,6 @@ TEST_CASE("expr", "[elements]") {
         REQUIRE(holder2->is<Variable>());
         REQUIRE(holder2->as<Variable>() == Variable("bla"));
 
-        // Note: copy-ctor is explicit so in order for this "assignment" to
-        // work, we need to assign rvalues
         Product prod(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
         ExprHolder holder3 = Product(prod);
         REQUIRE(holder3->is<Product>());
@@ -1802,6 +1801,25 @@ TEST_CASE("expr", "[elements]") {
 
       REQUIRE(copy->is<Variable>());
       REQUIRE(holder->is<Constant>());
+
+      ExprHolder copy2 = holder;
+      REQUIRE(copy2->is<Constant>());
+      REQUIRE(&*copy2 != &*holder);
+    }
+    SECTION("copyable") {
+      STATIC_REQUIRE(std::copyable<ExprHolder>);
+
+      ExprHolder holder = Variable("A");
+      std::vector<ExprHolder> holders{holder, holder};
+      REQUIRE(holders.size() == 2);
+      REQUIRE(holders[0]->is<Variable>());
+      REQUIRE(&*holders[0] != &*holder);
+      REQUIRE(&*holders[0] != &*holders[1]);
+
+      ExprHolderList list{holder, Constant(2)};
+      std::vector<ExprHolder> from_list(list);
+      REQUIRE(from_list.size() == 2);
+      REQUIRE(from_list[1]->is<Constant>());
     }
     SECTION("conversion to Expr &") {
       bool passed1 = false;
