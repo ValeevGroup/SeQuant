@@ -12,7 +12,7 @@ namespace sequant {
 class Expr;
 class ResultExpr;
 class ExprPtr;
-class ExprContainer;
+class ExprHolder;
 
 class Labeled;
 class Constant;

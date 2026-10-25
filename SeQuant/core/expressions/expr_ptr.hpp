@@ -11,7 +11,7 @@
 
 namespace sequant {
 
-class ExprContainer;
+class ExprHolder;
 
 /// @brief ExprPtr is a multiple-owner smart pointer to Expr
 
@@ -26,8 +26,8 @@ class ExprPtr : public std::shared_ptr<Expr> {
   ExprPtr() = default;
   ExprPtr(const ExprPtr &) = default;
   ExprPtr(ExprPtr &&) = default;
-  explicit ExprPtr(const ExprContainer &container);
-  ExprPtr(ExprContainer &&container);
+  explicit ExprPtr(const ExprHolder &holder);
+  ExprPtr(ExprHolder &&holder);
   template <typename E, typename = std::enable_if_t<
                             std::is_same_v<std::remove_const_t<E>, Expr> ||
                             std::is_base_of_v<Expr, std::remove_const_t<E>>>>

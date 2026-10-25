@@ -197,7 +197,7 @@ struct LexicographicCompareOptions {
 /// @endcode
 class Expr : public std::enable_shared_from_this<Expr> {
  public:
-  friend class ExprContainer;
+  friend class ExprHolder;
 
   using hash_type = std::size_t;
   using type_id_type = std::uint64_t;

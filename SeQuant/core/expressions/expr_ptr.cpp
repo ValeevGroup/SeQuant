@@ -1,7 +1,7 @@
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
-#include <SeQuant/core/expressions/expr_container.hpp>
+#include <SeQuant/core/expressions/expr_holder.hpp>
 #include <SeQuant/core/expressions/expr_operators.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
@@ -12,10 +12,10 @@
 
 namespace sequant {
 
-ExprPtr::ExprPtr(const ExprContainer &container) : ExprPtr(container.copy()) {}
+ExprPtr::ExprPtr(const ExprHolder &holder) : ExprPtr(holder.copy()) {}
 
-ExprPtr::ExprPtr(ExprContainer &&container)
-    : ExprPtr(std::move(container).take_expr()) {}
+ExprPtr::ExprPtr(ExprHolder &&holder)
+    : ExprPtr(std::move(holder).take_expr()) {}
 
 ExprPtr ExprPtr::clone() const & {
   if (!*this) return {};

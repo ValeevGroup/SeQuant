@@ -41,7 +41,7 @@ constexpr bool is_power_v = meta::is_same_v<Power, T>;
 
 template <typename T>
 concept expr_holder = std::same_as<std::remove_cvref_t<T>, ExprPtr> ||
-                      std::same_as<std::remove_cvref_t<T>, ExprContainer>;
+                      std::same_as<std::remove_cvref_t<T>, ExprHolder>;
 
 }  // namespace sequant
 

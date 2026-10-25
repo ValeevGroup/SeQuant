@@ -1726,89 +1726,89 @@ TEST_CASE("expr", "[elements]") {
     }
   }
 
-  SECTION("ExprContainer") {
+  SECTION("ExprHolder") {
     SECTION("Constructors") {
       SECTION("from conrete") {
-        ExprContainer cont1(Constant(1));
-        REQUIRE(cont1->is<Constant>());
-        REQUIRE(cont1->as<Constant>() == Constant(1));
+        ExprHolder holder1(Constant(1));
+        REQUIRE(holder1->is<Constant>());
+        REQUIRE(holder1->as<Constant>() == Constant(1));
 
-        ExprContainer cont2(Variable("bla"));
-        REQUIRE(cont2->is<Variable>());
-        REQUIRE(cont2->as<Variable>() == Variable("bla"));
+        ExprHolder holder2(Variable("bla"));
+        REQUIRE(holder2->is<Variable>());
+        REQUIRE(holder2->as<Variable>() == Variable("bla"));
 
         Product prod(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
-        ExprContainer cont3(prod);
-        REQUIRE(cont3->is<Product>());
-        REQUIRE(cont3->as<Product>() == prod);
+        ExprHolder holder3(prod);
+        REQUIRE(holder3->is<Product>());
+        REQUIRE(holder3->as<Product>() == prod);
 
         Sum sum(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
-        ExprContainer cont4(sum);
-        REQUIRE(cont4->is<Sum>());
-        REQUIRE(cont4->as<Sum>() == sum);
+        ExprHolder holder4(sum);
+        REQUIRE(holder4->is<Sum>());
+        REQUIRE(holder4->as<Sum>() == sum);
       }
       SECTION("from  base") {
         ExprPtr expr = ex<Constant>(42);
 
-        ExprContainer cont(*expr);
-        REQUIRE(cont->is<Constant>());
-        REQUIRE(cont->as<Constant>().value() == 42);
+        ExprHolder holder(*expr);
+        REQUIRE(holder->is<Constant>());
+        REQUIRE(holder->as<Constant>().value() == 42);
       }
       SECTION("conversion via 'assignment'") {
-        ExprContainer cont1 = Constant(1);
-        REQUIRE(cont1->is<Constant>());
-        REQUIRE(cont1->as<Constant>() == Constant(1));
+        ExprHolder holder1 = Constant(1);
+        REQUIRE(holder1->is<Constant>());
+        REQUIRE(holder1->as<Constant>() == Constant(1));
 
-        ExprContainer cont2 = Variable("bla");
-        REQUIRE(cont2->is<Variable>());
-        REQUIRE(cont2->as<Variable>() == Variable("bla"));
+        ExprHolder holder2 = Variable("bla");
+        REQUIRE(holder2->is<Variable>());
+        REQUIRE(holder2->as<Variable>() == Variable("bla"));
 
         // Note: copy-ctor is explicit so in order for this "assignment" to
         // work, we need to assign rvalues
         Product prod(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
-        ExprContainer cont3 = Product(prod);
-        REQUIRE(cont3->is<Product>());
-        REQUIRE(cont3->as<Product>() == prod);
+        ExprHolder holder3 = Product(prod);
+        REQUIRE(holder3->is<Product>());
+        REQUIRE(holder3->as<Product>() == prod);
 
         Sum sum(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
-        ExprContainer cont4 = Sum(sum);
-        REQUIRE(cont4->is<Sum>());
-        REQUIRE(cont4->as<Sum>() == sum);
+        ExprHolder holder4 = Sum(sum);
+        REQUIRE(holder4->is<Sum>());
+        REQUIRE(holder4->as<Sum>() == sum);
       }
     }
     SECTION("Assignment") {
-      ExprContainer cont = Constant(1);
-      REQUIRE(cont->is<Constant>());
-      REQUIRE(cont->as<Constant>() == Constant(1));
+      ExprHolder holder = Constant(1);
+      REQUIRE(holder->is<Constant>());
+      REQUIRE(holder->as<Constant>() == Constant(1));
 
-      cont = Variable("bla");
-      REQUIRE(cont->is<Variable>());
-      REQUIRE(cont->as<Variable>() == Variable("bla"));
+      holder = Variable("bla");
+      REQUIRE(holder->is<Variable>());
+      REQUIRE(holder->as<Variable>() == Variable("bla"));
 
       Product prod(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
-      cont = Product(prod);
-      REQUIRE(cont->is<Product>());
-      REQUIRE(cont->as<Product>() == prod);
+      holder = Product(prod);
+      REQUIRE(holder->is<Product>());
+      REQUIRE(holder->as<Product>() == prod);
 
       Sum sum(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
-      cont = Sum(sum);
-      REQUIRE(cont->is<Sum>());
-      REQUIRE(cont->as<Sum>() == sum);
+      holder = Sum(sum);
+      REQUIRE(holder->is<Sum>());
+      REQUIRE(holder->as<Sum>() == sum);
     }
     SECTION("value semantics") {
-      ExprContainer cont = Constant(1);
-      ExprContainer copy(cont);
+      ExprHolder holder = Constant(1);
+      ExprHolder copy(holder);
       copy = Variable("test");
 
       REQUIRE(copy->is<Variable>());
-      REQUIRE(cont->is<Constant>());
+      REQUIRE(holder->is<Constant>());
     }
     SECTION("conversion to Expr &") {
       bool passed1 = false;
 
       auto func1 = [&passed1](Expr &) { passed1 = true; };
 
-      ExprContainer expr = Constant(5);
+      ExprHolder expr = Constant(5);
       func1(expr);
 
       REQUIRE(passed1);
@@ -1829,15 +1829,15 @@ TEST_CASE("expr", "[elements]") {
     }
     SECTION("freestanding Expr arithmetic") {
       // This allows to use arithmetic directly on Expr & instances (instead of
-      // requiring ExprPtr or ExprContainer wrappers)
-      ExprContainer res = Constant(1) + Variable("One");
+      // requiring ExprPtr or ExprHolder wrappers)
+      ExprHolder res = Constant(1) + Variable("One");
       REQUIRE_THAT(res, EquivalentTo("1 + One"));
 
       res = Variable("A") * Tensor("T", bra({"a1"}), ket()) - Constant(42);
       REQUIRE_THAT(res, EquivalentTo("A * T{a1}:N-N-N - 42"));
     }
-    SECTION("In-place ExprContainer arithmetic") {
-      ExprContainer res = Constant(1);
+    SECTION("In-place ExprHolder arithmetic") {
+      ExprHolder res = Constant(1);
       res += Variable("A");
       res -= Variable("B");
       res *= Constant(3);
@@ -1845,21 +1845,21 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_THAT(res, EquivalentTo("(1 + A - B) * 3"));
     }
     SECTION("Conversion to ExprPtr") {
-      ExprContainer cont = Constant(3);
+      ExprHolder holder = Constant(3);
 
-      ExprPtr ptr = std::move(cont);
+      ExprPtr ptr = std::move(holder);
       REQUIRE(ptr->is<Constant>());
       REQUIRE(ptr->as<Constant>().value() == 3);
 
-      cont = Variable("A");
+      holder = Variable("A");
       // Copy-conversion-ctor is explicit
-      ptr = ExprPtr(cont);
+      ptr = ExprPtr(holder);
       REQUIRE(ptr->is<Variable>());
       REQUIRE(ptr->as<Variable>().label() == L"A");
 
       // Ensure that ptr actually points to a copy
       ptr->as<Variable>().set_label(L"B");
-      REQUIRE(cont->as<Variable>().label() == L"A");
+      REQUIRE(holder->as<Variable>().label() == L"A");
       REQUIRE(ptr->as<Variable>().label() == L"B");
     }
     SECTION("Conversion from ExprPtr") {
@@ -1867,13 +1867,13 @@ TEST_CASE("expr", "[elements]") {
       // Even a moved-from ExpPtr might point to an object that is co-owned by
       // another ExprPtr and thus "resource stealing" is not possible.
       ExprPtr ptr = ex<Constant>(2);
-      ExprContainer cont(ptr);
-      REQUIRE(cont->is<Constant>());
-      REQUIRE(cont->as<Constant>().value() == 2);
+      ExprHolder holder(ptr);
+      REQUIRE(holder->is<Constant>());
+      REQUIRE(holder->as<Constant>().value() == 2);
 
       ptr->as<Constant>() = Constant(3);
       REQUIRE(ptr->as<Constant>().value() == 3);
-      REQUIRE(cont->as<Constant>().value() == 2);
+      REQUIRE(holder->as<Constant>().value() == 2);
     }
   }
 

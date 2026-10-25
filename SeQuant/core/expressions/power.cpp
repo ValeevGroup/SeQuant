@@ -1,4 +1,4 @@
-#include <SeQuant/core/expressions/expr_container.hpp>
+#include <SeQuant/core/expressions/expr_holder.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/hash.hpp>
@@ -13,9 +13,9 @@
 namespace sequant {
 
 Power::Power(const ExprPtr& base, exponent_type exponent)
-    : Power(ExprContainer(base), std::move(exponent)) {}
+    : Power(ExprHolder(base), std::move(exponent)) {}
 
-Power::Power(ExprContainer base, exponent_type exponent)
+Power::Power(ExprHolder base, exponent_type exponent)
     : base_{std::move(base)}, exponent_{std::move(exponent)} {
   SEQUANT_ASSERT(base_->is<Constant>() || base_->is<Variable>());
   // 0^n is defined only for n >= 0 (0^0 = 1 by convention)
@@ -23,7 +23,7 @@ Power::Power(ExprContainer base, exponent_type exponent)
                  exponent_ >= 0);
 }
 
-const ExprContainer& Power::base() const { return base_; }
+const ExprHolder& Power::base() const { return base_; }
 
 const Power::exponent_type& Power::exponent() const { return exponent_; }
 
@@ -44,7 +44,7 @@ std::wstring Power::to_latex() const { return io::latex::to_string(*this); }
 template <expr_holder E>
 void flatt_impl(E& expr) {
   auto create_constant = [](const auto& val) {
-    if constexpr (std::same_as<std::remove_cvref_t<E>, ExprContainer>) {
+    if constexpr (std::same_as<std::remove_cvref_t<E>, ExprHolder>) {
       return Constant(val);
     } else {
       return ex<Constant>(val);
@@ -127,7 +127,7 @@ void Power::flatten(ExprPtr& expr) {
   flatt_impl(expr);
 }
 
-void Power::flatten(ExprContainer& expr) {
+void Power::flatten(ExprHolder& expr) {
   if (!expr->is<Power>()) return;
 
   flatt_impl(expr);

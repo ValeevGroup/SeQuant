@@ -3,7 +3,7 @@
 
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
-#include <SeQuant/core/expressions/expr_container.hpp>
+#include <SeQuant/core/expressions/expr_holder.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/traits.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
@@ -31,7 +31,7 @@ class Power : public Expr {
   /// @param[in] base the base expression; must be a Constant or Variable.
   /// @param[in] exponent rational exponent
   Power(const ExprPtr& base, exponent_type exponent);
-  Power(ExprContainer base, exponent_type exponent);
+  Power(ExprHolder base, exponent_type exponent);
 
   /// @overload constructs a `Variable` base from @p label
   template <typename L>
@@ -47,7 +47,7 @@ class Power : public Expr {
       : Power(ex<Constant>(std::forward<V>(value)), std::move(exponent)) {}
 
   /// @return the base expression
-  const ExprContainer& base() const;
+  const ExprHolder& base() const;
 
   /// @return the rational exponent
   const exponent_type& exponent() const;
@@ -90,7 +90,7 @@ class Power : public Expr {
   /// On success, @p expr is rebound to the folded expression; otherwise it
   /// is left unchanged.
   static void flatten(ExprPtr& expr);
-  static void flatten(ExprContainer& expr);
+  static void flatten(ExprHolder& expr);
 
   static constexpr type_rank_type type_rank = expr_type_rank::power;
   static constexpr std::string static_type_name(
@@ -119,7 +119,7 @@ class Power : public Expr {
   std::unique_ptr<Expr> unique_copy() const override;
 
  private:
-  ExprContainer base_;
+  ExprHolder base_;
   exponent_type exponent_;
   bool conjugated_ = false;
 
