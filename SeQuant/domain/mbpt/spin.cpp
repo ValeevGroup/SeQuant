@@ -1098,15 +1098,15 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
   if (expr->is<Sum>()) {
     // Canonicalize and merge each traced contribution before retaining the
     // next one, so equivalent terms do not accumulate across input summands.
-    HashingAccumulator traced;
-    for (const auto& term : *expr) {
-      auto contribution = options.naive_spintrace
-                              ? spintrace(term, ext_idxs)
-                              : closed_shell_spintrace(term, ext_idxs);
-      canonicalize(contribution);
-      traced.append(std::move(contribution));
-    }
-    st_expr = traced.make_expr();
+    st_expr = transform_sum_expr(
+        *expr,
+        [&](const ExprPtr& term) {
+          auto contribution = options.naive_spintrace
+                                  ? spintrace(term, ext_idxs)
+                                  : closed_shell_spintrace(term, ext_idxs);
+          return canonicalize(std::move(contribution));
+        },
+        {.canonicalize = false});
   } else {
     st_expr = options.naive_spintrace ? spintrace(expr, ext_idxs)
                                       : closed_shell_spintrace(expr, ext_idxs);

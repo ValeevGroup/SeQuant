@@ -23,6 +23,7 @@
 #include <libperm/Utils.hpp>
 
 #include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/view/iota.hpp>
 #include <range/v3/view/transform.hpp>
 
 #include <algorithm>
@@ -517,30 +518,32 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
     SEQUANT_ASSERT(num_perms == computed_coefficients->cols());
   }
 
+  const auto perm_ranks =
+      ranges::views::iota(std::size_t{0}, static_cast<std::size_t>(num_perms));
   for (std::size_t i = 0; i < result_exprs.size(); ++i) {
-    HashingAccumulator result_acc;
     perm::Permutation reference = perm::unrank(ranks.at(i), n_particles);
     reference->invert();
 
-    for (std::size_t rank = 0; rank < num_perms; ++rank) {
-      perm::Permutation perm = perm::unrank(rank, n_particles);
-      perm->postMultiply(reference);
+    // Merge canonical terms before retaining the next permuted expression.
+    result_exprs.at(i).expression() = transform_sum_expr(
+        perm_ranks,
+        [&](std::size_t rank) {
+          perm::Permutation perm = perm::unrank(rank, n_particles);
+          perm->postMultiply(reference);
 
-      sequant::rational coeff =
-          (n_particles <= max_rank_hardcoded_biorthogonalizer_matrix)
-              ? (*hardcoded_coefficients)(ranks.at(i), rank)
-              : to_rational((*computed_coefficients)(ranks.at(i), rank),
-                            threshold);
+          sequant::rational coeff =
+              (n_particles <= max_rank_hardcoded_biorthogonalizer_matrix)
+                  ? (*hardcoded_coefficients)(ranks.at(i), rank)
+                  : to_rational((*computed_coefficients)(ranks.at(i), rank),
+                                threshold);
 
-      auto contribution =
-          ex<Constant>(coeff) *
-          create_expr_for(externals.at(i), perm, externals, original_exprs);
-      // Merge canonical terms before retaining the next permuted expression.
-      simplify(contribution);
-      result_acc.append(std::move(contribution));
-    }
-
-    result_exprs.at(i).expression() = result_acc.make_expr();
+          auto contribution =
+              ex<Constant>(coeff) *
+              create_expr_for(externals.at(i), perm, externals, original_exprs);
+          simplify(contribution);
+          return contribution;
+        },
+        {.canonicalize = false});
     simplify(result_exprs.at(i).expression());
   }
 }
