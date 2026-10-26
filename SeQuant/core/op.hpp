@@ -39,6 +39,7 @@
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/range/access.hpp>
 #include <range/v3/range/primitives.hpp>
+#include <range/v3/range/traits.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/counted.hpp>
 #include <range/v3/view/reverse.hpp>
@@ -1075,6 +1076,10 @@ class NormalOperator : public Operator<S>,
     // Sort borrowed indices to compare multisets without copying protoindices;
     // the operator owns the indices throughout this comparison.
     auto sorted_indices = [](auto &&idx_view) {
+      static_assert(
+          std::is_lvalue_reference_v<ranges::range_reference_t<
+              std::remove_cvref_t<decltype(idx_view)>>>,
+          "the view must yield the operator's own indices, not copies");
       container::svector<const Index *> indices;
       for (const Index &idx : idx_view) indices.push_back(&idx);
       ranges::sort(indices,
