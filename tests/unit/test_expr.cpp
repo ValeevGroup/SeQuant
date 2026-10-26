@@ -1801,6 +1801,21 @@ TEST_CASE("sum_move_omits_zeros_and_combines_constants", "[elements]") {
   }
 }
 
+TEST_CASE("sum_constant_fold", "[elements]") {
+  using namespace sequant;
+
+  SECTION("folding leaves the caller's constants intact") {
+    auto c1 = ex<Constant>(1);
+    auto c2 = ex<Constant>(2);
+    Sum result(Sum::summands_type{c1, c2, ex<Variable>(L"x")},
+               Sum::move_only_tag{});
+    REQUIRE(result.size() == 2);
+    REQUIRE(result.summand(0)->as<Constant>().value() == 3);
+    REQUIRE(c1->as<Constant>().value() == 1);
+    REQUIRE(c2->as<Constant>().value() == 2);
+  }
+}
+
 // CProduct before Product: a derived type computed first must not take, or
 // collide with, its base's id
 TEST_CASE("expr_type_id_derived", "[elements]") {

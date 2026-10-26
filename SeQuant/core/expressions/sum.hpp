@@ -157,8 +157,8 @@ class Sum : public Expr {
                                 // to sum up constants in the move-only ctor,
                                 // append and prepend
 
-  /// adds @p constant to the constant summand recorded by
-  /// constant_summand_idx_, which must be set
+  /// replaces the constant summand recorded by constant_summand_idx_, which
+  /// must be set, with its sum with @p constant
   void fold_constant(const Constant &constant);
 
   /// @return the hash of this object

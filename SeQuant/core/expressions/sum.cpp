@@ -93,8 +93,13 @@ Sum &Sum::prepend(ExprPtr summand) {
 
 void Sum::fold_constant(const Constant &constant) {
   SEQUANT_ASSERT(constant_summand_idx_);
-  SEQUANT_ASSERT(summands_.at(*constant_summand_idx_)->is<Constant>());
-  summands_[*constant_summand_idx_].as<Constant>() += constant;
+  auto &recorded = summands_.at(*constant_summand_idx_);
+  SEQUANT_ASSERT(recorded->is<Constant>());
+  // replace rather than modify in place: the move-only ctor does not clone,
+  // so the recorded constant may still be held by the caller
+  auto folded = std::make_shared<Constant>(recorded->as<Constant>());
+  *folded += constant;
+  recorded = std::move(folded);
 }
 
 const Sum::summands_type &Sum::summands() const { return summands_; }
