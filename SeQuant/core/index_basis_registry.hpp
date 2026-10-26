@@ -1419,6 +1419,9 @@ class IndexBasisRegistry {
   /// @sa IndexBasisRegistry::is_base
   /// @return (memoized) set of base IndexSpace objects, sorted in the order of
   /// increasing type()
+  /// @note the memoized set is read without locking, so it may be called from
+  /// several threads at once, but the registry must not be mutated (or
+  /// destroyed) while any of them reads it or uses the returned reference
   const std::vector<IndexSpace>& base_spaces() const {
     if (const auto* cached =
             base_spaces_published_.load(std::memory_order_acquire))
