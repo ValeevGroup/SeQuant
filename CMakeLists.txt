@@ -145,6 +145,9 @@ add_feature_info(SEQUANT_EVAL_TILEDARRAY SEQUANT_TILEDARRAY "Enable TiledArray e
 option(SEQUANT_TAPP "Enable TAPP eval backend" ${SEQUANT_EVAL_TESTS})
 add_feature_info(SEQUANT_EVAL_TAPP SEQUANT_TAPP "Enable TAPP eval backend")
 
+# options and helpers for fetched (and possibly installed) dependencies
+include(SeQuantFetchedDependencies)
+
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 
@@ -906,6 +909,8 @@ install(FILES
 add_custom_target_subproject(sequant install-config
         COMMAND ${CMAKE_COMMAND} -DCOMPONENT=sequant-config -P ${PROJECT_BINARY_DIR}/cmake_install.cmake
         COMMENT "Installing SeQuant config components")
+
+sequant_report_fetched_dependencies()
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     feature_summary(WHAT ALL
