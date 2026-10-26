@@ -9,6 +9,12 @@ set(SEQUANT_INSTALL_FETCHED_BACKENDS "" CACHE STRING "Fetched eval backends to i
 option(SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES "Allow installing a fetched dependency over a different version already installed in the prefix" OFF)
 add_feature_info(SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES "Overwrite different versions of installed dependencies")
 
+# SEQUANT_FETCHED_<DEP>: whether SeQuant fetched <DEP>; a FindOrFetch module sets it, so a dependency
+# whose target a parent project provided (the module never runs) counts as not fetched
+foreach (_dep RANGEV3 POLYMORPHICVARIANT LIBPERM JSON TILEDARRAY BTAS TAPP)
+    set(SEQUANT_FETCHED_${_dep} FALSE)
+endforeach ()
+
 # validate SEQUANT_INSTALL_FETCHED_BACKENDS, normalizing the spelling of each entry
 set(_sequant_known_backends TiledArray BTAS TAPP)
 # the SeQuant module of each backend

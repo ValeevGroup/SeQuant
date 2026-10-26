@@ -656,7 +656,8 @@ if (SEQUANT_BTAS)
         FetchContent_GetProperties(BTAS)
     endif ()
     if (SEQUANT_FETCHED_TILEDARRAY AND btas_POPULATED)
-        # BTAS is part of the fetched TiledArray and is installed (and recorded) only together with it
+        # BTAS was fetched by the fetched TiledArray and is installed only together with it
+        set(SEQUANT_FETCHED_BTAS TRUE)
         set(SEQUANT_EXPORTS_BTAS ${SEQUANT_EXPORTS_TILEDARRAY})
         if (NOT SEQUANT_EXPORTS_BTAS)
             unset(BTAS_CONFIG)
