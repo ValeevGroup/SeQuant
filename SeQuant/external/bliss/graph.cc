@@ -4308,9 +4308,7 @@ bool Graph::is_automorphism(const std::vector<unsigned int>& perm) const {
       edges1.push_back(perm[*ei]);
 
     const Vertex& v2 = vertices[perm[i]];
-    edges2.clear();
-    for (auto ei = v2.edges.begin(); ei != v2.edges.end(); ei++)
-      edges2.push_back(*ei);
+    edges2.assign(v2.edges.begin(), v2.edges.end());
 
     std::sort(edges1.begin(), edges1.end());
     edges1.erase(std::unique(edges1.begin(), edges1.end()), edges1.end());
