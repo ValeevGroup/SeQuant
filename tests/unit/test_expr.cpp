@@ -19,6 +19,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -43,6 +44,11 @@ struct Dummy : public sequant::Expr {
   sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
   void adjoint() override {}
   bool static_equal(const sequant::Expr &) const override { return true; }
+  std::weak_ordering static_lexicographic_compare(
+      const sequant::Expr &,
+      const sequant::LexicographicCompareOptions &) const override {
+    return std::weak_ordering::equivalent;
+  }
 };
 
 template <typename T>
@@ -113,6 +119,23 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
            static_cast<const base_type &>(static_cast<const VecExpr &>(that));
   }
 
+  std::weak_ordering static_lexicographic_compare(
+      const sequant::Expr &that,
+      const sequant::LexicographicCompareOptions &opts) const override {
+    const auto &that_cast =
+        static_cast<const base_type &>(static_cast<const VecExpr &>(that));
+    return std::lexicographical_compare_three_way(
+        base_type::begin(), base_type::end(), that_cast.begin(),
+        that_cast.end(), [&opts](const T &a, const T &b) -> std::weak_ordering {
+          if constexpr (sequant::Expr::is_shared_ptr_of_expr_or_derived<
+                            T>::value) {
+            return a->lexicographic_compare(*b, opts);
+          } else {
+            return std::weak_order(a, b);
+          }
+        });
+  }
+
   sequant::ExprPtr clone() const override {
     return sequant::ex<VecExpr>(this->begin(), this->end());
   }
@@ -132,6 +155,11 @@ struct Adjointable : public sequant::Expr {
   bool static_equal(const sequant::Expr &that) const override {
     return v == that.as<Adjointable>().v;
   }
+  std::weak_ordering static_lexicographic_compare(
+      const sequant::Expr &that,
+      const sequant::LexicographicCompareOptions &) const override {
+    return v <=> that.as<Adjointable>().v;
+  }
   void adjoint() override { v = -v; };
 
   int v = 1;
@@ -150,6 +178,11 @@ struct MinimalExpr : public sequant::Expr {
   sequant::ExprPtr clone() const override { return sequant::ex<Derived>(); }
   void adjoint() override {}
   bool static_equal(const sequant::Expr &) const override { return true; }
+  std::weak_ordering static_lexicographic_compare(
+      const sequant::Expr &,
+      const sequant::LexicographicCompareOptions &) const override {
+    return std::weak_ordering::equivalent;
+  }
 };
 
 struct DeclaredExpr : public MinimalExpr<DeclaredExpr> {

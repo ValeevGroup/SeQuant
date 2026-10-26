@@ -17,7 +17,9 @@
 
 #include <boost/core/demangle.hpp>
 
+#include <algorithm>
 #include <atomic>
+#include <compare>
 #include <cstdint>
 #include <cstring>
 #include <map>
@@ -29,6 +31,34 @@
 #include <utility>
 
 namespace sequant {
+
+LexicographicCompareOptions
+LexicographicCompareOptions::from_default_context() {
+  return LexicographicCompareOptions{
+      .cardinal_tensor_labels =
+          get_default_context_snapshot().cardinal_tensor_labels()};
+}
+
+std::size_t LexicographicCompareOptions::cardinal_position(
+    std::wstring_view label) const {
+  label = strip_adjoint_label(label);
+  const auto it = std::ranges::find(cardinal_tensor_labels, label);
+  return static_cast<std::size_t>(it - cardinal_tensor_labels.begin());
+}
+
+std::weak_ordering Expr::lexicographic_compare(
+    const Expr &that, const LexicographicCompareOptions &opts) const {
+  if (this == &that) return std::weak_ordering::equivalent;
+  const auto this_id = type_id();
+  const auto that_id = that.type_id();
+  if (this_id != that_id) return this_id <=> that_id;
+  return static_lexicographic_compare(that, opts);
+}
+
+std::weak_ordering Expr::lexicographic_compare(const Expr &that) const {
+  return lexicographic_compare(
+      that, LexicographicCompareOptions::from_default_context());
+}
 
 ExprIterator Expr::begin() { return begin_subexpr(); }
 

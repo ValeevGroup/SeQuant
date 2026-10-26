@@ -70,6 +70,10 @@ class Variable : public Expr, public MutatableLabeled {
 
   bool static_equal(const Expr &that) const override;
 
+  /// orders by label, then unconjugated before conjugated
+  std::weak_ordering static_lexicographic_compare(
+      const Expr &that, const LexicographicCompareOptions &opts) const override;
+
 };  // class Variable
 
 }  // namespace sequant

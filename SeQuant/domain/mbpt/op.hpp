@@ -989,6 +989,12 @@ class Operator : public Operator<void, S> {
 
   bool static_equal(const Expr& other) const override;
 
+  /// orders by label (see LexicographicCompareOptions::cardinal_tensor_labels
+  /// ), then by quantum numbers, then by batch ordinals, then by order
+  std::weak_ordering static_lexicographic_compare(
+      const Expr& other,
+      const LexicographicCompareOptions& opts) const override;
+
 };  // class Operator
 
 extern template class Operator<qns_t, Statistics::FermiDirac>;

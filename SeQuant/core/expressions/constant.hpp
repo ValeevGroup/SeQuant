@@ -110,6 +110,10 @@ class Constant : public Expr {
   /// consistent with numeric order nor portable across platforms
   bool static_less_than(const Expr &that) const override;
 
+  /// orders by value: by real part, then by imaginary part
+  std::weak_ordering static_lexicographic_compare(
+      const Expr &that, const LexicographicCompareOptions &opts) const override;
+
 };  // class Constant
 
 }  // namespace sequant

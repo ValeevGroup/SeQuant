@@ -153,10 +153,23 @@ class Sum : public Expr {
 
  private:
   summands_type summands_{};
-  std::optional<size_t>
-      constant_summand_idx_{};  // points to the constant summand, if any; used
-                                // to sum up constants in the move-only ctor,
-                                // append and prepend
+  /// points to the constant summand, if any; used to sum up constants in the
+  /// move-only ctor, append and prepend
+  /// @warning only meaningful if constant_summand_idx_valid_ is true, use
+  /// constant_summand_idx() to read
+  mutable std::optional<size_t> constant_summand_idx_{};
+  /// false if the summands may have been mutated via the mutable subexpression
+  /// iterators (which also invalidates the memoized hash), hence
+  /// constant_summand_idx_ needs to be recomputed
+  mutable bool constant_summand_idx_valid_ = true;
+
+  /// @return the position of the constant summand, if any; recomputed if it
+  /// was invalidated
+  std::optional<size_t> constant_summand_idx() const;
+
+  /// invalidates the memoized hash and the position of the constant summand;
+  /// to be called whenever mutable access to the summands is handed out
+  void invalidate_summand_caches() const;
 
   /// replaces the constant summand recorded by constant_summand_idx_, which
   /// must be set, with its sum with @p constant
@@ -184,6 +197,10 @@ class Sum : public Expr {
               CanonicalizationMethod::Rapid)) override;
 
   bool static_equal(const Expr &that) const override;
+
+  /// orders by summands (lexicographically)
+  std::weak_ordering static_lexicographic_compare(
+      const Expr &that, const LexicographicCompareOptions &opts) const override;
 };  // class Sum
 
 /// @brief utility for eagerly accumulating summands in a hash table
@@ -200,7 +217,9 @@ class HashingAccumulator {
   SumPtr make_canonicalized_sum();
 
   /// @param canonicalize if true, will sort the summands to canonical order
-  /// defined by ExprPtr::operator<
+  /// defined by their hash values (and Expr::operator<)
+  /// @note use sort_expr() to sort in an order that does not depend on the
+  /// hashing algorithm
   /// @return summands as a Sum (if have more than 1 summand), Constant (if have
   /// zero summands), or the lone summand itself
   ExprPtr make_expr(bool canonicalize = true);
