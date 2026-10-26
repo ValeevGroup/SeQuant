@@ -1009,14 +1009,14 @@ TEST_CASE(
 // ===========================================================================
 // Acceptance + executor-shape validation.
 //
-// Both TEST_CASEs below reuse the SAME two real fixtures the water-20 and
-// cross-iteration tests above already build (water-20's aux-only residual and
-// the cross-iteration forced-split fixture), factored into two small builder
-// functions so the acceptance and executor-shape checks below run against
-// literally the same data rather than a re-derived copy. The existing
-// TEST_CASEs above are left untouched (their own inline setup is not
-// replaced) to avoid disturbing already-pinned behavior; these builders are
-// net-new, consumed only by the two TEST_CASEs that follow them.
+// The builder below constructs the real water-20 CSV-CCSD doubles residual
+// with AUX+OCC batching. The [w20-auxocc][levels] case checks schedule
+// well-formedness, value-count agreement, and equivalence to the independent
+// two-set producer/consumer partition on the SAME forest, legality analysis,
+// and schedule, so those checks describe one configuration.
+// Occupied-index batching gives this fixture LoopCarried values; the aux-only
+// water-20 case and the synthetic forced-split cases above cover their own
+// configurations separately, including deeper carried chains.
 // ===========================================================================
 
 namespace {
@@ -1028,14 +1028,14 @@ struct OrderedSchedFixture {
   OrderedSchedule sched;
 };
 
-// Same recipe as the "[w20-auxocc]" TEST_CASE below (the real water-20
-// CSV-CCSD doubles residual with AUX+OCC batching -- Kappa
-// batchable-contracted, occ ("i") batchable-EXTERNAL, matching MPQC's
-// make_csv_batch_policy with occ_target>0), stopping once the schedule is
-// built. Unlike an aux-ONLY policy (where Kappa is always fully contracted and
-// nothing is ever LoopCarried), this configuration genuinely carries values on
-// occ -- shared by the [w20-auxocc] case and the forced_split_levels
-// equivalence case below so the two do not silently drift apart.
+// Real water-20 CSV-CCSD doubles residual with AUX+OCC batching: Kappa is
+// batchable-contracted and occupied indices are batchable-external, matching
+// MPQC's make_csv_batch_policy with occ_target>0. Unlike an aux-only policy,
+// this configuration carries values on occupied indices.
+// This local dry-run fixture exercises the AUX+OCC schedule-build path of
+// MPQC's water-20 CSV-CCk run without requiring MPI/MPQC. The schedule builder
+// refuses an ill-formed result; set SEQUANT_DUMP_SCHEDULE=1 to dump the
+// schedule before its structural self-check.
 [[maybe_unused]] OrderedSchedFixture orderedsched_water20_auxocc_fixture() {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
@@ -1237,24 +1237,6 @@ TEST_CASE(
   }
 }
 
-// w20 repro: the SAME real water-20 CSV-CCSD doubles residual, but
-// with AUX+OCC batching (Κ contracted + i external) -- the config the MPQC w20
-// csv-cck run uses, which trips SEQUANT_ASSERT(well_formed(out)) INSIDE
-// build_ordered_schedule. This reproduces that schedule-build failure as a
-// local dry-run so the failing well_formed invariant (SEQUANT_DUMP_WF) can be
-// diagnosed without the MPI/MPQC run.
-// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
-#ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "build_ordered_schedule: water-20 aux+occ residual builds a well-formed "
-    "schedule",
-    "[ordered-schedule][w20-auxocc]") {
-  auto const fx = orderedsched_water20_auxocc_fixture();
-  CHECK(well_formed(fx.sched));
-  CHECK(fx.sched.num_values == fx.rich.cells.size());
-}
-#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
-
 namespace {
 
 // A test-local copy of the two-set producer/consumer partition function
@@ -1332,12 +1314,8 @@ orderedsched_old_partition(
 
 }  // namespace
 
-// Two-level equivalence, on REAL data: orderedsched_water20_auxocc_fixture()
-// (the SAME shared fixture the "[w20-auxocc]" TEST_CASE above consumes --
-// Kappa batchable-contracted, occ ("i") batchable-EXTERNAL, matching MPQC's
-// make_csv_batch_policy with occ_target>0), which genuinely carries values
-// on occ (unlike an aux-ONLY policy, where Kappa is always fully contracted
-// and nothing is ever LoopCarried).
+// Two-level equivalence on the real water-20 AUX+OCC fixture, which carries
+// values on occupied indices.
 // old.consumer_pass is exactly today's upward-plus-downward pass-1 set; the
 // property this pins -- pass(v) >= 1 iff v is in old.consumer_pass -- holds
 // for a carried chain of ANY depth, not just the depth-1 case this real
@@ -1346,8 +1324,10 @@ orderedsched_old_partition(
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("forced_split_levels: two levels reproduce the two-set partition",
-          "[ordered-schedule][levels]") {
+          "[ordered-schedule][levels][w20-auxocc]") {
   auto const fx = orderedsched_water20_auxocc_fixture();
+  CHECK(well_formed(fx.sched));
+  CHECK(fx.sched.num_values == fx.rich.cells.size());
   auto const g = sequant::eval::detail::ordered_schedule_dep_graph(fx.rich);
   auto const [old_carried, old_consumer_pass] =
       orderedsched_old_partition(L"i", fx.legality, g);
