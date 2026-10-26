@@ -93,7 +93,7 @@ function(_sequant_guard_installed_dependencies)
 
     if (_conflicts)
         list(JOIN _conflicts ";\n  " _conflicts)
-        set(_message "SeQuant would overwrite\n  ${_conflicts}.\nTo proceed: upgrade or remove the installed copy, or make SeQuant use it instead of fetching (put its prefix on CMAKE_PREFIX_PATH, or set <pkg>_DIR) and reconfigure; or install SeQuant into a different prefix; or reconfigure with -DSEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES=ON.")
+        set(_message "SeQuant would overwrite\n  ${_conflicts}.\nSeQuant fetched its own copy because it did not find the installed one: the install prefix is not searched for dependencies unless it is on CMAKE_PREFIX_PATH (CMAKE_FIND_NO_INSTALL_PREFIX is ON by default), and a copy older than the required minimum is rejected. To proceed: upgrade or remove the installed copy, or make SeQuant use it instead of fetching (put its prefix on CMAKE_PREFIX_PATH, or set <pkg>_DIR) and reconfigure; or install SeQuant into a different prefix; or reconfigure with -DSEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES=ON.")
         if (SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES)
             message(WARNING "${_message}")
         else ()
