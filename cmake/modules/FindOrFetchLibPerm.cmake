@@ -1,4 +1,4 @@
-if (NOT TARGET libperm)
+if (NOT TARGET libperm::libperm)
     include(FetchContent)
 
     # libPerm's own tests are never run by check-sequant (ctest -R "^sequant"),
@@ -8,18 +8,23 @@ if (NOT TARGET libperm)
 
     sequant_find_unless_fetching(libperm ${SEQUANT_OLDEST_LIBPERM_VERSION})
 
-    set(LIBPERM_INSTALL ${SEQUANT_INSTALL_FETCHED_DEPENDENCIES} CACHE BOOL "Whether to install libPerm" FORCE)
+    # keep libPerm's export set (the static SeQuant libraries link it privately), but leave it out of the install
+    set(_exclude)
+    if (NOT SEQUANT_INSTALL_FETCHED_DEPENDENCIES)
+        set(_exclude EXCLUDE_FROM_ALL)
+    endif()
 
     FetchContent_Declare(
-        libPerm
+        libperm
         GIT_REPOSITORY "https://github.com/Krzmbrzl/libPerm.git"
         GIT_TAG "${SEQUANT_TRACKED_LIBPERM_TAG}"
         GIT_SHALLOW
         SYSTEM
-        FIND_PACKAGE_ARGS ${SEQUANT_OLDEST_LIBPERM_VERSION} NAMES libperm
+        ${_exclude}
+        FIND_PACKAGE_ARGS ${SEQUANT_OLDEST_LIBPERM_VERSION}
     )
 
-    FetchContent_MakeAvailable(libPerm)
+    FetchContent_MakeAvailable(libperm)
 
     if (libperm_FOUND)
         set(SEQUANT_FETCHED_LIBPERM FALSE)
@@ -38,6 +43,6 @@ if (NOT TARGET libperm)
 endif()
 
 # postcond check
-if (NOT TARGET libperm)
-    message(FATAL_ERROR "FindOrFetchLibPerm could not make TARGET libperm available")
+if (NOT TARGET libperm::libperm)
+    message(FATAL_ERROR "FindOrFetchLibPerm could not make TARGET libperm::libperm available")
 endif()
