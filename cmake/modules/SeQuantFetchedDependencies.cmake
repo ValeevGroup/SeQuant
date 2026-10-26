@@ -55,49 +55,23 @@ function(sequant_backend_installable backend out_var)
     endif ()
 endfunction()
 
-# records a fetched dependency that will be installed; CONFIG_VERSION_FILE is relative to the install prefix
+# records a fetched dependency that SeQuant will install, for the configure-time summary;
+# what that dependency installs in turn (e.g. MADNESS with TiledArray) is enumerated at
+# install time by cmake/sequant-install-guard.cmake
 function(sequant_record_installed_dependency pkg)
-    cmake_parse_arguments(PARSE_ARGV 1 ARG "" "VERSION;CONFIG_VERSION_FILE" "")
-    if (NOT ARG_VERSION OR NOT ARG_CONFIG_VERSION_FILE)
-        message(FATAL_ERROR "sequant_record_installed_dependency(${pkg}): VERSION and CONFIG_VERSION_FILE must be non-empty")
+    cmake_parse_arguments(PARSE_ARGV 1 ARG "" "VERSION" "")
+    if (NOT ARG_VERSION)
+        message(FATAL_ERROR "sequant_record_installed_dependency(${pkg}): VERSION must be non-empty")
     endif ()
-    set_property(GLOBAL APPEND PROPERTY SEQUANT_INSTALLED_DEPENDENCY_NAMES "${pkg}")
-    set_property(GLOBAL APPEND PROPERTY SEQUANT_INSTALLED_DEPENDENCY_VERSIONS "${ARG_VERSION}")
-    set_property(GLOBAL APPEND PROPERTY SEQUANT_INSTALLED_DEPENDENCY_CONFIG_VERSION_FILES "${ARG_CONFIG_VERSION_FILE}")
+    set_property(GLOBAL APPEND PROPERTY SEQUANT_INSTALLED_DEPENDENCIES "${pkg} ${ARG_VERSION}")
 endfunction()
 
-# reads the version recorded in <file> (a CMake package version file), sets <out-var> to it in the caller
-function(_sequant_installed_package_version file out_var)
-    unset(PACKAGE_FIND_VERSION)
-    unset(PACKAGE_VERSION)
-    include("${file}")
-    set(${out_var} "${PACKAGE_VERSION}" PARENT_SCOPE)
-endfunction()
-
-# summarizes what will be installed, warns about different versions already installed,
-# and writes the manifest consumed at install time
+# summarizes which fetched dependencies and backends will (not) be installed
 function(sequant_report_fetched_dependencies)
-    get_property(names GLOBAL PROPERTY SEQUANT_INSTALLED_DEPENDENCY_NAMES)
-    get_property(versions GLOBAL PROPERTY SEQUANT_INSTALLED_DEPENDENCY_VERSIONS)
-    get_property(files GLOBAL PROPERTY SEQUANT_INSTALLED_DEPENDENCY_CONFIG_VERSION_FILES)
-
-    if (names)
-        set(summary "")
-        set(i 0)
-        foreach (name IN LISTS names)
-            list(GET versions ${i} version)
-            list(GET files ${i} file)
-            string(APPEND summary "${name} ${version}, ")
-            if (EXISTS "${CMAKE_INSTALL_PREFIX}/${file}")
-                _sequant_installed_package_version("${CMAKE_INSTALL_PREFIX}/${file}" installed)
-                if (NOT installed VERSION_EQUAL version)
-                    message(WARNING "${name} ${installed} is already installed at ${CMAKE_INSTALL_PREFIX}/${file} and differs from the ${version} that will be installed; the install will refuse to overwrite it unless SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES=ON")
-                endif ()
-            endif ()
-            math(EXPR i "${i} + 1")
-        endforeach ()
-        string(REGEX REPLACE ", $" "" summary "${summary}")
-        message(STATUS "SeQuant will install these fetched dependencies into ${CMAKE_INSTALL_PREFIX}: ${summary}")
+    get_property(installed GLOBAL PROPERTY SEQUANT_INSTALLED_DEPENDENCIES)
+    if (installed)
+        list(JOIN installed ", " installed)
+        message(STATUS "SeQuant will install these fetched dependencies (and what they install themselves) into ${CMAKE_INSTALL_PREFIX}: ${installed}; the install refuses to overwrite a different version of any package unless SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES=ON")
     else ()
         message(STATUS "SeQuant will install no fetched dependencies")
     endif ()
@@ -113,10 +87,4 @@ function(sequant_report_fetched_dependencies)
         list(JOIN not_installed ", " not_installed)
         message(STATUS "SeQuant will not install or export these fetched backends: ${not_installed} (add them to SEQUANT_INSTALL_FETCHED_BACKENDS to install them)")
     endif ()
-
-    file(GENERATE OUTPUT "${PROJECT_BINARY_DIR}/sequant-fetched-dependencies.cmake"
-         CONTENT "set(SEQUANT_FETCHED_DEPENDENCY_NAMES \"${names}\")
-set(SEQUANT_FETCHED_DEPENDENCY_VERSIONS \"${versions}\")
-set(SEQUANT_FETCHED_DEPENDENCY_CONFIG_VERSION_FILES \"${files}\")
-")
 endfunction()

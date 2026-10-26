@@ -66,8 +66,7 @@ if (NOT TARGET BTAS::BTAS)
     get_directory_property(_btas_version DIRECTORY ${BTAS_SOURCE_DIR} DEFINITION BTAS_VERSION)
     # set BTAS_CONFIG to the install location so that we know where to find it
     set(BTAS_CONFIG ${CMAKE_INSTALL_PREFIX}/${BTAS_INSTALL_CMAKEDIR}/btas-config.cmake)
-    sequant_record_installed_dependency(BTAS VERSION ${_btas_version}
-                                        CONFIG_VERSION_FILE ${BTAS_INSTALL_CMAKEDIR}/btas-config-version.cmake)
+    sequant_record_installed_dependency(BTAS VERSION ${_btas_version})
   else()
     unset(BTAS_CONFIG)
   endif()

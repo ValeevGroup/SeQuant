@@ -34,8 +34,7 @@ if (NOT TARGET tapp::reference)
     get_directory_property(_tapp_version DIRECTORY ${tapp_SOURCE_DIR} DEFINITION TAPP_VERSION)
     # set tapp_CONFIG to the install location so that sequant-config.cmake knows where to find it
     set(tapp_CONFIG ${CMAKE_INSTALL_PREFIX}/${TAPP_INSTALL_CMAKEDIR}/tapp-config.cmake)
-    sequant_record_installed_dependency(tapp VERSION ${_tapp_version}
-                                        CONFIG_VERSION_FILE ${TAPP_INSTALL_CMAKEDIR}/tapp-config-version.cmake)
+    sequant_record_installed_dependency(tapp VERSION ${_tapp_version})
   else()
     unset(tapp_CONFIG)
   endif()

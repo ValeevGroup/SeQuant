@@ -255,9 +255,10 @@ endif ()
 # check if <execution> header is usable
 vgkit_check_cxx_execution_header(SEQUANT)
 
-# refuse at install time to overwrite a different version of a fetched dependency;
+# refuse at install time to overwrite a different version of a package SeQuant installs;
 # must precede every dependency's install rules (CMP0082 NEW: rules run in declaration order)
-install(CODE "set(SEQUANT_FETCHED_DEPENDENCIES_MANIFEST \"${PROJECT_BINARY_DIR}/sequant-fetched-dependencies.cmake\")
+install(CODE "set(SEQUANT_INSTALL_SCRIPT \"${PROJECT_BINARY_DIR}/cmake_install.cmake\")
+set(SEQUANT_INSTALL_STAGING_DIR \"${PROJECT_BINARY_DIR}/sequant-install-staging\")
 set(SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES ${SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES})
 include(\"${PROJECT_SOURCE_DIR}/cmake/sequant-install-guard.cmake\")" ALL_COMPONENTS)
 

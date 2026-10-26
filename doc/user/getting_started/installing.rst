@@ -99,7 +99,7 @@ Useful CMake Variables
        (listing BTAS alone warns). Installing TiledArray also installs nlohmann::json if it was fetched.
    * - SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES
      - OFF
-     - By default the install fails rather than overwrite a *different* version of a fetched dependency already present in the destination
+     - By default the install fails rather than overwrite a *different* version of a package already present in the destination
        (``$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}``); the same version passes. If ON, the failure becomes a warning.
    * - SEQUANT_BENCHMARKS
      - ON
@@ -175,20 +175,26 @@ What the Install Adds to the Prefix
 
 Besides SeQuant itself, the default install also installs the primary prerequisites that SeQuant had to fetch (Range-V3,
 polymorphic_variant, libPerm, nlohmann::json) into :code:`CMAKE_INSTALL_PREFIX`; the configure output lists them, e.g.
-:code:`SeQuant will install these fetched dependencies into <prefix>: range-v3 0.12.0, ...`. Dependencies found on the
-system are never installed. Note that :code:`CMAKE_FIND_NO_INSTALL_PREFIX` is ON by default, so a dependency already in
-:code:`CMAKE_INSTALL_PREFIX` is found only if that prefix is on :code:`CMAKE_PREFIX_PATH` (or :code:`<pkg>_DIR` is set);
-otherwise it is fetched again and reinstalled.
+:code:`SeQuant will install these fetched dependencies (and what they install themselves) into <prefix>: range-v3 0.12.0, ...`.
+Dependencies found on the system are never installed. Note that :code:`CMAKE_FIND_NO_INSTALL_PREFIX` is ON by default, so a
+dependency already in :code:`CMAKE_INSTALL_PREFIX` is found only if that prefix is on :code:`CMAKE_PREFIX_PATH` (or
+:code:`<pkg>_DIR` is set); otherwise it is fetched again and reinstalled.
 
 * Fetched evaluation backends are installed only if listed in :code:`SEQUANT_INSTALL_FETCHED_BACKENDS`. A fetched backend that is
   not listed is neither installed nor exported, so a project that exports targets linking :code:`SeQuant::eval::<backend>` must list it.
-* The install refuses to overwrite a different version of a fetched dependency already in the destination, unless
-  :code:`SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES=ON`. Instead, upgrade or remove the installed copy (or point
-  :code:`<pkg>_DIR`/:code:`CMAKE_PREFIX_PATH` at a newer one and reconfigure), or install into a different prefix.
+* The install first stages itself into a scratch directory under the build directory and enumerates every CMake package
+  (by its package version file) that it is about to install, including what the fetched dependencies install in turn
+  (e.g. MADNESS with TiledArray); it prints that list, e.g. :code:`SeQuant installs these packages into <prefix>: ...`, and
+  refuses to overwrite a different version of any of them already in the destination unless
+  :code:`SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES=ON`. Instead, upgrade or remove the installed copy, make SeQuant use it instead
+  of fetching (put its prefix on :code:`CMAKE_PREFIX_PATH`, or set :code:`<pkg>_DIR`, and reconfigure), or install into a
+  different prefix. A package without a version file, or one with the same version but different contents (e.g. another
+  commit of TiledArray's :code:`1.0.0`), is not detected.
 * :code:`SEQUANT_INSTALL_FETCHED_DEPENDENCIES=OFF` installs SeQuant alone; packagers who want no fetching at all should set
   :code:`SEQUANT_FETCH_MISSING_DEPENDENCIES=OFF`.
 * Known gap: Boost built from source (:code:`Boost_FETCH_IF_MISSING`) is installed by its own build system and is not covered
-  by the configure summary, the overwrite guard, or :code:`SEQUANT_INSTALL_FETCHED_DEPENDENCIES`.
+  by the configure summary or :code:`SEQUANT_INSTALL_FETCHED_DEPENDENCIES`; the overwrite check sees it only if its files go
+  through SeQuant's install script.
 
 
 Windows

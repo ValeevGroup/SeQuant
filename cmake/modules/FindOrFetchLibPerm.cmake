@@ -34,8 +34,7 @@ if (NOT TARGET libperm::libperm)
             # libPerm's project name has a trailing comma, so its <name>_VERSION is not usable
             get_directory_property(_libperm_version DIRECTORY ${libperm_SOURCE_DIR} DEFINITION PROJECT_VERSION)
             set(libperm_CONFIG "${CMAKE_INSTALL_PREFIX}/${LIBPERM_INSTALL_CMAKEDIR}/libperm-config.cmake")
-            sequant_record_installed_dependency(libperm VERSION ${_libperm_version}
-                                                CONFIG_VERSION_FILE ${LIBPERM_INSTALL_CMAKEDIR}/libperm-config-version.cmake)
+            sequant_record_installed_dependency(libperm VERSION ${_libperm_version})
         else()
             unset(libperm_CONFIG)
         endif()
