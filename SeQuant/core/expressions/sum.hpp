@@ -223,6 +223,8 @@ struct TransformSumExprOptions {
 };
 
 /// variant of sequant::transform_reduce for eager sum reduction of Expr's
+/// @param rng a sized range; @p map is applied to each of its elements
+/// @param map maps an element of @p rng to an ExprPtr (null to skip it)
 /// @sa HashingAccumulator
 template <typename SizedRange, typename UnaryMapOp>
   requires(meta::is_range_v<std::remove_cvref_t<SizedRange>>)
@@ -233,7 +235,7 @@ ExprPtr transform_sum_expr(SizedRange &&rng, const UnaryMapOp &map,
 
   auto task = [&result_acc, &result_mtx, &map,
                canonicalize = options.canonicalize,
-               flatten = options.flatten](const ExprPtr &input) {
+               flatten = options.flatten](const auto &input) {
     auto task_result = map(input);
     if (task_result) {
       if (canonicalize) {
