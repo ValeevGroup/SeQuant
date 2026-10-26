@@ -38,6 +38,7 @@ namespace sequant {
 /// // the instance of A will be destroyed with other static-linkage objects
 /// \endcode
 /// Singleton is thread-safe, in that multiple threads can call `A::instance()`, even if `A::set_instance()` has not been called yet.
+/// The instance must not be used after it has been destroyed, i.e. do not call `A::instance()` from the destructor of a static-linkage object that was constructed before the instance of A.
 // clang-format on
 template <typename Derived>
 class Singleton {
@@ -110,9 +111,18 @@ class Singleton {
  private:
   /// owns the instance; read and written only under instance_mutex(), and
   /// written only by publish()
-  static auto& instance_accessor() {
-    static std::unique_ptr<Derived> instance;
-    return instance;
+  static std::unique_ptr<Derived>& instance_accessor() {
+    // the atomic outlives the owner (it is trivially destructible), so clear
+    // it before the instance is destroyed: a reader that runs later falls
+    // back to the slow path instead of seeing a dangling pointer
+    struct Owner {
+      std::unique_ptr<Derived> instance;
+      ~Owner() {
+        published_instance().store(nullptr, std::memory_order_release);
+      }
+    };
+    static Owner owner;
+    return owner.instance;
   }
   /// the constructed instance, published for lock-free reads; null until
   /// publish() has been called
