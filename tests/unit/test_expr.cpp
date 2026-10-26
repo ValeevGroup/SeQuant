@@ -1761,6 +1761,46 @@ TEST_CASE("expr", "[elements]") {
   }
 }
 
+TEST_CASE("sum_move_omits_zeros_and_combines_constants", "[elements]") {
+  using namespace sequant;
+
+  SECTION("merging the final constant") {
+    Sum result(Sum::summands_type{ex<Constant>(1), ex<Constant>(2)},
+               Sum::move_only_tag{});
+    REQUIRE(result.size() == 1);
+    REQUIRE(result.front().as<Constant>().value() == 3);
+  }
+
+  SECTION("constants and zeros interleaved with variables") {
+    Sum result(
+        Sum::summands_type{ex<Constant>(0), ex<Variable>(L"x"), ex<Constant>(1),
+                           ex<Constant>(2), ex<Constant>(0), ex<Variable>(L"y"),
+                           ex<Constant>(3)},
+        Sum::move_only_tag{});
+    REQUIRE(result.size() == 3);
+    REQUIRE(result.summand(0)->as<Variable>().label() == L"x");
+    REQUIRE(result.summand(1)->as<Constant>().value() == 6);
+    REQUIRE(result.summand(2)->as<Variable>().label() == L"y");
+
+    // the recorded constant position is observable only through a later
+    // append: a correct position folds the new constant in, a stale one
+    // appends a second constant or trips the assert
+    result.append(ex<Constant>(4));
+    REQUIRE(result.size() == 3);
+    REQUIRE(result.summand(1)->as<Constant>().value() == 10);
+  }
+
+  SECTION("adjacent and trailing zeros") {
+    Sum result(
+        Sum::summands_type{ex<Variable>(L"x"), ex<Constant>(0), ex<Constant>(0),
+                           ex<Variable>(L"y"), ex<Constant>(0)},
+        Sum::move_only_tag{});
+    REQUIRE(result.size() == 2);
+    REQUIRE(result.summand(0)->as<Variable>().label() == L"x");
+    REQUIRE(result.summand(1)->as<Variable>().label() == L"y");
+  }
+}
+
 // CProduct before Product: a derived type computed first must not take, or
 // collide with, its base's id
 TEST_CASE("expr_type_id_derived", "[elements]") {
