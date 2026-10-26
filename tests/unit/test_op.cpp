@@ -199,6 +199,23 @@ TEST_CASE("op", "[elements]") {
     CHECK(nopseq_empty == nopseq_empty_from_ops);
   }
 
+  SECTION("ordering ignores tags on equal indices") {
+    Index first(L"i_1"), second(L"i_1");
+    first.tag().assign(1);
+    second.tag().assign(2);
+    REQUIRE_FALSE(fcre(first) < fcre(second));
+    REQUIRE_FALSE(fcre(second) < fcre(first));
+  }
+
+  SECTION("ordering with one tagged index") {
+    Index tagged(L"i_1"), untagged(L"i_1"), other(L"i_2");
+    tagged.tag().assign(1);
+    REQUIRE_FALSE(fcre(tagged) < fcre(untagged));
+    REQUIRE_FALSE(fcre(untagged) < fcre(tagged));
+    REQUIRE(fcre(tagged) < fcre(other));
+    REQUIRE_FALSE(fcre(other) < fcre(tagged));
+  }
+
   SECTION("adjoint") {
     auto o1 = adjoint(FOp(Index(L"i_1"), Action::Create));
     REQUIRE(o1.statistics == Statistics::FermiDirac);
