@@ -547,6 +547,7 @@ set(SeQuant_optimize_src
         SeQuant/core/optimize/extract_subtrees.hpp
         SeQuant/core/optimize/fusion.cpp
         SeQuant/core/optimize/fusion.hpp
+        SeQuant/core/optimize/name_recycling.hpp
         SeQuant/core/optimize/options.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/optimize/optimize.hpp
@@ -576,6 +577,7 @@ set(SeQuant_export_src
         SeQuant/core/export/julia_tensor_kit.hpp
         SeQuant/core/export/julia_tensor_operations.cpp
         SeQuant/core/export/julia_tensor_operations.hpp
+        SeQuant/core/export/name_recycling.hpp
         SeQuant/core/export/reordering_context.cpp
         SeQuant/core/export/reordering_context.hpp
         SeQuant/core/export/text_generator.hpp

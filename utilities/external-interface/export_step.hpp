@@ -7,6 +7,7 @@
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/irreps/any.hpp>
+#include <SeQuant/core/optimize/name_recycling.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
 
@@ -60,6 +61,9 @@ class ExportStep : public ProcessingStep {
   std::map<ExprMatcher, std::string, std::less<>> import_names_;
   /// Context for determining the IRREPs of all exported tensors (if any)
   std::optional<AnyIrrepContext> irrep_context_;
+  /// If set, names of CSE intermediates are recycled using the given shape
+  /// compatibility
+  std::optional<opt::ShapeCompatibility> recycle_intermediates_;
 
   static meta_type parse_meta(std::string_view language,
                               const nlohmann::json &meta);
@@ -67,6 +71,13 @@ class ExportStep : public ProcessingStep {
   /// Parses the 'irreps' option
   /// @throws Exception if the specification is invalid
   static AnyIrrepContext parse_irreps(const nlohmann::json &irreps);
+
+  /// Parses the 'recycle_intermediates' option
+  /// @returns The shape compatibility to use or std::nullopt if recycling is
+  /// disabled
+  /// @throws Exception if the specification is invalid
+  static std::optional<opt::ShapeCompatibility> parse_recycling(
+      const nlohmann::json &value);
 
   std::vector<ExpressionGroup<>> prepare_expressions(
       ExecutionContext &ctx, const std::vector<std::string_view> &inputs,
