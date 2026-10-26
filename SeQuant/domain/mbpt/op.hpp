@@ -471,7 +471,7 @@ using qnc_t = qns_t;
 using op_t = mbpt::Operator<qnc_t>;
 
 /// combines 2 sets of quantum numbers using Wick's theorem
-qns_t combine(qns_t, qns_t);
+qns_t combine(qns_t, const qns_t&);
 
 /// @brief Constructs quantum numbers for an excitation operator based on the
 /// defined context

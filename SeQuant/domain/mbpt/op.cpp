@@ -171,11 +171,11 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
 
 // By counting the number of contractions between indices of proper type, we can
 // know the quantum numbers of a combined result.
-qns_t combine(qns_t a, qns_t b) {
+qns_t combine(qns_t a, const qns_t& b) {
   SEQUANT_ASSERT(a.size() == b.size());
 
-  // Reuse the by-value input's storage; compute both counts in each pair
-  // before overwriting either, since both depend on the original values.
+  // Reuse the by-value first input's storage; compute both counts in each
+  // pair before overwriting either, since both depend on the original values.
   if (get_default_context().vacuum() == Vacuum::Physical) {
     const auto ncontr = qninterval_t{0, std::min(b[0].upper(), a[1].upper())};
     const auto nc = nonnegative(a[0] + b[0] - ncontr);
