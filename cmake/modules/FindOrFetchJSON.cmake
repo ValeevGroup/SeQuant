@@ -3,19 +3,27 @@ if (NOT TARGET nlohmann_json::nlohmann_json)
 
     sequant_find_unless_fetching(nlohmann_json ${SEQUANT_OLDEST_JSON_VERSION})
 
+    # a fetched nlohmann_json is installed with the other fetched dependencies; this also
+    # covers a fetched and installed TiledArray, whose MADNESS reuses this target and
+    # links its installed libraries against it. The export set must exist even when
+    # nothing is installed (MADNESS's install(EXPORT) requires it), hence EXCLUDE_FROM_ALL
+    # rather than JSON_Install=OFF
+    set(_exclude)
+    if (NOT SEQUANT_INSTALL_FETCHED_DEPENDENCIES)
+        set(_exclude EXCLUDE_FROM_ALL)
+    endif()
+
     FetchContent_Declare(
         nlohmann_json
         URL "https://github.com/nlohmann/json/releases/download/${SEQUANT_TRACKED_JSON_TAG}/json.tar.xz"
         GIT_SHALLOW
         SYSTEM
+        ${_exclude}
         FIND_PACKAGE_ARGS ${SEQUANT_OLDEST_JSON_VERSION} NAMES nlohmann_json
     )
 
-    # a fetched nlohmann_json is installed with the other fetched dependencies; this also
-    # covers a fetched and installed TiledArray, whose MADNESS reuses this target and
-    # links its installed libraries against it
     set(JSON_BuildTests OFF CACHE INTERNAL "")
-    set(JSON_Install ${SEQUANT_INSTALL_FETCHED_DEPENDENCIES} CACHE INTERNAL "")
+    set(JSON_Install ON CACHE INTERNAL "")
 
     FetchContent_MakeAvailable(nlohmann_json)
 
