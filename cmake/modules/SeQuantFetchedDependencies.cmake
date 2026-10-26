@@ -102,6 +102,18 @@ function(sequant_report_fetched_dependencies)
         message(STATUS "SeQuant will install no fetched dependencies")
     endif ()
 
+    set(not_installed "")
+    foreach (backend IN LISTS _sequant_known_backends)
+        string(TOUPPER ${backend} backend_uc)
+        if (SEQUANT_HAS_${backend_uc} AND SEQUANT_FETCHED_${backend_uc} AND NOT SEQUANT_EXPORTS_${backend_uc})
+            list(APPEND not_installed ${backend})
+        endif ()
+    endforeach ()
+    if (not_installed)
+        list(JOIN not_installed ", " not_installed)
+        message(STATUS "SeQuant will not install or export these fetched backends: ${not_installed} (add them to SEQUANT_INSTALL_FETCHED_BACKENDS to install them)")
+    endif ()
+
     file(GENERATE OUTPUT "${PROJECT_BINARY_DIR}/sequant-fetched-dependencies.cmake"
          CONTENT "set(SEQUANT_FETCHED_DEPENDENCY_NAMES \"${names}\")
 set(SEQUANT_FETCHED_DEPENDENCY_VERSIONS \"${versions}\")

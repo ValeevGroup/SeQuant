@@ -71,13 +71,17 @@ unset(_sequant_hint)
 
 # Eigen is a private dependency: only static libraries need it
 if (NOT "@BUILD_SHARED_LIBS@" AND NOT TARGET Eigen3::Eigen)
-  get_filename_component(Eigen3_DIR "@Eigen3_CONFIG@" DIRECTORY)
+  set(_sequant_hint "")
+  if (NOT "@Eigen3_CONFIG@" STREQUAL "")
+    get_filename_component(_sequant_hint "@Eigen3_CONFIG@" DIRECTORY)
+  endif()
   # re:NO_CMAKE_PACKAGE_REGISTRY: eigen3 registers its *build* tree with the user package registry ...
   #                               to avoid issues with wiped build directory look for installed eigen
-  find_package(Eigen3 CONFIG REQUIRED NO_CMAKE_PACKAGE_REGISTRY HINTS "${Eigen3_DIR}")
+  find_package(Eigen3 CONFIG REQUIRED NO_CMAKE_PACKAGE_REGISTRY HINTS "${_sequant_hint}")
   if (Eigen3_VERSION VERSION_LESS "@SEQUANT_OLDEST_EIGEN_VERSION@")
     message(FATAL_ERROR "Found Eigen3 ${Eigen3_VERSION} at ${Eigen3_DIR}, but SeQuant requires @SEQUANT_OLDEST_EIGEN_VERSION@ or later")
   endif()
+  unset(_sequant_hint)
 endif()
 
 set(SEQUANT_HAS_TILEDARRAY @SEQUANT_EXPORTS_TILEDARRAY@)

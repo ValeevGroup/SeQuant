@@ -180,7 +180,8 @@ system are never installed. Note that :code:`CMAKE_FIND_NO_INSTALL_PREFIX` is ON
 :code:`CMAKE_INSTALL_PREFIX` is found only if that prefix is on :code:`CMAKE_PREFIX_PATH` (or :code:`<pkg>_DIR` is set);
 otherwise it is fetched again and reinstalled.
 
-* Fetched evaluation backends are installed only if listed in :code:`SEQUANT_INSTALL_FETCHED_BACKENDS`.
+* Fetched evaluation backends are installed only if listed in :code:`SEQUANT_INSTALL_FETCHED_BACKENDS`. A fetched backend that is
+  not listed is neither installed nor exported, so a project that exports targets linking :code:`SeQuant::eval::<backend>` must list it.
 * The install refuses to overwrite a different version of a fetched dependency already in the destination, unless
   :code:`SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES=ON`. Instead, upgrade or remove the installed copy (or point
   :code:`<pkg>_DIR`/:code:`CMAKE_PREFIX_PATH` at a newer one and reconfigure), or install into a different prefix.
