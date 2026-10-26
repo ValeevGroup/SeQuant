@@ -11,22 +11,22 @@ if (NOT TARGET range-v3::range-v3)
     endif()
 
     FetchContent_Declare(
-        RangeV3
+        range-v3
         GIT_REPOSITORY "https://github.com/ericniebler/range-v3.git"
         GIT_TAG "${SEQUANT_TRACKED_RANGEV3_TAG}"
         GIT_SHALLOW
         SYSTEM
         ${_exclude}
-        FIND_PACKAGE_ARGS NAMES range-v3
+        FIND_PACKAGE_ARGS
     )
 
-    FetchContent_MakeAvailable(RangeV3)
+    FetchContent_MakeAvailable(range-v3)
 
     if (range-v3_FOUND)
         set(_rangev3_version "${range-v3_VERSION}")
         set(SEQUANT_FETCHED_RANGEV3 FALSE)
     else()
-        get_directory_property(_rangev3_version DIRECTORY ${rangev3_SOURCE_DIR} DEFINITION RANGE_V3_VERSION)
+        get_directory_property(_rangev3_version DIRECTORY ${range-v3_SOURCE_DIR} DEFINITION RANGE_V3_VERSION)
         set(SEQUANT_FETCHED_RANGEV3 TRUE)
     endif()
     if (_rangev3_version VERSION_LESS SEQUANT_OLDEST_RANGEV3_VERSION)
