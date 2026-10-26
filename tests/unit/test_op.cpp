@@ -216,6 +216,24 @@ TEST_CASE("op", "[elements]") {
     REQUIRE_FALSE(fcre(other) < fcre(tagged));
   }
 
+  SECTION("hermiticity") {
+    // bra and ket are compared as multisets of indices, proto-indices
+    // included
+    const Index a1_i1(L"a_1", {L"i_1"});
+    const Index a1_i2(L"a_1", {L"i_2"});
+    const Index a2_i1(L"a_2", {L"i_1"});
+    REQUIRE(hermiticity(FNOperator(cre({L"i_1"}), ann({L"i_1"}))) ==
+            sequant::Hermiticity::Hermitian);
+    REQUIRE(hermiticity(FNOperator(cre({L"i_1"}), ann({L"i_2"}))) ==
+            sequant::Hermiticity::NonHermitian);
+    REQUIRE(hermiticity(FNOperator(cre({L"i_1", L"i_2"}), ann({L"i_1"}))) ==
+            sequant::Hermiticity::NonHermitian);
+    REQUIRE(hermiticity(FNOperator(cre({a1_i1, a2_i1}), ann({a2_i1, a1_i1}))) ==
+            sequant::Hermiticity::Hermitian);
+    REQUIRE(hermiticity(FNOperator(cre({a1_i1}), ann({a1_i2}))) ==
+            sequant::Hermiticity::NonHermitian);
+  }
+
   SECTION("adjoint") {
     auto o1 = adjoint(FOp(Index(L"i_1"), Action::Create));
     REQUIRE(o1.statistics == Statistics::FermiDirac);
