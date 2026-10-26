@@ -58,6 +58,38 @@ struct SizeRegime {
   // are not expected here (an entry for 1 or 2 is ignored by inner_pow()).
   std::map<std::size_t, std::array<double, 5>> csv_moment_by_rank;
 
+  /// The CSV moment tables of one basis instance (see csv_moment_by_instance):
+  /// the rank-1 (OSV), rank-2 (PNO) and rank >= 3 tables, laid out and
+  /// dispatched exactly like csv_osv_moment / csv_pno_moment /
+  /// csv_moment_by_rank.
+  struct CsvMomentTables {
+    std::array<double, 5> osv{1.0, 1.0, 1.0, 1.0, 1.0};
+    std::array<double, 5> pno{1.0, 1.0, 1.0, 1.0, 1.0};
+    std::map<std::size_t, std::array<double, 5>> by_rank;
+
+    /// \return the k-th power mean of the rank-\p rank cluster domain: osv
+    ///         for rank 1, pno for rank 2, by_rank[rank] for a rank >= 3 that
+    ///         has a table, else pno
+    [[nodiscard]] double moment(std::size_t rank, std::size_t k) const {
+      if (rank <= 1) return osv[k];
+      if (rank == 2) return pno[k];
+      auto const it = by_rank.find(rank);
+      return it != by_rank.end() ? it->second[k] : pno[k];
+    }
+  };
+
+  /// Moment tables keyed by the basis instance the composite's IndexBasis
+  /// carries (IndexBasis::basis_instance()). A composite whose index carries
+  /// an instance listed here is sized by that instance's tables; every other
+  /// composite -- no instance, or one not listed -- by csv_osv_moment /
+  /// csv_pno_moment / csv_moment_by_rank, which thus double as the default.
+  /// A consumer whose one evaluation spans several CSV bases (e.g. the
+  /// ground-state amplitudes expanded in one PNO basis and the response
+  /// amplitudes in another, each family's indices carrying its basis
+  /// instance) files every basis here, so no family is priced by another's
+  /// domain sizes. Empty (default) => one basis, the default tables.
+  std::map<IndexBasis::instance_type, CsvMomentTables> csv_moment_by_instance;
+
   /// \return the flat extent of \p ix's \c IndexBasis::base_key(); throws
   ///         \c std::out_of_range if the key is not present in
   ///         \c space_extent (fail loud rather than silently defaulting to 1).
@@ -79,10 +111,11 @@ struct SizeRegime {
 
   /// \return the k-th power-mean moment for a proto-indexed CSV/PNO composite
   ///         index (\p k clamped to 0..4), or \c pow(extent, k) for a plain
-  ///         (non-composite) index. Rank is determined by the number of proto
-  ///         indices: 1 => OSV (occupied single), 2 => PNO (occupied pair),
-  ///         >= 3 => the rank-specific csv_moment_by_rank table if present,
-  ///         else the PNO (rank-2) table.
+  ///         (non-composite) index. The tables are the composite's basis
+  ///         instance's if csv_moment_by_instance lists it, else the default
+  ///         ones. Rank is determined by the number of proto indices: 1 =>
+  ///         OSV (occupied single), 2 => PNO (occupied pair), >= 3 => the
+  ///         rank-specific table if present, else the PNO (rank-2) table.
   [[nodiscard]] double inner_pow(Index const& composite, std::size_t k) const {
     if (k > 4) k = 4;
     auto const& protos = composite.proto_indices();
@@ -90,6 +123,11 @@ struct SizeRegime {
       return std::pow(static_cast<double>(extent(composite)),
                       static_cast<double>(k));
     auto const rank = protos.size();
+    if (!csv_moment_by_instance.empty())
+      if (auto const& instance = composite.basis().basis_instance())
+        if (auto const it = csv_moment_by_instance.find(*instance);
+            it != csv_moment_by_instance.end())
+          return it->second.moment(rank, k);
     if (rank <= 1) return csv_osv_moment[k];
     if (rank == 2) return csv_pno_moment[k];
     auto const it = csv_moment_by_rank.find(rank);

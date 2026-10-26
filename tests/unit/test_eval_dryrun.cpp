@@ -189,6 +189,43 @@ TEST_CASE("dryrun size regime keys a named basis by its label",
   CHECK(r.slice_extents(virt).empty());
 }
 
+TEST_CASE("dryrun size regime prices a composite by its basis instance",
+          "[dryrun][sizing][basis]") {
+  using namespace sequant;
+  eval::dryrun::SizeRegime r;
+  r.space_extent = {{L"i", 10u}, {L"a", 300u}};
+  for (std::size_t k = 0; k <= 4; ++k) {
+    r.csv_pno_moment[k] = 14.0;
+    r.csv_osv_moment[k] = 9.0;
+  }
+  eval::dryrun::SizeRegime::CsvMomentTables perturbed;
+  for (std::size_t k = 0; k <= 4; ++k) {
+    perturbed.pno[k] = 19.0;
+    perturbed.osv[k] = 12.0;
+  }
+  perturbed.by_rank[3] = {1.0, 25.0, 25.0, 25.0, 25.0};
+  constexpr IndexBasis::instance_type P = 10;
+  r.csv_moment_by_instance[P] = perturbed;
+  const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3");
+  const Index pno(L"a_1", {i1, i2}), osv(L"a_2", {i1}),
+      triple(L"a_3", {i1, i2, i3});
+  // no instance: the default tables
+  CHECK(r.inner_pow(pno, 2) == Catch::Approx(14.0));
+  CHECK(r.inner_pow(osv, 1) == Catch::Approx(9.0));
+  CHECK(r.inner_pow(triple, 1) == Catch::Approx(14.0));
+  // the listed instance: its own tables, rank dispatch included
+  CHECK(r.inner_pow(pno.replace_basis_instance(P), 2) == Catch::Approx(19.0));
+  CHECK(r.inner_pow(osv.replace_basis_instance(P), 1) == Catch::Approx(12.0));
+  CHECK(r.inner_pow(triple.replace_basis_instance(P), 1) ==
+        Catch::Approx(25.0));
+  // an instance that is not listed: the default tables
+  CHECK(r.inner_pow(pno.replace_basis_instance(P + 1), 2) ==
+        Catch::Approx(14.0));
+  // a plain index is sized by its space extent whatever its instance
+  CHECK(r.inner_pow(Index(L"a_4").replace_basis_instance(P), 2) ==
+        Catch::Approx(9.0e4));
+}
+
 TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
           "[dryrun-probe]") {
   // Replaces the (unreachable) two K-anchor checks: pick one concrete index
