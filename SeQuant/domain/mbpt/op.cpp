@@ -223,7 +223,7 @@ qns_t combine(qns_t a, const qns_t& b) {
 template <>
 bool is_vacuum<qns_t>(qns_t qns) {
   return std::all_of(qns.begin(), qns.end(), [](const auto& interval) {
-    return equal(interval, qninterval_t{0});
+    return boost::numeric::equal(interval, qninterval_t{0});
   });
 }
 
