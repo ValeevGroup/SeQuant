@@ -974,6 +974,33 @@ TEST_CASE("expr", "[elements]") {
       const auto e_clone = e->clone();
       REQUIRE_FALSE(e_clone.as<Product>().is_commutative());
     }
+    {  // Product::deep_copy owns new factors and keeps nested products
+      Product p(2, ExprPtrList{});
+      p.append(1, ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}));
+      p.append(
+          1,
+          ex<Product>(ExprPtrList{ex<Tensor>(L"f", bra{L"i_1"}, ket{L"i_2"}),
+                                  ex<Tensor>(L"g", bra{L"a_1"}, ket{L"a_2"})}),
+          Product::Flatten::No);
+      const auto copy = p.deep_copy();
+      REQUIRE(copy == p);
+      REQUIRE(copy.scalar() == p.scalar());
+      REQUIRE(copy.factors().size() == 2);
+      REQUIRE(copy.factors()[1]->is<Product>());
+      for (std::size_t i = 0; i != p.factors().size(); ++i)
+        REQUIRE(copy.factors()[i].get() != p.factors()[i].get());
+      REQUIRE(copy.factors()[1]->as<Product>().factors()[0].get() !=
+              p.factors()[1]->as<Product>().factors()[0].get());
+    }
+    {  // Product::deep_copy keeps the canonical mark
+      ExprPtr e = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
+                  ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+      const auto opts = CanonicalizeOptions::default_options().copy_and_set(
+          CanonicalizationMethod::Complete);
+      e->mark_canonical(opts);
+      REQUIRE(e->is_canonical(opts));
+      REQUIRE(e->as<Product>().deep_copy().is_canonical(opts));
+    }
   }  // SECTION("clone")
 
   SECTION("latex") {
