@@ -933,6 +933,20 @@ export(EXPORT sequant
         NAMESPACE SeQuant::
         FILE "${PROJECT_BINARY_DIR}/sequant-targets.cmake")
 
+# the installed config locates a dependency installed with SeQuant relative to its own prefix, so that the
+# install can be relocated (--prefix, DESTDIR, a moved tree); a found dependency keeps its absolute path
+foreach (_pair "range-v3:RANGEV3" "polymorphic_variant:POLYMORPHICVARIANT" "libperm:LIBPERM"
+               "TiledArray:TILEDARRAY" "BTAS:BTAS" "tapp:TAPP")
+    string(REPLACE ":" ";" _pair "${_pair}")
+    list(GET _pair 0 _pkg)
+    list(GET _pair 1 _dep)
+    set(_hint "${${_pkg}_CONFIG}")
+    if (_hint AND SEQUANT_FETCHED_${_dep})
+        cmake_path(RELATIVE_PATH _hint BASE_DIRECTORY "${CMAKE_INSTALL_PREFIX}")
+    endif ()
+    set(SEQUANT_${_dep}_CONFIG_HINT "${_hint}")
+endforeach ()
+
 ## Create the configure file
 configure_package_config_file(cmake/sequant-config.cmake.in
         "${PROJECT_BINARY_DIR}/sequant-config.cmake"
