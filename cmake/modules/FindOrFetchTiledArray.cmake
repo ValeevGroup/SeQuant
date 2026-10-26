@@ -51,6 +51,13 @@ if (NOT TARGET tiledarray)
             set(TiledArray_CONFIG "${CMAKE_INSTALL_PREFIX}/${TILEDARRAY_INSTALL_CMAKEDIR}")
             sequant_record_installed_dependency(TiledArray VERSION ${_ta_version}
                                                 CONFIG_VERSION_FILE ${TILEDARRAY_INSTALL_CMAKEDIR}/tiledarray-config-version.cmake)
+            # a BTAS fetched by TiledArray is installed with it, whether or not SEQUANT_BTAS is ON
+            FetchContent_GetProperties(BTAS)
+            if (btas_POPULATED)
+                get_directory_property(_btas_version DIRECTORY ${btas_SOURCE_DIR} DEFINITION BTAS_VERSION)
+                sequant_record_installed_dependency(BTAS VERSION ${_btas_version}
+                                                    CONFIG_VERSION_FILE ${BTAS_INSTALL_CMAKEDIR}/btas-config-version.cmake)
+            endif()
         else()
             unset(TiledArray_CONFIG)
         endif()

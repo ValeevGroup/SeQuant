@@ -655,13 +655,9 @@ if (SEQUANT_BTAS)
         FetchContent_GetProperties(BTAS)
     endif ()
     if (SEQUANT_FETCHED_TILEDARRAY AND btas_POPULATED)
-        # BTAS is part of the fetched TiledArray and is installed only together with it
+        # BTAS is part of the fetched TiledArray and is installed (and recorded) only together with it
         set(SEQUANT_EXPORTS_BTAS ${SEQUANT_EXPORTS_TILEDARRAY})
-        if (SEQUANT_EXPORTS_BTAS)
-            get_directory_property(_btas_version DIRECTORY ${btas_SOURCE_DIR} DEFINITION BTAS_VERSION)
-            sequant_record_installed_dependency(BTAS VERSION ${_btas_version}
-                                                CONFIG_VERSION_FILE ${BTAS_INSTALL_CMAKEDIR}/btas-config-version.cmake)
-        else ()
+        if (NOT SEQUANT_EXPORTS_BTAS)
             unset(BTAS_CONFIG)
             sequant_backend_installable(BTAS _btas_install)
             if (_btas_install)
@@ -830,9 +826,9 @@ endif()
 set(SEQUANT_MODULES SeQuant-bliss SeQuant-symb SeQuant-eval SeQuant-optimize SeQuant-export SeQuant-core SeQuant-mbpt SeQuant)
 # a backend module is installed and exported only with its backend, else it is build-tree only
 set(SEQUANT_BUILD_LOCAL_MODULES)
-set(_sequant_backend_modules SeQuant-eval-ta SeQuant-eval-btas SeQuant-eval-tapp)  # in the order of _sequant_known_backends
-foreach (_backend _module IN ZIP_LISTS _sequant_known_backends _sequant_backend_modules)
+foreach (_backend IN LISTS _sequant_known_backends)
     string(TOUPPER ${_backend} _backend_uc)
+    set(_module ${_sequant_backend_module_${_backend}})
     if (SEQUANT_EXPORTS_${_backend_uc})
         list(APPEND SEQUANT_MODULES ${_module})
     elseif (SEQUANT_HAS_${_backend_uc})

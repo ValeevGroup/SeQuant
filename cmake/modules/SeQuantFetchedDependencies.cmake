@@ -11,6 +11,10 @@ add_feature_info(SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES SEQUANT_OVERWRITE_INST
 
 # validate SEQUANT_INSTALL_FETCHED_BACKENDS, normalizing the spelling of each entry
 set(_sequant_known_backends TiledArray BTAS TAPP)
+# the SeQuant module of each backend
+set(_sequant_backend_module_TiledArray SeQuant-eval-ta)
+set(_sequant_backend_module_BTAS SeQuant-eval-btas)
+set(_sequant_backend_module_TAPP SeQuant-eval-tapp)
 set(SEQUANT_INSTALL_FETCHED_BACKENDS_NORMALIZED "")
 foreach (_backend IN LISTS SEQUANT_INSTALL_FETCHED_BACKENDS)
     set(_normalized "")
