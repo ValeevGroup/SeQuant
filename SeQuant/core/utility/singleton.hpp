@@ -6,6 +6,7 @@
 #define SEQUANT_CORE_UTILITY_SINGLETON_HPP
 
 #include <SeQuant/core/utility/exception.hpp>
+#include <atomic>
 #include <cassert>
 #include <memory>
 #include <mutex>
@@ -51,8 +52,8 @@ class Singleton {
   /// Derived is not default-constructible and set_instance() had not been
   /// called)
   static Derived& instance() {
-    const auto& result_ptr = instance_accessor();
-    if (result_ptr != nullptr) return *result_ptr;
+    if (auto* result_ptr = published_instance().load(std::memory_order_acquire))
+      return *result_ptr;
     if constexpr (has_default_ctor<Derived>) {
       return set_default_instance();
     } else
@@ -66,8 +67,8 @@ class Singleton {
   /// @return pointer to the instance, or nullptr if it has not yet been
   /// constructed
   static Derived* instance_ptr() {
-    const auto& result_ptr = instance_accessor();
-    if (result_ptr != nullptr) return result_ptr.get();
+    if (auto* result_ptr = published_instance().load(std::memory_order_acquire))
+      return result_ptr;
     if constexpr (has_default_ctor<Derived>) {
       return set_default_instance();
     } else
@@ -93,6 +94,8 @@ class Singleton {
           "constructed");
     instance_accessor() = std::move(
         std::unique_ptr<Derived>(new Derived(std::forward<Args>(args)...)));
+    published_instance().store(instance_accessor().get(),
+                               std::memory_order_release);
     return *instance_accessor();
   }
 
@@ -100,6 +103,7 @@ class Singleton {
   template <typename... Args>
   Singleton(Args&&...) {}  // all constructors are private
 
+  /// owns the instance; read and written only under instance_mutex()
   static auto& instance_accessor() {
     static std::unique_ptr<Derived> instance;
     return instance;
@@ -108,6 +112,12 @@ class Singleton {
   static auto& instance_mutex() {
     static std::mutex mtx;
     return mtx;
+  }
+  /// the constructed instance, published for lock-free reads; null until
+  /// instance_accessor() has been set
+  static std::atomic<Derived*>& published_instance() {
+    static std::atomic<Derived*> instance{nullptr};
+    return instance;
   }
 
  private:
@@ -120,6 +130,8 @@ class Singleton {
     if (!instance_accessor()) {
       // Note: std::make_unique can't deal with private friend ctors
       instance_accessor().reset(new Derived());
+      published_instance().store(instance_accessor().get(),
+                                 std::memory_order_release);
     }
     return *instance_accessor();
   }
