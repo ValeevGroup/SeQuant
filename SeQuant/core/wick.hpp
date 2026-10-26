@@ -897,8 +897,11 @@ class WickTheorem {
       op_input_ordinals.reserve(nopseq_size);
       auto operators =
           flattened_rangenest<NormalOperatorSequence<S>>(&this->nopseq);
-      for (const auto &op : operators)
-        op_input_ordinals.push_back(wick.op_to_input_ordinal_.find(op)->second);
+      for (const auto &op : operators) {
+        const auto it = wick.op_to_input_ordinal_.find(op);
+        SEQUANT_ASSERT(it != wick.op_to_input_ordinal_.end());
+        op_input_ordinals.push_back(it->second);
+      }
     }
 
     NontensorWickState(const NontensorWickState &) = delete;
