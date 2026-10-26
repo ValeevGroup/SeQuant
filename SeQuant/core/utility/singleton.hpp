@@ -63,10 +63,11 @@ class Singleton {
           "has not been called");
   }
 
-  /// same as instance(), but returns pointer to the instance, or nullptr if
-  /// the instance has not been constructed
-  /// @return pointer to the instance, or nullptr if it has not yet been
-  /// constructed
+  /// same as instance(), but instead of throwing returns nullptr if the
+  /// instance has not been constructed; like instance(), constructs the
+  /// instance on first use if Derived is default-constructible
+  /// @return pointer to the instance, or nullptr if Derived is not
+  /// default-constructible and set_instance() has not been called
   static Derived* instance_ptr() {
     if (auto* result_ptr = published_instance().load(std::memory_order_acquire))
       return result_ptr;
