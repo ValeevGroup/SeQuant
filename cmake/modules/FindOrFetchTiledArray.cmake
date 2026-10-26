@@ -18,21 +18,42 @@ if (NOT TARGET tiledarray)
         set(TA_ASSERT_POLICY TA_ASSERT_${SEQUANT_ASSERT_BEHAVIOR} CACHE STRING "Controls the behavior of TA_ASSERT (seeded from SEQUANT_ASSERT_BEHAVIOR)")
     endif()
 
+    sequant_find_unless_fetching(TiledArray COMPONENTS tiledarray)
+
+    # a fetched TiledArray (with MADNESS and BTAS) is installed only on request;
+    # the nlohmann_json it reuses is made installable by FindOrFetchJSON
+    sequant_backend_installable(TiledArray _install)
+    set(_exclude)
+    if (NOT _install)
+        set(_exclude EXCLUDE_FROM_ALL)
+    endif()
+
     FetchContent_Declare(
         TiledArray
         GIT_REPOSITORY "https://github.com/ValeevGroup/tiledarray.git"
         GIT_TAG "${SEQUANT_TRACKED_TILEDARRAY_TAG}"
         GIT_SHALLOW
         SYSTEM
+        ${_exclude}
         FIND_PACKAGE_ARGS NAMES TiledArray COMPONENTS tiledarray
     )
 
     FetchContent_MakeAvailable(TiledArray)
 
-    if (NOT DEFINED TiledArray_CONFIG)
-        # this is where tiledarray-config.cmake will end up
-        # must be in sync with the "install(FILES ...tiledarray-config.cmake" statement in https://github.com/ValeevGroup/tiledarray/blob/${MPQC_TRACKED_TILEDARRAY_TAG}/CMakeLists.txt
-        set(TiledArray_CONFIG "${CMAKE_INSTALL_PREFIX}/${TILEDARRAY_INSTALL_CMAKEDIR}")
+    if (TiledArray_FOUND)
+        set(SEQUANT_FETCHED_TILEDARRAY FALSE)
+    else()
+        set(SEQUANT_FETCHED_TILEDARRAY TRUE)
+        if (_install)
+            get_directory_property(_ta_version DIRECTORY ${tiledarray_SOURCE_DIR} DEFINITION TILEDARRAY_VERSION)
+            # this is where tiledarray-config.cmake will end up
+            # must be in sync with the "install(FILES ...tiledarray-config.cmake" statement in https://github.com/ValeevGroup/tiledarray/blob/${MPQC_TRACKED_TILEDARRAY_TAG}/CMakeLists.txt
+            set(TiledArray_CONFIG "${CMAKE_INSTALL_PREFIX}/${TILEDARRAY_INSTALL_CMAKEDIR}")
+            sequant_record_installed_dependency(TiledArray VERSION ${_ta_version}
+                                                CONFIG_VERSION_FILE ${TILEDARRAY_INSTALL_CMAKEDIR}/tiledarray-config-version.cmake)
+        else()
+            unset(TiledArray_CONFIG)
+        endif()
     endif()
 endif()
 

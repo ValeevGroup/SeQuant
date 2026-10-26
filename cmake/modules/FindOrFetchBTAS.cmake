@@ -4,6 +4,9 @@ if (NOT TARGET BTAS::BTAS)
   find_package_regimport(BTAS 1.0.0 QUIET CONFIG)
   if (TARGET BTAS::BTAS)
     message(STATUS "Found BTAS CONFIG at ${BTAS_CONFIG}")
+    set(SEQUANT_FETCHED_BTAS FALSE)
+  elseif (NOT SEQUANT_FETCH_MISSING_DEPENDENCIES)
+    message(FATAL_ERROR "BTAS 1.0.0 or later not found: set BTAS_DIR to the directory containing btas-config.cmake, or set SEQUANT_FETCH_MISSING_DEPENDENCIES=ON")
   endif (TARGET BTAS::BTAS)
 endif (NOT TARGET BTAS::BTAS)
 
@@ -31,12 +34,19 @@ if (NOT TARGET BTAS::BTAS)
     set(BTAS_ASSERT_POLICY BTAS_ASSERT_${SEQUANT_ASSERT_BEHAVIOR} CACHE STRING "Controls the behavior of BTAS_ASSERT (seeded from SEQUANT_ASSERT_BEHAVIOR)")
   endif()
 
+  # a fetched BTAS is installed only on request
+  sequant_backend_installable(BTAS _install)
+  set(_exclude)
+  if (NOT _install)
+    set(_exclude EXCLUDE_FROM_ALL)
+  endif()
+
   include(FetchContent)
   FetchContent_Declare(
       BTAS
       GIT_REPOSITORY      https://github.com/BTAS/btas.git
       GIT_TAG             ${SEQUANT_TRACKED_BTAS_TAG}
-      EXCLUDE_FROM_ALL
+      ${_exclude}
       SYSTEM
   )
   FetchContent_MakeAvailable(BTAS)
@@ -51,8 +61,16 @@ if (NOT TARGET BTAS::BTAS)
     add_library(BTAS::BTAS ALIAS BTAS)
   endif(TARGET BTAS AND NOT TARGET BTAS::BTAS)
 
-  # set BTAS_CONFIG to the install location so that we know where to find it
-  set(BTAS_CONFIG ${CMAKE_INSTALL_PREFIX}/${BTAS_INSTALL_CMAKEDIR}/btas-config.cmake)
+  set(SEQUANT_FETCHED_BTAS TRUE)
+  if (_install)
+    get_directory_property(_btas_version DIRECTORY ${BTAS_SOURCE_DIR} DEFINITION BTAS_VERSION)
+    # set BTAS_CONFIG to the install location so that we know where to find it
+    set(BTAS_CONFIG ${CMAKE_INSTALL_PREFIX}/${BTAS_INSTALL_CMAKEDIR}/btas-config.cmake)
+    sequant_record_installed_dependency(BTAS VERSION ${_btas_version}
+                                        CONFIG_VERSION_FILE ${BTAS_INSTALL_CMAKEDIR}/btas-config-version.cmake)
+  else()
+    unset(BTAS_CONFIG)
+  endif()
 
   # define macros specifying Fortran mangling convention, if necessary
   if (_linalgpp_use_standard_linalg_kits)
