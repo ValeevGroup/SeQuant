@@ -1777,11 +1777,27 @@ TEST_CASE("sum_move_omits_zeros_and_combines_constants", "[elements]") {
                            ex<Constant>(2), ex<Constant>(0), ex<Variable>(L"y"),
                            ex<Constant>(3)},
         Sum::move_only_tag{});
-    const auto constant =
-        std::find_if(result.begin(), result.end(),
-                     [](const ExprPtr &term) { return term->is<Constant>(); });
-    REQUIRE(constant != result.end());
-    REQUIRE(constant->as<Constant>().value() == 6);
+    REQUIRE(result.size() == 3);
+    REQUIRE(result.summand(0)->as<Variable>().label() == L"x");
+    REQUIRE(result.summand(1)->as<Constant>().value() == 6);
+    REQUIRE(result.summand(2)->as<Variable>().label() == L"y");
+
+    // the recorded constant position is observable only through a later
+    // append: a correct position folds the new constant in, a stale one
+    // appends a second constant or trips the assert
+    result.append(ex<Constant>(4));
+    REQUIRE(result.size() == 3);
+    REQUIRE(result.summand(1)->as<Constant>().value() == 10);
+  }
+
+  SECTION("adjacent and trailing zeros") {
+    Sum result(
+        Sum::summands_type{ex<Variable>(L"x"), ex<Constant>(0), ex<Constant>(0),
+                           ex<Variable>(L"y"), ex<Constant>(0)},
+        Sum::move_only_tag{});
+    REQUIRE(result.size() == 2);
+    REQUIRE(result.summand(0)->as<Variable>().label() == L"x");
+    REQUIRE(result.summand(1)->as<Variable>().label() == L"y");
   }
 }
 
