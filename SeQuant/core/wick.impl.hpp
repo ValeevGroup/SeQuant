@@ -794,7 +794,7 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
       // - any index with protoindices is noncovariant
       // - if kronecker delta has a noncovariant index, the other index is also
       // noncovariant
-      expr->visit([&all_noncovariant_indices](const ExprPtr &ex) {
+      expr->visit([&all_noncovariant_indices](const Expr &ex) {
         if (ex.is<AbstractTensor>()) {
           auto &t = ex.template as<AbstractTensor>();
           for (auto &idx : slots(t)) {
@@ -905,8 +905,8 @@ void WickTheorem<S>::extract_indices() const {
     input = *it;
   }
   bool expanded = true;
-  input->visit([&expanded](const ExprPtr &subexpr) {
-    if (subexpr->is<Sum>()) expanded = false;
+  input->visit([&expanded](const Expr &subexpr) {
+    if (subexpr.is<Sum>()) expanded = false;
   });
   if (!expanded)
     throw Exception(

@@ -363,9 +363,9 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE_NOTHROW(result = wick_mp(in));
     std::size_t noverlaps = 0;
     result->visit(
-        [&](const ExprPtr& e) {
-          if (!e->is<Tensor>()) return;
-          const auto& t = e->as<Tensor>();
+        [&](const Expr& e) {
+          if (!e.is<Tensor>()) return;
+          const auto& t = e.as<Tensor>();
           INFO(toUtf8(to_latex(e)));
           if (t.label() == reserved::kronecker_label())
             REQUIRE(t.bra()[0].proto_indices() == t.ket()[0].proto_indices());
@@ -432,8 +432,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
                ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
     auto result2 = wick_mp(in2, {.eta_as_delta_minus_gamma = true});
     result2->visit(
-        [](const ExprPtr& e) {
-          if (e->is<Tensor>()) REQUIRE(e->as<Tensor>().label() != L"δ");
+        [](const Expr& e) {
+          if (e.is<Tensor>()) REQUIRE(e.as<Tensor>().label() != L"δ");
         },
         /*atoms_only=*/true);
   }
@@ -445,13 +445,13 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     const container::map<Index, Index> identify{{u3, u2}, {u4, u1}};
     auto rename = [&](ExprPtr expr) {
       expr->visit(
-          [&](const ExprPtr& e) {
-            if (e->is<Tensor>()) {
-              e->as<Tensor>().transform_indices(identify);
-              e->as<Tensor>().reset_tags();
-            } else if (e->is<FNOperator>()) {
-              e->as<FNOperator>().transform_indices(identify);
-              for (const auto& op : e->as<FNOperator>()) op.index().reset_tag();
+          [&](Expr& e) {
+            if (e.is<Tensor>()) {
+              e.as<Tensor>().transform_indices(identify);
+              e.as<Tensor>().reset_tags();
+            } else if (e.is<FNOperator>()) {
+              e.as<FNOperator>().transform_indices(identify);
+              for (const auto& op : e.as<FNOperator>()) op.index().reset_tag();
             }
           },
           /*atoms_only=*/true);
@@ -480,8 +480,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         REQUIRE(simplify(result - expected) == ex<Constant>(0));
         bool has_kappa = false;
         result->visit(
-            [&](const ExprPtr& e) {
-              if (e->is<Tensor>() && e->as<Tensor>().label() == L"κ")
+            [&](const Expr& e) {
+              if (e.is<Tensor>() && e.as<Tensor>().label() == L"κ")
                 has_kappa = true;
             },
             /*atoms_only=*/true);
@@ -918,9 +918,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
                                       L"+ κ{u_2,u_4;u_1,u_3}"));
     bool has_eta = false;
     result->visit(
-        [&](const ExprPtr& e) {
-          if (e->is<Tensor>() && e->as<Tensor>().label() == L"η")
-            has_eta = true;
+        [&](const Expr& e) {
+          if (e.is<Tensor>() && e.as<Tensor>().label() == L"η") has_eta = true;
         },
         /*atoms_only=*/true);
     REQUIRE(!has_eta);
@@ -937,9 +936,9 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE_NOTHROW(result = wick_mp(in, {.eta_as_delta_minus_gamma = true}));
     std::size_t n_eta1 = 0, n_eta2 = 0;
     result->visit(
-        [&](const ExprPtr& e) {
-          if (e->is<Tensor>() && e->as<Tensor>().label() == L"η")
-            (e->as<Tensor>().rank() == 1 ? n_eta1 : n_eta2) += 1;
+        [&](const Expr& e) {
+          if (e.is<Tensor>() && e.as<Tensor>().label() == L"η")
+            (e.as<Tensor>().rank() == 1 ? n_eta1 : n_eta2) += 1;
         },
         /*atoms_only=*/true);
     REQUIRE(n_eta1 == 0);
@@ -991,9 +990,9 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         sp = simplify(sp);
         // no active space: no γ, η or κ
         mp->visit(
-            [&](const ExprPtr& e) {
-              if (e->is<Tensor>()) {
-                const auto l = e->as<Tensor>().label();
+            [&](const Expr& e) {
+              if (e.is<Tensor>()) {
+                const auto l = e.as<Tensor>().label();
                 REQUIRE(l != L"γ");
                 REQUIRE(l != L"η");
                 REQUIRE(l != L"κ");
@@ -1005,10 +1004,10 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         // The standard theorem spells a contraction as the overlap s, the
         // extended one as δ; they coincide for same-space indices.
         sp->visit(
-            [](const ExprPtr& e) {
-              if (e->is<Tensor>() &&
-                  e->as<Tensor>().label() == reserved::overlap_label()) {
-                auto& s = e->as<Tensor>();
+            [](Expr& e) {
+              if (e.is<Tensor>() &&
+                  e.as<Tensor>().label() == reserved::overlap_label()) {
+                auto& s = e.as<Tensor>();
                 s = make_kronecker(s.bra()[0], s.ket()[0])->as<Tensor>();
               }
             },
@@ -1017,10 +1016,10 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         // equal terms apart in mp - sp: rebuild them with a common vacuum.
         for (auto* e : {&mp, &sp})
           (*e)->visit(
-              [](const ExprPtr& x) {
-                if (x->is<FNOperator>()) {
-                  auto& nop = x->as<FNOperator>();
-                  x->as<FNOperator>() =
+              [](Expr& x) {
+                if (x.is<FNOperator>()) {
+                  auto& nop = x.as<FNOperator>();
+                  x.as<FNOperator>() =
                       FNOperator(cre(nop.creators()), ann(nop.annihilators()),
                                  Vacuum::SingleProduct);
                 }
@@ -1044,18 +1043,18 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       auto e = wick_mp(single(p, q));
       container::map<Index, Index> fresh;
       e->visit(
-          [&](const ExprPtr& x) {
-            if (x->is<Tensor>())
-              for (const auto& idx : x->as<Tensor>().const_braket())
+          [&](const Expr& x) {
+            if (x.is<Tensor>())
+              for (const auto& idx : x.as<Tensor>().const_braket())
                 if (idx != p && idx != q && !fresh.contains(idx))
                   fresh.emplace(idx, Index::make_tmp_index(idx.space()));
           },
           /*atoms_only=*/true);
       e->visit(
-          [&](const ExprPtr& x) {
-            if (x->is<Tensor>()) {
-              x->as<Tensor>().transform_indices(fresh);
-              x->as<Tensor>().reset_tags();
+          [&](Expr& x) {
+            if (x.is<Tensor>()) {
+              x.as<Tensor>().transform_indices(fresh);
+              x.as<Tensor>().reset_tags();
             }
           },
           /*atoms_only=*/true);
@@ -1092,9 +1091,9 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
             ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
             ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"})))
         ->visit(
-            [&](const ExprPtr& e) {
-              if (e->is<Tensor>() && e->as<Tensor>().label() == L"κ")
-                kappa_ranks.insert(e->as<Tensor>().bra_rank());
+            [&](const Expr& e) {
+              if (e.is<Tensor>() && e.as<Tensor>().label() == L"κ")
+                kappa_ranks.insert(e.as<Tensor>().bra_rank());
             },
             /*atoms_only=*/true);
     REQUIRE(kappa_ranks == container::set<std::size_t>{2, 3});

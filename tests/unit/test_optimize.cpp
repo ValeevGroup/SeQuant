@@ -53,7 +53,7 @@ sequant::ExprPtr extract(sequant::ExprPtr expr,
 size_t count_tensor_leaves(sequant::ExprPtr const& expr) {
   using namespace sequant;
   size_t n = 0;
-  expr->visit([&n](auto const& x) { n += x->template is<Tensor>() ? 1 : 0; },
+  expr->visit([&n](Expr const& x) { n += x.is<Tensor>() ? 1 : 0; },
               /*atoms_only=*/true);
   return n;
 }

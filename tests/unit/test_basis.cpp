@@ -248,10 +248,10 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
         mbpt::csv_transform(make_overlap(x2, x1) * make_overlap(x1, x3), uocc);
     container::map<Index, int> counts;
     ct->visit(
-        [&counts](const ExprPtr& e) {
-          if (e->is<Tensor>()) {
-            for (const auto& idx : e->as<Tensor>().bra()) ++counts[idx];
-            for (const auto& idx : e->as<Tensor>().ket()) ++counts[idx];
+        [&counts](const Expr& e) {
+          if (e.is<Tensor>()) {
+            for (const auto& idx : e.as<Tensor>().bra()) ++counts[idx];
+            for (const auto& idx : e.as<Tensor>().ket()) ++counts[idx];
           }
         },
         /*atoms_only=*/true);
@@ -366,12 +366,12 @@ TEST_CASE("index-basis-canonicalization", "[algorithms][canonicalize][basis]") {
 
     std::set<Index> indices;
     term->visit(
-        [&indices](ExprPtr const& x) {
-          if (!x->is<Tensor>()) return;
-          for (auto&& idx : x->as<Tensor>().const_braketaux_indices())
+        [&indices](const Expr& x) {
+          if (!x.is<Tensor>()) return;
+          for (auto&& idx : x.as<Tensor>().const_braketaux_indices())
             indices.insert(idx);
-          if (x->as<Tensor>().label() == L"t")
-            CHECK(x->as<Tensor>().bra().at(0).label() != L"a_1");
+          if (x.as<Tensor>().label() == L"t")
+            CHECK(x.as<Tensor>().bra().at(0).label() != L"a_1");
         },
         /* atoms_only = */ true);
     REQUIRE(indices.contains(a1));

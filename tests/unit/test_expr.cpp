@@ -178,9 +178,7 @@ struct Adjointable : public sequant::Expr {
 };
 
 struct latex_visitor {
-  void operator()(const std::shared_ptr<sequant::Expr> &expr) {
-    result += expr->to_latex();
-  }
+  void operator()(const sequant::Expr &expr) { result += expr.to_latex(); }
   std::wstring result{};
 };
 
@@ -1190,26 +1188,40 @@ TEST_CASE("expr", "[elements]") {
       CHECK(x->as<Constant>().value() == 84);
     }
 
-    // a root managed by shared_ptr is passed to ExprPtr visitors as-is
+    // a visitor taking Expr & modifies the visited expressions in-place,
+    // including the visited expression itself, regardless of how it is managed
     {
+      auto relabel = [](Expr &expr) {
+        if (expr.is<Variable>()) expr.as<Variable>().set_label(L"B");
+      };
+
       ExprPtr root = ex<Variable>(L"A");
+      root->visit(relabel);
+      REQUIRE(root->as<Variable>().label() == L"B");
+
+      ExprHolder holder = Variable(L"A");
+      holder->visit(relabel);
+      REQUIRE(holder->as<Variable>().label() == L"B");
+
+      Sum sum(ExprPtrList{ex<Variable>(L"A"), ex<Variable>(L"C")});
       std::size_t n_visited = 0;
-      root->visit([&](const ExprPtr &expr) {
-        REQUIRE(expr.get() == root.get());
-        expr->as<Variable>().set_label(L"B");
+      sum.visit([&](Expr &expr) {
+        relabel(expr);
         ++n_visited;
       });
-      REQUIRE(n_visited == 1);
-      REQUIRE(root->as<Variable>().label() == L"B");
+      // two summands + the sum itself
+      REQUIRE(n_visited == 3);
+      REQUIRE(sum.summand(0)->as<Variable>().label() == L"B");
+      REQUIRE(sum.summand(1)->as<Variable>().label() == L"B");
     }
 
-    // visiting expressions not managed by shared_ptr
+    // a visitor taking const Expr & visits the visited expression itself, too
     {
       const Sum sum(ExprPtrList{ex<Variable>(L"A"), ex<Variable>(L"B")});
 
       std::wstring labels;
       sum.visit(
-          [&](const ExprPtr &expr) { labels += expr->as<Variable>().label(); },
+          [&](const Expr &expr) { labels += expr.as<Variable>().label(); },
           /* atoms_only = */ true);
       REQUIRE(labels == L"AB");
 
@@ -1218,12 +1230,43 @@ TEST_CASE("expr", "[elements]") {
       // two summands + the sum itself
       REQUIRE(n_visited == 3);
 
-      // root is passed as a non-owning pointer to ExprPtr visitors
       const Variable var(L"A");
+      n_visited = 0;
+      var.visit([&](const Expr &expr) {
+        REQUIRE(&expr == &var);
+        ++n_visited;
+      });
+      REQUIRE(n_visited == 1);
+    }
+
+    // a (deprecated) visitor taking const ExprPtr & receives a non-owning
+    // pointer to the visited expression itself, regardless of how it is managed
+    {
+      ExprPtr root = ex<Variable>(L"A");
+      std::size_t n_visited = 0;
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      root->visit([&](const ExprPtr &expr) {
+        REQUIRE(expr.get() == root.get());
+        REQUIRE(expr.use_count() == 0);
+        expr->as<Variable>().set_label(L"B");
+        ++n_visited;
+      });
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+      REQUIRE(n_visited == 1);
+      REQUIRE(root->as<Variable>().label() == L"B");
+      REQUIRE(root.use_count() == 1);
+
+      Variable var(L"A");
+      n_visited = 0;
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
       var.visit([&](const ExprPtr &expr) {
         REQUIRE(expr.get() == &var);
-        REQUIRE(expr.use_count() == 0);
+        expr->as<Variable>().set_label(L"B");
+        ++n_visited;
       });
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+      REQUIRE(n_visited == 1);
+      REQUIRE(var.label() == L"B");
     }
   }
 
@@ -1545,11 +1588,17 @@ TEST_CASE("expr", "[elements]") {
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     REQUIRE_NOTHROW(ex<Constant>(1)->hash_value(hasher1) == 0);
     {
-      // an expression managed by shared_ptr is passed to the hasher as-is
+      // the hasher receives a pointer to the expression itself, regardless of
+      // how it is managed
       const ExprPtr c = ex<Constant>(1);
       REQUIRE(c->hash_value(
                   [&c](const std::shared_ptr<const Expr> &ptr) -> std::size_t {
                     return ptr.get() == c.get() ? 1 : 0;
+                  }) == 1);
+      const Constant c2(1);
+      REQUIRE(c2.hash_value(
+                  [&c2](const std::shared_ptr<const Expr> &ptr) -> std::size_t {
+                    return ptr.get() == &c2 ? 1 : 0;
                   }) == 1);
     }
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END

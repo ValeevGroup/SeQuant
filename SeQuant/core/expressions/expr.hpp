@@ -117,6 +117,12 @@ struct CanonicalMark {
   }
 };
 
+/// a visitor taking `const ExprPtr &`, which is deprecated for Expr::visit
+template <typename Visitor>
+concept const_exprptr_visitor =
+    std::is_invocable_r_v<void, std::remove_reference_t<Visitor>,
+                          const ExprPtr &>;
+
 }  // namespace detail
 
 /// @return `T::static_type_name(std::type_identity<T>{})` if @c T declares
@@ -316,21 +322,55 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// @warning this will only work for tree expressions; no checking is
   /// performed that each subexpression has only been visited once
   /// TODO make work for graphs
-  /// @tparam Visitor a callable of type void(ExprPtr&) or void(const ExprPtr&)
-  /// @param visitor the visitor object
+  /// @tparam Visitor a callable of type void(ExprPtr&), void(Expr&) or
+  /// void(const Expr&); the deprecated void(const ExprPtr&) is supported as
+  /// well
+  /// @param visitor the visitor object. A visitor taking `ExprPtr &` can
+  /// replace the visited subexpressions; since this object itself can't be
+  /// replaced, it is not invoked on it. A visitor taking `Expr &` (only
+  /// supported by the non-const overload) can modify the visited expressions
+  /// in-place and one taking `const Expr &` can only inspect them; both are
+  /// invoked on this object as well. A visitor taking the deprecated
+  /// `const ExprPtr &` is invoked on this object, too, but receives a
+  /// non-owning pointer to it that must not be retained beyond the visitor's
+  /// invocation.
   /// @param atoms_only if true, will visit only the leaves; the default is to
   /// visit all nodes
   /// @return true if this object was visited
   /// @sa expr_range
   // clang-format on
   template <typename Visitor>
+    requires(!detail::const_exprptr_visitor<Visitor>)
   bool visit(Visitor &&visitor, const bool atoms_only = false) {
     return visit_impl(*this, std::forward<Visitor>(visitor), atoms_only);
   }
 
   /// const version of visit
   template <typename Visitor>
+    requires(!detail::const_exprptr_visitor<Visitor>)
   bool visit(Visitor &&visitor, const bool atoms_only = false) const {
+    return visit_impl(*this, std::forward<Visitor>(visitor), atoms_only);
+  }
+
+  /// visit with a visitor taking `const ExprPtr &`
+  /// @warning the visitor receives a non-owning pointer to this object, which
+  /// must not be retained beyond the visitor's invocation
+  template <detail::const_exprptr_visitor Visitor>
+  [[deprecated(
+      "Visitors taking const ExprPtr & are deprecated: use const Expr & for "
+      "inspecting and Expr & for modifying the visited expressions "
+      "instead")]] bool
+  visit(Visitor &&visitor, const bool atoms_only = false) {
+    return visit_impl(*this, std::forward<Visitor>(visitor), atoms_only);
+  }
+
+  /// const version of the deprecated visit
+  template <detail::const_exprptr_visitor Visitor>
+  [[deprecated(
+      "Visitors taking const ExprPtr & are deprecated: use const Expr & for "
+      "inspecting and Expr & for modifying the visited expressions "
+      "instead")]] bool
+  visit(Visitor &&visitor, const bool atoms_only = false) const {
     return visit_impl(*this, std::forward<Visitor>(visitor), atoms_only);
   }
 
@@ -627,9 +667,16 @@ class Expr : public std::enable_shared_from_this<Expr> {
       typename E, typename Visitor,
       typename = std::enable_if_t<std::is_same_v<std::remove_cvref_t<E>, Expr>>>
   static bool visit_impl(E &&expr, Visitor &&visitor, const bool atoms_only) {
+    using visitor_type = std::remove_reference_t<Visitor>;
+    constexpr bool is_const = std::is_const_v<std::remove_reference_t<E>>;
     constexpr bool visitor_uses_exprptr =
-        std::is_invocable_r_v<void, std::remove_reference_t<Visitor>,
-                              ExprPtr &>;
+        std::is_invocable_r_v<void, visitor_type, ExprPtr &>;
+    constexpr bool visitor_uses_expr = std::is_invocable_r_v<
+        void, visitor_type, std::conditional_t<is_const, const Expr &, Expr &>>;
+    static_assert(visitor_uses_exprptr || visitor_uses_expr,
+                  "Expr::visit: visitor must be invocable with ExprPtr &, "
+                  "Expr & or const Expr & (the latter only, if the visited "
+                  "expression is const)");
 
     for (auto &subexpr_ptr : expr.expr()) {
       const auto subexpr_is_an_atom = subexpr_ptr->is_atom();
@@ -648,22 +695,16 @@ class Expr : public std::enable_shared_from_this<Expr> {
       }
     }
 
-    // N.B. can only visit itself if visitor is nonmutating!
+    // N.B. this can't be replaced, hence ExprPtr & visitors don't visit it
     bool this_visited = false;
-    if constexpr (std::is_invocable_r_v<void, std::remove_reference_t<Visitor>,
-                                        const ExprPtr &>) {
-      if (!atoms_only || expr.is_atom()) {
-        const ExprPtr this_ptr = expr.non_owning_ptr();
-        visitor(this_ptr);
-        this_visited = true;
-      }
-    } else if constexpr (std::is_invocable_r_v<void,
-                                               std::remove_reference_t<Visitor>,
-                                               const Expr &>) {
-      if (!atoms_only || expr.is_atom()) {
-        visitor(std::as_const(expr));
-        this_visited = true;
-      }
+    if (atoms_only && !expr.is_atom()) return this_visited;
+    if constexpr (detail::const_exprptr_visitor<Visitor>) {
+      const ExprPtr this_ptr = expr.non_owning_ptr();
+      visitor(this_ptr);
+      this_visited = true;
+    } else if constexpr (!visitor_uses_exprptr) {
+      visitor(expr);
+      this_visited = true;
     }
 
     return this_visited;

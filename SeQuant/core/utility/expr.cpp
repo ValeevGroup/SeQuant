@@ -669,7 +669,7 @@ void push_symmetrizer(ResultExpr &expression,
 bool has_symmetrizer(const ExprPtr &expression) {
   bool contains_symmetrizer = false;
   expression->visit(
-      [&contains_symmetrizer](const ExprPtr &expr) {
+      [&contains_symmetrizer](const Expr &expr) {
         // Symmetrizer operators are represented as tensors with a reserved name
         if (expr.is<Tensor>() &&
             expr.as<Tensor>().label() == reserved::symm_label()) {

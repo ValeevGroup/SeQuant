@@ -172,7 +172,7 @@ bool Operator<QuantumNumbers, S>::has_odd_rank_term() const {
 
     auto term_rank = [](const ExprPtr& term) {
       std::size_t rank = 0;
-      auto count = [&rank](const ExprPtr& e) {
+      auto count = [&rank](const Expr& e) {
         if (e.is<NormalOperator<S>>()) {
           const auto& nop = e.as<NormalOperator<S>>();
           rank += nop.ncreators() + nop.nannihilators();

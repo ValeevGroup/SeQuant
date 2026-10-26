@@ -64,9 +64,9 @@ inline Census census(ExprPtr const& eq) {
     container::set<Index> bound;
     Instances term_instances;
     term->visit(
-        [&](ExprPtr const& x) {
-          if (!x->is<AbstractTensor>()) return;
-          auto const& t = x->as<AbstractTensor>();
+        [&](const Expr& x) {
+          if (!x.is<AbstractTensor>()) return;
+          auto const& t = x.as<AbstractTensor>();
           for (Index const& idx : t._slots()) {
             result.instances.insert(idx.basis().basis_instance());
             if (idx.basis().has_basis_instance())
@@ -78,9 +78,9 @@ inline Census census(ExprPtr const& eq) {
         /* atoms_only = */ true);
     result.max_per_term = std::max(result.max_per_term, term_instances.size());
     term->visit(
-        [&](ExprPtr const& x) {
-          if (!x->is<AbstractTensor>()) return;
-          auto const& t = x->as<AbstractTensor>();
+        [&](const Expr& x) {
+          if (!x.is<AbstractTensor>()) return;
+          auto const& t = x.as<AbstractTensor>();
           if (mbpt::is_amplitude_tensor(t, reg) || is_projector(t)) return;
           if (t._label() == reserved::overlap_label()) {
             ++result.metrics;
@@ -141,15 +141,15 @@ inline ExprPtr first_tensor(std::vector<ExprPtr> const& eqs,
   for (auto const& eq : eqs)
     if (eq && !result)
       eq->visit(
-          [&](ExprPtr const& x) {
-            if (result || !x->is<AbstractTensor>()) return;
-            auto const& t = x->as<AbstractTensor>();
+          [&](const Expr& x) {
+            if (result || !x.is<AbstractTensor>()) return;
+            auto const& t = x.as<AbstractTensor>();
             if (t._label() == label &&
                 (!with_instance ||
                  std::ranges::any_of(t._slots(), [](Index const& idx) {
                    return idx.basis().has_basis_instance();
                  })))
-              result = x->clone();
+              result = x.clone();
           },
           /* atoms_only = */ true);
   return result;
