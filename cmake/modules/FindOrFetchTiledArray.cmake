@@ -48,7 +48,7 @@ if (NOT TARGET tiledarray)
             get_directory_property(_ta_version DIRECTORY ${tiledarray_SOURCE_DIR} DEFINITION TILEDARRAY_VERSION)
             # this is where tiledarray-config.cmake will end up
             # must be in sync with the "install(FILES ...tiledarray-config.cmake" statement in https://github.com/ValeevGroup/tiledarray/blob/${MPQC_TRACKED_TILEDARRAY_TAG}/CMakeLists.txt
-            set(TiledArray_CONFIG "${CMAKE_INSTALL_PREFIX}/${TILEDARRAY_INSTALL_CMAKEDIR}")
+            set(TiledArray_CONFIG "${CMAKE_INSTALL_PREFIX}/${TILEDARRAY_INSTALL_CMAKEDIR}/tiledarray-config.cmake")
             sequant_record_installed_dependency(TiledArray VERSION ${_ta_version}
                                                 CONFIG_VERSION_FILE ${TILEDARRAY_INSTALL_CMAKEDIR}/tiledarray-config-version.cmake)
             # a BTAS fetched by TiledArray is installed with it, whether or not SEQUANT_BTAS is ON
