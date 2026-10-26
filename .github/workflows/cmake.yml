@@ -63,6 +63,7 @@ jobs:
         -DCMAKE_UNITY_BUILD=${{ !matrix.sanitize && (matrix.build_type == 'Debug' || matrix.valgrind) }}
         -DMPIEXEC_PREFLAGS='--bind-to;none;--allow-run-as-root'
         -DCMAKE_PREFIX_PATH='/usr/local/opt/boost'
+        -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/install
         -DSEQUANT_TESTS=ON
         -DSEQUANT_EVAL_TESTS=${{ !matrix.valgrind && !matrix.sanitize && !startswith(matrix.os, 'windows') }}
         -DSEQUANT_USE_SYSTEM_BOOST_HASH=OFF
@@ -176,6 +177,47 @@ jobs:
       working-directory: ${{github.workspace}}/build
       shell: bash
       run: ctest --output-on-failure -R "^sequant"
+
+    - name: Test consuming installed SeQuant
+      if: ${{ !matrix.valgrind && !matrix.sanitize }}
+      shell: bash
+      env:
+        VCPKG_CMAKE_CONFIG: ${{ steps.vcpkg.outputs.vcpkg-cmake-config }}
+      run: |
+        cmake --install build
+        cmake -S tests/consumer -B $RUNNER_TEMP/consumer -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/install;/usr/local/opt/boost" $VCPKG_CMAKE_CONFIG
+        cmake --build $RUNNER_TEMP/consumer
+        $RUNNER_TEMP/consumer/consumer
+
+        # the install refuses to overwrite a different version of a package it installed (libPerm is never found, so always fetched)
+        version_file=$(find "$GITHUB_WORKSPACE/install" -name libperm-config-version.cmake)
+        test -n "$version_file"
+        sed -i.bak 's/^set(PACKAGE_VERSION "[^"]*")/set(PACKAGE_VERSION "0.0.1")/' "$version_file"
+        if cmake --install build; then echo "the install should have refused to overwrite libperm 0.0.1"; exit 1; fi
+        mv "$version_file.bak" "$version_file"
+
+        # with the master switch off nothing fetched is installed; the consumer then gets the dependencies from the first install
+        cmake -DSEQUANT_INSTALL_FETCHED_DEPENDENCIES=OFF -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install-nodeps build
+        cmake --install build
+        test ! -e "$GITHUB_WORKSPACE/install-nodeps/lib/cmake/range-v3"
+        cmake -S tests/consumer -B $RUNNER_TEMP/consumer-nodeps -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/install-nodeps;$GITHUB_WORKSPACE/install;/usr/local/opt/boost" $VCPKG_CMAKE_CONFIG
+        cmake --build $RUNNER_TEMP/consumer-nodeps
+        $RUNNER_TEMP/consumer-nodeps/consumer
+
+    - name: Test consuming installed SeQuant with a fetched backend
+      # TAPP is the cheapest fetched backend: built already, small to install
+      if: ${{ !matrix.valgrind && !matrix.sanitize && !startswith(matrix.os, 'windows') }}
+      shell: bash
+      run: |
+        cmake -DSEQUANT_INSTALL_FETCHED_DEPENDENCIES=ON -DSEQUANT_INSTALL_FETCHED_BACKENDS=TAPP -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install-tapp build
+        cmake --build build -j 2
+        cmake --install build
+        cmake -S tests/consumer -B $RUNNER_TEMP/consumer-tapp -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/install-tapp;/usr/local/opt/boost" -DSEQUANT_CONSUMER_BACKENDS=tapp
+        cmake --build $RUNNER_TEMP/consumer-tapp
+        $RUNNER_TEMP/consumer-tapp/consumer
 
     - name: Ensure benchmarks not broken
       if: ${{ !matrix.valgrind && !matrix.sanitize }}

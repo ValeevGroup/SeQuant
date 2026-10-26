@@ -22,6 +22,15 @@ set(SEQUANT_EXT_VERSION "@SEQUANT_EXT_VERSION@")
 
 @PACKAGE_INIT@
 
+# <out-var> = the config file a hint names: a hint relative to the install prefix locates a dependency
+# installed with SeQuant, wherever the install is now; an absolute one a dependency found elsewhere
+macro(_sequant_resolve_config hint out_var)
+  set(${out_var} "${hint}")
+  if (NOT "${hint}" STREQUAL "" AND NOT IS_ABSOLUTE "${hint}")
+    set(${out_var} "${PACKAGE_PREFIX_DIR}/${hint}")
+  endif()
+endmacro()
+
 # Detect libc++ header/library mismatch for non-Apple Clang (warn only;
 # the consuming top-level project is responsible for global linker flags)
 include("${CMAKE_CURRENT_LIST_DIR}/CheckCXXFeatures.cmake")
@@ -29,9 +38,68 @@ vgkit_check_libcxx_linker_mismatch()
 
 @Boost_CONFIG_FILE_CONTENTS@
 
-set(SEQUANT_HAS_TILEDARRAY @SEQUANT_HAS_TILEDARRAY@)
+if (NOT TARGET Threads::Threads)
+  find_dependency(Threads REQUIRED)
+endif()
+
+set(SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB @SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB@)
+if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB AND NOT TARGET TBB::tbb)
+  get_filename_component(_sequant_tbb_dir "@TBB_CONFIG@" DIRECTORY)
+  find_dependency(TBB CONFIG REQUIRED HINTS "${_sequant_tbb_dir}")
+  unset(_sequant_tbb_dir)
+endif()
+
+# range-v3's version file is ExactVersion: check the minimum by hand
+if (NOT TARGET range-v3::range-v3)
+  set(_sequant_hint "")
+  _sequant_resolve_config("@SEQUANT_RANGEV3_CONFIG_HINT@" _sequant_config)
+  if (_sequant_config)
+    get_filename_component(_sequant_hint "${_sequant_config}" DIRECTORY)
+  endif()
+  find_dependency(range-v3 QUIET REQUIRED HINTS "${_sequant_hint}")
+  if (range-v3_VERSION VERSION_LESS "@SEQUANT_OLDEST_RANGEV3_VERSION@")
+    message(FATAL_ERROR "Found range-v3 ${range-v3_VERSION}, but SeQuant requires @SEQUANT_OLDEST_RANGEV3_VERSION@ or later")
+  endif()
+endif()
+
+if (NOT TARGET polymorphic_variant::polymorphic_variant)
+  set(_sequant_hint "")
+  _sequant_resolve_config("@SEQUANT_POLYMORPHICVARIANT_CONFIG_HINT@" _sequant_config)
+  if (_sequant_config)
+    get_filename_component(_sequant_hint "${_sequant_config}" DIRECTORY)
+  endif()
+  find_dependency(polymorphic_variant @SEQUANT_OLDEST_POLYMORPHICVARIANT_VERSION@ QUIET REQUIRED HINTS "${_sequant_hint}")
+endif()
+
+if (NOT TARGET libperm::libperm)
+  set(_sequant_hint "")
+  _sequant_resolve_config("@SEQUANT_LIBPERM_CONFIG_HINT@" _sequant_config)
+  if (_sequant_config)
+    get_filename_component(_sequant_hint "${_sequant_config}" DIRECTORY)
+  endif()
+  find_dependency(libperm @SEQUANT_OLDEST_LIBPERM_VERSION@ QUIET REQUIRED HINTS "${_sequant_hint}")
+endif()
+unset(_sequant_hint)
+unset(_sequant_config)
+
+# Eigen is a private dependency: only static libraries need it
+if (NOT "@BUILD_SHARED_LIBS@" AND NOT TARGET Eigen3::Eigen)
+  set(_sequant_hint "")
+  if (NOT "@Eigen3_CONFIG@" STREQUAL "")
+    get_filename_component(_sequant_hint "@Eigen3_CONFIG@" DIRECTORY)
+  endif()
+  # re:NO_CMAKE_PACKAGE_REGISTRY: eigen3 registers its *build* tree with the user package registry ...
+  #                               to avoid issues with wiped build directory look for installed eigen
+  find_package(Eigen3 CONFIG REQUIRED NO_CMAKE_PACKAGE_REGISTRY HINTS "${_sequant_hint}")
+  if (Eigen3_VERSION VERSION_LESS "@SEQUANT_OLDEST_EIGEN_VERSION@")
+    message(FATAL_ERROR "Found Eigen3 ${Eigen3_VERSION} at ${Eigen3_DIR}, but SeQuant requires @SEQUANT_OLDEST_EIGEN_VERSION@ or later")
+  endif()
+  unset(_sequant_hint)
+endif()
+
+set(SEQUANT_HAS_TILEDARRAY @SEQUANT_EXPORTS_TILEDARRAY@)
 if(SEQUANT_HAS_TILEDARRAY AND NOT TARGET tiledarray)
-  set(TiledArray_CONFIG @TiledArray_CONFIG@)
+  _sequant_resolve_config("@SEQUANT_TILEDARRAY_CONFIG_HINT@" TiledArray_CONFIG)
   if (NOT TiledArray_CONFIG OR NOT EXISTS ${TiledArray_CONFIG})
     message(FATAL_ERROR "Expected TiledArray config file at ${TiledArray_CONFIG}; directory moved since SeQuant configuration?")
   endif()
@@ -39,9 +107,9 @@ if(SEQUANT_HAS_TILEDARRAY AND NOT TARGET tiledarray)
   find_dependency(TiledArray CONFIG QUIET REQUIRED COMPONENTS tiledarray PATHS ${TiledArray_DIR} NO_DEFAULT_PATH)
 endif()
 
-set(SEQUANT_HAS_BTAS @SEQUANT_HAS_BTAS@)
+set(SEQUANT_HAS_BTAS @SEQUANT_EXPORTS_BTAS@)
 if(SEQUANT_HAS_BTAS AND NOT TARGET BTAS::BTAS)
-  set(BTAS_CONFIG @BTAS_CONFIG@)
+  _sequant_resolve_config("@SEQUANT_BTAS_CONFIG_HINT@" BTAS_CONFIG)
   if (NOT BTAS_CONFIG OR NOT EXISTS ${BTAS_CONFIG})
     message(FATAL_ERROR "Expected BTAS config file at ${BTAS_CONFIG}; directory moved since SeQuant configuration?")
   endif()
@@ -49,52 +117,14 @@ if(SEQUANT_HAS_BTAS AND NOT TARGET BTAS::BTAS)
   find_dependency(BTAS CONFIG QUIET REQUIRED PATHS ${BTAS_DIR} NO_DEFAULT_PATH)
 endif()
 
-set(SEQUANT_HAS_TAPP @SEQUANT_HAS_TAPP@)
+set(SEQUANT_HAS_TAPP @SEQUANT_EXPORTS_TAPP@)
 if(SEQUANT_HAS_TAPP AND NOT TARGET tapp::reference)
-  set(tapp_CONFIG @tapp_CONFIG@)
+  _sequant_resolve_config("@SEQUANT_TAPP_CONFIG_HINT@" tapp_CONFIG)
   if (NOT tapp_CONFIG OR NOT EXISTS ${tapp_CONFIG})
     message(FATAL_ERROR "Expected tapp config at ${tapp_CONFIG}; directory moved since SeQuant configuration?")
   endif()
   get_filename_component(tapp_DIR ${tapp_CONFIG} DIRECTORY)
   find_dependency(tapp CONFIG QUIET REQUIRED COMPONENTS reference PATHS ${tapp_DIR} NO_DEFAULT_PATH)
-endif()
-
-set(SEQUANT_HAS_EIGEN @SEQUANT_HAS_EIGEN@)
-if (NOT TARGET Eigen3::Eigen AND SEQUANT_HAS_EIGEN)
-  if (TARGET TiledArray_Eigen)
-     add_library(Eigen3::Eigen ALIAS TiledArray_Eigen)
-  else()
-    get_filename_component(Eigen3_DIR "@Eigen3_CONFIG@" DIRECTORY)
-     # re:NO_CMAKE_PACKAGE_REGISTRY: eigen3 registers its *build* tree with the user package registry ...
-     #                               to avoid issues with wiped build directory look for installed eigen
-     find_package(Eigen3 3.0 CONFIG REQUIRED NO_CMAKE_PACKAGE_REGISTRY HINTS "${Eigen3_DIR}")
-  endif()
-endif()
-
-if (NOT TARGET range-v3::range-v3)
-  get_filename_component(range-v3_DIR "@range-v3_CONFIG@" DIRECTORY)
-  find_dependency(range-v3 QUIET REQUIRED HINTS "${range-v3_DIR}")
-endif(NOT TARGET range-v3::range-v3)
-
-if (NOT TARGET libperm::libperm)
-  get_filename_component(libperm_DIR "@libperm_CONFIG@" DIRECTORY)
-  find_dependency(libperm QUIET REQUIRED HINTS "${libperm_DIR}")
-endif(NOT TARGET libperm::libperm)
-
-if (NOT TARGET polymorphic_variant::polymorphic_variant)
-  get_filename_component(polymorphic_variant_DIR "@polymorphic_variant_CONFIG@" DIRECTORY)
-  find_dependency(polymorphic_variant QUIET REQUIRED HINTS "${polymorphic_variant_DIR}")
-endif(NOT TARGET polymorphic_variant::polymorphic_variant)
-
-if (NOT TARGET Threads::Threads)
-    find_dependency(Threads REQUIRED)
-endif (NOT TARGET Threads::Threads)
-
-set(SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB @SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB@)
-if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB AND NOT TARGET TBB::tbb)
-    get_filename_component(_sequant_tbb_dir "@TBB_CONFIG@" DIRECTORY)
-    find_dependency(TBB CONFIG REQUIRED HINTS "${_sequant_tbb_dir}")
-    unset(_sequant_tbb_dir)
 endif()
 
 # Include library IMPORT targets

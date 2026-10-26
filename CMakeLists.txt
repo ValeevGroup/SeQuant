@@ -145,6 +145,9 @@ add_feature_info(SEQUANT_EVAL_TILEDARRAY SEQUANT_TILEDARRAY "Enable TiledArray e
 option(SEQUANT_TAPP "Enable TAPP eval backend" ${SEQUANT_EVAL_TESTS})
 add_feature_info(SEQUANT_EVAL_TAPP SEQUANT_TAPP "Enable TAPP eval backend")
 
+# options and helpers for fetched (and possibly installed) dependencies
+include(SeQuantFetchedDependencies)
+
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 
@@ -251,6 +254,13 @@ if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND
 endif ()
 # check if <execution> header is usable
 vgkit_check_cxx_execution_header(SEQUANT)
+
+# refuse at install time to overwrite a different version of a package SeQuant installs;
+# must precede every dependency's install rules (CMP0082 NEW: rules run in declaration order)
+install(CODE "set(SEQUANT_INSTALL_SCRIPT \"${PROJECT_BINARY_DIR}/cmake_install.cmake\")
+set(SEQUANT_INSTALL_STAGING_DIR \"${PROJECT_BINARY_DIR}/sequant-install-staging\")
+set(SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES ${SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES})
+include(\"${PROJECT_SOURCE_DIR}/cmake/sequant-install-guard.cmake\")" ALL_COMPONENTS)
 
 # Ranges-V3
 include(FindOrFetchRangeV3)
@@ -613,23 +623,61 @@ set(SeQuant_core_src
 )
 
 ### optional prereqs
+# SEQUANT_HAS_<X>: backend <X> is enabled
+# SEQUANT_EXPORTS_<X>: backend <X> is enabled and either found or fetched and installed,
+# so that the installed SeQuant can export SeQuant::eval::<x>
+foreach (_backend IN LISTS _sequant_known_backends)
+    string(TOUPPER ${_backend} _backend_uc)
+    set(SEQUANT_EXPORTS_${_backend_uc} OFF)
+endforeach ()
+# sets SEQUANT_EXPORTS_<BACKEND> for an enabled <backend>
+macro(sequant_set_backend_exports backend)
+    string(TOUPPER ${backend} _backend_uc)
+    if (SEQUANT_FETCHED_${_backend_uc})
+        sequant_backend_installable(${backend} SEQUANT_EXPORTS_${_backend_uc})
+    else ()
+        set(SEQUANT_EXPORTS_${_backend_uc} ON)
+    endif ()
+endmacro()
+
 if (SEQUANT_TILEDARRAY)
     if (NOT TARGET tiledarray)
         include(FindOrFetchTiledArray)
     endif()
     set(SEQUANT_HAS_TILEDARRAY ON)
+    sequant_set_backend_exports(TiledArray)
 endif ()
 if (SEQUANT_BTAS)
     if (NOT TARGET BTAS::BTAS)
         include(FindOrFetchBTAS)
     endif()
     set(SEQUANT_HAS_BTAS ON)
+    if (SEQUANT_FETCHED_TILEDARRAY)
+        # BTAS::BTAS came with the fetched TiledArray, which found or fetched it
+        get_directory_property(BTAS_CONFIG DIRECTORY ${tiledarray_SOURCE_DIR} DEFINITION BTAS_CONFIG)
+        FetchContent_GetProperties(BTAS)
+    endif ()
+    if (SEQUANT_FETCHED_TILEDARRAY AND btas_POPULATED)
+        # BTAS was fetched by the fetched TiledArray and is installed only together with it
+        set(SEQUANT_FETCHED_BTAS TRUE)
+        set(SEQUANT_EXPORTS_BTAS ${SEQUANT_EXPORTS_TILEDARRAY})
+        if (NOT SEQUANT_EXPORTS_BTAS)
+            unset(BTAS_CONFIG)
+            sequant_backend_installable(BTAS _btas_install)
+            if (_btas_install)
+                message(WARNING "BTAS is built as part of the fetched TiledArray and is installed only together with it; add TiledArray to SEQUANT_INSTALL_FETCHED_BACKENDS")
+            endif ()
+        endif ()
+    else ()
+        sequant_set_backend_exports(BTAS)
+    endif ()
 endif ()
 if (SEQUANT_TAPP)
     if (NOT TARGET tapp::reference)
         include(FindOrFetchTAPP)
     endif()
     set(SEQUANT_HAS_TAPP ON)
+    sequant_set_backend_exports(TAPP)
 endif ()
 
 if (NOT PROJECT_IS_TOP_LEVEL)
@@ -780,21 +828,26 @@ endif()
 # All SeQuant modules (used for install, IWYU, etc.)
 ##########################
 set(SEQUANT_MODULES SeQuant-bliss SeQuant-symb SeQuant-eval SeQuant-optimize SeQuant-export SeQuant-core SeQuant-mbpt SeQuant)
-if (SEQUANT_HAS_TILEDARRAY)
-    list(APPEND SEQUANT_MODULES SeQuant-eval-ta)
-endif()
-if (SEQUANT_HAS_BTAS)
-    list(APPEND SEQUANT_MODULES SeQuant-eval-btas)
-endif()
-if (SEQUANT_HAS_TAPP)
-    list(APPEND SEQUANT_MODULES SeQuant-eval-tapp)
-endif()
+# a backend module is installed and exported only with its backend, else it is build-tree only
+set(SEQUANT_BUILD_LOCAL_MODULES)
+foreach (_backend IN LISTS _sequant_known_backends)
+    string(TOUPPER ${_backend} _backend_uc)
+    set(_module ${_sequant_backend_module_${_backend}})
+    if (SEQUANT_EXPORTS_${_backend_uc})
+        list(APPEND SEQUANT_MODULES ${_module})
+    elseif (SEQUANT_HAS_${_backend_uc})
+        list(APPEND SEQUANT_BUILD_LOCAL_MODULES ${_module})
+    endif()
+endforeach()
 
 ##########################
 # SeQuant: umbrella INTERFACE target (backwards compatibility)
 ##########################
 add_library(SeQuant INTERFACE)
 target_link_libraries(SeQuant INTERFACE ${SEQUANT_MODULES})
+foreach (_module IN LISTS SEQUANT_BUILD_LOCAL_MODULES)
+    target_link_libraries(SeQuant INTERFACE $<BUILD_LOCAL_INTERFACE:${_module}>)
+endforeach()
 set_target_properties(SeQuant PROPERTIES EXPORT_NAME SeQuant)
 add_library(SeQuant::SeQuant ALIAS SeQuant)
 
@@ -830,7 +883,7 @@ if (SEQUANT_IWYU)
             -Xiwyu --cxx20ns
             -Xiwyu --no_comments
         )
-        foreach(_target ${SEQUANT_MODULES})
+        foreach(_target ${SEQUANT_MODULES} ${SEQUANT_BUILD_LOCAL_MODULES})
             get_target_property(_type ${_target} TYPE)
             if (NOT _type STREQUAL "INTERFACE_LIBRARY")
                 set_property(TARGET ${_target} PROPERTY CXX_INCLUDE_WHAT_YOU_USE ${iwyu_options_and_path})
@@ -882,6 +935,20 @@ export(EXPORT sequant
         NAMESPACE SeQuant::
         FILE "${PROJECT_BINARY_DIR}/sequant-targets.cmake")
 
+# the installed config locates a dependency installed with SeQuant relative to its own prefix, so that the
+# install can be relocated (--prefix, DESTDIR, a moved tree); a found dependency keeps its absolute path
+foreach (_pair "range-v3:RANGEV3" "polymorphic_variant:POLYMORPHICVARIANT" "libperm:LIBPERM"
+               "TiledArray:TILEDARRAY" "BTAS:BTAS" "tapp:TAPP")
+    string(REPLACE ":" ";" _pair "${_pair}")
+    list(GET _pair 0 _pkg)
+    list(GET _pair 1 _dep)
+    set(_hint "${${_pkg}_CONFIG}")
+    if (_hint AND SEQUANT_FETCHED_${_dep})
+        cmake_path(RELATIVE_PATH _hint BASE_DIRECTORY "${CMAKE_INSTALL_PREFIX}")
+    endif ()
+    set(SEQUANT_${_dep}_CONFIG_HINT "${_hint}")
+endforeach ()
+
 ## Create the configure file
 configure_package_config_file(cmake/sequant-config.cmake.in
         "${PROJECT_BINARY_DIR}/sequant-config.cmake"
@@ -908,6 +975,8 @@ install(FILES
 add_custom_target_subproject(sequant install-config
         COMMAND ${CMAKE_COMMAND} -DCOMPONENT=sequant-config -P ${PROJECT_BINARY_DIR}/cmake_install.cmake
         COMMENT "Installing SeQuant config components")
+
+sequant_report_fetched_dependencies()
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     feature_summary(WHAT ALL
