@@ -154,7 +154,12 @@ class Sum : public Expr {
   summands_type summands_{};
   std::optional<size_t>
       constant_summand_idx_{};  // points to the constant summand, if any; used
-                                // to sum up constants in append/prepend
+                                // to sum up constants in the move-only ctor,
+                                // append and prepend
+
+  /// adds @p constant to the constant summand recorded by
+  /// constant_summand_idx_, which must be set
+  void fold_constant(const Constant &constant);
 
   /// @return the hash of this object
   /// @note this ensures that hash of a Sum of a single summand is
