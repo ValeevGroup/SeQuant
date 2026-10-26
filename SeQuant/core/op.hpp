@@ -31,6 +31,7 @@
 #include <utility>
 
 #include <range/v3/algorithm/adjacent_find.hpp>
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/sort.hpp>
@@ -38,6 +39,7 @@
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/range/access.hpp>
 #include <range/v3/range/primitives.hpp>
+#include <range/v3/range/traits.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/counted.hpp>
 #include <range/v3/view/reverse.hpp>
@@ -123,6 +125,11 @@ template <Statistics S1, Statistics S2>
 inline bool operator<(const Op<S1> &op1, const Op<S2> &op2) {
   if constexpr (S1 == S2) {
     if (op1.action() == op2.action()) {
+      // Equality ignores tags, while ordering can distinguish two tagged
+      // indices.
+      if (!op1.index().tag().has_value() || !op2.index().tag().has_value()) {
+        return op1.index() < op2.index();
+      }
       if (op1.index() == op2.index()) {
         return false;
       } else {
@@ -1066,13 +1073,22 @@ class NormalOperator : public Operator<S>,
   Hermiticity _hermiticity() const override final {
     if (this->_bra_rank() != this->_ket_rank())
       return Hermiticity::NonHermitian;
+    // Sort borrowed indices to compare multisets without copying protoindices;
+    // the operator owns the indices throughout this comparison.
     auto sorted_indices = [](auto &&idx_view) {
-      container::svector<Index> indices;
-      for (const Index &idx : idx_view) indices.push_back(idx);
-      ranges::sort(indices);
+      static_assert(
+          std::is_lvalue_reference_v<ranges::range_reference_t<
+              std::remove_cvref_t<decltype(idx_view)>>>,
+          "the view must yield the operator's own indices, not copies");
+      container::svector<const Index *> indices;
+      for (const Index &idx : idx_view) indices.push_back(&idx);
+      ranges::sort(indices,
+                   [](const Index *a, const Index *b) { return *a < *b; });
       return indices;
     };
-    return sorted_indices(this->_bra()) == sorted_indices(this->_ket())
+    return ranges::equal(
+               sorted_indices(this->_bra()), sorted_indices(this->_ket()),
+               [](const Index *a, const Index *b) { return *a == *b; })
                ? Hermiticity::Hermitian
                : Hermiticity::NonHermitian;
   }

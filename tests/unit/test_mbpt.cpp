@@ -256,6 +256,64 @@ TEST_CASE("mbpt operator commutativity", "[mbpt]") {
   }
 }
 
+TEST_CASE("mbpt quantum numbers combine and vacuum", "[mbpt]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  SECTION("single-product vacuum") {
+    auto ctx = get_default_context();
+    ctx.set(make_sr_spaces());
+    auto ctx_resetter = set_scoped_default_context(ctx);
+
+    const qns_t vac;
+    const auto t1 = excitation_type_qns(1);
+    const auto l1 = deexcitation_type_qns(1);
+
+    REQUIRE(is_vacuum(vac));
+    REQUIRE_FALSE(is_vacuum(t1));
+    REQUIRE_FALSE(is_vacuum(l1));
+    auto zero_or_one = vac;  // contains zero, but is not the vacuum
+    zero_or_one[0] = {0ul, 1ul};
+    REQUIRE_FALSE(is_vacuum(zero_or_one));
+
+    REQUIRE(combine(t1, vac) == t1);
+    REQUIRE(combine(vac, t1) == t1);
+    // excitations do not contract with each other
+    REQUIRE(combine(t1, t1) == excitation_type_qns(2));
+
+    // l1 to the left of t1 can contract partly or fully, so every count can
+    // drop to zero; t1 to the left of l1 cannot contract at all
+    qns_t contracted, uncontracted;
+    for (std::size_t s = 0; s != vac.size(); ++s) {
+      uncontracted[s] = t1[s] + l1[s];
+      contracted[s] = {0l, uncontracted[s].upper()};
+    }
+    REQUIRE(combine(l1, t1) == contracted);
+    REQUIRE(combine(t1, l1) == uncontracted);
+  }
+
+  SECTION("physical vacuum") {
+    auto ctx = get_default_context();
+    ctx.set(Vacuum::Physical);
+    auto ctx_resetter = set_scoped_default_context(ctx);
+
+    qns_t cre1, ann1;
+    cre1[0] = {1ul, 1ul};
+    ann1[1] = {1ul, 1ul};
+
+    // an annihilator to the left of a creator can contract with it
+    qns_t contracted;
+    contracted[0] = {0ul, 1ul};
+    contracted[1] = {0ul, 1ul};
+    REQUIRE(combine(ann1, cre1) == contracted);
+
+    qns_t uncontracted;
+    uncontracted[0] = {1ul, 1ul};
+    uncontracted[1] = {1ul, 1ul};
+    REQUIRE(combine(cre1, ann1) == uncontracted);
+  }
+}
+
 TEST_CASE("mbpt multireference regressions", "[mbpt]") {
   using namespace sequant;
   using namespace sequant::mbpt;

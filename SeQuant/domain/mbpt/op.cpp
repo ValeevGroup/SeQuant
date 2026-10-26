@@ -22,6 +22,7 @@
 #include <range/v3/view/reverse.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <algorithm>
 #include <memory>
 #include <mutex>
 
@@ -145,7 +146,8 @@ qns_t interval_deexcitation_type_qns(std::size_t K,
 
 qns_t general_type_qns(std::size_t K) {
   qnc_t result;
-  for (int i = 0; i < result.size(); i++) {
+  const auto n = result.size();
+  for (int i = 0; i < n; i++) {
     result[i] = {0, K};
   }
   return result;
@@ -169,17 +171,18 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
 
 // By counting the number of contractions between indices of proper type, we can
 // know the quantum numbers of a combined result.
-qns_t combine(qns_t a, qns_t b) {
+qns_t combine(qns_t a, const qns_t& b) {
   SEQUANT_ASSERT(a.size() == b.size());
-  qns_t result;
 
+  // Reuse the by-value first input's storage; compute both counts in each
+  // pair before overwriting either, since both depend on the original values.
   if (get_default_context().vacuum() == Vacuum::Physical) {
     const auto ncontr = qninterval_t{0, std::min(b[0].upper(), a[1].upper())};
     const auto nc = nonnegative(a[0] + b[0] - ncontr);
     const auto na = nonnegative(a[1] + b[1] - ncontr);
-    result[0] = nc;
-    result[1] = na;
-    return result;
+    a[0] = nc;
+    a[1] = na;
+    return a;
   } else if (get_default_context().vacuum() == Vacuum::SingleProduct ||
              get_default_context().vacuum() == Vacuum::MultiProduct) {
     const bool multiproduct =
@@ -207,10 +210,10 @@ qns_t combine(qns_t a, qns_t b) {
               : qninterval_t{0, std::min(b[cre].upper(), a[ann].upper())};
       auto nc_space = nonnegative(b[cre] + a[cre] - ncontr_space);
       auto na_space = nonnegative(b[ann] + a[ann] - ncontr_space);
-      result[cre] = nc_space;
-      result[ann] = na_space;
+      a[cre] = nc_space;
+      a[ann] = na_space;
     }
-    return result;
+    return a;
   } else {
     throw Exception("Unsupported vacuum context.");
   }
@@ -219,7 +222,9 @@ qns_t combine(qns_t a, qns_t b) {
 // must be defined including op.ipp since it's used there
 template <>
 bool is_vacuum<qns_t>(qns_t qns) {
-  return qns == qns_t{};
+  return std::all_of(qns.begin(), qns.end(), [](const auto& interval) {
+    return boost::numeric::equal(interval, qninterval_t{0});
+  });
 }
 
 }  // namespace sequant::mbpt
@@ -228,9 +233,10 @@ namespace sequant {
 
 mbpt::qns_t adjoint(mbpt::qns_t qns) {
   mbpt::qns_t new_qnst;
-  new_qnst.resize(qns.size());
+  const auto n = qns.size();
+  new_qnst.resize(n);
   auto is_even = [](int i) { return i % 2 == 0; };
-  for (int i = 0; i < qns.size(); i++) {
+  for (int i = 0; i < n; i++) {
     if (is_even(i)) {
       new_qnst[i + 1] = qns[i];
     } else {

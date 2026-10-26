@@ -872,6 +872,21 @@ SECTION("Closed-shell spintrace CCD") {
                    EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
                                 L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
     }
+    {  // compact = v2, two summands, both tracers
+      for (bool naive : {false, true}) {
+        const auto input = ex<Sum>(ExprPtrList{
+            deserialize(L"3/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                        {.def_perm_symm = Symmetry::Antisymm}),
+            deserialize(L"-1/2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                        {.def_perm_symm = Symmetry::Antisymm})});
+
+        auto result =
+            closed_shell_CC_spintrace_v2(input, {.naive_spintrace = naive});
+        REQUIRE_THAT(result,
+                     EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
+                                  L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
+      }
+    }
     {  // CSV (aka PNO) for regular cs
       const auto pno_ccd_energy_so = deserialize(
           L"1/4 g{a1<i1,i2>, a2<i1,i2>;i1, i2}:A-C t{i1,i2;a1<i1,i2>, "

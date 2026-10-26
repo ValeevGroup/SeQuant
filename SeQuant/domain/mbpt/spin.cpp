@@ -1094,9 +1094,23 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
   SEQUANT_ASSERT(options.method == BiorthogonalizationMethod::V2);
   using ranges::views::transform;
   auto const ext_idxs = external_indices(expr);
-  auto st_expr = options.naive_spintrace
-                     ? spintrace(expr, ext_idxs)
-                     : closed_shell_spintrace(expr, ext_idxs);
+  ExprPtr st_expr;
+  if (expr->is<Sum>()) {
+    // Canonicalize and merge each traced contribution before retaining the
+    // next one, so equivalent terms do not accumulate across input summands.
+    st_expr = transform_sum_expr(
+        *expr,
+        [&](const ExprPtr& term) {
+          auto contribution = options.naive_spintrace
+                                  ? spintrace(term, ext_idxs)
+                                  : closed_shell_spintrace(term, ext_idxs);
+          return canonicalize(std::move(contribution));
+        },
+        {.canonicalize = false});
+  } else {
+    st_expr = options.naive_spintrace ? spintrace(expr, ext_idxs)
+                                      : closed_shell_spintrace(expr, ext_idxs);
+  }
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
