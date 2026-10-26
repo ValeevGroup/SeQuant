@@ -52,7 +52,9 @@ else ()
 endif ()
 
 if (NOT SEQUANT_FETCH_MISSING_DEPENDENCIES)
-    set(Boost_FETCH_IF_MISSING OFF CACHE BOOL "" FORCE)
+    # normal variable (shadows any cache entry) so that nothing persists in the cache
+    set(Boost_FETCH_IF_MISSING 0)
+    message(STATUS "Boost_FETCH_IF_MISSING forced OFF by SEQUANT_FETCH_MISSING_DEPENDENCIES=OFF")
 elseif (NOT DEFINED Boost_FETCH_IF_MISSING)
     set(Boost_FETCH_IF_MISSING 1)
 endif ()
