@@ -40,6 +40,7 @@ Sum::Sum(summands_type &&summands, move_only_tag)
       ++pos;
     }
   }
+  drop_zero_constant();
 }
 
 Sum &Sum::append(ExprPtr summand) {
@@ -50,6 +51,7 @@ Sum &Sum::append(ExprPtr summand) {
         // immediately, if possible
         if (constant_summand_idx_) {
           fold_constant(summand->as<Constant>());
+          drop_zero_constant();
         } else {
           summands_.push_back(summand->clone());
           constant_summand_idx_ = summands_.size() - 1;
@@ -73,6 +75,7 @@ Sum &Sum::prepend(ExprPtr summand) {
       if (summand->is<Constant>()) {
         if (constant_summand_idx_) {  // add up to the existing constant ...
           fold_constant(summand->as<Constant>());
+          drop_zero_constant();
         } else {  // or include the nonzero constant and update
           // constant_summand_idx_
           summands_.insert(summands_.begin(), summand->clone());
@@ -100,6 +103,14 @@ void Sum::fold_constant(const Constant &constant) {
   auto folded = std::make_shared<Constant>(recorded->as<Constant>());
   *folded += constant;
   recorded = std::move(folded);
+}
+
+void Sum::drop_zero_constant() {
+  if (constant_summand_idx_ &&
+      summands_.at(*constant_summand_idx_)->is_zero()) {
+    summands_.erase(summands_.begin() + *constant_summand_idx_);
+    constant_summand_idx_.reset();
+  }
 }
 
 const Sum::summands_type &Sum::summands() const { return summands_; }

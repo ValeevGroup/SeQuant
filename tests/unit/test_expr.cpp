@@ -1814,6 +1814,31 @@ TEST_CASE("sum_constant_fold", "[elements]") {
     REQUIRE(c1->as<Constant>().value() == 1);
     REQUIRE(c2->as<Constant>().value() == 2);
   }
+
+  SECTION("constants that cancel are dropped") {
+    Sum moved(Sum::summands_type{ex<Constant>(1), ex<Constant>(-1),
+                                 ex<Variable>(L"x")},
+              Sum::move_only_tag{});
+    REQUIRE(moved.size() == 1);
+    REQUIRE(moved.summand(0)->is<Variable>());
+
+    Sum appended(ExprPtrList{ex<Variable>(L"x"), ex<Constant>(1)});
+    appended.append(ex<Constant>(-1));
+    REQUIRE(appended.size() == 1);
+    REQUIRE(appended.summand(0)->is<Variable>());
+    // the constant slot is released: a later constant starts a new one
+    appended.append(ex<Constant>(2));
+    REQUIRE(appended.size() == 2);
+    REQUIRE(appended.summand(1)->as<Constant>().value() == 2);
+
+    Sum prepended(ExprPtrList{ex<Constant>(1), ex<Variable>(L"x")});
+    prepended.prepend(ex<Constant>(-1));
+    REQUIRE(prepended.size() == 1);
+    REQUIRE(prepended.summand(0)->is<Variable>());
+    prepended.prepend(ex<Constant>(2));
+    REQUIRE(prepended.size() == 2);
+    REQUIRE(prepended.summand(0)->as<Constant>().value() == 2);
+  }
 }
 
 // CProduct before Product: a derived type computed first must not take, or
