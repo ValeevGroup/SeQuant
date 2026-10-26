@@ -88,15 +88,18 @@ Useful CMake Variables
        ``-DDTL_INCLUDE_DIR=<directory containing dtl/dtl.hpp>``; spdlog (``SEQUANT_UTILITIES`` only) cannot be located, so set ``SEQUANT_UTILITIES=OFF``.
    * - SEQUANT_INSTALL_FETCHED_DEPENDENCIES
      - ON
-     - Install the primary prerequisites that SeQuant had to fetch (Range-V3, polymorphic_variant, libPerm, nlohmann::json) into
-       ``CMAKE_INSTALL_PREFIX`` alongside SeQuant. Dependencies that were found are never installed. If OFF, the installed ``sequant-config.cmake``
-       looks for them with ``find_dependency`` and the consumer must provide them (e.g. via ``CMAKE_PREFIX_PATH``).
+     - Master switch for installing what SeQuant had to fetch. If ON, the fetched primary prerequisites (Range-V3, polymorphic_variant,
+       libPerm, nlohmann::json) are installed into ``CMAKE_INSTALL_PREFIX`` alongside SeQuant, and fetched evaluation backends can be
+       selected for installation with ``SEQUANT_INSTALL_FETCHED_BACKENDS``. Dependencies that were found are never installed. If OFF,
+       nothing fetched is installed: the installed ``sequant-config.cmake`` looks for the prerequisites with ``find_dependency`` and the
+       consumer must provide them (e.g. via ``CMAKE_PREFIX_PATH``), and a non-empty ``SEQUANT_INSTALL_FETCHED_BACKENDS`` is a configure error.
    * - SEQUANT_INSTALL_FETCHED_BACKENDS
      - (empty)
-     - Semicolon-separated, case-insensitive subset of ``TiledArray;BTAS;TAPP``: the *fetched* evaluation backends to install with SeQuant.
+     - Semicolon-separated, case-insensitive subset of ``TiledArray;BTAS;TAPP``: the *fetched* evaluation backends to install with SeQuant
+       (requires ``SEQUANT_INSTALL_FETCHED_DEPENDENCIES=ON``).
        A fetched backend that is not listed is usable from the build tree but is neither installed nor exported, so the installed SeQuant does not
        provide ``SeQuant::eval::<backend>`` for it. BTAS built as part of a fetched TiledArray is installed only together with TiledArray
-       (listing BTAS alone warns). Installing TiledArray also installs nlohmann::json if it was fetched.
+       (listing BTAS alone warns).
    * - SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES
      - OFF
      - By default the install fails rather than overwrite a *different* version of a package already present in the destination
@@ -190,8 +193,8 @@ dependency already in :code:`CMAKE_INSTALL_PREFIX` is found only if that prefix 
   of fetching (put its prefix on :code:`CMAKE_PREFIX_PATH`, or set :code:`<pkg>_DIR`, and reconfigure), or install into a
   different prefix. A package without a version file, or one with the same version but different contents (e.g. another
   commit of TiledArray's :code:`1.0.0`), is not detected.
-* :code:`SEQUANT_INSTALL_FETCHED_DEPENDENCIES=OFF` installs SeQuant alone; packagers who want no fetching at all should set
-  :code:`SEQUANT_FETCH_MISSING_DEPENDENCIES=OFF`.
+* :code:`SEQUANT_INSTALL_FETCHED_DEPENDENCIES=OFF` installs SeQuant alone, backends included; packagers who want no fetching at all
+  should set :code:`SEQUANT_FETCH_MISSING_DEPENDENCIES=OFF`.
 * Known gap: Boost built from source (:code:`Boost_FETCH_IF_MISSING`) is installed by its own build system and is not covered
   by the configure summary or :code:`SEQUANT_INSTALL_FETCHED_DEPENDENCIES`; the overwrite check sees it only if its files go
   through SeQuant's install script.

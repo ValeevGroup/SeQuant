@@ -3,9 +3,9 @@
 
 option(SEQUANT_FETCH_MISSING_DEPENDENCIES "Fetch (via FetchContent) dependencies that are not found; if OFF, missing dependencies are an error" ON)
 add_feature_info(SEQUANT_FETCH_MISSING_DEPENDENCIES SEQUANT_FETCH_MISSING_DEPENDENCIES "Fetch missing dependencies")
-option(SEQUANT_INSTALL_FETCHED_DEPENDENCIES "Install the fetched primary dependencies (Range-v3, libPerm, polymorphic_variant, ...) with SeQuant" ON)
-add_feature_info(SEQUANT_INSTALL_FETCHED_DEPENDENCIES SEQUANT_INSTALL_FETCHED_DEPENDENCIES "Install fetched primary dependencies")
-set(SEQUANT_INSTALL_FETCHED_BACKENDS "" CACHE STRING "Fetched eval backends to install with SeQuant; subset of TiledArray;BTAS;TAPP (case-insensitive)")
+option(SEQUANT_INSTALL_FETCHED_DEPENDENCIES "Install fetched dependencies (Range-v3, libPerm, polymorphic_variant, ...) with SeQuant; if OFF, nothing fetched is installed" ON)
+add_feature_info(SEQUANT_INSTALL_FETCHED_DEPENDENCIES SEQUANT_INSTALL_FETCHED_DEPENDENCIES "Install fetched dependencies")
+set(SEQUANT_INSTALL_FETCHED_BACKENDS "" CACHE STRING "Fetched eval backends to install with SeQuant; subset of TiledArray;BTAS;TAPP (case-insensitive); requires SEQUANT_INSTALL_FETCHED_DEPENDENCIES=ON")
 option(SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES "Allow installing a fetched dependency over a different version already installed in the prefix" OFF)
 add_feature_info(SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES "Overwrite different versions of installed dependencies")
 
@@ -31,6 +31,10 @@ foreach (_backend IN LISTS SEQUANT_INSTALL_FETCHED_BACKENDS)
     list(APPEND SEQUANT_INSTALL_FETCHED_BACKENDS_NORMALIZED ${_normalized})
 endforeach ()
 list(REMOVE_DUPLICATES SEQUANT_INSTALL_FETCHED_BACKENDS_NORMALIZED)
+# SEQUANT_INSTALL_FETCHED_DEPENDENCIES is the master switch: nothing fetched is installed when it is OFF
+if (SEQUANT_INSTALL_FETCHED_BACKENDS_NORMALIZED AND NOT SEQUANT_INSTALL_FETCHED_DEPENDENCIES)
+    message(FATAL_ERROR "SEQUANT_INSTALL_FETCHED_BACKENDS=${SEQUANT_INSTALL_FETCHED_BACKENDS} requires SEQUANT_INSTALL_FETCHED_DEPENDENCIES=ON")
+endif ()
 
 # if fetching is forbidden, require <pkg> to be found; call before FetchContent_Declare
 macro(sequant_find_unless_fetching pkg)
@@ -48,7 +52,7 @@ endmacro()
 
 # sets <out-var> to TRUE iff <backend> is to be installed when fetched
 function(sequant_backend_installable backend out_var)
-    if (backend IN_LIST SEQUANT_INSTALL_FETCHED_BACKENDS_NORMALIZED)
+    if (SEQUANT_INSTALL_FETCHED_DEPENDENCIES AND backend IN_LIST SEQUANT_INSTALL_FETCHED_BACKENDS_NORMALIZED)
         set(${out_var} TRUE PARENT_SCOPE)
     else ()
         set(${out_var} FALSE PARENT_SCOPE)
