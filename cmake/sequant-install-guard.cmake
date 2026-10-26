@@ -1,0 +1,28 @@
+# Install-time guard (CMake script mode, included from cmake_install.cmake): refuses to overwrite
+# a different version of a fetched dependency already installed in the destination.
+# Expects SEQUANT_FETCHED_DEPENDENCIES_MANIFEST and SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES.
+
+set(_prefix "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}")
+include("${SEQUANT_FETCHED_DEPENDENCIES_MANIFEST}")
+
+foreach (_name _version _file IN ZIP_LISTS
+         SEQUANT_FETCHED_DEPENDENCY_NAMES
+         SEQUANT_FETCHED_DEPENDENCY_VERSIONS
+         SEQUANT_FETCHED_DEPENDENCY_CONFIG_VERSION_FILES)
+    if (NOT EXISTS "${_prefix}/${_file}")
+        continue()
+    endif ()
+    # a package version file reports its version in PACKAGE_VERSION unless a version is requested
+    unset(PACKAGE_FIND_VERSION)
+    unset(PACKAGE_VERSION)
+    include("${_prefix}/${_file}")
+    if (NOT PACKAGE_VERSION VERSION_EQUAL _version)
+        get_filename_component(_dir "${_file}" DIRECTORY)
+        set(_message "SeQuant would overwrite ${_name} ${PACKAGE_VERSION} at ${_prefix}/${_dir} with ${_name} ${_version} fetched by SeQuant. To proceed: upgrade or remove the installed ${_name}, or point ${_name}_DIR or CMAKE_PREFIX_PATH at a newer copy and reconfigure; or install SeQuant into a different prefix; or reconfigure with -DSEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES=ON.")
+        if (SEQUANT_OVERWRITE_INSTALLED_DEPENDENCIES)
+            message(WARNING "${_message}")
+        else ()
+            message(FATAL_ERROR "${_message}")
+        endif ()
+    endif ()
+endforeach ()
