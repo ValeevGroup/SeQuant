@@ -24,10 +24,8 @@ Sum::Sum(summands_type &&summands, move_only_tag)
     if (summand->is_zero()) {
       do_erase = true;
     } else if (summand->is<Constant>()) {
-      auto summand_constant = summand.as_shared_ptr<Constant>();
       if (constant_summand_idx_) {  // add up to the existing constant ...
-        SEQUANT_ASSERT(summands_.at(*constant_summand_idx_)->is<Constant>());
-        summands_[*constant_summand_idx_].as<Constant>() += *summand_constant;
+        fold_constant(summand->as<Constant>());
         do_erase = true;
       } else {  // or memorize the position of the constant
         constant_summand_idx_ = pos;
@@ -42,6 +40,7 @@ Sum::Sum(summands_type &&summands, move_only_tag)
       ++pos;
     }
   }
+  drop_zero_constant();
 }
 
 Sum &Sum::append(ExprPtr summand) {
@@ -50,10 +49,9 @@ Sum &Sum::append(ExprPtr summand) {
     if (!summand->is_zero()) {        // exclude zeros
       if (summand->is<Constant>()) {  // add up constants
         // immediately, if possible
-        auto summand_constant = summand.as_shared_ptr<Constant>();
         if (constant_summand_idx_) {
-          SEQUANT_ASSERT(summands_.at(*constant_summand_idx_)->is<Constant>());
-          summands_[*constant_summand_idx_].as<Constant>() += *summand;
+          fold_constant(summand->as<Constant>());
+          drop_zero_constant();
         } else {
           summands_.push_back(summand->clone());
           constant_summand_idx_ = summands_.size() - 1;
@@ -75,10 +73,9 @@ Sum &Sum::prepend(ExprPtr summand) {
     if (!summand->is_zero()) {
       // exclude zeros
       if (summand->is<Constant>()) {
-        auto summand_constant = summand.as_shared_ptr<Constant>();
         if (constant_summand_idx_) {  // add up to the existing constant ...
-          SEQUANT_ASSERT(summands_.at(*constant_summand_idx_)->is<Constant>());
-          summands_[*constant_summand_idx_].as<Constant>() += *summand_constant;
+          fold_constant(summand->as<Constant>());
+          drop_zero_constant();
         } else {  // or include the nonzero constant and update
           // constant_summand_idx_
           summands_.insert(summands_.begin(), summand->clone());
@@ -95,6 +92,25 @@ Sum &Sum::prepend(ExprPtr summand) {
     for (auto &subsummand : *summand) this->prepend(subsummand);
   }
   return *this;
+}
+
+void Sum::fold_constant(const Constant &constant) {
+  SEQUANT_ASSERT(constant_summand_idx_);
+  auto &recorded = summands_.at(*constant_summand_idx_);
+  SEQUANT_ASSERT(recorded->is<Constant>());
+  // replace rather than modify in place: the move-only ctor does not clone,
+  // so the recorded constant may still be held by the caller
+  auto folded = std::make_shared<Constant>(recorded->as<Constant>());
+  *folded += constant;
+  recorded = std::move(folded);
+}
+
+void Sum::drop_zero_constant() {
+  if (constant_summand_idx_ &&
+      summands_.at(*constant_summand_idx_)->is_zero()) {
+    summands_.erase(summands_.begin() + *constant_summand_idx_);
+    constant_summand_idx_.reset();
+  }
 }
 
 const Sum::summands_type &Sum::summands() const { return summands_; }
