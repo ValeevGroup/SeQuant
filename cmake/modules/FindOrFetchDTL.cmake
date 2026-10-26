@@ -1,6 +1,8 @@
 include(FetchContent)
 
 if (NOT TARGET dtl::dtl)
+    sequant_fetch_only_dependency(dtl "tests/ needs it to configure even with SEQUANT_TESTS=OFF, so allow fetching")
+
     FetchContent_Declare(
         DTL
         GIT_REPOSITORY https://github.com/cubicdaiya/dtl

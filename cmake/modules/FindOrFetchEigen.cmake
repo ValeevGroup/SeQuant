@@ -5,6 +5,8 @@ if (NOT TARGET Eigen3::Eigen)
     if (TARGET TiledArray_Eigen)
         add_library(Eigen3::Eigen ALIAS TiledArray_Eigen)
     else()
+        sequant_find_unless_fetching(Eigen3 NO_CMAKE_PACKAGE_REGISTRY)
+
 		set(EIGEN_BUILD_CMAKE_PACKAGE ON)
 		FetchContent_Declare(
 			Eigen3
