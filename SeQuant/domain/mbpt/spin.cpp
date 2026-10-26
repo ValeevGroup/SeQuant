@@ -1096,6 +1096,8 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
   auto const ext_idxs = external_indices(expr);
   ExprPtr st_expr;
   if (expr->is<Sum>()) {
+    // Canonicalize and merge each traced contribution before retaining the
+    // next one, so equivalent terms do not accumulate across input summands.
     HashingAccumulator traced;
     for (const auto& term : *expr) {
       auto contribution = options.naive_spintrace

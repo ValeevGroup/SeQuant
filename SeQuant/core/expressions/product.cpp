@@ -294,6 +294,7 @@ ExprPtr Product::clone() const { return ex<Product>(this->deep_copy()); }
 
 Product Product::deep_copy() const {
   Product result(this->scalar(), ExprPtrList{});
+  // append() clones each factor; Flatten::No preserves nested products.
   for (const auto &factor : factors()) {
     result.append(1, factor, Flatten::No);
   }

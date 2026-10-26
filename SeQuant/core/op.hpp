@@ -1072,6 +1072,8 @@ class NormalOperator : public Operator<S>,
   Hermiticity _hermiticity() const override final {
     if (this->_bra_rank() != this->_ket_rank())
       return Hermiticity::NonHermitian;
+    // Sort borrowed indices to compare multisets without copying protoindices;
+    // the operator owns the indices throughout this comparison.
     auto sorted_indices = [](auto &&idx_view) {
       container::svector<const Index *> indices;
       for (const Index &idx : idx_view) indices.push_back(&idx);

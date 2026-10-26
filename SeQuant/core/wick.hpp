@@ -892,6 +892,8 @@ class WickTheorem {
           nop_adjacency_matrix(ntri(nopseq.size()), 0),
           nop_nconnections(nopseq.size(), 0) {
       init_topological_partitions();
+      // Cache map lookups outside recursion, preserving the map's treatment
+      // of equivalent operator keys rather than numbering occurrences anew.
       op_input_ordinals.reserve(nopseq_size);
       auto operators =
           flattened_rangenest<NormalOperatorSequence<S>>(&this->nopseq);

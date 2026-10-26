@@ -174,6 +174,8 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
 qns_t combine(qns_t a, qns_t b) {
   SEQUANT_ASSERT(a.size() == b.size());
 
+  // Reuse the by-value input's storage; compute both counts in each pair
+  // before overwriting either, since both depend on the original values.
   if (get_default_context().vacuum() == Vacuum::Physical) {
     const auto ncontr = qninterval_t{0, std::min(b[0].upper(), a[1].upper())};
     const auto nc = nonnegative(a[0] + b[0] - ncontr);
