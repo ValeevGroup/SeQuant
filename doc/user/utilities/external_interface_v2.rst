@@ -105,6 +105,9 @@ There are two forms:
   boolean, a number stays a number, and an array or object is spliced in as-is.
 * A placeholder embedded in a longer string (e.g. :code:`"file_${name}.itfaa"`) is substituted textually; the parameter must be a scalar (a boolean
   renders as :code:`true`/:code:`false`).
+* A whole-value :code:`"${keys(name)}"` or :code:`"${values(name)}"` is replaced by an array holding the keys or the values, respectively, of the
+  object parameter :code:`name`. The :code:`i`-th key and the :code:`i`-th value belong together; otherwise their order is unspecified.
+  These forms cannot be embedded in a longer string.
 
 If a whole-value placeholder resolves to :code:`null`, its enclosing object member is dropped (and an :code:`options` object left empty this way is
 removed entirely). This lets a single template serve both the "option present" and "option absent" cases: give the parameter a :code:`default` of
@@ -174,6 +177,59 @@ The :code:`base` use produces steps :code:`base_opt` and :code:`base_tree` (its 
 :code:`replay_tree`, with the :code:`replay` option present. Subsequent steps refer to the resulting trees as :code:`base_tree` and
 :code:`replay_tree`.
 
+
+Conditional steps and optional references
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A step inside a template (including a nested template use) may carry a :code:`when` property. The step is only part of the expansion if its value
+is *truthy*. Usually :code:`when` is a whole-value placeholder such as :code:`"${replay_input}"`; any other value is taken literally. Everything
+except :code:`null`, :code:`false` and empty strings, arrays and objects is truthy. This is decided while expanding the template, so a skipped step
+never exists at run time.
+
+Steps that process the output of a skipped step would then refer to something that isn't there. A reference (an entry of :code:`inputs`, the value
+of :code:`inherit_options_from`, or an ID inside the :code:`grouping`, :code:`merge_inputs` or :code:`relative_order` options) can be marked as
+*optional* by a trailing :code:`?`. After all templates have been expanded:
+
+* An optional reference to an existing step (the part before the first :code:`.`) loses its :code:`?` and is otherwise unchanged. Whether the
+  output the reference names exists is not checked.
+* An optional reference to a step that doesn't exist is removed from the array or object it is part of. If nothing is left of
+  :code:`inputs`, the whole step is removed, which in turn makes optional references to it unresolvable. If nothing is left of
+  :code:`inherit_options_from`, :code:`grouping`, :code:`merge_inputs` or :code:`relative_order`, that property is omitted.
+* References without a :code:`?` are never touched, so a misspelled ID is still an error.
+
+Because output aliases only propagate along steps that exist, there is no implicit pass-through for a skipped step: either a downstream reference is
+optional, or the step is skipped for good.
+
+Together with :code:`null` defaults, this lets one template cover variants that differ in additional steps. In the following, :code:`replay_input`
+selects inputs that are optimized with :code:`replay` and exported with the remaining ones, if there are any:
+
+.. code-block:: json
+
+   {
+     "templates": {
+       "variant": {
+         "parameters": {
+           "source": { "required": true },
+           "replay_input": { "default": [] },
+           "replay": { "default": null }
+         },
+         "steps": [
+           { "id": "opt", "kind": "optimize", "inputs": "${source}" },
+           { "id": "opt_replay", "kind": "optimize", "inputs": "${replay_input}",
+             "options": { "replay": "${replay}" }, "when": "${replay_input}" },
+           { "id": "tree", "kind": "to_export_tree", "inputs": "opt" },
+           { "id": "tree_replay", "kind": "to_export_tree", "inputs": "opt_replay", "when": "${replay_input}" },
+           { "id": "export", "kind": "export", "inputs": ["tree", "tree_replay?"],
+             "options": { "language": "itf", "output": "out.itfaa" } }
+         ]
+       }
+     }
+   }
+
+Without :code:`replay_input` only :code:`opt`, :code:`tree` and :code:`export` remain, and :code:`export` has the single input :code:`tree`.
+
+As IDs inside option values are not namespaced (see the note above), optional references there are meant to be passed in through parameters, e.g.
+a :code:`grouping` parameter containing :code:`"Init": "my_variant_opt_replay.persistent?"`, where :code:`my_variant` is the :code:`id` of the use.
 
 .. _external_interface_step_kinds:
 
@@ -269,6 +325,10 @@ step rather than after it (see the note under :code:`dependencies`).
      - No
    * - :code:`merge_inputs`
      - Whether multiple inputs shall be merged together in order to undergo combined rather than individual CSE.
+       Instead of a boolean, an array of input IDs/aliases can be given, in which case merging happens only within the
+       inputs matching each listed ID (matched like the groups of the :code:`grouping` option of the export step). Each
+       listed ID yields one output, aliased to :code:`<step>.<ID>`. Inputs matching none of the IDs undergo individual
+       CSE; inputs matching more than one ID are an error.
      - false
      - No
 
@@ -411,10 +471,72 @@ given, they are merged and jointly ordered before being exported together.
        (imported) rather than being computed by the generated code.
      - :code:`{}`
      - No
+   * - :code:`irreps`
+     - Point-group symmetry (IRREP) information. If given, the IRREPs of all exported tensors are determined from the IRREPs of the input tensors
+       and emitted into the generated code. See below for the sub-schema.
+     - -
+     - No
+   * - :code:`recycle_intermediates`
+     - Whether to reuse the names (and thereby the storage) of intermediates introduced by the :code:`cse` step once they are no longer needed.
+       A later intermediate takes over the name of an earlier one if the earlier one's last use precedes its definition, both are batched over the
+       same indices, both span the same IRREPs (if :code:`irreps` is given) and their shapes are compatible. Either a boolean or an object with the
+       property :code:`shape`, which is :code:`multiset` (default; same index spaces up to permutation, the indices of the later intermediate are
+       rearranged accordingly) or :code:`block` (same index spaces in the same order).
+     - false
+     - No
    * - :code:`meta`
      - Additional, language-specific metadata. See below for the sub-schema accepted when :code:`language` is :code:`itf`.
      - :code:`{}`
      - No
+
+The :code:`irreps` option accepts the following properties:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Option
+     - Description
+     - Default
+     - Required
+   * - :code:`group`
+     - The symmetry group. Either the name of one of the abelian point groups :code:`C1`, :code:`Ci`, :code:`C2`, :code:`Cs`, :code:`C2v`,
+       :code:`C2h`, :code:`D2` and :code:`D2h` (with IRREPs named and ordered as in Molpro), :code:`symbolic` for a group consisting of symbolic
+       IRREPs only, or an object describing an explicit (possibly non-abelian) multiplication table with the properties
+       :code:`totally_symmetric` (name of the totally symmetric IRREP), :code:`products` (object mapping :code:`"X*Y"` to the IRREP(s) of the
+       product; one ordering per pair suffices and products with the totally symmetric IRREP are implicit) and :code:`conjugates` (object mapping
+       complex IRREPs to their complex conjugate; one direction per pair suffices).
+     - -
+     - Yes
+   * - :code:`symbols`
+     - Array of names of symbolic IRREPs, i.e. IRREPs whose value is only known at runtime (e.g. the symmetry of a perturbation). Symbols remain
+       unevaluated in the generated code (e.g. :code:`B1u*Gp`), where every IRREP is its own inverse (:code:`Gp*Gp` is totally symmetric). For the
+       named point groups, every name that is not an IRREP of the group must be declared here (this catches typos). For :code:`symbolic`, any
+       name is accepted unless this list is given. Not supported for explicit multiplication tables.
+     - :code:`[]`
+     - No
+   * - :code:`relations`
+     - Array of relations between IRREPs of the form :code:`"My1*My2 = My3"`, which are used to simplify products of symbolic IRREPs. Not
+       supported for explicit multiplication tables.
+     - :code:`[]`
+     - No
+   * - :code:`tensors`
+     - Object mapping tensors to their IRREP(s), given as a single IRREP name or an array of names (for tensors spanning several IRREPs).
+       :code:`"*"` stands for any IRREP. Keys are either a serialized tensor (matching the corresponding tensor block, as for :code:`imports`) or
+       otherwise a full-match regular expression for the tensor label (applying to all blocks of matching tensors, as for the :code:`label` rules
+       of the :code:`filter` step). Tensor block keys take precedence over label keys and a label key spelling out a tensor's label literally takes
+       precedence over other matching label keys. Beyond that, all keys matching a given tensor must specify the same IRREPs. Tensors are referred
+       to by their names in the expressions (e.g. :code:`g` rather than :code:`K`/:code:`J`). Reserved tensors (e.g. Kronecker deltas) are totally symmetric and tensors computed during the export (results,
+       intermediates) need not be listed.
+     - :code:`{}`
+     - No
+   * - :code:`default`
+     - IRREP(s) of tensors not listed in :code:`tensors`. The special value :code:`error` turns unlisted tensors into an error, which is
+       recommended to catch missing specifications.
+     - :code:`"*"`
+     - No
+
+For :code:`language: itf`, the IRREPs of created tensors are emitted as an :code:`irrep:` entry of their :code:`!Create{...}` statement, whereas the
+IRREPs of imported tensors are given as a trailing comment of their declaration (for informational purposes only).
 
 For :code:`language: itf`, :code:`meta` accepts the following properties:
 
@@ -434,6 +556,11 @@ For :code:`language: itf`, :code:`meta` accepts the following properties:
    * - :code:`min_index_id`
      - Non-negative integer offset that index IDs emitted into the generated ITF code start counting from.
      - 0
+     - No
+   * - :code:`irrep_names`
+     - Object mapping IRREP names (as used in the :code:`irreps` option, e.g. :code:`Ag` or :code:`B1u*Gp`) to the names used in the generated ITF
+       code. The key :code:`"*"` refers to tensors spanning any IRREP. IRREPs not listed here keep their name.
+     - :code:`{}`
      - No
 
 

@@ -8,6 +8,7 @@
 #include <SeQuant/core/tensor_canonicalizer_fwd.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/context.hpp>
+#include <SeQuant/core/utility/deprecated_member.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <atomic>
@@ -97,9 +98,6 @@ class Context {
   };
 
   /// helper for the named-parameter constructor of Context
-
-  // the implicit special members of Options use its deprecated fields
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   /// see the Context documentation for detailed description
   struct Options {
     SEQUANT_DESIGNATED_INIT_ONLY;
@@ -107,10 +105,10 @@ class Context {
       std::shared_ptr<const IndexBasisRegistry> index_basis_registry_shared_ptr = nullptr;
       /// an IndexBasisRegistry object, moved into the Context; used if index_basis_registry_shared_ptr is null and it is nonnull
       std::optional<IndexBasisRegistry> index_basis_registry = std::nullopt;
-      /// @deprecated use index_basis_registry_shared_ptr
-      [[deprecated("use index_basis_registry_shared_ptr")]] std::shared_ptr<const IndexBasisRegistry> index_space_registry_shared_ptr = nullptr;
-      /// @deprecated use index_basis_registry
-      [[deprecated("use index_basis_registry")]] std::optional<IndexBasisRegistry> index_space_registry = std::nullopt;
+      /// @deprecated use index_basis_registry_shared_ptr; giving this a value is diagnosed as deprecated, and its value is read through `.value` (see SEQUANT_DEPRECATED_MEMBER)
+      SEQUANT_DEPRECATED_MEMBER(index_space_registry_shared_ptr, "use index_basis_registry_shared_ptr", std::shared_ptr<const IndexBasisRegistry>);
+      /// @deprecated use index_basis_registry; giving this a value is diagnosed as deprecated, and its value is read through `.value` (see SEQUANT_DEPRECATED_MEMBER)
+      SEQUANT_DEPRECATED_MEMBER(index_space_registry, "use index_basis_registry", std::optional<IndexBasisRegistry>);
       /// the Vacuum object
       Vacuum vacuum = Defaults::vacuum;
       /// the flag that controls the strictness of bra-ket checks in
@@ -146,7 +144,6 @@ class Context {
       /// the cardinal Tensor labels; if not set, the reserved labels
       std::optional<container::vector<std::wstring>> cardinal_tensor_labels = std::nullopt;
   };
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   static Options make_default_options() { return {}; }
 
   /// @brief standard named-parameter constructor

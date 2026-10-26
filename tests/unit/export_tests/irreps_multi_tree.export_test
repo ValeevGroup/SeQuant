@@ -1,0 +1,80 @@
+R{a1;i1} = t{a1;a2} f{a2;i2} f{i2;i1}
+S{a1;i1} = v{a1;a2} f{a2;i2} f{i2;i1}
+U{a1;i1} = t{a1;a2} f{a2;i2} v{i2;i1}
+R{a1;i1} = v{a1;i2} f{i2;i1}
+
+=================================================
+ITF
+point_group: D2
+irreps: t:B1, f:A, v:B2
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: b, External, e
+index-space: c, External, e
+
+tensor: I:ec[bk], !Create{type:plain irrep:B1}
+tensor: I2:ec[bk], !Create{type:plain irrep:B2}
+tensor: R:ec[bj], R:ec // irrep:B2,B1
+tensor: S:ec[bj], S:ec // irrep:B2
+tensor: U:ec[bj], U:ec // irrep:B3
+tensor: f:cc[kj], f:cc // irrep:A
+tensor: f:ec[ck], f:ec // irrep:A
+tensor: t:ee[bc], t:ee // irrep:B1
+tensor: v:cc[kj], v:cc // irrep:B2
+tensor: v:ec[bk], v:ec // irrep:B2
+tensor: v:ee[bc], v:ee // irrep:B2
+
+
+---- code("unnamed")
+alloc R:ec[bj]
+alloc I:ec[bk]
+load t:ee[bc]
+load f:ec[ck]
+.I:ec[bk] += t:ee[bc] f:ec[ck]
+drop f:ec[ck]
+drop t:ee[bc]
+load f:cc[kj]
+.R:ec[bj] += I:ec[bk] f:cc[kj]
+drop f:cc[kj]
+drop I:ec[bk]
+store R:ec[bj]
+
+alloc S:ec[bj]
+alloc I2:ec[bk]
+load v:ee[bc]
+load f:ec[ck]
+.I2:ec[bk] += v:ee[bc] f:ec[ck]
+drop f:ec[ck]
+drop v:ee[bc]
+load f:cc[kj]
+.S:ec[bj] += I2:ec[bk] f:cc[kj]
+drop f:cc[kj]
+drop I2:ec[bk]
+store S:ec[bj]
+
+alloc U:ec[bj]
+alloc I:ec[bk]
+load t:ee[bc]
+load f:ec[ck]
+.I:ec[bk] += t:ee[bc] f:ec[ck]
+drop f:ec[ck]
+drop t:ee[bc]
+load v:cc[kj]
+.U:ec[bj] += I:ec[bk] v:cc[kj]
+drop v:cc[kj]
+drop I:ec[bk]
+store U:ec[bj]
+
+alloc R:ec[bj]
+load v:ec[bk]
+load f:cc[kj]
+.R:ec[bj] += v:ec[bk] f:cc[kj]
+drop f:cc[kj]
+drop v:ec[bk]
+store R:ec[bj]
+
+
+---- end
+

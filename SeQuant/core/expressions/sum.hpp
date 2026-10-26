@@ -82,7 +82,8 @@ class Sum : public Expr {
   struct move_only_tag {};
 
   /// construct a Sum by moving in the summands, no flattening is performed,
-  /// but zeros will be omitted and constants added up
+  /// but zeros will be omitted and constants added up (and omitted if they
+  /// add up to zero)
   /// @param summands the summands to move in
   explicit Sum(summands_type &&summands, move_only_tag);
 
@@ -154,7 +155,16 @@ class Sum : public Expr {
   summands_type summands_{};
   std::optional<size_t>
       constant_summand_idx_{};  // points to the constant summand, if any; used
-                                // to sum up constants in append/prepend
+                                // to sum up constants in the move-only ctor,
+                                // append and prepend
+
+  /// replaces the constant summand recorded by constant_summand_idx_, which
+  /// must be set, with its sum with @p constant
+  void fold_constant(const Constant &constant);
+
+  /// erases the constant summand recorded by constant_summand_idx_ if it is
+  /// zero and clears the record
+  void drop_zero_constant();
 
   /// @return the hash of this object
   /// @note this ensures that hash of a Sum of a single summand is

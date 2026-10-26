@@ -151,3 +151,18 @@ add_test(
 	WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/examples/"
 )
 set_tests_properties("sequant/external_interface/nevpt2_v2_cse_batched/verify" PROPERTIES FIXTURES_REQUIRED "SEQUANT_TEST_EXTERNAL_INTERFACE_NEVPT2v2")
+
+
+# CCSD with IRREP information (symbolic amplitude IRREP)
+add_test(
+	NAME "sequant/external_interface/ccsd_irreps/generate"
+	COMMAND external_interface --driver "${CMAKE_CURRENT_LIST_DIR}/examples/ccsd_irreps.json"
+)
+set_tests_properties("sequant/external_interface/ccsd_irreps/generate" PROPERTIES FIXTURES_SETUP "SEQUANT_TEST_EXTERNAL_INTERFACE_CCSD_IRREPS")
+
+add_test(
+	NAME "sequant/external_interface/ccsd_irreps/verify"
+	COMMAND "${CMAKE_COMMAND}" -E compare_files "ccsd_irreps.itfaa" "ccsd_irreps.itfaa.expected"
+	WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/examples/"
+)
+set_tests_properties("sequant/external_interface/ccsd_irreps/verify" PROPERTIES FIXTURES_REQUIRED "SEQUANT_TEST_EXTERNAL_INTERFACE_CCSD_IRREPS")

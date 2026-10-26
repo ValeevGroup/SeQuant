@@ -417,7 +417,9 @@ TEST_CASE(
   auto make_V = [] {
     return inode("V{i_1;i_2}", leaf("V1{i_1;x_1}"), leaf("V2{x_1;i_2}"));
   };
-  auto P = inode("P{i_2;a_1}", make_V(), leaf("W{i_1;a_1}"));
+  // P carries i_1, as an External open site must: the DP opens an external
+  // loop only at a node that carries its mode.
+  auto P = inode("P{i_1,i_2;a_1}", make_V(), leaf("W{i_1;a_1}"));
   stamp_ext(P, Index{L"i_1"});  // realized i_1 loop above V in tree 1
   auto Q = inode("Q{i_1;i_2}", make_V(), leaf("U{i_2;i_1}"));  // no loop
 
@@ -455,7 +457,8 @@ SizeRegime anchor_regime() {
   SizeRegime r;
   r.space_extent = {{L"i", 10}, {L"a", 20}};
   double const pno = 4.0;
-  for (std::size_t k = 0; k <= 4; ++k) r.csv_pno_moment[k] = std::pow(pno, k);
+  for (std::size_t k = 0; k <= sequant::eval::dryrun::kMaxCompositeGroup; ++k)
+    r.csv_pno_moment[k] = std::pow(pno, k);
   r.csv_osv_moment = r.csv_pno_moment;
   return r;
 }

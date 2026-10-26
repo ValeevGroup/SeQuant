@@ -68,9 +68,11 @@ void log_chosen_factorization(ExprPtr const& result,
     for (auto const& o : tot.outer)
       s += std::to_string(opts.idx_to_extent(o)) + ",";
     s += "} inner{";
+    // a composite has no integer extent (see has_index_extent): report the
+    // per-member inner_pow factor the model actually used (k=1), if any
     for (auto const& i : tot.inner)
-      s += std::to_string(i.proto_indices().size()) +
-           "p:" + std::to_string(opts.idx_to_extent(i)) + ",";
+      s += std::to_string(i.proto_indices().size()) + "p:" +
+           (opts.inner_pow ? std::to_string(opts.inner_pow(i, 1)) : "?") + ",";
     s += "}";
     return {fp, std::move(s)};
   };

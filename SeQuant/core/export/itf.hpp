@@ -8,6 +8,7 @@
 #include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/irreps/any.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -56,6 +57,13 @@ class ItfContext : public ReorderingContext {
   /// none is obtained, the variable will not be imported.
   virtual std::optional<std::string> import_name(
       const Variable &variable) const;
+
+  /// @returns The ITF representation of the given IRREP. By default, this is
+  /// the IRREP's standard string representation (via irrep_to_string).
+  virtual std::string irrep_name(const AnyIrrep &irrep) const;
+  /// @returns The ITF representation of a set spanning any IRREP (e.g. for
+  /// tensors of unknown symmetry). By default, this is "*".
+  virtual std::string any_irreps_name() const;
 
   /// Sets the name of the given index space
   virtual void set_name(const IndexSpace &space, std::string name);
@@ -351,19 +359,57 @@ class ItfGenerator : public Generator<Context> {
     bool needs_import = import_name.has_value() || usage == Usage::Terminal ||
                         usage == Usage::Result;
 
+    const AnyIrrepSet *irreps = ctx.irreps_of(tensor);
+
     if (needs_import) {
       if (import_name.has_value()) {
         append(import_name.value());
       } else {
         append(get_name(tensor, ctx));
       }
-    } else if (usage == Usage::Intermediate) {
-      append("!Create{type:plain}");
+
+      if (irreps) {
+        // IRREPs of imported tensors are only given for informational purposes
+        append(" // " + irrep_entry(tensor, *irreps, ctx));
+      }
     } else {
-      append("!Create{type:disk}");
+      append("!Create{type:");
+      append(usage == Usage::Intermediate ? "plain" : "disk");
+      if (irreps) {
+        append(" " + irrep_entry(tensor, *irreps, ctx));
+      }
+      append("}");
     }
 
     append_line();
+  }
+
+  /// @returns The ITF specification of the given tensor's IRREPs as
+  /// "irrep:<comma-separated list of IRREP names>"
+  /// @throws Exception if the tensor spans no IRREP at all
+  static std::string irrep_entry(const Tensor &tensor,
+                                 const AnyIrrepSet &irreps,
+                                 const Context &ctx) {
+    std::string entry = "irrep:";
+
+    if (irreps.is_any()) {
+      return entry + ctx.any_irreps_name();
+    }
+    if (irreps.empty()) {
+      throw Exception("Tensor " + toUtf8(tensor.label()) +
+                      " spans no IRREP (i.e. it vanishes by symmetry)");
+    }
+
+    bool first = true;
+    irreps.for_each([&](const AnyIrrep &irrep) {
+      if (!first) {
+        entry += ",";
+      }
+      first = false;
+      entry += ctx.irrep_name(irrep);
+    });
+
+    return entry;
   }
 
   void all_indices_declared(std::size_t amount, const Context &) override {

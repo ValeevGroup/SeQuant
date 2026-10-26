@@ -1,0 +1,56 @@
+R{a1;i1} = 1/2 * c * t{a1;i2} f{i2;i3} v{i3;i1}
+E = t{a1;i1} f{i1;a1}
+
+=================================================
+ITF
+point_group: D2
+irreps: t:B1, f:A, v:B2
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: l, Closed, c
+index-space: b, External, e
+
+tensor: E[], E
+tensor: c[], c
+
+tensor: I:ec[bl], !Create{type:plain irrep:B1}
+tensor: I2:ec[bk], !Create{type:plain irrep:B1}
+tensor: R:ec[bj], R:ec // irrep:B3
+tensor: f:cc[kl], f:cc // irrep:A
+tensor: f:ce[jb], f:ce // irrep:A
+tensor: t:ec[bk], t:ec // irrep:B1
+tensor: v:cc[lj], v:cc // irrep:B2
+
+
+---- code("unnamed")
+alloc R:ec[bj]
+alloc I:ec[bl]
+alloc I2:ec[bk]
+load c[]
+load t:ec[bk]
+.I2:ec[bk] += c[] t:ec[bk]
+drop t:ec[bk]
+drop c[]
+load f:cc[kl]
+.I:ec[bl] += I2:ec[bk] f:cc[kl]
+drop f:cc[kl]
+drop I2:ec[bk]
+load v:cc[lj]
+.R:ec[bj] += 1/2 * I:ec[bl] v:cc[lj]
+drop v:cc[lj]
+drop I:ec[bl]
+store R:ec[bj]
+
+alloc E[]
+load t:ec[bj]
+load f:ce[jb]
+.E[] += t:ec[bj] f:ce[jb]
+drop f:ce[jb]
+drop t:ec[bj]
+store E[]
+
+
+---- end
+

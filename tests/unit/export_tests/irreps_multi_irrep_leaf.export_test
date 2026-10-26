@@ -1,0 +1,37 @@
+R{a1;i1} = m{a1;i2} t{i2;i3} f{i3;i1}
+
+=================================================
+ITF
+point_group: D2
+irreps: m:B1|B2, t:B1, f:A
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: l, Closed, c
+index-space: b, External, e
+
+tensor: I:ec[bl], !Create{type:plain irrep:A,B3}
+tensor: R:ec[bj], R:ec // irrep:A,B3
+tensor: f:cc[lj], f:cc // irrep:A
+tensor: m:ec[bk], m:ec // irrep:B2,B1
+tensor: t:cc[kl], t:cc // irrep:B1
+
+
+---- code("unnamed")
+alloc R:ec[bj]
+alloc I:ec[bl]
+load m:ec[bk]
+load t:cc[kl]
+.I:ec[bl] += m:ec[bk] t:cc[kl]
+drop t:cc[kl]
+drop m:ec[bk]
+load f:cc[lj]
+.R:ec[bj] += I:ec[bl] f:cc[lj]
+drop f:cc[lj]
+drop I:ec[bl]
+store R:ec[bj]
+
+
+---- end
+

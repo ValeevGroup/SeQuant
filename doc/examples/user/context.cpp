@@ -68,7 +68,7 @@ int main() {
   auto grant_resetter = mbpt::set_scoped_default_mbpt_context(
       {.op_registry_ptr = granted_registry});
   const ExprPtr t1 = mbpt::op::tensor::t(1);
-  for (const Index& idx : get_used_indices(t1))
+  for ([[maybe_unused]] const Index& idx : get_used_indices(t1))
     SEQUANT_ASSERT(idx.basis().basis_instance() ==
                    (ibr->is_pure_unoccupied(idx.space())
                         ? IndexBasis::optional_instance{1}

@@ -51,7 +51,11 @@ else ()
     set(Boost_OPTIONAL_COMPONENTS "${optional_components}" CACHE STRING "Optional components of Boost to discovered or built")
 endif ()
 
-if (NOT DEFINED Boost_FETCH_IF_MISSING)
+if (NOT SEQUANT_FETCH_MISSING_DEPENDENCIES)
+    # normal variable (shadows any cache entry) so that nothing persists in the cache
+    set(Boost_FETCH_IF_MISSING 0)
+    message(STATUS "Boost_FETCH_IF_MISSING forced OFF by SEQUANT_FETCH_MISSING_DEPENDENCIES=OFF")
+elseif (NOT DEFINED Boost_FETCH_IF_MISSING)
     set(Boost_FETCH_IF_MISSING 1)
 endif ()
 

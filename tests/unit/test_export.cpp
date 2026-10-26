@@ -17,6 +17,9 @@
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/irreps/any.hpp>
+#include <SeQuant/core/irreps/propagation.hpp>
+#include <SeQuant/core/irreps/z2_algebra.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -193,9 +196,67 @@ void add_to_context(TextGeneratorContext &ctx, std::string_view key,
         std::string(key) + "'");
   }
 }
+/// Sets the IRREPs of tensors based on a specification of the form
+/// "t:B1|Gx, f:A" (IRREP sets of tensors by label) if the context's IRREP
+/// algebra uses the given group
+template <typename Group>
+bool set_irreps_by_label(ItfContext &ctx, std::string_view spec) {
+  using Irrep = Z2Irrep<Group>;
+
+  if (!ctx.has_irrep_context() ||
+      ctx.irrep_context().as<Z2Algebra<Group>>() == nullptr) {
+    return false;
+  }
+
+  container::map<std::wstring, IrrepSet<Irrep>> irreps;
+  for (auto entry : std::ranges::views::split(spec, ',')) {
+    std::string current(entry.begin(), entry.end());
+    boost::trim(current);
+    auto pos = current.find(':');
+    if (pos == std::string::npos) {
+      throw Exception("Malformed IRREP specification '" + current + "'");
+    }
+
+    IrrepSet<Irrep> set;
+    for (auto name : std::ranges::views::split(
+             std::string_view(current).substr(pos + 1), '|')) {
+      set.insert(make_irrep<Group>(std::string_view(name.begin(), name.end())));
+    }
+
+    irreps.emplace(toUtf16(current.substr(0, pos)), std::move(set));
+  }
+
+  ctx.set_irrep_context(IrrepContext<Z2Algebra<Group>>(
+      resolve_by_label<Irrep>(std::move(irreps))));
+
+  return true;
+}
+
+template <typename Group>
+void set_point_group(ItfContext &ctx) {
+  ctx.set_irrep_context(
+      IrrepContext<Z2Algebra<Group>>(resolve_by_label<Z2Irrep<Group>>({})));
+}
+
 void add_to_context(ItfContext &ctx, std::string_view key,
                     std::string_view value) {
-  if (key == "batch_indices") {
+  if (key == "point_group") {
+    if (value == "symbolic") {
+      set_point_group<NoConcreteGroup>(ctx);
+    } else if (value == "D2") {
+      set_point_group<point_groups::D2>(ctx);
+    } else if (value == "D2h") {
+      set_point_group<point_groups::D2h>(ctx);
+    } else {
+      throw Exception("Unsupported point group '" + std::string(value) + "'");
+    }
+  } else if (key == "irreps") {
+    if (!set_irreps_by_label<NoConcreteGroup>(ctx, value) &&
+        !set_irreps_by_label<point_groups::D2>(ctx, value) &&
+        !set_irreps_by_label<point_groups::D2h>(ctx, value)) {
+      throw Exception("'irreps' requires a preceding 'point_group'");
+    }
+  } else if (key == "batch_indices") {
     std::vector<Index> indices;
     for (auto current : std::ranges::views::split(value, ',')) {
       Index idx(std::string(current.begin(), current.end()));
@@ -1284,5 +1345,128 @@ TEST_CASE("export-basis-instance", "[export][basis]") {
                ContainsSubstring("R_v_12o") && ContainsSubstring("f_v_12v"));
     CHECK_THAT(py.get_generated_code(), !ContainsSubstring("-12"));
     CHECK(py_ctx.get_shape_tuple(tz) == "(nvirt__12, nocc)");
+  }
+}
+
+namespace {
+
+/// ITF context spelling out (concrete) D2 IRREPs by their 1-based number
+class NumberedIrrepItfContext : public ItfContext {
+ public:
+  std::string irrep_name(const AnyIrrep &irrep) const override {
+    const auto *typed = irrep.as<Z2Irrep<point_groups::D2>>();
+    REQUIRE(typed != nullptr);
+    return std::to_string(typed->concrete() + 1);
+  }
+};
+
+}  // namespace
+
+TEST_CASE("export-irrep-name", "[export][irreps]") {
+  using Catch::Matchers::ContainsSubstring;
+  using Irrep = Z2Irrep<point_groups::D2>;
+  auto resetter = to_export_context();
+
+  NumberedIrrepItfContext ctx;
+  configure_context_defaults(ctx);
+  ctx.set_irrep_context(IrrepContext<Z2Algebra<point_groups::D2>>(
+      resolve_by_label<Irrep>({{L"t", {make_irrep<point_groups::D2>("B1")}},
+                               {L"v", {make_irrep<point_groups::D2>("B2")}},
+                               {L"f", {make_irrep<point_groups::D2>("A")}}})));
+
+  auto groups =
+      parse_expression_spec("R{a1;i1} = t{a1;i2} f{i2;i3} v{i3;i1}", false);
+  ItfGenerator<NumberedIrrepItfContext> generator;
+  export_groups<>(groups, generator, ctx);
+
+  const std::string code = generator.get_generated_code();
+  // B1 is the 4th IRREP of D2, B3 the 2nd
+  CHECK_THAT(code, ContainsSubstring("!Create{type:plain irrep:4}"));
+  CHECK_THAT(code, ContainsSubstring("R:ec // irrep:2"));
+  CHECK_THAT(code, ContainsSubstring("v:cc // irrep:3"));
+  CHECK_THAT(code, ContainsSubstring("f:cc // irrep:1"));
+}
+
+TEST_CASE("export-irreps", "[export][irreps]") {
+  using point_groups::D2;
+  using Irrep = Z2Irrep<D2>;
+  using Set = IrrepSet<Irrep>;
+  auto resetter = to_export_context();
+  auto irrep = [](std::string_view name) { return make_irrep<D2>(name); };
+
+  SECTION("registry") {
+    ExportContext ctx;
+    REQUIRE(!ctx.has_irrep_context());
+    REQUIRE_THROWS_AS(ctx.irrep_context(), Exception);
+
+    const Tensor t = deserialize(L"t{a1;i1}")->as<Tensor>();
+    // Same tensor block as t
+    const Tensor t_other = deserialize(L"t{a2;i2}")->as<Tensor>();
+
+    REQUIRE(ctx.irreps_of(t) == nullptr);
+    ctx.register_irreps(t, Set{irrep("B1")}, IrrepOrigin::Input);
+    REQUIRE(ctx.irreps_of(t_other) != nullptr);
+    REQUIRE(*ctx.irreps_of(t_other) == AnyIrrepSet(Set{irrep("B1")}));
+    REQUIRE(ctx.computed_irreps_of(t) == nullptr);
+
+    REQUIRE_NOTHROW(
+        ctx.register_irreps(t_other, Set{irrep("B1")}, IrrepOrigin::Input));
+    REQUIRE_THROWS_AS(
+        ctx.register_irreps(t, Set{irrep("B2")}, IrrepOrigin::Input),
+        Exception);
+    REQUIRE_THROWS_AS(
+        ctx.register_irreps(t, Set{irrep("B2")}, IrrepOrigin::Intermediate),
+        Exception);
+
+    ctx.register_irreps(t, Set{irrep("B2")}, IrrepOrigin::Result);
+    const AnyIrrepSet merged(Set{irrep("B1"), irrep("B2")});
+    REQUIRE(*ctx.irreps_of(t) == merged);
+    REQUIRE(ctx.computed_irreps_of(t) != nullptr);
+
+    // Copies are independent of each other
+    ExportContext copy(ctx);
+    copy.register_irreps(t, Set{irrep("B3")}, IrrepOrigin::Result);
+    REQUIRE(*ctx.irreps_of(t) == merged);
+    REQUIRE(*copy.irreps_of(t) ==
+            AnyIrrepSet(Set{irrep("B1"), irrep("B2"), irrep("B3")}));
+  }
+
+  SECTION("conflicting leaf IRREPs") {
+    // A resolver that (inconsistently) assigns different IRREPs to the same
+    // tensor block on subsequent calls
+    std::size_t calls = 0;
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ctx.set_irrep_context(
+        IrrepContext<Z2Algebra<D2>>([&](const Tensor &tensor) -> Set {
+          if (tensor.label() == L"t") {
+            return {calls++ == 0 ? irrep("B1") : irrep("B2")};
+          }
+          return {irrep("A")};
+        }));
+
+    // Conflict across different expressions
+    auto groups = parse_expression_spec(
+        "R{a1;i1} = t{a1;i2} f{i2;i1}\nS{a1;i1} = t{a1;i2} f{i2;i1}", false);
+    ItfGenerator<ItfContext> generator;
+    REQUIRE_THROWS_AS(export_groups<>(groups, generator, ctx), Exception);
+
+    // Conflict within the same expression
+    calls = 0;
+    groups =
+        parse_expression_spec("R{a1;i1} = t{a1;i2} f{i2;a2} t{a2;i1}", false);
+    REQUIRE_THROWS_AS(export_groups<>(groups, generator, ctx), Exception);
+  }
+
+  SECTION("empty IRREP set") {
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ctx.set_irrep_context(IrrepContext<Z2Algebra<D2>>(
+        resolve_by_label<Irrep>({{L"t", Set{}}, {L"f", Set{irrep("A")}}})));
+
+    auto groups =
+        parse_expression_spec("R{a1;i1} = t{a1;i2} f{i2;i3} f{i3;i1}", false);
+    ItfGenerator<ItfContext> generator;
+    REQUIRE_THROWS_AS(export_groups<>(groups, generator, ctx), Exception);
   }
 }

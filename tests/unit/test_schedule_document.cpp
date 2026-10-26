@@ -6,6 +6,7 @@
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/legality.hpp>
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
@@ -25,12 +26,14 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
+#include "csv_size_fixtures.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <fstream>
@@ -269,6 +272,7 @@ Document make_dag_doc() {
     o.home = {"i_1"};
     o.enclosing = {"a_1"};
     o.opens = {{"i_1", ModeKind::External}};
+    o.roles = {{"i_1", "Lockstep"}};
     v.occurrences = {o};
     v.siblings = {id == "v0" ? "v1" : "v0"};
     dag.values.push_back(std::move(v));
@@ -316,6 +320,13 @@ TEST_CASE("schedule document round-trips the dag and run sections",
   REQUIRE(back.run->n_batches.at(1) == 2);
   REQUIRE(back.run->planner.at("peak") == "1e9");
   REQUIRE(back.dag->values[0].occurrences[0].consumer == 1);
+  REQUIRE(back.dag->values[0].occurrences[0].roles.size() == 1);
+  REQUIRE(back.dag->values[0].occurrences[0].roles[0].role == "Lockstep");
+  // a role is one of the names the writer produces
+  REQUIRE_THROWS_WITH(from_json(mutate(d, "\"Lockstep\"", "\"Sideways\"")),
+                      Catch::Matchers::ContainsSubstring("unknown role"));
+  REQUIRE_THROWS_WITH(from_json(mutate(d, "\"LoopLocal\"", "\"Local\"")),
+                      Catch::Matchers::ContainsSubstring("unknown role"));
   REQUIRE(back.dag->blocks[1].outputs[0].second == "AccumulateSum");
   REQUIRE(std::get<2>(back.dag->loop_order[0]) == 2);
   REQUIRE(summary_line(d) == "roots=1 terms=1 values=2 blocks=2 depth=1");
@@ -1717,25 +1728,10 @@ TEST_CASE("ordered executor is unchanged without a run record",
 
 namespace {
 
-struct SizeIndProblemSize {
-  std::size_t mu_tilde;
-  std::size_t aux;
-  std::size_t i_occ;
-  std::array<double, 5> pno_M;
-  std::array<double, 5> osv_M;
-};
-
-// water-20 pVDZ-F12
-inline constexpr SizeIndProblemSize kSizeIndWater20{
-    /*mu_tilde=*/896u,
-    /*aux=*/1682u,
-    /*i_occ=*/80u,
-    /*pno_M=*/
-    {1.0, 23.175775480059084, 25.865548281212597, 28.171416142614103,
-     30.03848680550367},
-    /*osv_M=*/
-    {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
-     59.872014818179686}};
+// Problem size, provenance and occupancy adjustment: csv_size_fixtures.hpp.
+using SizeIndProblemSize = sequant::tests::csv_sizes::CsvProblemSize;
+inline constexpr auto const& kSizeIndWater20 =
+    sequant::tests::csv_sizes::kWater20_pVDZF12;
 
 /// every extent doubled
 SizeIndProblemSize sizeind_doubled(SizeIndProblemSize p) {
@@ -1754,16 +1750,7 @@ std::string sizeind_slurp(std::string const& path) {
 
 sequant::eval::dryrun::SizeRegime sizeind_df_regime(
     SizeIndProblemSize const& p) {
-  sequant::eval::dryrun::SizeRegime r;
-  r.space_extent = {
-      {L"i", p.i_occ},
-      {L"μ̃", p.mu_tilde},
-      {L"Κ", p.aux},
-      {L"a", p.mu_tilde},
-  };
-  r.csv_pno_moment = p.pno_M;
-  r.csv_osv_moment = p.osv_M;
-  return r;
+  return sequant::tests::csv_sizes::df_size_regime(p);
 }
 
 sequant::ExprPtr sizeind_flatten_product(sequant::ExprPtr const& e) {

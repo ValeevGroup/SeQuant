@@ -6,6 +6,8 @@
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
+#include <SeQuant/core/irreps/any.hpp>
+#include <SeQuant/core/optimize/name_recycling.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
 
@@ -15,6 +17,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -42,6 +45,9 @@ class ExportStep : public ProcessingStep {
 
     std::map<IndexSpace, IndexSpaceMeta> index_spaces;
     std::size_t idx_id_offset = 0;
+    /// Maps standard IRREP names to the names used in the generated code.
+    /// The key "*" refers to sets spanning any IRREP.
+    std::map<std::string, std::string, std::less<>> irrep_names;
   };
 
   using meta_type = std::variant<std::monostate, ItfMeta>;
@@ -53,9 +59,25 @@ class ExportStep : public ProcessingStep {
   meta_type meta_;
   std::vector<std::string> relative_order_;
   std::map<ExprMatcher, std::string, std::less<>> import_names_;
+  /// Context for determining the IRREPs of all exported tensors (if any)
+  std::optional<AnyIrrepContext> irrep_context_;
+  /// If set, names of CSE intermediates are recycled using the given shape
+  /// compatibility
+  std::optional<opt::ShapeCompatibility> recycle_intermediates_;
 
   static meta_type parse_meta(std::string_view language,
                               const nlohmann::json &meta);
+
+  /// Parses the 'irreps' option
+  /// @throws Exception if the specification is invalid
+  static AnyIrrepContext parse_irreps(const nlohmann::json &irreps);
+
+  /// Parses the 'recycle_intermediates' option
+  /// @returns The shape compatibility to use or std::nullopt if recycling is
+  /// disabled
+  /// @throws Exception if the specification is invalid
+  static std::optional<opt::ShapeCompatibility> parse_recycling(
+      const nlohmann::json &value);
 
   std::vector<ExpressionGroup<>> prepare_expressions(
       ExecutionContext &ctx, const std::vector<std::string_view> &inputs,

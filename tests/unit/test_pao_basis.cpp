@@ -62,14 +62,13 @@ std::vector<ExprPtr> derive() {
 TEST_CASE("pao-named-basis", "[mbpt][csv][basis][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::tests::pao;
-  const auto eqs = derive();
-  REQUIRE(eqs.size() == 3);
-
   const Context ctx = gate_context();
   const IndexBasis pao = ctx.index_basis_registry()->retrieve(L"μ̃");
   auto scoped = set_scoped_default_context(ctx);
 
   SECTION("round trip and metadata") {
+    const auto eqs = derive();
+    REQUIRE(eqs.size() == 3);
     for (auto const& e : eqs) CHECK(deserialize<ExprPtr>(serialize(e)) == e);
     CHECK(Index(L"μ̃_3") == Index(pao, 3));
     CHECK(Index(pao, 3).full_label() == L"μ̃_3");
