@@ -403,9 +403,9 @@ class CProduct : public Product {
   CProduct(const Product &other);
   CProduct(Product &&other);
 
-  /// objects of this type report Product's type_id(); this name keeps
-  /// `Expr::get_type_id<CProduct>()`, which Expr::is uses, independent of the
-  /// compiler
+  /// objects of this type report Product's type_id() (hence Expr::is and
+  /// Expr::as reject this type); this name keeps
+  /// `Expr::get_type_id<CProduct>()` independent of the compiler
   static constexpr std::string static_type_name(
       std::type_identity<CProduct> = {}) {
     return "sequant::CProduct";
@@ -436,9 +436,9 @@ class NCProduct : public Product {
   NCProduct(const Product &other);
   NCProduct(Product &&other);
 
-  /// objects of this type report Product's type_id(); this name keeps
-  /// `Expr::get_type_id<NCProduct>()`, which Expr::is uses, independent of the
-  /// compiler
+  /// objects of this type report Product's type_id() (hence Expr::is and
+  /// Expr::as reject this type); this name keeps
+  /// `Expr::get_type_id<NCProduct>()` independent of the compiler
   static constexpr std::string static_type_name(
       std::type_identity<NCProduct> = {}) {
     return "sequant::NCProduct";

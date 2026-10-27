@@ -13,7 +13,9 @@ itself; ``CProduct`` and ``NCProduct`` instead report the id of their base ``Pro
 equal ids mean "same type" to ``operator==`` and ``Expr::operator<``, and ``Expr::operator<`` orders expressions of
 *unlike* types by their ids. The latter is visible in results wherever expressions of unlike types are sorted with
 ``operator<``. ``Expr::is<T>()`` also compares against ``get_type_id<T>()``, so the id of a type can be computed even if
-no object reports it.
+no object reports it. Since a ``CProduct`` or ``NCProduct`` is indistinguishable from a ``Product`` by its id,
+``Expr::is`` and ``Expr::as`` reject them at compile time; test for ``is<Product>()`` and query
+``Product::is_commutative()`` instead.
 
 An id is computed once per type from two things the type may declare:
 

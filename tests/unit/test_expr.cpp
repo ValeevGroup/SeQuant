@@ -2491,14 +2491,8 @@ TEST_CASE("expr_type_id_derived", "[elements]") {
   REQUIRE(cid != pid);
   REQUIRE(ncid != pid);
   REQUIRE(cid != ncid);
-  const auto c = ex<Constant>(1);
   const auto p = ex<Variable>(L"x") * ex<Variable>(L"y");
-  REQUIRE_NOTHROW(c->is<CProduct>());
-  REQUIRE_NOTHROW(c->is<NCProduct>());
-  REQUIRE_NOTHROW(p->is<CProduct>());
-  REQUIRE_NOTHROW(p->is<NCProduct>());
   REQUIRE(p->is<Product>());
-  REQUIRE(!p->is<CProduct>());
   REQUIRE(Expr::get_type_id<Product>() == pid);
   REQUIRE(Expr::get_type_id<CProduct>() == cid);
 }
@@ -2597,8 +2591,6 @@ TEST_CASE("expr_type_id", "[elements]") {
     REQUIRE(Expr::get_type_id<Product>() != Expr::get_type_id<CProduct>());
     REQUIRE(Expr::get_type_id<Product>() != Expr::get_type_id<NCProduct>());
     REQUIRE(Expr::get_type_id<CProduct>() != Expr::get_type_id<NCProduct>());
-    REQUIRE_NOTHROW(ex<Constant>(1)->is<CProduct>());
-    REQUIRE_NOTHROW(ex<Constant>(1)->is<NCProduct>());
     static_assert(type_name_of<CProduct>() == "sequant::CProduct");
 
     // a derived type that declares no name keeps its base's rank but not its

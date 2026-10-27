@@ -123,6 +123,12 @@ concept const_exprptr_visitor =
     std::is_invocable_r_v<void, std::remove_reference_t<Visitor>,
                           const ExprPtr &>;
 
+/// CProduct or NCProduct, which report the type id of Product and hence can't
+/// be told apart from Product by Expr::is and Expr::as
+template <typename T>
+concept product_variant = std::same_as<std::remove_cvref_t<T>, CProduct> ||
+                          std::same_as<std::remove_cvref_t<T>, NCProduct>;
+
 }  // namespace detail
 
 /// @return `T::static_type_name(std::type_identity<T>{})` if @c T declares
@@ -570,10 +576,16 @@ class Expr : public std::enable_shared_from_this<Expr> {
     return id;
   }
 
-  /// @tparam T an Expr type
+  /// @tparam T an Expr type; must not be CProduct or NCProduct, which report
+  /// the type id of Product (use `is<Product>()` and
+  /// Product::is_commutative() instead)
   /// @return true if this object is of type @c T
   template <typename T>
   bool is() const {
+    static_assert(!detail::product_variant<T>,
+                  "Expr::is/as: CProduct and NCProduct report the type id of "
+                  "Product, use is<Product>()/as<Product>() and "
+                  "Product::is_commutative() instead");
     if constexpr (is_expr_v<T>)
       return true;
     else if constexpr (std::is_base_of_v<Expr, T>)
