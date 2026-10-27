@@ -234,6 +234,29 @@ TEST_CASE("pop_symmetrizer", "[utilities]") {
   REQUIRE_FALSE(pop_symmetrizer(expr).has_value());
 }
 
+TEST_CASE("push_symmetrizer", "[utilities]") {
+  using namespace sequant;
+
+  auto t = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+  ExprPtr expr = ex<Tensor>(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                            ket{L"a_1", L"a_2"}, Symmetry::Antisymm) *
+                 t;
+  ResultExpr result(Tensor(L"R", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}),
+                    expr->clone());
+  ExprPtr original = result.expression()->clone();
+
+  push_symmetrizer(result, std::nullopt);
+  REQUIRE(result.expression() == original);
+
+  std::optional<ExprPtr> symmetrizer = pop_symmetrizer(result);
+  REQUIRE(symmetrizer.has_value());
+  REQUIRE_FALSE(has_tensor(result.expression(), reserved::antisymm_label()));
+
+  push_symmetrizer(result, std::move(symmetrizer));
+  REQUIRE(has_tensor(result.expression(), reserved::antisymm_label()));
+  REQUIRE(has_tensor(result.expression(), L"t"));
+}
+
 TEST_CASE("utilities", "[utilities]") {
   using namespace sequant;
 

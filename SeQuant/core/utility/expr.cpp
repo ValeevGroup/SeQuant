@@ -655,6 +655,16 @@ std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression) {
   return pop_symmetrizer(expression.expression());
 }
 
+void push_symmetrizer(ResultExpr &expression,
+                      std::optional<ExprPtr> symmetrizer) {
+  if (symmetrizer.has_value()) {
+    expression.expression() =
+        ex<Product>(ExprPtrList{std::move(symmetrizer.value()),
+                                std::move(expression.expression())},
+                    Product::Flatten::No);
+  }
+}
+
 ExprPtr &replace(ExprPtr &expr, const ExprMatcher &target,
                  const Expr &replacement) {
   if (!target.expr().is_atom()) {

@@ -195,7 +195,7 @@ void OptimizationStep::set_replay_options(const nlohmann::json &options) {
 }
 
 /// Optimizes @p expr, returning the result symmetrizer that has been split
-/// off beforehand (see reattach_symmetrizer)
+/// off beforehand (see push_symmetrizer)
 std::optional<ExprPtr> optimize_unsymmetrized(ResultExpr &expr,
                                               const OptimizeOptions &options) {
   std::optional<ExprPtr> symmetrizer = pop_symmetrizer(expr);
@@ -203,15 +203,6 @@ std::optional<ExprPtr> optimize_unsymmetrized(ResultExpr &expr,
   optimize(expr, options);
 
   return symmetrizer;
-}
-
-void reattach_symmetrizer(ResultExpr &expr,
-                          std::optional<ExprPtr> symmetrizer) {
-  if (symmetrizer.has_value()) {
-    expr.expression() = ex<Product>(ExprPtrList{std::move(symmetrizer.value()),
-                                                std::move(expr.expression())},
-                                    Product::Flatten::No);
-  }
 }
 
 /// Adds the number of tensor leaves of @p node to @p num_tensors and returns
@@ -330,7 +321,7 @@ std::size_t OptimizationStep::run(std::string_view step_id,
     unassigned.clear();
 
     ResultExpr result = to_result(trees[i]);
-    reattach_symmetrizer(result, std::move(symmetrizers.at(expr_idx)));
+    push_symmetrizer(result, std::move(symmetrizers.at(expr_idx)));
     volatile_part.expressions.push_back(std::move(result));
 
     ++expr_idx;
@@ -417,7 +408,7 @@ std::size_t OptimizationStep::process(std::string_view id_prefix,
 
     std::optional<ExprPtr> symmetrizer =
         optimize_unsymmetrized(result.expressions.back(), options_);
-    reattach_symmetrizer(result.expressions.back(), std::move(symmetrizer));
+    push_symmetrizer(result.expressions.back(), std::move(symmetrizer));
   }
 
   ctx.set_data(id_prefix, id_start, std::move(result));

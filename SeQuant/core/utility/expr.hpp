@@ -92,6 +92,15 @@ std::optional<ExprPtr> pop_symmetrizer(ExprPtr &expression);
 /// @copydoc pop_symmetrizer(ExprPtr&)
 std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression);
 
+/// Inverse of pop_symmetrizer: multiplies the given expression from the left
+/// with the given (anti)symmetrization operator
+///
+/// @param expression The expression to modify
+/// @param symmetrizer The operator to re-attach, as returned by
+/// pop_symmetrizer. If empty, @p expression is left unchanged.
+void push_symmetrizer(ResultExpr &expression,
+                      std::optional<ExprPtr> symmetrizer);
+
 /// Replaces a given target expression by a given replacement
 ///
 /// If target and replacement have common indices, the indices in the
