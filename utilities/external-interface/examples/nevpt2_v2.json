@@ -42,9 +42,14 @@
 					}
 				},
 				{
+					"id": "sorted",
+					"kind": "sort",
+					"inputs": "opt"
+				},
+				{
 					"id": "tree",
 					"kind": "to_export_tree",
-					"inputs": "opt"
+					"inputs": "sorted"
 				}
 			]
 		}

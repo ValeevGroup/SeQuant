@@ -886,6 +886,26 @@ Simplifies the given expressions.
 This step does not accept any options.
 
 
+sort
+^^^^
+
+Sorts the input expressions into lexicographic order: the summands of every sum are sorted, as are the factors of every
+product insofar as they commute. Unlike the order produced by :code:`canonicalize`, which is based on hash values, this
+order depends only on the expressions themselves (tensors with the cardinal tensor labels of the context come first) and
+is hence stable across changes of the hashing algorithm. The order of the expressions within an input is not changed.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Input
+     - Output
+   * - Expression
+     - Expression
+
+
+This step does not accept any options.
+
+
 spintracing
 ^^^^^^^^^^^
 
