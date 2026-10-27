@@ -691,6 +691,14 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
                      return convert_data<ExportTreeData>(dat.data.get());
                    });
 
+  std::map<std::size_t, const CtxData *> producers;
+  for (const CtxData &current : data) {
+    for (const auto &entry :
+         convert_data<ExportTreeData>(current.data.get()).entries) {
+      producers.emplace(entry.tree->id(), &current);
+    }
+  }
+
   // Pre-compute CtxData inter-dependencies
   std::map<const CtxData *, container::svector<const CtxData *>> dependencies;
   for (const CtxData &base : data) {
@@ -705,19 +713,10 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
         std::views::join;
 
     for (std::size_t id : all_dep_ids) {
-      auto it = std::ranges::find_if(
-          tree_data, [id](const ExportTreeData &tree_data) {
-            for (const auto &entry : tree_data.entries) {
-              if (entry.tree->id() == id) {
-                return true;
-              }
-            }
-            return false;
-          });
+      auto it = producers.find(id);
+      SEQUANT_ASSERT(it != producers.end());
 
-      SEQUANT_ASSERT(it != end(tree_data));
-
-      const CtxData *producer = &(*it.base());
+      const CtxData *producer = it->second;
 
       // A dependency resolving to an entry in the same group (e.g. after a
       // merge_inputs cse pulled dependent results into a single group) is
