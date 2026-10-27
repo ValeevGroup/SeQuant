@@ -34,6 +34,11 @@ from highest to lowest. They never override the "Never"/"Do not" rules below.
    change. This holds for performance opportunities too: first make the
    minimal change, then, only for a measured and significant (non-trivial)
    speedup, follow up with a dedicated performance commit.
+5. **Compile dependencies.** Keep compile-time coupling between components
+   small, to limit rebuild cost. Prefer non-templated implementations in a
+   `.cpp` file over inline ones in a header (LTO covers the call overhead;
+   inline only for a measured speedup, per 3), and prefer forward
+   declarations over includes in headers.
 
 If in doubt, whether about a priority trade-off, the intended behavior or the
 scope of a change, consult the user to make the decision instead of guessing.
