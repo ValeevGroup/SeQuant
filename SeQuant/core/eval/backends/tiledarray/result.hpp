@@ -622,6 +622,65 @@ mode_batches_of_trange1(TA::TiledRange1 const& tr1,
 /// \tparam ArrayT TA::DistArray type. Tile type of ArrayT is regular tensor of
 ///                scalars (not a tensor of tensors)
 ///
+namespace detail {
+/// A copy of @p arr with a pending transform applied: @p phase times (the
+/// elementwise conjugate when @p conj of) every tile, and the factor -1 on
+/// every tile of the ⇓ half -- the upper half of the tile range -- along each
+/// of the @p signed_halves modes: the time-reversal flip's sign (see
+/// ResultTensorTA::View::signed_halves). Tile by tile, same tiling, shape and
+/// process map (the transform leaves every tile norm unchanged); always a
+/// deep copy, never a tile shared with @p arr.
+template <typename ArrayT>
+ArrayT signed_copy(ArrayT const& arr, std::int8_t phase, bool conj,
+                   container::svector<std::size_t> const& signed_halves) {
+  using value_type = typename ArrayT::value_type;
+  using numeric_type = typename ArrayT::numeric_type;
+  auto& world = arr.world();
+  auto const& tr = arr.trange();
+  auto const& tiles = tr.tiles_range();
+  container::svector<std::size_t> half(tr.rank(), 0);
+  for (auto const m : signed_halves) {
+    SEQUANT_ASSERT(m < tr.rank() && tr.dim(m).tile_extent() % 2 == 0);
+    half[m] = static_cast<std::size_t>(tr.dim(m).tile_extent()) / 2;
+  }
+  ArrayT dst(world, tr, arr.shape(), arr.pmap());
+  for (auto it = dst.pmap()->begin(); it != dst.pmap()->end(); ++it) {
+    auto const ord = *it;
+    if (dst.is_zero(ord)) continue;
+    auto const idx = tiles.idx(ord);
+    double sign = static_cast<double>(phase);
+    for (auto const m : signed_halves)
+      if (static_cast<std::size_t>(idx[m]) >= half[m]) sign = -sign;
+    numeric_type const f = numeric_type(1) * sign;
+    dst.set(ord, world.taskq.add(
+                     [f, conj](value_type const& src) -> value_type {
+                       if constexpr (TA::detail::is_complex_v<numeric_type>)
+                         if (conj) return src.conj(f);
+                       return src.scale(f);
+                     },
+                     arr.find(ord)));
+  }
+  world.gop.fence();
+  return dst;
+}
+
+/// the positions in @p target of the labels that the modes @p modes of the
+/// stored annotation @p stored carry (a label absent from @p target, e.g. a
+/// mode the other operand does not share, is skipped)
+inline container::svector<std::size_t> map_modes(
+    container::svector<std::size_t> const& modes,
+    container::svector<std::string> const& stored,
+    container::svector<std::string> const& target) {
+  container::svector<std::size_t> out;
+  for (auto const m : modes) {
+    auto const it = std::find(target.begin(), target.end(), stored.at(m));
+    if (it != target.end())
+      out.push_back(static_cast<std::size_t>(it - target.begin()));
+  }
+  return out;
+}
+}  // namespace detail
+
 template <typename ArrayT, typename = std::enable_if_t<TA::detail::is_tensor_v<
                                typename ArrayT::value_type>>>
 class ResultTensorTA final : public Result {
@@ -641,8 +700,16 @@ class ResultTensorTA final : public Result {
     std::int8_t phase = 1;
     bool conj = false;
     container::svector<std::size_t> perm;
+    /// STORED modes along which the ⇓ half (the upper half of the tile
+    /// range, a Kramers-union axis) carries the factor -1: the sign of the
+    /// time-reversal flip, F = phase · conj ∘ swap ∘ sign (kramers_flip.h in
+    /// MPQC), whose swap is served as an alias and whose sign, conjugation
+    /// and phase ride here. No TA expression spells a sign per half, so a
+    /// consumer that cannot move it (see einsum_pair) materializes the view
+    /// through detail::signed_copy.
+    container::svector<std::size_t> signed_halves;
     [[nodiscard]] bool trivial() const noexcept {
-      return phase == 1 && !conj && perm.empty();
+      return phase == 1 && !conj && perm.empty() && signed_halves.empty();
     }
   };
 
@@ -667,8 +734,11 @@ class ResultTensorTA final : public Result {
   ///         produced, including one whose pending transform composed away
   [[nodiscard]] bool is_buffer_alias() const override { return alias_; }
 
+  /// the tiled range is the stored array's unless the view relabels: a
+  /// pending phase / conj / sign is not materialized for a description
   [[nodiscard]] std::string trange_annot() const override {
-    return detail::ta_trange_string(get<ArrayT>());
+    return detail::ta_trange_string(
+        view_ && !view_->perm.empty() ? get<ArrayT>() : raw<ArrayT>());
   }
 
  private:
@@ -753,6 +823,8 @@ class ResultTensorTA final : public Result {
   /// annotation @p annot (logical order), the pending transform folded in
   template <typename F>
   decltype(auto) with_expr(std::string const& annot, F&& f) const {
+    // a sign per half is no TA expression: such a view is materialized first
+    if (view_ && !view_->signed_halves.empty()) ensure_materialized();
     auto const& arr = raw<ArrayT>();
     auto const a = translate(annot);
     if (view_) {
@@ -773,7 +845,16 @@ class ResultTensorTA final : public Result {
     auto const rank = raw<ArrayT>().trange().rank();
     auto const ann = TA::detail::dummy_annotation(rank);
     ArrayT r;
-    with_expr(ann, [&](auto&& e) { r(ann) = e; });
+    if (!view_->signed_halves.empty()) {
+      // the sign per half is no TA expression: a deep tile-wise copy in the
+      // stored mode order, then the relabel
+      auto const s = detail::signed_copy(raw<ArrayT>(), view_->phase,
+                                         view_->conj, view_->signed_halves);
+      if (view_->perm.empty()) return s;
+      r(ann) = s(translate(ann));
+    } else {
+      with_expr(ann, [&](auto&& e) { r(ann) = e; });
+    }
     ::sequant::detail::drain_lazy_cleanup(r);
     log_ta_tensor_host_memory_use();
     return r;
@@ -940,6 +1021,8 @@ class ResultTensorTA final : public Result {
     detail::log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
     ArrayT result;
+    View rv;  // the result's pending transform: an einsum product may carry
+              // the operands' conjugation (see below)
     // on failure, name the contraction: annotations and outer extents
     auto const describe = [&](std::string const& what) {
       auto extents = [](ArrayT const& arr) {
@@ -962,17 +1045,56 @@ class ResultTensorTA final : public Result {
                       [&](auto&& re) { result(a.this_annot) = le * re; });
         });
       } else {
-        // einsum takes plain tensor expressions only: materialize views
-        auto const A = logical_array();
-        auto const B = o.logical_array();
-        result = TA::einsum(A(a.lannot), B(a.rannot), a.this_annot);
+        // einsum takes plain tensor expressions only. With a pending
+        // conjugation on the larger operand alone, conj(A)·B = conj(A·conj(B))
+        // conjugates the smaller one into a copy and the result carries the
+        // conjugation (a KramersFlip served as a conjugated alias of its
+        // operand is never copied); otherwise the views are materialized.
+        // The flip's sign per half (View::signed_halves) moves with the
+        // conjugation: along a contracted mode onto the copy, along a free
+        // mode onto the result.
+        bool const lc = view_ && view_->conj;
+        bool const rc = o.view_ && o.view_->conj;
+        this_type const& big = lc ? *this : o;
+        this_type const& small = lc ? o : *this;
+        auto const volume = [](this_type const& r) {
+          return r.template raw<ArrayT>().trange().elements_range().volume();
+        };
+        if (lc != rc && volume(big) > volume(small)) {
+          auto const& bannot = lc ? a.lannot : a.rannot;
+          auto const& sannot = lc ? a.rannot : a.lannot;
+          auto const bstored = tokens(big.translate(bannot));
+          container::svector<std::size_t> const none;
+          auto const& bsigned = big.view_ ? big.view_->signed_halves : none;
+          // the conjugate of the small operand's logical value (its own view
+          // applied), negated on the ⇓ half of every signed mode it contracts
+          auto const S = detail::signed_copy(
+              small.logical_array(), /*phase=*/1, /*conj=*/true,
+              detail::map_modes(bsigned, bstored, tokens(sannot)));
+          auto const& B = big.template raw<ArrayT>();
+          result = lc ? TA::einsum(B(big.translate(a.lannot)), S(a.rannot),
+                                   a.this_annot)
+                      : TA::einsum(S(a.lannot), B(big.translate(a.rannot)),
+                                   a.this_annot);
+          if (auto const rs =
+                  detail::map_modes(bsigned, bstored, tokens(a.this_annot));
+              !rs.empty())
+            result = detail::signed_copy(result, 1, false, rs);
+          // the small operand's phase is in its logical array
+          rv.phase = big.view_ ? big.view_->phase : std::int8_t{1};
+          rv.conj = true;
+        } else {
+          auto const A = logical_array();
+          auto const B = o.logical_array();
+          result = TA::einsum(A(a.lannot), B(a.rannot), a.this_annot);
+        }
       }
     } catch (std::exception const& ex) {
       throw std::runtime_error(describe(ex.what()));
     }
     ::sequant::detail::drain_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(result));
+    return eval_result<this_type>(std::move(result), std::move(rv));
   }
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
@@ -1033,9 +1155,10 @@ class ResultTensorTA final : public Result {
 
     ensure_owned();
     auto& t = get<ArrayT>();
-    // a relabeled view has a different stored mode order: materialize it;
-    // a phase/conj-only view is consumed lazily
-    if (o.view_ && !o.view_->perm.empty()) o.ensure_materialized();
+    // a relabeled view has a different stored mode order, a signed one no
+    // expression: materialize those; a phase/conj-only view is consumed lazily
+    if (o.view_ && (!o.view_->perm.empty() || !o.view_->signed_halves.empty()))
+      o.ensure_materialized();
     auto const& oarr = o.template raw<ArrayT>();
 
     SEQUANT_ASSERT(t.trange() == oarr.trange());
@@ -1101,8 +1224,12 @@ class ResultTensorOfTensorTA final : public Result {
     bool conj = false;
     container::svector<std::size_t> operm;
     container::svector<std::size_t> iperm;
+    /// STORED outer modes along which the ⇓ half carries the factor -1 (the
+    /// time-reversal flip's sign, see ResultTensorTA::View::signed_halves)
+    container::svector<std::size_t> signed_halves;
     [[nodiscard]] bool trivial() const noexcept {
-      return phase == 1 && !conj && operm.empty() && iperm.empty();
+      return phase == 1 && !conj && operm.empty() && iperm.empty() &&
+             signed_halves.empty();
     }
     [[nodiscard]] bool relabeled() const noexcept {
       return !operm.empty() || !iperm.empty();
@@ -1151,8 +1278,11 @@ class ResultTensorOfTensorTA final : public Result {
   /// declares a known all-empty-inner (zero) array
   void note_inner_rank(std::size_t r) const noexcept { inner_rank_ = r; }
 
+  /// the tiled range is the stored array's unless the view relabels: a
+  /// pending phase / conj / sign is not materialized for a description
   [[nodiscard]] std::string trange_annot() const override {
-    return detail::ta_trange_string(get<ArrayT>());
+    return detail::ta_trange_string(
+        view_ && view_->relabeled() ? get<ArrayT>() : raw<ArrayT>());
   }
 
  private:
@@ -1303,6 +1433,8 @@ class ResultTensorOfTensorTA final : public Result {
   /// annotation @p annot (logical order), the pending transform folded in
   template <typename F>
   decltype(auto) with_expr(std::string const& annot, F&& f) const {
+    // a sign per half is no TA expression: such a view is materialized first
+    if (view_ && !view_->signed_halves.empty()) ensure_materialized();
     auto const& arr = raw<ArrayT>();
     auto const a = translate(annot);
     if (view_) {
@@ -1332,7 +1464,18 @@ class ResultTensorOfTensorTA final : public Result {
     if (!view_) return;
     auto const ann = dummy_annotation();
     ArrayT r;
-    with_expr(ann, [&](auto&& e) { r(ann) = e; });
+    if (!view_->signed_halves.empty()) {
+      // the sign per half is no TA expression: a deep tile-wise copy in the
+      // stored mode order, then the relabel
+      auto const s = detail::signed_copy(raw<ArrayT>(), view_->phase,
+                                         view_->conj, view_->signed_halves);
+      if (view_->relabeled())
+        r(ann) = s(translate(ann));
+      else
+        r = s;
+    } else {
+      with_expr(ann, [&](auto&& e) { r(ann) = e; });
+    }
     ::sequant::detail::drain_lazy_cleanup(r);
     log_ta_tensor_host_memory_use();
     reset_value(std::move(r));
@@ -1404,8 +1547,84 @@ class ResultTensorOfTensorTA final : public Result {
   };
   [[nodiscard]] EinsumOperand einsum_operand(std::string const& annot,
                                              bool keep_conj) const {
-    if (view_ && view_->conj && !keep_conj) ensure_materialized();
+    if (view_ && (view_->conj || !view_->signed_halves.empty()) && !keep_conj)
+      ensure_materialized();
     return {translate(annot), phase()};
+  }
+
+  /// the outer element count: the size proxy the one-sided conjugation move
+  /// (einsum_pair) compares, the inner extents of the two operands of one
+  /// product being of the same order
+  [[nodiscard]] std::size_t outer_volume() const noexcept {
+    return raw<ArrayT>().trange().elements_range().volume();
+  }
+  [[nodiscard]] bool half_signed() const noexcept {
+    return view_ && !view_->signed_halves.empty();
+  }
+
+  /// The two operands of an einsum product (which takes plain arrays), with
+  /// a pending conjugation placed so that no LARGE operand is materialized:
+  /// conj(A)·conj(B) = conj(A·B) keeps both raw and puts the conjugation on
+  /// the result (as before); conj(A)·B = conj(A·conj(B)) does the same when
+  /// only the larger operand is conjugated, after conjugating the smaller one
+  /// into a copy of its own -- a KramersFlip served as a conjugated alias of
+  /// its operand then costs one small copy instead of a copy of itself. The
+  /// flip's sign per half (View::signed_halves) moves with the conjugation:
+  /// along a contracted mode onto the small copy, along a free mode onto the
+  /// result (result_signed, applied by the caller). Otherwise the conjugated
+  /// (or signed) operand is materialized.
+  struct EinsumPair {
+    EinsumOperand l, r;
+    ArrayT const* la = nullptr;
+    ArrayT const* ra = nullptr;
+    bool conj = false;  ///< the conjugation pending on the result
+    /// result modes whose ⇓ half the caller negates (detail::signed_copy)
+    container::svector<std::size_t> result_signed;
+    ResultPtr copy;  ///< the conjugated copy of the smaller operand, if any
+  };
+  [[nodiscard]] EinsumPair einsum_pair(this_type const& o,
+                                       std::string const& lannot,
+                                       std::string const& rannot,
+                                       std::string const& this_annot) const {
+    EinsumPair p;
+    bool const lc = conjugated(), rc = o.conjugated();
+    if (lc != rc) {
+      this_type const& big = lc ? *this : o;
+      this_type const& small = lc ? o : *this;
+      if (big.outer_volume() > small.outer_volume()) {
+        auto const& bannot = lc ? lannot : rannot;
+        auto const& sannot = lc ? rannot : lannot;
+        // the big operand stays raw: its relabel in the annotation, its
+        // phase on the record, its conjugation and sign moved below
+        EinsumOperand const bo = big.einsum_operand(bannot, /*keep_conj=*/true);
+        container::svector<std::size_t> const none;
+        auto const& bsigned = big.view_ ? big.view_->signed_halves : none;
+        auto const bstored = tokens(bo.annot).outer;
+        // the conjugate of the small operand's logical value (its own view
+        // applied), negated on the ⇓ half of every signed mode it contracts
+        p.copy = eval_result<this_type>(detail::signed_copy(
+            small.logical_array(), /*phase=*/1, /*conj=*/true,
+            detail::map_modes(bsigned, bstored, tokens(sannot).outer)));
+        p.result_signed =
+            detail::map_modes(bsigned, bstored, tokens(this_annot).outer);
+        auto const* sc =
+            &static_cast<this_type const&>(*p.copy).template raw<ArrayT>();
+        EinsumOperand const so{sannot, 1};
+        p.l = lc ? bo : so;
+        p.r = lc ? so : bo;
+        p.la = lc ? &big.template raw<ArrayT>() : sc;
+        p.ra = lc ? sc : &big.template raw<ArrayT>();
+        p.conj = true;
+        return p;
+      }
+    }
+    bool const both = lc && rc && !half_signed() && !o.half_signed();
+    p.l = einsum_operand(lannot, both);
+    p.r = o.einsum_operand(rannot, both);
+    p.la = &raw<ArrayT>();
+    p.ra = &o.template raw<ArrayT>();
+    p.conj = both;
+    return p;
   }
 
   // Diagnostic (see Result::fence): force all pending async work in this
@@ -1454,8 +1673,10 @@ class ResultTensorOfTensorTA final : public Result {
     // the outer modes of a nested sum): materialize such an operand. A
     // conj / phase view rides on it (`le + ph * re.conj()`; the nested add
     // conjugates arena inner cells: TA tests/tot_add_conj.cpp)
-    if (view_ && !view_->iperm.empty()) ensure_materialized();
-    if (o.view_ && !o.view_->iperm.empty()) o.ensure_materialized();
+    if (view_ && (!view_->iperm.empty() || !view_->signed_halves.empty()))
+      ensure_materialized();
+    if (o.view_ && (!o.view_->iperm.empty() || !o.view_->signed_halves.empty()))
+      o.ensure_materialized();
     ArrayT result;
     // a TA failure names the operands (as the product's wrapper does): the
     // raw TA message carries no annotation
@@ -1605,44 +1826,63 @@ class ResultTensorOfTensorTA final : public Result {
     if (other.is<that_type>()) {
       // ToT * T -> ToT. The flat operand is read materialized (its own view
       // is memoized on first read); ours rides on the einsum annotation
-      // (relabel) and the result's view (phase); a pending conj is
-      // materialized (einsum takes plain tensor expressions only).
-      auto const l = einsum_operand(a.lannot, /*keep_conj=*/false);
+      // (relabel) and the result's view (phase). A pending conj of ours
+      // (einsum takes plain tensor expressions only) is moved onto the flat
+      // operand when that is the smaller array -- conj(A)·B = conj(A·conj(B)),
+      // the conjugation then rides on the result -- else materialized.
+      // the sign per half of a flipped mode moves with it: along a contracted
+      // mode onto the copy of the flat, along a free mode onto the result.
+      auto const& flat =
+          other.template get<compatible_regular_distarray_type>();
+      bool const move_conj =
+          conjugated() &&
+          flat.trange().elements_range().volume() < outer_volume();
+      auto const l = einsum_operand(a.lannot, /*keep_conj=*/move_conj);
+      container::svector<std::size_t> const none;
+      auto const& lsigned = move_conj && view_ ? view_->signed_halves : none;
+      auto const lstored = tokens(l.annot).outer;
+      auto const B =
+          move_conj
+              ? detail::signed_copy(
+                    flat, /*phase=*/1, /*conj=*/true,
+                    detail::map_modes(lsigned, lstored, split_list(a.rannot)))
+              : flat;
       auto result = [&] {
         try {
-          return TA::einsum(
-              raw<ArrayT>()(l.annot),
-              other.template get<compatible_regular_distarray_type>()(a.rannot),
-              a.this_annot);
+          return TA::einsum(raw<ArrayT>()(l.annot), B(a.rannot), a.this_annot);
         } catch (std::exception const& ex) {
           throw std::runtime_error(describe_tot(ex.what()));
         }
       }();
+      if (auto const rs =
+              detail::map_modes(lsigned, lstored, tokens(a.this_annot).outer);
+          !rs.empty())
+        result = detail::signed_copy(result, 1, false, rs);
       log_ta_tensor_host_memory_use();
       return noted(
-          eval_result<this_type>(std::move(result), View{.phase = l.phase}),
+          eval_result<this_type>(std::move(result),
+                                 View{.phase = l.phase, .conj = move_conj}),
           inner_count(a.this_annot));
 
     } else if (other.is<this_type>() && DeNestFlag == DeNest::True) {
       // ToT * ToT -> T (einsum only)
       auto const& o = static_cast<this_type const&>(other);
-      bool const both_conj = conjugated() && o.conjugated();
-      auto const l = einsum_operand(a.lannot, both_conj);
-      auto const r = o.einsum_operand(a.rannot, both_conj);
+      auto const p = einsum_pair(o, a.lannot, a.rannot, a.this_annot);
       auto result = [&] {
         try {
-          return TA::einsum<TA::DeNest::True>(raw<ArrayT>()(l.annot),
-                                              o.template raw<ArrayT>()(r.annot),
-                                              a.this_annot);
+          return TA::einsum<TA::DeNest::True>((*p.la)(p.l.annot),
+                                              (*p.ra)(p.r.annot), a.this_annot);
         } catch (std::exception const& ex) {
           throw std::runtime_error(describe_tot(ex.what()));
         }
       }();
+      if (!p.result_signed.empty())
+        result = detail::signed_copy(result, 1, false, p.result_signed);
       log_ta_tensor_host_memory_use();
-      // conj(A) . conj(B) = conj(A . B): both conjugations ride on the result
+      // conj(A) . conj(B) = conj(A . B): the conjugation rides on the result
       typename that_type::View rv;
-      rv.phase = static_cast<std::int8_t>(l.phase * r.phase);
-      rv.conj = both_conj;
+      rv.phase = static_cast<std::int8_t>(p.l.phase * p.r.phase);
+      rv.conj = p.conj;
       return eval_result<that_type>(std::move(result), std::move(rv));
 
     } else if (other.is<this_type>() && DeNestFlag == DeNest::False) {
@@ -1662,21 +1902,21 @@ class ResultTensorOfTensorTA final : public Result {
         return noted(eval_result<this_type>(std::move(result)),
                      inner_count(a.this_annot));
       }
-      bool const both_conj = conjugated() && o.conjugated();
-      auto const l = einsum_operand(a.lannot, both_conj);
-      auto const r = o.einsum_operand(a.rannot, both_conj);
+      auto const p = einsum_pair(o, a.lannot, a.rannot, a.this_annot);
       auto result = [&] {
         try {
-          return TA::einsum(raw<ArrayT>()(l.annot),
-                            o.template raw<ArrayT>()(r.annot), a.this_annot);
+          return TA::einsum((*p.la)(p.l.annot), (*p.ra)(p.r.annot),
+                            a.this_annot);
         } catch (std::exception const& ex) {
           throw std::runtime_error(describe_tot(ex.what()));
         }
       }();
+      if (!p.result_signed.empty())
+        result = detail::signed_copy(result, 1, false, p.result_signed);
       log_ta_tensor_host_memory_use();
       View rv;
-      rv.phase = static_cast<std::int8_t>(l.phase * r.phase);
-      rv.conj = both_conj;
+      rv.phase = static_cast<std::int8_t>(p.l.phase * p.r.phase);
+      rv.conj = p.conj;
       return noted(eval_result<this_type>(std::move(result), std::move(rv)),
                    inner_count(a.this_annot));
     } else {
@@ -1740,7 +1980,8 @@ class ResultTensorOfTensorTA final : public Result {
     // a phase / conj view is consumed lazily (`t += ph * o.conj()`; the
     // nested in-place add conjugates arena inner cells, null destination
     // cells included: TA tests/tot_add_conj.cpp)
-    if (o.view_ && o.view_->relabeled()) o.ensure_materialized();
+    if (o.view_ && (o.view_->relabeled() || !o.view_->signed_halves.empty()))
+      o.ensure_materialized();
     auto const& oarr = o.template raw<ArrayT>();
 
     SEQUANT_ASSERT(t.trange() == oarr.trange());

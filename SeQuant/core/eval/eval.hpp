@@ -879,22 +879,27 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
     // every alive entry on the scope chain: a cached child fetched full
     // aliases and is skipped; an apply_phase / sliced / permuted child is
     // a distinct buffer and is added.
+    // A result that aliases its operand's buffer (a KramersFlip served as a
+    // view) allocated nothing: charged 0, and the operand's buffer -- the
+    // result's -- is counted once, see Result::is_buffer_alias().
+    bool const lazy = result->is_buffer_alias();
     size_t hwmark = log::bytes(cache, result).value;
-    if (!cache.chain_holds(left)) hwmark += log::bytes(left).value;
+    if (!lazy && !cache.chain_holds(left)) hwmark += log::bytes(left).value;
     if (right && !cache.chain_holds(right)) hwmark += log::bytes(right).value;
     hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-    log::eval(log::EvalStat{.mode = log::eval_mode(node),
-                            .time = time,
-                            .mem_result = log::bytes(result),
-                            .mem_alloc = log::bytes(result),
-                            .mem_hwmark = {cache.note_working_set(
-                                hwmark, node->hash_value())},
-                            .mem_left = log::bytes(left),
-                            .mem_right = log::bytes(right)},
-              log::label(node, cache.batch_context()) + " | L." +
-                  left->trange_annot() +
-                  (right ? " R." + right->trange_annot() : std::string{}) +
-                  " O." + result->trange_annot());
+    log::eval(
+        log::EvalStat{
+            .mode = log::eval_mode(node),
+            .time = time,
+            .mem_result = log::bytes(result),
+            .mem_alloc = lazy ? log::Bytes{0} : log::bytes(result),
+            .mem_hwmark = {cache.note_working_set(hwmark, node->hash_value())},
+            .mem_left = log::bytes(left),
+            .mem_right = log::bytes(right)},
+        log::label(node, cache.batch_context()) + " | L." +
+            left->trange_annot() +
+            (right ? " R." + right->trange_annot() : std::string{}) + " O." +
+            result->trange_annot());
   }
   log::release_after_op();
   return result;
@@ -1030,7 +1035,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
     log::eval(log::EvalStat{.mode = log::eval_mode(node),
                             .time = time,
                             .mem_result = log::bytes(intercepted),
-                            .mem_alloc = log::bytes(intercepted),
+                            .mem_alloc = intercepted->is_buffer_alias()
+                                             ? log::Bytes{0}
+                                             : log::bytes(intercepted),
                             .mem_hwmark = {cache.note_working_set(
                                 hwmark, node->hash_value())}},
               log::label(node, cache.batch_context()));
@@ -1065,13 +1072,15 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename F,
   if constexpr (detail::trace(EvalTrace)) {
     size_t hwmark = log::bytes(cache, result).value;
     hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-    log::eval(log::EvalStat{.mode = log::eval_mode(node),
-                            .time = time,
-                            .mem_result = log::bytes(result),
-                            .mem_alloc = log::bytes(result),
-                            .mem_hwmark = {cache.note_working_set(
-                                hwmark, node->hash_value())}},
-              log::label(node, cache.batch_context()));
+    log::eval(
+        log::EvalStat{
+            .mode = log::eval_mode(node),
+            .time = time,
+            .mem_result = log::bytes(result),
+            .mem_alloc =
+                result->is_buffer_alias() ? log::Bytes{0} : log::bytes(result),
+            .mem_hwmark = {cache.note_working_set(hwmark, node->hash_value())}},
+        log::label(node, cache.batch_context()));
   }
   log::release_after_op();
   // The leaf evaluator serves the CANONICAL spelling (the orientation the
