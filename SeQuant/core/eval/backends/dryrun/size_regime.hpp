@@ -137,6 +137,11 @@ struct SizeRegime {
   /// amplitudes in another, each family's indices carrying its basis
   /// instance) files every basis here, so no family is priced by another's
   /// domain sizes. Empty (default) => one basis, the default tables.
+  /// Composites are grouped by proto-index set alone (inner_aware_volume), so
+  /// a group whose members sit in different bases is priced by the product
+  /// of each member's own M_k; for two bases A and B on one pair grid that is
+  /// nocc^N M_k(A) M_k(B), an upper bound (Cauchy-Schwarz) of the volume
+  /// Sum_pairs d_A d_B, exact when d_A and d_B are proportional.
   std::map<csv_basis_key_type, CsvMomentTables> csv_moment_by_instance;
 
   /// \return the flat extent of the proto-free index \p ix's
