@@ -32,6 +32,26 @@
 
 namespace sequant {
 
+/// Invokes @p tensor_fn or @p variable_fn for the tensor or variable that the
+/// given leaf expression represents. Powers are represented by their base. Does
+/// nothing for any other expression.
+template <typename TensorFn, typename VariableFn>
+void visit_leaf_expr(const Expr &expr, TensorFn &&tensor_fn,
+                     VariableFn &&variable_fn) {
+  if (expr.is<Tensor>()) {
+    tensor_fn(expr.as<Tensor>());
+  } else if (expr.is<Variable>()) {
+    variable_fn(expr.as<Variable>());
+  } else if (expr.is<Power>()) {
+    const Power &power = expr.as<Power>();
+    if (power.base().is<Tensor>()) {
+      tensor_fn(power.base().as<Tensor>());
+    } else if (power.base().is<Variable>()) {
+      variable_fn(power.base().as<Variable>());
+    }
+  }
+}
+
 namespace detail {
 
 /// A collection of various meta-data that the preprocessing stage will collect
@@ -623,18 +643,7 @@ void track_usage(const EvalNode<T> &node, PreprocessResult &result) {
     result.names.occupy(variable);
   };
 
-  if (expr.is<Tensor>()) {
-    handle_tensor(expr.as<Tensor>());
-  } else if (expr.is<Variable>()) {
-    handle_variable(expr.as<Variable>());
-  } else if (expr.is<Power>()) {
-    const Power &power = expr.as<Power>();
-    if (power.base().is<Tensor>()) {
-      handle_tensor(power.base().as<Tensor>());
-    } else if (power.base().is<Variable>()) {
-      handle_variable(power.base().as<Variable>());
-    }
-  }
+  visit_leaf_expr(expr, handle_tensor, handle_variable);
 }
 
 /// @returns Whether the given node may be pruned from its parent in order to
