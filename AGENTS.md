@@ -4,6 +4,32 @@ Conventions for automated contributors working in this repository. Human
 contributors: see `README.md` and `INSTALL.md`, which these notes do not
 replace.
 
+## Development priorities
+
+When making changes or extensions to the code, weigh the following priorities,
+from highest to lowest. They never override the "Never"/"Do not" rules below.
+
+1. **Correctness.** Never trade it for anything below. Sizable changes get an
+   independent review (see "Review sizable changes independently").
+2. **Readability/Maintainability.** Others will have to understand and modify
+   the code later. A key part of this is reuse: before implementing new
+   functionality, search the whole tree (any file, any part of SeQuant) for an
+   existing implementation of it. If one exists, or the same logic would end up
+   in two places, factor the shared part out into a function or utility that
+   both call instead of copying it. Extracting what is needed for this is in
+   scope even though it touches existing call sites; unrelated cleanup is not.
+3. **Performance.** Ranks just below readability, and wins over it only when
+   the readability loss buys a significant, measured speedup; say so in the
+   commit message. Asymptotic scaling is the exception: SeQuant is expected to
+   process very large expressions, so the difference between O(N^2) and
+   O(N log N) in the size of an expression (number of terms, factors, indices)
+   can be dramatic. Do not introduce a worse complexity class than necessary
+   on such paths, even if it is simpler. The benchmarks, integration tests and
+   external interface runs are examples of typical loads.
+
+If in doubt, whether about a priority trade-off, the intended behavior or the
+scope of a change, consult the user to make the decision instead of guessing.
+
 ## Never regenerate `*.expected` fixtures
 
 **Do not create, update, or regenerate any `*.expected` file, and do not run a
@@ -78,6 +104,20 @@ fix/refactor it depends on. Do not fold "fix A", "fix B", and "add feature C
 that uses the fixed code" into one commit just because they happened in the
 same session.
 
+## Review sizable changes independently
+
+Before reporting a change as done, have it reviewed for correctness by a
+reviewer that did not write it (a fresh subagent, or `/code-review` if
+available). Do this for changes that alter behavior in more than a few
+lines, touch symbolic/algebraic logic, symmetry or hashing, evaluation or
+export, or span several files. Skip it for docs, comments, formatting
+and mechanical renames.
+
+Give the reviewer the diff and the intent, not your reasoning, and ask for
+concrete failure scenarios rather than style remarks. Verify each finding
+yourself before acting on it, and report unresolved ones. If no independent
+reviewer is available, say so instead of skipping silently.
+
 ## Prefer the smallest diff that achieves the change
 
 Make the smallest change that gets the job done, without compromising on
@@ -103,13 +143,6 @@ the code — a hidden constraint, a subtle invariant, a workaround. Don't use
 a comment to narrate what the code used to do before this change, and don't
 use a comment to justify why this change was made or why this approach was
 chosen over an alternative. That reasoning belongs in the commit message.
-
-## Reuse logic across similar call sites instead of duplicating it
-
-Before adding a second implementation of behavior that already exists
-elsewhere in the tree — even in a different file or class than the one
-being added — factor the shared part out into a function or utility both
-call, rather than copying it.
 
 ## Throw `sequant::Exception`, nothing else
 
