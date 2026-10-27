@@ -41,19 +41,6 @@ class IndexSpaceMeta {
 sequant::container::svector<sequant::container::svector<sequant::Index>>
 getExternalIndexPairs(const sequant::ExprPtr &expression);
 
-bool needsSymmetrization(const sequant::ExprPtr &expression);
-
-sequant::ExprPtr generateResultSymmetrization(const sequant::ResultExpr &result,
-                                              std::wstring_view precursorName);
-
-sequant::ExprPtr generateResultSymmetrization(const sequant::Tensor &result,
-                                              std::wstring_view precursorName);
-
-sequant::ExprPtr generateResultSymmetrization(
-    std::wstring_view precursorName,
-    const sequant::IndexGroups<std::vector<sequant::Index>> &externals,
-    const sequant::Tensor &ref);
-
 template <std::ranges::random_access_range Container,
           std::ranges::random_access_range Order>
   requires(std::integral<std::ranges::range_value_t<Order>>)

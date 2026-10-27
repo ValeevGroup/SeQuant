@@ -257,6 +257,33 @@ TEST_CASE("push_symmetrizer", "[utilities]") {
   REQUIRE(has_tensor(result.expression(), L"t"));
 }
 
+TEST_CASE("has_symmetrizer", "[utilities]") {
+  using namespace sequant;
+
+  auto t = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+  ExprPtr symmetrizer = ex<Tensor>(reserved::symm_label(), bra{L"i_1", L"i_2"},
+                                   ket{L"a_1", L"a_2"});
+
+  REQUIRE_FALSE(has_symmetrizer(t));
+  REQUIRE(has_symmetrizer(symmetrizer * t));
+}
+
+TEST_CASE("result_symmetrization", "[utilities]") {
+  using namespace sequant;
+
+  Tensor result(L"R", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+
+  ExprPtr expected =
+      ex<Constant>(rational(1, 2)) *
+          ex<Tensor>(L"Ru", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) +
+      ex<Constant>(rational(1, 2)) *
+          ex<Tensor>(L"Ru", bra{L"a_2", L"a_1"}, ket{L"i_2", L"i_1"});
+
+  REQUIRE(result_symmetrization(result, L"Ru") == expected);
+  REQUIRE(result_symmetrization(ResultExpr(result, ex<Constant>(0)), L"Ru") ==
+          expected);
+}
+
 TEST_CASE("utilities", "[utilities]") {
   using namespace sequant;
 

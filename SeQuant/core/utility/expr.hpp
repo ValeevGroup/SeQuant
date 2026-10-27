@@ -101,6 +101,26 @@ std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression);
 void push_symmetrizer(ResultExpr &expression,
                       std::optional<ExprPtr> symmetrizer);
 
+/// @returns Whether the given expression contains a symmetrization operator,
+/// i.e. a tensor labeled reserved::symm_label(), anywhere
+/// @note The assumption is that there are no cases in which only part of the
+/// expression requires symmetrization
+bool has_symmetrizer(const ExprPtr &expression);
+
+/// Generates the expression that symmetrizes the given result over all
+/// cyclic permutations of its bra-ket index pairs, based on the tensor named
+/// @p precursor_name (with the same symmetries as @p result). Auxiliary
+/// indices are not symmetrized.
+///
+/// @param result The result to symmetrize
+/// @param precursor_name The name of the not yet symmetrized tensor
+ExprPtr result_symmetrization(const Tensor &result,
+                              std::wstring_view precursor_name);
+
+/// @copydoc result_symmetrization(const Tensor&, std::wstring_view)
+ExprPtr result_symmetrization(const ResultExpr &result,
+                              std::wstring_view precursor_name);
+
 /// Replaces a given target expression by a given replacement
 ///
 /// If target and replacement have common indices, the indices in the

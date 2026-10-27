@@ -19,6 +19,7 @@
 #include <SeQuant/core/irreps/table_algebra.hpp>
 #include <SeQuant/core/irreps/z2_algebra.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/topological.hpp>
@@ -1044,7 +1045,7 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
       SEQUANT_ASSERT(it != group.rend());
 
       ResultExpr symmetrization(
-          symm_res, generateResultSymmetrization(symm_res, unsymm_res.label()));
+          symm_res, result_symmetrization(symm_res, unsymm_res.label()));
 
       const auto batch_indices = genctx.batch_indices((*it)->id());
 
