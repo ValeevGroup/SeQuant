@@ -81,60 +81,36 @@ std::optional<ExportTreeData> perform_cse(ExprRange &&exprs,
   opt::CSEOptions<ExportNode<>> cse_opts;
   cse_opts.filter_predicate = opt::min_usage_filter<ExportNode<>>(min_usage);
 
-  std::vector<std::size_t> cse_positions;
-  std::vector<std::vector<Index>> used_batch_indices;
-  std::vector<std::pair<std::size_t, std::size_t>> batches;
+  // Expressions can only share subexpressions if they are batched identically
+  std::vector<std::optional<std::vector<Index>>> expr_batch_indices;
+  expr_batch_indices.reserve(exprs.size());
+  for (std::size_t input_idx : expr_to_input) {
+    const auto &entries = inputs[input_idx].entries;
+    const auto &batch_indices = entries.front().batch_indices;
 
-  // Determine CSEs in batches of expressions that share the same
-  // batching indices
-  std::pair<std::size_t, std::size_t> partition = {0, 0};
-  while (partition.second < exprs.size()) {
-    partition.first = partition.second;
-
-    SEQUANT_ASSERT(partition.first >= cse_positions.size());
-    auto batch_indices =
-        inputs[expr_to_input[partition.first - cse_positions.size()]]
-            .entries.front()
-            .batch_indices;
-
-    // Note: we explicitly also check the first ==  second case
-    // as the first set of entries could already have different indices
-    for (; partition.second < exprs.size(); ++partition.second) {
-      SEQUANT_ASSERT(partition.second >= cse_positions.size());
-      const auto &entries =
-          inputs[expr_to_input[partition.second - cse_positions.size()]]
-              .entries;
-      if (std::ranges::any_of(
-              entries,
-              [&](const auto &indices) { return indices != batch_indices; },
-              &ExportTreeData::Entry::batch_indices)) {
-        break;
-      }
+    if (std::ranges::all_of(
+            entries,
+            [&](const auto &indices) { return indices == batch_indices; },
+            &ExportTreeData::Entry::batch_indices)) {
+      expr_batch_indices.emplace_back(batch_indices);
+    } else {
+      expr_batch_indices.emplace_back(std::nullopt);
     }
-
-    if (partition.first == partition.second) {
-      ++partition.second;
-      batch_indices.clear();
-    }
-
-    cse_opts.batch_indices = std::move(batch_indices);
-
-    std::vector<std::size_t> new_cses = opt::eliminate_common_subexpressions(
-        exprs, partition.first, partition.second,
-        [](const auto &expr) {
-          // Note: the lambda is needed to make the callable usable for
-          // ExprPtr as well as ResultExpr objects
-          return to_export_tree(expr);
-        },
-        cse_opts);
-
-    cse_positions.insert(cse_positions.end(), new_cses.begin(), new_cses.end());
-
-    partition.second += new_cses.size();
-
-    used_batch_indices.emplace_back(std::move(cse_opts.batch_indices));
-    batches.emplace_back(partition);
   }
+
+  opt::BatchedCSEResult cse_result =
+      opt::eliminate_common_subexpressions_batched(
+          exprs, expr_batch_indices,
+          [](const auto &expr) {
+            // Note: the lambda is needed to make the callable usable for
+            // ExprPtr as well as ResultExpr objects
+            return to_export_tree(expr);
+          },
+          cse_opts);
+
+  std::vector<std::size_t> &cse_positions = cse_result.cse_positions;
+  const auto &batches = cse_result.partitions;
+  const auto &used_batch_indices = cse_result.batch_indices;
 
   SEQUANT_ASSERT(batches.back().second == exprs.size());
   SEQUANT_ASSERT(batches.size() == used_batch_indices.size());
@@ -218,49 +194,19 @@ std::optional<ExportTreeData> perform_cse(ExprRange &&exprs,
         std::ranges::subrange(output.entries.begin() + current_batch.first,
                               output.entries.begin() + current_batch.second);
 
-    // Sort by used batch indices per expression. Batch indices are treated as
-    // having a "priority". We start at the highest priority (first) batch index
-    // and compare on the first batch index that only one of the expressions
-    // has. Expressions with the lower priority batching indices (or even none)
-    // come before the ones with the higher priority (or more) batching indices.
-    // Since all non-CSEs are chose to have the same batching indices,
-    // their relative order remains unchanged. And since CSEs can't depend
-    // on each other (due to the way we determine them), their order is
-    // irrelevant as long as they are computed before they are used, which
-    // is guaranteed because the CSE can at most have as many batched
-    // indices as the associated main expression and hence they compare
-    // equivalent with the used comparator (and stable_sort guarantees
-    // retained relative order of equivalent elements).
+    // Since all non-CSEs are chosen to have the same batching indices, their
+    // relative order remains unchanged. And since CSEs can't depend on each
+    // other (due to the way we determine them), their order is irrelevant as
+    // long as they are computed before they are used, which is guaranteed
+    // because the CSE can at most have as many batched indices as the
+    // associated main expression and hence they compare equivalent with the
+    // used comparator (and stable_sort guarantees retained relative order of
+    // equivalent elements).
     std::ranges::stable_sort(
         batch_entries,
         [&current_batch_indices](const ExportNode<> &lhs,
                                  const ExportNode<> &rhs) {
-          if (!rhs->is_tensor()) {
-            return true;
-          }
-          if (!lhs->is_tensor()) {
-            return std::ranges::any_of(
-                rhs->as_tensor().const_indices(), [&](const Index &idx) {
-                  return std::ranges::find(current_batch_indices, idx) !=
-                         current_batch_indices.end();
-                });
-          }
-
-          auto lhs_indices = lhs->as_tensor().const_indices();
-          auto rhs_indices = rhs->as_tensor().const_indices();
-
-          for (const Index &idx : current_batch_indices) {
-            const bool lhs_contains =
-                std::ranges::find(lhs_indices, idx) != lhs_indices.end();
-            const bool rhs_contains =
-                std::ranges::find(rhs_indices, idx) != rhs_indices.end();
-
-            if (lhs_contains != rhs_contains) {
-              return rhs_contains;
-            }
-          }
-
-          return false;
+          return opt::batch_priority_less(lhs, rhs, current_batch_indices);
         },
         &ExportTreeData::Entry::tree);
   }
