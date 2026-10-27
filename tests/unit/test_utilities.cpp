@@ -13,6 +13,7 @@
 #include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/expr_filter.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -282,6 +283,36 @@ TEST_CASE("result_symmetrization", "[utilities]") {
   REQUIRE(result_symmetrization(result, L"Ru") == expected);
   REQUIRE(result_symmetrization(ResultExpr(result, ex<Constant>(0)), L"Ru") ==
           expected);
+}
+
+TEST_CASE("ExpressionFilter", "[utilities]") {
+  using namespace sequant;
+
+  ExprPtr t = ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"});
+  ExprPtr f = ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"});
+  ExprPtr g = ex<Tensor>(L"g", bra{L"i_1"}, ket{L"a_1"});
+  ExprPtr expr = t * f + g;
+
+  ExpressionFilter filter;
+  filter.add_rule(
+      std::make_unique<LabelRule>(std::vector<std::wregex>{std::wregex(L"t")}));
+  REQUIRE(filter.matches(*expr));
+  REQUIRE_FALSE(filter.matches(*g));
+
+  ExpressionFilter contains;
+  contains.add_rule(std::make_unique<ContainsRule>(ExprMatcher(*g)));
+  REQUIRE(contains.matches(*expr));
+  REQUIRE_FALSE(contains.matches(*t));
+
+  ExpressionFilter any;
+  any.set_require_all(false);
+  any.add_rule(std::make_unique<ContainsRule>(ExprMatcher(*g)));
+  any.add_rule(std::make_unique<ContainsRule>(ExprMatcher(*t)));
+  REQUIRE(any.matches(*g));
+  REQUIRE_FALSE(any.matches(*f));
+
+  // Only the summand containing t is kept
+  REQUIRE(prune_to_matches(*expr, filter) == ex<Sum>(ExprPtrList{t * f}));
 }
 
 TEST_CASE("utilities", "[utilities]") {
