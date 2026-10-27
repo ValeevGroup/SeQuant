@@ -7,6 +7,7 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/irreps/algebra.hpp>
 #include <SeQuant/core/irreps/any.hpp>
+#include <SeQuant/core/irreps/config.hpp>
 #include <SeQuant/core/irreps/eval_tree.hpp>
 #include <SeQuant/core/irreps/propagation.hpp>
 #include <SeQuant/core/irreps/table_algebra.hpp>
@@ -522,5 +523,54 @@ TEST_CASE("irreps", "[irreps]") {
           REQUIRE(current.as<Irrep>() != nullptr);
         });
     REQUIRE(names == std::vector<std::string>{"B2*Gx", "B1"});
+  }
+}
+
+TEST_CASE("irrep context from specification", "[irreps]") {
+  using namespace sequant;
+
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
+  Tensor f(L"f", bra{L"i_1"}, ket{L"a_1"});
+  Tensor g(L"g", bra{L"i_1"}, ket{L"a_1"});
+
+  IrrepContextSpec spec;
+  spec.group = "symbolic";
+  spec.tensors = {{"t", {"A"}}, {"f.*", {"*"}}};
+  spec.error_on_unspecified = true;
+
+  AnyIrrepContext ctx = make_irrep_context(spec);
+  REQUIRE(ctx.irreps_of(t).to_string() == "{A}");
+  REQUIRE(ctx.irreps_of(f).is_any());
+  REQUIRE_THROWS_AS(ctx.irreps_of(g), Exception);
+
+  SECTION("default") {
+    spec.error_on_unspecified = false;
+    spec.default_irreps = {"B"};
+
+    REQUIRE(make_irrep_context(spec).irreps_of(g).to_string() == "{B}");
+  }
+
+  SECTION("invalid specifications") {
+    IrrepContextSpec invalid;
+    invalid.group = "Unknown";
+    REQUIRE_THROWS_AS(make_irrep_context(invalid), Exception);
+
+    invalid.group = "D2h";
+    invalid.tensors = {{"t", {"Unknown"}}};
+    REQUIRE_THROWS_AS(make_irrep_context(invalid), Exception);
+  }
+
+  SECTION("multiplication table") {
+    IrrepContextSpec table_spec;
+    table_spec.table = IrrepContextSpec::Table{.totally_symmetric = "E",
+                                               .products = {{"X*X", {"E"}}},
+                                               .conjugates = {}};
+    table_spec.tensors = {{"t", {"X"}}};
+
+    AnyIrrepContext table_ctx = make_irrep_context(table_spec);
+    REQUIRE(table_ctx.irreps_of(t).to_string() == "{X}");
+
+    table_spec.symbols = std::vector<std::string>{};
+    REQUIRE_THROWS_AS(make_irrep_context(table_spec), Exception);
   }
 }
