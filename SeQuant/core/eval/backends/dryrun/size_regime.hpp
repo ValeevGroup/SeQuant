@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
@@ -42,9 +43,12 @@ namespace detail {
 ///         tables \p by_rank: osv for rank <= 1, pno for rank 2,
 ///         by_rank[rank] for a rank >= 3 that has a table, else pno (an entry
 ///         of by_rank for rank 1 or 2 is ignored)
+/// \pre \p k in [1, kMaxCompositeGroup]; SizeRegime::inner_pow() rejects any
+///      other k before it gets here
 inline double csv_moment(MomentTable const& osv, MomentTable const& pno,
                          std::map<std::size_t, MomentTable> const& by_rank,
                          std::size_t rank, std::size_t k) {
+  SEQUANT_ASSERT(k >= 1 && k <= kMaxCompositeGroup);
   if (rank <= 1) return osv[k];
   if (rank == 2) return pno[k];
   auto const it = by_rank.find(rank);
