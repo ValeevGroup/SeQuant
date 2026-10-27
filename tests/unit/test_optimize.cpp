@@ -1195,6 +1195,37 @@ TEST_CASE("optimize", "[optimize]") {
         REQUIRE(collect_as_expr(expressions) == expected);
       }
     }
+    SECTION("persistent subexpressions") {
+      using Node = EvalNode<EvalExpr>;
+
+      std::vector<Node> expressions = parse_inputs(
+          std::vector<std::wstring>{L"R1 = (A{i1;i2} B{i2;i3}) C{i3;i1}",
+                                    L"R2 = (A{i1;i2} B{i2;i3}) D{i3;i1}",
+                                    L"R3 = (E{i1;i2} C{i2;i3}) D{i3;i1}"});
+
+      const std::vector<std::size_t> definitions =
+          opt::extract_persistent_subexpressions(
+              expressions,
+              std::function<bool(const Node&)>([](const Node& leaf) {
+                return leaf->is_tensor() &&
+                       (leaf->as_tensor().label() == L"C" ||
+                        leaf->as_tensor().label() == L"D");
+              }),
+              binarizer,
+              std::function<std::string(const Node&, std::size_t)>(
+                  [](const Node&, std::size_t counter) {
+                    return "P" + std::to_string(counter);
+                  }));
+
+      // Every use of the persistent subtree is replaced by the intermediate
+      REQUIRE(definitions == std::vector<std::size_t>{0});
+      REQUIRE(expressions.size() == 4);
+      REQUIRE(collect_as_expr(expressions) ==
+              parse_expected(std::vector<std::wstring>{
+                  L"P1{;;i1,i3} = A{i1;i2} B{i2;i3}",
+                  L"R1 = P1{;;i1,i3} C{i3;i1}", L"R2 = P1{;;i1,i3} D{i3;i1}",
+                  L"R3 = (E{i1;i2} C{i2;i3}) D{i3;i1}"}));
+    }
     SECTION("batched") {
       const std::vector<std::wstring> inputs = {
           L"R1 = (A{i1;i2} B{i2;i3}) C{i3;i1}",

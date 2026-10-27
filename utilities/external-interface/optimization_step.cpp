@@ -205,21 +205,6 @@ std::optional<ExprPtr> optimize_unsymmetrized(ResultExpr &expr,
   return symmetrizer;
 }
 
-/// Adds the number of tensor leaves of @p node to @p num_tensors and returns
-/// whether none of its leaves is volatile.
-// Note: visit_leaf can't be used as it doesn't stop at non-root nodes
-bool count_tensors_if_persistent(const ExportNode<> &node,
-                                 const ExpressionFilter &is_volatile,
-                                 std::size_t &num_tensors) {
-  if (node.leaf()) {
-    num_tensors += node->is_tensor();
-    return !is_volatile.matches(*node->expr());
-  }
-
-  return count_tensors_if_persistent(node.left(), is_volatile, num_tensors) &&
-         count_tensors_if_persistent(node.right(), is_volatile, num_tensors);
-}
-
 std::size_t OptimizationStep::run(std::string_view step_id,
                                   ExecutionContext &ctx,
                                   const std::vector<std::string_view> &inputs) {
@@ -260,44 +245,16 @@ std::size_t OptimizationStep::run(std::string_view step_id,
     }
   }
 
-  auto is_persistent = [this](const Node &node) {
-    std::size_t num_tensors = 0;
-    if (!count_tensors_if_persistent(node, *replay_->is_volatile,
-                                     num_tensors)) {
-      return false;
-    }
-
-    // Same threshold as in the cse step: extracting a single tensor is not
-    // worth it
-    return num_tensors >= 2;
-  };
-
-  // Maximal persistent subtrees (their subtrees are not visited)
-  SubexpressionUsageCounts<Node> persistent;
-  for (const Node &tree : trees) {
-    tree.visit_internal([&](const Node &node) {
-      if (!is_persistent(node)) {
-        return true;
-      }
-
-      ++persistent[node];
-      return false;
-    });
-  }
-
-  std::vector<std::size_t> definitions;
-  if (!persistent.empty()) {
-    auto label_gen = [this](const Node &, std::size_t counter) {
-      return replay_->intermediate_label + std::to_string(counter);
-    };
-
-    opt::cse::SubexpressionReplacer<std::vector<Node>, Node, decltype(to_tree),
-                                    decltype(label_gen)>
-        replacer(trees, persistent, to_tree, label_gen);
-    replacer.perform_replacements(0, trees.size());
-
-    definitions = replacer.cse_indices();
-  }
+  const std::vector<std::size_t> definitions =
+      opt::extract_persistent_subexpressions(
+          trees, std::function<bool(const Node &)>([this](const Node &leaf) {
+            return replay_->is_volatile->matches(*leaf->expr());
+          }),
+          to_tree,
+          std::function<std::string(const Node &, std::size_t)>(
+              [this](const Node &, std::size_t counter) {
+                return replay_->intermediate_label + std::to_string(counter);
+              }));
 
   // Definitions are inserted right before their first use and are assigned
   // to the persistent part of the input that use belongs to

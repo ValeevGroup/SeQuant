@@ -19,6 +19,7 @@
 #include <ranges>
 #include <span>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -442,6 +443,91 @@ bool batch_priority_less(const TreeNode &lhs, const TreeNode &rhs,
   }
 
   return false;
+}
+
+namespace cse {
+
+/// Adds the number of tensor leaves of @p node to @p num_tensors and returns
+/// whether none of its leaves satisfies @p is_volatile_leaf. Note that the
+/// traversal stops at the first volatile leaf.
+template <typename TreeNode>
+bool count_tensors_if_persistent(
+    const TreeNode &node,
+    const std::function<bool(const TreeNode &)> &is_volatile_leaf,
+    std::size_t &num_tensors) {
+  if (node.leaf()) {
+    num_tensors += node->is_tensor();
+    return !is_volatile_leaf(node);
+  }
+
+  return count_tensors_if_persistent(node.left(), is_volatile_leaf,
+                                     num_tensors) &&
+         count_tensors_if_persistent(node.right(), is_volatile_leaf,
+                                     num_tensors);
+}
+
+}  // namespace cse
+
+/// Replaces all maximal subtrees that are "persistent" by intermediates, no
+/// matter how often they are used. A subtree is persistent if none of its
+/// leaves is volatile and if it contains at least @p min_tensors tensors.
+/// Definitions of the intermediates are inserted into the given container
+/// right before their first use.
+///
+/// @param expr_trees Container (vector-like) of evaluation trees
+/// @param is_volatile_leaf Predicate that identifies leaves that are not
+/// persistent
+/// @param expr_to_tree See eliminate_common_subexpressions
+/// @param label_gen Generates the label of an intermediate from its tree and
+/// a counter
+/// @param min_tensors The minimum number of tensors a persistent subtree must
+/// contain in order to be extracted (see also min_usage_filter)
+/// @returns The positions of the inserted intermediate definitions
+template <std::ranges::range VectorLike,
+          std::regular_invocable<ExprPtr> Transformer>
+  requires std::regular_invocable<Transformer, ResultExpr> &&
+           meta::eval_node<std::ranges::range_value_t<VectorLike>>
+std::vector<std::size_t> extract_persistent_subexpressions(
+    VectorLike &expr_trees,
+    const std::function<bool(const std::ranges::range_value_t<VectorLike> &)>
+        &is_volatile_leaf,
+    const Transformer &expr_to_tree,
+    const std::function<std::string(
+        const std::ranges::range_value_t<VectorLike> &, std::size_t)>
+        &label_gen,
+    std::size_t min_tensors = 2) {
+  using TreeNode = std::ranges::range_value_t<VectorLike>;
+
+  auto is_persistent = [&](const TreeNode &node) {
+    std::size_t num_tensors = 0;
+    return cse::count_tensors_if_persistent(node, is_volatile_leaf,
+                                            num_tensors) &&
+           num_tensors >= min_tensors;
+  };
+
+  // Maximal persistent subtrees (their subtrees are not visited)
+  SubexpressionUsageCounts<TreeNode> persistent;
+  for (const TreeNode &tree : expr_trees) {
+    tree.visit_internal([&](const TreeNode &node) {
+      if (!is_persistent(node)) {
+        return true;
+      }
+
+      ++persistent[node];
+      return false;
+    });
+  }
+
+  if (persistent.empty()) {
+    return {};
+  }
+
+  cse::SubexpressionReplacer<VectorLike, TreeNode, Transformer,
+                             std::remove_cvref_t<decltype(label_gen)>>
+      replacer(expr_trees, persistent, expr_to_tree, label_gen);
+  replacer.perform_replacements(0, expr_trees.size());
+
+  return replacer.cse_indices();
 }
 
 }  // namespace sequant::opt
