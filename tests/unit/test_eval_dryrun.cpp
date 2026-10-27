@@ -199,36 +199,42 @@ TEST_CASE("dryrun size regime prices a composite by its basis instance",
   eval::dryrun::SizeRegime r;
   r.space_extent = {{L"i", 10u}, {L"a", 300u}};
   eval::dryrun::SizeRegime::CsvMomentTables perturbed;
+  // every table varies with k, so a check also pins the column it reads
   for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
-    r.csv_pno_moment[k] = 14.0;
-    r.csv_osv_moment[k] = 9.0;
-    perturbed.pno[k] = 19.0;
-    perturbed.osv[k] = 12.0;
-    perturbed.by_rank[3][k] = 25.0;
+    auto const dk = static_cast<double>(k);
+    r.csv_pno_moment[k] = 14.0 + dk;
+    r.csv_osv_moment[k] = 9.0 + dk;
+    perturbed.pno[k] = 19.0 + dk;
+    perturbed.osv[k] = 12.0 + dk;
+    perturbed.by_rank[3][k] = 25.0 + dk;
   }
   constexpr IndexBasis::instance_type P = 10;
-  const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3");
+  const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3"), i4(L"i_4");
   r.csv_moment_by_instance[eval::dryrun::SizeRegime::csv_basis_key(
       Index(L"a_1").space(), P)] = perturbed;
   const Index pno(L"a_1", {i1, i2}), osv(L"a_2", {i1}),
-      triple(L"a_3", {i1, i2, i3});
+      triple(L"a_3", {i1, i2, i3}), quad(L"a_4", {i1, i2, i3, i4});
   // no instance: the default tables
-  CHECK(r.inner_pow(pno, 2) == Catch::Approx(14.0));
-  CHECK(r.inner_pow(osv, 1) == Catch::Approx(9.0));
-  CHECK(r.inner_pow(triple, 1) == Catch::Approx(14.0));
+  CHECK(r.inner_pow(pno, 2) == Catch::Approx(16.0));
+  CHECK(r.inner_pow(osv, 1) == Catch::Approx(10.0));
+  CHECK(r.inner_pow(triple, 1) == Catch::Approx(15.0));
+  CHECK(r.inner_pow(quad, 3) == Catch::Approx(17.0));
   // the listed instance: its own tables, rank dispatch included
-  CHECK(r.inner_pow(pno.replace_basis_instance(P), 2) == Catch::Approx(19.0));
-  CHECK(r.inner_pow(osv.replace_basis_instance(P), 1) == Catch::Approx(12.0));
+  CHECK(r.inner_pow(pno.replace_basis_instance(P), 2) == Catch::Approx(21.0));
+  CHECK(r.inner_pow(osv.replace_basis_instance(P), 1) == Catch::Approx(13.0));
   CHECK(r.inner_pow(triple.replace_basis_instance(P), 1) ==
-        Catch::Approx(25.0));
+        Catch::Approx(26.0));
+  // a rank without a table of its own falls back to the instance's PNO table,
+  // not to the default one
+  CHECK(r.inner_pow(quad.replace_basis_instance(P), 3) == Catch::Approx(22.0));
   // an instance that is not listed: the default tables
   CHECK(r.inner_pow(pno.replace_basis_instance(P + 1), 2) ==
-        Catch::Approx(14.0));
+        Catch::Approx(16.0));
   // the same instance number of another space is another basis instance
   CHECK(r.inner_pow(Index(L"p_1", {i1, i2}).replace_basis_instance(P), 2) ==
-        Catch::Approx(14.0));
+        Catch::Approx(16.0));
   // a plain index is sized by its space extent whatever its instance
-  CHECK(r.inner_pow(Index(L"a_4").replace_basis_instance(P), 2) ==
+  CHECK(r.inner_pow(Index(L"a_5").replace_basis_instance(P), 2) ==
         Catch::Approx(9.0e4));
 }
 
