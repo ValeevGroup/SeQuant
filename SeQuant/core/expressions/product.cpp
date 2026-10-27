@@ -297,9 +297,9 @@ Product::type_id_type Product::type_id() const {
 
 Product Product::deep_copy() const {
   Product result(this->scalar(), ExprPtrList{});
-  // append() clones each factor; Flatten::No preserves nested products.
-  for (const auto &factor : factors()) {
-    result.append(1, factor, Flatten::No);
+  for (const auto &factor : factors_) {
+    SEQUANT_ASSERT(factor);
+    result.append_impl(1, *factor, Flatten::No);
   }
   result.copy_canonical_mark(*this);
   return result;
@@ -307,7 +307,7 @@ Product Product::deep_copy() const {
 
 Product &Product::operator*=(const Expr &that) {
   if (!that.is<Constant>()) {
-    this->append(1, that.clone());
+    this->append_impl(1, that, Flatten::Yes);
   } else {
     scalar_ *= that.as<Constant>().value();
     reset_canonical_mark();

@@ -58,7 +58,7 @@ ExprPtr operator*(T &&lhs, const std::same_as<ExprPtr> auto &rhs) {
 }
 
 template <typename T>
-  requires(std::is_arithmetic_v<T>)
+  requires(std::is_arithmetic_v<std::remove_cvref_t<T>>)
 ExprPtr operator/(const std::same_as<ExprPtr> auto &lhs, T &&rhs) {
   return lhs * ex<Constant>(rational(1, std::forward<T>(rhs)));
 }
@@ -149,7 +149,7 @@ ExprHolder operator*(T &&lhs, const std::same_as<ExprHolder> auto &rhs) {
 }
 
 template <typename T>
-  requires(std::is_arithmetic_v<T>)
+  requires(std::is_arithmetic_v<std::remove_cvref_t<T>>)
 ExprHolder operator/(const std::same_as<ExprHolder> auto &lhs, T &&rhs) {
   return lhs * Constant(rational(1, std::forward<T>(rhs)));
 }

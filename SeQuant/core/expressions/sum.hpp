@@ -71,15 +71,11 @@ class Sum : public Expr {
         std::same_as<ExprHolder, std::remove_cvref_t<Range>>;
 
     if constexpr (rng_is_expr || rng_is_exprptr || rng_is_exprholder) {
-      ExprPtr rng_as_exprptr;
       if constexpr (rng_is_expr) {
-        rng_as_exprptr = rng.clone();
-      } else if constexpr (rng_is_exprholder) {
-        rng_as_exprptr = ExprPtr(std::forward<Range>(rng));
+        this->append_impl(rng);
       } else {
-        rng_as_exprptr = rng;
+        this->append_impl(*rng);
       }
-      this->append(rng_as_exprptr);
     } else {
       for (auto &&v : rng) {
         append(std::forward<decltype(v)>(v));
@@ -195,6 +191,12 @@ class Sum : public Expr {
   /// erases the constant summand recorded by constant_summand_idx_ if it is
   /// zero and clears the record
   void drop_zero_constant();
+
+  /// appends a copy of @p summand (or of its summands, if it is a Sum)
+  Sum &append_impl(const Expr &summand);
+
+  /// prepends a copy of @p summand (or of its summands, if it is a Sum)
+  Sum &prepend_impl(const Expr &summand);
 
   /// @return the hash of this object
   /// @note this ensures that hash of a Sum of a single summand is

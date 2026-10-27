@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <utility>
 
 namespace sequant {
 
@@ -118,13 +119,20 @@ const Expr *ExprHolder::operator->() const { return &get(); }
 
 Expr *ExprHolder::operator->() { return &get(); }
 
+// N.B. in the operators below, the held expression is kept alive (in held)
+// until the result has been formed, as the other operand may refer to (a part
+// of) it
+
 ExprHolder &ExprHolder::operator+=(const Expr &expr) {
   if (get().is<Sum>()) {
     get().as<Sum>() += expr;
   } else if (get().is<Constant>() && expr.is<Constant>()) {
     *this = get().as<Constant>() + expr.as<Constant>();
   } else {
-    *this = Sum(ExprPtrList{to_expr_ptr(std::move(*this)), expr.clone()});
+    const ExprPtr held = to_expr_ptr(std::move(*this));
+    Sum sum(Sum::summands_type{held}, Sum::move_only_tag{});
+    sum += expr;
+    *this = std::move(sum);
   }
 
   return *this;
@@ -136,8 +144,10 @@ ExprHolder &ExprHolder::operator-=(const Expr &expr) {
   } else if (get().is<Constant>() && expr.is<Constant>()) {
     *this = get().as<Constant>() - expr.as<Constant>();
   } else {
-    *this = Sum(ExprPtrList{to_expr_ptr(std::move(*this)),
-                            ex<Product>(-1, ExprPtrList{expr.clone()})});
+    const ExprPtr held = to_expr_ptr(std::move(*this));
+    Sum sum(Sum::summands_type{held}, Sum::move_only_tag{});
+    sum -= expr;
+    *this = std::move(sum);
   }
 
   return *this;
@@ -149,23 +159,28 @@ ExprHolder &ExprHolder::operator*=(const Expr &expr) {
   } else if (get().is<Constant>() && expr.is<Constant>()) {
     *this = get().as<Constant>() * expr.as<Constant>();
   } else {
-    *this = Product(ExprPtrList{to_expr_ptr(std::move(*this)), expr.clone()});
+    const ExprPtr held = to_expr_ptr(std::move(*this));
+    Product product(ExprPtrList{held});
+    product *= expr;
+    *this = std::move(product);
   }
   return *this;
 }
 
 ExprHolder &ExprHolder::operator^=(const Expr &other) {
-  auto this_is_product = get().is<Product>();
-  auto other_is_product = other.is<Product>();
-  if (!this_is_product && !other_is_product) {
-    *this =
-        NCProduct(ExprPtrList{to_expr_ptr(std::move(*this)), other.clone()});
-  } else if (this_is_product) {
-    *this = NCProduct(std::move(get().as<Product>()));
-    get().as<NCProduct>().append(1, other.clone());
-  } else {  // other_is_product
-    NCProduct result(other.clone().as<Product>());
-    result.prepend(1, to_expr_ptr(std::move(*this)));
+  const ExprPtr held = to_expr_ptr(std::move(*this));
+  if (held->is<Product>()) {
+    // N.B. the (shallow) copy shares the factors with held
+    NCProduct result(std::as_const(held->as<Product>()));
+    result.append(1, other);
+    *this = std::move(result);
+  } else if (other.is<Product>()) {
+    NCProduct result(other.as<Product>().deep_copy());
+    result.prepend(1, *held);
+    *this = std::move(result);
+  } else {
+    NCProduct result(ExprPtrList{held});
+    result.append(1, other);
     *this = std::move(result);
   }
 

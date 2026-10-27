@@ -2056,6 +2056,90 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_THAT(a + L"B", EquivalentTo("A + B"));
       REQUIRE_THAT(L"B" - a, EquivalentTo("B - A"));
       REQUIRE_THAT(a * L"B", EquivalentTo("A * B"));
+
+      const int two = 2;
+      REQUIRE_THAT(a / two, EquivalentTo("1/2 A"));
+    }
+    SECTION("ExprHolder arithmetic yields the same as ExprPtr arithmetic") {
+      const ExprHolder a = Variable("A");
+      const ExprPtr a_ptr = ex<Variable>("A");
+
+      REQUIRE((a + Constant(2)) == (a_ptr + ex<Constant>(2)));
+      REQUIRE((a - Constant(2)) == (a_ptr - ex<Constant>(2)));
+      REQUIRE((a - 2) == (a_ptr - 2));
+      REQUIRE((Constant(2) - a) == (ex<Constant>(2) - a_ptr));
+      REQUIRE((a * Constant(2)) == (a_ptr * ex<Constant>(2)));
+    }
+    SECTION("non-commutative product involving a Product") {
+      ExprHolder appended = Variable("A") * Variable("B");
+      appended ^= Variable("C");
+      REQUIRE(appended->is<Product>());
+      REQUIRE_FALSE(appended->as<Product>().is_commutative());
+      REQUIRE(appended->size() == 3);
+      REQUIRE(appended->as<Product>().factor(2)->as<Variable>().label() ==
+              L"C");
+
+      ExprHolder prepended = Variable("C") ^ (Variable("A") * Variable("B"));
+      REQUIRE(prepended->is<Product>());
+      REQUIRE_FALSE(prepended->as<Product>().is_commutative());
+      REQUIRE(prepended->size() == 3);
+      REQUIRE(prepended->as<Product>().factor(0)->as<Variable>().label() ==
+              L"C");
+    }
+    SECTION("operand referring to the held expression") {
+      auto labels = [](const Expr &expr) {
+        std::vector<std::wstring> result;
+        for (const ExprPtr &subexpr : expr) {
+          result.push_back(std::wstring(subexpr->as<Variable>().label()));
+        }
+        return result;
+      };
+      const std::vector<std::wstring> abab = {L"A", L"B", L"A", L"B"};
+
+      SECTION("Sum") {
+        ExprHolder sum = Variable("A") + Variable("B");
+        sum += sum;
+        REQUIRE(sum->is<Sum>());
+        REQUIRE(labels(sum) == abab);
+
+        sum = Variable("A") + Variable("B");
+        sum -= sum;
+        REQUIRE(sum->is<Sum>());
+        REQUIRE(sum->size() == 3);
+      }
+      SECTION("Product") {
+        ExprHolder prod = Variable("A") * Variable("B");
+        prod *= prod;
+        REQUIRE(prod->is<Product>());
+        REQUIRE(labels(prod) == abab);
+
+        prod = Variable("A") * Variable("B");
+        prod ^= prod;
+        REQUIRE(prod->is<Product>());
+        REQUIRE_FALSE(prod->as<Product>().is_commutative());
+        REQUIRE(labels(prod) == abab);
+      }
+      SECTION("atom") {
+        ExprHolder var = Variable("A");
+        var += var;
+        REQUIRE(var->is<Sum>());
+        REQUIRE(var->size() == 2);
+
+        var = Variable("A");
+        var -= var;
+        REQUIRE(var->is<Sum>());
+        REQUIRE(var->size() == 2);
+
+        var = Variable("A");
+        var *= var;
+        REQUIRE(var->is<Product>());
+        REQUIRE(var->size() == 2);
+
+        var = Variable("A");
+        var ^= var;
+        REQUIRE(var->is<Product>());
+        REQUIRE(var->size() == 2);
+      }
     }
     SECTION("moved-from ExprHolder") {
       ExprHolder holder = Variable("A");
