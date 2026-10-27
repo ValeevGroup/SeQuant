@@ -36,6 +36,22 @@ inline constexpr MomentTable unit_moment_table() {
   return t;
 }
 
+namespace detail {
+/// \return the k-th power mean of the rank-\p rank cluster domain from the
+///         rank-1 table \p osv, the rank-2 table \p pno and the rank >= 3
+///         tables \p by_rank: osv for rank <= 1, pno for rank 2,
+///         by_rank[rank] for a rank >= 3 that has a table, else pno (an entry
+///         of by_rank for rank 1 or 2 is ignored)
+inline double csv_moment(MomentTable const& osv, MomentTable const& pno,
+                         std::map<std::size_t, MomentTable> const& by_rank,
+                         std::size_t rank, std::size_t k) {
+  if (rank <= 1) return osv[k];
+  if (rank == 2) return pno[k];
+  auto const it = by_rank.find(rank);
+  return it != by_rank.end() ? it->second[k] : pno[k];
+}
+}  // namespace detail
+
 struct SizeRegime {
   /// element extent per IndexBasis::base_key(); an unnamed basis instance
   /// shares its space's entry (see IndexBasis)
@@ -86,14 +102,10 @@ struct SizeRegime {
     MomentTable pno = unit_moment_table();
     std::map<std::size_t, MomentTable> by_rank;
 
-    /// \return the k-th power mean of the rank-\p rank cluster domain: osv
-    ///         for rank 1, pno for rank 2, by_rank[rank] for a rank >= 3 that
-    ///         has a table, else pno
+    /// \return the k-th power mean of the rank-\p rank cluster domain (see
+    ///         detail::csv_moment())
     [[nodiscard]] double moment(std::size_t rank, std::size_t k) const {
-      if (rank <= 1) return osv[k];
-      if (rank == 2) return pno[k];
-      auto const it = by_rank.find(rank);
-      return it != by_rank.end() ? it->second[k] : pno[k];
+      return detail::csv_moment(osv, pno, by_rank, rank, k);
     }
   };
 
@@ -178,10 +190,8 @@ struct SizeRegime {
                 csv_basis_key(composite.space(), *instance));
             it != csv_moment_by_instance.end())
           return it->second.moment(rank, k);
-    if (rank <= 1) return csv_osv_moment[k];
-    if (rank == 2) return csv_pno_moment[k];
-    auto const it = csv_moment_by_rank.find(rank);
-    return (it != csv_moment_by_rank.end()) ? it->second[k] : csv_pno_moment[k];
+    return detail::csv_moment(csv_osv_moment, csv_pno_moment,
+                              csv_moment_by_rank, rank, k);
   }
 
   [[nodiscard]] std::function<std::size_t(Index const&)> idx_to_extent() const {
