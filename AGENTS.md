@@ -26,6 +26,14 @@ from highest to lowest. They never override the "Never"/"Do not" rules below.
    can be dramatic. Do not introduce a worse complexity class than necessary
    on such paths, even if it is simpler. The benchmarks, integration tests and
    external interface runs are examples of typical loads.
+4. **Smallest diff.** Make the smallest change that gets the job done,
+   without compromising on correctness or code readability. Don't fold in
+   unrelated refactoring, cleanup, or new abstractions the change doesn't
+   strictly require, even if the surrounding code looks like it could use it
+   while you're in the area — propose that separately and let it be its own
+   change. This holds for performance opportunities too: first make the
+   minimal change, then, only for a measured and significant (non-trivial)
+   speedup, follow up with a dedicated performance commit.
 
 If in doubt, whether about a priority trade-off, the intended behavior or the
 scope of a change, consult the user to make the decision instead of guessing.
@@ -117,14 +125,6 @@ Give the reviewer the diff and the intent, not your reasoning, and ask for
 concrete failure scenarios rather than style remarks. Verify each finding
 yourself before acting on it, and report unresolved ones. If no independent
 reviewer is available, say so instead of skipping silently.
-
-## Prefer the smallest diff that achieves the change
-
-Make the smallest change that gets the job done, without compromising on
-correctness or code readability. Don't fold in unrelated refactoring, cleanup,
-or new abstractions the change doesn't strictly require, even if the
-surrounding code looks like it could use it while you're in the area
-— propose that separately and let it be its own change.
 
 ## Keep plans and specs out of the source tree
 
