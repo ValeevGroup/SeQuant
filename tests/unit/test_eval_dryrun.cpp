@@ -207,8 +207,9 @@ TEST_CASE("dryrun size regime prices a composite by its basis instance",
     perturbed.by_rank[3][k] = 25.0;
   }
   constexpr IndexBasis::instance_type P = 10;
-  r.csv_moment_by_instance[P] = perturbed;
   const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3");
+  r.csv_moment_by_instance[eval::dryrun::SizeRegime::csv_basis_key(
+      Index(L"a_1").space(), P)] = perturbed;
   const Index pno(L"a_1", {i1, i2}), osv(L"a_2", {i1}),
       triple(L"a_3", {i1, i2, i3});
   // no instance: the default tables
@@ -222,6 +223,9 @@ TEST_CASE("dryrun size regime prices a composite by its basis instance",
         Catch::Approx(25.0));
   // an instance that is not listed: the default tables
   CHECK(r.inner_pow(pno.replace_basis_instance(P + 1), 2) ==
+        Catch::Approx(14.0));
+  // the same instance number of another space is another basis instance
+  CHECK(r.inner_pow(Index(L"p_1", {i1, i2}).replace_basis_instance(P), 2) ==
         Catch::Approx(14.0));
   // a plain index is sized by its space extent whatever its instance
   CHECK(r.inner_pow(Index(L"a_4").replace_basis_instance(P), 2) ==

@@ -13,6 +13,7 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <utility>
 
 namespace sequant::eval::dryrun {
 
@@ -96,17 +97,31 @@ struct SizeRegime {
     }
   };
 
+  /// Identifies a basis instance the way the registry does (same_instance():
+  /// one space, one instance number): the space's IndexSpace::base_key() and
+  /// the IndexBasis::basis_instance(). An instance number alone would not do,
+  /// since the registry scopes it to its space.
+  using csv_basis_key_type = std::pair<std::wstring, IndexBasis::instance_type>;
+
+  /// \return the csv_moment_by_instance key of instance \p instance of
+  ///         \p space
+  [[nodiscard]] static csv_basis_key_type csv_basis_key(
+      IndexSpace const& space, IndexBasis::instance_type instance) {
+    return {space.base_key(), instance};
+  }
+
   /// Moment tables keyed by the basis instance the composite's IndexBasis
-  /// carries (IndexBasis::basis_instance()). A composite whose index carries
-  /// an instance listed here is sized by that instance's tables; every other
-  /// composite -- no instance, or one not listed -- by csv_osv_moment /
-  /// csv_pno_moment / csv_moment_by_rank, which thus double as the default.
+  /// carries (csv_basis_key(): its space's key and its basis instance). A
+  /// composite whose index carries an instance listed here is sized by that
+  /// instance's tables; every other composite -- no instance, or one not
+  /// listed -- by csv_osv_moment / csv_pno_moment / csv_moment_by_rank, which
+  /// thus double as the default.
   /// A consumer whose one evaluation spans several CSV bases (e.g. the
   /// ground-state amplitudes expanded in one PNO basis and the response
   /// amplitudes in another, each family's indices carrying its basis
   /// instance) files every basis here, so no family is priced by another's
   /// domain sizes. Empty (default) => one basis, the default tables.
-  std::map<IndexBasis::instance_type, CsvMomentTables> csv_moment_by_instance;
+  std::map<csv_basis_key_type, CsvMomentTables> csv_moment_by_instance;
 
   /// \return the flat extent of the proto-free index \p ix's
   ///         \c IndexBasis::base_key(); throws \c std::out_of_range if the
@@ -159,7 +174,8 @@ struct SizeRegime {
     auto const rank = protos.size();
     if (!csv_moment_by_instance.empty())
       if (auto const& instance = composite.basis().basis_instance())
-        if (auto const it = csv_moment_by_instance.find(*instance);
+        if (auto const it = csv_moment_by_instance.find(
+                csv_basis_key(composite.space(), *instance));
             it != csv_moment_by_instance.end())
           return it->second.moment(rank, k);
     if (rank <= 1) return csv_osv_moment[k];
