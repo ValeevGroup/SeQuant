@@ -20,6 +20,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/nodiscard.hpp>
 #include <SeQuant/core/utility/scope.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -40,6 +41,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -83,59 +85,40 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
   Index::reset_tmp_index();
 
   SECTION("Op contractions") {
-    REQUIRE(FWickTheorem::can_contract(fann(L"i_1"), fcre(L"i_2"),
-                                       Vacuum::Physical));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"i_1"), fcre(L"i_2"),
-                                        Vacuum::Physical));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"i_1"), fann(L"i_2"),
-                                        Vacuum::Physical));
-    REQUIRE(!FWickTheorem::can_contract(fann(L"i_1"), fann(L"i_2"),
-                                        Vacuum::Physical));
-
-    REQUIRE(!FWickTheorem::can_contract(fann(L"i_1"), fcre(L"i_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"i_1"), fcre(L"i_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(FWickTheorem::can_contract(fcre(L"i_1"), fann(L"i_2"),
-                                       Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fann(L"i_1"), fann(L"i_2"),
-                                        Vacuum::SingleProduct));
-
-    REQUIRE(!FWickTheorem::can_contract(fann(L"i_1"), fcre(L"a_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"i_1"), fcre(L"a_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"i_1"), fann(L"a_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fann(L"i_1"), fann(L"a_2"),
-                                        Vacuum::SingleProduct));
-
-    REQUIRE(!FWickTheorem::can_contract(fann(L"a_1"), fcre(L"i_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"a_1"), fcre(L"i_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"a_1"), fann(L"i_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fann(L"a_1"), fann(L"i_2"),
-                                        Vacuum::SingleProduct));
-
-    REQUIRE(FWickTheorem::can_contract(fann(L"a_1"), fcre(L"a_2"),
-                                       Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"a_1"), fcre(L"a_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"a_1"), fann(L"a_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fann(L"a_1"), fann(L"a_2"),
-                                        Vacuum::SingleProduct));
-
-    REQUIRE(!FWickTheorem::can_contract(fann(L"p_1"), fcre(L"i_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fcre(L"p_1"), fcre(L"i_2"),
-                                        Vacuum::SingleProduct));
-    REQUIRE(FWickTheorem::can_contract(fcre(L"p_1"), fann(L"i_2"),
-                                       Vacuum::SingleProduct));
-    REQUIRE(!FWickTheorem::can_contract(fann(L"p_1"), fann(L"i_2"),
-                                        Vacuum::SingleProduct));
+    // {vacuum, first, second, can contract}
+    const std::vector<std::tuple<Vacuum, decltype(fann(L"i_1")),
+                                 decltype(fann(L"i_1")), bool>>
+        fermion_contractions{
+            {Vacuum::Physical, fann(L"i_1"), fcre(L"i_2"), true},
+            {Vacuum::Physical, fcre(L"i_1"), fcre(L"i_2"), false},
+            {Vacuum::Physical, fcre(L"i_1"), fann(L"i_2"), false},
+            {Vacuum::Physical, fann(L"i_1"), fann(L"i_2"), false},
+            {Vacuum::SingleProduct, fann(L"i_1"), fcre(L"i_2"), false},
+            {Vacuum::SingleProduct, fcre(L"i_1"), fcre(L"i_2"), false},
+            {Vacuum::SingleProduct, fcre(L"i_1"), fann(L"i_2"), true},
+            {Vacuum::SingleProduct, fann(L"i_1"), fann(L"i_2"), false},
+            {Vacuum::SingleProduct, fann(L"i_1"), fcre(L"a_2"), false},
+            {Vacuum::SingleProduct, fcre(L"i_1"), fcre(L"a_2"), false},
+            {Vacuum::SingleProduct, fcre(L"i_1"), fann(L"a_2"), false},
+            {Vacuum::SingleProduct, fann(L"i_1"), fann(L"a_2"), false},
+            {Vacuum::SingleProduct, fann(L"a_1"), fcre(L"i_2"), false},
+            {Vacuum::SingleProduct, fcre(L"a_1"), fcre(L"i_2"), false},
+            {Vacuum::SingleProduct, fcre(L"a_1"), fann(L"i_2"), false},
+            {Vacuum::SingleProduct, fann(L"a_1"), fann(L"i_2"), false},
+            {Vacuum::SingleProduct, fann(L"a_1"), fcre(L"a_2"), true},
+            {Vacuum::SingleProduct, fcre(L"a_1"), fcre(L"a_2"), false},
+            {Vacuum::SingleProduct, fcre(L"a_1"), fann(L"a_2"), false},
+            {Vacuum::SingleProduct, fann(L"a_1"), fann(L"a_2"), false},
+            {Vacuum::SingleProduct, fann(L"p_1"), fcre(L"i_2"), false},
+            {Vacuum::SingleProduct, fcre(L"p_1"), fcre(L"i_2"), false},
+            {Vacuum::SingleProduct, fcre(L"p_1"), fann(L"i_2"), true},
+            {Vacuum::SingleProduct, fann(L"p_1"), fann(L"i_2"), false},
+        };
+    for (const auto& [vacuum, first, second, expected] : fermion_contractions) {
+      CAPTURE(static_cast<int>(vacuum), toUtf8(first.index().label()),
+              toUtf8(second.index().label()));
+      REQUIRE(FWickTheorem::can_contract(first, second, vacuum) == expected);
+    }
 
     REQUIRE(BWickTheorem::can_contract(bann(L"i_1"), bcre(L"i_2"),
                                        Vacuum::Physical));
