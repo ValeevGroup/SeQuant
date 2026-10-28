@@ -37,10 +37,7 @@
 #include <utility>
 #include <vector>
 
-TEST_CASE(
-    "build_site_of collects the batchable contracted axis of a binary "
-    "contraction and excludes a non-batchable one",
-    "[legality]") {
+TEST_CASE("build-site-contracted-axis", "[legality]") {
   using sequant::eval::dryrun::EvalExprDryRun;
 
   // g{i_1;a_3} * t{a_3;i_1}: contracts BOTH i_1 (occupied) and a_3
@@ -79,11 +76,7 @@ TEST_CASE(
   CHECK_FALSE(contains(L"i"));
 }
 
-TEST_CASE(
-    "classify_axis decides per axis: a value carrying one occupied index and "
-    "contracting another in batches is loop-local on the first and a "
-    "reduction on the second",
-    "[legality]") {
+TEST_CASE("classify-axis-per-axis", "[legality]") {
   using sequant::Index;
   using sequant::eval::LoopRole;
   using sequant::eval::OccurrenceRec;
@@ -151,10 +144,8 @@ sequant::ExprPtr legality_witness_flatten_product(sequant::ExprPtr const& e) {
 
 }  // namespace
 
-TEST_CASE(
-    "classify_axis / analyze_legality: four-way axis classification on the "
-    "water-20 aux-only residual",
-    "[.][legality][blocked-stamp-based-legality]") {
+TEST_CASE("legality-w20-four-way",
+          "[.][legality][blocked-stamp-based-legality]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -504,11 +495,8 @@ TEST_CASE(
 // nothing to lock it to a loop iteration -> classify_axis == LoopCarried.
 // Saved to data/legality_cross_iteration.txt for reuse below.
 // ===========================================================================
-TEST_CASE(
-    "analyze_legality: a loop-carried value records its axis in "
-    "forced_split_axes; the fixpoint terminates (synthetic cross-iteration "
-    "fixture)",
-    "[.][legality][blocked-stamp-based-legality]") {
+TEST_CASE("legality-loop-carried-axes",
+          "[.][legality][blocked-stamp-based-legality]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -591,11 +579,7 @@ TEST_CASE(
 // on classify_axis with a HAND-CONSTRUCTED OccurrenceRec -- no
 // forest/optimize pipeline needed.
 // ===========================================================================
-TEST_CASE(
-    "classify_axis: a value carrying TWO same-space indices, one sliced by an "
-    "enclosing loop instance and one by a non-enclosing one, classifies "
-    "LoopLocal / LoopCarried per axis",
-    "[legality]") {
+TEST_CASE("classify-two-same-space", "[legality]") {
   using sequant::Index;
   using sequant::container::svector;
   using sequant::eval::classify_axis;
@@ -661,10 +645,7 @@ TEST_CASE(
 // (Issue #720: the outside occurrence used to be skipped, and the value was
 // built inside the loop only.)
 // ===========================================================================
-TEST_CASE(
-    "classify_axis: one lockstep and one assembled occurrence of a value give "
-    "LoopLocal with a per-occurrence Assembled verdict",
-    "[legality]") {
+TEST_CASE("classify-lockstep-assembled", "[legality]") {
   using sequant::Index;
   using sequant::container::svector;
   using sequant::eval::classify_axis;
@@ -724,10 +705,7 @@ TEST_CASE(
 // that opened it and that opener's stamps, and throws on every way the
 // record can fail to name the instance -- never falling back to a label.
 // ===========================================================================
-TEST_CASE(
-    "enclosing_instances: resolved through the opener's stamps; an opener "
-    "the record does not name, cannot find, or that carries no stamp throws",
-    "[legality]") {
+TEST_CASE("enclosing-instances", "[legality]") {
   using sequant::Index;
   using sequant::container::svector;
   using sequant::eval::enclosing_instances;
@@ -798,10 +776,7 @@ TEST_CASE(
 // LoopCarried. (Regression: w8 aux+occ value [i_4 mu mu i_1], sliced only on
 // i_1, was wrongly escaped and evicted before an in-loop consumer read it.)
 // ===========================================================================
-TEST_CASE(
-    "classify_axis (spectator): a same-space FULL non-batched carried index "
-    "does not force LoopCarried on a lockstep-bound batched axis",
-    "[legality]") {
+TEST_CASE("classify-spectator", "[legality]") {
   using sequant::Index;
   using sequant::container::svector;
   using sequant::eval::classify_axis;
@@ -846,10 +821,7 @@ TEST_CASE(
 // LoopCarried on occ) into the single loop (axis) they jointly force to
 // split.
 // ===========================================================================
-TEST_CASE(
-    "forced_split_types collapses two distinct same-space LoopCarried "
-    "indices into ONE occ-space entry",
-    "[legality]") {
+TEST_CASE("forced-split-types-collapse", "[legality]") {
   using sequant::Index;
   using sequant::eval::CellLegality;
   using sequant::eval::forced_split_types;
@@ -926,12 +898,8 @@ TEST_CASE("forced_split_types keeps a named basis apart from its space",
 // dependence at its own node, exactly as the water-20 test's Κ-free-composite
 // check does.
 // ===========================================================================
-TEST_CASE(
-    "legality acceptance: analyze_legality / classify_axis demonstrably "
-    "produce all four LoopRole values (LoopLocal, Reduction, LoopCarried, "
-    "LoopInvariant) across the water-20 and cross-iteration canonical "
-    "inputs",
-    "[.][legality][blocked-stamp-based-legality]") {
+TEST_CASE("legality-four-roles",
+          "[.][legality][blocked-stamp-based-legality]") {
   using sequant::eval::LoopRole;
 
   bool saw_local = false;
