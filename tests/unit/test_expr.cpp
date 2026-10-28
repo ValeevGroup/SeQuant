@@ -1487,7 +1487,7 @@ TEST_CASE("expr", "[elements]") {
     auto hasher = [](const std::shared_ptr<const Expr> &) -> unsigned int {
       return 0;
     };
-    REQUIRE_NOTHROW(ex<Constant>(1)->hash_value(hasher) == 0);
+    REQUIRE(ex<Constant>(1)->hash_value(hasher) == 0);
 
     {  // Power
       const auto c2 = ex<Constant>(rational{1, 2});
