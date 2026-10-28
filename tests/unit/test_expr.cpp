@@ -1820,6 +1820,30 @@ TEST_CASE("tensor_power", "[elements]") {
     CHECK(p.is_cnumber());
     CHECK(p.is<AbstractTensor>());
   }
+  SECTION("pow factory") {
+    const auto x = ex<Variable>(L"x");
+    CHECK(pow(x, rational{2})->is<Power>());
+    CHECK(pow(ex<Constant>(2), rational{1, 2})->is<Power>());
+    CHECK(*pow(x, rational{1}) == *x);
+    CHECK(pow(pow(x, rational{2}), rational{3})->as<Power>().exponent() ==
+          rational{6});
+    CHECK(pow(D, rational{-1})->is<TensorPower>());
+    CHECK(*pow(D, rational{1}) == *D);
+    CHECK(
+        pow(pow(D, rational{-1}), rational{2})->as<TensorPower>().exponent() ==
+        rational{-2});
+    CHECK(*pow(pow(D, rational{3}), rational{1, 3}) ==
+          *D);  // odd inner: composes
+    REQUIRE_THROWS_AS(pow(pow(D, rational{2}), rational{1, 2}), Exception);
+    REQUIRE_THROWS_AS(pow(D * D, rational{-1}), Exception);
+    REQUIRE_THROWS_AS(pow(D + D, rational{-1}), Exception);
+    REQUIRE_THROWS_AS(pow(x * x, rational{2}), Exception);
+    if (assert_behavior() != AssertBehavior::Abort)
+      REQUIRE_THROWS_AS(pow(t, rational{1, 2}), Exception);
+    // exponent 0 on a tensor is a tensor of ones, not Constant(1)
+    CHECK(pow(D, rational{0})->is<TensorPower>());
+    CHECK(pow(D, rational{0})->as<TensorPower>()._symmetry() == Symmetry::Symm);
+  }
   SECTION("hash and equality") {
     const auto p1 = ex<TensorPower>(D, rational{-1});
     const auto p2 = ex<TensorPower>(D, rational{-1});

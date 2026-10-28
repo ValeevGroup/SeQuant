@@ -1,5 +1,8 @@
 #include <SeQuant/core/expressions/tensor_power.hpp>
 
+#include <SeQuant/core/expressions/constant.hpp>
+#include <SeQuant/core/expressions/power.hpp>
+#include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/math.hpp>
@@ -225,6 +228,41 @@ bool TensorPower::static_less_than(const Expr& that) const {
   const auto& other = static_cast<const TensorPower&>(that);
   if (*base_ != *other.base_) return *base_ < *other.base_;
   return exponent_ < other.exponent_;
+}
+
+ExprPtr pow(ExprPtr base, rational exponent) {
+  if (exponent == 1) return base->clone();
+
+  if (base->is<Power>()) {
+    const auto& inner = base->as<Power>();
+    auto result = ex<Power>(inner.base(), inner.exponent() * exponent);
+    if (inner.conjugated()) result->as<Power>().conjugate();
+    return result;
+  }
+
+  if (base->is_scalar()) {
+    SEQUANT_ENFORCE(base->is<Constant>() || base->is<Variable>(),
+                    "pow: a scalar base must be a Constant, Variable or Power");
+    return ex<Power>(std::move(base), std::move(exponent));
+  }
+
+  if (base->is<TensorPower>()) {
+    const auto& inner = base->as<TensorPower>();
+    SEQUANT_ENFORCE(
+        denominator(exponent) == 1 || numerator(inner.exponent()) % 2 != 0,
+        "pow: (T^a)^b with even a and non-integer b is |T|^(ab), "
+        "not T^(ab); name T^a as a ResultExpr and raise the "
+        "resulting leaf");
+    const auto composed = inner.exponent() * exponent;
+    if (composed == 1) return inner.base()->clone();
+    return ex<TensorPower>(inner.base(), composed);
+  }
+
+  SEQUANT_ENFORCE(base->is<AbstractTensor>(),
+                  "pow: base must be a scalar or a c-number tensor; name a "
+                  "compound tensor-valued expression as a ResultExpr and "
+                  "raise the resulting leaf");
+  return ex<TensorPower>(std::move(base), std::move(exponent));
 }
 
 }  // namespace sequant
