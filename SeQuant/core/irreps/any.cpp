@@ -133,6 +133,12 @@ AnyIrrepSet AnyIrrepContext::empty_set() const {
   return m_impl->empty_set();
 }
 
+AnyIrrep AnyIrrepContext::canonical_irrep(std::string_view name) const {
+  SEQUANT_ASSERT(m_impl &&
+                 "moved-from AnyIrrepContext objects must not be used");
+  return m_impl->canonical_irrep(name);
+}
+
 AnyIrrepSet AnyIrrepContext::product(const AnyIrrepSet &lhs,
                                      const AnyIrrepSet &rhs) const {
   SEQUANT_ASSERT(m_impl &&

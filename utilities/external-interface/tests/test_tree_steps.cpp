@@ -324,6 +324,51 @@ TEST_CASE("export step", "[extint]") {
     std::filesystem::remove(out);
   }
 
+  SECTION("IRREP names are looked up by canonical IRREP") {
+    ExecutionContext ctx;
+    ctx.set_data("in", 0,
+                 ProcessingData{test_support::tree_data(
+                     {L"R{a1;i1} = + T2{a1,a2;i1,i2}:A-H-S "
+                      L"Y{i2;a2}:N-N-N"})});
+
+    const std::filesystem::path out =
+        std::filesystem::temp_directory_path() / "extint_irrep_names.itfaa";
+
+    // Gp is the totally symmetric IRREP by virtue of the relation
+    json options{{"language", "itf"},
+                 {"output", out.string()},
+                 {"irreps",
+                  {{"group", "D2h"},
+                   {"symbols", {"Gp"}},
+                   {"relations", {"Gp = Ag"}},
+                   {"default", "error"},
+                   {"tensors", {{"T2", "Gp"}, {"Y", "Ag"}}}}},
+                 {"meta",
+                  {{"index_spaces",
+                    {{"i", {{"name", "Closed"}, {"tag", "c"}}},
+                     {"a", {{"name", "External"}, {"tag", "e"}}}}},
+                   {"irrep_names", {{"Gp", "sym"}}}}}};
+
+    ExportStep step;
+    step.set_options(options);
+    {
+      test_support::ScopedStreamSilencer silencer;
+      step.run("exp", ctx, {"in.0"});
+    }
+
+    std::ifstream stream(out);
+    REQUIRE(stream.good());
+    std::stringstream buffer;
+    buffer << stream.rdbuf();
+    const std::string code = buffer.str();
+    stream.close();
+    std::filesystem::remove(out);
+
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring("T2:eecc // irrep:sym"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("R:ec // irrep:sym"));
+  }
+
   SECTION("tensors are matched by label patterns and blocks") {
     // @returns The code generated for a fixed expression with the given
     // IRREP specification of the tensors

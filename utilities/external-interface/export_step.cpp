@@ -478,7 +478,19 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
 
   if (language_ == "itf") {
     ItfGenerator<MetaAwareIftContext> generator;
-    MetaAwareIftContext genctx(std::get<ItfMeta>(meta_));
+    ItfMeta meta = std::get<ItfMeta>(meta_);
+    if (irrep_context_.has_value()) {
+      // Names are looked up by canonical IRREP (e.g. "A1" may equal "1")
+      decltype(meta.irrep_names) names;
+      for (const auto &[irrep, name] : meta.irrep_names) {
+        names.emplace(irrep == "*"
+                          ? irrep
+                          : irrep_context_->canonical_irrep(irrep).to_string(),
+                      name);
+      }
+      meta.irrep_names = std::move(names);
+    }
+    MetaAwareIftContext genctx(meta);
     if (irrep_context_.has_value()) {
       genctx.set_irrep_context(irrep_context_.value());
     }

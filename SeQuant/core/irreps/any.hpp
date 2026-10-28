@@ -9,6 +9,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 
@@ -192,6 +193,8 @@ class AnyIrrepContext {
   [[nodiscard]] AnyIrrepSet irreps_of(const Tensor &tensor) const;
   [[nodiscard]] AnyIrrepSet totally_symmetric() const;
   [[nodiscard]] AnyIrrepSet empty_set() const;
+  /// @sa IrrepContext::canonical_irrep
+  [[nodiscard]] AnyIrrep canonical_irrep(std::string_view name) const;
   /// @throws Exception if the sets are not of this context's IRREP type
   [[nodiscard]] AnyIrrepSet product(const AnyIrrepSet &lhs,
                                     const AnyIrrepSet &rhs) const;
@@ -213,6 +216,7 @@ class AnyIrrepContext {
     virtual AnyIrrepSet irreps_of(const Tensor &tensor) const = 0;
     virtual AnyIrrepSet totally_symmetric() const = 0;
     virtual AnyIrrepSet empty_set() const = 0;
+    virtual AnyIrrep canonical_irrep(std::string_view name) const = 0;
     virtual AnyIrrepSet product(const AnyIrrepSet &lhs,
                                 const AnyIrrepSet &rhs) const = 0;
     virtual AnyIrrepSet conjugate(const AnyIrrepSet &set) const = 0;
@@ -235,6 +239,9 @@ class AnyIrrepContext {
       return ctx.totally_symmetric();
     }
     AnyIrrepSet empty_set() const override { return ctx.empty_set(); }
+    AnyIrrep canonical_irrep(std::string_view name) const override {
+      return AnyIrrep(ctx.canonical_irrep(name));
+    }
     AnyIrrepSet product(const AnyIrrepSet &lhs,
                         const AnyIrrepSet &rhs) const override {
       return ctx.product(typed(lhs), typed(rhs));

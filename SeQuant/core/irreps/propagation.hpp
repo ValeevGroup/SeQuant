@@ -16,6 +16,7 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -32,9 +33,14 @@ class IrrepContext {
   using irrep_type = typename A::irrep_type;
   using set_type = IrrepSet<irrep_type>;
   using resolver_type = std::function<set_type(const Tensor &)>;
+  using parser_type = std::function<irrep_type(std::string_view)>;
 
-  IrrepContext(A algebra, resolver_type resolver)
-      : m_algebra(std::move(algebra)), m_resolver(std::move(resolver)) {}
+  /// @param parser Converts the name of an IRREP into the IRREP. Only needed
+  /// for canonical_irrep.
+  IrrepContext(A algebra, resolver_type resolver, parser_type parser = {})
+      : m_algebra(std::move(algebra)),
+        m_resolver(std::move(resolver)),
+        m_parser(std::move(parser)) {}
 
   explicit IrrepContext(resolver_type resolver)
     requires std::default_initializable<A>
@@ -59,6 +65,24 @@ class IrrepContext {
 
   set_type totally_symmetric() const { return {m_algebra.totally_symmetric()}; }
 
+  /// @returns The IRREP of the given name in the algebra's canonical form
+  /// (e.g. with relations between IRREPs applied)
+  /// @throws Exception if this context has no parser or if the name does not
+  /// refer to exactly one IRREP
+  irrep_type canonical_irrep(std::string_view name) const {
+    if (!m_parser) {
+      throw Exception("IRREP context cannot parse IRREP names");
+    }
+
+    set_type set = product(totally_symmetric(), {m_parser(name)});
+    if (set.is_any() || set.size() != 1) {
+      throw Exception("'" + std::string(name) +
+                      "' does not refer to exactly one IRREP");
+    }
+
+    return *set.begin();
+  }
+
   set_type empty_set() const { return {}; }
 
   set_type product(const set_type &lhs, const set_type &rhs) const {
@@ -72,6 +96,7 @@ class IrrepContext {
  private:
   A m_algebra;
   resolver_type m_resolver;
+  parser_type m_parser;
 };
 
 /// Requirements for a context that can be used to propagate IRREPs through
