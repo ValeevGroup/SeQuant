@@ -65,7 +65,7 @@ class TensorPower : public Expr, public AbstractTensor {
   std::wstring to_latex() const override;
 
   /// @return the symmetry of the base, except that for an even integer
-  /// exponent an Symmetry::Antisymm becomes Symmetry::Symm
+  /// exponent an antisymmetric base becomes Symmetry::Symm
   Symmetry _symmetry() const override;
   /// @return the braket symmetry of the base
   BraKetSymmetry _braket_symmetry() const override;

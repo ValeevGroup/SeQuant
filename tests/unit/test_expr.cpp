@@ -1831,7 +1831,7 @@ TEST_CASE("tensor_power", "[elements]") {
     CHECK(p1->hash_value() != D->hash_value());
     CHECK(*p1 != *D);
     CHECK((*p1 < *p3) != (*p3 < *p1));
-    auto s = D + p1;  // Review Focus 3
+    auto s = D + p1;  // a power must not merge with its base
     REQUIRE(s->is<Sum>());
     CHECK(s->as<Sum>().summands().size() == 2);
   }
