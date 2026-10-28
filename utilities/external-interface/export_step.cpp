@@ -54,7 +54,7 @@ class MetaAwareIftContext : public ItfContext {
     SEQUANT_ASSERT(meta_);
     auto it = meta_->index_spaces.find(space);
     if (it == meta_->index_spaces.end()) {
-      return ItfContext::get_name(space);
+      return ItfContext::get_tag(space);
     }
 
     return it->second.tag;
@@ -64,7 +64,7 @@ class MetaAwareIftContext : public ItfContext {
     SEQUANT_ASSERT(meta_);
     auto it = meta_->index_spaces.find(space);
     if (it == meta_->index_spaces.end()) {
-      return ItfContext::get_tag(space);
+      return ItfContext::get_name(space);
     }
 
     return it->second.name;
