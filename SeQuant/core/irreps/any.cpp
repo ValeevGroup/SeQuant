@@ -127,6 +127,12 @@ AnyIrrepSet AnyIrrepContext::totally_symmetric() const {
   return m_impl->totally_symmetric();
 }
 
+bool AnyIrrepContext::is_totally_symmetric(const AnyIrrepSet &set) const {
+  SEQUANT_ASSERT(m_impl &&
+                 "moved-from AnyIrrepContext objects must not be used");
+  return m_impl->is_totally_symmetric(set);
+}
+
 AnyIrrepSet AnyIrrepContext::empty_set() const {
   SEQUANT_ASSERT(m_impl &&
                  "moved-from AnyIrrepContext objects must not be used");

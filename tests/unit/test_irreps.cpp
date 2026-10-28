@@ -488,6 +488,15 @@ TEST_CASE("irreps", "[irreps]") {
       REQUIRE(result.to_string() == to_string(*typed_result));
     }
 
+    // Totally symmetric check
+    REQUIRE(erased.is_totally_symmetric(erased.totally_symmetric()));
+    REQUIRE(typed.is_totally_symmetric(typed.totally_symmetric()));
+    REQUIRE_FALSE(erased.is_totally_symmetric(erased.empty_set()));
+    REQUIRE_FALSE(erased.is_totally_symmetric(AnyIrrepSet(Set{irrep("B1")})));
+    REQUIRE_FALSE(
+        erased.is_totally_symmetric(AnyIrrepSet(Set{irrep("A"), irrep("B1")})));
+    REQUIRE_FALSE(erased.is_totally_symmetric(AnyIrrepSet(Set::any())));
+
     // Deep copy
     AnyIrrepContext copy(erased);
     REQUIRE(copy.as<Z2Algebra<D2>>() != nullptr);

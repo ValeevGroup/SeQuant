@@ -65,6 +65,12 @@ class IrrepContext {
 
   set_type totally_symmetric() const { return {m_algebra.totally_symmetric()}; }
 
+  /// @returns Whether the given set contains nothing but the totally
+  /// symmetric IRREP
+  bool is_totally_symmetric(const set_type &set) const {
+    return set == totally_symmetric();
+  }
+
   /// @returns The IRREP of the given name in the algebra's canonical form
   /// (e.g. with relations between IRREPs applied)
   /// @throws Exception if this context has no parser or if the name does not
