@@ -303,11 +303,13 @@ TEST_CASE("export step", "[extint]") {
     // Gp x Ag x {Ag, B1u} = {Gp, B1u*Gp} where Gp is renamed to 'pert'
     REQUIRE_THAT(
         code, Catch::Matchers::ContainsSubstring("R:ec // irrep:pert,B1u*Gp"));
-    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("f:ce // irrep:Ag"));
+    // Ag is totally symmetric and therefore not annotated
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("f:ce\n"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("f:ce //"));
     REQUIRE_THAT(code,
                  Catch::Matchers::ContainsSubstring("T2:eecc // irrep:pert"));
     REQUIRE_THAT(
-        code, Catch::Matchers::ContainsSubstring("!Create{type:plain irrep:"));
+        code, Catch::Matchers::ContainsSubstring("!Create{type:plain; irrep:"));
 
     // Tensors without IRREP specification are rejected if requested
     options["irreps"]["tensors"].erase("Y{i1;i2}");
@@ -322,6 +324,51 @@ TEST_CASE("export step", "[extint]") {
     REQUIRE_THROWS_WITH(strict.run("exp", ctx2, {"in.0"}),
                         Catch::Matchers::ContainsSubstring("No IRREPs"));
     std::filesystem::remove(out);
+  }
+
+  SECTION("IRREP names are looked up by canonical IRREP") {
+    ExecutionContext ctx;
+    ctx.set_data("in", 0,
+                 ProcessingData{test_support::tree_data(
+                     {L"R{a1;i1} = + T2{a1,a2;i1,i2}:A-H-S "
+                      L"Y{i2;a2}:N-N-N"})});
+
+    const std::filesystem::path out =
+        std::filesystem::temp_directory_path() / "extint_irrep_names.itfaa";
+
+    // Gp is B1u by virtue of the relation
+    json options{{"language", "itf"},
+                 {"output", out.string()},
+                 {"irreps",
+                  {{"group", "D2h"},
+                   {"symbols", {"Gp"}},
+                   {"relations", {"Gp = B1u"}},
+                   {"default", "error"},
+                   {"tensors", {{"T2", "Gp"}, {"Y", "Ag"}}}}},
+                 {"meta",
+                  {{"index_spaces",
+                    {{"i", {{"name", "Closed"}, {"tag", "c"}}},
+                     {"a", {{"name", "External"}, {"tag", "e"}}}}},
+                   {"irrep_names", {{"Gp", "sym"}}}}}};
+
+    ExportStep step;
+    step.set_options(options);
+    {
+      test_support::ScopedStreamSilencer silencer;
+      step.run("exp", ctx, {"in.0"});
+    }
+
+    std::ifstream stream(out);
+    REQUIRE(stream.good());
+    std::stringstream buffer;
+    buffer << stream.rdbuf();
+    const std::string code = buffer.str();
+    stream.close();
+    std::filesystem::remove(out);
+
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring("T2:eecc // irrep:sym"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("R:ec // irrep:sym"));
   }
 
   SECTION("tensors are matched by label patterns and blocks") {
@@ -367,7 +414,7 @@ TEST_CASE("export step", "[extint]") {
 
     // Labels are full-match regular expressions
     std::string code = export_code({{"[fY]", "Ag"}, {"T.", "Gp"}});
-    REQUIRE_THAT(code, ContainsSubstring("Y:cc // irrep:Ag"));
+    REQUIRE_THAT(code, ContainsSubstring("Y:cc"));
     REQUIRE_THAT(code, ContainsSubstring("T2:eecc // irrep:Gp"));
     REQUIRE_THAT(code, ContainsSubstring("R:ec // irrep:Gp"));
     REQUIRE_THROWS_WITH(export_code({{"[fY]", "Ag"}, {"T", "Gp"}}),

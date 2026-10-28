@@ -146,7 +146,7 @@ AnyIrrepContext make_context(A algebra, const IrrepContextSpec &spec,
     return fallback.value();
   };
 
-  return IrrepContext<A>(std::move(algebra), std::move(resolver));
+  return IrrepContext<A>(std::move(algebra), std::move(resolver), parse);
 }
 
 /// Creates an IRREP context for a Z2 group (D2h or one of its subgroups, or

@@ -11,9 +11,9 @@ index-space: k, Closed, c
 index-space: l, Closed, c
 index-space: b, External, e
 
-tensor: I:ec[bl], !Create{type:plain irrep:*}
+tensor: I:ec[bl], !Create{type:plain; irrep:*}
 tensor: R:ec[bj], R:ec // irrep:*
-tensor: f:cc[lj], f:cc // irrep:A
+tensor: f:cc[lj], f:cc
 tensor: t:ec[bk], t:ec // irrep:B1
 tensor: x:cc[kl], x:cc // irrep:*
 
