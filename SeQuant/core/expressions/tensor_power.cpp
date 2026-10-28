@@ -74,8 +74,7 @@ void TensorPower::adjoint() {
 }
 
 std::wstring TensorPower::to_latex() const {
-  return L"{" + base_->to_latex() + L"}^{" + io::latex::to_string(exponent_) +
-         L"}";
+  return io::latex::to_string(*this);
 }
 
 Symmetry TensorPower::_symmetry() const {
