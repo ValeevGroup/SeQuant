@@ -7,11 +7,13 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <string>
+#include <utility>
 #include <vector>
 
 TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
@@ -22,73 +24,66 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
   auto resetter = set_scoped_default_context(ctx);
 
   SECTION("plain ExprPtr") {
-    const std::vector<std::wstring> inputs = {L"t{a1;i1}", L"g{a1,a2;i1,i2}",
-                                              L"t{i1,i2,i3;a1,a2,a3}"};
-    const std::vector<std::wstring> expected_outputs = {
-        L"1/2 t{a1;i1}", L"1/6 (2 g{a1,a2;i1,i2} + g{a2,a1;i1,i2})",
+    // {input, expected output}
+    const std::vector<std::pair<std::wstring, std::wstring>> rows = {
+        {L"t{a1;i1}", L"1/2 t{a1;i1}"},
+        {L"g{a1,a2;i1,i2}", L"1/6 (2 g{a1,a2;i1,i2} + g{a2,a1;i1,i2})"},
         // cmp. Wang & Knizia (2018), DOI: arXiv:1805.00565, Eq. (31): theirs
         // is normalized by 3!/rank(M) = 6/5 (1/120); this is the unnormalized
         // coefficient
-        L"1/144 ("
-        "-7 t{i_1,i_2,i_3;a_2,a_3,a_1}:N-N-S "
-        "- 7 t{i_1,i_2,i_3;a_3,a_1,a_2}:N-N-S "
-        "- t{i_1,i_2,i_3;a_2,a_1,a_3}:N-N-S "
-        "- t{i_1,i_2,i_3;a_3,a_2,a_1}:N-N-S "
-        "- t{i_1,i_2,i_3;a_1,a_3,a_2}:N-N-S "
-        "+ 17t{i_1,i_2,i_3;a_1,a_2,a_3}:N-N-S)"};
+        {L"t{i1,i2,i3;a1,a2,a3}",
+         L"1/144 ("
+         "-7 t{i_1,i_2,i_3;a_2,a_3,a_1}:N-N-S "
+         "- 7 t{i_1,i_2,i_3;a_3,a_1,a_2}:N-N-S "
+         "- t{i_1,i_2,i_3;a_2,a_1,a_3}:N-N-S "
+         "- t{i_1,i_2,i_3;a_3,a_2,a_1}:N-N-S "
+         "- t{i_1,i_2,i_3;a_1,a_3,a_2}:N-N-S "
+         "+ 17t{i_1,i_2,i_3;a_1,a_2,a_3}:N-N-S)"},
+    };
 
-    REQUIRE(inputs.size() == expected_outputs.size());
+    for (const auto& [input, expected] : rows) {
+      CAPTURE(toUtf8(input));
 
-    for (std::size_t i = 0; i < inputs.size(); ++i) {
-      CAPTURE(i);
-
-      ExprPtr input_expr = deserialize(inputs.at(i));
+      ExprPtr input_expr = deserialize(input);
 
       auto externals = external_indices(input_expr);
 
       ExprPtr actual = mbpt::biorthogonal_transform(input_expr, externals);
 
-      REQUIRE_THAT(actual, EquivalentTo(expected_outputs.at(i)));
+      REQUIRE_THAT(actual, EquivalentTo(expected));
     }
   }
 
   SECTION("ResultExpr") {
-    const std::vector<std::vector<std::wstring>> inputs = {
-        {L"R{a1;i1} = t{a1;i1}"},
-        {L"R{i1,i2;a1,a2} = g{a1,a2;i1,i2}"},
-        {L"R{i1,u1;a1,a2} = g{i1,u1;a1,a2}"},
-        {L"R{i1,i2;a1,u1} = g{i1,i2;a1,u1}"},
-        {L"R{a1,a2;u1,i1} = 4 g{a1,a2;u2,i1} GAM0{u2;u1} "
-         "- 2 g{a2,a1;u2,i1} GAM0{u2;u1}"},
-        {L"R{i1,u1;a1,u2} = X{i1,u1;a1,u2}",
-         L"R{u1,i1;a1,u2} = Y{u1,i1;a1,u2}"},
+    using Equations = std::vector<std::pair<std::wstring, std::wstring>>;
+    // each row: {input, expected output} for all equations of one system
+    const std::vector<Equations> rows = {
+        {{L"R{a1;i1} = t{a1;i1}", L"R{a1;i1} = 1/2 t{a1;i1}"}},
+        {{L"R{i1,i2;a1,a2} = g{a1,a2;i1,i2}",
+          L"R{a1,a2;i1,i2} = 1/6 ( 2 g{a1,a2;i1,i2} + g{a2,a1;i1,i2} )"}},
+        {{L"R{i1,u1;a1,a2} = g{i1,u1;a1,a2}",
+          L"R{i1,u1;a1,a2} = 1/6 ( 2 g{i1,u1;a1,a2} + g{i1,u1;a2,a1} )"}},
+        {{L"R{i1,i2;a1,u1} = g{i1,i2;a1,u1}",
+          L"R{i1,i2;a1,u1} = 1/6 ( 2 g{i1,i2;a1,u1} + g{i2,i1;a1,u1} )"}},
+        {{L"R{a1,a2;u1,i1} = 4 g{a1,a2;u2,i1} GAM0{u2;u1} "
+          "- 2 g{a2,a1;u2,i1} GAM0{u2;u1}",
+          L"R{a1,a2;u1,i1} = g{a1,a2;u2,i1} GAM0{u2;u1}"}},
+        {{L"R{i1,u1;a1,u2} = X{i1,u1;a1,u2}",
+          L"R{i1,u1;a1,u2} = 1/3 X{i1,u1;a1,u2} + 1/6 Y{u1,i1;a1,u2}"},
+         {L"R{u1,i1;a1,u2} = Y{u1,i1;a1,u2}",
+          L"R{u1,i1;a1,u2} = 1/3 Y{u1,i1;a1,u2} + 1/6 X{i1,u1;a1,u2}"}},
     };
-    const std::vector<std::vector<std::wstring>> expected_outputs = {
-        {L"R{a1;i1} = 1/2 t{a1;i1}"},
-        {L"R{a1,a2;i1,i2} = 1/6 ( 2 g{a1,a2;i1,i2} + g{a2,a1;i1,i2} )"},
-        {L"R{i1,u1;a1,a2} = 1/6 ( 2 g{i1,u1;a1,a2} + g{i1,u1;a2,a1} )"},
-        {L"R{i1,i2;a1,u1} = 1/6 ( 2 g{i1,i2;a1,u1} + g{i2,i1;a1,u1} )"},
-        {L"R{a1,a2;u1,i1} = g{a1,a2;u2,i1} GAM0{u2;u1}"},
-        {L"R{i1,u1;a1,u2} = 1/3 X{i1,u1;a1,u2} + 1/6 Y{u1,i1;a1,u2}",
-         L"R{u1,i1;a1,u2} = 1/3 Y{u1,i1;a1,u2} + 1/6 X{i1,u1;a1,u2}"},
-    };
 
-    REQUIRE(inputs.size() == expected_outputs.size());
-
-    for (std::size_t i = 0; i < inputs.size(); ++i) {
-      CAPTURE(inputs.at(i));
-
-      REQUIRE(inputs.at(i).size() == expected_outputs.at(i).size());
-
+    for (const Equations& row : rows) {
+      std::string description;
       container::svector<ResultExpr> expressions;
       container::svector<ResultExpr> expected;
-      for (std::size_t k = 0; k < inputs.at(i).size(); ++k) {
-        ResultExpr parsed = deserialize<ResultExpr>(inputs.at(i).at(k));
-        expressions.push_back(parsed);
-
-        expected.push_back(
-            deserialize<ResultExpr>(expected_outputs.at(i).at(k)));
+      for (const auto& [input, output] : row) {
+        description += toUtf8(input) + "; ";
+        expressions.push_back(deserialize<ResultExpr>(input));
+        expected.push_back(deserialize<ResultExpr>(output));
       }
+      CAPTURE(description);
 
       mbpt::biorthogonal_transform(expressions);
 
@@ -136,13 +131,15 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
         {L"R{i1,u1;a1,u2} = X{i1,u1;a1,u2}"},
     };
 
-    for (const std::vector<std::wstring> &current_inputs : inputs) {
-      CAPTURE(current_inputs);
+    for (const std::vector<std::wstring>& current_inputs : inputs) {
+      std::string description;
       container::svector<ResultExpr> expressions;
 
-      for (const std::wstring &str : current_inputs) {
+      for (const std::wstring& str : current_inputs) {
+        description += toUtf8(str) + "; ";
         expressions.push_back(deserialize<ResultExpr>(str));
       }
+      CAPTURE(description);
 
       REQUIRE_THROWS_WITH(
           mbpt::biorthogonal_transform(expressions),
