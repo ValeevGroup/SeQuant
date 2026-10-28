@@ -230,6 +230,10 @@ class AbstractTensor {
   virtual std::size_t _color() const {
     throw missing_instantiation_for("_color");
   }
+  /// @return a value mixed into the network vertex shade; distinguishes
+  /// decorations of one label, e.g. a power of a tensor from the tensor;
+  /// 0 (the default) is not mixed in
+  virtual std::size_t _color_salt() const { return 0; }
   /// @return true if this is a c-number; if false,
   /// @sa Expr::is_cnumber()
   virtual bool _is_cnumber() const {

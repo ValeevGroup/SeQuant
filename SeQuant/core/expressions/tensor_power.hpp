@@ -92,6 +92,8 @@ class TensorPower : public Expr, public AbstractTensor {
   Hermiticity _hermiticity() const override;
   Field _base_field() const override;
   std::size_t _color() const override;
+  /// @return the hash of the exponent
+  std::size_t _color_salt() const override;
   bool _is_cnumber() const override;
   std::wstring_view _label() const override;
   std::wstring _to_latex() const override;

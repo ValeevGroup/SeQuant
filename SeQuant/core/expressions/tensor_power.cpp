@@ -158,6 +158,8 @@ Field TensorPower::_base_field() const { return base_tensor()._base_field(); }
 
 std::size_t TensorPower::_color() const { return base_tensor()._color(); }
 
+std::size_t TensorPower::_color_salt() const { return hash::value(exponent_); }
+
 bool TensorPower::_is_cnumber() const { return base_tensor()._is_cnumber(); }
 
 std::wstring_view TensorPower::_label() const { return base_tensor()._label(); }
