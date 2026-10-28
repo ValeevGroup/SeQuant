@@ -1780,6 +1780,7 @@ SECTION("MRSO-MultiProduct") {
   // averages of B's substrings. Built so from core-vacuum averages, {x} is an
   // elementary-operator expression, which makes products of GNO strings,
   // number-conserving or not, comparable on the two paths
+#ifndef SEQUANT_SKIP_LONG_TESTS
   SECTION("GNO products match the core-vacuum path") {
     struct Leg {
       Index index;
@@ -2155,6 +2156,7 @@ SECTION("MRSO-MultiProduct") {
                    gno_string({i2}, {})});
     check_partial({gno_string({u1, u2}, {u3}), gno_string({u4}, {u6, u5})});
   }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
   SECTION("wick(H2**T2) runs in generalized normal order") {
     ExprPtr result;
@@ -2637,6 +2639,7 @@ SECTION("rdm-decomposition symmetries") {
   }
 }
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 SECTION("cumulant-to-density decompositions") {
   using namespace sequant;
   auto ctx_resetter = set_scoped_default_context(
@@ -2838,4 +2841,5 @@ SECTION("cumulant-to-density decompositions") {
   REQUIRE(simplify(cumulants_to_densities(density::make_cumulant(nop4)) -
                    densities4) == ex<Constant>(0));
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 }

@@ -1170,6 +1170,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(eval2, man2));
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
       // for rank 4 residual, nns applies:
       // result = NNS_P * sum_of_ket_permutations
       auto expr3 = parse_antisymm(L"R_{a1, a2, a3, a4}^{i1, i2, i3, i4}");
@@ -1204,6 +1205,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                 2.0 / 24.0 * arr3("0,1,2,3,7,6,5,4");
 
       REQUIRE(equal_tarrays<Loose>(eval3, man3));
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
     }
 
     SECTION("Others") {

@@ -168,6 +168,7 @@ inline void check_cell(ExprPtr const& eq, std::set<std::size_t> const& ordinals,
 
 }  // namespace sequant::tests::csv_rules
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("csv-a-metric-between-two-amplitude-bases-stands",
           "[mbpt][csv][valgrind_skip]") {
   using namespace sequant;
@@ -198,6 +199,7 @@ TEST_CASE("csv-a-metric-between-two-amplitude-bases-stands",
     CHECK(changed > 0);
   }
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 TEST_CASE("csv-shape-predicates", "[mbpt][csv]") {
   using namespace sequant;
@@ -629,6 +631,7 @@ TEST_CASE("csv-pno-amplitude-basis-follows-the-partner",
   CHECK(n > 0);
 }
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("csv-pno-order-counts-every-amplitude-family",
           "[mbpt][csv][valgrind_skip]") {
   using namespace sequant;
@@ -652,7 +655,9 @@ TEST_CASE("csv-pno-order-counts-every-amplitude-family",
   }
   CHECK(probed > 0);
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("csv-pno-projection-lambda-canonicalizes",
           "[mbpt][csv][valgrind_skip]") {
   using namespace sequant;
@@ -686,6 +691,7 @@ TEST_CASE("csv-pno-projection-lambda-canonicalizes",
     }
   }
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 TEST_CASE("csv-pno-projection-nested-sum-then-sibling", "[mbpt][csv]") {
   using namespace sequant;
