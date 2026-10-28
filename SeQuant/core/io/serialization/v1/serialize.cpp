@@ -128,6 +128,12 @@ std::wstring to_string(const Variable& variable, const SerializationOptions&) {
   return std::wstring(variable.label()) + (variable.conjugated() ? L"^*" : L"");
 }
 
+static std::wstring serialize_exponent(const rational& exponent,
+                                       const SerializationOptions& options) {
+  return L"^(" + serialize_scalar(Constant::scalar_type{exponent}, options) +
+         L")";
+}
+
 std::wstring to_string(const Power& power,
                        const SerializationOptions& options) {
   std::wstring core;
@@ -139,18 +145,15 @@ std::wstring to_string(const Power& power,
   if (parenthesize_base) core += L"(";
   core += v1::to_string(*base, options);
   if (parenthesize_base) core += L")";
-  core += L"^(";
-  core += serialize_scalar(Constant::scalar_type{power.exponent()}, options);
-  core += L")";
+  core += serialize_exponent(power.exponent(), options);
   if (power.conjugated()) return L"(" + std::move(core) + L")^*";
   return core;
 }
 
 std::wstring to_string(const TensorPower& power,
                        const SerializationOptions& options) {
-  return v1::to_string(*power.base(), options) + L"^(" +
-         serialize_scalar(Constant::scalar_type{power.exponent()}, options) +
-         L")";
+  return v1::to_string(*power.base(), options) +
+         serialize_exponent(power.exponent(), options);
 }
 
 std::wstring to_string(Product const& prod,
