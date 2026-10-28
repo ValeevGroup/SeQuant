@@ -919,7 +919,7 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
     REQUIRE(s->is<Product>());
     CHECK(s->as<Product>().factors().size() == 3);
   }
-  SECTION("named orthonormal target: the overlap's dummy is in that basis") {
+  SECTION("named-target-dummy") {
     const ExprPtr s = mbpt::csv_transform(
         make_overlap(x, Index(uocc, 3, {i1}).replace_basis_instance(0)),
         registry.retrieve(L"ã"));
