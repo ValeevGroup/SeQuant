@@ -280,7 +280,7 @@ TEST_CASE("scheduler-default-forest", "[ordered-executor]") {
 // (CSE) -- eliminating the per-block rebuild of a root-homed composite that
 // the whole ordered-scope effort exists to remove.
 //
-// `[.]` hidden (run-by-name): a multi-second DryRun optimize+binarize of ~40
+// A multi-second DryRun optimize+binarize of ~40
 // residual terms. The fixture construction below is
 // replicated (with an `orderedexec_` prefix) from
 // test_ordered_schedule.cpp's water-20 fixture rather than shared via a header:
@@ -407,7 +407,7 @@ std::optional<std::size_t> orderedexec_index_of_build_step(
 
 }  // namespace
 
-TEST_CASE("ordered-w20-aux-witness", "[.][ordered-executor-witness-water20]") {
+TEST_CASE("ordered-w20-aux-witness", "[ordered-executor-witness-water20]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -2116,15 +2116,14 @@ TEST_CASE("ordered-mirrored-strict-walk", "[ordered][cell_table]") {
 // unconditional gate block in the [w20-auxocc-walk] case, and the
 // mirrored execution case, which asserts it without any environment variable).
 // This case is kept as the shape characterization behind the fix.
-// Hidden ("[.]") so it never runs
-// in the default or CI suites; run explicitly with the mirrored environment
+// Run with the mirrored environment
 // (SEQUANT_UT_PEAK_THRESHOLD=25e9,
 // SEQUANT_UT_OBJECTIVE=dense_time_space_batched) to see the report on
 // stderr. The watched value ids are only meaningful under that mirrored
 // configuration.
 // ===========================================================================
 TEST_CASE("mirrored-w20-mixed-pass-dump",
-          "[cell_table][ordered][.][mixed-pass-dump]") {
+          "[cell_table][ordered][mixed-pass-dump]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -2599,7 +2598,7 @@ TEST_CASE("ordered-cache-halt", "[ordered][cache-halt]") {
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
-// [.][dryrun-2iter-report] (hidden report, not a strict gate): a 2-ITERATION
+// dryrun-2iter-report (a report, not a strict gate): a 2-ITERATION
 // dry-run cost report -- iter 1 (cold cache) vs iter 2 (warm cache: persistent
 // composites resident + the needed_build cache-halt active) -- of builds /
 // FLOPs / peak, for BOTH forest descent and the ordered/DAG executor, at w20
@@ -2612,7 +2611,7 @@ TEST_CASE("ordered-cache-halt", "[ordered][cache-halt]") {
 // schedule, and `run` is what the ordered COLD iteration measured. Render it
 // with `sequant-schedule view <path>`.
 // ===========================================================================
-TEST_CASE("dryrun-2iter-report", "[.][dryrun-2iter-report]") {
+TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -3229,7 +3228,7 @@ TEST_CASE("dryrun-2iter-report", "[.][dryrun-2iter-report]") {
 // duplicated here as-is, matching the file's own stated precedent for these
 // fixtures (see the file-header note above the witness TEST_CASE).
 // ===========================================================================
-TEST_CASE("meter-replay-equals-direct", "[.][ordered-executor][meter]") {
+TEST_CASE("meter-replay-equals-direct", "[ordered-executor][meter]") {
   using sequant::eval::dryrun::CacheConfig;
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
@@ -3424,9 +3423,9 @@ TEST_CASE("meter-replay-equals-direct", "[.][ordered-executor][meter]") {
 // executor dense-model peak into tier A (root-homed Κ-free composites) vs
 // tier B (Κ-carrying aux-loop working set), and snapshot the co-resident set
 // at the instant of realized high-water. Reuses the same fixture as the
-// witness above. Run by name: [.][w20-peak-composition].
+// witness above. Run by name: [w20-peak-composition].
 // ===========================================================================
-TEST_CASE("w20-peak-composition", "[.][w20-peak-composition]") {
+TEST_CASE("w20-peak-composition", "[w20-peak-composition]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
