@@ -82,17 +82,9 @@ TEST_CASE("opt::extract_subtrees", "[optimize][extract_subtrees]") {
     auto extracted = opt::extract_subtrees(forest, non_t_intermediate_pred);
 
     REQUIRE(extracted.size() == 1);
+    REQUIRE_FALSE(extracted.begin()->leaf());
     REQUIRE_FALSE(forest[0].leaf());  // mixed item retains its internal shape
     REQUIRE(forest[1].leaf());        // pure-non-t root collapsed
-  }
-
-  SECTION(
-      "captured subtrees under the example pred are always internal nodes") {
-    std::vector<Node> forest;
-    forest.emplace_back(bin(L"f{a1;a2} * g{a2;a1}"));
-    auto extracted = opt::extract_subtrees(forest, non_t_intermediate_pred);
-    REQUIRE(extracted.size() == 1);
-    REQUIRE_FALSE(extracted.begin()->leaf());
   }
 
   SECTION(
