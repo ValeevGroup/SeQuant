@@ -68,9 +68,7 @@ std::string dotdump_slurp(std::string const& path) {
 
 }  // namespace
 
-TEST_CASE(
-    "dot dump: the residual forest and its value DAG, shared values coloured",
-    "[.][dot-dump]") {
+TEST_CASE("dot-dump-residual", "[.][dot-dump]") {
   using namespace sequant;
   using namespace sequant::eval::dryrun;
   namespace ev = sequant::eval;
