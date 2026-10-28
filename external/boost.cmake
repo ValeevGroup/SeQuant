@@ -25,9 +25,8 @@ set(required_components
         hana
         locale
         multiprecision
-        #          numeric_conversion
-        #          numeric_interval
-        accumulators      # including numeric_* as targets is broken, instead include accumulators to ensure that numeric_{conversion,interval,ublas} are included
+        numeric_conversion
+        numeric_interval
         range
         regex
         spirit
