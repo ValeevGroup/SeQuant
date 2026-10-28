@@ -568,7 +568,7 @@ TEST_CASE("expr", "[elements]") {
        // the scalar, the rest into a single Power R^(1/D)
       const auto half = rational{1, 2};
       const auto third = rational{1, 3};
-      const auto factors = [](const ExprPtr &e) {
+      const auto factors = [](const ExprPtr &e) -> const auto & {
         return e->as<Product>().factors();
       };
       const auto has_factor = [&](const ExprPtr &e, const Expr &f) {
@@ -774,7 +774,7 @@ TEST_CASE("expr", "[elements]") {
        // Powers, into one factor per Variable
       const auto half = rational{1, 2};
       const auto vy = ex<Variable>(L"y");
-      const auto factors = [](const ExprPtr &e) {
+      const auto factors = [](const ExprPtr &e) -> const auto & {
         return e->as<Product>().factors();
       };
       const auto has_factor = [&](const ExprPtr &e, const Expr &f) {
