@@ -21,6 +21,15 @@ void reset_tags(const ExprPtr& expr) {
       /* atoms_only = */ true);
 }
 
+bool cross_type_less(const AbstractTensor& a, const AbstractTensor& b) {
+  if (a._label() != b._label()) return a._label() < b._label();
+  if (a._bra_rank() != b._bra_rank()) return a._bra_rank() < b._bra_rank();
+  if (a._ket_rank() != b._ket_rank()) return a._ket_rank() < b._ket_rank();
+  if (a._aux_rank() != b._aux_rank()) return a._aux_rank() < b._aux_rank();
+  return dynamic_cast<const Expr&>(a).type_id() <
+         dynamic_cast<const Expr&>(b).type_id();
+}
+
 bool has_tensor(const ExprPtr& expr, std::wstring label) {
   if (expr->is<Constant>() || expr->is<Variable>()) return false;
 

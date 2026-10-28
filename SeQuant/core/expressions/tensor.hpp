@@ -958,7 +958,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       const Expr *other_expr = static_cast<const Expr *>(other_tensor);
       return this->static_less_than(*other_expr);
     } else
-      return false;  // TODO do we compare typeid? labels? probably the latter
+      return cross_type_less(*this, other);
   }
 
  private:

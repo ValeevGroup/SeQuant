@@ -639,6 +639,14 @@ inline void permute_braket(AbstractTensor& t, std::span<std::size_t> perm) {
 
 using AbstractTensorPtr = std::shared_ptr<AbstractTensor>;
 
+/// @brief orders AbstractTensor objects of unlike concrete types
+///
+/// Compares label, then bra, ket and aux ranks, then the Expr type id of
+/// the two objects.
+/// @return true if @p a precedes @p b; false if they compare equal in all of
+///         these
+bool cross_type_less(const AbstractTensor& a, const AbstractTensor& b);
+
 /// @brief Check if a tensor with a certain label is present in an expression
 /// @param expr input expression
 /// @param label tensor label to find in the expression
