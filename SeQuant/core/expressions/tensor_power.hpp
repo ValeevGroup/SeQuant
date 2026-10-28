@@ -123,6 +123,18 @@ class TensorPower : public Expr, public AbstractTensor {
       const Expr& that, const LexicographicCompareOptions& opts) const override;
 };
 
+/// @brief raises a scalar or a c-number tensor leaf to a rational power
+///
+/// A Constant or Variable base gives a Power, a c-number tensor base a
+/// TensorPower. Exponents of nested powers are composed when that is exact:
+/// for a TensorPower `T^a` and exponent `b`, `(T^a)^b = T^{ab}` for real `T`
+/// only if `b` is an integer or `a` is an odd integer.
+/// @param[in] base a Constant, Variable, Power, c-number AbstractTensor or
+///            TensorPower
+/// @param[in] exponent any rational
+/// @throw Exception if @p base is not supported or the composition is inexact
+ExprPtr pow(ExprPtr base, rational exponent);
+
 }  // namespace sequant
 
 #endif  // SEQUANT_EXPRESSIONS_TENSOR_POWER_HPP
