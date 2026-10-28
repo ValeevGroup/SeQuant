@@ -535,6 +535,9 @@ The :code:`irreps` option accepts the following properties:
      - :code:`"*"`
      - No
 
+Whitespace around IRREP names, :code:`*` and :code:`=` is ignored (:code:`"A * B = C"` equals :code:`"A*B=C"`). IRREP names themselves must not
+contain whitespace.
+
 For :code:`language: itf`, the IRREPs of created tensors are emitted as an :code:`irrep:` entry of their :code:`!Create{...}` statement, whereas the
 IRREPs of imported tensors are given as a trailing comment of their declaration (for informational purposes only).
 
