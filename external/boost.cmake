@@ -59,12 +59,3 @@ elseif (NOT DEFINED Boost_FETCH_IF_MISSING)
 endif ()
 
 include(${vg_cmake_kit_SOURCE_DIR}/modules/FindOrFetchBoost.cmake)
-
-if (Boost_BUILT_FROM_SOURCE)
-    if ("${PROJECT_NAME}" STREQUAL "${CMAKE_PROJECT_NAME}")
-        add_custom_target(build-boost-in-SeQuant)
-        foreach(_target IN LISTS Boost_FOUND_TARGETS Boost_MODULAR_TARGETS_NOT_BUILT_BY_INSTALL)
-            add_dependencies(build-boost-in-SeQuant Boost::${_target})
-        endforeach()
-    endif()
-endif()

@@ -874,11 +874,6 @@ if (SEQUANT_MIMALLOC)
     target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_HAS_MIMALLOC=1)
 endif ()
 
-# build all of boost before SeQuant-symb, including parts it does not use
-if (Boost_BUILT_FROM_SOURCE AND TARGET build-boost-in-SeQuant)
-    add_dependencies(SeQuant-symb build-boost-in-SeQuant)
-endif()
-
 if (SEQUANT_IWYU)
     find_program(iwyu_path NAMES include-what-you-use iwyu)
 
