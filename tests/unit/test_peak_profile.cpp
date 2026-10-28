@@ -653,8 +653,7 @@ TEST_CASE("boulevard-key-collision-identical", "[peak_profile][value-cell]") {
 TEST_CASE("the value->node bridges hold the FOREST's nodes, not copies of them",
           "[peak_profile][value-node-map]") {
   // Deliverable of the pointer conversion, pinned in a test that RUNS by
-  // default (the deep-spine case that carries the memory numbers is hidden
-  // behind [.]). ValueNodeMap holds `Node const*`; an entry must therefore BE
+  // default. ValueNodeMap holds `Node const*`; an entry must therefore BE
   // the address of the forest node it was built from. A by-value map -- the
   // shape this replaced, whose entries were deep copies of whole subtrees --
   // cannot satisfy this, and cannot even compile against it.
@@ -683,7 +682,7 @@ TEST_CASE("the value->node bridges hold the FOREST's nodes, not copies of them",
   CHECK(&vmap.at(sequant::value_key_of(root.left()))->parent() == &root);
 }
 
-TEST_CASE("prepass-deep-sum", "[.][peak_profile][stack-safety]") {
+TEST_CASE("prepass-deep-sum", "[peak_profile][stack-safety]") {
   // An equation's residual/energy reaches the ordered path as a SINGLE
   // in-place Sum tree with one node per summand, so its LEFT SPINE is as deep
   // as the number of terms -- thousands for a large equation. Every prepass
@@ -691,8 +690,6 @@ TEST_CASE("prepass-deep-sum", "[.][peak_profile][stack-safety]") {
   // executor itself already does); a recursive descent overflows the call
   // stack long before the executor is reached.
   //
-  // Hidden ([.]) only because 40000 nodes cost ~4 GB to hold; the walks
-  // themselves are sub-second. Run it by name or by [stack-safety];
   // SEQUANT_UT_SPINE_N overrides the depth.
   //
   // build_value_node_map / build_value_key_node_map are covered here too (see
