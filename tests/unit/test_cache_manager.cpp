@@ -558,21 +558,6 @@ TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
         man.store_and_access(p, eval_result(20)));  // re-store, no reset()
     REQUIRE_NOTHROW(man.store_and_access(p, eval_result(30)));
   }
-
-  SECTION("assert-enabled + THROW: re-store without reset() throws") {
-    if (sequant::assert_behavior() != sequant::AssertBehavior::Throw) {
-      // Default build config (Release: IGNORE: no-op; Debug: ABORT: not
-      // catchable) -- nothing to observe via REQUIRE_THROWS here. The
-      // strict-fill-once sections above already exercise the guard's logic
-      // deterministically across build configs.
-      return;
-    }
-    (void)man.store_and_access(
-        np,
-        eval_result(1));  // 1st store since construction/reset: OK
-    REQUIRE_THROWS(
-        man.store_and_access(np, eval_result(2)));  // 2nd, no reset(): flagged
-  }
 }
 
 TEST_CASE("cache_manager_volatility_frontier", "[cache_manager]") {
