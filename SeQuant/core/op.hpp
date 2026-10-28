@@ -1084,8 +1084,10 @@ class NormalOperator : public Operator<S>,
            ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
+  // empty, but not a default-constructed any_view: range-v3's end() of one
+  // dereferences a null pointer
   AbstractTensor::const_any_view_randsz _aux() const override final {
-    return {};
+    return ranges::counted_view<const Index *>(nullptr, 0);
   }
   AbstractTensor::const_any_view_rand _braket() const override final {
     return ranges::views::concat(annihilators(), creators()) |
@@ -1184,7 +1186,9 @@ class NormalOperator : public Operator<S>,
            ranges::views::transform(
                [](auto &&op) -> Index & { return op.index(); });
   }
-  AbstractTensor::any_view_randsz _aux_mutable() override final { return {}; }
+  AbstractTensor::any_view_randsz _aux_mutable() override final {
+    return ranges::counted_view<Index *>(nullptr, 0);
+  }
 
   void _permute_aux(std::span<const std::size_t> perm) override final {
     if (perm.size() != 0)
