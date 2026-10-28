@@ -2387,17 +2387,6 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
   }
 }
 
-// BLOCKED, hidden by default. This test batched an UNANNOTATED node via the
-// runtime's depth-0 heuristic fallback, which has been removed (annotations are
-// now authoritative). Re-pointing it at an explicit annotation is NOT
-// behaviour-preserving: cache_manager vetoes caching for a node whose own
-// node_slice_mask() carries a sliced batchable mode, and the heuristic never
-// set node_slice_mask() -- so the same mode batched by the two routes gives
-// different CSE. The correct expectations depend on replacing that veto
-// with per-context (per-slice) caching. Re-enable and re-derive the counts
-// then; do not "fix" the numbers against veto behaviour that is about to be
-// deleted.
-
 // Ordered executor (see ordered_schedule.hpp's own doc comments for the
 // OrderedSchedule IR and
 // ordered_executor.hpp's detail::run_ordered_contracted_block for the
@@ -2806,7 +2795,7 @@ TEST_CASE("ordered-mixed-open-aux-sparse",
 }
 
 // Minimal TA-level probe for the nested-tile permutation crash seen in the
-// hidden ToT replica: permute a Tensor<Tensor<double>> array on its outer
+// ToT culprit replica: permute a Tensor<Tensor<double>> array on its outer
 // modes only, on inner only, and on both, through TA expressions.
 TEST_CASE("TA nested-tile permutation probe", "[tot][tot-perm-probe]") {
   using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
@@ -3672,247 +3661,6 @@ TEST_CASE("ordered-vs-forest-external-block", "[eval][ordered-executor]") {
   double const rel = TA::norm2(diff) / TA::norm2(ref);
   INFO("relative L2 diff = " << rel);
   CHECK(rel < 1e-10);
-}
-
-TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
-          "[.][blocked-on-per-context-caching]") {
-  using sequant::evaluate;
-  using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
-  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
-  using cache_t = sequant::CacheManager<node_t>;
-
-  auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12, 12};
-  yield_.set_max_tile(4);
-
-  // W-analog: root contracts the aux index x_1; the two children are
-  // canonically equal
-  auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})");
-  std::string const target = "i_1,i_3,i_2,i_4";
-  auto node = eval_node(expr);
-  // The runtime batches STRICTLY on the optimizer's annotations (there is no
-  // heuristic fallback), so this test must state the mode it wants batched.
-  // batch_axis() picks exactly what the removed depth-0 heuristic used to pick.
-  auto const ax = sequant::batch_axis(node);
-  REQUIRE(ax.has_value());
-  node->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
-  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
-
-  std::map<std::wstring, int> n_yield;
-  auto counting_yield = [&yield_, &n_yield](node_t const& n) {
-    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
-    return yield_(n);
-  };
-
-  // x_1 is auxiliary: extent 12, tiles of 4; target 4 elements -> 3 batches
-  int const n_b = 3;
-  auto cache = cache_t::empty();
-  cache.set_custom_evaluator(make_batched_custom_evaluator(
-      counting_yield,
-      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; }));
-  auto const res =
-      evaluate(node, target, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(equal_tarrays<Loose>(res, ref));
-
-  // with within-batch dedup: per batch the left child evaluates (g and h
-  // yielded once each), the right child is a scratch cache hit; plus one g
-  // from the evaluator's mode_batches probe of the x_1-carrying leaf
-  CHECK(n_yield[L"g"] == n_b + 1);
-  CHECK(n_yield[L"h"] == n_b);
-}
-
-// BLOCKED, hidden by default. This test batched an UNANNOTATED node via the
-// runtime's depth-0 heuristic fallback, which has been removed (annotations are
-// now authoritative). Re-pointing it at an explicit annotation is NOT
-// behaviour-preserving: cache_manager vetoes caching for a node whose own
-// node_slice_mask() carries a sliced batchable mode, and the heuristic never
-// set node_slice_mask() -- so the same mode batched by the two routes gives
-// different CSE. The correct expectations depend on replacing that veto
-// with per-context (per-slice) caching. Re-enable and re-derive the counts
-// then; do not "fix" the numbers against veto behaviour that is about to be
-// deleted.
-TEST_CASE("batched-group-replay", "[.][blocked-on-per-context-caching]") {
-  using sequant::evaluate;
-  using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
-  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
-
-  auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12, 12};
-  yield_.set_max_tile(4);
-
-  // Two persistent finals sharing the sub-intermediate S = g*h (carries the
-  // auxiliary batch mode x_1):
-  //   F1 = S * S'   (canonically-equal siblings; contracts x_1, aux-aux)
-  //   F2 = S * p    (contracts x_1, aux-aux)
-  // Volatile heads (label "t") make F1 and F2 persistent. Every orbital
-  // contraction pairs a bra with a ket.
-  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3}))"
-      L" * t{i_1,i_2;i_3,i_9}");
-  auto const t2 = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3}");
-  std::string const tgt1 = "i_4,i_9";
-  std::string const tgt2 = "i_5,i_6";
-  auto n1 = eval_node(t1);
-  auto n2 = eval_node(t2);
-  // Annotate explicitly: the runtime batches STRICTLY on the optimizer's
-  // annotations (no heuristic fallback), so each final must state the mode it
-  // wants batched. batch_axis() picks exactly what the old depth-0 heuristic
-  // picked, so this reproduces the behaviour these assertions were written for.
-  for (auto* nd : {&n1, &n2}) {
-    auto const ax = sequant::batch_axis(*nd);
-    REQUIRE(ax.has_value());
-    (*nd)->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
-  }
-
-  auto is_volatile_t = [](node_t const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
-  };
-
-  // references (unbatched, uncached, uncounted)
-  auto const ref1 = evaluate(n1, tgt1, yield_)->get<TArrayD>();
-  auto const ref2 = evaluate(n2, tgt2, yield_)->get<TArrayD>();
-
-  // real cache over the two-term forest; F1 and F2 must classify persistent
-  auto cache = sequant::cache_manager(std::vector{n1, n2}, is_volatile_t);
-  REQUIRE(cache.persistent(n1.left()));
-  REQUIRE(cache.persistent(n2.left()));
-
-  std::map<std::wstring, int> n_yield;
-  auto counting_yield = [&yield_, &n_yield](node_t const& n) {
-    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
-    return yield_(n);
-  };
-  // persistent_only=true: gate volatile term heads so the group replay streams
-  // only the persistent finals F1/F2 (the across-the-board default would also
-  // batch volatile triggers, changing the yield counts asserted below).
-  cache.set_custom_evaluator(make_batched_custom_evaluator(
-      counting_yield,
-      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
-      sequant::accept_any_index{}, sequant::make_no_scope_guard{},
-      is_volatile_t,
-      /*persistent_only=*/true));
-
-  // evaluating term 1 triggers at F1 and must prebuild F2 in the same passes
-  auto const res1 = evaluate(n1, tgt1, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(cache.alive(n2.left()));  // F2 prebuilt by the group replay
-
-  auto const res2 = evaluate(n2, tgt2, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(equal_tarrays<Loose>(res1, ref1));
-  REQUIRE(equal_tarrays<Loose>(res2, ref2));
-
-  // S evaluated once per batch (n_b = 3), shared by F1 (twice) and F2 (once):
-  // g: 3 (S evals) + 1 (trigger probe) + 1 (F2 candidacy probe) = 5
-  // h: 3; p: 3 (sliced, once per batch); t: 2 (one per term head)
-  CHECK(n_yield[L"g"] == 5);
-  CHECK(n_yield[L"h"] == 3);
-  CHECK(n_yield[L"p"] == 3);
-  CHECK(n_yield[L"t"] == 2);
-}
-
-// BLOCKED, hidden by default. This test batched an UNANNOTATED node via the
-// runtime's depth-0 heuristic fallback, which has been removed (annotations are
-// now authoritative). Re-pointing it at an explicit annotation is NOT
-// behaviour-preserving: cache_manager vetoes caching for a node whose own
-// node_slice_mask() carries a sliced batchable mode, and the heuristic never
-// set node_slice_mask() -- so the same mode batched by the two routes gives
-// different CSE. The correct expectations depend on replacing that veto
-// with per-context (per-slice) caching. Re-enable and re-derive the counts
-// then; do not "fix" the numbers against veto behaviour that is about to be
-// deleted.
-TEST_CASE("batched-group-replay-nested-finals",
-          "[.][blocked-on-per-context-caching]") {
-  using sequant::evaluate;
-  using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
-  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
-
-  auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12, 12};
-  yield_.set_max_tile(4);
-
-  // F_in = (g*h)*p (contracts the aux index x_1; persistent) nests inside
-  // F_out, which contracts its own aux mode x_2:  F_out = (F_in * r) * q,
-  // with r and q carrying x_2. Triggering at F_out must build F_in in an
-  // inner layer first, then seed its full value into F_out's pass (F_in
-  // carries no x_2). Every orbital contraction pairs a bra with a ket.
-  auto const t_out = sequant::deserialize<sequant::ExprPtr>(
-      L"((((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * r{i_6;i_7;x_2})"
-      L" * q{i_7;i_8;x_2}) * t{i_1;i_3,i_9}");
-  auto const t_in = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3,i_7}");
-  std::string const tgt_out = "i_5,i_8,i_9";
-  std::string const tgt_in = "i_5,i_6,i_7";
-  auto n_out = eval_node(t_out);
-  auto n_in = eval_node(t_in);
-
-  auto is_volatile_t = [](node_t const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
-  };
-
-  auto const ref_out = evaluate(n_out, tgt_out, yield_)->get<TArrayD>();
-  auto const ref_in = evaluate(n_in, tgt_in, yield_)->get<TArrayD>();
-
-  auto cache = sequant::cache_manager(std::vector{n_out, n_in}, is_volatile_t);
-  // structural preconditions: both finals persistent; F_in nests in F_out
-  REQUIRE(cache.persistent(n_out.left()));
-  REQUIRE(cache.persistent(n_in.left()));
-  {
-    sequant::TreeNodeEqualityComparator<node_t> const eq;
-    REQUIRE(eq(n_out.left().left().left(), n_in.left()));
-  }
-
-  std::map<std::wstring, int> n_yield;
-  auto counting_yield = [&yield_, &n_yield](node_t const& n) {
-    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
-    return yield_(n);
-  };
-  // batch only over auxiliary indices (as a DF-batched application would)
-  auto const aux_space =
-      sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
-  auto accept_aux = [aux_space](sequant::Index const& ix) {
-    return ix.space() == aux_space;
-  };
-
-  // Annotate explicitly: the runtime batches STRICTLY on the optimizer's
-  // annotations (no heuristic fallback), so each final must state the mode it
-  // wants batched. batch_axis() picks exactly what the old depth-0 heuristic
-  // picked, so this reproduces the behaviour these assertions were written for.
-  for (auto* nd : {&n_out, &n_in}) {
-    auto const ax = sequant::batch_axis(*nd, accept_aux);
-    REQUIRE(ax.has_value());
-    (*nd)->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
-  }
-
-  cache.set_custom_evaluator(make_batched_custom_evaluator(
-      counting_yield,
-      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
-      accept_aux, sequant::make_no_scope_guard{}, is_volatile_t));
-
-  auto const res_out =
-      evaluate(n_out, tgt_out, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(cache.alive(n_in.left()));  // inner layer built and stored
-
-  auto const res_in =
-      evaluate(n_in, tgt_in, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(equal_tarrays<Loose>(res_out, ref_out));
-  REQUIRE(equal_tarrays<Loose>(res_in, ref_in));
-
-  // layer 1 (F_in over x_1, 3 batches): g,h,p once per batch; layer 2 (F_out
-  // over x_2): F_in SEEDED (g,h,p untouched), r,q sliced once per batch.
-  // Probes: +1 r (trigger, x_2-carrying leaf), +1 g (F_in candidacy, x_1
-  // leaf). If seeding failed and F_in were re-derived per batch, g/h/p
-  // would be 6+.
-  CHECK(n_yield[L"g"] == 4);
-  CHECK(n_yield[L"h"] == 3);
-  CHECK(n_yield[L"p"] == 3);
-  CHECK(n_yield[L"r"] == 4);
-  CHECK(n_yield[L"q"] == 3);
-  CHECK(n_yield[L"t"] == 2);
 }
 
 TEST_CASE("eval_batched_custom_evaluator nests inner mode", "[eval]") {
@@ -6178,7 +5926,7 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
 // per-node external opens, not a fixture. This is the only case in which the
 // External stamps are produced by the optimizer rather than hand-written.
 // Compares the batched result against the plain unbatched reference (ground
-// truth). Hidden ([.]) diagnostic.
+// truth).
 // ---------------------------------------------------------------------------
 namespace {
 
@@ -6242,7 +5990,7 @@ void dump_annotations(sequant::FullBinaryNode<sequant::EvalExprTA> const& n,
 }  // namespace
 
 TEST_CASE("dp_external_placement_correctness",
-          "[.][eval][batched-external][node-placement]") {
+          "[eval][batched-external][node-placement]") {
   using namespace sequant;
   using TA::TArrayD;
   using node_t = FullBinaryNode<EvalExprTA>;
