@@ -748,28 +748,15 @@ class ResultTensorTA final : public Result {
     }
     // The block keeps every mode's element coordinates (TA's
     // preserve_lobound), like the eager slice did, so a spectator mode with a
-    // nonzero lobound still matches the operand it is contracted against.
-    // The flag is set LAST: TiledArray's conj() (and its scalar operators)
-    // rebuild a block expression without it -- see preserve_lobound_of().
-    auto blk = parent_(stored).block(view_.blk_lo, view_.blk_hi);
+    // nonzero lobound still matches the operand it is contracted against;
+    // the expressions derived from the block (conj(), scaling, negation)
+    // carry the lobound along.
+    auto blk =
+        parent_(stored).block(view_.blk_lo, view_.blk_hi, TA::preserve_lobound);
     if constexpr (TA::detail::is_complex_v<numeric_type>) {
-      if (conj) {
-        auto cblk = blk.conj();
-        cblk.preserve_lobound();
-        return std::forward<F>(f)(cblk);
-      }
+      if (conj) return std::forward<F>(f)(blk.conj());
     }
-    blk.preserve_lobound();
     return std::forward<F>(f)(blk);
-  }
-
-  /// Re-applies TA's preserve_lobound to \p e when it is a block expression:
-  /// TiledArray's scalar operators (and conj()) construct a fresh block
-  /// expression that does not carry the flag, so `scalar * block` of a
-  /// lobound-preserving block would be rebased to element 0.
-  template <typename E>
-  static void preserve_lobound_of(E& e) {
-    if constexpr (requires { e.preserve_lobound(); }) e.preserve_lobound();
   }
 
  private:
@@ -953,11 +940,8 @@ class ResultTensorTA final : public Result {
       detail::log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
 
       ArrayT result;
-      with_expr(a.lannot, [&](auto&& le) {
-        auto se = scalar * le;
-        preserve_lobound_of(se);
-        result(a.this_annot) = se;
-      });
+      with_expr(a.lannot,
+                [&](auto&& le) { result(a.this_annot) = scalar * le; });
 
       ::sequant::detail::wait_for_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
@@ -1173,16 +1157,14 @@ class ResultTensorOfTensorTA final : public Result {
   /// Hands \p f the TiledArray expression of this result's value for the
   /// nested annotation \p annot (`outer;inner`): `value(annot)` when the value
   /// is held, else the parent array's block over the outer modes, element
-  /// coordinates kept (TA's preserve_lobound, set last -- see
-  /// ResultTensorTA::with_expr). \p f must return the same type whatever
-  /// expression it receives.
+  /// coordinates kept (TA's preserve_lobound; see ResultTensorTA::with_expr).
+  /// \p f must return the same type whatever expression it receives.
   template <typename F>
   decltype(auto) with_expr(std::string const& annot, F&& f) const {
     if (has_value()) return std::forward<F>(f)(Result::get<ArrayT>()(annot));
     if (view_.blk_lo.empty()) return std::forward<F>(f)(parent_(annot));
-    auto blk = parent_(annot).block(view_.blk_lo, view_.blk_hi);
-    blk.preserve_lobound();
-    return std::forward<F>(f)(blk);
+    return std::forward<F>(f)(
+        parent_(annot).block(view_.blk_lo, view_.blk_hi, TA::preserve_lobound));
   }
 
  private:
@@ -1408,11 +1390,8 @@ class ResultTensorOfTensorTA final : public Result {
       detail::log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
 
       ArrayT result;
-      with_expr(a.lannot, [&](auto&& le) {
-        auto se = scalar * le;
-        that_type::preserve_lobound_of(se);
-        result(a.this_annot) = se;
-      });
+      with_expr(a.lannot,
+                [&](auto&& le) { result(a.this_annot) = scalar * le; });
 
       ::sequant::detail::wait_for_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
@@ -1523,9 +1502,7 @@ class ResultTensorOfTensorTA final : public Result {
     ArrayT result;
     with_expr(pre_annot, [&](auto&& e) {
       if constexpr (TA::detail::is_complex_v<numeric_type>) {
-        auto ce = e.conj();
-        that_type::preserve_lobound_of(ce);
-        result(post_annot) = ce;
+        result(post_annot) = e.conj();
       } else {
         result(post_annot) = e;
       }
