@@ -169,7 +169,7 @@ std::size_t TensorPower::_hash_value() const { return hash_value(); }
 bool TensorPower::operator<(const AbstractTensor& that) const {
   if (const auto* other = dynamic_cast<const TensorPower*>(&that))
     return static_less_than(*other);
-  return false;
+  return cross_type_less(*this, that);
 }
 
 bool TensorPower::_transform_indices(
