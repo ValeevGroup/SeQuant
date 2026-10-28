@@ -1364,94 +1364,49 @@ TEST_CASE("expr", "[elements]") {
 
     {  // Power::flatten
 
-      // Constant base + integer exponent folds in place
-      auto pf1 = ex<Power>(2, 3);
-      Power::flatten(pf1);
-      REQUIRE(pf1 == ex<Constant>(rational{8}));
-
-      // non-integer exponent without an exact root is a no-op
-      auto pf2 = ex<Power>(2, rational{1, 2});
-      Power::flatten(pf2);
-      REQUIRE(pf2->is<Power>());
-
-      // Variable base is a no-op
-      auto pf3 = ex<Power>(L"x", 2);
-      Power::flatten(pf3);
-      REQUIRE(pf3->is<Power>());
-
-      // Variable base, zero exponent: x^0 = 1
-      auto pf4 = ex<Power>(L"x", 0);
-      Power::flatten(pf4);
-      REQUIRE(pf4 == ex<Constant>(rational{1}));
-
-      // 2^(-20) = 1/1048576
-      auto pf5 = ex<Power>(2, -20);
-      Power::flatten(pf5);
-      REQUIRE(pf5 == ex<Constant>(rational{1, 1048576}));
-
-      // square-root exponent with perfect-square base folds
-      // 4^(1/2) = 2
-      auto pf6 = ex<Power>(4, rational{1, 2});
-      Power::flatten(pf6);
-      REQUIRE(pf6 == ex<Constant>(rational{2}));
-
-      // (1/4)^(1/2) = 1/2
-      auto pf7 = ex<Power>(rational{1, 4}, rational{1, 2});
-      Power::flatten(pf7);
-      REQUIRE(pf7 == ex<Constant>(rational{1, 2}));
-
-      // (1/4)^(-1/2) = 2
-      auto pf8 = ex<Power>(rational{1, 4}, rational{-1, 2});
-      Power::flatten(pf8);
-      REQUIRE(pf8 == ex<Constant>(rational{2}));
-
-      // (9/16)^(3/2) = 27/64
-      auto pf9 = ex<Power>(rational{9, 16}, rational{3, 2});
-      Power::flatten(pf9);
-      REQUIRE(pf9 == ex<Constant>(rational{27, 64}));
-
-      // (-1)^(1/2) is imaginary; left as Power
-      auto pf10 = ex<Power>(-1, rational{1, 2});
-      Power::flatten(pf10);
-      REQUIRE(pf10->is<Power>());
-
-      // negative-real base with half-integer exponent: not folded
-      auto pf11 = ex<Power>(-4, rational{1, 2});
-      Power::flatten(pf11);
-      REQUIRE(pf11->is<Power>());
-
-      // complex base (imag != 0) with half-integer exponent: not folded
-      auto pf12 = ex<Power>(Constant::scalar_type{1, 1}, rational{1, 2});
-      Power::flatten(pf12);
-      REQUIRE(pf12->is<Power>());
-
-      // roots of any order fold when exact: 8^(1/3) = 2, (1/8)^(1/3) = 1/2
-      auto pf13 = ex<Power>(8, rational{1, 3});
-      Power::flatten(pf13);
-      REQUIRE(pf13 == ex<Constant>(rational{2}));
-      auto pf13b = ex<Power>(rational{1, 8}, rational{1, 3});
-      Power::flatten(pf13b);
-      REQUIRE(pf13b == ex<Constant>(rational{1, 2}));
-      // ... and not otherwise, even if a rational factor could come out
-      auto pf13c = ex<Power>(8, rational{1, 2});
-      Power::flatten(pf13c);
-      REQUIRE(pf13c->is<Power>());
-
-      // 0^(1/3) = 0
-      auto pf13d = ex<Power>(0, rational{1, 3});
-      Power::flatten(pf13d);
-      REQUIRE(pf13d == ex<Constant>(rational{0}));
-
-      // an integer power too large to build is left alone
-      auto pf13e = ex<Power>(2, rational{sequant::intmax_t{1} << 17});
-      Power::flatten(pf13e);
-      REQUIRE(pf13e->is<Power>());
-      auto pf13f = ex<Power>(-2, rational{sequant::intmax_t{1} << 17});
-      Power::flatten(pf13f);
-      REQUIRE(pf13f->is<Power>());
-      auto pf13g = ex<Power>(-2, rational{sequant::intmax_t{1} << 15});
-      Power::flatten(pf13g);
-      REQUIRE(pf13g == ex<Constant>(rational{sequant::intmax_t{1} << 32768}));
+      // {what, Power, folded value (null: stays a Power)}
+      const auto folds_to = [](auto... args) {
+        return ex<Constant>(rational{args...});
+      };
+      const std::vector<std::tuple<const char *, ExprPtr, ExprPtr>> rows{
+          {"constant base, integer exponent", ex<Power>(2, 3), folds_to(8)},
+          {"no exact root", ex<Power>(2, rational{1, 2}), nullptr},
+          {"variable base", ex<Power>(L"x", 2), nullptr},
+          {"variable base, zero exponent", ex<Power>(L"x", 0), folds_to(1)},
+          {"2^(-20)", ex<Power>(2, -20), folds_to(1, 1048576)},
+          {"4^(1/2)", ex<Power>(4, rational{1, 2}), folds_to(2)},
+          {"(1/4)^(1/2)", ex<Power>(rational{1, 4}, rational{1, 2}),
+           folds_to(1, 2)},
+          {"(1/4)^(-1/2)", ex<Power>(rational{1, 4}, rational{-1, 2}),
+           folds_to(2)},
+          {"(9/16)^(3/2)", ex<Power>(rational{9, 16}, rational{3, 2}),
+           folds_to(27, 64)},
+          {"(-1)^(1/2) is imaginary", ex<Power>(-1, rational{1, 2}), nullptr},
+          {"negative base, half-integer exponent",
+           ex<Power>(-4, rational{1, 2}), nullptr},
+          {"complex base, half-integer exponent",
+           ex<Power>(Constant::scalar_type{1, 1}, rational{1, 2}), nullptr},
+          {"8^(1/3)", ex<Power>(8, rational{1, 3}), folds_to(2)},
+          {"(1/8)^(1/3)", ex<Power>(rational{1, 8}, rational{1, 3}),
+           folds_to(1, 2)},
+          {"no exact root, rational factor could come out",
+           ex<Power>(8, rational{1, 2}), nullptr},
+          {"0^(1/3)", ex<Power>(0, rational{1, 3}), folds_to(0)},
+          {"2^(2^17) is too large to build",
+           ex<Power>(2, rational{sequant::intmax_t{1} << 17}), nullptr},
+          {"(-2)^(2^17) is too large to build",
+           ex<Power>(-2, rational{sequant::intmax_t{1} << 17}), nullptr},
+          {"(-2)^(2^15)", ex<Power>(-2, rational{sequant::intmax_t{1} << 15}),
+           folds_to(sequant::intmax_t{1} << 32768)},
+      };
+      for (auto [what, power, expected] : rows) {
+        CAPTURE(what);
+        Power::flatten(power);
+        if (expected)
+          REQUIRE(power == expected);
+        else
+          REQUIRE(power->is<Power>());
+      }
       // ... the bound accounts for both denominators of a complex base:
       // (1/2 + i/3)^20000 folds, with a 6^20000 denominator, while
       // (1/2 + i/3)^30000 would exceed the cap and is left alone
