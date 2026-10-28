@@ -3826,18 +3826,13 @@ TEST_CASE("loop-tree recompute charge prices the middle gap", "[loop-tree]") {
   }
 }
 
-// RED gate for the free-hoist charge.
+// Gate for the free-hoist charge.
 //
 // The free-hoist / I2 shape: a subset that carries NO batchable mode, sitting
 // inside an enclosing loop over a CONTRACTED batchable mode. Such a node is
 // invariant to that loop AND slicing the mode would not shrink it, so hoisting
 // it above the loop is FREE -- unchanged footprint, computed once. The correct
 // recompute factor is rf = 1.
-//
-// Today's charge (cost_model.hpp ~909-913) is order-blind: it bills
-// nBatch(x) for EVERY x in `esc = B & ~open_modes[n]`, with no notion of where
-// the node sits relative to those loops. So it over-charges this node by
-// nBatch(F). The Carr == 0 case is the worst over-charge.
 //
 // Asserted directly on the DP cell st[n][B] rather than on an emitted schedule,
 // so the test pins the CHARGE and does not depend on which tree the DP happens
@@ -3896,7 +3891,7 @@ TEST_CASE("loop-tree charge must not bill a free hoist", "[loop-tree]") {
 
   // {s,t} carries no batchable mode, so slicing F_1 cannot shrink it and it can
   // be built once above the F_1 loop at unchanged footprint. rf must be 1.
-  CHECK(inside == outside);  // FAILS today: inside == nBatch(F_1) * outside
+  CHECK(inside == outside);
 }
 
 // D1 fix (ii) gate (emit External BEFORE Contracted at co-carrying nodes). A
