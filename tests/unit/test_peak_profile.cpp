@@ -682,6 +682,7 @@ TEST_CASE("the value->node bridges hold the FOREST's nodes, not copies of them",
   CHECK(&vmap.at(sequant::value_key_of(root.left()))->parent() == &root);
 }
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("prepass-deep-sum", "[peak_profile][stack-safety]") {
   // An equation's residual/energy reaches the ordered path as a SINGLE
   // in-place Sum tree with one node per summand, so its LEFT SPINE is as deep
@@ -757,3 +758,4 @@ TEST_CASE("prepass-deep-sum", "[peak_profile][stack-safety]") {
   CHECK(vmap.at(sequant::value_key_of(forest.front())) == &forest.front());
   CHECK(vkmap.at(sequant::value_key_of(forest.front())) == &forest.front());
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)

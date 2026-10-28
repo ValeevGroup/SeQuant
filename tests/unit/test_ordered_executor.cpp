@@ -295,7 +295,8 @@ TEST_CASE("scheduler-default-forest", "[ordered-executor]") {
 
 namespace {
 
-std::string orderedexec_witness_slurp(std::string const& path) {
+[[maybe_unused]] std::string orderedexec_witness_slurp(
+    std::string const& path) {
   std::ifstream in(path);
   std::stringstream ss;
   ss << in.rdbuf();
@@ -311,8 +312,8 @@ inline constexpr auto const& kOrderedExecWater20_pVDZF12 =
 inline constexpr auto const& kOrderedExecC60_pVDZF12 =
     sequant::tests::csv_sizes::kC60_pVDZF12;
 
-sequant::eval::dryrun::SizeRegime orderedexec_witness_df_regime(
-    OrderedExecWater20ProblemSize const& p) {
+[[maybe_unused]] sequant::eval::dryrun::SizeRegime
+orderedexec_witness_df_regime(OrderedExecWater20ProblemSize const& p) {
   return sequant::tests::csv_sizes::df_size_regime(p);
 }
 
@@ -333,7 +334,7 @@ sequant::eval::dryrun::SizeRegime orderedexec_witness_df_regime(
          std::pow(p.pno_occupancy, static_cast<double>(occupancy_power));
 }
 
-sequant::ExprPtr orderedexec_witness_flatten_product(
+[[maybe_unused]] sequant::ExprPtr orderedexec_witness_flatten_product(
     sequant::ExprPtr const& e) {
   if (!e->is<sequant::Product>()) return e;
   auto const& p = e->as<sequant::Product>();
@@ -396,7 +397,7 @@ orderedexec_per_leg_operands(sequant::eval::RichSchedule const& rich,
   };
 }
 
-std::optional<std::size_t> orderedexec_index_of_build_step(
+[[maybe_unused]] std::optional<std::size_t> orderedexec_index_of_build_step(
     sequant::eval::ScopeBlock const& block, std::size_t value_id) {
   for (std::size_t i = 0; i < block.steps.size(); ++i)
     if (auto const* b =
@@ -407,6 +408,7 @@ std::optional<std::size_t> orderedexec_index_of_build_step(
 
 }  // namespace
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("ordered-w20-aux-witness", "[ordered-executor-witness-water20]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
@@ -854,6 +856,7 @@ TEST_CASE("ordered-w20-aux-witness", "[ordered-executor-witness-water20]") {
   // above) and executed to completion.
   CHECK(sequant::eval::well_formed(ordered));
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // AUX+OCC dry-run WALK gate (default-on, NOT hidden): the MPQC water-20 CSV-CCk
@@ -878,7 +881,8 @@ namespace {
 // SEQUANT_UT_SCHED_TREE: the block tree of an ordered schedule (depth, axis,
 // kind, step count, escaped outputs), independent of whether the cell table
 // later validates.
-void ut_dump_sched_tree(sequant::eval::OrderedSchedule const& sched) {
+[[maybe_unused]] void ut_dump_sched_tree(
+    sequant::eval::OrderedSchedule const& sched) {
   std::function<void(sequant::eval::ScopeBlock const&, int)> dump =
       [&](sequant::eval::ScopeBlock const& b, int depth) {
         std::size_t builds = 0, children = 0;
@@ -915,9 +919,9 @@ void ut_dump_sched_tree(sequant::eval::OrderedSchedule const& sched) {
 // identities (carried positions' loop_slot, reduced_slot, modes contracted in
 // batches, loops opened), the operands and the consumer of every occurrence
 // of those values.
-void ut_dump_role_diag(sequant::eval::RichSchedule const& rich,
-                       sequant::eval::LegalitySchedule const& legality,
-                       char const* rd) {
+[[maybe_unused]] void ut_dump_role_diag(
+    sequant::eval::RichSchedule const& rich,
+    sequant::eval::LegalitySchedule const& legality, char const* rd) {
   std::set<std::size_t> want;
   std::istringstream toks{rd};
   for (std::string tok; std::getline(toks, tok, ',');)
@@ -2107,6 +2111,7 @@ TEST_CASE("ordered-mirrored-strict-walk", "[ordered][cell_table]") {
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 // ===========================================================================
 // Diagnostic-only dump:
 // characterize, on the mirrored w20 configuration, the values that the
@@ -2305,6 +2310,7 @@ TEST_CASE("mirrored-w20-mixed-pass-dump",
   }
   SUCCEED("characterization printed to stderr");
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // Cache-halt across CC iterations: a Κ-free PERSISTENT composite (I(i,i;a,a),
@@ -2597,6 +2603,7 @@ TEST_CASE("ordered-cache-halt", "[ordered][cache-halt]") {
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 // ===========================================================================
 // dryrun-2iter-report (a report, not a strict gate): a 2-ITERATION
 // dry-run cost report -- iter 1 (cold cache) vs iter 2 (warm cache: persistent
@@ -3206,7 +3213,9 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   CHECK(f2.builds <= f1.builds);
   if (ordered_ok) CHECK(o2.builds <= o1.builds);
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 // ===========================================================================
 // Dry == wet schedule
 // EQUIVALENCE for the ordered executor. This guards a real dry-run/wet-run
@@ -3417,7 +3426,9 @@ TEST_CASE("meter-replay-equals-direct", "[ordered-executor][meter]") {
   CHECK(meter_report.peak_bytes ==
         Catch::Approx(double(direct_mon.hwmark_bytes)).margin(1.0));
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 // ===========================================================================
 // ANALYSIS PROBE (uncommitted diagnostic): decompose the water-20 ORDERED
 // executor dense-model peak into tier A (root-homed Κ-free composites) vs
@@ -3991,6 +4002,7 @@ TEST_CASE("w20-peak-composition", "[w20-peak-composition]") {
   std::wcerr << L"====================================================\n";
   CHECK(mon.hwmark_bytes > 0);
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // A value MATERIALIZED across a forced loop split is built in its home block

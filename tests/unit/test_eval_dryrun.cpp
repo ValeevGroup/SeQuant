@@ -440,9 +440,12 @@ inline constexpr auto const& kWater20_pVDZF12 =
 
 // Regime for the post-transform (mu~ + K) residual from explicit extents and
 // moments (occupancy 1 unless given): see df_size_regime for the shape.
-SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux, std::size_t i_occ,
-                     MomentTable const& pno_M, MomentTable const& osv_M,
-                     double pno_occupancy = 1.0, double osv_occupancy = 1.0) {
+[[maybe_unused]] SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux,
+                                      std::size_t i_occ,
+                                      MomentTable const& pno_M,
+                                      MomentTable const& osv_M,
+                                      double pno_occupancy = 1.0,
+                                      double osv_occupancy = 1.0) {
   return sequant::tests::csv_sizes::df_size_regime(ProblemSize{
       mu_tilde, aux, i_occ, pno_M, osv_M, pno_occupancy, osv_occupancy});
 }
@@ -734,6 +737,7 @@ TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
              << ctx.nCells << L" (nB=" << ctx.nB << L")\n";
 }
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 // Whole-residual dev sweep (no correctness assertions): optimizes
 // every summand and prints, per term, whether its free-mu~ giant got a mu~/K
 // batch mode or escaped slicing.
@@ -1216,6 +1220,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[dryrun-df]") {
   REQUIRE(total_mu_nodes > 0);
   SUCCEED();
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // DryRun eval BACKEND (zero-data Result + eval_expr) and the
@@ -2742,6 +2747,7 @@ TEST_CASE("external-occ-sizing", "[dryrun-occ-sizing]") {
         Catch::Approx(giant_full_bytes * expected_ratio).epsilon(1e-9));
 }
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 // P4 GO/NO-GO AUDIT (Concern #3): across ALL C60 residual terms under the
 // perf-first (DenseTimeSpaceBatched) objective, does external-occ FOREST
 // batching (P3, the result-external occ carried as composite protos)
@@ -3097,6 +3103,7 @@ TEST_CASE("c60-perf-first-audit", "[dryrun-c60-batchability-audit]") {
 
   REQUIRE(verdicts.size() > 0);
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // The opt-in scratch-fold peak sink captures the batched-inner peak the
 // OUTER cache.working_set_hwmark() misses. Reuse the [dryrun-objective]
