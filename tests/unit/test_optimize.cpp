@@ -1483,6 +1483,25 @@ std::wstring render_tree(sequant::ExprPtr const& e) {
   }
   return L"?";
 }
+
+// True iff every `t` leaf is contracted directly with a `C` leaf, i.e. each
+// OSV/PNO transform C·t is formed before anything else touches it.
+bool every_t_meets_its_transform_first(sequant::ExprPtr const& e) {
+  using namespace sequant;
+  if (!e->is<Product>()) return true;
+  auto const& factors = e->as<Product>().factors();
+  for (auto const& f : factors) {
+    if (f->is<Tensor>() && f->as<Tensor>().label() == L"t") {
+      for (auto const& other : factors)
+        if (other != f &&
+            !(other->is<Tensor>() && other->as<Tensor>().label() == L"C"))
+          return false;
+    } else if (!every_t_meets_its_transform_first(f)) {
+      return false;
+    }
+  }
+  return true;
+}
 }  // namespace
 
 // Role-based batchability (domain-generic): the caller supplies two space sets
@@ -1690,6 +1709,8 @@ TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
         prod, idxsz, /*subnet_cse=*/false,
         CostParams{.volatile_weight = 1.0, .inner_pow = ip});
     std::wcout << name << L":  " << render_tree(res) << L"\n";
+    CAPTURE(sequant::toUtf8(name), sequant::toUtf8(render_tree(res)));
+    CHECK(every_t_meets_its_transform_first(res));
   };
   // Omitting inner_pow on a term with composite (CSV/PNO) indices used to
   // silently size the composite `a` at its full uocc extent (40), inverting
@@ -1850,12 +1871,14 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
         prod, idxsz, false,
         CostParams{.volatile_weight = 1.0, .inner_pow = ip});
     std::wcout << L"FLOPs:        " << render_tree(res) << L"\n";
+    CHECK(every_t_meets_its_transform_first(res));
   }
   {
     auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
         prod, idxsz, false,
         CostParams{.volatile_weight = 1.0, .inner_pow = ip});
     std::wcout << L"PeakSize:     " << render_tree(res) << L"\n";
+    CHECK(every_t_meets_its_transform_first(res));
   }
   {
     auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
@@ -1865,6 +1888,7 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
                    .batch_target_size = bts,
                    .inner_pow = ip});
     std::wcout << L"PeakBatched:  " << render_tree(res) << L"\n";
+    CHECK(every_t_meets_its_transform_first(res));
   }
   std::wcout << L"\n  >>> looking for (C{a_4<i_1>;μ̃_1216} * t{a_4<i_1>;i_1}) "
                 L"contracted EARLY <<<\n\n";
@@ -2123,149 +2147,6 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
              opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
                  prod, idxsz, false, po_cost));
   CHECK(pbat_po >= osv_outer_product);  // gate restored -> OSV deferred again
-}
-
-// C60 PNO-CCSD residual "member 2": the batched intermediate that OOMs (~185 GB
-// materialized) is the double-proto I(i_1,i_2,i_3,Κ; a_3<i_2,i_3>,
-// a_1<i_1,i_2>).
-//   flat product:  g{i_3;i_1;Κ} · C{a_1<i_1,i_2>;μ̃} · g{μ̃;μ̃;Κ} ·
-//   C{μ̃;a_3<i_2,i_3>}
-// Two 2-occ PNO composites sharing i_2, no t amplitude. This probe answers:
-//  (1) does STO form the double-proto intermediate, and under which objective;
-//  (2) how does the (block-sparse) cost model size it (max_imed);
-//  (3) do the rejected brackets avoid it, i.e. does a cheaper schedule exist?
-TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
-  using namespace sequant;
-  auto reg = std::make_shared<IndexBasisRegistry>(
-      *get_default_context().index_basis_registry());
-  mbpt::add_df_spaces(reg);
-  mbpt::add_ao_basis(reg, mbpt::Spin::any);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
-  // C60 cc-pVDZ-F12-ish extents: active occ 120, PNO domain 42, PAO 1800,
-  // DF aux 6000 (sliced to batch 30 by the batched objective).
-  for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 120}, {L"a", 42}, {L"μ", 1800}, {L"Κ", 6000}}) {
-    reg->extent(k, v);
-  }
-  auto aux_space = reg->retrieve_space(L"Κ");
-  auto ctx_resetter =
-      set_scoped_default_context(get_default_context_snapshot().set(reg));
-  auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
-  };
-  // constant PNO domain 42 => all power means equal, neutralizing the
-  // RMS-vs-mean magnitude question; here we test STRUCTURE (which tree, is the
-  // double-proto avoidable), not the heavy-tail correction.
-  auto ip = [](Index const&, std::size_t) -> double { return 42.0; };
-  auto is_batch = [aux_space](Index const& ix) {
-    return ix.space() == aux_space;
-  };
-  std::function<std::size_t(Index const&)> bts = [](Index const&) {
-    return std::size_t{30};
-  };
-
-  auto prod = deserialize(
-                  L"g{i_3;i_1;Κ_1} C{a_1<i_1,i_2>;μ̃_1} "
-                  L"g{μ̃_1;μ̃_2;Κ_1} C{μ̃_2;a_3<i_2,i_3>}")
-                  ->as<Product>();
-
-  auto fp = opt::detail::footprint_counter(
-      idxsz, std::function<double(Index const&, std::size_t)>(ip));
-
-  std::function<std::vector<Index>(ExprPtr const&, double&)> freeix =
-      [&](ExprPtr const& e, double& mx) -> std::vector<Index> {
-    if (e->is<Tensor>()) {
-      std::vector<Index> v;
-      for (auto const& ix : e->as<Tensor>().const_braketaux_indices())
-        v.push_back(ix);
-      return v;
-    }
-    std::map<std::wstring, std::pair<int, Index>> cnt;
-    for (auto const& fct : e->as<Product>().factors())
-      for (auto const& ix : freeix(fct, mx)) {
-        auto k = std::wstring(ix.full_label());
-        cnt[k].first++;
-        cnt[k].second = ix;
-      }
-    std::vector<Index> result;
-    for (auto const& [k, v] : cnt)
-      if (v.first == 1) result.push_back(v.second);
-    double here = fp(result);
-    if (here > mx) mx = here;
-    return result;
-  };
-  struct TP {
-    double peak, leafsum, S;
-  };
-  std::function<TP(ExprPtr const&)> tree_peak = [&](ExprPtr const& e) -> TP {
-    if (e->is<Tensor>()) {
-      std::vector<Index> v;
-      for (auto const& ix : e->as<Tensor>().const_braketaux_indices())
-        v.push_back(ix);
-      double s = fp(v);
-      return TP{s, s, s};
-    }
-    auto const& facs = e->as<Product>().factors();
-    TP L = tree_peak(facs[0]);
-    TP R = tree_peak(facs[1]);
-    double dummy = 0.0;
-    double Snode = fp(freeix(e, dummy));
-    double both = L.S + R.S + Snode;
-    double lfirst = std::max({R.leafsum + L.peak, L.S + R.peak, both});
-    double rfirst = std::max({L.leafsum + R.peak, R.S + L.peak, both});
-    return TP{std::min(lfirst, rfirst), L.leafsum + R.leafsum, Snode};
-  };
-  auto report = [&](std::wstring name, ExprPtr res) {
-    double mx = 0.0;
-    freeix(res, mx);
-    double tpk = tree_peak(res).peak;
-    std::wcout << name << L"  max_imed(elems)=" << (long long)mx
-               << L"  recurrence_PEAK(elems)=" << (long long)tpk << L"\n      "
-               << render_tree(res) << L"\n";
-  };
-
-  std::wcout
-      << L"\n=== C60 MEMBER-2 (i=120, a=42, μ̃=1800, Κ=6000, batch=30) ===\n";
-  report(L"FLOPs:       ",
-         opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-             prod, idxsz, false,
-             CostParams{.volatile_weight = 1.0, .inner_pow = ip}));
-  report(L"PeakSize:    ",
-         opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-             prod, idxsz, false,
-             CostParams{.volatile_weight = 1.0, .inner_pow = ip}));
-  report(L"PeakBatched: ",
-         opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-             prod, idxsz, false,
-             CostParams{.volatile_weight = 1.0,
-                        .is_batchable_contracted_index = is_batch,
-                        .batch_target_size = bts,
-                        .inner_pow = ip}));
-  // Experiment: make PAO (μ̃) batchable TOO (batch 100). Prediction: STO
-  // switches away from the double-proto to a g·g-first tree whose worst
-  // intermediate carries μ̃ and is now sliceable.
-  auto mu_basis = reg->retrieve(L"μ̃");
-  auto is_batch2 = [aux_space, mu_basis](Index const& ix) {
-    return ix.space() == aux_space || ix.basis() == mu_basis;
-  };
-  std::function<std::size_t(Index const&)> bts2 = [aux_space](Index const& ix) {
-    return ix.space() == aux_space ? std::size_t{30} : std::size_t{100};
-  };
-  report(L"PeakBatched(+μ̃):",
-         opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-             prod, idxsz, false,
-             CostParams{.volatile_weight = 1.0,
-                        .is_batchable_contracted_index = is_batch2,
-                        .batch_target_size = bts2,
-                        .inner_pow = ip}));
-  // Reference: the double-proto intermediate as the model sizes it, dense at
-  // d=42 (== the block-sparse upper bound), with Κ at one batch of 30:
-  //   i^3 * Κ_batch * a * a  elements.
-  std::wcout << L"double-proto imed (i^3*Κbatch*a^2) elems = "
-             << (long long)(120.0 * 120 * 120 * 30 * 42 * 42) << L"  (="
-             << (long long)(120.0 * 120 * 120 * 30 * 42 * 42 * 8)
-             << L" B dense)\n\n";
 }
 
 TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
@@ -4106,61 +3987,6 @@ TEST_CASE("loop-tree-axis-order", "[loop-tree]") {
   REQUIRE(found_co_carrying);
 }
 
-// PROBE (not a gate): the resident-scan peak. When {s,t} is free-hoisted above
-// the F_1 loop (the ordered cells' free hoist), it is RESIDENT across that
-// loop, so its
-// footprint should appear in the peak of everything evaluated inside -- the
-// top-node peak under B={F_1}. A3a adds no peak term, so today the hoist looks
-// free on peak. Measure the cells before writing the resident-scan RED gate.
-TEST_CASE("loop-tree probe: resident-scan peak of a hoisted node",
-          "[loop-tree-peak]") {
-  using namespace sequant;
-  auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
-
-  auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.basis().extent();
-  };
-  auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
-  };
-  auto batch_fn = [](Index const&) -> std::size_t { return 1; };
-
-  std::vector<ExprPtr> ts;
-  for (auto str : {L"g{a4;F1}", L"h{F1;a1}", L"s{a1;a2}", L"t{a2;a3}"})
-    ts.push_back(deserialize(str, {.def_perm_symm = Symmetry::Nonsymm}));
-  TensorNetwork net{ts};
-  container::svector<Index> targets;
-
-  std::size_t const top = 0b1111, st_set = 0b1100;
-
-  auto min_peak = [](auto const& frontier) {
-    double m = std::numeric_limits<double>::max();
-    for (auto const& fp : frontier) m = std::min(m, fp.peak);
-    return m;
-  };
-
-  {
-    opt::detail::PeakBatchedModel model{idxsz, batch_fn, {}};
-    model.is_batchable_contracted_index = is_batchable;
-    model.charge_batch_recompute = true;
-    auto ctx = model.build_context(net, targets);
-    auto st = opt::detail::solve_single_term(model, net, targets, ctx);
-    // DP cells are ORDERED sequences, not sliced-set bitmasks: resolve the
-    // "F_1 alone is open" cell by descending from the empty sequence rather
-    // than indexing by the bit.
-    REQUIRE(ctx.m == 1u);
-    std::size_t const f1_cell = ctx.descend(0, std::size_t{1});
-    REQUIRE(f1_cell != std::numeric_limits<std::size_t>::max());
-    std::wcerr << L"[loop-tree-peak] sz{s,t}=" << ctx.sz(st_set, 0)
-               << L"  top.peak[cell=()]=" << min_peak(st[top][0])
-               << L"  top.peak[cell=(F_1)]=" << min_peak(st[top][f1_cell])
-               << L"\n";
-  }
-}
-
 // The Carr != 0 order-dependent case. A node that carries one batched
 // contracted mode (F_2) and not another (F_1) must be charged by the ORDER: if
 // F_1's loop is OUTER to F_2's the node is legitimately recomputed per F_1
@@ -4228,58 +4054,6 @@ TEST_CASE("loop-tree probe: order-dependent Carr != 0 cells",
       hi = std::max(hi, min_flops(n_st, cell));
     }
   CHECK(lo < hi);
-}
-
-// PROBE (not a gate): resident-scan peak on the nested Carr != 0 network. Reads
-// the top-node peak per B to see whether an enclosing accumulator (the F_1
-// contraction's result, resident during the F_2 loop and vice versa) is
-// counted.
-TEST_CASE("loop-tree probe: resident-scan peak, nested",
-          "[loop-tree-peak-nested]") {
-  using namespace sequant;
-  auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000},
-                        {.dimension = 1000}));  // large: dominates peak
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
-
-  auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
-  auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
-  };
-
-  std::vector<ExprPtr> ts;
-  for (auto str : {L"g{a4;F1}", L"h{F1;F2}", L"s{F2;a2}", L"t{a2;a3}"})
-    ts.push_back(deserialize(str, {.def_perm_symm = Symmetry::Nonsymm}));
-  TensorNetwork net{ts};
-  container::svector<Index> targets;
-
-  auto min_peak = [](auto const& frontier) {
-    double m = std::numeric_limits<double>::max();
-    for (auto const& fp : frontier) m = std::min(m, fp.peak);
-    return m;
-  };
-
-  // batch F to tiles of 1 so nbatches == extent; large F so slicing it
-  // dominates
-  auto batch1 = [](Index const&) -> std::size_t { return 1; };
-  {
-    opt::detail::PeakBatchedModel model{idxsz, batch1, {}};
-    model.is_batchable_contracted_index = is_batchable;
-    model.charge_batch_recompute = true;
-    auto ctx = model.build_context(net, targets);
-    auto st = opt::detail::solve_single_term(model, net, targets, ctx);
-    std::size_t const top = (std::size_t{1} << ctx.nt) - 1;
-    std::wcerr << L"[peak-nested] m=" << ctx.m << L"  sz{s,t}[cell=()]="
-               << ctx.sz(0b1100, 0) << L"  sz{g,h}[cell=()]="
-               << ctx.sz(0b0011, 0);
-    // Cells are ordered sequences; print the cell id with its union so the
-    // label stays meaningful (a bare bitmask index would not be a cell).
-    for (std::size_t cell = 0; cell < ctx.nCells; ++cell)
-      std::wcerr << L"  top.peak[cell=" << cell << L" union="
-                 << ctx.cell_union(cell) << L"]=" << min_peak(st[top][cell]);
-    std::wcerr << L"\n";
-  }
 }
 
 // The two batchability building-block predicates + their
