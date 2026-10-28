@@ -15,10 +15,10 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/irreps/any.hpp>
+#include <SeQuant/core/irreps/config.hpp>
 #include <SeQuant/core/irreps/propagation.hpp>
-#include <SeQuant/core/irreps/table_algebra.hpp>
-#include <SeQuant/core/irreps/z2_algebra.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/topological.hpp>
@@ -40,6 +40,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 namespace sequant::util::extint {
@@ -54,7 +55,7 @@ class MetaAwareIftContext : public ItfContext {
     SEQUANT_ASSERT(meta_);
     auto it = meta_->index_spaces.find(space);
     if (it == meta_->index_spaces.end()) {
-      return ItfContext::get_name(space);
+      return ItfContext::get_tag(space);
     }
 
     return it->second.tag;
@@ -64,7 +65,7 @@ class MetaAwareIftContext : public ItfContext {
     SEQUANT_ASSERT(meta_);
     auto it = meta_->index_spaces.find(space);
     if (it == meta_->index_spaces.end()) {
-      return ItfContext::get_tag(space);
+      return ItfContext::get_name(space);
     }
 
     return it->second.name;
@@ -96,162 +97,40 @@ using json = nlohmann::json;
 
 /// Parses a set of IRREPs given either as a single IRREP name or as an array
 /// of IRREP names. The name "*" refers to any IRREP.
-template <typename Irrep, typename Parser>
-IrrepSet<Irrep> parse_irrep_set(const json &value, const Parser &parse,
-                                std::string_view what) {
-  auto add = [&](const json &entry, IrrepSet<Irrep> &set) {
+IrrepContextSpec::IrrepNames parse_irrep_names(const json &value,
+                                               std::string_view what) {
+  auto add = [&](const json &entry, IrrepContextSpec::IrrepNames &names) {
     if (!entry.is_string()) {
       throw Exception("Expected IRREPs of " + std::string(what) +
                       " to be given as string(s)");
     }
 
-    const std::string name = entry.get<std::string>();
-    if (name == "*") {
-      set = IrrepSet<Irrep>::any();
-    } else {
-      set.insert(parse(name));
-    }
+    names.push_back(entry.get<std::string>());
   };
 
-  IrrepSet<Irrep> set;
+  IrrepContextSpec::IrrepNames names;
   if (value.is_array() && !value.empty()) {
     for (const json &entry : value) {
-      add(entry, set);
+      add(entry, names);
     }
   } else if (value.is_string()) {
-    add(value, set);
+    add(value, names);
   } else {
     throw Exception("Expected IRREPs of " + std::string(what) +
                     " to be given as a string or a non-empty array of strings");
   }
 
-  return set;
+  return names;
 }
 
-/// Creates an IRREP context for the given algebra with the leaf tensor IRREPs
-/// as specified in the 'tensors' and 'default' entries of the given
-/// configuration
-template <IrrepAlgebra A, typename Parser>
-AnyIrrepContext make_irrep_context(A algebra, const json &config,
-                                   const Parser &parse) {
-  using Set = IrrepSet<typename A::irrep_type>;
-
-  // Tensors are matched consistently with the other steps: keys containing
-  // a '{' are serialized tensors matched by block (cmp. imports), all other
-  // keys are full-match regular expressions for the tensor label (cmp. label
-  // rules of the filter step)
-  struct TensorRule {
-    std::string key;
-    std::shared_ptr<const ExpressionFilter::Rule> rule;
-    Set irreps;
-  };
-  std::vector<TensorRule> blocks;
-  std::vector<TensorRule> labels;
-  container::map<std::wstring, Set> literal_labels;
-  if (config.contains("tensors")) {
-    const json &tensors = config.at("tensors");
-    if (!tensors.is_object()) {
-      throw Exception("Expected 'tensors' to be an object");
-    }
-
-    for (const auto &[key, value] : tensors.items()) {
-      Set set = parse_irrep_set<typename A::irrep_type>(value, parse,
-                                                        "tensor '" + key + "'");
-
-      if (key.find('{') == std::string::npos) {
-        literal_labels.emplace(toUtf16(key), set);
-        labels.push_back(
-            TensorRule{.key = key,
-                       .rule = parse_contains_label(json{{"label", key}}),
-                       .irreps = std::move(set)});
-        continue;
-      }
-
-      ExprPtr tensor = io::serialization::from_string<ExprPtr>(key);
-      if (!tensor->is<Tensor>()) {
-        throw Exception("Expected '" + key + "' to be a tensor");
-      }
-      blocks.push_back(TensorRule{
-          .key = key,
-          .rule =
-              parse_contains_expr(json{{"expr", key}}, TensorComparison::Block),
-          .irreps = std::move(set)});
-    }
-  }
-
-  // An empty optional means that unspecified tensors are an error
-  std::optional<Set> fallback = Set::any();
-  if (config.contains("default")) {
-    const json &value = config.at("default");
-    if (value.is_string() && value.get<std::string>() == "error") {
-      fallback.reset();
-    } else {
-      fallback =
-          parse_irrep_set<typename A::irrep_type>(value, parse, "the default");
-    }
-  }
-
-  auto resolver = [blocks = std::move(blocks), labels = std::move(labels),
-                   literal_labels = std::move(literal_labels),
-                   fallback = std::move(fallback)](const Tensor &tensor) {
-    // @returns The rule matching the tensor (if any)
-    // @throws Exception if several rules with different IRREPs match
-    auto unique_match =
-        [&tensor](const std::vector<TensorRule> &rules) -> const TensorRule * {
-      const TensorRule *match = nullptr;
-      for (const TensorRule &current : rules) {
-        if (!current.rule->matches(tensor)) {
-          continue;
-        }
-
-        if (match && match->irreps != current.irreps) {
-          throw Exception("Ambiguous IRREPs for tensor " +
-                          toUtf8(tensor.to_latex()) + ": matched by '" +
-                          match->key + "' and '" + current.key + "'");
-        }
-        match = match ? match : &current;
-      }
-
-      return match;
-    };
-
-    if (const TensorRule *match = unique_match(blocks)) {
-      return match->irreps;
-    }
-
-    // A key spelling out the label literally takes precedence over patterns
-    if (auto it = literal_labels.find(std::wstring(tensor.label()));
-        it != literal_labels.end()) {
-      return it->second;
-    }
-
-    if (const TensorRule *match = unique_match(labels)) {
-      return match->irreps;
-    }
-
-    if (!fallback.has_value()) {
-      throw Exception("No IRREPs specified for tensor " +
-                      toUtf8(tensor.to_latex()));
-    }
-
-    return fallback.value();
-  };
-
-  return IrrepContext<A>(std::move(algebra), std::move(resolver));
-}
-
-/// @returns The list of strings in the given (optional) array entry
-std::vector<std::string> string_list(const json &config, const char *key) {
-  std::vector<std::string> list;
-  if (!config.contains(key)) {
-    return list;
-  }
-
-  const json &value = config.at(key);
+/// @returns The list of strings in the given array
+std::vector<std::string> string_list(const json &value, const char *key) {
   if (!value.is_array()) {
     throw Exception("Expected '" + std::string(key) +
                     "' to be an array of strings");
   }
+
+  std::vector<std::string> list;
   for (const json &entry : value) {
     if (!entry.is_string()) {
       throw Exception("Expected '" + std::string(key) +
@@ -263,67 +142,8 @@ std::vector<std::string> string_list(const json &config, const char *key) {
   return list;
 }
 
-/// Creates an IRREP context for a Z2 group (D2h or one of its subgroups, or
-/// a group consisting of symbols only)
-/// @param symbols_must_be_declared Whether all symbolic IRREPs must be listed
-///        in the configuration's 'symbols' entry
-template <Z2Group Group>
-AnyIrrepContext make_z2_context(const json &config,
-                                bool symbols_must_be_declared) {
-  std::optional<std::set<std::string, std::less<>>> declared;
-  if (symbols_must_be_declared || config.contains("symbols")) {
-    std::vector<std::string> symbols = string_list(config, "symbols");
-    declared.emplace(symbols.begin(), symbols.end());
-  }
-
-  auto parse = [declared](std::string_view name) {
-    Z2Irrep<Group> irrep = make_irrep<Group>(name);
-    if (declared.has_value()) {
-      for (const std::string &symbol : irrep.symbols()) {
-        if (!declared->contains(symbol)) {
-          throw Exception("Unknown IRREP '" + symbol +
-                          "': neither an IRREP of the point group nor a "
-                          "declared symbol");
-        }
-      }
-    }
-
-    return irrep;
-  };
-
-  std::vector<std::pair<Z2Irrep<Group>, Z2Irrep<Group>>> relations;
-  for (const std::string &relation : string_list(config, "relations")) {
-    const auto pos = relation.find('=');
-    if (pos == std::string::npos ||
-        relation.find('=', pos + 1) != std::string::npos) {
-      throw Exception(
-          "Expected IRREP relation of the form 'lhs = rhs' but got '" +
-          relation + "'");
-    }
-
-    std::string lhs = relation.substr(0, pos);
-    std::string rhs = relation.substr(pos + 1);
-    boost::trim(lhs);
-    boost::trim(rhs);
-    if (lhs.empty() || rhs.empty()) {
-      throw Exception("Incomplete IRREP relation '" + relation + "'");
-    }
-
-    relations.emplace_back(parse(lhs), parse(rhs));
-  }
-
-  return make_irrep_context(Z2Algebra<Group>(relations), config, parse);
-}
-
-/// Creates an IRREP context for a group given by an explicit multiplication
-/// table
-AnyIrrepContext make_table_context(const json &group, const json &config) {
-  if (config.contains("relations") || config.contains("symbols")) {
-    throw Exception(
-        "'relations' and 'symbols' are only supported for the shipped point "
-        "groups and 'symbolic'");
-  }
-
+/// Parses a multiplication table
+IrrepContextSpec::Table parse_table(const json &group) {
   for (const auto &[key, value] : group.items()) {
     if (key != "totally_symmetric" && key != "products" &&
         key != "conjugates") {
@@ -336,15 +156,10 @@ AnyIrrepContext make_table_context(const json &group, const json &config) {
     throw Exception(
         "Multiplication table requires 'totally_symmetric' to be a string");
   }
-  const std::string totally_symmetric =
-      group.at("totally_symmetric").get<std::string>();
 
-  std::set<std::string, std::less<>> known{totally_symmetric};
-  auto add_known = [&known](std::string_view name) {
-    return std::string(*known.emplace(name).first);
-  };
+  IrrepContextSpec::Table table;
+  table.totally_symmetric = group.at("totally_symmetric").get<std::string>();
 
-  TableAlgebra::table_type table;
   if (group.contains("products")) {
     const json &products = group.at("products");
     if (!products.is_object()) {
@@ -352,22 +167,11 @@ AnyIrrepContext make_table_context(const json &group, const json &config) {
     }
 
     for (const auto &[key, value] : products.items()) {
-      const auto pos = key.find('*');
-      if (pos == std::string::npos ||
-          key.find('*', pos + 1) != std::string::npos) {
-        throw Exception("Expected product of the form 'X*Y' but got '" + key +
-                        "'");
-      }
-
-      std::string lhs = add_known(key.substr(0, pos));
-      std::string rhs = add_known(key.substr(pos + 1));
-      table.emplace(std::make_pair(std::move(lhs), std::move(rhs)),
-                    parse_irrep_set<std::string>(value, add_known,
-                                                 "product '" + key + "'"));
+      table.products.emplace_back(
+          key, parse_irrep_names(value, "product '" + key + "'"));
     }
   }
 
-  TableAlgebra::conjugation_map conjugates;
   if (group.contains("conjugates")) {
     const json &value = group.at("conjugates");
     if (!value.is_object()) {
@@ -378,21 +182,23 @@ AnyIrrepContext make_table_context(const json &group, const json &config) {
       if (!conjugate.is_string()) {
         throw Exception("Expected conjugate of '" + irrep + "' to be a string");
       }
-      conjugates.emplace(add_known(irrep),
-                         add_known(conjugate.get<std::string>()));
+      table.conjugates.emplace_back(irrep, conjugate.get<std::string>());
     }
   }
 
-  auto parse = [known = std::move(known)](std::string_view name) {
-    if (!known.contains(name)) {
-      throw Exception("Unknown IRREP '" + std::string(name) + "'");
-    }
-    return std::string(name);
-  };
+  return table;
+}
 
-  return make_irrep_context(
-      TableAlgebra(totally_symmetric, std::move(table), std::move(conjugates)),
-      config, parse);
+/// Invokes @p fn with a copy of the tensor or variable that the given tree
+/// computes
+template <typename Fn>
+void visit_result(const ExportNode<> &tree, Fn &&fn) {
+  if (tree->is_tensor()) {
+    fn(Tensor(tree->as_tensor()));
+  } else {
+    SEQUANT_ASSERT(tree->is_variable());
+    fn(Variable(tree->as_variable()));
+  }
 }
 
 }  // namespace
@@ -615,22 +421,16 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
             continue;
           }
 
-          if (tree->is_tensor()) {
-            Tensor result = tree->as_tensor();
+          visit_result(tree, [&](auto result) {
             genctx.rewrite(result);
             genctx.setZeroStrategy(result, ZeroStrategy::ZeroOnCreate);
-          } else {
-            Variable result = tree->as_variable();
-            genctx.rewrite(result);
-            genctx.setZeroStrategy(result, ZeroStrategy::ZeroOnCreate);
-          }
+          });
         }
       }
     }
 
     for (const ExpressionGroup<> &current_group : groups) {
-      std::set<Tensor> created_tensors;
-      std::set<Variable> created_variables;
+      std::tuple<std::set<Tensor>, std::set<Variable>> created_results;
 
       for (const ExportNode<> &current_node : current_group) {
         std::string import_name;
@@ -647,42 +447,23 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
         const bool force_create = always_create_ids.find(current_node->id()) !=
                                   always_create_ids.end();
 
-        if (current_node->is_tensor()) {
-          Tensor result = current_node->as_tensor();
+        visit_result(current_node, [&](auto result) {
           genctx.rewrite(result);
 
           if (!import_name.empty()) {
             genctx.set_import_name(result, import_name);
           }
 
-          if (force_create ||
-              created_tensors.find(result) == created_tensors.end()) {
+          auto &created = std::get<std::set<decltype(result)>>(created_results);
+          if (force_create || created.find(result) == created.end()) {
             genctx.setLoadStrategy(result, LoadStrategy::Create,
                                    current_node->id());
-            if (!force_create) created_tensors.emplace(std::move(result));
+            if (!force_create) created.emplace(std::move(result));
           } else {
             genctx.setLoadStrategy(result, LoadStrategy::Load,
                                    current_node->id());
           }
-        } else {
-          SEQUANT_ASSERT(current_node->is_variable());
-          Variable result = current_node->as_variable();
-          genctx.rewrite(result);
-
-          if (!import_name.empty()) {
-            genctx.set_import_name(result, import_name);
-          }
-
-          if (force_create ||
-              created_variables.find(result) == created_variables.end()) {
-            genctx.setLoadStrategy(result, LoadStrategy::Create,
-                                   current_node->id());
-            if (!force_create) created_variables.emplace(std::move(result));
-          } else {
-            genctx.setLoadStrategy(result, LoadStrategy::Load,
-                                   current_node->id());
-          }
-        }
+        });
       }
     }
 
@@ -798,7 +579,8 @@ ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
             throw Exception("Expected the name of IRREP '" + irrep +
                             "' to be a string");
           }
-          data.irrep_names.emplace(irrep, name.get<std::string>());
+          data.irrep_names.emplace(normalize_irrep_spec(irrep),
+                                   name.get<std::string>());
         }
       } else {
         throw Exception("Unknown meta data type '" + key + "' for language '" +
@@ -834,38 +616,48 @@ AnyIrrepContext ExportStep::parse_irreps(const nlohmann::json &irreps) {
       throw Exception("The 'group' entry is mandatory");
     }
 
+    IrrepContextSpec spec;
+
     const json &group = irreps.at("group");
     if (group.is_object()) {
-      return make_table_context(group, irreps);
-    }
-    if (!group.is_string()) {
+      spec.table = parse_table(group);
+    } else if (group.is_string()) {
+      spec.group = group.get<std::string>();
+    } else {
       throw Exception(
           "Expected 'group' to be the name of a point group or a "
           "multiplication table");
     }
 
-    const std::string name = group.get<std::string>();
-    if (name == "symbolic") {
-      return make_z2_context<NoConcreteGroup>(irreps, false);
-    } else if (name == "C1") {
-      return make_z2_context<point_groups::C1>(irreps, true);
-    } else if (name == "Ci") {
-      return make_z2_context<point_groups::Ci>(irreps, true);
-    } else if (name == "C2") {
-      return make_z2_context<point_groups::C2>(irreps, true);
-    } else if (name == "Cs") {
-      return make_z2_context<point_groups::Cs>(irreps, true);
-    } else if (name == "C2v") {
-      return make_z2_context<point_groups::C2v>(irreps, true);
-    } else if (name == "C2h") {
-      return make_z2_context<point_groups::C2h>(irreps, true);
-    } else if (name == "D2") {
-      return make_z2_context<point_groups::D2>(irreps, true);
-    } else if (name == "D2h") {
-      return make_z2_context<point_groups::D2h>(irreps, true);
+    if (irreps.contains("symbols")) {
+      spec.symbols = string_list(irreps.at("symbols"), "symbols");
+    }
+    if (irreps.contains("relations")) {
+      spec.relations = string_list(irreps.at("relations"), "relations");
     }
 
-    throw Exception("Unknown point group '" + name + "'");
+    if (irreps.contains("tensors")) {
+      const json &tensors = irreps.at("tensors");
+      if (!tensors.is_object()) {
+        throw Exception("Expected 'tensors' to be an object");
+      }
+
+      for (const auto &[key, value] : tensors.items()) {
+        spec.tensors.emplace_back(
+            key, parse_irrep_names(value, "tensor '" + key + "'"));
+      }
+    }
+
+    if (irreps.contains("default")) {
+      const json &value = irreps.at("default");
+      if (value.is_string() && value.get<std::string>() == "error") {
+        spec.error_on_unspecified = true;
+      } else {
+        spec.default_irreps = parse_irrep_names(value, "the default");
+      }
+    }
+
+    return make_irrep_context(spec);
   } catch (const Exception &e) {
     throw Exception("Invalid 'irreps' option for export: " +
                     std::string(e.what()));
@@ -888,6 +680,14 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
                      return convert_data<ExportTreeData>(dat.data.get());
                    });
 
+  std::map<std::size_t, const CtxData *> producers;
+  for (const CtxData &current : data) {
+    for (const auto &entry :
+         convert_data<ExportTreeData>(current.data.get()).entries) {
+      producers.emplace(entry.tree->id(), &current);
+    }
+  }
+
   // Pre-compute CtxData inter-dependencies
   std::map<const CtxData *, container::svector<const CtxData *>> dependencies;
   for (const CtxData &base : data) {
@@ -902,19 +702,10 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
         std::views::join;
 
     for (std::size_t id : all_dep_ids) {
-      auto it = std::ranges::find_if(
-          tree_data, [id](const ExportTreeData &tree_data) {
-            for (const auto &entry : tree_data.entries) {
-              if (entry.tree->id() == id) {
-                return true;
-              }
-            }
-            return false;
-          });
+      auto it = producers.find(id);
+      SEQUANT_ASSERT(it != producers.end());
 
-      SEQUANT_ASSERT(it != end(tree_data));
-
-      const CtxData *producer = &(*it.base());
+      const CtxData *producer = it->second;
 
       // A dependency resolving to an entry in the same group (e.g. after a
       // merge_inputs cse pulled dependent results into a single group) is
@@ -989,16 +780,10 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
         // unrewritten result would store it under a key the lookup never hits.
         // rewrite() is the generic per-generator hook, so this holds for every
         // backend.
-        if (current.tree->is_tensor()) {
-          Tensor result = current.tree->as_tensor();
+        visit_result(current.tree, [&](auto result) {
           genctx.rewrite(result);
           genctx.setZeroStrategy(result, strategy);
-        } else {
-          SEQUANT_ASSERT(current.tree->is_variable());
-          Variable result = current.tree->as_variable();
-          genctx.rewrite(result);
-          genctx.setZeroStrategy(result, strategy);
-        }
+        });
 
         // An entry flagged to overwrite its previous result (e.g. a CSE
         // intermediate) must be allocated freshly rather than accumulated onto.
@@ -1044,7 +829,7 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
       SEQUANT_ASSERT(it != group.rend());
 
       ResultExpr symmetrization(
-          symm_res, generateResultSymmetrization(symm_res, unsymm_res.label()));
+          symm_res, result_symmetrization(symm_res, unsymm_res.label()));
 
       const auto batch_indices = genctx.batch_indices((*it)->id());
 

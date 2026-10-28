@@ -413,6 +413,8 @@ set(SeQuant_symb_src
         SeQuant/core/irreps/algebra.hpp
         SeQuant/core/irreps/any.cpp
         SeQuant/core/irreps/any.hpp
+        SeQuant/core/irreps/config.cpp
+        SeQuant/core/irreps/config.hpp
         SeQuant/core/irreps/propagation.hpp
         SeQuant/core/irreps/table_algebra.cpp
         SeQuant/core/irreps/table_algebra.hpp
@@ -448,6 +450,8 @@ set(SeQuant_symb_src
         SeQuant/core/utility/exception.hpp
         SeQuant/core/utility/expr.cpp
         SeQuant/core/utility/expr.hpp
+        SeQuant/core/utility/expr_filter.cpp
+        SeQuant/core/utility/expr_filter.hpp
         SeQuant/core/utility/expr_matcher.cpp
         SeQuant/core/utility/expr_matcher.hpp
         SeQuant/core/utility/indices.hpp

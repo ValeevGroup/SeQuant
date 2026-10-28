@@ -17,7 +17,11 @@
 #include <functional>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <string>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace sequant::opt {
 
@@ -327,6 +331,203 @@ std::vector<std::size_t> eliminate_common_subexpressions(
     const CSEOptions<std::ranges::range_value_t<VectorLike>> opts = {}) {
   return eliminate_common_subexpressions(expr_trees, 0, expr_trees.size(),
                                          expr_to_tree, opts);
+}
+
+/// Result of eliminate_common_subexpressions_batched
+struct BatchedCSEResult {
+  /// Positions of the inserted intermediate definitions
+  std::vector<std::size_t> cse_positions;
+  /// Ranges [begin, end) of the expression trees (including the inserted
+  /// definitions) that were processed together
+  std::vector<std::pair<std::size_t, std::size_t>> partitions;
+  /// The batch indices that were used for each partition
+  std::vector<std::vector<Index>> batch_indices;
+};
+
+/// Like eliminate_common_subexpressions, but takes into account that
+/// expressions can be computed in batches over different sets of indices.
+/// Consecutive expressions that share the same batch indices are processed
+/// together, such that subexpressions are only shared among expressions that
+/// are batched identically.
+///
+/// @param expr_trees Container (vector-like) of evaluation trees
+/// @param expr_batch_indices The batch indices of each of the given trees. An
+/// empty optional means that the tree has no well-defined set of batch indices,
+/// which causes it to be processed on its own, without batching. Must have as
+/// many elements as there are trees on input.
+/// @param expr_to_tree See eliminate_common_subexpressions
+/// @param opts See eliminate_common_subexpressions. The batch indices are taken
+/// from @p expr_batch_indices instead of from the options.
+template <std::ranges::range VectorLike,
+          std::regular_invocable<ExprPtr> Transformer,
+          bool force_hash_collisions = false>
+  requires std::regular_invocable<Transformer, ResultExpr> &&
+           meta::eval_node<std::ranges::range_value_t<VectorLike>>
+BatchedCSEResult eliminate_common_subexpressions_batched(
+    VectorLike &expr_trees,
+    std::span<const std::optional<std::vector<Index>>> expr_batch_indices,
+    const Transformer &expr_to_tree,
+    CSEOptions<std::ranges::range_value_t<VectorLike>> opts = {}) {
+  SEQUANT_ASSERT(expr_batch_indices.size() == expr_trees.size());
+
+  BatchedCSEResult result;
+
+  std::pair<std::size_t, std::size_t> partition = {0, 0};
+  while (partition.second < expr_trees.size()) {
+    partition.first = partition.second;
+
+    // Positions of inserted definitions have to be skipped to get to the
+    // index of the original expression
+    SEQUANT_ASSERT(partition.first >= result.cse_positions.size());
+    const auto &batch_indices =
+        expr_batch_indices[partition.first - result.cse_positions.size()];
+
+    if (batch_indices.has_value()) {
+      for (; partition.second < expr_trees.size(); ++partition.second) {
+        SEQUANT_ASSERT(partition.second >= result.cse_positions.size());
+        if (expr_batch_indices[partition.second -
+                               result.cse_positions.size()] != batch_indices) {
+          break;
+        }
+      }
+    }
+
+    if (partition.first == partition.second) {
+      ++partition.second;
+      opts.batch_indices.clear();
+    } else {
+      opts.batch_indices = *batch_indices;
+    }
+
+    std::vector<std::size_t> new_cses = eliminate_common_subexpressions(
+        expr_trees, partition.first, partition.second, expr_to_tree, opts);
+
+    result.cse_positions.insert(result.cse_positions.end(), new_cses.begin(),
+                                new_cses.end());
+
+    partition.second += new_cses.size();
+
+    result.batch_indices.push_back(std::move(opts.batch_indices));
+    result.partitions.push_back(partition);
+  }
+
+  return result;
+}
+
+/// Orders trees by their batch indices, which are treated as having a
+/// "priority": we start at the highest priority (first) batch index and compare
+/// on the first batch index that only one of the trees has. Trees with the
+/// lower priority batch indices (or even none) precede the ones with the higher
+/// priority (or more) batch indices. Trees that are not tensors are treated as
+/// having no batch indices.
+///
+/// @returns Whether @p lhs strictly precedes @p rhs
+template <typename TreeNode>
+bool batch_priority_less(const TreeNode &lhs, const TreeNode &rhs,
+                         std::span<const Index> batch_indices) {
+  auto contains = [](const TreeNode &tree, const Index &idx) {
+    if (!tree->is_tensor()) {
+      return false;
+    }
+    auto indices = tree->as_tensor().const_indices();
+    return std::ranges::find(indices, idx) != indices.end();
+  };
+
+  for (const Index &idx : batch_indices) {
+    const bool lhs_contains = contains(lhs, idx);
+    const bool rhs_contains = contains(rhs, idx);
+
+    if (lhs_contains != rhs_contains) {
+      return rhs_contains;
+    }
+  }
+
+  return false;
+}
+
+namespace cse {
+
+/// Adds the number of tensor leaves of @p node to @p num_tensors and returns
+/// whether none of its leaves satisfies @p is_volatile_leaf. Note that the
+/// traversal stops at the first volatile leaf.
+template <typename TreeNode>
+bool count_tensors_if_persistent(
+    const TreeNode &node,
+    const std::function<bool(const TreeNode &)> &is_volatile_leaf,
+    std::size_t &num_tensors) {
+  if (node.leaf()) {
+    num_tensors += node->is_tensor();
+    return !is_volatile_leaf(node);
+  }
+
+  return count_tensors_if_persistent(node.left(), is_volatile_leaf,
+                                     num_tensors) &&
+         count_tensors_if_persistent(node.right(), is_volatile_leaf,
+                                     num_tensors);
+}
+
+}  // namespace cse
+
+/// Replaces all maximal subtrees that are "persistent" by intermediates, no
+/// matter how often they are used. A subtree is persistent if none of its
+/// leaves is volatile and if it contains at least @p min_tensors tensors.
+/// Definitions of the intermediates are inserted into the given container
+/// right before their first use.
+///
+/// @param expr_trees Container (vector-like) of evaluation trees
+/// @param is_volatile_leaf Predicate that identifies leaves that are not
+/// persistent
+/// @param expr_to_tree See eliminate_common_subexpressions
+/// @param label_gen Generates the label of an intermediate from its tree and
+/// a counter
+/// @param min_tensors The minimum number of tensors a persistent subtree must
+/// contain in order to be extracted (see also min_usage_filter)
+/// @returns The positions of the inserted intermediate definitions
+template <std::ranges::range VectorLike,
+          std::regular_invocable<ExprPtr> Transformer>
+  requires std::regular_invocable<Transformer, ResultExpr> &&
+           meta::eval_node<std::ranges::range_value_t<VectorLike>>
+std::vector<std::size_t> extract_persistent_subexpressions(
+    VectorLike &expr_trees,
+    const std::function<bool(const std::ranges::range_value_t<VectorLike> &)>
+        &is_volatile_leaf,
+    const Transformer &expr_to_tree,
+    const std::function<std::string(
+        const std::ranges::range_value_t<VectorLike> &, std::size_t)>
+        &label_gen,
+    std::size_t min_tensors = 2) {
+  using TreeNode = std::ranges::range_value_t<VectorLike>;
+
+  auto is_persistent = [&](const TreeNode &node) {
+    std::size_t num_tensors = 0;
+    return cse::count_tensors_if_persistent(node, is_volatile_leaf,
+                                            num_tensors) &&
+           num_tensors >= min_tensors;
+  };
+
+  // Maximal persistent subtrees (their subtrees are not visited)
+  SubexpressionUsageCounts<TreeNode> persistent;
+  for (const TreeNode &tree : expr_trees) {
+    tree.visit_internal([&](const TreeNode &node) {
+      if (!is_persistent(node)) {
+        return true;
+      }
+
+      ++persistent[node];
+      return false;
+    });
+  }
+
+  if (persistent.empty()) {
+    return {};
+  }
+
+  cse::SubexpressionReplacer<VectorLike, TreeNode, Transformer,
+                             std::remove_cvref_t<decltype(label_gen)>>
+      replacer(expr_trees, persistent, expr_to_tree, label_gen);
+  replacer.perform_replacements(0, expr_trees.size());
+
+  return replacer.cse_indices();
 }
 
 }  // namespace sequant::opt

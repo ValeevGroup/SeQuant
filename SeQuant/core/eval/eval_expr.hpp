@@ -736,8 +736,20 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
 
   } else {
     SEQUANT_ASSERT(op == EvalOp::Sum && "unsupported operation type");
-    return ex<Sum>(
-        Sum{to_expr(node.left(), leaf_map), to_expr(node.right(), leaf_map)});
+    // Collect the operands of the entire chain of sums, since Sum flattens
+    // (and thereby copies) its summands on construction
+    container::svector<ExprPtr> summands;
+    auto collect = [&](const auto& current, const auto& self) -> void {
+      if (!current.leaf() && current->op_type() == EvalOp::Sum) {
+        self(current.left(), self);
+        self(current.right(), self);
+      } else {
+        summands.push_back(to_expr(current, leaf_map));
+      }
+    };
+    collect(node, collect);
+
+    return ex<Sum>(Sum(summands.begin(), summands.end()));
   }
 }
 

@@ -413,7 +413,7 @@ void generateITF(const json &blocks, std::string_view out_file,
             return false;
           }();
 
-          if (needsSymmetrization(current.expression())) {
+          if (has_symmetrizer(current.expression())) {
             std::optional<ExprPtr> symmetrizer =
                 pop_tensor(current.expression(), reserved::symm_label());
             SEQUANT_ASSERT(symmetrizer.has_value());
@@ -448,7 +448,7 @@ void generateITF(const json &blocks, std::string_view out_file,
       }
 
       for (const Tensor &current : tensorsToSymmetrize) {
-        ExprPtr symmetrization = generateResultSymmetrization(
+        ExprPtr symmetrization = result_symmetrization(
             current, std::wstring(current.label()) + L"u");
 
         ResultExpr symmetrizedResult(current, std::move(symmetrization));

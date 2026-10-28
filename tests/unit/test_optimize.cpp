@@ -1195,6 +1195,107 @@ TEST_CASE("optimize", "[optimize]") {
         REQUIRE(collect_as_expr(expressions) == expected);
       }
     }
+    SECTION("persistent subexpressions") {
+      using Node = EvalNode<EvalExpr>;
+
+      std::vector<Node> expressions = parse_inputs(
+          std::vector<std::wstring>{L"R1 = (A{i1;i2} B{i2;i3}) C{i3;i1}",
+                                    L"R2 = (A{i1;i2} B{i2;i3}) D{i3;i1}",
+                                    L"R3 = (E{i1;i2} C{i2;i3}) D{i3;i1}"});
+
+      const std::vector<std::size_t> definitions =
+          opt::extract_persistent_subexpressions(
+              expressions,
+              std::function<bool(const Node&)>([](const Node& leaf) {
+                return leaf->is_tensor() &&
+                       (leaf->as_tensor().label() == L"C" ||
+                        leaf->as_tensor().label() == L"D");
+              }),
+              binarizer,
+              std::function<std::string(const Node&, std::size_t)>(
+                  [](const Node&, std::size_t counter) {
+                    return "P" + std::to_string(counter);
+                  }));
+
+      // Every use of the persistent subtree is replaced by the intermediate
+      REQUIRE(definitions == std::vector<std::size_t>{0});
+      REQUIRE(expressions.size() == 4);
+      REQUIRE(collect_as_expr(expressions) ==
+              parse_expected(std::vector<std::wstring>{
+                  L"P1{;;i1,i3} = A{i1;i2} B{i2;i3}",
+                  L"R1 = P1{;;i1,i3} C{i3;i1}", L"R2 = P1{;;i1,i3} D{i3;i1}",
+                  L"R3 = (E{i1;i2} C{i2;i3}) D{i3;i1}"}));
+    }
+    SECTION("batched") {
+      const std::vector<std::wstring> inputs = {
+          L"R1 = (A{i1;i2} B{i2;i3}) C{i3;i1}",
+          L"R2 = (A{i1;i2} B{i2;i3}) D{i3;i1}"};
+      const std::vector<Index> batch = {Index(L"i5")};
+
+      SECTION("identical batch indices share subexpressions") {
+        std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
+        const std::vector<std::optional<std::vector<Index>>> batch_indices = {
+            batch, batch};
+
+        const opt::BatchedCSEResult result =
+            opt::eliminate_common_subexpressions_batched(
+                expressions, batch_indices, binarizer);
+
+        REQUIRE(result.cse_positions.size() == 1);
+        REQUIRE(expressions.size() == 3);
+        REQUIRE(result.partitions ==
+                std::vector<std::pair<std::size_t, std::size_t>>{{0, 3}});
+        REQUIRE(result.batch_indices.size() == 1);
+        REQUIRE(result.batch_indices.front() == batch);
+      }
+
+      SECTION("different batch indices are processed separately") {
+        std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
+        const std::vector<std::optional<std::vector<Index>>> batch_indices = {
+            batch, std::vector<Index>{}};
+
+        const opt::BatchedCSEResult result =
+            opt::eliminate_common_subexpressions_batched(
+                expressions, batch_indices, binarizer);
+
+        REQUIRE(result.cse_positions.empty());
+        REQUIRE(expressions.size() == 2);
+        REQUIRE(
+            result.partitions ==
+            std::vector<std::pair<std::size_t, std::size_t>>{{0, 1}, {1, 2}});
+      }
+
+      SECTION("trees without well-defined batch indices stay on their own") {
+        std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
+        const std::vector<std::optional<std::vector<Index>>> batch_indices = {
+            std::nullopt, std::nullopt};
+
+        const opt::BatchedCSEResult result =
+            opt::eliminate_common_subexpressions_batched(
+                expressions, batch_indices, binarizer);
+
+        REQUIRE(result.cse_positions.empty());
+        REQUIRE(
+            result.partitions ==
+            std::vector<std::pair<std::size_t, std::size_t>>{{0, 1}, {1, 2}});
+        REQUIRE(result.batch_indices ==
+                std::vector<std::vector<Index>>{{}, {}});
+      }
+
+      SECTION("batch_priority_less") {
+        const std::vector<EvalNode<EvalExpr>> expressions =
+            parse_inputs(std::vector<std::wstring>{L"R1{i1;i2} = A{i1;i2}",
+                                                   L"R2{i1;i5} = B{i1;i5}"});
+
+        // Trees with more (high priority) batch indices come later
+        REQUIRE(
+            opt::batch_priority_less(expressions[0], expressions[1], batch));
+        REQUIRE_FALSE(
+            opt::batch_priority_less(expressions[1], expressions[0], batch));
+        REQUIRE_FALSE(
+            opt::batch_priority_less(expressions[0], expressions[0], batch));
+      }
+    }
   }
 
   SECTION("Single term optimization with CSE") {
