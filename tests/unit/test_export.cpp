@@ -760,104 +760,51 @@ TEST_CASE("export", "[export]") {
         REQUIRE_THAT(tensor, EquivalentTo("g{a1;i1}:N-N-N"));
       }
 
+      // {name, index order of the symmetry-unpermuted integral, expected}
+      using Row = std::tuple<const char *, std::vector<Index>, const char *>;
+      const auto check_rewrites = [&](const std::vector<Row> &rows) {
+        for (const auto &[name, indices, expected] : rows) {
+          REQUIRE(indices.size() == 4);
+
+          for (const std::vector<std::size_t> &indexPerm :
+               twoElectronIntegralSymmetries()) {
+            CAPTURE(name, indexPerm);
+            REQUIRE(indexPerm.size() == 4);
+
+            Tensor integral(int_label,
+                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
+                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
+
+            bool rewritten = ctx.rewrite(integral);
+            REQUIRE_THAT(integral, EquivalentTo(expected));
+            REQUIRE(rewritten);
+          }
+        }
+      };
+
       SECTION("K") {
-        SECTION("occ,occ,occ,occ") {
-          std::vector<Index> indices = {L"i_1", L"i_2", L"i_3", L"i_4"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            CAPTURE(indexPerm);
-
-            REQUIRE(indexPerm.size() == 4);
-
-            Tensor integral(int_label,
-                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            bool rewritten = ctx.rewrite(integral);
-            REQUIRE_THAT(integral, EquivalentTo("K{i1,i2;i3,i4}"));
-            REQUIRE(rewritten);
-          }
-        }
-
-        SECTION("virt,virt,occ,occ") {
-          std::vector<Index> indices = {L"a_1", L"a_2", L"i_1", L"i_2"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            CAPTURE(indexPerm);
-            REQUIRE(indexPerm.size() == 4);
-
-            Tensor integral(int_label,
-                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            bool rewritten = ctx.rewrite(integral);
-            REQUIRE_THAT(integral, EquivalentTo("K{a1,a2;i1,i2}"));
-            REQUIRE(rewritten);
-          }
-        }
-
-        SECTION("virt,virt,virt,virt") {
-          std::vector<Index> indices = {L"a_1", L"a_2", L"a_3", L"a_4"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            CAPTURE(indexPerm);
-            REQUIRE(indexPerm.size() == 4);
-
-            Tensor integral(int_label,
-                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            bool rewritten = ctx.rewrite(integral);
-            REQUIRE_THAT(integral, EquivalentTo("K{a1,a2;a3,a4}"));
-            REQUIRE(rewritten);
-          }
-        }
+        check_rewrites({
+            {"occ,occ,occ,occ",
+             {L"i_1", L"i_2", L"i_3", L"i_4"},
+             "K{i1,i2;i3,i4}"},
+            {"virt,virt,occ,occ",
+             {L"a_1", L"a_2", L"i_1", L"i_2"},
+             "K{a1,a2;i1,i2}"},
+            {"virt,virt,virt,virt",
+             {L"a_1", L"a_2", L"a_3", L"a_4"},
+             "K{a1,a2;a3,a4}"},
+        });
       }
 
       SECTION("J") {
-        SECTION("virt,occ,virt,occ") {
-          std::vector<Index> indices = {L"a_1", L"i_1", L"a_2", L"i_2"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            CAPTURE(indexPerm);
-            REQUIRE(indexPerm.size() == 4);
-
-            Tensor integral(int_label,
-                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            bool rewritten = ctx.rewrite(integral);
-            REQUIRE_THAT(integral, EquivalentTo("J{a1,a2;i1,i2}"));
-            REQUIRE(rewritten);
-          }
-        }
-
-        SECTION("virt,occ,virt,virt") {
-          std::vector<Index> indices = {L"a_1", L"i_1", L"a_2", L"a_3"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            CAPTURE(indexPerm);
-            REQUIRE(indexPerm.size() == 4);
-
-            Tensor integral(int_label,
-                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            bool rewritten = ctx.rewrite(integral);
-            REQUIRE_THAT(integral, EquivalentTo("J{a1,a2;a3,i1}"));
-            REQUIRE(rewritten);
-          }
-        }
+        check_rewrites({
+            {"virt,occ,virt,occ",
+             {L"a_1", L"i_1", L"a_2", L"i_2"},
+             "J{a1,a2;i1,i2}"},
+            {"virt,occ,virt,virt",
+             {L"a_1", L"i_1", L"a_2", L"a_3"},
+             "J{a1,a2;a3,i1}"},
+        });
       }
     }
   }
