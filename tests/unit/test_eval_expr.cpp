@@ -53,42 +53,21 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
   SECTION("Constructors") {
     auto t1 = parse_tensor(L"t_{i1, i2}^{a1, a2}");
-
     REQUIRE_NOTHROW(EvalExpr{t1});
+    REQUIRE(!EvalExpr{t1}.op_type());
 
     auto p1 = deserialize(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
-
-    const auto& c2 = EvalExpr{p1->at(0)->as<Tensor>()};
-    const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
-
-    REQUIRE_NOTHROW(EvalExpr{Variable{L"λ"}});
-
-    REQUIRE_NOTHROW(EvalExpr{Constant{1}});
-
-    REQUIRE_NOTHROW(
-        EvalExpr{Power(ex<Constant>(rational{1, 2}), rational{1, 2})});
-    REQUIRE_NOTHROW(EvalExpr{Power(ex<Variable>(L"x"), rational{3, 1})});
-  }
-
-  SECTION("EvalExpr::EvalOp types") {
-    auto t1 = parse_tensor(L"t_{i1, i2}^{a1, a2}");
-
-    auto x1 = EvalExpr(t1);
-
-    REQUIRE(!x1.op_type());
-
-    auto p1 = deserialize(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
-
-    const auto& c2 = EvalExpr{p1->at(0)->as<Tensor>()};
-    const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
-
-    auto x2 = EvalExpr(deserialize(L"1/2")->as<Constant>());
-    REQUIRE(!x2.op_type());
+    REQUIRE(!EvalExpr{p1->at(0)->as<Tensor>()}.op_type());
+    REQUIRE(!EvalExpr{p1->at(1)->as<Tensor>()}.op_type());
 
     REQUIRE(!EvalExpr{Variable{L"λ"}}.op_type());
 
+    REQUIRE(!EvalExpr{Constant{1}}.op_type());
+    REQUIRE(!EvalExpr{deserialize(L"1/2")->as<Constant>()}.op_type());
+
     REQUIRE(!EvalExpr{Power(ex<Constant>(rational{1, 2}), rational{1, 2})}
                  .op_type());
+    REQUIRE(!EvalExpr{Power(ex<Variable>(L"x"), rational{3, 1})}.op_type());
   }
 
   SECTION("ResultType types") {
