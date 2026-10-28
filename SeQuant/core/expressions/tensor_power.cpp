@@ -157,7 +157,11 @@ Field TensorPower::_base_field() const { return base_tensor()._base_field(); }
 
 std::size_t TensorPower::_color() const { return base_tensor()._color(); }
 
-std::size_t TensorPower::_color_salt() const { return hash::value(exponent_); }
+std::size_t TensorPower::_color_salt() const {
+  auto salt = hash::value(exponent_);
+  hash::combine(salt, static_cast<std::size_t>(get_type_id<TensorPower>()));
+  return salt ? salt : 1;
+}
 
 bool TensorPower::_is_cnumber() const { return base_tensor()._is_cnumber(); }
 

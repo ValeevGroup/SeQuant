@@ -1437,8 +1437,8 @@ TEST_CASE("tensor_power_canonicalization", "[algorithms]") {
 
   // every product below has its externals in two slots of the same kind, so
   // without named indices they are deduced as dummies and three covariant
-  // slots trip the strict bra-ket rule (v3.cpp:1518); canonicalize with the
-  // externals named, as a ResultExpr head would
+  // slots trip the strict bra-ket rule in TensorNetworkV3; canonicalize with
+  // the externals named, as a ResultExpr head would
   auto canon = [&](ExprPtr e) {
     e->canonicalize(named);
     return e;
@@ -1462,6 +1462,10 @@ TEST_CASE("tensor_power_canonicalization", "[algorithms]") {
     auto c = canon(D * pow(D, rational{-1}) * M);
     auto d = canon(pow(D, rational{-1}) * D * M);
     CHECK(*c == *d);
+    CHECK(
+        (D->as<AbstractTensor>() <
+         pow(D, rational{-1})->as<AbstractTensor>()) !=
+        (pow(D, rational{-1})->as<AbstractTensor>() < D->as<AbstractTensor>()));
   }
   SECTION("a power is not identified with its base by the network") {
     auto e = canon(D * pow(D, rational{-1}));

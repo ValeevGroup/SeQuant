@@ -6,6 +6,7 @@
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/any_of.hpp>
 
@@ -26,8 +27,10 @@ bool cross_type_less(const AbstractTensor& a, const AbstractTensor& b) {
   if (a._bra_rank() != b._bra_rank()) return a._bra_rank() < b._bra_rank();
   if (a._ket_rank() != b._ket_rank()) return a._ket_rank() < b._ket_rank();
   if (a._aux_rank() != b._aux_rank()) return a._aux_rank() < b._aux_rank();
-  return dynamic_cast<const Expr&>(a).type_id() <
-         dynamic_cast<const Expr&>(b).type_id();
+  const auto* lhs_expr = dynamic_cast<const Expr*>(&a);
+  const auto* rhs_expr = dynamic_cast<const Expr*>(&b);
+  SEQUANT_ASSERT(lhs_expr && rhs_expr);
+  return lhs_expr->type_id() < rhs_expr->type_id();
 }
 
 bool has_tensor(const ExprPtr& expr, std::wstring label) {
