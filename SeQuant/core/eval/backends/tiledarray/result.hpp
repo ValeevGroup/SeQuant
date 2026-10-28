@@ -390,12 +390,10 @@ inline constexpr TA::DeNest to_ta_denest(DeNest d) noexcept {
 /// operand. A result outer label must appear on at least one operand (true for
 /// any well-formed contraction). This is the trange handed to the result-shape
 /// provider so it can assemble a SparseShape over the result's outer tiles.
-template <typename LArrayT, typename RArrayT>
-[[nodiscard]] TA::TiledRange result_outer_trange(LArrayT const& larr,
-                                                 std::string const& lannot,
-                                                 RArrayT const& rarr,
-                                                 std::string const& rannot,
-                                                 std::string const& cannot) {
+[[nodiscard]] inline TA::TiledRange result_outer_trange(
+    TA::TiledRange const& ltr, std::string const& lannot,
+    TA::TiledRange const& rtr, std::string const& rannot,
+    std::string const& cannot) {
   auto const lo = outer_annot_labels(lannot);
   auto const ro = outer_annot_labels(rannot);
   auto const co = outer_annot_labels(cannot);
@@ -404,9 +402,9 @@ template <typename LArrayT, typename RArrayT>
   dims.reserve(co.size());
   for (auto const& lbl : co) {
     if (auto const i = find_position(lo, lbl)) {
-      dims.emplace_back(larr.trange().dim(*i));
+      dims.emplace_back(ltr.dim(*i));
     } else if (auto const j = find_position(ro, lbl)) {
-      dims.emplace_back(rarr.trange().dim(*j));
+      dims.emplace_back(rtr.dim(*j));
     } else {
       throw Exception("result_outer_trange: result outer label '" + lbl +
                       "' is carried by neither operand of the binary product");
@@ -434,6 +432,132 @@ template <typename LArrayT, typename RArrayT>
   SEQUANT_ASSERT(elem_hi >= tr1.elements_range().second ||
                  tr1.tile(tile_hi).first == elem_hi);  // hi on a tile boundary
   return {tile_lo, tile_hi};
+}
+
+/// \brief A pending, zero-copy transformation of a stored array: the view a
+///        ResultTensorTA may stand for instead of holding a value.
+///
+/// Composable parts, all optional: a tile block (a batch slice), a mode
+/// permutation, a conjugation. The block and the permutation are expressed in
+/// the STORED array's mode order; the result's own (logical) modes are the
+/// stored ones permuted by \c perm. A view is folded into a TiledArray
+/// expression by ResultTensorTA::with_expr(): `arr(stored annot).block(blk_lo,
+/// blk_hi, preserve_lobound).conj()`, so a consumer that is itself an
+/// expression (a product, a sum, a scatter) never materializes it.
+struct ArrayView {
+  /// stored mode \c s holds logical mode \c perm[s]; empty = identity
+  container::svector<std::size_t> perm;
+  /// tile bounds `[blk_lo[s], blk_hi[s])` per STORED mode, in the stored
+  /// array's tile coordinates; empty = the whole array
+  container::svector<std::size_t> blk_lo, blk_hi;
+  /// elementwise conjugation pending
+  bool conj = false;
+
+  [[nodiscard]] bool trivial() const noexcept {
+    return perm.empty() && blk_lo.empty() && !conj;
+  }
+
+  /// the stored mode that holds logical mode \p logical
+  [[nodiscard]] std::size_t stored_mode(std::size_t logical) const {
+    if (perm.empty()) return logical;
+    for (std::size_t s = 0; s < perm.size(); ++s)
+      if (perm[s] == logical) return s;
+    SEQUANT_ASSERT(false && "ArrayView::stored_mode: no such logical mode");
+    return logical;
+  }
+};
+
+/// the annotation of the STORED array for the logical annotation \p annot of a
+/// view permuted by \p perm (see ArrayView::perm): stored mode \c s is
+/// labelled with the logical label of mode \c perm[s]. Flat annotations only.
+[[nodiscard]] inline std::string stored_annot(
+    std::string const& annot, container::svector<std::size_t> const& perm) {
+  if (perm.empty()) return annot;
+  auto const labels = outer_annot_labels(annot);
+  SEQUANT_ASSERT(labels.size() == perm.size());
+  std::string out;
+  for (std::size_t s = 0; s < perm.size(); ++s) {
+    if (s) out += ',';
+    out += labels[perm[s]];
+  }
+  return out;
+}
+
+/// the TiledRange a view stands for: \p stored's dims cut to the view's tile
+/// block (every mode keeps its element coordinates, as TA's
+/// `preserve_lobound` block does) and reordered to the view's logical modes
+[[nodiscard]] inline TA::TiledRange logical_trange(TA::TiledRange const& stored,
+                                                   ArrayView const& view) {
+  auto const rank = stored.rank();
+  std::vector<TA::TiledRange1> dims;
+  dims.reserve(rank);
+  for (std::size_t m = 0; m < rank; ++m) {
+    auto const s = view.stored_mode(m);
+    auto const& dim = stored.dim(s);
+    if (view.blk_lo.empty()) {
+      dims.push_back(dim);
+      continue;
+    }
+    std::vector<std::size_t> bounds{
+        static_cast<std::size_t>(dim.tile(view.blk_lo[s]).first)};
+    for (std::size_t t = view.blk_lo[s]; t < view.blk_hi[s]; ++t)
+      bounds.push_back(static_cast<std::size_t>(dim.tile(t).second));
+    dims.emplace_back(bounds.begin(), bounds.end());
+  }
+  return TA::TiledRange(dims.begin(), dims.end());
+}
+
+/// Whether the binary product with (flat) annotations \p lannot, \p rannot ->
+/// \p cannot can be emitted through TiledArray's expression layer,
+/// `out(cannot) = l(lannot) * r(rannot)`: every operand label is either
+/// contracted (on both operands, absent from the result) or external (on one
+/// operand and the result), and a label on all three -- a Hadamard index --
+/// only in the pure elementwise case (identical label sets). Anything else
+/// (a traced label, a mixed Hadamard product, a broadcast, inner labels) is
+/// einsum territory.
+[[nodiscard]] inline bool expression_product_ok(std::string const& lannot,
+                                                std::string const& rannot,
+                                                std::string const& cannot) {
+  if (lannot.find(';') != std::string::npos ||
+      rannot.find(';') != std::string::npos ||
+      cannot.find(';') != std::string::npos)
+    return false;
+  auto const L = outer_annot_labels(lannot);
+  auto const R = outer_annot_labels(rannot);
+  auto const C = outer_annot_labels(cannot);
+  auto has = [](auto const& v, std::string const& x) {
+    return std::find(v.begin(), v.end(), x) != v.end();
+  };
+  auto unique = [](auto const& v) {
+    for (std::size_t i = 0; i < v.size(); ++i)
+      for (std::size_t j = i + 1; j < v.size(); ++j)
+        if (v[i] == v[j]) return false;
+    return true;
+  };
+  if (!unique(L) || !unique(R) || !unique(C)) return false;
+  bool hadamard = false;
+  for (auto const& x : L) {
+    bool const r = has(R, x), c = has(C, x);
+    if (!r && !c) return false;
+    if (r && c) hadamard = true;
+  }
+  for (auto const& x : R)
+    if (!has(L, x) && !has(C, x)) return false;
+  for (auto const& x : C)
+    if (!has(L, x) && !has(R, x)) return false;
+  if (!hadamard) return true;
+  // pure elementwise: the three label SETS coincide
+  if (L.size() != R.size() || L.size() != C.size()) return false;
+  for (auto const& x : L)
+    if (!has(R, x) || !has(C, x)) return false;
+  return true;
+}
+
+/// \return the TiledRange \p tr, as printed by TiledArray
+[[nodiscard]] inline std::string ta_trange_string(TA::TiledRange const& tr) {
+  std::ostringstream os;
+  os << tr;
+  return os.str();
 }
 
 /// \return the TiledRange of \p arr, as printed by TiledArray
@@ -583,32 +707,152 @@ mode_batches_of_trange1(TA::TiledRange1 const& tr1,
 /// \tparam ArrayT TA::DistArray type. Tile type of ArrayT is regular tensor of
 ///                scalars (not a tensor of tensors)
 ///
+/// A result may be a VIEW of another result's array -- a tile block of it (a
+/// batch slice), a mode permutation, a conjugation, or any combination --
+/// pending rather than applied (detail::ArrayView). The view shares the
+/// parent's tiles, so it costs no allocation and no pass over the data:
+/// consumers that are TiledArray expressions -- the flat products without a
+/// Hadamard index, the dot product, scaling, sums, accumulation of the operand,
+/// the batch scatter -- fold it into their expression through with_expr(); a
+/// consumer that needs an array (TiledArray's einsum, clone, the symmetrizers,
+/// Result::get<ArrayT>()) materializes it once, into this result's own value,
+/// after which the parent is released.
+///
 template <typename ArrayT, typename = std::enable_if_t<TA::detail::is_tensor_v<
                                typename ArrayT::value_type>>>
 class ResultTensorTA final : public Result {
  public:
   using Result::id_t;
   using numeric_type = typename ArrayT::numeric_type;
+  using view_type = detail::ArrayView;
 
   explicit ResultTensorTA(ArrayT arr) : Result{std::move(arr)} {}
 
+  /// a view of \p parent with \p view pending. A trivial view (an identity
+  /// permutation, a slice over whole modes) is an alias too: it reads the
+  /// parent's tiles as they are and still copies before it is written to, so
+  /// no two results ever share tiles one of them accumulates into.
+  ResultTensorTA(ArrayT parent, view_type view)
+      : Result{}, parent_(std::move(parent)), view_(std::move(view)) {}
+
   [[nodiscard]] std::string trange_annot() const override {
-    return detail::ta_trange_string(get<ArrayT>());
+    return detail::ta_trange_string(logical_trange());
+  }
+
+  /// true while this result is a pending view sharing another array's tiles
+  [[nodiscard]] bool is_buffer_alias() const noexcept override {
+    return !has_value();
+  }
+
+  /// the TiledRange of the value this result stands for, with the pending
+  /// view applied (block cut, modes permuted); never materializes
+  [[nodiscard]] TA::TiledRange logical_trange() const {
+    if (has_value()) return Result::get<ArrayT>().trange();
+    return detail::logical_trange(parent_.trange(), view_);
+  }
+
+  /// Hands \p f the TiledArray expression of this result's value for the
+  /// logical annotation \p annot: `value(annot)` when the value is held, else
+  /// the parent array with the pending view folded in -- its modes relabelled
+  /// through the permutation, the block cut by block(), the conjugation by
+  /// conj(). \p f must return the same type whatever expression it receives.
+  template <typename F>
+  decltype(auto) with_expr(std::string const& annot, F&& f) const {
+    if (has_value()) return std::forward<F>(f)(Result::get<ArrayT>()(annot));
+    auto const stored = detail::stored_annot(annot, view_.perm);
+    bool const conj = TA::detail::is_complex_v<numeric_type> && view_.conj;
+    if (view_.blk_lo.empty()) {
+      if constexpr (TA::detail::is_complex_v<numeric_type>) {
+        if (conj) return std::forward<F>(f)(parent_(stored).conj());
+      }
+      return std::forward<F>(f)(parent_(stored));
+    }
+    // The block keeps every mode's element coordinates (TA's
+    // preserve_lobound), like the eager slice did, so a spectator mode with a
+    // nonzero lobound still matches the operand it is contracted against.
+    // The flag is set LAST: TiledArray's conj() (and its scalar operators)
+    // rebuild a block expression without it -- see preserve_lobound_of().
+    auto blk = parent_(stored).block(view_.blk_lo, view_.blk_hi);
+    if constexpr (TA::detail::is_complex_v<numeric_type>) {
+      if (conj) {
+        auto cblk = blk.conj();
+        cblk.preserve_lobound();
+        return std::forward<F>(f)(cblk);
+      }
+    }
+    blk.preserve_lobound();
+    return std::forward<F>(f)(blk);
+  }
+
+  /// Re-applies TA's preserve_lobound to \p e when it is a block expression:
+  /// TiledArray's scalar operators (and conj()) construct a fresh block
+  /// expression that does not carry the flag, so `scalar * block` of a
+  /// lobound-preserving block would be rebased to element 0.
+  template <typename E>
+  static void preserve_lobound_of(E& e) {
+    if constexpr (requires { e.preserve_lobound(); }) e.preserve_lobound();
   }
 
  private:
   using this_type = ResultTensorTA<ArrayT>;
   using annot_wrap = Annot<std::string>;
 
+  /// the parent array of a pending view: an empty handle once the value is
+  /// held (mutable: released by the const materialization in ensure_value())
+  mutable ArrayT parent_;
+  view_type view_;
+
   [[nodiscard]] id_t type_id() const noexcept override {
     return id_for_type<this_type>();
+  }
+
+  [[nodiscard]] std::size_t logical_rank() const {
+    return has_value() ? Result::get<ArrayT>().trange().rank()
+                       : parent_.trange().rank();
+  }
+
+  /// a dummy annotation over the logical modes
+  [[nodiscard]] std::string dummy_annot() const {
+    return TA::detail::dummy_annotation(
+        static_cast<unsigned int>(logical_rank()));
+  }
+
+  /// the value this result stands for, as a fresh array: the pending view
+  /// applied in one pass (or a deep copy of the held value)
+  [[nodiscard]] ArrayT materialize() const {
+    if (has_value()) return TA::clone(Result::get<ArrayT>());
+    auto const ann = dummy_annot();
+    auto const t0 = std::chrono::steady_clock::now();
+    ArrayT out;
+    with_expr(ann, [&](auto&& e) { out(ann) = e; });
+    ::sequant::detail::wait_for_lazy_cleanup(out);
+    detail::log_batch_op("Materialize", std::chrono::steady_clock::now() - t0,
+                         out, ann);
+    return out;
+  }
+
+  /// Result::get<ArrayT>() on a pending view: the view applied, once; the
+  /// parent's tiles are released
+  void ensure_value() const override {
+    if (has_value()) return;
+    set_value(std::make_any<ArrayT>(materialize()));
+    parent_ = ArrayT();
+  }
+
+  /// the array a further view of this result is a view of (the parent while
+  /// this one is pending, else the held value), and that view's mode map
+  [[nodiscard]] ArrayT const& view_base() const {
+    return has_value() ? Result::get<ArrayT>() : parent_;
+  }
+  [[nodiscard]] view_type base_view() const {
+    return has_value() ? view_type{} : view_;
   }
 
   // Diagnostic (see Result::fence): force all pending async work in this
   // array's world to complete so a lazily-executed op's timer captures
   // execution, not just dispatch.
   void fence() const noexcept override {
-    get<ArrayT>().world().gop.fence();
+    view_base().world().gop.fence();
     ::sequant::detail::note_fence();
   }
 
@@ -616,26 +860,45 @@ class ResultTensorTA final : public Result {
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
     SEQUANT_ASSERT(other.is<this_type>());
+    auto const& o = other.as<this_type>();
     auto const a = annot_wrap{annot};
 
     detail::log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
 
     ArrayT result;
-    result(a.this_annot) =
-        get<ArrayT>()(a.lannot) + other.get<ArrayT>()(a.rannot);
+    with_expr(a.lannot, [&](auto&& le) {
+      o.with_expr(a.rannot, [&](auto&& re) { result(a.this_annot) = le + re; });
+    });
     ::sequant::detail::wait_for_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
 
+  /// A batch slice is a pending view: the tile block of logical \p mode that
+  /// covers `[elem_lo, elem_hi)` (tile-aligned, see slice_bounds_to_tiles),
+  /// intersected with the block this result already is. No tile is copied.
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
     ::sequant::detail::note_slice();
     auto const t0 = std::chrono::steady_clock::now();
-    auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
-        get<ArrayT>().trange().dim(mode), elem_lo, elem_hi);
-    auto r = eval_result<this_type>(
-        slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
+    auto const& base = view_base();
+    auto view = base_view();
+    auto const s = view.stored_mode(mode);
+    auto const [tile_lo, tile_hi] =
+        detail::slice_bounds_to_tiles(base.trange().dim(s), elem_lo, elem_hi);
+    if (view.blk_lo.empty()) {
+      auto const rank = base.trange().rank();
+      view.blk_lo.assign(rank, 0);
+      view.blk_hi.resize(rank);
+      for (std::size_t d = 0; d < rank; ++d)
+        view.blk_hi[d] = base.trange().dim(d).tile_extent();
+    }
+    SEQUANT_ASSERT(tile_lo >= view.blk_lo[s] && tile_hi <= view.blk_hi[s] &&
+                   "slice_mode: the slice must lie within the block this "
+                   "result already is");
+    view.blk_lo[s] = tile_lo;
+    view.blk_hi[s] = tile_hi;
+    auto r = eval_result<this_type>(base, std::move(view));
     ::sequant::detail::slice_ns().fetch_add(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now() - t0)
@@ -645,23 +908,55 @@ class ResultTensorTA final : public Result {
   }
 
   [[nodiscard]] double norm2() const override {
-    return detail::ta_norm2(get<ArrayT>());
+    if (has_value()) return detail::ta_norm2(Result::get<ArrayT>());
+    if constexpr (requires(ArrayT const& a) {
+                    { TA::squared_norm(a) } -> std::convertible_to<double>;
+                  })
+      return with_expr(dummy_annot(), [](auto&& e) {
+        return static_cast<double>(e.norm().get());
+      });
+    else
+      return -1.0;
   }
   [[nodiscard]] std::string layout_desc() const override {
-    return detail::ta_trange_string(get<ArrayT>());
+    return detail::ta_trange_string(logical_trange());
   }
   [[nodiscard]] std::string tile_diff(Result const& other) const override {
     if (!other.is<this_type>()) return "(kind mismatch)";
     return detail::ta_tile_diff(get<ArrayT>(), other.get<ArrayT>());
   }
 
+  /// Scatter \p block into this result's value (materialized first if this
+  /// result is a pending view: a scatter writes, and a view must not write
+  /// through to its parent). The block may itself be a pending view: it is
+  /// folded into the assignment.
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     SEQUANT_ASSERT(block.is<this_type>());
+    auto const& b = block.as<this_type>();
     auto& dest = get<ArrayT>();
+    auto const rank = dest.trange().rank();
+    SEQUANT_ASSERT(mode < rank);
     auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
         dest.trange().dim(mode), block_lo, block_hi);
-    write_array_into_mode(dest, block.get<ArrayT>(), mode, tile_lo, tile_hi);
+    container::svector<std::size_t> lo(rank, 0), hi(rank);
+    for (std::size_t d = 0; d < rank; ++d)
+      hi[d] = dest.trange().dim(d).tile_extent();
+    lo[mode] = tile_lo;
+    hi[mode] = tile_hi;
+    auto const annot = dummy_annot();
+    // preserve_lobound on the destination sub-block: the source block shares
+    // its element coordinates (see write_array_into_mode)
+    auto const t0 = std::chrono::steady_clock::now();
+    b.with_expr(annot, [&](auto&& be) {
+      dest(annot).block(lo, hi, TA::preserve_lobound) = be;
+    });
+    ::sequant::detail::wait_for_lazy_cleanup(dest);
+    detail::log_batch_op("Scatter", std::chrono::steady_clock::now() - t0, dest,
+                         annot + " mode=" + std::to_string(mode) + " tiles=[" +
+                             std::to_string(tile_lo) + "," +
+                             std::to_string(tile_hi) + ")");
+    log_ta_tensor_host_memory_use();
   }
 
   [[nodiscard]] ResultPtr prod(Result const& other,
@@ -670,12 +965,16 @@ class ResultTensorTA final : public Result {
     auto const a = annot_wrap{annot};
 
     if (other.is<ResultScalar<numeric_type>>()) {
-      auto result = get<ArrayT>();
       auto scalar = other.get<numeric_type>();
 
       detail::log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
 
-      result(a.this_annot) = scalar * result(a.lannot);
+      ArrayT result;
+      with_expr(a.lannot, [&](auto&& le) {
+        auto se = scalar * le;
+        preserve_lobound_of(se);
+        result(a.this_annot) = se;
+      });
 
       ::sequant::detail::wait_for_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
@@ -685,10 +984,14 @@ class ResultTensorTA final : public Result {
     if (a.this_annot.empty()) {
       // DOT product
       SEQUANT_ASSERT(other.is<this_type>());
-      numeric_type d =
-          TA::dot(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot));
-      ::sequant::detail::wait_for_lazy_cleanup(get<ArrayT>());
-      ::sequant::detail::wait_for_lazy_cleanup(other.get<ArrayT>());
+      auto const& o = other.as<this_type>();
+      numeric_type const d = with_expr(a.lannot, [&](auto&& le) {
+        return o.with_expr(a.rannot, [&](auto&& re) {
+          return static_cast<numeric_type>(le.dot(re).get());
+        });
+      });
+      ::sequant::detail::wait_for_lazy_cleanup(view_base());
+      ::sequant::detail::wait_for_lazy_cleanup(o.view_base());
 
       detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
@@ -704,13 +1007,26 @@ class ResultTensorTA final : public Result {
     }
 
     // confirmed: other.is<this_type>() is true
+    auto const& o = other.as<this_type>();
 
     detail::log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
     ArrayT result;
 
-    result = TA::einsum(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot),
-                        a.this_annot);
+    if ((is_buffer_alias() || o.is_buffer_alias()) &&
+        detail::expression_product_ok(a.lannot, a.rannot, a.this_annot)) {
+      // an operand is a pending view and the contraction is a plain one: the
+      // expression layer takes the view (block, permutation, conjugation) as
+      // is, no operand is materialized
+      with_expr(a.lannot, [&](auto&& le) {
+        o.with_expr(a.rannot,
+                    [&](auto&& re) { result(a.this_annot) = le * re; });
+      });
+    } else {
+      // TiledArray's einsum takes plain arrays: a pending view is applied once
+      result = TA::einsum(get<ArrayT>()(a.lannot),
+                          o.template get<ArrayT>()(a.rannot), a.this_annot);
+    }
     ::sequant::detail::wait_for_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
@@ -725,11 +1041,12 @@ class ResultTensorTA final : public Result {
   /// Deep copy: \c TA::DistArray's own copy is a shallow (reference-counted)
   /// handle onto the same tiles, so an in-place accumulation into the copy
   /// would be seen by every other holder -- \c TA::clone allocates and copies
-  /// the tiles.
+  /// the tiles. A pending view is applied into the copy directly.
   [[nodiscard]] ResultPtr clone() const override {
-    return eval_result<this_type>(TA::clone(get<ArrayT>()));
+    return eval_result<this_type>(materialize());
   }
 
+  /// A permutation is a pending view: the modes relabelled, no tile moved.
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
@@ -737,51 +1054,71 @@ class ResultTensorTA final : public Result {
 
     detail::log_ta(pre_annot, " = ", post_annot, "\n");
 
-    ArrayT result;
-    result(post_annot) = get<ArrayT>()(pre_annot);
-    ::sequant::detail::wait_for_lazy_cleanup(result);
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(result));
+    return eval_result<this_type>(view_base(),
+                                  permuted_view(pre_annot, post_annot, false));
   }
 
+  /// T†{a;i} = conj(T{i;a}) -- bra/ket-swapped layout (annotation rewrite
+  /// baked into ann by the IR: operand annot in ann[0], adjoint annot in
+  /// ann[1]) plus elementwise conjugation: a pending view, like permute(). For
+  /// real numeric_type, conj is a no-op.
   [[nodiscard]] ResultPtr adjoint(
       std::array<std::any, 2> const& ann) const override {
-    // T†{a;i} = conj(T{i;a}) — bra/ket-swapped layout (annotation rewrite
-    // baked into ann by the IR: operand annot in ann[0], adjoint annot in
-    // ann[1]) plus elementwise conjugation. For real numeric_type, conj is
-    // a no-op; elide it so the TA expression doesn't carry a ConjTsrExpr
-    // wrapper unnecessarily.
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
 
     detail::log_ta(post_annot, " = adjoint(", pre_annot, ")\n");
 
-    ArrayT result;
-    if constexpr (TA::detail::is_complex_v<numeric_type>) {
-      result(post_annot) = get<ArrayT>()(pre_annot).conj();
-    } else {
-      result(post_annot) = get<ArrayT>()(pre_annot);
-    }
-    ::sequant::detail::wait_for_lazy_cleanup(result);
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(result));
+    return eval_result<this_type>(
+        view_base(), permuted_view(pre_annot, post_annot,
+                                   TA::detail::is_complex_v<numeric_type>));
   }
 
+  /// the view of view_base() that is this result relabelled from \p pre_annot
+  /// (its logical modes) to \p post_annot, conjugated once more if \p conj
+  [[nodiscard]] view_type permuted_view(std::string const& pre_annot,
+                                        std::string const& post_annot,
+                                        bool conj) const {
+    auto const pre = detail::outer_annot_labels(pre_annot);
+    auto const post = detail::outer_annot_labels(post_annot);
+    SEQUANT_ASSERT(pre.size() == post.size() && pre.size() == logical_rank());
+    auto view = base_view();
+    auto const rank = pre.size();
+    // stored mode s holds logical mode j of this result, whose label pre[j]
+    // sits at position k of the result's annotation: perm'[s] = k
+    container::svector<std::size_t> perm(rank);
+    for (std::size_t s = 0; s < rank; ++s) {
+      auto const j = view.perm.empty() ? s : view.perm[s];
+      auto const it = std::find(post.begin(), post.end(), pre[j]);
+      SEQUANT_ASSERT(it != post.end() && "permute: label not in the result");
+      perm[s] = static_cast<std::size_t>(it - post.begin());
+    }
+    bool identity = true;
+    for (std::size_t s = 0; s < rank; ++s)
+      if (perm[s] != s) identity = false;
+    view.perm = identity ? container::svector<std::size_t>{} : std::move(perm);
+    if (conj) view.conj = !view.conj;
+    return view;
+  }
+
+  /// Accumulate \p other into this result's value (materialized first if this
+  /// result is a pending view: an accumulation writes, and a view must not
+  /// write through to its parent). The operand may be a pending view.
   void add_inplace(Result const& other) override {
     SEQUANT_ASSERT(other.is<this_type>());
+    auto const& o = other.as<this_type>();
 
     auto& t = get<ArrayT>();
-    auto const& o = other.get<ArrayT>();
 
-    SEQUANT_ASSERT(t.trange() == o.trange());
+    SEQUANT_ASSERT(t.trange() == o.logical_trange());
     auto ann = TA::detail::dummy_annotation(t.trange().rank());
 
     detail::log_ta(ann, " += ", ann, "\n");
 
     auto const t0 = std::chrono::steady_clock::now();
-    t(ann) += o(ann);
+    o.with_expr(ann, [&](auto&& oe) { t(ann) += oe; });
     ::sequant::detail::wait_for_lazy_cleanup(t);
-    detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0, o,
+    detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0, t,
                          ann);
     log_ta_tensor_host_memory_use();
   }
@@ -796,14 +1133,17 @@ class ResultTensorTA final : public Result {
   }
 
  private:
+  /// a pending view holds no tiles of its own: 0 bytes
   [[nodiscard]] std::size_t size_in_bytes() const final {
+    if (!has_value()) return 0;
     if (Logger::instance().eval.level == 0)
       return 0;  // size_of disabled untraced: it is collective
     return measured_size_in_bytes();
   }
 
   [[nodiscard]] std::size_t measured_size_in_bytes() const final {
-    auto& v = get<ArrayT>();
+    if (!has_value()) return 0;
+    auto& v = Result::get<ArrayT>();
     auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
     v.world().gop.sum(local_size);
     return local_size;
@@ -937,6 +1277,9 @@ class ResultTensorOfTensorTA final : public Result {
 
     detail::log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
+    // ToT * T: TiledArray's einsum takes arrays, so a flat operand that is a
+    // pending view (a batch slice, a permutation, a conjugation) is
+    // materialized here, once, by its get<>()
     if (other.is<that_type>()) {
       // ToT * T -> ToT
       auto result =
@@ -1238,20 +1581,19 @@ template <typename NumericT, typename PolicyT,
   using ToTArray = TA::DistArray<TA::Tensor<InnerTileT>, PolicyT>;
   using ToTResult = ResultTensorOfTensorTA<ToTArray>;
 
+  using FlatResult = ResultTensorTA<FlatArray>;
+
   auto const a = Annot<std::string>{annot};
 
-  // Dispatch the left/right array extraction on operand kind, then defer to the
-  // label-matching detail helper.  Four (flat/ToT)^2 combinations.
-  auto with_left = [&](auto const& larr) -> TA::TiledRange {
-    if (right.is<ToTResult>())
-      return detail::result_outer_trange(larr, a.lannot, right.get<ToTArray>(),
-                                         a.rannot, a.this_annot);
-    return detail::result_outer_trange(larr, a.lannot, right.get<FlatArray>(),
-                                       a.rannot, a.this_annot);
+  // Each operand's TiledRange by kind: a flat result reports the range of the
+  // value it stands for (a pending view is not materialized for it), a nested
+  // one its array's. Then defer to the label-matching detail helper.
+  auto trange_of = [&](Result const& r) -> TA::TiledRange {
+    if (r.is<ToTResult>()) return r.get<ToTArray>().trange();
+    return r.as<FlatResult>().logical_trange();
   };
-
-  if (left.is<ToTResult>()) return with_left(left.get<ToTArray>());
-  return with_left(left.get<FlatArray>());
+  return detail::result_outer_trange(trange_of(left), a.lannot,
+                                     trange_of(right), a.rannot, a.this_annot);
 }
 
 /// \brief Emit a binary product through the STANDARD expression layer with an
@@ -1305,12 +1647,18 @@ template <typename NumericT, typename PolicyT,
   // outlive it; a per-product fence would only serialize the asynchronous
   // tile work against the executor's bookkeeping.
 
+  // A flat operand may be a pending view (a batch slice, a permutation, a
+  // conjugation): with_expr() folds it into the expression, so it is not
+  // materialized here.
+
   // T * T -> T
   if (l_flat && r_flat) {
     FlatArray out;
-    out(a.this_annot) =
-        (left.get<FlatArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
-            .set_shape(shape);
+    left.as<FlatResult>().with_expr(a.lannot, [&](auto&& le) {
+      right.as<FlatResult>().with_expr(a.rannot, [&](auto&& re) {
+        out(a.this_annot) = (le * re).set_shape(shape);
+      });
+    });
     ::sequant::detail::wait_for_lazy_cleanup(out);
     return eval_result<FlatResult>(std::move(out));
   }
@@ -1324,13 +1672,15 @@ template <typename NumericT, typename PolicyT,
       return nullptr;
     ToTArray out;
     if (l_flat) {
-      out(a.this_annot) =
-          (left.get<FlatArray>()(a.lannot) * right.get<ToTArray>()(a.rannot))
-              .set_shape(shape);
+      left.as<FlatResult>().with_expr(a.lannot, [&](auto&& le) {
+        out(a.this_annot) =
+            (le * right.get<ToTArray>()(a.rannot)).set_shape(shape);
+      });
     } else {
-      out(a.this_annot) =
-          (left.get<ToTArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
-              .set_shape(shape);
+      right.as<FlatResult>().with_expr(a.rannot, [&](auto&& re) {
+        out(a.this_annot) =
+            (left.get<ToTArray>()(a.lannot) * re).set_shape(shape);
+      });
     }
     ::sequant::detail::wait_for_lazy_cleanup(out);
     return eval_result<ToTResult>(std::move(out));

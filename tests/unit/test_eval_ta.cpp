@@ -6355,3 +6355,323 @@ TEST_CASE("ordered-root-no-alias", "[eval][ordered]") {
     CHECK(rel < 1e-12);
   }
 }
+
+// A flat TiledArray result may stand for a pending view of another result's
+// array (detail::ArrayView): a batch slice, a mode permutation, a conjugation.
+// The view shares the parent's tiles until a consumer needs an array. These
+// tests pin the contract: a view is an alias (no bytes of its own) until
+// get<>() materializes it; the expression consumers (products without a
+// Hadamard index, dot, scaling, sums, accumulation, the scatter) take the view
+// as is and leave it an alias; the array consumers (einsum, clone) materialize
+// it exactly; writes into a view never reach the parent.
+TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
+  using sequant::DeNest;
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultScalar;
+  using sequant::ResultTensorTA;
+  using TArrayD = TA::TArrayD;
+  using TArrayZ = TA::TArrayZ;
+  using ResultD = ResultTensorTA<TArrayD>;
+  using ResultZ = ResultTensorTA<TArrayZ>;
+  using Bounds = std::vector<std::size_t>;
+
+  auto& world = TA::get_default_world();
+  auto annot3 = [](std::string l, std::string r, std::string c) {
+    return std::array<std::any, 3>{std::move(l), std::move(r), std::move(c)};
+  };
+  auto annot2 = [](std::string pre, std::string post) {
+    return std::array<std::any, 2>{std::move(pre), std::move(post)};
+  };
+  // the eager slice: tiles [lo, hi) of every mode, element coordinates kept
+  auto eager_block = [](auto const& arr, std::string const& ann, Bounds lo,
+                        Bounds hi) {
+    std::decay_t<decltype(arr)> out;
+    out(ann) = arr(ann).block(lo, hi, TA::preserve_lobound);
+    return out;
+  };
+
+  // A(a,b,c): tiles 3 x 4 x 2; B(c,d): tiles 2 x 2
+  TA::TiledRange const trA{{0, 3, 6, 9}, {0, 2, 4, 6, 8}, {0, 5, 10}};
+  TA::TiledRange const trB{{0, 5, 10}, {0, 4, 7}};
+  TArrayD A(world, trA), B(world, trB);
+  A.fill_random();
+  B.fill_random();
+  world.gop.fence();
+  auto rA = eval_result<ResultD>(A);
+  auto rB = eval_result<ResultD>(B);
+
+  SECTION("a batch slice is an alias until its value is asked for") {
+    // mode 1, elements [2, 6) = tiles 1..2
+    auto s = rA->slice_mode(1, 2, 6);
+    REQUIRE(s->is_buffer_alias());
+    REQUIRE(s->size_in_bytes() == 0);
+    REQUIRE(s->measured_size_in_bytes() == 0);
+    auto const exp = eager_block(A, "a,b,c", {0, 1, 0}, {3, 3, 2});
+    // the layout it reports is the slice's, without materializing
+    std::ostringstream os;
+    os << exp.trange();
+    REQUIRE(s->trange_annot() == os.str());
+    REQUIRE(s->is_buffer_alias());
+    // the value is the eager slice; asking for it materializes once
+    REQUIRE(equal_tarrays(s->get<TArrayD>(), exp, "a,b,c"));
+    REQUIRE_FALSE(s->is_buffer_alias());
+    REQUIRE(s->measured_size_in_bytes() > 0);
+    // A is untouched
+    REQUIRE(A.trange() == trA);
+  }
+
+  SECTION("a product takes a sliced operand as is") {
+    // batch the contracted index c: slices of A (mode 2) and B (mode 0) over
+    // the tile [5, 10)
+    auto sA = rA->slice_mode(2, 5, 10);
+    auto sB = rB->slice_mode(0, 5, 10);
+    auto prod = sA->prod(*sB, annot3("a,b,c", "c,d", "a,b,d"), DeNest::False);
+    // neither operand was materialized
+    REQUIRE(sA->is_buffer_alias());
+    REQUIRE(sB->is_buffer_alias());
+    REQUIRE_FALSE(prod->is_buffer_alias());
+    TArrayD exp;
+    exp("a,b,d") = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2})("a,b,c") *
+                   eager_block(B, "c,d", {1, 0}, {2, 2})("c,d");
+    REQUIRE(equal_tarrays(prod->get<TArrayD>(), exp, "a,b,d"));
+
+    // the batches add up to the full contraction
+    auto s0A = rA->slice_mode(2, 0, 5);
+    auto s0B = rB->slice_mode(0, 0, 5);
+    auto p0 = s0A->prod(*s0B, annot3("a,b,c", "c,d", "a,b,d"), DeNest::False);
+    p0->add_inplace(*prod);
+    TArrayD full;
+    full("a,b,d") = A("a,b,c") * B("c,d");
+    REQUIRE(equal_tarrays(p0->get<TArrayD>(), full, "a,b,d"));
+  }
+
+  SECTION("a product with a Hadamard index materializes the view, once") {
+    // H(a,c): a appears on both operands and the result -> einsum territory
+    TArrayD H(world, TA::TiledRange{{0, 3, 6, 9}, {0, 5, 10}});
+    H.fill_random();
+    world.gop.fence();
+    auto rH = eval_result<ResultD>(H);
+    auto sA = rA->slice_mode(2, 5, 10);
+    auto sH = rH->slice_mode(1, 5, 10);
+    auto prod = sA->prod(*sH, annot3("a,b,c", "a,c", "a,b"), DeNest::False);
+    REQUIRE_FALSE(sA->is_buffer_alias());
+    REQUIRE_FALSE(sH->is_buffer_alias());
+    auto exp =
+        TA::einsum(eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2})("a,b,c"),
+                   eager_block(H, "a,c", {0, 1}, {3, 2})("a,c"), "a,b");
+    REQUIRE(equal_tarrays(prod->get<TArrayD>(), exp, "a,b"));
+  }
+
+  SECTION("a slice of a slice") {
+    auto s = rA->slice_mode(1, 2, 6);
+    auto ss = s->slice_mode(2, 5, 10);
+    REQUIRE(ss->is_buffer_alias());
+    REQUIRE(s->is_buffer_alias());
+    auto const exp = eager_block(A, "a,b,c", {0, 1, 1}, {3, 3, 2});
+    REQUIRE(equal_tarrays(ss->get<TArrayD>(), exp, "a,b,c"));
+    // narrowing the already sliced mode
+    auto sn = s->slice_mode(1, 4, 6);
+    REQUIRE(equal_tarrays(sn->get<TArrayD>(),
+                          eager_block(A, "a,b,c", {0, 2, 0}, {3, 3, 2}),
+                          "a,b,c"));
+    // slicing a view further never materializes it
+    REQUIRE(s->is_buffer_alias());
+    // a slice of a materialized result is an alias of that result
+    REQUIRE(equal_tarrays(s->get<TArrayD>(),
+                          eager_block(A, "a,b,c", {0, 1, 0}, {3, 3, 2}),
+                          "a,b,c"));
+    REQUIRE_FALSE(s->is_buffer_alias());
+    auto sm = s->slice_mode(2, 0, 5);
+    REQUIRE(sm->is_buffer_alias());
+    REQUIRE(equal_tarrays(sm->get<TArrayD>(),
+                          eager_block(A, "a,b,c", {0, 1, 0}, {3, 3, 1}),
+                          "a,b,c"));
+  }
+
+  SECTION("a permutation is lazy and composes with a slice") {
+    auto p = rA->permute(annot2("a,b,c", "c,a,b"));
+    REQUIRE(p->is_buffer_alias());
+    TArrayD expP;
+    expP("c,a,b") = A("a,b,c");
+    std::ostringstream os;
+    os << expP.trange();
+    REQUIRE(p->trange_annot() == os.str());
+    // slicing the permuted view's mode 0 (= c of A)
+    auto ps = p->slice_mode(0, 5, 10);
+    REQUIRE(ps->is_buffer_alias());
+    REQUIRE(p->is_buffer_alias());
+    TArrayD expPS;
+    expPS("c,a,b") = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2})("a,b,c");
+    REQUIRE(equal_tarrays(ps->get<TArrayD>(), expPS, "c,a,b"));
+    // the permuted slice as a product operand, relabelled once more
+    auto ps2 = p->slice_mode(0, 5, 10);
+    auto sB = rB->slice_mode(0, 5, 10);
+    auto prod = ps2->prod(*sB, annot3("c,a,b", "c,d", "b,a,d"), DeNest::False);
+    REQUIRE(ps2->is_buffer_alias());
+    TArrayD exp;
+    exp("b,a,d") = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2})("a,b,c") *
+                   eager_block(B, "c,d", {1, 0}, {2, 2})("c,d");
+    REQUIRE(equal_tarrays(prod->get<TArrayD>(), exp, "b,a,d"));
+    // a permutation of a permutation
+    auto pp = p->permute(annot2("c,a,b", "b,c,a"));
+    REQUIRE(pp->is_buffer_alias());
+    TArrayD expPP;
+    expPP("b,c,a") = A("a,b,c");
+    REQUIRE(equal_tarrays(pp->get<TArrayD>(), expPP, "b,c,a"));
+    // the identity permutation is an alias too, and copies before a write:
+    // accumulating into it leaves A alone
+    auto const A0 = TA::clone(A);
+    auto id = rA->permute(annot2("a,b,c", "a,b,c"));
+    REQUIRE(id->is_buffer_alias());
+    id->add_inplace(*eval_result<ResultD>(TA::clone(A)));
+    REQUIRE_FALSE(id->is_buffer_alias());
+    TArrayD twice;
+    twice("a,b,c") = 2.0 * A0("a,b,c");
+    REQUIRE(equal_tarrays(id->get<TArrayD>(), twice, "a,b,c"));
+    REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+    REQUIRE(p->is_buffer_alias());
+  }
+
+  SECTION("the adjoint conjugates lazily") {
+    TArrayZ Z(world, TA::TiledRange{{0, 3, 6}, {0, 5, 10}});
+    TArrayZ W(world, TA::TiledRange{{0, 5, 10}, {0, 4}});
+    Z.fill_random();
+    W.fill_random();
+    world.gop.fence();
+    auto rZ = eval_result<ResultZ>(Z);
+    auto rW = eval_result<ResultZ>(W);
+    auto adj = rZ->adjoint(annot2("i,a", "a,i"));
+    REQUIRE(adj->is_buffer_alias());
+    TArrayZ expAdj;
+    expAdj("a,i") = Z("i,a").conj();
+    // consumed by a product: Z^dagger(a,i) W(a,j) -> (i,j), nothing
+    // materialized
+    auto prod = adj->prod(*rW, annot3("a,i", "a,j", "i,j"), DeNest::False);
+    REQUIRE(adj->is_buffer_alias());
+    TArrayZ exp;
+    exp("i,j") = expAdj("a,i") * W("a,j");
+    REQUIRE(equal_tarrays(prod->get<TArrayZ>(), exp, "i,j"));
+    // a slice of the adjoint: mode 0 (= a) tile [5, 10)
+    auto as = adj->slice_mode(0, 5, 10);
+    REQUIRE(as->is_buffer_alias());
+    TArrayZ expAS;
+    expAS("a,i") = eager_block(Z, "i,a", {0, 1}, {2, 2})("i,a").conj();
+    REQUIRE(equal_tarrays(as->get<TArrayZ>(), expAS, "a,i"));
+    // the adjoint of the adjoint is a (trivial) view of the array
+    auto adj2 = adj->adjoint(annot2("a,i", "i,a"));
+    REQUIRE(adj2->is_buffer_alias());
+    REQUIRE(equal_tarrays(adj2->get<TArrayZ>(), Z, "i,a"));
+    REQUIRE_FALSE(adj2->is_buffer_alias());
+    // and the value of the adjoint itself
+    REQUIRE(equal_tarrays(adj->get<TArrayZ>(), expAdj, "a,i"));
+  }
+
+  SECTION("sum, scaling, dot and norm take views as is") {
+    auto s1 = rA->slice_mode(2, 5, 10);
+    auto s2 = rA->slice_mode(2, 5, 10);
+    auto const blk = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2});
+    auto sum = s1->sum(*s2, annot3("a,b,c", "a,b,c", "c,b,a"));
+    REQUIRE(s1->is_buffer_alias());
+    REQUIRE(s2->is_buffer_alias());
+    TArrayD expSum;
+    expSum("c,b,a") = blk("a,b,c") + blk("a,b,c");
+    REQUIRE(equal_tarrays(sum->get<TArrayD>(), expSum, "c,b,a"));
+    TArrayD unusedSum;
+    unusedSum("a,b,c") = blk("a,b,c") + blk("a,b,c");
+    expSum = unusedSum;
+
+    auto scaled = s1->prod(*eval_result<ResultScalar<double>>(2.5),
+                           annot3("a,b,c", "", "c,b,a"), DeNest::False);
+    REQUIRE(s1->is_buffer_alias());
+    TArrayD expScaled;
+    expScaled("c,b,a") = 2.5 * blk("a,b,c");
+    REQUIRE(equal_tarrays(scaled->get<TArrayD>(), expScaled, "c,b,a"));
+
+    auto dot = s1->prod(*s2, annot3("a,b,c", "a,b,c", ""), DeNest::False);
+    REQUIRE(s1->is_buffer_alias());
+    double const expDot = TA::dot(blk("a,b,c"), blk("a,b,c"));
+    REQUIRE(dot->get<double>() == Catch::Approx(expDot));
+
+    REQUIRE(s1->norm2() == Catch::Approx(TA::norm2(blk)));
+    REQUIRE(s1->is_buffer_alias());
+  }
+
+  SECTION("writes into a view never reach the parent") {
+    auto const A0 = TA::clone(A);
+    // accumulate into a slice: the slice becomes its own array
+    auto s = rA->slice_mode(2, 5, 10);
+    auto const blk = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2});
+    auto other = eval_result<ResultD>(TA::clone(blk));
+    s->add_inplace(*other);
+    REQUIRE_FALSE(s->is_buffer_alias());
+    TArrayD exp2;
+    exp2("a,b,c") = 2.0 * blk("a,b,c");
+    REQUIRE(equal_tarrays(s->get<TArrayD>(), exp2, "a,b,c"));
+    REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+    // accumulating a view INTO a held value folds the view in
+    auto held = eval_result<ResultD>(TA::clone(blk));
+    held->add_inplace(*rA->slice_mode(2, 5, 10));
+    REQUIRE(equal_tarrays(held->get<TArrayD>(), exp2, "a,b,c"));
+    REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+
+    // the scatter: a view as the block, and a view as the destination
+    TArrayD Zr(world, trA);
+    Zr.fill(0.0);
+    world.gop.fence();
+    auto dest = eval_result<ResultD>(Zr);
+    dest->write_into_slice(*rA->slice_mode(2, 5, 10), 2, 5, 10);
+    TArrayD expZ;
+    expZ("a,b,c") = Zr("a,b,c");
+    expZ("a,b,c").block({0, 0, 1}, {3, 4, 2}, TA::preserve_lobound) =
+        blk("a,b,c");
+    REQUIRE(equal_tarrays(dest->get<TArrayD>(), expZ, "a,b,c"));
+    auto destView = rA->slice_mode(1, 2, 6);  // a view as a destination
+    destView->write_into_slice(*rA->slice_mode(1, 2, 6)->slice_mode(2, 5, 10),
+                               2, 5, 10);
+    REQUIRE_FALSE(destView->is_buffer_alias());
+    REQUIRE(equal_tarrays(destView->get<TArrayD>(),
+                          eager_block(A, "a,b,c", {0, 1, 0}, {3, 3, 2}),
+                          "a,b,c"));
+    REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+  }
+
+  SECTION("clone of a view is a fresh array with the view applied") {
+    auto s = rA->slice_mode(2, 5, 10);
+    auto c = s->clone();
+    REQUIRE(s->is_buffer_alias());
+    REQUIRE_FALSE(c->is_buffer_alias());
+    auto const blk = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2});
+    REQUIRE(equal_tarrays(c->get<TArrayD>(), blk, "a,b,c"));
+    // independent storage
+    c->add_inplace(*eval_result<ResultD>(TA::clone(blk)));
+    REQUIRE(equal_tarrays(s->get<TArrayD>(), blk, "a,b,c"));
+  }
+
+  SECTION("a nested-array product with a sliced flat operand") {
+    using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+    using ResultToT = sequant::ResultTensorOfTensorTA<ToTArray>;
+    // T(i,c;x,y) nested, g(c,d) flat sliced on c -> R(i,d;x,y): the einsum
+    // path takes arrays, so the slice is applied once, exactly
+    TA::TiledRange const trT{{0, 2, 4}, {0, 5, 10}};
+    TA::Range const inner({3, 2});
+    ToTArray T(world, trT);
+    for (auto it = T.begin(); it != T.end(); ++it)
+      if (T.is_local(it.index()))
+        *it = world.taskq.add(
+            [inner](TA::Range const& orng) {
+              return random_tensor_of_tensor<double>(orng, inner);
+            },
+            it.make_range());
+    world.gop.fence();
+    auto rT = eval_result<ResultToT>(T);
+    auto sB = rB->slice_mode(0, 5, 10);
+    auto sT = rT->slice_mode(1, 5, 10);
+    auto prod =
+        sT->prod(*sB, annot3("i,c;x,y", "c,d", "i,d;x,y"), DeNest::False);
+    auto exp =
+        TA::einsum(sT->get<ToTArray>()("i,c;x,y"),
+                   eager_block(B, "c,d", {1, 0}, {2, 2})("c,d"), "i,d;x,y");
+    REQUIRE(equal_tarrays(prod->get<ToTArray>(), exp, "i,d;x,y"));
+  }
+}
