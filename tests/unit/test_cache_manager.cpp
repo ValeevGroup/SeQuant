@@ -659,9 +659,9 @@ TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
     return a3;
   };
 
-  // baseline: no node_slice_mask annotation -> all-full mask, veto inert; the
-  // NV/V frontier is cached and persistent.
-  {
+  // no node_slice_mask annotation -> all-full mask, veto inert; the NV/V
+  // frontier is cached and persistent.
+  SECTION("baseline") {
     auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
     auto const a3 = find_a3(node);
     REQUIRE(a3);
@@ -678,7 +678,7 @@ TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
   // loop, not a whole run-scope entry), so it is VETOED from the run-scope
   // cache
   // -- not registered in the cache map, not persistent.
-  {
+  SECTION("vetoed") {
     auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
     auto const a3 = find_a3(node);
     REQUIRE(a3);
