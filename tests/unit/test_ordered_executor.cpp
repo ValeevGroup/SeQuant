@@ -156,10 +156,7 @@ ScalarNode scalar_tree(std::wstring_view spec) {
 
 }  // namespace
 
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent for an unbatched "
-    "forest",
-    "[ordered-executor]") {
+TEST_CASE("ordered-vs-forest-unbatched", "[ordered-executor]") {
   // A two-root forest, a
   // nontrivial Sum-of-Products over named scalar Variables sharing a common
   // subexpression pattern (2*a*b appears in both roots' construction path
@@ -226,10 +223,7 @@ TEST_CASE(
 // ordered_executor.hpp) with policy.scheduler == BatchScheduler::ordered -- the
 // actual caller-facing seam, rather than calling
 // evaluate_ordered_schedule directly as the test above does.
-TEST_CASE(
-    "BatchPolicy::scheduler == BatchScheduler::ordered routes through the "
-    "ordered executor and matches forest descent",
-    "[ordered-executor]") {
+TEST_CASE("ordered-dispatch-matches-forest", "[ordered-executor]") {
   std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b - c"),
                                  scalar_tree(L"a * a + 3 * b - 2 * c")};
   ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
@@ -256,10 +250,7 @@ TEST_CASE(
 // sequant::evaluate(Nodes const&, layout, leaf_evaluator, cache)) -- i.e.
 // the ordered branch must not disturb it when the scheduler is not set to
 // ordered.
-TEST_CASE(
-    "BatchScheduler defaults to forest_descent and does not disturb the "
-    "pre-existing BatchPolicy dispatch arms",
-    "[ordered-executor]") {
+TEST_CASE("scheduler-default-forest", "[ordered-executor]") {
   std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b - c"),
                                  scalar_tree(L"a * a + 3 * b - 2 * c")};
   ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
@@ -416,12 +407,7 @@ std::optional<std::size_t> orderedexec_index_of_build_step(
 
 }  // namespace
 
-TEST_CASE(
-    "ordered-executor witness: water-20 aux-only residual -- forest descent "
-    "and the ordered executor model the same result shape, and "
-    "the Κ-free home={} composite builds exactly once under the ordered "
-    "executor",
-    "[.][ordered-executor-witness-water20]") {
+TEST_CASE("ordered-w20-aux-witness", "[.][ordered-executor-witness-water20]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -1028,11 +1014,7 @@ void ut_dump_role_diag(sequant::eval::RichSchedule const& rich,
 
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "ordered executor: water-20 aux+occ residual dry-run walk completes "
-    "without "
-    "a vanished home value",
-    "[ordered][w20-auxocc-walk]") {
+TEST_CASE("ordered-w20-auxocc-dryrun", "[ordered][w20-auxocc-walk]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -1905,10 +1887,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
 // ===========================================================================
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "ordered executor: the input-mirrored configuration RUNS the strict "
-    "dry-run walk to completion",
-    "[ordered][cell_table]") {
+TEST_CASE("ordered-mirrored-strict-walk", "[ordered][cell_table]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -2144,9 +2123,8 @@ TEST_CASE(
 // stderr. The watched value ids are only meaningful under that mirrored
 // configuration.
 // ===========================================================================
-TEST_CASE(
-    "cell table: dump the mixed-pass members of the mirrored w20 schedule",
-    "[cell_table][ordered][.][mixed-pass-dump]") {
+TEST_CASE("mirrored-w20-mixed-pass-dump",
+          "[cell_table][ordered][.][mixed-pass-dump]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -2344,10 +2322,7 @@ TEST_CASE(
 // ===========================================================================
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "ordered executor: cache-halt gate does not re-form a resident persistent "
-    "composite, and skips its dead batch-block prerequisites when present",
-    "[ordered][cache-halt]") {
+TEST_CASE("ordered-cache-halt", "[ordered][cache-halt]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -2637,10 +2612,7 @@ TEST_CASE(
 // schedule, and `run` is what the ordered COLD iteration measured. Render it
 // with `sequant-schedule view <path>`.
 // ===========================================================================
-TEST_CASE(
-    "dry-run 2-iteration report: forest vs ordered, cold vs warm cache "
-    "(builds/FLOPs/peak) at w20 residual scale",
-    "[.][dryrun-2iter-report]") {
+TEST_CASE("dryrun-2iter-report", "[.][dryrun-2iter-report]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -3257,10 +3229,7 @@ TEST_CASE(
 // duplicated here as-is, matching the file's own stated precedent for these
 // fixtures (see the file-header note above the witness TEST_CASE).
 // ===========================================================================
-TEST_CASE(
-    "b3: meter()'s ordered replay peak equals a direct evaluate_ordered_"
-    "schedule (PeakMonitor) replay on the water-20 aux-only residual forest",
-    "[.][ordered-executor][meter]") {
+TEST_CASE("meter-replay-equals-direct", "[.][ordered-executor][meter]") {
   using sequant::eval::dryrun::CacheConfig;
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
@@ -3457,8 +3426,7 @@ TEST_CASE(
 // at the instant of realized high-water. Reuses the same fixture as the
 // witness above. Run by name: [.][w20-peak-composition].
 // ===========================================================================
-TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
-          "[.][w20-peak-composition]") {
+TEST_CASE("w20-peak-composition", "[.][w20-peak-composition]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -4033,8 +4001,7 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
 // BuildStep or is an ancestor of the block that does. Any other combination
 // of build and escape sites is still duplicate production.
 // ===========================================================================
-TEST_CASE("well_formed accepts a value built and escaped in its home block",
-          "[ordered][escape-chain]") {
+TEST_CASE("well-formed-home-escape", "[ordered][escape-chain]") {
   using sequant::eval::BuildStep;
   using sequant::eval::OrderedSchedule;
   using sequant::eval::OutputKind;
@@ -4145,10 +4112,7 @@ template <typename CV>
 concept has_coloring_member = requires(CV const& v) { v.coloring; };
 }  // namespace
 
-TEST_CASE(
-    "cache manager and ordered schedule have no legacy value-keyed cache "
-    "machinery",
-    "[ordered][cell_table]") {
+TEST_CASE("no-legacy-value-cache", "[ordered][cell_table]") {
   static_assert(!has_ensure_home_slot_1<sequant::CacheManager<ScalarNode>>,
                 "ensure_home_slot(key) must be gone from the cache");
   static_assert(
@@ -4195,10 +4159,7 @@ TEST_CASE(
 // resolves to, and this pins it without depending on a schedule shape that
 // happens to touch some leaf first inside a loop.
 // ===========================================================================
-TEST_CASE(
-    "ordered executor: a leaf's first touch inside a batch loop is served "
-    "through its Read, with the declared slice",
-    "[ordered][cell_registry]") {
+TEST_CASE("ordered-leaf-first-touch-read", "[ordered][cell_registry]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
 
@@ -4323,10 +4284,7 @@ TEST_CASE(
 // ===========================================================================
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "ordered executor: an Assemble step's scatter destination is sized from "
-    "its own cell form",
-    "[ordered][assemble-dest]") {
+TEST_CASE("ordered-assemble-dest-size", "[ordered][assemble-dest]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -4644,10 +4602,7 @@ TEST_CASE(
 // ===========================================================================
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "ordered executor: a loop-invariant escape is not re-formed on later "
-    "batches",
-    "[ordered][block-skip]") {
+TEST_CASE("ordered-invariant-escape-once", "[ordered][block-skip]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -4841,10 +4796,7 @@ TEST_CASE(
 // ===========================================================================
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "ordered executor: a produce-if-absent cell bound to an enclosing loop is "
-    "re-produced on that loop's batches",
-    "[ordered][pia-rebind]") {
+TEST_CASE("ordered-pia-bound-reproduced", "[ordered][pia-rebind]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -5027,10 +4979,7 @@ TEST_CASE(
 // mark outlives the clear); an UNBOUND one is reachable by no clear and so may
 // be. Before the fix the seeding rule was "produce_if_absent and currently
 // held", which admits the bound cell and elides its re-production.
-TEST_CASE(
-    "ordered executor: only an unbound produce-if-absent cell may be seeded "
-    "into a per-visit skip set",
-    "[ordered][pia-rebind]") {
+TEST_CASE("ordered-pia-unbound-seed", "[ordered][pia-rebind]") {
   using sequant::eval::CellRegistry;
   using sequant::eval::CellTable;
   using sequant::eval::LoopKey;
@@ -5447,10 +5396,8 @@ TEST_CASE("ordered executor refuses a batched schedule with no backend ops",
 // 2), and the cell table must validate. Decided per recorded loop instance, not
 // by basis key.
 // ===========================================================================
-TEST_CASE(
-    "ordered schedule: a shared batched intermediate read in lockstep by one "
-    "term and whole by another is built in its loop and escapes assembled",
-    "[ordered][cell_table][legality]") {
+TEST_CASE("ordered-lockstep-vs-whole-escape",
+          "[ordered][cell_table][legality]") {
   using sequant::Index;
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
