@@ -117,6 +117,18 @@ struct CanonicalMark {
   }
 };
 
+/// a visitor taking `const ExprPtr &`, which is deprecated for Expr::visit
+template <typename Visitor>
+concept const_exprptr_visitor =
+    std::is_invocable_r_v<void, std::remove_reference_t<Visitor>,
+                          const ExprPtr &>;
+
+/// CProduct or NCProduct, which report the type id of Product and hence can't
+/// be told apart from Product by Expr::is and Expr::as
+template <typename T>
+concept product_variant = std::same_as<std::remove_cvref_t<T>, CProduct> ||
+                          std::same_as<std::remove_cvref_t<T>, NCProduct>;
+
 }  // namespace detail
 
 /// @return `T::static_type_name(std::type_identity<T>{})` if @c T declares
@@ -197,6 +209,8 @@ struct LexicographicCompareOptions {
 /// @endcode
 class Expr : public std::enable_shared_from_this<Expr> {
  public:
+  friend class ExprHolder;
+
   using hash_type = std::size_t;
   using type_id_type = std::uint64_t;
   using type_rank_type = std::uint8_t;
@@ -218,29 +232,48 @@ class Expr : public std::enable_shared_from_this<Expr> {
   virtual std::wstring to_latex() const;
 
   /// @return a clone of this object, i.e. an object that is equal to @c this
-  virtual ExprPtr clone() const = 0;
+  ExprPtr clone() const;
+
+  [[deprecated("Expr objects may no longer be managed by shared_ptr")]] std::
+      shared_ptr<Expr>
+      shared_from_this();
+  [[deprecated("Expr objects may no longer be managed by shared_ptr")]] std::
+      shared_ptr<const Expr>
+      shared_from_this() const;
+  [[deprecated("Expr objects may no longer be managed by shared_ptr")]] std::
+      weak_ptr<Expr>
+      weak_from_this();
+  [[deprecated("Expr objects may no longer be managed by shared_ptr")]] std::
+      weak_ptr<const Expr>
+      weak_from_this() const;
 
   /// like Expr::shared_from_this, but returns ExprPtr
   /// @return a shared_ptr to this object wrapped into ExprPtr, if this object
   /// is already managed by a shared_ptr, else returns a shared_ptr to a clone
   /// of this object wrapped into ExprPtr
-  ExprPtr exprptr_from_this() {
+  [[deprecated("Expr objects may no longer be managed by shared_ptr")]] ExprPtr
+  exprptr_from_this() {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     if (weak_from_this().use_count() == 0)
       return this->clone();
     else
       return static_cast<ExprPtr>(this->shared_from_this());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   }
 
   /// like Expr::shared_from_this, but returns ExprPtr
   /// @return a shared_ptr to this object wrapped into ExprPtr, if this object
   /// is already managed by a shared_ptr, else returns a shared_ptr to a clone
   /// of this object wrapped into ExprPtr
-  ExprPtr exprptr_from_this() const {
+  [[deprecated("Expr objects may no longer be managed by shared_ptr")]] ExprPtr
+  exprptr_from_this() const {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     if (weak_from_this().use_count() == 0)
       return this->clone();
     else
       return static_cast<const ExprPtr>(
           std::const_pointer_cast<Expr>(this->shared_from_this()));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   }
 
   /// Canonicalizes @c this and returns the byproduct of canonicalization (e.g.
@@ -295,21 +328,55 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// @warning this will only work for tree expressions; no checking is
   /// performed that each subexpression has only been visited once
   /// TODO make work for graphs
-  /// @tparam Visitor a callable of type void(ExprPtr&) or void(const ExprPtr&)
-  /// @param visitor the visitor object
+  /// @tparam Visitor a callable of type void(ExprPtr&), void(Expr&) or
+  /// void(const Expr&); the deprecated void(const ExprPtr&) is supported as
+  /// well
+  /// @param visitor the visitor object. A visitor taking `ExprPtr &` can
+  /// replace the visited subexpressions; since this object itself can't be
+  /// replaced, it is not invoked on it. A visitor taking `Expr &` (only
+  /// supported by the non-const overload) can modify the visited expressions
+  /// in-place and one taking `const Expr &` can only inspect them; both are
+  /// invoked on this object as well. A visitor taking the deprecated
+  /// `const ExprPtr &` is invoked on this object, too, but receives a
+  /// non-owning pointer to it that must not be retained beyond the visitor's
+  /// invocation.
   /// @param atoms_only if true, will visit only the leaves; the default is to
   /// visit all nodes
   /// @return true if this object was visited
   /// @sa expr_range
   // clang-format on
   template <typename Visitor>
+    requires(!detail::const_exprptr_visitor<Visitor>)
   bool visit(Visitor &&visitor, const bool atoms_only = false) {
     return visit_impl(*this, std::forward<Visitor>(visitor), atoms_only);
   }
 
   /// const version of visit
   template <typename Visitor>
+    requires(!detail::const_exprptr_visitor<Visitor>)
   bool visit(Visitor &&visitor, const bool atoms_only = false) const {
+    return visit_impl(*this, std::forward<Visitor>(visitor), atoms_only);
+  }
+
+  /// visit with a visitor taking `const ExprPtr &`
+  /// @warning the visitor receives a non-owning pointer to this object, which
+  /// must not be retained beyond the visitor's invocation
+  template <detail::const_exprptr_visitor Visitor>
+  [[deprecated(
+      "Visitors taking const ExprPtr & are deprecated: use const Expr & for "
+      "inspecting and Expr & for modifying the visited expressions "
+      "instead")]] bool
+  visit(Visitor &&visitor, const bool atoms_only = false) {
+    return visit_impl(*this, std::forward<Visitor>(visitor), atoms_only);
+  }
+
+  /// const version of the deprecated visit
+  template <detail::const_exprptr_visitor Visitor>
+  [[deprecated(
+      "Visitors taking const ExprPtr & are deprecated: use const Expr & for "
+      "inspecting and Expr & for modifying the visited expressions "
+      "instead")]] bool
+  visit(Visitor &&visitor, const bool atoms_only = false) const {
     return visit_impl(*this, std::forward<Visitor>(visitor), atoms_only);
   }
 
@@ -406,9 +473,16 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// Expr::memoizing_hash
   /// @return the hash value for this Expr
   hash_type hash_value(
-      std::function<hash_type(const std::shared_ptr<const Expr> &)> hasher = {})
-      const {
-    return hasher ? hasher(shared_from_this()) : memoizing_hash();
+      std::function<hash_type(const Expr &)> hasher = {}) const {
+    return hasher ? hasher(*this) : memoizing_hash();
+  }
+
+  [[deprecated(
+      "Use a hashing function that takes a const Expr & instead of "
+      "shared_ptr")]] hash_type
+  hash_value(std::function<hash_type(const std::shared_ptr<const Expr> &)>
+                 hasher) const {
+    return hasher ? hasher(this->non_owning_ptr()) : memoizing_hash();
   }
 
   /// Computes and returns the derived type identifier
@@ -502,10 +576,16 @@ class Expr : public std::enable_shared_from_this<Expr> {
     return id;
   }
 
-  /// @tparam T an Expr type
+  /// @tparam T an Expr type; must not be CProduct or NCProduct, which report
+  /// the type id of Product (use `is<Product>()` and
+  /// Product::is_commutative() instead)
   /// @return true if this object is of type @c T
   template <typename T>
   bool is() const {
+    static_assert(!detail::product_variant<T>,
+                  "Expr::is/as: CProduct and NCProduct report the type id of "
+                  "Product, use is<Product>()/as<Product>() and "
+                  "Product::is_commutative() instead");
     if constexpr (is_expr_v<T>)
       return true;
     else if constexpr (std::is_base_of_v<Expr, T>)
@@ -586,6 +666,12 @@ class Expr : public std::enable_shared_from_this<Expr> {
   const ExprPtr &back() const;
 
  private:
+  /// @return an ExprPtr pointing to this object without owning it, i.e. it
+  /// does not keep this object alive; regardless of how this object is managed
+  /// @note only to be used to support deprecated APIs that pass this object
+  /// as a shared_ptr
+  ExprPtr non_owning_ptr() const;
+
   /// reports an out-of-range access by at()/front()/back()
   [[noreturn]] void throw_out_of_range(std::size_t idx) const;
 
@@ -593,9 +679,17 @@ class Expr : public std::enable_shared_from_this<Expr> {
       typename E, typename Visitor,
       typename = std::enable_if_t<std::is_same_v<std::remove_cvref_t<E>, Expr>>>
   static bool visit_impl(E &&expr, Visitor &&visitor, const bool atoms_only) {
-    if (expr.weak_from_this().use_count() == 0)
-      throw Exception(
-          "Expr::visit: cannot visit expressions not managed by shared_ptr");
+    using visitor_type = std::remove_reference_t<Visitor>;
+    constexpr bool is_const = std::is_const_v<std::remove_reference_t<E>>;
+    constexpr bool visitor_uses_exprptr =
+        std::is_invocable_r_v<void, visitor_type, ExprPtr &>;
+    constexpr bool visitor_uses_expr = std::is_invocable_r_v<
+        void, visitor_type, std::conditional_t<is_const, const Expr &, Expr &>>;
+    static_assert(visitor_uses_exprptr || visitor_uses_expr,
+                  "Expr::visit: visitor must be invocable with ExprPtr &, "
+                  "Expr & or const Expr & (the latter only, if the visited "
+                  "expression is const)");
+
     for (auto &subexpr_ptr : expr.expr()) {
       const auto subexpr_is_an_atom = subexpr_ptr->is_atom();
       const auto need_to_visit_subexpr = !atoms_only || subexpr_is_an_atom;
@@ -604,18 +698,27 @@ class Expr : public std::enable_shared_from_this<Expr> {
         visited = visit_impl(*subexpr_ptr, std::forward<Visitor>(visitor),
                              atoms_only);
       // call on the subexpression itself, if not yet done so
-      if (need_to_visit_subexpr && !visited) visitor(subexpr_ptr);
-    }
-    // N.B. can only visit itself if visitor is nonmutating!
-    bool this_visited = false;
-    if constexpr (std::is_invocable_r_v<void, std::remove_reference_t<Visitor>,
-                                        const ExprPtr &>) {
-      if (!atoms_only || expr.is_atom()) {
-        const ExprPtr this_exprptr = expr.exprptr_from_this();
-        visitor(this_exprptr);
-        this_visited = true;
+      if (need_to_visit_subexpr && !visited) {
+        if constexpr (visitor_uses_exprptr) {
+          visitor(subexpr_ptr);
+        } else {
+          visitor(*subexpr_ptr);
+        }
       }
     }
+
+    // N.B. this can't be replaced, hence ExprPtr & visitors don't visit it
+    bool this_visited = false;
+    if (atoms_only && !expr.is_atom()) return this_visited;
+    if constexpr (detail::const_exprptr_visitor<Visitor>) {
+      const ExprPtr this_ptr = expr.non_owning_ptr();
+      visitor(this_ptr);
+      this_visited = true;
+    } else if constexpr (!visitor_uses_exprptr) {
+      visitor(expr);
+      this_visited = true;
+    }
+
     return this_visited;
   }
 
@@ -690,6 +793,14 @@ class Expr : public std::enable_shared_from_this<Expr> {
     return true;
   }
 
+  /// @return a (deep) copy of this object allocated on the heap
+  virtual std::unique_ptr<Expr> unique_copy() const = 0;
+
+  /// @return a heap-allocated object of the same type as this object into
+  /// which the contents of this object have been moved
+  /// @post this object is left in a valid but unspecified (moved-from) state
+  virtual std::unique_ptr<Expr> unique_move() && = 0;
+
  private:
   /// records that type @p type , named @p name , has type id @p id
   /// @throw sequant::Exception if @p id is already recorded for a type of
@@ -746,6 +857,7 @@ struct proportional_to {
   /// @param[in] expr1
   /// @param[in] expr2
   /// @return true if @p expr1 is proportional to @p expr2
+  bool operator()(const Expr &expr1, const Expr &expr2) const;
   bool operator()(const ExprPtr &expr1, const ExprPtr &expr2) const;
 };
 

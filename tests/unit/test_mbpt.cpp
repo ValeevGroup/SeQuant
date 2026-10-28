@@ -94,18 +94,15 @@ sequant::ExprPtr in_base_spaces(
   };
   auto first_index = [](const ExprPtr& term, auto&& pred) {
     std::optional<Index> found;
-    auto look = [&](const ExprPtr& f) {
-      if (found || !f->is<Tensor>()) return;
-      for (const auto& idx : f->as<Tensor>().const_braket())
+    auto look = [&](const Expr& f) {
+      if (found || !f.is<Tensor>()) return;
+      for (const auto& idx : f.as<Tensor>().const_braket())
         if (pred(idx)) {
           found = idx;
           return;
         }
     };
-    if (term->is<Tensor>())
-      look(term);
-    else
-      term->visit(look, /*atoms_only=*/true);
+    term->visit(look, /*atoms_only=*/true);
     return found;
   };
 
@@ -2010,9 +2007,9 @@ SECTION("MRSO-MultiProduct") {
       // every density leg of the MultiProduct result is active
       bool active_only = true;
       mp->visit(
-          [&](const ExprPtr& e) {
-            if (!e->is<Tensor>()) return;
-            const auto& t = e->as<Tensor>();
+          [&](const Expr& e) {
+            if (!e.is<Tensor>()) return;
+            const auto& t = e.as<Tensor>();
             if (t.label() == L"γ" || t.label() == L"η" || t.label() == L"κ")
               for (const auto& idx : t.const_braket())
                 active_only =
@@ -2596,11 +2593,11 @@ SECTION("rdm-decomposition symmetries") {
   const auto densities2 =
       simplify(mbpt::decompositions::cumulant2_to_density(kappa2));
   densities2->visit(
-      [](const ExprPtr& e) {
-        if (!e->is<Tensor>()) return;
-        REQUIRE(e->as<Tensor>().label() == L"γ");
-        REQUIRE(e->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
-        REQUIRE(e->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+      [](const Expr& e) {
+        if (!e.is<Tensor>()) return;
+        REQUIRE(e.as<Tensor>().label() == L"γ");
+        REQUIRE(e.as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+        REQUIRE(e.as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
       },
       /*atoms_only=*/true);
   // a spin-orbital multi-body density is antisymmetric, like the one
@@ -2621,14 +2618,14 @@ SECTION("rdm-decomposition symmetries") {
                      .first);
     std::size_t n_multibody_kappa = 0;
     decomp->visit(
-        [&n_multibody_kappa](const ExprPtr& e) {
-          if (!e->is<Tensor>() || e->as<Tensor>().label() != L"κ" ||
-              e->as<Tensor>().rank() < 2)
+        [&n_multibody_kappa](const Expr& e) {
+          if (!e.is<Tensor>() || e.as<Tensor>().label() != L"κ" ||
+              e.as<Tensor>().rank() < 2)
             return;
           ++n_multibody_kappa;
-          REQUIRE(e->as<Tensor>().symmetry() == Symmetry::Antisymm);
-          REQUIRE(e->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
-          REQUIRE(e->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+          REQUIRE(e.as<Tensor>().symmetry() == Symmetry::Antisymm);
+          REQUIRE(e.as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+          REQUIRE(e.as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
         },
         /*atoms_only=*/true);
     REQUIRE(n_multibody_kappa > 0);
@@ -2725,9 +2722,9 @@ SECTION("cumulant-to-density decompositions") {
     REQUIRE(permuted->is<Sum>());
     REQUIRE(permuted->size() == 2);
     permuted->visit(
-        [](const ExprPtr& e) {
-          if (e->is<Tensor>())
-            REQUIRE(e->as<Tensor>().braket_symmetry() == BraKetSymmetry::Symm);
+        [](const Expr& e) {
+          if (e.is<Tensor>())
+            REQUIRE(e.as<Tensor>().braket_symmetry() == BraKetSymmetry::Symm);
         },
         /*atoms_only=*/true);
   }
@@ -2746,8 +2743,8 @@ SECTION("cumulant-to-density decompositions") {
                         h * mbpt::decompositions::cumulant_to_density(kappa1);
   const auto result = cumulants_to_densities(expr);
   result->visit(
-      [](const ExprPtr& e) {
-        if (e->is<Tensor>()) REQUIRE(e->as<Tensor>().label() != L"κ");
+      [](const Expr& e) {
+        if (e.is<Tensor>()) REQUIRE(e.as<Tensor>().label() != L"κ");
       },
       /*atoms_only=*/true);
   REQUIRE(simplify(result - expected) == ex<Constant>(0));

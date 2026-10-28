@@ -123,9 +123,9 @@ inline std::vector<std::wstring> serialized(ExprPtr const& expr,
                                             std::wstring_view label) {
   std::vector<std::wstring> result;
   expr->visit(
-      [&](ExprPtr const& x) {
-        if (x->is<AbstractTensor>() &&
-            std::wstring_view(x->as<AbstractTensor>()._label()) == label)
+      [&](const Expr& x) {
+        if (x.is<AbstractTensor>() &&
+            std::wstring_view(x.as<AbstractTensor>()._label()) == label)
           result.push_back(serialize(x));
       },
       /* atoms_only = */ true);

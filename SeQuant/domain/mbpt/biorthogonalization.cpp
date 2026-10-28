@@ -456,10 +456,10 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
       result_exprs.begin(), result_exprs.end(), [](const ResultExpr& res) {
         bool found = false;
         res.expression()->visit(
-            [&](const ExprPtr& expr) {
-              if (expr->is<Tensor>() &&
-                  (expr->as<Tensor>().label() == reserved::symm_label() ||
-                   expr->as<Tensor>().label() == reserved::antisymm_label())) {
+            [&](const Expr& expr) {
+              if (expr.is<Tensor>() &&
+                  (expr.as<Tensor>().label() == reserved::symm_label() ||
+                   expr.as<Tensor>().label() == reserved::antisymm_label())) {
                 found = true;
               };
             },

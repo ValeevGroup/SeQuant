@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_holder.hpp>
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
@@ -17,7 +18,10 @@
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <concepts>
+#include <memory>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <type_traits>
 
@@ -53,24 +57,25 @@ class Sum : public Expr {
   }
 
   /// construct a Sum out of a range of summands
-  /// @param rng a range
-  template <typename Range>
-    requires(meta::is_range_v<std::remove_cvref_t<Range>> &&
-             !meta::is_same_v<std::remove_cvref_t<Range>, ExprPtrList>)
+  /// @param rng a range; if rng is an expression (or an ExprPtr or ExprHolder
+  /// to one), it is treated as a single summand rather than as the range of
+  /// its subexpressions
+  template <std::ranges::range Range>
+    requires(!std::same_as<std::remove_cvref_t<Range>, ExprPtrList>)
   explicit Sum(Range &&rng) {
     // N.B. use append to flatten out Sum summands
-    constexpr auto rng_is_expr =
-        meta::is_base_of_v<Expr, std::remove_cvref_t<Range>>;
+    constexpr auto rng_is_expr = is_an_expr_v<std::remove_cvref_t<Range>>;
     constexpr auto rng_is_exprptr =
-        meta::is_same_v<ExprPtr, std::remove_cvref_t<Range>>;
-    if constexpr (rng_is_expr || rng_is_exprptr) {
-      ExprPtr rng_as_exprptr;
+        std::same_as<ExprPtr, std::remove_cvref_t<Range>>;
+    constexpr auto rng_is_exprholder =
+        std::same_as<ExprHolder, std::remove_cvref_t<Range>>;
+
+    if constexpr (rng_is_expr || rng_is_exprptr || rng_is_exprholder) {
       if constexpr (rng_is_expr) {
-        rng_as_exprptr = rng.exprptr_from_this();
+        this->append_impl(rng);
       } else {
-        rng_as_exprptr = rng;
+        this->append_impl(*rng);
       }
-      this->append(rng_as_exprptr);
     } else {
       for (auto &&v : rng) {
         append(std::forward<decltype(v)>(v));
@@ -110,13 +115,19 @@ class Sum : public Expr {
   /// offset
   ExprPtr take_n(size_t offset, size_t count) const;
 
-  /// @tparam Filter a boolean predicate type, such `Filter(const ExprPtr&)`
-  /// evaluates to true
-  /// @param f an object of Filter type
-  /// Selects elements {`e`} for which `f(e)` is true
+  /// @param f Boolean predicate taking either a `const Expr &` or a
+  /// `const ExprPtr &`
+  /// @returns A sum containing only the summands for which f was true.
   template <typename Filter>
+    requires(std::predicate<Filter &, const Expr &> ||
+             std::predicate<Filter &, const ExprPtr &>)
   ExprPtr filter(Filter &&f) const {
-    return ex<Sum>(summands_ | ranges::views::filter(f));
+    if constexpr (std::predicate<Filter &, const ExprPtr &>) {
+      return ex<Sum>(summands_ | ranges::views::filter(f));
+    } else {
+      return ex<Sum>(summands_ | ranges::views::filter(
+                                     [&f](const ExprPtr &e) { return f(*e); }));
+    }
   }
 
   /// @return true if the number of factors is zero
@@ -134,8 +145,6 @@ class Sum : public Expr {
 
   Expr::type_id_type type_id() const override;
 
-  ExprPtr clone() const override;
-
   /// @brief adjoint of a Sum is a sum of adjoints of its factors
   virtual void adjoint() override;
 
@@ -150,6 +159,10 @@ class Sum : public Expr {
   ConstExprIterator begin_subexpr() const override;
 
   ConstExprIterator end_subexpr() const override;
+
+ protected:
+  std::unique_ptr<Expr> unique_copy() const override;
+  std::unique_ptr<Expr> unique_move() && override;
 
  private:
   summands_type summands_{};
@@ -178,6 +191,12 @@ class Sum : public Expr {
   /// erases the constant summand recorded by constant_summand_idx_ if it is
   /// zero and clears the record
   void drop_zero_constant();
+
+  /// appends a copy of @p summand (or of its summands, if it is a Sum)
+  Sum &append_impl(const Expr &summand);
+
+  /// prepends a copy of @p summand (or of its summands, if it is a Sum)
+  Sum &prepend_impl(const Expr &summand);
 
   /// @return the hash of this object
   /// @note this ensures that hash of a Sum of a single summand is

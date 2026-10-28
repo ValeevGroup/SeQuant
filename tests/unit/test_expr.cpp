@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <compare>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -41,7 +42,12 @@ struct Dummy : public sequant::Expr {
   virtual ~Dummy() = default;
   std::wstring to_latex() const override { return L"{\\text{Dummy}}"; }
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
-  sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
+  std::unique_ptr<sequant::Expr> unique_copy() const override {
+    return std::make_unique<Dummy>();
+  }
+  std::unique_ptr<sequant::Expr> unique_move() && override {
+    return std::make_unique<Dummy>(std::move(*this));
+  }
   void adjoint() override {}
   bool static_equal(const sequant::Expr &) const override { return true; }
   std::weak_ordering static_lexicographic_compare(
@@ -136,8 +142,11 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
         });
   }
 
-  sequant::ExprPtr clone() const override {
-    return sequant::ex<VecExpr>(this->begin(), this->end());
+  std::unique_ptr<sequant::Expr> unique_copy() const override {
+    return std::make_unique<VecExpr>(this->begin(), this->end());
+  }
+  std::unique_ptr<sequant::Expr> unique_move() && override {
+    return std::make_unique<VecExpr>(std::move(*this));
   }
 };
 
@@ -149,8 +158,11 @@ struct Adjointable : public sequant::Expr {
     return L"{\\text{Adjointable}{" + std::to_wstring(v) + L"}}";
   }
   type_id_type type_id() const override { return get_type_id<Adjointable>(); };
-  sequant::ExprPtr clone() const override {
-    return sequant::ex<Adjointable>(v);
+  std::unique_ptr<sequant::Expr> unique_copy() const override {
+    return std::make_unique<Adjointable>(v);
+  }
+  std::unique_ptr<sequant::Expr> unique_move() && override {
+    return std::make_unique<Adjointable>(std::move(*this));
   }
   bool static_equal(const sequant::Expr &that) const override {
     return v == that.as<Adjointable>().v;
@@ -166,16 +178,19 @@ struct Adjointable : public sequant::Expr {
 };
 
 struct latex_visitor {
-  void operator()(const std::shared_ptr<sequant::Expr> &expr) {
-    result += expr->to_latex();
-  }
+  void operator()(const sequant::Expr &expr) { result += expr.to_latex(); }
   std::wstring result{};
 };
 
 template <typename Derived>
 struct MinimalExpr : public sequant::Expr {
   type_id_type type_id() const override { return get_type_id<Derived>(); };
-  sequant::ExprPtr clone() const override { return sequant::ex<Derived>(); }
+  std::unique_ptr<sequant::Expr> unique_copy() const override {
+    return std::make_unique<Derived>();
+  }
+  std::unique_ptr<sequant::Expr> unique_move() && override {
+    return std::make_unique<Derived>();
+  }
   void adjoint() override {}
   bool static_equal(const sequant::Expr &) const override { return true; }
   std::weak_ordering static_lexicographic_compare(
@@ -453,16 +468,16 @@ TEST_CASE("expr", "[elements]") {
     const auto c2 = ex<Constant>(rational{1, 2});
     const auto vx = ex<Variable>(L"x");
 
-    {  // constructors
+    SECTION("constructors") {
       REQUIRE_NOTHROW(Power(c2, rational{1, 2}));
       REQUIRE_NOTHROW(Power(vx, rational{3, 1}));
 
       // convenience ctors:
       REQUIRE(Power(L"x", 2) == Power(vx, rational{2}));
       REQUIRE(Power(L"x", rational{1, 2}) == Power(vx, rational{1, 2}));
-      REQUIRE(Power(2, 3) == Power(ex<Constant>(2), rational{3}));
+      REQUIRE(Power(2, 3) == Power(Constant(2), rational{3}));
       REQUIRE(Power(rational{2, 3}, 2) ==
-              Power(ex<Constant>(rational{2, 3}), rational{2}));
+              Power(Constant(rational{2, 3}), rational{2}));
       if constexpr (sequant::assert_behavior() ==
                     sequant::AssertBehavior::Throw) {
         // base must be a Constant or Variable; Power-of-Power is not allowed
@@ -470,25 +485,25 @@ TEST_CASE("expr", "[elements]") {
         REQUIRE_THROWS(Power(inner, rational{2, 3}));
 
         // 0^n is defined only for n >= 0
-        REQUIRE_THROWS(Power(ex<Constant>(0), rational{-1}));
+        REQUIRE_THROWS(Power(Constant(0), rational{-1}));
       }
     }
 
-    {  // accessors
+    SECTION("accessors") {
       Power p(c2, rational{1, 2});
-      REQUIRE(p.base() == ex<Constant>(rational{1, 2}));
+      REQUIRE(p.base() == Constant(rational{1, 2}));
       REQUIRE(p.exponent() == rational{1, 2});
 
       // is_zero: base == 0, exponent > 0
-      Power pz(ex<Constant>(0), rational{2});
+      Power pz(Constant(0), rational{2});
       REQUIRE(pz.is_zero());
       // 0^0 is not zero by our convention
-      Power pz2(ex<Constant>(0), rational{0});
+      Power pz2(Constant(0), rational{0});
       REQUIRE(!pz2.is_zero());
       REQUIRE(!p.is_zero());
     }
 
-    {  // comparison
+    SECTION("comparison") {
       Power p1(c2, rational{1, 2});
       Power p2(c2, rational{1, 2});
       REQUIRE(p1 == p2);
@@ -507,7 +522,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(!(plt_a < plt_c));
     }
 
-    {  // operator*=
+    SECTION("operator*=") {
       // b^e1 *= b^e2 -> b^(e1+e2)
       Power pa(vx, rational{1, 2});
       Power pb(vx, rational{1, 3});
@@ -537,14 +552,14 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(pc_conj2.exponent() == rational{3, 2});
 
       // 2^{1/2} * 2^{1/2} = 2
-      Power pe(ex<Constant>(2), rational{1, 2});
-      Power pf(ex<Constant>(2), rational{1, 2});
+      Power pe(Constant(2), rational{1, 2});
+      Power pf(Constant(2), rational{1, 2});
       pe *= pf;
       REQUIRE(pe.exponent() == rational{1});
       REQUIRE(to_latex(pe) == Constant(2).to_latex());
     }
 
-    {  // Power should NOT be absorbed into Product::scalar_
+    SECTION("Don't absorb into Product::scalar") {
       auto p = ex<Power>(vx, rational{1, 2});
       auto prod = ex<Product>(Product{});
       prod->as<Product>().append(1, p, Product::Flatten::Yes);
@@ -898,12 +913,12 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE_NOTHROW(adjoint(e));  // check free-function adjoint
     }
-    {  // Constant
+    SECTION("Constant") {
       const auto e = std::make_shared<Constant>(Constant::scalar_type{1, 2});
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->value() == Constant::scalar_type{1, -2});
     }
-    {  // Variable
+    SECTION("Variable") {
       const auto e = std::make_shared<Variable>(L"q");
       REQUIRE(e->conjugated() == false);
       REQUIRE_NOTHROW(e->adjoint());
@@ -912,7 +927,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->conjugated() == false);
     }
-    {  // Product
+    SECTION("Product") {  // Product
       const auto e = std::make_shared<Product>();
       e->append(Constant::scalar_type{2, -1}, ex<Adjointable>());
       e->append(1, ex<Adjointable>(-2));
@@ -921,7 +936,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->factors()[0]->as<Adjointable>().v == 2);
       REQUIRE(e->factors()[1]->as<Adjointable>().v == -1);
     }
-    {  // CProduct
+    SECTION("CProduct") {
       const auto e = std::make_shared<CProduct>();
       e->append(Constant::scalar_type{2, -1}, ex<Adjointable>());
       e->append(1, ex<Adjointable>(-2));
@@ -930,7 +945,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->factors()[0]->as<Adjointable>().v == -1);
       REQUIRE(e->factors()[1]->as<Adjointable>().v == 2);
     }
-    {  // NCProduct
+    SECTION("NCProduct") {
       const auto e = std::make_shared<NCProduct>();
       e->append(Constant::scalar_type{2, -1}, ex<Adjointable>());
       e->append(1, ex<Adjointable>(-2));
@@ -939,7 +954,7 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->factors()[0]->as<Adjointable>().v == 2);
       REQUIRE(e->factors()[1]->as<Adjointable>().v == -1);
     }
-    {  // Sum
+    SECTION("Sum") {
       const auto e = std::make_shared<Sum>();
       e->append(ex<Adjointable>());
       e->append(ex<Adjointable>(-2));
@@ -947,7 +962,8 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->summands()[0]->as<Adjointable>().v == -1);
       REQUIRE(e->summands()[1]->as<Adjointable>().v == 2);
     }
-    {  // Power: adjoint flips the conjugation flag; base/exponent unchanged
+    SECTION("Power") {
+      // adjoint flips the conjugation flag; base/exponent unchanged
       Power pv(ex<Variable>(L"z"), rational{1, 2});
       REQUIRE(!pv.conjugated());
       pv.adjoint();
@@ -1170,6 +1186,87 @@ TEST_CASE("expr", "[elements]") {
       CHECK_NOTHROW(simplify(x));
       CHECK(x->is<Constant>());
       CHECK(x->as<Constant>().value() == 84);
+    }
+
+    // a visitor taking Expr & modifies the visited expressions in-place,
+    // including the visited expression itself, regardless of how it is managed
+    {
+      auto relabel = [](Expr &expr) {
+        if (expr.is<Variable>()) expr.as<Variable>().set_label(L"B");
+      };
+
+      ExprPtr root = ex<Variable>(L"A");
+      root->visit(relabel);
+      REQUIRE(root->as<Variable>().label() == L"B");
+
+      ExprHolder holder = Variable(L"A");
+      holder->visit(relabel);
+      REQUIRE(holder->as<Variable>().label() == L"B");
+
+      Sum sum(ExprPtrList{ex<Variable>(L"A"), ex<Variable>(L"C")});
+      std::size_t n_visited = 0;
+      sum.visit([&](Expr &expr) {
+        relabel(expr);
+        ++n_visited;
+      });
+      // two summands + the sum itself
+      REQUIRE(n_visited == 3);
+      REQUIRE(sum.summand(0)->as<Variable>().label() == L"B");
+      REQUIRE(sum.summand(1)->as<Variable>().label() == L"B");
+    }
+
+    // a visitor taking const Expr & visits the visited expression itself, too
+    {
+      const Sum sum(ExprPtrList{ex<Variable>(L"A"), ex<Variable>(L"B")});
+
+      std::wstring labels;
+      sum.visit(
+          [&](const Expr &expr) { labels += expr.as<Variable>().label(); },
+          /* atoms_only = */ true);
+      REQUIRE(labels == L"AB");
+
+      std::size_t n_visited = 0;
+      sum.visit([&](const Expr &) { ++n_visited; });
+      // two summands + the sum itself
+      REQUIRE(n_visited == 3);
+
+      const Variable var(L"A");
+      n_visited = 0;
+      var.visit([&](const Expr &expr) {
+        REQUIRE(&expr == &var);
+        ++n_visited;
+      });
+      REQUIRE(n_visited == 1);
+    }
+
+    // a (deprecated) visitor taking const ExprPtr & receives a non-owning
+    // pointer to the visited expression itself, regardless of how it is managed
+    {
+      ExprPtr root = ex<Variable>(L"A");
+      std::size_t n_visited = 0;
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      root->visit([&](const ExprPtr &expr) {
+        REQUIRE(expr.get() == root.get());
+        REQUIRE(expr.use_count() == 0);
+        expr->as<Variable>().set_label(L"B");
+        ++n_visited;
+      });
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+      REQUIRE(n_visited == 1);
+      REQUIRE(root->as<Variable>().label() == L"B");
+      REQUIRE(root.use_count() == 1);
+
+      Variable var(L"A");
+      n_visited = 0;
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      var.visit([&](const ExprPtr &expr) {
+        REQUIRE(expr.get() == &var);
+        expr->as<Variable>().set_label(L"B");
+        ++n_visited;
+      });
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+      REQUIRE(n_visited == 1);
+      REQUIRE(var.label() == L"B");
     }
   }
 
@@ -1484,10 +1581,28 @@ TEST_CASE("expr", "[elements]") {
 
     REQUIRE(hash_value(ex<Constant>(1)) == hash_value(ex<Constant>(1)));
 
-    auto hasher = [](const std::shared_ptr<const Expr> &) -> unsigned int {
+    auto hasher1 = [](const std::shared_ptr<const Expr> &) -> unsigned int {
       return 0;
     };
-    REQUIRE_NOTHROW(ex<Constant>(1)->hash_value(hasher) == 0);
+    auto hasher2 = [](const Expr &) -> unsigned int { return 2; };
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    REQUIRE_NOTHROW(ex<Constant>(1)->hash_value(hasher1) == 0);
+    {
+      // the hasher receives a pointer to the expression itself, regardless of
+      // how it is managed
+      const ExprPtr c = ex<Constant>(1);
+      REQUIRE(c->hash_value(
+                  [&c](const std::shared_ptr<const Expr> &ptr) -> std::size_t {
+                    return ptr.get() == c.get() ? 1 : 0;
+                  }) == 1);
+      const Constant c2(1);
+      REQUIRE(c2.hash_value(
+                  [&c2](const std::shared_ptr<const Expr> &ptr) -> std::size_t {
+                    return ptr.get() == &c2 ? 1 : 0;
+                  }) == 1);
+    }
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE_NOTHROW(ex<Constant>(1)->hash_value(hasher2) == 2);
 
     {  // Power
       const auto c2 = ex<Constant>(rational{1, 2});
@@ -1717,6 +1832,471 @@ TEST_CASE("expr", "[elements]") {
     }
   }
 
+  SECTION("Sum::filter") {
+    const Sum sum(
+        ExprPtrList{ex<Variable>("A"), ex<Constant>(2), ex<Variable>("B")});
+
+    SECTION("predicate on Expr") {
+      ExprPtr filtered =
+          sum.filter([](const Expr &e) { return e.is<Variable>(); });
+      REQUIRE_THAT(filtered, EquivalentTo("A + B"));
+    }
+    SECTION("predicate on ExprPtr") {
+      ExprPtr filtered =
+          sum.filter([](const ExprPtr &e) { return e->is<Constant>(); });
+      REQUIRE(filtered->is<Sum>());
+      REQUIRE(filtered->size() == 1);
+      REQUIRE(filtered->as<Sum>().summand(0)->is<Constant>());
+    }
+  }
+
+  SECTION("ExprHolder") {
+    SECTION("Constructors") {
+      SECTION("from concrete") {
+        ExprHolder holder1(Constant(1));
+        REQUIRE(holder1->is<Constant>());
+        REQUIRE(holder1->as<Constant>() == Constant(1));
+
+        ExprHolder holder2(Variable("bla"));
+        REQUIRE(holder2->is<Variable>());
+        REQUIRE(holder2->as<Variable>() == Variable("bla"));
+
+        Product prod(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
+        ExprHolder holder3(prod);
+        REQUIRE(holder3->is<Product>());
+        REQUIRE(holder3->as<Product>() == prod);
+
+        Sum sum(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
+        ExprHolder holder4(sum);
+        REQUIRE(holder4->is<Sum>());
+        REQUIRE(holder4->as<Sum>() == sum);
+      }
+      SECTION("from base") {
+        ExprPtr expr = ex<Constant>(42);
+
+        ExprHolder holder(*expr);
+        REQUIRE(holder->is<Constant>());
+        REQUIRE(holder->as<Constant>().value() == 42);
+      }
+      SECTION("conversion via 'assignment'") {
+        ExprHolder holder1 = Constant(1);
+        REQUIRE(holder1->is<Constant>());
+        REQUIRE(holder1->as<Constant>() == Constant(1));
+
+        ExprHolder holder2 = Variable("bla");
+        REQUIRE(holder2->is<Variable>());
+        REQUIRE(holder2->as<Variable>() == Variable("bla"));
+
+        Product prod(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
+        ExprHolder holder3 = Product(prod);
+        REQUIRE(holder3->is<Product>());
+        REQUIRE(holder3->as<Product>() == prod);
+
+        Sum sum(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
+        ExprHolder holder4 = Sum(sum);
+        REQUIRE(holder4->is<Sum>());
+        REQUIRE(holder4->as<Sum>() == sum);
+      }
+    }
+    SECTION("moving in an expression does not copy it") {
+      Sum sum(
+          ExprPtrList{ex<Variable>("A"), ex<Variable>("B"), ex<Variable>("C")});
+      const Expr *first_summand = sum.summand(0).get();
+
+      ExprHolder holder = std::move(sum);
+      REQUIRE(holder->is<Sum>());
+      REQUIRE(holder->as<Sum>().size() == 3);
+      // a copy would have deep-copied the summands
+      REQUIRE(holder->as<Sum>().summand(0).get() == first_summand);
+
+      // also when moving through a reference to the base class
+      Product prod(ExprPtrList{ex<Variable>("A"), ex<Variable>("B")});
+      const Expr *first_factor = prod.factor(0).get();
+      Expr &prod_ref = prod;
+      holder = std::move(prod_ref);
+      REQUIRE(holder->is<Product>());
+      REQUIRE(holder->as<Product>().factor(0).get() == first_factor);
+    }
+    SECTION("Assignment") {
+      ExprHolder holder = Constant(1);
+      REQUIRE(holder->is<Constant>());
+      REQUIRE(holder->as<Constant>() == Constant(1));
+
+      holder = Variable("bla");
+      REQUIRE(holder->is<Variable>());
+      REQUIRE(holder->as<Variable>() == Variable("bla"));
+
+      Product prod(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
+      holder = Product(prod);
+      REQUIRE(holder->is<Product>());
+      REQUIRE(holder->as<Product>() == prod);
+
+      Sum sum(ExprPtrList{ex<Variable>("bla"), ex<Constant>(2)});
+      holder = Sum(sum);
+      REQUIRE(holder->is<Sum>());
+      REQUIRE(holder->as<Sum>() == sum);
+    }
+    SECTION("value semantics") {
+      ExprHolder holder = Constant(1);
+      ExprHolder copy(holder);
+      copy = Variable("test");
+
+      REQUIRE(copy->is<Variable>());
+      REQUIRE(holder->is<Constant>());
+
+      ExprHolder copy2 = holder;
+      REQUIRE(copy2->is<Constant>());
+      REQUIRE(&*copy2 != &*holder);
+    }
+    SECTION("copyable") {
+      STATIC_REQUIRE(std::copyable<ExprHolder>);
+
+      ExprHolder holder = Variable("A");
+      std::vector<ExprHolder> holders{holder, holder};
+      REQUIRE(holders.size() == 2);
+      REQUIRE(holders[0]->is<Variable>());
+      REQUIRE(&*holders[0] != &*holder);
+      REQUIRE(&*holders[0] != &*holders[1]);
+
+      ExprHolderList list{holder, Constant(2)};
+      std::vector<ExprHolder> from_list(list);
+      REQUIRE(from_list.size() == 2);
+      REQUIRE(from_list[1]->is<Constant>());
+    }
+    SECTION("conversion to Expr &") {
+      bool passed1 = false;
+
+      auto func1 = [&passed1](Expr &) { passed1 = true; };
+
+      ExprHolder expr = Constant(5);
+      func1(expr);
+
+      REQUIRE(passed1);
+
+      bool passed2 = false;
+      auto func2 = [&passed2](const Expr &) { passed2 = true; };
+
+      func2(std::as_const(expr));
+
+      REQUIRE(passed2);
+
+      bool passed3 = false;
+      auto func3 = [&passed3](Expr &&) { passed3 = true; };
+
+      func3(std::move(expr));
+
+      REQUIRE(passed3);
+    }
+    SECTION("freestanding Expr arithmetic") {
+      // This allows to use arithmetic directly on Expr & instances (instead of
+      // requiring ExprPtr or ExprHolder wrappers)
+      ExprHolder res = Constant(1) + Variable("One");
+      REQUIRE_THAT(res, EquivalentTo("1 + One"));
+
+      res = Variable("A") * Tensor("T", bra({"a1"}), ket()) - Constant(42);
+      REQUIRE_THAT(res, EquivalentTo("A * T{a1}:N-N-N - 42"));
+    }
+    SECTION("In-place ExprHolder arithmetic") {
+      ExprHolder res = Constant(1);
+      res += Variable("A");
+      res -= Variable("B");
+      res *= Constant(3);
+
+      REQUIRE_THAT(res, EquivalentTo("(1 + A - B) * 3"));
+
+      ExprHolder ncprod = Variable("A");
+      ncprod ^= Variable("B");
+      // N.B. NCProduct reports the type id of Product
+      REQUIRE(ncprod->is<Product>());
+      REQUIRE_FALSE(ncprod->as<Product>().is_commutative());
+      REQUIRE(ncprod->size() == 2);
+      REQUIRE(ncprod->as<Product>().factor(0)->as<Variable>().label() == L"A");
+      REQUIRE(ncprod->as<Product>().factor(1)->as<Variable>().label() == L"B");
+    }
+    SECTION("ExprHolder with ExprHolder arithmetic") {
+      const ExprHolder a = Variable("A");
+      const ExprHolder b = Variable("B");
+
+      REQUIRE_THAT(a + b, EquivalentTo("A + B"));
+      REQUIRE_THAT(a - b, EquivalentTo("A - B"));
+      REQUIRE_THAT(a * b, EquivalentTo("A * B"));
+
+      ExprHolder nc = a ^ b;
+      REQUIRE(nc->is<Product>());
+      REQUIRE_FALSE(nc->as<Product>().is_commutative());
+      REQUIRE(nc->as<Product>().factor(0)->as<Variable>().label() == L"A");
+      REQUIRE(nc->as<Product>().factor(1)->as<Variable>().label() == L"B");
+
+      // operands are left untouched
+      REQUIRE(a->as<Variable>().label() == L"A");
+      REQUIRE(b->as<Variable>().label() == L"B");
+
+      // rvalue operands
+      REQUIRE_THAT(ExprHolder(Variable("A")) + b, EquivalentTo("A + B"));
+      REQUIRE_THAT(a * ExprHolder(Variable("B")), EquivalentTo("A * B"));
+
+      // mixed with Expr
+      REQUIRE_THAT(a + Variable("C"), EquivalentTo("A + C"));
+      REQUIRE_THAT(Variable("C") - a, EquivalentTo("C - A"));
+      REQUIRE_THAT(Variable("C") * a, EquivalentTo("C * A"));
+    }
+    SECTION("ExprHolder with scalar arithmetic") {
+      const ExprHolder a = Variable("A");
+
+      REQUIRE_THAT(a + 2, EquivalentTo("A + 2"));
+      REQUIRE_THAT(2 + a, EquivalentTo("2 + A"));
+      REQUIRE_THAT(a - 2, EquivalentTo("A - 2"));
+      REQUIRE_THAT(2 - a, EquivalentTo("2 - A"));
+      REQUIRE_THAT(a * 2, EquivalentTo("2 A"));
+      REQUIRE_THAT(2 * a, EquivalentTo("2 A"));
+      REQUIRE_THAT(a / 2, EquivalentTo("1/2 A"));
+      REQUIRE_THAT(a / Constant(2), EquivalentTo("1/2 A"));
+      REQUIRE_THAT(a + Constant(2), EquivalentTo("A + 2"));
+
+      REQUIRE_THAT(a + L"B", EquivalentTo("A + B"));
+      REQUIRE_THAT(L"B" - a, EquivalentTo("B - A"));
+      REQUIRE_THAT(a * L"B", EquivalentTo("A * B"));
+
+      const int two = 2;
+      REQUIRE_THAT(a / two, EquivalentTo("1/2 A"));
+    }
+    SECTION("ExprHolder arithmetic yields the same as ExprPtr arithmetic") {
+      const ExprHolder a = Variable("A");
+      const ExprPtr a_ptr = ex<Variable>("A");
+
+      REQUIRE((a + Constant(2)) == (a_ptr + ex<Constant>(2)));
+      REQUIRE((a - Constant(2)) == (a_ptr - ex<Constant>(2)));
+      REQUIRE((a - 2) == (a_ptr - 2));
+      REQUIRE((Constant(2) - a) == (ex<Constant>(2) - a_ptr));
+      REQUIRE((a * Constant(2)) == (a_ptr * ex<Constant>(2)));
+    }
+    SECTION("non-commutative product involving a Product") {
+      ExprHolder appended = Variable("A") * Variable("B");
+      appended ^= Variable("C");
+      REQUIRE(appended->is<Product>());
+      REQUIRE_FALSE(appended->as<Product>().is_commutative());
+      REQUIRE(appended->size() == 3);
+      REQUIRE(appended->as<Product>().factor(2)->as<Variable>().label() ==
+              L"C");
+
+      ExprHolder prepended = Variable("C") ^ (Variable("A") * Variable("B"));
+      REQUIRE(prepended->is<Product>());
+      REQUIRE_FALSE(prepended->as<Product>().is_commutative());
+      REQUIRE(prepended->size() == 3);
+      REQUIRE(prepended->as<Product>().factor(0)->as<Variable>().label() ==
+              L"C");
+    }
+    SECTION("operand referring to the held expression") {
+      auto labels = [](const Expr &expr) {
+        std::vector<std::wstring> result;
+        for (const ExprPtr &subexpr : expr) {
+          result.push_back(std::wstring(subexpr->as<Variable>().label()));
+        }
+        return result;
+      };
+      const std::vector<std::wstring> abab = {L"A", L"B", L"A", L"B"};
+
+      SECTION("Sum") {
+        ExprHolder sum = Variable("A") + Variable("B");
+        sum += sum;
+        REQUIRE(sum->is<Sum>());
+        REQUIRE(labels(sum) == abab);
+
+        sum = Variable("A") + Variable("B");
+        sum -= sum;
+        REQUIRE(sum->is<Sum>());
+        REQUIRE(sum->size() == 3);
+      }
+      SECTION("Product") {
+        ExprHolder prod = Variable("A") * Variable("B");
+        prod *= prod;
+        REQUIRE(prod->is<Product>());
+        REQUIRE(labels(prod) == abab);
+
+        prod = Variable("A") * Variable("B");
+        prod ^= prod;
+        REQUIRE(prod->is<Product>());
+        REQUIRE_FALSE(prod->as<Product>().is_commutative());
+        REQUIRE(labels(prod) == abab);
+      }
+      SECTION("atom") {
+        ExprHolder var = Variable("A");
+        var += var;
+        REQUIRE(var->is<Sum>());
+        REQUIRE(var->size() == 2);
+
+        var = Variable("A");
+        var -= var;
+        REQUIRE(var->is<Sum>());
+        REQUIRE(var->size() == 2);
+
+        var = Variable("A");
+        var *= var;
+        REQUIRE(var->is<Product>());
+        REQUIRE(var->size() == 2);
+
+        var = Variable("A");
+        var ^= var;
+        REQUIRE(var->is<Product>());
+        REQUIRE(var->size() == 2);
+      }
+    }
+    SECTION("moved-from ExprHolder") {
+      ExprHolder holder = Variable("A");
+      ExprHolder other = std::move(holder);
+      REQUIRE(other->is<Variable>());
+
+      if constexpr (sequant::assert_behavior() ==
+                    sequant::AssertBehavior::Throw) {
+        REQUIRE_THROWS(*holder);
+        REQUIRE_THROWS(holder->is_atom());
+        REQUIRE_THROWS(ExprHolder(holder));
+        REQUIRE_THROWS(holder.copy());
+        REQUIRE_THROWS(holder.begin());
+        REQUIRE_THROWS(static_cast<const Expr &>(holder));
+        REQUIRE_THROWS(ExprHolder(ExprPtr{}));
+      }
+
+      // a moved-from holder can be assigned to
+      holder = Constant(1);
+      REQUIRE(holder->is<Constant>());
+    }
+    SECTION("take_expr") {
+      ExprHolder holder = Variable("A");
+      const Expr *held = &*holder;
+
+      std::unique_ptr<Expr> taken = std::move(holder).take_expr();
+      REQUIRE(taken.get() == held);
+      REQUIRE(taken->is<Variable>());
+
+      if constexpr (sequant::assert_behavior() ==
+                    sequant::AssertBehavior::Throw) {
+        REQUIRE_THROWS(std::move(holder).take_expr());
+      }
+    }
+    SECTION("iteration") {
+      ExprHolder holder = Variable("A") + Variable("B") + Variable("C");
+
+      std::wstring labels;
+      for (const ExprPtr &summand : std::as_const(holder)) {
+        labels += summand->as<Variable>().label();
+      }
+      REQUIRE(labels == L"ABC");
+
+      for (ExprPtr &summand : holder) {
+        summand = ex<Constant>(1);
+      }
+      REQUIRE(std::ranges::all_of(holder, [](const ExprPtr &summand) {
+        return summand->is<Constant>();
+      }));
+
+      ExprHolder atom = Variable("A");
+      REQUIRE(atom.begin() == atom.end());
+      REQUIRE(atom.cbegin() == atom.cend());
+    }
+    SECTION("adjoint") {
+      const ExprHolder holder = Variable("A");
+      ExprHolder adj = adjoint(holder);
+
+      REQUIRE(adj->as<Variable>().conjugated());
+      REQUIRE_FALSE(holder->as<Variable>().conjugated());
+    }
+    SECTION("Power") {
+      const ExprHolder base = Variable("x");
+      Power pw(base, rational{2});
+      REQUIRE(pw.base() == ex<Variable>("x"));
+      REQUIRE(&*pw.base() != &*base);
+
+      // copies retain the conjugation and are independent of the original
+      pw.conjugate();
+      ExprHolder copy(pw);
+      REQUIRE(copy->as<Power>().conjugated());
+      REQUIRE(copy->as<Power>().exponent() == rational{2});
+      REQUIRE(&*copy->as<Power>().base() != &*pw.base());
+      ExprPtr clone = pw.clone();
+      REQUIRE(clone->as<Power>().conjugated());
+      REQUIRE(*clone == pw);
+
+      ExprHolder folded = Power(2, 3);
+      Power::flatten(folded);
+      REQUIRE(folded->is<Constant>());
+      REQUIRE(folded->as<Constant>().value() == 8);
+
+      ExprHolder unfolded = Power(L"x", 2);
+      Power::flatten(unfolded);
+      REQUIRE(unfolded->is<Power>());
+
+      ExprHolder lifted = Power(L"x", 1);
+      lifted->as<Power>().conjugate();
+      Power::flatten(lifted);
+      REQUIRE(lifted->is<Variable>());
+      REQUIRE(lifted->as<Variable>().conjugated());
+    }
+    SECTION("Sum and Product of a single ExprHolder") {
+      const ExprHolder var = Variable("A");
+
+      Sum sum(var);
+      REQUIRE(sum.size() == 1);
+      REQUIRE(sum.summand(0)->is<Variable>());
+      REQUIRE(sum.summand(0).get() != &*var);
+
+      ExprPtr sum_ptr = ex<Sum>(var);
+      REQUIRE(sum_ptr->size() == 1);
+
+      Product prod(var);
+      REQUIRE(prod.size() == 1);
+      REQUIRE(prod.factor(0)->is<Variable>());
+
+      ExprPtr prod_ptr = ex<Product>(var);
+      REQUIRE(prod_ptr->size() == 1);
+
+      // nested sums and products are flattened
+      const ExprHolder holder_sum = Variable("A") + Variable("B");
+      REQUIRE(Sum(holder_sum).size() == 2);
+
+      const ExprHolder holder_prod =
+          Constant(2) * Variable("A") * Variable("B");
+      Product flattened(holder_prod);
+      REQUIRE(flattened.size() == 2);
+      REQUIRE(flattened.scalar() == 2);
+
+      // rvalue holders
+      ExprHolder to_move = Variable("A") + Variable("B");
+      REQUIRE(Sum(std::move(to_move)).size() == 2);
+    }
+    SECTION("Conversion to ExprPtr") {
+      ExprHolder holder = Constant(3);
+
+      ExprPtr ptr = std::move(holder);
+      REQUIRE(ptr->is<Constant>());
+      REQUIRE(ptr->as<Constant>().value() == 3);
+
+      holder = Variable("A");
+      // Copy-conversion-ctor is explicit
+      ptr = ExprPtr(holder);
+      REQUIRE(ptr->is<Variable>());
+      REQUIRE(ptr->as<Variable>().label() == L"A");
+
+      // Ensure that ptr actually points to a copy
+      ptr->as<Variable>().set_label(L"B");
+      REQUIRE(holder->as<Variable>().label() == L"A");
+      REQUIRE(ptr->as<Variable>().label() == L"B");
+    }
+    SECTION("Conversion from ExprPtr") {
+      // This conversion is always explicit as it always has to perform a copy.
+      // Even a moved-from ExpPtr might point to an object that is co-owned by
+      // another ExprPtr and thus "resource stealing" is not possible.
+      ExprPtr ptr = ex<Constant>(2);
+      ExprHolder holder(ptr);
+      REQUIRE(holder->is<Constant>());
+      REQUIRE(holder->as<Constant>().value() == 2);
+
+      ptr->as<Constant>() = Constant(3);
+      REQUIRE(ptr->as<Constant>().value() == 3);
+      REQUIRE(holder->as<Constant>().value() == 2);
+    }
+  }
+
   SECTION("ResultExpr") {
     SECTION("accessors") {
       SECTION("as_variable") {
@@ -1911,14 +2491,8 @@ TEST_CASE("expr_type_id_derived", "[elements]") {
   REQUIRE(cid != pid);
   REQUIRE(ncid != pid);
   REQUIRE(cid != ncid);
-  const auto c = ex<Constant>(1);
   const auto p = ex<Variable>(L"x") * ex<Variable>(L"y");
-  REQUIRE_NOTHROW(c->is<CProduct>());
-  REQUIRE_NOTHROW(c->is<NCProduct>());
-  REQUIRE_NOTHROW(p->is<CProduct>());
-  REQUIRE_NOTHROW(p->is<NCProduct>());
   REQUIRE(p->is<Product>());
-  REQUIRE(!p->is<CProduct>());
   REQUIRE(Expr::get_type_id<Product>() == pid);
   REQUIRE(Expr::get_type_id<CProduct>() == cid);
 }
@@ -2017,8 +2591,6 @@ TEST_CASE("expr_type_id", "[elements]") {
     REQUIRE(Expr::get_type_id<Product>() != Expr::get_type_id<CProduct>());
     REQUIRE(Expr::get_type_id<Product>() != Expr::get_type_id<NCProduct>());
     REQUIRE(Expr::get_type_id<CProduct>() != Expr::get_type_id<NCProduct>());
-    REQUIRE_NOTHROW(ex<Constant>(1)->is<CProduct>());
-    REQUIRE_NOTHROW(ex<Constant>(1)->is<NCProduct>());
     static_assert(type_name_of<CProduct>() == "sequant::CProduct");
 
     // a derived type that declares no name keeps its base's rank but not its

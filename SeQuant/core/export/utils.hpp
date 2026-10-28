@@ -54,7 +54,7 @@ std::string format_power_exponent(const Power::exponent_type &exponent,
 /// @param base_str @p base already rendered to a string by the caller
 /// @return @p base_str, wrapped in parens iff @p base is a Constant whose
 ///         value is a non-integer or negative real
-std::string format_power_base(const ExprPtr &base, std::string base_str);
+std::string format_power_base(const ExprHolder &base, std::string base_str);
 
 /// Formats a Power for export framework
 /// @param power the Power to format

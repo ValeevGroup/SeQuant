@@ -206,9 +206,9 @@ ExprPtr projection_term(ExprPtr const& term, ProjectionOptions const& opts) {
   std::size_t rank = 0;
   auto const& registry = *get_default_mbpt_context().op_registry();
   term->visit(
-      [&](ExprPtr const& x) {
-        if (!x->is<AbstractTensor>()) return;
-        auto const& t = x->as<AbstractTensor>();
+      [&](const Expr& x) {
+        if (!x.is<AbstractTensor>()) return;
+        auto const& t = x.as<AbstractTensor>();
         if (t._label() == reserved::symm_label() ||
             t._label() == reserved::antisymm_label()) {
           rank = t._bra_rank();

@@ -47,9 +47,9 @@ namespace sequant::tests::csv {
 template <typename F>
 void for_each_index(ExprPtr const& expr, F&& f) {
   expr->visit(
-      [&f](ExprPtr const& x) {
-        if (!x->is<AbstractTensor>()) return;
-        for (auto const& idx : x->as<AbstractTensor>()._slots()) f(idx);
+      [&f](const Expr& x) {
+        if (!x.is<AbstractTensor>()) return;
+        for (auto const& idx : x.as<AbstractTensor>()._slots()) f(idx);
       },
       /* atoms_only = */ true);
 }
@@ -107,9 +107,9 @@ inline void assert_amplitudes_carry_granted_basis(ExprPtr const& expr) {
                     instance_text(grant));
   };
   expr->visit(
-      [&](ExprPtr const& x) {
-        if (!x->is<AbstractTensor>()) return;
-        auto const& t = x->as<AbstractTensor>();
+      [&](const Expr& x) {
+        if (!x.is<AbstractTensor>()) return;
+        auto const& t = x.as<AbstractTensor>();
         if (!mbpt::is_amplitude_tensor(t, reg)) return;
         const std::wstring label(strip_adjoint_label(t._label()));
         for (Index const& idx : t._bra()) check_slot(t, label, idx);
@@ -160,9 +160,9 @@ inline std::vector<AbstractTensor const*> tensors_labelled(
     ExprPtr const& expr, std::wstring_view label) {
   std::vector<AbstractTensor const*> result;
   expr->visit(
-      [&](ExprPtr const& x) {
-        if (!x->is<AbstractTensor>()) return;
-        auto const& t = x->as<AbstractTensor>();
+      [&](const Expr& x) {
+        if (!x.is<AbstractTensor>()) return;
+        auto const& t = x.as<AbstractTensor>();
         if (std::wstring_view(t._label()) == label) result.push_back(&t);
       },
       /* atoms_only = */ true);

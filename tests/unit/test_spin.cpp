@@ -2007,9 +2007,9 @@ TEST_CASE("spin-traced densities", "[spin]") {
                                             : spintrace(expr));
       std::size_t n_density = 0;
       result->visit(
-          [&n_density, &label](const ExprPtr& e) {
-            if (!e->is<Tensor>()) return;
-            const auto& t = e->as<Tensor>();
+          [&n_density, &label](const Expr& e) {
+            if (!e.is<Tensor>()) return;
+            const auto& t = e.as<Tensor>();
             REQUIRE(t.label() != reserved::spinfree_rdm_label());
             if (t.label() != label) return;
             ++n_density;
@@ -2025,9 +2025,9 @@ TEST_CASE("spin-traced densities", "[spin]") {
     // never produces Γ either
     for (const auto& block : open_shell_spintrace(expr, {})) {
       block->visit(
-          [&label](const ExprPtr& e) {
-            if (!e->is<Tensor>()) return;
-            const auto& t = e->as<Tensor>();
+          [&label](const Expr& e) {
+            if (!e.is<Tensor>()) return;
+            const auto& t = e.as<Tensor>();
             REQUIRE(t.label() != reserved::spinfree_rdm_label());
             if (t.label() != label) return;
             REQUIRE(t.hermiticity() == Hermiticity::Hermitian);

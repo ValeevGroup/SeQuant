@@ -1,3 +1,4 @@
+#include <SeQuant/core/expressions/expr_holder.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/hash.hpp>
@@ -7,22 +8,22 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
+#include <memory>
 
 namespace sequant {
 
-Power::Power(ExprPtr base, exponent_type exponent)
-    : base_{}, exponent_{std::move(exponent)} {
-  SEQUANT_ASSERT(base);
-  SEQUANT_ASSERT(base->is<Constant>() || base->is<Variable>());
-  // clone on construction so that external
-  // mutations of the input cannot invalidate our memoized hash
-  base_ = base->clone();
+Power::Power(const ExprPtr& base, exponent_type exponent)
+    : Power(ExprHolder(base), std::move(exponent)) {}
+
+Power::Power(ExprHolder base, exponent_type exponent)
+    : base_{std::move(base)}, exponent_{std::move(exponent)} {
+  SEQUANT_ASSERT(base_->is<Constant>() || base_->is<Variable>());
   // 0^n is defined only for n >= 0 (0^0 = 1 by convention)
   SEQUANT_ASSERT(!base_->is<Constant>() || !base_->as<Constant>().is_zero() ||
                  exponent_ >= 0);
 }
 
-const ExprPtr& Power::base() const { return base_; }
+const ExprHolder& Power::base() const { return base_; }
 
 const Power::exponent_type& Power::exponent() const { return exponent_; }
 
@@ -40,41 +41,49 @@ bool Power::is_zero() const {
 
 std::wstring Power::to_latex() const { return io::latex::to_string(*this); }
 
-void Power::flatten(ExprPtr& expr) {
-  if (!expr || !expr->is<Power>()) return;
-  const auto& pw = expr->as<Power>();
+template <expr_holder E>
+void flatten_impl(E& expr) {
+  auto create_constant = [](const auto& val) {
+    if constexpr (std::same_as<std::remove_cvref_t<E>, ExprHolder>) {
+      return Constant(val);
+    } else {
+      return ex<Constant>(val);
+    }
+  };
+
+  const auto& pw = expr->template as<Power>();
 
   // b^1 = b and conjugate if needed
-  if (pw.exponent_ == 1) {
-    auto lifted = pw.base_->clone();
-    if (pw.conjugated_) lifted->adjoint();
+  if (pw.exponent() == 1) {
+    auto lifted = pw.base().copy();
+    if (pw.conjugated()) lifted->adjoint();
     expr = std::move(lifted);
     return;
   }
   // b^0 = 1 for any base (the ctor rejects 0^(negative)
-  if (pw.exponent_ == 0) {
-    expr = ex<Constant>(Constant::scalar_type{1});
+  if (pw.exponent() == 0) {
+    expr = create_constant(Constant::scalar_type{1});
     return;
   }
-  if (!pw.base_->is<Constant>()) return;
+  if (!pw.base()->template is<Constant>()) return;
 
   using scalar_type = Constant::scalar_type;
-  const auto& base_val = pw.base_->as<Constant>().value();
+  const auto& base_val = pw.base()->template as<Constant>().value();
 
   // 1^k = 1 for any rational k.
   if (base_val == scalar_type{1}) {
-    expr = ex<Constant>(scalar_type{1});
+    expr = create_constant(scalar_type{1});
     return;
   }
   // 0^k for k < 0 is undefined; the ctor rejects it, and a disabled assert
   // must not let it fold to 0 or divide by zero below
-  if (Constant::is_zero(base_val) && pw.exponent_ < 0) return;
+  if (Constant::is_zero(base_val) && pw.exponent() < 0) return;
 
   scalar_type value{0};
-  if (denominator(pw.exponent_) == 1) {
+  if (denominator(pw.exponent()) == 1) {
     // integer exponent, any Constant base: exp-by-squaring; for negative
     // exponents we power the magnitude and invert at the end
-    auto exp_nr = numerator(pw.exponent_);
+    auto exp_nr = numerator(pw.exponent());
     const bool negate = exp_nr < 0;
     if (negate) exp_nr = -exp_nr;
     // refuse a value too large to build: with the base written as
@@ -101,27 +110,32 @@ void Power::flatten(ExprPtr& expr) {
     // 0^k = 0 for the k > 0 the ctor admits (k = 0 was handled above)
   } else if (base_val.imag() == 0 && base_val.real() > 0) {
     // a rational power of a positive rational folds iff it has no root
-    const auto form = simplest_radical_form({{base_val.real(), pw.exponent_}});
+    const auto form = simplest_radical_form({{base_val.real(), pw.exponent()}});
     if (!form || form->root_order != 1) return;
     value = scalar_type{form->rational_part};
   } else {
     return;
   }
 
-  if (pw.conjugated_) value = conj(value);
-  expr = ex<Constant>(std::move(value));
+  if (pw.conjugated()) value = conj(value);
+  expr = create_constant(std::move(value));
+}
+
+void Power::flatten(ExprPtr& expr) {
+  if (!expr || !expr->is<Power>()) return;
+
+  flatten_impl(expr);
+}
+
+void Power::flatten(ExprHolder& expr) {
+  if (!expr->is<Power>()) return;
+
+  flatten_impl(expr);
 }
 
 Expr::type_id_type Power::type_id() const { return get_type_id<Power>(); }
 
 bool Power::is_scalar() const { return true; }
-
-ExprPtr Power::clone() const {
-  auto cloned = ex<Power>(base_, exponent_);
-  if (conjugated_) cloned->as<Power>().conjugate();
-  cloned->as<Power>().copy_canonical_mark(*this);
-  return cloned;
-}
 
 void Power::adjoint() { conjugate(); }
 
@@ -155,6 +169,17 @@ Power& Power::operator*=(const Expr& that) {
     return *this;
   }
   throw Exception("Power::operator*=(that): not valid for that");
+}
+
+std::unique_ptr<Expr> Power::unique_copy() const {
+  auto copy = std::make_unique<Power>(base_.copy(), exponent_);
+  if (conjugated_) copy->as<Power>().conjugate();
+  copy->copy_canonical_mark(*this);
+  return copy;
+}
+
+std::unique_ptr<Expr> Power::unique_move() && {
+  return std::make_unique<Power>(std::move(*this));
 }
 
 Expr::hash_type Power::memoizing_hash() const {

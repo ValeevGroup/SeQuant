@@ -44,7 +44,7 @@
 #include <functional>
 #include <initializer_list>
 #include <iterator>
-#include <map>
+#include <memory>
 #include <optional>
 #include <source_location>
 #include <string>
@@ -960,6 +960,10 @@ class Operator : public Operator<void, S> {
   /// @brief returns the perturbation order of this operator
   [[nodiscard]] size_t order() const { return order_; }
 
+ protected:
+  std::unique_ptr<Expr> unique_copy() const override;
+  std::unique_ptr<Expr> unique_move() && override;
+
  private:
   std::function<void(QuantumNumbers&)> qn_action_;
 
@@ -980,8 +984,6 @@ class Operator : public Operator<void, S> {
   bool has_odd_rank_term() const;
 
   Expr::type_id_type type_id() const override;
-
-  ExprPtr clone() const override;
 
   std::wstring to_latex() const override;
 

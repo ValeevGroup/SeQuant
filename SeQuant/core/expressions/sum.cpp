@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <memory>
 
 namespace sequant {
 
@@ -48,51 +49,71 @@ Sum::Sum(summands_type &&summands, move_only_tag)
 
 Sum &Sum::append(ExprPtr summand) {
   SEQUANT_ASSERT(summand);
-  if (!summand->is<Sum>()) {
-    if (!summand->is_zero()) {        // exclude zeros
-      if (summand->is<Constant>()) {  // add up constants
+  return append_impl(*summand);
+}
+
+Sum &Sum::append_impl(const Expr &summand) {
+  if (&summand == this) {
+    // N.B. appending to this while iterating over its summands invalidates
+    // the iterators, hence iterate over a (shallow) copy instead
+    const Sum copy(*this);
+    return append_impl(copy);
+  }
+  if (!summand.is<Sum>()) {
+    if (!summand.is_zero()) {        // exclude zeros
+      if (summand.is<Constant>()) {  // add up constants
         // immediately, if possible
         if (constant_summand_idx()) {
-          fold_constant(summand->as<Constant>());
+          fold_constant(summand.as<Constant>());
           drop_zero_constant();
         } else {
-          summands_.push_back(summand->clone());
+          summands_.push_back(summand.clone());
           constant_summand_idx_ = summands_.size() - 1;
         }
       } else {
-        summands_.push_back(summand->clone());
+        summands_.push_back(summand.clone());
       }
       reset_hash_value();
     }
   } else {  // this recursively flattens Sum summands
-    for (auto &subsummand : *summand) this->append(subsummand);
+    for (const auto &subsummand : summand) this->append_impl(*subsummand);
   }
   return *this;
 }
 
 Sum &Sum::prepend(ExprPtr summand) {
   SEQUANT_ASSERT(summand);
-  if (!summand->is<Sum>()) {
-    if (!summand->is_zero()) {
+  return prepend_impl(*summand);
+}
+
+Sum &Sum::prepend_impl(const Expr &summand) {
+  if (&summand == this) {
+    // N.B. prepending to this while iterating over its summands invalidates
+    // the iterators, hence iterate over a (shallow) copy instead
+    const Sum copy(*this);
+    return prepend_impl(copy);
+  }
+  if (!summand.is<Sum>()) {
+    if (!summand.is_zero()) {
       // exclude zeros
-      if (summand->is<Constant>()) {
+      if (summand.is<Constant>()) {
         if (constant_summand_idx()) {  // add up to the existing constant ...
-          fold_constant(summand->as<Constant>());
+          fold_constant(summand.as<Constant>());
           drop_zero_constant();
         } else {  // or include the nonzero constant and update
           // constant_summand_idx_
-          summands_.insert(summands_.begin(), summand->clone());
+          summands_.insert(summands_.begin(), summand.clone());
           constant_summand_idx_ = 0;
         }
       } else {
-        summands_.insert(summands_.begin(), summand->clone());
+        summands_.insert(summands_.begin(), summand.clone());
         if (constant_summand_idx())  // if have a constant, update its position
           ++*constant_summand_idx_;
       }
       reset_hash_value();
     }
   } else {  // this recursively flattens Sum summands
-    for (auto &subsummand : *summand) this->prepend(subsummand);
+    for (const auto &subsummand : summand) this->prepend_impl(*subsummand);
   }
   return *this;
 }
@@ -165,16 +186,6 @@ std::wstring Sum::to_latex() const {
 
 Expr::type_id_type Sum::type_id() const { return Expr::get_type_id<Sum>(); }
 
-ExprPtr Sum::clone() const {
-  auto cloned_summands =
-      summands() |
-      ranges::views::transform([](const ExprPtr &ptr) { return ptr->clone(); });
-  auto result =
-      ex<Sum>(ranges::begin(cloned_summands), ranges::end(cloned_summands));
-  result->as<Sum>().copy_canonical_mark(*this);
-  return result;
-}
-
 void Sum::adjoint() {
   using namespace ranges;
   auto adj_summands = summands() | views::transform([](auto &&expr) {
@@ -185,8 +196,8 @@ void Sum::adjoint() {
 
 ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
   if (Logger::instance().canonicalize)
-    std::wcout << "Sum::canonicalize_impl: input = "
-               << to_latex_align(shared_from_this()) << std::endl;
+    std::wcout << "Sum::canonicalize_impl: input = " << to_latex_align(*this)
+               << std::endl;
 
   // options of the rapid and of the full canonicalization of the summands;
   // canonicalizing TNs in a sum requires treating named indices as
@@ -225,7 +236,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     if (Logger::instance().canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
                  << "): after canonicalizing summands = "
-                 << to_latex_align(shared_from_this()) << std::endl;
+                 << to_latex_align(*this) << std::endl;
 
     HashingAccumulator acc;
     for (auto &summand : summands_) {
@@ -242,24 +253,23 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
 
     if (Logger::instance().canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
-                 << "): after reducing summands = "
-                 << to_latex_align(shared_from_this()) << std::endl;
+                 << "): after reducing summands = " << to_latex_align(*this)
+                 << std::endl;
   }
 
   return {};  // side effects are absorbed into summands
 }
 
-Sum &Sum::operator+=(const Expr &that) {
-  this->append(const_cast<Expr &>(that).shared_from_this());
-  return *this;
-}
+Sum &Sum::operator+=(const Expr &that) { return this->append_impl(that); }
 
 Sum &Sum::operator-=(const Expr &that) {
-  if (that.is<Constant>())
-    this->append(ex<Constant>(-that.as<Constant>().value()));
-  else
-    this->append(ex<Product>(
-        -1, ExprPtrList{const_cast<Expr &>(that).shared_from_this()}));
+  if (that.is<Constant>()) {
+    this->append_impl(Constant(-that.as<Constant>().value()));
+  } else {
+    Product negated(-1, ExprPtrList{});
+    negated.append(1, that);
+    this->append_impl(negated);
+  }
   return *this;
 }
 
@@ -309,6 +319,17 @@ ConstExprIterator Sum::begin_subexpr() const {
 
 ConstExprIterator Sum::end_subexpr() const {
   return ConstExprIterator{summands_.data() + summands_.size()};
+}
+
+std::unique_ptr<Expr> Sum::unique_copy() const {
+  auto result = std::make_unique<Sum>();
+  for (const auto &summand : summands_) result->append_impl(*summand);
+  result->copy_canonical_mark(*this);
+  return result;
+}
+
+std::unique_ptr<Expr> Sum::unique_move() && {
+  return std::make_unique<Sum>(std::move(*this));
 }
 
 Expr::hash_type Sum::memoizing_hash() const {

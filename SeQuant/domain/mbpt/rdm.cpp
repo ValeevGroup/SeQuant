@@ -99,14 +99,12 @@ ExprPtr cumulants_to_densities(ExprPtr expr) {
   simplify(expr);
   [[maybe_unused]] auto no_cumulant = [&expr] {
     bool found = false;
-    auto check = [&found](const ExprPtr& e) {
-      found |= e->is<Tensor>() &&
-               e->as<Tensor>().label() == density::cumulant_label();
-    };
-    if (expr->is_atom())
-      check(expr);
-    else
-      expr->visit(check, /*atoms_only=*/true);
+    expr->visit(
+        [&found](const Expr& e) {
+          found |= e.is<Tensor>() &&
+                   e.as<Tensor>().label() == density::cumulant_label();
+        },
+        /*atoms_only=*/true);
     return !found;
   };
   SEQUANT_ASSERT(no_cumulant());

@@ -1393,9 +1393,9 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     auto self_deltas = [](const ExprPtr& expr) {
       container::svector<Tensor> result;
       expr->visit(
-          [&result](const ExprPtr& ex) {
-            if (!ex->is<Tensor>()) return;
-            const auto& t = ex->as<Tensor>();
+          [&result](const Expr& ex) {
+            if (!ex.is<Tensor>()) return;
+            const auto& t = ex.as<Tensor>();
             if (t.label() != reserved::overlap_label() &&
                 t.label() != reserved::kronecker_label())
               return;
@@ -1522,9 +1522,9 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     auto deltas = [](const ExprPtr& expr) {
       container::svector<std::pair<Index, Index>> result;
       expr->visit(
-          [&result](const ExprPtr& ex) {
-            if (!ex->is<Tensor>()) return;
-            const auto& t = ex->as<Tensor>();
+          [&result](const Expr& ex) {
+            if (!ex.is<Tensor>()) return;
+            const auto& t = ex.as<Tensor>();
             if (t.label() == reserved::overlap_label() ||
                 t.label() == reserved::kronecker_label())
               result.emplace_back(t.bra()[0], t.ket()[0]);

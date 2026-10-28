@@ -15,6 +15,8 @@
 #include <range/v3/algorithm/is_sorted.hpp>
 #include <range/v3/view/iota.hpp>
 
+#include <memory>
+
 namespace sequant {
 namespace mbpt {
 
@@ -170,7 +172,7 @@ bool Operator<QuantumNumbers, S>::has_odd_rank_term() const {
 
     auto term_rank = [](const ExprPtr& term) {
       std::size_t rank = 0;
-      auto count = [&rank](const ExprPtr& e) {
+      auto count = [&rank](const Expr& e) {
         if (e.is<NormalOperator<S>>()) {
           const auto& nop = e.as<NormalOperator<S>>();
           rank += nop.ncreators() + nop.nannihilators();
@@ -238,8 +240,13 @@ Expr::type_id_type Operator<QuantumNumbers, S>::type_id() const {
 };
 
 template <typename QuantumNumbers, Statistics S>
-ExprPtr Operator<QuantumNumbers, S>::clone() const {
-  return ex<this_type>(*this);
+std::unique_ptr<Expr> Operator<QuantumNumbers, S>::unique_copy() const {
+  return std::make_unique<this_type>(*this);
+}
+
+template <typename QuantumNumbers, Statistics S>
+std::unique_ptr<Expr> Operator<QuantumNumbers, S>::unique_move() && {
+  return std::make_unique<this_type>(std::move(*this));
 }
 
 // Expresses general operators in human interpretable form. for example:

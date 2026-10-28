@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <sstream>
@@ -240,17 +241,39 @@ const Expr &Expr::operator[](const TreeIndex &idx) const {
   return idx.select_from(*this);
 }
 
-bool proportional_to::operator()(const ExprPtr &expr1,
-                                 const ExprPtr &expr2) const {
-  if (expr1->type_id() !=
-      expr2->type_id()) {  // if expr1 is a Product with single factor == expr2,
-                           // or vice versa
+ExprPtr Expr::clone() const { return unique_copy(); }
+
+std::shared_ptr<Expr> Expr::shared_from_this() {
+  return std::enable_shared_from_this<Expr>::shared_from_this();
+}
+
+std::shared_ptr<const Expr> Expr::shared_from_this() const {
+  return std::enable_shared_from_this<Expr>::shared_from_this();
+}
+
+std::weak_ptr<Expr> Expr::weak_from_this() {
+  return std::enable_shared_from_this<Expr>::weak_from_this();
+}
+
+std::weak_ptr<const Expr> Expr::weak_from_this() const {
+  return std::enable_shared_from_this<Expr>::weak_from_this();
+}
+
+ExprPtr Expr::non_owning_ptr() const {
+  // aliasing constructor with an empty owner
+  return ExprPtr(std::shared_ptr<Expr>{}, const_cast<Expr *>(this));
+}
+
+bool proportional_to::operator()(const Expr &expr1, const Expr &expr2) const {
+  if (expr1.type_id() != expr2.type_id()) {
+    // if expr1 is a Product with single factor == expr2,
+    // or vice versa
     if (expr1.is<Product>()) {
       return expr1.as<Product>().factors().size() == 1 &&
-             expr1.as<Product>().factors().front() == expr2;
+             *expr1.as<Product>().factors().front() == expr2;
     } else if (expr2.is<Product>()) {
       return expr2.as<Product>().factors().size() == 1 &&
-             expr2.as<Product>().factors().front() == expr1;
+             *expr2.as<Product>().factors().front() == expr1;
     } else
       return false;
   }
@@ -261,10 +284,15 @@ bool proportional_to::operator()(const ExprPtr &expr1,
     return true;
   }
   if (expr1.is<Product>()) {
-    return expr1->hash_value() == expr2->hash_value() &&
+    return expr1.hash_value() == expr2.hash_value() &&
            expr1.as<Product>().factors() == expr2.as<Product>().factors();
   }
   return expr1 == expr2;
+}
+
+bool proportional_to::operator()(const ExprPtr &expr1,
+                                 const ExprPtr &expr2) const {
+  return (*this)(*expr1, *expr2);
 }
 
 }  // namespace sequant

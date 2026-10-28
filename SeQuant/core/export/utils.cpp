@@ -67,7 +67,7 @@ std::string format_power_exponent(const Power::exponent_type &exponent,
   return ss.str();
 }
 
-std::string format_power_base(const ExprPtr &base, std::string base_str) {
+std::string format_power_base(const ExprHolder &base, std::string base_str) {
   if (base->is<Constant>()) {
     const auto &v = base->as<Constant>().value();
     if (v.imag() == 0 &&
@@ -82,7 +82,7 @@ std::string format_power(
     const Power &power, std::string base_str, std::string_view pow_op,
     bool double_slash,
     const std::function<std::string(std::string)> &wrap_conj) {
-  const ExprPtr &base = power.base();
+  const ExprHolder &base = power.base();
   if (base->is<Variable>() && base->as<Variable>().conjugated()) {
     base_str = wrap_conj(std::move(base_str));
   }

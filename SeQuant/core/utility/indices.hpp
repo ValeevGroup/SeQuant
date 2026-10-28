@@ -348,7 +348,7 @@ Map get_used_indices_with_counts(const Expr& expr) {
   if (expr.is_atom()) {
     collect_indices(expr);
   } else {
-    expr.visit([&](const ExprPtr& expr) { collect_indices(*expr); },
+    expr.visit([&](const Expr& expr) { collect_indices(expr); },
                /*atoms_only=*/true);
   }
 
@@ -585,7 +585,7 @@ Container<Group<SlottedIndex>> external_indices(const Expr& expr) {
 
   std::optional<Tensor> symmetrizer;
   expr.visit(
-      [&](const ExprPtr& expr) {
+      [&](const Expr& expr) {
         if (expr.is<Tensor>() &&
             (expr.as<Tensor>().label() == reserved::symm_label() ||
              expr.as<Tensor>().label() == reserved::antisymm_label())) {

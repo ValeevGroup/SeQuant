@@ -36,7 +36,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
                                         const std::wstring& label) {
     bool found = false;
     e->visit(
-        [&](const ExprPtr& n) {
+        [&](const Expr& n) {
           if (n.is<Tensor>() && n.as<Tensor>().label() == label) found = true;
         },
         /*atoms_only=*/true);
@@ -134,7 +134,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     // no general index survives: every residual index is occ or uocc
     auto ibr = get_default_context().index_basis_registry();
     Vx->visit(
-        [&](const ExprPtr& n) {
+        [&](const Expr& n) {
           if (!n.is<NormalOperator<Statistics::FermiDirac>>()) return;
           for (const auto& o :
                n.as<NormalOperator<Statistics::FermiDirac>>().creann()) {
