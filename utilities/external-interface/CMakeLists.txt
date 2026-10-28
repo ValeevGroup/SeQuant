@@ -29,6 +29,7 @@ add_library(external_interface-obj OBJECT
     projection_step.cpp
     read_input_step.cpp
     simplify_step.cpp
+    sort_step.cpp
     spintracing_step.cpp
     substitute_step.cpp
     template_expansion.cpp

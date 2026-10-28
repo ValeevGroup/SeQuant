@@ -189,10 +189,14 @@ struct ExportOptions {
   std::size_t max_batched = std::numeric_limits<std::size_t>::max();
 };
 
-ExportNode<> prepareForExport(const ResultExpr &result,
+ExportNode<> prepareForExport(ResultExpr &result,
                               const ItfGenerator<ItfExportContext> &generator,
                               ItfExportContext &ctx,
                               const ExportOptions &opts) {
+  // use an order that does not depend on the hashing algorithm, to make the
+  // generated code reproducible
+  sort_expr(result);
+
   ExportNode<> tree = to_export_tree(result);
 
   if (result.produces_tensor()) {

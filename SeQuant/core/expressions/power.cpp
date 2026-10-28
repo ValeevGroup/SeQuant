@@ -186,4 +186,15 @@ bool Power::static_less_than(const Expr& that) const {
   if (exponent_ != other.exponent_) return exponent_ < other.exponent_;
   return conjugated_ < other.conjugated_;
 }
+
+std::weak_ordering Power::static_lexicographic_compare(
+    const Expr& that, const LexicographicCompareOptions& opts) const {
+  const auto& other = static_cast<const Power&>(that);
+  if (auto cmp = base_->lexicographic_compare(*other.base_, opts); cmp != 0)
+    return cmp;
+  if (auto cmp = std::compare_weak_order_fallback(exponent_, other.exponent_);
+      cmp != 0)
+    return cmp;
+  return conjugated_ <=> other.conjugated_;
+}
 }  // namespace sequant

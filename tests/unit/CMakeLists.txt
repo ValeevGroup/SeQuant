@@ -15,6 +15,7 @@ set(symb_test_sources
     "test_index.cpp"
     "test_iterator.cpp"
     "test_latex.cpp"
+    "test_lexicographic_order.cpp"
     "test_macros.cpp"
     "test_math.cpp"
     "test_meta.cpp"
