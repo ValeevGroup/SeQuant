@@ -400,6 +400,10 @@ TEST_CASE("irreps", "[irreps]") {
 
     REQUIRE(irreps(L"t{a1;i1}") == Set{irrep("B1")});
     REQUIRE(irreps(L"t{a1;i1} v{i1;a2}") == Set{irrep("B3")});
+    // Element-wise power of a tensor spans the IRREPs of its base
+    ExprPtr m = deserialize(L"m{a1;i1}");
+    REQUIRE(irreps_of(*pow(m, rational{-1}), ctx) == irreps_of(*m, ctx));
+    REQUIRE(irreps_of(*m, ctx) == Set{irrep("B1"), irrep("B2")});
     REQUIRE(irreps(L"1/2 * t{a1;i1} v{i1;a2} f{a2;a3}") == Set{irrep("B3")});
     REQUIRE(irreps(L"t{a1;i1} + v{a1;i1}") == Set{irrep("B1"), irrep("B2")});
     REQUIRE(irreps(L"t{a1;i1} m{i1;a2}") == Set{irrep("A"), irrep("B3")});
