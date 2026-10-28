@@ -3,6 +3,7 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor_power.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -145,6 +146,13 @@ std::wstring to_string(const Power& power,
   return core;
 }
 
+std::wstring to_string(const TensorPower& power,
+                       const SerializationOptions& options) {
+  return v1::to_string(*power.base(), options) + L"^(" +
+         serialize_scalar(Constant::scalar_type{power.exponent()}, options) +
+         L")";
+}
+
 std::wstring to_string(Product const& prod,
                        const SerializationOptions& options) {
   std::wstring serialized;
@@ -233,6 +241,8 @@ std::wstring to_string(const Expr& expr, const SerializationOptions& options) {
     return detail::to_string(expr.as<Variable>(), options);
   else if (expr.is<Power>())
     return detail::to_string(expr.as<Power>(), options);
+  else if (expr.is<TensorPower>())
+    return detail::to_string(expr.as<TensorPower>(), options);
   else
     throw Exception(
         expr.type_name() +
