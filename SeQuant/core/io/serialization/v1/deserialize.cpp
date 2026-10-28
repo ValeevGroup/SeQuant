@@ -135,7 +135,7 @@ auto tensor_def       = x3::lexeme[
 
 // TODO(power): per comments on PR #513, promote `^` to a binary operator (with higher precedence than *) and then reject unsupported cases while traversing the AST.
 // Two forms are accepted: b^(e) and (b^(e))^*
-auto power_core       = (('(' >> (number | variable) >> ')') | number | variable)
+auto power_core       = (('(' >> (number | tensor | variable) >> ')') | number | tensor | variable)
                         >> x3::lit(L"^") >> '(' >> number >> ')';
 auto power_def        = (power_core >> x3::attr(false))
                         | ('(' >> power_core >> ')' >> x3::lit(L"^*") >> x3::attr(true));
