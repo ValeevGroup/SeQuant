@@ -204,10 +204,7 @@ TEST_CASE("cell_footprint sizes enclosing-home modes at BLOCK, others FULL",
   }
 }
 
-TEST_CASE(
-    "cell_footprint no longer doubles a divergent-mode home (the 2x fudge is "
-    "gone; divergent_modes is informational)",
-    "[peak_profile]") {
+TEST_CASE("footprint-no-divergent-double", "[peak_profile]") {
   // The flat 2x pricing fudge (placeholder 46b495eba) is DELETED: a divergent
   // value homed at a sub-scope is UN-FOLDED into two real, non-divergent
   // ValueCells, each priced ONCE here at its own home; peak co-residency is
@@ -399,9 +396,7 @@ TEST_CASE(
   }
 }
 
-TEST_CASE(
-    "peak_profile_replay == sweep with a DEMOTED value (empty cross-occ meet)",
-    "[peak_profile]") {
+TEST_CASE("replay-demoted", "[peak_profile]") {
   // The core O3b demoted case: an internal value V occurs TWICE.
   //   - In tree 1, V sits under a parent P that realizes an External i_1 loop.
   //     stamp_lifetime_masks accumulates i_1 down to V, and i_1 is one of V's
@@ -606,10 +601,7 @@ void check_split_propagates(std::vector<EvalNode<EvalExpr>> const& forest,
   CHECK(produced == expected_produced);
 }
 
-TEST_CASE(
-    "compute_dag_boulevard opens separate cells for two values that COLLIDE "
-    "on the value key",
-    "[peak_profile][value-cell]") {
+TEST_CASE("boulevard-key-collision-operands", "[peak_profile][value-cell]") {
   // The grouping used to be `hash_to_cell.find(r.key)` alone: a bucket hit on
   // the 64-bit value key WAS identity. Two distinct values colliding there
   // would merge into one ValueCell, and the schedule would then build one of
@@ -637,10 +629,7 @@ TEST_CASE(
   check_split_propagates({X, Y}, 6, collide);
 }
 
-TEST_CASE(
-    "compute_dag_boulevard separates key-colliding values with IDENTICAL "
-    "operands",
-    "[peak_profile][value-cell]") {
+TEST_CASE("boulevard-key-collision-identical", "[peak_profile][value-cell]") {
   // The companion case: the two colliding products contract the SAME two
   // leaves, so they fold to the same child CELLS and the same (empty)
   // loop_slot / reduced_slot -- every cheap discriminator ties, and only
@@ -694,10 +683,7 @@ TEST_CASE("the value->node bridges hold the FOREST's nodes, not copies of them",
   CHECK(&vmap.at(sequant::value_key_of(root.left()))->parent() == &root);
 }
 
-TEST_CASE(
-    "the ordered prepasses walk a deep Sum spine without overflowing the "
-    "stack",
-    "[.][peak_profile][stack-safety]") {
+TEST_CASE("prepass-deep-sum", "[.][peak_profile][stack-safety]") {
   // An equation's residual/energy reaches the ordered path as a SINGLE
   // in-place Sum tree with one node per summand, so its LEFT SPINE is as deep
   // as the number of terms -- thousands for a large equation. Every prepass
