@@ -293,8 +293,7 @@ TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
 // A group of more than four composites on one cluster is priced by its own
 // column, p * M_k^k, not by reusing column 4 (which under-priced it by
 // p^((k - 4)/4)); a group beyond the table is an error, not an extrapolation.
-TEST_CASE("SizeRegime prices groups up to kMaxCompositeGroup, refuses beyond",
-          "[dryrun][sizing][extent-contract]") {
+TEST_CASE("regime-max-composite-group", "[dryrun][sizing][extent-contract]") {
   SizeRegime r;
   r.space_extent = {{L"i", 10u}};
   double const p = 0.25;
@@ -616,8 +615,7 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
 // contraction, binarize's node_counter == node_batch_axes.size() assertion
 // aborts. Mirrors MPQC's path: DenseTimeSpaceBatched optimize + head-pinned
 // binarize with the CSV rank-1 residual head R{a<i>;i}.
-TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
-          "[optimize][batch][r1-offbyone]") {
+TEST_CASE("node-axes-match-binarize", "[optimize][batch][r1-offbyone]") {
   using namespace sequant;
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
@@ -1492,10 +1490,7 @@ TEST_CASE("dryrun cost model flops and exec_cost are finite/positive",
                      cm.memsize(out)) > 0.0);
 }
 
-TEST_CASE(
-    "dryrun product roofline exec charges both operands and the result, "
-    "order-independently",
-    "[dryrun-costmodel][roofline]") {
+TEST_CASE("roofline-exec-charges", "[dryrun-costmodel][roofline]") {
   // The roofline `traffic` term is the COMPULSORY single-pass data movement of
   // one contraction -- read both operands, WRITE the result -- which is what
   // the optimizer's DP charges (S[lp] + S[rp] + S[n]; PeakModel::relax and
@@ -1597,8 +1592,7 @@ TEST_CASE("dryrun flat result size delegates to cost model",
   CHECK(rt.size_in_bytes() == cm->memsize(idx));
 }
 
-TEST_CASE("dryrun flat result prod yields the result annotation index set",
-          "[dryrun-result]") {
+TEST_CASE("flat-result-prod-annotation", "[dryrun-result]") {
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
   ResultDryRun l{{Index{L"a_3"}, Index{L"i_2"}}, cm};
@@ -1651,8 +1645,7 @@ TEST_CASE("dryrun axis_batches tiles the axis space extent",
   CHECK(batches.back().second == 20);
 }
 
-TEST_CASE("dryrun make_zeros builds a full-extent flat scatter destination",
-          "[dryrun-result][pre-sized]") {
+TEST_CASE("make-zeros-flat", "[dryrun-result][pre-sized]") {
   // The runtime External-mode scatter builds its destination from the node's
   // OWN (unsliced) index list via BackendArrayOps::make_zeros -- every mode at
   // its space's FULL extent (a structural fact queryable immediately via
@@ -1673,8 +1666,7 @@ TEST_CASE("dryrun make_zeros builds a full-extent flat scatter destination",
   CHECK(dest->size_in_bytes() == full_bytes);
 }
 
-TEST_CASE("dryrun make_zeros builds a full-extent nested scatter destination",
-          "[dryrun-result][pre-sized]") {
+TEST_CASE("make-zeros-nested", "[dryrun-result][pre-sized]") {
   // ToT analogue of the flat case above -- CSV/PNO residuals carry
   // ResultDryRunNested tokens, so make_zeros must build a nested full-extent
   // destination when the descriptor carries a proto-indexed (composite) leg.
@@ -1697,10 +1689,7 @@ TEST_CASE("dryrun make_zeros builds a full-extent nested scatter destination",
   CHECK(dest->size_in_bytes() == full_bytes);
 }
 
-TEST_CASE(
-    "dryrun result write_into_slice assembles disjoint blocks into a "
-    "pre-sized destination",
-    "[dryrun-result][write-into-slice]") {
+TEST_CASE("write-into-slice-blocks", "[dryrun-result][write-into-slice]") {
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
 
@@ -1752,9 +1741,8 @@ TEST_CASE(
         std::pair<std::size_t, std::size_t>{2, 6});
 }
 
-TEST_CASE(
-    "dryrun result write_into_slice REFUSES a gapped or overlapping block",
-    "[dryrun-result][write-into-slice]") {
+TEST_CASE("write-into-slice-refuses-gaps",
+          "[dryrun-result][write-into-slice]") {
   // Copilot review (PR #613): the contiguity requirement used to be carried by
   // a SEQUANT_ASSERT alone. Asserts are compiled out in non-Debug builds (and
   // CI builds with SEQUANT_ASSERT_BEHAVIOR=THROW rather than relying on the
@@ -1800,8 +1788,7 @@ TEST_CASE(
   }
 }
 
-TEST_CASE("dryrun nested result uses moment-aware inner extent, not extent^k",
-          "[dryrun-nested]") {
+TEST_CASE("nested-moment-aware-extent", "[dryrun-nested]") {
   auto r = backend_test_regime();
   // Non-trivial second moment: <#PNO^2> != <#PNO>^2 (dispersion inflates it).
   r.csv_pno_moment[1] = 4.0;
@@ -1832,8 +1819,7 @@ TEST_CASE("dryrun nested result uses moment-aware inner extent, not extent^k",
   CHECK(rc.size_in_bytes() == with_composite);
 }
 
-TEST_CASE("dryrun make_dryrun_result dispatches flat vs nested by content",
-          "[dryrun-nested]") {
+TEST_CASE("make-dryrun-result-dispatch", "[dryrun-nested]") {
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
   Index i1{L"i_1"}, i2{L"i_2"};
@@ -1874,9 +1860,7 @@ TEST_CASE("dryrun leaf yielder builds a sized token from a tensor leaf",
   CHECK(res->size_in_bytes() == cm->memsize(idx));
 }
 
-TEST_CASE(
-    "dryrun external-mode scatter replay models the sliced footprint (D3.1)",
-    "[dryrun-extmode][eval]") {
+TEST_CASE("external-scatter-replay", "[dryrun-extmode][eval]") {
   // D3.1 regression: the runtime External-mode scatter branch in
   // make_batched_custom_evaluator (eval.hpp) calls, on the first block,
   // part->pre_sized_zeros_over_mode(dest_mode, carrier_full, carrier_mode),
@@ -2020,10 +2004,7 @@ TEST_CASE(
 
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "dryrun eval backend replays the post-transform giant term through the "
-    "real batched runtime",
-    "[dryrun-eval]") {
+TEST_CASE("giant-term-replay", "[dryrun-eval]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
@@ -2307,10 +2288,7 @@ TEST_CASE(
 // so no ASSERTION is made about it.
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "dryrun perf-first never forms the 4-PAO AO integral and peaks on the "
-    "genuine 4-PNO W node (C60 giant)",
-    "[dryrun-objective]") {
+TEST_CASE("perf-first-no-4pao", "[dryrun-objective]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
@@ -2612,9 +2590,7 @@ TEST_CASE(
 // BatchModeType::External only on occ labels; with the flag off the reported
 // peak stays over budget and no External mode is stamped. The size of the drop
 // is not pinned.
-TEST_CASE(
-    "dryrun external-mode seeding lowers the DP-reported peak of the C60 giant",
-    "[dryrun-extmode]") {
+TEST_CASE("external-seeding-lowers-peak", "[dryrun-extmode]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
@@ -2771,9 +2747,7 @@ TEST_CASE(
 // This does NOT touch runtime, optimize() selection, or emit wiring. It sizes
 // ONE node's free-index set twice, with two extent functions. Hidden tag; run:
 //   ./tests/unit/unit_tests-sequant "[dryrun-occ-sizing]"
-TEST_CASE(
-    "dryrun external-occ slicing shrinks the PPL W footprint (P1 sizing gate)",
-    "[.][dryrun-occ-sizing]") {
+TEST_CASE("external-occ-sizing", "[.][dryrun-occ-sizing]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
@@ -2970,10 +2944,7 @@ TEST_CASE(
 // giant-node locator and ext_occ extraction; it asserts on the batchable list,
 // not the footprint. Hidden tag; run:
 //   ./tests/unit/unit_tests-sequant "[dryrun-occ-recognize]"
-TEST_CASE(
-    "dryrun external occ is recognized as a batchable mode (P1 recognition "
-    "gate)",
-    "[.][dryrun-occ-recognize]") {
+TEST_CASE("external-occ-recognition", "[.][dryrun-occ-recognize]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
@@ -3145,8 +3116,7 @@ TEST_CASE(
 // BOUNDED-by-P3 (occ slice fits) / NEEDS-mu-forest / NEEDS-k-forest / GAP.
 // Hidden; run:
 //   ./tests/unit/unit_tests-sequant "[dryrun-c60-batchability-audit]"
-TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
-          "[.][dryrun-c60-batchability-audit]") {
+TEST_CASE("c60-perf-first-audit", "[.][dryrun-c60-batchability-audit]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
@@ -4030,8 +4000,7 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
 // batch group (the measured 2.5x product-work regression). See
 // cost_model.hpp:1811-1817 ("if the expensive gC-class nodes show rf==1, the DP
 // is not pricing the runtime recompute").
-TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
-          "[.][dryrun-water-frag]") {
+TEST_CASE("w20-aux-batch-fragmentation", "[.][dryrun-water-frag]") {
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
@@ -4230,10 +4199,7 @@ TEST_CASE("PeakMonitor tracks hierarchy-wide co-resident high-water",
   CHECK(peaks == std::vector<std::size_t>{100, 300});
 }
 
-TEST_CASE(
-    "PeakMonitor wired onto a CacheManager observes the same high-water as "
-    "the cache's own working_set_hwmark()",
-    "[meter]") {
+TEST_CASE("peak-monitor-cache-hwmark", "[meter]") {
   using sequant::eval::dryrun::CostModel;
   using sequant::eval::dryrun::DryRunLeafEvaluator;
   using sequant::eval::dryrun::EvalExprDryRun;
@@ -4295,10 +4261,7 @@ TEST_CASE(
   CHECK(mon.hwmark_bytes == cache.working_set_hwmark());
 }
 
-TEST_CASE(
-    "assemble_report rolls a metered dry-run replay's per-node build tally "
-    "into a MeterReport (peak, persistent/volatile FLOPs+time, build-vs-home)",
-    "[meter]") {
+TEST_CASE("meter-assemble-report", "[meter]") {
   using sequant::eval::compute_dag_boulevard;
   using sequant::eval::PeakMonitor;
   using sequant::eval::dryrun::assemble_report;
@@ -4443,10 +4406,7 @@ TEST_CASE(
 // PeakMonitor parent-chain under a real batched walk); with it forest_descent,
 // the SAME forest runs through today's unbatched per-tree descent. Both modes
 // must report a positive peak/build count and the matching `scheduler` value.
-TEST_CASE(
-    "meter runs the policy-selected executor (ordered and forest) with "
-    "the sizing backend and a metered cache",
-    "[meter]") {
+TEST_CASE("meter-policy-executor", "[meter]") {
   using sequant::BatchModeType;
   using sequant::BatchPolicy;
   using sequant::Index;
