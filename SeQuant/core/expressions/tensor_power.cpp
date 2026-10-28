@@ -230,38 +230,59 @@ bool TensorPower::static_less_than(const Expr& that) const {
   return exponent_ < other.exponent_;
 }
 
+namespace {
+
+ExprPtr make_scalar_power(const ExprPtr& base, rational exponent) {
+  if (base->is<Constant>() && base->as<Constant>().is_zero() && exponent < 0)
+    throw Exception("pow: 0 raised to a negative exponent is undefined");
+  return ex<Power>(base, std::move(exponent));
+}
+
+}  // namespace
+
 ExprPtr pow(ExprPtr base, rational exponent) {
   if (exponent == 1) return base->clone();
 
   if (base->is<Power>()) {
     const auto& inner = base->as<Power>();
-    auto result = ex<Power>(inner.base(), inner.exponent() * exponent);
+    if (denominator(exponent) != 1 && numerator(inner.exponent()) % 2 == 0)
+      throw Exception(
+          "pow: (x^a)^b with even a and non-integer b is |x|^(ab), not "
+          "x^(ab)");
+    const auto composed = inner.exponent() * exponent;
+    if (composed == 1) {
+      auto result = inner.base()->clone();
+      if (inner.conjugated()) result->adjoint();
+      return result;
+    }
+    auto result = make_scalar_power(inner.base(), composed);
     if (inner.conjugated()) result->as<Power>().conjugate();
     return result;
   }
 
   if (base->is_scalar()) {
-    SEQUANT_ENFORCE(base->is<Constant>() || base->is<Variable>(),
-                    "pow: a scalar base must be a Constant, Variable or Power");
-    return ex<Power>(std::move(base), std::move(exponent));
+    if (!base->is<Constant>() && !base->is<Variable>())
+      throw Exception(
+          "pow: a scalar base must be a Constant, Variable or Power");
+    return make_scalar_power(base, std::move(exponent));
   }
 
   if (base->is<TensorPower>()) {
     const auto& inner = base->as<TensorPower>();
-    SEQUANT_ENFORCE(
-        denominator(exponent) == 1 || numerator(inner.exponent()) % 2 != 0,
-        "pow: (T^a)^b with even a and non-integer b is |T|^(ab), "
-        "not T^(ab); name T^a as a ResultExpr and raise the "
-        "resulting leaf");
+    if (denominator(exponent) != 1 && numerator(inner.exponent()) % 2 == 0)
+      throw Exception(
+          "pow: (T^a)^b with even a and non-integer b is |T|^(ab), not "
+          "T^(ab); name T^a as a ResultExpr and raise the resulting leaf");
     const auto composed = inner.exponent() * exponent;
     if (composed == 1) return inner.base()->clone();
     return ex<TensorPower>(inner.base(), composed);
   }
 
-  SEQUANT_ENFORCE(base->is<AbstractTensor>(),
-                  "pow: base must be a scalar or a c-number tensor; name a "
-                  "compound tensor-valued expression as a ResultExpr and "
-                  "raise the resulting leaf");
+  if (!base->is<AbstractTensor>())
+    throw Exception(
+        "pow: base must be a scalar or a c-number tensor; name a compound "
+        "tensor-valued expression as a ResultExpr and raise the resulting "
+        "leaf");
   return ex<TensorPower>(std::move(base), std::move(exponent));
 }
 

@@ -123,7 +123,7 @@ class TensorPower : public Expr, public AbstractTensor {
 /// A Constant or Variable base gives a Power, a c-number tensor base a
 /// TensorPower. Exponents of nested powers are composed when that is exact:
 /// for a TensorPower `T^a` and exponent `b`, `(T^a)^b = T^{ab}` for real `T`
-/// only if `b` is an integer or `a` is an odd integer.
+/// only if `b` is an integer or `a` has an odd numerator.
 /// @param[in] base a Constant, Variable, Power, c-number AbstractTensor or
 ///            TensorPower
 /// @param[in] exponent any rational

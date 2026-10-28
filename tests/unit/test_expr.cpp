@@ -1840,6 +1840,15 @@ TEST_CASE("tensor_power", "[elements]") {
     REQUIRE_THROWS_AS(pow(x * x, rational{2}), Exception);
     if (assert_behavior() != AssertBehavior::Abort)
       REQUIRE_THROWS_AS(pow(t, rational{1, 2}), Exception);
+    CHECK(pow(pow(D, rational{-1}), rational{1, 3})
+              ->as<TensorPower>()
+              .exponent() == rational{-1, 3});
+    REQUIRE_THROWS_AS(pow(pow(D, rational{-2}), rational{1, 2}), Exception);
+    auto xc = ex<Power>(x, rational{2});
+    xc->as<Power>().conjugate();
+    CHECK(pow(xc, rational{3})->as<Power>().conjugated());
+    REQUIRE_THROWS_AS(pow(pow(x, rational{2}), rational{1, 2}), Exception);
+    REQUIRE_THROWS_AS(pow(ex<Constant>(0), rational{-1}), Exception);
     // exponent 0 on a tensor is a tensor of ones, not Constant(1)
     CHECK(pow(D, rational{0})->is<TensorPower>());
     CHECK(pow(D, rational{0})->as<TensorPower>()._symmetry() == Symmetry::Symm);
