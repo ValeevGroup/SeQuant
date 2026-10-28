@@ -588,7 +588,7 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(S[0b11] == 64.0);
     }
 
-    SECTION("DensePeakSize matches oracle over a battery of small networks") {
+    SECTION("peak-dp-oracle-battery") {
       using namespace sequant;
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
@@ -707,9 +707,7 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(tables[size_t{1} << f1bit][0b01] < tables[0b00][0b01]);
     }
 
-    SECTION(
-        "DensePeakSizeBatched all-sliced corner equals peak_cost with "
-        "sliced extents") {
+    SECTION("batched-all-sliced-corner") {
       using namespace sequant;
       // Dedicated batchable "F" space (fresh type bit, no overlap with
       // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
@@ -812,9 +810,7 @@ TEST_CASE("optimize", "[optimize]") {
       }
     }
 
-    SECTION(
-        "DensePeakSizeBatched reconstruction achieves the optimum "
-        "(numeric)") {
+    SECTION("batched-reconstruction") {
       using namespace sequant;
       // Dedicated batchable "F" space (fresh type bit, no overlap with
       // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
@@ -1491,9 +1487,7 @@ std::wstring render_tree(sequant::ExprPtr const& e) {
 // batchable_mode_list admits both as CANDIDATES (a mode's role is not known
 // there) and build_context's role filter keeps i_1 but drops i_2 -- so the
 // contracted occurrences of an external-only space never enter the 2^m search.
-TEST_CASE(
-    "batchable roles: external-only space keeps external, drops contracted",
-    "[optimize][batch]") {
+TEST_CASE("batch-roles-external-only", "[optimize][batch]") {
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
@@ -1559,8 +1553,7 @@ TEST_CASE(
 // Equivalently: leaving a contracted mode in the contracted predicate (the
 // pre-migration routing) DOES slice it (control, > 0); moving it to the
 // external role does NOT (fix, == 0).
-TEST_CASE("role filter: contracted mode sliced only in the contracted role",
-          "[optimize][role-filter]") {
+TEST_CASE("role-filter-contracted", "[optimize][role-filter]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
   auto ctx_copy = get_default_context_snapshot();
@@ -1627,8 +1620,7 @@ TEST_CASE("role filter: contracted mode sliced only in the contracted role",
 // default-decline the mode is dropped (n_F == 0). The RED run also proves the
 // assertion is non-vacuous: the mode is a genuine batchable-space mode that the
 // fallback DID admit.
-TEST_CASE("role filter: external mode needs the external role, not a fallback",
-          "[optimize][role-filter]") {
+TEST_CASE("role-filter-external", "[optimize][role-filter]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
   auto ctx_copy = get_default_context_snapshot();
@@ -2696,10 +2688,7 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
 // K_b. A near-zero peak_threshold instead makes every point infeasible,
 // triggering the min-peak fallback, which reproduces the old (peak-driven)
 // answer.
-TEST_CASE(
-    "threshold gates batching: default (+inf) picks min-flops regardless of "
-    "K_b; near-zero threshold falls back to min-peak",
-    "[optimize][threshold]") {
+TEST_CASE("peak-threshold-gating", "[optimize][threshold]") {
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
@@ -2837,7 +2826,7 @@ TEST_CASE(
 // independent memory-simulation oracle on this fixture (dp==dp_K_only, and the
 // dp==oracle gate fails) -- a real batched-DP cost-model regression to fix in a
 // focused DP pass, not a stale expectation. Hidden until then.
-TEST_CASE("batched DP peak matches oracle with two modes and accumulation",
+TEST_CASE("batched-dp-two-mode-oracle",
           "[.][optimize][batched-accum][blocked-dp-cost-model]") {
   using namespace sequant;
   // SKIP (not just the [.] tag above):
@@ -3295,8 +3284,7 @@ TEST_CASE("NoReorder Sum re-keys batch annotations onto the final Sum",
 // independently of node_slice_mask() (axes). Hand-build node_batch_axes so the
 // single contraction node's opened_here carries one External mode while a leaf
 // stays empty -- isolates the binarize wiring from the DP emit.
-TEST_CASE("binarize applies batch_loops_opened_here from node annotation",
-          "[optimize][annotate][loop-open]") {
+TEST_CASE("binarize-loops-opened-here", "[optimize][annotate][loop-open]") {
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
@@ -4003,8 +3991,7 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
   REQUIRE(composite_inner_checked);
 }
 
-TEST_CASE("outer-product pruning: large connected term optimizes quickly",
-          "[optimize][pruning]") {
+TEST_CASE("prune-large-connected", "[optimize][pruning]") {
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
@@ -4030,8 +4017,7 @@ TEST_CASE("outer-product pruning: large connected term optimizes quickly",
   CHECK(out);
 }
 
-TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
-          "[optimize][pruning]") {
+TEST_CASE("prune-multi-component", "[optimize][pruning]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
   auto reg = std::make_shared<IndexBasisRegistry>(
@@ -4466,9 +4452,7 @@ TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
 // peak_threshold forcing over budget the external modes are adopted/stamped
 // there. RED pre-fix: `axes` is [Contracted a1, External i...] (contracted
 // pushed first). GREEN post-fix: [External i..., Contracted a1].
-TEST_CASE(
-    "loop-tree emit: External axis precedes Contracted at co-carrying node",
-    "[.][loop-tree]") {
+TEST_CASE("loop-tree-axis-order", "[.][loop-tree]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   auto reg =
@@ -4756,7 +4740,7 @@ TEST_CASE("batchability role-split building-block predicates",
     CHECK_FALSE(u2(i));
   }
 
-  SECTION("PeakBatchedModel::is_batchable(ix) == OR of both building blocks") {
+  SECTION("batched-model-is-batchable") {
     auto idxsz = [](Index const& ix) -> std::size_t {
       return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
     };
