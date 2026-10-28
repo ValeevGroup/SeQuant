@@ -25,6 +25,8 @@ jobs:
         os : [ macos-26, ubuntu-26.04, windows-2025 ]
         valgrind: [ true, false ]
         sanitize: [ true, false ]
+        # where Boost comes from: the system package manager (vcpkg on Windows), or built from source by SeQuant
+        boost: [ system ]
         exclude:
           - valgrind : true
             sanitize : true
@@ -41,6 +43,12 @@ jobs:
           - os: windows-2025
             valgrind: true
         include:
+          # MSVC needs Boost >= 1.85 (Spirit); check that the Boost SeQuant builds from source works with it
+          - os: windows-2025
+            build_type: Release
+            valgrind: false
+            sanitize: false
+            boost: fetch
           - os: ubuntu-26.04
             cxx: /usr/bin/g++-14
             sanitize_flags: -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
@@ -54,7 +62,7 @@ jobs:
           - os: windows-2025
             hardening_flags: -D_MSVC_STL_HARDENING=1
 
-    name: "${{ matrix.valgrind && 'Valgrind' || matrix.sanitize && 'Sanitizers' || '' }} ${{ matrix.os }}: ${{ matrix.cxx }} ${{ matrix.build_type }}"
+    name: "${{ matrix.valgrind && 'Valgrind' || matrix.sanitize && 'Sanitizers' || '' }} ${{ matrix.os }}: ${{ matrix.cxx }} ${{ matrix.build_type }}${{ matrix.boost == 'fetch' && ' (Boost built from source)' || '' }}"
     runs-on: ${{ matrix.os }}
     env:
       CXX : ${{ matrix.cxx }}
@@ -149,7 +157,9 @@ jobs:
       id: vcpkg
       uses: johnwason/vcpkg-action@v8
       with:
-        pkgs: eigen3 boost-locale boost-random boost-regex boost-container boost-container-hash boost-hana boost-multiprecision boost-conversion boost-interval boost-range boost-spirit catch2 benchmark
+        pkgs: >-
+          eigen3 catch2 benchmark
+          ${{ matrix.boost == 'system' && 'boost-container boost-container-hash boost-conversion boost-core boost-dynamic-bitset boost-fusion boost-hana boost-interval boost-locale boost-multiprecision boost-numeric-conversion boost-random boost-range boost-regex boost-spirit boost-unordered boost-variant' || '' }}
         triplet: x64-windows
         token: ${{ github.token }}
 
@@ -163,9 +173,9 @@ jobs:
       uses: actions/cache/restore@v6
       with:
         path: ${{github.workspace}}/build/.ccache
-        key: ${{ matrix.os }}-${{ matrix.build_type }}-${{ matrix.sanitize }}-${{ matrix.valgrind }}-ccache-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
+        key: ${{ matrix.os }}-${{ matrix.build_type }}-${{ matrix.sanitize }}-${{ matrix.valgrind }}-${{ matrix.boost }}-ccache-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
         restore-keys: |
-          ${{ matrix.os }}-${{ matrix.build_type }}-${{ matrix.sanitize }}-${{ matrix.valgrind }}-ccache-
+          ${{ matrix.os }}-${{ matrix.build_type }}-${{ matrix.sanitize }}-${{ matrix.valgrind }}-${{ matrix.boost }}-ccache-
 
     - name: Configure CMake
       shell: bash

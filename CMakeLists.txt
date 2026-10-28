@@ -229,7 +229,7 @@ else()
   vgkit_check_libcxx_linker_mismatch()
 endif()
 # Clang < 19 needs -frelaxed-template-template-args for P0522R0;
-# sets VGKIT_P0522R0_COMPILE_FLAG, applied to SeQuant-symb below
+# sets VGKIT_CXX_P0522R0_COMPILE_FLAG, applied to SeQuant-symb below
 vgkit_check_cxx_p0522r0()
 
 if (PROJECT_IS_TOP_LEVEL AND NOT DEFINED CMAKE_POSITION_INDEPENDENT_CODE)
@@ -693,8 +693,8 @@ endif()
 # SeQuant-symb: core symbolic layer
 ##########################
 sequant_add_library(symb ${SeQuant_symb_src})
-if (VGKIT_P0522R0_COMPILE_FLAG)
-  target_compile_options(SeQuant-symb PUBLIC ${VGKIT_P0522R0_COMPILE_FLAG})
+if (VGKIT_CXX_P0522R0_COMPILE_FLAG)
+  target_compile_options(SeQuant-symb PUBLIC ${VGKIT_CXX_P0522R0_COMPILE_FLAG})
 endif()
 target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_ASSERT_BEHAVIOR_=${SEQUANT_ASSERT_BEHAVIOR})
 if (NOT SEQUANT_ASSERT_BEHAVIOR STREQUAL "IGNORE")
@@ -873,11 +873,6 @@ if (SEQUANT_MIMALLOC)
     target_link_libraries(SeQuant-symb PUBLIC mimalloc)
     target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_HAS_MIMALLOC=1)
 endif ()
-
-# build all of boost before SeQuant-symb, including parts it does not use
-if (Boost_BUILT_FROM_SOURCE AND TARGET build-boost-in-SeQuant)
-    add_dependencies(SeQuant-symb build-boost-in-SeQuant)
-endif()
 
 if (SEQUANT_IWYU)
     find_program(iwyu_path NAMES include-what-you-use iwyu)
