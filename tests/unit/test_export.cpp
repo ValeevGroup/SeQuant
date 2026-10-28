@@ -1384,7 +1384,9 @@ TEST_CASE("export-irrep-name", "[export][irreps]") {
   CHECK_THAT(code, ContainsSubstring("!Create{type:plain; irrep:4}"));
   CHECK_THAT(code, ContainsSubstring("R:ec // irrep:2"));
   CHECK_THAT(code, ContainsSubstring("v:cc // irrep:3"));
-  CHECK_THAT(code, ContainsSubstring("f:cc // irrep:1"));
+  // f is totally symmetric and therefore not annotated
+  CHECK_THAT(code, ContainsSubstring("f:cc[kl], f:cc\n"));
+  CHECK_THAT(code, !ContainsSubstring("f:cc //"));
 }
 
 TEST_CASE("export-irreps", "[export][irreps]") {

@@ -303,7 +303,9 @@ TEST_CASE("export step", "[extint]") {
     // Gp x Ag x {Ag, B1u} = {Gp, B1u*Gp} where Gp is renamed to 'pert'
     REQUIRE_THAT(
         code, Catch::Matchers::ContainsSubstring("R:ec // irrep:pert,B1u*Gp"));
-    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("f:ce // irrep:Ag"));
+    // Ag is totally symmetric and therefore not annotated
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("f:ce\n"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("f:ce //"));
     REQUIRE_THAT(code,
                  Catch::Matchers::ContainsSubstring("T2:eecc // irrep:pert"));
     REQUIRE_THAT(
@@ -334,13 +336,13 @@ TEST_CASE("export step", "[extint]") {
     const std::filesystem::path out =
         std::filesystem::temp_directory_path() / "extint_irrep_names.itfaa";
 
-    // Gp is the totally symmetric IRREP by virtue of the relation
+    // Gp is B1u by virtue of the relation
     json options{{"language", "itf"},
                  {"output", out.string()},
                  {"irreps",
                   {{"group", "D2h"},
                    {"symbols", {"Gp"}},
-                   {"relations", {"Gp = Ag"}},
+                   {"relations", {"Gp = B1u"}},
                    {"default", "error"},
                    {"tensors", {{"T2", "Gp"}, {"Y", "Ag"}}}}},
                  {"meta",
@@ -412,7 +414,7 @@ TEST_CASE("export step", "[extint]") {
 
     // Labels are full-match regular expressions
     std::string code = export_code({{"[fY]", "Ag"}, {"T.", "Gp"}});
-    REQUIRE_THAT(code, ContainsSubstring("Y:cc // irrep:Ag"));
+    REQUIRE_THAT(code, ContainsSubstring("Y:cc"));
     REQUIRE_THAT(code, ContainsSubstring("T2:eecc // irrep:Gp"));
     REQUIRE_THAT(code, ContainsSubstring("R:ec // irrep:Gp"));
     REQUIRE_THROWS_WITH(export_code({{"[fY]", "Ag"}, {"T", "Gp"}}),

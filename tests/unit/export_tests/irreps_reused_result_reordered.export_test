@@ -15,7 +15,7 @@ index-space: c, External, e
 
 tensor: R:ec[bj], R:ec // irrep:B3
 tensor: X:ceec[jbck], !Create{type:disk; irrep:B3}
-tensor: f:ec[ck], f:ec // irrep:A
+tensor: f:ec[ck], f:ec
 tensor: t:ce[jc], t:ce // irrep:B1
 tensor: v:ec[bk], v:ec // irrep:B2
 
