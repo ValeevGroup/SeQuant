@@ -6446,8 +6446,9 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     REQUIRE(equal_tarrays(p0->get<TArrayD>(), full, "a,b,d"));
   }
 
-  SECTION("a product with a Hadamard index materializes the view, once") {
-    // H(a,c): a appears on both operands and the result -> einsum territory
+  SECTION("a product with a Hadamard index takes the views as is") {
+    // H(a,c): a appears on both operands and the result (a general product,
+    // which the expression layer evaluates natively)
     TArrayD H(world, TA::TiledRange{{0, 3, 6, 9}, {0, 5, 10}});
     H.fill_random();
     world.gop.fence();
@@ -6455,8 +6456,8 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     auto sA = rA->slice_mode(2, 5, 10);
     auto sH = rH->slice_mode(1, 5, 10);
     auto prod = sA->prod(*sH, annot3("a,b,c", "a,c", "a,b"), DeNest::False);
-    REQUIRE_FALSE(sA->is_buffer_alias());
-    REQUIRE_FALSE(sH->is_buffer_alias());
+    REQUIRE(sA->is_buffer_alias());
+    REQUIRE(sH->is_buffer_alias());
     auto exp =
         TA::einsum(eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2})("a,b,c"),
                    eager_block(H, "a,c", {0, 1}, {3, 2})("a,c"), "a,b");
@@ -6648,11 +6649,10 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     REQUIRE(equal_tarrays(s->get<TArrayD>(), blk, "a,b,c"));
   }
 
-  SECTION("a nested-array product with a sliced flat operand") {
+  SECTION("nested-array slices are views too") {
     using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
     using ResultToT = sequant::ResultTensorOfTensorTA<ToTArray>;
-    // T(i,c;x,y) nested, g(c,d) flat sliced on c -> R(i,d;x,y): the einsum
-    // path takes arrays, so the slice is applied once, exactly
+    // T(i,c;x,y) nested over tiles 2 x 2, inner 3 x 2
     TA::TiledRange const trT{{0, 2, 4}, {0, 5, 10}};
     TA::Range const inner({3, 2});
     ToTArray T(world, trT);
@@ -6664,14 +6664,332 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
             },
             it.make_range());
     world.gop.fence();
+    auto const T0 = TA::clone(T);
     auto rT = eval_result<ResultToT>(T);
-    auto sB = rB->slice_mode(0, 5, 10);
+    auto const eager = sequant::slice_array_over_mode(T, 1, 1, 2);
+
+    // the slice is an alias, reports the slice's layout, materializes once
     auto sT = rT->slice_mode(1, 5, 10);
-    auto prod =
-        sT->prod(*sB, annot3("i,c;x,y", "c,d", "i,d;x,y"), DeNest::False);
-    auto exp =
-        TA::einsum(sT->get<ToTArray>()("i,c;x,y"),
-                   eager_block(B, "c,d", {1, 0}, {2, 2})("c,d"), "i,d;x,y");
-    REQUIRE(equal_tarrays(prod->get<ToTArray>(), exp, "i,d;x,y"));
+    REQUIRE(sT->is_buffer_alias());
+    REQUIRE(sT->size_in_bytes() == 0);
+    std::ostringstream os;
+    os << eager.trange();
+    REQUIRE(sT->trange_annot() == os.str());
+    REQUIRE(equal_tarrays(sT->get<ToTArray>(), eager, "i,c;x,y"));
+    REQUIRE_FALSE(sT->is_buffer_alias());
+
+    // ToT * flat with both operands sliced on the contracted index: neither
+    // is materialized; the batches add up to the full product
+    auto sT1 = rT->slice_mode(1, 5, 10);
+    auto sB1 = rB->slice_mode(0, 5, 10);
+    auto p1 =
+        sT1->prod(*sB1, annot3("i,c;x,y", "c,d", "i,d;x,y"), DeNest::False);
+    REQUIRE(sT1->is_buffer_alias());
+    REQUIRE(sB1->is_buffer_alias());
+    ToTArray exp1;
+    exp1("i,d;x,y") =
+        eager("i,c;x,y") * eager_block(B, "c,d", {1, 0}, {2, 2})("c,d");
+    REQUIRE(equal_tarrays(p1->get<ToTArray>(), exp1, "i,d;x,y"));
+    auto p0 = rT->slice_mode(1, 0, 5)->prod(*rB->slice_mode(0, 0, 5),
+                                            annot3("i,c;x,y", "c,d", "i,d;x,y"),
+                                            DeNest::False);
+    p0->add_inplace(*p1);
+    ToTArray full;
+    full("i,d;x,y") = T("i,c;x,y") * B("c,d");
+    REQUIRE(equal_tarrays(p0->get<ToTArray>(), full, "i,d;x,y"));
+
+    // a nested view as the operand of an accumulation, and as the block of a
+    // scatter; neither reaches T
+    auto acc = eval_result<ResultToT>(TA::clone(eager));
+    acc->add_inplace(*rT->slice_mode(1, 5, 10));
+    ToTArray twice;
+    twice("i,c;x,y") = 2.0 * eager("i,c;x,y");
+    REQUIRE(equal_tarrays(acc->get<ToTArray>(), twice, "i,c;x,y"));
+    auto dest = eval_result<ResultToT>(TA::clone(T));
+    dest->write_into_slice(*acc, 1, 5, 10);
+    ToTArray expDest;
+    expDest("i,c;x,y") = T("i,c;x,y");
+    expDest("i,c;x,y").block({0, 1}, {2, 2}, TA::preserve_lobound) =
+        twice("i,c;x,y");
+    REQUIRE(equal_tarrays(dest->get<ToTArray>(), expDest, "i,c;x,y"));
+    // scattering INTO a view materializes it; T is untouched throughout
+    auto destView = rT->slice_mode(0, 0, 4);
+    REQUIRE(destView->is_buffer_alias());
+    destView->write_into_slice(*acc, 1, 5, 10);
+    REQUIRE_FALSE(destView->is_buffer_alias());
+    REQUIRE(equal_tarrays(destView->get<ToTArray>(), expDest, "i,c;x,y"));
+    REQUIRE(equal_tarrays(T, T0, "i,c;x,y"));
+
+    // a flat view (permuted and sliced) as the operand of a nested product
+    auto pB = rB->permute(annot2("c,d", "d,c"))->slice_mode(1, 5, 10);
+    auto p2 = rT->slice_mode(1, 5, 10)->prod(
+        *pB, annot3("i,c;x,y", "d,c", "i,d;x,y"), DeNest::False);
+    REQUIRE(pB->is_buffer_alias());
+    REQUIRE(equal_tarrays(p2->get<ToTArray>(), exp1, "i,d;x,y"));
+  }
+
+  SECTION("a permutation or an adjoint of a slice is a view") {
+    auto ps = rA->slice_mode(1, 2, 6)->permute(annot2("a,b,c", "c,a,b"));
+    REQUIRE(ps->is_buffer_alias());
+    TArrayD exp;
+    exp("c,a,b") = eager_block(A, "a,b,c", {0, 1, 0}, {3, 3, 2})("a,b,c");
+    REQUIRE(equal_tarrays(ps->get<TArrayD>(), exp, "c,a,b"));
+
+    TArrayZ Z(world, TA::TiledRange{{0, 3, 6}, {0, 5, 10}});
+    Z.fill_random();
+    world.gop.fence();
+    auto rZ = eval_result<ResultZ>(Z);
+    auto as = rZ->slice_mode(1, 5, 10)->adjoint(annot2("i,a", "a,i"));
+    REQUIRE(as->is_buffer_alias());
+    TArrayZ expZ;
+    expZ("a,i") = eager_block(Z, "i,a", {0, 1}, {2, 2})("i,a").conj();
+    REQUIRE(equal_tarrays(as->get<TArrayZ>(), expZ, "a,i"));
+  }
+
+  SECTION("the array consumers of a view leave the parent alone") {
+    auto const A0 = TA::clone(A);
+    auto const blk = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2});
+    // a phase: the view's own copy is scaled
+    auto neg = rA->slice_mode(2, 5, 10)->mult_by_phase(-1);
+    TArrayD expNeg;
+    expNeg("a,b,c") = -1.0 * blk("a,b,c");
+    REQUIRE(equal_tarrays(neg->get<TArrayD>(), expNeg, "a,b,c"));
+    REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+    // the symmetrizer (i <-> j with a <-> b): the same as on the
+    // materialized slice; both members of a swapped pair are cut alike
+    TArrayD M(world,
+              TA::TiledRange{{0, 3, 6}, {0, 3, 6}, {0, 2, 4}, {0, 2, 4}});
+    M.fill_random();
+    world.gop.fence();
+    auto rM = eval_result<ResultD>(M);
+    auto symView = rM->slice_mode(0, 3, 6)->slice_mode(1, 3, 6)->symmetrize();
+    auto symEager = eval_result<ResultD>(
+                        eager_block(M, "i,j,a,b", {1, 1, 0, 0}, {2, 2, 2, 2}))
+                        ->symmetrize();
+    REQUIRE(equal_tarrays(symView->get<TArrayD>(), symEager->get<TArrayD>(),
+                          "i,j,a,b"));
+  }
+
+  SECTION("a spectator mode with a nonzero element lobound keeps it") {
+    // the modes of A2 and B2 start at element 4 (a frozen-core offset)
+    TArrayD A2(world, TA::TiledRange{{4, 6, 8}, {0, 5, 10}});
+    TArrayD B2(world, TA::TiledRange{{4, 6, 8}, {0, 4}});
+    A2.fill_random();
+    B2.fill_random();
+    world.gop.fence();
+    auto rA2 = eval_result<ResultD>(A2);
+    auto rB2 = eval_result<ResultD>(B2);
+    auto s = rA2->slice_mode(1, 5, 10);
+    auto const blk = eager_block(A2, "a,b", {0, 1}, {2, 2});
+    auto const& sv = s->as<ResultD>();
+    REQUIRE(sv.logical_trange() == blk.trange());
+    REQUIRE(sv.logical_trange().elements_range().lobound()[0] == 4);
+    auto prod = s->prod(*rB2, annot3("a,b", "a,c", "b,c"), DeNest::False);
+    REQUIRE(s->is_buffer_alias());
+    TArrayD exp;
+    exp("b,c") = blk("a,b") * B2("a,c");
+    REQUIRE(equal_tarrays(prod->get<TArrayD>(), exp, "b,c"));
+    // and through a permutation of the view
+    auto pp = s->permute(annot2("a,b", "b,a"));
+    REQUIRE(pp->as<ResultD>().logical_trange().elements_range().lobound()[1] ==
+            4);
+    TArrayD expP;
+    expP("b,a") = blk("a,b");
+    REQUIRE(equal_tarrays(pp->get<TArrayD>(), expP, "b,a"));
+  }
+
+  SECTION("block-sparse arrays: the view keeps the shape") {
+    using SpArray = TA::TSpArrayD;
+    using ResultS = ResultTensorTA<SpArray>;
+    SpArray SA = TA::to_sparse(A);
+    SpArray SB = TA::to_sparse(B);
+    auto rSA = eval_result<ResultS>(SA);
+    auto rSB = eval_result<ResultS>(SB);
+    auto sA = rSA->slice_mode(2, 5, 10);
+    auto sB = rSB->slice_mode(0, 5, 10);
+    REQUIRE(sA->is_buffer_alias());
+    auto prod = sA->prod(*sB, annot3("a,b,c", "c,d", "a,b,d"), DeNest::False);
+    REQUIRE(sA->is_buffer_alias());
+    SpArray exp;
+    exp("a,b,d") = eager_block(SA, "a,b,c", {0, 0, 1}, {3, 4, 2})("a,b,c") *
+                   eager_block(SB, "c,d", {1, 0}, {2, 2})("c,d");
+    REQUIRE(equal_tarrays(prod->get<SpArray>(), exp, "a,b,d"));
+    // the view's value is the sparse block
+    auto const blk = eager_block(SA, "a,b,c", {0, 0, 1}, {3, 4, 2});
+    REQUIRE(equal_tarrays(sA->get<SpArray>(), blk, "a,b,c"));
+    // scatter of a view into a sparse destination
+    auto dest = eval_result<ResultS>(TA::to_sparse(A));
+    SpArray twice;
+    twice("a,b,c") = 2.0 * SA("a,b,c");
+    dest->write_into_slice(*eval_result<ResultS>(twice)->slice_mode(2, 5, 10),
+                           2, 5, 10);
+    SpArray expD;
+    expD("a,b,c") = SA("a,b,c");
+    expD("a,b,c").block({0, 0, 1}, {3, 4, 2}, TA::preserve_lobound) =
+        eager_block(twice, "a,b,c", {0, 0, 1}, {3, 4, 2})("a,b,c");
+    REQUIRE(equal_tarrays(dest->get<SpArray>(), expD, "a,b,c"));
+  }
+}
+
+// The nested-array result's views: a block over the outer modes, consumed by
+// every nested product (nested x flat, nested x nested, the inner contraction
+// that flattens, the dot), by sums, scaling, accumulation and the scatter.
+TEST_CASE("ta_lazy_views_nested", "[eval][ta][lazy]") {
+  using sequant::DeNest;
+  using sequant::eval_result;
+  using sequant::ResultScalar;
+  using sequant::ResultTensorOfTensorTA;
+  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+  using ResultToT = ResultTensorOfTensorTA<ToTArray>;
+
+  auto& world = TA::get_default_world();
+  auto annot3 = [](std::string l, std::string r, std::string c) {
+    return std::array<std::any, 3>{std::move(l), std::move(r), std::move(c)};
+  };
+  auto annot2 = [](std::string pre, std::string post) {
+    return std::array<std::any, 2>{std::move(pre), std::move(post)};
+  };
+  // outer tiles 2 x 2, the same for every array
+  TA::TiledRange const tr{{0, 2, 4}, {0, 5, 10}};
+  auto make_tot = [&](TA::Range const& inner, TA::TiledRange const& outer) {
+    ToTArray t(world, outer);
+    for (auto it = t.begin(); it != t.end(); ++it)
+      if (t.is_local(it.index()))
+        *it = world.taskq.add(
+            [inner](TA::Range const& orng) {
+              return random_tensor_of_tensor<double>(orng, inner);
+            },
+            it.make_range());
+    world.gop.fence();
+    return t;
+  };
+  // L(i,j;a,b) inner 3 x 2, R(i,j;b,c) inner 2 x 4
+  auto const L = make_tot(TA::Range({3, 2}), tr);
+  auto const R = make_tot(TA::Range({2, 4}), tr);
+  auto const L0 = TA::clone(L);
+  auto rL = eval_result<ResultToT>(L);
+  auto rR = eval_result<ResultToT>(R);
+  // the eager slices over j = elements [5, 10) (tile 1)
+  auto const Le = sequant::slice_array_over_mode(L, 1, 1, 2);
+  auto const Re = sequant::slice_array_over_mode(R, 1, 1, 2);
+  auto sL = [&] { return rL->slice_mode(1, 5, 10); };
+  auto sR = [&] { return rR->slice_mode(1, 5, 10); };
+
+  SECTION("a slice of a slice, and the clone") {
+    auto ss = sL()->slice_mode(0, 2, 4);
+    REQUIRE(ss->is_buffer_alias());
+    auto const exp = sequant::slice_array_over_mode(Le, 0, 1, 2);
+    REQUIRE(equal_tarrays(ss->get<ToTArray>(), exp, "i,j;a,b"));
+    auto v = sL();
+    auto c = v->clone();
+    REQUIRE(v->is_buffer_alias());
+    REQUIRE_FALSE(c->is_buffer_alias());
+    REQUIRE(equal_tarrays(c->get<ToTArray>(), Le, "i,j;a,b"));
+    c->add_inplace(*sL());
+    REQUIRE(equal_tarrays(v->get<ToTArray>(), Le, "i,j;a,b"));
+    REQUIRE(equal_tarrays(L, L0, "i,j;a,b"));
+  }
+
+  SECTION("nested x nested products take the views as is") {
+    // outer Hadamard, inner contraction over b -> (i,j;a,c)
+    auto l = sL();
+    auto r = sR();
+    auto p =
+        l->prod(*r, annot3("i,j;a,b", "i,j;b,c", "i,j;a,c"), DeNest::False);
+    REQUIRE(l->is_buffer_alias());
+    REQUIRE(r->is_buffer_alias());
+    auto const exp = TA::einsum(Le("i,j;a,b"), Re("i,j;b,c"), "i,j;a,c");
+    REQUIRE(equal_tarrays(p->get<ToTArray>(), exp, "i,j;a,c"));
+    // the result wants its inner modes in the other order
+    auto p2 = sL()->prod(*sR(), annot3("i,j;a,b", "i,j;b,c", "i,j;c,a"),
+                         DeNest::False);
+    auto const exp2 = TA::einsum(Le("i,j;a,b"), Re("i,j;b,c"), "i,j;c,a");
+    REQUIRE(equal_tarrays(p2->get<ToTArray>(), exp2, "i,j;c,a"));
+    // the inner contraction that flattens: (i,j;a,b) . (i,j;a,b) -> (i,j)
+    auto l3 = sL();
+    auto d = l3->prod(*sL(), annot3("i,j;a,b", "i,j;a,b", "i,j"), DeNest::True);
+    REQUIRE(l3->is_buffer_alias());
+    auto const expD =
+        TA::einsum<TA::DeNest::True>(Le("i,j;a,b"), Le("i,j;a,b"), "i,j");
+    REQUIRE(equal_tarrays(d->get<TA::TArrayD>(), expD, "i,j"));
+    // the dot
+    auto l4 = sL();
+    auto dot = l4->prod(*sL(), annot3("i,j;a,b", "i,j;a,b", ""), DeNest::False);
+    REQUIRE(l4->is_buffer_alias());
+    REQUIRE(dot->get<double>() ==
+            Catch::Approx(TA::dot(Le("i,j;a,b"), Le("i,j;a,b"))));
+  }
+
+  SECTION("sum, scaling, permutation and adjoint of nested views") {
+    auto l = sL();
+    auto sum = l->sum(*sL(), annot3("i,j;a,b", "i,j;a,b", "i,j;a,b"));
+    REQUIRE(l->is_buffer_alias());
+    ToTArray twice;
+    twice("i,j;a,b") = 2.0 * Le("i,j;a,b");
+    REQUIRE(equal_tarrays(sum->get<ToTArray>(), twice, "i,j;a,b"));
+
+    auto scaled = l->prod(*eval_result<ResultScalar<double>>(2.0),
+                          annot3("i,j;a,b", "", "j,i;a,b"), DeNest::False);
+    REQUIRE(l->is_buffer_alias());
+    ToTArray expS;
+    expS("j,i;a,b") = twice("i,j;a,b");
+    REQUIRE(equal_tarrays(scaled->get<ToTArray>(), expS, "j,i;a,b"));
+
+    auto perm = l->permute(annot2("i,j;a,b", "j,i;b,a"));
+    REQUIRE(l->is_buffer_alias());
+    ToTArray expP;
+    expP("j,i;b,a") = Le("i,j;a,b");
+    REQUIRE(equal_tarrays(perm->get<ToTArray>(), expP, "j,i;b,a"));
+
+    auto adj = l->adjoint(annot2("i,j;a,b", "j,i;b,a"));
+    REQUIRE(equal_tarrays(adj->get<ToTArray>(), expP, "j,i;b,a"));
+
+    auto neg = sL()->mult_by_phase(-1);
+    ToTArray expN;
+    expN("i,j;a,b") = -1.0 * Le("i,j;a,b");
+    REQUIRE(equal_tarrays(neg->get<ToTArray>(), expN, "i,j;a,b"));
+    REQUIRE(equal_tarrays(L, L0, "i,j;a,b"));
+
+    // the symmetrizer (i <-> j with a <-> b): as on the eager slice of a
+    // square array, both outer modes cut alike
+    auto const S =
+        make_tot(TA::Range({2, 2}), TA::TiledRange{{0, 2, 4}, {0, 2, 4}});
+    auto rS = eval_result<ResultToT>(S);
+    auto symV = rS->slice_mode(0, 2, 4)->slice_mode(1, 2, 4)->symmetrize();
+    auto const Se = sequant::slice_array_over_mode(
+        sequant::slice_array_over_mode(S, 0, 1, 2), 1, 1, 2);
+    auto symE = eval_result<ResultToT>(TA::clone(Se))->symmetrize();
+    REQUIRE(
+        equal_tarrays(symV->get<ToTArray>(), symE->get<ToTArray>(), "i,j;a,b"));
+  }
+
+  SECTION("a nested view as the block of a scatter") {
+    ToTArray twiceFull;
+    twiceFull("i,j;a,b") = 2.0 * L("i,j;a,b");
+    auto dest = eval_result<ResultToT>(TA::clone(L));
+    auto blockView = eval_result<ResultToT>(twiceFull)->slice_mode(1, 5, 10);
+    dest->write_into_slice(*blockView, 1, 5, 10);
+    REQUIRE(blockView->is_buffer_alias());
+    ToTArray exp;
+    exp("i,j;a,b") = L("i,j;a,b");
+    exp("i,j;a,b").block({0, 1}, {2, 2}, TA::preserve_lobound) =
+        sequant::slice_array_over_mode(twiceFull, 1, 1, 2)("i,j;a,b");
+    REQUIRE(equal_tarrays(dest->get<ToTArray>(), exp, "i,j;a,b"));
+    REQUIRE(equal_tarrays(L, L0, "i,j;a,b"));
+  }
+
+  SECTION("a view of an all-empty nested array is zero over the slice") {
+    ToTArray E(world, tr);
+    for (auto it = E.begin(); it != E.end(); ++it)
+      if (E.is_local(it.index()))
+        *it = TA::Tensor<TA::Tensor<double>>(it.make_range());
+    world.gop.fence();
+    auto rE = eval_result<ResultToT>(E);
+    auto v = rE->slice_mode(1, 5, 10);
+    REQUIRE(v->is_buffer_alias());
+    REQUIRE(v->trange_annot() == sL()->trange_annot());
+    auto const& val = v->get<ToTArray>();
+    REQUIRE(val.trange() == Le.trange());
+    REQUIRE(sequant::detail::tot_inner_rank(val) == 0);
   }
 }
