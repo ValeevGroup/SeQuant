@@ -310,6 +310,16 @@ ExprPtr map_leaf_objects(const ExprPtr &leaf, Visitor &&visitor) {
     }
   }
 
+  if (leaf->is<TensorPower>()) {
+    const TensorPower &power = leaf->as<TensorPower>();
+    if (power.base()->is<Tensor>()) {
+      ExprPtr replacement = visitor(power.base());
+      if (replacement) {
+        return pow(std::move(replacement), power.exponent());
+      }
+    }
+  }
+
   return leaf;
 }
 

@@ -16,6 +16,8 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tree_index.hpp>
+#include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
@@ -1904,6 +1906,26 @@ TEST_CASE("tensor_power", "[elements]") {
     tadj->adjoint();
     CHECK(*p->as<TensorPower>().base() == *tadj);
     CHECK(p->hash_value() != h0);
+  }
+  SECTION("utilities") {
+    auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                        TensorSymmetries{.perm = Symmetry::Antisymm});
+    auto p = pow(D, rational{-1});
+    std::string msg;
+    CHECK(is_valid(p, &msg));
+    auto groups = get_unique_indices(p);
+    CHECK(groups.bra == std::vector{Index{L"i_1"}, Index{L"i_2"}});
+    CHECK(groups.ket == std::vector{Index{L"a_1"}, Index{L"a_2"}});
+    // transform_expr renames inside the base
+    container::map<Index, Index> repl{{Index{L"i_1"}, Index{L"i_3"}},
+                                      {Index{L"a_1"}, Index{L"a_3"}}};
+    auto renamed = transform_expr(M * p, repl);
+    auto D3 = ex<Tensor>(L"D", bra{L"i_3", L"i_2"}, ket{L"a_3", L"a_2"},
+                         TensorSymmetries{.perm = Symmetry::Symm,
+                                          .braket = BraKetSymmetry::Symm,
+                                          .column = ColumnSymmetry::Symm});
+    REQUIRE(renamed->is<Product>());
+    CHECK(*renamed->as<Product>().factors()[1] == *pow(D3, rational{-1}));
   }
 }
 

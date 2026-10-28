@@ -227,6 +227,10 @@ struct IrrepNodeTraits<Expr> {
       }
       return ctx.irreps_of(tensor);
     }
+    if (expr.is<TensorPower>()) {
+      // element-wise power of a tensor: irreps of the base
+      return leaf_irreps(*expr.as<TensorPower>().base(), ctx);
+    }
     if (expr.is<Constant>() || expr.is<Product>()) {
       // Only zero-valued products end up here (see kind())
       SEQUANT_ASSERT(expr.is<Constant>() || expr.is_zero());

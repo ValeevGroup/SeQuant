@@ -453,6 +453,8 @@ bool is_valid(const Expr &expr, std::string *msg) {
     // rational and is always well-formed. Power is atomic (it exposes no
     // subexpressions to the children loop above), so validate the base here.
     if (!is_valid(expr.as<Power>().base(), msg)) return false;
+  } else if (expr.is<TensorPower>()) {
+    if (!is_valid(expr.as<TensorPower>().base(), msg)) return false;
   } else {
     SEQUANT_ASSERT(false, "Unsupported expression type in is_valid");
   }
