@@ -307,9 +307,9 @@ namespace {
 // adjustment live in csv_size_fixtures.hpp (a named namespace, so sharing it
 // across files is unity-build safe); these aliases keep this file's names.
 using OrderedExecWater20ProblemSize = sequant::tests::csv_sizes::CsvProblemSize;
-inline constexpr auto const& kOrderedExecWater20_pVDZF12 =
+[[maybe_unused]] inline constexpr auto const& kOrderedExecWater20_pVDZF12 =
     sequant::tests::csv_sizes::kWater20_pVDZF12;
-inline constexpr auto const& kOrderedExecC60_pVDZF12 =
+[[maybe_unused]] inline constexpr auto const& kOrderedExecC60_pVDZF12 =
     sequant::tests::csv_sizes::kC60_pVDZF12;
 
 [[maybe_unused]] sequant::eval::dryrun::SizeRegime
