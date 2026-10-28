@@ -75,7 +75,7 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
     REQUIRE(&n2.left().parent() == &n2);
   }
 
-  SECTION("derefence") {
+  SECTION("dereference") {
     auto const n1 = FullBinaryNode{100};
 
     REQUIRE_NOTHROW(*n1);
