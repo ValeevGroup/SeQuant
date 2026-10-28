@@ -1201,9 +1201,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
                      "t{a_1,a_2,a_3;i_1,i_3,i_4}:N-N-S "));
   }
 
-  SECTION(
-      "the most expensive term in CCSDT: A3 * g * t3, spintracing with direct "
-      "full-expansion") {
+  SECTION("A3-g-t3-full") {
     auto input = ex<Constant>(rational{3, 2}) *
                  ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
                             ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
