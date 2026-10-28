@@ -1854,6 +1854,15 @@ TEST_CASE("tensor_power", "[elements]") {
     CHECK(TensorPower(D, rational{-1})._column_symmetry() ==
           ColumnSymmetry::Symm);
   }
+  SECTION("base with an empty ket") {
+    auto eps = ex<Tensor>(L"ε", bra{L"a_1"}, ket{},
+                          TensorSymmetries{.braket = BraKetSymmetry::Symm});
+    auto p = ex<TensorPower>(eps, rational{-1});
+    CHECK(p->as<AbstractTensor>()._bra_rank() == 1);
+    CHECK(p->as<AbstractTensor>()._ket_rank() == 0);
+    CHECK(p->as<AbstractTensor>()._bra_net_rank() == 1);
+    CHECK(ranges::distance(p->as<AbstractTensor>()._braket()) == 1);
+  }
   SECTION("adjoint acts on the base") {
     auto p = ex<TensorPower>(t, rational{-1});
     const auto h0 = p->hash_value();

@@ -7,6 +7,7 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/rational.hpp>
 
+#include <memory>
 #include <string>
 #include <type_traits>
 
@@ -71,9 +72,44 @@ class TensorPower : public Expr, public AbstractTensor {
   /// @return the column symmetry of the base
   ColumnSymmetry _column_symmetry() const override;
 
+  // the rest of the AbstractTensor interface forwards to the base; mutating
+  // members flush the memoized hash
+  AbstractTensor* _clone() const override;
+  std::shared_ptr<AbstractTensor> _clone_shared() const override;
+  const_any_view_randsz _bra() const override;
+  const_any_view_randsz _ket() const override;
+  const_any_view_randsz _aux() const override;
+  const_any_view_rand _braket() const override;
+  const_any_view_rand _braketaux() const override;
+  const_any_view_rand _slots() const override;
+  std::size_t _bra_rank() const override;
+  std::size_t _bra_net_rank() const override;
+  std::size_t _ket_rank() const override;
+  std::size_t _ket_net_rank() const override;
+  std::size_t _aux_rank() const override;
+  std::size_t _num_slots() const override;
+  std::size_t _num_indices() const override;
+  Hermiticity _hermiticity() const override;
+  Field _base_field() const override;
+  std::size_t _color() const override;
+  bool _is_cnumber() const override;
+  std::wstring_view _label() const override;
+  std::wstring _to_latex() const override;
+  std::size_t _hash_value() const override;
+  bool operator<(const AbstractTensor& that) const override;
+  bool _transform_indices(
+      const container::map<Index, Index>& index_map) override;
+  void _reset_tags() override;
+  void _swap_bra_ket() override;
+  any_view_randsz _bra_mutable() override;
+  any_view_randsz _ket_mutable() override;
+  any_view_randsz _aux_mutable() override;
+
  private:
   ExprPtr base_;
   exponent_type exponent_;
+
+  AbstractTensor& base_tensor_mut();
 
   hash_type memoizing_hash() const override;
 
