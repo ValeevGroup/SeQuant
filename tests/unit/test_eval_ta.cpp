@@ -887,12 +887,18 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           ->get<TA::TArrayD>();
     };
 
-    auto eval_biorthogonal_nns_project = [&yield_](
-                                             sequant::ExprPtr const& expr,
+    auto eval_biorthogonal_nns_project_with =
+        [](decltype(yield_)& yield, sequant::ExprPtr const& expr,
+           std::string const& target_labels) {
+          auto result = evaluate(eval_node(expr), target_labels, yield);
+          return sequant::mbpt::biorthogonal_nns_project(
+              result->get<TA::TArrayD>(),
+              eval_node(expr)->as_tensor().bra_rank());
+        };
+
+    auto eval_biorthogonal_nns_project = [&](sequant::ExprPtr const& expr,
                                              std::string const& target_labels) {
-      auto result = evaluate(eval_node(expr), target_labels, yield_);
-      return sequant::mbpt::biorthogonal_nns_project(
-          result->get<TA::TArrayD>(), eval_node(expr)->as_tensor().bra_rank());
+      return eval_biorthogonal_nns_project_with(yield_, expr, target_labels);
     };
 
     SECTION("summation") {
@@ -1170,13 +1176,17 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(eval2, man2));
 
-#ifndef SEQUANT_SKIP_LONG_TESTS
       // for rank 4 residual, nns applies:
       // result = NNS_P * sum_of_ket_permutations
+      // (own extents: nocc >= rank, else every ket tuple repeats an index and
+      // the antisymmetric part of the projector goes unchecked; small nvirt,
+      // since the projection acts on the kets only)
+      auto yield4_ = rand_tensor_yield<double, TA::DensePolicy>{world, 4, 2};
       auto expr3 = parse_antisymm(L"R_{a1, a2, a3, a4}^{i1, i2, i3, i4}");
-      auto eval3 = eval_biorthogonal_nns_project(
-          expr3, "a_1,a_2,a_3,a_4,i_1,i_2,i_3,i_4");
-      auto const& arr3 = yield(L"R{a1,a2,a3,a4;i1,i2,i3,i4}");
+      auto eval3 = eval_biorthogonal_nns_project_with(
+          yield4_, expr3, "a_1,a_2,a_3,a_4,i_1,i_2,i_3,i_4");
+      auto const& arr3 =
+          yield4_(L"R{a1,a2,a3,a4;i1,i2,i3,i4}")->get<TA::TArrayD>();
 
       auto man3 = TArrayD{};
       man3("0,1,2,3,4,5,6,7") = 14.0 / 24.0 * arr3("0,1,2,3,4,5,6,7") +
@@ -1205,7 +1215,6 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                 2.0 / 24.0 * arr3("0,1,2,3,7,6,5,4");
 
       REQUIRE(equal_tarrays<Loose>(eval3, man3));
-#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
     }
 
     SECTION("Others") {
