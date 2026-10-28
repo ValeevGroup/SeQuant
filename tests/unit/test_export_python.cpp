@@ -1235,8 +1235,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
-    // Subsection 1: Column-major (default) write and read
-    {
+    SECTION("column-major-roundtrip") {
+      // Column-major (default) write and read
       // Default Eigen::Tensor is column-major
       Eigen::Tensor<double, 2> tensor_col(3, 4);
       for (int i = 0; i < 3; ++i) {
@@ -1263,8 +1263,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
       }
     }
 
-    // Subsection 2: Row-major write and read
-    {
+    SECTION("row-major-roundtrip") {
+      // Row-major write and read
       // Explicitly create row-major tensor
       Eigen::Tensor<double, 2, Eigen::RowMajor> tensor_row(3, 4);
       for (int i = 0; i < 3; ++i) {
@@ -1292,8 +1292,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
       }
     }
 
-    // Subsection 3: Verify layout mismatch detection with explicit RowMajor
-    {
+    SECTION("layout-mismatch-throws") {
+      // Verify layout mismatch detection with explicit RowMajor
       // Create a column-major tensor and write it
       Eigen::Tensor<double, 2> tensor_col(2, 3);  // default is column-major
       tensor_col.setConstant(42.0);
@@ -1309,8 +1309,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
           Catch::Matchers::ContainsSubstring("Layout mismatch"));
     }
 
-    // Subsection 4: Default Options accepts any layout
-    {
+    SECTION("default-options-any-layout") {
+      // Default Options accepts any layout
       // Write a row-major file using external means (simulate numpy output)
       Eigen::Tensor<double, 2, Eigen::RowMajor> tensor_row(2, 3);
       for (int i = 0; i < 2; ++i) {
@@ -1332,8 +1332,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
       REQUIRE(tensor_read.dimensions()[1] == 3);
     }
 
-    // Subsection 5: Scalar (rank-0) tensors
-    {
+    SECTION("rank-0-scalar") {
+      // Scalar (rank-0) tensors
       Eigen::Tensor<double, 0> scalar_tensor;
       scalar_tensor() = 3.14159;
 
@@ -1345,8 +1345,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
       REQUIRE(std::abs(scalar_read() - 3.14159) < 1e-10);
     }
 
-    // Subsection 6: Higher rank tensors
-    {
+    SECTION("rank-4-float") {
+      // Higher rank tensors
       Eigen::Tensor<float, 4> tensor4d(2, 3, 4, 5);
       tensor4d.setRandom();
 
