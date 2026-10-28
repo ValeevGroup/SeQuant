@@ -1608,7 +1608,7 @@ SECTION("MRSO") {
   ctx.set(mbpt::make_mr_spaces());
   auto ctx_resetter = set_scoped_default_context(ctx);
 
-  SECTION("ref_av rejects connectivity when reference differs from vacuum") {
+  SECTION("ref_av-rejects-connectivity") {
     const auto expr = t::h(1) * t::t(1);
     const auto unconstrained = t::ref_av(expr);
     REQUIRE(unconstrained != ex<Constant>(0));
