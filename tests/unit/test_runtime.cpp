@@ -229,13 +229,15 @@ TEST_CASE("context", "[runtime]") {
     }
 
     SECTION("named-parameters") {
+      const auto custom_cmp = TensorCanonicalizer::index_comparer_t(
+          [](const Index& a, const Index& b) { return a < b; });
       const Context ctx_opts(
           {.index_basis_registry = *ctx.index_basis_registry(),
            .tensor_canonicalizers =
                container::map<std::wstring,
                               std::shared_ptr<TensorCanonicalizer>>{
                    {L"Q", null_canon}},
-           .index_comparer = ctx.index_comparer(),
+           .index_comparer = custom_cmp,
            .cardinal_tensor_labels = container::vector<std::wstring>{L"Z"}});
       CHECK(ctx_opts.tensor_canonicalizer_ptr(L"Q") == null_canon);
       // the empty label maps to the default canonicalizer unless given
@@ -249,6 +251,7 @@ TEST_CASE("context", "[runtime]") {
       CHECK(ctx_opts.cardinal_tensor_labels() ==
             container::vector<std::wstring>{L"Z"});
       CHECK(ctx_opts.index_comparer());
+      CHECK(ctx_opts.index_comparer()(Index(L"i_1"), Index(L"i_2")));
       CHECK(ctx_opts.index_pair_comparer());
       CHECK(ctx_opts != ctx);
     }
