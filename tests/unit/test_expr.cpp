@@ -893,17 +893,17 @@ TEST_CASE("expr", "[elements]") {
   }
 
   SECTION("adjoint") {
-    {  // implemented in Adjointable
+    SECTION("Adjointable") {
       const auto e = std::make_shared<Adjointable>();
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE_NOTHROW(adjoint(e));  // check free-function adjoint
     }
-    {  // Constant
+    SECTION("Constant") {
       const auto e = std::make_shared<Constant>(Constant::scalar_type{1, 2});
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->value() == Constant::scalar_type{1, -2});
     }
-    {  // Variable
+    SECTION("Variable") {
       const auto e = std::make_shared<Variable>(L"q");
       REQUIRE(e->conjugated() == false);
       REQUIRE_NOTHROW(e->adjoint());
@@ -912,34 +912,21 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->conjugated() == false);
     }
-    {  // Product
-      const auto e = std::make_shared<Product>();
+    // Product and NCProduct reverse the factor order, CProduct does not
+    const auto check_product = [](auto e, bool reverses) {
       e->append(Constant::scalar_type{2, -1}, ex<Adjointable>());
       e->append(1, ex<Adjointable>(-2));
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->scalar() == Constant::scalar_type{2, 1});
-      REQUIRE(e->factors()[0]->as<Adjointable>().v == 2);
-      REQUIRE(e->factors()[1]->as<Adjointable>().v == -1);
-    }
-    {  // CProduct
-      const auto e = std::make_shared<CProduct>();
-      e->append(Constant::scalar_type{2, -1}, ex<Adjointable>());
-      e->append(1, ex<Adjointable>(-2));
-      REQUIRE_NOTHROW(e->adjoint());
-      REQUIRE(e->scalar() == Constant::scalar_type{2, 1});
-      REQUIRE(e->factors()[0]->as<Adjointable>().v == -1);
-      REQUIRE(e->factors()[1]->as<Adjointable>().v == 2);
-    }
-    {  // NCProduct
-      const auto e = std::make_shared<NCProduct>();
-      e->append(Constant::scalar_type{2, -1}, ex<Adjointable>());
-      e->append(1, ex<Adjointable>(-2));
-      REQUIRE_NOTHROW(e->adjoint());
-      REQUIRE(e->scalar() == Constant::scalar_type{2, 1});
-      REQUIRE(e->factors()[0]->as<Adjointable>().v == 2);
-      REQUIRE(e->factors()[1]->as<Adjointable>().v == -1);
-    }
-    {  // Sum
+      REQUIRE(e->factors()[reverses ? 0 : 1]->template as<Adjointable>().v ==
+              2);
+      REQUIRE(e->factors()[reverses ? 1 : 0]->template as<Adjointable>().v ==
+              -1);
+    };
+    SECTION("Product") { check_product(std::make_shared<Product>(), true); }
+    SECTION("CProduct") { check_product(std::make_shared<CProduct>(), false); }
+    SECTION("NCProduct") { check_product(std::make_shared<NCProduct>(), true); }
+    SECTION("Sum") {
       const auto e = std::make_shared<Sum>();
       e->append(ex<Adjointable>());
       e->append(ex<Adjointable>(-2));
@@ -947,7 +934,8 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->summands()[0]->as<Adjointable>().v == -1);
       REQUIRE(e->summands()[1]->as<Adjointable>().v == 2);
     }
-    {  // Power: adjoint flips the conjugation flag; base/exponent unchanged
+    SECTION("Power") {
+      // adjoint flips the conjugation flag; base/exponent unchanged
       Power pv(ex<Variable>(L"z"), rational{1, 2});
       REQUIRE(!pv.conjugated());
       pv.adjoint();
