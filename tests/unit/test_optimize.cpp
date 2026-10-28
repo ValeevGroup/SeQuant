@@ -588,26 +588,6 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(S[0b11] == 64.0);
     }
 
-    SECTION("DensePeakSize DP matches brute-force oracle") {
-      using namespace sequant;
-      auto idxsz = [](Index const& ix) -> std::size_t {
-        return ix.basis().extent();
-      };
-      // A 4-tensor chain whose intermediates differ in size by contraction
-      // order.
-      auto t0 = deserialize(L"g{a1;i1}", {.def_perm_symm = Symmetry::Nonsymm});
-      auto t1 = deserialize(L"g{a1;a2}", {.def_perm_symm = Symmetry::Nonsymm});
-      auto t2 = deserialize(L"g{a2;a3}", {.def_perm_symm = Symmetry::Nonsymm});
-      auto t3 = deserialize(L"g{a3;i2}", {.def_perm_symm = Symmetry::Nonsymm});
-      TensorNetwork net{std::vector<ExprPtr>{t0, t1, t2, t3}};
-      container::svector<Index> targets;  // i1,i2 left open
-      auto S = opt::detail::subset_footprints(net, targets, idxsz);
-      double oracle =
-          brute_force_min_peak(std::vector<double>(S.begin(), S.end()), 4);
-      double dp = opt::detail::peak_cost(net, targets, idxsz);
-      REQUIRE(dp == oracle);
-    }
-
     SECTION("DensePeakSize matches oracle over a battery of small networks") {
       using namespace sequant;
       auto idxsz = [](Index const& ix) -> std::size_t {
