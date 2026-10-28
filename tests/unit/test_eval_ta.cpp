@@ -6993,3 +6993,131 @@ TEST_CASE("ta_lazy_views_nested", "[eval][ta][lazy]") {
     REQUIRE(sequant::detail::tot_inner_rank(val) == 0);
   }
 }
+
+// The result-shape-constrained product (apply_shaped_product, the product the
+// evaluator emits when a result-shape provider is set) takes views as is, for
+// every operand kind it supports.
+TEST_CASE("ta_lazy_views_shaped", "[eval][ta][lazy]") {
+  using sequant::eval_result;
+  using sequant::ResultTensorOfTensorTA;
+  using sequant::ResultTensorTA;
+  using FlatArray = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
+  using ToTArray =
+      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ResultF = ResultTensorTA<FlatArray>;
+  using ResultToT = ResultTensorOfTensorTA<ToTArray>;
+
+  auto& world = TA::get_default_world();
+  auto annot3 = [](std::string l, std::string r, std::string c) {
+    return std::array<std::any, 3>{std::move(l), std::move(r), std::move(c)};
+  };
+  auto full_shape = [](TA::TiledRange const& tr) {
+    return TA::SparseShape<float>(TA::Tensor<float>(tr.tiles_range(), 1.0f),
+                                  tr);
+  };
+  auto make_tot = [&](TA::Range const& inner, TA::TiledRange const& outer) {
+    ToTArray t(world, outer, full_shape(outer));
+    for (auto it = t.begin(); it != t.end(); ++it)
+      if (t.is_local(it.index()))
+        *it = world.taskq.add(
+            [inner](TA::Range const& orng) {
+              return random_tensor_of_tensor<double>(orng, inner);
+            },
+            it.make_range());
+    world.gop.fence();
+    return t;
+  };
+  auto shaped = [&](sequant::Result const& l, sequant::Result const& r,
+                    std::array<std::any, 3> const& annot, bool de_nest) {
+    auto const tr =
+        sequant::result_outer_trange_from_results<double, TA::SparsePolicy>(
+            l, r, annot);
+    // a shape that drops the result's first outer tile
+    TA::Tensor<float> norms{tr.tiles_range(), 1.0f};
+    norms[0] = 0.0f;
+    return sequant::apply_shaped_product<double, TA::SparsePolicy>(
+        l, r, annot, TA::SparseShape<float>(norms, tr), de_nest);
+  };
+
+  // the flat operands
+  TA::TArrayD Ad(world,
+                 TA::TiledRange{{0, 3, 6, 9}, {0, 2, 4, 6, 8}, {0, 5, 10}});
+  TA::TArrayD Bd(world, TA::TiledRange{{0, 5, 10}, {0, 4, 7}});
+  Ad.fill_random();
+  Bd.fill_random();
+  world.gop.fence();
+  FlatArray const A = TA::to_sparse(Ad);
+  FlatArray const B = TA::to_sparse(Bd);
+  auto rA = eval_result<ResultF>(A);
+  auto rB = eval_result<ResultF>(B);
+  auto const Ae = sequant::slice_array_over_mode(A, 2, 1, 2);
+  auto const Be = sequant::slice_array_over_mode(B, 0, 1, 2);
+  // the nested operands: T(i,c;x,y) over c, L(i,j;a,b) and R(i,j;b,c) over j
+  TA::TiledRange const trT{{0, 2, 4}, {0, 5, 10}};
+  auto const T = make_tot(TA::Range({3, 2}), trT);
+  auto const L = make_tot(TA::Range({3, 2}), trT);
+  auto const R = make_tot(TA::Range({2, 4}), trT);
+  auto rT = eval_result<ResultToT>(T);
+  auto rL = eval_result<ResultToT>(L);
+  auto rR = eval_result<ResultToT>(R);
+  auto const Te = sequant::slice_array_over_mode(T, 1, 1, 2);
+  auto const Le = sequant::slice_array_over_mode(L, 1, 1, 2);
+  auto const Re = sequant::slice_array_over_mode(R, 1, 1, 2);
+
+  SECTION("flat x flat") {
+    auto sA = rA->slice_mode(2, 5, 10);
+    auto sB = rB->slice_mode(0, 5, 10);
+    auto const an = annot3("a,b,c", "c,d", "a,b,d");
+    auto p = shaped(*sA, *sB, an, false);
+    REQUIRE(p);
+    REQUIRE(sA->is_buffer_alias());
+    REQUIRE(sB->is_buffer_alias());
+    auto e =
+        shaped(*eval_result<ResultF>(Ae), *eval_result<ResultF>(Be), an, false);
+    REQUIRE(p->get<FlatArray>().is_zero(0));
+    REQUIRE(equal_tarrays(p->get<FlatArray>(), e->get<FlatArray>(), "a,b,d"));
+  }
+
+  SECTION("nested x flat, both orders") {
+    auto sT = rT->slice_mode(1, 5, 10);
+    auto sB = rB->slice_mode(0, 5, 10);
+    auto const an = annot3("i,c;x,y", "c,d", "i,d;x,y");
+    auto p = shaped(*sT, *sB, an, false);
+    REQUIRE(p);
+    REQUIRE(sT->is_buffer_alias());
+    REQUIRE(sB->is_buffer_alias());
+    auto e = shaped(*eval_result<ResultToT>(Te), *eval_result<ResultF>(Be), an,
+                    false);
+    REQUIRE(p->get<ToTArray>().is_zero(0));
+    REQUIRE(equal_tarrays(p->get<ToTArray>(), e->get<ToTArray>(), "i,d;x,y"));
+    auto const an2 = annot3("c,d", "i,c;x,y", "i,d;x,y");
+    auto p2 = shaped(*sB, *sT, an2, false);
+    REQUIRE(p2);
+    REQUIRE(sT->is_buffer_alias());
+    REQUIRE(equal_tarrays(p2->get<ToTArray>(), e->get<ToTArray>(), "i,d;x,y"));
+  }
+
+  SECTION("nested x nested, nested and flattened results") {
+    auto sL = rL->slice_mode(1, 5, 10);
+    auto sR = rR->slice_mode(1, 5, 10);
+    auto const an = annot3("i,j;a,b", "i,j;b,c", "i,j;a,c");
+    auto p = shaped(*sL, *sR, an, false);
+    REQUIRE(p);
+    REQUIRE(sL->is_buffer_alias());
+    REQUIRE(sR->is_buffer_alias());
+    auto e = shaped(*eval_result<ResultToT>(Le), *eval_result<ResultToT>(Re),
+                    an, false);
+    REQUIRE(p->get<ToTArray>().is_zero(0));
+    REQUIRE(equal_tarrays(p->get<ToTArray>(), e->get<ToTArray>(), "i,j;a,c"));
+
+    auto sL2 = rL->slice_mode(1, 5, 10);
+    auto const anD = annot3("i,j;a,b", "i,j;a,b", "i,j");
+    auto d = shaped(*sL2, *rL->slice_mode(1, 5, 10), anD, true);
+    REQUIRE(d);
+    REQUIRE(sL2->is_buffer_alias());
+    auto eD = shaped(*eval_result<ResultToT>(Le), *eval_result<ResultToT>(Le),
+                     anD, true);
+    REQUIRE(d->get<FlatArray>().is_zero(0));
+    REQUIRE(equal_tarrays(d->get<FlatArray>(), eD->get<FlatArray>(), "i,j"));
+  }
+}

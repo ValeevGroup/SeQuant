@@ -1235,10 +1235,9 @@ class ResultTensorOfTensorTA final : public Result {
   [[nodiscard]] ArrayT zero_over(TA::TiledRange const& tr) const {
     using value_type = typename ArrayT::value_type;
     ArrayT out{view_base().world(), tr};
+    // every rank sets its own tiles with ready values: no fence needed
     for (auto it = out.begin(); it != out.end(); ++it)
       if (out.is_local(it.index())) *it = value_type{it.make_range()};
-    out.world().gop.fence();
-    ::sequant::detail::note_fence();
     return out;
   }
 
