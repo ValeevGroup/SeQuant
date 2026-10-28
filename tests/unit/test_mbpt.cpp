@@ -1686,18 +1686,6 @@ SECTION("MRSO") {
     REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
                                       L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
   }
-
-#if 0
-    // H**T12 -> R2
-    SECTION("wick(H**T2 -> R2)") {
-      auto result = t::ref_av(t::A(-2) * t::H() * t::t(2), {.connect = {{1, 2}}});
-
-      {
-        std::wcout << "H*T2 -> R2 = " << to_latex_align(result, 0, 1)
-                   << std::endl;
-      }
-    }
-#endif
 }  // SECTION("MRSO")
 
 SECTION("MRSO-MultiProduct") {
