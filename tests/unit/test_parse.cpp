@@ -420,6 +420,10 @@ TEST_CASE("serialization", "[serialization]") {
       CHECK(prod->as<Product>().factors().size() == 2);
       CHECK(*deserialize<ExprPtr>(serialize(prod)) == *prod);
       CHECK(*deserialize<ExprPtr>(serialize(p)) == *p);
+      REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"D{i_1,i_2;a_1,a_2}:A^(1/2)"),
+                        io::serialization::SerializationError);
+      REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"0^(-1)"),
+                        io::serialization::SerializationError);
       REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"(D{i_1;a_1}^(2))^*"),
                         io::serialization::SerializationError);
     }

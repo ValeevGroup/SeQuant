@@ -511,7 +511,20 @@ struct Transformer {
                                "adjoint the base instead");
     }
 
-    auto pw = pow(std::move(base), std::move(exponent));
+    auto [offset, length] = get_pos(power, position_cache.get(), begin.get());
+    if (base->is<AbstractTensor>() && denominator(exponent) != 1 &&
+        base->as<AbstractTensor>()._symmetry() == Symmetry::Antisymm) {
+      throw SerializationError(
+          offset, length,
+          "a non-integer power of an antisymmetric tensor is not defined");
+    }
+
+    ExprPtr pw;
+    try {
+      pw = pow(std::move(base), std::move(exponent));
+    } catch (const Exception &e) {
+      throw SerializationError(offset, length, e.what());
+    }
     if (power.conjugated) pw->adjoint();
     return pw;
   }
