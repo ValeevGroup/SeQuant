@@ -230,7 +230,7 @@ else()
 endif()
 # Clang < 19 needs -frelaxed-template-template-args for P0522R0;
 # sets VGKIT_P0522R0_COMPILE_FLAG, applied to SeQuant-symb below
-vgkit_check_p0522r0()
+vgkit_check_cxx_p0522r0()
 
 if (PROJECT_IS_TOP_LEVEL AND NOT DEFINED CMAKE_POSITION_INDEPENDENT_CODE)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
