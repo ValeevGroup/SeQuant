@@ -40,6 +40,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 namespace sequant::util::extint {
@@ -186,6 +187,18 @@ IrrepContextSpec::Table parse_table(const json &group) {
   }
 
   return table;
+}
+
+/// Invokes @p fn with a copy of the tensor or variable that the given tree
+/// computes
+template <typename Fn>
+void visit_result(const ExportNode<> &tree, Fn &&fn) {
+  if (tree->is_tensor()) {
+    fn(Tensor(tree->as_tensor()));
+  } else {
+    SEQUANT_ASSERT(tree->is_variable());
+    fn(Variable(tree->as_variable()));
+  }
 }
 
 }  // namespace
@@ -408,22 +421,16 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
             continue;
           }
 
-          if (tree->is_tensor()) {
-            Tensor result = tree->as_tensor();
+          visit_result(tree, [&](auto result) {
             genctx.rewrite(result);
             genctx.setZeroStrategy(result, ZeroStrategy::ZeroOnCreate);
-          } else {
-            Variable result = tree->as_variable();
-            genctx.rewrite(result);
-            genctx.setZeroStrategy(result, ZeroStrategy::ZeroOnCreate);
-          }
+          });
         }
       }
     }
 
     for (const ExpressionGroup<> &current_group : groups) {
-      std::set<Tensor> created_tensors;
-      std::set<Variable> created_variables;
+      std::tuple<std::set<Tensor>, std::set<Variable>> created_results;
 
       for (const ExportNode<> &current_node : current_group) {
         std::string import_name;
@@ -440,42 +447,23 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
         const bool force_create = always_create_ids.find(current_node->id()) !=
                                   always_create_ids.end();
 
-        if (current_node->is_tensor()) {
-          Tensor result = current_node->as_tensor();
+        visit_result(current_node, [&](auto result) {
           genctx.rewrite(result);
 
           if (!import_name.empty()) {
             genctx.set_import_name(result, import_name);
           }
 
-          if (force_create ||
-              created_tensors.find(result) == created_tensors.end()) {
+          auto &created = std::get<std::set<decltype(result)>>(created_results);
+          if (force_create || created.find(result) == created.end()) {
             genctx.setLoadStrategy(result, LoadStrategy::Create,
                                    current_node->id());
-            if (!force_create) created_tensors.emplace(std::move(result));
+            if (!force_create) created.emplace(std::move(result));
           } else {
             genctx.setLoadStrategy(result, LoadStrategy::Load,
                                    current_node->id());
           }
-        } else {
-          SEQUANT_ASSERT(current_node->is_variable());
-          Variable result = current_node->as_variable();
-          genctx.rewrite(result);
-
-          if (!import_name.empty()) {
-            genctx.set_import_name(result, import_name);
-          }
-
-          if (force_create ||
-              created_variables.find(result) == created_variables.end()) {
-            genctx.setLoadStrategy(result, LoadStrategy::Create,
-                                   current_node->id());
-            if (!force_create) created_variables.emplace(std::move(result));
-          } else {
-            genctx.setLoadStrategy(result, LoadStrategy::Load,
-                                   current_node->id());
-          }
-        }
+        });
       }
     }
 
@@ -792,16 +780,10 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
         // unrewritten result would store it under a key the lookup never hits.
         // rewrite() is the generic per-generator hook, so this holds for every
         // backend.
-        if (current.tree->is_tensor()) {
-          Tensor result = current.tree->as_tensor();
+        visit_result(current.tree, [&](auto result) {
           genctx.rewrite(result);
           genctx.setZeroStrategy(result, strategy);
-        } else {
-          SEQUANT_ASSERT(current.tree->is_variable());
-          Variable result = current.tree->as_variable();
-          genctx.rewrite(result);
-          genctx.setZeroStrategy(result, strategy);
-        }
+        });
 
         // An entry flagged to overwrite its previous result (e.g. a CSE
         // intermediate) must be allocated freshly rather than accumulated onto.
