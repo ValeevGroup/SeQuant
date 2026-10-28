@@ -1651,7 +1651,7 @@ TEST_CASE("ordered dry run fills the run record", "[schedule-document]") {
 /// fixture's own policy and pinned extents.
 TEST_CASE("write the viewer example document", "[.write-example]") {
   char const* const out_path = std::getenv("SEQUANT_SCHEDULE_EXAMPLE_OUT");
-  REQUIRE(out_path != nullptr);
+  if (out_path == nullptr) SKIP("SEQUANT_SCHEDULE_EXAMPLE_OUT is not set");
 
   auto const fx = two_root_fixture();
   Document doc;

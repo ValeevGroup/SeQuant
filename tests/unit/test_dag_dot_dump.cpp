@@ -75,8 +75,8 @@ TEST_CASE("dot-dump-residual", "[.][dot-dump]") {
 
   char const* const forest_path = std::getenv("SEQUANT_DOT_FOREST");
   char const* const dag_path = std::getenv("SEQUANT_DOT_DAG");
-  REQUIRE(forest_path != nullptr);
-  REQUIRE(dag_path != nullptr);
+  if (forest_path == nullptr || dag_path == nullptr)
+    SKIP("SEQUANT_DOT_FOREST and SEQUANT_DOT_DAG must both be set");
   bool const labels = std::getenv("SEQUANT_DOT_LABELS") != nullptr;
   char const* const latex_path = std::getenv("SEQUANT_DOT_LATEX");
   // SEQUANT_DOT_COLLAPSE_SUMS: a chain of Sum nodes (an equation's binarized
