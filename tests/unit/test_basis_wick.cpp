@@ -56,7 +56,7 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
                  L"t{a_1<;1>,a_2<;1>;i_1,i_2}:A-N-S"));
   }
 
-  SECTION("K2: projector and amplitude legs of different pairs, one family") {
+  SECTION("K2-projector-amplitude-legs") {
     CHECK(serialize(vac_av(with_leg_instance(t::P(nₚ(1)), 1) * t::h(1) *
                            with_leg_instance(t::t(2), 1))) ==
           (yes ? L"-1 Â{i_1;a_1<i_1;1>}:A-N-S * f{i_2;a_2<i_1,i_2;1>}:A-C-S * "
@@ -101,7 +101,7 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
     }
   }
 
-  SECTION("K6: general-space legs of two families contract to one overlap") {
+  SECTION("K6-general-space-overlap") {
     // neither leg is pure, so the contraction is δ{p_1<;1>;q<;1>}
     // s{q<;1>;q'<;2>} δ{q'<;2>;p_2<;2>}: a projection onto the quasiparticle
     // space keeps the instance of the leg it projects, and the overlap
@@ -291,7 +291,7 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
     }
   }
 
-  SECTION("an overlap between two instances stands, even through a delta") {
+  SECTION("overlap-through-delta") {
     // s{p_1;a_1<;1>} δ{p_1;p_2} s{p_2;a_2<;2>} g{a_1<;1>,a_2<;2>;i_1,i_2}
     // = <a_1<;1>|a_2<;2>> g: one overlap between the two families stands
     const auto s1 = make_overlap(p1, a1_1), d = make_kronecker(p1, q1),
@@ -383,7 +383,7 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
     CHECK(slots(*tensors_labelled(r, L"t")[0])[1] == a2_1);
   }
 
-  SECTION("a delta or overlap between disjoint spaces is zero in any bases") {
+  SECTION("disjoint-zero") {
     const auto i1_1 = i1.replace_basis_instance(1);
     const auto a1_2 = a1.replace_basis_instance(2);
     auto t = [&] { return ex<Tensor>(L"t", bra{a1_2}, ket{i1_1}); };
@@ -490,7 +490,7 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
         });
   };
 
-  SECTION("a contraction between two instances leaves an overlap standing") {
+  SECTION("contraction-overlap") {
     for (IndexBasis::instance_type ket_instance : {1, 2}) {
       CAPTURE(ket_instance);
       const auto p1 = Index(L"p_1").replace_basis_instance(1);
