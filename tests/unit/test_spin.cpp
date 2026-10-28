@@ -1954,7 +1954,7 @@ SECTION("ResultExpr") {
   REQUIRE(inputs.size() == expected_outputs.size());
 
   for (std::size_t i = 0; i < inputs.size(); ++i) {
-    CAPTURE(inputs.at(i));
+    CAPTURE(toUtf8(inputs.at(i)));
     const ResultExpr input = deserialize<ResultExpr>(inputs.at(i));
 
     container::svector<ResultExpr> expected;

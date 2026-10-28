@@ -16,6 +16,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
@@ -1114,7 +1115,10 @@ TEST_CASE("optimize", "[optimize]") {
                    L" + CSE1{;;u3,u2,u5,u1} t{a1,u5;i1,u3}"
                    L" + CSE1{;;u3,u2,u1,u5} t{a1,u5;u3,i1}"}},
              }) {
-          CAPTURE(inputs);
+          std::string described;
+          for (const auto& input : inputs)
+            described += sequant::toUtf8(input) + "\n";
+          CAPTURE(described);
 
           std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
           const std::vector<ResultExpr> expected = parse_expected(outputs);
@@ -1161,7 +1165,10 @@ TEST_CASE("optimize", "[optimize]") {
                  L"R = CSE1{;;i1,i2} C{i2;i1} + "
                  L"CSE1{;;i3,i4} D{i4;i3}"}},
            }) {
-        CAPTURE(inputs);
+        std::string described;
+        for (const auto& input : inputs)
+          described += sequant::toUtf8(input) + "\n";
+        CAPTURE(described);
 
         std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
         const std::vector<ResultExpr> expected = parse_expected(outputs);
