@@ -56,7 +56,7 @@ TEST_CASE("opt::extract_subtrees", "[optimize][extract_subtrees]") {
     REQUIRE_FALSE(forest[0].leaf());
   }
 
-  SECTION("always-true predicate captures each root, collapsing forest items") {
+  SECTION("always-pred") {
     std::vector<Node> forest;
     forest.emplace_back(bin(L"g{a1;i1} * t{i1;a1}"));
     forest.emplace_back(bin(L"f{a1;a2} * g{a2;a1}"));
@@ -87,8 +87,7 @@ TEST_CASE("opt::extract_subtrees", "[optimize][extract_subtrees]") {
     REQUIRE(forest[1].leaf());        // pure-non-t root collapsed
   }
 
-  SECTION(
-      "no-recurse: nested positives inside a captured subtree stay inlined") {
+  SECTION("no-recurse") {
     // All-non-t 3-factor product: regardless of how binarize shapes it,
     // every internal node is pred-positive (no "t" anywhere). Only the
     // root is captured; the internal grandchild is *not* a separate entry.
