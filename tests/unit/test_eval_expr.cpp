@@ -180,8 +180,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
                    TensorSymmetries{.column = ColumnSymmetry::Symm}));
   }
 
-  SECTION(
-      "scalar * tensor product node inherits the tensor operand canon_phase") {
+  SECTION("scalar-tensor-canon-phase") {
     // Regression: binarize(Product) hardcoded canon_phase=1 for scalar*tensor
     // nodes instead of inheriting the tensor operand's real phase.
     // Subexpression reuse relies on that phase to reconcile sign-differing
