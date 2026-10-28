@@ -377,6 +377,8 @@ set(SeQuant_symb_src
         SeQuant/core/expressions/sum.hpp
         SeQuant/core/expressions/tensor.cpp
         SeQuant/core/expressions/tensor.hpp
+        SeQuant/core/expressions/tensor_power.cpp
+        SeQuant/core/expressions/tensor_power.hpp
         SeQuant/core/expressions/variable.cpp
         SeQuant/core/expressions/variable.hpp
         SeQuant/core/hash.cpp

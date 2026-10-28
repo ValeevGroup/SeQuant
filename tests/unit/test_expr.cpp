@@ -1788,6 +1788,83 @@ TEST_CASE("expr", "[elements]") {
   }
 }
 
+TEST_CASE("tensor_power", "[elements]") {
+  using namespace sequant;
+  const auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                            TensorSymmetries{.perm = Symmetry::Symm,
+                                             .braket = BraKetSymmetry::Symm,
+                                             .column = ColumnSymmetry::Symm});
+  const auto t = ex<Tensor>(L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                            TensorSymmetries{.perm = Symmetry::Antisymm});
+  SECTION("construction") {
+    REQUIRE_NOTHROW(TensorPower(D, rational{-1}));
+    REQUIRE_NOTHROW(TensorPower(D, rational{1, 2}));
+    REQUIRE_NOTHROW(TensorPower(D, rational{0}));
+    REQUIRE_NOTHROW(TensorPower(t, rational{3}));
+    if (assert_behavior() != AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(TensorPower(t, rational{1, 2}),
+                        Exception);  // non-integer on Antisymm
+      REQUIRE_THROWS_AS(TensorPower(ex<Variable>(L"x"), rational{2}),
+                        Exception);  // scalar base
+      REQUIRE_THROWS_AS(TensorPower(D * D, rational{2}),
+                        Exception);  // compound base
+      REQUIRE_THROWS_AS(
+          TensorPower(ex<TensorPower>(D, rational{2}), rational{3}),
+          Exception);  // nesting
+    }
+    const TensorPower p(D, rational{-1});
+    CHECK(*p.base() == *D);
+    CHECK(p.base().get() != D.get());  // cloned
+    CHECK(p.exponent() == rational{-1});
+    CHECK_FALSE(p.is_scalar());
+    CHECK(p.is_cnumber());
+    CHECK(p.is<AbstractTensor>());
+  }
+  SECTION("hash and equality") {
+    const auto p1 = ex<TensorPower>(D, rational{-1});
+    const auto p2 = ex<TensorPower>(D, rational{-1});
+    const auto p3 = ex<TensorPower>(D, rational{-2});
+    CHECK(*p1 == *p2);
+    CHECK(p1->hash_value() == p2->hash_value());
+    CHECK(*p1 != *p3);
+    CHECK(p1->hash_value() != p3->hash_value());
+    CHECK(p1->hash_value() != D->hash_value());
+    CHECK(*p1 != *D);
+    CHECK((*p1 < *p3) != (*p3 < *p1));
+    auto s = D + p1;  // Review Focus 3
+    REQUIRE(s->is<Sum>());
+    CHECK(s->as<Sum>().summands().size() == 2);
+  }
+  SECTION("clone and copy are deep") {
+    const TensorPower p(D, rational{-1});
+    TensorPower q(p);
+    CHECK(q.base().get() != p.base().get());
+    CHECK(q == p);
+    auto c = p.clone();
+    CHECK(c->as<TensorPower>().base().get() != p.base().get());
+    CHECK(*c == p);
+  }
+  SECTION("symmetry rule") {
+    CHECK(TensorPower(t, rational{3})._symmetry() == Symmetry::Antisymm);
+    CHECK(TensorPower(t, rational{2})._symmetry() == Symmetry::Symm);
+    CHECK(TensorPower(t, rational{0})._symmetry() == Symmetry::Symm);
+    CHECK(TensorPower(D, rational{1, 2})._symmetry() == Symmetry::Symm);
+    CHECK(TensorPower(D, rational{-1})._braket_symmetry() ==
+          D->as<Tensor>().braket_symmetry());
+    CHECK(TensorPower(D, rational{-1})._column_symmetry() ==
+          ColumnSymmetry::Symm);
+  }
+  SECTION("adjoint acts on the base") {
+    auto p = ex<TensorPower>(t, rational{-1});
+    const auto h0 = p->hash_value();
+    p->adjoint();
+    auto tadj = t->clone();
+    tadj->adjoint();
+    CHECK(*p->as<TensorPower>().base() == *tadj);
+    CHECK(p->hash_value() != h0);
+  }
+}
+
 TEST_CASE("sum_move_omits_zeros_and_combines_constants", "[elements]") {
   using namespace sequant;
 

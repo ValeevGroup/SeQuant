@@ -1,0 +1,120 @@
+#include <SeQuant/core/expressions/tensor_power.hpp>
+
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
+#include <SeQuant/core/math.hpp>
+#include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
+
+#include <utility>
+
+namespace sequant {
+
+TensorPower::TensorPower(ExprPtr base, exponent_type exponent)
+    : base_{}, exponent_{std::move(exponent)} {
+  SEQUANT_ENFORCE(base && base->is<AbstractTensor>() &&
+                      base->as<AbstractTensor>()._is_cnumber(),
+                  "TensorPower: base must be a c-number tensor; name a "
+                  "compound tensor-valued expression as a ResultExpr and "
+                  "raise the resulting leaf");
+  SEQUANT_ENFORCE(!base->is<TensorPower>(),
+                  "TensorPower: use pow() to compose exponents");
+  SEQUANT_ENFORCE(
+      denominator(exponent_) == 1 ||
+          base->as<AbstractTensor>()._symmetry() != Symmetry::Antisymm,
+      "TensorPower: a non-integer power of an antisymmetric "
+      "tensor is not defined");
+  base_ = base->clone();
+}
+
+TensorPower::TensorPower(const TensorPower& other)
+    : Expr(other),
+      AbstractTensor(other),
+      base_(other.base_->clone()),
+      exponent_(other.exponent_) {}
+
+TensorPower& TensorPower::operator=(const TensorPower& other) {
+  if (this != &other) {
+    Expr::operator=(other);
+    AbstractTensor::operator=(other);
+    base_ = other.base_->clone();
+    exponent_ = other.exponent_;
+  }
+  return *this;
+}
+
+const ExprPtr& TensorPower::base() const { return base_; }
+
+const AbstractTensor& TensorPower::base_tensor() const {
+  return base_->as<AbstractTensor>();
+}
+
+const TensorPower::exponent_type& TensorPower::exponent() const {
+  return exponent_;
+}
+
+Expr::type_id_type TensorPower::type_id() const {
+  return get_type_id<TensorPower>();
+}
+
+bool TensorPower::is_scalar() const { return false; }
+
+ExprPtr TensorPower::clone() const {
+  auto cloned = ex<TensorPower>(base_, exponent_);
+  cloned->as<TensorPower>().copy_canonical_mark(*this);
+  return cloned;
+}
+
+void TensorPower::adjoint() {
+  base_->adjoint();
+  reset_hash_value();
+}
+
+std::wstring TensorPower::to_latex() const {
+  return L"{" + base_->to_latex() + L"}^{" + io::latex::to_string(exponent_) +
+         L"}";
+}
+
+Symmetry TensorPower::_symmetry() const {
+  const auto base_symmetry = base_tensor()._symmetry();
+  if (denominator(exponent_) == 1 && numerator(exponent_) % 2 == 0 &&
+      base_symmetry == Symmetry::Antisymm)
+    return Symmetry::Symm;
+  return base_symmetry;
+}
+
+BraKetSymmetry TensorPower::_braket_symmetry() const {
+  return base_tensor()._braket_symmetry();
+}
+
+ColumnSymmetry TensorPower::_column_symmetry() const {
+  return base_tensor()._column_symmetry();
+}
+
+Expr::hash_type TensorPower::memoizing_hash() const {
+  auto compute_hash = [this]() {
+    auto val = hash::value(*base_);
+    hash::combine(val, hash::value(exponent_));
+    return val;
+  };
+
+  if (!hash_value_) {
+    hash_value_ = compute_hash();
+  } else {
+    SEQUANT_ASSERT(*hash_value_ == compute_hash());
+  }
+  return *hash_value_;
+}
+
+bool TensorPower::static_equal(const Expr& that) const {
+  const auto& other = static_cast<const TensorPower&>(that);
+  return exponent_ == other.exponent_ && *base_ == *other.base_;
+}
+
+bool TensorPower::static_less_than(const Expr& that) const {
+  const auto& other = static_cast<const TensorPower&>(that);
+  if (*base_ != *other.base_) return *base_ < *other.base_;
+  return exponent_ < other.exponent_;
+}
+
+}  // namespace sequant

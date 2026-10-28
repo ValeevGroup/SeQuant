@@ -19,6 +19,7 @@
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/expressions/tensor_power.hpp>
 #include <SeQuant/core/expressions/traits.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
 

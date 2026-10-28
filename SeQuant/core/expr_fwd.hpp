@@ -28,6 +28,8 @@ class Variable;
 using VariablePtr = std::shared_ptr<Variable>;
 class Power;
 using PowerPtr = std::shared_ptr<Power>;
+class TensorPower;
+using TensorPowerPtr = std::shared_ptr<TensorPower>;
 class Tensor;
 using TensorPtr = std::shared_ptr<Tensor>;
 
