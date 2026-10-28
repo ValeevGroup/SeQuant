@@ -1726,6 +1726,7 @@ TEST_CASE("ordered executor is unchanged without a run record",
 // tests/unit/CMakeLists.txt).
 // ---------------------------------------------------------------------------
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 namespace {
 
 // Problem size, provenance and occupancy adjustment: csv_size_fixtures.hpp.
@@ -1890,3 +1891,4 @@ TEST_CASE("a pinned schedule is identical across two problem sizes",
   REQUIRE_NOTHROW(sequant::opt::schedule::check_fingerprint(
       docA.fingerprint, docB_pinned.fingerprint));
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)

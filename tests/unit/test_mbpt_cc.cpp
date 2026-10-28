@@ -444,6 +444,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE(simplify(CC(1, {.hbar_comm_rank = 2}).energy() - expected) ==
             ex<Constant>(0));
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
     // screening must not change the result; the MR amplitudes do not commute,
     // so the BCH expansion at rank 2 and up exceeds several GB, hence rank 1
     const auto screened = CC(2, {.hbar_comm_rank = 1}).t();
@@ -451,6 +452,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE(has_tensor(screened.at(1), L"t"));
     for (std::size_t p = 0; p != screened.size(); ++p)
       REQUIRE_THAT(screened.at(p), EquivalentTo(unscreened.at(p)));
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
     if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
       // match the message: under THROW an unrelated SEQUANT_ASSERT throws
