@@ -1415,3 +1415,64 @@ TEST_CASE("canonicalize_lone_term", "[algorithms]") {
     }
   }
 }
+
+TEST_CASE("tensor_power_canonicalization", "[algorithms]") {
+  using namespace sequant;
+  auto ibr = mbpt::make_legacy_spaces();
+  auto ctx = get_default_context();
+  ctx.set(ibr);
+  auto ctx_resetter = set_scoped_default_context(ctx);
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  auto Dp = ex<Tensor>(L"D", bra{L"i_2", L"i_1"}, ket{L"a_1", L"a_2"}, dsym);
+  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      TensorSymmetries{.perm = Symmetry::Antisymm});
+  auto Mp = ex<Tensor>(L"M", bra{L"i_2", L"i_1"}, ket{L"a_1", L"a_2"},
+                       TensorSymmetries{.perm = Symmetry::Antisymm});
+  auto named = CanonicalizeOptions::default_options();
+  named.named_indices = container::set<Index>{Index{L"i_1"}, Index{L"i_2"},
+                                              Index{L"a_1"}, Index{L"a_2"}};
+
+  // every product below has its externals in two slots of the same kind, so
+  // without named indices they are deduced as dummies and three covariant
+  // slots trip the strict bra-ket rule (v3.cpp:1518); canonicalize with the
+  // externals named, as a ResultExpr head would
+  auto canon = [&](ExprPtr e) {
+    e->canonicalize(named);
+    return e;
+  };
+  SECTION("Hadamard product with named externals canonicalizes") {
+    auto e1 = canon(M * pow(D, rational{-1}));
+    // i_1<->i_2 in both factors: M antisymm, D symm => e2 == -e1
+    auto e2 = canon(Mp * pow(Dp, rational{-1}));
+    REQUIRE(e1->is<Product>());
+    REQUIRE(e2->is<Product>());
+    // Product absorbs the phase into its scalar
+    CHECK(e2->as<Product>().scalar() == -e1->as<Product>().scalar());
+    CHECK(ranges::equal(e1->as<Product>().factors(),
+                        e2->as<Product>().factors(),
+                        [](auto const& x, auto const& y) { return *x == *y; }));
+  }
+  SECTION("power and base of the same label order uniquely") {
+    auto a = canon(pow(D, rational{-1}) * pow(D, rational{2}) * M);
+    auto b = canon(pow(D, rational{2}) * pow(D, rational{-1}) * M);
+    CHECK(*a == *b);
+    auto c = canon(D * pow(D, rational{-1}) * M);
+    auto d = canon(pow(D, rational{-1}) * D * M);
+    CHECK(*c == *d);
+  }
+  SECTION("a power is not identified with its base by the network") {
+    auto e = canon(D * pow(D, rational{-1}));
+    REQUIRE(e->is<Product>());
+    CHECK(e->as<Product>().factors().size() == 2);
+    CHECK(canon(D * D)->hash_value() != e->hash_value());
+  }
+  SECTION("relabelled duplicates merge in a sum") {
+    // == M D^-1 - M D^-1 == 0
+    auto s = M * pow(D, rational{-1}) + Mp * pow(Dp, rational{-1});
+    simplify(s);
+    CHECK(s->is_zero());
+  }
+}
