@@ -12,6 +12,8 @@
 
 #include <boost/algorithm/string/trim.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <memory>
 #include <optional>
 #include <regex>
@@ -251,7 +253,60 @@ AnyIrrepContext make_table_context(const IrrepContextSpec &spec) {
 
 }  // namespace
 
-AnyIrrepContext make_irrep_context(const IrrepContextSpec &spec) {
+std::string normalize_irrep_spec(std::string_view spec) {
+  std::string result;
+  std::size_t start = 0;
+  while (start <= spec.size()) {
+    std::size_t end = spec.find_first_of("*=", start);
+    const bool last = end == std::string_view::npos;
+    std::string name(spec.substr(start, last ? spec.npos : end - start));
+    boost::trim(name);
+    if (std::ranges::any_of(name,
+                            [](unsigned char c) { return std::isspace(c); })) {
+      throw Exception("IRREP names must not contain whitespace but got '" +
+                      name + "'");
+    }
+
+    result += name;
+    if (last) {
+      break;
+    }
+    result += spec[end];
+    start = end + 1;
+  }
+
+  return result;
+}
+
+AnyIrrepContext make_irrep_context(const IrrepContextSpec &input) {
+  IrrepContextSpec spec = input;
+  auto normalize = [](std::string &name) { name = normalize_irrep_spec(name); };
+  auto normalize_all = [&](auto &names) {
+    std::ranges::for_each(names, normalize);
+  };
+  normalize(spec.group);
+  if (spec.table.has_value()) {
+    normalize(spec.table->totally_symmetric);
+    for (auto &[product, names] : spec.table->products) {
+      normalize(product);
+      normalize_all(names);
+    }
+    for (auto &[irrep, conjugate] : spec.table->conjugates) {
+      normalize(irrep);
+      normalize(conjugate);
+    }
+  }
+  if (spec.symbols.has_value()) {
+    normalize_all(*spec.symbols);
+  }
+  if (spec.relations.has_value()) {
+    normalize_all(*spec.relations);
+  }
+  for (auto &[tensor, names] : spec.tensors) {
+    normalize_all(names);
+  }
+  normalize_all(spec.default_irreps);
+
   if (spec.table.has_value()) {
     return make_table_context(spec);
   }

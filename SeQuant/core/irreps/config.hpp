@@ -5,6 +5,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -52,6 +53,13 @@ struct IrrepContextSpec {
 /// Creates an IRREP context from the given description
 /// @throws Exception if the description is invalid
 AnyIrrepContext make_irrep_context(const IrrepContextSpec &spec);
+
+/// Removes the whitespace around the names in a textual IRREP specification
+/// (a name, a product "X*Y" or a relation "X*Y = Z"), such that
+/// "A * B = C" and "A*B=C" are equivalent. IRREP names must not contain
+/// whitespace themselves.
+/// @throws Exception if a name contains whitespace
+std::string normalize_irrep_spec(std::string_view spec);
 
 }  // namespace sequant
 

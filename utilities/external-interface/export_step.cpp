@@ -591,7 +591,8 @@ ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
             throw Exception("Expected the name of IRREP '" + irrep +
                             "' to be a string");
           }
-          data.irrep_names.emplace(irrep, name.get<std::string>());
+          data.irrep_names.emplace(normalize_irrep_spec(irrep),
+                                   name.get<std::string>());
         }
       } else {
         throw Exception("Unknown meta data type '" + key + "' for language '" +

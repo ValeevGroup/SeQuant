@@ -560,6 +560,33 @@ TEST_CASE("irrep context from specification", "[irreps]") {
     REQUIRE_THROWS_AS(make_irrep_context(invalid), Exception);
   }
 
+  SECTION("whitespace") {
+    REQUIRE(normalize_irrep_spec(" A * B = C ") == "A*B=C");
+    REQUIRE(normalize_irrep_spec("A*B=C") == "A*B=C");
+    REQUIRE_THROWS_AS(normalize_irrep_spec("A B"), Exception);
+
+    IrrepContextSpec compact;
+    compact.group = "symbolic";
+    compact.relations = std::vector<std::string>{"A*B=C"};
+    compact.tensors = {{"t", {"A*B"}}};
+    IrrepContextSpec spaced = compact;
+    spaced.relations = std::vector<std::string>{" A * B = C "};
+    spaced.tensors = {{"t", {" A * B "}}};
+
+    REQUIRE(make_irrep_context(spaced).irreps_of(t).to_string() ==
+            make_irrep_context(compact).irreps_of(t).to_string());
+
+    spaced.tensors = {{"t", {"A B"}}};
+    REQUIRE_THROWS_AS(make_irrep_context(spaced), Exception);
+
+    IrrepContextSpec table_spec;
+    table_spec.table = IrrepContextSpec::Table{.totally_symmetric = "E",
+                                               .products = {{" X * X ", {"E"}}},
+                                               .conjugates = {}};
+    table_spec.tensors = {{"t", {" X "}}};
+    REQUIRE(make_irrep_context(table_spec).irreps_of(t).to_string() == "{X}");
+  }
+
   SECTION("multiplication table") {
     IrrepContextSpec table_spec;
     table_spec.table = IrrepContextSpec::Table{.totally_symmetric = "E",
