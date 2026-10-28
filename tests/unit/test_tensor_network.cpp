@@ -309,49 +309,44 @@ TEST_CASE("tensor_network_shared", "[elements]") {
 
   SECTION("canonicalize") {
     SECTION("need particle reorder?") {
-      {
-        Index::reset_tmp_index();
-        auto input1 = deserialize(
-            L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p6,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
-        auto input2 = deserialize(
-            L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p11,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
+      Index::reset_tmp_index();
+      auto input1 = deserialize(
+          L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p6,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
+      auto input2 = deserialize(
+          L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p11,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
 
-        CAPTURE(input1);
-        CAPTURE(input2);
+      CAPTURE(input1);
+      CAPTURE(input2);
 
-        {
-          TN tn1(*input1);
-          tn1.canonicalize(get_default_context().cardinal_tensor_labels());
-          TN tn2(*input2);
-          tn2.canonicalize(get_default_context().cardinal_tensor_labels());
+      TN tn1(*input1);
+      tn1.canonicalize(get_default_context().cardinal_tensor_labels());
+      TN tn2(*input2);
+      tn2.canonicalize(get_default_context().cardinal_tensor_labels());
 
-          // std::wcout << "tn1[0] = " <<
-          // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[0])) <<
-          // "\n"; std::wcout << "tn1[1] = " <<
-          // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[1])) <<
-          // "\n"; std::wcout << "tn1[2] = " <<
-          // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[2])) <<
-          // "\n"; std::wcout << "tn2[0] = " <<
-          // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[0])) <<
-          // "\n"; std::wcout << "tn2[1] = " <<
-          // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[1])) <<
-          // "\n"; std::wcout << "tn2[2] = " <<
-          // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[2])) <<
-          // "\n";
+      // std::wcout << "tn1[0] = " <<
+      // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[0])) <<
+      // "\n"; std::wcout << "tn1[1] = " <<
+      // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[1])) <<
+      // "\n"; std::wcout << "tn1[2] = " <<
+      // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[2])) <<
+      // "\n"; std::wcout << "tn2[0] = " <<
+      // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[0])) <<
+      // "\n"; std::wcout << "tn2[1] = " <<
+      // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[1])) <<
+      // "\n"; std::wcout << "tn2[2] = " <<
+      // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[2])) <<
+      // "\n";
 
-          // input2 obtained from input1 by i6 -> i11, which "frees" i6 for
-          // dummy renamings so canonical(input2) is obtained from
-          // canonical(input1) by i6 -> i11 and i7 -> i6
-          for (int i = 0; i != tn1.tensors().size(); ++i) {
-            std::unique_ptr<AbstractTensor> t2_i(tn2.tensors()[i]->_clone());
-            container::map<Index, Index> idxrepl{
-                {Index{L"p_11"}, Index{L"p_6"}},
-                {Index{L"p_6"}, Index{L"p_7"}}};
-            apply_index_replacements(*t2_i, idxrepl, false);
-            REQUIRE(serialize(*(tn1.tensors()[i]), {.annot_symm = true}) ==
-                    serialize(*t2_i, {.annot_symm = true}));
-          }
-        }
+      // input2 obtained from input1 by i6 -> i11, which "frees" i6 for
+      // dummy renamings so canonical(input2) is obtained from
+      // canonical(input1) by i6 -> i11 and i7 -> i6
+      for (int i = 0; i != tn1.tensors().size(); ++i) {
+        std::unique_ptr<AbstractTensor> t2_i(tn2.tensors()[i]->_clone());
+        container::map<Index, Index> idxrepl{{Index{L"p_11"}, Index{L"p_6"}},
+                                             {Index{L"p_6"}, Index{L"p_7"}}};
+        apply_index_replacements(*t2_i, idxrepl, false);
+        REQUIRE(serialize(*(tn1.tensors()[i]), {.annot_symm = true}) ==
+                serialize(*t2_i, {.annot_symm = true}));
       }
     }
   }
@@ -564,7 +559,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
   }  // SECTION("accessors")
 
   SECTION("canonicalizer") {
-    {  // non-covariant pairings are rejected, covariant ones are not
+    SECTION("non-covariant pairings") {
+      // non-covariant pairings are rejected, covariant ones are not
       constexpr const auto V = Vacuum::SingleProduct;
       auto canonicalize = [](const ExprPtr& product) {
         TN tn(product->as<Product>().factors());
@@ -617,7 +613,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       }
     }
 
-    {  // with no external indices, hence no named indices whatsoever
+    SECTION("no named indices") {
       Index::reset_tmp_index();
       constexpr const auto V = Vacuum::SingleProduct;
       auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
@@ -641,7 +637,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
               L"{\\tilde{a}^{{i_1}}_{{i_2}}}");
     }
 
-    {
+    SECTION("named indices") {
       Index::reset_tmp_index();
       constexpr const auto V = Vacuum::SingleProduct;
       auto t1 = ex<Tensor>(L"F", bra{L"i_2"}, ket{L"i_17"});
