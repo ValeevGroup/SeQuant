@@ -429,10 +429,12 @@ class Result {
   ///
   /// \return Cast the type-erased data to the type \tparam T, and return a ref.
   ///
+  /// A result that is a pending view of another result's storage (see
+  /// is_buffer_alias()) materializes its value here first, once.
   template <typename T>
   [[nodiscard]] T& get() {
-    SEQUANT_ASSERT(has_value());
     ensure_materialized();
+    SEQUANT_ASSERT(has_value());
     return *std::any_cast<T>(&value_);
   }
 
@@ -440,27 +442,27 @@ class Result {
   /// \return Cast the type-erased data to the type \tparam T, and return a
   ///         const ref.
   ///
+  /// A result that is a pending view of another result's storage (see
+  /// is_buffer_alias()) materializes its value here first, once.
   template <typename T>
   [[nodiscard]] T const& get() const {
-    SEQUANT_ASSERT(has_value());
     ensure_materialized();
+    SEQUANT_ASSERT(has_value());
     return *std::any_cast<const T>(&value_);
   }
 
-  /// @return whether this result's buffer is _owned by another_ result -- the
-  ///         value is an alias, produced by a transform (phase, conjugation,
-  ///         relabel) that was recorded instead of performed, whether or not
-  ///         anything is still pending (a transform composing to the identity
-  ///         leaves an alias with nothing to apply). Producing one allocates
-  ///         nothing, so a tracer must charge it 0 allocated bytes
-  ///         (size_in_bytes() still reports the value's logical size) and must
-  ///         not count its buffer twice in a working set.
-  [[nodiscard]] virtual bool is_buffer_alias() const { return false; }
+  /// @return whether this result is a pending view of another result's
+  ///         storage -- a batch slice, a relabeling, a conjugation, a phase,
+  ///         a half-sign recorded instead of performed -- and so holds no
+  ///         tiles of its own: producing one allocates nothing, so a tracer
+  ///         charges it 0 allocated bytes (size_in_bytes() reports the
+  ///         value's logical size) and must not count its buffer twice in a
+  ///         working set. get<T>() applies the view (once) on first read.
+  [[nodiscard]] virtual bool is_buffer_alias() const noexcept { return false; }
 
-  /// @return the size of the object in bytes. For a lazy view (see
+  /// @return the size of the object in bytes. For a pending view (see
   ///         is_buffer_alias()) this is the _logical_ size of the value it
-  ///         represents, which is the size of the buffer it shares -- not a
-  ///         buffer of its own.
+  ///         stands for, not a buffer of its own.
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
 
   /// @return the size of the object in bytes, measured even where
@@ -485,6 +487,16 @@ class Result {
             typename = std::enable_if_t<!std::is_convertible_v<T, Result>>>
   explicit Result(T&& arg) noexcept
       : value_{std::make_any<std::decay_t<T>>(std::forward<T>(arg))} {}
+
+  /// a result without a value yet: a pending view (see is_buffer_alias()),
+  /// which stores its value through reset_value() when first asked for it
+  Result() noexcept = default;
+
+  /// Stores \p value as this result's value. Logically const: a pending view
+  /// materializing itself does not change what the result stands for.
+
+  /// Called by get<T>() before the cast: a pending view materializes its value
+  /// here (reset_value()). Default no-op.
 
   [[nodiscard]] virtual id_t type_id() const noexcept = 0;
 
@@ -515,10 +527,10 @@ class Result {
   }
 
  private:
-  /// mutable so that a lazily transformed result can materialize itself on
-  /// first read through a const handle. _Not_ thread-safe: a Result is owned
-  /// by one evaluation (the serial evaluate() stack / cache); concurrent
-  /// get<>() on a pending view is not supported
+  /// mutable so that a pending view can materialize itself on first read
+  /// through a const handle. _Not_ thread-safe: a Result is owned by one
+  /// evaluation (the serial evaluate() stack / cache); concurrent get<>() on
+  /// a pending view is not supported
   mutable std::any value_;
 
   [[nodiscard]] static id_t next_id() noexcept;
