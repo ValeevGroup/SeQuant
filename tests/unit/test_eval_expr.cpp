@@ -311,9 +311,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // T2 (multiply-appearing), a3 also multiply-appearing
     auto expr = deserialize(L"t{i1,i2;a1,a3} T2{a2,a3;i1,i2}");
 
-    // without external indices: i1,i2,a3 are all contracted
-    // result has only {a1,a2}
-    {
+    SECTION("without external indices") {
+      // i1,i2,a3 are all contracted; result has only {a1,a2}
       SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
       auto tree = binarize(expr);
       SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
@@ -326,9 +325,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
       REQUIRE(ixs == expected);
     }
 
-    // with external={i1,i2}: only a3 is contracted
-    // result has {a1,a2,i1,i2} with i1,i2 in aux
-    {
+    SECTION("with external indices") {
+      // external={i1,i2}: only a3 is contracted; result has {a1,a2,i1,i2}
+      // with i1,i2 in aux
       IndexSet ext;
       ext.emplace(Index{L"i_1"});
       ext.emplace(Index{L"i_2"});
