@@ -1784,8 +1784,7 @@ TEST_CASE("expr", "[elements]") {
     std::vector<std::tuple<std::string, TreeIndex, std::string>> tests = {
         {"Var", {}, "Var"},           {"A * B", {}, "A * B"},
         {"A + B", {0}, "A"},          {"A + B", {1}, "B"},
-        {"A + B", {}, "A + B"},       {"A + B", {0}, "A"},
-        {"A + B", {1}, "B"},          {"A + B * C", {0}, "A"},
+        {"A + B", {}, "A + B"},       {"A + B * C", {0}, "A"},
         {"A + B * C", {1}, "B * C"},  {"A + B * C", {1, 0}, "B"},
         {"A + B * C", {1, 1}, "C"},   {"(A + B) * C", {0}, "A + B"},
         {"(A + B) * C", {0, 1}, "B"}, {"(A + B) * C", {1}, "C"},
