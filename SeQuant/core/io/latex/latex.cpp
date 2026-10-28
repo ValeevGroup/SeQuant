@@ -8,6 +8,7 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
+#include <SeQuant/core/expressions/tensor_power.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -69,6 +70,10 @@ std::wstring to_string(const Power& power) {
   }
   if (power.conjugated()) result = L"{" + result + L"^*}";
   return result;
+}
+
+std::wstring to_string(const TensorPower& power) {
+  return L"{" + power.base()->to_latex() + L"}^" + to_string(power.exponent());
 }
 
 std::wstring to_string(const ResultExpr& expr) {
