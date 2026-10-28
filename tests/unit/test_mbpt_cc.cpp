@@ -59,6 +59,15 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
         }
       }
 
+      SECTION("screening does not change CCSD t") {
+        // here screening drops about half of H̄'s terms at each projection
+        const auto screened = CC{2}.t();
+        const auto unscreened = CC{2, {.screen = false}}.t();
+        REQUIRE(screened.size() == unscreened.size());
+        for (std::size_t p = 0; p != screened.size(); ++p)
+          REQUIRE_THAT(screened.at(p), EquivalentTo(unscreened.at(p)));
+      }
+
     }  // SECTION("t")
 
     SECTION("λ") {
