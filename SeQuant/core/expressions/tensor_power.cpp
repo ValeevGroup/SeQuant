@@ -91,6 +91,116 @@ ColumnSymmetry TensorPower::_column_symmetry() const {
   return base_tensor()._column_symmetry();
 }
 
+AbstractTensor& TensorPower::base_tensor_mut() {
+  return base_->as<AbstractTensor>();
+}
+
+AbstractTensor* TensorPower::_clone() const { return new TensorPower(*this); }
+
+std::shared_ptr<AbstractTensor> TensorPower::_clone_shared() const {
+  return std::make_shared<TensorPower>(*this);
+}
+
+AbstractTensor::const_any_view_randsz TensorPower::_bra() const {
+  return base_tensor()._bra();
+}
+
+AbstractTensor::const_any_view_randsz TensorPower::_ket() const {
+  return base_tensor()._ket();
+}
+
+AbstractTensor::const_any_view_randsz TensorPower::_aux() const {
+  return base_tensor()._aux();
+}
+
+AbstractTensor::const_any_view_rand TensorPower::_braket() const {
+  return base_tensor()._braket();
+}
+
+AbstractTensor::const_any_view_rand TensorPower::_braketaux() const {
+  return base_tensor()._braketaux();
+}
+
+AbstractTensor::const_any_view_rand TensorPower::_slots() const {
+  return base_tensor()._slots();
+}
+
+std::size_t TensorPower::_bra_rank() const { return base_tensor()._bra_rank(); }
+
+std::size_t TensorPower::_bra_net_rank() const {
+  return base_tensor()._bra_net_rank();
+}
+
+std::size_t TensorPower::_ket_rank() const { return base_tensor()._ket_rank(); }
+
+std::size_t TensorPower::_ket_net_rank() const {
+  return base_tensor()._ket_net_rank();
+}
+
+std::size_t TensorPower::_aux_rank() const { return base_tensor()._aux_rank(); }
+
+std::size_t TensorPower::_num_slots() const {
+  return base_tensor()._num_slots();
+}
+
+std::size_t TensorPower::_num_indices() const {
+  return base_tensor()._num_indices();
+}
+
+Hermiticity TensorPower::_hermiticity() const {
+  return base_tensor()._hermiticity();
+}
+
+Field TensorPower::_base_field() const { return base_tensor()._base_field(); }
+
+std::size_t TensorPower::_color() const { return base_tensor()._color(); }
+
+bool TensorPower::_is_cnumber() const { return base_tensor()._is_cnumber(); }
+
+std::wstring_view TensorPower::_label() const { return base_tensor()._label(); }
+
+std::wstring TensorPower::_to_latex() const { return to_latex(); }
+
+std::size_t TensorPower::_hash_value() const { return hash_value(); }
+
+bool TensorPower::operator<(const AbstractTensor& that) const {
+  if (const auto* other = dynamic_cast<const TensorPower*>(&that))
+    return static_less_than(*other);
+  return false;
+}
+
+bool TensorPower::_transform_indices(
+    const container::map<Index, Index>& index_map) {
+  const auto result = base_tensor_mut()._transform_indices(index_map);
+  reset_hash_value();
+  return result;
+}
+
+void TensorPower::_reset_tags() {
+  base_tensor_mut()._reset_tags();
+  reset_hash_value();
+}
+
+void TensorPower::_swap_bra_ket() {
+  base_tensor_mut()._swap_bra_ket();
+  reset_hash_value();
+}
+
+AbstractTensor::any_view_randsz TensorPower::_bra_mutable() {
+  reset_hash_value();
+  return base_tensor_mut()._bra_mutable();
+}
+
+AbstractTensor::any_view_randsz TensorPower::_ket_mutable() {
+  reset_hash_value();
+  return base_tensor_mut()._ket_mutable();
+}
+
+AbstractTensor::any_view_randsz TensorPower::_aux_mutable() {
+  reset_hash_value();
+  return base_tensor_mut()._aux_mutable();
+}
+
 Expr::hash_type TensorPower::memoizing_hash() const {
   auto compute_hash = [this]() {
     auto val = hash::value(*base_);
