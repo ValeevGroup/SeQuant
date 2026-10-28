@@ -307,7 +307,7 @@ TEST_CASE("export step", "[extint]") {
     REQUIRE_THAT(code,
                  Catch::Matchers::ContainsSubstring("T2:eecc // irrep:pert"));
     REQUIRE_THAT(
-        code, Catch::Matchers::ContainsSubstring("!Create{type:plain irrep:"));
+        code, Catch::Matchers::ContainsSubstring("!Create{type:plain; irrep:"));
 
     // Tensors without IRREP specification are rejected if requested
     options["irreps"]["tensors"].erase("Y{i1;i2}");

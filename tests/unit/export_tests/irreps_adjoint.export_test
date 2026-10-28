@@ -13,7 +13,7 @@ index-space: b, External, e
 tensor: R:ec[bj], R:ec // irrep:Gp
 tensor: f:cc[kj], f:cc // irrep:1
 tensor: t:ce[kb], t:ce // irrep:Gp
-tensor: t⁺:ec[bk], !Create{type:plain irrep:Gp}
+tensor: t⁺:ec[bk], !Create{type:plain; irrep:Gp}
 
 
 ---- code("unnamed")

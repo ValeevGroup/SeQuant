@@ -376,7 +376,7 @@ class ItfGenerator : public Generator<Context> {
       append("!Create{type:");
       append(usage == Usage::Intermediate ? "plain" : "disk");
       if (irreps) {
-        append(" " + irrep_entry(tensor, *irreps, ctx));
+        append("; " + irrep_entry(tensor, *irreps, ctx));
       }
       append("}");
     }

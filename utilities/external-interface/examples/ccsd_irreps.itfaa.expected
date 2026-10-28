@@ -10,13 +10,13 @@ index-space: m, Closed, c
 
 tensor: ECC[], ECC
 
-tensor: I:ee[cd], !Create{type:plain irrep:Gp}
-tensor: I:ec[cj], !Create{type:plain irrep:Gp}
-tensor: I:cc[jk], !Create{type:plain irrep:Gp}
-tensor: I:eecc[cdkl], !Create{type:plain irrep:Gp}
-tensor: I:eccc[cjkl], !Create{type:plain irrep:Gp}
-tensor: I:cccc[jklm], !Create{type:plain irrep:Gp}
-tensor: I2:eccc[cjkl], !Create{type:plain irrep:1}
+tensor: I:ee[cd], !Create{type:plain; irrep:Gp}
+tensor: I:ec[cj], !Create{type:plain; irrep:Gp}
+tensor: I:cc[jk], !Create{type:plain; irrep:Gp}
+tensor: I:eecc[cdkl], !Create{type:plain; irrep:Gp}
+tensor: I:eccc[cjkl], !Create{type:plain; irrep:Gp}
+tensor: I:cccc[jklm], !Create{type:plain; irrep:Gp}
+tensor: I2:eccc[cjkl], !Create{type:plain; irrep:1}
 tensor: INTpp:eecc[cdjk], INTpp:eecc // irrep:Gp
 tensor: J:eeec[bcdk], J:eeec // irrep:1
 tensor: J:eecc[bcjk], J:eecc // irrep:1
@@ -26,7 +26,7 @@ tensor: K:eccc[cjkl], K:eccc // irrep:1
 tensor: K:cccc[jklm], K:cccc // irrep:1
 tensor: R1:ec[bj], R1:ec // irrep:1,Gp
 tensor: R2:eecc[bcjk], R2:eecc // irrep:1,Gp
-tensor: R2u:eecc[bcjk], !Create{type:disk irrep:1,Gp}
+tensor: R2u:eecc[bcjk], !Create{type:disk; irrep:1,Gp}
 tensor: T1:ec[bj], T1:ec // irrep:Gp
 tensor: T2:eecc[bcjk], T2:eecc // irrep:Gp
 tensor: f:ee[bc], f:ee // irrep:1

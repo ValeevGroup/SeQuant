@@ -1381,7 +1381,7 @@ TEST_CASE("export-irrep-name", "[export][irreps]") {
 
   const std::string code = generator.get_generated_code();
   // B1 is the 4th IRREP of D2, B3 the 2nd
-  CHECK_THAT(code, ContainsSubstring("!Create{type:plain irrep:4}"));
+  CHECK_THAT(code, ContainsSubstring("!Create{type:plain; irrep:4}"));
   CHECK_THAT(code, ContainsSubstring("R:ec // irrep:2"));
   CHECK_THAT(code, ContainsSubstring("v:cc // irrep:3"));
   CHECK_THAT(code, ContainsSubstring("f:cc // irrep:1"));
