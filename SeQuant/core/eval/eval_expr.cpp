@@ -244,6 +244,14 @@ bool EvalExpr::is_adjoint() const noexcept {
   return op_type() == EvalOp::Adjoint;
 }
 
+bool EvalExpr::is_elementwise_power() const noexcept {
+  return op_type() == EvalOp::Power;
+}
+
+bool is_unary(EvalOp op) noexcept {
+  return op == EvalOp::Adjoint || op == EvalOp::Power;
+}
+
 Tensor const& EvalExpr::as_tensor() const { return expr().as<Tensor>(); }
 
 Constant const& EvalExpr::as_constant() const { return expr().as<Constant>(); }
@@ -345,6 +353,8 @@ void all_indices(IndexSet& result, ExprPtr const& expr) {
       // proto-only indices are still live outer modes of the ToT array
       for (auto&& p : ix.proto_indices()) result.emplace(p);
     }
+  else if (expr->is<TensorPower>())
+    all_indices(result, expr->as<TensorPower>().base());
   else if (expr->is<Sum>() && !expr->empty())
     all_indices(result, expr->front());
   else if (expr->is<Product>())
@@ -367,12 +377,11 @@ void collect_tensor_factors(EvalExprNode const& node,  //
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
 
   if (auto op = node->op_type();
-      node->is_tensor() &&
-      (!op || *op == EvalOp::Sum || *op == EvalOp::Adjoint))
-    // Treat Adjoint the same as Sum here: it produces a tensor result that
-    // enters a parent Product as a single factor — the parent shouldn't
-    // try to recurse past the Adjoint boundary, just collect the adjointed
-    // tensor (held in node->expr()) and move on.
+      node->is_tensor() && (!op || *op == EvalOp::Sum || is_unary(*op)))
+    // Treat a unary node (Adjoint, Power) the same as Sum here: it produces a
+    // tensor result that enters a parent Product as a single factor — the
+    // parent shouldn't recurse past its boundary, just collect the tensor
+    // held in node->expr() and move on.
     collect.emplace_back(
         ExprWithHash{.expr = node->expr(), .hash = node->hash_value()});
   else if (node->op_type() == EvalOp::Product && !node.leaf()) {
@@ -386,6 +395,35 @@ EvalExprNode binarize(Constant const& c) { return EvalExprNode{EvalExpr{c}}; }
 EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
 
 EvalExprNode binarize(Power const& p) { return EvalExprNode{EvalExpr{p}}; }
+
+namespace {
+
+/// Assembles a unary node (see is_unary) of type \p op over \p operand, with
+/// a Constant \p sentinel as the right child. The hash is the operand's
+/// combined with \p op and, for a Power, the exponent.
+EvalExprNode make_unary_node(EvalOp op, EvalExprNode operand,
+                             Constant const& sentinel, ExprPtr expr,
+                             EvalExpr::index_vector canon_indices,
+                             std::int8_t phase) {
+  SEQUANT_ASSERT(is_unary(op));
+  auto h = operand->hash_value();
+  hash::combine(h, static_cast<size_t>(op));
+  if (op == EvalOp::Power) {
+    SEQUANT_ASSERT(sentinel.value().imag() == 0);
+    hash::combine(h, hash::value(sentinel.value().real()));
+  }
+  EvalExpr node{op,
+                ResultType::Tensor,
+                std::move(expr),
+                std::move(canon_indices),
+                phase,
+                h,
+                nullptr};
+  return EvalExprNode{std::move(node), std::move(operand),
+                      EvalExprNode{EvalExpr{sentinel}}};
+}
+
+}  // namespace
 
 EvalExprNode binarize(Tensor const& t) {
   // Detect adjoint-marked tensor leaves (label ending in U+207A '⁺'). These
@@ -407,26 +445,28 @@ EvalExprNode binarize(Tensor const& t) {
     Tensor bare{t};
     bare.adjoint();
     SEQUANT_ASSERT(!is_adjoint_label(bare.label()));
-    EvalExprNode bare_leaf{EvalExpr{bare}};
 
-    // Sentinel right child.
-    EvalExprNode sentinel{EvalExpr{Constant{1}}};
-
-    // Build the Adjoint EvalExpr. Hash differs from the bare leaf so cache
-    // lookups don't collide.
-    auto h = bare_leaf->hash_value();
-    hash::combine(h, static_cast<size_t>(EvalOp::Adjoint));
-    EvalExpr adj{EvalOp::Adjoint,                                   //
-                 ResultType::Tensor,                                //
-                 t.clone(),                                         //
-                 t.indices() | ranges::to<EvalExpr::index_vector>,  //
-                 1,                                                 //
-                 h,                                                 //
-                 nullptr};
-    return EvalExprNode{std::move(adj), std::move(bare_leaf),
-                        std::move(sentinel)};
+    // Sentinel right child is Constant(1); the hash differs from the bare
+    // leaf's so cache lookups don't collide.
+    return make_unary_node(EvalOp::Adjoint, EvalExprNode{EvalExpr{bare}},
+                           Constant{1}, t.clone(),
+                           t.indices() | ranges::to<EvalExpr::index_vector>, 1);
   }
   return EvalExprNode{EvalExpr{t}};
+}
+
+EvalExprNode binarize(TensorPower const& power, IndexSet const& uncontract,
+                      const BinarizationOptions& opts,
+                      std::size_t& node_counter) {
+  auto operand = impl::binarize(power.base(), uncontract, opts, node_counter);
+  auto const& base = power.base()->as<Tensor>();
+  auto expr = detail::make_tensor_wo_symmetries(
+      opts, bra(base.bra()), ket(base.ket()), aux(base.aux()));
+  auto canon_indices = operand->canon_indices();
+  auto const phase = operand->canon_phase();
+  return make_unary_node(EvalOp::Power, std::move(operand),
+                         Constant{power.exponent()}, std::move(expr),
+                         std::move(canon_indices), phase);
 }
 
 EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
@@ -668,6 +708,9 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
 
   if (expr->is<Power>())  //
     return binarize(expr->as<Power>());
+
+  if (expr->is<TensorPower>())  //
+    return binarize(expr->as<TensorPower>(), uncontract, opts, node_counter);
 
   throw Exception("Encountered unsupported expression in binarize.");
 }

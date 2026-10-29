@@ -262,6 +262,8 @@ class GenerationVisitor {
         // representing conj in the generated IR — tracked separately.
         expressions.push_back(node.left()->expr());
         break;
+      case EvalOp::Power:
+        throw Exception("export of TensorPower is not supported yet");
       case EvalOp::Sum: {
         switch (node->compute_selection()) {
           case ComputeSelection::None:

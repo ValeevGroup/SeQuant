@@ -50,8 +50,24 @@ enum class EvalOp {
   ///        FullBinaryNode invariant — every non-leaf has both children —
   ///        is preserved). Evaluate dispatches on this op_type and only uses
   ///        the left operand; the right is ignored.
-  Adjoint
+  Adjoint,
+
+  ///
+  /// \brief Represents the element-wise rational power of one tensor-valued
+  ///        EvalExpr object (the evaluation of a TensorPower). Unary like
+  ///        Adjoint: the left child is the operand subtree and the right child
+  ///        is a Constant sentinel holding the rational exponent (see
+  ///        power_exponent()). The node's expression is a symmetry-free
+  ///        Tensor over the operand's slots; the result is
+  ///        operand^exponent, element by element.
+  Power
 };
+
+///
+/// \return True if \p op is unary, i.e. a node of this type evaluates its left
+///         child only and its right child is a sentinel leaf.
+///
+[[nodiscard]] bool is_unary(EvalOp op) noexcept;
 
 ///
 /// \brief The ResultType enum.
@@ -204,6 +220,11 @@ class EvalExpr {
   /// \return True if this expression is an adjoint (unary) node.
   ///
   [[nodiscard]] bool is_adjoint() const noexcept;
+
+  ///
+  /// \return True if this expression is an element-wise power (unary) node.
+  ///
+  [[nodiscard]] bool is_elementwise_power() const noexcept;
 
   ///
   /// \brief Calls to<Tensor>() on ExprPtr held by this object.
@@ -696,6 +717,18 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res,
 }
 
 ///
+/// \return The exponent of the element-wise power node \p node, read off its
+///         Constant sentinel right child.
+/// \pre \p node is an EvalOp::Power node
+///
+rational power_exponent(meta::eval_node auto const& node) {
+  SEQUANT_ASSERT(!node.leaf() && node->op_type() == EvalOp::Power);
+  auto const value = node.right()->as_constant().value();
+  SEQUANT_ASSERT(value.imag() == 0);
+  return value.real();
+}
+
+///
 /// Converts an `EvalExpr` to `ExprPtr`, passing the expression of every
 /// terminal through @p leaf_map.
 ///
@@ -715,6 +748,9 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
   // own ExprPtr; the bare-leaf left child and Constant(1) right child are
   // structural plumbing for the IR, not part of the symbolic form.
   if (op == EvalOp::Adjoint) return leaf_map(evxpr.expr());
+
+  if (op == EvalOp::Power)
+    return pow(to_expr(node.left(), leaf_map), power_exponent(node));
 
   if (op == EvalOp::Product) {
     auto prod = Product{};

@@ -21,6 +21,7 @@
 #include <string_view>
 
 #include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 
@@ -326,6 +327,59 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     REQUIRE_NOTHROW(binarize(expr));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+
+  SECTION("Power op") {
+    const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                                .braket = BraKetSymmetry::Symm,
+                                .column = ColumnSymmetry::Symm};
+    auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+    auto p = pow(D, rational{-1});
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto tree = binarize(p);
+    auto base_tree = binarize(D);
+    auto p2_tree = binarize(pow(D, rational{-2}));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE_FALSE(tree.leaf());
+    REQUIRE(tree->op_type() == EvalOp::Power);
+    REQUIRE(tree->is_elementwise_power());
+    REQUIRE(tree->is_tensor());
+    REQUIRE(tree.left().leaf());
+    REQUIRE(tree.left()->is_tensor());
+    REQUIRE(tree.left()->as_tensor().label() == L"D");
+    REQUIRE(tree.right().leaf());
+    REQUIRE(tree.right()->is_constant());
+    REQUIRE(power_exponent(tree) == rational{-1});
+    CHECK(ranges::equal(tree->canon_indices(), tree.left()->canon_indices()));
+    CHECK(tree->hash_value() != base_tree->hash_value());
+    CHECK(tree->hash_value() != p2_tree->hash_value());
+    // round trip, modulo the block canonicalization of the D leaf (its Symm
+    // bra-ket symmetry lets it swap bra and ket)
+    CHECK(*to_expr(tree) == *pow(to_expr(base_tree), rational{-1}));
+
+    // power of an adjoint-marked base: Power over Adjoint over the bare leaf
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    Tensor t_adj = t;
+    t_adj.adjoint();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto pa = binarize(pow(ex<Tensor>(t_adj), rational{2}));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(pa->op_type() == EvalOp::Power);
+    REQUIRE(pa.left()->op_type() == EvalOp::Adjoint);
+    CHECK(*to_expr(pa) == *pow(ex<Tensor>(t_adj), rational{2}));
+
+    // a product containing a power binarizes; the power's slots are the base's
+    auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                        TensorSymmetries{.perm = Symmetry::Antisymm});
+    auto ell = ResultExpr(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                                 TensorSymmetries{.perm = Symmetry::Antisymm}),
+                          M * p);
+    REQUIRE_NOTHROW(binarize(ell));
+    auto ell_tree = binarize(ell);
+    REQUIRE(ell_tree->op_type() == EvalOp::Product);
+    CHECK((ell_tree.left()->is_elementwise_power() ||
+           ell_tree.right()->is_elementwise_power()));
   }
 
   SECTION("external hyperindices") {
