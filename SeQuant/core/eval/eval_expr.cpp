@@ -459,9 +459,9 @@ EvalExprNode binarize(TensorPower const& power, IndexSet const& uncontract,
                       const BinarizationOptions& opts,
                       std::size_t& node_counter) {
   auto operand = impl::binarize(power.base(), uncontract, opts, node_counter);
-  auto const& base = power.base()->as<Tensor>();
-  auto expr = detail::make_tensor_wo_symmetries(
-      opts, bra(base.bra()), ket(base.ket()), aux(base.aux()));
+  auto const& t = operand->as_tensor();
+  auto expr = detail::make_tensor_wo_symmetries(opts, bra(t.bra()),
+                                                ket(t.ket()), aux(t.aux()));
   auto canon_indices = operand->canon_indices();
   auto const phase = operand->canon_phase();
   return make_unary_node(EvalOp::Power, std::move(operand),
