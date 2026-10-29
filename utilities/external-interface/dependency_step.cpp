@@ -98,6 +98,17 @@ void DependencyStep::set_options(const nlohmann::json &options) {
   }
 }
 
+std::vector<std::string> DependencyStep::referenced_ids() const {
+  std::vector<std::string> ids;
+
+  for (const auto &[consumer_id, producer_ids] : deps_) {
+    ids.push_back(consumer_id);
+    ids.insert(ids.end(), producer_ids.begin(), producer_ids.end());
+  }
+
+  return ids;
+}
+
 std::size_t DependencyStep::run(std::string_view step_id,
                                 ExecutionContext &exctx,
                                 const std::vector<std::string_view> &inputs) {
