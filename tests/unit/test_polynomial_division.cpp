@@ -600,3 +600,90 @@ TEST_CASE("polynomial_division_regressions",
     REQUIRE_THAT(result, EquivalentTo(L"I{a2;a3} J{a3;i2} X{i1;a1}"));
   }
 }
+
+TEST_CASE("polynomial_division_code_review",
+          "[utilities][polynomial_division]") {
+  using namespace sequant;
+
+  SECTION("result indices of ResultExpr are retained") {
+    // reversed bra order of an antisymmetric result must not be touched
+    ResultExpr expr =
+        deserialize<ResultExpr>(L"R{a2,a1;i1,i2}:A = t{a1,a2;i1,i2}:A u w");
+    replace(expr, deserialize(L"u w"), *deserialize(L"s"),
+            IndexMatching::Exact);
+    REQUIRE(expr.bra() ==
+            ResultExpr::IndexContainer{Index{L"a_2"}, Index{L"a_1"}});
+    REQUIRE(expr.ket() ==
+            ResultExpr::IndexContainer{Index{L"i_1"}, Index{L"i_2"}});
+    REQUIRE_THAT(expr.expression(), EquivalentTo(L"t{a1,a2;i1,i2}:A s"));
+
+    // bra/ket of the result must not be swapped
+    ResultExpr expr2 = deserialize<ResultExpr>(L"R{a1;i1} = g{i1;a1} u w");
+    replace(expr2, deserialize(L"u w"), *deserialize(L"s"),
+            IndexMatching::Exact);
+    REQUIRE(expr2.bra() == ResultExpr::IndexContainer{Index{L"a_1"}});
+    REQUIRE(expr2.ket() == ResultExpr::IndexContainer{Index{L"i_1"}});
+  }
+
+  SECTION("high degree") {
+    const ExprPtr dividend = deserialize(L"x^(200)");
+    DivisionResult result =
+        divide(dividend, deserialize(L"x + 1"), DivisionMode::Remainder,
+               IndexMatching::Exact);
+    REQUIRE(result.groups.size() == 1);
+    REQUIRE_THAT(result.remainder, EquivalentTo(L"1"));
+    REQUIRE_THAT(result.to_expr(), EquivalentTo(dividend));
+  }
+
+  SECTION("negative exponents") {
+    DivisionResult result =
+        divide(deserialize(L"x^(-2) y"), deserialize(L"x^(-1)"),
+               DivisionMode::Strict, IndexMatching::Exact);
+    REQUIRE_THAT(result.groups.at(0).quotient, EquivalentTo(L"x^(-1) y"));
+
+    result = divide(deserialize(L"x y"), deserialize(L"x^(-1)"),
+                    DivisionMode::Remainder, IndexMatching::Exact);
+    REQUIRE(result.groups.empty());
+  }
+
+  SECTION("symmetric divisors with exact matching") {
+    for (const auto &[divisor_str, cofactor_str] :
+         std::vector<std::pair<std::wstring, std::wstring>>{
+             {L"v{a1,a2;i1,i2}:S", L"u"},
+             {L"t{a1,a2;i1,i2}:A", L"u"},
+             {L"f{a1;i1} f{a2;i2}", L"u"},
+             {L"f{a1;i1} f{a2;i2}", L"X{i1,i2;a1,a2}"},
+         }) {
+      CAPTURE(toUtf8(divisor_str));
+      const ExprPtr divisor = deserialize(divisor_str);
+      const ExprPtr dividend = divisor->clone() * deserialize(cofactor_str);
+      DivisionResult result =
+          divide(dividend, divisor, DivisionMode::Strict, IndexMatching::Exact);
+      REQUIRE(result.groups.size() == 1);
+      REQUIRE(result.groups[0].relabeling.empty());
+      REQUIRE_THAT(result.groups[0].quotient,
+                   EquivalentTo(deserialize(cofactor_str)));
+    }
+  }
+
+  SECTION("substitute with additional free indices") {
+    // a1 is an external of the dividend but the divisor's a1 is bound to the
+    // dummy a2 -> a newly introduced label is used, which must not coincide
+    // with the substitute's free index a4
+    const ExprPtr result = factor_out(
+        deserialize(L"f{a2;a3} t{a3;i2} Y{i2;a2} X{a1}"),
+        deserialize(L"f{a1;a2} t{a2;i1}"), *deserialize(L"S{a1,a4;i1}"),
+        DivisionMode::Strict, IndexMatching::Relabel);
+    std::string msg;
+    const bool valid = is_valid(result, &msg);
+    INFO(msg);
+    REQUIRE(valid);
+    REQUIRE_THAT(result, EquivalentTo(L"S{a3,a4;i1} Y{i1;a3} X{a1}"));
+  }
+
+  SECTION("transform_expr with powers") {
+    REQUIRE_THAT(transform_expr(deserialize(L"x^(2) t{a1;i1}"),
+                                {{Index{L"a_1"}, Index{L"a_2"}}}),
+                 EquivalentTo(L"x^(2) t{a2;i1}"));
+  }
+}

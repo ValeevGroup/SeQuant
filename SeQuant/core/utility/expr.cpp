@@ -521,7 +521,7 @@ ExprPtr transform_expr(const ExprPtr &expr,
 ExprPtr transform_expr(const Expr &expr,
                        const container::map<Index, Index> &index_replacements,
                        Constant::scalar_type scaling_factor) {
-  if (expr.is<Constant>() || expr.is<Variable>()) {
+  if (expr.is<Constant>() || expr.is<Variable>() || expr.is<Power>()) {
     if (scaling_factor != 1) {
       return ex<Constant>(scaling_factor) * expr.clone();
     }
@@ -544,13 +544,12 @@ ExprPtr transform_expr(const Expr &expr,
     for (auto &&term : product) {
       if (term->is<AbstractTensor>()) {
         result->append(1, transform_tensor(*term));
-      } else if (term->is<Variable>() || term->is<Constant>()) {
+      } else if (term->is<Variable>() || term->is<Constant>() ||
+                 term->is<Power>()) {
         result->append(1, term->clone());
-      } else if (term->is<Sum>() || term->is<Product>()) {
+      } else {
         result->append(1, transform_expr(term, index_replacements),
                        Product::Flatten::No);
-      } else {
-        throw Exception("Invalid Expr type in transform_product");
       }
     }
     result->scale(scaling_factor);
@@ -573,7 +572,23 @@ ExprPtr transform_expr(const Expr &expr,
     }
     return result;
   } else {
-    throw Exception("Invalid Expr type in transform_expr");
+    // Any other expression: transform all tensors contained in it
+    ExprPtr result = expr.clone();
+    if (!result->is_atom()) {
+      result->visit(
+          [&index_replacements](ExprPtr &current) {
+            if (current->is<AbstractTensor>()) {
+              auto &tensor = current->as<AbstractTensor>();
+              transform_indices(tensor, index_replacements);
+              reset_tags(tensor);
+            }
+          },
+          /*atoms_only=*/true);
+    }
+    if (scaling_factor != 1) {
+      result = ex<Constant>(scaling_factor) * result;
+    }
+    return result;
   }
 }
 
@@ -818,9 +833,19 @@ namespace {
 void update_result_indices(ResultExpr &expr) {
   IndexGroups<> externals = get_unique_indices(expr.expression());
 
-  if (!std::ranges::equal(externals.bra, expr.bra()) ||
-      !std::ranges::equal(externals.ket, expr.ket()) ||
-      !std::ranges::equal(externals.aux, expr.aux())) {
+  // N.B.: the order (and slot type) in which the external indices appear in
+  // the expression is irrelevant (and may change e.g. due to
+  // canonicalization). Only if the set of external indices changes, the
+  // result has to be updated.
+  auto as_set = [](const auto &...ranges) {
+    container::set<Index> result;
+    (result.insert(std::ranges::begin(ranges), std::ranges::end(ranges)), ...);
+    result.erase(Index{});
+    return result;
+  };
+
+  if (as_set(externals.bra, externals.ket, externals.aux) !=
+      as_set(expr.bra(), expr.ket(), expr.aux())) {
     // Externals have changed -> update result
     // TODO: Is retaining result symmetry a reasonable thing to do? Generally
     // speaking, replacements could also change the result symmetry so in

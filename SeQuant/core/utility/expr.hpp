@@ -62,6 +62,9 @@ bool is_valid(const Expr &expr, std::string *msg = nullptr);
 bool is_valid(const ResultExpr &expr, std::string *msg = nullptr);
 
 /// @brief Applies index replacement rules to an ExprPtr
+/// @note All replacements are applied simultaneously (i.e. they are not
+/// chained). Indices of all tensors contained in the expression (including
+/// e.g. operators) are transformed.
 /// @param expr ExprPtr to transform
 /// @param index_replacements index replacement map
 /// @param scaling_factor to scale the result

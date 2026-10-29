@@ -6,17 +6,20 @@
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/conversion.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
+#include <queue>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -44,53 +47,6 @@ CanonicalizeOptions term_canonicalization_options() {
 CanonicalizeOptions matching_canonicalization_options() {
   return CanonicalizeOptions::default_options().copy_and_set(
       CanonicalizeOptions::IgnoreNamedIndexLabel::Yes);
-}
-
-/// @returns A copy of @p expr in which indices have been replaced according to
-/// @p map (simultaneously, i.e. the replacements are not chained)
-ExprPtr relabel(const Expr &expr, const IndexMap &map) {
-  auto relabel_tensor = [&map](AbstractTensor &tensor) {
-    transform_indices(tensor, map);
-    reset_tags(tensor);
-  };
-
-  if (expr.is<AbstractTensor>()) {
-    ExprPtr result = expr.clone();
-    if (!map.empty()) {
-      relabel_tensor(result->as<AbstractTensor>());
-    }
-    return result;
-  }
-
-  if (expr.is<Product>()) {
-    const auto &product = expr.as<Product>();
-    auto result = std::make_shared<Product>();
-    result->scale(product.scalar());
-    for (const ExprPtr &factor : product.factors()) {
-      result->append(1, relabel(*factor, map), Product::Flatten::No);
-    }
-    return result;
-  }
-
-  if (expr.is<Sum>()) {
-    auto result = std::make_shared<Sum>(ExprPtrList{});
-    for (const ExprPtr &summand : expr.as<Sum>().summands()) {
-      result->append(relabel(*summand, map));
-    }
-    return result;
-  }
-
-  ExprPtr result = expr.clone();
-  if (!map.empty() && !result->is_atom()) {
-    result->visit(
-        [&](ExprPtr &current) {
-          if (current->is<AbstractTensor>()) {
-            relabel_tensor(current->as<AbstractTensor>());
-          }
-        },
-        /*atoms_only=*/true);
-  }
-  return result;
 }
 
 /// @returns The number of (non-proto) occurrences of every index in @p expr
@@ -235,8 +191,11 @@ std::optional<container::svector<ExprPtr>> divide_scalars(
     const ScalarPower current(factor);
     auto it = std::ranges::find_if(
         remaining, [&](const std::optional<ScalarPower> &candidate) {
+          // N.B.: base^a is considered divisible by base^b if both exponents
+          // have the same sign and |a| >= |b|
           return candidate.has_value() && candidate->same_base(current) &&
-                 candidate->exponent >= current.exponent;
+                 (candidate->exponent < 0) == (current.exponent < 0) &&
+                 abs(candidate->exponent) >= abs(current.exponent);
         });
     if (it == remaining.end()) {
       return std::nullopt;
@@ -308,7 +267,7 @@ ExprPtr tidy_dummies(const ExprPtr &expr, const Indices &avoid) {
       used.insert(to);
     }
 
-    return relabel(*term, map);
+    return transform_expr(*term, map);
   };
 
   if (expr.is<Sum>()) {
@@ -377,7 +336,7 @@ Divisor prepare_divisor(const ExprPtr &divisor, FreshIndices &fresh) {
     }
 
     DivisorTerm div_term;
-    div_term.expr = relabel(product, dummy_map);
+    div_term.expr = transform_expr(product, dummy_map);
     div_term.scalar = product.scalar();
     for (const ExprPtr &factor : div_term.expr.as<Product>().factors()) {
       if (is_scalar_factor(factor)) {
@@ -403,9 +362,53 @@ Divisor prepare_divisor(const ExprPtr &divisor, FreshIndices &fresh) {
 struct NetworkMatch {
   /// maps external indices of the divisor term to indices of the dividend
   IndexMap sigma;
-  /// subset == ratio * relabel(divisor_tensors, sigma)
+  /// subset == ratio * transform_expr(divisor_tensors, sigma)
   scalar_type ratio = 1;
 };
+
+/// Checks whether @p subset equals (up to a scalar factor and renaming of
+/// dummy indices) the network formed by @p divisor_tensors with its external
+/// indices relabeled according to @p sigma
+/// @returns The ratio subset / relabeled divisor tensors or std::nullopt if
+/// they don't match
+std::optional<scalar_type> verify_binding(
+    const container::svector<ExprPtr> &subset,
+    const container::svector<ExprPtr> &divisor_tensors, const IndexMap &sigma) {
+  container::set<Index> named;
+  for (const auto &[external, image] : sigma) {
+    named.insert(image);
+  }
+  const auto opts = term_canonicalization_options().copy_and_set(
+      std::optional<container::set<Index>>(std::move(named)));
+
+  auto canonicalized = [&opts](auto &&tensors) {
+    auto product = std::make_shared<Product>(tensors, Product::Flatten::No);
+    ExprPtr byproduct = product->canonicalize(opts);
+    if (byproduct) {
+      product->scale(byproduct.as<Constant>().value());
+    }
+    return product;
+  };
+
+  container::svector<ExprPtr> mapped;
+  for (const ExprPtr &tensor : divisor_tensors) {
+    mapped.push_back(transform_expr(*tensor, sigma));
+  }
+
+  auto lhs = canonicalized(subset);
+  auto rhs = canonicalized(mapped);
+  if (lhs->is_zero() || rhs->is_zero() ||
+      lhs->factors().size() != rhs->factors().size()) {
+    return std::nullopt;
+  }
+  for (std::size_t i = 0; i < lhs->factors().size(); ++i) {
+    if (*lhs->factor(i) != *rhs->factor(i)) {
+      return std::nullopt;
+    }
+  }
+
+  return lhs->scalar() / rhs->scalar();
+}
 
 /// Attempts to match the tensor network formed by @p subset to the one formed
 /// by @p divisor_tensors (up to relabeling of indices)
@@ -487,7 +490,7 @@ std::optional<NetworkMatch> match_networks(
   // Verify that the mapping indeed maps the divisor onto the subset
   IndexMap full_map = sigma;
   full_map.insert(dummies.begin(), dummies.end());
-  ExprPtr mapped = relabel(*rhs, full_map);
+  ExprPtr mapped = transform_expr(*rhs, full_map);
   const auto &mapped_product = mapped.as<Product>();
   for (std::size_t i = 0; i < lhs->factors().size(); ++i) {
     if (*lhs->factor(i) != *mapped_product.factor(i)) {
@@ -497,6 +500,46 @@ std::optional<NetworkMatch> match_networks(
 
   if (sigma.size() != divisor_externals.size()) {
     return std::nullopt;
+  }
+
+  // In case of (permutational) symmetries, there might be multiple equivalent
+  // bindings of the divisor's externals of which the canonicalization picks
+  // an arbitrary one. Prefer the binding that maps as many of the externals
+  // onto themselves as possible (required for IndexMatching::Exact and
+  // helpful for grouping in IndexMatching::Relabel).
+  Indices images_of_externals;
+  for (const auto &[external, image] : sigma) {
+    images_of_externals.insert(image);
+  }
+  IndexMap preferred;
+  for (const Index &external : divisor_externals) {
+    if (images_of_externals.contains(external)) {
+      preferred.emplace(external, external);
+    }
+  }
+  if (preferred.size() != sigma.size()) {
+    Indices leftover_images = images_of_externals;
+    for (const auto &[external, image] : preferred) {
+      leftover_images.erase(image);
+    }
+    for (const auto &[external, image] : sigma) {
+      if (preferred.contains(external)) {
+        continue;
+      }
+      auto it = std::ranges::find_if(leftover_images, [&](const Index &idx) {
+        return idx.space() == external.space();
+      });
+      if (it == leftover_images.end()) {
+        break;
+      }
+      preferred.emplace(external, *it);
+      leftover_images.erase(it);
+    }
+  }
+  if (preferred.size() == sigma.size() && preferred != sigma) {
+    if (auto ratio = verify_binding(subset, divisor_tensors, preferred)) {
+      return NetworkMatch{.sigma = std::move(preferred), .ratio = *ratio};
+    }
   }
 
   return NetworkMatch{.sigma = std::move(sigma),
@@ -533,39 +576,76 @@ void for_each_tensor_subset(
     const container::svector<ExprPtr> &tensors,
     const std::function<void(const container::svector<std::size_t> &)>
         &callback) {
-  container::set<container::svector<std::size_t>> seen;
-  container::svector<std::size_t> current;
-  container::svector<bool> used(candidates.size(), false);
-
-  std::function<void(std::size_t)> recurse = [&](std::size_t depth) {
-    if (depth == tensors.size()) {
-      auto sorted = current;
-      std::ranges::sort(sorted);
-      if (seen.insert(sorted).second) {
-        callback(sorted);
-      }
-      return;
-    }
-
-    const auto &target = tensors[depth].as<Tensor>();
-    for (std::size_t i = 0; i < candidates.size(); ++i) {
-      if (used[i]) {
-        continue;
-      }
-      const auto &candidate = factors[candidates[i]].as<Tensor>();
-      if (candidate.label() != target.label() ||
-          candidate.num_slots() != target.num_slots()) {
-        continue;
-      }
-      used[i] = true;
-      current.push_back(candidates[i]);
-      recurse(depth + 1);
-      current.pop_back();
-      used[i] = false;
-    }
+  // Group the divisor's tensors by their "kind" (label and number of slots).
+  // For every kind that occurs k times, we have to choose k (distinct)
+  // candidates of the same kind. Since the order within such a choice is
+  // irrelevant, we directly generate combinations (rather than permutations).
+  auto same_kind = [](const Tensor &lhs, const Tensor &rhs) {
+    return lhs.label() == rhs.label() && lhs.num_slots() == rhs.num_slots();
   };
 
-  recurse(0);
+  struct Kind {
+    /// how many tensors of this kind the divisor contains
+    std::size_t count;
+    /// positions (in factors) of the candidates of this kind
+    container::svector<std::size_t> candidates;
+  };
+  container::svector<Kind> kinds;
+  container::svector<const Tensor *> representatives;
+  for (const ExprPtr &tensor : tensors) {
+    const auto &current = tensor.as<Tensor>();
+    auto it = std::ranges::find_if(representatives, [&](const Tensor *rep) {
+      return same_kind(*rep, current);
+    });
+    if (it != representatives.end()) {
+      ++kinds[std::distance(representatives.begin(), it)].count;
+      continue;
+    }
+
+    Kind kind{.count = 1, .candidates = {}};
+    for (std::size_t pos : candidates) {
+      if (same_kind(factors[pos].as<Tensor>(), current)) {
+        kind.candidates.push_back(pos);
+      }
+    }
+    kinds.push_back(std::move(kind));
+    representatives.push_back(&current);
+  }
+
+  for (const Kind &kind : kinds) {
+    if (kind.candidates.size() < kind.count) {
+      return;
+    }
+  }
+
+  container::svector<std::size_t> current;
+  // Chooses the next element for the current kind, starting at candidate
+  // position start; chosen is the number of already chosen elements of the
+  // current kind
+  std::function<void(std::size_t, std::size_t, std::size_t)> recurse =
+      [&](std::size_t kind_idx, std::size_t start, std::size_t chosen) {
+        if (kind_idx == kinds.size()) {
+          auto sorted = current;
+          std::ranges::sort(sorted);
+          callback(sorted);
+          return;
+        }
+
+        const Kind &kind = kinds[kind_idx];
+        if (chosen == kind.count) {
+          recurse(kind_idx + 1, 0, 0);
+          return;
+        }
+
+        for (std::size_t i = start;
+             i + (kind.count - chosen) <= kind.candidates.size(); ++i) {
+          current.push_back(kind.candidates[i]);
+          recurse(kind_idx, i + 1, chosen + 1);
+          current.pop_back();
+        }
+      };
+
+  recurse(0, 0, 0);
 }
 
 /// Divides the dividend term @p term by the divisor term @p divisor_term
@@ -687,7 +767,7 @@ container::svector<TermMatch> divide_term(const ExprPtr &term,
         }
 
         TermMatch match;
-        match.quotient = relabel(*quotient, renaming);
+        match.quotient = transform_expr(*quotient, renaming);
         for (const auto &[external, bound] : binding) {
           if (external != bound) {
             match.binding.emplace(external, bound);
@@ -734,6 +814,7 @@ class TermTable {
 
     by_hash_.emplace(term->hash_value(), entries_.size());
     rational term_degree = total_degree(term.as<Product>());
+    pending_.emplace(term_degree, entries_.size());
     entries_.push_back(Entry{.term = std::move(term),
                              .state = State::Pending,
                              .degree = std::move(term_degree)});
@@ -755,18 +836,18 @@ class TermTable {
   /// polynomial division, processing terms in order of decreasing degree
   /// ensures that cancellation terms (which tend to be of lower degree) are
   /// produced before they are processed themselves.
-  std::optional<std::size_t> next() const {
-    std::optional<std::size_t> result;
-    for (std::size_t idx = 0; idx < entries_.size(); ++idx) {
-      if (entries_[idx].state != State::Pending) {
-        continue;
-      }
-      if (!result.has_value() ||
-          entries_[idx].degree > entries_[*result].degree) {
-        result = idx;
+  /// Among entries of the same degree, the one added first is returned.
+  std::optional<std::size_t> next() {
+    while (!pending_.empty()) {
+      const std::size_t idx = pending_.top().second;
+      pending_.pop();
+      // N.B.: entries are only ever pushed once but they might have changed
+      // their state since
+      if (entries_[idx].state == State::Pending) {
+        return idx;
       }
     }
-    return result;
+    return std::nullopt;
   }
 
   Entry &operator[](std::size_t idx) { return entries_[idx]; }
@@ -785,6 +866,19 @@ class TermTable {
  private:
   std::vector<Entry> entries_;
   std::unordered_multimap<std::size_t, std::size_t> by_hash_;
+
+  /// (degree, position) of entries that have been pending when added
+  using QueueItem = std::pair<rational, std::size_t>;
+  struct QueueCompare {
+    bool operator()(const QueueItem &lhs, const QueueItem &rhs) const {
+      // max-heap w.r.t. degree, min-heap w.r.t. position
+      if (lhs.first != rhs.first) {
+        return lhs.first < rhs.first;
+      }
+      return lhs.second > rhs.second;
+    }
+  };
+  std::priority_queue<QueueItem, std::vector<QueueItem>, QueueCompare> pending_;
 };
 
 /// @returns The number of terms in @p expr
@@ -802,7 +896,7 @@ std::size_t num_terms(const ExprPtr &expr) {
 /// dummy indices renamed such that they don't coincide with any of @p avoid
 ExprPtr bound_divisor_term(const DivisorTerm &term, const IndexMap &binding,
                            const Indices &avoid = {}) {
-  return tidy_dummies(relabel(*term.expr, binding), avoid);
+  return tidy_dummies(transform_expr(*term.expr, binding), avoid);
 }
 
 /// Thrown if the division doesn't terminate for a given pivot
@@ -896,8 +990,16 @@ DivisionResult divide_with_pivot(const container::svector<ExprPtr> &terms,
 
   const DivisorTerm &pivot_term = divisor.terms.at(pivot);
 
+  // The number of required iterations grows with the number of terms and
+  // their degree (e.g. dividing x^n by x + 1 requires n steps)
+  std::size_t degree_bound = 1;
+  for (const ExprPtr &term : terms) {
+    const double degree = total_degree(term.as<Product>()).convert_to<double>();
+    degree_bound =
+        std::max(degree_bound, static_cast<std::size_t>(std::ceil(degree)));
+  }
   const std::size_t max_iterations =
-      64 * (terms.size() + 1) * (divisor.terms.size() + 1);
+      64 * (terms.size() + 1) * (divisor.terms.size() + 1) * degree_bound;
   std::size_t iterations = 0;
 
   while (auto idx = table.next()) {
@@ -1036,8 +1138,13 @@ ExprPtr DivisionResult::to_expr() const {
       *this, [](const DivisionGroup &group) { return group.divisor->clone(); });
 }
 
-DivisionResult divide(const ExprPtr &dividend, const ExprPtr &divisor,
-                      DivisionMode mode, IndexMatching matching) {
+namespace {
+
+/// Implementation of divide()
+/// @param reserved Indices that must not be used for any newly introduced index
+DivisionResult divide_impl(const ExprPtr &dividend, const ExprPtr &divisor,
+                           DivisionMode mode, IndexMatching matching,
+                           const Indices &reserved) {
   SEQUANT_ENFORCE(dividend && divisor);
 
   ExprPtr simplified_dividend = simplify(dividend->clone());
@@ -1056,6 +1163,7 @@ DivisionResult divide(const ExprPtr &dividend, const ExprPtr &divisor,
   for (const Index &idx : used_indices(*simplified_divisor)) {
     used.insert(idx);
   }
+  used.insert(reserved.begin(), reserved.end());
 
   DivisionContext ctx{.matching = matching,
                       .dividend_externals = {},
@@ -1083,6 +1191,30 @@ DivisionResult divide(const ExprPtr &dividend, const ExprPtr &divisor,
            prepared_divisor.terms[rhs].degree();
   });
 
+  // A pivot that divides another term of the divisor can't be the leading term
+  // w.r.t. any monomial order and generally leads to a non-terminating
+  // division. Such pivots are only tried as a last resort.
+  container::svector<std::size_t> proper_pivots;
+  container::svector<std::size_t> improper_pivots;
+  {
+    const IndexMatching original_matching = ctx.matching;
+    ctx.matching = IndexMatching::Relabel;
+    for (std::size_t pivot : pivots) {
+      bool proper = true;
+      for (std::size_t j = 0; j < prepared_divisor.terms.size() && proper;
+           ++j) {
+        if (j != pivot &&
+            !divide_term(prepared_divisor.terms[j].expr,
+                         prepared_divisor.terms[pivot], prepared_divisor, ctx)
+                 .empty()) {
+          proper = false;
+        }
+      }
+      (proper ? proper_pivots : improper_pivots).push_back(pivot);
+    }
+    ctx.matching = original_matching;
+  }
+
   // The best result is the one with the fewest remainder terms. Among those,
   // prefer the one that has factored the most terms.
   auto quality = [](const DivisionResult &result) {
@@ -1100,42 +1232,57 @@ DivisionResult divide(const ExprPtr &dividend, const ExprPtr &divisor,
       std::numeric_limits<std::size_t>::max(),
       std::numeric_limits<std::size_t>::max()};
   std::optional<NonTermination> failure;
-  for (std::size_t pivot : pivots) {
-    std::optional<DivisionResult> attempt;
-    try {
-      attempt = divide_with_pivot(terms, prepared_divisor, pivot, mode, ctx);
-    } catch (const NonTermination &e) {
-      // Not every choice of pivot leads to a terminating division, e.g. if
-      // the pivot divides another term of the divisor. Other pivots may work.
-      failure = e;
-      continue;
+  bool any_terminated = false;
+  for (const auto *candidates : {&proper_pivots, &improper_pivots}) {
+    if (best.has_value()) {
+      break;
     }
-    DivisionResult &current = *attempt;
 
-    if (mode == DivisionMode::Strict) {
-      if (current.exact()) {
-        return current;
+    for (std::size_t pivot : *candidates) {
+      std::optional<DivisionResult> attempt;
+      try {
+        attempt = divide_with_pivot(terms, prepared_divisor, pivot, mode, ctx);
+      } catch (const NonTermination &e) {
+        // Not every choice of pivot leads to a terminating division. Other
+        // pivots may work.
+        failure = e;
+        continue;
       }
-      continue;
-    }
+      any_terminated = true;
 
-    const auto current_quality = quality(current);
-    if (current_quality < best_quality) {
-      best_quality = current_quality;
-      best = std::move(current);
+      if (mode == DivisionMode::Strict) {
+        if (attempt->exact()) {
+          return std::move(*attempt);
+        }
+        continue;
+      }
+
+      const auto current_quality = quality(*attempt);
+      if (current_quality < best_quality) {
+        best_quality = current_quality;
+        best = std::move(*attempt);
+      }
     }
+  }
+
+  if (!any_terminated) {
+    SEQUANT_ASSERT(failure.has_value());
+    throw *failure;
   }
 
   if (mode == DivisionMode::Strict) {
     throw Exception("Dividend is not exactly divisible by the divisor");
   }
 
-  if (!best.has_value()) {
-    SEQUANT_ASSERT(failure.has_value());
-    throw *failure;
-  }
-
+  SEQUANT_ASSERT(best.has_value());
   return std::move(best.value());
+}
+
+}  // namespace
+
+DivisionResult divide(const ExprPtr &dividend, const ExprPtr &divisor,
+                      DivisionMode mode, IndexMatching matching) {
+  return divide_impl(dividend, divisor, mode, matching, {});
 }
 
 ExprPtr factor_out(const ExprPtr &expr, const ExprPtr &factor,
@@ -1164,7 +1311,10 @@ ExprPtr factor_out(const ExprPtr &expr, const ExprPtr &factor,
 ExprPtr factor_out(const ExprPtr &expr, const ExprPtr &factor,
                    const Expr &substitute, DivisionMode mode,
                    IndexMatching matching) {
-  DivisionResult result = divide(expr, factor, mode, matching);
+  // Indices introduced by the division must not clash with indices of the
+  // substitute
+  DivisionResult result =
+      divide_impl(expr, factor, mode, matching, used_indices(substitute));
 
   return assemble(result, [&substitute](const DivisionGroup &group) {
     // Make sure the substitute's dummies are neither affected by the
@@ -1175,7 +1325,7 @@ ExprPtr factor_out(const ExprPtr &expr, const ExprPtr &factor,
       affected.insert(to);
     }
     ExprPtr tidied = tidy_dummies(substitute.clone(), affected);
-    return relabel(*tidied, group.relabeling);
+    return transform_expr(*tidied, group.relabeling);
   });
 }
 
