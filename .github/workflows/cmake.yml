@@ -52,9 +52,7 @@ jobs:
           - os: ubuntu-26.04
             cxx: /usr/bin/g++-14
             sanitize_flags: -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
-            # "=1": TiledArray's DetectAlignSize forwards CXXFLAGS as try_compile
-            # CMAKE_FLAGS, which rejects a -D without a value
-            hardening_flags: -D_GLIBCXX_ASSERTIONS=1
+            hardening_flags: -D_GLIBCXX_ASSERTIONS
           - os: macos-26
             cxx: clang++
             sanitize_flags: -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
