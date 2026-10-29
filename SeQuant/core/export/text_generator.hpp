@@ -131,6 +131,14 @@ class TextGenerator : public Generator<Context> {
                                 /*double_slash*/ false, &wrap_conj);
   }
 
+  std::string represent(const TensorPower &power,
+                        const Context &ctx) const override {
+    SEQUANT_ASSERT(power.base()->is<Tensor>());
+    return detail::format_tensor_power(
+        power, represent(power.base()->as<Tensor>(), ctx), "^",
+        /*double_slash*/ false);
+  }
+
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
     m_generated += m_indent + "Create " + represent(tensor, ctx);

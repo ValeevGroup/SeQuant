@@ -92,4 +92,10 @@ std::string format_power(
   return s;
 }
 
+std::string format_tensor_power(const TensorPower &power, std::string base_str,
+                                std::string_view pow_op, bool double_slash) {
+  return std::move(base_str) + std::string(pow_op) +
+         format_power_exponent(power.exponent(), double_slash);
+}
+
 }  // namespace sequant::detail
