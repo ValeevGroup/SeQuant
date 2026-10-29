@@ -878,6 +878,35 @@ TEST_CASE("eval_broadcast_sum_btas", "[eval_btas][broadcast]") {
         for (std::size_t a2 = 0; a2 < nvirt; ++a2)
           CHECK(got(i1, i2, a1, a2) ==
                 Catch::Approx(ea(a1) + ea(a2) - ei(i1) - ei(i2)).margin(1e-12));
+
+  // distinct leaves and a nonsymmetric head: the expected tensor changes under
+  // any mode swap, so this pins the result layout
+  {
+    auto const e1 = ex<Tensor>(L"ε1", bra{}, ket{L"a_1"});
+    auto const e2 = ex<Tensor>(L"ε2", bra{}, ket{L"a_2"});
+    auto const e3 = ex<Tensor>(L"ε3", bra{L"i_1"}, ket{});
+    auto const e4 = ex<Tensor>(L"ε4", bra{L"i_2"}, ket{});
+    auto vec = [&](ExprPtr const& e) {
+      return yield_(e->as<Tensor>())->get<BTensorD>();
+    };
+    auto const v1 = vec(e1), v2 = vec(e2), v3 = vec(e3), v4 = vec(e4);
+    const TensorSymmetries nsym{.perm = Symmetry::Nonsymm,
+                                .braket = BraKetSymmetry::Nonsymm,
+                                .column = ColumnSymmetry::Nonsymm};
+    Tensor const nhead(L"D'", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, nsym);
+    ResultExpr nres(nhead, e1 + e2 - e3 - e4);
+    auto const ngot =
+        evaluate(binarize<EvalExprBTAS>(nres), tidxs(nhead), yield_)
+            ->get<BTensorD>();
+    REQUIRE(ngot.range() == btas::Range{nocc, nocc, nvirt, nvirt});
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t i2 = 0; i2 < nocc; ++i2)
+        for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+          for (std::size_t a2 = 0; a2 < nvirt; ++a2)
+            CHECK(
+                ngot(i1, i2, a1, a2) ==
+                Catch::Approx(v1(a1) + v2(a2) - v3(i1) - v4(i2)).margin(1e-12));
+  }
 }
 
 // A product that contracts every index of both operands is a bilinear dot,
