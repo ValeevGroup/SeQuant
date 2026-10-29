@@ -121,6 +121,12 @@ AnyIrrepSet AnyIrrepContext::irreps_of(const Tensor &tensor) const {
   return m_impl->irreps_of(tensor);
 }
 
+AnyIrrepSet AnyIrrepContext::irreps_of(const Variable &variable) const {
+  SEQUANT_ASSERT(m_impl &&
+                 "moved-from AnyIrrepContext objects must not be used");
+  return m_impl->irreps_of(variable);
+}
+
 AnyIrrepSet AnyIrrepContext::totally_symmetric() const {
   SEQUANT_ASSERT(m_impl &&
                  "moved-from AnyIrrepContext objects must not be used");

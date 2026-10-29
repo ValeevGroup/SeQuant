@@ -619,7 +619,7 @@ AnyIrrepContext ExportStep::parse_irreps(const nlohmann::json &irreps) {
 
     for (const auto &[key, value] : irreps.items()) {
       if (key != "group" && key != "relations" && key != "symbols" &&
-          key != "tensors" && key != "default") {
+          key != "tensors" && key != "variables" && key != "default") {
         throw Exception("Unknown key '" + key + "'");
       }
     }
@@ -657,6 +657,18 @@ AnyIrrepContext ExportStep::parse_irreps(const nlohmann::json &irreps) {
       for (const auto &[key, value] : tensors.items()) {
         spec.tensors.emplace_back(
             key, parse_irrep_names(value, "tensor '" + key + "'"));
+      }
+    }
+
+    if (irreps.contains("variables")) {
+      const json &variables = irreps.at("variables");
+      if (!variables.is_object()) {
+        throw Exception("Expected 'variables' to be an object");
+      }
+
+      for (const auto &[key, value] : variables.items()) {
+        spec.variables.emplace_back(
+            key, parse_irrep_names(value, "variable '" + key + "'"));
       }
     }
 
