@@ -412,9 +412,7 @@ bool is_valid_broadcast(const ResultExpr &result, const Sum &sum,
   const auto result_braket = ranges::views::concat(result.bra(), result.ket());
   container::set<Index> covered;
   for (const ExprPtr &summand : sum.summands()) {
-    ExprPtr term = summand->clone();
-    pop_tensor(term, reserved::antisymm_label());
-    pop_tensor(term, reserved::symm_label());
+    const ExprPtr term = detail::without_symmetrizers(summand);
     const IndexGroups<> externals = get_unique_indices(term);
 
     auto check = [&](const Index &idx, const auto &allowed) {
@@ -561,9 +559,7 @@ bool is_valid(const ResultExpr &expr, std::string *msg) {
 
   // We need to make sure to remove any symmetrizers from the expression in
   // order to not mess up the determination of external indices
-  ExprPtr rhs = expr.expression().clone();
-  pop_tensor(rhs, reserved::antisymm_label());
-  pop_tensor(rhs, reserved::symm_label());
+  const ExprPtr rhs = detail::without_symmetrizers(expr.expression());
 
   IndexGroups<> externals = get_unique_indices(rhs);
 
@@ -747,6 +743,13 @@ std::optional<ExprPtr> pop_symmetrizer(ExprPtr &expression) {
 
 std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression) {
   return pop_symmetrizer(expression.expression());
+}
+
+ExprPtr detail::without_symmetrizers(const ExprPtr &expression) {
+  ExprPtr result = expression.clone();
+  pop_tensor(result, reserved::antisymm_label());
+  pop_tensor(result, reserved::symm_label());
+  return result;
 }
 
 ExprPtr &replace(ExprPtr &expr, const ExprMatcher &target,

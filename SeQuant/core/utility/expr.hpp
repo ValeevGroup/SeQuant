@@ -96,6 +96,12 @@ std::optional<ExprPtr> pop_symmetrizer(ExprPtr &expression);
 /// @copydoc pop_symmetrizer(ExprPtr&)
 std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression);
 
+namespace detail {
+/// @return a copy of @p expression without its symmetrizer and
+/// antisymmetrizer (see pop_tensor), e.g. to determine its external indices
+ExprPtr without_symmetrizers(const ExprPtr &expression);
+}  // namespace detail
+
 /// Replaces a given target expression by a given replacement
 ///
 /// If target and replacement have common indices, the indices in the
