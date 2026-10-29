@@ -422,7 +422,8 @@ container::vector<container::vector<double>> sliced_footprints(
 /// \param network           The TensorNetwork.
 /// \param is_volatile_leaf  Predicate identifying volatile leaf tensors; may
 ///        be empty.
-/// \return Bitmask with bit i set iff tensor i is a volatile leaf.
+/// \return Bitmask with bit i set iff tensor i is a volatile leaf, or a
+///         TensorPower of one.
 inline std::size_t leaf_volatile_mask(
     TensorNetwork const& network,
     std::function<bool(Tensor const&)> const& is_volatile_leaf) {
@@ -430,7 +431,10 @@ inline std::size_t leaf_volatile_mask(
   if (!is_volatile_leaf) return mask;
   std::size_t i = 0;
   for (auto&& t : network.tensors()) {
-    auto tp = std::dynamic_pointer_cast<Tensor>(t);
+    // a power is as volatile as its base, the leaf the evaluator sees
+    auto const* tp = dynamic_cast<Tensor const*>(t.get());
+    if (auto const* pw = dynamic_cast<TensorPower const*>(t.get()))
+      tp = dynamic_cast<Tensor const*>(&pw->base_tensor());
     if (tp && is_volatile_leaf(*tp)) mask |= (std::size_t{1} << i);
     ++i;
   }
