@@ -24,6 +24,14 @@ class PinSession;
 class RecordSession;
 }  // namespace opt::schedule
 
+namespace opt {
+
+/// \return whether \p e is a tensor factor of a product the single-term
+///         optimizer contracts: a Tensor or a TensorPower
+bool is_tensor_factor(Expr const& e);
+
+}  // namespace opt
+
 /// Objective function to minimize in single-term and top-level optimize
 /// routines. The `Dense*` models assume dense tensors:
 /// - `DenseFLOPs` (the default) counts floating-point operations, the metric

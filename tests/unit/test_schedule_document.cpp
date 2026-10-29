@@ -524,6 +524,12 @@ sequant::ExprPtr power_term() {
   return L * M * pow(D, rational{-1});
 }
 
+/// a Sum of power_term() and a plain tensor product
+sequant::ExprPtr power_root() {
+  return sequant::ex<sequant::Sum>(sequant::ExprPtrList{
+      power_term(), pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_1,i_2}")});
+}
+
 /// the default context with AssertStrictBraKetSymmetry::No
 sequant::Context lax_braket_context() {
   auto ctx = sequant::get_default_context();
@@ -853,8 +859,7 @@ TEST_CASE("record_root then pin reproduce a Sum with a TensorPower term",
           "[schedule-document][tensor-power]") {
   using namespace sequant::opt::schedule;
   auto _ = sequant::set_scoped_default_context(lax_braket_context());
-  auto const sum = sequant::ex<sequant::Sum>(sequant::ExprPtrList{
-      power_term(), pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_1,i_2}")});
+  auto const sum = power_root();
   auto opts = session_opts();
   auto rr = record_root("E", sum, opts);
   REQUIRE(rr.record.terms.size() == 2);
@@ -877,10 +882,13 @@ TEST_CASE("record_root then pin reproduce a Sum with a TensorPower term",
       sequant::ResultExpr{sequant::Variable{L"E"}, pinned}, bopts));
 }
 
-TEST_CASE("a pin loaded from JSON reproduces the recorded document",
-          "[schedule-document]") {
+namespace {
+
+/// records \p sum under batched and unbatched objectives, writes the record
+/// to JSON, reads it back, pins from it and checks the pinned run reproduces
+/// the recorded document
+void require_json_pin_round_trip(sequant::ExprPtr const& sum) {
   using namespace sequant::opt::schedule;
-  auto const sum = session_root();
   for (auto const objective :
        {sequant::ObjectiveFunction::DenseTimeSpaceBatched,
         sequant::ObjectiveFunction::DenseFLOPs}) {
@@ -915,6 +923,19 @@ TEST_CASE("a pin loaded from JSON reproduces the recorded document",
     doc2.roots = {rr2.record};
     REQUIRE(compare(loaded, from_json(to_json(doc2))).empty());
   }
+}
+
+}  // namespace
+
+TEST_CASE("a pin loaded from JSON reproduces the recorded document",
+          "[schedule-document]") {
+  require_json_pin_round_trip(session_root());
+}
+
+TEST_CASE("a pin loaded from JSON reproduces a TensorPower term",
+          "[schedule-document][tensor-power]") {
+  auto _ = sequant::set_scoped_default_context(lax_braket_context());
+  require_json_pin_round_trip(power_root());
 }
 
 TEST_CASE("an axis with several proto indices survives JSON and pins",

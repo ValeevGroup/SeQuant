@@ -8,7 +8,6 @@
 // single_term_opt<Metric> entry points below route through run_single_term_opt.
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/optimize/cost_model.hpp>
-#include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/optimize/single_term_detail.hpp>
 

@@ -19,6 +19,8 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
+#include <range/v3/algorithm/contains.hpp>
+
 #include <algorithm>
 #include <bit>
 #include <cstddef>
@@ -4840,5 +4842,73 @@ TEST_CASE("optimize accepts TensorPower factors", "[optimize][tensor-power]") {
                      optimized},
           opts));
     }
+  }
+}
+
+TEST_CASE("single-term DP sees a TensorPower vertex through its base",
+          "[optimize][tensor-power]") {
+  using namespace sequant;
+  auto ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  auto t = [](std::wstring_view s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Nonsymm});
+  };
+  auto power_vertex = [](TensorNetwork const& net) {
+    std::size_t i = 0;
+    for (auto&& v : net.tensors()) {
+      if (dynamic_cast<TensorPower const*>(v.get())) return i;
+      ++i;
+    }
+    FAIL("no TensorPower vertex");
+    return i;
+  };
+
+  SECTION("volatility mask") {
+    TensorNetwork net{std::vector<ExprPtr>{
+        t(L"M{i_1;a_1}"), pow(t(L"D{i_1;a_1}"), rational{-1})}};
+    auto const p = power_vertex(net);
+    auto const mask = opt::detail::leaf_volatile_mask(
+        net, [](Tensor const& x) { return x.label() == L"D"; });
+    REQUIRE(mask == (std::size_t{1} << p));
+    REQUIRE(opt::detail::leaf_volatile_mask(net, [](Tensor const& x) {
+              return x.label() == L"M";
+            }) == (std::size_t{1} << (1 - p)));
+  }
+
+  SECTION("subnet CSE tells M·D from M·pow(D,-1)") {
+    // subsets {M_1, D_1} and {M_2, D_2 or pow(D_2,-1)} have the same shape
+    auto meta_ids = [&t](ExprPtr d2) {
+      std::vector<ExprPtr> ts{t(L"M{i_1;a_1}"), t(L"D{a_1;i_2}"),
+                              t(L"M{i_3;a_2}"), std::move(d2)};
+      TensorNetwork net{ts};
+      // vertex of each input factor, by the target index only it carries
+      std::vector<std::size_t> pos;
+      for (auto lbl : {L"i_1", L"i_2", L"i_3", L"i_4"}) {
+        std::size_t i = 0;
+        for (auto&& v : net.tensors()) {
+          if (ranges::contains(slots(*v), Index{lbl})) break;
+          ++i;
+        }
+        REQUIRE(i < ts.size());
+        pos.push_back(i);
+      }
+      container::svector<Index> targets{Index{L"i_1"}, Index{L"i_2"},
+                                        Index{L"i_3"}, Index{L"i_4"}};
+      container::vector<opt::detail::OptRes> results(std::size_t{1}
+                                                     << ts.size());
+      container::vector<char> connected(results.size(), 1);
+      opt::detail::init_results(net, targets, results, &connected);
+      auto md = opt::detail::build_subnet_metadata(net, results, connected);
+      auto bits = [&pos](std::size_t a, std::size_t b) {
+        return (std::size_t{1} << pos[a]) | (std::size_t{1} << pos[b]);
+      };
+      return std::pair{md.meta_ids[bits(0, 1)], md.meta_ids[bits(2, 3)]};
+    };
+    auto [md_plain, md_plain2] = meta_ids(t(L"D{a_2;i_4}"));
+    REQUIRE(md_plain == md_plain2);  // control: equal subnets share an id
+    auto [md_d, md_pow] = meta_ids(pow(t(L"D{a_2;i_4}"), rational{-1}));
+    REQUIRE(md_d != md_pow);
   }
 }

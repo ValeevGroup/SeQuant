@@ -64,14 +64,6 @@ optimize(ResultExpr& expr, bool reorder_sum);
                         " overload of optimize() instead")]] ResultExpr&
 optimize(ResultExpr&& expr, bool reorder_sum);
 
-namespace opt {
-
-/// \return whether \p e is a tensor factor of a product the single-term
-///         optimizer contracts: a Tensor or a TensorPower
-bool is_tensor_factor(Expr const& e);
-
-}  // namespace opt
-
 }  // namespace sequant
 
 #endif  // SEQUANT_OPTIMIZE_OPTIMIZE_HPP
