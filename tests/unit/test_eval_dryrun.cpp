@@ -4635,10 +4635,11 @@ TEST_CASE("meter batches a loop through an element-wise power",
       CHECK(flops == Catch::Approx(ref_flops));
       CHECK(ref_flops == Catch::Approx(12 * nelem));
     } else {
-      // Pre-existing forest_descent metering blind spot: the loop the root
-      // opens over a contracted mode is replayed (the result below assembles)
-      // but the meter tallies no builds or flops; the control L·D, with no
-      // power, reports the same zeros.
+      // Pre-existing forest_descent metering blind spot (issue #755): the loop
+      // the root opens over a contracted mode is replayed (the result below
+      // assembles) but the meter tallies no builds or flops; the control L·D,
+      // with no power, reports the same zeros. When #755 is fixed these
+      // CHECKs should flip to the ordered scheduler's numbers above.
       CHECK(report.builds_total == 0);
       CHECK(flops == 0);
       SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
