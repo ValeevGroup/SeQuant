@@ -43,6 +43,10 @@ struct IrrepContextSpec {
   /// is matched by block, all other keys are full-match regular expressions for
   /// the tensor label (an exact label takes precedence over patterns).
   std::vector<std::pair<std::string, IrrepNames>> tensors;
+  /// IRREPs of scalar variables. Keys are full-match regular expressions for
+  /// the variable label (an exact label takes precedence over patterns).
+  /// Variables that are not listed are totally symmetric.
+  std::vector<std::pair<std::string, IrrepNames>> variables;
   /// IRREPs of leaf tensors that are not covered by @c tensors
   IrrepNames default_irreps = {"*"};
   /// Whether tensors that are not covered by @c tensors are an error (instead

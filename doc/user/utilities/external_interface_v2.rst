@@ -529,6 +529,14 @@ The :code:`irreps` option accepts the following properties:
        intermediates) need not be listed.
      - :code:`{}`
      - No
+   * - :code:`variables`
+     - Object mapping scalar variables to their IRREP(s), in the same format as :code:`tensors`, except that keys are always full-match regular
+       expressions for the variable label (an exactly spelled label takes precedence). Entries of :code:`tensors` never apply to variables and
+       vice versa. Variables not listed are totally symmetric and are not subject to :code:`default`.
+       A variable with an IRREP other than the totally symmetric one contributes that IRREP to the products it appears in (symbolic
+       bookkeeping only). Powers of such variables are not supported.
+     - :code:`{}`
+     - No
    * - :code:`default`
      - IRREP(s) of tensors not listed in :code:`tensors`. The special value :code:`error` turns unlisted tensors into an error, which is
        recommended to catch missing specifications.

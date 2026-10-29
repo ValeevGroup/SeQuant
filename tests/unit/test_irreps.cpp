@@ -552,6 +552,34 @@ TEST_CASE("irrep context from specification", "[irreps]") {
   REQUIRE(ctx.irreps_of(f).is_any());
   REQUIRE_THROWS_AS(ctx.irreps_of(g), Exception);
 
+  SECTION("variables") {
+    spec.tensors.emplace_back("w", IrrepContextSpec::IrrepNames{"B"});
+    spec.variables.emplace_back("w", IrrepContextSpec::IrrepNames{"A"});
+    spec.variables.emplace_back("v.", IrrepContextSpec::IrrepNames{"B"});
+    AnyIrrepContext var_ctx = make_irrep_context(spec);
+
+    REQUIRE(var_ctx.irreps_of(Variable(L"w")).to_string() == "{A}");
+    REQUIRE(var_ctx.irreps_of(Variable(L"v1")).to_string() == "{B}");
+    // Unlisted variables are totally symmetric even if tensors must be listed
+    REQUIRE(var_ctx.irreps_of(Variable(L"x")) == var_ctx.totally_symmetric());
+    // Tensor entries don't apply to variables and vice versa
+    REQUIRE(var_ctx.irreps_of(Variable(L"f1")) == var_ctx.totally_symmetric());
+    REQUIRE(
+        var_ctx.irreps_of(Tensor(L"w", bra{L"a_1"}, ket{L"i_1"})).to_string() ==
+        "{B}");
+    REQUIRE_THROWS_AS(
+        var_ctx.irreps_of(Tensor(L"v1", bra{L"a_1"}, ket{L"i_1"})), Exception);
+
+    REQUIRE_NOTHROW(irreps_of(*ex<Power>(L"x", 2), var_ctx));
+    REQUIRE_THROWS_AS(irreps_of(*ex<Power>(L"w", 2), var_ctx), Exception);
+
+    spec.variables.emplace_back("v.*", IrrepContextSpec::IrrepNames{"A"});
+    REQUIRE_THROWS_AS(make_irrep_context(spec).irreps_of(Variable(L"v1")),
+                      Exception);
+    spec.variables = {{"w{a1;i1}", {"A"}}};
+    REQUIRE_THROWS_AS(make_irrep_context(spec), Exception);
+  }
+
   SECTION("default") {
     spec.error_on_unspecified = false;
     spec.default_irreps = {"B"};

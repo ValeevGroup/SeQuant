@@ -45,7 +45,7 @@ IrrepSet<Irrep> to_irrep_set(const IrrepContextSpec::IrrepNames &names,
 }
 
 /// Creates an IRREP context for the given algebra with the leaf tensor IRREPs
-/// as specified in the 'tensors' and default entries of the given
+/// as specified in the 'tensors', 'variables' and default entries of the given
 /// specification
 template <IrrepAlgebra A, typename Parser>
 AnyIrrepContext make_context(A algebra, const IrrepContextSpec &spec,
@@ -57,25 +57,32 @@ AnyIrrepContext make_context(A algebra, const IrrepContextSpec &spec,
     std::shared_ptr<const ExpressionFilter::Rule> rule;
     Set irreps;
   };
+  struct LabelRules {
+    std::vector<TensorRule> patterns;
+    container::map<std::wstring, Set> literals;
+  };
+  auto add_label_rule = [](LabelRules &rules, const std::string &key, Set set) {
+    rules.literals.emplace(toUtf16(key), set);
+
+    std::vector<std::wregex> patterns;
+    try {
+      patterns.emplace_back(toUtf16(key));
+    } catch (const std::regex_error &e) {
+      throw Exception("Invalid label regex '" + key + "': " + e.what());
+    }
+    rules.patterns.push_back(
+        TensorRule{.key = key,
+                   .rule = std::make_shared<LabelRule>(std::move(patterns)),
+                   .irreps = std::move(set)});
+  };
+
   std::vector<TensorRule> blocks;
-  std::vector<TensorRule> labels;
-  container::map<std::wstring, Set> literal_labels;
+  LabelRules labels;
   for (const auto &[key, names] : spec.tensors) {
     Set set = to_irrep_set<typename A::irrep_type>(names, parse);
 
     if (key.find('{') == std::string::npos) {
-      literal_labels.emplace(toUtf16(key), set);
-
-      std::vector<std::wregex> patterns;
-      try {
-        patterns.emplace_back(toUtf16(key));
-      } catch (const std::regex_error &e) {
-        throw Exception("Invalid label regex '" + key + "': " + e.what());
-      }
-      labels.push_back(
-          TensorRule{.key = key,
-                     .rule = std::make_shared<LabelRule>(std::move(patterns)),
-                     .irreps = std::move(set)});
+      add_label_rule(labels, key, std::move(set));
       continue;
     }
 
@@ -94,48 +101,69 @@ AnyIrrepContext make_context(A algebra, const IrrepContextSpec &spec,
         .irreps = std::move(set)});
   }
 
+  LabelRules variable_labels;
+  for (const auto &[key, names] : spec.variables) {
+    if (key.find('{') != std::string::npos) {
+      throw Exception("Expected '" + key + "' to be a variable label");
+    }
+    add_label_rule(variable_labels, key,
+                   to_irrep_set<typename A::irrep_type>(names, parse));
+  }
+
   // An empty optional means that unspecified tensors are an error
   std::optional<Set> fallback;
   if (!spec.error_on_unspecified) {
     fallback = to_irrep_set<typename A::irrep_type>(spec.default_irreps, parse);
   }
 
-  auto resolver = [blocks = std::move(blocks), labels = std::move(labels),
-                   literal_labels = std::move(literal_labels),
-                   fallback = std::move(fallback)](const Tensor &tensor) {
-    // @returns The rule matching the tensor (if any)
-    // @throws Exception if several rules with different IRREPs match
-    auto unique_match =
-        [&tensor](const std::vector<TensorRule> &rules) -> const TensorRule * {
-      const TensorRule *match = nullptr;
-      for (const TensorRule &current : rules) {
-        if (!current.rule->matches(tensor)) {
-          continue;
-        }
-
-        if (match && match->irreps != current.irreps) {
-          throw Exception("Ambiguous IRREPs for tensor " +
-                          toUtf8(tensor.to_latex()) + ": matched by '" +
-                          match->key + "' and '" + current.key + "'");
-        }
-        match = match ? match : &current;
+  // @returns The rule matching the expression (if any)
+  // @throws Exception if several rules with different IRREPs match
+  auto unique_match =
+      [](const Expr &expr,
+         const std::vector<TensorRule> &rules) -> const TensorRule * {
+    const TensorRule *match = nullptr;
+    for (const TensorRule &current : rules) {
+      if (!current.rule->matches(expr)) {
+        continue;
       }
 
-      return match;
-    };
-
-    if (const TensorRule *match = unique_match(blocks)) {
-      return match->irreps;
+      if (match && match->irreps != current.irreps) {
+        throw Exception("Ambiguous IRREPs for " + toUtf8(expr.to_latex()) +
+                        ": matched by '" + match->key + "' and '" +
+                        current.key + "'");
+      }
+      match = match ? match : &current;
     }
 
+    return match;
+  };
+
+  // @returns The IRREPs of the label rule matching the given labeled
+  // expression (if any)
+  auto match_label = [unique_match](const LabelRules &rules,
+                                    const Expr &expr) -> std::optional<Set> {
     // A key spelling out the label literally takes precedence over patterns
-    if (auto it = literal_labels.find(std::wstring(tensor.label()));
-        it != literal_labels.end()) {
+    if (auto it = rules.literals.find(std::wstring(expr.as<Labeled>().label()));
+        it != rules.literals.end()) {
       return it->second;
     }
 
-    if (const TensorRule *match = unique_match(labels)) {
+    if (const TensorRule *match = unique_match(expr, rules.patterns)) {
       return match->irreps;
+    }
+
+    return std::nullopt;
+  };
+
+  auto resolver = [blocks = std::move(blocks), labels = std::move(labels),
+                   unique_match, match_label,
+                   fallback = std::move(fallback)](const Tensor &tensor) {
+    if (const TensorRule *match = unique_match(tensor, blocks)) {
+      return match->irreps;
+    }
+
+    if (std::optional<Set> irreps = match_label(labels, tensor)) {
+      return std::move(irreps).value();
     }
 
     if (!fallback.has_value()) {
@@ -146,7 +174,13 @@ AnyIrrepContext make_context(A algebra, const IrrepContextSpec &spec,
     return fallback.value();
   };
 
-  return IrrepContext<A>(std::move(algebra), std::move(resolver), parse);
+  auto variable_resolver = [variable_labels = std::move(variable_labels),
+                            match_label](const Variable &variable) {
+    return match_label(variable_labels, variable);
+  };
+
+  return IrrepContext<A>(std::move(algebra), std::move(resolver), parse,
+                         std::move(variable_resolver));
 }
 
 /// Creates an IRREP context for a Z2 group (D2h or one of its subgroups, or
