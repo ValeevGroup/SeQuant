@@ -52,6 +52,10 @@ bool is_valid(const Expr &expr, std::string *msg = nullptr);
 
 /// Checks whether the given expression is valid (i.e. uses
 /// consistent indexing etc.)
+///
+/// Unlike a bare Sum, a Sum on the rhs may broadcast: its summands may have
+/// different external indices if each is a subset of the result's indices
+/// and together they are all of them.
 /// @param expr The expression to validate
 /// @param msg If given, the function will set the string to a message
 ///            describing why the provided expression is considered to
