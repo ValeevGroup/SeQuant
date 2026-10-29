@@ -74,3 +74,40 @@ since both need to know the external index pairing and symmetry of the result, n
 The examples print expressions with ``<<`` and ``std::format``, which :file:`SeQuant/core/io/format.hpp` provides and which
 default to SeQuant's text serialization format. Once built, an expression tree can be rendered to LaTeX or round-tripped through
 that format; see :doc:`io` for both and for the format specifiers that select between them.
+
+Factoring out expressions
+-------------------------
+
+Sometimes it is known (or desired for reasons other than operation count) that a given expression :math:`A`, e.g. a known
+intermediate, should be factored out of another expression :math:`B`. :func:`sequant::divide` performs the underlying *polynomial
+division*: it determines quotients :math:`Q_\sigma` and a remainder :math:`R` such that :math:`B = \sum_\sigma A_\sigma Q_\sigma + R`.
+Both expressions are simplified (expanded and canonicalized) first, and terms are matched up to renaming of dummy indices and the
+permutational symmetries of the involved tensors. Since the result of multivariate polynomial division depends on which term of
+:math:`A` is used as the pivot ("leading") term, every term of :math:`A` is tried and the result with the smallest remainder is
+kept.
+
+The :enum:`sequant::DivisionMode` determines how terms that don't (cleanly) contain :math:`A` are handled:
+
+- ``Strict``: :math:`B` must be divisible by :math:`A` without remainder, otherwise an exception is thrown.
+- ``Split``: only those terms that contain :math:`A` in its entirety are factored; the remainder consists of the other terms of
+  :math:`B` (no new terms are introduced).
+- ``Remainder``: standard polynomial division, in which the remainder may contain cancellation terms, e.g. dividing :math:`u w + z`
+  by :math:`u + v` yields :math:`(u + v) w + (z - v w)`.
+
+The :enum:`sequant::IndexMatching` must always be specified explicitly. With ``Exact``, the external indices of :math:`A` are
+taken literally (only dummy indices of :math:`B` are renamed), such that there is at most one group :math:`A Q`. With ``Relabel``,
+:math:`A` acts as a template whose external indices may bind to any compatible index of :math:`B`, which yields one group per
+distinct binding :math:`\sigma`.
+
+:func:`sequant::factor_out` builds on this to produce the factored expression directly, either keeping :math:`A` as a
+parenthesized factor, dropping it (returning only the quotient), or substituting it, e.g. by the result tensor of a
+:class:`sequant::ResultExpr` defining an intermediate:
+
+.. literalinclude:: /examples/user/expressions.cpp
+   :language: cpp
+   :start-after: start-snippet-4
+   :end-before: end-snippet-4
+   :dedent: 2
+
+The same machinery allows the :func:`sequant::replace` overload taking an :enum:`sequant::IndexMatching` to replace composite
+targets (products and sums) in an expression.

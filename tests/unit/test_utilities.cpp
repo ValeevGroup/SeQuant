@@ -18,6 +18,7 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
+#include <SeQuant/core/utility/polynomial_division.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
@@ -925,6 +926,67 @@ TEST_CASE("utilities", "[utilities]") {
 
         REQUIRE_THAT(input2, EquivalentTo(expected_str));
       }
+    }
+    SECTION("composite targets") {
+      for (const auto& [input_str, target_str, replacement_str, matching,
+                        expected_str] :
+           std::vector<std::tuple<std::wstring, std::wstring, std::wstring,
+                                  IndexMatching, std::wstring>>{
+               // Products
+               {L"f{a3;a4} t{a4;i3} g{i3;a3}", L"f{a1;a2} t{a2;i1}",
+                L"I{a1;i1}", IndexMatching::Exact, L"I{a1;i1} g{i1;a1}"},
+               {L"f{a1;a3} t{a3;i1} g{i2;a2} + Var", L"f{a1;a2} t{a2;i1}",
+                L"I{a1;i1}", IndexMatching::Exact, L"I{a1;i1} g{i2;a2} + Var"},
+               {L"f{a2;a3} t{a3;i2} g{i1;a1}", L"f{a1;a2} t{a2;i1}",
+                L"I{a1;i1}", IndexMatching::Exact,
+                L"f{a2;a3} t{a3;i2} g{i1;a1}"},
+               {L"f{a2;a3} t{a3;i2} g{i1;a1}", L"f{a1;a2} t{a2;i1}",
+                L"I{a1;i1}", IndexMatching::Relabel, L"I{a2;i2} g{i1;a1}"},
+               {L"f{a2;a3} t{a3;i2} g{i1;a1} + f{a1;a3} t{a3;i1} g{i2;a2}",
+                L"f{a1;a2} t{a2;i1}", L"I{a1;i1}", IndexMatching::Relabel,
+                L"I{a2;i2} g{i1;a1} + I{a1;i1} g{i2;a2}"},
+               {L"2 Var f{a1;a3} t{a3;i1}", L"Var f{a1;a2} t{a2;i1}",
+                L"I{a1;i1}", IndexMatching::Exact, L"2 I{a1;i1}"},
+               // Atoms
+               {L"t{a1;i1} Var", L"Var", L"Test", IndexMatching::Exact,
+                L"t{a1;i1} Test"},
+               {L"t{a2;i2} g{i2;a2}", L"t{a1;i1}", L"T{a1;i1}",
+                IndexMatching::Relabel, L"T{a2;i2} g{i2;a2}"},
+               // Sums
+               {L"u w + v w + y", L"u + v", L"s", IndexMatching::Exact,
+                L"s w + y"},
+               {L"u w + y", L"u + v", L"s", IndexMatching::Exact, L"u w + y"},
+               {L"(f{a1;a3} t{a3;i1} + h{a1;i1}) g{i2;a2} + u",
+                L"f{a1;a2} t{a2;i1} + h{a1;i1}", L"I{a1;i1}",
+                IndexMatching::Exact, L"I{a1;i1} g{i2;a2} + u"},
+               {L"(f{a2;a3} t{a3;i2} + h{a2;i2}) g{i1;a1}",
+                L"f{a1;a2} t{a2;i1} + h{a1;i1}", L"I{a1;i1}",
+                IndexMatching::Relabel, L"I{a2;i2} g{i1;a1}"},
+               // Only partially contained
+               {L"f{a1;a3} t{a3;i1} g{i2;a2}", L"f{a1;a2} t{a2;i1} + h{a1;i1}",
+                L"I{a1;i1}", IndexMatching::Exact,
+                L"f{a1;a3} t{a3;i1} g{i2;a2}"},
+           }) {
+        CAPTURE(toUtf8(input_str));
+        CAPTURE(toUtf8(target_str));
+        CAPTURE(toUtf8(replacement_str));
+        CAPTURE(toUtf8(expected_str));
+
+        ExprPtr input = deserialize(input_str);
+        const ExprPtr target = deserialize(target_str);
+        const ExprPtr replacement = deserialize(replacement_str);
+
+        replace(input, target, *replacement, matching);
+
+        REQUIRE_THAT(input, EquivalentTo(expected_str));
+      }
+
+      // ResultExpr
+      ResultExpr input =
+          deserialize<ResultExpr>(L"R{a1;i1} = f{a1;a2} t{a2;i1} Var");
+      replace(input, deserialize(L"f{a1;a3} t{a3;i1}"),
+              *deserialize(L"I{a1;i1}"), IndexMatching::Exact);
+      REQUIRE_THAT(input, EquivalentTo(L"R{a1;i1} = I{a1;i1} Var"));
     }
   }
 

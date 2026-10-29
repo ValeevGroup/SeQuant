@@ -5,6 +5,7 @@
 #include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/polynomial_division.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/algorithm/all_of.hpp>
@@ -810,12 +811,11 @@ ExprPtr &replace(ExprPtr &expr, const ExprMatcher &target,
   return expr;
 }
 
-ResultExpr &replace(ResultExpr &expr, const ExprMatcher &target,
-                    const Expr &replacement) {
-  replace(expr.expression(), target, replacement);
+namespace {
 
-  // We have to check whether the external indices have been modified by the
-  // replacement and if they did, adapt the indices in the result
+/// Updates the result of @p expr in case the external indices of its
+/// expression have changed
+void update_result_indices(ResultExpr &expr) {
   IndexGroups<> externals = get_unique_indices(expr.expression());
 
   if (!std::ranges::equal(externals.bra, expr.bra()) ||
@@ -833,6 +833,46 @@ ResultExpr &replace(ResultExpr &expr, const ExprMatcher &target,
                                     : std::nullopt,
                    std::move(expr.expression()));
   }
+}
+
+}  // namespace
+
+ResultExpr &replace(ResultExpr &expr, const ExprMatcher &target,
+                    const Expr &replacement) {
+  replace(expr.expression(), target, replacement);
+
+  // We have to check whether the external indices have been modified by the
+  // replacement and if they did, adapt the indices in the result
+  update_result_indices(expr);
+
+  return expr;
+}
+
+ExprPtr &replace(ExprPtr &expr, const ExprPtr &target, const Expr &replacement,
+                 IndexMatching matching) {
+  if (target->is_atom()) {
+    return replace(
+        expr,
+        ExprMatcher(
+            *target,
+            ExprMatcherOptions{.tensor_cmp = matching == IndexMatching::Exact
+                                                 ? TensorComparison::Identity
+                                                 : TensorComparison::Block}),
+        replacement);
+  }
+
+  // Composite targets are factored out of the (simplified) expression and
+  // replaced by the replacement
+  expr = factor_out(expr, target, replacement, DivisionMode::Split, matching);
+
+  return expr;
+}
+
+ResultExpr &replace(ResultExpr &expr, const ExprPtr &target,
+                    const Expr &replacement, IndexMatching matching) {
+  replace(expr.expression(), target, replacement, matching);
+
+  update_result_indices(expr);
 
   return expr;
 }

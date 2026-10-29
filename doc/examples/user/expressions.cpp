@@ -2,6 +2,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/polynomial_division.hpp>
 
 #include <format>
 
@@ -50,6 +51,38 @@ int main() {
   SEQUANT_ASSERT(result.produces_tensor());
   std::wcout << std::format(L"{}", result.expression()) << std::endl;
   // end-snippet-3
+
+  // start-snippet-4
+  // the intermediate I^{a_1}_{i_1} = f^{a_1}_{a_2} t^{a_2}_{i_1} +
+  // g^{a_1}_{i_1}
+  auto intermediate =
+      ResultExpr(Tensor(L"I", bra{L"a_1"}, ket{L"i_1"}),
+                 ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_2"}) *
+                         ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_1"}) +
+                     ex<Tensor>(L"g", bra{L"a_1"}, ket{L"i_1"}));
+
+  // an expression containing the intermediate in expanded form (using
+  // different dummy indices) plus an unrelated term
+  auto h = ex<Tensor>(L"h", bra{L"i_3"}, ket{L"a_3"});
+  auto expr = ex<Tensor>(L"f", bra{L"a_3"}, ket{L"a_4"}) *
+                  ex<Tensor>(L"t", bra{L"a_4"}, ket{L"i_3"}) * h +
+              ex<Tensor>(L"g", bra{L"a_3"}, ket{L"i_3"}) * h +
+              ex<Variable>(L"E");
+
+  // polynomial division: expr = divisor * quotient + remainder
+  DivisionResult division = divide(expr, intermediate.expression(),
+                                   DivisionMode::Split, IndexMatching::Exact);
+  SEQUANT_ASSERT(division.groups.size() == 1);
+  SEQUANT_ASSERT(!division.exact());  // the remainder is E
+  // (f t + g) h + E
+  std::wcout << std::format(L"{}", division.to_expr()) << std::endl;
+
+  // factor out the intermediate and replace it by its result tensor
+  // I^{a_1}_{i_1} h^{i_1}_{a_1} + E
+  auto factored =
+      factor_out(expr, intermediate, DivisionMode::Split, IndexMatching::Exact);
+  std::wcout << std::format(L"{}", factored) << std::endl;
+  // end-snippet-4
 
   return 0;
 }

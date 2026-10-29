@@ -7,6 +7,7 @@
 #include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/polynomial_division.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
 #include <range/v3/algorithm/equal.hpp>
@@ -203,6 +204,40 @@ replace(ResultExpr &expr, const ExprPtr &target, const ExprPtr &replacement,
 
   return replace(expr, ExprMatcher(*target, std::move(options)), *replacement);
 }
+
+/// Replaces a given (possibly composite) target expression by a given
+/// replacement
+///
+/// Atomic targets are handled as in replace(ExprPtr&, const ExprMatcher&, const
+/// Expr&) using TensorComparison::Identity for IndexMatching::Exact and
+/// TensorComparison::Block for IndexMatching::Relabel.
+///
+/// Composite targets (e.g. products or sums) are factored out of the
+/// (simplified, i.e. expanded and canonicalized) expression via factor_out()
+/// using DivisionMode::Split. That is, only terms that contain the target in
+/// its entirety are affected and no other terms are introduced. Matching is
+/// performed up to renaming of dummy indices and the permutational symmetries
+/// of the involved tensors. With IndexMatching::Relabel, the target's external
+/// indices may additionally bind to arbitrary (compatible) indices of the
+/// expression. Indices of the replacement that coincide with external indices
+/// of the target are adapted for every match.
+///
+/// @param expr The expression to perform the replacements in
+/// @param target The target expression to be replaced
+/// @param replacement The expression to replace the target with
+/// @param matching How the target's external indices are matched
+/// @returns A reference to expr, which has been modified in-place (useful for
+/// chaining)
+///
+/// @note For composite targets, the resulting expression is based on the
+/// simplified form of expr
+ExprPtr &replace(ExprPtr &expr, const ExprPtr &target, const Expr &replacement,
+                 IndexMatching matching);
+
+/// Like replace(ExprPtr&, const ExprPtr&, const Expr&, IndexMatching) but for a
+/// ResultExpr whose result indices are adapted as needed
+ResultExpr &replace(ResultExpr &expr, const ExprPtr &target,
+                    const Expr &replacement, IndexMatching matching);
 
 }  // namespace sequant
 
