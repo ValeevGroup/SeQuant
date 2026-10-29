@@ -511,12 +511,33 @@ template <typename ArrayT>
 /// \note The tiles are mapped into a fresh array by TA::foreach, so \p arr,
 ///       which may be shared (e.g. a cached leaf), is not modified. A sparse
 ///       array's zero tiles stay zero, which is only right for a positive
-///       exponent; other exponents require every tile to be present.
+///       exponent; other exponents require every tile to be present. The same
+///       holds for the empty inner tiles of a nested array.
 template <typename ArrayT>
 [[nodiscard]] ArrayT ta_elementwise_pow(ArrayT const& arr,
                                         rational const& exponent) {
   using tile_type = typename ArrayT::value_type;
   using numeric_type = typename ArrayT::numeric_type;
+  if constexpr (TA::detail::is_tensor_of_tensor_v<tile_type>) {
+    // checked here rather than in the tile tasks: an exception thrown inside
+    // a MADNESS task aborts the process
+    if (!(exponent > 0)) {
+      int absent = 0;
+      for (auto it = arr.begin(); it != arr.end() && absent == 0; ++it) {
+        tile_type const tile = it->get();
+        for (std::size_t k = 0; k < tile.size(); ++k)
+          if (tile.data()[k].empty()) {
+            absent = 1;
+            break;
+          }
+      }
+      arr.world().gop.max(absent);
+      SEQUANT_ENFORCE(absent == 0,
+                      "element-wise power with a non-positive exponent of a "
+                      "nested array with an absent inner tile: its value "
+                      "(inf or 1) is not representable");
+    }
+  }
   ElementwisePow const op{exponent};
   auto const elem = [op](numeric_type const& x) { return op(x); };
   auto const pow_tile = [elem](tile_type const& in) -> tile_type {

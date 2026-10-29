@@ -709,6 +709,77 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
   }
 }
 
+// Result::pow on a ToT: an absent (empty) inner tile is exactly zero, which a
+// positive exponent keeps; a non-positive exponent would make it inf or 1,
+// which an empty tile cannot hold, so it is refused.
+TEST_CASE("tot_elementwise_pow", "[eval][tot]") {
+  using sequant::rational;
+  using sequant::detail::ta_elementwise_pow;
+  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+
+  auto& world = TA::get_default_world();
+  TA::Range const inner_r(std::vector<std::size_t>{2, 2});
+
+  // a single outer tile of 3 inner tiles; inner element j of inner tile i is
+  // 1 + i + j/4 (never zero). With `empty_middle` inner tile 1 is empty.
+  auto build = [&world, inner_r](bool empty_middle) -> ToTArray {
+    auto tile_fn = [inner_r, empty_middle](TA::Range const& orng) {
+      TA::Tensor<TA::Tensor<double>> t{orng};
+      for (std::size_t i = 0; i < t.size(); ++i) {
+        if (empty_middle && i == 1) continue;
+        t.data()[i] = TA::Tensor<double>{inner_r};
+        for (std::size_t j = 0; j < t.data()[i].size(); ++j)
+          t.data()[i].data()[j] = 1.0 + static_cast<double>(i) + j / 4.0;
+      }
+      return t;
+    };
+    ToTArray arr{world, TA::TiledRange{TA::TiledRange1{0, 3}}};
+    for (auto it = arr.begin(); it != arr.end(); ++it)
+      if (arr.is_local(it.index()))
+        *it = world.taskq.add(tile_fn, it.make_range());
+    world.gop.fence();
+    return arr;
+  };
+
+  // checks that every inner element of `got` is f(element of `in`), and that
+  // the empty inner tiles of `in` are exactly those of `got`
+  auto check = [](ToTArray const& in, ToTArray const& got, auto const& f) {
+    for (auto it = in.begin(); it != in.end(); ++it) {
+      auto const t_in = it->get();
+      auto const t_got = got.find_local(it.index()).get();
+      REQUIRE(t_got.size() == t_in.size());
+      for (std::size_t i = 0; i < t_in.size(); ++i) {
+        REQUIRE(t_got.data()[i].empty() == t_in.data()[i].empty());
+        for (std::size_t j = 0; j < t_in.data()[i].size(); ++j)
+          CHECK(t_got.data()[i].data()[j] ==
+                Catch::Approx(f(t_in.data()[i].data()[j])).margin(1e-12));
+      }
+    }
+  };
+
+  SECTION("positive exponent keeps an absent inner tile absent") {
+    auto const arr = build(/*empty_middle=*/true);
+    check(arr, ta_elementwise_pow(arr, rational{2}),
+          [](double x) { return x * x; });
+  }
+
+  SECTION("negative exponent without absent inner tiles") {
+    auto const arr = build(/*empty_middle=*/false);
+    check(arr, ta_elementwise_pow(arr, rational{-1}),
+          [](double x) { return 1 / x; });
+  }
+
+  SECTION("non-positive exponent of an absent inner tile is refused") {
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      auto const arr = build(/*empty_middle=*/true);
+      REQUIRE_THROWS_AS(ta_elementwise_pow(arr, rational{-1}),
+                        sequant::Exception);
+      REQUIRE_THROWS_AS(ta_elementwise_pow(arr, rational{0}),
+                        sequant::Exception);
+    }
+  }
+}
+
 TEST_CASE("measured_size_in_bytes ignores the trace gate on size_in_bytes",
           "[eval]") {
   // size_in_bytes() is collective for a DistArray and so switched off
@@ -1857,6 +1928,19 @@ TEST_CASE("eval_tensor_power_ta", "[eval]") {
         elements(evaluate(eval_node(pow(D, rational{2})), target, yield_)
                      ->get<TSpArrayD>()),
         expected);
+
+    // a zero tile of a sparse array would become inf under a negative
+    // exponent, which a zero tile cannot hold
+    if (assert_behavior() != AssertBehavior::Abort) {
+      TA::TiledRange const tr{TA::TiledRange1{0, 2, 4}};
+      TA::Tensor<float> norms(tr.tiles_range(), 1.0f);
+      norms.at_ordinal(1) = 0.0f;
+      TSpArrayD arr(world, tr, TA::SparseShape<float>(norms, tr));
+      arr.fill(2.0);
+      REQUIRE(arr.shape().sparsity() > 0);
+      REQUIRE_THROWS_AS(detail::ta_elementwise_pow(arr, rational{-1}),
+                        Exception);
+    }
   }
 
   SECTION("complex") {
