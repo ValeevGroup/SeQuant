@@ -246,6 +246,14 @@ TEST_CASE("pop_symmetrizer", "[utilities]") {
   REQUIRE(has_tensor(expr, L"t"));
 
   REQUIRE_FALSE(pop_symmetrizer(expr).has_value());
+
+  // a TensorPower holds no symmetrizer
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+  expr = ex<Tensor>(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                    ket{L"a_1", L"a_2"}, Symmetry::Antisymm) *
+         t * pow(D, rational{-1});
+  REQUIRE(pop_symmetrizer(expr).has_value());
+  REQUIRE(*expr == *(t * pow(D, rational{-1})));
 }
 
 TEST_CASE("utilities", "[utilities]") {

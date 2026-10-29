@@ -723,7 +723,8 @@ std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
     return tensor;
   }
 
-  if (expression->is_scalar()) {
+  // the base of a TensorPower is not a factor of the expression
+  if (expression->is_scalar() || expression->is<TensorPower>()) {
     return tensor;
   }
 
