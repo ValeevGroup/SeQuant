@@ -159,6 +159,7 @@ enum struct EvalMode {
   SumInplace,
   Symmetrize,
   Antisymmetrize,
+  ElementwisePower,
   Unknown
 };
 
@@ -170,26 +171,28 @@ enum struct EvalMode {
            : node->is_tensor()   ? EvalMode::Tensor
                                  : EvalMode::Unknown;
   } else {
-    return node->is_product()   ? EvalMode::Product
-           : node->is_sum()     ? EvalMode::Sum
-           : node->is_adjoint() ? EvalMode::Permute
-                                : EvalMode::Unknown;
+    return node->is_product()             ? EvalMode::Product
+           : node->is_sum()               ? EvalMode::Sum
+           : node->is_adjoint()           ? EvalMode::Permute
+           : node->is_elementwise_power() ? EvalMode::ElementwisePower
+                                          : EvalMode::Unknown;
   }
 }
 
 [[nodiscard]] constexpr auto to_string(EvalMode mode) noexcept {
-  return (mode == EvalMode::Constant)         ? "Constant"
-         : (mode == EvalMode::Variable)       ? "Variable"
-         : (mode == EvalMode::Power)          ? "Power"
-         : (mode == EvalMode::Tensor)         ? "Tensor"
-         : (mode == EvalMode::Permute)        ? "Permute"
-         : (mode == EvalMode::Product)        ? "Product"
-         : (mode == EvalMode::MultByPhase)    ? "MultByPhase"
-         : (mode == EvalMode::Sum)            ? "Sum"
-         : (mode == EvalMode::SumInplace)     ? "SumInplace"
-         : (mode == EvalMode::Symmetrize)     ? "Symmetrize"
-         : (mode == EvalMode::Antisymmetrize) ? "Antisymmetrize"
-                                              : "??";
+  return (mode == EvalMode::Constant)           ? "Constant"
+         : (mode == EvalMode::Variable)         ? "Variable"
+         : (mode == EvalMode::Power)            ? "Power"
+         : (mode == EvalMode::Tensor)           ? "Tensor"
+         : (mode == EvalMode::Permute)          ? "Permute"
+         : (mode == EvalMode::Product)          ? "Product"
+         : (mode == EvalMode::MultByPhase)      ? "MultByPhase"
+         : (mode == EvalMode::Sum)              ? "Sum"
+         : (mode == EvalMode::SumInplace)       ? "SumInplace"
+         : (mode == EvalMode::Symmetrize)       ? "Symmetrize"
+         : (mode == EvalMode::Antisymmetrize)   ? "Antisymmetrize"
+         : (mode == EvalMode::ElementwisePower) ? "ElementwisePower"
+                                                : "??";
 }
 
 enum struct CacheMode { Store, Access, Release };

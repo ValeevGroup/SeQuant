@@ -21,10 +21,10 @@ template <meta::eval_node Node>
 ExprPtr linearize_eval_node(Node const& node) {
   if (node.leaf()) return to_expr(node);
 
-  // Adjoint is unary: round-trip back to the marker-bearing tensor stored in
-  // the node's own ExprPtr — that's the symbolic form a Sum/Product parent
-  // would see — and ignore the Constant(1) sentinel right child.
-  if (node->op_type() == EvalOp::Adjoint) return to_expr(node);
+  // A unary node (Adjoint, Power) round-trips through to_expr, which rebuilds
+  // its symbolic form (the marker-bearing tensor, the TensorPower) and ignores
+  // the sentinel right child.
+  if (is_unary(*node->op_type())) return to_expr(node);
 
   ExprPtr lres = linearize_eval_node(node.left());
   ExprPtr rres = linearize_eval_node(node.right());
@@ -159,11 +159,11 @@ struct Memory {
                     : AsyCost::zero();
     };
 
-    // Adjoint is unary — the right child is the Constant(1) sentinel (zero
-    // cost). But the backend materializes the permuted/conjugated result into
-    // a fresh array, so the bare-leaf operand (left) and the adjoint result
-    // (node) are both live at peak — two tensors' worth, not one.
-    if (n->op_type() == EvalOp::Adjoint) {
+    // A unary node (Adjoint, Power) has a Constant sentinel right child (zero
+    // cost). But the backend materializes the permuted/conjugated or
+    // element-wise power result into a fresh array, so the operand (left) and
+    // the result (node) are both live at peak — two tensors' worth, not one.
+    if (!n.leaf() && is_unary(*n->op_type())) {
       add_cost(n.left()->expr());
       add_cost(n->expr());
       return result;
@@ -186,9 +186,9 @@ struct Memory {
 struct FlopsWithSymm {
   [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
     auto cost = Flops{}(n);
-    // Adjoint is unary (right is Constant(1) sentinel) and does no
-    // symmetry-driven reduction — return Flops's permute-style cost as-is.
-    if (n.leaf() || n->op_type() == EvalOp::Adjoint ||
+    // A unary node (Adjoint, Power; right is a Constant sentinel) does no
+    // symmetry-driven reduction — return Flops's element-wise cost as-is.
+    if (n.leaf() || is_unary(*n->op_type()) ||
         !(n->is_tensor()            //
           && n.left()->is_tensor()  //
           && n.right()->is_tensor()))
