@@ -4572,6 +4572,72 @@ TEST_CASE("meter accounts an element-wise power", "[meter]") {
   }
 }
 
+// The all-ones leaves a broadcast Sum lowers to (see lower_broadcast_sum())
+// are ordinary leaves: the dry-run leaf evaluator sizes them from their index
+// spaces like any other tensor leaf, and the broadcast result is sized by the
+// union of the head's indices.
+TEST_CASE("dryrun evaluates a broadcast sum", "[dryrun][broadcast]") {
+  using namespace sequant;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+
+  auto const cm = std::make_shared<CostModel const>(backend_test_regime());
+  DryRunLeafEvaluator const yield{cm};
+
+  // D{i_1;a_1} = ε{;a_1} − ε{i_1;}
+  ResultExpr const res(Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}),
+                       ex<Tensor>(L"ε", bra{}, ket{L"a_1"}) -
+                           ex<Tensor>(L"ε", bra{L"i_1"}, ket{}));
+  auto const node = binarize<EvalExprDryRun>(res);
+  REQUIRE(node->op_type() == EvalOp::Sum);
+  container::svector<Index> const head_idx{Index{L"i_1"}, Index{L"a_1"}};
+  auto const head_bytes = cm->memsize(head_idx);
+
+  SECTION("the ones leaf is sized from its index space") {
+    std::size_t n_ones = 0;
+    node.visit_leaf([&](EvalNodeDryRun const& leaf) {
+      if (!leaf->is_tensor() || !is_ones(leaf->as_tensor())) return;
+      ++n_ones;
+      container::svector<Index> idx;
+      for (Index const& ix : leaf->as_tensor().const_braket_indices())
+        idx.push_back(ix);
+      REQUIRE(idx.size() == 1);
+      auto const ones = yield(leaf);
+      REQUIRE(ones);
+      CHECK(ones->size_in_bytes() == cm->memsize(idx));
+    });
+    CHECK(n_ones == 2);
+    // a lone occupied ones leaf, as make_ones() spells it
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto const i_ones =
+        binarize<EvalExprDryRun>(make_ones(Index{L"i_1"}, SlotType::Bra));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(i_ones.leaf());
+    CHECK(yield(i_ones)->size_in_bytes() ==
+          cm->memsize(container::svector<Index>{Index{L"i_1"}}));
+  }
+
+  SECTION("tree evaluator") {
+    auto const got = evaluate(node, yield);
+    REQUIRE(got);
+    CHECK(got->size_in_bytes() == head_bytes);
+  }
+
+  SECTION("ordered executor") {
+    std::vector<EvalNodeDryRun> const forest{node};
+    BatchPolicy policy;
+    policy.scheduler = BatchScheduler::ordered;
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+    cache.set_array_ops(&aops);
+    auto const got = evaluate(forest, policy, std::wstring{}, yield, cache);
+    REQUIRE(got);
+    CHECK(got->size_in_bytes() == head_bytes);
+  }
+}
+
 // E{i_2;i_3} = L · (M ⊙ pow(D,-1)), batched over the occupied i_1 the root
 // contracts:
 // the loop opened at the root slices the Hadamard product and the power
