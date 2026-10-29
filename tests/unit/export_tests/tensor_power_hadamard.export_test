@@ -23,6 +23,20 @@ Unload I[i_1, a_1]
 Persist R[i_1, a_1]
 
 =================================================
+Julia (TensorOperations)
+=================================================
+R_ov = zeros(Float64, nocc, nv)
+I_vo = zeros(Float64, nv, nocc)
+D_vo = deserialize("D_vo.jlbin")
+I_vo .+= D_vo .^ (-1)
+D_vo = nothing
+f_ov = deserialize("f_ov.jlbin")
+@tensor R_ov[ i_1, a_1 ] += 2 * I_vo[ a_1, i_1 ] * f_ov[ i_1, a_1 ]
+f_ov = nothing
+I_vo = nothing
+return R_ov
+
+=================================================
 Python (einsum)
 =================================================
 import numpy as np

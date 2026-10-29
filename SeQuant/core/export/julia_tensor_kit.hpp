@@ -45,6 +45,15 @@ class JuliaTensorKitGenerator : public JuliaTensorOperationsGenerator<Context> {
                        domain(tensor, ctx));
   }
 
+  void compute(const Expr &expression, const Tensor &result,
+               const Context &ctx) override {
+    if (Base::find_tensor_power(expression)) {
+      throw Exception(this->get_format_name() +
+                      " cannot express an element-wise tensor power");
+    }
+    Base::compute(expression, result, ctx);
+  }
+
  private:
   std::string domain(const Tensor &tensor, const Context &ctx) const {
     std::string domain;

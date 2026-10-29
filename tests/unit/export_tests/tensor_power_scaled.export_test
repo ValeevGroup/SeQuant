@@ -16,6 +16,15 @@ Unload D[a_1, i_1]
 Persist R[i_1, a_1]
 
 =================================================
+Julia (TensorOperations)
+=================================================
+R_ov = zeros(Float64, nocc, nv)
+D_vo = deserialize("D_vo.jlbin")
+R_ov .+= 2 * permutedims(D_vo, (2, 1)) .^ (-1)
+D_vo = nothing
+return R_ov
+
+=================================================
 Python (einsum)
 =================================================
 import numpy as np

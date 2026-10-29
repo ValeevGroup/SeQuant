@@ -18,6 +18,15 @@ Unload D[a_1, a_2, i_1, i_2]
 Persist I[i_1, i_2, a_1, a_2]
 
 =================================================
+Julia (TensorOperations)
+=================================================
+I_oovv = zeros(Float64, nocc, nocc, nv, nv)
+D_vvoo = deserialize("D_vvoo.jlbin")
+I_oovv .+= permutedims(D_vvoo, (3, 4, 1, 2)) .^ (-1)
+D_vvoo = nothing
+return I_oovv
+
+=================================================
 Python (einsum)
 =================================================
 import numpy as np

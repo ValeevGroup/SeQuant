@@ -78,6 +78,10 @@ class JuliaITensorGenerator : public JuliaTensorOperationsGenerator<Context> {
 
   void compute(const Expr &expression, const Tensor &result,
                const Context &ctx) override {
+    if (Base::find_tensor_power(expression)) {
+      throw Exception(this->get_format_name() +
+                      " cannot express an element-wise tensor power");
+    }
     Base::m_generated += Base::tensor_name(result, ctx) +
                          " += " + Base::to_julia_expr(expression, ctx) + "\n";
   }
