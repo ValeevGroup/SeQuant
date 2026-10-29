@@ -96,8 +96,9 @@ The :enum:`sequant::DivisionMode` determines how terms that don't (cleanly) cont
 
 The :enum:`sequant::IndexMatching` must always be specified explicitly. With ``Exact``, the external indices of :math:`A` are
 taken literally (only dummy indices of :math:`B` are renamed), such that there is at most one group :math:`A Q`. With ``Relabel``,
-:math:`A` acts as a template whose external indices may bind to any compatible index of :math:`B`, which yields one group per
-distinct binding :math:`\sigma`.
+:math:`A` acts as a template whose external indices may bind to any index of :math:`B` belonging to the same index space, which
+yields one group per distinct binding :math:`\sigma`. Note that indices are never bound to indices of a different space, not even
+to those of a subspace (e.g. a general index of :math:`A` does not match an occupied index of :math:`B`).
 
 :func:`sequant::factor_out` builds on this to produce the factored expression directly, either keeping :math:`A` as a
 parenthesized factor, dropping it (returning only the quotient), or substituting it, e.g. by the result tensor of a

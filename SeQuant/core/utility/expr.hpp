@@ -210,7 +210,9 @@ replace(ResultExpr &expr, const ExprPtr &target, const ExprPtr &replacement,
 ///
 /// Atomic targets are handled as in replace(ExprPtr&, const ExprMatcher&, const
 /// Expr&) using TensorComparison::Identity for IndexMatching::Exact and
-/// TensorComparison::Block for IndexMatching::Relabel.
+/// TensorComparison::Block for IndexMatching::Relabel. That is, they are
+/// matched literally against the atoms of expr without prior simplification
+/// (e.g. the target x^(2) doesn't match x x).
 ///
 /// Composite targets (e.g. products or sums) are factored out of the
 /// (simplified, i.e. expanded and canonicalized) expression via factor_out()
@@ -218,9 +220,9 @@ replace(ResultExpr &expr, const ExprPtr &target, const ExprPtr &replacement,
 /// its entirety are affected and no other terms are introduced. Matching is
 /// performed up to renaming of dummy indices and the permutational symmetries
 /// of the involved tensors. With IndexMatching::Relabel, the target's external
-/// indices may additionally bind to arbitrary (compatible) indices of the
-/// expression. Indices of the replacement that coincide with external indices
-/// of the target are adapted for every match.
+/// indices may additionally bind to arbitrary indices of the expression that
+/// belong to the same index space. Indices of the replacement that coincide
+/// with external indices of the target are adapted for every match.
 ///
 /// @param expr The expression to perform the replacements in
 /// @param target The target expression to be replaced

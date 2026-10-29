@@ -34,9 +34,11 @@ enum class IndexMatching {
   /// form B = A * Q + R.
   Exact,
   /// The divisor acts as a template whose external indices may bind to any
-  /// (compatible) index of the dividend. This yields one group per distinct
-  /// binding σ of the divisor's external indices to the dividend's external
-  /// indices, i.e. B = Σ_σ A_σ * Q_σ + R.
+  /// index of the dividend that belongs to the same index space. This yields
+  /// one group per distinct binding σ of the divisor's external indices to the
+  /// dividend's external indices, i.e. B = Σ_σ A_σ * Q_σ + R.
+  /// @note An index only ever binds to an index of the very same space (not to
+  /// one of a subspace).
   Relabel,
 };
 

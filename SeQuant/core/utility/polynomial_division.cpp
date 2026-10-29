@@ -13,7 +13,6 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <deque>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -116,6 +115,20 @@ Indices open_indices(const Expr &term) {
   return result;
 }
 
+/// @returns The indices occurring exactly once in any of the terms of @p expr
+Indices external_indices(const ExprPtr &expr) {
+  if (!expr.is<Sum>()) {
+    return open_indices(*expr);
+  }
+  Indices result;
+  for (const ExprPtr &summand : expr.as<Sum>().summands()) {
+    for (const Index &idx : open_indices(*summand)) {
+      result.insert(idx);
+    }
+  }
+  return result;
+}
+
 /// @returns All indices (including proto indices) used in @p expr
 Indices used_indices(const Expr &expr) { return get_used_indices(expr); }
 
@@ -134,6 +147,10 @@ ExprPtr to_product(const ExprPtr &expr) {
 /// @returns @p term
 ExprPtr &canonicalize_term(ExprPtr &term) {
   SEQUANT_ASSERT(term.is<Product>());
+  // Merge repeated scalar factors (e.g. x x -> x^2) such that every monomial
+  // has a unique representation
+  rapid_simplify(term);
+  term = to_product(term);
   ExprPtr byproduct = term->canonicalize(term_canonicalization_options());
   if (byproduct) {
     SEQUANT_ASSERT(byproduct.is<Constant>());
@@ -305,6 +322,16 @@ ExprPtr tidy_dummies(const ExprPtr &expr, const Indices &avoid) {
   return tidy_term(expr);
 }
 
+/// @returns The total degree of the given monomial, i.e. the number of its
+/// non-scalar factors plus the sum of the exponents of its scalar factors
+rational total_degree(const Product &term) {
+  rational result = 0;
+  for (const ExprPtr &factor : term.factors()) {
+    result += factor.is<Power>() ? factor.as<Power>().exponent() : 1;
+  }
+  return result;
+}
+
 /// A single term of the divisor
 struct DivisorTerm {
   /// The term as a Product
@@ -313,7 +340,7 @@ struct DivisorTerm {
   container::svector<ExprPtr> scalars;
   container::svector<ExprPtr> tensors;
 
-  std::size_t degree() const { return scalars.size() + tensors.size(); }
+  rational degree() const { return total_degree(expr.as<Product>()); }
 };
 
 /// The divisor, prepared for division
@@ -682,6 +709,7 @@ class TermTable {
   struct Entry {
     ExprPtr term;
     State state;
+    rational degree;
   };
 
   /// Adds @p term (which must be canonical) to the table, combining it with
@@ -705,8 +733,10 @@ class TermTable {
     }
 
     by_hash_.emplace(term->hash_value(), entries_.size());
-    entries_.push_back(Entry{.term = std::move(term), .state = State::Pending});
-    queue_.push_back(entries_.size() - 1);
+    rational term_degree = total_degree(term.as<Product>());
+    entries_.push_back(Entry{.term = std::move(term),
+                             .state = State::Pending,
+                             .degree = std::move(term_degree)});
   }
 
   /// @returns The position of a live entry proportional to @p term
@@ -721,16 +751,22 @@ class TermTable {
     return std::nullopt;
   }
 
-  /// @returns The next pending entry (if any)
-  std::optional<std::size_t> next() {
-    while (!queue_.empty()) {
-      std::size_t idx = queue_.front();
-      queue_.pop_front();
-      if (entries_[idx].state == State::Pending) {
-        return idx;
+  /// @returns The pending entry of highest degree (if any). As in standard
+  /// polynomial division, processing terms in order of decreasing degree
+  /// ensures that cancellation terms (which tend to be of lower degree) are
+  /// produced before they are processed themselves.
+  std::optional<std::size_t> next() const {
+    std::optional<std::size_t> result;
+    for (std::size_t idx = 0; idx < entries_.size(); ++idx) {
+      if (entries_[idx].state != State::Pending) {
+        continue;
+      }
+      if (!result.has_value() ||
+          entries_[idx].degree > entries_[*result].degree) {
+        result = idx;
       }
     }
-    return std::nullopt;
+    return result;
   }
 
   Entry &operator[](std::size_t idx) { return entries_[idx]; }
@@ -749,7 +785,6 @@ class TermTable {
  private:
   std::vector<Entry> entries_;
   std::unordered_multimap<std::size_t, std::size_t> by_hash_;
-  std::deque<std::size_t> queue_;
 };
 
 /// @returns The number of terms in @p expr
@@ -763,9 +798,88 @@ std::size_t num_terms(const ExprPtr &expr) {
   return 1;
 }
 
-/// @returns The divisor term relabeled according to @p binding
-ExprPtr bound_divisor_term(const DivisorTerm &term, const IndexMap &binding) {
-  return relabel(*term.expr, binding);
+/// @returns The divisor term relabeled according to @p binding, with its
+/// dummy indices renamed such that they don't coincide with any of @p avoid
+ExprPtr bound_divisor_term(const DivisorTerm &term, const IndexMap &binding,
+                           const Indices &avoid = {}) {
+  return tidy_dummies(relabel(*term.expr, binding), avoid);
+}
+
+/// Thrown if the division doesn't terminate for a given pivot
+class NonTermination : public Exception {
+ public:
+  using Exception::Exception;
+};
+
+/// The expansion of divisor * quotient for a candidate quotient
+struct QuotientExpansion {
+  /// The quotient
+  ExprPtr quotient;
+  /// All terms of divisor * quotient except the one corresponding to the
+  /// divided term
+  container::svector<ExprPtr> companions;
+};
+
+/// Determines the coefficient of the candidate quotient of @p match such that
+/// divisor * quotient reproduces @p term exactly (taking into account that
+/// several divisor terms may map onto the same monomial). This is done by
+/// expanding divisor * quotient explicitly.
+/// @returns The quotient and the remaining terms of divisor * quotient or
+/// std::nullopt if the candidate quotient doesn't reproduce @p term
+std::optional<QuotientExpansion> expand_quotient(const ExprPtr &term,
+                                                 const TermMatch &match,
+                                                 const Divisor &divisor) {
+  auto unit_quotient = std::make_shared<Product>(match.quotient.as<Product>());
+  SEQUANT_ASSERT(!unit_quotient->is_zero());
+  unit_quotient->scale(1 / unit_quotient->scalar());
+  const ExprPtr unit_quotient_ptr = unit_quotient;
+  const Indices quotient_indices = used_indices(*unit_quotient);
+
+  container::svector<ExprPtr> expansion;
+  for (const DivisorTerm &divisor_term : divisor.terms) {
+    ExprPtr product = ex<Product>(ExprPtrList{
+        bound_divisor_term(divisor_term, match.binding, quotient_indices),
+        unit_quotient_ptr});
+    canonicalize_term(product);
+    if (product->is_zero()) {
+      continue;
+    }
+
+    auto it = std::ranges::find_if(expansion, [&](const ExprPtr &existing) {
+      return proportional_to{}(existing, product);
+    });
+    if (it == expansion.end()) {
+      expansion.push_back(std::move(product));
+    } else {
+      auto combined = std::make_shared<Product>(it->as<Product>());
+      combined->add_identical(product);
+      *it = combined;
+    }
+  }
+
+  auto self = std::ranges::find_if(expansion, [&](const ExprPtr &existing) {
+    return proportional_to{}(existing, term);
+  });
+  if (self == expansion.end() || (*self)->is_zero()) {
+    return std::nullopt;
+  }
+
+  const scalar_type factor =
+      term.as<Product>().scalar() / self->as<Product>().scalar();
+
+  QuotientExpansion result;
+  unit_quotient->scale(factor);
+  result.quotient = unit_quotient;
+  for (auto it = expansion.begin(); it != expansion.end(); ++it) {
+    if (it == self || (*it)->is_zero()) {
+      continue;
+    }
+    auto companion = std::make_shared<Product>(it->as<Product>());
+    companion->scale(factor);
+    result.companions.push_back(companion);
+  }
+
+  return result;
 }
 
 /// Performs the division using the divisor term at position @p pivot as the
@@ -788,7 +902,7 @@ DivisionResult divide_with_pivot(const container::svector<ExprPtr> &terms,
 
   while (auto idx = table.next()) {
     if (++iterations > max_iterations) {
-      throw Exception(
+      throw NonTermination(
           "Polynomial division did not terminate within the expected number "
           "of iterations");
     }
@@ -798,33 +912,26 @@ DivisionResult divide_with_pivot(const container::svector<ExprPtr> &terms,
     container::svector<TermMatch> matches =
         divide_term(term, pivot_term, divisor, ctx);
 
-    std::optional<TermMatch> chosen;
-    container::svector<ExprPtr> companions;
-    for (TermMatch &match : matches) {
-      companions.clear();
-      bool clean = true;
-      for (std::size_t j = 0; j < divisor.terms.size(); ++j) {
-        if (j == pivot) {
-          continue;
-        }
-        ExprPtr companion = ex<Product>(
-            ExprPtrList{bound_divisor_term(divisor.terms[j], match.binding),
-                        match.quotient});
-        canonicalize_term(companion);
-        if (companion->is_zero()) {
-          continue;
-        }
-        if (mode == DivisionMode::Split && !table.find(companion)) {
-          clean = false;
-          break;
-        }
-        companions.push_back(std::move(companion));
+    std::optional<IndexMap> binding;
+    std::optional<QuotientExpansion> chosen;
+    for (const TermMatch &match : matches) {
+      std::optional<QuotientExpansion> expansion =
+          expand_quotient(term, match, divisor);
+      if (!expansion.has_value()) {
+        continue;
       }
 
-      if (clean) {
-        chosen = std::move(match);
-        break;
+      if (mode == DivisionMode::Split &&
+          !std::ranges::all_of(expansion->companions,
+                               [&](const ExprPtr &companion) {
+                                 return table.find(companion).has_value();
+                               })) {
+        continue;
       }
+
+      binding = match.binding;
+      chosen = std::move(expansion);
+      break;
     }
 
     if (!chosen.has_value()) {
@@ -834,16 +941,15 @@ DivisionResult divide_with_pivot(const container::svector<ExprPtr> &terms,
 
     table[*idx].state = TermTable::State::Dead;
 
-    auto group_it = std::ranges::find_if(groups, [&](const auto &group) {
-      return group.first == chosen->binding;
-    });
+    auto group_it = std::ranges::find_if(
+        groups, [&](const auto &group) { return group.first == *binding; });
     if (group_it == groups.end()) {
-      groups.emplace_back(chosen->binding, container::svector<ExprPtr>{});
+      groups.emplace_back(*binding, container::svector<ExprPtr>{});
       group_it = std::prev(groups.end());
     }
     group_it->second.push_back(chosen->quotient);
 
-    for (ExprPtr &companion : companions) {
+    for (ExprPtr &companion : chosen->companions) {
       companion.as<Product>().scale(-1);
       table.add(std::move(companion));
     }
@@ -859,6 +965,16 @@ DivisionResult divide_with_pivot(const container::svector<ExprPtr> &terms,
       continue;
     }
 
+    Indices bound_externals;
+    for (const Index &external : divisor.externals) {
+      auto it = binding.find(external);
+      bound_externals.insert(it == binding.end() ? external : it->second);
+    }
+
+    // Simplification may have renamed the quotient's dummies such that they
+    // coincide with the externals of the (bound) divisor
+    quotient = tidy_dummies(quotient, bound_externals);
+
     auto divisor_expr = std::make_shared<Sum>(ExprPtrList{});
     for (const DivisorTerm &term : divisor.terms) {
       divisor_expr->append(bound_divisor_term(term, binding));
@@ -869,12 +985,6 @@ DivisionResult divide_with_pivot(const container::svector<ExprPtr> &terms,
       bound_divisor = divisor_expr->summand(0);
     }
     bound_divisor = rapid_simplify(bound_divisor);
-
-    Indices bound_externals;
-    for (const Index &external : divisor.externals) {
-      auto it = binding.find(external);
-      bound_externals.insert(it == binding.end() ? external : it->second);
-    }
 
     result.groups.push_back(
         DivisionGroup{.divisor = tidy_dummies(bound_divisor, bound_externals),
@@ -893,10 +1003,11 @@ ExprPtr assemble(
   auto sum = std::make_shared<Sum>(ExprPtrList{});
 
   for (const DivisionGroup &group : result.groups) {
-    Indices avoid = used_indices(*group.quotient);
-    ExprPtr factor = tidy_dummies(make_factor(group), avoid);
+    ExprPtr factor = make_factor(group);
+    ExprPtr quotient = tidy_dummies(group.quotient, external_indices(factor));
+    factor = tidy_dummies(factor, used_indices(*quotient));
 
-    sum->append(ex<Product>(ExprPtrList{std::move(factor), group.quotient},
+    sum->append(ex<Product>(ExprPtrList{std::move(factor), std::move(quotient)},
                             Product::Flatten::Once));
   }
 
@@ -988,9 +1099,18 @@ DivisionResult divide(const ExprPtr &dividend, const ExprPtr &divisor,
   std::pair<std::size_t, std::size_t> best_quality = {
       std::numeric_limits<std::size_t>::max(),
       std::numeric_limits<std::size_t>::max()};
+  std::optional<NonTermination> failure;
   for (std::size_t pivot : pivots) {
-    DivisionResult current =
-        divide_with_pivot(terms, prepared_divisor, pivot, mode, ctx);
+    std::optional<DivisionResult> attempt;
+    try {
+      attempt = divide_with_pivot(terms, prepared_divisor, pivot, mode, ctx);
+    } catch (const NonTermination &e) {
+      // Not every choice of pivot leads to a terminating division, e.g. if
+      // the pivot divides another term of the divisor. Other pivots may work.
+      failure = e;
+      continue;
+    }
+    DivisionResult &current = *attempt;
 
     if (mode == DivisionMode::Strict) {
       if (current.exact()) {
@@ -1010,7 +1130,11 @@ DivisionResult divide(const ExprPtr &dividend, const ExprPtr &divisor,
     throw Exception("Dividend is not exactly divisible by the divisor");
   }
 
-  SEQUANT_ASSERT(best.has_value());
+  if (!best.has_value()) {
+    SEQUANT_ASSERT(failure.has_value());
+    throw *failure;
+  }
+
   return std::move(best.value());
 }
 
@@ -1043,7 +1167,15 @@ ExprPtr factor_out(const ExprPtr &expr, const ExprPtr &factor,
   DivisionResult result = divide(expr, factor, mode, matching);
 
   return assemble(result, [&substitute](const DivisionGroup &group) {
-    return relabel(substitute, group.relabeling);
+    // Make sure the substitute's dummies are neither affected by the
+    // relabeling nor clash with the relabeled indices
+    Indices affected;
+    for (const auto &[from, to] : group.relabeling) {
+      affected.insert(from);
+      affected.insert(to);
+    }
+    ExprPtr tidied = tidy_dummies(substitute.clone(), affected);
+    return relabel(*tidied, group.relabeling);
   });
 }
 

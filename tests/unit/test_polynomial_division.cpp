@@ -7,10 +7,12 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/polynomial_division.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <array>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -19,6 +21,23 @@ namespace {
 
 bool is_zero(const sequant::ExprPtr &expr) {
   return expr.is<sequant::Constant>() && expr.as<sequant::Constant>().is_zero();
+}
+
+bool equivalent(const sequant::ExprPtr &lhs, const sequant::ExprPtr &rhs) {
+  return is_zero(sequant::simplify(lhs->clone() - rhs->clone()));
+}
+
+/// Checks that the result of the division is a valid expression that
+/// reproduces the dividend
+void check_reconstruction(const sequant::DivisionResult &result,
+                          const sequant::ExprPtr &dividend) {
+  using namespace sequant;
+  const ExprPtr reconstructed = result.to_expr();
+  std::string msg;
+  const bool valid = is_valid(reconstructed, &msg);
+  INFO(msg);
+  REQUIRE(valid);
+  REQUIRE_THAT(reconstructed, EquivalentTo(dividend));
 }
 
 }  // namespace
@@ -424,5 +443,160 @@ TEST_CASE("factor_out", "[utilities][polynomial_division]") {
                               IndexMatching::Exact),
                    EquivalentTo(L"I{a1;i1} Y{i1;a1}"));
     }
+  }
+}
+
+TEST_CASE("polynomial_division_regressions",
+          "[utilities][polynomial_division]") {
+  using namespace sequant;
+
+  const std::array modes = {DivisionMode::Strict, DivisionMode::Split,
+                            DivisionMode::Remainder};
+  const std::array matchings = {IndexMatching::Exact, IndexMatching::Relabel};
+
+  SECTION("quotient dummies vs divisor externals") {
+    const ExprPtr divisor = deserialize(L"f{a1;a2} t{a2;i1}");
+    for (const wchar_t *dividend_str : {
+             L"f{a1;a3} t{a3;i1} g{i2;a4} t{a4;i3} h{i3;a2}",
+             L"f{a1;a3} t{a3;i1} f{a2;a4} t{a4;i2}",
+         }) {
+      CAPTURE(toUtf8(std::wstring(dividend_str)));
+      const ExprPtr dividend = deserialize(dividend_str);
+      for (DivisionMode mode : modes) {
+        for (IndexMatching matching : matchings) {
+          check_reconstruction(divide(dividend, divisor, mode, matching),
+                               dividend);
+        }
+      }
+    }
+
+    // replace with a composite target
+    ExprPtr expr = deserialize(L"f{a1;a3} t{a3;i1} f{a2;a4} t{a4;i2}");
+    replace(expr, divisor, *deserialize(L"I{a1;i1}"), IndexMatching::Relabel);
+    REQUIRE(is_valid(expr));
+    REQUIRE((equivalent(expr, deserialize(L"I{a1;i1} f{a2;a3} t{a3;i2}")) ||
+             equivalent(expr, deserialize(L"I{a2;i2} f{a1;a3} t{a3;i1}"))));
+
+    // square of an intermediate
+    const ExprPtr sum_divisor = deserialize(L"f{a1;a2} t{a2;i1} + h{a1;i1}");
+    const ExprPtr square = deserialize(
+        L"(f{a1;a3} t{a3;i1} + h{a1;i1}) (f{a2;a4} t{a4;i2} + h{a2;i2})");
+    for (IndexMatching matching : matchings) {
+      DivisionResult result =
+          divide(square, sum_divisor, DivisionMode::Strict, matching);
+      check_reconstruction(result, square);
+    }
+  }
+
+  SECTION("divisor terms dividing each other") {
+    for (const auto &[dividend_str, divisor_str] :
+         std::vector<std::pair<std::wstring, std::wstring>>{
+             {L"x", L"x + x y"},
+             {L"x^(3)", L"x + x^(2)"},
+             {L"x^(2) + x", L"x + 1"},
+         }) {
+      CAPTURE(toUtf8(dividend_str));
+      CAPTURE(toUtf8(divisor_str));
+      const ExprPtr dividend = deserialize(dividend_str);
+      const ExprPtr divisor = deserialize(divisor_str);
+
+      for (DivisionMode mode : {DivisionMode::Split, DivisionMode::Remainder}) {
+        check_reconstruction(
+            divide(dividend, divisor, mode, IndexMatching::Exact), dividend);
+      }
+    }
+
+    DivisionResult result =
+        divide(deserialize(L"x^(2) + x"), deserialize(L"x + 1"),
+               DivisionMode::Remainder, IndexMatching::Exact);
+    REQUIRE(result.exact());
+    REQUIRE_THAT(result.groups.at(0).quotient, EquivalentTo(L"x"));
+
+    REQUIRE_THROWS_AS(divide(deserialize(L"x"), deserialize(L"x + x y"),
+                             DivisionMode::Strict, IndexMatching::Exact),
+                      Exception);
+  }
+
+  SECTION("divisor terms mapping onto the same monomial") {
+    // τ = t2 + t1 t1 - t1 t1' contracted with an antisymmetric integral
+    const ExprPtr tau = deserialize(
+        L"t{a1,a2;i1,i2}:A + t{a1;i1} t{a2;i2} - t{a2;i1} t{a1;i2}");
+    const ExprPtr energy = deserialize(
+        L"1/4 g{i1,i2;a1,a2}:A t{a1,a2;i1,i2}:A + "
+        L"1/2 g{i1,i2;a1,a2}:A t{a1;i1} t{a2;i2}");
+
+    for (DivisionMode mode : modes) {
+      for (IndexMatching matching : matchings) {
+        DivisionResult result = divide(energy, tau, mode, matching);
+        REQUIRE(result.exact());
+        REQUIRE(result.groups.size() == 1);
+        REQUIRE_THAT(result.groups[0].quotient,
+                     EquivalentTo(L"1/4 g{i1,i2;a1,a2}:A"));
+        check_reconstruction(result, energy);
+      }
+    }
+
+    const ResultExpr intermediate = deserialize<ResultExpr>(
+        L"T{a1,a2;i1,i2}:A = t{a1,a2;i1,i2}:A + t{a1;i1} t{a2;i2} - t{a2;i1} "
+        L"t{a1;i2}");
+    REQUIRE_THAT(factor_out(energy, intermediate, DivisionMode::Strict,
+                            IndexMatching::Exact),
+                 EquivalentTo(L"1/4 g{i1,i2;a1,a2}:A T{a1,a2;i1,i2}:A"));
+
+    // particle-particle ladder of a doubles residual: τ's externals are bound
+    // partially to dummies and partially to externals of the dividend
+    const ExprPtr ladder = deserialize(
+        L"1/2 g{a1,a2;a3,a4}:A (t{a3,a4;i1,i2}:A + t{a3;i1} t{a4;i2} - "
+        L"t{a4;i1} "
+        L"t{a3;i2}) + h{a1,a2;i1,i2}:A");
+    for (DivisionMode mode : {DivisionMode::Split, DivisionMode::Remainder}) {
+      DivisionResult result = divide(ladder, tau, mode, IndexMatching::Relabel);
+      REQUIRE(result.groups.size() == 1);
+      REQUIRE_THAT(result.remainder, EquivalentTo(L"h{a1,a2;i1,i2}:A"));
+      check_reconstruction(result, ladder);
+    }
+
+    const ExprPtr xy = deserialize(L"X{a1;i1} Y{a2;i2} + X{a2;i2} Y{a1;i1}");
+    const ExprPtr xyz =
+        deserialize(L"(X{a1;i1} Y{a2;i2} + X{a2;i2} Y{a1;i1}) Z{i1,i2;a1,a2}");
+    for (DivisionMode mode : modes) {
+      for (IndexMatching matching : matchings) {
+        DivisionResult result = divide(xyz, xy, mode, matching);
+        REQUIRE(result.exact());
+        check_reconstruction(result, xyz);
+      }
+    }
+  }
+
+  SECTION("divisor dummies vs quotient") {
+    const ExprPtr dividend = deserialize(L"t{a1;i1}");
+    const ExprPtr divisor = deserialize(L"t{a1;i1} + f{i2;i1} t{a1;i2}");
+    for (DivisionMode mode : {DivisionMode::Split, DivisionMode::Remainder}) {
+      for (IndexMatching matching : matchings) {
+        check_reconstruction(divide(dividend, divisor, mode, matching),
+                             dividend);
+      }
+    }
+  }
+
+  SECTION("repeated scalar factors in Split mode") {
+    for (const wchar_t *dividend_str :
+         {L"u u + 2 u v + v v", L"u^(2) + 2 u v + v^(2)"}) {
+      CAPTURE(toUtf8(std::wstring(dividend_str)));
+      const ExprPtr dividend = deserialize(dividend_str);
+      DivisionResult result = divide(dividend, deserialize(L"u + v"),
+                                     DivisionMode::Split, IndexMatching::Exact);
+      REQUIRE(result.exact());
+      REQUIRE_THAT(result.groups.at(0).quotient, EquivalentTo(L"u + v"));
+    }
+  }
+
+  SECTION("substitute with dummies") {
+    const ExprPtr result = factor_out(
+        deserialize(L"f{a2;a3} t{a3;i2} X{i1;a1}"),
+        deserialize(L"f{a1;a2} t{a2;i1}"), *deserialize(L"I{a1;a2} J{a2;i1}"),
+        DivisionMode::Strict, IndexMatching::Relabel);
+    REQUIRE(is_valid(result));
+    REQUIRE_THAT(result, EquivalentTo(L"I{a2;a3} J{a3;i2} X{i1;a1}"));
   }
 }
