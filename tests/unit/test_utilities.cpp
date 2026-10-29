@@ -875,7 +875,6 @@ TEST_CASE("utilities", "[utilities]") {
                {L"t{a1} t{a1} t{a1}", "Index a_1 appears more than 2 times"},
                {L"1 + t{a1} t{a1} t{a1}",
                 "Index a_1 appears more than 2 times"},
-               {L"1 + t{a1}", "Inconsistent external indices in sum"},
                // Allow bra/ket inconsistencies in external indices
                {L"t{;a1} + t{a1}", ""},
            }) {
@@ -904,6 +903,16 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE(actual_msg == msg);
         REQUIRE(actual == expected);
       }
+
+      // without a head, a Sum whose summands have different external indices
+      // is invalid even when it could broadcast under one (see ResultExpr)
+      for (const auto& expr_str :
+           {L"1 + t{a1}", L"ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}"}) {
+        CAPTURE(toUtf8(expr_str));
+        std::string msg;
+        REQUIRE_FALSE(is_valid(deserialize(expr_str), &msg));
+        REQUIRE(msg == "Inconsistent external indices in sum");
+      }
     }
     SECTION("ResultExpr") {
       for (const auto& [expr_str, msg] :
@@ -922,6 +931,23 @@ TEST_CASE("utilities", "[utilities]") {
                 "expression"},
                // Allow bra/ket inconsistencies in external indices
                {L"R{a2;a1} = t{a1;i1} t{i1;a2}", ""},
+               // a Sum under a head may broadcast: each summand covers a
+               // subset of the result's indices, all of them together
+               {L"D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}",
+                ""},
+               {L"D{i_1;a_1} = ε{;a_1} - ε{i_1;} - E", ""},
+               {L"R{a1} = 1 + t{a1}", ""},
+               // a summand's (anti)symmetrizer does not count
+               {L"R{a1,a2;i1,i2} = Â{i1,i2;a1,a2} t{a1,a2;i1,i2} + ε{a1;}", ""},
+               {L"D{i_1;a_1} = ε{a_1;} - ε{i_1;}", ""},
+               {L"D{i_1;a_1} = ε{;a_1} + ε{;a_2}",
+                "Summand index a_2 is not an index of the result"},
+               {L"D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2}",
+                "Result index i_1 appears in no summand"},
+               {L"D{i_1;a_1} = ε{;a_1} - E",
+                "Result index i_1 appears in no summand"},
+               {L"R{} = 1 + t{a1}",
+                "Summand index a_1 is not an index of the result"},
            }) {
         CAPTURE(toUtf8(expr_str));
 

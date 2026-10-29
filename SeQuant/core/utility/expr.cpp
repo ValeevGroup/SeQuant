@@ -8,6 +8,7 @@
 #include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/algorithm/contains.hpp>
 #include <range/v3/view/concat.hpp>
 
 #include <algorithm>
@@ -400,6 +401,53 @@ bool has_uniform_externals(const Sum &sum) {
   return std::ranges::all_of(sum.summands(), compare, extractor);
 }
 
+/// Under a result head the summands of @p sum may broadcast: each must supply
+/// a subset of the result's indices, and together all of them. Summands are
+/// validated as expressions, and their (anti)symmetrizers are disregarded.
+/// As for a whole rhs, bra and ket indices are pooled, since a bra-ket
+/// symmetric summand may present them swapped.
+bool is_valid_broadcast(const ResultExpr &result, const Sum &sum,
+                        std::string *msg) {
+  const auto result_braket = ranges::views::concat(result.bra(), result.ket());
+  container::set<Index> covered;
+  for (const ExprPtr &summand : sum.summands()) {
+    if (!is_valid(summand, msg)) {
+      return false;
+    }
+
+    ExprPtr term = summand->clone();
+    pop_tensor(term, reserved::antisymm_label());
+    pop_tensor(term, reserved::symm_label());
+    const IndexGroups<> externals = get_unique_indices(term);
+
+    auto check = [&](const Index &idx, const auto &allowed) {
+      if (!ranges::contains(allowed, idx)) {
+        SEQUANT_EXPR_INVALID("Summand index " + toUtf8(idx.full_label()) +
+                             " is not an index of the result");
+      }
+      covered.insert(idx);
+      return true;
+    };
+    for (const Index &idx :
+         ranges::views::concat(externals.bra, externals.ket)) {
+      if (!check(idx, result_braket)) return false;
+    }
+    for (const Index &idx : externals.aux) {
+      if (!check(idx, result.aux())) return false;
+    }
+  }
+
+  for (const Index &idx :
+       ranges::views::concat(result.bra(), result.ket(), result.aux())) {
+    if (!covered.contains(idx)) {
+      SEQUANT_EXPR_INVALID("Result index " + toUtf8(idx.full_label()) +
+                           " appears in no summand");
+    }
+  }
+
+  return true;
+}
+
 }  // namespace
 
 bool is_valid(const ExprPtr &expr, std::string *msg) {
@@ -480,6 +528,15 @@ bool is_valid(const Expr &expr, std::string *msg) {
 }
 
 bool is_valid(const ResultExpr &expr, std::string *msg) {
+  if (expr.expression()->is<Sum>()) {
+    const Sum &sum = expr.expression()->as<Sum>();
+    if (!has_uniform_externals(sum)) {
+      // a proto-indexed sum does not broadcast; reports the inconsistency
+      if (is_proto_indexed(sum)) return is_valid(sum, msg);
+      return is_valid_broadcast(expr, sum, msg);
+    }
+  }
+
   if (!is_valid(expr.expression(), msg)) {
     return false;
   }
