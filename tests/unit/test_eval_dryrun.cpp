@@ -4572,7 +4572,8 @@ TEST_CASE("meter accounts an element-wise power", "[meter]") {
   }
 }
 
-// E = L · (M ⊙ pow(D,-1)), batched over the occupied i_1 the root contracts:
+// E{i_2;i_3} = L · (M ⊙ pow(D,-1)), batched over the occupied i_1 the root
+// contracts:
 // the loop opened at the root slices the Hadamard product and the power
 // below it, so both schedulers replay a batched loop through the Power node.
 TEST_CASE("meter batches a loop through an element-wise power",
@@ -4613,6 +4614,7 @@ TEST_CASE("meter batches a loop through an element-wise power",
   auto const cm = std::make_shared<CostModel const>(regime);
   auto const ref_bytes =
       evaluate(plain, DryRunLeafEvaluator{cm})->size_in_bytes();
+  REQUIRE(ref_bytes == 10 * 10 * 8);
 
   std::vector<EvalNodeDryRun> const forest{batched};
   for (auto const scheduler :
@@ -4625,16 +4627,17 @@ TEST_CASE("meter batches a loop through an element-wise power",
     auto const flops = report.flops_persistent + report.flops_volatile;
     if (scheduler == BatchScheduler::ordered) {
       // one build of the power, the Hadamard product and the contraction per
-      // batch of i_1 (extent 10, batches of 1), each touching its slice of
-      // the 10·10·20·20 elements once: the same flops as the unbatched run,
-      // whose power alone accounts for one element count of D
+      // batch of i_1 (extent 10, batches of 1), each on its slice: the same
+      // flops as the unbatched run, in which the power and the Hadamard
+      // product each touch D's 10·10·20·20 elements once and the contraction
+      // costs i_1·i_2·i_3·a_1·a_2 = 10 times as much
       CHECK(report.builds_total == 30);
       CHECK(flops == Catch::Approx(ref_flops));
-      CHECK(ref_flops == Catch::Approx(3 * nelem));
+      CHECK(ref_flops == Catch::Approx(12 * nelem));
     } else {
-      // Pre-existing forest_descent metering blind spot: this fully
-      // contracted root's loop is replayed (the result below assembles) but
-      // the meter tallies no builds or flops; the control L·D, with no
+      // Pre-existing forest_descent metering blind spot: the loop the root
+      // opens over a contracted mode is replayed (the result below assembles)
+      // but the meter tallies no builds or flops; the control L·D, with no
       // power, reports the same zeros.
       CHECK(report.builds_total == 0);
       CHECK(flops == 0);
@@ -4649,7 +4652,7 @@ TEST_CASE("meter batches a loop through an element-wise power",
             0);
     }
 
-    // the batched result assembles to the unbatched one's size
+    // the batched result assembles to the unbatched one's size (10·10)
     DryRunLeafEvaluator const yield{cm};
     auto cache = CacheManager<EvalNodeDryRun>::empty();
     auto const aops = eval::dryrun::make_dryrun_array_ops(cm);

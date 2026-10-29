@@ -5653,8 +5653,8 @@ TEST_CASE(
 
 // Two roots sharing the leaf D: root 1 reads it, root 2 raises it element-wise
 // under a loop over i_1 its root contracts. The ordered multi-root executor
-// builds the batched loop through the Power node and assembles each root to
-// what per-root forest descent gives.
+// fetches D once for both roots, builds the batched loop through the Power
+// node, and assembles each root to the size of its unbatched evaluation.
 TEST_CASE(
     "evaluate_ordered_multiroot evaluates a batched loop through a "
     "Power node",
@@ -5672,6 +5672,8 @@ TEST_CASE(
       sequant::binarize<EvalExprDryRun>(hadamard_power_term())};
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   REQUIRE(forest[1].right().right()->op_type() == sequant::EvalOp::Power);
+  REQUIRE(forest[1].right().right().left()->hash_value() ==
+          forest[0].right()->hash_value());
   stamp_occ_loop(forest[1]);
   auto const policy = occ_contracted_policy();
 
@@ -5684,12 +5686,6 @@ TEST_CASE(
   sequant::eval::OrderedSchedule ordered;
   REQUIRE_NOTHROW(ordered = sequant::eval::build_ordered_schedule(
                       rich, legality, policy, {}));
-
-  // D is one value of the two roots
-  auto const d_hash = forest[0].right()->hash_value();
-  REQUIRE(forest[1].right().right().left()->hash_value() == d_hash);
-  CHECK(std::ranges::count(rich.cells, d_hash,
-                           &sequant::eval::ValueCell::hash) == 1);
 
   // the i_1 loop is realized
   bool occ_block = false;
@@ -5705,7 +5701,13 @@ TEST_CASE(
   find_occ(ordered.root);
   CHECK(occ_block);
 
-  DryRunLeafEvaluator const yield{cm};
+  // leaf fetches by label
+  DryRunLeafEvaluator const dry{cm};
+  std::map<std::wstring, std::size_t> fetches;
+  auto const yield = [&](EvalNodeDryRun const& n) -> sequant::ResultPtr {
+    ++fetches[std::wstring{n->as_tensor().label()}];
+    return dry(n);
+  };
   auto cache = sequant::cache_manager(forest);
   auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   cache.set_array_ops(&aops);
@@ -5714,12 +5716,21 @@ TEST_CASE(
                       forest, ordered, rich,
                       sequant::container::svector<std::string>(forest.size()),
                       yield, cache, policy.batch_target_size));
+  auto const counts = sequant::eval::detail::ordered_op_counts();
+  // D is fetched once for both roots; root 1 builds its one product, root 2
+  // the power, the Hadamard product and the contraction once per batch of
+  // i_1 (extent 10, batches of 1)
+  CHECK(fetches.at(L"D") == 1);
+  CHECK(counts.builds == 1 + 3 * 10);
+
+  // each root's result has the size of its unbatched evaluate()
   REQUIRE(res.size() == forest.size());
   for (std::size_t r = 0; r < forest.size(); ++r) {
     CAPTURE(r);
     REQUIRE(res[r]);
-    auto const ref = sequant::evaluate(forest[r], yield);
+    auto const ref = sequant::evaluate(forest[r], dry);
     REQUIRE(ref);
+    REQUIRE(ref->size_in_bytes() == 10 * 10 * 8);  // E{i_3;i_2}
     CHECK(res[r]->size_in_bytes() == ref->size_in_bytes());
   }
 }

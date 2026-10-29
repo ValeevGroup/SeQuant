@@ -1,6 +1,6 @@
 //
 // A Hadamard product with an element-wise power below a batched contraction,
-// E = L · (M ⊙ pow(D,-1)), shared by the dry-run, ordered-executor and
+// E{i_2;i_3} = L · (M ⊙ pow(D,-1)), shared by the dry-run, ordered-executor and
 // legality unit tests of batched evaluation through a Power node.
 //
 // Lives in a named namespace (not an anonymous one) so it can be included by
@@ -14,6 +14,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/index.hpp>
 
 #include <cstddef>
@@ -30,48 +31,66 @@ inline Context lax_braket_context() {
   return ctx;
 }
 
+/// the symmetries of the power's base: totally symmetric
+inline TensorSymmetries symmetric() {
+  return {.perm = Symmetry::Symm,
+          .braket = BraKetSymmetry::Symm,
+          .column = ColumnSymmetry::Symm};
+}
+
+/// the symmetries of the other factors: antisymmetric
+inline TensorSymmetries antisymmetric() {
+  return {.perm = Symmetry::Antisymm,
+          .braket = BraKetSymmetry::Symm,
+          .column = ColumnSymmetry::Symm};
+}
+
 /// D{i_1,i_2;a_1,a_2}, totally symmetric
 inline ExprPtr power_base() {
   return ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-                    TensorSymmetries{.perm = Symmetry::Symm,
-                                     .braket = BraKetSymmetry::Symm,
-                                     .column = ColumnSymmetry::Symm});
+                    symmetric());
 }
 
 /// an antisymmetric tensor \p label{bra;ket}
 template <typename Bra, typename Ket>
 ExprPtr antisymm(std::wstring_view label, Bra b, Ket k) {
-  return ex<Tensor>(label, std::move(b), std::move(k),
-                    TensorSymmetries{.perm = Symmetry::Antisymm,
-                                     .braket = BraKetSymmetry::Symm,
-                                     .column = ColumnSymmetry::Symm});
+  return ex<Tensor>(label, std::move(b), std::move(k), antisymmetric());
 }
 
-/// L{a_1,a_2;i_1,i_2} · (M{i_1,i_2;a_1,a_2} ⊙ pow(D,-1)), the Hadamard
-/// product kept as the right operand of the full contraction
-inline ExprPtr hadamard_power_term() {
+/// L{a_1,a_2;i_1,i_3}: contracts i_1, a_1 and a_2 with D's slots and leaves
+/// i_3 open
+inline ExprPtr contractor() {
+  return antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_3"});
+}
+
+/// \p label{i_2;i_3}, the head of either term
+inline Tensor head(std::wstring_view label) {
+  return Tensor(label, bra{L"i_2"}, ket{L"i_3"},
+                TensorSymmetries{.perm = Symmetry::Nonsymm});
+}
+
+/// E{i_2;i_3} = L{a_1,a_2;i_1,i_3} · (M{i_1,i_2;a_1,a_2} ⊙ pow(D,-1)), the
+/// Hadamard product kept as the right operand of the contraction; the head
+/// keeps i_2, which only M and D carry, open through the Hadamard product
+inline ResultExpr hadamard_power_term() {
   auto e = ex<Product>(ExprPtrList{});
-  e->as<Product>().append(
-      1, antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}),
-      Product::Flatten::No);
+  e->as<Product>().append(1, contractor(), Product::Flatten::No);
   e->as<Product>().append(
       1,
       ex<Product>(
           ExprPtrList{antisymm(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}),
                       pow(power_base(), rational{-1})}),
       Product::Flatten::No);
-  return e;
+  return ResultExpr(head(L"E"), e);
 }
 
-/// L{a_1,a_2;i_1,i_2} · D{i_1,i_2;a_1,a_2}: reads the base of the power
-/// directly
-inline ExprPtr base_term() {
+/// F{i_2;i_3} = L{a_1,a_2;i_1,i_3} · D{i_1,i_2;a_1,a_2}: reads the base of
+/// the power directly
+inline ResultExpr base_term() {
   auto e = ex<Product>(ExprPtrList{});
-  e->as<Product>().append(
-      1, antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}),
-      Product::Flatten::No);
+  e->as<Product>().append(1, contractor(), Product::Flatten::No);
   e->as<Product>().append(1, power_base(), Product::Flatten::No);
-  return e;
+  return ResultExpr(head(L"F"), e);
 }
 
 /// the occupied index i_1 the root of either term contracts

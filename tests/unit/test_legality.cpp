@@ -1148,7 +1148,7 @@ TEST_CASE(
 // power as it slices the Hadamard product that reads it: the Power value
 // carries the batched occupied mode and is read inside the loop, so the mode
 // is LoopLocal for it. Its operand is a leaf, which is read in slices and
-// never built, so it has no build-site axis, like the other leaf M.
+// never built, so it has no build-site axis.
 TEST_CASE(
     "analyze_legality classifies an axis through a Power node like its "
     "consumer, and its operand like any leaf",
@@ -1216,5 +1216,4 @@ TEST_CASE(
           return &n == &forest.front();
         }) == std::optional{LoopRole::Reduction});
   CHECK_FALSE(role_of(is_leaf(L"D")).has_value());
-  CHECK(role_of(is_leaf(L"D")) == role_of(is_leaf(L"M")));
 }

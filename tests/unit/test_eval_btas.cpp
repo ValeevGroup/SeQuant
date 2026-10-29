@@ -824,6 +824,7 @@ TEST_CASE("eval_tensor_power_btas", "[eval_btas]") {
     auto A = ex<Tensor>(L"A", bra{L"a_1", L"i_1"}, ket{L"i_2", L"a_2"},
                         TensorSymmetries{.perm = Symmetry::Antisymm});
     REQUIRE(eval_node(pow(A, rational{2})).left()->canon_phase() == -1);
+    REQUIRE(eval_node(pow(A, rational{2}))->canon_phase() == 1);
     REQUIRE(eval_node(pow(A, rational{-1}))->canon_phase() == -1);
     auto const a_target = tidxs(A->as<Tensor>());
     auto const at_a = [&](ExprPtr const& expr) {

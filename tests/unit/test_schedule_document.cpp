@@ -27,6 +27,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 #include "csv_size_fixtures.hpp"
+#include "tensor_power_fixtures.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -51,6 +52,7 @@
 namespace {
 
 using namespace sequant::eval::schedule;
+using sequant::tests::tensor_power::lax_braket_context;
 
 Document make_doc() {
   Document d;
@@ -512,29 +514,16 @@ namespace {
 /// bra slots, so callers scope AssertStrictBraKetSymmetry::No
 sequant::ExprPtr power_term() {
   using namespace sequant;
-  const TensorSymmetries dsym{.perm = Symmetry::Symm,
-                              .braket = BraKetSymmetry::Symm,
-                              .column = ColumnSymmetry::Symm};
-  const TensorSymmetries asym{.perm = Symmetry::Antisymm,
-                              .braket = BraKetSymmetry::Symm,
-                              .column = ColumnSymmetry::Symm};
-  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
-  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, asym);
-  auto L = ex<Tensor>(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, asym);
-  return L * M * pow(D, rational{-1});
+  using namespace sequant::tests::tensor_power;
+  return antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+         antisymm(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
+         pow(power_base(), rational{-1});
 }
 
 /// a Sum of power_term() and a plain tensor product
 sequant::ExprPtr power_root() {
   return sequant::ex<sequant::Sum>(sequant::ExprPtrList{
       power_term(), pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_1,i_2}")});
-}
-
-/// the default context with AssertStrictBraKetSymmetry::No
-sequant::Context lax_braket_context() {
-  auto ctx = sequant::get_default_context();
-  ctx.set(sequant::AssertStrictBraKetSymmetry::No);
-  return ctx;
 }
 
 }  // namespace
@@ -1685,28 +1674,15 @@ TEST_CASE("record_dag names an adjoint factor like a leaf, its operands below",
 TEST_CASE("record_dag names a power factor like a leaf, its operands below",
           "[schedule-document][tensor-power]") {
   using namespace sequant;
+  using namespace sequant::tests::tensor_power;
   auto _ = set_scoped_default_context(lax_braket_context());
   // the twin replaces pow(D,-1) by a plain tensor of D's shape
-  const TensorSymmetries dsym{.perm = Symmetry::Symm,
-                              .braket = BraKetSymmetry::Symm,
-                              .column = ColumnSymmetry::Symm};
-  const TensorSymmetries asym{.perm = Symmetry::Antisymm,
-                              .braket = BraKetSymmetry::Symm,
-                              .column = ColumnSymmetry::Symm};
   auto const twin_expr =
-      ex<Tensor>(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, asym) *
-      ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, asym) *
-      ex<Tensor>(L"N", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
-  // occupied modes, contracted at the root, batched one at a time
-  BatchPolicy policy;
-  policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.space().base_key() == L"i";
-  };
-  policy.is_batchable_external_index = [](Index const&) { return false; };
-  policy.batch_target_size = [](Index const&) -> std::size_t { return 1; };
-  policy.peak_threshold = 1;
-  auto const fx =
-      dag_fixture({{"R1", power_term()}, {"R2", twin_expr}}, policy);
+      antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+      antisymm(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
+      ex<Tensor>(L"N", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, symmetric());
+  auto const fx = dag_fixture({{"R1", power_term()}, {"R2", twin_expr}},
+                              occ_contracted_policy());
   DagRecord dag;
   REQUIRE_NOTHROW(
       dag = record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots));
