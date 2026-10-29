@@ -45,6 +45,15 @@ inline const std::wstring& kronecker_label() {
   return label;
 }
 
+/// @brief all-ones tensor label is reserved since it is used by low-level
+/// SeQuant machinery. Users can create an all-ones Tensor using make_ones()
+/// @note not in labels(): unlike those tensors, an all-ones tensor is not
+/// totally symmetric, it is nonzero in every IRREP block
+inline const std::wstring& ones_label() {
+  static const std::wstring label = L"𝟙";
+  return label;
+}
+
 /// @brief the (spin-orbital) 1- and multi-body reduced density matrix label
 /// is reserved since the extended Wick theorem and mbpt produce it with fixed
 /// symmetries, which a Tensor with this label must have. Users can create one
