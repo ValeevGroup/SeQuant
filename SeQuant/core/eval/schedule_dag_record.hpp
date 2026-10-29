@@ -541,9 +541,11 @@ DagRecord record_dag(
         rec.expr += detail::bare_label(node);
       } else {
         auto const op = node->op_type();
-        rec.expr += operand_of(v, node.left()) +
-                    (op && *op == EvalOp::Sum ? " + " : " * ") +
-                    operand_of(v, node.right());
+        auto const glyph = op == EvalOp::Sum     ? " + "
+                           : op == EvalOp::Power ? " ^ "
+                                                 : " * ";
+        rec.expr +=
+            operand_of(v, node.left()) + glyph + operand_of(v, node.right());
       }
     }
     rec.hash = detail::hex_string(c.hash);

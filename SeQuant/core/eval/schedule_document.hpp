@@ -148,7 +148,8 @@ struct ValueRecord {
   std::string name;
   /// "<name>[<slices>] = <operands>": the value in the form it is produced
   /// in, then a leaf's tensor label or the two operands as the value reads
-  /// them, each a leaf's tensor label or an intermediate's name
+  /// them, each a leaf's tensor label or an intermediate's name, joined by
+  /// " + " for a Sum, " ^ " for a Power (operand ^ exponent), else " * "
   std::string expr;
   std::string hash, key;
   bool leaf = false;
