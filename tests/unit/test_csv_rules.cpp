@@ -19,6 +19,7 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
+#include <SeQuant/domain/mbpt/rules/pair_basis.hpp>
 #include <SeQuant/domain/mbpt/rules/pno.hpp>
 
 #include <algorithm>
@@ -717,5 +718,113 @@ TEST_CASE("csv-pno-projection-nested-sum-then-sibling", "[mbpt][csv]") {
       for (Index const& idx : t->_slots()) ++counts[idx];
     for (auto const& [idx, n] : counts)
       if (idx.ordinal() >= Index::min_tmp_index()) CHECK(n <= 2);
+  }
+}
+
+TEST_CASE("csv-pair-basis-fold", "[mbpt][csv]") {
+  using namespace sequant;
+  using mbpt::fold_pair_basis_integrals;
+  using mbpt::PairBasisFoldReport;
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
+  // the ⇑⇑ ladder term of the Kramers CSV-CCD doubles residual after the DF
+  // split and the CSV transform under kramers_union (spin-free expansion
+  // dummies), spelled as the evaluator prints it: each integral's bra leg meets
+  // the conjugate coefficient (proto in the bra), its ket leg the stored one
+  const std::wstring upup =
+      L"g{a_1;a_3;Κ_1}:N-H-S-E-T * C{a_3;a_4<i↑_1,i↑_2>}:N-N-N-E-T"
+      L" * t{a_6<i↑_1,i↑_2>,a_4<i↑_1,i↑_2>;i↑_2,i↑_1}:A-N-S-E-T"
+      L" * C{a_5;a_6<i↑_1,i↑_2>}:N-N-N-E-T * C{a↑_2<i↑_1,i↑_2>;a_2}:N-N-N-E-T"
+      L" * g{a_2;a_5;Κ_1}:N-H-S-E-T * C{a↑_1<i↑_1,i↑_2>;a_1}:N-N-N-E-T";
+  const std::wstring upup_folded =
+      L"g{a↑_1<i↑_1,i↑_2>;a_4<i↑_1,i↑_2>;Κ_1}:N-N-N-E-T"
+      L" * t{a_6<i↑_1,i↑_2>,a_4<i↑_1,i↑_2>;i↑_2,i↑_1}:A-N-S-E-T"
+      L" * g{a↑_2<i↑_1,i↑_2>;a_6<i↑_1,i↑_2>;Κ_1}:N-N-N-E-T";
+  const std::wstring updn =
+      L"-g{a_1;a_3;Κ_1}:N-H-S-E-T * C{a_3;a_4<i↑_2,i↓_1>}:N-N-N-E-T"
+      L" * t{a_6<i↑_2,i↓_1>,a_4<i↑_2,i↓_1>;i↑_2,i↓_1}:A-N-S-E-T"
+      L" * C{a_5;a_6<i↑_2,i↓_1>}:N-N-N-E-T * C{a↑_2<i↑_2,i↓_1>;a_2}:N-N-N-E-T"
+      L" * g{a_2;a_5;Κ_1}:N-H-S-E-T * C{a↑_1<i↑_2,i↓_1>;a_1}:N-N-N-E-T";
+  const std::wstring updn_folded =
+      L"-g{a↑_1<i↑_2,i↓_1>;a_4<i↑_2,i↓_1>;Κ_1}:N-N-N-E-T"
+      L" * t{a_6<i↑_2,i↓_1>,a_4<i↑_2,i↓_1>;i↑_2,i↓_1}:A-N-S-E-T"
+      L" * g{a↑_2<i↑_2,i↓_1>;a_6<i↑_2,i↓_1>;Κ_1}:N-N-N-E-T";
+  auto same = [](ExprPtr const& a, std::wstring const& b) {
+    return serialize(a) == serialize(deserialize(b));
+  };
+
+  SECTION("both integrals of the ⇑⇑ ladder fold, the amplitude stays") {
+    PairBasisFoldReport rep;
+    const auto in = deserialize(upup);
+    const auto out = fold_pair_basis_integrals(in, {}, &rep);
+    CHECK(rep.folded == 2);
+    CHECK(rep.mirrored == 0);
+    CHECK(same(out, upup_folded));
+    // the leaves are proto-indexed on both legs and keep the aux index
+    for (auto const& f : *out) {
+      auto const& t = f->as<Tensor>();
+      if (t.label() != L"g") continue;
+      CHECK(t.aux_rank() == 1);
+      CHECK(t.bra().at(0).has_proto_indices());
+      CHECK(t.ket().at(0).has_proto_indices());
+    }
+    // idempotent, and the result canonicalizes
+    CHECK(fold_pair_basis_integrals(out).get() == out.get());
+    auto canon = out->clone();
+    canonicalize(canon);
+    CHECK(canon);
+  }
+
+  SECTION("the ⇑⇓ ladder keeps its sign") {
+    PairBasisFoldReport rep;
+    const auto out = fold_pair_basis_integrals(deserialize(updn), {}, &rep);
+    CHECK(rep.folded == 2);
+    CHECK(same(out, updn_folded));
+  }
+
+  SECTION("a sum folds per term") {
+    PairBasisFoldReport rep;
+    // updn carries its own leading sign
+    const auto out =
+        fold_pair_basis_integrals(deserialize(upup + L" " + updn), {}, &rep);
+    CHECK(rep.folded == 4);
+    CHECK(same(out, upup_folded + L" " + updn_folded));
+  }
+
+  SECTION("a nested product is flattened before matching") {
+    PairBasisFoldReport rep;
+    const std::wstring nested =
+        L"(g{a_1;a_3;Κ_1}:N-H-S-E-T * C{a_3;a_4<i↑_1,i↑_2>}:N-N-N-E-T)"
+        L" * (C{a↑_1<i↑_1,i↑_2>;a_1}:N-N-N-E-T"
+        L" * t{a_6<i↑_1,i↑_2>,a_4<i↑_1,i↑_2>;i↑_2,i↑_1}:A-N-S-E-T)";
+    const auto out = fold_pair_basis_integrals(deserialize(nested), {}, &rep);
+    CHECK(rep.folded == 1);
+    CHECK(same(out,
+               L"g{a↑_1<i↑_1,i↑_2>;a_4<i↑_1,i↑_2>;Κ_1}:N-N-N-E-T"
+               L" * t{a_6<i↑_1,i↑_2>,a_4<i↑_1,i↑_2>;i↑_2,i↑_1}:A-N-S-E-T"));
+  }
+
+  SECTION("untouched: an occupied leg, two pairs, the mirrored orientation") {
+    for (auto const& [what, text, mirrored] :
+         {std::tuple{
+              L"ov integral",
+              L"g{a_1;i↑_1;Κ_1}:N-H-S-E-T * C{a↑_1<i↑_1,i↑_2>;a_1}:N-N-N-E-T",
+              std::size_t{0}},
+          std::tuple{
+              L"two pairs",
+              L"g{a_1;a_3;Κ_1}:N-H-S-E-T * C{a↑_1<i↑_1,i↑_2>;a_1}:N-N-N-E-T"
+              L" * C{a_3;a_4<i↑_3,i↑_4>}:N-N-N-E-T",
+              std::size_t{0}},
+          std::tuple{
+              L"mirrored orientation",
+              L"g{a_1;a_3;Κ_1}:N-H-S-E-T * C{a_1;a_4<i↑_1,i↑_2>}:N-N-N-E-T"
+              L" * C{a↑_1<i↑_1,i↑_2>;a_3}:N-N-N-E-T",
+              std::size_t{1}}}) {
+      CAPTURE(toUtf8(what));
+      PairBasisFoldReport rep;
+      const auto in = deserialize(text);
+      CHECK(fold_pair_basis_integrals(in, {}, &rep).get() == in.get());
+      CHECK(rep.folded == 0);
+      CHECK(rep.mirrored == mirrored);
+    }
   }
 }
