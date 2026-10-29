@@ -10,9 +10,11 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
+#include <array>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -718,4 +720,141 @@ TEST_CASE("proto-index-liveness", "[eval]") {
   // i_1 is a slot index of the trailing t; i_2 is live only via proto tuples.
   CHECK(has_label(g_node->canon_indices(), L"i_1"));
   CHECK(has_label(g_node->canon_indices(), L"i_2"));
+}
+
+TEST_CASE("lower_broadcast_sum", "[EvalExpr][broadcast]") {
+  using namespace sequant;
+
+  auto one = [](std::wstring_view label, SlotType slot) {
+    return make_ones(Index{label}, slot)->as<Tensor>();
+  };
+  // the all-ones factors of a lowered summand, in order
+  auto ones_of = [](const ExprPtr& summand) {
+    container::svector<Tensor> result;
+    for (const ExprPtr& factor : summand->as<Product>().factors()) {
+      if (factor->is<Tensor>() && is_ones(factor->as<Tensor>())) {
+        result.push_back(factor->as<Tensor>());
+      }
+    }
+    return result;
+  };
+  using Ones = container::svector<Tensor>;
+
+  const ResultExpr d4 = deserialize<ResultExpr>(
+      L"D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}");
+
+  SECTION("outer products with ones leaves in head order and slots") {
+    const ResultExpr lowered = lower_broadcast_sum(d4);
+    REQUIRE(lowered.result_as_tensor() == d4.result_as_tensor());
+    REQUIRE(lowered.expression()->is<Sum>());
+    const Sum& sum = lowered.expression()->as<Sum>();
+    REQUIRE(sum.size() == 4);
+
+    const auto& eps = d4.expression()->as<Sum>().summands();
+    const auto i1 = one(L"i_1", SlotType::Bra);
+    const auto i2 = one(L"i_2", SlotType::Bra);
+    const auto a1 = one(L"a_1", SlotType::Ket);
+    const auto a2 = one(L"a_2", SlotType::Ket);
+    const std::array<Ones, 4> expected{Ones{i1, i2, a2}, Ones{i1, i2, a1},
+                                       Ones{i2, a1, a2}, Ones{i1, a1, a2}};
+    for (std::size_t s = 0; s != 4; ++s) {
+      CAPTURE(s);
+      const ExprPtr& summand = sum.summand(s);
+      REQUIRE(summand->is<Product>());
+      const Product& prod = summand->as<Product>();
+      REQUIRE(prod.size() == 4);
+      // the ε factor of the input summand comes first
+      const ExprPtr& eps_in =
+          eps[s]->is<Product>() ? eps[s]->as<Product>().factor(0) : eps[s];
+      REQUIRE(*prod.factor(0) == *eps_in);
+      REQUIRE(ones_of(summand) == expected[s]);
+      // −ε{i_1;} and −ε{i_2;} keep their sign
+      REQUIRE(prod.scalar() == (s < 2 ? 1 : -1));
+    }
+  }
+
+  SECTION("idempotent") {
+    const ResultExpr lowered = lower_broadcast_sum(d4);
+    REQUIRE(*lower_broadcast_sum(lowered).expression() ==
+            *lowered.expression());
+
+    // a Sum whose summands all cover the head is unchanged
+    const ResultExpr complete = deserialize<ResultExpr>(
+        L"R{i_1;a_1} = f{i_1;a_1} + g{i_1;i_2} t{i_2;a_1}");
+    REQUIRE(*lower_broadcast_sum(complete).expression() ==
+            *complete.expression());
+  }
+
+  SECTION("non-Sum unchanged") {
+    const ResultExpr res =
+        deserialize<ResultExpr>(L"R{i_1;a_1} = 2 g{i_1;i_2} t{i_2;a_1}");
+    const ResultExpr lowered = lower_broadcast_sum(res);
+    REQUIRE(*lowered.expression() == *res.expression());
+    REQUIRE(lowered.result_as_tensor() == res.result_as_tensor());
+  }
+
+  SECTION("bra-ket-swapped supply counts as present") {
+    const ResultExpr res =
+        deserialize<ResultExpr>(L"D{i_1;a_1} = ε{a_1;} - ε{i_1;}");
+    const ResultExpr lowered = lower_broadcast_sum(res);
+    const Sum& sum = lowered.expression()->as<Sum>();
+    REQUIRE(sum.size() == 2);
+    REQUIRE(ones_of(sum.summand(0)) == Ones{one(L"i_1", SlotType::Bra)});
+    REQUIRE(ones_of(sum.summand(1)) == Ones{one(L"a_1", SlotType::Ket)});
+    REQUIRE(sum.summand(1)->as<Product>().scalar() == -1);
+  }
+
+  SECTION("scalar summands") {
+    const ResultExpr res =
+        deserialize<ResultExpr>(L"D{i_1;a_1} = ε{;a_1} - ε{i_1;} - E");
+    const ResultExpr lowered = lower_broadcast_sum(res);
+    const Sum& sum = lowered.expression()->as<Sum>();
+    REQUIRE(sum.size() == 3);
+    const Product& e = sum.summand(2)->as<Product>();
+    REQUIRE(e.size() == 3);
+    REQUIRE(*e.factor(0) == Variable(L"E"));
+    REQUIRE(ones_of(sum.summand(2)) ==
+            Ones{one(L"i_1", SlotType::Bra), one(L"a_1", SlotType::Ket)});
+    REQUIRE(e.scalar() == -1);
+
+    // a Constant summand becomes the scaled ones leaves
+    const ResultExpr c = deserialize<ResultExpr>(L"R{a_1} = 2 + t{a_1}");
+    const ResultExpr clowered = lower_broadcast_sum(c);
+    const Sum& csum = clowered.expression()->as<Sum>();
+    REQUIRE(csum.size() == 2);
+    const auto cit = std::ranges::find_if(csum.summands(), [](const auto& s) {
+      return s->template is<Product>() &&
+             s->template as<Product>().scalar() == 2;
+    });
+    REQUIRE(cit != csum.summands().end());
+    REQUIRE((*cit)->as<Product>().size() == 1);
+    REQUIRE(ones_of(*cit) == Ones{one(L"a_1", SlotType::Bra)});
+  }
+
+  SECTION("aux index cannot be broadcast") {
+    const ResultExpr res =
+        deserialize<ResultExpr>(L"R{i_1;;a_2} = f{i_1;;a_2} + g{i_1;}");
+    REQUIRE_THROWS_AS(lower_broadcast_sum(res), Exception);
+  }
+
+  SECTION("binarize") {
+    std::optional<FullBinaryNode<EvalExpr>> tree;
+    REQUIRE_NOTHROW(tree.emplace(binarize(d4)));
+    REQUIRE((*tree)->op_type() == EvalOp::Sum);
+    REQUIRE((*tree)->as_tensor() == d4.result_as_tensor());
+    std::size_t n_eps = 0, n_ones = 0;
+    tree->visit_leaf([&](const auto& node) {
+      // the −1 prefactors are scalar leaves
+      if (!node->is_tensor()) {
+        REQUIRE(node->is_constant());
+        return;
+      }
+      if (is_ones(node->as_tensor()))
+        ++n_ones;
+      else if (node->as_tensor().label() == L"ε")
+        ++n_eps;
+    });
+    REQUIRE(n_eps == 4);
+    REQUIRE(n_ones == 12);
+  }
 }

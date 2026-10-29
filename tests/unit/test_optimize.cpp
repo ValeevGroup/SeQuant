@@ -4912,3 +4912,30 @@ TEST_CASE("single-term DP sees a TensorPower vertex through its base",
     REQUIRE(md_d != md_pow);
   }
 }
+
+TEST_CASE("optimize keeps the ones leaves of a broadcast Sum",
+          "[optimize][broadcast]") {
+  using namespace sequant;
+  ResultExpr res = deserialize<ResultExpr>(
+      L"D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}");
+  const Tensor head = res.result_as_tensor();
+  optimize(res);
+  REQUIRE(res.result_as_tensor() == head);
+
+  // optimize() lowers the broadcast and must keep every ones leaf
+  std::size_t n_ones_expr = 0;
+  res.expression()->visit(
+      [&](ExprPtr const& x) {
+        if (x->is<Tensor>() && is_ones(x->as<Tensor>())) ++n_ones_expr;
+      },
+      /* atoms_only = */ true);
+  REQUIRE(n_ones_expr == 12);
+
+  std::optional<FullBinaryNode<EvalExpr>> tree;
+  REQUIRE_NOTHROW(tree.emplace(binarize(res)));
+  std::size_t n_ones = 0;
+  tree->visit_leaf([&](const auto& node) {
+    if (node->is_tensor() && is_ones(node->as_tensor())) ++n_ones;
+  });
+  REQUIRE(n_ones == 12);
+}

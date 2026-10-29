@@ -11,6 +11,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -18,8 +19,10 @@
 
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/algorithm/contains.hpp>
 #include <range/v3/functional/not_fn.hpp>
 #include <range/v3/range/operations.hpp>
+#include <range/v3/view/concat.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/join.hpp>
 #include <range/v3/view/move.hpp>
@@ -27,6 +30,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 #include <ranges>
 #include <string_view>
 #include <type_traits>
@@ -721,5 +725,50 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
 }
 
 }  // namespace impl
+
+ResultExpr lower_broadcast_sum(ResultExpr const& res) {
+  if (!res.expression()->is<Sum>()) return res;
+
+  bool lowered = false;
+  Sum sum;
+  for (const ExprPtr& summand : res.expression()->as<Sum>().summands()) {
+    const IndexGroups<> externals =
+        get_unique_indices(detail::without_symmetrizers(summand));
+    const auto supplied =
+        ranges::views::concat(externals.bra, externals.ket, externals.aux);
+
+    std::optional<Product> broadcast;
+    auto append_ones = [&](const auto& head_indices, SlotType slot) {
+      for (const Index& idx : head_indices) {
+        if (!idx.nonnull() || ranges::contains(supplied, idx)) continue;
+        if (slot == SlotType::Aux) {
+          throw Exception(
+              "lower_broadcast_sum: cannot broadcast over aux index " +
+              toUtf8(idx.full_label()));
+        }
+        if (!broadcast) {
+          broadcast.emplace();
+          broadcast->append(1, summand, Product::Flatten::Once);
+        }
+        broadcast->append(1, make_ones(idx, slot), Product::Flatten::No);
+      }
+    };
+    append_ones(res.bra(), SlotType::Bra);
+    append_ones(res.ket(), SlotType::Ket);
+    append_ones(res.aux(), SlotType::Aux);
+
+    if (broadcast) {
+      sum.append(ex<Product>(std::move(*broadcast)));
+      lowered = true;
+    } else {
+      sum.append(summand);
+    }
+  }
+  if (!lowered) return res;
+
+  ResultExpr result = res;
+  result = ex<Sum>(std::move(sum));
+  return result;
+}
 
 }  // namespace sequant
