@@ -233,6 +233,13 @@ class rand_tensor_yield {
     layout_of_.erase(lbl);
   }
 
+  /// Serve \p r for every occurrence of tensor \p tnsr (by tensor_to_key);
+  /// \p r must be in the tensor's slot layout. For tests that need leaf data
+  /// they choose: same-shaped random arrays may hold identical values.
+  void set_leaf(sequant::Tensor const& tnsr, sequant::ResultPtr r) {
+    label_to_er_.insert_or_assign(tensor_to_key(tnsr), std::move(r));
+  }
+
   using array_type = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
   using array_tot_type =
       TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
@@ -2026,6 +2033,49 @@ TEST_CASE("eval_broadcast_sum_ta", "[eval][broadcast]") {
         for (std::size_t a1 = 0; a1 < nvirt; ++a1)
           for (std::size_t a2 = 0; a2 < nvirt; ++a2)
             expected.push_back(ea[a1] + ea[a2] - ei[i1] - ei[i2]);
+    check_elementwise(elements(evaluate(eval_node(res),
+                                        std::string{"i_1,i_2,a_1,a_2"}, yield_)
+                                   ->get<TA::TArrayD>()),
+                      expected);
+  }
+
+  SECTION("asymmetric head") {
+    // distinct leaves and a nonsymmetric head: the expected tensor changes
+    // under any mode swap, so this pins the result layout
+    // the yield's same-shaped random vectors can coincide, so the four leaves
+    // get chosen, pairwise distinct data
+    auto const e1 = ex<Tensor>(L"ε1", bra{}, ket{L"a_1"});
+    auto const e2 = ex<Tensor>(L"ε2", bra{}, ket{L"a_2"});
+    auto const e3 = ex<Tensor>(L"ε3", bra{L"i_1"}, ket{});
+    auto const e4 = ex<Tensor>(L"ε4", bra{L"i_2"}, ket{});
+    std::vector<double> const v1{0.5, 1.7, 2.3}, v2{-3.1, 4.9, 0.2},
+        v3{0.37, -1.3}, v4{2.9, 0.61};
+    REQUIRE(v1.size() == nvirt);
+    REQUIRE(v3.size() == nocc);
+    for (auto const& [e, v] : {std::pair{e1, v1}, std::pair{e2, v2},
+                               std::pair{e3, v3}, std::pair{e4, v4}}) {
+      TA::TArrayD arr(world, TA::TiledRange{yield_.tr1_for(L"", v.size())});
+      arr.init_tiles([&v](TA::Range const& r) {
+        TA::Tensor<double> t(r);
+        for (std::size_t k = 0; k < t.size(); ++k)
+          t.at_ordinal(k) = v[r.lobound()[0] + k];
+        return t;
+      });
+      yield_.set_leaf(e->as<Tensor>(),
+                      eval_result<ResultTensorTA<TA::TArrayD>>(arr));
+    }
+    const TensorSymmetries nsym{.perm = Symmetry::Nonsymm,
+                                .braket = BraKetSymmetry::Nonsymm,
+                                .column = ColumnSymmetry::Nonsymm};
+    ResultExpr res(
+        Tensor(L"D'", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, nsym),
+        e1 + e2 - e3 - e4);
+    std::vector<double> expected;
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t i2 = 0; i2 < nocc; ++i2)
+        for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+          for (std::size_t a2 = 0; a2 < nvirt; ++a2)
+            expected.push_back(v1[a1] + v2[a2] - v3[i1] - v4[i2]);
     check_elementwise(elements(evaluate(eval_node(res),
                                         std::string{"i_1,i_2,a_1,a_2"}, yield_)
                                    ->get<TA::TArrayD>()),
