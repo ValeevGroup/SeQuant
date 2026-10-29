@@ -92,6 +92,11 @@ class rand_tensor_yield {
 
     auto result = Tensor_t{rng};
     using numeric_type = typename Tensor_t::numeric_type;
+    // an all-ones leaf (see make_ones())
+    if (sequant::is_ones(tnsr)) {
+      result.fill(numeric_type{1});
+      return result;
+    }
     result.generate([]() -> numeric_type {
       auto const re = static_cast<double>(std::rand()) / RAND_MAX;
       if constexpr (sequant::meta::is_complex_v<numeric_type>) {
@@ -839,6 +844,40 @@ TEST_CASE("eval_tensor_power_btas", "[eval_btas]") {
     check_elementwise(at_a(pow(A, rational{-1})), a,
                       [](double x) { return 1 / x; });
   }
+}
+
+TEST_CASE("eval_broadcast_sum_btas", "[eval_btas][broadcast]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2024);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+
+  auto eps_a = [](wchar_t const* a) { return ex<Tensor>(L"ε", bra{}, ket{a}); };
+  auto eps_i = [](wchar_t const* i) { return ex<Tensor>(L"ε", bra{i}, ket{}); };
+  // every ket-ε occurrence shares one yielded array by key, likewise every
+  // bra-ε occurrence
+  auto const ea = yield_(eps_a(L"a_1")->as<Tensor>())->get<BTensorD>();
+  auto const ei = yield_(eps_i(L"i_1")->as<Tensor>())->get<BTensorD>();
+  REQUIRE(ea.size() == nvirt);
+  REQUIRE(ei.size() == nocc);
+
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  Tensor const head(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  ResultExpr res(head,
+                 eps_a(L"a_1") + eps_a(L"a_2") - eps_i(L"i_1") - eps_i(L"i_2"));
+  auto const got = evaluate(binarize<EvalExprBTAS>(res), tidxs(head), yield_)
+                       ->get<BTensorD>();
+  REQUIRE(got.range() == btas::Range{nocc, nocc, nvirt, nvirt});
+  for (std::size_t i1 = 0; i1 < nocc; ++i1)
+    for (std::size_t i2 = 0; i2 < nocc; ++i2)
+      for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+        for (std::size_t a2 = 0; a2 < nvirt; ++a2)
+          CHECK(got(i1, i2, a1, a2) ==
+                Catch::Approx(ea(a1) + ea(a2) - ei(i1) - ei(i2)).margin(1e-12));
 }
 
 // A product that contracts every index of both operands is a bilinear dot,
