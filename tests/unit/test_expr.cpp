@@ -1840,8 +1840,13 @@ TEST_CASE("tensor_power", "[elements]") {
     REQUIRE_THROWS_AS(pow(D * D, rational{-1}), Exception);
     REQUIRE_THROWS_AS(pow(D + D, rational{-1}), Exception);
     REQUIRE_THROWS_AS(pow(x * x, rational{2}), Exception);
-    if (assert_behavior() != AssertBehavior::Abort)
-      REQUIRE_THROWS_AS(pow(t, rational{1, 2}), Exception);
+    // unsupported input is rejected by pow itself, whatever the assert
+    // behavior
+    REQUIRE_THROWS_AS(pow(t, rational{1, 2}), Exception);
+    REQUIRE_THROWS_AS(pow(pow(t, rational{3}), rational{1, 2}), Exception);
+    REQUIRE_THROWS_AS(
+        pow(ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"})), rational{2}),
+        Exception);
     CHECK(pow(pow(D, rational{-1}), rational{1, 3})
               ->as<TensorPower>()
               .exponent() == rational{-1, 3});

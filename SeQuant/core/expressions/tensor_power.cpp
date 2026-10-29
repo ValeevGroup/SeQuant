@@ -251,6 +251,17 @@ ExprPtr make_scalar_power(const ExprPtr& base, rational exponent) {
   return ex<Power>(base, std::move(exponent));
 }
 
+/// rejects the inputs that the TensorPower constructor enforces against
+ExprPtr make_tensor_power(const ExprPtr& base, rational exponent) {
+  const auto& tensor = base->as<AbstractTensor>();
+  if (!tensor._is_cnumber())
+    throw Exception("pow: base must be a c-number tensor");
+  if (denominator(exponent) != 1 && tensor._symmetry() == Symmetry::Antisymm)
+    throw Exception(
+        "pow: a non-integer power of an antisymmetric tensor is not defined");
+  return ex<TensorPower>(base, std::move(exponent));
+}
+
 }  // namespace
 
 ExprPtr pow(ExprPtr base, rational exponent) {
@@ -288,7 +299,7 @@ ExprPtr pow(ExprPtr base, rational exponent) {
           "T^(ab); name T^a as a ResultExpr and raise the resulting leaf");
     const auto composed = inner.exponent() * exponent;
     if (composed == 1) return inner.base()->clone();
-    return ex<TensorPower>(inner.base(), composed);
+    return make_tensor_power(inner.base(), composed);
   }
 
   if (!base->is<AbstractTensor>())
@@ -296,7 +307,7 @@ ExprPtr pow(ExprPtr base, rational exponent) {
         "pow: base must be a scalar or a c-number tensor; name a compound "
         "tensor-valued expression as a ResultExpr and raise the resulting "
         "leaf");
-  return ex<TensorPower>(std::move(base), std::move(exponent));
+  return make_tensor_power(base, std::move(exponent));
 }
 
 }  // namespace sequant
