@@ -4511,6 +4511,66 @@ TEST_CASE(
   CHECK(fd_report.scheduler == sequant::BatchScheduler::forest_descent);
 }
 
+// An element-wise power is a build of its own: the dry-run backend sizes it
+// like its operand and charges one operation per element, so the meter sees
+// both ops of a Hadamard product with a power factor, under either scheduler.
+TEST_CASE("meter accounts an element-wise power", "[meter]") {
+  using namespace sequant;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+  double const nelem = 10. * 10. * 20. * 20.;
+
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      TensorSymmetries{.perm = Symmetry::Antisymm});
+
+  SECTION("the power result is sized like its operand") {
+    auto cm = std::make_shared<CostModel const>(regime);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize<EvalExprDryRun>(pow(D, rational{-1}));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(node->op_type() == EvalOp::Power);
+    auto const res = evaluate(node, DryRunLeafEvaluator{cm});
+    REQUIRE(res);
+    auto const operand = DryRunLeafEvaluator{cm}(node.left());
+    CHECK(res->size_in_bytes() == operand->size_in_bytes());
+    CHECK(res->size_in_bytes() == static_cast<std::size_t>(nelem * 8));
+  }
+
+  SECTION("both schedulers meter the product and the power") {
+    ResultExpr ell(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                          TensorSymmetries{.perm = Symmetry::Antisymm}),
+                   M * pow(D, rational{-1}));
+    std::vector<EvalNodeDryRun> const forest{binarize<EvalExprDryRun>(ell)};
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      BatchPolicy policy;
+      policy.scheduler = scheduler;
+      auto const report = meter(forest, policy, regime, CacheConfig{});
+      CHECK(report.scheduler == scheduler);
+      CHECK(report.builds_total >= 2);
+      // the Hadamard product and the power each touch every element once
+      CHECK(report.flops_persistent + report.flops_volatile ==
+            Catch::Approx(2 * nelem));
+    }
+  }
+}
+
 // The contract the fixtures share with mpqc's CSVSizeMoments::extent: a group
 // of k composites on one cluster, each sized by the occupancy-adjusted M_k,
 // has the per-member product p * M_k^k, so nocc^rank times it is the

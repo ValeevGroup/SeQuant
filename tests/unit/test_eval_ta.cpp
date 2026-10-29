@@ -1726,6 +1726,162 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
   }
 }
 
+TEST_CASE("eval_tensor_power_ta", "[eval]") {
+  using namespace sequant;
+  auto& world = TA::get_default_world();
+  const size_t nocc = 2, nvirt = 3;
+
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      TensorSymmetries{.perm = Symmetry::Antisymm});
+  std::string const target = "i_1,i_2,a_1,a_2";
+
+  // the elements of an array in local-tile order; arrays evaluated into the
+  // same layout from the same yield share a tiling, so these line up
+  auto elements = [](auto const& arr) {
+    using T = typename std::remove_cvref_t<decltype(arr)>::numeric_type;
+    std::vector<T> out;
+    for (auto it = arr.begin(); it != arr.end(); ++it) {
+      auto const tile = it->get();
+      out.insert(out.end(), tile.begin(), tile.end());
+    }
+    return out;
+  };
+  auto check_elementwise = [](auto const& got, auto const& expected) {
+    REQUIRE(got.size() == expected.size());
+    REQUIRE(!got.empty());
+    for (std::size_t k = 0; k < got.size(); ++k) {
+      CHECK(std::real(got[k]) ==
+            Catch::Approx(std::real(expected[k])).margin(1e-12));
+      CHECK(std::imag(got[k]) ==
+            Catch::Approx(std::imag(expected[k])).margin(1e-12));
+    }
+  };
+
+  SECTION("real") {
+    auto yield_ =
+        rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
+    auto eval_at = [&](ExprPtr const& expr) {
+      return elements(
+          evaluate(eval_node(expr), target, yield_)->get<TA::TArrayD>());
+    };
+    auto map = [](std::vector<double> v, auto const& f) {
+      for (auto& x : v) x = f(x);
+      return v;
+    };
+
+    auto node = eval_node(pow(D, rational{-1}));
+    REQUIRE(node->op_type() == EvalOp::Power);
+    auto const src =
+        TA::clone(yield_(node.left())->get<TA::TArrayD>());  // pristine copy
+    auto const d = eval_at(D);
+
+    check_elementwise(eval_at(pow(D, rational{-1})),
+                      map(d, [](double x) { return 1 / x; }));
+    check_elementwise(eval_at(pow(D, rational{0})),
+                      map(d, [](double) { return 1.0; }));
+    check_elementwise(eval_at(pow(D, rational{3})),
+                      map(d, [](double x) { return x * x * x; }));
+    // the harness's data are signed: a fractional power of a negative
+    // element is NaN
+    {
+      auto const got = eval_at(pow(D, rational{1, 2}));
+      REQUIRE(got.size() == d.size());
+      for (std::size_t k = 0; k < d.size(); ++k) {
+        if (d[k] < 0)
+          CHECK(std::isnan(got[k]));
+        else
+          CHECK(got[k] == Catch::Approx(std::sqrt(d[k])).margin(1e-12));
+      }
+    }
+
+    // ℓ = M ⊙ D^-1, a Hadamard product
+    auto const m = eval_at(M);
+    ResultExpr ell(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                          TensorSymmetries{.perm = Symmetry::Antisymm}),
+                   M * pow(D, rational{-1}));
+    {
+      auto expected = m;
+      for (std::size_t k = 0; k < m.size(); ++k) expected[k] /= d[k];
+      check_elementwise(
+          elements(
+              evaluate(eval_node(ell), target, yield_)->get<TA::TArrayD>()),
+          expected);
+    }
+
+    // E = L · (M ⊙ D^-1): every index appears on three tensors
+    {
+      auto ctx = get_default_context();
+      ctx.set(AssertStrictBraKetSymmetry::No);
+      auto _ = set_scoped_default_context(ctx);
+      auto L = ex<Tensor>(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                          TensorSymmetries{.perm = Symmetry::Antisymm});
+      ResultExpr E(Variable(L"E"), L * M * pow(D, rational{-1}));
+      auto const got =
+          evaluate(eval_node(E), std::string{}, yield_)->get<double>();
+      auto const l = eval_at(L);
+      double expected = 0;
+      for (std::size_t k = 0; k < l.size(); ++k) expected += l[k] * m[k] / d[k];
+      CHECK(got == Catch::Approx(expected).margin(1e-10));
+    }
+
+    // M ⊙ D^-1 + D^-1 evaluates correctly and leaves the cached D untouched
+    {
+      ResultExpr sum(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                            TensorSymmetries{.perm = Symmetry::Nonsymm}),
+                     M * pow(D, rational{-1}) + pow(D, rational{-1}));
+      auto expected = m;
+      for (std::size_t k = 0; k < m.size(); ++k)
+        expected[k] = (m[k] + 1) / d[k];
+      check_elementwise(
+          elements(
+              evaluate(eval_node(sum), target, yield_)->get<TA::TArrayD>()),
+          expected);
+      check_elementwise(elements(yield_(node.left())->get<TA::TArrayD>()),
+                        elements(src));
+    }
+  }
+
+  SECTION("sparse") {
+    using TSpArrayD = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
+    auto yield_ =
+        rand_tensor_yield<double, TA::SparsePolicy>{world, nocc, nvirt};
+    auto const d =
+        elements(evaluate(eval_node(D), target, yield_)->get<TSpArrayD>());
+    auto expected = d;
+    for (auto& x : expected) x = x * x;
+    check_elementwise(
+        elements(evaluate(eval_node(pow(D, rational{2})), target, yield_)
+                     ->get<TSpArrayD>()),
+        expected);
+  }
+
+  SECTION("complex") {
+    using TArrayC = TA::DistArray<TA::Tensor<std::complex<double>>>;
+    auto yield_ = rand_tensor_yield<std::complex<double>, TA::DensePolicy>{
+        world, nocc, nvirt};
+    auto const d =
+        elements(evaluate(eval_node(D), target, yield_)->get<TArrayC>());
+    auto square = d;
+    auto inverse = d;
+    for (std::size_t k = 0; k < d.size(); ++k) {
+      square[k] = d[k] * d[k];
+      inverse[k] = 1.0 / d[k];
+    }
+    check_elementwise(
+        elements(evaluate(eval_node(pow(D, rational{2})), target, yield_)
+                     ->get<TArrayC>()),
+        square);
+    check_elementwise(
+        elements(evaluate(eval_node(pow(D, rational{-1})), target, yield_)
+                     ->get<TArrayC>()),
+        inverse);
+  }
+}
+
 TEST_CASE("eval_custom_evaluator", "[eval]") {
   using sequant::evaluate;
   using sequant::ResultPtr;

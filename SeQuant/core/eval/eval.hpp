@@ -71,8 +71,8 @@ template <typename T, typename... Ts>
                     static_cast<bool>(a);
                     a->size_in_bytes();
                   }) {
-      // Smart-pointer-like operand: tolerate null so callers (e.g. the
-      // EvalOp::Adjoint dispatcher, which leaves `right` unevaluated) can
+      // Smart-pointer-like operand: tolerate null so callers (e.g. a unary
+      // op's dispatcher, which leaves `right` unevaluated) can
       // pass an empty ResultPtr without an external guard.
       return a ? a->size_in_bytes() : size_t{0};
     } else if constexpr (requires { a->size_in_bytes(); })
@@ -614,7 +614,7 @@ template <typename Node>
 /// by \p node's op type, with the contraction annotation computed from \p node.
 /// Value-in, value-out: it takes the operands' \c Result buffers and returns
 /// the op's raw result, touching no cache and no value identity. It is exactly
-/// the innermost `left->adjoint/sum/prod(...)` compute that both the
+/// the innermost `left->adjoint/pow/sum/prod(...)` compute that both the
 /// tree-walking
 /// \c evaluate_impl and the value/occurrence-driven ordered executor perform,
 /// so both reach the op through this one function. Not handled here (all
@@ -631,6 +631,8 @@ template <meta::can_evaluate Node>
     std::array<std::any, 2> const adj_ann{node.left()->annot(), node->annot()};
     return left->adjoint(adj_ann);
   }
+  // Unary as well: element-wise, in the operand's layout.
+  if (node->op_type() == EvalOp::Power) return left->pow(power_exponent(node));
   std::array<std::any, 3> const ann{node.left()->annot(), node.right()->annot(),
                                     node->annot()};
   if (node->op_type() == EvalOp::Sum) return left->sum(*right, ann);
@@ -711,10 +713,10 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
                                             ResultPtr const& right,
                                             CacheManager<N, FHC>& cache) {
   // The contraction annotation triple the shaped-product hook receives. A
-  // unary (Adjoint) node never reaches the hook, and its right child is the
-  // Constant(1) sentinel, so the triple is only built for a binary op.
+  // unary (Adjoint, Power) node never reaches the hook, and its right child is
+  // a Constant sentinel, so the triple is only built for a binary op.
   std::array<std::any, 3> const ann =
-      node->op_type() == EvalOp::Adjoint
+      is_unary(*node->op_type())
           ? std::array<std::any, 3>{}
           : std::array<std::any, 3>{node.left()->annot(), node.right()->annot(),
                                     node->annot()};
@@ -723,16 +725,16 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
   // Record a build against node's identity (keyed by the exact cache
   // identity: hash-bin + Bliss, so 64-bit hash collisions are not folded) in
   // the (root) cache's recompute tally, if the op just costed itself: the
-  // DryRun backend stashes a product's realized cost in last_op_flops. Deduped
-  // at the (value, slice) granularity using actual replay FLOPs: a value built
-  // over distinct slices is tiling (not recompute); the same value rebuilt at
-  // the same slice -- including a node invariant to an enclosing loop, rebuilt
-  // every block -- is recompute. The slice signature is the live batch context
-  // projected onto the modes node carries (find_leaf_carrying), so an
-  // invariant's projection is identical (empty for that loop) every block and
-  // its rebuilds fold. A no-op unless the dry-run replay enabled the tally on
-  // the root cache (the wet TA path leaves it disabled), so nothing is tallied
-  // off the costing path.
+  // DryRun backend stashes a product's or element-wise power's realized cost
+  // in last_op_flops. Deduped at the (value, slice) granularity using actual
+  // replay FLOPs: a value built over distinct slices is tiling (not
+  // recompute); the same value rebuilt at the same slice -- including a node
+  // invariant to an enclosing loop, rebuilt every block -- is recompute. The
+  // slice signature is the live batch context projected onto the modes node
+  // carries (find_leaf_carrying), so an invariant's projection is identical
+  // (empty for that loop) every block and its rebuilds fold. A no-op unless
+  // the dry-run replay enabled the tally on the root cache (the wet TA path
+  // leaves it disabled), so nothing is tallied off the costing path.
   //
   // The caller sets last_op_flops to the -1 sentinel before the op, so the
   // tally fires only when the op actually computed fresh flops for this node:
@@ -1069,7 +1071,7 @@ ResultPtr evaluate_impl(Node const& node,         //
   // marks a Checked node that exists in the cache map but has not been stored
   // yet, so its computed result must be cached (this replaces the recursive
   // wrapper's `evaluate<..., Unchecked>` re-entry).
-  enum class Stage { Enter, NeedLeft, NeedRight, NeedLeftAdj };
+  enum class Stage { Enter, NeedLeft, NeedRight, NeedLeftUnary };
   struct Frame {
     // Non-owning pointer into the tree being evaluated (which outlives this
     // call): a Node member would deep-copy the whole subtree into every frame
@@ -1168,17 +1170,17 @@ ResultPtr evaluate_impl(Node const& node,         //
 
         // --- Internal node: request the left operand (always Checked). The
         //     stage must advance before the push (push may grow the deque). ---
-        f.stage = (f.nd()->op_type() == EvalOp::Adjoint) ? Stage::NeedLeftAdj
-                                                         : Stage::NeedLeft;
+        f.stage = is_unary(*f.nd()->op_type()) ? Stage::NeedLeftUnary
+                                               : Stage::NeedLeft;
         stk.push_back(Frame{.node_p = &f.nd().left(), .checked = true});
         break;
       }
 
-      case Stage::NeedLeftAdj: {
-        // Unary IR op (Adjoint): only the left operand is evaluated; the right
-        // child is the Constant(1) sentinel kept to preserve FullBinaryNode's
-        // invariant, and is intentionally never pushed (so f.right stays
-        // null).
+      case Stage::NeedLeftUnary: {
+        // Unary IR op (Adjoint, Power): only the left operand is evaluated;
+        // the right child is the Constant sentinel kept to preserve
+        // FullBinaryNode's invariant, and is intentionally never pushed (so
+        // f.right stays null).
         f.left = std::move(ret);
         SEQUANT_ASSERT(f.left);
         ResultPtr result =

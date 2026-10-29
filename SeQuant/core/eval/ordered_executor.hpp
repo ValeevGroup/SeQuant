@@ -558,9 +558,8 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
       return intercepted;
     }
     ResultPtr tl = self(self, child.left());
-    ResultPtr const tr = child->op_type() == EvalOp::Adjoint
-                             ? ResultPtr{}
-                             : self(self, child.right());
+    ResultPtr const tr =
+        is_unary(*child->op_type()) ? ResultPtr{} : self(self, child.right());
     return apply_op(child, std::move(tl), tr);
   };
 
@@ -580,9 +579,9 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
   }
 
   ResultPtr left = read_operand(read_operand, node.left());
-  // Unary (Adjoint): the right child is the Constant(1) sentinel, never
+  // Unary (Adjoint, Power): the right child is a Constant sentinel, never
   // evaluated -- and so never read, exactly as the tree walk never read it.
-  ResultPtr const right = node->op_type() == EvalOp::Adjoint
+  ResultPtr const right = is_unary(*node->op_type())
                               ? ResultPtr{}
                               : read_operand(read_operand, node.right());
 
