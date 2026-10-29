@@ -4,11 +4,17 @@
 
 #include <nlohmann/json.hpp>
 
+#include <spdlog/spdlog.h>
+
 #include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <map>
+#include <memory>
+#include <numeric>
 #include <optional>
 #include <ranges>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -65,6 +71,35 @@ std::optional<nlohmann::json> resolve_options(const nlohmann::json &steps,
   return options;
 }
 
+/// @returns The index of the step (in @p step_indices) that created the data
+/// referenced by @p id (which must not contain selectors), or std::nullopt if
+/// there is no such step. IDs always start with the ID of the step that created
+/// them, but since step IDs may themselves contain periods, we have to find the
+/// longest matching step ID.
+std::optional<std::size_t> find_owning_step(
+    const std::map<std::string, std::size_t, std::less<>> &step_indices,
+    std::string_view id) {
+  for (std::size_t len = id.size(); len > 0; --len) {
+    if (len < id.size() && id[len] != '.') {
+      continue;
+    }
+
+    if (auto it = step_indices.find(id.substr(0, len));
+        it != step_indices.end()) {
+      return it->second;
+    }
+  }
+
+  return std::nullopt;
+}
+
+struct PreparedStep {
+  std::string_view kind;
+  std::string id;
+  std::unique_ptr<ProcessingStep> step;
+  std::vector<std::string_view> inputs;
+};
+
 }  // namespace
 
 void Executor::execute(const nlohmann::json &steps) {
@@ -72,7 +107,13 @@ void Executor::execute(const nlohmann::json &steps) {
     throw Exception("Steps object must be an array");
   }
 
-  std::size_t step_id_counter = 0;
+  // Data is released as soon as the pipeline no longer needs it, so data from
+  // a previous call can't be relied upon anyway
+  reset();
+
+  std::vector<PreparedStep> prepared;
+  prepared.reserve(steps.size());
+  std::map<std::string, std::size_t, std::less<>> step_indices;
 
   for (const nlohmann::json &step : steps) {
     const std::string_view kind = step.at("kind").get<std::string_view>();
@@ -124,21 +165,66 @@ void Executor::execute(const nlohmann::json &steps) {
 
     std::string step_id = step.contains("id")
                               ? step.at("id").get<std::string>()
-                              : "step" + std::to_string(step_id_counter) + "." +
+                              : "step" + std::to_string(prepared.size()) + "." +
                                     proc_step->kind();
 
-    if (num_outputs_.find(step_id) != num_outputs_.end()) {
+    if (!step_indices.emplace(step_id, prepared.size()).second) {
       throw Exception("Duplicate step ID '" + step_id + "'");
     }
 
-    std::cout << "Executing '" << step_id << "' (" << kind << ")... ";
+    prepared.push_back({.kind = kind,
+                        .id = std::move(step_id),
+                        .step = std::move(proc_step),
+                        .inputs = std::move(inputs)});
+  }
+
+  // Determine for every step the index of the last step that accesses any of
+  // its data. Afterwards, that data is no longer needed and can be released.
+  std::vector<std::size_t> last_use(prepared.size());
+  std::iota(last_use.begin(), last_use.end(), std::size_t{0});
+
+  for (std::size_t i = 0; i < prepared.size(); ++i) {
+    std::vector<std::string> references = prepared[i].step->referenced_ids();
+    references.insert(references.end(), prepared[i].inputs.begin(),
+                      prepared[i].inputs.end());
+
+    for (const std::string &ref : references) {
+      std::vector<std::string> expanded;
+      try {
+        expanded = ExecutionContext::expand_id(ref);
+      } catch (const std::exception &e) {
+        throw Exception("Invalid reference in step '" + prepared[i].id + "' (" +
+                        std::string(prepared[i].kind) + "): " + e.what());
+      }
+
+      for (const std::string &id : expanded) {
+        std::optional<std::size_t> owner = find_owning_step(step_indices, id);
+
+        // References to unknown or future steps will produce an error once
+        // the referencing step is executed
+        if (owner.has_value() && *owner < i) {
+          last_use[*owner] = std::max(last_use[*owner], i);
+        }
+      }
+    }
+  }
+
+  // IDs for which no owning step could be determined (reported only once)
+  std::set<std::string, std::less<>> unowned_ids;
+
+  for (std::size_t i = 0; i < prepared.size(); ++i) {
+    const nlohmann::json &step = steps.at(i);
+    const std::string &step_id = prepared[i].id;
+
+    std::cout << "Executing '" << step_id << "' (" << prepared[i].kind
+              << ")... ";
     std::cout.flush();
 
     std::chrono::steady_clock::time_point start =
         std::chrono::steady_clock::now();
 
     const std::size_t produced_outputs =
-        proc_step->run(step_id, context_, inputs);
+        prepared[i].step->run(step_id, context_, prepared[i].inputs);
 
     std::chrono::steady_clock::duration delta =
         std::chrono::steady_clock::now() - start;
@@ -152,8 +238,6 @@ void Executor::execute(const nlohmann::json &steps) {
       std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(delta)
                 << std::endl;
     }
-
-    num_outputs_.emplace(step_id, produced_outputs);
 
     if (step.contains("outputs")) {
       const nlohmann::json &outputs = step.at("outputs");
@@ -176,13 +260,32 @@ void Executor::execute(const nlohmann::json &steps) {
           std::string(step_id));
     }
 
-    ++step_id_counter;
+    // Data is still needed if any of its IDs is referenced by a later step.
+    // Note that steps that alias their inputs under their own ID (instead of
+    // creating new data) thereby extend the lifetime of these inputs.
+    const std::size_t n_released =
+        context_.release_data([&](std::string_view id) {
+          std::optional<std::size_t> owner = find_owning_step(step_indices, id);
+          if (!owner.has_value()) {
+            // Be conservative and assume that the data is still needed
+            if (unowned_ids.emplace(id).second) {
+              spdlog::debug(
+                  "Can't determine the step owning ID '{}' - associated data "
+                  "will not be released",
+                  id);
+            }
+            return true;
+          }
+          return last_use[*owner] > i;
+        });
+
+    if (n_released > 0) {
+      spdlog::debug("Released {} data object(s) after step '{}'", n_released,
+                    step_id);
+    }
   }
 }
 
-void Executor::reset() {
-  num_outputs_.clear();
-  context_ = {};
-}
+void Executor::reset() { context_ = {}; }
 
 }  // namespace sequant::util::extint
