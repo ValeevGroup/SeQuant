@@ -240,6 +240,10 @@ class ItfGenerator : public Generator<Context> {
     return s;
   }
 
+  std::string represent(const TensorPower &, const Context &) const override {
+    throw Exception("ITF has no element-wise tensor power");
+  }
+
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
     if (!zero_init) {
@@ -542,6 +546,8 @@ class ItfGenerator : public Generator<Context> {
       return represent(expr.as<Constant>(), ctx);
     } else if (expr.is<Power>()) {
       return represent(expr.as<Power>(), ctx);
+    } else if (expr.is<TensorPower>()) {
+      return represent(expr.as<TensorPower>(), ctx);
     } else if (expr.is<Product>()) {
       const Product &product = expr.as<Product>();
 

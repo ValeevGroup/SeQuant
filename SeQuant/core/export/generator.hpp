@@ -7,6 +7,7 @@
 #include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <sstream>
@@ -90,6 +91,17 @@ class Generator {
   /// @returns A backend-specific string representation of the given Power
   virtual std::string represent(const Power &power,
                                 const Context &ctx) const = 0;
+
+  /// @returns A backend-specific string representation of the given
+  /// element-wise tensor power
+  /// @throw Exception unless overridden by a generator that supports it
+  virtual std::string represent(const TensorPower &power,
+                                const Context &ctx) const {
+    (void)power;
+    (void)ctx;
+    throw Exception(get_format_name() +
+                    " cannot represent an element-wise tensor power");
+  }
 
   /// Semantic callback for creating the given tensor. This is expected to make
   /// the created tensor available for further use.

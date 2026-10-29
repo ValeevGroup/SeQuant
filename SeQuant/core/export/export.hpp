@@ -263,7 +263,12 @@ class GenerationVisitor {
         expressions.push_back(node.left()->expr());
         break;
       case EvalOp::Power:
-        throw Exception("export of TensorPower is not supported yet");
+        // Unary IR op: the left child is the operand tensor, the right child
+        // the Constant sentinel carrying the exponent. The power is taken
+        // element-wise, so the operand's indices are the result's and no
+        // transpose is implied.
+        expressions.push_back(pow(node.left()->expr(), power_exponent(node)));
+        break;
       case EvalOp::Sum: {
         switch (node->compute_selection()) {
           case ComputeSelection::None:

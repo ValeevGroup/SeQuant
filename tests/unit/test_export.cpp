@@ -1051,6 +1051,23 @@ TEST_CASE("export reuse-zero not applied to repeated leaf operand",
                        ContainsSubstring("] X:x["));
 }
 
+TEST_CASE("export element-wise tensor power to ITF", "[export]") {
+  // ITF has no element-wise power, so the snapshot files carry no ITF section
+  // for a TensorPower; the refusal is asserted here instead
+  auto resetter = to_export_context();
+
+  ItfGenerator<ItfContext> generator;
+  ItfContext ctx;
+  configure_context_defaults(ctx);
+
+  REQUIRE_THROWS_WITH(
+      export_expression(
+          to_export_tree(deserialize<ResultExpr>(
+              L"I{i_1,i_2;a_1,a_2} = D{i_1,i_2;a_1,a_2}:S-S-S^(-1)")),
+          generator, ctx),
+      "ITF has no element-wise tensor power");
+}
+
 TEST_CASE("ExportExpr", "[export]") {
   SECTION("id & equality") {
     Variable v(L"V");
