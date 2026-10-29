@@ -23,3 +23,37 @@ Unload I[i_1, a_1]
 Persist R[i_1, a_1]
 
 =================================================
+Python (einsum)
+=================================================
+import numpy as np
+import os
+
+R_ov = np.zeros((nocc, nvirt), order='F')
+I_vo = np.zeros((nvirt, nocc), order='F')
+D_vo = np.load('D_vo.npy')
+I_vo += np.einsum('ai->ai', D_vo, optimize=True)**(-1)
+del D_vo
+f_ov = np.load('f_ov.npy')
+R_ov += 2 * np.einsum('ai,ia->ia', I_vo, f_ov, optimize=True)
+del f_ov
+del I_vo
+np.save('R_ov.npy', R_ov)
+
+=================================================
+PyTorch (einsum)
+=================================================
+import torch
+import os
+
+R_ov = torch.zeros((nocc, nvirt), dtype=torch.float64)
+I_ov = torch.zeros((nocc, nvirt), dtype=torch.float64)
+D_ov = torch.load('D_ov.pt')
+I_ov += torch.einsum('ia->ia', D_ov)**(-1)
+del D_ov
+f_ov = torch.load('f_ov.pt')
+R_ov += 2 * torch.einsum('ia,ia->ia', I_ov, f_ov)
+del f_ov
+del I_ov
+torch.save(R_ov, 'R_ov.pt')
+
+=================================================
