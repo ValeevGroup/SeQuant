@@ -18,3 +18,27 @@ Unload D[a_1, a_2, i_1, i_2]
 Persist I[i_1, i_2, a_1, a_2]
 
 =================================================
+Python (einsum)
+=================================================
+import numpy as np
+import os
+
+I_oovv = np.zeros((nocc, nocc, nvirt, nvirt), order='F')
+D_vvoo = np.load('D_vvoo.npy')
+I_oovv += np.einsum('abic->icab', D_vvoo, optimize=True)**(-1)
+del D_vvoo
+np.save('I_oovv.npy', I_oovv)
+
+=================================================
+PyTorch (einsum)
+=================================================
+import torch
+import os
+
+I_oovv = torch.zeros((nocc, nocc, nvirt, nvirt), dtype=torch.float64)
+D_oovv = torch.load('D_oovv.pt')
+I_oovv += torch.einsum('iabc->iabc', D_oovv)**(-1)
+del D_oovv
+torch.save(I_oovv, 'I_oovv.pt')
+
+=================================================

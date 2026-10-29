@@ -1,0 +1,42 @@
+R{i_1;a_1} = 2 D{i_1;a_1}:S-S-S^(-1)
+
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index a_1
+
+Declare tensor D[a_1, i_1]
+Declare tensor R[i_1, a_1]
+
+Create R[i_1, a_1] and initialize to zero
+Load D[a_1, i_1]
+Compute R[i_1, a_1] += 2 D[a_1, i_1]^(-1)
+Unload D[a_1, i_1]
+Persist R[i_1, a_1]
+
+=================================================
+Python (einsum)
+=================================================
+import numpy as np
+import os
+
+R_ov = np.zeros((nocc, nvirt), order='F')
+D_vo = np.load('D_vo.npy')
+R_ov += 2 * np.einsum('ai->ia', D_vo, optimize=True)**(-1)
+del D_vo
+np.save('R_ov.npy', R_ov)
+
+=================================================
+PyTorch (einsum)
+=================================================
+import torch
+import os
+
+R_ov = torch.zeros((nocc, nvirt), dtype=torch.float64)
+D_ov = torch.load('D_ov.pt')
+R_ov += 2 * torch.einsum('ia->ia', D_ov)**(-1)
+del D_ov
+torch.save(R_ov, 'R_ov.pt')
+
+=================================================

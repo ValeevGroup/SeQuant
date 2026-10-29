@@ -18,6 +18,7 @@
 #include <unsupported/Eigen/CXX11/Tensor>
 
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -1063,6 +1064,140 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
           }
         }
       }
+    }
+  }
+
+  SECTION("Validation: Element-wise tensor power") {
+    std::filesystem::path temp_dir =
+        make_unique_temp_dir("sequant_test_tensor_power");
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
+
+    const Eigen::Index nocc = 3;
+    const Eigen::Index nvirt = 4;
+
+    // the fractional exponent needs a positive base to stay real
+    auto positive = [](Eigen::Tensor<double, 2> t) {
+      Eigen::Tensor<double, 2> result = t.abs() + 1.0;
+      return result;
+    };
+
+    NumPyEinsumGeneratorContext ctx;
+    ctx.enable_rewriting(
+        false);  // to ensure we write all tensors in expected layout
+    ctx.set_shape(occ, std::to_string(nocc));
+    ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+
+    const double tolerance = 1e-10;
+
+    // Hadamard product with an inverse, R[i,a] = 2 f[i,a] / D[i,a], and the
+    // bare scaled inverse, R[i,a] = 2 / D[i,a]
+    for (const bool with_f : {true, false}) {
+      CAPTURE(with_f);
+      auto f_tensor = random_tensor<double, 2>({nocc, nvirt}, 3000);
+      auto D_tensor = positive(random_tensor<double, 2>({nocc, nvirt}, 3100));
+
+      Eigen::Tensor<double, 2> R_expected = 2.0 * D_tensor.inverse();
+      if (with_f) R_expected = R_expected * f_tensor;
+
+      auto result_expr = deserialize<ResultExpr>(
+          with_f ? L"R{i_1;a_1} = 2 f{i_1;a_1} D{i_1;a_1}:S-S-S^(-1)"
+                 : L"R{i_1;a_1} = 2 D{i_1;a_1}:S-S-S^(-1)");
+
+      NumPyEinsumGenerator generator;
+      std::string f_name =
+          generator.represent(Tensor(L"f", bra{L"i_1"}, ket{L"a_1"}), ctx);
+      std::string D_name =
+          generator.represent(Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}), ctx);
+      // D's braket symmetry lets the export load it as D[a_1,i_1]
+      std::string D_t_name =
+          generator.represent(Tensor(L"D", bra{L"a_1"}, ket{L"i_1"}), ctx);
+      std::string R_name =
+          generator.represent(Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}), ctx);
+
+      if (with_f) {
+        write_eigen_tensor_to_numpy(temp_dir.string() + "/" + f_name + ".npy",
+                                    f_tensor);
+      }
+      write_eigen_tensor_to_numpy(temp_dir.string() + "/" + D_name + ".npy",
+                                  D_tensor);
+      Eigen::Tensor<double, 2> D_t_tensor =
+          D_tensor.shuffle(Eigen::array<int, 2>{1, 0});
+      write_eigen_tensor_to_numpy(temp_dir.string() + "/" + D_t_name + ".npy",
+                                  D_t_tensor);
+
+      export_expression(to_export_tree(result_expr), generator, ctx);
+
+      REQUIRE(
+          run_python_code(generator.get_generated_code(), temp_dir.string()));
+
+      auto R_actual = read_eigen_tensor_from_numpy<double, 2>(
+          temp_dir.string() + "/" + R_name + ".npy");
+
+      REQUIRE(R_actual.dimensions()[0] == nocc);
+      REQUIRE(R_actual.dimensions()[1] == nvirt);
+      for (Eigen::Index i = 0; i < nocc; ++i) {
+        for (Eigen::Index a = 0; a < nvirt; ++a) {
+          REQUIRE(std::abs(R_actual(i, a) - R_expected(i, a)) < tolerance);
+        }
+      }
+    }
+
+    // Square root: I[i1,i2,a1,a2] = D[i1,i2,a1,a2]^(1/2)
+    {
+      // D's permutational symmetry S makes its data symmetric under i1<->i2
+      // and, separately, under a1<->a2
+      auto D_raw = random_tensor<double, 4>({nocc, nocc, nvirt, nvirt}, 3200);
+      Eigen::Tensor<double, 4> D_tensor(nocc, nocc, nvirt, nvirt);
+      for (Eigen::Index i1 = 0; i1 < nocc; ++i1)
+        for (Eigen::Index i2 = 0; i2 < nocc; ++i2)
+          for (Eigen::Index a1 = 0; a1 < nvirt; ++a1)
+            for (Eigen::Index a2 = 0; a2 < nvirt; ++a2)
+              D_tensor(i1, i2, a1, a2) = std::abs(D_raw(i1, i2, a1, a2)) +
+                                         std::abs(D_raw(i2, i1, a1, a2)) +
+                                         std::abs(D_raw(i1, i2, a2, a1)) +
+                                         std::abs(D_raw(i2, i1, a2, a1)) + 1.0;
+
+      auto result_expr = deserialize<ResultExpr>(
+          L"I{i_1,i_2;a_1,a_2} = D{i_1,i_2;a_1,a_2}:S-S-S^(1/2)");
+
+      NumPyEinsumGenerator generator;
+      std::string D_name = generator.represent(
+          Tensor(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}), ctx);
+      // D's braket symmetry lets the export load it as D[a_1,a_2,i_1,i_2]
+      std::string D_t_name = generator.represent(
+          Tensor(L"D", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}), ctx);
+      std::string I_name = generator.represent(
+          Tensor(L"I", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}), ctx);
+
+      write_eigen_tensor_to_numpy(temp_dir.string() + "/" + D_name + ".npy",
+                                  D_tensor);
+      Eigen::Tensor<double, 4> D_t_tensor =
+          D_tensor.shuffle(Eigen::array<int, 4>{2, 3, 0, 1});
+      write_eigen_tensor_to_numpy(temp_dir.string() + "/" + D_t_name + ".npy",
+                                  D_t_tensor);
+
+      export_expression(to_export_tree(result_expr), generator, ctx);
+
+      REQUIRE(
+          run_python_code(generator.get_generated_code(), temp_dir.string()));
+
+      auto I_actual = read_eigen_tensor_from_numpy<double, 4>(
+          temp_dir.string() + "/" + I_name + ".npy");
+
+      REQUIRE(I_actual.dimensions()[0] == nocc);
+      REQUIRE(I_actual.dimensions()[1] == nocc);
+      REQUIRE(I_actual.dimensions()[2] == nvirt);
+      REQUIRE(I_actual.dimensions()[3] == nvirt);
+      for (Eigen::Index i1 = 0; i1 < nocc; ++i1)
+        for (Eigen::Index i2 = 0; i2 < nocc; ++i2)
+          for (Eigen::Index a1 = 0; a1 < nvirt; ++a1)
+            for (Eigen::Index a2 = 0; a2 < nvirt; ++a2)
+              REQUIRE(std::abs(I_actual(i1, i2, a1, a2) -
+                               std::sqrt(D_tensor(i1, i2, a1, a2))) <
+                      tolerance);
     }
   }
 

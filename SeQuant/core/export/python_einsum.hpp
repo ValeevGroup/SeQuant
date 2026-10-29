@@ -205,6 +205,14 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
         [this](std::string s) { return wrap_conj(std::move(s)); });
   }
 
+  std::string represent(const TensorPower &power,
+                        const Context &ctx) const override {
+    SEQUANT_ASSERT(power.base()->is<Tensor>());
+    return detail::format_tensor_power(
+        power, represent(power.base()->as<Tensor>(), ctx), "**",
+        /*double_slash*/ false);
+  }
+
   void unload(const Tensor &tensor, const Context &ctx) override {
     m_generated += m_indent + "del " + represent(tensor, ctx) + "\n";
   }
@@ -457,9 +465,16 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     std::vector<std::string> tensor_names;
     std::string scalar_factor;
 
+    // An element-wise power, alone or scaled, maps its operand onto the
+    // result's subscripts and is raised after that einsum
+    const TensorPower *power = nullptr;
+
     // Extract scalar prefactor and tensors from the expression
     extract_einsum_components(expr, einsum_spec, tensor_names, scalar_factor,
-                              ctx, index_map, used_chars);
+                              ctx, index_map, used_chars, &power);
+    if (power && tensor_names.size() != 1) {
+      throw Exception("element-wise power is not a contraction factor");
+    }
 
     // Add output specification
     einsum_spec +=
@@ -482,6 +497,11 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     }
 
     einsum_call += ")";
+
+    if (power) {
+      einsum_call = detail::format_tensor_power(*power, std::move(einsum_call),
+                                                "**", /*double_slash*/ false);
+    }
 
     // Apply scalar factor if present
     if (!scalar_factor.empty() && scalar_factor != "1" &&
@@ -507,12 +527,16 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
   }
 
   /// Extract einsum components from an expression
+  /// @param power if non-null, receives the TensorPower met in @p expr, whose
+  ///        base is then extracted in its place; a second one throws, as does
+  ///        any TensorPower if @p power is null
   void extract_einsum_components(
       const Expr &expr, std::string &einsum_spec,
       std::vector<std::string> &tensor_names, std::string &scalar_factor,
       const Context &ctx,
       boost::unordered::unordered_map<std::string, std::string> &index_map,
-      boost::unordered::unordered_set<std::string> &used_chars) const {
+      boost::unordered::unordered_set<std::string> &used_chars,
+      const TensorPower **power = nullptr) const {
     if (expr.is<Tensor>()) {
       const Tensor &tensor = expr.as<Tensor>();
       if (!einsum_spec.empty()) einsum_spec += ",";
@@ -542,8 +566,17 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
       // Handle tensor factors
       for (std::size_t i = 0; i < product.size(); ++i) {
         extract_einsum_components(*product.factor(i), einsum_spec, tensor_names,
-                                  scalar_factor, ctx, index_map, used_chars);
+                                  scalar_factor, ctx, index_map, used_chars,
+                                  power);
       }
+    } else if (expr.is<TensorPower>()) {
+      if (!power || *power) {
+        throw Exception("element-wise power is not a contraction factor");
+      }
+      *power = &expr.as<TensorPower>();
+      SEQUANT_ASSERT((*power)->base()->is<Tensor>());
+      extract_einsum_components(*(*power)->base(), einsum_spec, tensor_names,
+                                scalar_factor, ctx, index_map, used_chars);
     } else if (expr.is<Sum>()) {
       // For sums, we can't use a single einsum call
       // This should be handled at a higher level by generating multiple
