@@ -733,12 +733,8 @@ ResultExpr lower_broadcast_sum(ResultExpr const& res) {
   std::optional<Sum::summands_type> lowered;
   for (std::size_t s = 0; s != summands.size(); ++s) {
     const ExprPtr& summand = summands[s];
-    // a head index is never contracted, so one that a summand uses in
-    // several slots (a hyperindex) is supplied by it, too
-    const auto supplied =
-        get_used_indices<container::set<Index>,
-                         SlotType::Bra | SlotType::Ket | SlotType::Aux>(
-            *detail::without_symmetrizers(summand));
+    const container::set<Index> supplied = detail::supplied_result_indices(
+        res, *detail::without_symmetrizers(summand));
 
     std::optional<Product> broadcast;
     auto append_ones = [&](const auto& head_indices, SlotType slot) {

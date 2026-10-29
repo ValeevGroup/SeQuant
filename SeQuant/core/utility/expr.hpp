@@ -101,6 +101,15 @@ namespace detail {
 /// antisymmetrizer (see pop_tensor), e.g. to determine its external indices;
 /// @p expression itself (not a copy) if it has neither
 ExprPtr without_symmetrizers(const ExprPtr &expression);
+
+/// @param result a result head
+/// @param term a summand of the rhs of @p result, without symmetrizers (see
+///        without_symmetrizers())
+/// @return the (non-null) indices of @p result that @p term supplies, i.e. uses
+///         in a bra, ket or aux slot; a head index is never contracted, so one
+///         that @p term uses in several slots is supplied, too
+container::set<Index> supplied_result_indices(const ResultExpr &result,
+                                              const Expr &term);
 }  // namespace detail
 
 /// Replaces a given target expression by a given replacement

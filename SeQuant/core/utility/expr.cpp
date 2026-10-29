@@ -402,10 +402,11 @@ bool has_uniform_externals(const Sum &sum) {
 }
 
 /// Under a result head the summands of @p sum may broadcast: each must supply
-/// a subset of the result's indices, and together all of them, and none may
-/// contract a result index. The (anti)symmetrizers of the summands are
-/// disregarded. As for a whole rhs, bra and ket indices are pooled, since a
-/// bra-ket symmetric summand may present them swapped.
+/// a subset of the result's indices, and together all of them. A result index
+/// is never contracted, so a summand that uses it in several slots supplies
+/// it. The (anti)symmetrizers of the summands are disregarded. As for a whole
+/// rhs, bra and ket indices are pooled, since a bra-ket symmetric summand may
+/// present them swapped.
 /// @pre every summand of @p sum is valid
 bool is_valid_broadcast(const ResultExpr &result, const Sum &sum,
                         std::string *msg) {
@@ -420,7 +421,6 @@ bool is_valid_broadcast(const ResultExpr &result, const Sum &sum,
         SEQUANT_EXPR_INVALID("Summand index " + toUtf8(idx.full_label()) +
                              " is not an index of the result");
       }
-      covered.insert(idx);
       return true;
     };
     for (const Index &idx :
@@ -431,20 +431,8 @@ bool is_valid_broadcast(const ResultExpr &result, const Sum &sum,
       if (!check(idx, result.aux())) return false;
     }
 
-    // a result index that the summand uses but does not expose is contracted
-    // there, so the summand cannot be broadcast over it
-    const auto used =
-        get_used_indices<container::set<Index>,
-                         SlotType::Bra | SlotType::Ket | SlotType::Aux>(*term);
-    const auto summand_externals =
-        ranges::views::concat(externals.bra, externals.ket, externals.aux);
-    for (const Index &idx :
-         ranges::views::concat(result.bra(), result.ket(), result.aux())) {
-      if (used.contains(idx) && !ranges::contains(summand_externals, idx)) {
-        SEQUANT_EXPR_INVALID("Result index " + toUtf8(idx.full_label()) +
-                             " is contracted within a summand");
-      }
-    }
+    const auto supplied = detail::supplied_result_indices(result, *term);
+    covered.insert(supplied.begin(), supplied.end());
   }
 
   for (const Index &idx :
@@ -760,6 +748,18 @@ std::optional<ExprPtr> pop_symmetrizer(ExprPtr &expression) {
 
 std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression) {
   return pop_symmetrizer(expression.expression());
+}
+
+container::set<Index> detail::supplied_result_indices(const ResultExpr &result,
+                                                      const Expr &term) {
+  const auto used =
+      get_used_indices<container::set<Index>,
+                       SlotType::Bra | SlotType::Ket | SlotType::Aux>(term);
+  container::set<Index> supplied;
+  for (const Index &idx : result.indices()) {
+    if (used.contains(idx)) supplied.insert(idx);
+  }
+  return supplied;
 }
 
 ExprPtr detail::without_symmetrizers(const ExprPtr &expression) {

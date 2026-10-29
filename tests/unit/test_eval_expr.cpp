@@ -11,6 +11,7 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
@@ -848,6 +849,7 @@ TEST_CASE("lower_broadcast_sum", "[EvalExpr][broadcast]") {
   SECTION("a head index used twice in a summand is supplied") {
     const ResultExpr res = deserialize<ResultExpr>(
         L"R{i_1;a_1} = f{i_1;a_1} + M{i_1;a_1} D{a_1;i_1}");
+    REQUIRE(is_valid(res));
     const ResultExpr lowered = lower_broadcast_sum(res);
     REQUIRE(*lowered.expression() == *res.expression());
     REQUIRE_NOTHROW(binarize(res));
