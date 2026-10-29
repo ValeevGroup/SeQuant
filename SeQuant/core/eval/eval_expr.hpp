@@ -663,26 +663,46 @@ binarize(ExprPtr const& expr, IndexSet const& external = {},
                           [](auto&& val) { return ExprT{val}; });
 }
 
+/// Lowers a broadcast Sum under a result head to a Sum of uniformly indexed
+/// summands.
+///
+/// Under a head, the summands of a Sum may each supply only a subset of the
+/// head's indices (see is_valid(const ResultExpr&)); a summand is constant
+/// along the modes it lacks. Broadcast is defined only under a head, which
+/// supplies the missing modes; the evaluation tree has no such notion. Each
+/// summand that lacks head indices is therefore replaced by its product with
+/// one all-ones leaf (see make_ones()) per missing index, appended in head
+/// order (bra, ket, aux) and placed in the head slot of that index. An index
+/// that a summand supplies in the opposite bra/ket slot counts as present.
+/// @param res a valid ResultExpr
+/// @return @p res with its broadcast summands made explicit; @p res itself if
+///         its expression is not a Sum or every summand covers the head
+/// @throw Exception if a summand lacks an aux index of the head
+ResultExpr lower_broadcast_sum(ResultExpr const& res);
+
 /// Creates a binary tree for evaluation from a ResultExpr.
-/// External indices are deduced from @p res (its non-null slots).
+/// External indices are deduced from @p res (its non-null slots). A broadcast
+/// Sum on the rhs is lowered first (see lower_broadcast_sum()).
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
 FullBinaryNode<ExprT> binarize(ResultExpr const& res,
                                const BinarizationOptions& opts = {}) {
+  ResultExpr const lowered = lower_broadcast_sum(res);
+
   // collect result indices so they are not contracted in the expression tree
   IndexSet uncontract;
-  for (auto&& ix : res.indices()) uncontract.emplace(ix);
+  for (auto&& ix : lowered.indices()) uncontract.emplace(ix);
 
   // The recursive calls below dispatch to the (now deprecated)
   // binarize(ExprPtr) overload — the head's bra/ket would be positional, but
-  // we overwrite it below with res.result_as_tensor() so the layout is
+  // we overwrite it below with lowered.result_as_tensor() so the layout is
   // caller-determined and the deprecation does not apply.
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   FullBinaryNode<ExprT> tree =
-      binarize<ExprT>(res.expression(), uncontract, opts);
+      binarize<ExprT>(lowered.expression(), uncontract, opts);
 
   const bool is_scalar =
-      res.bra().empty() && res.ket().empty() && res.aux().empty();
+      lowered.bra().empty() && lowered.ket().empty() && lowered.aux().empty();
 
   if (tree.size() < 2) {
     // We want to have a result node with the result from the ResultExpr.
@@ -691,9 +711,9 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res,
     // that terminal multiplied by 1.
     ExprT result = [&]() {
       if (is_scalar) {
-        return *binarize<ExprT>(ex<Variable>(res.result_as_variable()));
+        return *binarize<ExprT>(ex<Variable>(lowered.result_as_variable()));
       }
-      return *binarize<ExprT>(ex<Tensor>(res.result_as_tensor()));
+      return *binarize<ExprT>(ex<Tensor>(lowered.result_as_tensor()));
     }();
     EvalOpSetter{}.set(result, EvalOp::Product);
 
@@ -704,13 +724,13 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res,
   SEQUANT_ASSERT(tree.size() > 1);
 
   if (is_scalar) {
-    if (res.has_label()) {
-      tree->expr().template as<Variable>().set_label(res.label());
+    if (lowered.has_label()) {
+      tree->expr().template as<Variable>().set_label(lowered.label());
     }
   } else {
     Tensor& tensor = tree->expr().template as<Tensor>();
 
-    tensor = res.result_as_tensor();
+    tensor = lowered.result_as_tensor();
   }
 
   return tree;

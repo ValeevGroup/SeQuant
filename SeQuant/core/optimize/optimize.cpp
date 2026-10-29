@@ -492,6 +492,7 @@ OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts) {
 }
 
 ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts) {
+  expr = lower_broadcast_sum(expr);
   expr.expression() = optimize(expr.expression(), std::move(opts));
   return expr;
 }
