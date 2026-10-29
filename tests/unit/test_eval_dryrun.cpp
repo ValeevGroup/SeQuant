@@ -40,6 +40,7 @@
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 
 #include "csv_size_fixtures.hpp"
+#include "tensor_power_fixtures.hpp"
 
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/batch_policy.hpp>
@@ -4568,6 +4569,97 @@ TEST_CASE("meter accounts an element-wise power", "[meter]") {
       CHECK(report.flops_persistent + report.flops_volatile ==
             Catch::Approx(2 * nelem));
     }
+  }
+}
+
+// E = L · (M ⊙ pow(D,-1)), batched over the occupied i_1 the root contracts:
+// the loop opened at the root slices the Hadamard product and the power
+// below it, so both schedulers replay a batched loop through the Power node.
+TEST_CASE("meter batches a loop through an element-wise power",
+          "[meter][tensor-power]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+
+  auto _ = set_scoped_default_context(lax_braket_context());
+
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+  double const nelem = 10. * 10. * 20. * 20.;
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto const plain = binarize<EvalExprDryRun>(hadamard_power_term());
+  auto batched = binarize<EvalExprDryRun>(hadamard_power_term());
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(plain->op_type() == EvalOp::Product);
+  REQUIRE(plain.right()->op_type() == EvalOp::Product);
+  REQUIRE(plain.right().right()->op_type() == EvalOp::Power);
+  stamp_occ_loop(batched);
+  auto policy = occ_contracted_policy();
+
+  // the unbatched reference
+  std::vector<EvalNodeDryRun> const plain_forest{plain};
+  auto const ref = meter(plain_forest, BatchPolicy{}, regime, CacheConfig{});
+  auto const ref_flops = ref.flops_persistent + ref.flops_volatile;
+  auto const cm = std::make_shared<CostModel const>(regime);
+  auto const ref_bytes =
+      evaluate(plain, DryRunLeafEvaluator{cm})->size_in_bytes();
+
+  std::vector<EvalNodeDryRun> const forest{batched};
+  for (auto const scheduler :
+       {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+    CAPTURE(static_cast<int>(scheduler));
+    policy.scheduler = scheduler;
+    eval::dryrun::MeterReport report;
+    REQUIRE_NOTHROW(report = meter(forest, policy, regime, CacheConfig{}));
+    CHECK(report.scheduler == scheduler);
+    auto const flops = report.flops_persistent + report.flops_volatile;
+    if (scheduler == BatchScheduler::ordered) {
+      // one build of the power, the Hadamard product and the contraction per
+      // batch of i_1 (extent 10, batches of 1), each touching its slice of
+      // the 10·10·20·20 elements once: the same flops as the unbatched run,
+      // whose power alone accounts for one element count of D
+      CHECK(report.builds_total == 30);
+      CHECK(flops == Catch::Approx(ref_flops));
+      CHECK(ref_flops == Catch::Approx(3 * nelem));
+    } else {
+      // Pre-existing forest_descent metering blind spot: this fully
+      // contracted root's loop is replayed (the result below assembles) but
+      // the meter tallies no builds or flops; the control L·D, with no
+      // power, reports the same zeros.
+      CHECK(report.builds_total == 0);
+      CHECK(flops == 0);
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      auto control = binarize<EvalExprDryRun>(base_term());
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+      stamp_occ_loop(control);
+      auto const control_report = meter(std::vector<EvalNodeDryRun>{control},
+                                        policy, regime, CacheConfig{});
+      CHECK(control_report.builds_total == 0);
+      CHECK(control_report.flops_persistent + control_report.flops_volatile ==
+            0);
+    }
+
+    // the batched result assembles to the unbatched one's size
+    DryRunLeafEvaluator const yield{cm};
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+    cache.set_array_ops(&aops);
+    if (scheduler == BatchScheduler::forest_descent)
+      cache.set_custom_evaluator(
+          make_evaluator(policy, yield, make_no_scope_guard{}));
+    auto const res = evaluate(forest, policy, std::wstring{}, yield, cache);
+    REQUIRE(res);
+    CHECK(res->size_in_bytes() == ref_bytes);
   }
 }
 

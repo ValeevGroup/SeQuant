@@ -11,6 +11,7 @@
 #include <SeQuant/core/eval/legality.hpp>
 #include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
+#include <SeQuant/core/eval/value_node_map.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -21,6 +22,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 #include "csv_size_fixtures.hpp"
+#include "tensor_power_fixtures.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -1140,4 +1142,79 @@ TEST_CASE(
 
   // Consolidated acceptance: all four roles demonstrably reachable.
   CHECK((saw_local && saw_reduction && saw_invariant && saw_carried));
+}
+
+// A loop opened at the contraction above an element-wise power slices the
+// power as it slices the Hadamard product that reads it: the Power value
+// carries the batched occupied mode and is read inside the loop, so the mode
+// is LoopLocal for it. Its operand is a leaf, which is read in slices and
+// never built, so it has no build-site axis, like the other leaf M.
+TEST_CASE(
+    "analyze_legality classifies an axis through a Power node like its "
+    "consumer, and its operand like any leaf",
+    "[legality][tensor-power]") {
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::LoopRole;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  auto _ = sequant::set_scoped_default_context(lax_braket_context());
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = sequant::binarize<EvalExprDryRun>(hadamard_power_term());
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  stamp_occ_loop(node);
+  std::vector<EvalNodeDryRun> const forest{node};
+  auto const policy = occ_contracted_policy();
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 10u}, {L"a", 20u}};
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const rich = sequant::eval::compute_dag_boulevard(
+      forest, cm, policy.batch_target_size);
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const vmap = sequant::eval::build_value_key_node_map(forest);
+
+  // the role of the batched occupied axis for the one value whose node
+  // \p pick selects; empty when the axis is not in its build site
+  auto const role_of = [&](auto const& pick) {
+    std::optional<LoopRole> role;
+    std::size_t nvalues = 0;
+    for (auto const& vc : rich.cells) {
+      auto const it = vmap.find(sequant::eval::value_key_of(vc));
+      REQUIRE(it != vmap.end());
+      if (!pick(*it->second)) continue;
+      ++nvalues;
+      auto const cl_it =
+          std::ranges::find(legality.cells, sequant::eval::value_key_of(vc),
+                            &sequant::eval::CellLegality::hash);
+      REQUIRE(cl_it != legality.cells.end());
+      for (auto const& ac : cl_it->per_axis)
+        if (ac.axis == batched_occ()) role = ac.role;
+    }
+    REQUIRE(nvalues == 1);
+    return role;
+  };
+  auto const is_op = [](sequant::EvalOp op) {
+    return [op](EvalNodeDryRun const& n) {
+      return !n.leaf() && n->op_type() == op;
+    };
+  };
+  auto const is_leaf = [](std::wstring_view label) {
+    return [label](EvalNodeDryRun const& n) {
+      return n.leaf() && n->is_tensor() && n->as_tensor().label() == label;
+    };
+  };
+  auto const power = role_of(is_op(sequant::EvalOp::Power));
+  CHECK(power == LoopRole::LoopLocal);
+  // the Hadamard product below the root: the only non-root Product
+  auto const hadamard = role_of([&](EvalNodeDryRun const& n) {
+    return is_op(sequant::EvalOp::Product)(n) && &n != &forest.front();
+  });
+  CHECK(power == hadamard);
+  // the root reduces the mode
+  CHECK(role_of([&](EvalNodeDryRun const& n) {
+          return &n == &forest.front();
+        }) == std::optional{LoopRole::Reduction});
+  CHECK_FALSE(role_of(is_leaf(L"D")).has_value());
+  CHECK(role_of(is_leaf(L"D")) == role_of(is_leaf(L"M")));
 }

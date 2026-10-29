@@ -57,6 +57,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 #include "csv_size_fixtures.hpp"
+#include "tensor_power_fixtures.hpp"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -5648,4 +5649,77 @@ TEST_CASE(
   REQUIRE_NOTHROW((void)sequant::eval::evaluate_ordered_multiroot(
       forest, ordered, rich, {""},
       sequant::eval::dryrun::DryRunLeafEvaluator{cm}, cache, target));
+}
+
+// Two roots sharing the leaf D: root 1 reads it, root 2 raises it element-wise
+// under a loop over i_1 its root contracts. The ordered multi-root executor
+// builds the batched loop through the Power node and assembles each root to
+// what per-root forest descent gives.
+TEST_CASE(
+    "evaluate_ordered_multiroot evaluates a batched loop through a "
+    "Power node",
+    "[ordered-executor][tensor-power]") {
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  auto _ = sequant::set_scoped_default_context(lax_braket_context());
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  std::vector<EvalNodeDryRun> forest{
+      sequant::binarize<EvalExprDryRun>(base_term()),
+      sequant::binarize<EvalExprDryRun>(hadamard_power_term())};
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(forest[1].right().right()->op_type() == sequant::EvalOp::Power);
+  stamp_occ_loop(forest[1]);
+  auto const policy = occ_contracted_policy();
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 10u}, {L"a", 20u}};
+  auto const cm = std::make_shared<CostModel const>(regime);
+  auto const rich = sequant::eval::compute_dag_boulevard(
+      forest, *cm, policy.batch_target_size);
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  sequant::eval::OrderedSchedule ordered;
+  REQUIRE_NOTHROW(ordered = sequant::eval::build_ordered_schedule(
+                      rich, legality, policy, {}));
+
+  // D is one value of the two roots
+  auto const d_hash = forest[0].right()->hash_value();
+  REQUIRE(forest[1].right().right().left()->hash_value() == d_hash);
+  CHECK(std::ranges::count(rich.cells, d_hash,
+                           &sequant::eval::ValueCell::hash) == 1);
+
+  // the i_1 loop is realized
+  bool occ_block = false;
+  std::function<void(sequant::eval::ScopeBlock const&)> const find_occ =
+      [&](sequant::eval::ScopeBlock const& b) {
+        if (b.axis.nonnull() && b.axis.space().base_key() == L"i")
+          occ_block = true;
+        for (auto const& st : b.steps)
+          if (auto const* child =
+                  std::get_if<sequant::eval::ScopeBlock>(&st.value))
+            find_occ(*child);
+      };
+  find_occ(ordered.root);
+  CHECK(occ_block);
+
+  DryRunLeafEvaluator const yield{cm};
+  auto cache = sequant::cache_manager(forest);
+  auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  cache.set_array_ops(&aops);
+  sequant::container::svector<sequant::ResultPtr> res;
+  REQUIRE_NOTHROW(res = sequant::eval::evaluate_ordered_multiroot(
+                      forest, ordered, rich,
+                      sequant::container::svector<std::string>(forest.size()),
+                      yield, cache, policy.batch_target_size));
+  REQUIRE(res.size() == forest.size());
+  for (std::size_t r = 0; r < forest.size(); ++r) {
+    CAPTURE(r);
+    REQUIRE(res[r]);
+    auto const ref = sequant::evaluate(forest[r], yield);
+    REQUIRE(ref);
+    CHECK(res[r]->size_in_bytes() == ref->size_in_bytes());
+  }
 }

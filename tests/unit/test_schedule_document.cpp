@@ -1682,6 +1682,56 @@ TEST_CASE("record_dag names an adjoint factor like a leaf, its operands below",
   REQUIRE(nsub == 2);
 }
 
+TEST_CASE("record_dag names a power factor like a leaf, its operands below",
+          "[schedule-document][tensor-power]") {
+  using namespace sequant;
+  auto _ = set_scoped_default_context(lax_braket_context());
+  // the twin replaces pow(D,-1) by a plain tensor of D's shape
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  const TensorSymmetries asym{.perm = Symmetry::Antisymm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  auto const twin_expr =
+      ex<Tensor>(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, asym) *
+      ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, asym) *
+      ex<Tensor>(L"N", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  // occupied modes, contracted at the root, batched one at a time
+  BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  policy.is_batchable_external_index = [](Index const&) { return false; };
+  policy.batch_target_size = [](Index const&) -> std::size_t { return 1; };
+  policy.peak_threshold = 1;
+  auto const fx =
+      dag_fixture({{"R1", power_term()}, {"R2", twin_expr}}, policy);
+  DagRecord dag;
+  REQUIRE_NOTHROW(
+      dag = record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots));
+  auto const& pw = fx.roots[0].terms.at(0).key;
+  auto const& twin = fx.roots[1].terms.at(0).key;
+
+  std::map<std::string, std::set<std::size_t>> ordinals;
+  std::set<std::string> ids;
+  for (auto const& v : dag.values) {
+    ids.insert(v.id);
+    for (auto const& o : v.occurrences) ordinals[o.term].insert(o.node);
+  }
+  REQUIRE(ordinals[pw] == ordinals[twin]);
+  REQUIRE(ordinals[pw] == std::set<std::size_t>{0, 1, 2, 3, 4});
+  std::size_t nsub = 0;
+  for (auto const& id : ids)
+    if (id.starts_with(pw + "#") && (id.ends_with("/0") || id.ends_with("/1")))
+      ++nsub;
+  REQUIRE(nsub == 2);
+
+  // the dag section round-trips through JSON
+  auto const doc = doc_with(fx.roots, dag);
+  REQUIRE(compare(doc, from_json(to_json(doc))).empty());
+}
+
 namespace {
 
 /// an index of each space the two-root fixture uses
