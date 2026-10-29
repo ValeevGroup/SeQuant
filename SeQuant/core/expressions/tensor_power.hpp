@@ -69,6 +69,9 @@ class TensorPower : public Expr, public AbstractTensor {
 
   std::wstring to_latex() const override;
 
+  bool operator<(const AbstractTensor& that) const override;
+
+ private:
   /// @return the symmetry of the base, except that for an even integer
   /// exponent an antisymmetric base becomes Symmetry::Symm
   Symmetry _symmetry() const override;
@@ -97,13 +100,12 @@ class TensorPower : public Expr, public AbstractTensor {
   Hermiticity _hermiticity() const override;
   Field _base_field() const override;
   std::size_t _color() const override;
-  /// @return the hash of the exponent
+  /// @return a nonzero hash of the exponent and the TensorPower type id
   std::size_t _color_salt() const override;
   bool _is_cnumber() const override;
   std::wstring_view _label() const override;
   std::wstring _to_latex() const override;
   std::size_t _hash_value() const override;
-  bool operator<(const AbstractTensor& that) const override;
   bool _transform_indices(
       const container::map<Index, Index>& index_map) override;
   void _reset_tags() override;
@@ -112,7 +114,6 @@ class TensorPower : public Expr, public AbstractTensor {
   any_view_randsz _ket_mutable() override;
   any_view_randsz _aux_mutable() override;
 
- private:
   ExprPtr base_;
   exponent_type exponent_;
 

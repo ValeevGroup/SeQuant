@@ -1858,7 +1858,8 @@ TEST_CASE("tensor_power", "[elements]") {
     REQUIRE_THROWS_AS(pow(ex<Constant>(0), rational{-1}), Exception);
     // exponent 0 on a tensor is a tensor of ones, not Constant(1)
     CHECK(pow(D, rational{0})->is<TensorPower>());
-    CHECK(pow(D, rational{0})->as<TensorPower>()._symmetry() == Symmetry::Symm);
+    CHECK(pow(D, rational{0})->as<AbstractTensor>()._symmetry() ==
+          Symmetry::Symm);
   }
   SECTION("hash and equality") {
     const auto p1 = ex<TensorPower>(D, rational{-1});
@@ -1885,14 +1886,20 @@ TEST_CASE("tensor_power", "[elements]") {
     CHECK(*c == p);
   }
   SECTION("symmetry rule") {
-    CHECK(TensorPower(t, rational{3})._symmetry() == Symmetry::Antisymm);
-    CHECK(TensorPower(t, rational{2})._symmetry() == Symmetry::Symm);
-    CHECK(TensorPower(t, rational{0})._symmetry() == Symmetry::Symm);
-    CHECK(TensorPower(D, rational{1, 2})._symmetry() == Symmetry::Symm);
-    CHECK(TensorPower(D, rational{-1})._braket_symmetry() ==
-          D->as<Tensor>().braket_symmetry());
-    CHECK(TensorPower(D, rational{-1})._column_symmetry() ==
-          ColumnSymmetry::Symm);
+    CHECK(TensorPower(t, rational{3}).as<AbstractTensor>()._symmetry() ==
+          Symmetry::Antisymm);
+    CHECK(TensorPower(t, rational{2}).as<AbstractTensor>()._symmetry() ==
+          Symmetry::Symm);
+    CHECK(TensorPower(t, rational{0}).as<AbstractTensor>()._symmetry() ==
+          Symmetry::Symm);
+    CHECK(TensorPower(D, rational{1, 2}).as<AbstractTensor>()._symmetry() ==
+          Symmetry::Symm);
+    CHECK(
+        TensorPower(D, rational{-1}).as<AbstractTensor>()._braket_symmetry() ==
+        D->as<Tensor>().braket_symmetry());
+    CHECK(
+        TensorPower(D, rational{-1}).as<AbstractTensor>()._column_symmetry() ==
+        ColumnSymmetry::Symm);
   }
   SECTION("base with an empty ket") {
     auto eps = ex<Tensor>(L"ε", bra{L"a_1"}, ket{},
@@ -1931,6 +1938,15 @@ TEST_CASE("tensor_power", "[elements]") {
                                           .column = ColumnSymmetry::Symm});
     REQUIRE(renamed->is<Product>());
     CHECK(*renamed->as<Product>().factors()[1] == *pow(D3, rational{-1}));
+
+    CHECK(diff(*p, *p).empty());
+    CHECK(!diff(*p, *pow(D, rational{-2})).empty());
+
+    // a proto-indexed Sum is validated by counting index occurrences, which
+    // must see the indices of a power's base
+    auto T = ex<Tensor>(L"T", bra{Index(L"a_1", {L"i_1"})}, ket{L"i_1"},
+                        TensorSymmetries{.braket = BraKetSymmetry::Symm});
+    CHECK(is_valid(T + pow(T, rational{-1}), &msg));
   }
 }
 

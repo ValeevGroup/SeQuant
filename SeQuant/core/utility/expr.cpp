@@ -208,6 +208,19 @@ std::string toplevel_diff(const Tensor &lhs, const Tensor &rhs) {
   SEQUANT_ABORT("Unhandled difference between tensors");
 }
 
+std::string toplevel_diff(const TensorPower &lhs, const TensorPower &rhs) {
+  if (lhs == rhs) {
+    return {};
+  }
+
+  if (lhs.exponent() != rhs.exponent()) {
+    return "Exponents differ: " + to_string(lhs.exponent()) + " vs. " +
+           to_string(rhs.exponent());
+  }
+
+  return "Bases differ: " + diff(*lhs.base(), *rhs.base());
+}
+
 std::string toplevel_diff(const Sum & /*lhs*/, const Sum & /*rhs*/) {
   // There is no way two Sum objects can be different on the top-level
   return {};
@@ -277,6 +290,8 @@ std::string diff(const Expr &lhs, const Expr &rhs) {
     diff_str = toplevel_diff(lhs.as<Product>(), rhs.as<Product>());
   } else if (lhs.is<Tensor>()) {
     diff_str = toplevel_diff(lhs.as<Tensor>(), rhs.as<Tensor>());
+  } else if (lhs.is<TensorPower>()) {
+    diff_str = toplevel_diff(lhs.as<TensorPower>(), rhs.as<TensorPower>());
   } else if (lhs.is<Constant>()) {
     diff_str = toplevel_diff(lhs.as<Constant>(), rhs.as<Constant>());
   } else if (lhs.is<Variable>()) {
@@ -299,11 +314,14 @@ namespace {
 /// Counts every index occurrence in @p expr, treating a proto-index of a
 /// composite (CSV) index as an occurrence of that (bare) index in addition to
 /// counting the composite index itself. The recursion descends through
-/// Products/Sums down to the Tensor leaves.
+/// Products/Sums down to the Tensor leaves; the indices of a TensorPower are
+/// those of its base.
 container::map<Index, std::size_t> index_occurrence_counts(const Expr &expr) {
   container::map<Index, std::size_t> counts;
   auto visit = [&counts](const Expr &e, auto &self) -> void {
-    if (e.is<Tensor>()) {
+    if (e.is<TensorPower>()) {
+      self(*e.as<TensorPower>().base(), self);
+    } else if (e.is<Tensor>()) {
       for (const Index &ix : e.as<Tensor>().const_braketaux()) {
         ++counts[ix];
         for (const Index &p : ix.proto_indices()) ++counts[p];
