@@ -506,6 +506,66 @@ TEST_CASE("record_term then rebuild_pinned_term reproduces the optimized tree",
   REQUIRE(*pinned2.expr == *optimized);
 }
 
+namespace {
+
+/// L·M·pow(D,-1), D totally symmetric, L and M antisymmetric; i_1 sits in two
+/// bra slots, so callers scope AssertStrictBraKetSymmetry::No
+sequant::ExprPtr power_term() {
+  using namespace sequant;
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  const TensorSymmetries asym{.perm = Symmetry::Antisymm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, asym);
+  auto L = ex<Tensor>(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, asym);
+  return L * M * pow(D, rational{-1});
+}
+
+/// the default context with AssertStrictBraKetSymmetry::No
+sequant::Context lax_braket_context() {
+  auto ctx = sequant::get_default_context();
+  ctx.set(sequant::AssertStrictBraKetSymmetry::No);
+  return ctx;
+}
+
+}  // namespace
+
+TEST_CASE("record_term then rebuild_pinned_term reproduce a TensorPower term",
+          "[schedule-document][tensor-power]") {
+  using namespace sequant::opt::schedule;
+  auto _ = sequant::set_scoped_default_context(lax_braket_context());
+  auto canon = canonical_term(power_term());
+  REQUIRE(canon->is<sequant::Product>());
+  REQUIRE(canonical_factors(canon).size() == 3);
+  auto [optimized, annotations] = pin_optimize(canon);
+  REQUIRE(annotations.size() == 2);
+
+  auto rec = record_term(canon, optimized, annotations);
+  REQUIRE(rec.factors.size() == 3);
+  REQUIRE(rec.nodes.size() == 2);
+  auto pinned = rebuild_pinned_term(rec, canon);
+  REQUIRE(*pinned.expr == *optimized);
+  REQUIRE(pinned.nodes.size() == annotations.size());
+  for (std::size_t k = 0; k < annotations.size(); ++k) {
+    REQUIRE(pinned.nodes[k].axes == annotations[k].axes);
+    REQUIRE(pinned.nodes[k].opened_here == annotations[k].opened_here);
+  }
+
+  // a lone power is a term too
+  auto lone = canonical_term(
+      sequant::pow(sequant::ex<sequant::Tensor>(L"D", sequant::bra{L"i_1"},
+                                                sequant::ket{L"a_1"}),
+                   sequant::rational{-1}));
+  REQUIRE(lone->is<sequant::TensorPower>());
+  auto lone_rec = record_term(lone, lone, {});
+  REQUIRE(lone_rec.tree.has_value());
+  REQUIRE(lone_rec.tree->leaf == std::optional<std::size_t>{0});
+  REQUIRE(*rebuild_pinned_term(lone_rec, lone).expr == *lone);
+}
+
 TEST_CASE(
     "record_term handles a lone tensor, a scalar, identical factors, and "
     "rejects mixed products",
@@ -787,6 +847,34 @@ TEST_CASE("record_root then pin reproduces the optimized Sum and annotations",
   require_same_annotations((*opts2.term_batch_axes)[pinned.get()],
                            recorded_axes);
   REQUIRE_NOTHROW(session.finish());
+}
+
+TEST_CASE("record_root then pin reproduce a Sum with a TensorPower term",
+          "[schedule-document][tensor-power]") {
+  using namespace sequant::opt::schedule;
+  auto _ = sequant::set_scoped_default_context(lax_braket_context());
+  auto const sum = sequant::ex<sequant::Sum>(sequant::ExprPtrList{
+      power_term(), pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_1,i_2}")});
+  auto opts = session_opts();
+  auto rr = record_root("E", sum, opts);
+  REQUIRE(rr.record.terms.size() == 2);
+  for (auto const& t : rr.record.terms) REQUIRE(t.pinnable);
+  auto const& recorded_axes = (*opts.term_batch_axes)[rr.optimized.get()];
+
+  PinSession session(rr.record);
+  auto opts2 = opts;
+  opts2.pinned = &session;
+  opts2.term_batch_axes = std::make_shared<AxesMap>();
+  auto pinned = sequant::optimize_result(sum, opts2).expr;
+  REQUIRE(*pinned == *rr.optimized);
+  require_same_annotations((*opts2.term_batch_axes)[pinned.get()],
+                           recorded_axes);
+  REQUIRE_NOTHROW(session.finish());
+
+  sequant::BinarizationOptions bopts;
+  bopts.node_batch_axes = recorded_axes;
+  REQUIRE_NOTHROW(sequant::binarize(
+      sequant::ResultExpr{sequant::Variable{L"E"}, pinned}, bopts));
 }
 
 TEST_CASE("a pin loaded from JSON reproduces the recorded document",
@@ -1168,6 +1256,29 @@ TEST_CASE("fingerprint captures DAG-shaping inputs and nothing size-dependent",
   REQUIRE(planner.count("roofline.fast_mem_elems") == 1);
   REQUIRE(planner.count("roofline.block_tiles") == 1);
   REQUIRE(planner.count("roofline.block_prefactor") == 1);
+}
+
+TEST_CASE("fingerprint sees the base of a TensorPower leaf",
+          "[schedule-document][tensor-power]") {
+  using namespace sequant::opt::schedule;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  auto _ = sequant::set_scoped_default_context(lax_braket_context());
+  auto opts = session_opts();
+  opts.batch_policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"D";
+  };
+  auto optimized = sequant::optimize(canonical_term(power_term()), opts);
+  sequant::BinarizationOptions bopts;
+  if (auto it = opts.term_batch_axes->find(optimized.get());
+      it != opts.term_batch_axes->end())
+    bopts.node_batch_axes = it->second;
+  std::vector<sequant::eval::dryrun::EvalNodeDryRun> forest;
+  forest.push_back(sequant::binarize<EvalExprDryRun>(
+      sequant::ResultExpr{sequant::Variable{L"E"}, optimized}, bopts));
+  sequant::eval::schedule::Fingerprint fp;
+  REQUIRE_NOTHROW(fp = fingerprint_of(forest, {"E"}, opts, {L"a", L"i"}));
+  REQUIRE(fp.volatile_leaves == std::vector<std::string>{"D"});
+  REQUIRE(fp.batchable.size() == 2);
 }
 
 TEST_CASE("check_fingerprint names every differing field",

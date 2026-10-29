@@ -8,6 +8,7 @@
 // single_term_opt<Metric> entry points below route through run_single_term_opt.
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/optimize/cost_model.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/optimize/single_term_detail.hpp>
 
@@ -248,14 +249,15 @@ ExprPtr single_term_opt(
     if (out_axes) {
       auto const nt = static_cast<std::size_t>(ranges::count_if(
           prod.factors(),
-          [](ExprPtr const& e) { return e->template is<Tensor>(); }));
+          [](ExprPtr const& e) { return is_tensor_factor(*e); }));
       if (nt >= 2) out_axes->assign(nt - 1, NodeBatchAnnotation{});
     }
     return ex<Product>(Product{prod.scalar(), prod.factors().begin(),
                                prod.factors().end(), Product::Flatten::No});
   }
   auto const tensors =
-      prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
+      prod | filter([](ExprPtr const& e) { return is_tensor_factor(*e); }) |
+      ranges::to_vector;
   auto seq = detail::single_term_opt<Metric>(TensorNetwork{tensors},
                                              std::forward<IdxToSz>(idxsz),
                                              subnet_cse, cost, out_axes);

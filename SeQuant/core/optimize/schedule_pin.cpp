@@ -54,13 +54,14 @@ Constant::scalar_type parse_scalar(std::string const& key,
   return e->as<Constant>().value();
 }
 
-/// only a Constant, a lone Tensor, or a Product of Tensors can be pinned
+/// only a Constant, a lone tensor factor, or a Product of tensor factors (see
+/// opt::is_tensor_factor) can be pinned
 void require_pure(ExprPtr const& canonical, std::string const& key) {
-  if (canonical->is<Constant>() || canonical->is<Tensor>()) return;
+  if (canonical->is<Constant>() || is_tensor_factor(*canonical)) return;
   if (canonical->is<Product>()) {
     bool pure = true;
     for (auto const& f : canonical->as<Product>().factors())
-      pure = pure && f->is<Tensor>();
+      pure = pure && is_tensor_factor(*f);
     if (pure) return;
   }
   fail(key, "only tensor products can be pinned");
@@ -69,7 +70,7 @@ void require_pure(ExprPtr const& canonical, std::string const& key) {
 /// slot indices of a tensor factor and their proto indices
 template <typename F>
 void for_each_index(ExprPtr const& factor, F&& f) {
-  for (auto const& ix : factor->as<Tensor>().const_slots()) {
+  for (auto const& ix : slots(factor->as<AbstractTensor>())) {
     if (!ix.nonnull()) continue;
     f(ix);
     for (auto const& p : ix.proto_indices()) f(p);
@@ -190,7 +191,7 @@ TermRecord record_term(ExprPtr const& canonical, ExprPtr const& optimized,
          "optimized factor " + expr_string(f) + " is not a factor of the term");
   };
   auto to_shape = [&](auto&& self, ExprPtr const& e, bool top) -> TreeShape {
-    if (e->is<Tensor>()) return TreeShape{ordinal_of(e)};
+    if (is_tensor_factor(*e)) return TreeShape{ordinal_of(e)};
     if (!e->is<Product>())
       fail(rec.key, "optimized output contains a non-tensor " + expr_string(e));
     auto const& p = e->as<Product>();
@@ -274,7 +275,7 @@ PinnedTerm rebuild_pinned_term(TermRecord const& rec,
                        Product::Flatten::No);
   };
   if (rec.tree->leaf) {
-    if (canonical->is<Tensor>()) {
+    if (is_tensor_factor(*canonical)) {
       if (scalar != 1) fail(rec.key, "a lone tensor carries no scalar");
       result.expr = factors[*rec.tree->leaf];
     } else {

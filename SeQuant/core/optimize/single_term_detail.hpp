@@ -346,8 +346,7 @@ inline container::vector<Index> batchable_mode_list(
            (is_batchable_external && is_batchable_external(ix));
   };
   for (auto&& t : network.tensors()) {
-    auto tp = std::dynamic_pointer_cast<Tensor>(t);
-    for (auto&& ix : ranges::views::concat(tp->bra(), tp->ket(), tp->aux())) {
+    for (auto&& ix : slots(*t)) {
       if (match(ix) && ranges::find(aux, ix) == ranges::end(aux))
         aux.push_back(ix);
       for (auto&& p : ix.proto_indices())
@@ -624,7 +623,7 @@ inline SubnetMetadata build_subnet_metadata(
     auto ts = bits::on_bits_index(n) | bits::sieve(network.tensors());
     container::vector<ExprPtr> ts_expr;
     for (auto&& t : ts)
-      ts_expr.emplace_back(std::dynamic_pointer_cast<Tensor>(t)->clone());
+      ts_expr.emplace_back(std::dynamic_pointer_cast<Expr>(t)->clone());
 
     auto tn = TensorNetwork{ts_expr};
     auto meta =

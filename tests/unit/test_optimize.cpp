@@ -1195,6 +1195,52 @@ TEST_CASE("optimize", "[optimize]") {
         REQUIRE(collect_as_expr(expressions) == expected);
       }
     }
+
+    SECTION("TensorPower") {
+      // M ⊙ pow(D,-1) shares i_1 between two bra slots
+      auto knob_ctx = get_default_context();
+      knob_ctx.set(AssertStrictBraKetSymmetry::No);
+      auto knob_resetter = set_scoped_default_context(knob_ctx);
+
+      std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(
+          std::vector<std::wstring>{L"R1 = (M{i1,i2;a1,a2} "
+                                    L"D{i1,i2;a1,a2}^(-1)) L{a1,a2;i1,i2}",
+                                    L"R2 = K{a1,a2;i1,i2} (M{i1,i2;a1,a2} "
+                                    L"D{i1,i2;a1,a2}^(-1))"});
+      opt::eliminate_common_subexpressions(
+          expressions, binarizer,
+          {.filter_predicate = opt::min_usage_filter<EvalNode<EvalExpr>>(2)});
+      auto const actual = collect_as_expr(expressions);
+      REQUIRE(actual.size() == 3);
+      auto const& def = actual[0];
+      REQUIRE(def.label() == L"CSE1");
+      REQUIRE(def.expression()->is<Product>());
+      auto const& factors = def.expression()->as<Product>().factors();
+      REQUIRE(factors.size() == 2);
+      std::size_t n_powers = 0;
+      for (auto const& f : factors) {
+        if (f->is<TensorPower>()) {
+          ++n_powers;
+          REQUIRE(f->as<TensorPower>().exponent() == rational{-1});
+          REQUIRE(f->as<TensorPower>().base_tensor()._label() == L"D");
+        } else {
+          REQUIRE(f->is<Tensor>());
+          REQUIRE(f->as<Tensor>().label() == L"M");
+        }
+      }
+      REQUIRE(n_powers == 1);
+      for (std::size_t r : {1, 2}) {
+        CAPTURE(r);
+        std::size_t uses = 0;
+        actual[r].expression()->visit(
+            [&uses](ExprPtr const& x) {
+              uses += x->is<Tensor>() && x->as<Tensor>().label() == L"CSE1";
+              REQUIRE(!x->is<TensorPower>());
+            },
+            /* atoms_only = */ true);
+        REQUIRE(uses == 1);
+      }
+    }
   }
 
   SECTION("Single term optimization with CSE") {
@@ -4700,5 +4746,99 @@ TEST_CASE("batchability role-split building-block predicates",
     CHECK(cost.is_batchable_contracted_index(a));
     CHECK(cost.is_batchable_external_index(i));
     CHECK(cost.batch_target_size(a) == 8u);
+  }
+}
+
+TEST_CASE("optimize accepts TensorPower factors", "[optimize][tensor-power]") {
+  using namespace sequant;
+  // L·M·pow(D,-1) has i_1 in two bra slots (M's and D's)
+  auto ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  const TensorSymmetries asym{.perm = Symmetry::Antisymm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, asym);
+  auto L = ex<Tensor>(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, asym);
+  auto const Dinv = pow(D, rational{-1});
+  REQUIRE(Dinv->is<TensorPower>());
+
+  auto count_powers = [&Dinv](ExprPtr const& e) {
+    std::size_t n = 0;
+    e->visit(
+        [&](ExprPtr const& x) {
+          if (x->is<TensorPower>()) {
+            REQUIRE(*x == *Dinv);
+            ++n;
+          }
+        },
+        /* atoms_only = */ true);
+    return n;
+  };
+
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"i" ? 10 : 100;
+  };
+
+  // batched objective: one annotation per contraction node, which binarize
+  // checks against the nodes it emits
+  auto batched_opts = [&idxsz]() {
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = idxsz;
+    opts.batch_policy.is_batchable_contracted_index = [](Index const& ix) {
+      return ix.space().base_key() == L"a";
+    };
+    opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
+      return 10;
+    };
+    opts.batch_policy.peak_threshold = 1e5;
+    opts.term_batch_axes = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<NodeBatchAnnotation>>>();
+    return opts;
+  };
+
+  auto binarize_annotated = [](ResultExpr const& res,
+                               OptimizeOptions const& opts) {
+    BinarizationOptions bopts;
+    if (opts.term_batch_axes)
+      if (auto it = opts.term_batch_axes->find(res.expression().get());
+          it != opts.term_batch_axes->end())
+        bopts.node_batch_axes = it->second;
+    return binarize(res, bopts);
+  };
+
+  SECTION("three factors") {
+    auto const term = L * M * Dinv;
+    OptimizeOptions subnet_opts;
+    subnet_opts.CSE.subnet = true;
+    for (auto const& opts : {OptimizeOptions{}, batched_opts(), subnet_opts}) {
+      auto const optimized = optimize_result(term, opts).expr;
+      REQUIRE(optimized->is<Product>());
+      REQUIRE(count_powers(optimized) == 1);
+      REQUIRE_NOTHROW(
+          binarize_annotated(ResultExpr{Variable{L"E"}, optimized}, opts));
+    }
+  }
+
+  SECTION("an element-wise product is unchanged up to factor order") {
+    auto const term = M * Dinv;
+    for (auto const& opts : {OptimizeOptions{}, batched_opts()}) {
+      auto const optimized = optimize(term, opts);
+      REQUIRE(optimized->is<Product>());
+      REQUIRE(optimized->size() == 2);
+      REQUIRE(count_powers(optimized) == 1);
+      REQUIRE(ranges::any_of(*optimized,
+                             [&M](ExprPtr const& f) { return *f == *M; }));
+      REQUIRE_NOTHROW(binarize_annotated(
+          ResultExpr{Tensor{L"ell", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}},
+                     optimized},
+          opts));
+    }
   }
 }
