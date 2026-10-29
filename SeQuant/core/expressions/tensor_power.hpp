@@ -62,6 +62,11 @@ class TensorPower : public Expr, public AbstractTensor {
   /// @brief adjoint of the power is the power of the adjoint
   void adjoint() override;
 
+  /// canonicalizes the slots like Tensor::canonicalize; the byproduct, the
+  /// phase of the base raised to the exponent, follows from _symmetry()
+  ExprPtr canonicalize(CanonicalizeOptions opts =
+                           CanonicalizeOptions::default_options()) override;
+
   std::wstring to_latex() const override;
 
   /// @return the symmetry of the base, except that for an even integer

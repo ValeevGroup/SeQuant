@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
@@ -1239,6 +1240,22 @@ static_assert(is_tensor<Tensor>,
               "Tensor interface");
 
 using TensorPtr = std::shared_ptr<Tensor>;
+
+/// @brief canonicalizes an Expr that is a tensor leaf, as Tensor::canonicalize
+/// does
+///
+/// A leaf in which an index occurs more than once, protoindices included, is a
+/// tensor network and is canonicalized as one, with @p opts; any other is
+/// canonicalized in place by the default tensor canonicalizer, through the
+/// AbstractTensor interface of @p leaf .
+/// @param[in,out] leaf an Expr that is an AbstractTensor
+/// @param[in] opts the canonicalization options
+/// @param[in] assign assigns the canonical form computed as a tensor network,
+///            an object of the same type as @p leaf , to @p leaf
+/// @return the byproduct of canonicalization (e.g. a phase), or nullptr
+ExprPtr canonicalize_tensor_leaf(
+    Expr &leaf, CanonicalizeOptions opts,
+    const std::function<void(const AbstractTensor &)> &assign);
 
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
   // an overlap is Hermitian and particle (column) symmetric by definition;
