@@ -949,6 +949,9 @@ TEST_CASE("utilities", "[utilities]") {
                {L"R{i_1;} = (f{i_1;} + g{i_1;}) c", ""},
                // a summand's (anti)symmetrizer does not count
                {L"R{a1,a2;i1,i2} = Â{i1,i2;a1,a2} t{a1,a2;i1,i2} + ε{a1;}", ""},
+               {L"R{a1,a2;i1,i2} = 1/2 (Â{i1,i2;a1,a2} t{a1,a2;i1,i2} + "
+                L"Â{i1,i2;a1,a2} u{a1,a2;i1,i2})",
+                ""},
                {L"D{i_1;a_1} = ε{a_1;} - ε{i_1;}", ""},
                {L"D{i_1;a_1} = ε{;a_1} + ε{;a_2}",
                 "Summand index a_2 is not an index of the result"},

@@ -665,6 +665,22 @@ ExprPtr transform_expr(const Expr &expr,
   }
 }
 
+namespace {
+
+/// @return true if pop_tensor(@p expression, @p label) would find a tensor,
+/// i.e. one labeled @p label is reached through Sums and Products
+bool has_poppable_tensor(const Expr &expression, std::wstring_view label) {
+  if (expression.is<Sum>() || expression.is<Product>()) {
+    for (const ExprPtr &e : expression) {
+      if (has_poppable_tensor(*e, label)) return true;
+    }
+    return false;
+  }
+  return expression.is<Tensor>() && expression.as<Tensor>().label() == label;
+}
+
+}  // namespace
+
 std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
                                   std::wstring_view label) {
   std::optional<ExprPtr> tensor;
@@ -747,6 +763,10 @@ std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression) {
 }
 
 ExprPtr detail::without_symmetrizers(const ExprPtr &expression) {
+  if (!has_poppable_tensor(*expression, reserved::antisymm_label()) &&
+      !has_poppable_tensor(*expression, reserved::symm_label())) {
+    return expression;
+  }
   ExprPtr result = expression.clone();
   pop_tensor(result, reserved::antisymm_label());
   pop_tensor(result, reserved::symm_label());

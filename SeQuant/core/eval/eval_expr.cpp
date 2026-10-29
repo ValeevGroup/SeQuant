@@ -30,6 +30,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <optional>
 #include <ranges>
 #include <string_view>
@@ -729,9 +730,11 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
 ResultExpr lower_broadcast_sum(ResultExpr const& res) {
   if (!res.expression()->is<Sum>()) return res;
 
-  bool lowered = false;
-  Sum sum;
-  for (const ExprPtr& summand : res.expression()->as<Sum>().summands()) {
+  const auto& summands = res.expression()->as<Sum>().summands();
+  // created at the first summand that needs broadcasting
+  std::optional<Sum::summands_type> lowered;
+  for (std::size_t s = 0; s != summands.size(); ++s) {
+    const ExprPtr& summand = summands[s];
     const IndexGroups<> externals =
         get_unique_indices(detail::without_symmetrizers(summand));
     const auto supplied =
@@ -757,17 +760,18 @@ ResultExpr lower_broadcast_sum(ResultExpr const& res) {
     append_ones(res.ket(), SlotType::Ket);
     append_ones(res.aux(), SlotType::Aux);
 
-    if (broadcast) {
-      sum.append(ex<Product>(std::move(*broadcast)));
-      lowered = true;
-    } else {
-      sum.append(summand);
+    if (broadcast && !lowered) {
+      lowered.emplace(summands.begin(), summands.begin() + s);
+    }
+    if (lowered) {
+      lowered->push_back(broadcast ? ex<Product>(std::move(*broadcast))
+                                   : summand);
     }
   }
   if (!lowered) return res;
 
   ResultExpr result = res;
-  result = ex<Sum>(std::move(sum));
+  result = ex<Sum>(std::move(*lowered), Sum::move_only_tag{});
   return result;
 }
 

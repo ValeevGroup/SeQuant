@@ -831,6 +831,31 @@ TEST_CASE("lower_broadcast_sum", "[EvalExpr][broadcast]") {
     REQUIRE(ones_of(*cit) == Ones{one(L"a_1", SlotType::Bra)});
   }
 
+  SECTION("a nested Sum broadcasts at the top level only") {
+    const ResultExpr res = deserialize<ResultExpr>(
+        L"R{i_1;a_1} = (f{i_1;} + g{i_1;}) c + h{i_1;a_1}");
+    const ResultExpr lowered = lower_broadcast_sum(res);
+    const Sum& sum = lowered.expression()->as<Sum>();
+    REQUIRE(sum.size() == 2);
+    REQUIRE(*sum.summand(1) == *res.expression()->as<Sum>().summand(1));
+    const Product& prod = sum.summand(0)->as<Product>();
+    REQUIRE(prod.size() == 3);
+    REQUIRE(*prod.factor(0) == *deserialize(L"f{i_1;} + g{i_1;}"));
+    REQUIRE(*prod.factor(1) == Variable(L"c"));
+    REQUIRE(ones_of(sum.summand(0)) == Ones{one(L"a_1", SlotType::Ket)});
+  }
+
+  SECTION("a symmetrizer in a nested Sum supplies no index") {
+    const ResultExpr res = deserialize<ResultExpr>(
+        L"R{a1,a2;i1,i2} = c (Â{i1,i2;a1,a2} t{a1;i1} ε{a2;} + "
+        L"Â{i1,i2;a1,a2} t{a2;i1} ε{a1;}) + g{a1,a2;i1,i2}");
+    const ResultExpr lowered = lower_broadcast_sum(res);
+    const Sum& sum = lowered.expression()->as<Sum>();
+    REQUIRE(sum.size() == 2);
+    REQUIRE(ones_of(sum.summand(0)) == Ones{one(L"i_2", SlotType::Ket)});
+    REQUIRE(*sum.summand(1) == *res.expression()->as<Sum>().summand(1));
+  }
+
   SECTION("aux index cannot be broadcast") {
     const ResultExpr res =
         deserialize<ResultExpr>(L"R{i_1;;a_2} = f{i_1;;a_2} + g{i_1;}");

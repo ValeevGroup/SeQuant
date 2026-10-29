@@ -674,7 +674,8 @@ binarize(ExprPtr const& expr, IndexSet const& external = {},
 /// one all-ones leaf (see make_ones()) per missing index, appended in head
 /// order (bra, ket, aux) and placed in the head slot of that index. An index
 /// that a summand supplies in the opposite bra/ket slot counts as present.
-/// @param res a valid ResultExpr
+/// @param res a ResultExpr; a broadcast Sum on its rhs must satisfy
+///        is_valid(const ResultExpr&)
 /// @return @p res with its broadcast summands made explicit; @p res itself if
 ///         its expression is not a Sum or every summand covers the head
 /// @throw Exception if a summand lacks an aux index of the head
