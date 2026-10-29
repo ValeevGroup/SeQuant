@@ -719,6 +719,102 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
     }
 }
 
+TEST_CASE("eval_tensor_power_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  std::srand(2024);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+
+  // the harness fills tensors with values in [0, 1], so every exponent applies
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      TensorSymmetries{.perm = Symmetry::Antisymm});
+  auto const target = tidxs(D->as<Tensor>());
+
+  auto eval_at = [&](ExprPtr const& expr) {
+    return evaluate(eval_node(expr), target, yield_)->get<BTensorD>();
+  };
+  // every element of got == f(element of ref), in lockstep (same layout)
+  auto check_elementwise = [](BTensorD const& got, BTensorD const& ref,
+                              auto const& f) {
+    REQUIRE(got.range() == ref.range());
+    auto g = got.begin();
+    for (auto r = ref.begin(); r != ref.end(); ++r, ++g)
+      CHECK(*g == Catch::Approx(f(*r)).margin(1e-12));
+  };
+
+  auto node = eval_node(pow(D, rational{-1}));
+  REQUIRE(node->op_type() == EvalOp::Power);
+  auto const src = yield_(node.left()->as_tensor())->get<BTensorD>();
+  auto const d = eval_at(D);
+
+  check_elementwise(eval_at(pow(D, rational{-1})), d,
+                    [](double x) { return 1 / x; });
+  check_elementwise(eval_at(pow(D, rational{0})), d,
+                    [](double) { return 1.0; });
+  check_elementwise(eval_at(pow(D, rational{2})), d,
+                    [](double x) { return x * x; });
+  check_elementwise(eval_at(pow(D, rational{1, 2})), d,
+                    [](double x) { return std::sqrt(x); });
+
+  // ℓ = M ⊙ D^-1, a Hadamard product
+  auto const m = eval_at(M);
+  ResultExpr ell(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                        TensorSymmetries{.perm = Symmetry::Antisymm}),
+                 M * pow(D, rational{-1}));
+  auto const got_ell =
+      evaluate(binarize<EvalExprBTAS>(ell), target, yield_)->get<BTensorD>();
+  {
+    BTensorD expected = m;
+    auto di = d.begin();
+    for (auto& x : expected) x /= *di++;
+    check_elementwise(got_ell, expected, [](double x) { return x; });
+  }
+
+  // E = L · (M ⊙ D^-1): every index appears on three tensors
+  {
+    auto ctx = get_default_context();
+    ctx.set(AssertStrictBraKetSymmetry::No);
+    auto _ = set_scoped_default_context(ctx);
+    auto L = ex<Tensor>(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                        TensorSymmetries{.perm = Symmetry::Antisymm});
+    ResultExpr E(Variable(L"E"), L * M * pow(D, rational{-1}));
+    auto const got_E =
+        evaluate(binarize<EvalExprBTAS>(E), container::svector<long>{}, yield_)
+            ->get<double>();
+    auto const l = eval_at(L);
+    double expected = 0;
+    auto mi = m.begin();
+    auto di = d.begin();
+    for (auto li = l.begin(); li != l.end(); ++li, ++mi, ++di)
+      expected += *li * *mi / *di;
+    CHECK(got_E == Catch::Approx(expected).margin(1e-10));
+  }
+
+  // M ⊙ D^-1 + D^-1 evaluates correctly and leaves the cached D untouched
+  {
+    ResultExpr sum(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                          TensorSymmetries{.perm = Symmetry::Nonsymm}),
+                   M * pow(D, rational{-1}) + pow(D, rational{-1}));
+    auto const got_sum =
+        evaluate(binarize<EvalExprBTAS>(sum), target, yield_)->get<BTensorD>();
+    BTensorD expected = m;
+    auto di = d.begin();
+    for (auto& x : expected) {
+      x = (x + 1) / *di;
+      ++di;
+    }
+    check_elementwise(got_sum, expected, [](double x) { return x; });
+    check_elementwise(yield_(node.left()->as_tensor())->get<BTensorD>(), src,
+                      [](double x) { return x; });
+  }
+}
+
 // A product that contracts every index of both operands is a bilinear dot,
 // sum_k L[k] R[k], with no conjugation: SeQuant spells a conjugated operand
 // explicitly (a Conjugate value modifier, an EvalOp::Adjoint node), so the
