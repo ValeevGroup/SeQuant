@@ -1669,6 +1669,12 @@ TEST_CASE("record_dag names an adjoint factor like a leaf, its operands below",
     if (id.starts_with(adj + "#") && (id.ends_with("/0") || id.ends_with("/1")))
       ++nsub;
   REQUIRE(nsub == 2);
+  // the adjoint value reads its one operand, marked "⁺"
+  std::size_t nadjoint = 0;
+  for (auto const& v : dag.values)
+    if (v.expr.ends_with("⁺") && v.expr.find(" * ") == std::string::npos)
+      ++nadjoint;
+  REQUIRE(nadjoint > 0);
 }
 
 TEST_CASE("record_dag names a power factor like a leaf, its operands below",

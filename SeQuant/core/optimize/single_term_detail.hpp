@@ -433,8 +433,11 @@ inline std::size_t leaf_volatile_mask(
   for (auto&& t : network.tensors()) {
     // a power is as volatile as its base, the leaf the evaluator sees
     auto const* tp = dynamic_cast<Tensor const*>(t.get());
-    if (auto const* pw = dynamic_cast<TensorPower const*>(t.get()))
+    if (auto const* pw = dynamic_cast<TensorPower const*>(t.get())) {
+      // the base of a TensorPower is a c-number Tensor leaf
       tp = dynamic_cast<Tensor const*>(&pw->base_tensor());
+      SEQUANT_ASSERT(tp);
+    }
     if (tp && is_volatile_leaf(*tp)) mask |= (std::size_t{1} << i);
     ++i;
   }

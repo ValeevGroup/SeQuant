@@ -1899,11 +1899,14 @@ TEST_CASE("eval_tensor_power_ta", "[eval]") {
       CHECK(got == Catch::Approx(expected).margin(1e-10));
     }
 
-    // M ⊙ D^-1 + D^-1 evaluates correctly and leaves the cached D untouched
-    {
+    // M ⊙ D^-1 + D^-1, with D^-1 as either summand, evaluates correctly and
+    // leaves the cached D untouched
+    for (bool const power_first : {false, true}) {
+      auto const hadamard = M * pow(D, rational{-1});
+      auto const power = pow(D, rational{-1});
       ResultExpr sum(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
                             TensorSymmetries{.perm = Symmetry::Nonsymm}),
-                     M * pow(D, rational{-1}) + pow(D, rational{-1}));
+                     power_first ? power + hadamard : hadamard + power);
       auto expected = m;
       for (std::size_t k = 0; k < m.size(); ++k)
         expected[k] = (m[k] + 1) / d[k];

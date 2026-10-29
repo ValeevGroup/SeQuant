@@ -796,11 +796,14 @@ TEST_CASE("eval_tensor_power_btas", "[eval_btas]") {
     CHECK(got_E == Catch::Approx(expected).margin(1e-10));
   }
 
-  // M ⊙ D^-1 + D^-1 evaluates correctly and leaves the cached D untouched
-  {
+  // M ⊙ D^-1 + D^-1, with D^-1 as either summand, evaluates correctly and
+  // leaves the cached D untouched
+  for (bool const power_first : {false, true}) {
+    auto const hadamard = M * pow(D, rational{-1});
+    auto const power = pow(D, rational{-1});
     ResultExpr sum(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
                           TensorSymmetries{.perm = Symmetry::Nonsymm}),
-                   M * pow(D, rational{-1}) + pow(D, rational{-1}));
+                   power_first ? power + hadamard : hadamard + power);
     auto const got_sum =
         evaluate(binarize<EvalExprBTAS>(sum), target, yield_)->get<BTensorD>();
     BTensorD expected = m;
