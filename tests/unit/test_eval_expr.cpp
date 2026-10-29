@@ -845,6 +845,14 @@ TEST_CASE("lower_broadcast_sum", "[EvalExpr][broadcast]") {
     REQUIRE(ones_of(sum.summand(0)) == Ones{one(L"a_1", SlotType::Ket)});
   }
 
+  SECTION("a head index used twice in a summand is supplied") {
+    const ResultExpr res = deserialize<ResultExpr>(
+        L"R{i_1;a_1} = f{i_1;a_1} + M{i_1;a_1} D{a_1;i_1}");
+    const ResultExpr lowered = lower_broadcast_sum(res);
+    REQUIRE(*lowered.expression() == *res.expression());
+    REQUIRE_NOTHROW(binarize(res));
+  }
+
   SECTION("a symmetrizer in a nested Sum supplies no index") {
     const ResultExpr res = deserialize<ResultExpr>(
         L"R{a1,a2;i1,i2} = c (Â{i1,i2;a1,a2} t{a1;i1} ε{a2;} + "

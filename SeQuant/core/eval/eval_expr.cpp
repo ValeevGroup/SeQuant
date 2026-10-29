@@ -19,10 +19,8 @@
 
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/any_of.hpp>
-#include <range/v3/algorithm/contains.hpp>
 #include <range/v3/functional/not_fn.hpp>
 #include <range/v3/range/operations.hpp>
-#include <range/v3/view/concat.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/join.hpp>
 #include <range/v3/view/move.hpp>
@@ -735,15 +733,17 @@ ResultExpr lower_broadcast_sum(ResultExpr const& res) {
   std::optional<Sum::summands_type> lowered;
   for (std::size_t s = 0; s != summands.size(); ++s) {
     const ExprPtr& summand = summands[s];
-    const IndexGroups<> externals =
-        get_unique_indices(detail::without_symmetrizers(summand));
+    // a head index is never contracted, so one that a summand uses in
+    // several slots (a hyperindex) is supplied by it, too
     const auto supplied =
-        ranges::views::concat(externals.bra, externals.ket, externals.aux);
+        get_used_indices<container::set<Index>,
+                         SlotType::Bra | SlotType::Ket | SlotType::Aux>(
+            *detail::without_symmetrizers(summand));
 
     std::optional<Product> broadcast;
     auto append_ones = [&](const auto& head_indices, SlotType slot) {
       for (const Index& idx : head_indices) {
-        if (!idx.nonnull() || ranges::contains(supplied, idx)) continue;
+        if (!idx.nonnull() || supplied.contains(idx)) continue;
         if (slot == SlotType::Aux) {
           throw Exception(
               "lower_broadcast_sum: cannot broadcast over aux index " +

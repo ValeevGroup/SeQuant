@@ -672,8 +672,10 @@ binarize(ExprPtr const& expr, IndexSet const& external = {},
 /// supplies the missing modes; the evaluation tree has no such notion. Each
 /// summand that lacks head indices is therefore replaced by its product with
 /// one all-ones leaf (see make_ones()) per missing index, appended in head
-/// order (bra, ket, aux) and placed in the head slot of that index. An index
-/// that a summand supplies in the opposite bra/ket slot counts as present.
+/// order (bra, ket, aux) and placed in the head slot of that index. A head
+/// index that a summand uses in any slot counts as present, also in the
+/// opposite bra/ket slot or in several slots (head indices are never
+/// contracted).
 /// @param res a ResultExpr; a broadcast Sum on its rhs must satisfy
 ///        is_valid(const ResultExpr&)
 /// @return @p res with its broadcast summands made explicit; @p res itself if
