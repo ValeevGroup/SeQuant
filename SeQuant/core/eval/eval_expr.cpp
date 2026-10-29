@@ -723,6 +723,49 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
   throw Exception("Encountered unsupported expression in binarize.");
 }
 
+EvalExprNode binarize(ResultExpr const& res, const BinarizationOptions& opts,
+                      std::size_t& node_counter) {
+  ResultExpr const lowered = lower_broadcast_sum(res);
+
+  // collect result indices so they are not contracted in the expression tree
+  IndexSet uncontract;
+  for (auto&& ix : lowered.indices()) uncontract.emplace(ix);
+
+  // the root's bra/ket would be positional (see the deprecated
+  // binarize(ExprPtr)), but it is overwritten below with
+  // lowered.result_as_tensor(), so the layout is caller-determined
+  EvalExprNode tree =
+      binarize(lowered.expression(), uncontract, opts, node_counter);
+
+  const bool is_scalar =
+      lowered.bra().empty() && lowered.ket().empty() && lowered.aux().empty();
+
+  if (tree.size() < 2) {
+    // We want to have a result node with the result from the ResultExpr.
+    // In order for that to work, we need a dedicated result node in the first
+    // place. Hence, we adapt the represented expression for terminals to be
+    // that terminal multiplied by 1.
+    EvalExpr result = is_scalar
+                          ? *sequant::binarize(lowered.result_as_variable())
+                          : *sequant::binarize(lowered.result_as_tensor());
+    EvalOpSetter{}.set(result, EvalOp::Product);
+
+    tree = EvalExprNode(std::move(result), std::move(tree),
+                        sequant::binarize(Constant(1)));
+  }
+  SEQUANT_ASSERT(tree.size() > 1);
+
+  if (is_scalar) {
+    if (lowered.has_label()) {
+      tree->expr()->as<Variable>().set_label(lowered.label());
+    }
+  } else {
+    tree->expr()->as<Tensor>() = lowered.result_as_tensor();
+  }
+
+  return tree;
+}
+
 }  // namespace impl
 
 ResultExpr lower_broadcast_sum(ResultExpr const& res) {
