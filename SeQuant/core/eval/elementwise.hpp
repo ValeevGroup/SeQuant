@@ -4,7 +4,7 @@
 #include <SeQuant/core/rational.hpp>
 
 #include <cmath>
-#include <complex>
+#include <complex>  // the complex overloads of std::pow
 #include <cstdint>
 #include <limits>
 
