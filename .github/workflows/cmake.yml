@@ -202,7 +202,7 @@ jobs:
       if: ${{ !matrix.valgrind }}
       working-directory: ${{github.workspace}}/build
       shell: bash
-      run: ctest --output-on-failure -R "^sequant"
+      run: ctest --output-on-failure -R "^sequant" -j 2
 
     - name: Test consuming installed SeQuant
       if: ${{ !matrix.valgrind && !matrix.sanitize }}
