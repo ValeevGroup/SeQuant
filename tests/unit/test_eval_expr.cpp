@@ -380,6 +380,31 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(ell_tree->op_type() == EvalOp::Product);
     CHECK((ell_tree.left()->is_elementwise_power() ||
            ell_tree.right()->is_elementwise_power()));
+
+    // the node phase is the base's canonicalization phase raised to the
+    // exponent
+    auto const asym = TensorSymmetries{.perm = Symmetry::Antisymm};
+    auto A = ex<Tensor>(L"D", bra{L"a_1", L"i_1"}, ket{L"i_2", L"a_2"}, asym);
+    auto A_sorted =
+        ex<Tensor>(L"D", bra{L"i_1", L"a_1"}, ket{L"i_2", L"a_2"}, asym);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto a2 = binarize(pow(A, rational{2}));
+    auto a2_sorted = binarize(pow(A_sorted, rational{2}));
+    auto am1 = binarize(pow(A, rational{-1}));
+    auto half = binarize(pow(D, rational{1, 2}));
+    auto third = binarize(pow(D, rational{1, 3}));
+    auto zeroth = binarize(pow(D, rational{0}));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(a2.left()->canon_phase() == -1);
+    CHECK(a2->canon_phase() == 1);
+    CHECK(am1->canon_phase() == -1);
+    CHECK(a2->hash_value() == a2_sorted->hash_value());
+    CHECK(a2_sorted->canon_phase() == 1);
+
+    // fractional exponents are told apart; a zero exponent is still a node
+    CHECK(half->hash_value() != third->hash_value());
+    REQUIRE(zeroth->op_type() == EvalOp::Power);
+    CHECK(power_exponent(zeroth) == rational{0});
   }
 
   SECTION("external hyperindices") {

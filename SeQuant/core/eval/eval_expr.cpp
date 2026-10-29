@@ -463,7 +463,12 @@ EvalExprNode binarize(TensorPower const& power, IndexSet const& uncontract,
   auto expr = detail::make_tensor_wo_symmetries(opts, bra(t.bra()),
                                                 ket(t.ket()), aux(t.aux()));
   auto canon_indices = operand->canon_indices();
-  auto const phase = operand->canon_phase();
+  // base = phase * canonical operand, so base^e = phase^e * operand^e; a
+  // non-integer exponent never meets phase -1 (pow() rejects antisymmetric
+  // bases there)
+  auto const& e = power.exponent();
+  bool const even = denominator(e) == 1 && numerator(e) % 2 == 0;
+  std::int8_t const phase = even ? 1 : operand->canon_phase();
   return make_unary_node(EvalOp::Power, std::move(operand),
                          Constant{power.exponent()}, std::move(expr),
                          std::move(canon_indices), phase);
