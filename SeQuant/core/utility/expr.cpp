@@ -402,10 +402,10 @@ bool has_uniform_externals(const Sum &sum) {
 }
 
 /// Under a result head the summands of @p sum may broadcast: each must supply
-/// a subset of the result's indices, and together all of them. Summands are
-/// validated as expressions, and their (anti)symmetrizers are disregarded.
-/// As for a whole rhs, bra and ket indices are pooled, since a bra-ket
-/// symmetric summand may present them swapped.
+/// a subset of the result's indices, and together all of them, and none may
+/// contract a result index. Summands are validated as expressions, and their
+/// (anti)symmetrizers are disregarded. As for a whole rhs, bra and ket indices
+/// are pooled, since a bra-ket symmetric summand may present them swapped.
 bool is_valid_broadcast(const ResultExpr &result, const Sum &sum,
                         std::string *msg) {
   const auto result_braket = ranges::views::concat(result.bra(), result.ket());
@@ -434,6 +434,21 @@ bool is_valid_broadcast(const ResultExpr &result, const Sum &sum,
     }
     for (const Index &idx : externals.aux) {
       if (!check(idx, result.aux())) return false;
+    }
+
+    // a result index that the summand uses but does not expose is contracted
+    // there, so the summand cannot be broadcast over it
+    const auto used =
+        get_used_indices<container::set<Index>,
+                         SlotType::Bra | SlotType::Ket | SlotType::Aux>(*term);
+    const auto summand_externals =
+        ranges::views::concat(externals.bra, externals.ket, externals.aux);
+    for (const Index &idx :
+         ranges::views::concat(result.bra(), result.ket(), result.aux())) {
+      if (used.contains(idx) && !ranges::contains(summand_externals, idx)) {
+        SEQUANT_EXPR_INVALID("Result index " + toUtf8(idx.full_label()) +
+                             " is contracted within a summand");
+      }
     }
   }
 

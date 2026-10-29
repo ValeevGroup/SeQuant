@@ -948,6 +948,13 @@ TEST_CASE("utilities", "[utilities]") {
                 "Result index i_1 appears in no summand"},
                {L"R{} = 1 + t{a1}",
                 "Summand index a_1 is not an index of the result"},
+               // a summand must not contract a result index it would be
+               // broadcast over
+               {L"R{i1} = f{i1;} + g{i1;i2} h{i2;i1}",
+                "Result index i_1 is contracted within a summand"},
+               {L"R{i1} = g{i1;i2} h{i2;i1}",
+                "Bra indices of result are inconsistent with the rhs "
+                "expression"},
            }) {
         CAPTURE(toUtf8(expr_str));
 
