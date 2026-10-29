@@ -2,8 +2,8 @@ Expression Types
 =================
 
 This page covers how SeQuant identifies and orders the concrete types of an expression tree, for contributors adding a
-new type derived from :class:`sequant::Expr`. It assumes the vocabulary of :doc:`The Expression Tree
-</user/guide/expressions>`.
+new type derived from :class:`sequant::Expr`, and how a broadcast sum under a ``ResultExpr`` head is lowered. It assumes
+the vocabulary of :doc:`The Expression Tree </user/guide/expressions>`.
 
 Type ids
 -----------
@@ -47,3 +47,16 @@ has its own ``std::type_info`` for a type, is not mistaken for a second type. Tw
 namespaces of different translation units have the same mangled name, so if both rely on the compiler-derived name they
 silently share an id. A type in an unnamed namespace therefore declares ``static_type_name()`` if another translation
 unit may define one of the same name.
+
+Broadcast sums under a head
+-------------------------------
+
+Broadcast is a property of a ``ResultExpr``, not of a ``Sum``: only a head names the modes a summand lacks, and supplies their
+slot (bra or ket) and extent. Hence :func:`is_valid(const ResultExpr&) <sequant::is_valid>` checks a Sum on the rhs per summand
+(each summand's external indices are a subset of the head's, and together they cover it; a head index that a summand uses in
+any slot counts as supplied, since head indices are never contracted), while ``is_valid`` of a bare ``Sum`` keeps requiring
+uniform external indices. Nothing downstream of the symbolic layer knows about broadcast: :func:`sequant::lower_broadcast_sum`,
+called by ``binarize(const ResultExpr&)`` and ``optimize(ResultExpr&)`` before they do anything else, multiplies each short summand
+by one rank-1 all-ones leaf per missing head index, in that index's head slot. The result is an ordinary uniformly indexed Sum
+of outer products, so the evaluation tree, the cost model and the export pipeline need no broadcast-specific case; the ``𝟙`` leaf
+is served by the caller's leaf evaluator, or created by the generator during export (``Generator::create_ones``).
