@@ -1473,6 +1473,36 @@ TEST_CASE("tensor_power_canonicalization", "[algorithms]") {
     CHECK(e->as<Product>().factors().size() == 2);
     CHECK(canon(D * D)->hash_value() != e->hash_value());
   }
+  SECTION("a lone power canonicalizes like a tensor") {
+    auto p = pow(Dp, rational{-1});
+    auto ref = pow(D, rational{-1});
+    CHECK(!p->canonicalize());
+    CHECK(!ref->canonicalize());
+    CHECK(*p == *ref);
+
+    auto s = pow(Dp, rational{-1}) - pow(D, rational{-1});
+    simplify(s);
+    CHECK(s->is_zero());
+
+    auto t = ex<Tensor>(L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                        Symmetry::Antisymm);
+    auto tp = ex<Tensor>(L"t", bra{L"i_2", L"i_1"}, ket{L"a_1", L"a_2"},
+                         Symmetry::Antisymm);
+    auto canon_with_phase = [](ExprPtr e) {
+      auto bp = e->canonicalize();
+      return bp ? bp * e : e;
+    };
+    // even exponent: the phase squares to +1
+    auto even = canon_with_phase(pow(tp, rational{2}));
+    CHECK(*even == *canon_with_phase(pow(t, rational{2})));
+    // odd exponent: the phase survives
+    auto odd = canon_with_phase(pow(tp, rational{3}));
+    CHECK(*odd == *(ex<Constant>(-1) * canon_with_phase(pow(t, rational{3}))));
+
+    auto s2 = pow(tp, rational{3}) + pow(t, rational{3});
+    simplify(s2);
+    CHECK(s2->is_zero());
+  }
   SECTION("relabelled duplicates merge in a sum") {
     // == M D^-1 - M D^-1 == 0
     auto s = M * pow(D, rational{-1}) + Mp * pow(Dp, rational{-1});

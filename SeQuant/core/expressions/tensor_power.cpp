@@ -2,6 +2,7 @@
 
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/power.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
@@ -71,6 +72,13 @@ ExprPtr TensorPower::clone() const {
 void TensorPower::adjoint() {
   base_->adjoint();
   reset_hash_value();
+}
+
+ExprPtr TensorPower::canonicalize(CanonicalizeOptions opts) {
+  return canonicalize_tensor_leaf(
+      *this, opts, [this](const AbstractTensor& canonical) {
+        *this = static_cast<const TensorPower&>(canonical);
+      });
 }
 
 std::wstring TensorPower::to_latex() const {
