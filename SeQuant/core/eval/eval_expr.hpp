@@ -604,6 +604,14 @@ namespace impl {
 FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
                                   const BinarizationOptions& opts,
                                   std::size_t& node_counter);
+
+/// The head-aware binarization behind binarize(ResultExpr const&, ...):
+/// lowers a broadcast Sum, binarizes the rhs with the head's indices
+/// uncontracted and stamps the root with the head.
+/// \param node_counter see binarize(ExprPtr const&, ...) above
+FullBinaryNode<EvalExpr> binarize(ResultExpr const& res,
+                                  const BinarizationOptions& opts,
+                                  std::size_t& node_counter);
 }  // namespace impl
 
 ///
@@ -611,6 +619,19 @@ FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
 ///
 template <meta::eval_expr T>
 using EvalNode = FullBinaryNode<T>;
+
+namespace detail {
+/// \return \p tree with every payload converted to \c ExprT
+template <typename ExprT>
+  requires std::is_constructible_v<ExprT, EvalExpr>
+FullBinaryNode<ExprT> to_eval_node(FullBinaryNode<EvalExpr>&& tree) {
+  if constexpr (std::is_same_v<ExprT, EvalExpr>)
+    return std::move(tree);
+  else
+    return transform_node(std::move(tree),
+                          [](auto&& val) { return ExprT{val}; });
+}
+}  // namespace detail
 
 static_assert(meta::eval_node<EvalNode<EvalExpr>>);
 static_assert(!meta::can_evaluate<EvalNode<EvalExpr>>);
@@ -656,11 +677,7 @@ binarize(ExprPtr const& expr, IndexSet const& external = {},
   if (!opts.node_batch_axes.empty()) {
     SEQUANT_ASSERT(node_counter == opts.node_batch_axes.size());
   }
-  if constexpr (std::is_same_v<ExprT, EvalExpr>)
-    return tree;
-  else
-    return transform_node(std::move(tree),
-                          [](auto&& val) { return ExprT{val}; });
+  return detail::to_eval_node<ExprT>(std::move(tree));
 }
 
 /// Lowers a broadcast Sum under a result head to a Sum of uniformly indexed
@@ -690,53 +707,13 @@ template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
 FullBinaryNode<ExprT> binarize(ResultExpr const& res,
                                const BinarizationOptions& opts = {}) {
-  ResultExpr const lowered = lower_broadcast_sum(res);
-
-  // collect result indices so they are not contracted in the expression tree
-  IndexSet uncontract;
-  for (auto&& ix : lowered.indices()) uncontract.emplace(ix);
-
-  // The recursive calls below dispatch to the (now deprecated)
-  // binarize(ExprPtr) overload — the head's bra/ket would be positional, but
-  // we overwrite it below with lowered.result_as_tensor() so the layout is
-  // caller-determined and the deprecation does not apply.
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  FullBinaryNode<ExprT> tree =
-      binarize<ExprT>(lowered.expression(), uncontract, opts);
-
-  const bool is_scalar =
-      lowered.bra().empty() && lowered.ket().empty() && lowered.aux().empty();
-
-  if (tree.size() < 2) {
-    // We want to have a result node with the result from the ResultExpr.
-    // In order for that to work, we need a dedicated result node in the first
-    // place. Hence, we adapt the represented expression for terminals to be
-    // that terminal multiplied by 1.
-    ExprT result = [&]() {
-      if (is_scalar) {
-        return *binarize<ExprT>(ex<Variable>(lowered.result_as_variable()));
-      }
-      return *binarize<ExprT>(ex<Tensor>(lowered.result_as_tensor()));
-    }();
-    EvalOpSetter{}.set(result, EvalOp::Product);
-
-    tree = FullBinaryNode<ExprT>(std::move(result), std::move(tree),
-                                 binarize<ExprT>(ex<Constant>(1)));
+  std::size_t node_counter = 0;
+  auto tree = impl::binarize(res, opts, node_counter);
+  // see binarize(ExprPtr const&, ...)
+  if (!opts.node_batch_axes.empty()) {
+    SEQUANT_ASSERT(node_counter == opts.node_batch_axes.size());
   }
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  SEQUANT_ASSERT(tree.size() > 1);
-
-  if (is_scalar) {
-    if (lowered.has_label()) {
-      tree->expr().template as<Variable>().set_label(lowered.label());
-    }
-  } else {
-    Tensor& tensor = tree->expr().template as<Tensor>();
-
-    tensor = lowered.result_as_tensor();
-  }
-
-  return tree;
+  return detail::to_eval_node<ExprT>(std::move(tree));
 }
 
 ///
