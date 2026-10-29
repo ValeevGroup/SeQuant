@@ -1702,6 +1702,16 @@ TEST_CASE("record_dag names a power factor like a leaf, its operands below",
     if (id.starts_with(pw + "#") && (id.ends_with("/0") || id.ends_with("/1")))
       ++nsub;
   REQUIRE(nsub == 2);
+  // the power is spelled as its operand raised to its exponent, and its id
+  // is the ordinal its sub-positions hang off
+  auto const power = std::ranges::find_if(dag.values, [](auto const& v) {
+    return v.expr.find(" ^ ") != std::string::npos;
+  });
+  REQUIRE(power != dag.values.end());
+  CHECK(rhs_of(*power).starts_with("D"));
+  CHECK(rhs_of(*power).ends_with(" ^ -1"));
+  CHECK(ids.count(power->id + "/0") == 1);
+  CHECK(ids.count(power->id + "/1") == 1);
 
   // the dag section round-trips through JSON
   auto const doc = doc_with(fx.roots, dag);
