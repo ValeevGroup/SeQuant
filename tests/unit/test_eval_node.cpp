@@ -14,6 +14,7 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <initializer_list>
@@ -204,31 +205,21 @@ TEST_CASE("eval_node", "[EvalNode]") {
   }
 
   SECTION("variable") {
-    auto prod1 = deserialize(L"a * b * c");
-    auto node1 = eval_node(prod1);
+    for (const auto& [text, op] : {std::pair{L"a * b * c", EvalOp::Product},
+                                   std::pair{L"a + b + c", EvalOp::Sum}}) {
+      CAPTURE(sequant::toUtf8(text));
+      auto n = eval_node(deserialize(text));
 
-    REQUIRE(node1->op_type() == EvalOp::Product);
-    REQUIRE(node1.left()->op_type() == EvalOp::Product);
+      REQUIRE(n->op_type() == op);
+      REQUIRE(n.left()->op_type() == op);
 
-    REQUIRE(node(node1, {}).is_variable());
-    REQUIRE(node(node1, {L}).is_variable());
-    REQUIRE(node(node1, {R}).is_variable());
-    REQUIRE(node(node1, {R}).as_variable() == Variable{L"c"});
-    REQUIRE(node(node1, {L, R}).as_variable() == Variable{L"b"});
-    REQUIRE(node(node1, {L, L}).as_variable() == Variable{L"a"});
-
-    auto sum1 = deserialize(L"a + b + c");
-    auto node2 = eval_node(sum1);
-
-    REQUIRE(node2->op_type() == EvalOp::Sum);
-    REQUIRE(node2.left()->op_type() == EvalOp::Sum);
-
-    REQUIRE(node(node2, {}).is_variable());
-    REQUIRE(node(node2, {L}).is_variable());
-    REQUIRE(node(node2, {R}).is_variable());
-    REQUIRE(node(node2, {R}).as_variable() == Variable{L"c"});
-    REQUIRE(node(node2, {L, R}).as_variable() == Variable{L"b"});
-    REQUIRE(node(node2, {L, L}).as_variable() == Variable{L"a"});
+      REQUIRE(node(n, {}).is_variable());
+      REQUIRE(node(n, {L}).is_variable());
+      REQUIRE(node(n, {R}).is_variable());
+      REQUIRE(node(n, {R}).as_variable() == Variable{L"c"});
+      REQUIRE(node(n, {L, R}).as_variable() == Variable{L"b"});
+      REQUIRE(node(n, {L, L}).as_variable() == Variable{L"a"});
+    }
 
     auto prod2 = deserialize(L"a * t{i1;a1}");
     auto node3 = eval_node(prod2);
@@ -317,47 +308,6 @@ TEST_CASE("eval_node", "[EvalNode]") {
     auto const n_e = eval_node(p_e);
     REQUIRE(n_e->is_scalar());
     REQUIRE(asy_cost(n_e) == 2 * occ_virt_cost(2, 2) + 2 * occ_virt_cost(1, 1));
-
-#if 0
-    auto const s1 =
-        deserialize(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Symm);
-    auto const ns1 = eval_node(s1);
-    REQUIRE(asy_cost(ns1) == AsyCost{{1, 4}, 2, 2});  // 1/4 * O^2V^2
-
-    auto const s2 =
-        deserialize(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Antisymm);
-    auto const ns2 = eval_node(s2);
-    REQUIRE(asy_cost(ns2) == AsyCost{{1, 2}, 2, 2});  // 1/2 * O^2V^2
-
-    auto const s3 =
-        deserialize(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Nonsymm);
-    auto const ns3 = eval_node(s3);
-    REQUIRE(asy_cost(ns3) == AsyCost{2, 2});  // O^2V^2
-
-    auto const p4 =
-        deserialize(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Symm);
-    auto const np4 = eval_node(p4);
-    REQUIRE(asy_cost(np4) == AsyCost{{1, 2}, 2, 4});  // 1/4 * 2 * O^2V^4
-
-    auto const p5 =
-        deserialize(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Antisymm);
-    auto const np5 = eval_node(p5);
-    REQUIRE(asy_cost(np5) == AsyCost{{1, 2}, 2, 4});  // 1/4 * 2 * O^2V^4
-
-    auto const p6 =
-        deserialize(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Antisymm);
-    auto const np6 = eval_node(p6);
-    REQUIRE(asy_cost(np6) == AsyCost{{1, 2}, 2, 4});  // 1/4 * 2 * O^2V^4
-
-    auto const p7 = deserialize(L"I{i1;a1} * I{i2;a2}", Symmetry::Nonsymm);
-    auto const np7 = eval_node(p7);
-    REQUIRE(asy_cost(np7) == AsyCost{{1, 2}, 2, 2});  // 1/2 * O^2V^2
-
-    auto const p8 =
-        deserialize(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Nonsymm);
-    auto const np8 = eval_node(p8);
-    REQUIRE(asy_cost(np8) == AsyCost{2, 2, 4});  // 2 * O^2V^4
-#endif
 
     SECTION("PPL and density-fitting") {
       // AsyCost on parsed coupled-cluster expressions, using the plain Flops

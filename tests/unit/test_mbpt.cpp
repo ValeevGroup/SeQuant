@@ -12,6 +12,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
@@ -1608,7 +1609,7 @@ SECTION("MRSO") {
   ctx.set(mbpt::make_mr_spaces());
   auto ctx_resetter = set_scoped_default_context(ctx);
 
-  SECTION("ref_av rejects connectivity when reference differs from vacuum") {
+  SECTION("ref_av-rejects-connectivity") {
     const auto expr = t::h(1) * t::t(1);
     const auto unconstrained = t::ref_av(expr);
     REQUIRE(unconstrained != ex<Constant>(0));
@@ -1686,18 +1687,6 @@ SECTION("MRSO") {
     REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
                                       L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
   }
-
-#if 0
-    // H**T12 -> R2
-    SECTION("wick(H**T2 -> R2)") {
-      auto result = t::ref_av(t::A(-2) * t::H() * t::t(2), {.connect = {{1, 2}}});
-
-      {
-        std::wcout << "H*T2 -> R2 = " << to_latex_align(result, 0, 1)
-                   << std::endl;
-      }
-    }
-#endif
 }  // SECTION("MRSO")
 
 SECTION("MRSO-MultiProduct") {
@@ -2269,66 +2258,52 @@ SECTION("MRSF") {
 SECTION("rules") {
   using namespace sequant;
 
+  const auto aux_space = [] {
+    return get_default_context().index_basis_registry()->retrieve_space(L"x");
+  };
+
   SECTION("density-fit") {
-    const std::vector<std::wstring> inputs = {
-        L"t{a1,a2;i1,i2} t{a3;i3}",
-        L"t{a1,a2;i1,i2} g{a3;i3}",
-        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
-        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
-    };
-    const std::vector<std::wstring> expected = {
-        L"t{a1,a2;i1,i2} t{a3;i3}",
-        L"t{a1,a2;i1,i2} g{a3;i3}",
-        L"t{a1,a2;i1,i2} B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S",
-        L"t{a1,a2;i1,i2} (B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S "
-        "- B{i2;a1;x_1}:N-C-S B{i1;a2;x_1}:N-C-S)",
+    // {input, expected}
+    const std::vector<std::pair<std::wstring, std::wstring>> rows = {
+        {L"t{a1,a2;i1,i2} t{a3;i3}", L"t{a1,a2;i1,i2} t{a3;i3}"},
+        {L"t{a1,a2;i1,i2} g{a3;i3}", L"t{a1,a2;i1,i2} g{a3;i3}"},
+        {L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
+         L"t{a1,a2;i1,i2} B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S"},
+        {L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
+         L"t{a1,a2;i1,i2} (B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S "
+         L"- B{i2;a1;x_1}:N-C-S B{i1;a2;x_1}:N-C-S)"},
     };
 
-    REQUIRE(inputs.size() == expected.size());
+    for (const auto& [input, expected] : rows) {
+      CAPTURE(toUtf8(input));
 
-    for (std::size_t i = 0; i < inputs.size(); ++i) {
-      CAPTURE(inputs.at(i));
+      ExprPtr actual =
+          mbpt::density_fit(deserialize(input), aux_space(), L"g", L"B");
 
-      ExprPtr input_expr = deserialize(inputs.at(i));
-
-      const IndexSpace aux_space =
-          get_default_context().index_basis_registry()->retrieve_space(L"x");
-
-      ExprPtr actual = mbpt::density_fit(input_expr, aux_space, L"g", L"B");
-
-      REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
+      REQUIRE_THAT(actual, EquivalentTo(expected));
     }
   }
 
   SECTION("tensor-hypercontract") {
-    const std::vector<std::wstring> inputs = {
-        L"t{a1,a2;i1,i2} t{a3;i3}",
-        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
-        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
-    };
-    const std::vector<std::wstring> expected = {
-        L"t{a1,a2;i1,i2} t{a3;i3}",
-        L"t{a1,a2;i1,i2} B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i2;;x_2} "
-        L"B{;a2;x_2}",
-        L"t{a1,a2;i1,i2} (B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i2;;x_2} "
-        L"B{;a2;x_2}"
-        " - B{i2;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i1;;x_2} B{;a2;x_2})",
+    // {input, expected}
+    const std::vector<std::pair<std::wstring, std::wstring>> rows = {
+        {L"t{a1,a2;i1,i2} t{a3;i3}", L"t{a1,a2;i1,i2} t{a3;i3}"},
+        {L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
+         L"t{a1,a2;i1,i2} B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i2;;x_2} "
+         L"B{;a2;x_2}"},
+        {L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
+         L"t{a1,a2;i1,i2} (B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i2;;x_2} "
+         L"B{;a2;x_2}"
+         L" - B{i2;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i1;;x_2} B{;a2;x_2})"},
     };
 
-    REQUIRE(inputs.size() == expected.size());
+    for (const auto& [input, expected] : rows) {
+      CAPTURE(toUtf8(input));
 
-    for (std::size_t i = 0; i < inputs.size(); ++i) {
-      CAPTURE(inputs.at(i));
+      ExprPtr actual = mbpt::tensor_hypercontract(
+          deserialize(input), aux_space(), L"g", L"B", L"C");
 
-      ExprPtr input_expr = deserialize(inputs.at(i));
-
-      const IndexSpace aux_space =
-          get_default_context().index_basis_registry()->retrieve_space(L"x");
-
-      ExprPtr actual =
-          mbpt::tensor_hypercontract(input_expr, aux_space, L"g", L"B", L"C");
-
-      REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
+      REQUIRE_THAT(actual, EquivalentTo(expected));
     }
   }
 }  // SECTION("rules")

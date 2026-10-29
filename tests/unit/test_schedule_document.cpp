@@ -506,10 +506,7 @@ TEST_CASE("record_term then rebuild_pinned_term reproduces the optimized tree",
   REQUIRE(*pinned2.expr == *optimized);
 }
 
-TEST_CASE(
-    "record_term handles a lone tensor, a scalar, identical factors, and "
-    "rejects mixed products",
-    "[schedule-document]") {
+TEST_CASE("record-term", "[schedule-document]") {
   using namespace sequant::opt::schedule;
   using Catch::Matchers::ContainsSubstring;
 
@@ -594,9 +591,7 @@ TEST_CASE("rebuild_pinned_term rejects foreign factors and unknown axis labels",
                       ContainsSubstring("z_9"));
 }
 
-TEST_CASE(
-    "record_term gives every inner node of a pure tensor tree one annotation",
-    "[schedule-document]") {
+TEST_CASE("record-term-inner-annotations", "[schedule-document]") {
   using namespace sequant::opt::schedule;
   // i_2 is contracted between X and Y only: the (X Y) subtree is fully
   // contracted unless binarize is told i_2 is external; the optimizer still
@@ -1310,10 +1305,7 @@ Document doc_with(std::vector<RootRecord> const& roots, DagRecord dag) {
 
 }  // namespace
 
-TEST_CASE(
-    "record_dag gives a node sliced by two loops two values with each other "
-    "as siblings",
-    "[schedule-document]") {
+TEST_CASE("record-dag-two-loop-siblings", "[schedule-document]") {
   auto const fx = two_root_fixture();
   auto const dag =
       record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
@@ -1659,7 +1651,7 @@ TEST_CASE("ordered dry run fills the run record", "[schedule-document]") {
 /// fixture's own policy and pinned extents.
 TEST_CASE("write the viewer example document", "[.write-example]") {
   char const* const out_path = std::getenv("SEQUANT_SCHEDULE_EXAMPLE_OUT");
-  REQUIRE(out_path != nullptr);
+  if (out_path == nullptr) SKIP("SEQUANT_SCHEDULE_EXAMPLE_OUT is not set");
 
   auto const fx = two_root_fixture();
   Document doc;

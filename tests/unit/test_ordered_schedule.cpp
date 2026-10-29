@@ -60,10 +60,7 @@ using sequant::eval::ScopeBlock;
 using sequant::eval::Step;
 using sequant::eval::well_formed;
 
-TEST_CASE(
-    "well_formed accepts a root block with one build step and one child "
-    "loop block carrying an AccumulateSum output",
-    "[ordered-schedule]") {
+TEST_CASE("well-formed-accepts-root-loop", "[ordered-schedule]") {
   Index const i1{L"i_1"};
 
   // value_id 1 is the per-iteration transient built inside the loop; value_id
@@ -281,10 +278,7 @@ TEST_CASE("well_formed rejects an out-of-range output value_id",
   CHECK_FALSE(well_formed(sched));
 }
 
-TEST_CASE(
-    "well_formed rejects a value_id produced twice: once as a root "
-    "BuildStep and again as a child block's AccumulateSum output",
-    "[ordered-schedule]") {
+TEST_CASE("well-formed-rejects-double-producer", "[ordered-schedule]") {
   // Single-producer (SSA-like) invariant, checked WHOLE-SCHEDULE (not just
   // within one block): value_id 0 is built directly at the root AND is also
   // claimed as the accumulated output of an unrelated child loop -- two
@@ -430,13 +424,8 @@ sequant::EvalNode<sequant::EvalExpr> orderedsched_inode(
 // A and B was never sliced on i_1 (every batch contracted the FULL leaf, and
 // the sum over n batches overcounted P by n).
 // ===========================================================================
-TEST_CASE(
-    "compute_dag_boulevard seeds a loop identity for a batched reduction "
-    "whose operands are ALL inputs (no home-sliced operand to union "
-    "through); build_ordered_schedule places its single AccumulateSum "
-    "escape by that slot, and the resulting cell-table reads slice both "
-    "operands on it",
-    "[ordered-schedule][cell_table]") {
+TEST_CASE("boulevard-reduction-loop-identity",
+          "[ordered-schedule][cell_table]") {
   Index const i1{L"i_1"};
 
   auto A = orderedsched_leaf("A{i_1;}");
@@ -570,11 +559,7 @@ TEST_CASE(
 // realized loop depth: it should carry NO reduced_slot and the schedule
 // should keep exactly the pre-fix slot-0-fallback shape (an
 // AccumulateScatter escape, not a throw -- the throw is Reduction-only).
-TEST_CASE(
-    "compute_dag_boulevard does NOT seed a reduction loop identity for a "
-    "contracted mode the value also carries another index of the SAME "
-    "SPACE for; the schedule keeps its previous (slot-0-fallback) shape",
-    "[ordered-schedule]") {
+TEST_CASE("boulevard-no-reduction-identity", "[ordered-schedule]") {
   Index const i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
 
   // R{i_1;i_2} = A{i_1;i_3} * B{i_3;i_2}, contracting i_3 -- but R carries
@@ -664,10 +649,7 @@ TEST_CASE(
 // precondition the throw guards, in the style of the existing hand-built
 // rejection cases above ("outside its nest", "throws instead of silently
 // mis-scheduling").
-TEST_CASE(
-    "build_ordered_schedule: a Reduction axis with no reduced_slot at all "
-    "throws instead of guessing loop_slot 0",
-    "[ordered-schedule]") {
+TEST_CASE("schedule-reduction-no-slot-throws", "[ordered-schedule]") {
   using sequant::eval::LoopRole;
   Index const i1{L"i_1"};
 
@@ -799,10 +781,7 @@ void orderedsched_check_levels(
 }
 }  // namespace
 
-TEST_CASE(
-    "build_ordered_schedule: ScopeBlock::level mirrors axis/ordinal at the "
-    "correct nesting depth (DAG-scope runtime slicing)",
-    "[ordered-schedule][sp2-noninner]") {
+TEST_CASE("schedule-block-level", "[ordered-schedule][sp2-noninner]") {
   auto ctx = sequant::get_default_context_snapshot();
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
@@ -963,10 +942,7 @@ TEST_CASE("forced_split_levels: a carried chain gives consecutive passes",
 // Straddle: W (non-carried, base 0) is read by A (pass 2) and by P (pass 0);
 // W stays at 0. Edge property: every dependency edge points to an equal or
 // earlier pass.
-TEST_CASE(
-    "forced_split_levels: the lift follows readers that all sit later; "
-    "straddling readers keep the base; edges never point later",
-    "[ordered-schedule][levels]") {
+TEST_CASE("levels-lift-follows-readers", "[ordered-schedule][levels]") {
   using sequant::eval::LoopRole;
   sequant::eval::RichSchedule rich;
   rich.cells.push_back(
@@ -1185,9 +1161,7 @@ void orderedsched_collect_productions(
 // The persisted edges are exactly the dep graph the topo-sort used (derived
 // from every OccurrenceRec's consumer_point), and only computed (non-leaf)
 // values carry operands.
-TEST_CASE(
-    "build_ordered_schedule persists operand_vids (value/occurrence DAG edges)",
-    "[ordered-schedule][value-id]") {
+TEST_CASE("schedule-operand-vids", "[ordered-schedule][value-id]") {
   auto ctx = sequant::get_default_context_snapshot();
   REQUIRE(ctx.index_basis_registry() != nullptr);
   auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
@@ -1352,10 +1326,7 @@ TEST_CASE("forced_split_levels: two levels reproduce the two-set partition",
 // more-than-one-forced-space assertion and must produce a well-formed
 // schedule.
 // ===========================================================================
-TEST_CASE(
-    "build_ordered_schedule: two LoopCarried spaces of which only one is "
-    "genuine build without the more-than-one-forced-space assertion",
-    "[ordered-schedule][levels]") {
+TEST_CASE("schedule-two-carried-one-genuine", "[ordered-schedule][levels]") {
   using sequant::eval::LoopRole;
   sequant::Index const i1{L"i_1"};
   sequant::Index const a1{L"a_1"};
@@ -1441,11 +1412,8 @@ TEST_CASE(
 // straddle keeps V at its base pass 0 (no lift), so X (pass 1) is a genuine
 // later-pass reader of V, produced in a sibling nest -- outside V's own.
 // ===========================================================================
-TEST_CASE(
-    "build_ordered_schedule: a LoopLocal value straddling passes, read "
-    "later by a value outside its nest, throws instead of silently "
-    "mis-scheduling",
-    "[ordered-schedule][levels]") {
+TEST_CASE("schedule-straddling-looplocal-throws",
+          "[ordered-schedule][levels]") {
   using sequant::eval::LoopRole;
   sequant::Index const i1{L"i_1"};
   sequant::Index const i2{L"i_2"};
@@ -1673,10 +1641,7 @@ OrderedSchedReductionInLoopFixture orderedsched_reduction_in_loop_fixture() {
 // V -> u); the per-nest-split test below exercises build_ordered_schedule's
 // REAL `inside`, resolved from the loop chain (fusion_slot/depth_of_instance/
 // production_depth/type_cluster) against the SAME fixture.
-TEST_CASE(
-    "forced_split_levels: an in-loop reader of a reduction is bumped, "
-    "a root reader is not",
-    "[ordered-schedule][levels]") {
+TEST_CASE("levels-reduction-reader-bumped", "[ordered-schedule][levels]") {
   auto const fx = orderedsched_reduction_in_loop_fixture();
   auto const g = sequant::eval::detail::ordered_schedule_dep_graph(fx.rich);
   auto const inside = [](std::size_t reader_vid, std::size_t source_vid) {
@@ -1690,10 +1655,8 @@ TEST_CASE(
   CHECK(lv.pinned.count(0) == 1);  // V pinned: source of a bumping edge
 }
 
-TEST_CASE(
-    "per-nest split: a reduction source read inside its own loop by a "
-    "later pass gets two pass blocks",
-    "[ordered-schedule][per-nest-split]") {
+TEST_CASE("per-nest-reduction-source-two-passes",
+          "[ordered-schedule][per-nest-split]") {
   using sequant::eval::OutputKind;
   auto const fx = orderedsched_reduction_in_loop_fixture();
 
@@ -1743,10 +1706,7 @@ TEST_CASE(
   orderedsched_validated_table(fx.rich, sched);
 }
 
-TEST_CASE(
-    "per-nest split: only the nest holding a later-pass member is "
-    "split; a mixed-pass member is scattered to root in its own nest",
-    "[ordered-schedule][per-nest-split]") {
+TEST_CASE("per-nest-later-pass-member", "[ordered-schedule][per-nest-split]") {
   using sequant::eval::LoopRole;
   using sequant::eval::OutputKind;
   sequant::Index const i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"}, i4{L"i_4"};
@@ -1936,10 +1896,7 @@ TEST_CASE("per-nest split: a carried chain gives three pass blocks",
 // cell only at root scope, which only a fully escaped (LoopCarried) value
 // reaches -- the same pattern the two-nest fixture above uses for its own
 // zero-consumer roots.
-TEST_CASE(
-    "per-nest split: a member loop-local on the inner instance only is "
-    "scattered to a root-resident form",
-    "[ordered-schedule][per-nest-split]") {
+TEST_CASE("per-nest-inner-only-scatter", "[ordered-schedule][per-nest-split]") {
   using sequant::eval::LoopRole;
   sequant::Index const i1{L"i_1"}, i2{L"i_2"};
   std::vector<sequant::Index> const ab{i1, i2}, b{i2};
@@ -2011,10 +1968,8 @@ TEST_CASE(
 // then a scatter so V's assembled form reaches root. X is LoopCarried on
 // both axes (not LoopLocal), for the same zero-consumer/root-residency
 // reason as the invariant-outer fixture above.
-TEST_CASE(
-    "per-nest split: a member reduced over the inner instance chains a "
-    "sum then a scatter to root",
-    "[ordered-schedule][per-nest-split]") {
+TEST_CASE("per-nest-reduced-sum-scatter",
+          "[ordered-schedule][per-nest-split]") {
   using sequant::eval::LoopRole;
   sequant::Index const i1{L"i_1"}, i2{L"i_2"};
   std::vector<sequant::Index> const ab{i1, i2};
@@ -2110,10 +2065,8 @@ TEST_CASE(
 // AccumulateSum (the role loop's own reduction escape) to AccumulateScatter:
 // the loop-local mode's batches are disjoint, so summing them would silently
 // combine values that must stay separate.
-TEST_CASE(
-    "per-nest split: a loop-local mode sharing a depth with a reduced mode "
-    "upgrades the escape to a scatter",
-    "[ordered-schedule][per-nest-split]") {
+TEST_CASE("per-nest-shared-depth-upgrade",
+          "[ordered-schedule][per-nest-split]") {
   using sequant::eval::LoopRole;
   sequant::Index const i1{L"i_1"}, i2{L"i_2"};
   std::vector<sequant::Index> const ab{i1, i2};
@@ -2182,10 +2135,7 @@ TEST_CASE(
 // directly by X, LoopLocal on the disjoint i_6 (its own nest B), at a later
 // pass -- V's own nest never opens for X, so legality and the schedule
 // disagree.
-TEST_CASE(
-    "per-nest split: a loop-local value with no role escape, read later by "
-    "a value outside its nest, throws",
-    "[ordered-schedule][per-nest-split]") {
+TEST_CASE("per-nest-no-escape-throws", "[ordered-schedule][per-nest-split]") {
   using sequant::eval::LoopRole;
   sequant::Index const i4{L"i_4"}, i5{L"i_5"}, i6{L"i_6"};
 
@@ -2278,10 +2228,8 @@ TEST_CASE(
 // pass reader to trigger the materialization rule for i_1's own instance -- so
 // i_1's per-batch form is never delivered to root, and legality and the
 // schedule disagree, even though i_2 IS role-escaped.
-TEST_CASE(
-    "per-nest split: a value with one escaped and one unescaped loop-local "
-    "instance in one nest, read later from a different nest, throws",
-    "[ordered-schedule][per-nest-split]") {
+TEST_CASE("per-nest-partial-escape-throws",
+          "[ordered-schedule][per-nest-split]") {
   using sequant::eval::LoopRole;
   sequant::Index const i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
   std::vector<sequant::Index> const ab{i1, i2};
@@ -2335,10 +2283,7 @@ TEST_CASE(
 // root-resident W, no pass split. (Bumping R to a later pass would
 // re-traverse the a_1 loop and materialize all of W.)
 // ===========================================================================
-TEST_CASE(
-    "ordered schedule: an assembled reader produced inside the nest above "
-    "the instance reads the scattered form in the same pass",
-    "[ordered-schedule]") {
+TEST_CASE("assembled-reader-same-pass", "[ordered-schedule]") {
   using sequant::Index;
   using sequant::eval::LoopRole;
   using sequant::eval::OccurrenceRole;
@@ -2429,10 +2374,7 @@ TEST_CASE(
 // is materialized to a root-resident form for it, and the nest becomes two
 // pass blocks. The table validates.
 // ===========================================================================
-TEST_CASE(
-    "ordered schedule: an assembled reader produced inside the instance it "
-    "reads assembled over is bumped to a later pass",
-    "[ordered-schedule][per-nest-split]") {
+TEST_CASE("assembled-reader-bumped", "[ordered-schedule][per-nest-split]") {
   using sequant::Index;
   using sequant::eval::LoopRole;
   using sequant::eval::OccurrenceRole;

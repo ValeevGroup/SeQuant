@@ -347,59 +347,65 @@ TEST_CASE("csv-pno-projection-fixtures", "[mbpt][csv]") {
                              .basis = ProjectionBasis::Amplitude};
   };
 
-  // {input, options, expected; `#` = the minted legs' instance suffix}
-  const std::wstring moved_foreign =
-      S2 +
-      L"g{i_3,i_4;a_100<i_3,i_4#>,a_101<i_3,i_4#>}"
-      L" * s{a_100<i_3,i_4#>;a_3<i_1,i_2>} * s{a_101<i_3,i_4#>;a_4<i_1,i_2>}" +
-      tt_ss;
-  const std::vector<std::tuple<char const*, std::wstring, std::wstring>> rows{
-      {"foreign pair", foreign, moved_foreign},
-      {"the external stays, the contracted leg moves", linear,
-       L"-2 " + S2 +
-           L"g{i_3,a_1<i_1,i_2>;a_100<i_1,i_3#>,i_1}"
-           L" * s{a_100<i_1,i_3#>;a_3<i_2,i_3>}"
-           L" * t{a_3<i_2,i_3>,a_4<i_2,i_3>;i_2,i_3}"
-           L" * s{a_2<i_1,i_2>;a_4<i_2,i_3>}"},
-      {"rank-1 partners move onto the rank-2 own pair", rank1,
-       S2 + L"g{i_3,i_4;a_100<i_3,i_4#>,a_101<i_3,i_4#>}"
-            L" * s{a_100<i_3,i_4#>;a_3<i_1>} * s{a_101<i_3,i_4#>;a_4<i_2>}"
-            L" * t{a_3<i_1>;i_1} * t{a_4<i_2>;i_2}"
-            L" * t{a_5<i_3,i_4>,a_6<i_3,i_4>;i_3,i_4}"
-            L" * s{a_1<i_1,i_2>;a_5<i_3,i_4>} * s{a_2<i_1,i_2>;a_6<i_3,i_4>}"},
-  };
-  for (auto const& [what, in, expected] : rows) {
-    CAPTURE(what);
-    const ExprPtr input = deserialize(in);
-    for (auto const& [opts, suffix] :
-         {std::pair{own_pair(All), std::wstring(L";1")},
-          std::pair{amplitude(All), std::wstring()}}) {
-      const auto out = project(input, opts);
-      CHECK(terse(out) ==
-            std::regex_replace(expected, std::wregex(L"#"), suffix));
-      CHECK(overlaps(out) == overlaps(input) + moved_legs(input, out));
-      // idempotent; on the own pair, `Amplitude` keeps the Integral stamp
-      CHECK(mbpt::project_integral_domains(out, opts).get() == out.get());
-      CHECK(mbpt::project_integral_domains(out, amplitude(All)).get() ==
-            out.get());
+  SECTION("table") {
+    // {input, options, expected; `#` = the minted legs' instance suffix}
+    const std::wstring moved_foreign =
+        S2 +
+        L"g{i_3,i_4;a_100<i_3,i_4#>,a_101<i_3,i_4#>}"
+        L" * s{a_100<i_3,i_4#>;a_3<i_1,i_2>} * "
+        L"s{a_101<i_3,i_4#>;a_4<i_1,i_2>}" +
+        tt_ss;
+    const std::vector<std::tuple<char const*, std::wstring, std::wstring>> rows{
+        {"foreign pair", foreign, moved_foreign},
+        {"the external stays, the contracted leg moves", linear,
+         L"-2 " + S2 +
+             L"g{i_3,a_1<i_1,i_2>;a_100<i_1,i_3#>,i_1}"
+             L" * s{a_100<i_1,i_3#>;a_3<i_2,i_3>}"
+             L" * t{a_3<i_2,i_3>,a_4<i_2,i_3>;i_2,i_3}"
+             L" * s{a_2<i_1,i_2>;a_4<i_2,i_3>}"},
+        {"rank-1 partners move onto the rank-2 own pair", rank1,
+         S2 +
+             L"g{i_3,i_4;a_100<i_3,i_4#>,a_101<i_3,i_4#>}"
+             L" * s{a_100<i_3,i_4#>;a_3<i_1>} * s{a_101<i_3,i_4#>;a_4<i_2>}"
+             L" * t{a_3<i_1>;i_1} * t{a_4<i_2>;i_2}"
+             L" * t{a_5<i_3,i_4>,a_6<i_3,i_4>;i_3,i_4}"
+             L" * s{a_1<i_1,i_2>;a_5<i_3,i_4>} * s{a_2<i_1,i_2>;a_6<i_3,i_4>}"},
+    };
+    for (auto const& [what, in, expected] : rows) {
+      CAPTURE(what);
+      const ExprPtr input = deserialize(in);
+      for (auto const& [opts, suffix] :
+           {std::pair{own_pair(All), std::wstring(L";1")},
+            std::pair{amplitude(All), std::wstring()}}) {
+        const auto out = project(input, opts);
+        CHECK(terse(out) ==
+              std::regex_replace(expected, std::wregex(L"#"), suffix));
+        CHECK(overlaps(out) == overlaps(input) + moved_legs(input, out));
+        // idempotent; on the own pair, `Amplitude` keeps the Integral stamp
+        CHECK(mbpt::project_integral_domains(out, opts).get() == out.get());
+        CHECK(mbpt::project_integral_domains(out, amplitude(All)).get() ==
+              out.get());
+      }
     }
   }
 
-  // the cell decides: order and class
-  for (auto const& [in, cell] : {std::pair{foreign, ExchangeNonlinear},
-                                 std::pair{linear, ExchangeLinear},
-                                 std::pair{rank1, ExchangeNonlinear}}) {
-    const ExprPtr input = deserialize(in);
-    for (auto scope :
-         {ExchangeLinear, ExchangeNonlinear, CoulombLinear, CoulombNonlinear}) {
-      CAPTURE(toUtf8(in), static_cast<int>(scope));
-      CHECK((project(input, own_pair(scope)).get() != input.get()) ==
-            (scope == cell));
+  SECTION("cell-decides") {
+    // the order and class of the cell decide
+    for (auto const& [in, cell] : {std::pair{foreign, ExchangeNonlinear},
+                                   std::pair{linear, ExchangeLinear},
+                                   std::pair{rank1, ExchangeNonlinear}}) {
+      const ExprPtr input = deserialize(in);
+      for (auto scope : {ExchangeLinear, ExchangeNonlinear, CoulombLinear,
+                         CoulombNonlinear}) {
+        CAPTURE(toUtf8(in), static_cast<int>(scope));
+        CHECK((project(input, own_pair(scope)).get() != input.get()) ==
+              (scope == cell));
+      }
     }
   }
 
   // a leg already on the own pair stays; only the other one moves
-  {
+  SECTION("half-moved") {
     const ExprPtr input = deserialize(half);
     const auto out = project(input, amplitude(All));
     CHECK(terse(out) == L"-4 " + S2 +
@@ -412,23 +418,27 @@ TEST_CASE("csv-pno-projection-fixtures", "[mbpt][csv]") {
   }
 
   // no option reaches the energy, a singles residual or a (vv|vv) ladder
-  for (std::wstring const& text : {energy, singles, ladder}) {
-    CAPTURE(toUtf8(text));
-    const ExprPtr input = deserialize(text);
-    for (auto const& opts : {own_pair(All), amplitude(All),
-                             ProjectionOptions{.terms = All,
-                             .domain = ProjectionDomain::PartnerPair,
-                             .cell_instance = class_map(1, 2)}})
-      CHECK(project(input, opts).get() == input.get());
+  SECTION("unreachable") {
+    for (std::wstring const& text : {energy, singles, ladder}) {
+      CAPTURE(toUtf8(text));
+      const ExprPtr input = deserialize(text);
+      for (auto const& opts : {own_pair(All), amplitude(All),
+                               ProjectionOptions{.terms = All,
+                               .domain = ProjectionDomain::PartnerPair,
+                               .cell_instance = class_map(1, 2)}})
+        CHECK(project(input, opts).get() == input.get());
+    }
   }
 
   // overlap reduction is contraction-time only, so simplify keeps them
-  ExprPtr simplified = project(deserialize(foreign), own_pair(All));
-  simplify(simplified);
-  CHECK(standing_metrics(simplified) == 2);
+  SECTION("simplify-keeps-overlaps") {
+    ExprPtr simplified = project(deserialize(foreign), own_pair(All));
+    simplify(simplified);
+    CHECK(standing_metrics(simplified) == 2);
+  }
 
   // a Sum nested in a Product is rewritten in place; the legs are shared
-  {
+  SECTION("nested-sum") {
     const ExprPtr input = ex<Product>(
         1,
         ExprPtrList{deserialize(S2.substr(0, S2.size() - 3)),
@@ -449,7 +459,7 @@ TEST_CASE("csv-pno-projection-fixtures", "[mbpt][csv]") {
 
   // a leg shared by two integrals of one term moves once per integral, each
   // to its own fresh index; the overlaps chain through the leg
-  {
+  SECTION("shared-leg") {
     const std::wstring shared = S2 +
                                 L"g{i_3,a_4<i_1,i_2>;a_3<i_1,i_2>,i_4} * "
                                 L"g{i_5,i_6;a_4<i_1,i_2>,a_5<i_1,i_2>}"
@@ -469,17 +479,19 @@ TEST_CASE("csv-pno-projection-fixtures", "[mbpt][csv]") {
           out.get());
   }
 
-  // malformed input throws: density fitting already ran
-  const IndexSpace aux =
-      get_default_context().index_basis_registry()->retrieve_space(L"Κ");
-  REQUIRE_THROWS_MATCHES(
-      project(mbpt::density_fit(deserialize(foreign), aux, L"g", L"g"),
-              own_pair(All)),
-      sequant::Exception, message_contains("BEFORE density fitting"));
-  // `Integral` without a cell -> instance map
-  REQUIRE_THROWS_MATCHES(project(deserialize(foreign), {.terms = All}),
-                         sequant::Exception,
-                         message_contains("needs a cell_instance"));
+  SECTION("malformed-throws") {
+    // malformed input throws: density fitting already ran
+    const IndexSpace aux =
+        get_default_context().index_basis_registry()->retrieve_space(L"Κ");
+    REQUIRE_THROWS_MATCHES(
+        project(mbpt::density_fit(deserialize(foreign), aux, L"g", L"g"),
+                own_pair(All)),
+        sequant::Exception, message_contains("BEFORE density fitting"));
+    // `Integral` without a cell -> instance map
+    REQUIRE_THROWS_MATCHES(project(deserialize(foreign), {.terms = All}),
+                           sequant::Exception,
+                           message_contains("needs a cell_instance"));
+  }
 }
 
 TEST_CASE("csv-pno-projection-ccsd", "[mbpt][csv][valgrind_skip]") {

@@ -639,7 +639,7 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
     return arr;
   };
 
-  SECTION("add_inplace: empty += populated adopts the populated inner rank") {
+  SECTION("add-inplace-empty-populated") {
     auto empty = build(1, /*empty_inner=*/true);
     auto full = build(1, /*empty_inner=*/false);
     REQUIRE(tot_inner_rank(empty) == 0);
@@ -695,8 +695,7 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
     REQUIRE(sliced.trange().dim(0).tile_extent() == 1);
   }
 
-  SECTION(
-      "slice_array_over_mode: rebasing matches block() on a multi-tile cut") {
+  SECTION("slice-rebase-multitile") {
     // Slice across two tiles at a non-zero base; hand-built trange must match
     // what the populated path gets from TA's block().
     TA::TiledRange1 const tr1{0, 3, 6, 9};
@@ -709,8 +708,7 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
   }
 }
 
-TEST_CASE("measured_size_in_bytes ignores the trace gate on size_in_bytes",
-          "[eval]") {
+TEST_CASE("measured-size-trace-gate", "[eval]") {
   // size_in_bytes() is collective for a DistArray and so switched off
   // untraced; the schedule document's run record measures through
   // measured_size_in_bytes() instead
@@ -740,7 +738,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
   // conventional 2:2 (vir,vir;occ,occ) layout for a CCSD T2 residual head.
   // Bug is independent of scalar Field — fires under both Conjugate and Symm
   // whenever the canonical orientation puts an external on the "wrong" side.
-  SECTION("eval-graph head bra/ket split is positional, not external-aware") {
+  SECTION("head-braket-positional") {
     using sequant::deserialize;
     using sequant::EvalExprTA;
     using sequant::ExprPtr;
@@ -1882,8 +1880,7 @@ TEST_CASE("eval_slice_array_over_mode", "[eval]") {
             arr.trange().dim(2).tile_extent());
   }
 
-  SECTION(
-      "blocked contraction over the sliced mode reconstructs the full one") {
+  SECTION("blocked-contraction-sliced-mode") {
     // full contraction over b
     TA::TArrayD full;
     full("a,c,d") = arr("a,b,c") * bb("b,d");
@@ -1911,7 +1908,7 @@ TEST_CASE("eval_slice_array_over_mode", "[eval]") {
     REQUIRE(equal_tarrays(via_result, direct));
   }
 
-  SECTION("mode_batches_of_trange1 partitions a mode into element ranges") {
+  SECTION("mode-batches-of-trange1") {
     using batches_t = sequant::container::svector<std::pair<size_t, size_t>>;
     // The TA realization of axis_batches: partition a TiledRange1 into tile-
     // grouped element ranges. mode 1 (b) has 3 tiles of 3 elements each (extent
@@ -1984,7 +1981,7 @@ TEST_CASE("eval_write_into_slice", "[eval]") {
     REQUIRE(equal_tarrays<Tight>(rdest->get<TA::TArrayD>(), R));
   }
 
-  SECTION("flat: nonzero element lobound (frozen-core offset) is preserved") {
+  SECTION("flat-nonzero-lobound") {
     // mode 0 has element lobound 2 (a frozen-core-like offset) and two size-3
     // tiles; split into [2,5) and [5,8). The block bounds honor the lobound.
     TA::TArrayD R(world, TA::TiledRange{{2, 5, 8}, {0, 4}});
@@ -2401,17 +2398,6 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
   }
 }
 
-// BLOCKED, hidden by default. This test batched an UNANNOTATED node via the
-// runtime's depth-0 heuristic fallback, which has been removed (annotations are
-// now authoritative). Re-pointing it at an explicit annotation is NOT
-// behaviour-preserving: cache_manager vetoes caching for a node whose own
-// node_slice_mask() carries a sliced batchable mode, and the heuristic never
-// set node_slice_mask() -- so the same mode batched by the two routes gives
-// different CSE. The correct expectations depend on replacing that veto
-// with per-context (per-slice) caching. Re-enable and re-derive the counts
-// then; do not "fix" the numbers against veto behaviour that is about to be
-// deleted.
-
 // Ordered executor (see ordered_schedule.hpp's own doc comments for the
 // OrderedSchedule IR and
 // ordered_executor.hpp's detail::run_ordered_contracted_block for the
@@ -2432,10 +2418,7 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
 // contracted loop between the externals and the node's value is built inside
 // all three, partial over the contracted loop, escaping scatter -> sum ->
 // scatter. Plain dense arrays; ground truth = the unbatched evaluation.
-TEST_CASE(
-    "evaluate_ordered_schedule: mixed same-node open (two External occ + one "
-    "Contracted occ) matches the unbatched result",
-    "[eval][ordered-executor][mixed-open]") {
+TEST_CASE("ordered-mixed-open", "[eval][ordered-executor][mixed-open]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -2542,12 +2525,8 @@ TEST_CASE(
   CHECK(rel < 1e-10);
 }
 
-TEST_CASE(
-    "evaluate_ordered_schedule: mixed same-node open over an aux-contracted "
-    "inner product (invariant on the inner external loop) matches the "
-    "unbatched "
-    "result",
-    "[eval][ordered-executor][mixed-open][mixed-open-pia]") {
+TEST_CASE("ordered-mixed-open-aux-invariant",
+          "[eval][ordered-executor][mixed-open][mixed-open-pia]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -2681,10 +2660,8 @@ TEST_CASE(
   CHECK(rel < 1e-10);
 }
 
-TEST_CASE(
-    "evaluate_ordered_schedule: mixed same-node open over an aux-contracted "
-    "inner product, SPARSE policy, matches the unbatched result",
-    "[eval][ordered-executor][mixed-open][mixed-open-pia-sparse]") {
+TEST_CASE("ordered-mixed-open-aux-sparse",
+          "[eval][ordered-executor][mixed-open][mixed-open-pia-sparse]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -2829,7 +2806,7 @@ TEST_CASE(
 }
 
 // Minimal TA-level probe for the nested-tile permutation crash seen in the
-// hidden ToT replica: permute a Tensor<Tensor<double>> array on its outer
+// ToT culprit replica: permute a Tensor<Tensor<double>> array on its outer
 // modes only, on inner only, and on both, through TA expressions.
 TEST_CASE("TA nested-tile permutation probe", "[tot][tot-perm-probe]") {
   using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
@@ -2898,11 +2875,8 @@ TEST_CASE("TA nested tile with empty inner cells: permuting constructor",
 // reduction node N1 opening all three loops, the aux-contracted integral
 // product invariant on the inner external loop. Ground truth = the unbatched
 // evaluation.
-TEST_CASE(
-    "evaluate_ordered_schedule: ToT culprit replica (t sliced on two outer "
-    "modes under external > contracted > external) matches the unbatched "
-    "result",
-    "[eval][ordered-executor][mixed-open][mixed-open-tot]") {
+TEST_CASE("ordered-tot-culprit",
+          "[eval][ordered-executor][mixed-open][mixed-open-tot]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3079,10 +3053,7 @@ TEST_CASE(
   CHECK(rel < 1e-10);
 }
 
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent over one Contracted "
-    "loop block",
-    "[eval][ordered-executor]") {
+TEST_CASE("ordered-vs-forest-contracted-block", "[eval][ordered-executor]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3216,10 +3187,7 @@ TEST_CASE(
 // batching OFF, and which the batched flat tests above never cover. If the
 // ordered result disagrees with forest descent here, the bug is in that
 // unbatched core, not in the batched loop path or in ToT tiles.
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent for an unbatched "
-    "flat forest",
-    "[eval][ordered-executor]") {
+TEST_CASE("ordered-vs-forest-flat", "[eval][ordered-executor]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3292,10 +3260,7 @@ TEST_CASE(
 // divergence in the fast unit suite: if the ordered ToT result disagrees with
 // forest descent, the bug is in the ordered executor's ToT path (root-walk /
 // combine_forest_roots / homing), independent of batching.
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent for an unbatched "
-    "ToT forest",
-    "[eval][ordered-executor]") {
+TEST_CASE("ordered-vs-forest-tot", "[eval][ordered-executor]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3369,10 +3334,7 @@ TEST_CASE(
 // the second ordered result disagrees with forest descent, the ordered homing
 // leaks stale 't'-dependent state (or mutates a persistent buffer) across
 // reset().
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent across a reset "
-    "with a changed volatile leaf",
-    "[eval][ordered-executor]") {
+TEST_CASE("ordered-vs-forest-reset", "[eval][ordered-executor]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3469,10 +3431,8 @@ TEST_CASE(
 // volatile, recomputed with the new 't'); root F2 = S*(p*q) has no 't'
 // (persistent). If ordered disagrees with forest descent on iteration 2, the
 // batched path leaks stale 't'-dependent state across reset.
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent across a reset in "
-    "a batched Contracted loop",
-    "[eval][ordered-executor][ordered-crossiter-bug]") {
+TEST_CASE("ordered-vs-forest-reset-batched",
+          "[eval][ordered-executor][ordered-crossiter-bug]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3591,10 +3551,7 @@ TEST_CASE(
 // TYPE under more than one physical Index in one block is out of scope here.
 // Real TA data at a small tractable size (the DryRun backend is zero-data and
 // cannot witness a dropped/double-written scatter slice).
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent over one External "
-    "loop block",
-    "[eval][ordered-executor]") {
+TEST_CASE("ordered-vs-forest-external-block", "[eval][ordered-executor]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3715,248 +3672,6 @@ TEST_CASE(
   double const rel = TA::norm2(diff) / TA::norm2(ref);
   INFO("relative L2 diff = " << rel);
   CHECK(rel < 1e-10);
-}
-
-TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
-          "[.][blocked-on-per-context-caching]") {
-  using sequant::evaluate;
-  using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
-  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
-  using cache_t = sequant::CacheManager<node_t>;
-
-  auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12, 12};
-  yield_.set_max_tile(4);
-
-  // W-analog: root contracts the aux index x_1; the two children are
-  // canonically equal
-  auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})");
-  std::string const target = "i_1,i_3,i_2,i_4";
-  auto node = eval_node(expr);
-  // The runtime batches STRICTLY on the optimizer's annotations (there is no
-  // heuristic fallback), so this test must state the mode it wants batched.
-  // batch_axis() picks exactly what the removed depth-0 heuristic used to pick.
-  auto const ax = sequant::batch_axis(node);
-  REQUIRE(ax.has_value());
-  node->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
-  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
-
-  std::map<std::wstring, int> n_yield;
-  auto counting_yield = [&yield_, &n_yield](node_t const& n) {
-    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
-    return yield_(n);
-  };
-
-  // x_1 is auxiliary: extent 12, tiles of 4; target 4 elements -> 3 batches
-  int const n_b = 3;
-  auto cache = cache_t::empty();
-  cache.set_custom_evaluator(make_batched_custom_evaluator(
-      counting_yield,
-      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; }));
-  auto const res =
-      evaluate(node, target, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(equal_tarrays<Loose>(res, ref));
-
-  // with within-batch dedup: per batch the left child evaluates (g and h
-  // yielded once each), the right child is a scratch cache hit; plus one g
-  // from the evaluator's mode_batches probe of the x_1-carrying leaf
-  CHECK(n_yield[L"g"] == n_b + 1);
-  CHECK(n_yield[L"h"] == n_b);
-}
-
-// BLOCKED, hidden by default. This test batched an UNANNOTATED node via the
-// runtime's depth-0 heuristic fallback, which has been removed (annotations are
-// now authoritative). Re-pointing it at an explicit annotation is NOT
-// behaviour-preserving: cache_manager vetoes caching for a node whose own
-// node_slice_mask() carries a sliced batchable mode, and the heuristic never
-// set node_slice_mask() -- so the same mode batched by the two routes gives
-// different CSE. The correct expectations depend on replacing that veto
-// with per-context (per-slice) caching. Re-enable and re-derive the counts
-// then; do not "fix" the numbers against veto behaviour that is about to be
-// deleted.
-TEST_CASE("eval_batched_custom_evaluator group replay",
-          "[.][blocked-on-per-context-caching]") {
-  using sequant::evaluate;
-  using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
-  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
-
-  auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12, 12};
-  yield_.set_max_tile(4);
-
-  // Two persistent finals sharing the sub-intermediate S = g*h (carries the
-  // auxiliary batch mode x_1):
-  //   F1 = S * S'   (canonically-equal siblings; contracts x_1, aux-aux)
-  //   F2 = S * p    (contracts x_1, aux-aux)
-  // Volatile heads (label "t") make F1 and F2 persistent. Every orbital
-  // contraction pairs a bra with a ket.
-  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3}))"
-      L" * t{i_1,i_2;i_3,i_9}");
-  auto const t2 = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3}");
-  std::string const tgt1 = "i_4,i_9";
-  std::string const tgt2 = "i_5,i_6";
-  auto n1 = eval_node(t1);
-  auto n2 = eval_node(t2);
-  // Annotate explicitly: the runtime batches STRICTLY on the optimizer's
-  // annotations (no heuristic fallback), so each final must state the mode it
-  // wants batched. batch_axis() picks exactly what the old depth-0 heuristic
-  // picked, so this reproduces the behaviour these assertions were written for.
-  for (auto* nd : {&n1, &n2}) {
-    auto const ax = sequant::batch_axis(*nd);
-    REQUIRE(ax.has_value());
-    (*nd)->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
-  }
-
-  auto is_volatile_t = [](node_t const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
-  };
-
-  // references (unbatched, uncached, uncounted)
-  auto const ref1 = evaluate(n1, tgt1, yield_)->get<TArrayD>();
-  auto const ref2 = evaluate(n2, tgt2, yield_)->get<TArrayD>();
-
-  // real cache over the two-term forest; F1 and F2 must classify persistent
-  auto cache = sequant::cache_manager(std::vector{n1, n2}, is_volatile_t);
-  REQUIRE(cache.persistent(n1.left()));
-  REQUIRE(cache.persistent(n2.left()));
-
-  std::map<std::wstring, int> n_yield;
-  auto counting_yield = [&yield_, &n_yield](node_t const& n) {
-    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
-    return yield_(n);
-  };
-  // persistent_only=true: gate volatile term heads so the group replay streams
-  // only the persistent finals F1/F2 (the across-the-board default would also
-  // batch volatile triggers, changing the yield counts asserted below).
-  cache.set_custom_evaluator(make_batched_custom_evaluator(
-      counting_yield,
-      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
-      sequant::accept_any_index{}, sequant::make_no_scope_guard{},
-      is_volatile_t,
-      /*persistent_only=*/true));
-
-  // evaluating term 1 triggers at F1 and must prebuild F2 in the same passes
-  auto const res1 = evaluate(n1, tgt1, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(cache.alive(n2.left()));  // F2 prebuilt by the group replay
-
-  auto const res2 = evaluate(n2, tgt2, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(equal_tarrays<Loose>(res1, ref1));
-  REQUIRE(equal_tarrays<Loose>(res2, ref2));
-
-  // S evaluated once per batch (n_b = 3), shared by F1 (twice) and F2 (once):
-  // g: 3 (S evals) + 1 (trigger probe) + 1 (F2 candidacy probe) = 5
-  // h: 3; p: 3 (sliced, once per batch); t: 2 (one per term head)
-  CHECK(n_yield[L"g"] == 5);
-  CHECK(n_yield[L"h"] == 3);
-  CHECK(n_yield[L"p"] == 3);
-  CHECK(n_yield[L"t"] == 2);
-}
-
-// BLOCKED, hidden by default. This test batched an UNANNOTATED node via the
-// runtime's depth-0 heuristic fallback, which has been removed (annotations are
-// now authoritative). Re-pointing it at an explicit annotation is NOT
-// behaviour-preserving: cache_manager vetoes caching for a node whose own
-// node_slice_mask() carries a sliced batchable mode, and the heuristic never
-// set node_slice_mask() -- so the same mode batched by the two routes gives
-// different CSE. The correct expectations depend on replacing that veto
-// with per-context (per-slice) caching. Re-enable and re-derive the counts
-// then; do not "fix" the numbers against veto behaviour that is about to be
-// deleted.
-TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
-          "[.][blocked-on-per-context-caching]") {
-  using sequant::evaluate;
-  using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
-  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
-
-  auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 12, 12};
-  yield_.set_max_tile(4);
-
-  // F_in = (g*h)*p (contracts the aux index x_1; persistent) nests inside
-  // F_out, which contracts its own aux mode x_2:  F_out = (F_in * r) * q,
-  // with r and q carrying x_2. Triggering at F_out must build F_in in an
-  // inner layer first, then seed its full value into F_out's pass (F_in
-  // carries no x_2). Every orbital contraction pairs a bra with a ket.
-  auto const t_out = sequant::deserialize<sequant::ExprPtr>(
-      L"((((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * r{i_6;i_7;x_2})"
-      L" * q{i_7;i_8;x_2}) * t{i_1;i_3,i_9}");
-  auto const t_in = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3,i_7}");
-  std::string const tgt_out = "i_5,i_8,i_9";
-  std::string const tgt_in = "i_5,i_6,i_7";
-  auto n_out = eval_node(t_out);
-  auto n_in = eval_node(t_in);
-
-  auto is_volatile_t = [](node_t const& n) {
-    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"t";
-  };
-
-  auto const ref_out = evaluate(n_out, tgt_out, yield_)->get<TArrayD>();
-  auto const ref_in = evaluate(n_in, tgt_in, yield_)->get<TArrayD>();
-
-  auto cache = sequant::cache_manager(std::vector{n_out, n_in}, is_volatile_t);
-  // structural preconditions: both finals persistent; F_in nests in F_out
-  REQUIRE(cache.persistent(n_out.left()));
-  REQUIRE(cache.persistent(n_in.left()));
-  {
-    sequant::TreeNodeEqualityComparator<node_t> const eq;
-    REQUIRE(eq(n_out.left().left().left(), n_in.left()));
-  }
-
-  std::map<std::wstring, int> n_yield;
-  auto counting_yield = [&yield_, &n_yield](node_t const& n) {
-    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
-    return yield_(n);
-  };
-  // batch only over auxiliary indices (as a DF-batched application would)
-  auto const aux_space =
-      sequant::get_default_context().index_basis_registry()->retrieve_space(
-          L"x");
-  auto accept_aux = [aux_space](sequant::Index const& ix) {
-    return ix.space() == aux_space;
-  };
-
-  // Annotate explicitly: the runtime batches STRICTLY on the optimizer's
-  // annotations (no heuristic fallback), so each final must state the mode it
-  // wants batched. batch_axis() picks exactly what the old depth-0 heuristic
-  // picked, so this reproduces the behaviour these assertions were written for.
-  for (auto* nd : {&n_out, &n_in}) {
-    auto const ax = sequant::batch_axis(*nd, accept_aux);
-    REQUIRE(ax.has_value());
-    (*nd)->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
-  }
-
-  cache.set_custom_evaluator(make_batched_custom_evaluator(
-      counting_yield,
-      [](sequant::Index const&) -> std::size_t { return std::size_t{4}; },
-      accept_aux, sequant::make_no_scope_guard{}, is_volatile_t));
-
-  auto const res_out =
-      evaluate(n_out, tgt_out, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(cache.alive(n_in.left()));  // inner layer built and stored
-
-  auto const res_in =
-      evaluate(n_in, tgt_in, counting_yield, cache)->get<TArrayD>();
-  REQUIRE(equal_tarrays<Loose>(res_out, ref_out));
-  REQUIRE(equal_tarrays<Loose>(res_in, ref_in));
-
-  // layer 1 (F_in over x_1, 3 batches): g,h,p once per batch; layer 2 (F_out
-  // over x_2): F_in SEEDED (g,h,p untouched), r,q sliced once per batch.
-  // Probes: +1 r (trigger, x_2-carrying leaf), +1 g (F_in candidacy, x_1
-  // leaf). If seeding failed and F_in were re-derived per batch, g/h/p
-  // would be 6+.
-  CHECK(n_yield[L"g"] == 4);
-  CHECK(n_yield[L"h"] == 3);
-  CHECK(n_yield[L"p"] == 3);
-  CHECK(n_yield[L"r"] == 4);
-  CHECK(n_yield[L"q"] == 3);
-  CHECK(n_yield[L"t"] == 2);
 }
 
 TEST_CASE("eval_batched_custom_evaluator nests inner mode", "[eval]") {
@@ -4187,8 +3902,7 @@ TEST_CASE("eval_batched_custom_evaluator nests two modes on one node",
   CHECK(state.live.empty());
 }
 
-TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
-          "[eval]") {
+TEST_CASE("batched-hoist-loop-invariant", "[eval]") {
   // Hoisting gate: a network batched over an OUTER mode (x_1) whose
   // subtree contains an intermediate INVARIANT to that mode (I2 = a*b contracts
   // x_2 and carries no x_1) must build the invariant ONCE at its emitted scope
@@ -4297,10 +4011,7 @@ TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
   CHECK(g_evals == 1);
 }
 
-TEST_CASE(
-    "eval_batched_custom_evaluator hoists to an intermediate contracted-mode "
-    "level",
-    "[eval]") {
+TEST_CASE("batched-hoist-intermediate-level", "[eval]") {
   // The runtime residency is sliced_modes(),
   // the all-batched-modes cross-occurrence meet -- which carries a node's
   // enclosing CONTRACTED (aux) modes directly, since a node variant to an outer
@@ -4579,10 +4290,7 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
   }
 }
 
-TEST_CASE(
-    "batched external-carrying intermediate hoists to its seed home; the "
-    "result stays exact via slice-on-use (no demotion veto)",
-    "[eval][batched-external]") {
+TEST_CASE("batched-external-hoist-slice-on-use", "[eval][batched-external]") {
   // This test used to pin the `has_demoted_external`
   // demotion veto: in an external SCATTER over a mode e, a DESCENDANT
   // intermediate M that itself CARRIES e free onto its result (an External
@@ -4751,8 +4459,7 @@ TEST_CASE(
   }
 }
 
-TEST_CASE("batched cached intermediate is sliced to the batch block on use",
-          "[eval][slice-on-use]") {
+TEST_CASE("batched-cached-slice-on-use", "[eval][slice-on-use]") {
   // Slice-on-use RED/GREEN witness for the LOAD-BEARING fix. A shared
   // intermediate M that carries an external mode e can be cached FULL at an
   // OUTER scope (correct where it is used unbatched / peak-acceptable there)
@@ -5470,10 +5177,7 @@ TEST_CASE("batched_eval_external_nested_contracted",
   CHECK(std::count(guard_calls.begin(), guard_calls.end(), 2u) == 3);
 }
 
-TEST_CASE(
-    "eval_batched_custom_evaluator nested scope guards compose "
-    "multiplicatively",
-    "[eval]") {
+TEST_CASE("batched-nested-scope-guards", "[eval]") {
   // Prove that screening relaxation composes over nested batch
   // levels. The re-entrant inner evaluator is built by threading
   // make_scope_guard (along with accept/is_volatile/persistent_only/
@@ -6182,7 +5886,7 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
   auto const ref = evaluate(node, target, yield)->get<FlatArray>();
   TA::TiledRange const res_tr = ref.trange();
 
-  SECTION("real shape on the denest result: zeroed tile + survivors match") {
+  SECTION("denest-real-shape") {
     TAEvalContext ctx;
     ctx.result_shape_provider =
         [](sequant::FullBinaryNode<sequant::EvalExprTA> const&,
@@ -6233,7 +5937,7 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
 // per-node external opens, not a fixture. This is the only case in which the
 // External stamps are produced by the optimizer rather than hand-written.
 // Compares the batched result against the plain unbatched reference (ground
-// truth). Hidden ([.]) diagnostic.
+// truth).
 // ---------------------------------------------------------------------------
 namespace {
 
@@ -6297,7 +6001,7 @@ void dump_annotations(sequant::FullBinaryNode<sequant::EvalExprTA> const& n,
 }  // namespace
 
 TEST_CASE("dp_external_placement_correctness",
-          "[.][eval][batched-external][node-placement]") {
+          "[eval][batched-external][node-placement]") {
   using namespace sequant;
   using TA::TArrayD;
   using node_t = FullBinaryNode<EvalExprTA>;
@@ -6451,9 +6155,7 @@ TEST_CASE("dp_external_placement_correctness",
 // every value canonicalized through an odd permutation comes back with the
 // wrong sign. Real TA data is required -- the DryRun backend carries no
 // numbers and cannot witness a sign.
-TEST_CASE(
-    "evaluate_ordered_schedule applies a canonicalization phase exactly once",
-    "[eval][ordered-executor]") {
+TEST_CASE("ordered-canon-phase-once", "[eval][ordered-executor]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -6541,10 +6243,7 @@ TEST_CASE(
 // permutes each root first, which allocates a fresh buffer. Real TA data is
 // required -- the DryRun backend carries no numbers and cannot witness a
 // double-counted addend.
-TEST_CASE(
-    "evaluate_ordered_schedule: a root result never aliases the persistent "
-    "store",
-    "[eval][ordered]") {
+TEST_CASE("ordered-root-no-alias", "[eval][ordered]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;

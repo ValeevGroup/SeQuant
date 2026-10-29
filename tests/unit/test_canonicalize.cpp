@@ -696,7 +696,7 @@ TEST_CASE("context_tensor_canonicalizers", "[algorithms]") {
     return ex<Tensor>(L"Q", bra(b), ket(k), Symmetry::Antisymm);
   };
 
-  SECTION("Tensor::canonicalize uses the context's default canonicalizer") {
+  SECTION("tensor-default-canonicalizer") {
     {
       auto scoped = set_scoped_default_context(
           Context(get_default_context())
@@ -766,7 +766,7 @@ TEST_CASE("context_tensor_canonicalizers", "[algorithms]") {
     CHECK(*q == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
   }
 
-  SECTION("Product canonicalization follows the context's cardinal labels") {
+  SECTION("product-cardinal-labels") {
     auto canonical_labels = [] {
       auto product = ex<Tensor>(L"Z", bra{L"i_1"}, ket{L"a_1"}) *
                      ex<Tensor>(L"Y", bra{L"a_1"}, ket{L"i_1"});

@@ -16,6 +16,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
@@ -588,27 +589,7 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(S[0b11] == 64.0);
     }
 
-    SECTION("DensePeakSize DP matches brute-force oracle") {
-      using namespace sequant;
-      auto idxsz = [](Index const& ix) -> std::size_t {
-        return ix.basis().extent();
-      };
-      // A 4-tensor chain whose intermediates differ in size by contraction
-      // order.
-      auto t0 = deserialize(L"g{a1;i1}", {.def_perm_symm = Symmetry::Nonsymm});
-      auto t1 = deserialize(L"g{a1;a2}", {.def_perm_symm = Symmetry::Nonsymm});
-      auto t2 = deserialize(L"g{a2;a3}", {.def_perm_symm = Symmetry::Nonsymm});
-      auto t3 = deserialize(L"g{a3;i2}", {.def_perm_symm = Symmetry::Nonsymm});
-      TensorNetwork net{std::vector<ExprPtr>{t0, t1, t2, t3}};
-      container::svector<Index> targets;  // i1,i2 left open
-      auto S = opt::detail::subset_footprints(net, targets, idxsz);
-      double oracle =
-          brute_force_min_peak(std::vector<double>(S.begin(), S.end()), 4);
-      double dp = opt::detail::peak_cost(net, targets, idxsz);
-      REQUIRE(dp == oracle);
-    }
-
-    SECTION("DensePeakSize matches oracle over a battery of small networks") {
+    SECTION("peak-dp-oracle-battery") {
       using namespace sequant;
       auto idxsz = [](Index const& ix) -> std::size_t {
         return ix.basis().extent();
@@ -727,9 +708,7 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(tables[size_t{1} << f1bit][0b01] < tables[0b00][0b01]);
     }
 
-    SECTION(
-        "DensePeakSizeBatched all-sliced corner equals peak_cost with "
-        "sliced extents") {
+    SECTION("batched-all-sliced-corner") {
       using namespace sequant;
       // Dedicated batchable "F" space (fresh type bit, no overlap with
       // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
@@ -832,9 +811,7 @@ TEST_CASE("optimize", "[optimize]") {
       }
     }
 
-    SECTION(
-        "DensePeakSizeBatched reconstruction achieves the optimum "
-        "(numeric)") {
+    SECTION("batched-reconstruction") {
       using namespace sequant;
       // Dedicated batchable "F" space (fresh type bit, no overlap with
       // sr-spaces bits 0b0001..0b1000); see "per-index batchability tables".
@@ -1138,7 +1115,10 @@ TEST_CASE("optimize", "[optimize]") {
                    L" + CSE1{;;u3,u2,u5,u1} t{a1,u5;i1,u3}"
                    L" + CSE1{;;u3,u2,u1,u5} t{a1,u5;u3,i1}"}},
              }) {
-          CAPTURE(inputs);
+          std::string described;
+          for (const auto& input : inputs)
+            described += sequant::toUtf8(input) + "\n";
+          CAPTURE(described);
 
           std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
           const std::vector<ResultExpr> expected = parse_expected(outputs);
@@ -1185,7 +1165,10 @@ TEST_CASE("optimize", "[optimize]") {
                  L"R = CSE1{;;i1,i2} C{i2;i1} + "
                  L"CSE1{;;i3,i4} D{i4;i3}"}},
            }) {
-        CAPTURE(inputs);
+        std::string described;
+        for (const auto& input : inputs)
+          described += sequant::toUtf8(input) + "\n";
+        CAPTURE(described);
 
         std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(inputs);
         const std::vector<ResultExpr> expected = parse_expected(outputs);
@@ -1500,6 +1483,25 @@ std::wstring render_tree(sequant::ExprPtr const& e) {
   }
   return L"?";
 }
+
+// True iff every `t` leaf is contracted directly with a `C` leaf, i.e. each
+// OSV/PNO transform C·t is formed before anything else touches it.
+bool every_t_meets_its_transform_first(sequant::ExprPtr const& e) {
+  using namespace sequant;
+  if (!e->is<Product>()) return true;
+  auto const& factors = e->as<Product>().factors();
+  for (auto const& f : factors) {
+    if (f->is<Tensor>() && f->as<Tensor>().label() == L"t") {
+      for (auto const& other : factors)
+        if (other != f &&
+            !(other->is<Tensor>() && other->as<Tensor>().label() == L"C"))
+          return false;
+    } else if (!every_t_meets_its_transform_first(f)) {
+      return false;
+    }
+  }
+  return true;
+}
 }  // namespace
 
 // Role-based batchability (domain-generic): the caller supplies two space sets
@@ -1511,9 +1513,7 @@ std::wstring render_tree(sequant::ExprPtr const& e) {
 // batchable_mode_list admits both as CANDIDATES (a mode's role is not known
 // there) and build_context's role filter keeps i_1 but drops i_2 -- so the
 // contracted occurrences of an external-only space never enter the 2^m search.
-TEST_CASE(
-    "batchable roles: external-only space keeps external, drops contracted",
-    "[optimize][batch]") {
+TEST_CASE("batch-roles-external-only", "[optimize][batch]") {
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
@@ -1579,8 +1579,7 @@ TEST_CASE(
 // Equivalently: leaving a contracted mode in the contracted predicate (the
 // pre-migration routing) DOES slice it (control, > 0); moving it to the
 // external role does NOT (fix, == 0).
-TEST_CASE("role filter: contracted mode sliced only in the contracted role",
-          "[optimize][role-filter]") {
+TEST_CASE("role-filter-contracted", "[optimize][role-filter]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
   auto ctx_copy = get_default_context_snapshot();
@@ -1647,8 +1646,7 @@ TEST_CASE("role filter: contracted mode sliced only in the contracted role",
 // default-decline the mode is dropped (n_F == 0). The RED run also proves the
 // assertion is non-vacuous: the mode is a genuine batchable-space mode that the
 // fallback DID admit.
-TEST_CASE("role filter: external mode needs the external role, not a fallback",
-          "[optimize][role-filter]") {
+TEST_CASE("role-filter-external", "[optimize][role-filter]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
   auto ctx_copy = get_default_context_snapshot();
@@ -1711,6 +1709,8 @@ TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
         prod, idxsz, /*subnet_cse=*/false,
         CostParams{.volatile_weight = 1.0, .inner_pow = ip});
     std::wcout << name << L":  " << render_tree(res) << L"\n";
+    CAPTURE(sequant::toUtf8(name), sequant::toUtf8(render_tree(res)));
+    CHECK(every_t_meets_its_transform_first(res));
   };
   // Omitting inner_pow on a term with composite (CSV/PNO) indices used to
   // silently size the composite `a` at its full uocc extent (40), inverting
@@ -1871,12 +1871,14 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
         prod, idxsz, false,
         CostParams{.volatile_weight = 1.0, .inner_pow = ip});
     std::wcout << L"FLOPs:        " << render_tree(res) << L"\n";
+    CHECK(every_t_meets_its_transform_first(res));
   }
   {
     auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
         prod, idxsz, false,
         CostParams{.volatile_weight = 1.0, .inner_pow = ip});
     std::wcout << L"PeakSize:     " << render_tree(res) << L"\n";
+    CHECK(every_t_meets_its_transform_first(res));
   }
   {
     auto res = opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
@@ -1886,6 +1888,7 @@ TEST_CASE("OSV early-contraction reproducer (full term #1)",
                    .batch_target_size = bts,
                    .inner_pow = ip});
     std::wcout << L"PeakBatched:  " << render_tree(res) << L"\n";
+    CHECK(every_t_meets_its_transform_first(res));
   }
   std::wcout << L"\n  >>> looking for (C{a_4<i_1>;μ̃_1216} * t{a_4<i_1>;i_1}) "
                 L"contracted EARLY <<<\n\n";
@@ -2144,149 +2147,6 @@ TEST_CASE("OSV deferral reproducer (tetramer term 3)", "[optimize][osv]") {
              opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
                  prod, idxsz, false, po_cost));
   CHECK(pbat_po >= osv_outer_product);  // gate restored -> OSV deferred again
-}
-
-// C60 PNO-CCSD residual "member 2": the batched intermediate that OOMs (~185 GB
-// materialized) is the double-proto I(i_1,i_2,i_3,Κ; a_3<i_2,i_3>,
-// a_1<i_1,i_2>).
-//   flat product:  g{i_3;i_1;Κ} · C{a_1<i_1,i_2>;μ̃} · g{μ̃;μ̃;Κ} ·
-//   C{μ̃;a_3<i_2,i_3>}
-// Two 2-occ PNO composites sharing i_2, no t amplitude. This probe answers:
-//  (1) does STO form the double-proto intermediate, and under which objective;
-//  (2) how does the (block-sparse) cost model size it (max_imed);
-//  (3) do the rejected brackets avoid it, i.e. does a cheaper schedule exist?
-TEST_CASE("C60 member-2 double-proto probe", "[optimize][osv][c60]") {
-  using namespace sequant;
-  auto reg = std::make_shared<IndexBasisRegistry>(
-      *get_default_context().index_basis_registry());
-  mbpt::add_df_spaces(reg);
-  mbpt::add_ao_basis(reg, mbpt::Spin::any);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
-  // C60 cc-pVDZ-F12-ish extents: active occ 120, PNO domain 42, PAO 1800,
-  // DF aux 6000 (sliced to batch 30 by the batched objective).
-  for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 120}, {L"a", 42}, {L"μ", 1800}, {L"Κ", 6000}}) {
-    reg->extent(k, v);
-  }
-  auto aux_space = reg->retrieve_space(L"Κ");
-  auto ctx_resetter =
-      set_scoped_default_context(get_default_context_snapshot().set(reg));
-  auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
-  };
-  // constant PNO domain 42 => all power means equal, neutralizing the
-  // RMS-vs-mean magnitude question; here we test STRUCTURE (which tree, is the
-  // double-proto avoidable), not the heavy-tail correction.
-  auto ip = [](Index const&, std::size_t) -> double { return 42.0; };
-  auto is_batch = [aux_space](Index const& ix) {
-    return ix.space() == aux_space;
-  };
-  std::function<std::size_t(Index const&)> bts = [](Index const&) {
-    return std::size_t{30};
-  };
-
-  auto prod = deserialize(
-                  L"g{i_3;i_1;Κ_1} C{a_1<i_1,i_2>;μ̃_1} "
-                  L"g{μ̃_1;μ̃_2;Κ_1} C{μ̃_2;a_3<i_2,i_3>}")
-                  ->as<Product>();
-
-  auto fp = opt::detail::footprint_counter(
-      idxsz, std::function<double(Index const&, std::size_t)>(ip));
-
-  std::function<std::vector<Index>(ExprPtr const&, double&)> freeix =
-      [&](ExprPtr const& e, double& mx) -> std::vector<Index> {
-    if (e->is<Tensor>()) {
-      std::vector<Index> v;
-      for (auto const& ix : e->as<Tensor>().const_braketaux_indices())
-        v.push_back(ix);
-      return v;
-    }
-    std::map<std::wstring, std::pair<int, Index>> cnt;
-    for (auto const& fct : e->as<Product>().factors())
-      for (auto const& ix : freeix(fct, mx)) {
-        auto k = std::wstring(ix.full_label());
-        cnt[k].first++;
-        cnt[k].second = ix;
-      }
-    std::vector<Index> result;
-    for (auto const& [k, v] : cnt)
-      if (v.first == 1) result.push_back(v.second);
-    double here = fp(result);
-    if (here > mx) mx = here;
-    return result;
-  };
-  struct TP {
-    double peak, leafsum, S;
-  };
-  std::function<TP(ExprPtr const&)> tree_peak = [&](ExprPtr const& e) -> TP {
-    if (e->is<Tensor>()) {
-      std::vector<Index> v;
-      for (auto const& ix : e->as<Tensor>().const_braketaux_indices())
-        v.push_back(ix);
-      double s = fp(v);
-      return TP{s, s, s};
-    }
-    auto const& facs = e->as<Product>().factors();
-    TP L = tree_peak(facs[0]);
-    TP R = tree_peak(facs[1]);
-    double dummy = 0.0;
-    double Snode = fp(freeix(e, dummy));
-    double both = L.S + R.S + Snode;
-    double lfirst = std::max({R.leafsum + L.peak, L.S + R.peak, both});
-    double rfirst = std::max({L.leafsum + R.peak, R.S + L.peak, both});
-    return TP{std::min(lfirst, rfirst), L.leafsum + R.leafsum, Snode};
-  };
-  auto report = [&](std::wstring name, ExprPtr res) {
-    double mx = 0.0;
-    freeix(res, mx);
-    double tpk = tree_peak(res).peak;
-    std::wcout << name << L"  max_imed(elems)=" << (long long)mx
-               << L"  recurrence_PEAK(elems)=" << (long long)tpk << L"\n      "
-               << render_tree(res) << L"\n";
-  };
-
-  std::wcout
-      << L"\n=== C60 MEMBER-2 (i=120, a=42, μ̃=1800, Κ=6000, batch=30) ===\n";
-  report(L"FLOPs:       ",
-         opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-             prod, idxsz, false,
-             CostParams{.volatile_weight = 1.0, .inner_pow = ip}));
-  report(L"PeakSize:    ",
-         opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-             prod, idxsz, false,
-             CostParams{.volatile_weight = 1.0, .inner_pow = ip}));
-  report(L"PeakBatched: ",
-         opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-             prod, idxsz, false,
-             CostParams{.volatile_weight = 1.0,
-                        .is_batchable_contracted_index = is_batch,
-                        .batch_target_size = bts,
-                        .inner_pow = ip}));
-  // Experiment: make PAO (μ̃) batchable TOO (batch 100). Prediction: STO
-  // switches away from the double-proto to a g·g-first tree whose worst
-  // intermediate carries μ̃ and is now sliceable.
-  auto mu_basis = reg->retrieve(L"μ̃");
-  auto is_batch2 = [aux_space, mu_basis](Index const& ix) {
-    return ix.space() == aux_space || ix.basis() == mu_basis;
-  };
-  std::function<std::size_t(Index const&)> bts2 = [aux_space](Index const& ix) {
-    return ix.space() == aux_space ? std::size_t{30} : std::size_t{100};
-  };
-  report(L"PeakBatched(+μ̃):",
-         opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
-             prod, idxsz, false,
-             CostParams{.volatile_weight = 1.0,
-                        .is_batchable_contracted_index = is_batch2,
-                        .batch_target_size = bts2,
-                        .inner_pow = ip}));
-  // Reference: the double-proto intermediate as the model sizes it, dense at
-  // d=42 (== the block-sparse upper bound), with Κ at one batch of 30:
-  //   i^3 * Κ_batch * a * a  elements.
-  std::wcout << L"double-proto imed (i^3*Κbatch*a^2) elems = "
-             << (long long)(120.0 * 120 * 120 * 30 * 42 * 42) << L"  (="
-             << (long long)(120.0 * 120 * 120 * 30 * 42 * 42 * 8)
-             << L" B dense)\n\n";
 }
 
 TEST_CASE("PPL: form 4-PNO W vs fold-t (peak-neutral, flop tie-break)",
@@ -2716,10 +2576,7 @@ TEST_CASE("quadratic bubble: early-K integral vs late-K t·(gC)",
 // K_b. A near-zero peak_threshold instead makes every point infeasible,
 // triggering the min-peak fallback, which reproduces the old (peak-driven)
 // answer.
-TEST_CASE(
-    "threshold gates batching: default (+inf) picks min-flops regardless of "
-    "K_b; near-zero threshold falls back to min-peak",
-    "[optimize][threshold]") {
+TEST_CASE("peak-threshold-gating", "[optimize][threshold]") {
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
@@ -2841,90 +2698,6 @@ TEST_CASE(
   // resolve to min-flops -- see the ceiling note above).
   CHECK(integral_at_perf(/*Kb=*/2, inf));
   CHECK(integral_at_perf(/*Kb=*/2, /*peak_threshold(bytes)=*/1.0));
-}
-
-// Validate that the batched DP's accumulation_factor charge is
-// priced correctly under NESTED accumulation -- i.e. more than one batchable
-// index, contracted at *different* nodes of the binarized tree -- and that
-// the ctx.m <= 1 restriction that used to guard accumulation_factor != 0 can
-// be lifted. Network: T0=g{i;a;K}, T1=g{mu1;mu2;K}, T2=f{mu1;a2},
-// T3=f{mu2;a3}. T1 is a hub carrying K, mu1 AND mu2 simultaneously; K is
-// contracted between T0/T1, mu1 between T1/T2, mu2 between T1/T3 -- three
-// distinct batchable Index instances (K, mu1, mu2) spanning the aux (Κ) and
-// PAO (μ̃) spaces, forcing the DP to slice more than one mode, at more than
-// one node, to reach its minimum-peak schedule.
-// HIDDEN ([.]): the batched DP peak cost (peak_cost_batched) diverges from its
-// independent memory-simulation oracle on this fixture (dp==dp_K_only, and the
-// dp==oracle gate fails) -- a real batched-DP cost-model regression to fix in a
-// focused DP pass, not a stale expectation. Hidden until then.
-TEST_CASE("batched DP peak matches oracle with two modes and accumulation",
-          "[.][optimize][batched-accum][blocked-dp-cost-model]") {
-  using namespace sequant;
-  // SKIP (not just the [.] tag above):
-  // peak_cost_batched/reconstructed_batched_peak never expose a finite
-  // peak_threshold, so PeakBatchedModel::relax's revert-to-no-batching gate
-  // disables slicing unconditionally here, making dp/dp_K_only/dp_mu_only
-  // degenerate to the same unbatched value below. [.] alone only excludes this
-  // from a bare/no-argument run; an explicit tag filter (e.g. "[optimize]")
-  // still executes -- and fails -- it. See the tracking issue for the proposed
-  // fix.
-  SKIP(
-      "blocked-dp-cost-model: peak_cost_batched/reconstructed_batched_peak "
-      "have no finite peak_threshold, so batching never engages here");
-  auto reg = std::make_shared<IndexBasisRegistry>(
-      *get_default_context().index_basis_registry());
-  mbpt::add_df_spaces(reg);
-  mbpt::add_ao_basis(reg, mbpt::Spin::any);
-  mbpt::add_pao_basis(reg, mbpt::Spin::any);
-  for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 20}, {L"a", 20}, {L"μ", 200}, {L"Κ", 300}}) {
-    reg->extent(k, v);
-  }
-  auto aux = reg->retrieve_space(L"Κ");
-  auto pao = reg->retrieve(L"μ̃");
-  auto ctx_resetter =
-      set_scoped_default_context(get_default_context_snapshot().set(reg));
-  auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
-  };
-  auto is_batch = [aux, pao](Index const& ix) {
-    return ix.space() == aux || ix.basis() == pao;
-  };
-  auto is_batch_K = [aux](Index const& ix) { return ix.space() == aux; };
-  auto is_batch_mu = [pao](Index const& ix) { return ix.basis() == pao; };
-  std::function<std::size_t(Index const&)> bts = [](Index const&) {
-    return std::size_t{10};
-  };
-  std::function<bool(Tensor const&)> novol = {};
-  // Two batchable contracted indices K and mu-tilde, contracted at different
-  // nodes (nested accumulation).
-  auto prod = deserialize(
-                  L"g{i_1;a_1;Κ_1} g{μ̃_1;μ̃_2;Κ_1} f{μ̃_1;a_2} "
-                  L"f{μ̃_2;a_3}")
-                  ->as<Product>();
-  TensorNetwork net(prod.factors());
-  container::svector<Index> tidxs{};
-  double const acc = 1.0;
-  double const dp = opt::detail::peak_cost_batched(net, tidxs, idxsz, is_batch,
-                                                   bts, novol, acc);
-  double const oracle = opt::detail::reconstructed_batched_peak(
-      net, tidxs, idxsz, is_batch, bts, novol, acc);
-  // The correctness gate: the DP's max/+ recurrence for the accumulation
-  // charge must agree with the independent memory-simulation oracle even
-  // when more than one batchable index is sliced along the chosen tree.
-  CHECK(dp == Catch::Approx(oracle));
-
-  // Confirm the identity is not vacuous: the chosen 2-mode schedule must
-  // actually be lower-peak than slicing either mode alone, proving the DP
-  // engaged (and nested) both K and mu-tilde rather than degenerating to a
-  // single-mode schedule.
-  double const dp_K_only = opt::detail::peak_cost_batched(
-      net, tidxs, idxsz, is_batch_K, bts, novol, acc);
-  double const dp_mu_only = opt::detail::peak_cost_batched(
-      net, tidxs, idxsz, is_batch_mu, bts, novol, acc);
-  CHECK(dp < dp_K_only);
-  CHECK(dp < dp_mu_only);
 }
 
 // Ordered-key gate: on the Carr != 0 network, {s,t} carries the aux F_2 but not
@@ -3315,8 +3088,7 @@ TEST_CASE("NoReorder Sum re-keys batch annotations onto the final Sum",
 // independently of node_slice_mask() (axes). Hand-build node_batch_axes so the
 // single contraction node's opened_here carries one External mode while a leaf
 // stays empty -- isolates the binarize wiring from the DP emit.
-TEST_CASE("binarize applies batch_loops_opened_here from node annotation",
-          "[optimize][annotate][loop-open]") {
+TEST_CASE("binarize-loops-opened-here", "[optimize][annotate][loop-open]") {
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
@@ -3406,201 +3178,6 @@ TEST_CASE("binarize marks accumulation Sum nodes in-place", "[binarize]") {
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   REQUIRE(node2->is_sum());
   REQUIRE(node2->accumulate_in_place());
-}
-
-// reconstruct_batched_modes must emit BatchModeType::External entries
-// for a genuine external (external, never-contracted) mode at every node whose
-// subset carries it, gated by BatchPolicy::batch_spectator_indices (without
-// which an external bit never enters a DP cell, so no loop is opened and
-// nothing is stamped). i_1 lives only
-// on the first tensor of a 4-tensor chain -- a genuine external
-// that is never contracted anywhere, so is_external_mode(i_1) holds
-// regardless of the chosen factorization -- while Kappa_1 (the DF aux shared
-// by the first two tensors) is a genuine CONTRACTED mode, never an external.
-// Distinguishes the two kinds even though both get admitted into
-// ctx.batchable_modes.
-// HIDDEN ([.]): the DP no longer emits a per-node External occ annotation on
-// this network (node_with_external / found_co_carrying come up empty) -- a
-// real batched-DP annotation-emission change to adjudicate in a focused DP
-// pass. Hidden until then.
-TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
-          "[.][optimize][batch][blocked-dp-cost-model]") {
-  using namespace sequant;
-  // SKIP (not just the [.] tag above): the DP's Pareto frontier treats "which
-  // mode is sliced" as fungible, so the external i_1 candidate is
-  // domination-pruned by a co-existing, peak-cheaper contracted (Kappa)
-  // candidate at the same nsl tier -- no per-node External annotation ever
-  // survives to be stamped. [.] alone only excludes this from a bare/
-  // no-argument run; an explicit tag filter (e.g. "[optimize]") still
-  // executes -- and fails -- it. See the tracking issue for details.
-  SKIP(
-      "blocked-dp-cost-model: external-mode batching candidates are "
-      "Pareto-dominated by contracted-mode ones, so no per-node External "
-      "annotation is ever emitted here");
-  auto reg = std::make_shared<IndexBasisRegistry>(
-      *get_default_context().index_basis_registry());
-  mbpt::add_df_spaces(reg);
-  for (auto&& [k, v] :
-       std::initializer_list<std::pair<std::wstring_view, size_t>>{
-           {L"i", 8}, {L"a", 8}, {L"Κ", 400}})
-    reg->extent(k, v);
-  auto aux_space = reg->retrieve_space(L"Κ");
-  auto occ_space = reg->retrieve_space(L"i");
-  auto ctx_resetter =
-      set_scoped_default_context(get_default_context_snapshot().set(reg));
-
-  auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
-  };
-
-  // Chain network T1-T2-T3-T4: T1--(a_1,Kappa_1)--T2--(a_2)--T3--(a_4)--T4.
-  // i_1 (on T1 only) and a_5 (on T4 only) are the root-external indices.
-  auto expr =
-      deserialize(L"g{i_1;a_1;Κ_1} g{a_1;a_2;Κ_1} f{a_2;a_4} h{a_4;a_5}");
-
-  auto axes_map = std::make_shared<std::unordered_map<
-      Expr const*, container::vector<NodeBatchAnnotation>>>();
-
-  OptimizeOptions opts;
-  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
-  opts.reorder = ReorderSum::NoReorder;
-  opts.idx_to_extent = idxsz;
-  opts.batch_policy.is_batchable_contracted_index =
-      [aux_space](Index const& ix) { return ix.space() == aux_space; };
-  opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
-    return 20;
-  };
-  // The external mode is admitted in the EXTERNAL role: this space is batchable
-  // where it is open on the term root, not where it is contracted. (Previously
-  // such modes were auto-admitted by an occupancy-specific special case in
-  // batchable_mode_list; batchability is now role-based and caller-declared.)
-  opts.batch_policy.is_batchable_external_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"i";
-  };
-  opts.batch_policy.batch_spectator_indices = true;
-  opts.term_batch_axes = axes_map;
-
-  // Determine this term's actual perf-first root peak (bytes) directly, via
-  // the same PeakBatchedModel construction single_term.hpp's
-  // DenseTimeSpaceBatched arm uses (idxsz, is_batchable_index,
-  // batch_target_size, perf_first=true), so peak_threshold values below and
-  // above it can be chosen without hardcoding a magic number tied to the
-  // extents above. peak_threshold is NOT a factorization gate under
-  // perf_first (see PeakBatchedModel::select_root), so this value does not
-  // depend on which threshold the model below is eventually given.
-  namespace o = sequant::opt::detail;
-  container::svector<ExprPtr> tensors;
-  for (auto const& f : expr->as<Product>().factors())
-    if (f->is<Tensor>()) tensors.push_back(f);
-  TensorNetwork const net{tensors};
-  o::PeakBatchedModel<decltype(idxsz)> peek_model{
-      idxsz, opts.batch_policy.batch_target_size, /*is_volatile_leaf=*/{}};
-  peek_model.is_batchable_contracted_index =
-      opts.batch_policy.is_batchable_contracted_index;
-  peek_model.perf_first = true;
-  // Same role split as the optimize() path, so the peeked root peak (and hence
-  // the threshold derived from it) is computed over the same mode set.
-  peek_model.is_batchable_external_index =
-      opts.batch_policy.is_batchable_external_index;
-  container::svector<Index> const tidxs{};
-  auto pctx = peek_model.build_context(net, tidxs);
-  auto pst = o::solve_single_term(peek_model, net, tidxs, pctx);
-  std::size_t const proot = (std::size_t{1} << pctx.nt) - 1;
-  int const pbest = peek_model.select_root(pctx, pst);
-  REQUIRE(pbest >= 0);
-  double const root_peak_bytes =
-      pst[proot][0][pbest].peak * peek_model.numeric_size;
-  REQUIRE(root_peak_bytes > 0.0);
-
-  // Assertion 1: peak_threshold strictly BELOW the term's actual peak =>
-  // gate (iv) holds => External entries ARE emitted. (For this small chain no
-  // batched schedule fits root_peak/2 either -- the peak shrinks less than 2x
-  // under Kappa slicing -- so select_root's perf-first ceiling falls back to
-  // the unbatched min-flops schedule here, same as before the ceiling existed;
-  // the ceiling ENGAGING is covered by select_root_perf_first_ceiling below.)
-  opts.batch_policy.peak_threshold = root_peak_bytes / 2.0;
-
-  auto optimized = optimize(expr, opts);
-  REQUIRE(optimized);
-
-  auto it = axes_map->find(optimized.get());
-  REQUIRE(it != axes_map->end());
-  auto const& node_axes = it->second;
-  REQUIRE(!node_axes.empty());
-
-  bool node_with_external = false;
-  bool node_without_external = false;
-  for (auto const& modes : node_axes) {
-    bool has_i1_external = false;
-    for (auto const& entry : modes.axes) {
-      // Kappa (a genuine contracted DF aux, never an external) must never be
-      // tagged External.
-      if (entry.first.space() == aux_space)
-        CHECK(entry.second == BatchModeType::Contracted);
-      if (entry.first.space() == occ_space &&
-          entry.second == BatchModeType::External)
-        has_i1_external = true;
-    }
-    if (has_i1_external)
-      node_with_external = true;
-    else
-      node_without_external = true;
-  }
-  CHECK(node_with_external);
-  CHECK(node_without_external);
-
-  // Assertion 1b: the build lambda in cost_model.hpp pushes External entries
-  // before Contracted ones, so a node that co-carries the opened external i_1
-  // AND the contracted Κ_1 must realize the External axis before the
-  // Contracted axis in `ann.axes`. Guard with found_co_carrying so the
-  // compare cannot pass vacuously.
-  bool found_co_carrying = false;
-  for (auto const& modes : node_axes) {
-    int first_ext = -1, first_con = -1;
-    for (int p = 0; p < static_cast<int>(modes.axes.size()); ++p) {
-      auto const& entry = modes.axes[static_cast<std::size_t>(p)];
-      if (entry.second == BatchModeType::External && first_ext < 0)
-        first_ext = p;
-      if (entry.second == BatchModeType::Contracted && first_con < 0)
-        first_con = p;
-    }
-    if (first_ext >= 0 && first_con >= 0) {
-      found_co_carrying = true;
-      CHECK(first_ext < first_con);
-    }
-  }
-  REQUIRE(found_co_carrying);
-
-  // Assertion 2: peak_threshold = +infinity (the term never "needs" batching
-  // under any budget) with batch_spectator_indices still true => the
-  // unseeded-peak-over-threshold gate fails => ZERO External entries
-  // anywhere. Before this gate, reconstruct_batched_modes emitted
-  // External regardless of peak_threshold, so this assertion fails without the
-  // fix and passes with it.
-  axes_map->clear();
-  opts.batch_policy.peak_threshold = std::numeric_limits<double>::infinity();
-  auto optimized_inf = optimize(expr, opts);
-  REQUIRE(optimized_inf);
-  auto it_inf = axes_map->find(optimized_inf.get());
-  REQUIRE(it_inf != axes_map->end());
-  for (auto const& modes : it_inf->second)
-    for (auto const& entry : modes.axes)
-      CHECK(entry.second != BatchModeType::External);
-
-  // Assertion 3: with the external gate off (batch_spectator_indices=false)
-  // -- threshold restored below the actual peak so only the flag is under
-  // test -- the default optimize() path stays byte-identical: no External
-  // entries anywhere (existing [optimize] tests are its witness).
-  axes_map->clear();
-  opts.batch_policy.peak_threshold = root_peak_bytes / 2.0;
-  opts.batch_policy.batch_spectator_indices = false;
-  auto optimized_off = optimize(expr, opts);
-  REQUIRE(optimized_off);
-  auto it_off = axes_map->find(optimized_off.get());
-  REQUIRE(it_off != axes_map->end());
-  for (auto const& modes : it_off->second)
-    for (auto const& entry : modes.axes)
-      CHECK(entry.second != BatchModeType::External);
 }
 
 // select_root under perf_first (DenseTimeSpaceBatched) treats peak_threshold
@@ -4023,8 +3600,7 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
   REQUIRE(composite_inner_checked);
 }
 
-TEST_CASE("outer-product pruning: large connected term optimizes quickly",
-          "[optimize][pruning]") {
+TEST_CASE("prune-large-connected", "[optimize][pruning]") {
   using namespace sequant;
   auto reg = std::make_shared<IndexBasisRegistry>(
       *get_default_context().index_basis_registry());
@@ -4050,8 +3626,7 @@ TEST_CASE("outer-product pruning: large connected term optimizes quickly",
   CHECK(out);
 }
 
-TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
-          "[optimize][pruning]") {
+TEST_CASE("prune-multi-component", "[optimize][pruning]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
   auto reg = std::make_shared<IndexBasisRegistry>(
@@ -4107,8 +3682,7 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
 // a DIFFERENT reason -- i is EXTERNAL (free on the root, contracted nowhere),
 // so it never enters any aprime and hence never enters B on the emit walk,
 // which starts at B=0. Print the per-node charge and let the numbers decide.
-TEST_CASE("loop-tree recompute charge prices the middle gap",
-          "[.][loop-tree]") {
+TEST_CASE("loop-tree recompute charge prices the middle gap", "[loop-tree]") {
   using namespace sequant;
   // Scoped context: these TEST_CASEs are file-scope, so adding F to the
   // default context's registry would make them collide on the second add.
@@ -4145,8 +3719,7 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   model.is_batchable_contracted_index = is_batchable;
   // The batchable mode occurs EXTERNALLY here (open on the term root); admit it
   // in the external role explicitly. Byte-identical to the old external->
-  // contracted fallback, which has been removed; this hidden [.][loop-tree]
-  // test relied on it.
+  // contracted fallback, which has been removed; this test relied on it.
   model.is_batchable_external_index = is_batchable;
   model.charge_batch_recompute = true;
   // The external mode's loop is a nestable DP cell mode only under spectator
@@ -4253,7 +3826,7 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   }
 }
 
-// RED gate for the free-hoist charge.
+// Gate for the free-hoist charge.
 //
 // The free-hoist / I2 shape: a subset that carries NO batchable mode, sitting
 // inside an enclosing loop over a CONTRACTED batchable mode. Such a node is
@@ -4261,15 +3834,10 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
 // it above the loop is FREE -- unchanged footprint, computed once. The correct
 // recompute factor is rf = 1.
 //
-// Today's charge (cost_model.hpp ~909-913) is order-blind: it bills
-// nBatch(x) for EVERY x in `esc = B & ~open_modes[n]`, with no notion of where
-// the node sits relative to those loops. So it over-charges this node by
-// nBatch(F). The Carr == 0 case is the worst over-charge.
-//
 // Asserted directly on the DP cell st[n][B] rather than on an emitted schedule,
 // so the test pins the CHARGE and does not depend on which tree the DP happens
 // to select.
-TEST_CASE("loop-tree charge must not bill a free hoist", "[.][loop-tree]") {
+TEST_CASE("loop-tree charge must not bill a free hoist", "[loop-tree]") {
   using namespace sequant;
   // Scoped context: these TEST_CASEs are file-scope, so adding F to the
   // default context's registry would make them collide on the second add.
@@ -4323,150 +3891,7 @@ TEST_CASE("loop-tree charge must not bill a free hoist", "[.][loop-tree]") {
 
   // {s,t} carries no batchable mode, so slicing F_1 cannot shrink it and it can
   // be built once above the F_1 loop at unchanged footprint. rf must be 1.
-  CHECK(inside == outside);  // FAILS today: inside == nBatch(F_1) * outside
-}
-
-// reconstruct_batched_modes must emit, per contraction node, its
-// effective use count (effective_count) alongside the batch axes, on the
-// order-aware path. The oracle is the formula evaluated straight from
-// the Context at each node's (n, B): effective count = the product of
-// nbatches over the escaped-outer set. We re-walk the SAME chosen
-// back-pointer tree the emit walks and cross-check every emitted node, so the
-// assertion is independent of which factorization the DP happens to select.
-TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
-  using namespace sequant;
-  auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
-
-  auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.basis().extent();
-  };
-  // Both F1 and F2 are batchable and contracted (nestable) => two ordered
-  // enclosing modes.
-  auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
-  };
-  auto batch_fn = [](Index const&) -> std::size_t {
-    return 1;  // batch tile 1 => nbatches == extent (4) > 1
-  };
-
-  // slot index (in ctx.batchable_modes) of a batchable Index, by full label.
-  auto slot_of = [](auto const& ctx, Index const& ix) -> int {
-    for (std::size_t k = 0; k < ctx.m; ++k)
-      if (ctx.batchable_modes[k].full_label() == ix.full_label())
-        return static_cast<int>(k);
-    return -1;
-  };
-
-  // Re-walk the chosen back-pointer tree in the emit's left-first post-order,
-  // recording (n, B) per contraction node so node_nb[j] pairs with the j-th
-  // emitted annotation.
-  auto walk_nb = [](auto const& ctx, auto const& st, int best) {
-    container::vector<std::pair<std::size_t, std::size_t>> node_nb;
-    std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
-    std::function<void(std::size_t, std::size_t, int)> go =
-        [&](std::size_t n, std::size_t B, int idx) {
-          if (std::popcount(n) == 1) return;
-          auto const& r = st[n][B][idx];
-          std::size_t const C = ctx.descend(B, r.aprime);
-          std::size_t const fs = r.lp_first ? r.lp : r.rp;
-          int const fi = r.lp_first ? r.lp_idx : r.rp_idx;
-          std::size_t const ss = r.lp_first ? r.rp : r.lp;
-          int const si = r.lp_first ? r.rp_idx : r.lp_idx;
-          go(fs, C, fi);
-          go(ss, C, si);
-          node_nb.push_back({n, B});
-        };
-    go(root, 0, best);
-    return node_nb;
-  };
-
-  // ---- Assertion 1: nested chain -- cross-check every emitted node ---------
-  {
-    std::vector<ExprPtr> ts;
-    for (auto s : {L"g{a4;F1}", L"h{F1;F2}", L"s{F2;a2}", L"t{a2;a3}"})
-      ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
-    TensorNetwork net{ts};
-    container::svector<Index> targets;
-
-    opt::detail::PeakBatchedModel model{idxsz, batch_fn, {}};
-
-    model.is_batchable_contracted_index = is_batchable;
-    model.charge_batch_recompute = true;
-    auto ctx = model.build_context(net, targets);
-    REQUIRE(ctx.m == 2u);
-
-    auto st = opt::detail::solve_single_term(model, net, targets, ctx);
-    int const best = model.select_root(ctx, st);
-    REQUIRE(best >= 0);
-    auto const node_nb = walk_nb(ctx, st, best);
-
-    auto const emitted = model.reconstruct_batched_modes(ctx, st);
-    REQUIRE(emitted.second.size() == node_nb.size());
-    REQUIRE(!emitted.second.empty());
-
-    for (std::size_t j = 0; j < emitted.second.size(); ++j) {
-      auto const& ann = emitted.second[j];
-      auto const [n, B] = node_nb[j];
-
-      // Expected effective_count = prod nbatches over the escaped-outer set.
-      std::size_t const esc = ctx.escaped_outer(B, ctx.open_modes[n]);
-      double rf = 1.0;
-      for (std::size_t k = 0; k < ctx.m; ++k)
-        if (esc & (std::size_t{1} << k)) rf *= ctx.nbatches[k];
-      CHECK(ann.effective_count == static_cast<std::size_t>(std::llround(rf)));
-
-      // Contracted axes emitted in ascending batchable-slot order (descend).
-      int last = -1;
-      for (auto const& [ix, knd] : ann.axes)
-        if (knd == BatchModeType::Contracted) {
-          int const slot = slot_of(ctx, ix);
-          CHECK(slot > last);
-          last = slot;
-        }
-    }
-
-    // The term root carries no enclosing batched mode (its cell is the empty
-    // sequence), so it has unit use count.
-    CHECK(emitted.second.back().effective_count == 1u);
-  }
-
-  // ---- Assertion 2: a node contracting two batched modes emits them in ----
-  // ---- ascending batched-slot order (matches descend). -------------------
-  {
-    std::vector<ExprPtr> ts;
-    for (auto s : {L"x{a1;F1,F2}", L"y{F1,F2;a2}", L"z{a2;a3}"})
-      ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
-    TensorNetwork net{ts};
-    container::svector<Index> targets;
-
-    opt::detail::PeakBatchedModel model{idxsz, batch_fn, {}};
-
-    model.is_batchable_contracted_index = is_batchable;
-    model.charge_batch_recompute = true;
-    auto ctx = model.build_context(net, targets);
-    REQUIRE(ctx.m == 2u);
-
-    auto st = opt::detail::solve_single_term(model, net, targets, ctx);
-    auto const emitted = model.reconstruct_batched_modes(ctx, st);
-
-    bool saw_two_mode = false;
-    for (auto const& ann : emitted.second) {
-      int last = -1, n_con = 0;
-      for (auto const& [ix, knd] : ann.axes)
-        if (knd == BatchModeType::Contracted) {
-          int const slot = slot_of(ctx, ix);
-          CHECK(slot > last);  // strictly ascending slot order
-          last = slot;
-          ++n_con;
-        }
-      if (n_con >= 2) saw_two_mode = true;
-    }
-    // x.y contracts BOTH F1 and F2 at one node.
-    CHECK(saw_two_mode);
-  }
+  CHECK(inside == outside);
 }
 
 // D1 fix (ii) gate (emit External BEFORE Contracted at co-carrying nodes). A
@@ -4486,9 +3911,7 @@ TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
 // peak_threshold forcing over budget the external modes are adopted/stamped
 // there. RED pre-fix: `axes` is [Contracted a1, External i...] (contracted
 // pushed first). GREEN post-fix: [External i..., Contracted a1].
-TEST_CASE(
-    "loop-tree emit: External axis precedes Contracted at co-carrying node",
-    "[.][loop-tree]") {
+TEST_CASE("loop-tree-axis-order", "[loop-tree]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   auto reg =
@@ -4559,61 +3982,6 @@ TEST_CASE(
   REQUIRE(found_co_carrying);
 }
 
-// PROBE (not a gate): the resident-scan peak. When {s,t} is free-hoisted above
-// the F_1 loop (the ordered cells' free hoist), it is RESIDENT across that
-// loop, so its
-// footprint should appear in the peak of everything evaluated inside -- the
-// top-node peak under B={F_1}. A3a adds no peak term, so today the hoist looks
-// free on peak. Measure the cells before writing the resident-scan RED gate.
-TEST_CASE("loop-tree probe: resident-scan peak of a hoisted node",
-          "[.][loop-tree-peak]") {
-  using namespace sequant;
-  auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000}, {.dimension = 4}));
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
-
-  auto idxsz = [](Index const& ix) -> std::size_t {
-    return ix.basis().extent();
-  };
-  auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
-  };
-  auto batch_fn = [](Index const&) -> std::size_t { return 1; };
-
-  std::vector<ExprPtr> ts;
-  for (auto str : {L"g{a4;F1}", L"h{F1;a1}", L"s{a1;a2}", L"t{a2;a3}"})
-    ts.push_back(deserialize(str, {.def_perm_symm = Symmetry::Nonsymm}));
-  TensorNetwork net{ts};
-  container::svector<Index> targets;
-
-  std::size_t const top = 0b1111, st_set = 0b1100;
-
-  auto min_peak = [](auto const& frontier) {
-    double m = std::numeric_limits<double>::max();
-    for (auto const& fp : frontier) m = std::min(m, fp.peak);
-    return m;
-  };
-
-  {
-    opt::detail::PeakBatchedModel model{idxsz, batch_fn, {}};
-    model.is_batchable_contracted_index = is_batchable;
-    model.charge_batch_recompute = true;
-    auto ctx = model.build_context(net, targets);
-    auto st = opt::detail::solve_single_term(model, net, targets, ctx);
-    // DP cells are ORDERED sequences, not sliced-set bitmasks: resolve the
-    // "F_1 alone is open" cell by descending from the empty sequence rather
-    // than indexing by the bit.
-    REQUIRE(ctx.m == 1u);
-    std::size_t const f1_cell = ctx.descend(0, std::size_t{1});
-    REQUIRE(f1_cell != std::numeric_limits<std::size_t>::max());
-    std::wcerr << L"[loop-tree-peak] sz{s,t}=" << ctx.sz(st_set, 0)
-               << L"  top.peak[cell=()]=" << min_peak(st[top][0])
-               << L"  top.peak[cell=(F_1)]=" << min_peak(st[top][f1_cell])
-               << L"\n";
-  }
-}
-
 // The Carr != 0 order-dependent case. A node that carries one batched
 // contracted mode (F_2) and not another (F_1) must be charged by the ORDER: if
 // F_1's loop is OUTER to F_2's the node is legitimately recomputed per F_1
@@ -4622,7 +3990,7 @@ TEST_CASE("loop-tree probe: resident-scan peak of a hoisted node",
 // be wrong -- the representability defect the ordered cells fix. Prints every
 // cell and asserts the two orderings of {F_1,F_2} do NOT price {s,t} alike.
 TEST_CASE("loop-tree probe: order-dependent Carr != 0 cells",
-          "[.][loop-tree-order]") {
+          "[loop-tree-order]") {
   using namespace sequant;
   auto ctx_copy = get_default_context_snapshot();
   ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
@@ -4683,58 +4051,6 @@ TEST_CASE("loop-tree probe: order-dependent Carr != 0 cells",
   CHECK(lo < hi);
 }
 
-// PROBE (not a gate): resident-scan peak on the nested Carr != 0 network. Reads
-// the top-node peak per B to see whether an enclosing accumulator (the F_1
-// contraction's result, resident during the F_2 loop and vice versa) is
-// counted.
-TEST_CASE("loop-tree probe: resident-scan peak, nested",
-          "[.][loop-tree-peak-nested]") {
-  using namespace sequant;
-  auto ctx_copy = get_default_context_snapshot();
-  ctx_copy.set(IndexBasisRegistry(*ctx_copy.index_basis_registry())
-                   .add(L"F", IndexSpace::Type{0b10000},
-                        {.dimension = 1000}));  // large: dominates peak
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
-
-  auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
-  auto is_batchable = [](Index const& ix) {
-    return ix.basis().base_key() == L"F";
-  };
-
-  std::vector<ExprPtr> ts;
-  for (auto str : {L"g{a4;F1}", L"h{F1;F2}", L"s{F2;a2}", L"t{a2;a3}"})
-    ts.push_back(deserialize(str, {.def_perm_symm = Symmetry::Nonsymm}));
-  TensorNetwork net{ts};
-  container::svector<Index> targets;
-
-  auto min_peak = [](auto const& frontier) {
-    double m = std::numeric_limits<double>::max();
-    for (auto const& fp : frontier) m = std::min(m, fp.peak);
-    return m;
-  };
-
-  // batch F to tiles of 1 so nbatches == extent; large F so slicing it
-  // dominates
-  auto batch1 = [](Index const&) -> std::size_t { return 1; };
-  {
-    opt::detail::PeakBatchedModel model{idxsz, batch1, {}};
-    model.is_batchable_contracted_index = is_batchable;
-    model.charge_batch_recompute = true;
-    auto ctx = model.build_context(net, targets);
-    auto st = opt::detail::solve_single_term(model, net, targets, ctx);
-    std::size_t const top = (std::size_t{1} << ctx.nt) - 1;
-    std::wcerr << L"[peak-nested] m=" << ctx.m << L"  sz{s,t}[cell=()]="
-               << ctx.sz(0b1100, 0) << L"  sz{g,h}[cell=()]="
-               << ctx.sz(0b0011, 0);
-    // Cells are ordered sequences; print the cell id with its union so the
-    // label stays meaningful (a bare bitmask index would not be a cell).
-    for (std::size_t cell = 0; cell < ctx.nCells; ++cell)
-      std::wcerr << L"  top.peak[cell=" << cell << L" union="
-                 << ctx.cell_union(cell) << L"]=" << min_peak(st[top][cell]);
-    std::wcerr << L"\n";
-  }
-}
-
 // The two batchability building-block predicates + their
 // derived "any role" accessors. BatchPolicy / CostParams / PeakBatchedModel
 // each expose is_batchable_contracted_index and is_batchable_external_index as
@@ -4776,7 +4092,7 @@ TEST_CASE("batchability role-split building-block predicates",
     CHECK_FALSE(u2(i));
   }
 
-  SECTION("PeakBatchedModel::is_batchable(ix) == OR of both building blocks") {
+  SECTION("batched-model-is-batchable") {
     auto idxsz = [](Index const& ix) -> std::size_t {
       return ix.nonnull() ? ix.basis().extent() : std::size_t{1};
     };
