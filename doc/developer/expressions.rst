@@ -29,7 +29,7 @@ An id is computed once per type from two things the type may declare:
 The id is ``(rank << 56) | (fnv1a_64(name) >> 8)`` (``Expr::make_type_id``; ``Expr::type_rank_of`` recovers the rank),
 so ranks order types first and the name only breaks ties within a rank. The ranks of SeQuant's own types are collected
 in ``sequant::expr_type_rank`` (``SeQuant/core/expressions/expr.hpp``); in ascending order they are ``Tensor``,
-``Product`` (which ``CProduct`` and ``NCProduct`` inherit), ``Constant``, ``Sum``, ``Variable``, ``Power``, then every
+``Product`` (which ``CProduct`` and ``NCProduct`` inherit), ``Constant``, ``Sum``, ``Variable``, ``Power``, ``TensorPower``, then every
 type of default rank (e.g. ``NormalOperatorSequence`` and ``mbpt::Operator``), then ``BOperator``, ``FOperator``,
 ``BNOperator`` and ``FNOperator``. They are spaced so that a new type can be inserted between them.
 
