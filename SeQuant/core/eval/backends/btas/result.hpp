@@ -4,6 +4,7 @@
 #ifdef SEQUANT_HAS_BTAS
 
 #include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/eval/elementwise.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/meta.hpp>
@@ -417,6 +418,13 @@ class ResultTensorBTAS final : public Result {
     if constexpr (meta::is_complex_v<numeric_type>) {
       for (auto& x : result) x = std::conj(x);
     }
+    return eval_result<ResultTensorBTAS<T>>(std::move(result));
+  }
+
+  [[nodiscard]] ResultPtr pow(rational const& exponent) const override {
+    T result = get<T>();
+    detail::ElementwisePow const op{exponent};
+    for (auto& x : result) x = op(x);
     return eval_result<ResultTensorBTAS<T>>(std::move(result));
   }
 

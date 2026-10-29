@@ -5,6 +5,7 @@
 
 #include <SeQuant/core/eval/backends/tapp/ops.hpp>
 #include <SeQuant/core/eval/backends/tapp/tensor.hpp>
+#include <SeQuant/core/eval/elementwise.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/meta.hpp>
@@ -272,6 +273,13 @@ class ResultTensorTAPP final : public Result {
     if constexpr (meta::is_complex_v<numeric_type>) {
       for (auto& x : result) x = std::conj(x);
     }
+    return eval_result<ResultTensorTAPP<T>>(std::move(result));
+  }
+
+  [[nodiscard]] ResultPtr pow(rational const& exponent) const override {
+    T result = get<T>();
+    detail::ElementwisePow const op{exponent};
+    for (auto& x : result) x = op(x);
     return eval_result<ResultTensorTAPP<T>>(std::move(result));
   }
 

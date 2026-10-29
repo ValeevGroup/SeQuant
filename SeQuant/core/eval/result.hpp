@@ -8,6 +8,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -293,6 +294,23 @@ class Result {
   [[nodiscard]] virtual ResultPtr adjoint(
       std::array<std::any, 2> const& /*ann*/) const {
     throw detail::unimplemented_method("adjoint");
+  }
+
+  ///
+  /// \brief Raise every element of this result to the power \p exponent.
+  ///
+  /// Used to evaluate the EvalOp::Power IR node. Returns a fresh result of the
+  /// same layout as this one (the node's canon indices are its operand's); this
+  /// result is not modified. An integer exponent is exact (repeated
+  /// multiplication, and the reciprocal for a negative exponent); any other
+  /// goes through \c std::pow on the element type with the exponent converted
+  /// to \c double (for complex elements, \c std::pow(std::complex, double)).
+  /// A zero element raised to a negative power yields `inf` per IEEE; it is
+  /// neither checked nor asserted. Not a pure virtual: only tensor-backed
+  /// results need it; the default throws.
+  ///
+  [[nodiscard]] virtual ResultPtr pow(rational const& /*exponent*/) const {
+    throw detail::unimplemented_method("pow");
   }
 
   ///

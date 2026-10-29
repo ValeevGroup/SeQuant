@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
+#include <SeQuant/core/eval/elementwise.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -680,6 +681,51 @@ template <typename ArrayT>
   return os.str();
 }
 
+/// \return a new array holding every element of \p arr raised to \p exponent
+///         (see Result::pow); for a nested array, every inner element
+/// \note The tiles are mapped into a fresh array by TA::foreach, so \p arr,
+///       which may be shared (e.g. a cached leaf), is not modified. A sparse
+///       array's zero tiles stay zero, which is only right for a positive
+///       exponent; other exponents require every tile to be present.
+template <typename ArrayT>
+[[nodiscard]] ArrayT ta_elementwise_pow(ArrayT const& arr,
+                                        rational const& exponent) {
+  using tile_type = typename ArrayT::value_type;
+  using numeric_type = typename ArrayT::numeric_type;
+  ElementwisePow const op{exponent};
+  auto const elem = [op](numeric_type const& x) { return op(x); };
+  auto const pow_tile = [elem](tile_type const& in) -> tile_type {
+    if constexpr (TA::detail::is_tensor_of_tensor_v<tile_type>) {
+      // an arena inner tile is a view that cannot allocate on its own, so
+      // the outer tile is cloned (a fresh slab, absent inner tiles kept
+      // absent) and powered in place
+      tile_type out = in.clone();
+      for (std::size_t k = 0; k < out.size(); ++k) {
+        auto& inner = out.data()[k];
+        auto* const x = inner.data();
+        for (std::size_t e = 0; e < inner.size(); ++e) x[e] = elem(x[e]);
+      }
+      return out;
+    } else {
+      return in.unary(elem);
+    }
+  };
+  if constexpr (TA::is_dense_v<typename ArrayT::policy_type>) {
+    return TA::foreach (arr, [pow_tile](tile_type& out, tile_type const& in) {
+      out = pow_tile(in);
+    });
+  } else {
+    SEQUANT_ENFORCE(exponent > 0 || arr.shape().sparsity() == 0,
+                    "element-wise power with a non-positive exponent of a "
+                    "sparse array with zero tiles");
+    return TA::foreach (
+        arr, [pow_tile](tile_type& out, tile_type const& in) -> float {
+          out = pow_tile(in);
+          return out.norm();
+        });
+  }
+}
+
 }  // namespace detail
 
 /// TA::Tensor memory use logger
@@ -1205,6 +1251,13 @@ class ResultTensorTA final : public Result {
     return view;
   }
 
+  [[nodiscard]] ResultPtr pow(rational const& exponent) const override {
+    auto result = detail::ta_elementwise_pow(get<ArrayT>(), exponent);
+    ::sequant::detail::wait_for_lazy_cleanup(result);
+    log_ta_tensor_host_memory_use();
+    return eval_result<this_type>(std::move(result));
+  }
+
   /// Accumulate \p other into this result's value (materialized first if this
   /// result is a pending view: an accumulation writes, and a view must not
   /// write through to its parent). The operand may be a pending view.
@@ -1713,6 +1766,13 @@ class ResultTensorOfTensorTA final : public Result {
     } else {
       with_expr(pre_annot, [&](auto&& e) { result(post_annot) = e; });
     }
+    ::sequant::detail::wait_for_lazy_cleanup(result);
+    log_ta_tensor_host_memory_use();
+    return eval_result<this_type>(std::move(result));
+  }
+
+  [[nodiscard]] ResultPtr pow(rational const& exponent) const override {
+    auto result = detail::ta_elementwise_pow(get<ArrayT>(), exponent);
     ::sequant::detail::wait_for_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
