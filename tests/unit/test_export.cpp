@@ -1068,6 +1068,64 @@ TEST_CASE("export element-wise tensor power to ITF", "[export]") {
       "ITF has no element-wise tensor power");
 }
 
+TEST_CASE("export element-wise tensor power to Julia", "[export]") {
+  using Catch::Matchers::ContainsSubstring;
+
+  // ITensor and TensorKit have no element-wise power, so the snapshot files
+  // carry no section for them on a TensorPower; the refusal is asserted here
+  auto resetter = to_export_context();
+
+  const auto expr = GENERATE(
+      as<std::wstring>{}, L"I{i_1,i_2;a_1,a_2} = D{i_1,i_2;a_1,a_2}:S-S-S^(-1)",
+      L"R{i_1;a_1} = 2 D{i_1;a_1}:S-S-S^(-1)");
+  CAPTURE(toUtf8(expr));
+
+  SECTION("ITensor") {
+    JuliaITensorGenerator<> generator;
+    JuliaITensorGeneratorContext ctx;
+    configure_context_defaults(ctx);
+
+    REQUIRE_THROWS_WITH(
+        export_expression(to_export_tree(deserialize<ResultExpr>(expr)),
+                          generator, ctx),
+        "Julia (ITensor) cannot express an element-wise tensor power");
+    // nothing of the refused computation is emitted
+    CHECK_THAT(generator.get_generated_code(), !ContainsSubstring("+="));
+  }
+
+  SECTION("TensorKit") {
+    JuliaTensorKitGenerator<> generator;
+    JuliaTensorKitGeneratorContext ctx;
+    configure_context_defaults(ctx);
+
+    REQUIRE_THROWS_WITH(
+        export_expression(to_export_tree(deserialize<ResultExpr>(expr),
+                                         /*retain_braket=*/true),
+                          generator, ctx),
+        "Julia (TensorKit) cannot express an element-wise tensor power");
+    // nothing of the refused computation is emitted
+    CHECK_THAT(generator.get_generated_code(), !ContainsSubstring("+="));
+  }
+
+  SECTION("TensorOperations: power inside a contraction") {
+    JuliaTensorOperationsGenerator<> generator;
+    JuliaTensorOperationsGeneratorContext ctx;
+    configure_context_defaults(ctx);
+
+    const auto D = deserialize(L"D{i_1;a_1}:S-S-S");
+    const auto f = deserialize(L"f{i_1;a_1}");
+    const Tensor R = deserialize(L"R{i_1;a_1}")->as<Tensor>();
+    const auto prod = ex<Constant>(2) * ex<TensorPower>(D, rational{-1}) * f;
+    REQUIRE(prod->is<Product>());
+
+    REQUIRE_THROWS_WITH(
+        generator.compute(*prod, R, ctx),
+        "Julia TensorOperations: an element-wise power cannot be part of a "
+        "contraction");
+    CHECK(generator.get_generated_code().empty());
+  }
+}
+
 TEST_CASE("ExportExpr", "[export]") {
   SECTION("id & equality") {
     Variable v(L"V");
@@ -1092,6 +1150,19 @@ TEST_CASE("JuliaTensorOperationsGenerator", "[export]") {
     generator.load(Variable(L"y"), /*set_to_zero=*/true, ctx);
 
     REQUIRE(generator.get_generated_code() == "x = 0.0\ny = 0.0\n");
+  }
+
+  SECTION("represent element-wise power") {
+    auto resetter = to_export_context();
+    JuliaTensorOperationsGenerator<> generator;
+    JuliaTensorOperationsGeneratorContext ctx;
+    configure_context_defaults(ctx);
+
+    const auto D = deserialize(L"D{i_1;a_1}");
+    REQUIRE(generator.represent(TensorPower(D, rational{1, 2}), ctx) ==
+            "D_ov.^(1//2)");
+    REQUIRE(generator.represent(TensorPower(D, rational{-1}), ctx) ==
+            "D_ov.^(-1)");
   }
 }
 

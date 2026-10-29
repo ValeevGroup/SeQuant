@@ -134,6 +134,14 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
                                 /*double_slash*/ true, &wrap_conj);
   }
 
+  std::string represent(const TensorPower &power,
+                        const Context &ctx) const override {
+    SEQUANT_ASSERT(power.base()->is<Tensor>());
+    return detail::format_tensor_power(
+        power, tensor_name(power.base()->as<Tensor>(), ctx), ".^",
+        /*double_slash*/ true);
+  }
+
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
     if (!zero_init) {
@@ -219,6 +227,12 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
   void compute(const Expr &expression, const Tensor &result,
                const Context &ctx) override {
+    if (const TensorPower *power = find_tensor_power(expression)) {
+      m_generated += tensor_name(result, ctx) + " .+= " +
+                     broadcast_power(expression, *power, result, ctx) + "\n";
+      return;
+    }
+
     m_generated += "@tensor " + represent(result, ctx) +
                    " += " + to_julia_expr(expression, ctx) + "\n";
   }
@@ -287,6 +301,76 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
   static std::string wrap_conj(std::string s) {
     return "conj(" + std::move(s) + ")";
+  }
+
+  /// @return the element-wise power in @p expression if it is a TensorPower or
+  /// a Product with a TensorPower factor, else nullptr
+  static const TensorPower *find_tensor_power(const Expr &expression) {
+    if (expression.is<TensorPower>()) return &expression.as<TensorPower>();
+    if (expression.is<Product>()) {
+      for (const ExprPtr &factor : expression.as<Product>().factors()) {
+        if (factor->is<TensorPower>()) return &factor->as<TensorPower>();
+      }
+    }
+    return nullptr;
+  }
+
+  /// @return the broadcast form of @p expression, the element-wise @p power
+  /// (of an operand laid out as @p result) times the scalars of @p expression,
+  /// as `[<scalars> * ]<operand> .^ <exponent>`, the operand permuted to the
+  /// index order of @p result if that differs
+  std::string broadcast_power(const Expr &expression, const TensorPower &power,
+                              const Tensor &result, const Context &ctx) const {
+    std::string scalars;
+    if (expression.is<Product>()) {
+      const Product &product = expression.as<Product>();
+      if (!product.scalar().is_identity()) {
+        scalars += represent(Constant(product.scalar()), ctx) + " * ";
+      }
+      for (const ExprPtr &factor : product.factors()) {
+        if (factor->is<TensorPower>() && &factor->as<TensorPower>() == &power) {
+          continue;
+        }
+        if (!factor->is_scalar()) {
+          throw Exception(
+              "Julia TensorOperations: an element-wise power cannot be part of "
+              "a contraction");
+        }
+        scalars += to_julia_expr(*factor, ctx) + " * ";
+      }
+    }
+
+    SEQUANT_ASSERT(power.base()->is<Tensor>());
+    const Tensor &operand = power.base()->as<Tensor>();
+    std::string operand_str = tensor_name(operand, ctx);
+
+    // permutedims(A, p) has A's dimension p[k] as its k-th dimension
+    std::string perm;
+    bool is_identity = true;
+    std::size_t k = 0;
+    for (const Index &idx : result.const_indices()) {
+      ++k;
+      std::size_t pos = 0;
+      [[maybe_unused]] bool found = false;
+      for (const Index &operand_idx : operand.const_indices()) {
+        ++pos;
+        if (operand_idx == idx) {
+          found = true;
+          break;
+        }
+      }
+      SEQUANT_ASSERT(found);
+      is_identity = is_identity && pos == k;
+      if (!perm.empty()) perm += ", ";
+      perm += std::to_string(pos);
+    }
+    SEQUANT_ASSERT(k == operand.num_indices());
+    if (!is_identity) {
+      operand_str = "permutedims(" + operand_str + ", (" + perm + "))";
+    }
+
+    return scalars + detail::format_tensor_power(power, std::move(operand_str),
+                                                 " .^ ", /*double_slash*/ true);
   }
 
   /// emits `<name> = <wrapper>(zeros(Float64, <dims>...), <shape>)`
