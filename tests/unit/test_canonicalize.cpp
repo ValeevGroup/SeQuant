@@ -1529,6 +1529,18 @@ TEST_CASE("tensor_power_canonicalization", "[algorithms]") {
     diff->rapid_canonicalize();
     REQUIRE(diff->is<Sum>());
     CHECK(diff->as<Sum>().summands().empty());
+
+    // two powers of one base differ only in the exponent
+    auto Y2 =
+        pow(ex<Tensor>(L"D", bra{L"i_4"}, ket{L"a_4"}, dsym), rational{2});
+    auto A2 = canon_lex(X->clone() * Y2->clone() * Z->clone());
+    auto B2 = canon_lex(Y2->clone() * X->clone() * Z->clone());
+    CHECK(*A2 == *B2);
+    auto diff2 = X->clone() * Y2->clone() * Z->clone() -
+                 Y2->clone() * X->clone() * Z->clone();
+    diff2->rapid_canonicalize();
+    REQUIRE(diff2->is<Sum>());
+    CHECK(diff2->as<Sum>().summands().empty());
   }
   SECTION("relabelled duplicates merge in a sum") {
     // == M D^-1 - M D^-1 == 0
