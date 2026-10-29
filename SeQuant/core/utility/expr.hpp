@@ -98,7 +98,8 @@ std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression);
 
 namespace detail {
 /// @return a copy of @p expression without its symmetrizer and
-/// antisymmetrizer (see pop_tensor), e.g. to determine its external indices
+/// antisymmetrizer (see pop_tensor), e.g. to determine its external indices;
+/// @p expression itself (not a copy) if it has neither
 ExprPtr without_symmetrizers(const ExprPtr &expression);
 }  // namespace detail
 
