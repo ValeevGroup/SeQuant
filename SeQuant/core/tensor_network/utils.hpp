@@ -71,8 +71,9 @@ struct TensorBlockCompare {
     SEQUANT_CHECK_IDX_GROUP(ket);
     SEQUANT_CHECK_IDX_GROUP(aux);
 
-    // Tensors are identical
-    return false;
+    // the blocks are identical; tell apart tensors of different types, e.g.
+    // a TensorPower from its base
+    return expr_type_id_less(lhs, rhs);
   }
 };
 

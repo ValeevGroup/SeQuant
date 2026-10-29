@@ -1503,6 +1503,33 @@ TEST_CASE("tensor_power_canonicalization", "[algorithms]") {
     simplify(s2);
     CHECK(s2->is_zero());
   }
+  SECTION("lexicographic canonicalization tells a power from its base") {
+    // no cardinal labels, so that the order of the D factors is decided by
+    // the tensor comparison
+    auto lex_ctx = get_default_context();
+    lex_ctx.set_cardinal_tensor_labels({});
+    auto lex_ctx_resetter = set_scoped_default_context(lex_ctx);
+    auto opts = CanonicalizeOptions::default_options().copy_and_set(
+        CanonicalizationMethod::Lexicographic);
+    auto X =
+        pow(ex<Tensor>(L"D", bra{L"i_3"}, ket{L"a_3"}, dsym), rational{-1});
+    auto Y = ex<Tensor>(L"D", bra{L"i_4"}, ket{L"a_4"}, dsym);
+    auto Z = ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_3", L"i_4"});
+    auto canon_lex = [&](ExprPtr e) {
+      auto bp = e->canonicalize(opts);
+      return bp ? bp * e : e;
+    };
+    auto A = canon_lex(X->clone() * Y->clone() * Z->clone());
+    auto B = canon_lex(Y->clone() * X->clone() * Z->clone());
+    CHECK(*A == *B);
+    // rapid canonicalization of a Sum canonicalizes its summands
+    // lexicographically and merges them
+    auto diff = X->clone() * Y->clone() * Z->clone() -
+                Y->clone() * X->clone() * Z->clone();
+    diff->rapid_canonicalize();
+    REQUIRE(diff->is<Sum>());
+    CHECK(diff->as<Sum>().summands().empty());
+  }
   SECTION("relabelled duplicates merge in a sum") {
     // == M D^-1 - M D^-1 == 0
     auto s = M * pow(D, rational{-1}) + Mp * pow(Dp, rational{-1});

@@ -10,6 +10,8 @@
 
 #include <range/v3/algorithm/any_of.hpp>
 
+#include <typeinfo>
+
 namespace sequant {
 
 void reset_tags(const ExprPtr& expr) {
@@ -27,6 +29,11 @@ bool cross_type_less(const AbstractTensor& a, const AbstractTensor& b) {
   if (a._bra_rank() != b._bra_rank()) return a._bra_rank() < b._bra_rank();
   if (a._ket_rank() != b._ket_rank()) return a._ket_rank() < b._ket_rank();
   if (a._aux_rank() != b._aux_rank()) return a._aux_rank() < b._aux_rank();
+  return expr_type_id_less(a, b);
+}
+
+bool expr_type_id_less(const AbstractTensor& a, const AbstractTensor& b) {
+  if (typeid(a) == typeid(b)) return false;
   const auto* lhs_expr = dynamic_cast<const Expr*>(&a);
   const auto* rhs_expr = dynamic_cast<const Expr*>(&b);
   SEQUANT_ASSERT(lhs_expr && rhs_expr);
