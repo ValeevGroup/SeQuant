@@ -486,6 +486,7 @@ class RegisteredIrrepContext {
   explicit RegisteredIrrepContext(const ExportContext &ctx);
 
   AnyIrrepSet irreps_of(const Tensor &tensor) const;
+  AnyIrrepSet irreps_of(const Variable &variable) const;
   AnyIrrepSet totally_symmetric() const;
   AnyIrrepSet empty_set() const;
   AnyIrrepSet product(const AnyIrrepSet &lhs, const AnyIrrepSet &rhs) const;
