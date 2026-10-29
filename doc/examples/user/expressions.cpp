@@ -72,5 +72,27 @@ int main() {
   std::wcout << std::format(L"{}", D_inv) << std::endl;
   // end-snippet-4
 
+  // start-snippet-5
+  // Compose through ResultExpr heads: each stage is its own equation whose
+  // head declares the external indices and symmetries once, and later stages
+  // reuse the head via result_as_tensor() instead of respelling it
+  const TensorSymmetries antisymm{.perm = Symmetry::Antisymm};
+  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, antisymm);
+  auto L = ex<Tensor>(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, antisymm);
+
+  // ℓ = M ⊙ D^{-1}: a Hadamard (element-wise) product, legal because the
+  // head names its externals; the head declares ℓ's antisymmetry
+  auto ell = ResultExpr(
+      Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, antisymm),
+      M * pow(D, rational{-1}));
+
+  // E = L · ℓ: an ordinary contraction of the leaf ℓ, taken from the head
+  auto E = ResultExpr(Variable(L"E"), L * ex<Tensor>(ell.result_as_tensor()));
+
+  SEQUANT_ASSERT(!E.produces_tensor());
+  std::wcout << std::format(L"{}", ell.expression()) << std::endl;
+  std::wcout << std::format(L"{}", E.expression()) << std::endl;
+  // end-snippet-5
+
   return 0;
 }

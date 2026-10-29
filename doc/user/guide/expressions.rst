@@ -82,6 +82,18 @@ since both need to know the external index pairing and symmetry of the result, n
    :end-before: end-snippet-3
    :dedent: 2
 
+A tensorial expression that a later equation needs as a factor, a Hadamard (element-wise) product such as
+:math:`\ell^{a_1 a_2}_{i_1 i_2} = M^{a_1 a_2}_{i_1 i_2} / D^{a_1 a_2}_{i_1 i_2}` in a perturbative correction, is composed through heads: it
+becomes its own ``ResultExpr``, whose head declares the external indices and symmetries once, and the later equation uses that head
+as a leaf via :func:`ResultExpr::result_as_tensor() <sequant::ResultExpr::result_as_tensor>` rather than respelling it. This is also
+how a compound expression is raised to a power: name it, then apply :func:`sequant::pow` to the leaf.
+
+.. literalinclude:: /examples/user/expressions.cpp
+   :language: cpp
+   :start-after: start-snippet-5
+   :end-before: end-snippet-5
+   :dedent: 2
+
 The examples print expressions with ``<<`` and ``std::format``, which :file:`SeQuant/core/io/format.hpp` provides and which
 default to SeQuant's text serialization format. Once built, an expression tree can be rendered to LaTeX or round-tripped through
 that format; see :doc:`io` for both and for the format specifiers that select between them.
