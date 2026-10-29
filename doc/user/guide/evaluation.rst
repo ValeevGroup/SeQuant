@@ -53,7 +53,10 @@ Each ``EvalRow`` has the fields:
 ``mode``
     one of ``Tensor``, ``Constant``, ``Variable``, ``Permute``,
     ``MultByPhase``, ``Sum``, ``Product``, ``SumInplace``,
-    ``Symmetrize``, ``Antisymmetrize``.
+    ``Symmetrize``, ``Antisymmetrize``, ``ElementwisePower``.
+    ``ElementwisePower`` is the unary node that evaluates a :class:`sequant::TensorPower`: the element-wise power of its
+    operand, whose exponent is carried by a sentinel right child (see :cpp:enumerator:`sequant::EvalOp::Power`). Under batching it is
+    sliced like its operand.
 ``time_ns``
     wall time in nanoseconds.
 ``result``
