@@ -349,6 +349,57 @@ container::set<Index> proto_aware_externals(
   return ext;
 }
 
+/// A proto-indexed (CSV) summand carries occ indices both as tensor slots
+/// and inside composite indices' proto-index lists; the slot-only
+/// get_unique_indices is then not invariant across summands and
+/// false-positives in has_uniform_externals. Detected from the reference
+/// (first) summand.
+bool is_proto_indexed(const Sum &sum) {
+  const auto ref_counts = index_occurrence_counts(*sum.summand(0));
+  return std::ranges::any_of(
+      ref_counts, [](const auto &kv) { return kv.first.has_proto_indices(); });
+}
+
+/// @return whether all summands of @p sum have the same external indices,
+/// compared as proto-aware externals if is_proto_indexed(sum)
+bool has_uniform_externals(const Sum &sum) {
+  if (is_proto_indexed(sum)) {
+    const container::set<Index> ref =
+        proto_aware_externals(index_occurrence_counts(*sum.summand(0)));
+    return std::ranges::all_of(sum.summands(), [&ref](const ExprPtr &s) {
+      return proto_aware_externals(index_occurrence_counts(*s)) == ref;
+    });
+  }
+
+  auto extractor = [](const ExprPtr &expr) { return get_unique_indices(expr); };
+
+  const IndexGroups<> ref = extractor(sum.summand(0));
+
+  auto compare = [&ref](const IndexGroups<> &grps) {
+    const bool bra_ok = std::ranges::is_permutation(ref.bra, grps.bra);
+    const bool ket_ok = std::ranges::is_permutation(ref.ket, grps.ket);
+    const bool aux_ok = std::ranges::is_permutation(ref.aux, grps.aux);
+
+    if (bra_ok && ket_ok && aux_ok) {
+      return true;
+    }
+
+    if (aux_ok && !bra_ok && !ket_ok) {
+      // Bra and ket indices might have been swapped in case of braket
+      // symmetry Let's just allow for that here without explicitly checking
+      // the summand's symmetry
+      auto combined_ref = ranges::views::concat(ref.bra, ref.ket);
+      auto combined_cmp = ranges::views::concat(grps.bra, grps.ket);
+
+      return std::ranges::is_permutation(combined_ref, combined_cmp);
+    }
+
+    return false;
+  };
+
+  return std::ranges::all_of(sum.summands(), compare, extractor);
+}
+
 }  // namespace
 
 bool is_valid(const ExprPtr &expr, std::string *msg) {
@@ -411,59 +462,7 @@ bool is_valid(const Expr &expr, std::string *msg) {
       }
     }
   } else if (expr.is<Sum>()) {
-    // Verify that all summands have the same external indices
-    const Sum &sum = expr.as<Sum>();
-
-    // A proto-indexed (CSV) summand carries occ indices both as tensor slots
-    // and inside composite indices' proto-index lists; the slot-only
-    // get_unique_indices is then not invariant across summands and
-    // false-positives here. Detect this from the reference summand and, when
-    // present, validate with the proto-aware external-index set instead.
-    const auto ref_counts = index_occurrence_counts(*sum.summand(0));
-    const bool proto_indexed = std::ranges::any_of(
-        ref_counts,
-        [](const auto &kv) { return kv.first.has_proto_indices(); });
-
-    bool consistent;
-    if (proto_indexed) {
-      const container::set<Index> ref = proto_aware_externals(ref_counts);
-      consistent =
-          std::ranges::all_of(sum.summands(), [&ref](const ExprPtr &s) {
-            return proto_aware_externals(index_occurrence_counts(*s)) == ref;
-          });
-    } else {
-      auto extractor = [](const ExprPtr &expr) {
-        return get_unique_indices(expr);
-      };
-
-      const IndexGroups<> ref = extractor(sum.summand(0));
-
-      auto compare = [&ref](const IndexGroups<> &grps) {
-        const bool bra_ok = std::ranges::is_permutation(ref.bra, grps.bra);
-        const bool ket_ok = std::ranges::is_permutation(ref.ket, grps.ket);
-        const bool aux_ok = std::ranges::is_permutation(ref.aux, grps.aux);
-
-        if (bra_ok && ket_ok && aux_ok) {
-          return true;
-        }
-
-        if (aux_ok && !bra_ok && !ket_ok) {
-          // Bra and ket indices might have been swapped in case of braket
-          // symmetry Let's just allow for that here without explicitly checking
-          // the summand's symmetry
-          auto combined_ref = ranges::views::concat(ref.bra, ref.ket);
-          auto combined_cmp = ranges::views::concat(grps.bra, grps.ket);
-
-          return std::ranges::is_permutation(combined_ref, combined_cmp);
-        }
-
-        return false;
-      };
-
-      consistent = std::ranges::all_of(sum.summands(), compare, extractor);
-    }
-
-    if (!consistent) {
+    if (!has_uniform_externals(expr.as<Sum>())) {
       SEQUANT_EXPR_INVALID("Inconsistent external indices in sum");
     }
   } else if (expr.is<Power>()) {
