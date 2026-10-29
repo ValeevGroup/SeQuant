@@ -29,11 +29,21 @@ Scalar quantities are represented by two different leaf types, depending on whet
 - :class:`sequant::Variable` holds a *named* scalar, such as a perturbation strength :math:`\lambda`, whose value is not fixed by the
   expression itself.
 - :class:`sequant::Power` represents ``base^exponent`` for a rational exponent, where the base is a ``Constant`` or a ``Variable``.
+- :class:`sequant::TensorPower` represents the element-wise ``base^exponent`` of a tensor leaf for a rational exponent. Build either kind of
+  power with :func:`sequant::pow`, which refuses a compound tensor-valued base (name it as a ``ResultExpr`` and raise the resulting leaf). An odd
+  integer exponent keeps the base's permutational symmetry, an even one makes an antisymmetric base symmetric, and a non-integer exponent on an
+  antisymmetric base is rejected.
 
 .. literalinclude:: /examples/user/expressions.cpp
    :language: cpp
    :start-after: start-snippet-1
    :end-before: end-snippet-1
+   :dedent: 2
+
+.. literalinclude:: /examples/user/expressions.cpp
+   :language: cpp
+   :start-after: start-snippet-4
+   :end-before: end-snippet-4
    :dedent: 2
 
 Composition: ``Product`` and ``Sum``

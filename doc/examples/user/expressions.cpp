@@ -51,5 +51,26 @@ int main() {
   std::wcout << std::format(L"{}", result.expression()) << std::endl;
   // end-snippet-3
 
+  // start-snippet-4
+  // TensorPower is the element-wise rational power of a tensor leaf; pow()
+  // builds it, e.g. the inverse of a symmetric denominator tensor
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      TensorSymmetries{.perm = Symmetry::Symm,
+                                       .braket = BraKetSymmetry::Symm,
+                                       .column = ColumnSymmetry::Symm});
+  auto D_inv = pow(D, rational{-1});
+
+  SEQUANT_ASSERT(D_inv.is<TensorPower>());
+  SEQUANT_ASSERT(D_inv.as<TensorPower>()._symmetry() == Symmetry::Symm);
+
+  // an even power of an antisymmetric tensor is symmetric
+  auto t = ex<Tensor>(L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      Symmetry::Antisymm);
+  SEQUANT_ASSERT(pow(t, rational{2})->as<AbstractTensor>()._symmetry() ==
+                 Symmetry::Symm);
+
+  std::wcout << std::format(L"{}", D_inv) << std::endl;
+  // end-snippet-4
+
   return 0;
 }
