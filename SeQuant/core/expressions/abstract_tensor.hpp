@@ -651,6 +651,12 @@ using AbstractTensorPtr = std::shared_ptr<AbstractTensor>;
 ///         these
 bool cross_type_less(const AbstractTensor& a, const AbstractTensor& b);
 
+/// @brief orders AbstractTensor objects by the Expr type id of their concrete
+/// types
+/// @return true if the Expr type id of @p a is less than that of @p b; false
+///         if both are of the same concrete type
+bool expr_type_id_less(const AbstractTensor& a, const AbstractTensor& b);
+
 /// @brief Check if a tensor with a certain label is present in an expression
 /// @param expr input expression
 /// @param label tensor label to find in the expression
