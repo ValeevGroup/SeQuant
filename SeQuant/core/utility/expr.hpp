@@ -96,6 +96,12 @@ std::optional<ExprPtr> pop_symmetrizer(ExprPtr &expression);
 /// @copydoc pop_symmetrizer(ExprPtr&)
 std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression);
 
+namespace detail {
+/// @return a copy of @p expression without its symmetrizer and
+/// antisymmetrizer (see pop_tensor), e.g. to determine its external indices
+ExprPtr without_symmetrizers(const ExprPtr &expression);
+}  // namespace detail
+
 /// Inverse of pop_symmetrizer: multiplies the given expression from the left
 /// with the given (anti)symmetrization operator
 ///
