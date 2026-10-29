@@ -226,6 +226,18 @@ inline void check_accumulate_ranges(
 /// mode_batches bodies are one-line forwards, not near-duplicated logic.
 ///
 struct DryRunOps {
+  /// Publish one op's realized-extent \p flops / \p exec: to the eval loop's
+  /// build tally (through last_op_flops/last_op_exec), to the eval trace, and
+  /// to the replay cost sink if one is attached to \p cm. Called only when
+  /// the eval trace is on.
+  static void record_op_cost(CostModel const& cm, double flops, double exec) {
+    sequant::eval::detail::last_op_flops() = flops;
+    sequant::eval::detail::last_op_exec() = exec;
+    write_log(Logger::instance(), "OpCost", std::format(" | {}", flops),
+              std::format(" | {}", exec), '\n');
+    cm.tally_op(flops, exec);
+  }
+
   [[nodiscard]] static ResultPtr sum(container::svector<Index> const&,
                                      ExtentOverrides const& ov,
                                      std::shared_ptr<CostModel const> const& cm,
@@ -311,7 +323,6 @@ struct DryRunOps {
       for (auto const& [lbl, w] : extents_by_label(other_ov, a.rannot))
         label_extents.emplace(lbl, w);
       double const flops = cm->flops(out, contracted, label_extents);
-      sequant::eval::detail::last_op_flops() = flops;
       // Roofline traffic == the op's compulsory single-pass data movement:
       // read both operands, write the result -- each at its realized (sliced)
       // extent. This is the same footprint the optimizer's DP charges (S[lp] +
@@ -329,24 +340,18 @@ struct DryRunOps {
       double const exec = cm->exec_cost(
           flops, cm->memsize(idx, ov), cm->memsize(indices_of(other), other_ov),
           cm->memsize(out, merged));
-      sequant::eval::detail::last_op_exec() = exec;
-      write_log(Logger::instance(), "OpCost", std::format(" | {}", flops),
-                std::format(" | {}", exec), '\n');
-      // Fold this op's sliced-extent cost into the replay cost sink, if one is
-      // attached (the replay's recompute-aware tally). merged/ov carry the
-      // runtime slicing, so a contraction re-executed once per occ block is
-      // charged once per block at its sliced size -- the same numbers already
-      // logged above, summed here. A no-op when no sink is attached.
-      cm->tally_op(flops, exec);
-      // last_op_flops (set above) is this build's actual realized-extent cost.
-      // The eval loop's build choke point reads it and records it against the
-      // node's identity, at the (value, slice) granularity, in the (root)
-      // cache's recompute tally -- so avoidable recompute is the actual FLOPs a
-      // slice was rebuilt beyond once, with no ill-defined "full extent"
-      // denominator (slicing is non-uniform). prod cannot form the node
-      // identity here (it has no node, and the include cycle
-      // dryrun/eval_expr.hpp -> cost_model_object.hpp keeps the node type out
-      // of the CostSink), so the rollup is done there. See
+      // merged/ov carry the runtime slicing, so a contraction re-executed once
+      // per occ block is charged once per block at its sliced size.
+      record_op_cost(*cm, flops, exec);
+      // last_op_flops (set by record_op_cost) is this build's actual
+      // realized-extent cost. The eval loop's build choke point reads it and
+      // records it against the node's identity, at the (value, slice)
+      // granularity, in the (root) cache's recompute tally -- so avoidable
+      // recompute is the actual FLOPs a slice was rebuilt beyond once, with no
+      // ill-defined "full extent" denominator (slicing is non-uniform). prod
+      // cannot form the node identity here (it has no node, and the include
+      // cycle dryrun/eval_expr.hpp -> cost_model_object.hpp keeps the node type
+      // out of the CostSink), so the rollup is done there. See
       // CacheManager::tally_build / recompute_tally().
     }
 
