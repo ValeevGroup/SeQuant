@@ -27,9 +27,16 @@ e.g. as one function — in five stages:
 The tree walk itself is driven by a ``GenerationVisitor`` in combined pre-/post-order: pre-order visits (leaves and, on the way down,
 already-computed intermediates) call ``load_or_create()``, which decides ``create`` vs. ``load`` vs. ``set_to_zero`` from
 ``ExportContext``'s per-object ``LoadStrategy``/``ZeroStrategy`` and a ref-count map of what this walk has already loaded; post-order
-visits call ``process_computation()``, which assembles the node's ``Product``/``Sum``/``Adjoint`` expression (multiplying back in any
+visits call ``process_computation()``, which assembles the node's ``Product``/``Sum``/``Adjoint``/``TensorPower`` expression (multiplying back in any
 pruned scalar factor) and calls ``generator.compute(...)``, then drops both children's reference counts, ``unload``-ing whichever drop to
 zero. ``generator.persist()`` fires when a group's designated result node is reached.
+
+The unary ``EvalOp::Power`` node becomes ``pow(operand, exponent)``, a :class:`sequant::TensorPower` over the operand tensor (wrapped in a
+``Product`` with the scalar prefactor when one was attached). It is element-wise, so no transpose is implied: the operand keeps whatever
+index order its canonical form has, and a generator permutes to the result's order where needed. Generators that cannot express it
+throw a :class:`sequant::Exception` from whichever hook sees the power first: the ``represent`` overload for ``TensorPower``, or
+``compute`` where the statement is assembled there. A backend that overrides neither inherits the default
+:func:`sequant::Generator::represent` overload, which throws naming the format.
 
 Preprocessing: scalars, rebalancing, and renaming
 ------------------------------------------------------
@@ -116,6 +123,7 @@ very useful for debugging or other cases in which a human-readable version of th
    The adjoint/transpose case (``EvalOp::Adjoint``) currently exports only the index permutation, not elementwise conjugation: correct
    for a real-valued field, incomplete for a complex one, since the exported IR has no node to carry an explicit conjugation yet. A
    backend targeting complex arithmetic needs to be aware of this gap.
+   The element-wise ``TensorPower`` is exported as such, without conjugation, under the same caveat.
 
 Debugging and tests
 ------------------------
