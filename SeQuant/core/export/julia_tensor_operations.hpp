@@ -277,7 +277,11 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   std::string to_julia_expr(const Expr &expr, const Context &ctx) const {
     return detail::stringify_expr(
         expr, " * ",
-        [this, &ctx](const auto &e) { return this->represent(e, ctx); },
+        [this, &ctx](const auto &e) {
+          // through the base so that no overload is hidden in a derived class
+          return static_cast<const Generator<Context> &>(*this).represent(e,
+                                                                          ctx);
+        },
         "to_julia_expr");
   }
 
