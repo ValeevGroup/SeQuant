@@ -32,8 +32,7 @@ Scalar quantities are represented by two different leaf types, depending on whet
 - :class:`sequant::TensorPower` represents the element-wise ``base^exponent`` of a tensor leaf for a rational exponent. Build either kind of
   power with :func:`sequant::pow`, which refuses a compound tensor-valued base (name it as a ``ResultExpr`` and raise the resulting leaf). An odd
   integer exponent keeps the base's permutational symmetry, an even one makes an antisymmetric base symmetric, and a non-integer exponent on an
-  antisymmetric base is rejected. Numerical evaluation and code export of a ``TensorPower`` are not yet supported (they are planned), so,
-  e.g., ``binarize()`` rejects an expression that contains one.
+  antisymmetric base is rejected. A ``TensorPower`` evaluates numerically on every backend; code export of one is not supported yet (it is planned).
 
 .. literalinclude:: /examples/user/expressions.cpp
    :language: cpp
