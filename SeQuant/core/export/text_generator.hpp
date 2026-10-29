@@ -159,6 +159,11 @@ class TextGenerator : public Generator<Context> {
     m_generated += "\n";
   }
 
+  void create_ones(const Tensor &tensor, const Context &ctx) override {
+    m_generated +=
+        m_indent + "Create " + represent(tensor, ctx) + " and fill with ones\n";
+  }
+
   void set_to_zero(const Tensor &tensor, const Context &ctx) override {
     m_generated +=
         m_indent + "Setting " + represent(tensor, ctx) + " to zero\n";
