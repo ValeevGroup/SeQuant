@@ -490,9 +490,19 @@ class rand_tensor_yield {
         char const* e = std::getenv("SEQUANT_UT_YIELD_SPARSITY");
         return e ? std::atof(e) : 0.0;
       }();
+      // an all-ones leaf (see make_ones()) is served as ones, never sparse
+      bool const ones = is_ones(tnsr);
       std::size_t ord = 0;
       for (auto it = array.begin(); it != array.end(); ++it, ++ord) {
         if (!array.is_local(it.index())) continue;
+        if (ones) {
+          *it = world.taskq.add(
+              [](TA::Range const& r) {
+                return TA::Tensor<NumericT>(r, NumericT{1});
+              },
+              it.make_range());
+          continue;
+        }
         bool const zero =
             sparsity > 0.0 &&
             (static_cast<double>((ord * 2654435761u) % 1000u) / 1000.0 <
@@ -1966,6 +1976,74 @@ TEST_CASE("eval_tensor_power_ta", "[eval]") {
         elements(evaluate(eval_node(pow(D, rational{-1})), target, yield_)
                      ->get<TArrayC>()),
         inverse);
+  }
+}
+
+TEST_CASE("eval_broadcast_sum_ta", "[eval][broadcast]") {
+  using namespace sequant;
+  auto& world = TA::get_default_world();
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
+
+  // the elements of an array in row-major order of its (single-tile) layout
+  auto elements = [](TA::TArrayD const& arr) {
+    std::vector<double> out;
+    for (auto it = arr.begin(); it != arr.end(); ++it) {
+      auto const tile = it->get();
+      out.insert(out.end(), tile.begin(), tile.end());
+    }
+    return out;
+  };
+  auto check_elementwise = [](std::vector<double> const& got,
+                              std::vector<double> const& expected) {
+    REQUIRE(got.size() == expected.size());
+    REQUIRE(!got.empty());
+    for (std::size_t k = 0; k < got.size(); ++k)
+      CHECK(got[k] == Catch::Approx(expected[k]).margin(1e-12));
+  };
+
+  auto eps_a = [](wchar_t const* a) { return ex<Tensor>(L"ε", bra{}, ket{a}); };
+  auto eps_i = [](wchar_t const* i) { return ex<Tensor>(L"ε", bra{i}, ket{}); };
+  // the yielded ε vectors: every ket-ε occurrence shares one array by key,
+  // likewise every bra-ε occurrence
+  auto const ea =
+      elements(yield_(eps_a(L"a_1")->as<Tensor>())->get<TA::TArrayD>());
+  auto const ei =
+      elements(yield_(eps_i(L"i_1")->as<Tensor>())->get<TA::TArrayD>());
+  REQUIRE(ea.size() == nvirt);
+  REQUIRE(ei.size() == nocc);
+
+  SECTION("four-term denominator") {
+    const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                                .braket = BraKetSymmetry::Symm,
+                                .column = ColumnSymmetry::Symm};
+    ResultExpr res(
+        Tensor(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym),
+        eps_a(L"a_1") + eps_a(L"a_2") - eps_i(L"i_1") - eps_i(L"i_2"));
+    std::vector<double> expected;
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t i2 = 0; i2 < nocc; ++i2)
+        for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+          for (std::size_t a2 = 0; a2 < nvirt; ++a2)
+            expected.push_back(ea[a1] + ea[a2] - ei[i1] - ei[i2]);
+    check_elementwise(elements(evaluate(eval_node(res),
+                                        std::string{"i_1,i_2,a_1,a_2"}, yield_)
+                                   ->get<TA::TArrayD>()),
+                      expected);
+  }
+
+  SECTION("scalar summand") {
+    ResultExpr res(Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}),
+                   eps_a(L"a_1") - eps_i(L"i_1") - ex<Variable>(L"E"));
+    double const e = yield_(Variable(L"E"))->get<double>();
+    std::vector<double> expected;
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+        expected.push_back(ea[a1] - ei[i1] - e);
+    check_elementwise(
+        elements(evaluate(eval_node(res), std::string{"i_1,a_1"}, yield_)
+                     ->get<TA::TArrayD>()),
+        expected);
   }
 }
 
