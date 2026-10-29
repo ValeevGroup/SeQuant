@@ -366,6 +366,20 @@ struct DryRunOps {
         std::move(merged), std::move(merged_lob));
   }
 
+  /// Element-wise power: the result has the operand's shape (and slicing).
+  /// Its cost, one operation per element, is recorded like a product's.
+  [[nodiscard]] static ResultPtr pow(container::svector<Index> const& idx,
+                                     ExtentOverrides const& ov,
+                                     std::shared_ptr<CostModel const> const& cm,
+                                     ExtentOverrides const& lob = {}) {
+    if (Logger::instance().eval.level > 0) {
+      double const flops = cm->flops(idx, {}, extents_by_label(ov, idx));
+      auto const bytes = cm->memsize(idx, ov);
+      record_op_cost(*cm, flops, cm->exec_cost(flops, bytes, 0, bytes));
+    }
+    return make_dryrun_result(idx, cm, ov, lob);
+  }
+
   [[nodiscard]] static ResultPtr permute(
       container::svector<Index> const& idx, ExtentOverrides const& ov,
       std::shared_ptr<CostModel const> const& cm,
@@ -624,6 +638,10 @@ class ResultDryRun final : public Result {
                                       lobounds_);
   }
 
+  [[nodiscard]] ResultPtr pow(rational const& /*exponent*/) const override {
+    return detail::DryRunOps::pow(indices_, overrides_, cm_, lobounds_);
+  }
+
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
     return detail::DryRunOps::slice_mode(indices_, overrides_, cm_, mode,
@@ -778,6 +796,10 @@ class ResultDryRunNested final : public Result {
       std::array<std::any, 2> const& ann) const override {
     return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
                                       lobounds_);
+  }
+
+  [[nodiscard]] ResultPtr pow(rational const& /*exponent*/) const override {
+    return detail::DryRunOps::pow(indices_, overrides_, cm_, lobounds_);
   }
 
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,

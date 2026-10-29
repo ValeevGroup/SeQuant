@@ -525,6 +525,7 @@ set(SeQuant_eval_src
         SeQuant/core/eval/cell_table.hpp
         SeQuant/core/eval/cell_table_builder.hpp
         SeQuant/core/eval/dag_scope.hpp
+        SeQuant/core/eval/elementwise.hpp
         SeQuant/core/eval/eval.hpp
         SeQuant/core/eval/eval_expr.cpp
         SeQuant/core/eval/eval_expr.hpp

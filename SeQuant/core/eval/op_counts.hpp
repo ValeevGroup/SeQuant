@@ -13,21 +13,23 @@ namespace sequant::eval {
 
 namespace detail {
 
-/// Diagnostic: the flops the last product op computed (cm->flops), stashed by
-/// DryRunOps::record_op_cost and read by \c CacheManager::tally_build (called
-/// from eval.hpp) and the unit tests, so the per-build tally carries the same
-/// cost the replay computed -- no second flop path. Thread-local;
-/// single-threaded dry-run replay.
+/// Diagnostic: the flops the last costed op (a product or an element-wise
+/// power) computed (cm->flops), stashed by DryRunOps::record_op_cost and read
+/// by \c CacheManager::tally_build (called from
+/// eval.hpp) and the unit tests, so the per-build tally carries the same cost
+/// the replay computed -- no second flop path. Thread-local; single-threaded
+/// dry-run replay.
 inline double& last_op_flops() noexcept {
   static thread_local double f = 0.0;
   return f;
 }
 
 /// Diagnostic: the roofline exec-cost estimate (cm->exec_cost) for the last
-/// product op, stashed by DryRunOps::record_op_cost alongside
-/// \c last_op_flops() and read by \c CacheManager::tally_build (called from
-/// eval.hpp) so each per-build tally entry carries the same time estimate the
-/// replay computed. Thread-local; single-threaded dry-run replay.
+/// costed op, stashed by DryRunOps::record_op_cost alongside
+/// \c last_op_flops() and
+/// read by \c CacheManager::tally_build (called from eval.hpp) so each
+/// per-build tally entry carries the same time estimate the replay computed.
+/// Thread-local; single-threaded dry-run replay.
 inline double& last_op_exec() noexcept {
   static thread_local double f = 0.0;
   return f;
