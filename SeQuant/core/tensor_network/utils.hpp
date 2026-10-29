@@ -72,8 +72,11 @@ struct TensorBlockCompare {
     SEQUANT_CHECK_IDX_GROUP(aux);
 
     // the blocks are identical; tell apart tensors of different types, e.g.
-    // a TensorPower from its base
-    return expr_type_id_less(lhs, rhs);
+    // a TensorPower from its base, then decorations of one type, e.g. powers
+    // of one base with different exponents
+    if (expr_type_id_less(lhs, rhs)) return true;
+    if (expr_type_id_less(rhs, lhs)) return false;
+    return lhs._color_salt() < rhs._color_salt();
   }
 };
 
