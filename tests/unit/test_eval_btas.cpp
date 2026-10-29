@@ -813,6 +813,28 @@ TEST_CASE("eval_tensor_power_btas", "[eval_btas]") {
     check_elementwise(yield_(node.left()->as_tensor())->get<BTensorD>(), src,
                       [](double x) { return x; });
   }
+
+  // an antisymmetric base spelled out of canonical order: its leaf
+  // canonicalizes with phase -1 and the power node carries that phase raised
+  // to the exponent; in the base's own layout pow(A, e) is the element-wise
+  // power of A as A evaluates there. A single uncached evaluation converts no
+  // node phase (a phase only reorients a cached value for another
+  // occurrence), so this pins the layout, not the phase arithmetic.
+  {
+    auto A = ex<Tensor>(L"A", bra{L"a_1", L"i_1"}, ket{L"i_2", L"a_2"},
+                        TensorSymmetries{.perm = Symmetry::Antisymm});
+    REQUIRE(eval_node(pow(A, rational{2})).left()->canon_phase() == -1);
+    REQUIRE(eval_node(pow(A, rational{-1}))->canon_phase() == -1);
+    auto const a_target = tidxs(A->as<Tensor>());
+    auto const at_a = [&](ExprPtr const& expr) {
+      return evaluate(eval_node(expr), a_target, yield_)->get<BTensorD>();
+    };
+    auto const a = at_a(A);
+    check_elementwise(at_a(pow(A, rational{2})), a,
+                      [](double x) { return x * x; });
+    check_elementwise(at_a(pow(A, rational{-1})), a,
+                      [](double x) { return 1 / x; });
+  }
 }
 
 // A product that contracts every index of both operands is a bilinear dot,

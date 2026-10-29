@@ -108,9 +108,11 @@ inline std::string output_kind_name(OutputKind k) {
 ///    the scalar), id "<key>#scale"; its right operand, the Constant leaf
 ///    holding the scalar, is (term key, number of tree positions), id
 ///    "<key>#scalar" (spec 6.1 names no id for it; it is a DAG value too);
-///  - an Adjoint node (a conjugated factor) takes one tree ordinal as a leaf
-///    would; its bare-label operand is id "<key>#<ordinal>/0" and its
-///    Constant{1} sentinel "<key>#<ordinal>/1", both at the same (term, node);
+///  - a unary node (an Adjoint, a conjugated factor, or a Power, a
+///    TensorPower factor) takes one tree ordinal as a leaf would; its operand
+///    is id "<key>#<ordinal>/0" and its Constant sentinel (Adjoint's
+///    Constant{1}, Power's exponent) "<key>#<ordinal>/1", both at the same
+///    (term, node);
 ///  - the k-th partial sum of a root's left-fold Sum: (root label, k), id
 ///    "<label>+<k>".
 ///
@@ -184,9 +186,8 @@ inline std::string form_label(std::string const& label,
 ///        runs with (see \c evaluate_ordered_schedule), which decides
 ///        persistence; empty means no leaf is volatile
 /// \throws sequant::Exception when the forest and \p roots disagree (tree or
-///         summand count, a Sum spine node that is not an in-place Sum), on
-///         an Adjoint node (not addressable by a pinned tree), or when a
-///         value, block step or legality record cannot be resolved
+///         summand count, a Sum spine node that is not an in-place Sum), or
+///         when a value, block step or legality record cannot be resolved
 template <meta::eval_node_range R>
 DagRecord record_dag(
     RichSchedule const& rich, LegalitySchedule const& legality,
@@ -215,9 +216,9 @@ DagRecord record_dag(
     std::size_t ordinal = 0;
     auto const walk = [&](auto const& self, Node const& n) -> void {
       if (!n.leaf()) {
-        if (n->op_type() && *n->op_type() == EvalOp::Adjoint) {
-          // the pinned (conjugated) factor: one ordinal, as a leaf; its
-          // bare-label operand and Constant{1} sentinel are sub-positions
+        if (n->op_type() && is_unary(*n->op_type())) {
+          // the pinned factor (conjugated or raised): one ordinal, as a leaf;
+          // its operand and Constant sentinel are sub-positions
           std::string const id = key + "#" + std::to_string(ordinal);
           place[&n.left()] = {key, ordinal, id + "/0"};
           place[&n.right()] = {key, ordinal, id + "/1"};
