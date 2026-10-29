@@ -403,18 +403,15 @@ bool has_uniform_externals(const Sum &sum) {
 
 /// Under a result head the summands of @p sum may broadcast: each must supply
 /// a subset of the result's indices, and together all of them, and none may
-/// contract a result index. Summands are validated as expressions, and their
-/// (anti)symmetrizers are disregarded. As for a whole rhs, bra and ket indices
-/// are pooled, since a bra-ket symmetric summand may present them swapped.
+/// contract a result index. The (anti)symmetrizers of the summands are
+/// disregarded. As for a whole rhs, bra and ket indices are pooled, since a
+/// bra-ket symmetric summand may present them swapped.
+/// @pre every summand of @p sum is valid
 bool is_valid_broadcast(const ResultExpr &result, const Sum &sum,
                         std::string *msg) {
   const auto result_braket = ranges::views::concat(result.bra(), result.ket());
   container::set<Index> covered;
   for (const ExprPtr &summand : sum.summands()) {
-    if (!is_valid(summand, msg)) {
-      return false;
-    }
-
     ExprPtr term = summand->clone();
     pop_tensor(term, reserved::antisymm_label());
     pop_tensor(term, reserved::symm_label());
@@ -544,15 +541,21 @@ bool is_valid(const Expr &expr, std::string *msg) {
 
 bool is_valid(const ResultExpr &expr, std::string *msg) {
   if (expr.expression()->is<Sum>()) {
+    // validated as is_valid(Expr) does, except that the summands may broadcast
     const Sum &sum = expr.expression()->as<Sum>();
+    for (const ExprPtr &summand : sum.summands()) {
+      if (!is_valid(summand, msg)) {
+        return false;
+      }
+    }
     if (!has_uniform_externals(sum)) {
-      // a proto-indexed sum does not broadcast; reports the inconsistency
-      if (is_proto_indexed(sum)) return is_valid(sum, msg);
+      // a proto-indexed sum does not broadcast
+      if (is_proto_indexed(sum)) {
+        SEQUANT_EXPR_INVALID("Inconsistent external indices in sum");
+      }
       return is_valid_broadcast(expr, sum, msg);
     }
-  }
-
-  if (!is_valid(expr.expression(), msg)) {
+  } else if (!is_valid(expr.expression(), msg)) {
     return false;
   }
 
