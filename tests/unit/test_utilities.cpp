@@ -218,6 +218,20 @@ TEST_CASE("join_strings", "[utilities]") {
           }) == "1-2-3");
 }
 
+TEST_CASE("utf conversion", "[utilities]") {
+  using namespace sequant;
+
+  // BMP and astral-plane (a surrogate pair in UTF-16) characters
+  for (const std::wstring& str : {std::wstring(L"t_1"), std::wstring(L"Âδγ"),
+                                  std::wstring(L"𝟙"), std::wstring(L"a𝟙b")}) {
+    const std::string utf8 = toUtf8(str);
+    REQUIRE(toUtf16(utf8) == str);
+    REQUIRE(toUtf8(toUtf16(utf8)) == utf8);
+  }
+  REQUIRE(toUtf8(std::wstring(L"𝟙")) == "\xF0\x9D\x9F\x99");
+  REQUIRE(toUtf16(std::string("\xF0\x9D\x9F\x99")) == L"𝟙");
+}
+
 TEST_CASE("pop_symmetrizer", "[utilities]") {
   using namespace sequant;
 
