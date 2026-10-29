@@ -56,7 +56,9 @@ Each ``EvalRow`` has the fields:
     ``Symmetrize``, ``Antisymmetrize``, ``ElementwisePower``.
     ``ElementwisePower`` is the unary node that evaluates a :class:`sequant::TensorPower`: the element-wise power of its
     operand, whose exponent is carried by a sentinel right child (see :cpp:enumerator:`sequant::EvalOp::Power`). Under batching it is
-    sliced like its operand.
+    sliced like its operand. A ``Tensor`` row is a leaf served by the caller's leaf evaluator; this includes the reserved
+    all-ones leaf ``𝟙`` of a broadcast sum (e.g. ``𝟙(i_1)``, see :doc:`expressions`), which the leaf evaluator must return as an
+    all-ones tensor of that mode's extent.
 ``time_ns``
     wall time in nanoseconds.
 ``result``

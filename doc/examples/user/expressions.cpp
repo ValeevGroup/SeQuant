@@ -1,6 +1,8 @@
+#include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/format.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <format>
@@ -93,6 +95,28 @@ int main() {
   std::wcout << std::format(L"{}", ell.expression()) << std::endl;
   std::wcout << std::format(L"{}", E.expression()) << std::endl;
   // end-snippet-5
+
+  // start-snippet-6
+  // under a head, a summand may omit head indices and is then constant along
+  // those modes, e.g. the orbital-energy denominator
+  // D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}
+  auto denominator =
+      ResultExpr(Tensor(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}),
+                 ex<Tensor>(L"ε", bra{}, ket{L"a_1"}) +
+                     ex<Tensor>(L"ε", bra{}, ket{L"a_2"}) -
+                     ex<Tensor>(L"ε", bra{L"i_1"}, ket{}) -
+                     ex<Tensor>(L"ε", bra{L"i_2"}, ket{}));
+  SEQUANT_ASSERT(is_valid(denominator));
+
+  // binarize() and optimize() lower it first: each summand is multiplied by
+  // one reserved all-ones leaf 𝟙 per head index it lacks
+  auto lowered = lower_broadcast_sum(denominator);
+  [[maybe_unused]] const auto& first_term =
+      lowered.expression()->as<Sum>().summand(0);
+  SEQUANT_ASSERT(first_term->as<Product>().factors().size() == 4);
+
+  std::wcout << std::format(L"{}", lowered.expression()) << std::endl;
+  // end-snippet-6
 
   return 0;
 }

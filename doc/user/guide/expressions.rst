@@ -93,6 +93,22 @@ how a compound expression is raised to a power: name it, then apply :func:`sequa
    :end-before: end-snippet-5
    :dedent: 2
 
+Under a head, the summands of a :class:`sequant::Sum` need not carry the same external indices: a summand may omit some of the
+head's indices, meaning that it is constant along those modes and is broadcast over them, as in the orbital-energy denominator
+``D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}``. :func:`is_valid() <sequant::is_valid>` accepts such a ``ResultExpr``
+if every summand's external indices are a subset of the head's and together the summands supply all of them; a bare ``Sum``, which
+has no head to name the missing modes, must still be uniformly indexed. :func:`sequant::binarize` and :func:`sequant::optimize` of
+a ``ResultExpr`` lower the broadcast first (:func:`sequant::lower_broadcast_sum`): each short summand becomes an outer product with
+one reserved all-ones leaf ``𝟙`` (:func:`sequant::make_ones`) per missing index. Numerical evaluation requests a ``𝟙`` leaf from the
+leaf evaluator like any other leaf, so the leaf evaluator must serve it (recognize it with :func:`sequant::is_ones`) as an all-ones
+tensor of its mode's extent; for code export see :doc:`export`.
+
+.. literalinclude:: /examples/user/expressions.cpp
+   :language: cpp
+   :start-after: start-snippet-6
+   :end-before: end-snippet-6
+   :dedent: 2
+
 The examples print expressions with ``<<`` and ``std::format``, which :file:`SeQuant/core/io/format.hpp` provides and which
 default to SeQuant's text serialization format. Once built, an expression tree can be rendered to LaTeX or round-tripped through
 that format; see :doc:`io` for both and for the format specifiers that select between them.

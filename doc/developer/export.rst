@@ -26,7 +26,8 @@ e.g. as one function — in five stages:
 
 The tree walk itself is driven by a ``GenerationVisitor`` in combined pre-/post-order: pre-order visits (leaves and, on the way down,
 already-computed intermediates) call ``load_or_create()``, which decides ``create`` vs. ``load`` vs. ``set_to_zero`` from
-``ExportContext``'s per-object ``LoadStrategy``/``ZeroStrategy`` and a ref-count map of what this walk has already loaded; post-order
+``ExportContext``'s per-object ``LoadStrategy``/``ZeroStrategy`` and a ref-count map of what this walk has already loaded (an
+all-ones leaf of a broadcast sum is never loaded: where it would be, ``create_ones`` is called instead); post-order
 visits call ``process_computation()``, which assembles the node's ``Product``/``Sum``/``Adjoint``/``TensorPower`` expression (multiplying back in any
 pruned scalar factor) and calls ``generator.compute(...)``, then drops both children's reference counts, ``unload``-ing whichever drop to
 zero. ``generator.persist()`` fires when a group's designated result node is reached.

@@ -57,6 +57,20 @@ Julia spells a rational exponent as, e.g., ``(1//2)``. :class:`sequant::ItfGener
 tensor power") have no way to express it and throw a :class:`sequant::Exception` instead. A custom backend opts in by overriding
 :func:`sequant::Generator::represent` for :class:`sequant::TensorPower`; the default throws.
 
+Broadcast sums
+~~~~~~~~~~~~~~~~~
+
+The evaluation tree of a broadcast sum under a ``ResultExpr`` head (see :doc:`expressions`) contains reserved all-ones leaves ``𝟙``.
+No caller provides them, so the generated code must create them: wherever another leaf would be loaded, the export calls
+:func:`sequant::Generator::create_ones` instead of ``load``. The text backend emits
+
+.. code-block:: text
+
+   Create 𝟙[i_1] and fill with ones
+
+and every other shipped backend throws a :class:`sequant::Exception` ("<format> cannot create an all-ones tensor"), the default of
+``create_ones``; a custom backend opts in by overriding it.
+
 Each backend has its own ``Context`` type (e.g. ``ItfContext``) for backend-specific settings such as naming conventions; consult its
 reference documentation for details. Numerically *evaluating* an expression directly in-process, rather than generating source code
 for it, is a separate concern handled by :code:`SeQuant/core/eval` (see :doc:`evaluation` for its trace/profiling tooling).
