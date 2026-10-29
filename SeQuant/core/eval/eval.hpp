@@ -720,9 +720,48 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
                                     node->annot()};
   ResultPtr result;
   log::Duration time{};
-  if (node->op_type() != EvalOp::Product) {
+  // Record a build against node's identity (keyed by the exact cache
+  // identity: hash-bin + Bliss, so 64-bit hash collisions are not folded) in
+  // the (root) cache's recompute tally, if the op just costed itself: the
+  // DryRun backend stashes a product's realized cost in last_op_flops. Deduped
+  // at the (value, slice) granularity using actual replay FLOPs: a value built
+  // over distinct slices is tiling (not recompute); the same value rebuilt at
+  // the same slice -- including a node invariant to an enclosing loop, rebuilt
+  // every block -- is recompute. The slice signature is the live batch context
+  // projected onto the modes node carries (find_leaf_carrying), so an
+  // invariant's projection is identical (empty for that loop) every block and
+  // its rebuilds fold. A no-op unless the dry-run replay enabled the tally on
+  // the root cache (the wet TA path leaves it disabled), so nothing is tallied
+  // off the costing path.
+  //
+  // The caller sets last_op_flops to the -1 sentinel before the op, so the
+  // tally fires only when the op actually computed fresh flops for this node:
+  // an op that costs nothing (a sum, an adjoint, DryRunOps::prod's
+  // scalar*tensor early return, any op of the wet TA backend) leaves it unset,
+  // and a stale value from a previous op must not be attributed here (it would
+  // fold garbage into the identity-keyed tally).
+  auto const run_and_tally = [&]() {
+    eval::detail::last_op_flops() = -1.0;
     time = detail::timed_eval_inplace(
         [&]() { result = apply_one_op(node, left, right); });
+    if (eval::detail::last_op_flops() >= 0.0) {
+      std::string slice_sig;
+      for (auto const& entry : cache.batch_context()) {
+        Index const& ix = entry.axis;
+        auto const& blk = entry.range;
+        if (find_leaf_carrying(node, ix).has_value()) {
+          slice_sig += toUtf8(ix.full_label());
+          slice_sig += ':';
+          slice_sig += std::to_string(blk.first);
+          slice_sig += ';';
+        }
+      }
+      cache.tally_build(node, slice_sig, eval::detail::last_op_flops(),
+                        eval::detail::last_op_exec());
+    }
+  };
+  if (node->op_type() != EvalOp::Product) {
+    run_and_tally();
   } else {
     // Consult the shaped-product hook (if set) before evaluating the
     // product. The hook receives the node (wrapped in a std::any as a
@@ -737,47 +776,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
         result = hook(std::any{std::cref(node)}, *left, *right, ann);
       });
     }
-    if (!result) {
-      // Sentinel so the recompute tally below fires only when a DryRun
-      // prod actually computed fresh flops for this node. DryRunOps::prod
-      // early-returns without setting last_op_flops for a scalar*tensor
-      // product (and it is never set at all by the wet TA backend); a
-      // stale value from a previous op must not be attributed here (it
-      // would fold garbage into the identity-keyed tally). prod sets
-      // last_op_flops >= 0 only on the real contraction path.
-      eval::detail::last_op_flops() = -1.0;
-      time = detail::timed_eval_inplace(
-          [&]() { result = apply_one_op(node, left, right); });
-      // Record this product build against node's identity (keyed by the
-      // exact cache identity: hash-bin + Bliss, so 64-bit hash collisions
-      // are not folded) in the (root) cache's recompute tally. Deduped at
-      // the (value, slice) granularity using actual replay FLOPs (DryRun
-      // prod just stashed this build's realized cost in last_op_flops): a
-      // value built over distinct slices is tiling (not recompute); the
-      // same value rebuilt at the same slice -- including a node
-      // invariant to an enclosing loop, rebuilt every block -- is
-      // recompute. The slice signature is the live batch context
-      // projected onto the modes node carries (find_leaf_carrying), so
-      // an invariant's projection is identical (empty for that loop)
-      // every block and its rebuilds fold. A no-op unless the dry-run
-      // replay enabled the tally on the root cache (the wet TA path
-      // leaves it disabled), so nothing is tallied off the costing path.
-      if (eval::detail::last_op_flops() >= 0.0) {
-        std::string slice_sig;
-        for (auto const& entry : cache.batch_context()) {
-          Index const& ix = entry.axis;
-          auto const& blk = entry.range;
-          if (find_leaf_carrying(node, ix).has_value()) {
-            slice_sig += toUtf8(ix.full_label());
-            slice_sig += ':';
-            slice_sig += std::to_string(blk.first);
-            slice_sig += ';';
-          }
-        }
-        cache.tally_build(node, slice_sig, eval::detail::last_op_flops(),
-                          eval::detail::last_op_exec());
-      }
-    }
+    if (!result) run_and_tally();
     // node-eval done: fence + accumulate the contraction's full cost.
     eval::EvalImplTimeline::note_prod(_tp0);
   }
@@ -1178,29 +1177,12 @@ ResultPtr evaluate_impl(Node const& node,         //
       case Stage::NeedLeftAdj: {
         // Unary IR op (Adjoint): only the left operand is evaluated; the right
         // child is the Constant(1) sentinel kept to preserve FullBinaryNode's
-        // invariant, and is intentionally never pushed.
+        // invariant, and is intentionally never pushed (so f.right stays
+        // null).
         f.left = std::move(ret);
         SEQUANT_ASSERT(f.left);
-        ResultPtr result;
-        auto time = detail::timed_eval_inplace(
-            [&]() { result = apply_one_op(f.nd(), f.left, f.right); });
-
-        if constexpr (detail::trace(EvalTrace)) {
-          // `right` is null here (see log::bytes() null tolerance).
-          size_t hwmark = log::bytes(cache, result).value;
-          if (!cache.chain_holds(f.left)) hwmark += log::bytes(f.left).value;
-          hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-          log::eval(log::EvalStat{.mode = log::eval_mode(f.nd()),
-                                  .time = time,
-                                  .mem_result = log::bytes(result),
-                                  .mem_alloc = log::bytes(result),
-                                  .mem_hwmark = {cache.note_working_set(
-                                      hwmark, f.nd()->hash_value())},
-                                  .mem_left = log::bytes(f.left),
-                                  .mem_right = log::bytes(f.right)},
-                    log::label(f.nd(), cache.batch_context()));
-        }
-        log::release_after_op();
+        ResultPtr result =
+            apply_one_op_traced<EvalTrace>(f.nd(), f.left, f.right, cache);
         finalize(finish_phase_b(f, std::move(result)));
         break;
       }
