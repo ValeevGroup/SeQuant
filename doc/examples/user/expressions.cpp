@@ -61,7 +61,7 @@ int main() {
   auto D_inv = pow(D, rational{-1});
 
   SEQUANT_ASSERT(D_inv.is<TensorPower>());
-  SEQUANT_ASSERT(D_inv.as<TensorPower>()._symmetry() == Symmetry::Symm);
+  SEQUANT_ASSERT(D_inv.as<AbstractTensor>()._symmetry() == Symmetry::Symm);
 
   // an even power of an antisymmetric tensor is symmetric
   auto t = ex<Tensor>(L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
