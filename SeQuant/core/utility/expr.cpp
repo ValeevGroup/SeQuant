@@ -402,7 +402,8 @@ bool has_uniform_externals(const Sum &sum) {
 }
 
 /// Under a result head the summands of @p sum may broadcast: each must supply
-/// a subset of the result's indices, and together all of them. A result index
+/// a subset of the result's indices, every one of its aux indices, and
+/// together all of them. A result index
 /// is never contracted, so a summand that uses it in several slots supplies
 /// it. The (anti)symmetrizers of the summands are disregarded. As for a whole
 /// rhs, bra and ket indices are pooled, since a bra-ket symmetric summand may
@@ -432,6 +433,13 @@ bool is_valid_broadcast(const ResultExpr &result, const Sum &sum,
     }
 
     const auto supplied = detail::supplied_result_indices(result, *term);
+    // broadcast is over bra and ket modes only
+    for (const Index &idx : result.aux()) {
+      if (idx.nonnull() && !supplied.contains(idx)) {
+        SEQUANT_EXPR_INVALID("Summand does not supply result aux index " +
+                             toUtf8(idx.full_label()));
+      }
+    }
     covered.insert(supplied.begin(), supplied.end());
   }
 

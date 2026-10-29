@@ -965,6 +965,10 @@ TEST_CASE("utilities", "[utilities]") {
                // in several slots supplies it
                {L"R{i1} = f{i1;} + g{i1;i2} h{i2;i1}", ""},
                {L"R{i_1;a_1} = f{i_1;a_1} + M{i_1;a_1} D{a_1;i_1}", ""},
+               // aux modes cannot be broadcast over
+               {L"R{i_1;;a_2} = f{i_1;;a_2} + g{i_1;}",
+                "Summand does not supply result aux index a_2"},
+               {L"R{i_1,i_2;;a_2} = f{i_1;;a_2} + g{i_2;;a_2}", ""},
                {L"R{i1} = g{i1;i2} h{i2;i1}",
                 "Bra indices of result are inconsistent with the rhs "
                 "expression"},

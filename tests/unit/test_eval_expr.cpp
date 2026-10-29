@@ -869,7 +869,18 @@ TEST_CASE("lower_broadcast_sum", "[EvalExpr][broadcast]") {
   SECTION("aux index cannot be broadcast") {
     const ResultExpr res =
         deserialize<ResultExpr>(L"R{i_1;;a_2} = f{i_1;;a_2} + g{i_1;}");
+    REQUIRE_FALSE(is_valid(res));
     REQUIRE_THROWS_AS(lower_broadcast_sum(res), Exception);
+
+    // a summand that carries the aux index may lack a bra/ket head index
+    const ResultExpr ok =
+        deserialize<ResultExpr>(L"R{i_1,i_2;;a_2} = f{i_1;;a_2} + g{i_2;;a_2}");
+    REQUIRE(is_valid(ok));
+    const ResultExpr lowered = lower_broadcast_sum(ok);
+    const Sum& sum = lowered.expression()->as<Sum>();
+    REQUIRE(sum.size() == 2);
+    REQUIRE(ones_of(sum.summand(0)) == Ones{one(L"i_2", SlotType::Bra)});
+    REQUIRE(ones_of(sum.summand(1)) == Ones{one(L"i_1", SlotType::Bra)});
   }
 
   SECTION("binarize") {

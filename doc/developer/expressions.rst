@@ -53,8 +53,9 @@ Broadcast sums under a head
 
 Broadcast is a property of a ``ResultExpr``, not of a ``Sum``: only a head names the modes a summand lacks, and supplies their
 slot (bra or ket) and extent. Hence :func:`is_valid(const ResultExpr&) <sequant::is_valid>` checks a Sum on the rhs per summand
-(each summand's external indices are a subset of the head's, and together they cover it; a head index that a summand uses in
-any slot counts as supplied, since head indices are never contracted), while ``is_valid`` of a bare ``Sum`` keeps requiring
+(each summand's external indices are a subset of the head's, each carries every aux index of the head, since broadcast is over
+bra and ket modes only, and together they cover it; a head index that a summand uses in any slot counts as supplied, since head
+indices are never contracted), while ``is_valid`` of a bare ``Sum`` keeps requiring
 uniform external indices. Nothing downstream of the symbolic layer knows about broadcast: :func:`sequant::lower_broadcast_sum`,
 called by ``binarize(const ResultExpr&)`` and ``optimize(ResultExpr&)`` before they do anything else, multiplies each short summand
 by one rank-1 all-ones leaf per missing head index, in that index's head slot. The result is an ordinary uniformly indexed Sum
