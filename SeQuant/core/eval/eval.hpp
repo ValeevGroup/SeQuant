@@ -1868,14 +1868,16 @@ struct BatchedScratch {
 /// recorded rather than hidden by the prune) and registers every internal
 /// subnode that repeats AND has a consistent slicing signature -- the position
 /// of the containing member's batch mode in the subnode's canon_indices(), or
-/// its absence -- across all occurrences. Signature consistency is what makes
-/// a scratch hit exact across members: canonical equality maps the index at
-/// canonical position p to the index at position p, so equal signatures plus
-/// equal realized element ranges (guaranteed by the caller's grouping) imply
-/// identical slices. Inconsistently-sliced subnodes are not registered and so
-/// are evaluated per occurrence, unshared. Count inexactness arising from the
-/// pruned walk is benign: an undercount makes evaluate() recompute a drained
-/// entry, an overcount keeps an entry until the per-batch reset().
+/// its absence, and likewise of each axis of the loops enclosing \p real
+/// (whose values are already sliced along them) -- across all occurrences.
+/// Signature consistency is what makes a scratch hit exact across members:
+/// canonical equality maps the index at canonical position p to the index at
+/// position p, so equal signatures plus equal realized element ranges
+/// (guaranteed by the caller's grouping) imply identical slices.
+/// Inconsistently-sliced subnodes are not registered and so are evaluated per
+/// occurrence, unshared. Count inexactness arising from the pruned walk is
+/// benign: an undercount makes evaluate() recompute a drained entry, an
+/// overcount keeps an entry until the per-batch reset().
 ///
 /// Subnodes whose signature is consistently 'absent' (no leaf below carries
 /// the mode -- the mode is contracted at the member's root, so a subtree
@@ -1916,6 +1918,15 @@ template <typename TreeNode, bool FHC, typename Members>
         ext_axes.push_back(ix);
   }
 
+  // The axes of the loops enclosing this scratch: \p real's values are
+  // already sliced along them. Two canonically-equal occurrences that bind
+  // an enclosing axis to different positions (or one binds it and the other
+  // does not) hold different slices of one canonical value, so they are not
+  // shared.
+  container::svector<Index> encl_axes;
+  for (auto const& e : real.batch_context())
+    encl_axes.push_back(e.exact_axis ? *e.exact_axis : e.axis);
+
   struct Meta {
     std::size_t count = 0;
     std::optional<std::size_t> sig;
@@ -1924,6 +1935,9 @@ template <typename TreeNode, bool FHC, typename Members>
     // is a function of the (canonical) node alone, so it is identical across
     // all occurrences of a canonically-equal node.
     container::svector<std::optional<std::size_t>> ext_sig;
+    // Positions of each enclosing axis (in encl_axes order); unlike ext_sig it
+    // may differ across occurrences, which then makes the node inconsistent.
+    container::svector<std::optional<std::size_t>> encl_sig;
     bool consistent = true;
   };
   std::unordered_map<TreeNode const*, Meta, Hasher, Comp> meta;
@@ -1942,8 +1956,8 @@ template <typename TreeNode, bool FHC, typename Members>
   // child before the left one keeps the pop order the recursion's pre-order, so
   // which occurrence is the `first` one (and so every recorded signature and
   // count) is unchanged.
-  auto visit = [&meta, &ext_sig_of](TreeNode const& root,
-                                    Index const& mode) -> void {
+  auto visit = [&meta, &ext_sig_of, &encl_axes](TreeNode const& root,
+                                                Index const& mode) -> void {
     std::vector<TreeNode const*> stack{&root};
     while (!stack.empty()) {
       TreeNode const& n = *stack.back();
@@ -1951,12 +1965,14 @@ template <typename TreeNode, bool FHC, typename Members>
       if (n.leaf()) continue;
       auto const sig = index_position(n, mode);
       auto const esig = ext_sig_of(n);
+      auto const csig = slicing_signature(n, encl_axes);
       auto const [it, first] = meta.try_emplace(&n);
       auto& e = it->second;
       if (first) {
         e.sig = sig;
         e.ext_sig = esig;
-      } else if (e.sig != sig || e.ext_sig != esig) {
+        e.encl_sig = csig;
+      } else if (e.sig != sig || e.ext_sig != esig || e.encl_sig != csig) {
         e.consistent = false;
       }
       ++e.count;
@@ -1972,8 +1988,9 @@ template <typename TreeNode, bool FHC, typename Members>
       // occurrence is evaluated per occurrence, not served from the scratch at
       // n. The External signature is invariant across occurrences (a function
       // of the canonical node), so folding it into the match only tightens the
-      // guard.
-      if (!first && e.sig == sig && e.ext_sig == esig) continue;
+      // guard; the enclosing-axis signature is matched like the batch mode's.
+      if (!first && e.sig == sig && e.ext_sig == esig && e.encl_sig == csig)
+        continue;
       stack.push_back(&n.right());
       stack.push_back(&n.left());
     }

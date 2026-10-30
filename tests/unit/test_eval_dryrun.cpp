@@ -82,6 +82,7 @@
 #include <cstring>
 #include <fstream>
 #include <functional>
+#include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -5035,5 +5036,135 @@ TEST_CASE("batched consumers slice one Broadcast value at different modes",
           make_evaluator(policy, yield, make_no_scope_guard{}));
     REQUIRE_NOTHROW(
         evaluate(Forest{a, b}, policy, std::wstring{}, yield, cache));
+  }
+}
+
+namespace {
+
+/// meters and evaluates \p forest batched by \p policy on \p schedulers,
+/// requiring each to succeed with a result of \p result_bytes
+void require_batched_run(
+    std::vector<sequant::eval::dryrun::EvalNodeDryRun> const& forest,
+    sequant::BatchPolicy policy,
+    sequant::eval::dryrun::SizeRegime const& regime, std::size_t result_bytes,
+    std::initializer_list<sequant::BatchScheduler> schedulers = {
+        sequant::BatchScheduler::ordered,
+        sequant::BatchScheduler::forest_descent}) {
+  using namespace sequant;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  auto const cm = std::make_shared<CostModel const>(regime);
+  DryRunLeafEvaluator const yield{cm};
+  auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+  for (auto const scheduler : schedulers) {
+    CAPTURE(static_cast<int>(scheduler));
+    policy.scheduler = scheduler;
+    REQUIRE_NOTHROW(eval::dryrun::meter(forest, policy, regime, CacheConfig{}));
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    if (scheduler == BatchScheduler::forest_descent)
+      cache.set_custom_evaluator(
+          make_evaluator(policy, yield, make_no_scope_guard{}));
+    ResultPtr res;
+    REQUIRE_NOTHROW(res =
+                        evaluate(forest, policy, std::wstring{}, yield, cache));
+    REQUIRE(res);
+    CHECK(res->size_in_bytes() == result_bytes);
+  }
+}
+
+/// contracted occupied and virtual modes batchable, in batches of 3 and 7
+sequant::BatchPolicy nested_contracted_policy() {
+  using namespace sequant;
+  BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const&) { return true; };
+  policy.is_batchable_external_index = [](Index const&) { return true; };
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"i" ? 3 : 7;
+  };
+  policy.peak_threshold = 1;
+  return policy;
+}
+
+}  // namespace
+
+// Two canonically equal nodes binding different occupied indices, e.g. the
+// Broadcast operands −1·ε{i_1;} and −1·ε{i_2;} of the inlined D, under two
+// nested loops: the inner loop's scratch must not serve the value sliced
+// along the outer loop's i_1 to the occurrence that binds i_2.
+TEST_CASE("nested batch loops do not share differently sliced values",
+          "[meter][broadcast][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::SizeRegime;
+
+  SizeRegime regime;
+  regime.space_extent = {{L"i", 10}, {L"a", 20}};
+  auto const cm = std::make_shared<CostModel const>(regime);
+  Index const i1{L"i_1"}, a1{L"a_1"}, a2{L"a_2"};
+
+  SECTION("two loops at the root of E, inlined D") {
+    auto const sys = binarize<EvalExprDryRun>(
+        std::vector<ResultExpr>{D_broadcast(), ell_definition(), consumer_E()});
+    EvalNodeDryRun e = sys.roots()[0].get();
+    e->set_node_slice_mask(
+        {{i1, BatchModeType::Contracted}, {a1, BatchModeType::Contracted}});
+    e->set_batch_loops_opened_here(
+        {{i1, BatchModeType::Contracted}, {a1, BatchModeType::Contracted}});
+    require_batched_run(
+        {e}, nested_contracted_policy(), regime,
+        cm->memsize(container::svector<Index>{Index{L"i_2"}, Index{L"i_3"}}));
+  }
+
+  SECTION("an outer loop at E, an inner one at the inlined ℓ") {
+    auto const sys = binarize<EvalExprDryRun>(
+        std::vector<ResultExpr>{D_broadcast(), ell_definition(), consumer_E()});
+    EvalNodeDryRun e = sys.roots()[0].get();
+    e->set_node_slice_mask({{i1, BatchModeType::Contracted}});
+    e->set_batch_loops_opened_here({{i1, BatchModeType::Contracted}});
+    auto& ell = e.right();
+    ell->set_node_slice_mask(
+        {{i1, BatchModeType::Contracted}, {a2, BatchModeType::External}});
+    ell->set_batch_loops_opened_here({{a2, BatchModeType::External}});
+    // ordered only: forest_descent does not slice the destination of an
+    // External loop opened below an enclosing loop by that loop, whether or
+    // not the tree holds a Broadcast node (the same system with D a leaf
+    // fails the same way)
+    require_batched_run(
+        {e}, nested_contracted_policy(), regime,
+        cm->memsize(container::svector<Index>{Index{L"i_2"}, Index{L"i_3"}}),
+        {BatchScheduler::ordered});
+  }
+
+  SECTION("without a broadcast: two equal sums over i_1 and i_2") {
+    // R{;i_3} = L{a_1;i_1,i_2,i_3} · ((x{i_1;} + y{i_1;}) (x{i_2;} + y{i_2;})
+    // g{;a_1}), the root contracting i_1, i_2 and a_1
+    auto s = [](wchar_t const* i) {
+      return ex<Tensor>(L"x", bra{i}, ket{}) + ex<Tensor>(L"y", bra{i}, ket{});
+    };
+    auto inner = ex<Product>(ExprPtrList{});
+    inner->as<Product>().append(1, s(L"i_1"), Product::Flatten::No);
+    inner->as<Product>().append(1, s(L"i_2"), Product::Flatten::No);
+    inner->as<Product>().append(1, ex<Tensor>(L"g", bra{}, ket{L"a_1"}),
+                                Product::Flatten::No);
+    auto rhs = ex<Product>(ExprPtrList{});
+    rhs->as<Product>().append(
+        1, ex<Tensor>(L"L", bra{L"a_1"}, ket{L"i_1", L"i_2", L"i_3"}),
+        Product::Flatten::No);
+    rhs->as<Product>().append(1, inner, Product::Flatten::No);
+    ResultExpr const r(Tensor(L"R", bra{}, ket{L"i_3"}), rhs);
+    EvalNodeDryRun root = binarize<EvalExprDryRun>(r);
+    REQUIRE(contracted_indices(root).size() == 3);
+    root->set_node_slice_mask(
+        {{i1, BatchModeType::Contracted}, {a1, BatchModeType::Contracted}});
+    root->set_batch_loops_opened_here(
+        {{i1, BatchModeType::Contracted}, {a1, BatchModeType::Contracted}});
+    require_batched_run({root}, nested_contracted_policy(), regime,
+                        cm->memsize(container::svector<Index>{Index{L"i_3"}}));
   }
 }
