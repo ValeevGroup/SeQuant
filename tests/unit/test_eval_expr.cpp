@@ -871,15 +871,23 @@ TEST_CASE("binarize a broadcast sum", "[EvalExpr][broadcast]") {
     REQUIRE(summands[1]->leaf());
   }
 
-  SECTION("a symmetrizer in a nested Sum supplies no index") {
-    const ResultExpr res = deserialize<ResultExpr>(
+  SECTION("a symmetrizer supplies its indices") {
+    // the binarized summand carries the symmetrizer's indices, so a Broadcast
+    // node would add no mode
+    auto const no_broadcast = [](Node const& root) {
+      bool found = false;
+      root.visit([&](Node const& n) {
+        if (!n.leaf() && n->is_broadcast()) found = true;
+      });
+      return !found;
+    };
+    const ResultExpr top = deserialize<ResultExpr>(
+        L"R{a1,a2;i1,i2} = Â{i1,i2;a1,a2} t{a1;i1} ε{a2;} + g{a1,a2;i1,i2}");
+    REQUIRE(no_broadcast(binarize(top)));
+    const ResultExpr nested = deserialize<ResultExpr>(
         L"R{a1,a2;i1,i2} = c (Â{i1,i2;a1,a2} t{a1;i1} ε{a2;} + "
         L"Â{i1,i2;a1,a2} t{a2;i1} ε{a1;}) + g{a1,a2;i1,i2}");
-    auto const summands_tree = binarize(res);
-    auto const summands = summands_of(summands_tree);
-    REQUIRE(summands.size() == 2);
-    REQUIRE(broadcasts_over(*summands[0], res));
-    REQUIRE(summands[1]->leaf());
+    REQUIRE(no_broadcast(binarize(nested)));
   }
 
   SECTION("aux index cannot be broadcast") {

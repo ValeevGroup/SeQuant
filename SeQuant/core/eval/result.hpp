@@ -321,12 +321,12 @@ class Result {
   /// from \p ann[0] and equals this result along the others. \p ann is
   /// [operand_annot, result_annot]; the result's modes are a superset of this
   /// result's. \p new_mode_ranges holds one rank-1 result per mode of the
-  /// result that this result lacks, in the result's mode order, built by
-  /// BackendArrayOps::make_zeros (and restricted to the current batch when a
-  /// batch loop runs over that mode): the result's range along that mode is
-  /// that result's range. A mode this result carries keeps this result's
-  /// range. Not a pure virtual: only tensor-backed results need it; the
-  /// default throws. A ResultScalar forwards to broadcast_scalar() of
+  /// result that this result lacks (none if it lacks none), in the result's
+  /// mode order, built by BackendArrayOps::make_zeros (and restricted to the
+  /// current batch when a batch loop runs over that mode): the result's range
+  /// along that mode is that result's range. A mode this result carries keeps
+  /// this result's range. Not a pure virtual: only tensor-backed results need
+  /// it; the default throws. A ResultScalar forwards to broadcast_scalar() of
   /// \p new_mode_ranges' first element.
   ///
   [[nodiscard]] virtual ResultPtr broadcast(

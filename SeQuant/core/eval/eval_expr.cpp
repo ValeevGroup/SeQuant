@@ -737,8 +737,10 @@ namespace {
 /// \return the left-folded chain of Sum nodes over the summands of the Sum
 ///         on the rhs of \p res, each binarized with the head's indices
 ///         \p uncontract uncontracted; a summand that does not supply every
-///         index of the head (see detail::supplied_result_indices) is wrapped
-///         in an EvalOp::Broadcast node over the head's indices
+///         index of the head (see detail::supplied_result_indices; a
+///         symmetrizer factor supplies its indices, as the binarized summand
+///         carries them) is wrapped in an EvalOp::Broadcast node over the
+///         head's indices
 /// \throw Exception if a summand lacks an aux index of the head
 EvalExprNode binarize_broadcast_sum(ResultExpr const& res,
                                     IndexSet const& uncontract,
@@ -751,8 +753,7 @@ EvalExprNode binarize_broadcast_sum(ResultExpr const& res,
   for (ExprPtr const& summand : res.expression()->as<Sum>().summands()) {
     auto node =
         impl::binarize(summand, uncontract, opts, node_counter, inline_ctx);
-    auto const supplied = detail::supplied_result_indices(
-        res, *detail::without_symmetrizers(summand));
+    auto const supplied = detail::supplied_result_indices(res, *summand);
     if (supplied.size() != head_indices.size()) {
       for (Index const& ix : res.aux())
         if (ix.nonnull() && !supplied.contains(ix))

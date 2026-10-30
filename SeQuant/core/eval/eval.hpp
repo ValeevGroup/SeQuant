@@ -636,8 +636,9 @@ batch_range_of(container::svector<BatchContextEntry> const& bctx,
 /// handled here (all caller-side): a leaf (a \c leaf_evaluator fetch, not an
 /// op), the shaped-product hook (the caller calls this only when the hook
 /// declines), \c apply_phase + store, the in-place-Sum fast path, and all tally
-/// / trace / timing / \c last_op_flops sentinel. \param aops the backend
-/// array-ops, which shape the modes an
+/// / trace / timing / \c last_op_flops sentinel.
+///
+/// \param aops the backend array-ops, which shape the modes an
 ///        EvalOp::Broadcast node adds to its operand
 /// \param bctx the enclosing batch loops: a mode a Broadcast node adds is
 ///        restricted to the current batch of the loop over it
