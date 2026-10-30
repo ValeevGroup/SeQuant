@@ -935,8 +935,16 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
     return binarize(expr->as<Product>(), uncontract, opts, node_counter,
                     inline_ctx);
 
-  if (expr->is<Power>())  //
-    return binarize(expr->as<Power>());
+  if (expr->is<Power>()) {
+    auto const& p = expr->as<Power>();
+    if (inline_ctx && p.base()->is<Variable>() &&
+        inline_ctx->match(p.base()->as<Variable>()))
+      throw Exception("inline: head " +
+                      toUtf8(p.base()->as<Variable>().label()) +
+                      " cannot be used inside a scalar power; define the "
+                      "power as its own equation");
+    return binarize(p);
+  }
 
   if (expr->is<TensorPower>())  //
     return binarize(expr->as<TensorPower>(), uncontract, opts, node_counter,

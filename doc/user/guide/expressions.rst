@@ -123,8 +123,9 @@ A :class:`sequant::Tensor` leaf names a head if its label, its bra, ket and aux 
 the head's; a leaf with the same label but a different shape remains an ordinary leaf, served by the leaf evaluator. A leaf that
 names a head must declare the head's symmetries, otherwise binarization throws; spelling the use through
 :func:`ResultExpr::result_as_tensor() <sequant::ResultExpr::result_as_tensor>` guarantees that. A :class:`sequant::Variable` leaf
-names a scalar head by its label; a conjugated use throws, so define the conjugate as its own equation. Two equations with the same
-label and shape, and a definition that reaches its own head, are errors as well; the API reference lists every exception.
+names a scalar head by its label; a conjugated use, or a use as the base of a scalar power, throws, so define the conjugate or
+the power as its own equation. Two equations with the same label and shape, and a definition that reaches its own head, are
+errors as well; the API reference lists every exception.
 
 An inlined equation enters its consumer as one factor with the layout and symmetries of the authored head: the consumer contracts
 with ``ℓ`` as declared, not with the factors of its right-hand side, so the head, rather than the factors that define it, is what

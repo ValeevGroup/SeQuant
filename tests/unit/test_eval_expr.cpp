@@ -1235,6 +1235,15 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
         binarize(conj),
         ContainsSubstring("inline: conjugated use of head E is not supported"));
 
+    // a scalar head inside a scalar power is neither a leaf nor inlined
+    auto const gp = ResultExpr(Tensor(L"G", bra{L"i_1"}, ket{L"a_1"}),
+                               ex<Power>(ex<Variable>(L"E"), 2) *
+                                   ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+    System const powered{e, gp};
+    REQUIRE_THROWS_WITH(binarize(powered),
+                        ContainsSubstring("inline: head E cannot be used "
+                                          "inside a scalar power"));
+
     // c has no definition
     auto const g = ResultExpr(
         Tensor(L"G", bra{L"i_1"}, ket{L"a_1"}),
