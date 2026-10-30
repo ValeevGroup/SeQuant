@@ -4733,10 +4733,138 @@ TEST_CASE("meter batches a loop through an element-wise power",
   }
 }
 
-// The contract the fixtures share with mpqc's CSVSizeMoments::extent: a group
-// of k composites on one cluster, each sized by the occupancy-adjusted M_k,
-// has the per-member product p * M_k^k, so nocc^rank times it is the
-// block-sparse volume sum_{nonnull clusters} d^k. Occupancy 1 is the identity.
+// E{i_2;i_3} = L · ℓ with ℓ = M ⊙ pow(D,-1) inlined from its own equation:
+// the loop over i_1 opened at the root slices the inlined head and the power
+// below it as it slices the Hadamard product of the direct term, so the meter
+// sees the direct term's builds, flops and peak. Binarizing the system needs
+// no lax bra-ket context.
+TEST_CASE("meter batches a loop through an inlined head",
+          "[meter][tensor-power][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::MeterReport;
+  using sequant::eval::dryrun::SizeRegime;
+  using Forest = std::vector<EvalNodeDryRun>;
+
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+  double const nelem = 10. * 10. * 20. * 20.;
+  auto const flops_of = [](MeterReport const& r) {
+    return r.flops_persistent + r.flops_volatile;
+  };
+  auto policy = occ_contracted_policy();
+
+  SECTION("the meter sees the direct Hadamard term") {
+    auto const sys = binarize<EvalExprDryRun>(
+        std::vector<ResultExpr>{ell_definition(), consumer_E()});
+    REQUIRE(sys.roots().size() == 1);
+    EvalNodeDryRun const& plain = sys.roots()[0].get();
+    REQUIRE(plain.right()->is_equation_boundary());
+    EvalNodeDryRun batched = plain;
+    stamp_occ_loop(batched);
+
+    auto direct = [] {
+      auto _ = set_scoped_default_context(lax_braket_context());
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      return binarize<EvalExprDryRun>(hadamard_power_term());
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    }();
+    auto const direct_ref =
+        meter(Forest{direct}, BatchPolicy{}, regime, CacheConfig{});
+    stamp_occ_loop(direct);
+
+    // the unbatched reference
+    auto const ref = meter(Forest{plain}, BatchPolicy{}, regime, CacheConfig{});
+    CHECK(flops_of(ref) == Catch::Approx(12 * nelem));
+    CHECK(ref.peak_bytes == direct_ref.peak_bytes);
+
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      policy.scheduler = scheduler;
+      MeterReport report;
+      REQUIRE_NOTHROW(
+          report = meter(Forest{batched}, policy, regime, CacheConfig{}));
+      CHECK(report.scheduler == scheduler);
+      if (scheduler == BatchScheduler::ordered) {
+        // the numbers of "meter batches a loop through an element-wise
+        // power": one build of the power, ℓ and the contraction per batch of
+        // i_1 (extent 10, batches of 1)
+        CHECK(report.builds_total == 30);
+        CHECK(flops_of(report) == Catch::Approx(12 * nelem));
+        // the leaves L, M and D are each as large as ℓ and resident whole, so
+        // batching does not lower this peak; it matches the direct term's
+        auto const direct_report =
+            meter(Forest{direct}, policy, regime, CacheConfig{});
+        CHECK(report.builds_total == direct_report.builds_total);
+        CHECK(report.peak_bytes == direct_report.peak_bytes);
+      } else {
+        // the forest_descent blind spot of issue #755, as for the direct term
+        CHECK(report.builds_total == 0);
+        CHECK(flops_of(report) == 0);
+      }
+    }
+  }
+
+  SECTION("three levels of inlining") {
+    auto const sys = binarize<EvalExprDryRun>(
+        std::vector<ResultExpr>{D_broadcast(), ell_definition(), consumer_E()});
+    REQUIRE(sys.roots().size() == 1);
+    EvalNodeDryRun batched = sys.roots()[0].get();
+    stamp_occ_loop(batched);
+    policy.scheduler = BatchScheduler::ordered;
+    MeterReport report;
+    REQUIRE_NOTHROW(report =
+                        meter(Forest{batched}, policy, regime, CacheConfig{}));
+    // per batch of i_1 (extent 10, batches of 1), 12 builds: the
+    // contraction, ℓ and the power, as in the two-level system; the chain
+    // ε{;a}·𝟙{i_1}·𝟙{i_2}·𝟙{a} of the lowered D (3 builds), shared by its
+    // a_1 and a_2 summands, whose slices are one value up to relabeling; and
+    // the chain ε{i}·𝟙·𝟙·𝟙 (3 builds) twice, once per occupied summand, since
+    // the batch slices ε in one and a 𝟙 in the other. The three in-place
+    // Sum steps and the two -1 scalings tally no build.
+    CHECK(report.builds_total == 10 * (3 + 3 + 2 * 3));
+  }
+
+  SECTION("an inlined intermediate larger than every leaf is never whole") {
+    // X{i_2,i_3;a_2,a_3} = t{a_1;i_1} · pow(D3,-1), D3 the o³v³ broadcast Sum
+    // of rank-1 orbital energies, read through its head
+    Tensor const d3 = D3_broadcast().result_as_tensor();
+    auto const x = ResultExpr(
+        Tensor(L"X", bra{L"i_2", L"i_3"}, ket{L"a_2", L"a_3"},
+               TensorSymmetries{.perm = Symmetry::Nonsymm}),
+        ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
+            pow(ex<Tensor>(relabelled(d3, d3.bra(), d3.ket())), rational{-1}));
+    auto const sys =
+        binarize<EvalExprDryRun>(std::vector<ResultExpr>{D3_broadcast(), x});
+    REQUIRE(sys.roots().size() == 1);
+    EvalNodeDryRun const& plain = sys.roots()[0].get();
+    EvalNodeDryRun batched = plain;
+    stamp_occ_loop(batched);
+
+    auto const cm = std::make_shared<CostModel const>(regime);
+    auto const d3_bytes = static_cast<double>(
+        cm->memsize({Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"}, Index{L"a_1"},
+                     Index{L"a_2"}, Index{L"a_3"}}));
+    policy.scheduler = BatchScheduler::ordered;
+    auto const ref = meter(Forest{plain}, BatchPolicy{}, regime, CacheConfig{});
+    MeterReport report;
+    REQUIRE_NOTHROW(report =
+                        meter(Forest{batched}, policy, regime, CacheConfig{}));
+    CAPTURE(ref.peak_bytes, report.peak_bytes, d3_bytes);
+    CHECK(ref.peak_bytes >= d3_bytes);
+    CHECK(report.peak_bytes < d3_bytes);
+  }
+}
+
 // the system {D, ℓ, E}: pow(D,-1) inside ℓ raises the inlined broadcast D,
 // whose trace spelling must read D as its head
 TEST_CASE("meter runs an inlined three-level system", "[meter][inline]") {
@@ -4768,6 +4896,10 @@ TEST_CASE("meter runs an inlined three-level system", "[meter][inline]") {
   REQUIRE_NOTHROW(meter(batched, policy, regime, CacheConfig{}));
 }
 
+// The contract the fixtures share with mpqc's CSVSizeMoments::extent: a group
+// of k composites on one cluster, each sized by the occupancy-adjusted M_k,
+// has the per-member product p * M_k^k, so nocc^rank times it is the
+// block-sparse volume sum_{nonnull clusters} d^k. Occupancy 1 is the identity.
 TEST_CASE("occupancy-adjusted moments satisfy the group-volume identity",
           "[dryrun][sizing]") {
   auto const& w20 = kWater20_pVDZF12;
