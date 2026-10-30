@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <utility>
 
@@ -593,6 +594,12 @@ concept leaf_node_evaluator =
 
 }  // namespace meta
 
+namespace detail {
+/// the definitions a system binarization inlines; see
+/// binarize(std::span<const ResultExpr>, const BinarizationOptions&)
+struct InlineContext;
+}  // namespace detail
+
 namespace impl {
 
 /// \param node_counter Running left-first-post-order count of contraction
@@ -601,17 +608,29 @@ namespace impl {
 ///        it can be checked against \c opts.node_batch_axes.size() by the
 ///        caller. Must be the same counter object across the entire call
 ///        tree of a single top-level invocation; do not reset per subtree.
+/// \param inline_ctx the definitions to inline into the leaves of the
+///        expression; null for none
 FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
                                   const BinarizationOptions& opts,
-                                  std::size_t& node_counter);
+                                  std::size_t& node_counter,
+                                  detail::InlineContext* inline_ctx = nullptr);
 
 /// The head-aware binarization behind binarize(ResultExpr const&, ...):
 /// lowers a broadcast Sum, binarizes the rhs with the head's indices
 /// uncontracted and stamps the root with the head.
 /// \param node_counter see binarize(ExprPtr const&, ...) above
+/// \param inline_ctx see binarize(ExprPtr const&, ...) above
 FullBinaryNode<EvalExpr> binarize(ResultExpr const& res,
                                   const BinarizationOptions& opts,
-                                  std::size_t& node_counter);
+                                  std::size_t& node_counter,
+                                  detail::InlineContext* inline_ctx = nullptr);
+
+/// The non-template part of
+/// binarize(std::span<const ResultExpr>, const BinarizationOptions&)
+/// \param[out] consumed see InlinedSystem::consumed
+container::svector<FullBinaryNode<EvalExpr>> binarize_system(
+    std::span<const ResultExpr> system, const BinarizationOptions& opts,
+    container::svector<bool>& consumed);
 }  // namespace impl
 
 ///
@@ -714,6 +733,53 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res,
     SEQUANT_ASSERT(node_counter == opts.node_batch_axes.size());
   }
   return detail::to_eval_node<ExprT>(std::move(tree));
+}
+
+/// The evaluation trees of a system of ResultExprs, see
+/// binarize(std::span<const ResultExpr>, const BinarizationOptions&)
+template <typename ExprT = EvalExpr>
+struct InlinedSystem {
+  /// one tree per equation, in input order
+  container::svector<FullBinaryNode<ExprT>> trees;
+  /// true for an equation whose head another equation inlined
+  container::svector<bool> consumed;
+
+  /// \return the trees of the equations no other equation inlined, in input
+  ///         order
+  auto roots() const {
+    container::svector<std::reference_wrapper<const FullBinaryNode<ExprT>>>
+        result;
+    for (std::size_t k = 0; k != trees.size(); ++k)
+      if (!consumed[k]) result.emplace_back(trees[k]);
+    return result;
+  }
+};
+
+/// Creates the evaluation trees of a system of equations, inlining each
+/// definition into its uses.
+///
+/// A Tensor leaf whose label, bra/ket/aux ranks and per-slot index spaces
+/// match the head of an equation, and a Variable leaf whose label matches a
+/// scalar head, is replaced by that equation's tree, binarized as by
+/// binarize(ResultExpr const&) after renaming the head's indices to the
+/// leaf's and the other indices of its rhs to fresh ones. The subtree enters
+/// the consumer as one factor; its root carries the (renamed) head.
+/// Definitions inline recursively and may appear in any order.
+/// @param system the equations; every head must be labelled
+/// @param opts the options of every equation; \c opts.node_batch_axes
+///        applies to the nodes of each equation's own rhs, inlined subtrees
+///        are not stamped
+/// @throw Exception if a head is unlabelled, two equations share a label and
+///        a shape, a matching leaf declares symmetries different from its
+///        head's, or a definition reaches its own head
+template <typename ExprT = EvalExpr>
+  requires std::is_constructible_v<ExprT, EvalExpr>
+InlinedSystem<ExprT> binarize(std::span<const ResultExpr> system,
+                              const BinarizationOptions& opts = {}) {
+  InlinedSystem<ExprT> result;
+  for (auto&& tree : impl::binarize_system(system, opts, result.consumed))
+    result.trees.emplace_back(detail::to_eval_node<ExprT>(std::move(tree)));
+  return result;
 }
 
 ///
