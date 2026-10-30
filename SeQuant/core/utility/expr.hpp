@@ -103,8 +103,9 @@ namespace detail {
 ExprPtr without_symmetrizers(const ExprPtr &expression);
 
 /// @param result a result head
-/// @param term a summand of the rhs of @p result, without symmetrizers (see
-///        without_symmetrizers())
+/// @param term a summand of the rhs of @p result; whether its symmetrizers
+///        supply their indices is the caller's choice (is_valid() passes
+///        @p term without them, see without_symmetrizers())
 /// @return the (non-null) indices of @p result that @p term supplies, i.e. uses
 ///         in a bra, ket or aux slot; a head index is never contracted, so one
 ///         that @p term uses in several slots is supplied, too

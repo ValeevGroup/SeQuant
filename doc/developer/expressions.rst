@@ -58,8 +58,9 @@ slot (bra or ket) and extent. Hence :func:`is_valid(const ResultExpr&) <sequant:
 bra and ket modes only, and together they cover it; a head index that a summand uses in any slot counts as supplied, since head
 indices are never contracted), while ``is_valid`` of a bare ``Sum`` keeps requiring
 uniform external indices. The symbolic layer keeps a broadcast Sum as written (``optimize(ResultExpr&)`` optimizes the summands
-like any others); ``binarize(const ResultExpr&)`` wraps each summand that lacks head indices (by ``detail::supplied_result_indices``,
-the rule ``is_valid`` applies) in a unary ``EvalOp::Broadcast`` node shaped like a ``Power`` node: the operand subtree on the left, a
+like any others); ``binarize(const ResultExpr&)`` wraps each summand that lacks head indices (by ``detail::supplied_result_indices`` on
+the summand as written: unlike ``is_valid``, which strips symmetrizers first, it counts the slots of an Â or Ŝ factor,
+because binarization keeps that factor as a leaf whose slots carry the head's indices) in a unary ``EvalOp::Broadcast`` node shaped like a ``Power`` node: the operand subtree on the left, a
 ``Constant`` sentinel on the right, and the head's indices, in slot order, as its canonical indices, so the Sum chain above it sees
 uniformly indexed operands. The node's hash combines the operand's with the result's modes and the position of each operand mode
 among them: one operand broadcast to different modes is a different value. At evaluation the ranges of the modes a node adds come
