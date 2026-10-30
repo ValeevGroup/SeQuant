@@ -36,9 +36,7 @@ struct IrrepNodeTraits<FullBinaryNode<T>> {
         // harmless for the totally symmetric denominators this is meant for
         return IrrepNodeKind::Sum;
       case EvalOp::Broadcast:
-        // a broadcast summand spans its operand's irreps, as the summand of
-        // the symbolic Sum it stands for does
-        return IrrepNodeKind::Sum;
+        return IrrepNodeKind::Broadcast;
     }
 
     SEQUANT_UNREACHABLE;
