@@ -794,7 +794,8 @@ struct InlinedSystem {
 ///        be empty: it annotates the nodes of a single term, so stamp the
 ///        returned trees instead
 /// @throw Exception if \c opts.node_batch_axes is not empty, a head is
-///        unlabelled, two equations share a label and a shape, a matching
+///        unlabelled, two equations share a label and a shape (for a bra-ket
+///        symmetric head, also with bra and ket swapped), a matching
 ///        leaf declares symmetries different from its head's, a conjugated
 ///        Variable leaf names a scalar head, a scalar head is the base of a
 ///        scalar Power, a leaf spells a conjugate-symmetric
