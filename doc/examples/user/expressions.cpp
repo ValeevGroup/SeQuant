@@ -6,6 +6,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <format>
+#include <vector>
 
 int main() {
   using namespace sequant;
@@ -117,6 +118,24 @@ int main() {
 
   std::wcout << std::format(L"{}", lowered.expression()) << std::endl;
   // end-snippet-6
+
+  // start-snippet-7
+  // binarize() of a system inlines each definition into its uses: a leaf
+  // names a head if label, ranks, index spaces and symmetries agree; D's head
+  // is D, the base of the power in ℓ, defined as the broadcast sum above
+  auto D_def = ResultExpr(D->as<Tensor>(), denominator.expression());
+
+  // R{i_2;i_3} = L{a_1,a_2;i_1,i_3} · ℓ{i_1,i_2;a_1,a_2}, ℓ taken from its head
+  auto R = ResultExpr(
+      Tensor(L"R", bra{L"i_2"}, ket{L"i_3"}),
+      ex<Tensor>(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_3"}, antisymm) *
+          ex<Tensor>(ell.result_as_tensor()));
+
+  // one tree per equation, in input order; D and ℓ are inlined, R is a root
+  [[maybe_unused]] auto sys = binarize(std::vector{D_def, ell, R});
+  SEQUANT_ASSERT((sys.consumed == container::svector<bool>{true, true, false}));
+  SEQUANT_ASSERT(sys.roots().size() == 1);
+  // end-snippet-7
 
   return 0;
 }
