@@ -79,11 +79,12 @@ std::optional<std::string> leaf_permutation_error(TreeShape const& tree,
                                                   std::size_t nfactors);
 
 struct TermRecord {
-  std::string key;
-  std::vector<std::string> factors;
-  std::string scalar;
-  std::optional<TreeShape> tree;  // nullopt = pure scalar term, or !pinnable
-  std::vector<NodeAnnotationRecord> nodes;
+  std::string key = {};
+  std::vector<std::string> factors = {};
+  std::string scalar = {};
+  /// nullopt = pure scalar term, or !pinnable
+  std::optional<TreeShape> tree = {};
+  std::vector<NodeAnnotationRecord> nodes = {};
   /// false: the term is not a tensor product (a factor is a Sum or a
   /// Variable), so the optimizer's choice for it is not recorded (tree is
   /// null, nodes empty) and a pin refuses it; the term is still listed so
