@@ -73,11 +73,11 @@ instead of making a leaf node, so lowering of a broadcast sum and inlining of fu
 equation. A set of the equations under construction detects cycles. A consumed equation also keeps its own tree, and each use
 binarizes its definition anew.
 
-Before a definition is binarized at a use, its indices are renamed: the head's indices, slot by slot, to the leaf's, and every
-other index of its right-hand side (a dummy, or every index under a scalar head) to a fresh index whose label occurs nowhere in
-the system, with proto indices following the renaming. The subtree therefore cannot capture an index of its consumer or of
-another inlined subtree. (Renaming goes through :func:`sequant::transform_expr`, which passes a scalar ``Power`` through like the
-other scalars.)
+Before a definition is binarized at a use, its indices are renamed: the head's indices, slot by slot, to the leaf's (the head's
+bra to the leaf's ket and vice versa for a swapped use of a bra-ket symmetric head), and every other index of its right-hand side
+(a dummy, or every index under a scalar head) to a fresh index whose label occurs nowhere in the system, with proto indices
+following the renaming. The subtree therefore cannot capture an index of its consumer or of another inlined subtree. (Renaming
+goes through :func:`sequant::transform_expr`, which passes a scalar ``Power`` through like the other scalars.)
 
 The root of an inlined subtree carries the renamed head and is flagged as an equation boundary
 (``EvalExpr::is_equation_boundary``). Factor collection, which gathers the factors of a product chain to check and canonicalize the

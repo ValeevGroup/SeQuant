@@ -1065,10 +1065,11 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
     auto const rank = ResultExpr(
         Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}),
         ex<Constant>(2) * ex<Tensor>(L"ℓ", bra{L"i_1"}, ket{L"a_1"}));
+    // spaces that match neither as written nor with bra and ket swapped
     auto const spaces =
-        ResultExpr(Tensor(L"R", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}),
+        ResultExpr(Tensor(L"R", bra{L"i_1", L"a_2"}, ket{L"a_1", L"i_2"}),
                    ex<Constant>(2) *
-                       antisymm_ell(bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}));
+                       antisymm_ell(bra{L"i_1", L"a_2"}, ket{L"a_1", L"i_2"}));
     for (auto const& consumer : {rank, spaces}) {
       System const sys{ell_definition(), consumer};
       auto const res = binarize(sys);
@@ -1076,6 +1077,61 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
       REQUIRE(find(res.trees[1], labelled(L"ℓ", true)));
       REQUIRE_FALSE(find(res.trees[1], labelled(L"ℓ", false)));
     }
+  }
+
+  SECTION("a bra-ket-swapped use of a head") {
+    // E{i_2;i_3} = L{a_1,a_2;i_3,i_1} ℓ{a_1,a_2;i_2,i_1}, ℓ as canonicalize()
+    // spells it: bra and ket swapped, which names the bra-ket symmetric ℓ
+    auto const L = antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_3", L"i_1"});
+    auto const swapped = ResultExpr(
+        head(L"E"), L * antisymm_ell(bra{L"a_1", L"a_2"}, ket{L"i_2", L"i_1"}));
+    System const sys{ell_definition(), swapped};
+    auto const res = binarize(sys);
+    REQUIRE(res.consumed == Flags{true, false});
+    Node const* ell = find(res.trees[1], labelled(L"ℓ", false));
+    REQUIRE(ell);
+    // the head's bra takes the leaf's ket and vice versa
+    REQUIRE((*ell)->as_tensor() ==
+            relabelled(ell_definition().result_as_tensor(), bra{L"i_2", L"i_1"},
+                       ket{L"a_1", L"a_2"}));
+    Node const* m = find(*ell, labelled(L"M", true));
+    REQUIRE(m);
+    REQUIRE(same_tensor((*m)->expr(), antisymm(L"M", bra{L"i_2", L"i_1"},
+                                               ket{L"a_1", L"a_2"})));
+    // the same tree as the use spelled like the head
+    auto const plain = ResultExpr(
+        head(L"E"), L * antisymm_ell(bra{L"i_2", L"i_1"}, ket{L"a_1", L"a_2"}));
+    System const psys{ell_definition(), plain};
+    REQUIRE(binarize(psys).trees[1]->hash_value() ==
+            res.trees[1]->hash_value());
+
+    // the canonicalized consumer_E() inlines too
+    auto const canon = ResultExpr(
+        head(L"E"), canonicalize(consumer_E().expression()->clone()));
+    System const csys{ell_definition(), canon};
+    auto const cres = binarize(csys);
+    REQUIRE(cres.consumed == Flags{true, false});
+    REQUIRE(find(cres.trees[1], labelled(L"ℓ", false)));
+
+    // K{i_1;a_1} = t{i_1;a_1}, read as K{a_1;i_1}
+    auto k_system = [](BraKetSymmetry bk) {
+      TensorSymmetries const syms{.perm = Symmetry::Nonsymm, .braket = bk};
+      return System{
+          ResultExpr(Tensor(L"K", bra{L"i_1"}, ket{L"a_1"}, syms),
+                     ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"})),
+          ResultExpr(Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}),
+                     ex<Constant>(2) *
+                         ex<Tensor>(L"K", bra{L"a_1"}, ket{L"i_1"}, syms))};
+    };
+    // a conjugate-symmetric head read swapped is its conjugate
+    REQUIRE_THROWS_WITH(
+        binarize(k_system(BraKetSymmetry::Conjugate)),
+        ContainsSubstring("inline: bra-ket-swapped use of the "
+                          "conjugate-symmetric head K is not supported"));
+    // a head without bra-ket symmetry read swapped is another object
+    auto const nonsymm = binarize(k_system(BraKetSymmetry::Nonsymm));
+    REQUIRE(nonsymm.consumed == Flags{false, false});
+    REQUIRE(find(nonsymm.trees[1], labelled(L"K", true)));
   }
 
   SECTION("a matching leaf with other symmetries throws") {

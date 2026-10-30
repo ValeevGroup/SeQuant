@@ -2267,6 +2267,44 @@ TEST_CASE("eval_inlined_system_ta", "[eval][inline]") {
                       expected);
   }
 
+  SECTION("a bra-ket-swapped use of a bra-ket-symmetric head") {
+    pin(ex<Tensor>(L"ε", bra{}, ket{L"a_1"}),
+        [](std::vector<std::size_t> const& x) { return data::eps_virt(x[0]); });
+    pin(ex<Tensor>(L"ε", bra{L"i_1"}, ket{}),
+        [](std::vector<std::size_t> const& x) { return data::eps_occ(x[0]); });
+    auto const t = ex<Tensor>(L"t", bra{L"i_2"}, ket{L"a_2"});
+    pin(t,
+        [](std::vector<std::size_t> const& x) { return data::t(x[0], x[1]); });
+    // Y{i_1;a_1} = t{i_2;a_2} D{a_1,a_2;i_1,i_2}, D read with bra and ket
+    // swapped
+    auto y_of = [&t](auto b, auto k) {
+      return ResultExpr(
+          Tensor(L"Y", bra{L"i_1"}, ket{L"a_1"}),
+          t * ex<Tensor>(L"D", std::move(b), std::move(k), tp::symmetric()));
+    };
+    System const sys{tp::D_broadcast(),
+                     y_of(bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"})};
+    REQUIRE(binarize(sys).consumed == Flags{true, false});
+    auto const swapped =
+        elements(eval_system(sys, "i_1,a_1")->get<TA::TArrayD>());
+    std::vector<double> expected;
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t a1 = 0; a1 < nvirt; ++a1) {
+        double y = 0;
+        for (std::size_t i2 = 0; i2 < nocc; ++i2)
+          for (std::size_t a2 = 0; a2 < nvirt; ++a2)
+            y += data::t(i2, a2) * data::D(i1, i2, a1, a2);
+        expected.push_back(y);
+      }
+    check_elementwise(swapped, expected);
+
+    // the use spelled like the head
+    System const plain{tp::D_broadcast(),
+                       y_of(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"})};
+    check_elementwise(
+        swapped, elements(eval_system(plain, "i_1,a_1")->get<TA::TArrayD>()));
+  }
+
   SECTION("a scalar head") {
     pin_M();
     pin_D();

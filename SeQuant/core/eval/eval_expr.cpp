@@ -706,15 +706,26 @@ namespace detail {
 
 namespace {
 
+/// \return true if slots \p a and \p b have the same rank and the same index
+///         space in every slot
+template <typename A, typename B>
+bool same_spaces(A const& a, B const& b) {
+  return std::ranges::equal(a, b, {}, &Index::space, &Index::space);
+}
+
 /// \return true if \p x and \p y have the same bra, ket and aux ranks and the
 ///         same index space in every slot
 template <typename X, typename Y>
 bool same_slot_spaces(X const& x, Y const& y) {
-  auto same = [](auto const& a, auto const& b) {
-    return std::ranges::equal(a, b, {}, &Index::space, &Index::space);
-  };
-  return same(x.bra(), y.bra()) && same(x.ket(), y.ket()) &&
-         same(x.aux(), y.aux());
+  return same_spaces(x.bra(), y.bra()) && same_spaces(x.ket(), y.ket()) &&
+         same_spaces(x.aux(), y.aux());
+}
+
+/// \return true if \p x with bra and ket swapped has the slot spaces of \p y
+template <typename X, typename Y>
+bool swapped_slot_spaces(X const& x, Y const& y) {
+  return same_spaces(x.ket(), y.bra()) && same_spaces(x.bra(), y.ket()) &&
+         same_spaces(x.aux(), y.aux());
 }
 
 /// \return true if two heads cannot be told apart by the leaves naming them
@@ -760,15 +771,36 @@ struct InlineContext {
   InlineContext(InlineContext const&) = delete;
   InlineContext& operator=(InlineContext const&) = delete;
 
-  /// \return the equation whose tensor head \p leaf names, if any
-  /// \throw Exception if \p leaf matches a head but not its symmetries
-  std::optional<std::size_t> match(Tensor const& leaf) const {
+  /// a Tensor leaf naming the head of equation \c k
+  struct TensorMatch {
+    std::size_t k;
+    /// the leaf spells the head with bra and ket swapped
+    bool swapped;
+  };
+
+  /// \return the equation whose tensor head \p leaf names, if any; a leaf
+  ///         that spells a bra-ket symmetric head with bra and ket swapped
+  ///         names it too
+  /// \throw Exception if \p leaf matches a head but not its symmetries, or
+  ///        spells a conjugate-symmetric head swapped
+  std::optional<TensorMatch> match(Tensor const& leaf) const {
     auto const it = by_label_.find(std::wstring(leaf.label()));
     if (it == by_label_.end()) return std::nullopt;
     for (std::size_t k : it->second) {
       if (!system_[k].produces_tensor()) continue;
       Tensor const& head = heads_[k];
-      if (!same_slot_spaces(leaf, head)) continue;
+      bool const swapped = !same_slot_spaces(leaf, head);
+      if (swapped) {
+        // a swapped spelling names the same object only if bra-ket symmetric
+        if (!swapped_slot_spaces(leaf, head) ||
+            head.braket_symmetry() == BraKetSymmetry::Nonsymm)
+          continue;
+        if (head.braket_symmetry() == BraKetSymmetry::Conjugate)
+          throw Exception(
+              "inline: bra-ket-swapped use of the conjugate-symmetric head " +
+              toUtf8(head.label()) +
+              " is not supported; define its conjugate as its own equation");
+      }
       if (leaf.symmetry() != head.symmetry() ||
           leaf.braket_symmetry() != head.braket_symmetry() ||
           leaf.column_symmetry() != head.column_symmetry())
@@ -776,7 +808,7 @@ struct InlineContext {
             "inline: leaf " + toUtf8(io::serialization::to_string(leaf)) +
             " names head " + toUtf8(io::serialization::to_string(head)) +
             " but declares different symmetries; use result_as_tensor()");
-      return k;
+      return TensorMatch{.k = k, .swapped = swapped};
     }
     return std::nullopt;
   }
@@ -805,11 +837,13 @@ struct InlineContext {
   }
 
   /// \return the tree of equation \p k as a factor in place of \p leaf (null
-  ///         for a Variable leaf): its head's indices renamed to \p leaf's and
-  ///         every other index of its rhs to a fresh one; not stamped with
+  ///         for a Variable leaf): its head's indices renamed to \p leaf's
+  ///         (the head's bra to the leaf's ket and vice versa if \p swapped)
+  ///         and every other index of its rhs to a fresh one; not stamped with
   ///         \p opts.node_batch_axes
   EvalExprNode inline_definition(std::size_t k, Tensor const* leaf,
-                                 BinarizationOptions const& opts) {
+                                 BinarizationOptions const& opts,
+                                 bool swapped = false) {
     consumed_[k] = true;
     ResultExpr const& def = system_[k];
 
@@ -832,8 +866,13 @@ struct InlineContext {
           ++t;
         }
       };
-      map_slots(head.bra(), leaf->bra());
-      map_slots(head.ket(), leaf->ket());
+      if (swapped) {
+        map_slots(head.bra(), leaf->ket());
+        map_slots(head.ket(), leaf->bra());
+      } else {
+        map_slots(head.bra(), leaf->bra());
+        map_slots(head.ket(), leaf->ket());
+      }
       map_slots(head.aux(), leaf->aux());
       transform_indices(head, renaming);
       reset_tags(head);
@@ -922,8 +961,8 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
   if (expr->is<Tensor>()) {
     auto const& t = expr->as<Tensor>();
     if (inline_ctx)
-      if (auto const k = inline_ctx->match(t))
-        return inline_ctx->inline_definition(*k, &t, opts);
+      if (auto const m = inline_ctx->match(t))
+        return inline_ctx->inline_definition(m->k, &t, opts, m->swapped);
     return binarize(t);
   }
 
