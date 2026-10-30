@@ -99,11 +99,11 @@ head's indices, meaning that it is constant along those modes and is broadcast o
 if every summand's external indices are a subset of the head's and together the summands supply all of them; a bare ``Sum``, which
 has no head to name the missing modes, must still be uniformly indexed. Aux modes cannot be broadcast over: a summand must carry
 every aux index of the head. :func:`sequant::binarize` of a ``ResultExpr`` wraps each short summand in a unary
-:cpp:enumerator:`sequant::EvalOp::Broadcast` node, which expands it over the head modes it lacks; :func:`sequant::optimize` keeps
-the summands as they are. Evaluating such a tree requires ``BackendArrayOps`` on the cache (``CacheManager::set_array_ops``), the
+:cpp:enumerator:`sequant::EvalOp::Broadcast` node, which expands it over the head modes it lacks; :func:`sequant::optimize`
+optimizes the summands like any others and leaves the broadcast to ``binarize``. Evaluating such a tree requires ``BackendArrayOps`` on the cache (``CacheManager::set_array_ops``), the
 same backend hooks batched evaluation uses (see :doc:`evaluation`), because the extents and tilings of the added modes come from the
 backend's per-space tilings; as in batched evaluation, the leaf tilings must agree with those array ops on every mode, which the
-broadcast itself does not diagnose. There is no all-ones leaf to supply. Code export spells the Broadcast nodes per backend (see
+broadcast itself does not diagnose. Code export spells the Broadcast nodes per backend (see
 :doc:`export`).
 
 .. literalinclude:: /examples/user/expressions.cpp
