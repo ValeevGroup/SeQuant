@@ -1034,10 +1034,13 @@ class ResultTensorTA final : public Result {
     return eval_result<this_type>(std::move(result));
   }
 
+  /// A pending view is folded into the scaling, not materialized first.
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
-    auto pre = get<ArrayT>();
-    TA::scale(pre, numeric_type(factor));
-    return eval_result<this_type>(std::move(pre));
+    auto const ann = dummy_annot();
+    ArrayT result;
+    with_expr(ann, [&](auto&& e) { result(ann) = numeric_type(factor) * e; });
+    ::sequant::detail::wait_for_lazy_cleanup(result);
+    return eval_result<this_type>(std::move(result));
   }
 
   /// Deep copy: \c TA::DistArray's own copy is a shallow (reference-counted)
@@ -1496,11 +1499,17 @@ class ResultTensorOfTensorTA final : public Result {
     }
   }
 
+  /// A pending view is folded into the scaling, not materialized first. An
+  /// array whose inner tiles are all empty is zero, and so is its phase.
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
-    auto pre = get<ArrayT>();
-    TA::scale(pre, numeric_type(factor));
+    auto const inner = inner_rank();
+    if (inner == 0) return eval_result<this_type>(materialize());
+    auto const ann = dummy_annot(inner);
+    ArrayT result;
+    with_expr(ann, [&](auto&& e) { result(ann) = numeric_type(factor) * e; });
+    ::sequant::detail::wait_for_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(pre));
+    return eval_result<this_type>(std::move(result));
   }
 
   /// Deep copy; see \c ResultTensorTA::clone. \c TA::clone deep-copies the

@@ -7045,8 +7045,10 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
   SECTION("the array consumers of a view leave the parent alone") {
     auto const A0 = TA::clone(A);
     auto const blk = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2});
-    // a phase: the view's own copy is scaled
-    auto neg = rA->slice_mode(2, 5, 10)->mult_by_phase(-1);
+    // a phase: folded into the scaling, the view stays a view
+    auto const vNeg = rA->slice_mode(2, 5, 10);
+    auto neg = vNeg->mult_by_phase(-1);
+    REQUIRE(vNeg->is_buffer_alias());
     TArrayD expNeg;
     expNeg("a,b,c") = -1.0 * blk("a,b,c");
     REQUIRE(equal_tarrays(neg->get<TArrayD>(), expNeg, "a,b,c"));
@@ -7254,7 +7256,9 @@ TEST_CASE("ta_lazy_views_nested", "[eval][ta][lazy]") {
     auto adj = l->adjoint(annot2("i,j;a,b", "j,i;b,a"));
     REQUIRE(equal_tarrays(adj->get<ToTArray>(), expP, "j,i;b,a"));
 
-    auto neg = sL()->mult_by_phase(-1);
+    auto const vNeg = sL();
+    auto neg = vNeg->mult_by_phase(-1);
+    REQUIRE(vNeg->is_buffer_alias());
     ToTArray expN;
     expN("i,j;a,b") = -1.0 * Le("i,j;a,b");
     REQUIRE(equal_tarrays(neg->get<ToTArray>(), expN, "i,j;a,b"));
