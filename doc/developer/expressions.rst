@@ -2,8 +2,9 @@ Expression Types
 =================
 
 This page covers how SeQuant identifies and orders the concrete types of an expression tree, for contributors adding a
-new type derived from :class:`sequant::Expr`, and how a broadcast sum under a ``ResultExpr`` head is lowered. It assumes
-the vocabulary of :doc:`The Expression Tree </user/guide/expressions>`.
+new type derived from :class:`sequant::Expr`, how a broadcast sum under a ``ResultExpr`` head is lowered, and how a system of
+``ResultExpr`` equations is inlined into one evaluation tree per equation. It assumes the vocabulary of
+:doc:`The Expression Tree </user/guide/expressions>`, including its account of which leaves name a head.
 
 Type ids
 -----------
@@ -61,3 +62,31 @@ called by ``binarize(const ResultExpr&)`` and ``optimize(ResultExpr&)`` before t
 by one rank-1 all-ones leaf per missing head index, in that index's head slot. The result is an ordinary uniformly indexed Sum
 of outer products, so the evaluation tree, the cost model and the export pipeline need no broadcast-specific case; the ``𝟙`` leaf
 is served by the caller's leaf evaluator, or created by the generator during export (``Generator::create_ones``).
+
+Inlining a system of equations
+-----------------------------------
+
+``binarize`` of a system builds one inlining context over all equations (heads indexed by label) and binarizes each equation
+through the same internal path as ``binarize(const ResultExpr&)``, with the context passed down. Inlining happens at the leaf:
+where that path reaches a ``Tensor`` or ``Variable`` leaf that names a head, it binarizes the head's equation in place of the leaf
+instead of making a leaf node, so lowering of a broadcast sum and inlining of further definitions apply to the subtree as to any
+equation. A set of the equations under construction detects cycles. A consumed equation also keeps its own tree, and each use
+binarizes its definition anew.
+
+Before a definition is binarized at a use, its indices are renamed: the head's indices, slot by slot, to the leaf's, and every
+other index of its right-hand side (a dummy, or every index under a scalar head) to a fresh index whose label occurs nowhere in
+the system, with proto indices following the renaming. The subtree therefore cannot capture an index of its consumer or of
+another inlined subtree. (Renaming goes through :func:`sequant::transform_expr`, which passes a scalar ``Power`` through like the
+other scalars.)
+
+The root of an inlined subtree carries the renamed head and is flagged as an equation boundary
+(``EvalExpr::is_equation_boundary``). Factor collection, which gathers the factors of a product chain to check and canonicalize the
+contraction, stops at that node as it does at a ``Sum`` or unary node, rather than splicing the definition's factors into the
+consumer's chain: the consumer contracts with the head's declared layout and symmetry, which is what the user authored, and its
+legality checks see the head instead of, e.g., a Hadamard product with a dummy in a bra slot of two factors. For the same
+reason :func:`sequant::to_expr` of a node above a boundary shows the head, not the expansion; the boundary node itself expands to
+its right-hand side. The flag is not part of the node's hash, so an inlined subtree hashes like the same subtree written out,
+and repeated uses of one head are recognized as one intermediate.
+
+Export binarizes one ``ResultExpr`` at a time and never inlines; a tree from the system overload is not meant for export, since
+its consumed heads would appear as intermediates without definitions.

@@ -110,6 +110,37 @@ tensor of its mode's extent; for code export see :doc:`export`.
    :end-before: end-snippet-6
    :dedent: 2
 
+Systems of equations
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Equations composed through heads, such as ``D``, ``ℓ`` and a consumer of ``ℓ``, can be binarized together:
+:func:`sequant::binarize` of a ``std::span<const ResultExpr>`` returns an :class:`sequant::InlinedSystem` with one evaluation tree
+per equation, in input order, a ``consumed`` flag for each equation whose head another equation used, and ``roots()``, the trees of
+the equations no other equation used. Each leaf that names a head is replaced by that head's equation, binarized as it would be on
+its own (so a broadcast sum is lowered and nested definitions are inlined in turn); the equations may be given in any order.
+
+A :class:`sequant::Tensor` leaf names a head if its label, its bra, ket and aux ranks and the index space of every slot agree with
+the head's; a leaf with the same label but a different shape remains an ordinary leaf, served by the leaf evaluator. A leaf that
+names a head must declare the head's symmetries, otherwise binarization throws; spelling the use through
+:func:`ResultExpr::result_as_tensor() <sequant::ResultExpr::result_as_tensor>` guarantees that. A :class:`sequant::Variable` leaf
+names a scalar head by its label; a conjugated use throws, so define the conjugate as its own equation. Two equations with the same
+label and shape, and a definition that reaches its own head, are errors as well; the API reference lists every exception.
+
+An inlined equation enters its consumer as one factor with the layout and symmetries of the authored head: the consumer contracts
+with ``ℓ`` as declared, not with the factors of its right-hand side, so the head, rather than the factors that define it, is what
+the consumer's legality (for instance the context's strict bra-ket rule) is checked against. Repeated uses of a head yield
+subtrees with equal hashes and are recognized as the same intermediate like any repeated subexpression. Batched evaluation
+(see :doc:`batching`) slices through an inlined equation like through any other subtree, so a batch loop opened in the
+consumer also bounds the intermediates of the definition: a denominator built from orbital energies need not be materialized
+whole. Code export does not use the system overload; export each ``ResultExpr`` in order (see :doc:`export`), and a later
+equation reads an earlier head like any other tensor.
+
+.. literalinclude:: /examples/user/expressions.cpp
+   :language: cpp
+   :start-after: start-snippet-7
+   :end-before: end-snippet-7
+   :dedent: 2
+
 The examples print expressions with ``<<`` and ``std::format``, which :file:`SeQuant/core/io/format.hpp` provides and which
 default to SeQuant's text serialization format. Once built, an expression tree can be rendered to LaTeX or round-tripped through
 that format; see :doc:`io` for both and for the format specifiers that select between them.
