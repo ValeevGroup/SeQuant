@@ -725,185 +725,200 @@ TEST_CASE("proto-index-liveness", "[eval]") {
   CHECK(has_label(g_node->canon_indices(), L"i_2"));
 }
 
-TEST_CASE("lower_broadcast_sum", "[EvalExpr][broadcast]") {
+TEST_CASE("binarize a broadcast sum", "[EvalExpr][broadcast]") {
   using namespace sequant;
+  using Node = FullBinaryNode<EvalExpr>;
 
-  auto one = [](std::wstring_view label, SlotType slot) {
-    return make_ones(Index{label}, slot)->as<Tensor>();
-  };
-  // the all-ones factors of a lowered summand, in order
-  auto ones_of = [](const ExprPtr& summand) {
-    container::svector<Tensor> result;
-    for (const ExprPtr& factor : summand->as<Product>().factors()) {
-      if (factor->is<Tensor>() && is_ones(factor->as<Tensor>())) {
-        result.push_back(factor->as<Tensor>());
-      }
+  // the summands of the Sum chain at root, in order
+  auto summands_of = [](Node const& root) {
+    container::svector<Node const*> result;
+    Node const* n = &root;
+    while (!n->leaf() && (*n)->op_type() == EvalOp::Sum) {
+      result.push_back(&n->right());
+      n = &n->left();
     }
+    result.push_back(n);
+    std::ranges::reverse(result);
     return result;
   };
-  using Ones = container::svector<Tensor>;
+  auto indices_of = [](ResultExpr const& res) {
+    return res.indices() | ranges::to<EvalExpr::index_vector>;
+  };
+  // n is a Broadcast node over the head of res
+  auto broadcasts_over = [&indices_of](Node const& n, ResultExpr const& res) {
+    if (n.leaf() || !n->is_broadcast()) return false;
+    REQUIRE(n->op_type() == EvalOp::Broadcast);
+    REQUIRE(n.right()->is_constant());
+    REQUIRE(n->canon_indices() == indices_of(res));
+    auto const& t = n->as_tensor();
+    auto const head = res.result_as_tensor();
+    REQUIRE(t.symmetry() == Symmetry::Nonsymm);
+    REQUIRE(t.braket_symmetry() == BraKetSymmetry::Nonsymm);
+    return std::ranges::equal(t.bra(), head.bra()) &&
+           std::ranges::equal(t.ket(), head.ket()) &&
+           std::ranges::equal(t.aux(), head.aux());
+  };
 
   const ResultExpr d4 = deserialize<ResultExpr>(
       L"D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}");
 
-  SECTION("outer products with ones leaves in head order and slots") {
-    const ResultExpr lowered = lower_broadcast_sum(d4);
-    REQUIRE(lowered.result_as_tensor() == d4.result_as_tensor());
-    REQUIRE(lowered.expression()->is<Sum>());
-    const Sum& sum = lowered.expression()->as<Sum>();
-    REQUIRE(sum.size() == 4);
-
-    const auto& eps = d4.expression()->as<Sum>().summands();
-    const auto i1 = one(L"i_1", SlotType::Bra);
-    const auto i2 = one(L"i_2", SlotType::Bra);
-    const auto a1 = one(L"a_1", SlotType::Ket);
-    const auto a2 = one(L"a_2", SlotType::Ket);
-    const std::array<Ones, 4> expected{Ones{i1, i2, a2}, Ones{i1, i2, a1},
-                                       Ones{i2, a1, a2}, Ones{i1, a1, a2}};
+  SECTION("a Sum chain over Broadcast nodes of the summands") {
+    auto const tree = binarize(d4);
+    REQUIRE(tree->op_type() == EvalOp::Sum);
+    REQUIRE(tree->as_tensor() == d4.result_as_tensor());
+    auto const summands = summands_of(tree);
+    REQUIRE(summands.size() == 4);
+    auto const& eps = d4.expression()->as<Sum>().summands();
     for (std::size_t s = 0; s != 4; ++s) {
       CAPTURE(s);
-      const ExprPtr& summand = sum.summand(s);
-      REQUIRE(summand->is<Product>());
-      const Product& prod = summand->as<Product>();
-      REQUIRE(prod.size() == 4);
-      // the ε factor of the input summand comes first
-      const ExprPtr& eps_in =
-          eps[s]->is<Product>() ? eps[s]->as<Product>().factor(0) : eps[s];
-      REQUIRE(*prod.factor(0) == *eps_in);
-      REQUIRE(ones_of(summand) == expected[s]);
-      // −ε{i_1;} and −ε{i_2;} keep their sign
-      REQUIRE(prod.scalar() == (s < 2 ? 1 : -1));
+      Node const& b = *summands[s];
+      REQUIRE(broadcasts_over(b, d4));
+      Node const& operand = b.left();
+      if (s < 2) {
+        // ε{;a_k}
+        REQUIRE(operand.leaf());
+        REQUIRE(*operand->expr() == *eps[s]);
+      } else {
+        // −1·ε{i_k;}
+        REQUIRE(operand->op_type() == EvalOp::Product);
+        REQUIRE(operand.left().leaf());
+        REQUIRE(*operand.left()->expr() == *eps[s]->as<Product>().factor(0));
+        REQUIRE(operand.right()->is_constant());
+        REQUIRE(operand.right()->as_constant().value() == -1);
+      }
+      REQUIRE(b->canon_phase() == operand->canon_phase());
     }
   }
 
-  SECTION("idempotent") {
-    const ResultExpr lowered = lower_broadcast_sum(d4);
-    REQUIRE(*lower_broadcast_sum(lowered).expression() ==
-            *lowered.expression());
-
-    // a Sum whose summands all cover the head is unchanged
-    const ResultExpr complete = deserialize<ResultExpr>(
-        L"R{i_1;a_1} = f{i_1;a_1} + g{i_1;i_2} t{i_2;a_1}");
-    REQUIRE(*lower_broadcast_sum(complete).expression() ==
-            *complete.expression());
-  }
-
-  SECTION("non-Sum unchanged") {
-    const ResultExpr res =
-        deserialize<ResultExpr>(L"R{i_1;a_1} = 2 g{i_1;i_2} t{i_2;a_1}");
-    const ResultExpr lowered = lower_broadcast_sum(res);
-    REQUIRE(*lowered.expression() == *res.expression());
-    REQUIRE(lowered.result_as_tensor() == res.result_as_tensor());
+  SECTION("to_expr spells the broadcast summands as written") {
+    auto const tree = binarize(d4);
+    REQUIRE(*to_expr(tree) == *d4.expression());
   }
 
   SECTION("bra-ket-swapped supply counts as present") {
     const ResultExpr res =
         deserialize<ResultExpr>(L"D{i_1;a_1} = ε{a_1;} - ε{i_1;}");
-    const ResultExpr lowered = lower_broadcast_sum(res);
-    const Sum& sum = lowered.expression()->as<Sum>();
-    REQUIRE(sum.size() == 2);
-    REQUIRE(ones_of(sum.summand(0)) == Ones{one(L"i_1", SlotType::Bra)});
-    REQUIRE(ones_of(sum.summand(1)) == Ones{one(L"a_1", SlotType::Ket)});
-    REQUIRE(sum.summand(1)->as<Product>().scalar() == -1);
+    auto const summands_tree = binarize(res);
+    auto const summands = summands_of(summands_tree);
+    REQUIRE(summands.size() == 2);
+    for (Node const* b : summands) REQUIRE(broadcasts_over(*b, res));
+    // ε{a_1;} lacks i_1 only, ε{i_1;} lacks a_1 only
+    REQUIRE(summands[0]->left()->canon_indices() ==
+            EvalExpr::index_vector{Index{L"a_1"}});
+    REQUIRE(summands[1]->left()->canon_indices() ==
+            EvalExpr::index_vector{Index{L"i_1"}});
   }
 
   SECTION("scalar summands") {
     const ResultExpr res =
         deserialize<ResultExpr>(L"D{i_1;a_1} = ε{;a_1} - ε{i_1;} - E");
-    const ResultExpr lowered = lower_broadcast_sum(res);
-    const Sum& sum = lowered.expression()->as<Sum>();
-    REQUIRE(sum.size() == 3);
-    const Product& e = sum.summand(2)->as<Product>();
-    REQUIRE(e.size() == 3);
-    REQUIRE(*e.factor(0) == Variable(L"E"));
-    REQUIRE(ones_of(sum.summand(2)) ==
-            Ones{one(L"i_1", SlotType::Bra), one(L"a_1", SlotType::Ket)});
-    REQUIRE(e.scalar() == -1);
+    auto const summands_tree = binarize(res);
+    auto const summands = summands_of(summands_tree);
+    REQUIRE(summands.size() == 3);
+    Node const& e = *summands[2];
+    REQUIRE(broadcasts_over(e, res));
+    // −1·E, a scalar
+    REQUIRE(e.left()->is_scalar());
+    REQUIRE(e.left()->op_type() == EvalOp::Product);
+    REQUIRE(e.left().left()->is_variable());
+    REQUIRE(e.left().left()->as_variable() == Variable(L"E"));
 
-    // a Constant summand becomes the scaled ones leaves
+    // a Constant summand
     const ResultExpr c = deserialize<ResultExpr>(L"R{a_1} = 2 + t{a_1}");
-    const ResultExpr clowered = lower_broadcast_sum(c);
-    const Sum& csum = clowered.expression()->as<Sum>();
-    REQUIRE(csum.size() == 2);
-    const auto cit = std::ranges::find_if(csum.summands(), [](const auto& s) {
-      return s->template is<Product>() &&
-             s->template as<Product>().scalar() == 2;
-    });
-    REQUIRE(cit != csum.summands().end());
-    REQUIRE((*cit)->as<Product>().size() == 1);
-    REQUIRE(ones_of(*cit) == Ones{one(L"a_1", SlotType::Bra)});
+    auto const csummands_tree = binarize(c);
+    auto const csummands = summands_of(csummands_tree);
+    REQUIRE(csummands.size() == 2);
+    auto const n_bcast = std::ranges::count_if(
+        csummands, [&](Node const* n) { return broadcasts_over(*n, c); });
+    REQUIRE(n_bcast == 1);
+  }
+
+  SECTION("a summand supplying every head index is not wrapped") {
+    const ResultExpr complete = deserialize<ResultExpr>(
+        L"R{i_1;a_1} = f{i_1;a_1} + g{i_1;i_2} t{i_2;a_1}");
+    auto const complete_tree = binarize(complete);
+    REQUIRE(std::ranges::none_of(summands_of(complete_tree), [](Node const* n) {
+      return !n->leaf() && (*n)->is_broadcast();
+    }));
+    // a head index used twice (a Hadamard product) is supplied
+    const ResultExpr hadamard = deserialize<ResultExpr>(
+        L"R{i_1;a_1} = f{i_1;a_1} + M{i_1;a_1} D{a_1;i_1}");
+    REQUIRE(is_valid(hadamard));
+    auto const hadamard_tree = binarize(hadamard);
+    REQUIRE(std::ranges::none_of(summands_of(hadamard_tree), [](Node const* n) {
+      return !n->leaf() && (*n)->is_broadcast();
+    }));
+  }
+
+  SECTION("a non-Sum rhs is not wrapped") {
+    const ResultExpr res =
+        deserialize<ResultExpr>(L"R{i_1;a_1} = 2 g{i_1;i_2} t{i_2;a_1}");
+    auto const tree = binarize(res);
+    REQUIRE(tree->op_type() == EvalOp::Product);
+    tree.visit(
+        [](Node const& n) { REQUIRE((n.leaf() || !n->is_broadcast())); });
   }
 
   SECTION("a nested Sum broadcasts at the top level only") {
     const ResultExpr res = deserialize<ResultExpr>(
         L"R{i_1;a_1} = (f{i_1;} + g{i_1;}) c + h{i_1;a_1}");
-    const ResultExpr lowered = lower_broadcast_sum(res);
-    const Sum& sum = lowered.expression()->as<Sum>();
-    REQUIRE(sum.size() == 2);
-    REQUIRE(*sum.summand(1) == *res.expression()->as<Sum>().summand(1));
-    const Product& prod = sum.summand(0)->as<Product>();
-    REQUIRE(prod.size() == 3);
-    REQUIRE(*prod.factor(0) == *deserialize(L"f{i_1;} + g{i_1;}"));
-    REQUIRE(*prod.factor(1) == Variable(L"c"));
-    REQUIRE(ones_of(sum.summand(0)) == Ones{one(L"a_1", SlotType::Ket)});
-  }
-
-  SECTION("a head index used twice in a summand is supplied") {
-    const ResultExpr res = deserialize<ResultExpr>(
-        L"R{i_1;a_1} = f{i_1;a_1} + M{i_1;a_1} D{a_1;i_1}");
-    REQUIRE(is_valid(res));
-    const ResultExpr lowered = lower_broadcast_sum(res);
-    REQUIRE(*lowered.expression() == *res.expression());
-    REQUIRE_NOTHROW(binarize(res));
+    auto const summands_tree = binarize(res);
+    auto const summands = summands_of(summands_tree);
+    REQUIRE(summands.size() == 2);
+    REQUIRE(broadcasts_over(*summands[0], res));
+    REQUIRE(summands[0]->left()->canon_indices() ==
+            EvalExpr::index_vector{Index{L"i_1"}});
+    REQUIRE(summands[1]->leaf());
   }
 
   SECTION("a symmetrizer in a nested Sum supplies no index") {
     const ResultExpr res = deserialize<ResultExpr>(
         L"R{a1,a2;i1,i2} = c (Â{i1,i2;a1,a2} t{a1;i1} ε{a2;} + "
         L"Â{i1,i2;a1,a2} t{a2;i1} ε{a1;}) + g{a1,a2;i1,i2}");
-    const ResultExpr lowered = lower_broadcast_sum(res);
-    const Sum& sum = lowered.expression()->as<Sum>();
-    REQUIRE(sum.size() == 2);
-    REQUIRE(ones_of(sum.summand(0)) == Ones{one(L"i_2", SlotType::Ket)});
-    REQUIRE(*sum.summand(1) == *res.expression()->as<Sum>().summand(1));
+    auto const summands_tree = binarize(res);
+    auto const summands = summands_of(summands_tree);
+    REQUIRE(summands.size() == 2);
+    REQUIRE(broadcasts_over(*summands[0], res));
+    REQUIRE(summands[1]->leaf());
   }
 
   SECTION("aux index cannot be broadcast") {
     const ResultExpr res =
         deserialize<ResultExpr>(L"R{i_1;;a_2} = f{i_1;;a_2} + g{i_1;}");
     REQUIRE_FALSE(is_valid(res));
-    REQUIRE_THROWS_AS(lower_broadcast_sum(res), Exception);
+    REQUIRE_THROWS_AS(binarize(res), Exception);
 
     // a summand that carries the aux index may lack a bra/ket head index
     const ResultExpr ok =
         deserialize<ResultExpr>(L"R{i_1,i_2;;a_2} = f{i_1;;a_2} + g{i_2;;a_2}");
     REQUIRE(is_valid(ok));
-    const ResultExpr lowered = lower_broadcast_sum(ok);
-    const Sum& sum = lowered.expression()->as<Sum>();
-    REQUIRE(sum.size() == 2);
-    REQUIRE(ones_of(sum.summand(0)) == Ones{one(L"i_2", SlotType::Bra)});
-    REQUIRE(ones_of(sum.summand(1)) == Ones{one(L"i_1", SlotType::Bra)});
+    auto const summands_tree = binarize(ok);
+    auto const summands = summands_of(summands_tree);
+    REQUIRE(summands.size() == 2);
+    for (Node const* b : summands) REQUIRE(broadcasts_over(*b, ok));
   }
 
-  SECTION("binarize") {
-    std::optional<FullBinaryNode<EvalExpr>> tree;
-    REQUIRE_NOTHROW(tree.emplace(binarize(d4)));
-    REQUIRE((*tree)->op_type() == EvalOp::Sum);
-    REQUIRE((*tree)->as_tensor() == d4.result_as_tensor());
-    std::size_t n_eps = 0, n_ones = 0;
-    tree->visit_leaf([&](const auto& node) {
-      // the −1 prefactors are scalar leaves
-      if (!node->is_tensor()) {
-        REQUIRE(node->is_constant());
-        return;
-      }
-      if (is_ones(node->as_tensor()))
-        ++n_ones;
-      else if (node->as_tensor().label() == L"ε")
-        ++n_eps;
-    });
-    REQUIRE(n_eps == 4);
-    REQUIRE(n_ones == 12);
+  SECTION("hash: the operand and its placement in the result") {
+    auto const tree = binarize(d4);
+    auto const summands = summands_of(tree);
+    // ε{;a_1} and ε{;a_2} are one value, broadcast to different modes
+    REQUIRE(summands[0]->left()->hash_value() ==
+            summands[1]->left()->hash_value());
+    REQUIRE((*summands[0])->hash_value() != (*summands[1])->hash_value());
+
+    // the same operand broadcast alike: one value
+    auto const first_bcast = [&summands_of](ResultExpr const& res) {
+      auto const tree = binarize(res);
+      return (*summands_of(tree).front())->hash_value();
+    };
+    auto const d = deserialize<ResultExpr>(L"D{i_1;a_1} = ε{;a_1} - ε{i_1;}");
+    auto const f =
+        deserialize<ResultExpr>(L"F{i_1;a_1} = ε{;a_1} + t{i_1;a_1}");
+    REQUIRE(first_bcast(d) == first_bcast(f));
+    // ... over a different set of modes: different values
+    auto const g =
+        deserialize<ResultExpr>(L"G{i_1,i_2;a_1} = ε{;a_1} + t{i_1,i_2;a_1}");
+    REQUIRE(first_bcast(d) != first_bcast(g));
   }
 }
 
@@ -1024,8 +1039,8 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
     REQUIRE((*d)->op_type() == EvalOp::Sum);
     REQUIRE((*d)->as_tensor() == power_base()->as<Tensor>());
     REQUIRE(find_all(*d, [](Node const& n) {
-              return n.leaf() && n->is_tensor() && is_ones(n->as_tensor());
-            }).size() == 12);
+              return !n.leaf() && n->is_broadcast();
+            }).size() == 4);
 
     // to_expr keeps the inlined equations below a node opaque
     auto product_of = [](ExprPtr const& l, ExprPtr const& r) {

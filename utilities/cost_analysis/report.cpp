@@ -100,6 +100,7 @@ void report_shape_histogram(const EquationResult& cell, double bytes_per_elem,
 std::string full_expr(const TreeNode& n) {
   if (n.leaf()) return n->label();
   if (n->op_type() == EvalOp::Adjoint) return full_expr(n.left()) + "+";
+  if (n->op_type() == EvalOp::Broadcast) return full_expr(n.left());
   if (n->op_type() == EvalOp::Power)
     return full_expr(n.left()) + "^(" + sequant::to_string(power_exponent(n)) +
            ")";

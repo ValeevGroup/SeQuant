@@ -29,11 +29,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <iterator>
 #include <optional>
 #include <ranges>
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace sequant {
 
@@ -251,8 +253,13 @@ bool EvalExpr::is_elementwise_power() const noexcept {
   return op_type() == EvalOp::Power;
 }
 
+bool EvalExpr::is_broadcast() const noexcept {
+  return op_type() == EvalOp::Broadcast;
+}
+
 bool is_unary(EvalOp op) noexcept {
-  return op == EvalOp::Adjoint || op == EvalOp::Power;
+  return op == EvalOp::Adjoint || op == EvalOp::Power ||
+         op == EvalOp::Broadcast;
 }
 
 Tensor const& EvalExpr::as_tensor() const { return expr().as<Tensor>(); }
@@ -406,7 +413,10 @@ namespace {
 
 /// Assembles a unary node (see is_unary) of type \p op over \p operand, with
 /// a Constant \p sentinel as the right child. The hash is the operand's
-/// combined with \p op and, for a Power, the exponent.
+/// combined with \p op and, for a Power, the exponent; for a Broadcast, the
+/// result's modes and the position among them of each operand mode, so two
+/// broadcasts of one operand agree only if they place it alike in the same
+/// result shape.
 EvalExprNode make_unary_node(EvalOp op, EvalExprNode operand,
                              Constant const& sentinel, ExprPtr expr,
                              EvalExpr::index_vector canon_indices,
@@ -417,6 +427,15 @@ EvalExprNode make_unary_node(EvalOp op, EvalExprNode operand,
   if (op == EvalOp::Power) {
     SEQUANT_ASSERT(sentinel.value().imag() == 0);
     hash::combine(h, hash::value(sentinel.value().real()));
+  }
+  if (op == EvalOp::Broadcast) {
+    hash::combine(h, hash_indices(canon_indices));
+    for (Index const& ix : operand->canon_indices()) {
+      auto const pos = std::ranges::find(canon_indices, ix);
+      SEQUANT_ASSERT(pos != canon_indices.end());
+      hash::combine(h, hash::value(static_cast<std::size_t>(
+                           std::distance(canon_indices.begin(), pos))));
+    }
   }
   EvalExpr node{op,
                 ResultType::Tensor,
@@ -482,19 +501,13 @@ EvalExprNode binarize(TensorPower const& power, IndexSet const& uncontract,
                          std::move(canon_indices), phase);
 }
 
-EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
-                      const BinarizationOptions& opts,
-                      std::size_t& node_counter,
-                      detail::InlineContext* inline_ctx) {
+namespace {
+
+/// \return the left-folded chain of Sum nodes over the binarized \p summands
+EvalExprNode sum_chain(std::vector<EvalExprNode>&& summands,
+                       const BinarizationOptions& opts) {
   using ranges::views::move;
   using ranges::views::transform;
-  auto summands =
-      sum.summands()  //
-      | transform([&uncontract, &opts, &node_counter,
-                   inline_ctx](ExprPtr const& x) {
-          return impl::binarize(x, uncontract, opts, node_counter, inline_ctx);
-        })  //
-      | ranges::to_vector;
 
   bool const all_tensors =
       ranges::all_of(summands, [](auto&& n) { return n->is_tensor(); });
@@ -543,6 +556,23 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
   };
 
   return fold_left_to_node(summands | move, make_sum);
+}
+
+}  // namespace
+
+EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
+                      const BinarizationOptions& opts,
+                      std::size_t& node_counter,
+                      detail::InlineContext* inline_ctx) {
+  using ranges::views::transform;
+  return sum_chain(sum.summands()  //
+                       | transform([&uncontract, &opts, &node_counter,
+                                    inline_ctx](ExprPtr const& x) {
+                           return impl::binarize(x, uncontract, opts,
+                                                 node_counter, inline_ctx);
+                         })  //
+                       | ranges::to_vector,
+                   opts);
 }
 
 EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
@@ -701,6 +731,46 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     return EvalExprNode{std::move(result), std::move(left), std::move(right)};
   }
 }
+
+namespace {
+
+/// \return the left-folded chain of Sum nodes over the summands of the Sum
+///         on the rhs of \p res, each binarized with the head's indices
+///         \p uncontract uncontracted; a summand that does not supply every
+///         index of the head (see detail::supplied_result_indices) is wrapped
+///         in an EvalOp::Broadcast node over the head's indices
+/// \throw Exception if a summand lacks an aux index of the head
+EvalExprNode binarize_broadcast_sum(ResultExpr const& res,
+                                    IndexSet const& uncontract,
+                                    const BinarizationOptions& opts,
+                                    std::size_t& node_counter,
+                                    detail::InlineContext* inline_ctx) {
+  SEQUANT_ASSERT(res.expression()->is<Sum>());
+  auto const head_indices = res.indices() | ranges::to<EvalExpr::index_vector>;
+  std::vector<EvalExprNode> summands;
+  for (ExprPtr const& summand : res.expression()->as<Sum>().summands()) {
+    auto node =
+        impl::binarize(summand, uncontract, opts, node_counter, inline_ctx);
+    auto const supplied = detail::supplied_result_indices(
+        res, *detail::without_symmetrizers(summand));
+    if (supplied.size() != head_indices.size()) {
+      for (Index const& ix : res.aux())
+        if (ix.nonnull() && !supplied.contains(ix))
+          throw Exception("binarize: cannot broadcast over aux index " +
+                          toUtf8(ix.full_label()));
+      // a broadcast is linear: it carries its operand's phase
+      std::int8_t const phase = node->canon_phase();
+      node = make_unary_node(EvalOp::Broadcast, std::move(node), Constant{1},
+                             detail::make_tensor(res.result_as_tensor(),
+                                                 /*with_symm=*/false, opts),
+                             head_indices, phase);
+    }
+    summands.push_back(std::move(node));
+  }
+  return sum_chain(std::move(summands), opts);
+}
+
+}  // namespace
 
 namespace detail {
 
@@ -1009,29 +1079,29 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
 EvalExprNode binarize(ResultExpr const& res, const BinarizationOptions& opts,
                       std::size_t& node_counter,
                       detail::InlineContext* inline_ctx) {
-  ResultExpr const lowered = lower_broadcast_sum(res);
-
   // collect result indices so they are not contracted in the expression tree
   IndexSet uncontract;
-  for (auto&& ix : lowered.indices()) uncontract.emplace(ix);
+  for (auto&& ix : res.indices()) uncontract.emplace(ix);
 
   // the root's bra/ket would be positional (see the deprecated
   // binarize(ExprPtr)), but it is overwritten below with
-  // lowered.result_as_tensor(), so the layout is caller-determined
-  EvalExprNode tree = binarize(lowered.expression(), uncontract, opts,
-                               node_counter, inline_ctx);
+  // res.result_as_tensor(), so the layout is caller-determined
+  EvalExprNode tree = res.expression()->is<Sum>()
+                          ? sequant::binarize_broadcast_sum(
+                                res, uncontract, opts, node_counter, inline_ctx)
+                          : binarize(res.expression(), uncontract, opts,
+                                     node_counter, inline_ctx);
 
   const bool is_scalar =
-      lowered.bra().empty() && lowered.ket().empty() && lowered.aux().empty();
+      res.bra().empty() && res.ket().empty() && res.aux().empty();
 
   if (tree.size() < 2) {
     // We want to have a result node with the result from the ResultExpr.
     // In order for that to work, we need a dedicated result node in the first
     // place. Hence, we adapt the represented expression for terminals to be
     // that terminal multiplied by 1.
-    EvalExpr result = is_scalar
-                          ? *sequant::binarize(lowered.result_as_variable())
-                          : *sequant::binarize(lowered.result_as_tensor());
+    EvalExpr result = is_scalar ? *sequant::binarize(res.result_as_variable())
+                                : *sequant::binarize(res.result_as_tensor());
     EvalOpSetter{}.set(result, EvalOp::Product);
 
     tree = EvalExprNode(std::move(result), std::move(tree),
@@ -1040,11 +1110,11 @@ EvalExprNode binarize(ResultExpr const& res, const BinarizationOptions& opts,
   SEQUANT_ASSERT(tree.size() > 1);
 
   if (is_scalar) {
-    if (lowered.has_label()) {
-      tree->expr()->as<Variable>().set_label(lowered.label());
+    if (res.has_label()) {
+      tree->expr()->as<Variable>().set_label(res.label());
     }
   } else {
-    tree->expr()->as<Tensor>() = lowered.result_as_tensor();
+    tree->expr()->as<Tensor>() = res.result_as_tensor();
   }
 
   return tree;
@@ -1069,51 +1139,5 @@ container::svector<EvalExprNode> binarize_system(
 }
 
 }  // namespace impl
-
-ResultExpr lower_broadcast_sum(ResultExpr const& res) {
-  if (!res.expression()->is<Sum>()) return res;
-
-  const auto& summands = res.expression()->as<Sum>().summands();
-  // created at the first summand that needs broadcasting
-  std::optional<Sum::summands_type> lowered;
-  for (std::size_t s = 0; s != summands.size(); ++s) {
-    const ExprPtr& summand = summands[s];
-    const container::set<Index> supplied = detail::supplied_result_indices(
-        res, *detail::without_symmetrizers(summand));
-
-    std::optional<Product> broadcast;
-    auto append_ones = [&](const auto& head_indices, SlotType slot) {
-      for (const Index& idx : head_indices) {
-        if (!idx.nonnull() || supplied.contains(idx)) continue;
-        if (slot == SlotType::Aux) {
-          throw Exception(
-              "lower_broadcast_sum: cannot broadcast over aux index " +
-              toUtf8(idx.full_label()));
-        }
-        if (!broadcast) {
-          broadcast.emplace();
-          broadcast->append(1, summand, Product::Flatten::Once);
-        }
-        broadcast->append(1, make_ones(idx, slot), Product::Flatten::No);
-      }
-    };
-    append_ones(res.bra(), SlotType::Bra);
-    append_ones(res.ket(), SlotType::Ket);
-    append_ones(res.aux(), SlotType::Aux);
-
-    if (broadcast && !lowered) {
-      lowered.emplace(summands.begin(), summands.begin() + s);
-    }
-    if (lowered) {
-      lowered->push_back(broadcast ? ex<Product>(std::move(*broadcast))
-                                   : summand);
-    }
-  }
-  if (!lowered) return res;
-
-  ResultExpr result = res;
-  result = ex<Sum>(std::move(*lowered), Sum::move_only_tag{});
-  return result;
-}
 
 }  // namespace sequant

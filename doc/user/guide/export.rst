@@ -60,16 +60,9 @@ tensor power") have no way to express it and throw a :class:`sequant::Exception`
 Broadcast sums
 ~~~~~~~~~~~~~~~~~
 
-The evaluation tree of a broadcast sum under a ``ResultExpr`` head (see :doc:`expressions`) contains reserved all-ones leaves ``𝟙``.
-No caller provides them, so the generated code must create them: wherever another leaf would be loaded, the export calls
-:func:`sequant::Generator::create_ones` instead of ``load``. The text backend emits
-
-.. code-block:: text
-
-   Create 𝟙[i_1] and fill with ones
-
-and every other shipped backend throws a :class:`sequant::Exception` ("<format> cannot create an all-ones tensor"), the default of
-``create_ones``; a custom backend opts in by overriding it.
+The evaluation tree of a broadcast sum under a ``ResultExpr`` head (see :doc:`expressions`) contains
+:cpp:enumerator:`sequant::EvalOp::Broadcast` nodes, which no shipped backend exports yet: the export throws a
+:class:`sequant::Exception`.
 
 Each backend has its own ``Context`` type (e.g. ``ItfContext``) for backend-specific settings such as naming conventions; consult its
 reference documentation for details. Numerically *evaluating* an expression directly in-process, rather than generating source code

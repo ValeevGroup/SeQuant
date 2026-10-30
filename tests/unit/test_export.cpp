@@ -1126,64 +1126,6 @@ TEST_CASE("export element-wise tensor power to Julia", "[export]") {
   }
 }
 
-TEST_CASE("export broadcast sum", "[export]") {
-  // only the text generator creates the all-ones leaves of a broadcast sum
-  // (see broadcast_sum.export_test); the others refuse it
-  auto resetter = to_export_context();
-
-  const std::wstring expr = L"D{i_1;a_1} = ε{;a_1} - ε{i_1;}";
-
-  SECTION("Python (NumPy)") {
-    NumPyEinsumGenerator generator;
-    NumPyEinsumGeneratorContext ctx;
-    configure_context_defaults(ctx);
-
-    REQUIRE_THROWS_WITH(
-        export_expression(to_export_tree(deserialize<ResultExpr>(expr)),
-                          generator, ctx),
-        "Python (einsum) cannot create an all-ones tensor");
-  }
-
-  SECTION("Julia (TensorOperations)") {
-    JuliaTensorOperationsGenerator<> generator;
-    JuliaTensorOperationsGeneratorContext ctx;
-    configure_context_defaults(ctx);
-
-    REQUIRE_THROWS_WITH(
-        export_expression(to_export_tree(deserialize<ResultExpr>(expr)),
-                          generator, ctx),
-        "Julia (TensorOperations) cannot create an all-ones tensor");
-  }
-
-  SECTION("ITF") {
-    ItfGenerator<ItfContext> generator;
-    ItfContext ctx;
-    configure_context_defaults(ctx);
-
-    REQUIRE_THROWS_WITH(
-        export_expression(to_export_tree(deserialize<ResultExpr>(expr)),
-                          generator, ctx),
-        "ITF cannot create an all-ones tensor");
-  }
-
-  SECTION("text through GenerationOptimizer") {
-    TextGenerator<TextGeneratorContext> textgen;
-    GenerationOptimizer<TextGenerator<TextGeneratorContext>> generator(textgen);
-    TextGeneratorContext ctx;
-    configure_context_defaults(ctx);
-
-    export_expression(to_export_tree(deserialize<ResultExpr>(expr)), generator,
-                      ctx);
-
-    const std::string code = generator.get_generated_code();
-    CAPTURE(code);
-    CHECK_THAT(code, Catch::Matchers::ContainsSubstring(
-                         "Create 𝟙[i_1] and fill with ones") &&
-                         Catch::Matchers::ContainsSubstring(
-                             "Create 𝟙[a_1] and fill with ones"));
-  }
-}
-
 TEST_CASE("ExportExpr", "[export]") {
   SECTION("id & equality") {
     Variable v(L"V");

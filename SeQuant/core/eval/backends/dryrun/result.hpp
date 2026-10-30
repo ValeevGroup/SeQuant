@@ -380,6 +380,42 @@ struct DryRunOps {
     return make_dryrun_result(idx, cm, ov, lob);
   }
 
+  /// Broadcast: the result is shaped by the result annotation \p ann[1];
+  /// a mode of the operand annotation \p ann[0] keeps the operand's slicing
+  /// (\p ov, \p lob), every other mode takes that of its rank-1 range in
+  /// \p new_mode_ranges (in result mode order). Its cost, one write per
+  /// result element, is recorded like a product's.
+  [[nodiscard]] static ResultPtr broadcast(
+      container::svector<Index> const& idx, ExtentOverrides const& ov,
+      std::shared_ptr<CostModel const> const& cm,
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges,
+      ExtentOverrides const& lob = {}) {
+    auto const pre = std::any_cast<annot_t>(ann[0]);
+    auto const post = std::any_cast<annot_t>(ann[1]);
+    auto merged = remap_overrides_by_annot(ov, pre, post);
+    auto merged_lob = remap_overrides_by_annot(lob, pre, post);
+    std::size_t k = 0;
+    for (std::size_t p = 0; p < post.size(); ++p) {
+      if (find_position(pre, post[p])) continue;
+      SEQUANT_ASSERT(k < new_mode_ranges.size());
+      Result const& range = *new_mode_ranges[k++];
+      if (auto const w = overrides_of(range); w.count(0)) merged[p] = w.at(0);
+      if (auto const lo = lobounds_of(range); lo.count(0))
+        merged_lob[p] = lo.at(0);
+    }
+    SEQUANT_ASSERT(k == new_mode_ranges.size());
+    container::svector<Index> out(post.begin(), post.end());
+    if (Logger::instance().eval.level > 0) {
+      double const flops = cm->flops(out, {}, extents_by_label(merged, post));
+      record_op_cost(*cm, flops,
+                     cm->exec_cost(flops, cm->memsize(idx, ov), 0,
+                                   cm->memsize(out, merged)));
+    }
+    return make_dryrun_result(std::move(out), cm, std::move(merged),
+                              std::move(merged_lob));
+  }
+
   [[nodiscard]] static ResultPtr permute(
       container::svector<Index> const& idx, ExtentOverrides const& ov,
       std::shared_ptr<CostModel const> const& cm,
@@ -642,6 +678,19 @@ class ResultDryRun final : public Result {
     return detail::DryRunOps::pow(indices_, overrides_, cm_, lobounds_);
   }
 
+  [[nodiscard]] ResultPtr broadcast(
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    return detail::DryRunOps::broadcast(indices_, overrides_, cm_, ann,
+                                        new_mode_ranges, lobounds_);
+  }
+
+  [[nodiscard]] ResultPtr broadcast_scalar(
+      Result const& /*scalar*/, std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    return detail::DryRunOps::broadcast({}, {}, cm_, ann, new_mode_ranges);
+  }
+
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
     return detail::DryRunOps::slice_mode(indices_, overrides_, cm_, mode,
@@ -800,6 +849,19 @@ class ResultDryRunNested final : public Result {
 
   [[nodiscard]] ResultPtr pow(rational const& /*exponent*/) const override {
     return detail::DryRunOps::pow(indices_, overrides_, cm_, lobounds_);
+  }
+
+  [[nodiscard]] ResultPtr broadcast(
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    return detail::DryRunOps::broadcast(indices_, overrides_, cm_, ann,
+                                        new_mode_ranges, lobounds_);
+  }
+
+  [[nodiscard]] ResultPtr broadcast_scalar(
+      Result const& /*scalar*/, std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    return detail::DryRunOps::broadcast({}, {}, cm_, ann, new_mode_ranges);
   }
 
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,

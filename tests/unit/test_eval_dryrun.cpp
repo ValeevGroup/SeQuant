@@ -71,6 +71,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -4572,10 +4573,9 @@ TEST_CASE("meter accounts an element-wise power", "[meter]") {
   }
 }
 
-// The all-ones leaves a broadcast Sum lowers to (see lower_broadcast_sum())
-// are ordinary leaves: the dry-run leaf evaluator sizes them from their index
-// spaces like any other tensor leaf, and the broadcast result is sized by the
-// union of the head's indices.
+// A broadcast Sum binarizes to Broadcast nodes over its short summands; the
+// dry-run backend shapes each from the array-ops (the operand's modes from the
+// operand), so the result is sized by the union of the head's indices.
 TEST_CASE("dryrun evaluates a broadcast sum", "[dryrun][broadcast]") {
   using namespace sequant;
   using sequant::eval::dryrun::CostModel;
@@ -4585,6 +4585,7 @@ TEST_CASE("dryrun evaluates a broadcast sum", "[dryrun][broadcast]") {
 
   auto const cm = std::make_shared<CostModel const>(backend_test_regime());
   DryRunLeafEvaluator const yield{cm};
+  auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
 
   // D{i_1;a_1} = ε{;a_1} − ε{i_1;}
   ResultExpr const res(Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}),
@@ -4592,37 +4593,45 @@ TEST_CASE("dryrun evaluates a broadcast sum", "[dryrun][broadcast]") {
                            ex<Tensor>(L"ε", bra{L"i_1"}, ket{}));
   auto const node = binarize<EvalExprDryRun>(res);
   REQUIRE(node->op_type() == EvalOp::Sum);
+  REQUIRE(node.left()->is_broadcast());
+  REQUIRE(node.right()->is_broadcast());
   container::svector<Index> const head_idx{Index{L"i_1"}, Index{L"a_1"}};
   auto const head_bytes = cm->memsize(head_idx);
 
-  SECTION("the ones leaf is sized from its index space") {
-    std::size_t n_ones = 0;
-    node.visit_leaf([&](EvalNodeDryRun const& leaf) {
-      if (!leaf->is_tensor() || !is_ones(leaf->as_tensor())) return;
-      ++n_ones;
-      container::svector<Index> idx;
-      for (Index const& ix : leaf->as_tensor().const_braket_indices())
-        idx.push_back(ix);
-      REQUIRE(idx.size() == 1);
-      auto const ones = yield(leaf);
-      REQUIRE(ones);
-      CHECK(ones->size_in_bytes() == cm->memsize(idx));
-    });
-    CHECK(n_ones == 2);
-    // a lone occupied ones leaf, as make_ones() spells it
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    auto const i_ones =
-        binarize<EvalExprDryRun>(make_ones(Index{L"i_1"}, SlotType::Bra));
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    REQUIRE(i_ones.leaf());
-    CHECK(yield(i_ones)->size_in_bytes() ==
-          cm->memsize(container::svector<Index>{Index{L"i_1"}}));
-  }
-
   SECTION("tree evaluator") {
-    auto const got = evaluate(node, yield);
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    auto const got = evaluate(node, yield, cache);
     REQUIRE(got);
     CHECK(got->size_in_bytes() == head_bytes);
+  }
+
+  SECTION("a Broadcast node is sized from the array-ops") {
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    auto const got = evaluate(node.left(), yield, cache);
+    REQUIRE(got);
+    CHECK(got->size_in_bytes() == head_bytes);
+  }
+
+  SECTION("a scalar summand is broadcast over every head mode") {
+    ResultExpr const scalar(
+        Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Tensor>(L"ε", bra{}, ket{L"a_1"}) - ex<Variable>(L"E"));
+    auto const snode = binarize<EvalExprDryRun>(scalar);
+    REQUIRE(snode.right()->is_broadcast());
+    REQUIRE(snode.right().left()->is_scalar());
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    auto const got = evaluate(snode, yield, cache);
+    REQUIRE(got);
+    CHECK(got->size_in_bytes() == head_bytes);
+  }
+
+  SECTION("a Broadcast node needs array-ops") {
+    REQUIRE_THROWS_WITH(
+        evaluate(node, yield),
+        Catch::Matchers::ContainsSubstring("needs BackendArrayOps"));
   }
 
   SECTION("ordered executor") {
@@ -4630,7 +4639,6 @@ TEST_CASE("dryrun evaluates a broadcast sum", "[dryrun][broadcast]") {
     BatchPolicy policy;
     policy.scheduler = BatchScheduler::ordered;
     auto cache = CacheManager<EvalNodeDryRun>::empty();
-    auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
     cache.set_array_ops(&aops);
     auto const got = evaluate(forest, policy, std::wstring{}, yield, cache);
     REQUIRE(got);
@@ -4824,14 +4832,11 @@ TEST_CASE("meter batches a loop through an inlined head",
     MeterReport report;
     REQUIRE_NOTHROW(report =
                         meter(Forest{batched}, policy, regime, CacheConfig{}));
-    // per batch of i_1 (extent 10, batches of 1), 12 builds: the
-    // contraction, ℓ and the power, as in the two-level system; the chain
-    // ε{;a}·𝟙{i_1}·𝟙{i_2}·𝟙{a} of the lowered D (3 builds), shared by its
-    // a_1 and a_2 summands, whose slices are one value up to relabeling; and
-    // the chain ε{i}·𝟙·𝟙·𝟙 (3 builds) twice, once per occupied summand, since
-    // the batch slices ε in one and a 𝟙 in the other. The three in-place
-    // Sum steps and the two -1 scalings tally no build.
-    CHECK(report.builds_total == 10 * (3 + 3 + 2 * 3));
+    // per batch of i_1 (extent 10, batches of 1), 7 builds: the
+    // contraction, ℓ and the power, as in the two-level system, and the four
+    // Broadcast nodes of D, each sliced to the batch along i_1. The three
+    // in-place Sum steps and the two -1 scalings tally no build.
+    CHECK(report.builds_total == 10 * (3 + 4));
   }
 
   SECTION("an inlined intermediate larger than every leaf is never whole") {
@@ -4862,6 +4867,29 @@ TEST_CASE("meter batches a loop through an inlined head",
     CAPTURE(ref.peak_bytes, report.peak_bytes, d3_bytes);
     CHECK(ref.peak_bytes >= d3_bytes);
     CHECK(report.peak_bytes < d3_bytes);
+
+    // the batch loop over i_1 slices the Broadcast nodes of D3 along i_1,
+    // which some of them add and the others' operands carry: the batched
+    // result assembles to the unbatched one's size on either scheduler
+    DryRunLeafEvaluator const yield{cm};
+    auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+    auto const x_bytes = cm->memsize(
+        {Index{L"i_2"}, Index{L"i_3"}, Index{L"a_2"}, Index{L"a_3"}});
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      policy.scheduler = scheduler;
+      auto cache = CacheManager<EvalNodeDryRun>::empty();
+      cache.set_array_ops(&aops);
+      if (scheduler == BatchScheduler::forest_descent)
+        cache.set_custom_evaluator(
+            make_evaluator(policy, yield, make_no_scope_guard{}));
+      ResultPtr res;
+      REQUIRE_NOTHROW(res = evaluate(Forest{batched}, policy, std::wstring{},
+                                     yield, cache));
+      REQUIRE(res);
+      CHECK(res->size_in_bytes() == x_bytes);
+    }
   }
 }
 
@@ -4948,4 +4976,64 @@ TEST_CASE("occupancy-adjusted moments satisfy the group-volume identity",
   auto const r = df_regime(w20);
   CHECK(r.csv_pno_moment[1] == Catch::Approx(w20.pno_occupancy * w20.pno_M[1]));
   CHECK(r.csv_osv_moment[2] == Catch::Approx(w20.osv_M[2]));
+}
+
+// E{i_2;i_3} = L{a_1,a_2;i_1,i_3} ℓ{i_1,i_2;a_1,a_2} batched over i_1 and
+// E2{i_1;i_3} = L{a_1,a_2;i_2,i_3} ℓ{i_1,i_2;a_1,a_2} batched over i_2, both
+// reading the inlined broadcast D through ℓ: the Broadcast values of D are
+// sliced at a different position under each loop, which the ordered
+// executor's canonical loop axis does not spell
+TEST_CASE("batched consumers slice one Broadcast value at different modes",
+          "[meter][broadcast][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+  using Forest = std::vector<EvalNodeDryRun>;
+  SizeRegime regime;
+  regime.space_extent = {{L"i", 10}, {L"a", 20}};
+  auto e2 = ex<Product>(ExprPtrList{});
+  e2->as<Product>().append(
+      1, antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_2", L"i_3"}),
+      Product::Flatten::No);
+  e2->as<Product>().append(
+      1,
+      ex<Tensor>(relabelled(ell_definition().result_as_tensor(),
+                            bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"})),
+      Product::Flatten::No);
+  auto const E2 =
+      ResultExpr(Tensor(L"E2", bra{L"i_1"}, ket{L"i_3"},
+                        TensorSymmetries{.perm = Symmetry::Nonsymm}),
+                 e2);
+  auto const sys = binarize<EvalExprDryRun>(std::vector<ResultExpr>{
+      D_broadcast(), ell_definition(), consumer_E(), E2});
+  REQUIRE(sys.roots().size() == 2);
+  EvalNodeDryRun a = sys.roots()[0].get();
+  EvalNodeDryRun b = sys.roots()[1].get();
+  stamp_occ_loop(a);
+  Index const i2{L"i_2"};
+  b->set_node_slice_mask({{i2, BatchModeType::Contracted}});
+  b->set_batch_loops_opened_here({{i2, BatchModeType::Contracted}});
+  auto policy = occ_contracted_policy();
+  for (auto const scheduler :
+       {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+    CAPTURE(static_cast<int>(scheduler));
+    policy.scheduler = scheduler;
+    REQUIRE_NOTHROW(meter(Forest{a, b}, policy, regime, CacheConfig{}));
+    auto const cm = std::make_shared<CostModel const>(regime);
+    DryRunLeafEvaluator const yield{cm};
+    auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    if (scheduler == BatchScheduler::forest_descent)
+      cache.set_custom_evaluator(
+          make_evaluator(policy, yield, make_no_scope_guard{}));
+    REQUIRE_NOTHROW(
+        evaluate(Forest{a, b}, policy, std::wstring{}, yield, cache));
+  }
 }

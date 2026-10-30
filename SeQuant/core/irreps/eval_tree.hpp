@@ -35,6 +35,10 @@ struct IrrepNodeTraits<FullBinaryNode<T>> {
         // block becomes inf or 1 and the result spans all irreps, which is
         // harmless for the totally symmetric denominators this is meant for
         return IrrepNodeKind::Sum;
+      case EvalOp::Broadcast:
+        // a broadcast summand spans its operand's irreps, as the summand of
+        // the symbolic Sum it stands for does
+        return IrrepNodeKind::Sum;
     }
 
     SEQUANT_UNREACHABLE;

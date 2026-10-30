@@ -160,6 +160,7 @@ enum struct EvalMode {
   Symmetrize,
   Antisymmetrize,
   ElementwisePower,
+  Broadcast,
   Unknown
 };
 
@@ -175,6 +176,7 @@ enum struct EvalMode {
            : node->is_sum()               ? EvalMode::Sum
            : node->is_adjoint()           ? EvalMode::Permute
            : node->is_elementwise_power() ? EvalMode::ElementwisePower
+           : node->is_broadcast()         ? EvalMode::Broadcast
                                           : EvalMode::Unknown;
   }
 }
@@ -192,6 +194,7 @@ enum struct EvalMode {
          : (mode == EvalMode::Symmetrize)       ? "Symmetrize"
          : (mode == EvalMode::Antisymmetrize)   ? "Antisymmetrize"
          : (mode == EvalMode::ElementwisePower) ? "ElementwisePower"
+         : (mode == EvalMode::Broadcast)        ? "Broadcast"
                                                 : "??";
 }
 
@@ -608,23 +611,62 @@ template <typename Node>
 // apply_canon_phase, try_custom_eval, note_fresh_build) rather than this
 // stack machine.
 
+namespace detail {
+/// \return the element range of the enclosing batch loop of \p bctx over
+///         \p ix, the mode a batch loop slices wherever a node carries it;
+///         nullopt if no enclosing loop is over \p ix
+[[nodiscard]] inline std::optional<std::pair<std::size_t, std::size_t>>
+batch_range_of(container::svector<BatchContextEntry> const& bctx,
+               Index const& ix) {
+  for (auto const& e : bctx)
+    if (e.axis == ix) return e.range;
+  return std::nullopt;
+}
+}  // namespace detail
+
 /// \brief The single-op compute kernel.
 ///
 /// \details The raw op applied to already-evaluated operand results, dispatched
 /// by \p node's op type, with the contraction annotation computed from \p node.
 /// Value-in, value-out: it takes the operands' \c Result buffers and returns
 /// the op's raw result, touching no cache and no value identity. It is exactly
-/// the innermost `left->adjoint/pow/sum/prod(...)` compute that both the
-/// tree-walking
-/// \c evaluate_impl and the value/occurrence-driven ordered executor perform,
-/// so both reach the op through this one function. Not handled here (all
-/// caller-side): a leaf (a \c leaf_evaluator fetch, not an op), the
-/// shaped-product hook (the caller calls this only when the hook declines), \c
-/// apply_phase + store, the in-place-Sum fast path, and all tally / trace /
-/// timing / \c last_op_flops sentinel.
+/// the innermost `left->adjoint/pow/broadcast/sum/prod(...)` compute that both
+/// the tree-walking \c evaluate_impl and the value/occurrence-driven ordered
+/// executor perform, so both reach the op through this one function. Not
+/// handled here (all caller-side): a leaf (a \c leaf_evaluator fetch, not an
+/// op), the shaped-product hook (the caller calls this only when the hook
+/// declines), \c apply_phase + store, the in-place-Sum fast path, and all tally
+/// / trace / timing / \c last_op_flops sentinel. \param aops the backend
+/// array-ops, which shape the modes an
+///        EvalOp::Broadcast node adds to its operand
+/// \param bctx the enclosing batch loops: a mode a Broadcast node adds is
+///        restricted to the current batch of the loop over it
+/// \throw Exception if \p node is an EvalOp::Broadcast node and \p aops is
+///        null
 template <meta::can_evaluate Node>
-[[nodiscard]] ResultPtr apply_one_op(Node const& node, ResultPtr const& left,
-                                     ResultPtr const& right) {
+[[nodiscard]] ResultPtr apply_one_op(
+    Node const& node, ResultPtr const& left, ResultPtr const& right,
+    BackendArrayOps const* aops,
+    container::svector<BatchContextEntry> const& bctx) {
+  if (node->op_type() == EvalOp::Broadcast) {
+    if (!aops)
+      throw Exception(
+          "evaluate: a Broadcast node needs BackendArrayOps "
+          "(CacheManager::set_array_ops) to shape its result");
+    // one rank-1 range per mode the operand lacks, in the node's mode order
+    auto const& operand_indices = node.left()->canon_indices();
+    container::svector<ResultPtr> new_mode_ranges;
+    for (Index const& ix : node->canon_indices()) {
+      if (std::ranges::find(operand_indices, ix) != operand_indices.end())
+        continue;
+      ResultPtr range = aops->make_zeros({ix});
+      if (auto const blk = detail::batch_range_of(bctx, ix))
+        range = range->slice_mode(0, blk->first, blk->second);
+      new_mode_ranges.push_back(std::move(range));
+    }
+    std::array<std::any, 2> const ann{node.left()->annot(), node->annot()};
+    return left->broadcast(ann, new_mode_ranges);
+  }
   if (node->op_type() == EvalOp::Adjoint) {
     // Unary: only the left operand; the right child is the Constant(1)
     // sentinel.
@@ -705,13 +747,15 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
 /// neither is the build event (\c note_fresh_build), which fires after the
 /// caller has decided what to do with the result.
 ///
+/// \param broadcast_ctx the batch context a Broadcast node's added modes are
+///        sliced by (see apply_one_op); null for \p cache's
 /// \return the op's raw result, in the node's own oriented layout.
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
           bool FHC>
-[[nodiscard]] ResultPtr apply_one_op_traced(Node const& node,
-                                            ResultPtr const& left,
-                                            ResultPtr const& right,
-                                            CacheManager<N, FHC>& cache) {
+[[nodiscard]] ResultPtr apply_one_op_traced(
+    Node const& node, ResultPtr const& left, ResultPtr const& right,
+    CacheManager<N, FHC>& cache,
+    container::svector<BatchContextEntry> const* broadcast_ctx = nullptr) {
   // The contraction annotation triple the shaped-product hook receives. A
   // unary (Adjoint, Power) node never reaches the hook, and its right child is
   // a Constant sentinel, so the triple is only built for a binary op.
@@ -744,8 +788,11 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
   // fold garbage into the identity-keyed tally).
   auto const run_and_tally = [&]() {
     eval::detail::last_op_flops() = -1.0;
-    time = detail::timed_eval_inplace(
-        [&]() { result = apply_one_op(node, left, right); });
+    time = detail::timed_eval_inplace([&]() {
+      result =
+          apply_one_op(node, left, right, cache.array_ops(),
+                       broadcast_ctx ? *broadcast_ctx : cache.batch_context());
+    });
     if (eval::detail::last_op_flops() >= 0.0) {
       std::string slice_sig;
       for (auto const& entry : cache.batch_context()) {
@@ -2094,9 +2141,7 @@ template <Trace EvalTrace = Trace::Default, typename F,
       // re-picked? Mirrors slice_to_use exactly: an exact context axis slices
       // ix.
       auto already_sliced = [&](Index const& ix) {
-        for (auto const& e : ectx)
-          if (e.axis == ix) return true;
-        return false;
+        return detail::batch_range_of(ectx, ix).has_value();
       };
       for (Index const& ix : candidate_axes(n)) {
         if (already_sliced(ix)) continue;

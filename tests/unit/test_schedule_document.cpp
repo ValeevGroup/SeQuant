@@ -1768,6 +1768,55 @@ TEST_CASE("record_dag names the nodes below a unary node's inlined operand",
   REQUIRE(compare(doc, from_json(to_json(doc))).empty());
 }
 
+TEST_CASE("record_dag places a Broadcast node like the other unary nodes",
+          "[schedule-document][broadcast]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  // D = ε{;a_1} + ε{;a_2} − ε{i_1;} − ε{i_2;}: a Sum of four Broadcast nodes
+  std::vector<eval::dryrun::EvalNodeDryRun> forest{
+      binarize<EvalExprDryRun>(D_broadcast())};
+  std::size_t n_bcast = 0;
+  forest[0].visit([&](auto const& n) {
+    if (!n.leaf() && n->is_broadcast()) ++n_bcast;
+  });
+  REQUIRE(n_bcast == 4);
+  auto const policy = occ_contracted_policy();
+  eval::dryrun::SizeRegime const regime;
+  eval::dryrun::CostModel const cm{regime};
+  auto const rich =
+      eval::compute_dag_boulevard(forest, cm, policy.batch_target_size);
+  std::optional<eval::LegalitySchedule> legality;
+  REQUIRE_NOTHROW(
+      legality.emplace(eval::analyze_legality(rich, forest, policy)));
+  auto const ordered =
+      eval::build_ordered_schedule(rich, *legality, policy, {});
+  std::vector<RootRecord> const roots{
+      RootRecord{.label = "D", .terms = {TermRecord{.key = "D"}}}};
+
+  DagRecord dag;
+  REQUIRE_NOTHROW(dag = record_dag(rich, *legality, ordered, forest, roots));
+  std::set<std::string> ids;
+  for (auto const& v : dag.values) REQUIRE(ids.insert(v.id).second);
+  REQUIRE(ids.size() == rich.cells.size());
+  // the four Broadcast nodes are spelled as such; an operand first met below
+  // one hangs at its /0 (two distinct ones: ε and −1·ε)
+  std::size_t n_spelled = 0;
+  for (auto const& v : dag.values)
+    if (rhs_of(v).starts_with("broadcast(")) {
+      ++n_spelled;
+      CHECK(rhs_of(v).ends_with(")"));
+    }
+  CHECK(n_spelled == 4);
+  std::size_t n_operands = 0;
+  for (auto const& id : ids)
+    if (id.ends_with("/0")) ++n_operands;
+  CHECK(n_operands == 2);
+
+  auto const doc = doc_with(roots, dag);
+  REQUIRE(compare(doc, from_json(to_json(doc))).empty());
+}
+
 TEST_CASE("record_dag records an inlined head like the expression it replaces",
           "[schedule-document][tensor-power][inline]") {
   using namespace sequant;

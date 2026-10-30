@@ -4913,29 +4913,32 @@ TEST_CASE("single-term DP sees a TensorPower vertex through its base",
   }
 }
 
-TEST_CASE("optimize keeps the ones leaves of a broadcast Sum",
-          "[optimize][broadcast]") {
+TEST_CASE("optimize keeps a broadcast Sum symbolic", "[optimize][broadcast]") {
   using namespace sequant;
   ResultExpr res = deserialize<ResultExpr>(
       L"D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}");
   const Tensor head = res.result_as_tensor();
+  const ExprPtr rhs = res.expression().clone();
   optimize(res);
   REQUIRE(res.result_as_tensor() == head);
 
-  // optimize() lowers the broadcast and must keep every ones leaf
-  std::size_t n_ones_expr = 0;
+  // the summands stay the ε leaves, which binarize broadcasts
+  std::size_t n_eps = 0;
   res.expression()->visit(
       [&](ExprPtr const& x) {
-        if (x->is<Tensor>() && is_ones(x->as<Tensor>())) ++n_ones_expr;
+        REQUIRE(x->is<Tensor>());
+        REQUIRE(x->as<Tensor>().label() == L"ε");
+        ++n_eps;
       },
       /* atoms_only = */ true);
-  REQUIRE(n_ones_expr == 12);
+  REQUIRE(n_eps == 4);
+  REQUIRE(res.expression()->size() == rhs->size());
 
   std::optional<FullBinaryNode<EvalExpr>> tree;
   REQUIRE_NOTHROW(tree.emplace(binarize(res)));
-  std::size_t n_ones = 0;
-  tree->visit_leaf([&](const auto& node) {
-    if (node->is_tensor() && is_ones(node->as_tensor())) ++n_ones;
+  std::size_t n_bcast = 0;
+  tree->visit([&](const auto& node) {
+    if (!node.leaf() && node->is_broadcast()) ++n_bcast;
   });
-  REQUIRE(n_ones == 12);
+  REQUIRE(n_bcast == 4);
 }

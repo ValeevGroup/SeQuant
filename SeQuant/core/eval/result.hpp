@@ -314,6 +314,44 @@ class Result {
   }
 
   ///
+  /// \brief Expand this result over the modes it lacks.
+  ///
+  /// Used to evaluate the EvalOp::Broadcast IR node. Returns a fresh result
+  /// over the modes of \p ann[1] that is constant along every mode absent
+  /// from \p ann[0] and equals this result along the others. \p ann is
+  /// [operand_annot, result_annot]; the result's modes are a superset of this
+  /// result's. \p new_mode_ranges holds one rank-1 result per mode of the
+  /// result that this result lacks, in the result's mode order, built by
+  /// BackendArrayOps::make_zeros (and restricted to the current batch when a
+  /// batch loop runs over that mode): the result's range along that mode is
+  /// that result's range. A mode this result carries keeps this result's
+  /// range. Not a pure virtual: only tensor-backed results need it; the
+  /// default throws. A ResultScalar forwards to broadcast_scalar() of
+  /// \p new_mode_ranges' first element.
+  ///
+  [[nodiscard]] virtual ResultPtr broadcast(
+      std::array<std::any, 2> const& /*ann*/,
+      container::svector<ResultPtr> const& /*new_mode_ranges*/) const {
+    throw detail::unimplemented_method("broadcast");
+  }
+
+  ///
+  /// \brief Expand the scalar \p scalar over every mode of \p ann[1].
+  ///
+  /// The broadcast() of a scalar operand (a ResultScalar), dispatched to the
+  /// backend's tensor type through the first of \p new_mode_ranges, which
+  /// hold one rank-1 result per mode of the result (see broadcast()). Returns
+  /// a fresh result every element of which is \p scalar's value; this result
+  /// is not modified. Not a pure virtual: only tensor-backed results need it;
+  /// the default throws.
+  ///
+  [[nodiscard]] virtual ResultPtr broadcast_scalar(
+      Result const& /*scalar*/, std::array<std::any, 2> const& /*ann*/,
+      container::svector<ResultPtr> const& /*new_mode_ranges*/) const {
+    throw detail::unimplemented_method("broadcast_scalar");
+  }
+
+  ///
   /// \brief Restrict this result to a contiguous *element* range of one mode.
   ///
   /// Keeps elements `[elem_lo, elem_hi)` of mode \p mode and all elements of
@@ -511,6 +549,14 @@ class ResultScalar final : public Result {
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const&) const override {
     throw detail::unimplemented_method("permute");
+  }
+
+  [[nodiscard]] ResultPtr broadcast(
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    SEQUANT_ASSERT(!new_mode_ranges.empty());
+    return new_mode_ranges.front()->broadcast_scalar(*this, ann,
+                                                     new_mode_ranges);
   }
 
   void add_inplace(Result const& other) override {

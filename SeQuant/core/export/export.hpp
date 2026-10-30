@@ -280,6 +280,9 @@ class GenerationVisitor {
         // transpose is implied.
         expressions.push_back(pow(node.left()->expr(), power_exponent(node)));
         break;
+      case EvalOp::Broadcast:
+        throw Exception(
+            "export: a summand of a broadcast Sum cannot be exported");
       case EvalOp::Sum: {
         switch (node->compute_selection()) {
           case ComputeSelection::None:

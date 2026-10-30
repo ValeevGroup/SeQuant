@@ -428,7 +428,9 @@ TEST_CASE("irreps", "[irreps]") {
     // Equality of propagation on plain expressions and on evaluation trees
     for (std::wstring_view spec : {L"t{a1;i1} v{i1;a2} f{a2;a3} m{a3;i2}",
                                    L"t{a1;i1} v{i1;i2} + p{a1;a2} f{a2;i2}",
-                                   L"t{a1;i1} m{i1;i2} + v{a1;i3} f{i3;i2}"}) {
+                                   L"t{a1;i1} m{i1;i2} + v{a1;i3} f{i3;i2}",
+                                   // a broadcast summand
+                                   L"t{a1;i2} + m{a1;}"}) {
       ResultExpr res(deserialize(L"R{a1;i2}")->as<Tensor>(), deserialize(spec));
       auto tree = binarize(res);
 
