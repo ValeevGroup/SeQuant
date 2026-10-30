@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
+#include "tensor_power_fixtures.hpp"
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
@@ -902,5 +904,262 @@ TEST_CASE("lower_broadcast_sum", "[EvalExpr][broadcast]") {
     });
     REQUIRE(n_eps == 4);
     REQUIRE(n_ones == 12);
+  }
+}
+
+TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using Catch::Matchers::ContainsSubstring;
+  using Node = FullBinaryNode<EvalExpr>;
+  using System = container::svector<ResultExpr>;
+  using Flags = container::svector<bool>;
+  auto _ = set_scoped_default_context(lax_braket_context());
+
+  // the nodes of the subtree at root satisfying pred, in pre-order
+  // (FullBinaryNode::visit walks a whole tree, not a subtree)
+  auto find_all = [](Node const& root, auto pred) {
+    container::svector<Node const*> result;
+    auto descend = [&](auto& self, Node const& n) -> void {
+      if (pred(n)) result.push_back(&n);
+      if (n.leaf()) return;
+      self(self, n.left());
+      self(self, n.right());
+    };
+    descend(descend, root);
+    return result;
+  };
+  auto find = [&find_all](Node const& root, auto pred) -> Node const* {
+    auto const all = find_all(root, pred);
+    return all.empty() ? nullptr : all.front();
+  };
+  auto labelled = [](std::wstring_view label, bool leaf) {
+    return [label, leaf](Node const& n) {
+      return n.leaf() == leaf && n->is_tensor() &&
+             n->as_tensor().label() == label;
+    };
+  };
+  auto variable = [](std::wstring_view label, bool leaf) {
+    return [label, leaf](Node const& n) {
+      return n.leaf() == leaf && n->expr()->is<Variable>() &&
+             n->expr()->as<Variable>().label() == label;
+    };
+  };
+  auto leaf_labels = [](Node const& root) {
+    std::multiset<std::string> result;
+    root.visit_leaf([&](Node const& n) { result.insert(n->label()); });
+    return result;
+  };
+  auto antisymm_ell = [](auto b, auto k) {
+    return ex<Tensor>(relabelled(ell_definition().result_as_tensor(),
+                                 std::move(b), std::move(k)));
+  };
+
+  SECTION("a definition becomes one factor of its consumer") {
+    System const sys{ell_definition(), consumer_E()};
+    auto const res = binarize(sys);
+    REQUIRE(res.trees.size() == 2);
+    REQUIRE(res.consumed == Flags{true, false});
+    REQUIRE(res.roots().size() == 1);
+    Node const& e = res.trees[1];
+    REQUIRE(&res.roots()[0].get() == &e);
+    REQUIRE(e->op_type() == EvalOp::Product);
+
+    Node const& ell = e.right();
+    REQUIRE_FALSE(ell.leaf());
+    REQUIRE(ell->as_tensor() == relabelled(ell_definition().result_as_tensor(),
+                                           bra{L"i_1", L"i_2"},
+                                           ket{L"a_1", L"a_2"}));
+    REQUIRE(find(ell, labelled(L"M", true)));
+    REQUIRE(find(ell, labelled(L"D", true)));
+    REQUIRE(
+        find(ell, [](Node const& n) { return n->op_type() == EvalOp::Power; }));
+
+    // the tree of the Hadamard term, but for the label on the inlined node
+    auto const ref = binarize(hadamard_power_term());
+    REQUIRE(e->hash_value() == ref->hash_value());
+    REQUIRE(ell->hash_value() == ref.right()->hash_value());
+    REQUIRE(leaf_labels(e) == leaf_labels(ref));
+    REQUIRE(ref.right()->as_tensor().label() != L"ℓ");
+  }
+
+  SECTION("definitions inline recursively, in any order") {
+    System const sys{D_broadcast(), ell_definition(), consumer_E()};
+    auto const fwd = binarize(sys);
+    REQUIRE(fwd.consumed == Flags{true, true, false});
+    Node const& e = fwd.trees[2];
+    REQUIRE_FALSE(find(e, labelled(L"D", true)));
+    Node const* d = find(e, labelled(L"D", false));
+    REQUIRE(d);
+    REQUIRE((*d)->op_type() == EvalOp::Sum);
+    REQUIRE((*d)->as_tensor() == power_base()->as<Tensor>());
+    REQUIRE(find_all(*d, [](Node const& n) {
+              return n.leaf() && n->is_tensor() && is_ones(n->as_tensor());
+            }).size() == 12);
+
+    System const rsys{consumer_E(), ell_definition(), D_broadcast()};
+    auto const rev = binarize(rsys);
+    REQUIRE(rev.consumed == Flags{false, true, true});
+    for (std::size_t k = 0; k != 3; ++k) {
+      CAPTURE(k);
+      Node const& f = fwd.trees[k];
+      Node const& r = rev.trees[2 - k];
+      REQUIRE(f->hash_value() == r->hash_value());
+      REQUIRE(f.size() == r.size());
+      REQUIRE(leaf_labels(f) == leaf_labels(r));
+    }
+  }
+
+  SECTION("a leaf of another shape stays a leaf") {
+    auto const rank = ResultExpr(
+        Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Constant>(2) * ex<Tensor>(L"ℓ", bra{L"i_1"}, ket{L"a_1"}));
+    auto const spaces =
+        ResultExpr(Tensor(L"R", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}),
+                   ex<Constant>(2) *
+                       antisymm_ell(bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}));
+    for (auto const& consumer : {rank, spaces}) {
+      System const sys{ell_definition(), consumer};
+      auto const res = binarize(sys);
+      REQUIRE(res.consumed == Flags{false, false});
+      REQUIRE(find(res.trees[1], labelled(L"ℓ", true)));
+      REQUIRE_FALSE(find(res.trees[1], labelled(L"ℓ", false)));
+    }
+  }
+
+  SECTION("a matching leaf with other symmetries throws") {
+    auto const e =
+        ResultExpr(head(L"E"),
+                   contractor() * ex<Tensor>(L"ℓ", bra{L"i_1", L"i_2"},
+                                             ket{L"a_1", L"a_2"}, symmetric()));
+    System const sys{ell_definition(), e};
+    REQUIRE_THROWS_WITH(binarize(sys),
+                        ContainsSubstring("declares different symmetries"));
+  }
+
+  SECTION("definition dummies stay distinct from the consumer's indices") {
+    auto nonsymm = [](std::wstring_view label, auto b, auto k) {
+      return ex<Tensor>(label, std::move(b), std::move(k),
+                        TensorSymmetries{.perm = Symmetry::Nonsymm});
+    };
+    // λ{i_1,i_2;a_1,a_2} = M{i_1,i_2;a_3,a_2} X{a_3;a_1}
+    auto const lambda = ResultExpr(
+        nonsymm(L"λ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"})->as<Tensor>(),
+        nonsymm(L"M", bra{L"i_1", L"i_2"}, ket{L"a_3", L"a_2"}) *
+            nonsymm(L"X", bra{L"a_3"}, ket{L"a_1"}));
+    // E{i_2;i_3} = L{a_3,a_4;i_1,i_3} λ{i_1,i_2;a_3,a_4}
+    auto const e = ResultExpr(
+        head(L"E"),
+        antisymm(L"L", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_3"}) *
+            ex<Tensor>(relabelled(lambda.result_as_tensor(),
+                                  bra{L"i_1", L"i_2"}, ket{L"a_3", L"a_4"})));
+    System const sys{lambda, e};
+    auto const res = binarize(sys);
+    REQUIRE(res.consumed == Flags{true, false});
+    Node const& root = res.trees[1];
+    Node const* l = find(root, labelled(L"λ", false));
+    REQUIRE(l);
+    Node const* m = find(*l, labelled(L"M", true));
+    Node const* x = find(*l, labelled(L"X", true));
+    REQUIRE(m);
+    REQUIRE(x);
+    Tensor const& mt = (*m)->as_tensor();
+    Tensor const& xt = (*x)->as_tensor();
+    REQUIRE(mt.bra()[0] == Index{L"i_1"});
+    REQUIRE(mt.bra()[1] == Index{L"i_2"});
+    REQUIRE(mt.ket()[1] == Index{L"a_4"});
+    REQUIRE(xt.ket()[0] == Index{L"a_3"});
+    // the dummy is contracted between M and X and is no other index of the
+    // system
+    Index const& dummy = xt.bra()[0];
+    REQUIRE(mt.ket()[0] == dummy);
+    for (auto label : {L"i_1", L"i_2", L"i_3", L"a_1", L"a_2", L"a_3", L"a_4"})
+      REQUIRE(dummy != Index{label});
+  }
+
+  SECTION("two uses of one definition share a hash") {
+    // G{i_2;i_3} = L{a_1,a_2;i_1,i_3} ℓ{i_1,i_2;a_1,a_2}
+    //            + K{a_1,a_2;i_1,i_2} ℓ{i_1,i_3;a_1,a_2}
+    auto const g = ResultExpr(
+        head(L"G"),
+        contractor() * antisymm_ell(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) +
+            antisymm(L"K", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+                antisymm_ell(bra{L"i_1", L"i_3"}, ket{L"a_1", L"a_2"}));
+    System const sys{ell_definition(), g};
+    auto const res = binarize(sys);
+    REQUIRE(res.consumed == Flags{true, false});
+    auto const uses = find_all(res.trees[1], labelled(L"ℓ", false));
+    REQUIRE(uses.size() == 2);
+    REQUIRE((*uses[0])->hash_value() == (*uses[1])->hash_value());
+    REQUIRE((*uses[0])->as_tensor().bra()[1] !=
+            (*uses[1])->as_tensor().bra()[1]);
+  }
+
+  SECTION("a cyclic definition throws") {
+    auto const x = ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}),
+                              ex<Tensor>(L"Y", bra{L"i_1"}, ket{L"a_1"}));
+    auto const y = ResultExpr(
+        Tensor(L"Y", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Constant>(2) * ex<Tensor>(L"X", bra{L"i_1"}, ket{L"a_1"}));
+    System const cycle{x, y};
+    REQUIRE_THROWS_WITH(binarize(cycle),
+                        ContainsSubstring("inline: cyclic definition of"));
+
+    auto const self = ResultExpr(
+        Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Tensor>(L"X", bra{L"i_1"}, ket{L"a_1"}) * ex<Variable>(L"c"));
+    System const selfref{self};
+    REQUIRE_THROWS_WITH(binarize(selfref),
+                        ContainsSubstring("inline: cyclic definition of"));
+  }
+
+  SECTION("scalar heads inline into Variable leaves") {
+    // E = L{a_1,a_2;i_1,i_2} ℓ{i_1,i_2;a_1,a_2}
+    auto const e =
+        ResultExpr(Variable(L"E"),
+                   antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+                       antisymm_ell(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}));
+    // F{i_1;a_1} = E t{i_1;a_1}
+    auto const f = ResultExpr(
+        Tensor(L"F", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Variable>(L"E") * ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+    System const sys{e, f};
+    auto const res = binarize(sys);
+    REQUIRE(res.consumed == Flags{true, false});
+    REQUIRE_FALSE(find(res.trees[1], variable(L"E", true)));
+    Node const* inlined = find(res.trees[1], variable(L"E", false));
+    REQUIRE(inlined);
+    REQUIRE((*inlined)->op_type() == EvalOp::Product);
+    REQUIRE(find(*inlined, labelled(L"L", true)));
+
+    auto const self =
+        ResultExpr(Variable(L"E"), ex<Constant>(2) * ex<Variable>(L"E"));
+    System const selfref{self};
+    REQUIRE_THROWS_WITH(binarize(selfref),
+                        ContainsSubstring("inline: cyclic definition of"));
+
+    // c has no definition
+    auto const g = ResultExpr(
+        Tensor(L"G", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Variable>(L"c") * ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+    System const undefined{e, g};
+    auto const ures = binarize(undefined);
+    REQUIRE(ures.consumed == Flags{false, false});
+    REQUIRE(find(ures.trees[1], variable(L"c", true)));
+  }
+
+  SECTION("batch-axis stamping counts the consumer's own nodes") {
+    // one contraction in E, with ℓ a leaf (and one in ℓ's own tree)
+    auto const opts = BinarizationOptions{
+        .node_batch_axes = {NodeBatchAnnotation{
+            .axes = {{batched_occ(), BatchModeType::Contracted}}}}};
+    System const sys{ell_definition(), consumer_E()};
+    std::optional<InlinedSystem<EvalExpr>> res;
+    REQUIRE_NOTHROW(res.emplace(binarize(sys, opts)));
+    Node const& e = res->trees[1];
+    REQUIRE(e->node_slice_mask().size() == 1);
+    REQUIRE(find_all(e.right(), [](Node const& n) {
+              return !n->node_slice_mask().empty();
+            }).empty());
   }
 }

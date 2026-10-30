@@ -460,8 +460,10 @@ EvalExprNode binarize(Tensor const& t) {
 
 EvalExprNode binarize(TensorPower const& power, IndexSet const& uncontract,
                       const BinarizationOptions& opts,
-                      std::size_t& node_counter) {
-  auto operand = impl::binarize(power.base(), uncontract, opts, node_counter);
+                      std::size_t& node_counter,
+                      detail::InlineContext* inline_ctx) {
+  auto operand =
+      impl::binarize(power.base(), uncontract, opts, node_counter, inline_ctx);
   auto const& t = operand->as_tensor();
   auto expr = detail::make_tensor_wo_symmetries(opts, bra(t.bra()),
                                                 ket(t.ket()), aux(t.aux()));
@@ -479,13 +481,15 @@ EvalExprNode binarize(TensorPower const& power, IndexSet const& uncontract,
 
 EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
                       const BinarizationOptions& opts,
-                      std::size_t& node_counter) {
+                      std::size_t& node_counter,
+                      detail::InlineContext* inline_ctx) {
   using ranges::views::move;
   using ranges::views::transform;
   auto summands =
       sum.summands()  //
-      | transform([&uncontract, &opts, &node_counter](ExprPtr const& x) {
-          return impl::binarize(x, uncontract, opts, node_counter);
+      | transform([&uncontract, &opts, &node_counter,
+                   inline_ctx](ExprPtr const& x) {
+          return impl::binarize(x, uncontract, opts, node_counter, inline_ctx);
         })  //
       | ranges::to_vector;
 
@@ -540,7 +544,8 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
 
 EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                       const BinarizationOptions& opts,
-                      std::size_t& node_counter) {
+                      std::size_t& node_counter,
+                      detail::InlineContext* inline_ctx) {
   using ranges::views::filter;
   using ranges::views::move;
   using ranges::views::transform;
@@ -558,10 +563,10 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
   }();
 
   auto factors = prod.factors()  //
-                 | transform([i = 0, &ltr_uncontr_idxs, &opts,
-                              &node_counter](ExprPtr const& x) mutable {
+                 | transform([i = 0, &ltr_uncontr_idxs, &opts, &node_counter,
+                              inline_ctx](ExprPtr const& x) mutable {
                      return impl::binarize(x, ltr_uncontr_idxs.children[i++],
-                                           opts, node_counter);
+                                           opts, node_counter, inline_ctx);
                    })  //
                  | ranges::to_vector;
 
@@ -694,37 +699,242 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
   }
 }
 
+namespace detail {
+
+namespace {
+
+/// \return true if \p x and \p y have the same bra, ket and aux ranks and the
+///         same index space in every slot
+template <typename X, typename Y>
+bool same_slot_spaces(X const& x, Y const& y) {
+  auto same = [](auto const& a, auto const& b) {
+    return std::ranges::equal(a, b, {}, &Index::space, &Index::space);
+  };
+  return same(x.bra(), y.bra()) && same(x.ket(), y.ket()) &&
+         same(x.aux(), y.aux());
+}
+
+/// \return true if two heads cannot be told apart by the leaves naming them
+bool same_shape(ResultExpr const& x, ResultExpr const& y) {
+  return x.produces_tensor() == y.produces_tensor() && same_slot_spaces(x, y);
+}
+
+}  // namespace
+
+/// The definitions of a system of equations and the state of inlining them;
+/// see binarize(std::span<const ResultExpr>, const BinarizationOptions&).
+struct InlineContext {
+  /// \param system the equations
+  /// \param consumed receives true for every equation inlined somewhere
+  InlineContext(std::span<const ResultExpr> system,
+                container::svector<bool>& consumed)
+      : system_(system), consumed_(consumed), fresh_([this](Index const& ix) {
+          return !used_labels_.contains(std::wstring(ix.label()));
+        }) {
+    for (std::size_t k = 0; k != system_.size(); ++k) {
+      ResultExpr const& res = system_[k];
+      if (!res.has_label())
+        throw Exception("inline: every equation needs a labelled head");
+      auto& same_label = by_label_[res.label()];
+      for (std::size_t j : same_label)
+        if (same_shape(system_[j], res))
+          throw Exception("inline: duplicate definition of " +
+                          toUtf8(res.label()));
+      same_label.push_back(k);
+      heads_.push_back(res.produces_tensor() ? res.result_as_tensor()
+                                             : Tensor{});
+
+      auto use = [this](Index const& ix) {
+        used_labels_.emplace(ix.label());
+        for (auto const& p : ix.proto_indices())
+          used_labels_.emplace(p.label());
+      };
+      for (auto const& ix : res.indices()) use(ix);
+      for (auto const& ix : get_used_indices(res.expression())) use(ix);
+    }
+  }
+
+  InlineContext(InlineContext const&) = delete;
+  InlineContext& operator=(InlineContext const&) = delete;
+
+  /// \return the equation whose tensor head \p leaf names, if any
+  /// \throw Exception if \p leaf matches a head but not its symmetries
+  std::optional<std::size_t> match(Tensor const& leaf) const {
+    auto const it = by_label_.find(std::wstring(leaf.label()));
+    if (it == by_label_.end()) return std::nullopt;
+    for (std::size_t k : it->second) {
+      if (!system_[k].produces_tensor()) continue;
+      Tensor const& head = heads_[k];
+      if (!same_slot_spaces(leaf, head)) continue;
+      if (leaf.symmetry() != head.symmetry() ||
+          leaf.braket_symmetry() != head.braket_symmetry() ||
+          leaf.column_symmetry() != head.column_symmetry())
+        throw Exception(
+            "inline: leaf " + toUtf8(io::serialization::to_string(leaf)) +
+            " names head " + toUtf8(io::serialization::to_string(head)) +
+            " but declares different symmetries; use result_as_tensor()");
+      return k;
+    }
+    return std::nullopt;
+  }
+
+  /// \return the equation whose scalar head \p leaf names, if any
+  std::optional<std::size_t> match(Variable const& leaf) const {
+    auto const it = by_label_.find(std::wstring(leaf.label()));
+    if (it == by_label_.end()) return std::nullopt;
+    for (std::size_t k : it->second)
+      if (!system_[k].produces_tensor()) return k;
+    return std::nullopt;
+  }
+
+  /// \return the tree of equation \p k, with every definition inlined
+  EvalExprNode binarize_equation(std::size_t k, BinarizationOptions const& opts,
+                                 std::size_t& node_counter) {
+    return binarize_guarded(k, system_[k], opts, node_counter);
+  }
+
+  /// \return the tree of equation \p k as a factor in place of \p leaf (null
+  ///         for a Variable leaf): its head's indices renamed to \p leaf's and
+  ///         every other index of its rhs to a fresh one; not stamped with
+  ///         \p opts.node_batch_axes
+  EvalExprNode inline_definition(std::size_t k, Tensor const* leaf,
+                                 BinarizationOptions const& opts) {
+    consumed_[k] = true;
+    ResultExpr const& def = system_[k];
+
+    container::map<Index, Index> renaming;
+    Tensor head;
+    if (leaf) {
+      head = heads_[k];
+      auto map_slots = [&renaming](auto const& from, auto const& to) {
+        SEQUANT_ASSERT(std::ranges::size(from) == std::ranges::size(to));
+        auto t = std::ranges::begin(to);
+        for (auto const& ix : from) {
+          if (!ix.nonnull()) {
+            ++t;
+            continue;
+          }
+          auto const [it, inserted] = renaming.emplace(ix, *t);
+          if (!inserted && it->second != *t)
+            throw Exception("inline: a leaf names head index " +
+                            toUtf8(ix.full_label()) + " by two indices");
+          ++t;
+        }
+      };
+      map_slots(head.bra(), leaf->bra());
+      map_slots(head.ket(), leaf->ket());
+      map_slots(head.aux(), leaf->aux());
+      transform_indices(head, renaming);
+      reset_tags(head);
+    }
+    // every other index of the rhs (a dummy, or every index under a scalar
+    // head) gets a fresh one, so the subtree cannot collide with the
+    // consumer's or another inlined subtree's indices
+    container::svector<Index> dummies;
+    for (auto const& ix : get_used_indices(def.expression()))
+      if (!renaming.contains(ix)) dummies.push_back(ix);
+    for (auto const& ix : dummies) {
+      Index f = fresh_.make(ix.drop_proto_indices());
+      used_labels_.emplace(f.label());
+      renaming.emplace(ix, std::move(f));
+    }
+    // the proto indices of a renamed dummy follow the renaming
+    for (auto const& ix : dummies) {
+      if (!ix.has_proto_indices()) continue;
+      container::vector<Index> protos;
+      for (auto const& p : ix.proto_indices()) {
+        auto const it = renaming.find(p);
+        protos.push_back(it == renaming.end() ? p : it->second);
+      }
+      Index& f = renaming.at(ix);
+      f = Index(Index(f), std::move(protos), ix.symmetric_proto_indices());
+    }
+
+    ExprPtr rhs = transform_expr(def.expression(), renaming);
+    ResultExpr const renamed =
+        leaf ? ResultExpr(head, std::move(rhs))
+             : ResultExpr(def.result_as_variable(), std::move(rhs));
+    BinarizationOptions sub_opts = opts;
+    sub_opts.node_batch_axes.clear();
+    std::size_t node_counter = 0;
+    return binarize_guarded(k, renamed, sub_opts, node_counter);
+  }
+
+ private:
+  /// binarizes \p res, the (renamed) equation \p k, with \p k marked active
+  /// \throw Exception if \p k is active already
+  EvalExprNode binarize_guarded(std::size_t k, ResultExpr const& res,
+                                BinarizationOptions const& opts,
+                                std::size_t& node_counter) {
+    if (!active_.emplace(k).second)
+      throw Exception("inline: cyclic definition of " +
+                      toUtf8(system_[k].label()));
+    auto tree = impl::binarize(res, opts, node_counter, this);
+    active_.erase(k);
+    return tree;
+  }
+
+  std::span<const ResultExpr> system_;
+  container::svector<bool>& consumed_;
+  /// head label -> the equations with that label
+  container::map<std::wstring, container::svector<std::size_t>> by_label_;
+  /// the head of every equation as a Tensor (empty for a scalar head)
+  container::svector<Tensor> heads_;
+  /// the equations whose trees are being built
+  container::set<std::size_t> active_;
+  /// the labels of every index of the system and of every fresh index
+  container::set<std::wstring> used_labels_;
+  IndexFactory fresh_;
+};
+
+}  // namespace detail
+
 namespace impl {
 
 EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
                       const BinarizationOptions& opts,
-                      std::size_t& node_counter) {
+                      std::size_t& node_counter,
+                      detail::InlineContext* inline_ctx) {
   if (expr->is<Constant>())  //
     return binarize(expr->as<Constant>());
 
-  if (expr->is<Variable>())  //
-    return binarize(expr->as<Variable>());
+  if (expr->is<Variable>()) {
+    auto const& v = expr->as<Variable>();
+    if (inline_ctx)
+      if (auto const k = inline_ctx->match(v))
+        return inline_ctx->inline_definition(*k, nullptr, opts);
+    return binarize(v);
+  }
 
-  if (expr->is<Tensor>())  //
-    return binarize(expr->as<Tensor>());
+  if (expr->is<Tensor>()) {
+    auto const& t = expr->as<Tensor>();
+    if (inline_ctx)
+      if (auto const k = inline_ctx->match(t))
+        return inline_ctx->inline_definition(*k, &t, opts);
+    return binarize(t);
+  }
 
   if (expr->is<Sum>())  //
-    return binarize(expr->as<Sum>(), uncontract, opts, node_counter);
+    return binarize(expr->as<Sum>(), uncontract, opts, node_counter,
+                    inline_ctx);
 
   if (expr->is<Product>())  //
-    return binarize(expr->as<Product>(), uncontract, opts, node_counter);
+    return binarize(expr->as<Product>(), uncontract, opts, node_counter,
+                    inline_ctx);
 
   if (expr->is<Power>())  //
     return binarize(expr->as<Power>());
 
   if (expr->is<TensorPower>())  //
-    return binarize(expr->as<TensorPower>(), uncontract, opts, node_counter);
+    return binarize(expr->as<TensorPower>(), uncontract, opts, node_counter,
+                    inline_ctx);
 
   throw Exception("Encountered unsupported expression in binarize.");
 }
 
 EvalExprNode binarize(ResultExpr const& res, const BinarizationOptions& opts,
-                      std::size_t& node_counter) {
+                      std::size_t& node_counter,
+                      detail::InlineContext* inline_ctx) {
   ResultExpr const lowered = lower_broadcast_sum(res);
 
   // collect result indices so they are not contracted in the expression tree
@@ -734,8 +944,8 @@ EvalExprNode binarize(ResultExpr const& res, const BinarizationOptions& opts,
   // the root's bra/ket would be positional (see the deprecated
   // binarize(ExprPtr)), but it is overwritten below with
   // lowered.result_as_tensor(), so the layout is caller-determined
-  EvalExprNode tree =
-      binarize(lowered.expression(), uncontract, opts, node_counter);
+  EvalExprNode tree = binarize(lowered.expression(), uncontract, opts,
+                               node_counter, inline_ctx);
 
   const bool is_scalar =
       lowered.bra().empty() && lowered.ket().empty() && lowered.aux().empty();
@@ -764,6 +974,23 @@ EvalExprNode binarize(ResultExpr const& res, const BinarizationOptions& opts,
   }
 
   return tree;
+}
+
+container::svector<EvalExprNode> binarize_system(
+    std::span<const ResultExpr> system, const BinarizationOptions& opts,
+    container::svector<bool>& consumed) {
+  consumed.assign(system.size(), false);
+  detail::InlineContext ctx(system, consumed);
+  container::svector<EvalExprNode> trees;
+  for (std::size_t k = 0; k != system.size(); ++k) {
+    std::size_t node_counter = 0;
+    trees.emplace_back(ctx.binarize_equation(k, opts, node_counter));
+    // see binarize(ExprPtr const&, ...)
+    if (!opts.node_batch_axes.empty()) {
+      SEQUANT_ASSERT(node_counter == opts.node_batch_axes.size());
+    }
+  }
+  return trees;
 }
 
 }  // namespace impl
