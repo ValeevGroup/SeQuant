@@ -7,6 +7,7 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/irreps/algebra.hpp>
 #include <SeQuant/core/irreps/any.hpp>
+#include <SeQuant/core/irreps/config.hpp>
 #include <SeQuant/core/irreps/eval_tree.hpp>
 #include <SeQuant/core/irreps/propagation.hpp>
 #include <SeQuant/core/irreps/table_algebra.hpp>
@@ -529,6 +530,15 @@ TEST_CASE("irreps", "[irreps]") {
       REQUIRE(result.to_string() == to_string(*typed_result));
     }
 
+    // Totally symmetric check
+    REQUIRE(erased.is_totally_symmetric(erased.totally_symmetric()));
+    REQUIRE(typed.is_totally_symmetric(typed.totally_symmetric()));
+    REQUIRE_FALSE(erased.is_totally_symmetric(erased.empty_set()));
+    REQUIRE_FALSE(erased.is_totally_symmetric(AnyIrrepSet(Set{irrep("B1")})));
+    REQUIRE_FALSE(
+        erased.is_totally_symmetric(AnyIrrepSet(Set{irrep("A"), irrep("B1")})));
+    REQUIRE_FALSE(erased.is_totally_symmetric(AnyIrrepSet(Set::any())));
+
     // Deep copy
     AnyIrrepContext copy(erased);
     REQUIRE(copy.as<Z2Algebra<D2>>() != nullptr);
@@ -564,5 +574,109 @@ TEST_CASE("irreps", "[irreps]") {
           REQUIRE(current.as<Irrep>() != nullptr);
         });
     REQUIRE(names == std::vector<std::string>{"B2*Gx", "B1"});
+  }
+}
+
+TEST_CASE("irrep context from specification", "[irreps]") {
+  using namespace sequant;
+
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
+  Tensor f(L"f", bra{L"i_1"}, ket{L"a_1"});
+  Tensor g(L"g", bra{L"i_1"}, ket{L"a_1"});
+
+  IrrepContextSpec spec;
+  spec.group = "symbolic";
+  spec.tensors = {{"t", {"A"}}, {"f.*", {"*"}}};
+  spec.error_on_unspecified = true;
+
+  AnyIrrepContext ctx = make_irrep_context(spec);
+  REQUIRE(ctx.irreps_of(t).to_string() == "{A}");
+  REQUIRE(ctx.irreps_of(f).is_any());
+  REQUIRE_THROWS_AS(ctx.irreps_of(g), Exception);
+
+  SECTION("variables") {
+    spec.tensors.emplace_back("w", IrrepContextSpec::IrrepNames{"B"});
+    spec.variables.emplace_back("w", IrrepContextSpec::IrrepNames{"A"});
+    spec.variables.emplace_back("v.", IrrepContextSpec::IrrepNames{"B"});
+    AnyIrrepContext var_ctx = make_irrep_context(spec);
+
+    REQUIRE(var_ctx.irreps_of(Variable(L"w")).to_string() == "{A}");
+    REQUIRE(var_ctx.irreps_of(Variable(L"v1")).to_string() == "{B}");
+    // Unlisted variables are totally symmetric even if tensors must be listed
+    REQUIRE(var_ctx.irreps_of(Variable(L"x")) == var_ctx.totally_symmetric());
+    // Tensor entries don't apply to variables and vice versa
+    REQUIRE(var_ctx.irreps_of(Variable(L"f1")) == var_ctx.totally_symmetric());
+    REQUIRE(
+        var_ctx.irreps_of(Tensor(L"w", bra{L"a_1"}, ket{L"i_1"})).to_string() ==
+        "{B}");
+    REQUIRE_THROWS_AS(
+        var_ctx.irreps_of(Tensor(L"v1", bra{L"a_1"}, ket{L"i_1"})), Exception);
+
+    REQUIRE_NOTHROW(irreps_of(*ex<Power>(L"x", 2), var_ctx));
+    REQUIRE_THROWS_AS(irreps_of(*ex<Power>(L"w", 2), var_ctx), Exception);
+
+    spec.variables.emplace_back("v.*", IrrepContextSpec::IrrepNames{"A"});
+    REQUIRE_THROWS_AS(make_irrep_context(spec).irreps_of(Variable(L"v1")),
+                      Exception);
+    spec.variables = {{"w{a1;i1}", {"A"}}};
+    REQUIRE_THROWS_AS(make_irrep_context(spec), Exception);
+  }
+
+  SECTION("default") {
+    spec.error_on_unspecified = false;
+    spec.default_irreps = {"B"};
+
+    REQUIRE(make_irrep_context(spec).irreps_of(g).to_string() == "{B}");
+  }
+
+  SECTION("invalid specifications") {
+    IrrepContextSpec invalid;
+    invalid.group = "Unknown";
+    REQUIRE_THROWS_AS(make_irrep_context(invalid), Exception);
+
+    invalid.group = "D2h";
+    invalid.tensors = {{"t", {"Unknown"}}};
+    REQUIRE_THROWS_AS(make_irrep_context(invalid), Exception);
+  }
+
+  SECTION("whitespace") {
+    REQUIRE(normalize_irrep_spec(" A * B = C ") == "A*B=C");
+    REQUIRE(normalize_irrep_spec("A*B=C") == "A*B=C");
+    REQUIRE_THROWS_AS(normalize_irrep_spec("A B"), Exception);
+
+    IrrepContextSpec compact;
+    compact.group = "symbolic";
+    compact.relations = std::vector<std::string>{"A*B=C"};
+    compact.tensors = {{"t", {"A*B"}}};
+    IrrepContextSpec spaced = compact;
+    spaced.relations = std::vector<std::string>{" A * B = C "};
+    spaced.tensors = {{"t", {" A * B "}}};
+
+    REQUIRE(make_irrep_context(spaced).irreps_of(t).to_string() ==
+            make_irrep_context(compact).irreps_of(t).to_string());
+
+    spaced.tensors = {{"t", {"A B"}}};
+    REQUIRE_THROWS_AS(make_irrep_context(spaced), Exception);
+
+    IrrepContextSpec table_spec;
+    table_spec.table = IrrepContextSpec::Table{.totally_symmetric = "E",
+                                               .products = {{" X * X ", {"E"}}},
+                                               .conjugates = {}};
+    table_spec.tensors = {{"t", {" X "}}};
+    REQUIRE(make_irrep_context(table_spec).irreps_of(t).to_string() == "{X}");
+  }
+
+  SECTION("multiplication table") {
+    IrrepContextSpec table_spec;
+    table_spec.table = IrrepContextSpec::Table{.totally_symmetric = "E",
+                                               .products = {{"X*X", {"E"}}},
+                                               .conjugates = {}};
+    table_spec.tensors = {{"t", {"X"}}};
+
+    AnyIrrepContext table_ctx = make_irrep_context(table_spec);
+    REQUIRE(table_ctx.irreps_of(t).to_string() == "{X}");
+
+    table_spec.symbols = std::vector<std::string>{};
+    REQUIRE_THROWS_AS(make_irrep_context(table_spec), Exception);
   }
 }

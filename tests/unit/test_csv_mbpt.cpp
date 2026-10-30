@@ -629,6 +629,7 @@ TEST_CASE("basis-grants-cc-t", "[mbpt][csv][valgrind_skip]") {
     }
   }
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
   SECTION("Bernoulli UCC projector legs carry the amplitude's grant") {
     ScopedCsvContext scoped{granted_registry({{L"t", 1}}), CSV::No};
     Index::reset_tmp_index();
@@ -641,6 +642,7 @@ TEST_CASE("basis-grants-cc-t", "[mbpt][csv][valgrind_skip]") {
       check_externals(eqs.at(p), 1);
     }
   }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
   SECTION("projector legs carry the amplitude's grant") {
     for (auto const& inst :
@@ -694,6 +696,7 @@ TEST_CASE("basis-grants-cc-t", "[mbpt][csv][valgrind_skip]") {
   }
 }
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("basis-grants-lambda", "[mbpt][csv][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::mbpt;
@@ -723,7 +726,9 @@ TEST_CASE("basis-grants-lambda", "[mbpt][csv][valgrind_skip]") {
   }
   CHECK(metrics == std::vector<std::size_t>{183, 88});
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("basis-grants-linear-response", "[mbpt][csv][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::mbpt;
@@ -806,3 +811,4 @@ TEST_CASE("basis-grants-linear-response", "[mbpt][csv][valgrind_skip]") {
     CHECK(max_per_term == 4);
   }
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)

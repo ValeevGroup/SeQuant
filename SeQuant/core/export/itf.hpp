@@ -365,6 +365,9 @@ class ItfGenerator : public Generator<Context> {
 
     const AnyIrrepSet *irreps = ctx.irreps_of(tensor);
 
+    const bool annotate_irrep =
+        irreps && !ctx.irrep_context().is_totally_symmetric(*irreps);
+
     if (needs_import) {
       if (import_name.has_value()) {
         append(import_name.value());
@@ -372,15 +375,15 @@ class ItfGenerator : public Generator<Context> {
         append(get_name(tensor, ctx));
       }
 
-      if (irreps) {
+      if (annotate_irrep) {
         // IRREPs of imported tensors are only given for informational purposes
         append(" // " + irrep_entry(tensor, *irreps, ctx));
       }
     } else {
       append("!Create{type:");
       append(usage == Usage::Intermediate ? "plain" : "disk");
-      if (irreps) {
-        append(" " + irrep_entry(tensor, *irreps, ctx));
+      if (annotate_irrep) {
+        append("; " + irrep_entry(tensor, *irreps, ctx));
       }
       append("}");
     }

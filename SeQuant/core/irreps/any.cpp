@@ -121,10 +121,22 @@ AnyIrrepSet AnyIrrepContext::irreps_of(const Tensor &tensor) const {
   return m_impl->irreps_of(tensor);
 }
 
+AnyIrrepSet AnyIrrepContext::irreps_of(const Variable &variable) const {
+  SEQUANT_ASSERT(m_impl &&
+                 "moved-from AnyIrrepContext objects must not be used");
+  return m_impl->irreps_of(variable);
+}
+
 AnyIrrepSet AnyIrrepContext::totally_symmetric() const {
   SEQUANT_ASSERT(m_impl &&
                  "moved-from AnyIrrepContext objects must not be used");
   return m_impl->totally_symmetric();
+}
+
+bool AnyIrrepContext::is_totally_symmetric(const AnyIrrepSet &set) const {
+  SEQUANT_ASSERT(m_impl &&
+                 "moved-from AnyIrrepContext objects must not be used");
+  return m_impl->is_totally_symmetric(set);
 }
 
 AnyIrrepSet AnyIrrepContext::empty_set() const {
@@ -137,6 +149,12 @@ AnyIrrepSet AnyIrrepContext::any_set() const {
   SEQUANT_ASSERT(m_impl &&
                  "moved-from AnyIrrepContext objects must not be used");
   return m_impl->any_set();
+}
+
+AnyIrrep AnyIrrepContext::canonical_irrep(std::string_view name) const {
+  SEQUANT_ASSERT(m_impl &&
+                 "moved-from AnyIrrepContext objects must not be used");
+  return m_impl->canonical_irrep(name);
 }
 
 AnyIrrepSet AnyIrrepContext::product(const AnyIrrepSet &lhs,

@@ -113,145 +113,159 @@ TEST_CASE("context", "[runtime]") {
   SECTION("tensor canonicalizers") {
     const Context ctx(
         {.index_basis_registry_shared_ptr = mbpt::make_sr_spaces()});
-
-    // defaults
-    REQUIRE(ctx.tensor_canonicalizer_ptr(L""));
-    CHECK(std::dynamic_pointer_cast<DefaultTensorCanonicalizer>(
-        ctx.tensor_canonicalizer_ptr(L"")));
-    CHECK(ctx.tensor_canonicalizer_ptr(L"anything") ==
-          ctx.tensor_canonicalizer_ptr(L""));
-    CHECK(&ctx.tensor_canonicalizer(L"anything") ==
-          ctx.tensor_canonicalizer_ptr(L"").get());
-    CHECK(ctx.nondefault_tensor_canonicalizer_ptr(L"anything") == nullptr);
-    CHECK(ctx.cardinal_tensor_labels() ==
-          container::vector<std::wstring>{reserved::antisymm_label(),
-                                          reserved::symm_label(),
-                                          reserved::transposition_label()});
-    {
-      const Index i1(L"i_1"), i2(L"i_2"), a1(L"a_1");
-      const auto& cmp = ctx.index_comparer();
-      REQUIRE(cmp);
-      CHECK(cmp(i1, i2));
-      CHECK(!cmp(i2, i1));
-      CHECK(!cmp(i1, i1));
-      CHECK(cmp(i1, a1) == (i1.space() < a1.space()));
-      const auto& paircmp = ctx.index_pair_comparer();
-      REQUIRE(paircmp);
-      CHECK(paircmp({i1, a1}, {i2, a1}));
-      CHECK(!paircmp({i2, a1}, {i1, a1}));
-    }
-
-    // two default-constructed states compare equal
-    const Context ctx2({.index_basis_registry = *ctx.index_basis_registry()});
-    CHECK(ctx == ctx2);
-
-    // setters act on a copy only
-    auto ctx_q = ctx;
-    CHECK(ctx_q == ctx);
     const auto null_canon = std::make_shared<NullTensorCanonicalizer>();
-    ctx_q.set_tensor_canonicalizer(L"Q", null_canon);
-    CHECK(ctx_q.nondefault_tensor_canonicalizer_ptr(L"Q") == null_canon);
-    CHECK(ctx_q.tensor_canonicalizer_ptr(L"Q") == null_canon);
-    CHECK(ctx_q.tensor_canonicalizer_ptr(L"R") ==
-          ctx.tensor_canonicalizer_ptr(L""));
-    CHECK(ctx.nondefault_tensor_canonicalizer_ptr(L"Q") == nullptr);
-    CHECK(ctx_q != ctx);
-    ctx_q.unset_tensor_canonicalizer(L"Q");
-    CHECK(ctx_q.nondefault_tensor_canonicalizer_ptr(L"Q") == nullptr);
-    CHECK(ctx_q == ctx);
 
-    // no canonicalizer at all
-    auto ctx_none = ctx;
-    ctx_none.unset_tensor_canonicalizer(L"");
-    CHECK(ctx_none.tensor_canonicalizer_ptr(L"anything") == nullptr);
-    CHECK_THROWS_AS(ctx_none.tensor_canonicalizer(L"anything"), Exception);
-    CHECK(ctx_none != ctx);
-
-    // comparers compare by identity: a behaviourally identical replacement is
-    // unequal, while a copy is equal
-    auto ctx_cmp = ctx;
-    ctx_cmp.set_index_comparer(TensorCanonicalizer::index_comparer_t(
-        [](const Index& a, const Index& b) { return a < b; }));
-    CHECK(ctx_cmp != ctx);
-    const auto ctx_cmp_copy = ctx_cmp;
-    CHECK(ctx_cmp_copy == ctx_cmp);
-    CHECK(ctx_cmp.index_comparer()(Index(L"i_1"), Index(L"i_2")));
-    auto ctx_paircmp = ctx;
-    ctx_paircmp.set_index_pair_comparer(
-        TensorCanonicalizer::index_pair_comparer_t(
-            [](const TensorCanonicalizer::index_pair_t& a,
-               const TensorCanonicalizer::index_pair_t b) {
-              return a.first < b.first;
-            }));
-    CHECK(ctx_paircmp != ctx);
-
-    // cardinal labels
-    auto ctx_card = ctx;
-    ctx_card.set_cardinal_tensor_labels({L"X", L"Y"});
-    CHECK(ctx_card.cardinal_tensor_labels() ==
-          container::vector<std::wstring>{L"X", L"Y"});
-    CHECK(ctx_card != ctx);
-    ctx_card.set_cardinal_tensor_labels(ctx.cardinal_tensor_labels());
-    CHECK(ctx_card == ctx);
-
-    // Context is copy-only: moving from it leaves it intact
-    {
-      auto source = ctx;
-      const auto moved_to = std::move(source);
-      CHECK(source == moved_to);
-      CHECK(source.index_comparer());
-      CHECK(source.tensor_canonicalizer_ptr(L""));
+    SECTION("defaults") {
+      REQUIRE(ctx.tensor_canonicalizer_ptr(L""));
+      CHECK(std::dynamic_pointer_cast<DefaultTensorCanonicalizer>(
+          ctx.tensor_canonicalizer_ptr(L"")));
+      CHECK(ctx.tensor_canonicalizer_ptr(L"anything") ==
+            ctx.tensor_canonicalizer_ptr(L""));
+      CHECK(&ctx.tensor_canonicalizer(L"anything") ==
+            ctx.tensor_canonicalizer_ptr(L"").get());
+      CHECK(ctx.nondefault_tensor_canonicalizer_ptr(L"anything") == nullptr);
+      CHECK(ctx.cardinal_tensor_labels() ==
+            container::vector<std::wstring>{reserved::antisymm_label(),
+                                            reserved::symm_label(),
+                                            reserved::transposition_label()});
+      {
+        const Index i1(L"i_1"), i2(L"i_2"), a1(L"a_1");
+        const auto& cmp = ctx.index_comparer();
+        REQUIRE(cmp);
+        CHECK(cmp(i1, i2));
+        CHECK(!cmp(i2, i1));
+        CHECK(!cmp(i1, i1));
+        CHECK(cmp(i1, a1) == (i1.space() < a1.space()));
+        const auto& paircmp = ctx.index_pair_comparer();
+        REQUIRE(paircmp);
+        CHECK(paircmp({i1, a1}, {i2, a1}));
+        CHECK(!paircmp({i2, a1}, {i1, a1}));
+      }
     }
 
-    // a comparer re-installed through its shared pointer keeps equality
-    auto ctx_same_cmp = ctx;
-    ctx_same_cmp.set_index_comparer(ctx.index_comparer_ptr())
-        .set_index_pair_comparer(ctx.index_pair_comparer_ptr());
-    CHECK(ctx_same_cmp == ctx);
-    CHECK(ctx_same_cmp.version() == ctx.version());
-    CHECK(Context(ctx).set_index_comparer(ctx.index_comparer()) != ctx);
+    SECTION("equal-defaults") {
+      const Context ctx2({.index_basis_registry = *ctx.index_basis_registry()});
+      CHECK(ctx == ctx2);
+    }
 
-    // chaining
-    auto ctx_chain = ctx;
-    CHECK(&ctx_chain.set_tensor_canonicalizer(L"Q", null_canon)
-               .unset_tensor_canonicalizer(L"Q")
-               .set_cardinal_tensor_labels(ctx.cardinal_tensor_labels())
-               .set_index_comparer(ctx.index_comparer())
-               .set_index_pair_comparer(ctx.index_pair_comparer()) ==
-          &ctx_chain);
+    SECTION("setters-copy-only") {
+      auto ctx_q = ctx;
+      CHECK(ctx_q == ctx);
+      ctx_q.set_tensor_canonicalizer(L"Q", null_canon);
+      CHECK(ctx_q.nondefault_tensor_canonicalizer_ptr(L"Q") == null_canon);
+      CHECK(ctx_q.tensor_canonicalizer_ptr(L"Q") == null_canon);
+      CHECK(ctx_q.tensor_canonicalizer_ptr(L"R") ==
+            ctx.tensor_canonicalizer_ptr(L""));
+      CHECK(ctx.nondefault_tensor_canonicalizer_ptr(L"Q") == nullptr);
+      CHECK(ctx_q != ctx);
+      ctx_q.unset_tensor_canonicalizer(L"Q");
+      CHECK(ctx_q.nondefault_tensor_canonicalizer_ptr(L"Q") == nullptr);
+      CHECK(ctx_q == ctx);
+    }
 
-    // named-parameter construction
-    const Context ctx_opts(
-        {.index_basis_registry = *ctx.index_basis_registry(),
-         .tensor_canonicalizers =
-             container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>{
-                 {L"Q", null_canon}},
-         .index_comparer = ctx_cmp.index_comparer(),
-         .cardinal_tensor_labels = container::vector<std::wstring>{L"Z"}});
-    CHECK(ctx_opts.tensor_canonicalizer_ptr(L"Q") == null_canon);
-    // the empty label maps to the default canonicalizer unless given
-    CHECK(ctx_opts.tensor_canonicalizer_ptr(L"R") ==
-          Context{}.tensor_canonicalizer_ptr(L""));
-    CHECK(Context({.tensor_canonicalizers =
+    SECTION("no-canonicalizer") {
+      auto ctx_none = ctx;
+      ctx_none.unset_tensor_canonicalizer(L"");
+      CHECK(ctx_none.tensor_canonicalizer_ptr(L"anything") == nullptr);
+      CHECK_THROWS_AS(ctx_none.tensor_canonicalizer(L"anything"), Exception);
+      CHECK(ctx_none != ctx);
+    }
+
+    SECTION("comparer-identity") {
+      auto ctx_cmp = ctx;
+      ctx_cmp.set_index_comparer(TensorCanonicalizer::index_comparer_t(
+          [](const Index& a, const Index& b) { return a < b; }));
+      CHECK(ctx_cmp != ctx);
+      const auto ctx_cmp_copy = ctx_cmp;
+      CHECK(ctx_cmp_copy == ctx_cmp);
+      CHECK(ctx_cmp.index_comparer()(Index(L"i_1"), Index(L"i_2")));
+      auto ctx_paircmp = ctx;
+      ctx_paircmp.set_index_pair_comparer(
+          TensorCanonicalizer::index_pair_comparer_t(
+              [](const TensorCanonicalizer::index_pair_t& a,
+                 const TensorCanonicalizer::index_pair_t b) {
+                return a.first < b.first;
+              }));
+      CHECK(ctx_paircmp != ctx);
+    }
+
+    SECTION("cardinal-labels") {
+      auto ctx_card = ctx;
+      ctx_card.set_cardinal_tensor_labels({L"X", L"Y"});
+      CHECK(ctx_card.cardinal_tensor_labels() ==
+            container::vector<std::wstring>{L"X", L"Y"});
+      CHECK(ctx_card != ctx);
+      ctx_card.set_cardinal_tensor_labels(ctx.cardinal_tensor_labels());
+      CHECK(ctx_card == ctx);
+    }
+
+    SECTION("copy-only") {
+      {
+        auto source = ctx;
+        const auto moved_to = std::move(source);
+        CHECK(source == moved_to);
+        CHECK(source.index_comparer());
+        CHECK(source.tensor_canonicalizer_ptr(L""));
+      }
+    }
+
+    SECTION("reinstalled-comparer") {
+      auto ctx_same_cmp = ctx;
+      ctx_same_cmp.set_index_comparer(ctx.index_comparer_ptr())
+          .set_index_pair_comparer(ctx.index_pair_comparer_ptr());
+      CHECK(ctx_same_cmp == ctx);
+      CHECK(ctx_same_cmp.version() == ctx.version());
+      CHECK(Context(ctx).set_index_comparer(ctx.index_comparer()) != ctx);
+    }
+
+    SECTION("chaining") {
+      auto ctx_chain = ctx;
+      CHECK(&ctx_chain.set_tensor_canonicalizer(L"Q", null_canon)
+                 .unset_tensor_canonicalizer(L"Q")
+                 .set_cardinal_tensor_labels(ctx.cardinal_tensor_labels())
+                 .set_index_comparer(ctx.index_comparer())
+                 .set_index_pair_comparer(ctx.index_pair_comparer()) ==
+            &ctx_chain);
+    }
+
+    SECTION("named-parameters") {
+      const auto custom_cmp = TensorCanonicalizer::index_comparer_t(
+          [](const Index& a, const Index& b) { return a < b; });
+      const Context ctx_opts(
+          {.index_basis_registry = *ctx.index_basis_registry(),
+           .tensor_canonicalizers =
+               container::map<std::wstring,
+                              std::shared_ptr<TensorCanonicalizer>>{
+                   {L"Q", null_canon}},
+           .index_comparer = custom_cmp,
+           .cardinal_tensor_labels = container::vector<std::wstring>{L"Z"}});
+      CHECK(ctx_opts.tensor_canonicalizer_ptr(L"Q") == null_canon);
+      // the empty label maps to the default canonicalizer unless given
+      CHECK(ctx_opts.tensor_canonicalizer_ptr(L"R") ==
+            Context{}.tensor_canonicalizer_ptr(L""));
+      CHECK(Context({.tensor_canonicalizers =
+                         container::map<std::wstring,
+                                        std::shared_ptr<TensorCanonicalizer>>{
+                             {L"", null_canon}}})
+                .tensor_canonicalizer_ptr(L"R") == null_canon);
+      CHECK(ctx_opts.cardinal_tensor_labels() ==
+            container::vector<std::wstring>{L"Z"});
+      CHECK(ctx_opts.index_comparer());
+      CHECK(ctx_opts.index_comparer()(Index(L"i_1"), Index(L"i_2")));
+      CHECK(ctx_opts.index_pair_comparer());
+      CHECK(ctx_opts != ctx);
+    }
+
+    SECTION("null-rejected") {
+      CHECK_THROWS_AS(
+          Context({.tensor_canonicalizers =
                        container::map<std::wstring,
                                       std::shared_ptr<TensorCanonicalizer>>{
-                           {L"", null_canon}}})
-              .tensor_canonicalizer_ptr(L"R") == null_canon);
-    CHECK(ctx_opts.cardinal_tensor_labels() ==
-          container::vector<std::wstring>{L"Z"});
-    CHECK(ctx_opts.index_comparer());
-    CHECK(ctx_opts.index_pair_comparer());
-    CHECK(ctx_opts != ctx);
-
-    // null canonicalizers are rejected
-    CHECK_THROWS_AS(
-        Context({.tensor_canonicalizers =
-                     container::map<std::wstring,
-                                    std::shared_ptr<TensorCanonicalizer>>{
-                         {L"Q", nullptr}}}),
-        Exception);
-    CHECK_THROWS_AS(Context{}.set_tensor_canonicalizer(L"Q", nullptr),
-                    Exception);
+                           {L"Q", nullptr}}}),
+          Exception);
+      CHECK_THROWS_AS(Context{}.set_tensor_canonicalizer(L"Q", nullptr),
+                      Exception);
+    }
   }
 
   SECTION("deprecated index space registry spellings forward") {

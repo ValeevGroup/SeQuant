@@ -79,6 +79,9 @@ wherever it is needed, so a pipeline tail that would otherwise be written out se
 Templates are expanded into ordinary steps before the pipeline runs, so everything described above - :code:`inherit_options_from`, output aliasing,
 input resolution - applies unchanged to the result.
 
+Templates can be shared between drivers by placing them in a separate file and pulling it in with :code:`$include` (see
+:ref:`external_interface_include`).
+
 Each entry of :code:`templates` maps a template name to a definition with two properties:
 
 * :code:`parameters` (Object): Declares the knobs the template exposes. Each entry maps a parameter name to a declaration object that must specify
@@ -529,11 +532,22 @@ The :code:`irreps` option accepts the following properties:
        intermediates) need not be listed.
      - :code:`{}`
      - No
+   * - :code:`variables`
+     - Object mapping scalar variables to their IRREP(s), in the same format as :code:`tensors`, except that keys are always full-match regular
+       expressions for the variable label (an exactly spelled label takes precedence). Entries of :code:`tensors` never apply to variables and
+       vice versa. Variables not listed are totally symmetric and are not subject to :code:`default`.
+       A variable with an IRREP other than the totally symmetric one contributes that IRREP to the products it appears in (symbolic
+       bookkeeping only). Powers of such variables are not supported.
+     - :code:`{}`
+     - No
    * - :code:`default`
      - IRREP(s) of tensors not listed in :code:`tensors`. The special value :code:`error` turns unlisted tensors into an error, which is
        recommended to catch missing specifications.
      - :code:`"*"`
      - No
+
+Whitespace around IRREP names, :code:`*` and :code:`=` is ignored (:code:`"A * B = C"` equals :code:`"A*B=C"`). IRREP names themselves must not
+contain whitespace.
 
 For :code:`language: itf`, the IRREPs of created tensors are emitted as an :code:`irrep:` entry of their :code:`!Create{...}` statement, whereas the
 IRREPs of imported tensors are given as a trailing comment of their declaration (for informational purposes only).
@@ -873,6 +887,26 @@ simplify
 ^^^^^^^^
 
 Simplifies the given expressions.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Input
+     - Output
+   * - Expression
+     - Expression
+
+
+This step does not accept any options.
+
+
+sort
+^^^^
+
+Sorts the input expressions into lexicographic order: the summands of every sum are sorted, as are the factors of every
+product insofar as they commute. Unlike the order produced by :code:`canonicalize`, which is based on hash values, this
+order depends only on the expressions themselves (tensors with the cardinal tensor labels of the context come first) and
+is hence stable across changes of the hashing algorithm. The order of the expressions within an input is not changed.
 
 .. list-table::
    :header-rows: 1

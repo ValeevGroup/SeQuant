@@ -742,7 +742,7 @@ TEST_CASE("evaluate consults the custom evaluator and short-circuits",
     CHECK(result == marker);      // the custom result is used as-is
   }
 
-  SECTION("null result declines: the standard scheme evaluates the children") {
+  SECTION("declines-to-standard") {
     auto cache = cache_manager(std::vector{node});
     size_t decline_calls = 0;
     cache.set_custom_evaluator([&](auto const&, auto&) -> ResultPtr {

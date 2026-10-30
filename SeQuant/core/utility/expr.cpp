@@ -10,6 +10,7 @@
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/view/concat.hpp>
+#include <range/v3/view/zip.hpp>
 
 #include <algorithm>
 #include <bitset>
@@ -781,6 +782,88 @@ ExprPtr detail::without_symmetrizers(const ExprPtr &expression) {
   pop_tensor(result, reserved::antisymm_label());
   pop_tensor(result, reserved::symm_label());
   return result;
+}
+
+void push_symmetrizer(ResultExpr &expression,
+                      std::optional<ExprPtr> symmetrizer) {
+  if (symmetrizer.has_value()) {
+    expression.expression() =
+        ex<Product>(ExprPtrList{std::move(symmetrizer.value()),
+                                std::move(expression.expression())},
+                    Product::Flatten::No);
+  }
+}
+
+bool has_symmetrizer(const ExprPtr &expression) {
+  bool contains_symmetrizer = false;
+  expression->visit(
+      [&contains_symmetrizer](const ExprPtr &expr) {
+        // Symmetrizer operators are represented as tensors with a reserved name
+        if (expr.is<Tensor>() &&
+            expr.as<Tensor>().label() == reserved::symm_label()) {
+          contains_symmetrizer = true;
+        }
+      },
+      true);
+
+  return contains_symmetrizer;
+}
+
+namespace {
+
+ExprPtr result_symmetrization(
+    std::wstring_view precursor_name,
+    const IndexGroups<container::svector<Index>> &externals,
+    const Tensor &ref) {
+  SEQUANT_ASSERT(externals.bra.size() == externals.ket.size());
+
+  // Note: we're only symmetrizing over bra-ket, not over auxiliary indices
+  ExprPtr symmetrization = ex<Sum>(ExprPtrList{});
+  for (std::size_t i = 0; i < externals.bra.size(); ++i) {
+    container::svector<Index> sym_bra;
+    container::svector<Index> sym_ket;
+
+    for (std::size_t j = 0; j < externals.ket.size(); ++j) {
+      sym_bra.push_back(externals.bra[(i + j) % externals.bra.size()]);
+      sym_ket.push_back(externals.ket[(i + j) % externals.ket.size()]);
+    }
+
+    symmetrization +=
+        rational(1, externals.bra.size()) *
+        ex<Tensor>(precursor_name, bra(std::move(sym_bra)),
+                   ket(std::move(sym_ket)), aux(externals.aux), ref.symmetry(),
+                   ref.braket_symmetry(), ref.column_symmetry());
+  }
+
+  return symmetrization;
+}
+
+}  // namespace
+
+ExprPtr result_symmetrization(const Tensor &result,
+                              std::wstring_view precursor_name) {
+  SEQUANT_ASSERT(result.bra_rank() == result.ket_rank());
+
+  IndexGroups<container::svector<Index>> externals;
+  for (const auto [bra, ket] : ranges::views::zip(result.bra(), result.ket())) {
+    externals.bra.push_back(bra);
+    externals.ket.push_back(ket);
+  }
+
+  return result_symmetrization(precursor_name, externals, result);
+}
+
+ExprPtr result_symmetrization(const ResultExpr &result,
+                              std::wstring_view precursor_name) {
+  IndexGroups<container::svector<Index>> externals;
+  for (const auto &[bra, ket] :
+       result.index_particle_grouping<std::pair<Index, Index>>()) {
+    externals.bra.push_back(bra);
+    externals.ket.push_back(ket);
+  }
+
+  return result_symmetrization(precursor_name, externals,
+                               result.result_as_tensor());
 }
 
 ExprPtr &replace(ExprPtr &expr, const ExprMatcher &target,

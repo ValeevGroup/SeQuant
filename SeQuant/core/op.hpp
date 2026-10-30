@@ -18,6 +18,8 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
+#include <algorithm>
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -163,6 +165,14 @@ bool operator==(const Op<S> &op1, const Op<S> &op2) {
 template <Statistics S>
 bool operator!=(const Op<S> &op1, const Op<S> &op2) {
   return !(op1 == op2);
+}
+
+/// @return the order of @p op1 relative to @p op2 : by action (cre < ann),
+/// then by index
+template <Statistics S>
+std::weak_ordering lexicographic_compare(const Op<S> &op1, const Op<S> &op2) {
+  if (auto cmp = op1.action() <=> op2.action(); cmp != 0) return cmp;
+  return op1.index() <=> op2.index();
 }
 
 using BOp = Op<Statistics::BoseEinstein>;
@@ -580,6 +590,12 @@ class Operator
 
   bool static_equal(const Expr &that) const override;
 
+ protected:
+  /// orders by the Op objects (lexicographically)
+  std::weak_ordering static_lexicographic_compare(
+      const Expr &that, const LexicographicCompareOptions &opts) const override;
+
+ private:
   bool is_cnumber() const override { return false; }
 
   bool commutes_with_atom(const Expr &that) const override {
@@ -631,6 +647,19 @@ template <Statistics S>
 bool Operator<S>::static_equal(const Expr &that) const {
   const auto &that_cast = static_cast<const Operator &>(that);
   return *this == that_cast;
+}
+
+template <Statistics S>
+std::weak_ordering Operator<S>::static_lexicographic_compare(
+    const Expr &that, const LexicographicCompareOptions &) const {
+  const auto &this_ops = static_cast<const base_type &>(*this);
+  const auto &that_ops =
+      static_cast<const base_type &>(static_cast<const Operator &>(that));
+  return std::lexicographical_compare_three_way(
+      this_ops.begin(), this_ops.end(), that_ops.begin(), that_ops.end(),
+      [](const Op<S> &a, const Op<S> &b) {
+        return sequant::lexicographic_compare(a, b);
+      });
 }
 
 template <Statistics S, typename T>
@@ -982,6 +1011,28 @@ class NormalOperator : public Operator<S>,
     }
   }
 
+  /// orders by label (see LexicographicCompareOptions::cardinal_tensor_labels
+  /// ), then by the numbers of creators and annihilators, then by the Op
+  /// objects (lexicographically), then by vacuum
+  std::weak_ordering static_lexicographic_compare(
+      const Expr &that,
+      const LexicographicCompareOptions &opts) const override {
+    const auto &that_cast = static_cast<const NormalOperator<S> &>(that);
+    if (auto cmp = detail::lexicographic_compare_tensor_labels(
+            this->label(), that_cast.label(), opts);
+        cmp != 0)
+      return cmp;
+    if (auto cmp = this->ncreators() <=> that_cast.ncreators(); cmp != 0)
+      return cmp;
+    if (auto cmp = this->nannihilators() <=> that_cast.nannihilators();
+        cmp != 0)
+      return cmp;
+    if (auto cmp = Operator<S>::static_lexicographic_compare(that, opts);
+        cmp != 0)
+      return cmp;
+    return this->vacuum() <=> that_cast.vacuum();
+  }
+
   template <Statistics>
   friend class Operator;
   bool commutes_with_atom(const Expr &that) const override {
@@ -1033,8 +1084,10 @@ class NormalOperator : public Operator<S>,
            ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
+  // empty, but not a default-constructed any_view: range-v3's end() of one
+  // dereferences a null pointer
   AbstractTensor::const_any_view_randsz _aux() const override final {
-    return {};
+    return ranges::counted_view<const Index *>(nullptr, 0);
   }
   AbstractTensor::const_any_view_rand _braket() const override final {
     return ranges::views::concat(annihilators(), creators()) |
@@ -1133,7 +1186,9 @@ class NormalOperator : public Operator<S>,
            ranges::views::transform(
                [](auto &&op) -> Index & { return op.index(); });
   }
-  AbstractTensor::any_view_randsz _aux_mutable() override final { return {}; }
+  AbstractTensor::any_view_randsz _aux_mutable() override final {
+    return ranges::counted_view<Index *>(nullptr, 0);
+  }
 
   void _permute_aux(std::span<const std::size_t> perm) override final {
     if (perm.size() != 0)
@@ -1341,6 +1396,21 @@ class NormalOperatorSequence
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const NormalOperatorSequence &>(that);
     return *this == that_cast;
+  }
+
+  /// orders by vacuum, then by the NormalOperator objects (lexicographically)
+  std::weak_ordering static_lexicographic_compare(
+      const Expr &that,
+      const LexicographicCompareOptions &opts) const override {
+    const auto &that_cast = static_cast<const NormalOperatorSequence &>(that);
+    if (auto cmp = this->vacuum() <=> that_cast.vacuum(); cmp != 0) return cmp;
+    const auto &this_nops = static_cast<const base_type &>(*this);
+    const auto &that_nops = static_cast<const base_type &>(that_cast);
+    return std::lexicographical_compare_three_way(
+        this_nops.begin(), this_nops.end(), that_nops.begin(), that_nops.end(),
+        [&opts](const NormalOperator<S> &a, const NormalOperator<S> &b) {
+          return a.lexicographic_compare(b, opts);
+        });
   }
 };
 

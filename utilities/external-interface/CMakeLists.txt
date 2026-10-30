@@ -10,6 +10,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 # file in each consumer, so the processing steps' factory self-registrations
 # (SEQUANT_EXTINT_REGISTER_STEP_TYPE) are not dropped as unreferenced.
 add_library(external_interface-obj OBJECT
+    json_include.cpp
     processing.cpp
     utils.cpp
 
@@ -29,6 +30,7 @@ add_library(external_interface-obj OBJECT
     projection_step.cpp
     read_input_step.cpp
     simplify_step.cpp
+    sort_step.cpp
     spintracing_step.cpp
     substitute_step.cpp
     template_expansion.cpp

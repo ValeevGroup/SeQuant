@@ -12,6 +12,7 @@
 #include <SeQuant/core/optimize/name_recycling.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -94,7 +95,9 @@ TEST_CASE("intermediate name recycling", "[optimize]") {
                   const std::vector<std::wstring>& outputs,
                   const NameRecyclingOptions<Tree>& opts,
                   std::size_t expected_values, std::size_t expected_names) {
-    CAPTURE(inputs);
+    std::string described;
+    for (const auto& input : inputs) described += sequant::toUtf8(input) + "\n";
+    CAPTURE(described);
     std::vector<Tree> trees = parse_trees(inputs);
 
     opt::NameRecyclingResult stats =

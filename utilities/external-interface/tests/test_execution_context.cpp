@@ -130,6 +130,41 @@ TEST_CASE("ExecutionContext aliasing", "[extint]") {
   }
 }
 
+TEST_CASE("ExecutionContext releasing data", "[extint]") {
+  ExecutionContext ctx;
+  ctx.set_data("input", 0, expr_data());
+  ctx.set_data("input", 1, expr_data());
+  ctx.add_data_alias(std::vector<std::string>{"input.0", "input.1"}, "both");
+  ctx.add_data_alias("input.1", "keep.1");
+
+  auto needed = [](std::string_view id) { return id.starts_with("keep"); };
+
+  REQUIRE(ctx.release_data(needed) == 1);
+
+  SECTION("released data can't be retrieved") {
+    REQUIRE_THROWS_WITH(
+        ctx.get_data("input.0"),
+        Catch::Matchers::ContainsSubstring("has already been released"));
+    REQUIRE_THROWS_AS(ctx.get_data("both"), Exception);
+  }
+
+  SECTION("data with a needed alias is retained") {
+    REQUIRE(ctx.get_data("input.1").size() == 1);
+    REQUIRE(ctx.get_data("keep.1").size() == 1);
+  }
+
+  SECTION("IDs remain registered") {
+    REQUIRE(ctx.has_data("input.0"));
+    REQUIRE(ctx.dataset_size("both") == 2);
+    REQUIRE(ctx.ids_are_equivalent("input.1", "keep.1"));
+  }
+
+  SECTION("releasing is idempotent") {
+    REQUIRE(ctx.release_data(needed) == 0);
+    REQUIRE(ctx.release_data([](std::string_view) { return false; }) == 1);
+  }
+}
+
 TEST_CASE("convert_data enforces the data kind", "[extint]") {
   ProcessingData expr = expr_data();
   ProcessingData tree = tree_data();

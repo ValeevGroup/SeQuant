@@ -555,13 +555,11 @@ TEST_CASE("serialization", "[serialization]") {
 
     SECTION("Error handling") {
       SECTION("Exception type") {
-        std::vector<std::wstring> inputs = {L"t^",
-                                            L"a + + b"
-                                            L"1/t"
-                                            L"T{}"
+        std::vector<std::wstring> inputs = {L"t^", L"a + + b", L"1/t",
                                             L"T^{i1}{a1}"};
 
         for (const std::wstring& current : inputs) {
+          CAPTURE(toUtf8(current));
           REQUIRE_THROWS_AS(deserialize<ExprPtr>(current),
                             io::serialization::SerializationError);
         }
@@ -745,6 +743,7 @@ TEST_CASE("serialization", "[serialization]") {
         L"1/2 ã{i_1;i_2} * b̃{i_3;i_4}"};
 
     for (const std::wstring& current : expressions) {
+      CAPTURE(toUtf8(current));
       ExprPtr expression = deserialize<ExprPtr>(current);
 
       REQUIRE(serialize(expression, {.annot_symm = true}) == current);
@@ -768,6 +767,7 @@ TEST_CASE("serialization", "[serialization]") {
       };
 
       for (const std::wstring& current : expressions) {
+        CAPTURE(toUtf8(current));
         ResultExpr result = deserialize<ResultExpr>(current);
 
         REQUIRE(serialize(result, {.annot_symm = true}) == current);

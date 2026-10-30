@@ -1174,7 +1174,7 @@ SECTION("Closed-shell CC spintrace for variable, constant, product") {
 }
 
 SECTION("Closed-shell spintrace CCSDT terms") {
-  SECTION("A3 * f * t3, , spintracing with partial-expansion") {
+  SECTION("A3-f-t3 partial") {
     auto input = ex<Constant>(3) *
                  ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
                             ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
@@ -1201,9 +1201,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
                      "t{a_1,a_2,a_3;i_1,i_3,i_4}:N-N-S "));
   }
 
-  SECTION(
-      "the most expensive term in CCSDT: A3 * g * t3, spintracing with direct "
-      "full-expansion") {
+  SECTION("A3-g-t3-full") {
     auto input = ex<Constant>(rational{3, 2}) *
                  ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
                             ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
@@ -1956,7 +1954,7 @@ SECTION("ResultExpr") {
   REQUIRE(inputs.size() == expected_outputs.size());
 
   for (std::size_t i = 0; i < inputs.size(); ++i) {
-    CAPTURE(inputs.at(i));
+    CAPTURE(toUtf8(inputs.at(i)));
     const ResultExpr input = deserialize<ResultExpr>(inputs.at(i));
 
     container::svector<ResultExpr> expected;

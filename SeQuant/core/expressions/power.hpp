@@ -126,6 +126,10 @@ class Power : public Expr {
   bool static_equal(const Expr& that) const override;
 
   bool static_less_than(const Expr& that) const override;
+
+  /// orders by base, then by exponent, then unconjugated before conjugated
+  std::weak_ordering static_lexicographic_compare(
+      const Expr& that, const LexicographicCompareOptions& opts) const override;
 };
 }  // namespace sequant
 

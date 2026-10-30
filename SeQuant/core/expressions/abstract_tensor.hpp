@@ -8,12 +8,14 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <compare>
 #include <cstdlib>
 #include <memory>
 #include <string>
@@ -418,6 +420,85 @@ inline auto column_symmetry(const AbstractTensor& t) {
 inline auto color(const AbstractTensor& t) { return t._color(); }
 inline auto is_cnumber(const AbstractTensor& t) { return t._is_cnumber(); }
 inline auto label(const AbstractTensor& t) { return t._label(); }
+
+namespace detail {
+
+/// @return the order of tensor labels @p a and @p b : cardinal labels (see
+/// LexicographicCompareOptions::cardinal_tensor_labels) precede all others, in
+/// the order given there; all others are ordered lexicographically
+inline std::weak_ordering lexicographic_compare_tensor_labels(
+    std::wstring_view a, std::wstring_view b,
+    const LexicographicCompareOptions& opts) {
+  if (a == b) return std::weak_ordering::equivalent;
+  if (auto cmp = opts.cardinal_position(a) <=> opts.cardinal_position(b);
+      cmp != 0)
+    return cmp;
+  return a <=> b;
+}
+
+/// @return the lexicographic order of the Index ranges @p a and @p b
+/// @note takes forwarding references since some views (e.g.
+/// ranges::any_view) are not iterable when const
+template <typename Range1, typename Range2>
+std::weak_ordering lexicographic_compare_indices(Range1&& a, Range2&& b) {
+  using ranges::begin;
+  using ranges::end;
+  auto a_it = begin(a);
+  auto b_it = begin(b);
+  const auto a_end = end(a);
+  const auto b_end = end(b);
+  for (; a_it != a_end && b_it != b_end; ++a_it, ++b_it) {
+    if (auto cmp = *a_it <=> *b_it; cmp != 0) return cmp;
+  }
+  if (a_it != a_end) return std::weak_ordering::greater;
+  if (b_it != b_end) return std::weak_ordering::less;
+  return std::weak_ordering::equivalent;
+}
+
+/// Lexicographically compares tensors @p a and @p b : by label (see
+/// lexicographic_compare_tensor_labels), then by bra, ket and aux ranks, then
+/// by bra, ket and aux indices, then by symmetry, braket symmetry and column
+/// symmetry
+/// @param bra a callable returning the bra indices of a tensor
+/// @param ket a callable returning the ket indices of a tensor
+/// @param aux a callable returning the aux indices of a tensor
+template <typename T, typename Bra, typename Ket, typename Aux>
+std::weak_ordering lexicographic_compare_tensors(
+    const T& a, const T& b, const LexicographicCompareOptions& opts,
+    const Bra& bra, const Ket& ket, const Aux& aux) {
+  if (auto cmp = lexicographic_compare_tensor_labels(label(a), label(b), opts);
+      cmp != 0)
+    return cmp;
+  if (auto cmp = bra_rank(a) <=> bra_rank(b); cmp != 0) return cmp;
+  if (auto cmp = ket_rank(a) <=> ket_rank(b); cmp != 0) return cmp;
+  if (auto cmp = aux_rank(a) <=> aux_rank(b); cmp != 0) return cmp;
+  if (auto cmp = lexicographic_compare_indices(bra(a), bra(b)); cmp != 0)
+    return cmp;
+  if (auto cmp = lexicographic_compare_indices(ket(a), ket(b)); cmp != 0)
+    return cmp;
+  if (auto cmp = lexicographic_compare_indices(aux(a), aux(b)); cmp != 0)
+    return cmp;
+  if (auto cmp = symmetry(a) <=> symmetry(b); cmp != 0) return cmp;
+  if (auto cmp = braket_symmetry(a) <=> braket_symmetry(b); cmp != 0)
+    return cmp;
+  return column_symmetry(a) <=> column_symmetry(b);
+}
+
+}  // namespace detail
+
+/// Lexicographically compares tensors @p a and @p b : by label (cardinal
+/// labels, see LexicographicCompareOptions::cardinal_tensor_labels , first),
+/// then by bra, ket and aux ranks, then by bra, ket and aux indices, then by
+/// symmetry, braket symmetry and column symmetry
+/// @return the order of @p a relative to @p b
+inline std::weak_ordering lexicographic_compare(
+    const AbstractTensor& a, const AbstractTensor& b,
+    const LexicographicCompareOptions& opts) {
+  return detail::lexicographic_compare_tensors(
+      a, b, opts, [](const AbstractTensor& t) { return t._bra(); },
+      [](const AbstractTensor& t) { return t._ket(); },
+      [](const AbstractTensor& t) { return t._aux(); });
+}
 
 /// produces LaTeX representation typeset using <a
 /// href="https://ctan.org/pkg/tensor?lang=en">tensor package</a>

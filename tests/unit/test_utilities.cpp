@@ -13,6 +13,7 @@
 #include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/expr_filter.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -254,6 +255,86 @@ TEST_CASE("pop_symmetrizer", "[utilities]") {
          t * pow(D, rational{-1});
   REQUIRE(pop_symmetrizer(expr).has_value());
   REQUIRE(*expr == *(t * pow(D, rational{-1})));
+}
+
+TEST_CASE("push_symmetrizer", "[utilities]") {
+  using namespace sequant;
+
+  auto t = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+  ExprPtr expr = ex<Tensor>(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                            ket{L"a_1", L"a_2"}, Symmetry::Antisymm) *
+                 t;
+  ResultExpr result(Tensor(L"R", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}),
+                    expr->clone());
+  ExprPtr original = result.expression()->clone();
+
+  push_symmetrizer(result, std::nullopt);
+  REQUIRE(result.expression() == original);
+
+  std::optional<ExprPtr> symmetrizer = pop_symmetrizer(result);
+  REQUIRE(symmetrizer.has_value());
+  REQUIRE_FALSE(has_tensor(result.expression(), reserved::antisymm_label()));
+
+  push_symmetrizer(result, std::move(symmetrizer));
+  REQUIRE(has_tensor(result.expression(), reserved::antisymm_label()));
+  REQUIRE(has_tensor(result.expression(), L"t"));
+}
+
+TEST_CASE("has_symmetrizer", "[utilities]") {
+  using namespace sequant;
+
+  auto t = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+  ExprPtr symmetrizer = ex<Tensor>(reserved::symm_label(), bra{L"i_1", L"i_2"},
+                                   ket{L"a_1", L"a_2"});
+
+  REQUIRE_FALSE(has_symmetrizer(t));
+  REQUIRE(has_symmetrizer(symmetrizer * t));
+}
+
+TEST_CASE("result_symmetrization", "[utilities]") {
+  using namespace sequant;
+
+  Tensor result(L"R", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+
+  ExprPtr expected =
+      ex<Constant>(rational(1, 2)) *
+          ex<Tensor>(L"Ru", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) +
+      ex<Constant>(rational(1, 2)) *
+          ex<Tensor>(L"Ru", bra{L"a_2", L"a_1"}, ket{L"i_2", L"i_1"});
+
+  REQUIRE(result_symmetrization(result, L"Ru") == expected);
+  REQUIRE(result_symmetrization(ResultExpr(result, ex<Constant>(0)), L"Ru") ==
+          expected);
+}
+
+TEST_CASE("ExpressionFilter", "[utilities]") {
+  using namespace sequant;
+
+  ExprPtr t = ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"});
+  ExprPtr f = ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"});
+  ExprPtr g = ex<Tensor>(L"g", bra{L"i_1"}, ket{L"a_1"});
+  ExprPtr expr = t * f + g;
+
+  ExpressionFilter filter;
+  filter.add_rule(
+      std::make_unique<LabelRule>(std::vector<std::wregex>{std::wregex(L"t")}));
+  REQUIRE(filter.matches(*expr));
+  REQUIRE_FALSE(filter.matches(*g));
+
+  ExpressionFilter contains;
+  contains.add_rule(std::make_unique<ContainsRule>(ExprMatcher(*g)));
+  REQUIRE(contains.matches(*expr));
+  REQUIRE_FALSE(contains.matches(*t));
+
+  ExpressionFilter any;
+  any.set_require_all(false);
+  any.add_rule(std::make_unique<ContainsRule>(ExprMatcher(*g)));
+  any.add_rule(std::make_unique<ContainsRule>(ExprMatcher(*t)));
+  REQUIRE(any.matches(*g));
+  REQUIRE_FALSE(any.matches(*f));
+
+  // Only the summand containing t is kept
+  REQUIRE(prune_to_matches(*expr, filter) == ex<Sum>(ExprPtrList{t * f}));
 }
 
 TEST_CASE("utilities", "[utilities]") {

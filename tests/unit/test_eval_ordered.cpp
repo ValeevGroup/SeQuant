@@ -178,10 +178,7 @@ std::size_t production_sites_with_hash(OrderedSchedule const& ordered,
 
 }  // namespace
 
-TEST_CASE(
-    "evaluate_ordered_multiroot builds a subexpression shared across two "
-    "independent roots exactly once, and matches per-root forest descent",
-    "[eval][ordered]") {
+TEST_CASE("multiroot-shared-built-once", "[eval][ordered]") {
   // Two INDEPENDENT roots (not summands of one equation) that structurally
   // share the SAME subexpression A = a * b -- root1 = c + (a*b), root2 =
   // d + (a*b). Deserialize+binarize each root SEPARATELY (as any two
@@ -279,10 +276,7 @@ TEST_CASE(
   CHECK(got1 != Catch::Approx(got1 + got2));
 }
 
-TEST_CASE(
-    "evaluate_ordered_multiroot on a single root is a regression anchor: "
-    "identical to the existing single-forest ordered path for one root",
-    "[eval][ordered]") {
+TEST_CASE("multiroot-single-root-anchor", "[eval][ordered]") {
   ScalarNode const root = scalar_tree(L"2 * a * b - c");
   ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
 
@@ -318,10 +312,7 @@ TEST_CASE(
   CHECK(single_val == Catch::Approx(-21.25));
 }
 
-TEST_CASE(
-    "sequant::evaluate_multiroot dispatches through cache.multiroot_driver() "
-    "and throws when unset (no per-root fallback)",
-    "[eval][ordered]") {
+TEST_CASE("multiroot-driver-dispatch", "[eval][ordered]") {
   // Two INDEPENDENT roots that structurally SHARE the subexpression A = a * b.
   //
   // root1 = (a*b + c) * (a*b): A appears BOTH as the LEFT operand of the
@@ -424,10 +415,7 @@ TEST_CASE(
   }
 }
 
-TEST_CASE(
-    "table-driven reads flip in-place eligibility: a homed value is shared "
-    "while the table still has reads of it, and drained by its last one",
-    "[eval][ordered]") {
+TEST_CASE("table-reads-in-place-eligibility", "[eval][ordered]") {
   // End-to-end pin for the table ownership seam: the in-place gate in
   // eval.hpp now asks eval::CellReadResolver::operand_drained() directly
   // (rather than the legacy CacheManager::chain_holds_shared(f.left), which
@@ -573,10 +561,7 @@ TEST_CASE(
   CHECK(drained_observations.back());
 }
 
-TEST_CASE(
-    "CacheManager::chain_holds_shared treats a persistent entry as shared "
-    "even when its max_life == 1",
-    "[eval][ordered]") {
+TEST_CASE("chain-holds-shared-persistent", "[eval][ordered]") {
   // Direct coverage of the runtime in-place safety gate. A PERSISTENT cache
   // entry (registered via the CacheManager(Iterable&&, PersistencePred) ctor
   // -- the make_batched_scratch path) is never drained by entry::access()
@@ -600,7 +585,7 @@ TEST_CASE(
     CHECK(cache.chain_holds_shared(val));
   }
 
-  SECTION("non-persistent, max_life == 1 -> not shared (drained on read)") {
+  SECTION("non-persistent-max-life-1") {
     svector<std::pair<ScalarNode, std::size_t>> const decaying{{node, 1}};
     sequant::CacheManager<ScalarNode> cache{
         decaying, [](ScalarNode const&) { return false; }};

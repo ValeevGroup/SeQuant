@@ -43,6 +43,10 @@ AnyIrrepSet RegisteredIrrepContext::irreps_of(const Tensor &tensor) const {
   return m_ctx.irrep_context().irreps_of(tensor);
 }
 
+AnyIrrepSet RegisteredIrrepContext::irreps_of(const Variable &variable) const {
+  return m_ctx.irrep_context().irreps_of(variable);
+}
+
 AnyIrrepSet RegisteredIrrepContext::totally_symmetric() const {
   return m_ctx.irrep_context().totally_symmetric();
 }

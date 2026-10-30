@@ -19,6 +19,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -87,35 +88,41 @@ TEST_CASE("math", "[elements]") {
             "64000000000000000000000000");
   }
   SECTION("iroot") {
+    using sequant::intmax_t;
     using sequant::iroot;
-    REQUIRE(iroot(1, 5) == 1);
-    REQUIRE(iroot(8, 1) == 8);
-    REQUIRE(iroot(8, 3) == 2);
-    REQUIRE(iroot(9, 2) == 3);
-    REQUIRE(iroot(10, 2) == 3);
-    REQUIRE(iroot(26, 3) == 2);
-    REQUIRE(iroot(27, 3) == 3);
-    REQUIRE(iroot(sequant::intmax_t{1} << 100, 10) == sequant::intmax_t{1}
-                                                          << 10);
-    REQUIRE(iroot((sequant::intmax_t{1} << 100) - 1, 10) ==
-            (sequant::intmax_t{1} << 10) - 1);
-    REQUIRE(iroot(5, 1000) == 1);
+    const intmax_t p3_500 = pow(intmax_t{3}, 500);
+    const intmax_t p1009_7 = pow(intmax_t{1009}, 7);
+    const intmax_t big = (intmax_t{1} << 8000) - 1;
+    // {n, k, floor(n^(1/k))}
+    const std::vector<std::tuple<intmax_t, unsigned, intmax_t>> rows{
+        {1, 5, 1},
+        {8, 1, 8},
+        {8, 3, 2},
+        {9, 2, 3},
+        {10, 2, 3},
+        {26, 3, 2},
+        {27, 3, 3},
+        {intmax_t{1} << 100, 10, intmax_t{1} << 10},
+        {(intmax_t{1} << 100) - 1, 10, (intmax_t{1} << 10) - 1},
+        {5, 1000, 1},
+        {p3_500 - 1, 500, 2},
+        {p3_500, 500, 3},
+        {p3_500 + 1, 500, 3},
+        {p1009_7 - 1, 7, 1008},
+        {p1009_7, 7, 1009},
+        {big, 2, (intmax_t{1} << 4000) - 1},
+        {big, 4000, 3},
+        {big + 2, 4000, 4},
+    };
+    for (const auto& [n, k, expected] : rows) {
+      CAPTURE(n, k);
+      REQUIRE(iroot(n, k) == expected);
+    }
     if constexpr (sequant::assert_behavior() ==
                   sequant::AssertBehavior::Throw) {
       REQUIRE_THROWS_AS(iroot(8, 0), Exception);
       REQUIRE_THROWS_AS(iroot(-8, 3), Exception);
     }
-    const sequant::intmax_t p3_500 = pow(sequant::intmax_t{3}, 500);
-    REQUIRE(iroot(p3_500 - 1, 500) == 2);
-    REQUIRE(iroot(p3_500, 500) == 3);
-    REQUIRE(iroot(p3_500 + 1, 500) == 3);
-    const sequant::intmax_t p1009_7 = pow(sequant::intmax_t{1009}, 7);
-    REQUIRE(iroot(p1009_7 - 1, 7) == 1008);
-    REQUIRE(iroot(p1009_7, 7) == 1009);
-    const sequant::intmax_t big = (sequant::intmax_t{1} << 8000) - 1;
-    REQUIRE(iroot(big, 2) == (sequant::intmax_t{1} << 4000) - 1);
-    REQUIRE(iroot(big, 4000) == 3);
-    REQUIRE(iroot(big + 2, 4000) == 4);
   }
 
   SECTION("coprime_base") {

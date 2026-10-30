@@ -68,17 +68,15 @@ std::string dotdump_slurp(std::string const& path) {
 
 }  // namespace
 
-TEST_CASE(
-    "dot dump: the residual forest and its value DAG, shared values coloured",
-    "[.][dot-dump]") {
+TEST_CASE("dot-dump-residual", "[.][dot-dump]") {
   using namespace sequant;
   using namespace sequant::eval::dryrun;
   namespace ev = sequant::eval;
 
   char const* const forest_path = std::getenv("SEQUANT_DOT_FOREST");
   char const* const dag_path = std::getenv("SEQUANT_DOT_DAG");
-  REQUIRE(forest_path != nullptr);
-  REQUIRE(dag_path != nullptr);
+  if (forest_path == nullptr || dag_path == nullptr)
+    SKIP("SEQUANT_DOT_FOREST and SEQUANT_DOT_DAG must both be set");
   bool const labels = std::getenv("SEQUANT_DOT_LABELS") != nullptr;
   char const* const latex_path = std::getenv("SEQUANT_DOT_LATEX");
   // SEQUANT_DOT_COLLAPSE_SUMS: a chain of Sum nodes (an equation's binarized

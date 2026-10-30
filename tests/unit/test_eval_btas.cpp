@@ -1104,7 +1104,7 @@ TEST_CASE("eval_dot_complex_btas", "[eval_btas]") {
     CHECK(got.imag() == Catch::Approx(ref.imag()).margin(1e-12));
   }
 
-  SECTION("full contraction of the non-batch indices: L[k,x] R[k,x] -> C[x]") {
+  SECTION("batch-full-contraction") {
     auto L = make({nk, nx}, 0.7), R = make({nk, nx}, 1.3);
     auto res = prod(L, R, annots({k, x}, {k, x}, {x}));
     REQUIRE(res->is<ResultTensorBTAS<BTensorC>>());
@@ -1259,9 +1259,7 @@ TEST_CASE("btas_batched_contract", "[eval_btas][hyperindex]") {
         CHECK(C(ib, ix) == Catch::Approx(L(ix) * R(ib, ix)));
   }
 
-  SECTION(
-      "result axis order differs from [batch,rest]: L[a,x] R[b,x] -> "
-      "C[x,a,b]") {
+  SECTION("batch-result-axis-order") {
     auto L = make({na, nx}), R = make({nb, nx});
     auto C = prod(L, R, annots({a, x}, {b, x}, {x, a, b}));
     REQUIRE(C.rank() == 3);

@@ -4,12 +4,15 @@
 #include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include "catch2_sequant.hpp"
 
 #include <cmath>
 #include <cstddef>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -51,21 +54,16 @@ TEST_CASE("asy_cost", "[AsyCost]") {
   using sequant::rational;
 
   SECTION("to_text") {
-    REQUIRE(occ_virt_cost(0, 0).text() == "0");
-
-    REQUIRE(AsyCost{}.text() == "0");
-
-    REQUIRE(occ_virt_cost(1, 0).text() == "O");
-
-    REQUIRE(occ_virt_cost(0, 1).text() == "V");
-
-    REQUIRE(occ_virt_cost(1, 1).text() == "OV");
-
-    REQUIRE(occ_virt_cost(2, 1).text() == "O^2V");
-
-    REQUIRE(occ_virt_cost(1, 2).text() == "OV^2");
-
-    REQUIRE(occ_virt_cost(2, 2).text() == "O^2V^2");
+    const std::vector<std::pair<AsyCost, std::string>> rows{
+        {occ_virt_cost(0, 0), "0"},    {AsyCost{}, "0"},
+        {occ_virt_cost(1, 0), "O"},    {occ_virt_cost(0, 1), "V"},
+        {occ_virt_cost(1, 1), "OV"},   {occ_virt_cost(2, 1), "O^2V"},
+        {occ_virt_cost(1, 2), "OV^2"}, {occ_virt_cost(2, 2), "O^2V^2"},
+    };
+    for (const auto& [cost, expected] : rows) {
+      CAPTURE(expected);
+      REQUIRE(cost.text() == expected);
+    }
 
     auto c = occ_virt_cost(2, 2) + occ_virt_cost(3, 2) + occ_virt_cost(2, 3) +
              occ_virt_cost(3, 3);
@@ -167,16 +165,17 @@ TEST_CASE("asy_cost", "[AsyCost]") {
   }
 
   SECTION("LaTeX") {
-    auto cost = occ_virt_cost(rational{1, 4}, 2, 3);
-    REQUIRE(cost.to_latex() == L"\\frac{1}{4}O^{2}V^{3}");
-    cost = occ_virt_cost(2, 3);
-    REQUIRE(cost.to_latex() == L"O^{2}V^{3}");
-    cost = occ_virt_cost(rational{1, 1}, 2, 3);
-    REQUIRE(cost.to_latex() == L"O^{2}V^{3}");
-    cost = occ_virt_cost(rational{-1, 1}, 2, 3);
-    REQUIRE(cost.to_latex() == L"- O^{2}V^{3}");
-    cost = occ_virt_cost(rational{-1, 4}, 2, 3);
-    REQUIRE(cost.to_latex() == L"- \\frac{1}{4}O^{2}V^{3}");
+    const std::vector<std::pair<AsyCost, std::wstring>> rows{
+        {occ_virt_cost(rational{1, 4}, 2, 3), L"\\frac{1}{4}O^{2}V^{3}"},
+        {occ_virt_cost(2, 3), L"O^{2}V^{3}"},
+        {occ_virt_cost(rational{1, 1}, 2, 3), L"O^{2}V^{3}"},
+        {occ_virt_cost(rational{-1, 1}, 2, 3), L"- O^{2}V^{3}"},
+        {occ_virt_cost(rational{-1, 4}, 2, 3), L"- \\frac{1}{4}O^{2}V^{3}"},
+    };
+    for (const auto& [cost, expected] : rows) {
+      CAPTURE(sequant::toUtf8(expected));
+      REQUIRE(cost.to_latex() == expected);
+    }
   }
 
   SECTION("generalized spaces") {

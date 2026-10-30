@@ -497,6 +497,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(disconnected->as<FNOperator>().size() == 2);
   }
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
   SECTION("WickTheorem: tensors commute with the theorem") {
     // operators carrying dummies of two different tensors: the result must
     // equal that of the same operators with external indices, times the
@@ -517,6 +518,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       REQUIRE(simplify(lhs - rhs) == ex<Constant>(0));
     }
   }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
   SECTION("WickTheorem: projected survivors with partial contractions") {
     // {a†_p1 a_p2}{a†_u3 a_u4}: projecting an op is substituting

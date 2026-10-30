@@ -7,6 +7,7 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/rational.hpp>
 
+#include <compare>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -124,6 +125,10 @@ class TensorPower : public Expr, public AbstractTensor {
   bool static_equal(const Expr& that) const override;
 
   bool static_less_than(const Expr& that) const override;
+
+  /// orders by base, then by exponent
+  std::weak_ordering static_lexicographic_compare(
+      const Expr& that, const LexicographicCompareOptions& opts) const override;
 };
 
 /// @brief raises a scalar or a c-number tensor leaf to a rational power

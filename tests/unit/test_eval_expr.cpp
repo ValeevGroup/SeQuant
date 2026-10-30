@@ -59,42 +59,21 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
   SECTION("Constructors") {
     auto t1 = parse_tensor(L"t_{i1, i2}^{a1, a2}");
-
     REQUIRE_NOTHROW(EvalExpr{t1});
+    REQUIRE(!EvalExpr{t1}.op_type());
 
     auto p1 = deserialize(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
-
-    const auto& c2 = EvalExpr{p1->at(0)->as<Tensor>()};
-    const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
-
-    REQUIRE_NOTHROW(EvalExpr{Variable{L"λ"}});
-
-    REQUIRE_NOTHROW(EvalExpr{Constant{1}});
-
-    REQUIRE_NOTHROW(
-        EvalExpr{Power(ex<Constant>(rational{1, 2}), rational{1, 2})});
-    REQUIRE_NOTHROW(EvalExpr{Power(ex<Variable>(L"x"), rational{3, 1})});
-  }
-
-  SECTION("EvalExpr::EvalOp types") {
-    auto t1 = parse_tensor(L"t_{i1, i2}^{a1, a2}");
-
-    auto x1 = EvalExpr(t1);
-
-    REQUIRE(!x1.op_type());
-
-    auto p1 = deserialize(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
-
-    const auto& c2 = EvalExpr{p1->at(0)->as<Tensor>()};
-    const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
-
-    auto x2 = EvalExpr(deserialize(L"1/2")->as<Constant>());
-    REQUIRE(!x2.op_type());
+    REQUIRE(!EvalExpr{p1->at(0)->as<Tensor>()}.op_type());
+    REQUIRE(!EvalExpr{p1->at(1)->as<Tensor>()}.op_type());
 
     REQUIRE(!EvalExpr{Variable{L"λ"}}.op_type());
 
+    REQUIRE(!EvalExpr{Constant{1}}.op_type());
+    REQUIRE(!EvalExpr{deserialize(L"1/2")->as<Constant>()}.op_type());
+
     REQUIRE(!EvalExpr{Power(ex<Constant>(rational{1, 2}), rational{1, 2})}
                  .op_type());
+    REQUIRE(!EvalExpr{Power(ex<Variable>(L"x"), rational{3, 1})}.op_type());
   }
 
   SECTION("ResultType types") {
@@ -207,8 +186,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
                    TensorSymmetries{.column = ColumnSymmetry::Symm}));
   }
 
-  SECTION(
-      "scalar * tensor product node inherits the tensor operand canon_phase") {
+  SECTION("scalar-tensor-canon-phase") {
     // Regression: binarize(Product) hardcoded canon_phase=1 for scalar*tensor
     // nodes instead of inheriting the tensor operand's real phase.
     // Subexpression reuse relies on that phase to reconcile sign-differing
@@ -417,9 +395,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // T2 (multiply-appearing), a3 also multiply-appearing
     auto expr = deserialize(L"t{i1,i2;a1,a3} T2{a2,a3;i1,i2}");
 
-    // without external indices: i1,i2,a3 are all contracted
-    // result has only {a1,a2}
-    {
+    SECTION("without external indices") {
+      // i1,i2,a3 are all contracted; result has only {a1,a2}
       SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
       auto tree = binarize(expr);
       SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
@@ -432,9 +409,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
       REQUIRE(ixs == expected);
     }
 
-    // with external={i1,i2}: only a3 is contracted
-    // result has {a1,a2,i1,i2} with i1,i2 in aux
-    {
+    SECTION("with external indices") {
+      // external={i1,i2}: only a3 is contracted; result has {a1,a2,i1,i2}
+      // with i1,i2 in aux
       IndexSet ext;
       ext.emplace(Index{L"i_1"});
       ext.emplace(Index{L"i_2"});
@@ -590,49 +567,6 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::Symm);
     REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
   }
-
-#if 0
-  SECTION("Symmetry of sum") {
-    auto tensor = [](Symmetry s) {
-      return deserialize(L"I_{i1,i2}^{a1,a2}", s)->as<Tensor>();
-    };
-
-    auto symmetry = [](const EvalExpr& x) {
-      return x.expr()->as<Tensor>().symmetry();
-    };
-
-    auto imed = [](const Tensor& t1, const Tensor& t2) {
-      return result_expr(EvalExpr{t1}, EvalExpr{t2}, EvalOp::Sum);
-    };
-
-    const auto t1 = tensor(Symmetry::Antisymm);
-    const auto t2 = tensor(Symmetry::Antisymm);
-
-    const auto t3 = tensor(Symmetry::Symm);
-    const auto t4 = tensor(Symmetry::Symm);
-
-    const auto t5 = tensor(Symmetry::Nonsymm);
-    const auto t6 = tensor(Symmetry::Nonsymm);
-
-    // sum of two antisymm tensors.
-    REQUIRE(symmetry(imed(t1, t2)) == Symmetry::Antisymm);
-
-    // sum of one antisymm and one symmetric tensors
-    REQUIRE(symmetry(imed(t1, t3)) == Symmetry::Symm);
-
-    // sum of two symmetric tensors
-    REQUIRE(symmetry(imed(t3, t4)) == Symmetry::Symm);
-
-    // sum of an antisymmetric and a nonsymmetric tensors
-    REQUIRE(symmetry(imed(t1, t5)) == Symmetry::Nonsymm);
-
-    // sum of one symmetric and one nonsymmetric tensors
-    REQUIRE(symmetry(imed(t3, t5)) == Symmetry::Nonsymm);
-
-    // sum of two nonsymmetric tensors
-    REQUIRE(symmetry(imed(t5, t6)) == Symmetry::Nonsymm);
-  }
-#endif
 
   SECTION("Debug") {
     auto t1 = EvalExpr{deserialize(L"O{a_1<i_1,i_2>;a_1<i_3,i_2>}",

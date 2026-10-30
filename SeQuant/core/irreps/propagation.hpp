@@ -18,7 +18,9 @@
 #include <cstddef>
 #include <functional>
 #include <map>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -35,9 +37,21 @@ class IrrepContext {
   using irrep_type = typename A::irrep_type;
   using set_type = IrrepSet<irrep_type>;
   using resolver_type = std::function<set_type(const Tensor &)>;
+  using variable_resolver_type =
+      std::function<std::optional<set_type>(const Variable &)>;
+  using parser_type = std::function<irrep_type(std::string_view)>;
 
-  IrrepContext(A algebra, resolver_type resolver)
-      : m_algebra(std::move(algebra)), m_resolver(std::move(resolver)) {}
+  /// @param parser Converts the name of an IRREP into the IRREP. Only needed
+  /// for canonical_irrep.
+  /// @param variable_resolver Determines the IRREPs of scalar variables.
+  /// Variables for which it returns no value (or all, if not given) are
+  /// totally symmetric.
+  IrrepContext(A algebra, resolver_type resolver, parser_type parser = {},
+               variable_resolver_type variable_resolver = {})
+      : m_algebra(std::move(algebra)),
+        m_resolver(std::move(resolver)),
+        m_parser(std::move(parser)),
+        m_variable_resolver(std::move(variable_resolver)) {}
 
   explicit IrrepContext(resolver_type resolver)
     requires std::default_initializable<A>
@@ -60,7 +74,43 @@ class IrrepContext {
     return product(totally_symmetric(), m_resolver(tensor));
   }
 
+  /// @returns The IRREPs of the given variable. Unless the variable resolver
+  /// says otherwise, variables are totally symmetric.
+  set_type irreps_of(const Variable &variable) const {
+    if (m_variable_resolver) {
+      if (auto irreps = m_variable_resolver(variable)) {
+        return product(totally_symmetric(), irreps.value());
+      }
+    }
+
+    return totally_symmetric();
+  }
+
   set_type totally_symmetric() const { return {m_algebra.totally_symmetric()}; }
+
+  /// @returns Whether the given set contains nothing but the totally
+  /// symmetric IRREP
+  bool is_totally_symmetric(const set_type &set) const {
+    return set == totally_symmetric();
+  }
+
+  /// @returns The IRREP of the given name in the algebra's canonical form
+  /// (e.g. with relations between IRREPs applied)
+  /// @throws Exception if this context has no parser or if the name does not
+  /// refer to exactly one IRREP
+  irrep_type canonical_irrep(std::string_view name) const {
+    if (!m_parser) {
+      throw Exception("IRREP context cannot parse IRREP names");
+    }
+
+    set_type set = product(totally_symmetric(), {m_parser(name)});
+    if (set.is_any() || set.size() != 1) {
+      throw Exception("'" + std::string(name) +
+                      "' does not refer to exactly one IRREP");
+    }
+
+    return *set.begin();
+  }
 
   set_type empty_set() const { return {}; }
 
@@ -78,6 +128,8 @@ class IrrepContext {
  private:
   A m_algebra;
   resolver_type m_resolver;
+  parser_type m_parser;
+  variable_resolver_type m_variable_resolver;
 };
 
 /// Requirements for a context that can be used to propagate IRREPs through
@@ -85,10 +137,11 @@ class IrrepContext {
 template <typename C>
 concept IrrepPropagationContext =
     std::copyable<typename C::set_type> &&
-    requires(const C &ctx, const Tensor &tensor,
+    requires(const C &ctx, const Tensor &tensor, const Variable &variable,
              const typename C::set_type &set,
              typename C::set_type &mutable_set) {
       { ctx.irreps_of(tensor) } -> std::convertible_to<typename C::set_type>;
+      { ctx.irreps_of(variable) } -> std::convertible_to<typename C::set_type>;
       { ctx.totally_symmetric() } -> std::convertible_to<typename C::set_type>;
       { ctx.empty_set() } -> std::convertible_to<typename C::set_type>;
       { ctx.any_set() } -> std::convertible_to<typename C::set_type>;
@@ -252,8 +305,19 @@ struct IrrepNodeTraits<Expr> {
       SEQUANT_ASSERT(expr.is<Constant>() || expr.is_zero());
       return expr.is_zero() ? ctx.empty_set() : ctx.totally_symmetric();
     }
-    if (expr.is<Variable>() || expr.is<Power>()) {
-      // Note: the base of a Power is always a scalar
+    if (expr.is<Variable>()) {
+      const Variable &variable = expr.as<Variable>();
+      auto irreps = ctx.irreps_of(variable);
+      return variable.conjugated() ? ctx.conjugate(irreps) : irreps;
+    }
+    if (expr.is<Power>()) {
+      const Expr &base = *expr.as<Power>().base();
+      if (base.is<Variable>() &&
+          ctx.irreps_of(base.as<Variable>()) != ctx.totally_symmetric()) {
+        throw Exception(
+            "Can't determine IRREPs of a power of a variable that is not "
+            "totally symmetric");
+      }
       return ctx.totally_symmetric();
     }
 

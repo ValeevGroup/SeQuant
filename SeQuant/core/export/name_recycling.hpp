@@ -97,6 +97,9 @@ class ScannedIrrepContext {
 
     return m_registered.irreps_of(tensor);
   }
+  AnyIrrepSet irreps_of(const Variable &variable) const {
+    return m_registered.irreps_of(variable);
+  }
   AnyIrrepSet totally_symmetric() const {
     return m_registered.totally_symmetric();
   }

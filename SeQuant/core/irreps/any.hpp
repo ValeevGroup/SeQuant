@@ -9,12 +9,14 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 
 namespace sequant {
 
 class Tensor;
+class Variable;
 
 /// Type-erased IRREP (of arbitrary IRREP type). A moved-from object may only
 /// be assigned to or destroyed.
@@ -190,9 +192,16 @@ class AnyIrrepContext {
 
   /// @sa IrrepContext::irreps_of
   [[nodiscard]] AnyIrrepSet irreps_of(const Tensor &tensor) const;
+  [[nodiscard]] AnyIrrepSet irreps_of(const Variable &variable) const;
   [[nodiscard]] AnyIrrepSet totally_symmetric() const;
+  /// @returns Whether the given set contains nothing but the totally symmetric
+  /// IRREP
+  /// @throws Exception if the set is not of this context's IRREP type
+  [[nodiscard]] bool is_totally_symmetric(const AnyIrrepSet &set) const;
   [[nodiscard]] AnyIrrepSet empty_set() const;
   [[nodiscard]] AnyIrrepSet any_set() const;
+  /// @sa IrrepContext::canonical_irrep
+  [[nodiscard]] AnyIrrep canonical_irrep(std::string_view name) const;
   /// @throws Exception if the sets are not of this context's IRREP type
   [[nodiscard]] AnyIrrepSet product(const AnyIrrepSet &lhs,
                                     const AnyIrrepSet &rhs) const;
@@ -212,9 +221,12 @@ class AnyIrrepContext {
     virtual ~Concept() = default;
     virtual std::unique_ptr<Concept> clone() const = 0;
     virtual AnyIrrepSet irreps_of(const Tensor &tensor) const = 0;
+    virtual AnyIrrepSet irreps_of(const Variable &variable) const = 0;
     virtual AnyIrrepSet totally_symmetric() const = 0;
+    virtual bool is_totally_symmetric(const AnyIrrepSet &set) const = 0;
     virtual AnyIrrepSet empty_set() const = 0;
     virtual AnyIrrepSet any_set() const = 0;
+    virtual AnyIrrep canonical_irrep(std::string_view name) const = 0;
     virtual AnyIrrepSet product(const AnyIrrepSet &lhs,
                                 const AnyIrrepSet &rhs) const = 0;
     virtual AnyIrrepSet conjugate(const AnyIrrepSet &set) const = 0;
@@ -233,11 +245,20 @@ class AnyIrrepContext {
     AnyIrrepSet irreps_of(const Tensor &tensor) const override {
       return ctx.irreps_of(tensor);
     }
+    AnyIrrepSet irreps_of(const Variable &variable) const override {
+      return ctx.irreps_of(variable);
+    }
     AnyIrrepSet totally_symmetric() const override {
       return ctx.totally_symmetric();
     }
+    bool is_totally_symmetric(const AnyIrrepSet &set) const override {
+      return ctx.is_totally_symmetric(typed(set));
+    }
     AnyIrrepSet empty_set() const override { return ctx.empty_set(); }
     AnyIrrepSet any_set() const override { return ctx.any_set(); }
+    AnyIrrep canonical_irrep(std::string_view name) const override {
+      return AnyIrrep(ctx.canonical_irrep(name));
+    }
     AnyIrrepSet product(const AnyIrrepSet &lhs,
                         const AnyIrrepSet &rhs) const override {
       return ctx.product(typed(lhs), typed(rhs));

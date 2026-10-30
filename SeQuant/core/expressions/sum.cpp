@@ -6,6 +6,9 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <algorithm>
+#include <iterator>
+
 namespace sequant {
 
 Sum::Sum(ExprPtrList summands) {
@@ -49,7 +52,7 @@ Sum &Sum::append(ExprPtr summand) {
     if (!summand->is_zero()) {        // exclude zeros
       if (summand->is<Constant>()) {  // add up constants
         // immediately, if possible
-        if (constant_summand_idx_) {
+        if (constant_summand_idx()) {
           fold_constant(summand->as<Constant>());
           drop_zero_constant();
         } else {
@@ -73,7 +76,7 @@ Sum &Sum::prepend(ExprPtr summand) {
     if (!summand->is_zero()) {
       // exclude zeros
       if (summand->is<Constant>()) {
-        if (constant_summand_idx_) {  // add up to the existing constant ...
+        if (constant_summand_idx()) {  // add up to the existing constant ...
           fold_constant(summand->as<Constant>());
           drop_zero_constant();
         } else {  // or include the nonzero constant and update
@@ -83,7 +86,7 @@ Sum &Sum::prepend(ExprPtr summand) {
         }
       } else {
         summands_.insert(summands_.begin(), summand->clone());
-        if (constant_summand_idx_)  // if have a constant, update its position
+        if (constant_summand_idx())  // if have a constant, update its position
           ++*constant_summand_idx_;
       }
       reset_hash_value();
@@ -260,11 +263,30 @@ Sum &Sum::operator-=(const Expr &that) {
   return *this;
 }
 
+std::optional<size_t> Sum::constant_summand_idx() const {
+  if (!constant_summand_idx_valid_) {
+    const auto it = std::ranges::find_if(summands_, [](const ExprPtr &summand) {
+      return summand.is<Constant>();
+    });
+    constant_summand_idx_ =
+        it == summands_.end()
+            ? std::nullopt
+            : std::optional<size_t>(std::distance(summands_.begin(), it));
+    constant_summand_idx_valid_ = true;
+  }
+  return constant_summand_idx_;
+}
+
+void Sum::invalidate_summand_caches() const {
+  hash_value_.reset();
+  constant_summand_idx_valid_ = false;
+}
+
 ExprIterator Sum::begin_subexpr() {
   // N.B. the canonical mark need not be reset: changes of the summands are
   // detected by Expr::is_canonical()
   if (!summands_.empty()) {
-    hash_value_.reset();
+    invalidate_summand_caches();
   }
 
   return ExprIterator{summands_.data()};
@@ -275,7 +297,7 @@ ExprIterator Sum::end_subexpr() {
   // memoized hash, regardless of which end of the range it points at
   // (`*(--end())` mutates just as `*begin()` does)
   if (!summands_.empty()) {
-    hash_value_.reset();
+    invalidate_summand_caches();
   }
 
   return ExprIterator{summands_.data() + summands_.size()};
@@ -338,6 +360,16 @@ bool Sum::static_equal(const Expr &that) const {
       return false;
   } else
     return false;
+}
+
+std::weak_ordering Sum::static_lexicographic_compare(
+    const Expr &that, const LexicographicCompareOptions &opts) const {
+  const auto &that_cast = static_cast<const Sum &>(that);
+  return std::lexicographical_compare_three_way(
+      summands_.begin(), summands_.end(), that_cast.summands_.begin(),
+      that_cast.summands_.end(), [&opts](const ExprPtr &a, const ExprPtr &b) {
+        return a->lexicographic_compare(*b, opts);
+      });
 }
 
 HashingAccumulator &HashingAccumulator::append(ExprPtr summand, bool flatten) {

@@ -292,6 +292,26 @@ bool Operator<QuantumNumbers, S>::static_equal(const Expr& other_expr) const {
          this->order() == other.order();
 }
 
+template <typename QuantumNumbers, Statistics S>
+std::weak_ordering Operator<QuantumNumbers, S>::static_lexicographic_compare(
+    const Expr& other_expr, const LexicographicCompareOptions& opts) const {
+  const auto& other =
+      static_cast<const Operator<QuantumNumbers, S>&>(other_expr);
+  if (auto cmp = sequant::detail::lexicographic_compare_tensor_labels(
+          this->label(), other.label(), opts);
+      cmp != 0)
+    return cmp;
+  if (auto cmp = std::compare_weak_order_fallback((*this)(QuantumNumbers{}),
+                                                  other(QuantumNumbers{}));
+      cmp != 0)
+    return cmp;
+  if (auto cmp = std::compare_weak_order_fallback(this->batch_ordinals(),
+                                                  other.batch_ordinals());
+      cmp != 0)
+    return cmp;
+  return this->order() <=> other.order();
+}
+
 }  // namespace mbpt
 }  // namespace sequant
 

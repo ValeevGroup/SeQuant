@@ -1154,6 +1154,16 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
                                         that_cast.aux().end());
   }
 
+  std::weak_ordering static_lexicographic_compare(
+      const Expr &that,
+      const LexicographicCompareOptions &opts) const override {
+    return detail::lexicographic_compare_tensors(
+        *this, static_cast<const Tensor &>(that), opts,
+        [](const Tensor &t) -> const auto & { return t.bra(); },
+        [](const Tensor &t) -> const auto & { return t.ket(); },
+        [](const Tensor &t) -> const auto & { return t.aux(); });
+  }
+
   Tensor *_clone() const override final { return new Tensor(*this); }
   std::shared_ptr<AbstractTensor> _clone_shared() const override final {
     return std::make_shared<Tensor>(*this);

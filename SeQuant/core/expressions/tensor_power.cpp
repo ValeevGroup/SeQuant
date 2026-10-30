@@ -243,6 +243,14 @@ bool TensorPower::static_less_than(const Expr& that) const {
   return exponent_ < other.exponent_;
 }
 
+std::weak_ordering TensorPower::static_lexicographic_compare(
+    const Expr& that, const LexicographicCompareOptions& opts) const {
+  const auto& other = static_cast<const TensorPower&>(that);
+  if (auto cmp = base_->lexicographic_compare(*other.base_, opts); cmp != 0)
+    return cmp;
+  return std::compare_weak_order_fallback(exponent_, other.exponent_);
+}
+
 namespace {
 
 ExprPtr make_scalar_power(const ExprPtr& base, rational exponent) {

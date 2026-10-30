@@ -29,7 +29,7 @@ section: `n_batches`, `footprint` and `builds` come from the ordered dry run,
 
 `sequant-schedule validate <doc.json>` checks a document and prints a summary.
 
-A realistic document comes from the hidden `[dryrun-2iter-report]` unit test,
+A realistic document comes from the `[dryrun-2iter-report]` unit test,
 which runs the DF-CCSD doubles residual through the ordered executor as a dry
 run at water-20 or C60 PNO-CCSD scale:
 
