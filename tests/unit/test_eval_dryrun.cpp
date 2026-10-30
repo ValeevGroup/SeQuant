@@ -1604,6 +1604,38 @@ TEST_CASE("write-into-slice-refuses-gaps",
   }
 }
 
+TEST_CASE("write-into-slice-refuses-mismatched-modes",
+          "[dryrun-result][write-into-slice]") {
+  // A block scattered along one mode must agree with the destination on every
+  // other mode they share. Issue #762's shape: the block is sliced to an
+  // enclosing batch of i_1 that the destination is not; the mismatch must
+  // surface at the scatter, not at whichever consumer next contracts the
+  // destination.
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  Index i1{L"i_1"}, a3{L"a_3"};
+  ResultDryRun const tmpl{{i1, a3}, cm};
+  Result const& tmpl_r = tmpl;
+
+  // the block: i_1 in the enclosing batch [0,3), a_3 in the scatter block [0,5)
+  auto const blk = tmpl_r.slice_mode(0, 0, 3)->slice_mode(1, 0, 5);
+  REQUIRE(blk);
+
+  SECTION("destination at the full extent of the enclosing mode") {
+    ResultDryRun dest{{i1, a3}, cm};
+    CHECK_THROWS_AS(static_cast<Result&>(dest).write_into_slice(*blk, 1, 0, 5),
+                    sequant::Exception);
+  }
+  SECTION("destination sliced to another batch of the enclosing mode") {
+    auto dest = tmpl_r.slice_mode(0, 3, 6);
+    CHECK_THROWS_AS(dest->write_into_slice(*blk, 1, 0, 5), sequant::Exception);
+  }
+  SECTION("destination sliced to the same batch") {
+    auto dest = tmpl_r.slice_mode(0, 0, 3);
+    CHECK_NOTHROW(dest->write_into_slice(*blk, 1, 0, 5));
+  }
+}
+
 TEST_CASE("nested-moment-aware-extent", "[dryrun-nested]") {
   auto r = backend_test_regime();
   // Non-trivial second moment: <#PNO^2> != <#PNO>^2 (dispersion inflates it).
