@@ -1604,6 +1604,38 @@ TEST_CASE("write-into-slice-refuses-gaps",
   }
 }
 
+TEST_CASE("write-into-slice-refuses-mismatched-modes",
+          "[dryrun-result][write-into-slice]") {
+  // A block scattered along one mode must agree with the destination on every
+  // other mode they share. Issue #762's shape: the block is sliced to an
+  // enclosing batch of i_1 that the destination is not; the mismatch must
+  // surface at the scatter, not at whichever consumer next contracts the
+  // destination.
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  Index i1{L"i_1"}, a3{L"a_3"};
+  ResultDryRun const tmpl{{i1, a3}, cm};
+  Result const& tmpl_r = tmpl;
+
+  // the block: i_1 in the enclosing batch [0,3), a_3 in the scatter block [0,5)
+  auto const blk = tmpl_r.slice_mode(0, 0, 3)->slice_mode(1, 0, 5);
+  REQUIRE(blk);
+
+  SECTION("destination at the full extent of the enclosing mode") {
+    ResultDryRun dest{{i1, a3}, cm};
+    CHECK_THROWS_AS(static_cast<Result&>(dest).write_into_slice(*blk, 1, 0, 5),
+                    sequant::Exception);
+  }
+  SECTION("destination sliced to another batch of the enclosing mode") {
+    auto dest = tmpl_r.slice_mode(0, 3, 6);
+    CHECK_THROWS_AS(dest->write_into_slice(*blk, 1, 0, 5), sequant::Exception);
+  }
+  SECTION("destination sliced to the same batch") {
+    auto dest = tmpl_r.slice_mode(0, 0, 3);
+    CHECK_NOTHROW(dest->write_into_slice(*blk, 1, 0, 5));
+  }
+}
+
 TEST_CASE("nested-moment-aware-extent", "[dryrun-nested]") {
   auto r = backend_test_regime();
   // Non-trivial second moment: <#PNO^2> != <#PNO>^2 (dispersion inflates it).
@@ -4002,6 +4034,123 @@ TEST_CASE("meter-policy-executor", "[meter]") {
   CHECK(fd_report.peak_bytes > 0.0);
   CHECK(fd_report.builds_total > 0);
   CHECK(fd_report.scheduler == sequant::BatchScheduler::forest_descent);
+}
+
+// Issue #762: under forest descent, an External loop opened INSIDE an
+// enclosing batch loop must pre-size its scatter destination to the enclosing
+// loops' current batches on every mode the node carries: each partial is
+// evaluated sliced to those batches, so a destination at their full extent
+// would disagree with it. In every section the root opens a Contracted loop
+// over i_1 and X = g * h, which carries i_1, opens the External loop(s) below
+// it. The ordered scheduler realizes the same stamps as a reference.
+TEST_CASE("forest-descent-nested-external-scatter", "[batch][forest_descent]") {
+  using sequant::BatchModeType;
+  using sequant::BatchPolicy;
+  using sequant::Index;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+  using Mask = container::svector<std::pair<Index, BatchModeType>>;
+  constexpr auto C = BatchModeType::Contracted;
+  constexpr auto E = BatchModeType::External;
+
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+
+  BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.basis().base_key() == L"i";
+  };
+  policy.is_batchable_external_index = [](Index const& ix) {
+    return ix.basis().base_key() == L"a";
+  };
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.basis().base_key() == L"i" ? std::size_t{3} : std::size_t{5};
+  };
+
+  auto binarize_expr = [](std::wstring_view s) {
+    auto expr = sequant::deserialize<sequant::ExprPtr>(s);
+    REQUIRE(static_cast<bool>(expr));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    return sequant::binarize<EvalExprDryRun>(expr);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  };
+  // stamps a non-leaf node; every mode a loop opened here is carried by its
+  // children (a Contracted loop) or by the node itself (an External loop)
+  auto stamp = [](EvalNodeDryRun& n, Mask const& mask, Mask const& opens) {
+    REQUIRE_FALSE(n.leaf());
+    for (auto const& [ix, kind] : opens)
+      REQUIRE(sequant::index_position(n, ix).has_value() ==
+              (kind == BatchModeType::External));
+    n->set_node_slice_mask(mask);
+    n->set_batch_loops_opened_here(opens);
+  };
+
+  Index const i1{L"i_1"};
+  Index const i3{L"i_3"};
+  Index const a1{L"a_1"};
+  Index const a2{L"a_2"};
+
+  std::optional<EvalNodeDryRun> root;
+  SECTION("one External loop under one Contracted loop") {
+    auto& node = root.emplace(
+        binarize_expr(L"(g{i_1;a_3} * h{a_3;a_1}) * L{a_1;i_1,i_2}"));
+    stamp(node, {{i1, C}}, {{i1, C}});
+    stamp(node.left(), {{i1, C}, {a1, E}}, {{a1, E}});  // X
+  }
+  SECTION("one External loop under two Contracted loops") {
+    // the middle node opens a second Contracted loop, over i_3, that X also
+    // carries
+    auto& node = root.emplace(binarize_expr(
+        L"((g{i_1,i_3;a_3} * h{a_3;a_1}) * L{a_1;i_3}) * M{i_2;i_1}"));
+    stamp(node, {{i1, C}}, {{i1, C}});
+    stamp(node.left(), {{i1, C}, {i3, C}}, {{i3, C}});
+    stamp(node.left().left(), {{i1, C}, {i3, C}, {a1, E}}, {{a1, E}});  // X
+  }
+  SECTION("two External loops on one node under one Contracted loop") {
+    auto& node = root.emplace(
+        binarize_expr(L"(g{i_1;a_3} * h{a_3;a_1,a_2}) * L{a_1,a_2;i_1,i_2}"));
+    stamp(node, {{i1, C}}, {{i1, C}});
+    stamp(node.left(), {{i1, C}, {a1, E}, {a2, E}}, {{a1, E}, {a2, E}});  // X
+  }
+
+  REQUIRE(root);
+  auto const& node = *root;
+
+  std::vector<EvalNodeDryRun> const forest{node};
+  CacheConfig const cfg;
+
+  policy.scheduler = sequant::BatchScheduler::ordered;
+  auto const ord_report = meter(forest, policy, regime, cfg);
+  CHECK(ord_report.builds_total > 0);
+
+  policy.scheduler = sequant::BatchScheduler::forest_descent;
+  // forest descent's meter reports no builds for a root-opened loop (issue
+  // #755), so its result is checked by direct evaluation below.
+  REQUIRE_NOTHROW(meter(forest, policy, regime, cfg));
+
+  // The batched forest-descent result has the unbatched result's size.
+  auto cm = std::make_shared<CostModel const>(regime);
+  DryRunLeafEvaluator yield{cm};
+  auto const ref = sequant::evaluate(node, yield);
+  REQUIRE(ref);
+
+  auto cache = sequant::CacheManager<EvalNodeDryRun>::empty();
+  auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  cache.set_array_ops(&aops);
+  cache.set_custom_evaluator(
+      sequant::make_evaluator(policy, yield, sequant::make_no_scope_guard{}));
+  sequant::ResultPtr result;
+  REQUIRE_NOTHROW(result = sequant::evaluate(node, yield, cache));
+  REQUIRE(result);
+  CHECK(result->size_in_bytes() == ref->size_in_bytes());
 }
 
 // The contract the fixtures share with mpqc's CSVSizeMoments::extent: a group
