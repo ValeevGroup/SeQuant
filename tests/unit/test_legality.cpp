@@ -32,6 +32,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -1216,4 +1217,81 @@ TEST_CASE(
           return &n == &forest.front();
         }) == std::optional{LoopRole::Reduction});
   CHECK_FALSE(role_of(is_leaf(L"D")).has_value());
+}
+
+// Inlining ℓ = M ⊙ pow(D,-1) into E = L · ℓ gives the tree of the direct term
+// with the Hadamard product stamped as the head ℓ: every value takes the role
+// it has in the direct term. The roots' hashes differ (their right operand is
+// ℓ, not a Hadamard product), so values are matched by position.
+TEST_CASE(
+    "analyze_legality classifies an inlined head like the expression it "
+    "replaces",
+    "[legality][tensor-power][inline]") {
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::LoopRole;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+
+  auto const sys = sequant::binarize<EvalExprDryRun>(
+      std::vector<sequant::ResultExpr>{ell_definition(), consumer_E()});
+  REQUIRE(sys.roots().size() == 1);
+  EvalNodeDryRun inlined = sys.roots()[0].get();
+  REQUIRE(inlined.right()->is_equation_boundary());
+  auto direct = [] {
+    auto _ = sequant::set_scoped_default_context(lax_braket_context());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    return sequant::binarize<EvalExprDryRun>(hadamard_power_term());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }();
+  REQUIRE(inlined->hash_value() != direct->hash_value());
+
+  auto const policy = occ_contracted_policy();
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 10u}, {L"a", 20u}};
+  sequant::eval::dryrun::CostModel const cm{regime};
+
+  // the role of the batched occupied axis at each node, in pre-order; empty
+  // when the axis is not in the node's build site
+  auto const roles = [&](EvalNodeDryRun node) {
+    stamp_occ_loop(node);
+    std::vector<EvalNodeDryRun> const forest{node};
+    auto const rich = sequant::eval::compute_dag_boulevard(
+        forest, cm, policy.batch_target_size);
+    auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+    auto const vmap = sequant::eval::build_value_key_node_map(forest);
+    std::map<EvalNodeDryRun const*, std::optional<LoopRole>> role_at;
+    for (auto const& vc : rich.cells) {
+      auto const key = sequant::eval::value_key_of(vc);
+      auto const it = vmap.find(key);
+      REQUIRE(it != vmap.end());
+      auto const cl_it = std::ranges::find(legality.cells, key,
+                                           &sequant::eval::CellLegality::hash);
+      REQUIRE(cl_it != legality.cells.end());
+      auto& role = role_at[it->second];
+      for (auto const& ac : cl_it->per_axis)
+        if (ac.axis == batched_occ()) role = ac.role;
+    }
+    auto const role_of = [&](EvalNodeDryRun const& n) {
+      auto const it = role_at.find(&n);
+      return it == role_at.end() ? std::optional<LoopRole>{} : it->second;
+    };
+    std::vector<std::optional<LoopRole>> result;
+    auto const descend = [&](auto const& self,
+                             EvalNodeDryRun const& n) -> void {
+      result.push_back(role_of(n));
+      if (n.leaf()) return;
+      self(self, n.left());
+      self(self, n.right());
+    };
+    descend(descend, forest.front());
+    return result;
+  };
+
+  auto const got = roles(inlined);
+  // root, L, ℓ / Hadamard product, M, Power, D, -1
+  REQUIRE(got.size() == 7);
+  CHECK(got == roles(direct));
+  CHECK(got[0] == std::optional{LoopRole::Reduction});
+  CHECK(got[2] == std::optional{LoopRole::LoopLocal});
+  CHECK(got[4] == std::optional{LoopRole::LoopLocal});
 }

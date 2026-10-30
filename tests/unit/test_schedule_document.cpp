@@ -1768,6 +1768,56 @@ TEST_CASE("record_dag names the nodes below a unary node's inlined operand",
   REQUIRE(compare(doc, from_json(to_json(doc))).empty());
 }
 
+TEST_CASE("record_dag records an inlined head like the expression it replaces",
+          "[schedule-document][tensor-power][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  std::vector<RootRecord> const roots{
+      RootRecord{.label = "E", .terms = {TermRecord{.key = "E"}}}};
+  auto const policy = occ_contracted_policy();
+  auto const record = [&](EvalNodeDryRun node) {
+    stamp_occ_loop(node);
+    std::vector<EvalNodeDryRun> const forest{node};
+    eval::dryrun::SizeRegime const regime;
+    eval::dryrun::CostModel const cm{regime};
+    auto const rich =
+        eval::compute_dag_boulevard(forest, cm, policy.batch_target_size);
+    auto const legality = eval::analyze_legality(rich, forest, policy);
+    auto const ordered =
+        eval::build_ordered_schedule(rich, legality, policy, {});
+    DagRecord dag;
+    REQUIRE_NOTHROW(dag = record_dag(rich, legality, ordered, forest, roots));
+    REQUIRE(dag.values.size() == rich.cells.size());
+    return dag;
+  };
+
+  // E = L · ℓ with ℓ = M ⊙ pow(D,-1) inlined, and E = L · (M ⊙ pow(D,-1))
+  auto const sys = binarize<EvalExprDryRun>(
+      std::vector<ResultExpr>{ell_definition(), consumer_E()});
+  REQUIRE(sys.roots().size() == 1);
+  auto const dag = record(sys.roots()[0].get());
+  auto const direct = [&] {
+    auto _ = set_scoped_default_context(lax_braket_context());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    return record(binarize<EvalExprDryRun>(hadamard_power_term()));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }();
+
+  // the same values, named and spelled alike
+  REQUIRE(dag.values.size() == 7);
+  REQUIRE(dag.values.size() == direct.values.size());
+  for (std::size_t v = 0; v != dag.values.size(); ++v) {
+    CAPTURE(v);
+    CHECK(dag.values[v].id == direct.values[v].id);
+    CHECK(dag.values[v].expr == direct.values[v].expr);
+  }
+
+  auto const doc = doc_with(roots, dag);
+  REQUIRE(compare(doc, from_json(to_json(doc))).empty());
+}
+
 namespace {
 
 /// an index of each space the two-root fixture uses
