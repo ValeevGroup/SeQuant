@@ -975,12 +975,22 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
     REQUIRE(
         find(ell, [](Node const& n) { return n->op_type() == EvalOp::Power; }));
 
-    // the tree of the Hadamard term, but for the label on the inlined node
+    // the leaves and the Hadamard subtree of the Hadamard term; the root
+    // contracts L with the head ℓ instead of with M and pow(D,-1)
     auto const ref = binarize(hadamard_power_term());
-    REQUIRE(e->hash_value() == ref->hash_value());
     REQUIRE(ell->hash_value() == ref.right()->hash_value());
     REQUIRE(leaf_labels(e) == leaf_labels(ref));
     REQUIRE(ref.right()->as_tensor().label() != L"ℓ");
+
+    // the inlined root alone is an equation boundary
+    REQUIRE(ell->is_equation_boundary());
+    REQUIRE_FALSE(e->is_equation_boundary());
+    REQUIRE(find_all(ell.left(), [](Node const& n) {
+              return n->is_equation_boundary();
+            }).empty());
+    REQUIRE(find_all(ell.right(), [](Node const& n) {
+              return n->is_equation_boundary();
+            }).empty());
   }
 
   SECTION("definitions inline recursively, in any order") {
@@ -1236,4 +1246,28 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
               return !n->node_slice_mask().empty();
             }).empty());
   }
+}
+
+TEST_CASE("binarize a system under the strict bra-ket context",
+          "[EvalExpr][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using Node = FullBinaryNode<EvalExpr>;
+  // E's factors are L and the head ℓ, not the Hadamard chain L, M, pow(D,-1)
+  // the strict bra-ket rule rejects
+  container::svector<ResultExpr> const sys{ell_definition(), consumer_E()};
+  std::optional<InlinedSystem<EvalExpr>> strict;
+  REQUIRE_NOTHROW(strict.emplace(binarize(sys)));
+  REQUIRE_THROWS_AS(binarize(hadamard_power_term()), Exception);
+
+  auto lax = [&] {
+    auto _ = set_scoped_default_context(lax_braket_context());
+    return binarize(sys);
+  }();
+  Node const& e = strict->trees[1];
+  Node const& e_lax = lax.trees[1];
+  REQUIRE(e->hash_value() == e_lax->hash_value());
+  REQUIRE(e.size() == e_lax.size());
+  REQUIRE(e.right()->is_equation_boundary());
+  REQUIRE(e.right()->hash_value() == e_lax.right()->hash_value());
 }

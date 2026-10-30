@@ -372,7 +372,8 @@ IndexSet all_indices(ExprPtr const& expr) {
 
 ///
 /// \brief Collect tensors appearing as a factor at the leaf node of a product
-///        sub-tree, or, at the root node of a sum sub-tree.
+///        sub-tree, or, at the root node of a sum sub-tree or of an inlined
+///        equation (see EvalExpr::is_equation_boundary).
 ///
 template <typename Rng>
 void collect_tensor_factors(EvalExprNode const& node,  //
@@ -380,14 +381,16 @@ void collect_tensor_factors(EvalExprNode const& node,  //
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
 
   if (auto op = node->op_type();
-      node->is_tensor() && (!op || *op == EvalOp::Sum || is_unary(*op)))
-    // Treat a unary node (Adjoint, Power) the same as Sum here: it produces a
-    // tensor result that enters a parent Product as a single factor — the
-    // parent shouldn't recurse past its boundary, just collect the tensor
-    // held in node->expr() and move on.
+      node->is_tensor() && (!op || *op == EvalOp::Sum || is_unary(*op) ||
+                            node->is_equation_boundary()))
+    // Treat a unary node (Adjoint, Power) and an inlined equation the same as
+    // Sum here: each produces a tensor result that enters a parent Product as
+    // a single factor — the parent shouldn't recurse past its boundary, just
+    // collect the tensor held in node->expr() and move on.
     collect.emplace_back(
         ExprWithHash{.expr = node->expr(), .hash = node->hash_value()});
-  else if (node->op_type() == EvalOp::Product && !node.leaf()) {
+  else if (node->op_type() == EvalOp::Product && !node.leaf() &&
+           !node->is_equation_boundary()) {
     collect_tensor_factors(node.left(), collect);
     collect_tensor_factors(node.right(), collect);
   }
@@ -865,7 +868,9 @@ struct InlineContext {
     BinarizationOptions sub_opts = opts;
     sub_opts.node_batch_axes.clear();
     std::size_t node_counter = 0;
-    return binarize_guarded(k, renamed, sub_opts, node_counter);
+    auto tree = binarize_guarded(k, renamed, sub_opts, node_counter);
+    tree->set_equation_boundary(true);
+    return tree;
   }
 
  private:

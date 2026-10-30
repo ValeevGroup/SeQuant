@@ -421,6 +421,23 @@ class EvalExpr {
   void set_accumulate_in_place(bool v) noexcept { accumulate_in_place_ = v; }
 
   ///
+  /// \brief Whether this node is the root of an equation inlined by
+  /// binarize(std::span<const ResultExpr>, const BinarizationOptions&): its
+  /// payload is the (renamed) head of that equation, and a consumer's factor
+  /// collection treats it as one factor instead of descending into it, so the
+  /// head's layout and symmetry are what the consumer contracts with. Not part
+  /// of the hash. Default \c false (also for the root of a top-level tree).
+  ///
+  [[nodiscard]] bool is_equation_boundary() const noexcept {
+    return equation_boundary_;
+  }
+
+  ///
+  /// \brief Sets the equation-boundary flag; see \c is_equation_boundary.
+  ///
+  void set_equation_boundary(bool v) noexcept { equation_boundary_ = v; }
+
+  ///
   /// \brief Emitted effective use count of this contraction node: the number of
   /// times its value is (re)referenced across the enclosing batch loops it does
   /// not carry. \c 1 (the default and the order-blind / off-path value) means
@@ -488,6 +505,9 @@ class EvalExpr {
 
   /// See \c accumulate_in_place.
   bool accumulate_in_place_ = false;
+
+  /// See \c is_equation_boundary.
+  bool equation_boundary_ = false;
 };
 
 struct EvalOpSetter {

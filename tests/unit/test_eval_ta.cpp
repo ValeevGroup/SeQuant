@@ -2109,10 +2109,6 @@ TEST_CASE("eval_inlined_system_ta", "[eval][inline]") {
   // diagonal
   const size_t nocc = 3, nvirt = 3;
   auto yield_ = rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
-  // the consumer's contraction sees through the inlined Hadamard product, so
-  // its network holds L, M and D, as in hadamard_power_term()
-  auto _ = set_scoped_default_context(tp::lax_braket_context());
-
   // the elements of an array in row-major order of its (single-tile) layout
   auto elements = [](TA::TArrayD const& arr) {
     std::vector<double> out;
@@ -2223,6 +2219,9 @@ TEST_CASE("eval_inlined_system_ta", "[eval][inline]") {
                                                  e_layout, yield_)
                                             ->get<TA::TArrayD>()));
 
+    // the direct form contracts L with M and D in one network, which the
+    // strict bra-ket rule rejects
+    auto _ = set_scoped_default_context(tp::lax_braket_context());
     check_elementwise(inlined,
                       elements(evaluate(eval_node(tp::hadamard_power_term()),
                                         e_layout, yield_)
