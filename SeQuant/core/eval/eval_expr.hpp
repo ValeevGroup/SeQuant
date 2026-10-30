@@ -779,12 +779,13 @@ struct InlinedSystem {
 /// definition into its uses.
 ///
 /// A Tensor leaf whose label, bra/ket/aux ranks and per-slot index spaces
-/// match the head of an equation, and a Variable leaf whose label matches a
-/// scalar head, is replaced by that equation's tree, binarized as by
-/// binarize(ResultExpr const&) after renaming the head's indices to the
-/// leaf's and the other indices of its rhs to fresh ones. The subtree enters
-/// the consumer as one factor; its root carries the (renamed) head.
-/// Definitions inline recursively and may appear in any order.
+/// match the head of an equation, or match it with bra and ket swapped if the
+/// head is bra-ket symmetric (BraKetSymmetry::Symm), and a Variable leaf
+/// whose label matches a scalar head, is replaced by that equation's tree,
+/// binarized as by binarize(ResultExpr const&) after renaming the head's
+/// indices to the leaf's and the other indices of its rhs to fresh ones. The
+/// subtree enters the consumer as one factor; its root carries the (renamed)
+/// head. Definitions inline recursively and may appear in any order.
 /// @param system the equations; every head must be labelled
 /// @param opts the options of every equation; \c opts.node_batch_axes must
 ///        be empty: it annotates the nodes of a single term, so stamp the
@@ -793,7 +794,9 @@ struct InlinedSystem {
 ///        unlabelled, two equations share a label and a shape, a matching
 ///        leaf declares symmetries different from its head's, a conjugated
 ///        Variable leaf names a scalar head, a scalar head is the base of a
-///        scalar Power, or a definition reaches its own head
+///        scalar Power, a leaf spells a conjugate-symmetric
+///        (BraKetSymmetry::Conjugate) head with bra and ket swapped, or a
+///        definition reaches its own head
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
 InlinedSystem<ExprT> binarize(std::span<const ResultExpr> system,
