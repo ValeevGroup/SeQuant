@@ -1189,16 +1189,21 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
     REQUIRE(find(*en, [](Node const& n) { return n->is_power(); }));
   }
 
-  SECTION("batch-axis stamping counts the consumer's own nodes") {
-    // one contraction in E, with ℓ a leaf (and one in ℓ's own tree)
+  SECTION("batch-axis stamping is applied to the returned trees") {
+    System const sys{ell_definition(), consumer_E()};
+    // one annotation list cannot describe several equations
     auto const opts = BinarizationOptions{
         .node_batch_axes = {NodeBatchAnnotation{
             .axes = {{batched_occ(), BatchModeType::Contracted}}}}};
-    System const sys{ell_definition(), consumer_E()};
-    std::optional<InlinedSystem<EvalExpr>> res;
-    REQUIRE_NOTHROW(res.emplace(binarize(sys, opts)));
-    Node const& e = res->trees[1];
+    REQUIRE_THROWS_WITH(
+        binarize(sys, opts),
+        ContainsSubstring("node_batch_axes cannot describe several equations"));
+
+    auto res = binarize(sys);
+    Node& e = res.trees[1];
+    stamp_occ_loop(e);
     REQUIRE(e->node_slice_mask().size() == 1);
+    REQUIRE(e->batch_loops_opened_here().size() == 1);
     REQUIRE(find_all(e.right(), [](Node const& n) {
               return !n->node_slice_mask().empty();
             }).empty());

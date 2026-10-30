@@ -766,12 +766,14 @@ struct InlinedSystem {
 /// the consumer as one factor; its root carries the (renamed) head.
 /// Definitions inline recursively and may appear in any order.
 /// @param system the equations; every head must be labelled
-/// @param opts the options of every equation; \c opts.node_batch_axes
-///        applies to the nodes of each equation's own rhs, inlined subtrees
-///        are not stamped
-/// @throw Exception if a head is unlabelled, two equations share a label and
-///        a shape, a matching leaf declares symmetries different from its
-///        head's, or a definition reaches its own head
+/// @param opts the options of every equation; \c opts.node_batch_axes must
+///        be empty: it annotates the nodes of a single term, so stamp the
+///        returned trees instead
+/// @throw Exception if \c opts.node_batch_axes is not empty, a head is
+///        unlabelled, two equations share a label and a shape, a matching
+///        leaf declares symmetries different from its head's, a conjugated
+///        Variable leaf names a scalar head, or a definition reaches its own
+///        head
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
 InlinedSystem<ExprT> binarize(std::span<const ResultExpr> system,

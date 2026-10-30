@@ -987,16 +987,17 @@ EvalExprNode binarize(ResultExpr const& res, const BinarizationOptions& opts,
 container::svector<EvalExprNode> binarize_system(
     std::span<const ResultExpr> system, const BinarizationOptions& opts,
     container::svector<bool>& consumed) {
+  // node_batch_axes annotates the nodes of one term
+  if (!opts.node_batch_axes.empty())
+    throw Exception(
+        "binarize(system): node_batch_axes cannot describe several equations; "
+        "stamp the returned trees instead");
   consumed.assign(system.size(), false);
   detail::InlineContext ctx(system, consumed);
   container::svector<EvalExprNode> trees;
   for (std::size_t k = 0; k != system.size(); ++k) {
     std::size_t node_counter = 0;
     trees.emplace_back(ctx.binarize_equation(k, opts, node_counter));
-    // see binarize(ExprPtr const&, ...)
-    if (!opts.node_batch_axes.empty()) {
-      SEQUANT_ASSERT(node_counter == opts.node_batch_axes.size());
-    }
   }
   return trees;
 }
