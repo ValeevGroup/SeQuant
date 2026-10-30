@@ -841,6 +841,17 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(lone_first->as<Product>().scalar() == 2);
       REQUIRE(has_factor(lone_first, *vx));
     }
+
+    {  // transform_expr passes a scalar Power through
+      container::map<Index, Index> repl{{Index{L"i_1"}, Index{L"i_2"}}};
+      auto const sq = ex<Power>(vx, 2);
+      REQUIRE(*transform_expr(sq, repl) == *sq);
+      REQUIRE(*transform_expr(sq, repl, 3) == *(ex<Constant>(3) * sq));
+      auto const renamed =
+          transform_expr(sq * ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}), repl);
+      REQUIRE(*renamed == *(sq * ex<Tensor>(L"t", bra{L"i_2"}, ket{L"a_1"})));
+      REQUIRE(*transform_expr(sq + vx, repl) == *(sq + vx));
+    }
   }
 
   SECTION("scaled_product") {

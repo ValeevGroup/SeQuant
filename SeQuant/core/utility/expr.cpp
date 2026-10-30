@@ -605,7 +605,8 @@ ExprPtr transform_expr(const ExprPtr &expr,
 ExprPtr transform_expr(const Expr &expr,
                        const container::map<Index, Index> &index_replacements,
                        Constant::scalar_type scaling_factor) {
-  if (expr.is<Constant>() || expr.is<Variable>()) {
+  // a scalar Power's base is a Constant or Variable: it carries no indices
+  if (expr.is<Constant>() || expr.is<Variable>() || expr.is<Power>()) {
     if (scaling_factor != 1) {
       return ex<Constant>(scaling_factor) * expr.clone();
     }
@@ -628,7 +629,8 @@ ExprPtr transform_expr(const Expr &expr,
     for (auto &&term : product) {
       if (term->is<AbstractTensor>()) {
         result->append(1, transform_tensor(*term));
-      } else if (term->is<Variable>() || term->is<Constant>()) {
+      } else if (term->is<Variable>() || term->is<Constant>() ||
+                 term->is<Power>()) {
         result->append(1, term->clone());
       } else if (term->is<Sum>() || term->is<Product>()) {
         result->append(1, transform_expr(term, index_replacements),

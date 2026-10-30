@@ -1148,6 +1148,36 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
     REQUIRE(find(ures.trees[1], variable(L"c", true)));
   }
 
+  SECTION("a scalar Power in a definition is inlined") {
+    auto const c2 = ex<Power>(ex<Variable>(L"c"), 2);
+    // X{i_1;a_1} = c^2 t{i_1;a_1}
+    auto const x = ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}),
+                              c2 * ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+    // F{i_2;a_2} = 2 X{i_2;a_2}
+    auto const f = ResultExpr(
+        Tensor(L"F", bra{L"i_2"}, ket{L"a_2"}),
+        ex<Constant>(2) * ex<Tensor>(L"X", bra{L"i_2"}, ket{L"a_2"}));
+    // E = c^-1, G{i_1;a_1} = E t{i_1;a_1}
+    auto const e =
+        ResultExpr(Variable(L"E"), ex<Power>(ex<Variable>(L"c"), -1));
+    auto const g = ResultExpr(
+        Tensor(L"G", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Variable>(L"E") * ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+    System const sys{x, f, e, g};
+    auto const res = binarize(sys);
+    REQUIRE(res.consumed == Flags{true, false, true, false});
+    Node const* xn = find(res.trees[1], labelled(L"X", false));
+    REQUIRE(xn);
+    Node const* t = find(*xn, labelled(L"t", true));
+    REQUIRE(t);
+    REQUIRE((*t)->as_tensor().bra()[0] == Index{L"i_2"});
+    REQUIRE((*t)->as_tensor().ket()[0] == Index{L"a_2"});
+    REQUIRE(find(*xn, [](Node const& n) { return n->is_power(); }));
+    Node const* en = find(res.trees[3], variable(L"E", false));
+    REQUIRE(en);
+    REQUIRE(find(*en, [](Node const& n) { return n->is_power(); }));
+  }
+
   SECTION("batch-axis stamping counts the consumer's own nodes") {
     // one contraction in E, with ℓ a leaf (and one in ℓ's own tree)
     auto const opts = BinarizationOptions{
