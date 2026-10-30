@@ -21,3 +21,33 @@ Unload f[i_1, a_1]
 Persist D[i_1, i_2, a_1]
 
 =================================================
+Python (einsum)
+=================================================
+import numpy as np
+import os
+
+D_oov = np.zeros((nocc, nocc, nvirt), order='F')
+g_vo = np.load('g_vo.npy')
+D_oov += np.einsum('ai->ia', g_vo, optimize=True)[None, :, :]
+del g_vo
+f_ov = np.load('f_ov.npy')
+D_oov += np.einsum('ia->ia', f_ov, optimize=True)[:, None, :]
+del f_ov
+np.save('D_oov.npy', D_oov)
+
+=================================================
+PyTorch (einsum)
+=================================================
+import torch
+import os
+
+D_oov = torch.zeros((nocc, nocc, nvirt), dtype=torch.float64)
+g_vo = torch.load('g_vo.pt')
+D_oov += torch.einsum('ai->ia', g_vo)[None, :, :]
+del g_vo
+f_ov = torch.load('f_ov.pt')
+D_oov += torch.einsum('ia->ia', f_ov)[:, None, :]
+del f_ov
+torch.save(D_oov, 'D_oov.pt')
+
+=================================================
