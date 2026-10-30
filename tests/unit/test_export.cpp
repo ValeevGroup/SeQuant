@@ -1126,6 +1126,67 @@ TEST_CASE("export element-wise tensor power to Julia", "[export]") {
   }
 }
 
+TEST_CASE("export broadcast sum", "[export]") {
+  using Catch::Matchers::ContainsSubstring;
+
+  // ITF, ITensor and TensorKit cannot broadcast a summand over the modes it
+  // lacks, so the snapshot files carry no section for them on a broadcast sum
+  auto resetter = to_export_context();
+
+  // ε{a_1;} rather than ε{;a_1}: TensorKit cannot load a tensor without bra
+  const auto expr =
+      GENERATE(as<std::wstring>{}, L"D{i_1;a_1} = ε{a_1;} - ε{i_1;}",
+               L"D{i_1;a_1} = ε{a_1;} - ε{i_1;} - E");
+  CAPTURE(toUtf8(expr));
+
+  SECTION("ITF") {
+    ItfGenerator<ItfContext> generator;
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+
+    REQUIRE_THROWS_WITH(
+        export_expression(to_export_tree(deserialize<ResultExpr>(expr)),
+                          generator, ctx),
+        "ITF cannot broadcast a summand");
+  }
+
+  SECTION("ITensor") {
+    JuliaITensorGenerator<> generator;
+    JuliaITensorGeneratorContext ctx;
+    configure_context_defaults(ctx);
+
+    REQUIRE_THROWS_WITH(
+        export_expression(to_export_tree(deserialize<ResultExpr>(expr)),
+                          generator, ctx),
+        "Julia (ITensor) cannot broadcast a summand");
+    CHECK_THAT(generator.get_generated_code(), !ContainsSubstring("+="));
+  }
+
+  SECTION("TensorKit") {
+    JuliaTensorKitGenerator<> generator;
+    JuliaTensorKitGeneratorContext ctx;
+    configure_context_defaults(ctx);
+
+    REQUIRE_THROWS_WITH(
+        export_expression(to_export_tree(deserialize<ResultExpr>(expr),
+                                         /*retain_braket=*/true),
+                          generator, ctx),
+        "Julia (TensorKit) cannot broadcast a summand");
+    CHECK_THAT(generator.get_generated_code(), !ContainsSubstring("+="));
+  }
+
+  SECTION("GenerationOptimizer forwards the broadcast") {
+    GenerationOptimizer<TextGenerator<>> generator{TextGenerator<>{}};
+    TextGeneratorContext ctx;
+
+    export_expression(to_export_tree(deserialize<ResultExpr>(expr)), generator,
+                      ctx);
+    CHECK_THAT(generator.get_generated_code(),
+               ContainsSubstring("+= ε[a_1] (broadcast over i_1)") &&
+                   ContainsSubstring("+= -1 ε[i_1] (broadcast over a_1)"));
+  }
+}
+
 TEST_CASE("ExportExpr", "[export]") {
   SECTION("id & equality") {
     Variable v(L"V");

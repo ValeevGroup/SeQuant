@@ -270,8 +270,10 @@ class GenerationVisitor {
         expressions.push_back(pow(node.left()->expr(), power_exponent(node)));
         break;
       case EvalOp::Broadcast:
-        throw Exception(
-            "export: a summand of a broadcast Sum cannot be exported");
+        // Unary IR op: the left child is the operand, whose modes are a subset
+        // of the result's; the generator broadcasts it over the others
+        expressions.push_back(node.left()->expr());
+        break;
       case EvalOp::Sum: {
         switch (node->compute_selection()) {
           case ComputeSelection::None:
@@ -335,6 +337,11 @@ class GenerationVisitor {
     }
 
     for (ExprPtr current : expressions) {
+      if (node->op_type() == EvalOp::Broadcast) {
+        SEQUANT_ASSERT(node->result_type() == ResultType::Tensor);
+        m_generator.broadcast_add(*current, node->as_tensor(), m_ctx);
+        continue;
+      }
       switch (node->result_type()) {
         case ResultType::Tensor:
           m_generator.compute(*current, node->as_tensor(), m_ctx);
@@ -669,11 +676,12 @@ bool may_prune(const EvalNode<T> &tree) {
   //   don't trigger any computation during export. Hence, existence of a
   //   parent node ensures that the parent triggers the computation which will
   //   contain the tree as well as the separately stored scalar factor.
-  // - The parent node represents a product. If it doesn't, the entire concept
-  //   of storing a scalar factor on it to be added to the computation
-  //   produces incorrect results.
+  // - The parent node represents a product or a broadcast (both linear in
+  //   this tree). Otherwise, the entire concept of storing a scalar factor on
+  //   it to be added to the computation produces incorrect results.
   const bool may_turn_tree_into_leaf =
-      !tree.root() && tree.parent()->op_type() == EvalOp::Product;
+      !tree.root() && (tree.parent()->op_type() == EvalOp::Product ||
+                       tree.parent()->op_type() == EvalOp::Broadcast);
 
   return !can_turn_tree_into_leaf || may_turn_tree_into_leaf;
 };

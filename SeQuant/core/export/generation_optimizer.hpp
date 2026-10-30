@@ -341,11 +341,33 @@ class GenerationOptimizer final : public Generator<MainContext> {
     ExprPtr m_expr;
   };
 
-  using Operation =
-      pv::polymorphic_variant<AbstractOperation, CreateOperation, LoadOperation,
-                              LoadAndZeroOperation, ZeroOperation,
-                              UnloadOperation, DestroyOperation,
-                              PersistOperation, ComputeOperation>;
+  /// A Compute whose expression is broadcast over the result's modes it lacks
+  class BroadcastAddOperation final : public AbstractOperation {
+   public:
+    BroadcastAddOperation(Tensor result, ExprPtr operand)
+        : AbstractOperation(std::move(result)), m_operand(std::move(operand)) {}
+
+    void execute(const Tensor &result, MainGenerator &generator,
+                 const MainContext &ctx) override {
+      SEQUANT_ASSERT(m_operand);
+      generator.broadcast_add(*m_operand, result, ctx);
+    }
+
+    void execute(const Variable &, MainGenerator &,
+                 const MainContext &) override {
+      SEQUANT_UNREACHABLE;
+    }
+
+    OperationType type() const override { return OperationType::Compute; }
+
+   private:
+    ExprPtr m_operand;
+  };
+
+  using Operation = pv::polymorphic_variant<
+      AbstractOperation, CreateOperation, LoadOperation, LoadAndZeroOperation,
+      ZeroOperation, UnloadOperation, DestroyOperation, PersistOperation,
+      ComputeOperation, BroadcastAddOperation>;
 
  public:
   GenerationOptimizer(MainGenerator generator)
@@ -424,6 +446,12 @@ class GenerationOptimizer final : public Generator<MainContext> {
   void compute(const Expr &expression, const Variable &result,
                const MainContext &ctx) override {
     m_queue.emplace_back(ComputeOperation(result, expression.clone()));
+    process_operation_queue(ctx);
+  }
+
+  void broadcast_add(const Expr &operand, const Tensor &result,
+                     const MainContext &ctx) override {
+    m_queue.emplace_back(BroadcastAddOperation(result, operand.clone()));
     process_operation_queue(ctx);
   }
 

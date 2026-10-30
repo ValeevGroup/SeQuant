@@ -223,6 +223,20 @@ class TextGenerator : public Generator<Context> {
                    " += " + stringify(expression, ctx) + "\n";
   }
 
+  void broadcast_add(const Expr &operand, const Tensor &result,
+                     const Context &ctx) override {
+    const Tensor *operand_tensor = detail::broadcast_operand_tensor(operand);
+    std::string new_modes;
+    for (const Index &idx : result.const_indices()) {
+      if (detail::broadcast_carries(operand_tensor, idx)) continue;
+      if (!new_modes.empty()) new_modes += ", ";
+      new_modes += represent(idx, ctx);
+    }
+    m_generated += m_indent + "Compute " + represent(result, ctx) +
+                   " += " + stringify(operand, ctx) + " (broadcast over " +
+                   new_modes + ")\n";
+  }
+
   void declare(const Index &idx, const Context &ctx) override {
     m_generated += m_indent + "Declare index " + represent(idx, ctx) + "\n";
   }

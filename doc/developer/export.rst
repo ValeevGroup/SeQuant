@@ -38,6 +38,12 @@ throw a :class:`sequant::Exception` from whichever hook sees the power first: th
 ``compute`` where the statement is assembled there. A backend that overrides neither inherits the default
 :func:`sequant::Generator::represent` overload, which throws naming the format.
 
+The unary ``EvalOp::Broadcast`` node instead calls ``generator.broadcast_add(operand, result)``, the operand being its left child's
+expression (times any pruned scalar factor) and ``result`` the node's tensor. A Broadcast node is a non-leaf child of a ``Sum``, so,
+like any computed summand, preprocessing gives it the ``Sum``'s result tensor and it accumulates into it. Scalar pruning treats a
+Broadcast parent like a ``Product`` one (both are linear in the child), so ``-ε{i_1;}`` arrives as ``-1 ε[i_1]`` rather than as an
+intermediate. :func:`sequant::Generator::broadcast_add` throws naming the format unless overridden.
+
 Preprocessing: scalars, rebalancing, and renaming
 ------------------------------------------------------
 
