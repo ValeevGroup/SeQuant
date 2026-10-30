@@ -58,8 +58,10 @@ Each ``EvalRow`` has the fields:
     operand, whose exponent is carried by a sentinel right child (see :cpp:enumerator:`sequant::EvalOp::Power`). Under batching it is
     sliced like its operand. ``Broadcast`` is the unary node that expands a summand of a broadcast sum over the head modes it lacks
     (see :cpp:enumerator:`sequant::EvalOp::Broadcast` and :doc:`expressions`); the ranges of those modes come from the backend
-    array-ops, which the cache must therefore hold (``CacheManager::set_array_ops``), as for batched evaluation. A ``Tensor`` row
-    is a leaf served by the caller's leaf evaluator.
+    array-ops, which the cache must therefore hold (``CacheManager::set_array_ops``), as for batched evaluation
+    (``make_ta_array_ops``, ``make_btas_array_ops`` and ``make_tapp_array_ops`` build them from per-space tilings or extents;
+    a tensor-of-tensor TiledArray result cannot be broadcast). A ``Tensor`` row is a leaf served by the caller's leaf
+    evaluator.
 ``time_ns``
     wall time in nanoseconds.
 ``result``

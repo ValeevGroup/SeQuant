@@ -4,6 +4,7 @@
 #ifdef SEQUANT_HAS_BTAS
 
 #include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/elementwise.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
@@ -13,6 +14,10 @@
 #include <btas/btas.h>
 
 #include <complex>
+#include <cstddef>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/iota.hpp>
@@ -286,6 +291,45 @@ T batched_contract(typename T::numeric_type alpha, T const& L, Annot const& la,
   return result;
 }
 
+/// \return \p arr expanded over the modes of \p post that \p pre lacks (see
+///         Result::broadcast), or, for a null \p arr, a tensor every element
+///         of which is \p scalar
+/// \param new_mode_bounds the [lobound, upbound) of each added mode, in the
+///        result's mode order; a mode \p arr carries keeps \p arr's range
+template <typename T, typename Annot>
+[[nodiscard]] T btas_broadcast(
+    T const* arr, typename T::numeric_type const& scalar, Annot const& pre,
+    Annot const& post,
+    container::svector<std::pair<long, long>> const& new_mode_bounds) {
+  auto const pos = broadcast_operand_modes(pre, post);
+  auto const rank = pos.size();
+  SEQUANT_ASSERT(arr || pre.empty());
+  std::vector<long> lo(rank), up(rank);
+  for (std::size_t p = 0, k = 0; p < rank; ++p) {
+    if (pos[p]) {
+      lo[p] = arr->range().lobound()[*pos[p]];
+      up[p] = arr->range().upbound()[*pos[p]];
+      continue;
+    }
+    SEQUANT_ASSERT(k < new_mode_bounds.size());
+    std::tie(lo[p], up[p]) = new_mode_bounds[k++];
+  }
+  T result{btas::Range{lo, up}};
+  if (!arr) {
+    result.fill(scalar);
+    return result;
+  }
+  container::svector<std::size_t> extents(rank), out_strides(rank),
+      in_strides(rank);
+  for (std::size_t p = 0; p < rank; ++p) {
+    extents[p] = result.range().extent()[p];
+    out_strides[p] = result.range().stride()[p];
+    in_strides[p] = pos[p] ? arr->range().stride()[*pos[p]] : 0;
+  }
+  broadcast_copy(result.data(), extents, out_strides, arr->data(), in_strides);
+  return result;
+}
+
 }  // namespace detail
 
 ///
@@ -428,6 +472,31 @@ class ResultTensorBTAS final : public Result {
     return eval_result<ResultTensorBTAS<T>>(std::move(result));
   }
 
+  [[nodiscard]] ResultPtr broadcast(
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    auto const pre_annot = std::any_cast<annot_t>(ann[0]);
+    auto const post_annot = std::any_cast<annot_t>(ann[1]);
+    detail::log_btas(detail::ords_to_labels(post_annot), " = broadcast(",
+                     detail::ords_to_labels(pre_annot), ")\n");
+    return eval_result<ResultTensorBTAS<T>>(
+        detail::btas_broadcast(&get<T>(), numeric_type{}, pre_annot, post_annot,
+                               new_mode_bounds(new_mode_ranges)));
+  }
+
+  [[nodiscard]] ResultPtr broadcast_scalar(
+      Result const& scalar, std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    if (!scalar.is<ResultScalar<numeric_type>>())
+      throw Exception("broadcast: the scalar's type is not this tensor's");
+    auto const post_annot = std::any_cast<annot_t>(ann[1]);
+    detail::log_btas(detail::ords_to_labels(post_annot), " = broadcast(",
+                     scalar.get<numeric_type>(), ")\n");
+    return eval_result<ResultTensorBTAS<T>>(detail::btas_broadcast<T>(
+        nullptr, scalar.get<numeric_type>(), annot_t{}, post_annot,
+        new_mode_bounds(new_mode_ranges)));
+  }
+
   void add_inplace(Result const& other) override {
     auto& t = get<T>();
     auto const& o = other.get<T>();
@@ -451,6 +520,23 @@ class ResultTensorBTAS final : public Result {
   }
 
  private:
+  /// the [lobound, upbound) of each rank-1 range Result::broadcast receives
+  [[nodiscard]] static container::svector<std::pair<long, long>>
+  new_mode_bounds(container::svector<ResultPtr> const& new_mode_ranges) {
+    container::svector<std::pair<long, long>> bounds;
+    bounds.reserve(new_mode_ranges.size());
+    for (auto const& r : new_mode_ranges) {
+      if (!r->is<ResultTensorBTAS<T>>())
+        throw Exception(
+            "broadcast: a mode range is not of this tensor's type; the "
+            "BackendArrayOps must build tensors of the evaluated type");
+      auto const& range = r->get<T>().range();
+      SEQUANT_ASSERT(range.rank() == 1);
+      bounds.emplace_back(range.lobound()[0], range.upbound()[0]);
+    }
+    return bounds;
+  }
+
   [[nodiscard]] std::size_t size_in_bytes() const final {
     const auto& tensor = get<T>();
     // only count data

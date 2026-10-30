@@ -4,6 +4,7 @@
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/eval/backends/tapp/array_ops.hpp>
 #include <SeQuant/core/eval/backends/tapp/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/tapp/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
@@ -97,6 +98,17 @@ class rand_tensor_yield {
       }
     });
     return result;
+  }
+
+  /// array ops sizing the occupied and the virtual space as this yield's
+  /// tensors
+  [[nodiscard]] sequant::BackendArrayOps array_ops() const {
+    auto ibr = sequant::get_default_context().index_basis_registry();
+    auto const bk = [&ibr](wchar_t const* l) {
+      return std::wstring(ibr->retrieve_space(l).base_key());
+    };
+    return sequant::make_tapp_array_ops<Tensor_t>(
+        {{bk(L"i"), nocc_}, {bk(L"a"), nvirt_}});
   }
 
   sequant::ResultPtr operator()(sequant::Tensor const& tnsr) const {
@@ -611,6 +623,81 @@ TEST_CASE("eval_tensor_power_tapp", "[eval_tapp]") {
     check_elementwise(got_sum, expected, [](double x) { return x; });
     check_elementwise(yield_(node.left()->as_tensor())->get<TAPPTensorD>(), src,
                       [](double x) { return x; });
+  }
+}
+
+TEST_CASE("eval_broadcast_sum_tapp", "[eval_tapp][broadcast]") {
+  using namespace sequant;
+
+  std::srand(2024);
+  const size_t nocc = 2, nvirt = 3;
+  auto yield_ = rand_tensor_yield<TAPPTensorD>{nocc, nvirt};
+  // a Broadcast node shapes the modes it adds through the array ops
+  auto const aops = yield_.array_ops();
+  auto eval_aops = [&](ResultExpr const& res) {
+    auto const node = binarize<EvalExprTAPP>(res);
+    auto cache = CacheManager<std::remove_cvref_t<decltype(node)>>::empty();
+    cache.set_array_ops(&aops);
+    return evaluate(node, tidxs(res.result_as_tensor()), yield_, cache)
+        ->get<TAPPTensorD>();
+  };
+  auto const extents = container::svector<int64_t>{
+      int64_t(nocc), int64_t(nocc), int64_t(nvirt), int64_t(nvirt)};
+  auto vec = [&](ExprPtr const& e) {
+    return yield_(e->as<Tensor>())->get<TAPPTensorD>();
+  };
+
+  SECTION("four-term denominator") {
+    auto eps_a = [](wchar_t const* a) {
+      return ex<Tensor>(L"ε", bra{}, ket{a});
+    };
+    auto eps_i = [](wchar_t const* i) {
+      return ex<Tensor>(L"ε", bra{i}, ket{});
+    };
+    // every ket-ε occurrence shares one yielded array by key, likewise every
+    // bra-ε occurrence
+    auto const ea = vec(eps_a(L"a_1"));
+    auto const ei = vec(eps_i(L"i_1"));
+    const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                                .braket = BraKetSymmetry::Symm,
+                                .column = ColumnSymmetry::Symm};
+    ResultExpr res(
+        Tensor(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym),
+        eps_a(L"a_1") + eps_a(L"a_2") - eps_i(L"i_1") - eps_i(L"i_2"));
+    auto const got = eval_aops(res);
+    REQUIRE(got.extents() == extents);
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t i2 = 0; i2 < nocc; ++i2)
+        for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+          for (std::size_t a2 = 0; a2 < nvirt; ++a2)
+            CHECK(
+                got(i1, i2, a1, a2) ==
+                Catch::Approx(ea(a1) + ea(a2) - ei(i1) - ei(i2)).margin(1e-12));
+  }
+
+  SECTION("asymmetric head and a constant summand") {
+    // distinct leaves and a nonsymmetric head: the expected tensor changes
+    // under any mode swap, so this pins the result layout
+    auto const e1 = ex<Tensor>(L"ε1", bra{}, ket{L"a_1"});
+    auto const e2 = ex<Tensor>(L"ε2", bra{}, ket{L"a_2"});
+    auto const e3 = ex<Tensor>(L"ε3", bra{L"i_1"}, ket{});
+    auto const e4 = ex<Tensor>(L"ε4", bra{L"i_2"}, ket{});
+    auto const v1 = vec(e1), v2 = vec(e2), v3 = vec(e3), v4 = vec(e4);
+    const TensorSymmetries nsym{.perm = Symmetry::Nonsymm,
+                                .braket = BraKetSymmetry::Nonsymm,
+                                .column = ColumnSymmetry::Nonsymm};
+    ResultExpr res(
+        Tensor(L"D'", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, nsym),
+        e1 + e2 - e3 - e4 + ex<Constant>(rational{3, 2}));
+    auto const got = eval_aops(res);
+    REQUIRE(got.extents() == extents);
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t i2 = 0; i2 < nocc; ++i2)
+        for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+          for (std::size_t a2 = 0; a2 < nvirt; ++a2)
+            CHECK(got(i1, i2, a1, a2) ==
+                  Catch::Approx(v1(a1) + v2(a2) - v3(i1) - v4(i2) + 1.5)
+                      .margin(1e-12));
   }
 }
 

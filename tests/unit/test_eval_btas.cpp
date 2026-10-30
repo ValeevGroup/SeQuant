@@ -6,6 +6,7 @@
 
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/eval/backends/btas/array_ops.hpp>
 #include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/btas/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
@@ -110,6 +111,17 @@ class rand_tensor_yield {
       }
     });
     return result;
+  }
+
+  /// array ops sizing the occupied and the virtual space as this yield's
+  /// tensors
+  [[nodiscard]] sequant::BackendArrayOps array_ops() const {
+    auto ibr = sequant::get_default_context().index_basis_registry();
+    auto const bk = [&ibr](wchar_t const* l) {
+      return std::wstring(ibr->retrieve_space(l).base_key());
+    };
+    return sequant::make_btas_array_ops<Tensor_t>(
+        {{bk(L"i"), nocc_}, {bk(L"a"), nvirt_}});
   }
 
   sequant::ResultPtr operator()(sequant::Tensor const& tnsr) const {
@@ -855,6 +867,13 @@ TEST_CASE("eval_broadcast_sum_btas", "[eval_btas][broadcast]") {
   std::srand(2024);
   const size_t nocc = 2, nvirt = 3;
   auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+  // a Broadcast node shapes the modes it adds through the array ops
+  auto const aops = yield_.array_ops();
+  auto eval_aops = [&](auto const& node, auto const& layout) {
+    auto cache = CacheManager<std::remove_cvref_t<decltype(node)>>::empty();
+    cache.set_array_ops(&aops);
+    return evaluate(node, layout, yield_, cache);
+  };
 
   auto eps_a = [](wchar_t const* a) { return ex<Tensor>(L"ε", bra{}, ket{a}); };
   auto eps_i = [](wchar_t const* i) { return ex<Tensor>(L"ε", bra{i}, ket{}); };
@@ -871,8 +890,8 @@ TEST_CASE("eval_broadcast_sum_btas", "[eval_btas][broadcast]") {
   Tensor const head(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
   ResultExpr res(head,
                  eps_a(L"a_1") + eps_a(L"a_2") - eps_i(L"i_1") - eps_i(L"i_2"));
-  auto const got = evaluate(binarize<EvalExprBTAS>(res), tidxs(head), yield_)
-                       ->get<BTensorD>();
+  auto const got =
+      eval_aops(binarize<EvalExprBTAS>(res), tidxs(head))->get<BTensorD>();
   REQUIRE(got.range() == btas::Range{nocc, nocc, nvirt, nvirt});
   for (std::size_t i1 = 0; i1 < nocc; ++i1)
     for (std::size_t i2 = 0; i2 < nocc; ++i2)
@@ -898,8 +917,7 @@ TEST_CASE("eval_broadcast_sum_btas", "[eval_btas][broadcast]") {
     Tensor const nhead(L"D'", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, nsym);
     ResultExpr nres(nhead, e1 + e2 - e3 - e4);
     auto const ngot =
-        evaluate(binarize<EvalExprBTAS>(nres), tidxs(nhead), yield_)
-            ->get<BTensorD>();
+        eval_aops(binarize<EvalExprBTAS>(nres), tidxs(nhead))->get<BTensorD>();
     REQUIRE(ngot.range() == btas::Range{nocc, nocc, nvirt, nvirt});
     for (std::size_t i1 = 0; i1 < nocc; ++i1)
       for (std::size_t i2 = 0; i2 < nocc; ++i2)
@@ -908,6 +926,22 @@ TEST_CASE("eval_broadcast_sum_btas", "[eval_btas][broadcast]") {
             CHECK(
                 ngot(i1, i2, a1, a2) ==
                 Catch::Approx(v1(a1) + v2(a2) - v3(i1) - v4(i2)).margin(1e-12));
+  }
+
+  // a constant summand is broadcast over every head mode
+  {
+    Tensor const chead(L"D", bra{L"i_1"}, ket{L"a_1"});
+    ResultExpr cres(
+        chead, eps_a(L"a_1") - eps_i(L"i_1") + ex<Constant>(rational{3, 2}));
+    auto const cnode = binarize<EvalExprBTAS>(cres);
+    REQUIRE(cnode.right()->is_broadcast());
+    REQUIRE(cnode.right().left()->is_constant());
+    auto const cgot = eval_aops(cnode, tidxs(chead))->get<BTensorD>();
+    REQUIRE(cgot.range() == btas::Range{nocc, nvirt});
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+        CHECK(cgot(i1, a1) ==
+              Catch::Approx(ea(a1) - ei(i1) + 1.5).margin(1e-12));
   }
 }
 
@@ -923,6 +957,13 @@ TEST_CASE("eval_inlined_system_btas", "[eval_btas][inline]") {
   // diagonal
   const size_t nocc = 3, nvirt = 3;
   auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+  // a Broadcast node shapes the modes it adds through the array ops
+  auto const aops = yield_.array_ops();
+  auto eval_aops = [&](auto const& node, auto const& layout) {
+    auto cache = CacheManager<std::remove_cvref_t<decltype(node)>>::empty();
+    cache.set_array_ops(&aops);
+    return evaluate(node, layout, yield_, cache);
+  };
   // serves f(slot ordinals of \p tnsr) for every occurrence of the leaf
   // \p tnsr, in either orientation: a leaf node of a bra-ket symmetric tensor
   // may hold either
@@ -960,7 +1001,7 @@ TEST_CASE("eval_inlined_system_btas", "[eval_btas][inline]") {
   auto eval_system = [&](System const& sys) {
     auto const res = binarize<EvalExprBTAS>(sys);
     REQUIRE(res.roots().size() == 1);
-    return evaluate(res.roots()[0].get(), e_layout, yield_)->get<BTensorD>();
+    return eval_aops(res.roots()[0].get(), e_layout)->get<BTensorD>();
   };
   // E{i_2;i_3} of consumer_E()
   auto check_E = [&](BTensorD const& got) {
