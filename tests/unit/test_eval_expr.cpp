@@ -1212,6 +1212,32 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
     REQUIRE(dummy.proto_indices()[0] == Index{L"i_3"});
   }
 
+  SECTION("a proto-indexed slot matches only a proto-indexed slot") {
+    Index const a1i1(L"a_1", {L"i_1"});
+    Index const a3i2(L"a_3", {L"i_2"});
+    // X{i_1;a_1} = t{i_1;a_1}: a CSV use X{i_2;a_3<i_2>} is another tensor
+    auto const plain_x = ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}),
+                                    ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+    // X{i_1;a_1<i_1>} = t{i_1;a_1<i_1>}
+    auto const csv_x = ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{a1i1}),
+                                  ex<Tensor>(L"t", bra{L"i_1"}, ket{a1i1}));
+    // R{i_2;a_3<i_2>} = 2 X{i_2;a_3<i_2>}
+    auto const r =
+        ResultExpr(Tensor(L"R", bra{L"i_2"}, ket{a3i2}),
+                   ex<Constant>(2) * ex<Tensor>(L"X", bra{L"i_2"}, ket{a3i2}));
+    System const mismatch{plain_x, r};
+    auto const res = binarize(mismatch);
+    REQUIRE(res.consumed == Flags{false, false});
+    REQUIRE(find(res.trees[1], labelled(L"X", true)));
+
+    System const match{csv_x, r};
+    auto const mres = binarize(match);
+    REQUIRE(mres.consumed == Flags{true, false});
+    Node const* t = find(mres.trees[1], labelled(L"t", true));
+    REQUIRE(t);
+    REQUIRE((*t)->as_tensor().ket()[0] == a3i2);
+  }
+
   SECTION("two uses of one definition share a hash") {
     // G{i_2;i_3} = L{a_1,a_2;i_1,i_3} ℓ{i_1,i_2;a_1,a_2}
     //            + K{a_1,a_2;i_1,i_2} ℓ{i_1,i_3;a_1,a_2}

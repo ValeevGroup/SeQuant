@@ -706,15 +706,18 @@ namespace detail {
 
 namespace {
 
-/// \return true if slots \p a and \p b have the same rank and the same index
-///         space in every slot
+/// \return true if slots \p a and \p b have the same rank and, in every
+///         slot, the same index space and number of proto indices
 template <typename A, typename B>
 bool same_spaces(A const& a, B const& b) {
-  return std::ranges::equal(a, b, {}, &Index::space, &Index::space);
+  return std::ranges::equal(a, b, [](Index const& x, Index const& y) {
+    return x.space() == y.space() &&
+           x.proto_indices().size() == y.proto_indices().size();
+  });
 }
 
-/// \return true if \p x and \p y have the same bra, ket and aux ranks and the
-///         same index space in every slot
+/// \return true if \p x and \p y have the same bra, ket and aux ranks and
+///         slots alike in every position (see same_spaces)
 template <typename X, typename Y>
 bool same_slot_spaces(X const& x, Y const& y) {
   return same_spaces(x.bra(), y.bra()) && same_spaces(x.ket(), y.ket()) &&
