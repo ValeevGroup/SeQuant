@@ -22,6 +22,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <utility>
 
 namespace sequant {
 
@@ -689,7 +690,10 @@ mode_batches_of_trange1(TA::TiledRange1 const& tr1,
 /// A result may be a VIEW of another result's array -- a tile block of it (a
 /// batch slice), a mode permutation, a conjugation, or any combination --
 /// pending rather than applied (detail::ArrayView). The view shares the
-/// parent's tiles, so it costs no allocation and no pass over the data:
+/// parent's tiles, so it costs no allocation and no pass over the data
+/// (TiledArray copies the tiles of a block of a MUTABLE array; with_expr()
+/// hands the parent over as a const array, whose preserve_lobound block is a
+/// view there):
 /// consumers that are TiledArray expressions -- the flat products without a
 /// Hadamard index, the dot product, scaling, sums, accumulation of the operand,
 /// the batch scatter -- fold it into their expression through with_expr(); a
@@ -735,16 +739,25 @@ class ResultTensorTA final : public Result {
   /// the parent array with the pending view folded in -- its modes relabelled
   /// through the permutation, the block cut by block(), the conjugation by
   /// conj(). \p f must return the same type whatever expression it receives.
+  ///
+  /// The parent is handed to TiledArray as a CONST array. A block of a const
+  /// array that keeps the parent's element coordinates (preserve_lobound) is
+  /// a view there: the consuming expression reads the parent's own tiles,
+  /// whereas a block of a mutable array is copied tile by tile. The const is
+  /// the promise that nothing writes the parent's tiles while the expression
+  /// is alive, which holds: a view is never written through, and the parent
+  /// is released once this result holds a value of its own.
   template <typename F>
   decltype(auto) with_expr(std::string const& annot, F&& f) const {
     if (has_value()) return std::forward<F>(f)(Result::get<ArrayT>()(annot));
+    auto const& parent = std::as_const(parent_);
     auto const stored = detail::stored_annot(annot, view_.perm);
     bool const conj = TA::detail::is_complex_v<numeric_type> && view_.conj;
     if (view_.blk_lo.empty()) {
       if constexpr (TA::detail::is_complex_v<numeric_type>) {
-        if (conj) return std::forward<F>(f)(parent_(stored).conj());
+        if (conj) return std::forward<F>(f)(parent(stored).conj());
       }
-      return std::forward<F>(f)(parent_(stored));
+      return std::forward<F>(f)(parent(stored));
     }
     // The block keeps every mode's element coordinates (TA's
     // preserve_lobound), like the eager slice did, so a spectator mode with a
@@ -752,7 +765,7 @@ class ResultTensorTA final : public Result {
     // the expressions derived from the block (conj(), scaling, negation)
     // carry the lobound along.
     auto blk =
-        parent_(stored).block(view_.blk_lo, view_.blk_hi, TA::preserve_lobound);
+        parent(stored).block(view_.blk_lo, view_.blk_hi, TA::preserve_lobound);
     if constexpr (TA::detail::is_complex_v<numeric_type>) {
       if (conj) return std::forward<F>(f)(blk.conj());
     }
@@ -1157,14 +1170,17 @@ class ResultTensorOfTensorTA final : public Result {
   /// Hands \p f the TiledArray expression of this result's value for the
   /// nested annotation \p annot (`outer;inner`): `value(annot)` when the value
   /// is held, else the parent array's block over the outer modes, element
-  /// coordinates kept (TA's preserve_lobound; see ResultTensorTA::with_expr).
-  /// \p f must return the same type whatever expression it receives.
+  /// coordinates kept (TA's preserve_lobound). The parent is handed over as a
+  /// const array, which makes the block a view in TiledArray (see
+  /// ResultTensorTA::with_expr). \p f must return the same type whatever
+  /// expression it receives.
   template <typename F>
   decltype(auto) with_expr(std::string const& annot, F&& f) const {
     if (has_value()) return std::forward<F>(f)(Result::get<ArrayT>()(annot));
-    if (view_.blk_lo.empty()) return std::forward<F>(f)(parent_(annot));
+    auto const& parent = std::as_const(parent_);
+    if (view_.blk_lo.empty()) return std::forward<F>(f)(parent(annot));
     return std::forward<F>(f)(
-        parent_(annot).block(view_.blk_lo, view_.blk_hi, TA::preserve_lobound));
+        parent(annot).block(view_.blk_lo, view_.blk_hi, TA::preserve_lobound));
   }
 
  private:
