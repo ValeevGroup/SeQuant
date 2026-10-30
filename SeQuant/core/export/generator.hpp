@@ -162,8 +162,8 @@ class Generator {
 
   /// Semantic callback for encoding the broadcast of @p operand over the modes
   /// of @p result that it lacks, added to @p result.
-  /// @param operand a Tensor or TensorPower, or a scalar (Variable, Constant,
-  ///        Power), possibly times scalar factors; its modes are a subset of
+  /// @param operand a Tensor, or a scalar (Variable, Constant, Power),
+  ///        possibly times scalar factors; its modes are a subset of
   ///        those of @p result, in any order
   /// @param result the tensor to accumulate into
   /// @throw Exception unless overridden by a generator that supports it
