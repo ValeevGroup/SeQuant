@@ -21,6 +21,18 @@ Unload f[i_1, a_1]
 Persist D[i_1, i_2, a_1]
 
 =================================================
+Julia (TensorOperations)
+=================================================
+D_oov = zeros(Float64, nocc, nocc, nv)
+g_vo = deserialize("g_vo.jlbin")
+D_oov .+= reshape(permutedims(g_vo, (2, 1)), (1, nocc, nv))
+g_vo = nothing
+f_ov = deserialize("f_ov.jlbin")
+D_oov .+= reshape(f_ov, (nocc, 1, nv))
+f_ov = nothing
+return D_oov
+
+=================================================
 Python (einsum)
 =================================================
 import numpy as np

@@ -18,6 +18,7 @@
 #include <ranges>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace sequant {
 
@@ -242,6 +243,51 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
                const Context &ctx) override {
     m_generated += "@tensor " + represent(result, ctx) +
                    " += " + to_julia_expr(expression, ctx) + "\n";
+  }
+
+  /// Emits `<result> .+= [<scalars> * ]reshape(<operand>, (<dims>))`, the
+  /// operand permuted to the order its modes have in @p result and given a
+  /// dimension of 1 at each mode it lacks; a scalar operand is added as is
+  void broadcast_add(const Expr &operand, const Tensor &result,
+                     const Context &ctx) override {
+    const Tensor *operand_tensor = detail::broadcast_operand_tensor(operand);
+    if (!operand_tensor) {
+      m_generated += tensor_name(result, ctx) +
+                     " .+= " + to_julia_expr(operand, ctx) + "\n";
+      return;
+    }
+
+    // the factor of operand that carries operand_tensor
+    const Expr *body = &operand;
+    if (operand.is<Product>()) {
+      for (const ExprPtr &factor : operand.as<Product>().factors()) {
+        if (!factor->is_scalar()) body = factor.get();
+      }
+    }
+
+    std::vector<Index> carried;
+    std::string dims;
+    for (const Index &idx : result.const_indices()) {
+      if (!dims.empty()) dims += ", ";
+      if (detail::broadcast_carries(operand_tensor, idx)) {
+        carried.push_back(idx);
+        dims += dim(idx, ctx);
+      } else {
+        dims += "1";
+      }
+    }
+
+    std::string body_str =
+        permuted(tensor_name(*operand_tensor, ctx), *operand_tensor, carried);
+    if (body->is<TensorPower>()) {
+      body_str = detail::format_tensor_power(body->as<TensorPower>(),
+                                             std::move(body_str), " .^ ",
+                                             /*double_slash*/ true);
+    }
+
+    m_generated += tensor_name(result, ctx) +
+                   " .+= " + scalar_prefix(operand, *body, ctx) + "reshape(" +
+                   body_str + ", (" + dims + "))\n";
   }
 
   void declare(const Index &, const Context &) override {}
