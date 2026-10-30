@@ -26,6 +26,8 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <cstddef>
+#include <utility>
 
 #include <tiledarray.h>
 #include <boost/regex.hpp>
@@ -6364,6 +6366,55 @@ TEST_CASE("ordered-root-no-alias", "[eval][ordered]") {
 // Hadamard index, dot, scaling, sums, accumulation, the scatter) take the view
 // as is and leave it an alias; the array consumers (einsum, clone) materialize
 // it exactly; writes into a view never reach the parent.
+
+// The tiles a consuming TiledArray expression receives from a view: what
+// with_expr() hands over, evaluated through its own engine in the view's
+// stored mode order (so no permutation is applied), each local lazy tile
+// converted as a product or a sum would convert it. Returns the evaluator's
+// TiledRange and the (ordinal, tile) pairs of this rank's tiles.
+template <typename ResultT>
+auto view_consumer_tiles(ResultT const& r, std::string const& annot) {
+  return r.with_expr(annot, [&](auto&& expr) {
+    using Expr = std::decay_t<decltype(expr)>;
+    typename TA::expressions::ExprTrait<Expr>::engine_type engine(expr);
+    engine.init(TA::get_default_world(), {},
+                TA::expressions::BipartiteIndexList(expr.annotation()));
+    auto dist_eval = engine.make_dist_eval();
+    dist_eval.eval();
+    using Tile = typename decltype(dist_eval)::eval_type;
+    std::vector<std::pair<std::size_t, Tile>> tiles;
+    for (auto ord : *dist_eval.pmap())
+      tiles.emplace_back(ord, static_cast<Tile>(dist_eval.get(ord).get()));
+    dist_eval.wait();
+    return std::make_pair(dist_eval.trange(), std::move(tiles));
+  });
+}
+
+// true iff every tile of \p tiles (from view_consumer_tiles) that the parent
+// array \p parent holds on this rank IS the parent's tile (same buffer); the
+// view's tile (ordinal in \p view_trange) maps to the parent's at + \p lo
+// (tile coordinates). A tile the parent holds elsewhere is a fetched copy by
+// construction and is not inspected.
+template <typename ArrayT, typename Tiles>
+bool consumer_reads_parent_tiles(ArrayT const& parent,
+                                 TA::TiledRange const& view_trange,
+                                 Tiles const& tiles,
+                                 std::vector<std::size_t> const& lo) {
+  std::size_t checked = 0;
+  for (auto const& [ord, tile] : tiles) {
+    auto idx = view_trange.tiles_range().idx(ord);
+    for (std::size_t d = 0; d < idx.size(); ++d) idx[d] += lo[d];
+    if (!parent.is_local(idx)) continue;
+    auto const parent_tile = parent.find_local(idx).get();
+    if (static_cast<void const*>(tile.data()) !=
+        static_cast<void const*>(parent_tile.data()))
+      return false;
+    ++checked;
+  }
+  // every rank holds some tiles of a dense array over this few tiles
+  return checked > 0;
+}
+
 TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
   using sequant::DeNest;
   using sequant::eval_result;
@@ -6419,6 +6470,49 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     REQUIRE(s->measured_size_in_bytes() > 0);
     // A is untouched
     REQUIRE(A.trange() == trA);
+  }
+
+  SECTION("the consumer of a view reads the parent's tiles in place") {
+    // what a product or a sum receives from a view is the parent's own tile,
+    // not a copy: TiledArray hands the tiles of a const array's block that
+    // keeps the array's element coordinates through, and with_expr() hands
+    // the parent over as a const array
+    {
+      // a slice: mode 1, tiles 1..2
+      auto s = rA->slice_mode(1, 2, 6);
+      auto const [tr, tiles] = view_consumer_tiles(s->as<ResultD>(), "a,b,c");
+      REQUIRE(consumer_reads_parent_tiles(A, tr, tiles, {0, 1, 0}));
+      REQUIRE(s->is_buffer_alias());
+    }
+    {
+      // a slice of a slice: mode 1 tiles 1..2, then mode 0 tile 2
+      auto ss = rA->slice_mode(1, 2, 6)->slice_mode(0, 6, 9);
+      auto const [tr, tiles] = view_consumer_tiles(ss->as<ResultD>(), "a,b,c");
+      REQUIRE(consumer_reads_parent_tiles(A, tr, tiles, {2, 1, 0}));
+    }
+    {
+      // a permuted slice: the permutation only relabels the parent's modes,
+      // so the tiles are still the parent's
+      auto ps = rA->slice_mode(1, 2, 6)->permute(annot2("a,b,c", "c,a,b"));
+      auto const [tr, tiles] = view_consumer_tiles(ps->as<ResultD>(), "c,a,b");
+      REQUIRE(consumer_reads_parent_tiles(A, tr, tiles, {0, 1, 0}));
+    }
+    {
+      // a whole-array view (a permutation without a slice) too
+      auto pv = rA->permute(annot2("a,b,c", "b,a,c"));
+      auto const [tr, tiles] = view_consumer_tiles(pv->as<ResultD>(), "b,a,c");
+      REQUIRE(consumer_reads_parent_tiles(A, tr, tiles, {0, 0, 0}));
+    }
+    {
+      // a conjugated view of a complex array computes its tiles: a copy
+      TArrayZ Z(world, trA);
+      Z.fill_random();
+      world.gop.fence();
+      auto rZ = eval_result<ResultZ>(Z);
+      auto cz = rZ->slice_mode(1, 2, 6)->adjoint(annot2("a,b,c", "a,b,c"));
+      auto const [tr, tiles] = view_consumer_tiles(cz->as<ResultZ>(), "a,b,c");
+      REQUIRE_FALSE(consumer_reads_parent_tiles(Z, tr, tiles, {0, 1, 0}));
+    }
   }
 
   SECTION("a product takes a sliced operand as is") {
@@ -6874,6 +6968,20 @@ TEST_CASE("ta_lazy_views_nested", "[eval][ta][lazy]") {
   auto const Re = sequant::slice_array_over_mode(R, 1, 1, 2);
   auto sL = [&] { return rL->slice_mode(1, 5, 10); };
   auto sR = [&] { return rR->slice_mode(1, 5, 10); };
+
+  SECTION("the consumer of a nested view reads the parent's tiles in place") {
+    {
+      auto const [tr, tiles] =
+          view_consumer_tiles(sL()->as<ResultToT>(), "i,j;a,b");
+      REQUIRE(consumer_reads_parent_tiles(L, tr, tiles, {0, 1}));
+    }
+    {
+      auto ss = sL()->slice_mode(0, 2, 4);
+      auto const [tr, tiles] =
+          view_consumer_tiles(ss->as<ResultToT>(), "i,j;a,b");
+      REQUIRE(consumer_reads_parent_tiles(L, tr, tiles, {1, 1}));
+    }
+  }
 
   SECTION("a slice of a slice, and the clone") {
     auto ss = sL()->slice_mode(0, 2, 4);
