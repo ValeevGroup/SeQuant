@@ -792,8 +792,8 @@ struct InlinedSystem {
 /// @throw Exception if \c opts.node_batch_axes is not empty, a head is
 ///        unlabelled, two equations share a label and a shape, a matching
 ///        leaf declares symmetries different from its head's, a conjugated
-///        Variable leaf names a scalar head, or a definition reaches its own
-///        head
+///        Variable leaf names a scalar head, a scalar head is the base of a
+///        scalar Power, or a definition reaches its own head
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
 InlinedSystem<ExprT> binarize(std::span<const ResultExpr> system,
