@@ -1232,13 +1232,13 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
       auto ev = random_tensor<double, 1>({nvirt}, 4100);
       Eigen::Tensor<double, 0> E;
       E() = 0.375;
-      write(Tensor(L"ε", bra{L"i_1"}, ket{}), eo);
-      write(Tensor(L"ε", bra{}, ket{L"a_1"}), ev);
+      write(Tensor(L"e", bra{L"i_1"}, ket{}), eo);
+      write(Tensor(L"e", bra{}, ket{L"a_1"}), ev);
       write_eigen_tensor_to_numpy(temp_dir.string() + "/E.npy", E);
 
       NumPyEinsumGenerator generator;
       export_expression(to_export_tree(deserialize<ResultExpr>(
-                            L"D{i_1;a_1} = ε{;a_1} - ε{i_1;} - E")),
+                            L"D{i_1;a_1} = e{;a_1} - e{i_1;} - E")),
                         generator, ctx);
       REQUIRE(
           run_python_code(generator.get_generated_code(), temp_dir.string()));
