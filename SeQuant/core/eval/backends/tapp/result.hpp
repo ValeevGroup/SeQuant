@@ -3,6 +3,7 @@
 
 #ifdef SEQUANT_HAS_TAPP
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backends/tapp/ops.hpp>
 #include <SeQuant/core/eval/backends/tapp/tensor.hpp>
 #include <SeQuant/core/eval/elementwise.hpp>
@@ -12,6 +13,8 @@
 #include <SeQuant/core/utility/exception.hpp>
 
 #include <complex>
+#include <cstddef>
+#include <cstdint>
 
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/iota.hpp>
@@ -150,6 +153,45 @@ inline void log_tapp(Args const&... args) noexcept {
   log_result("[TAPP] ", args...);
 }
 
+/// \return \p arr expanded over the modes of \p post that \p pre lacks (see
+///         Result::broadcast), or, for a null \p arr, a tensor every element
+///         of which is \p scalar
+/// \param new_mode_extents the extent of each added mode, in the result's
+///        mode order; a mode \p arr carries keeps \p arr's extent
+template <typename T, typename Annot>
+[[nodiscard]] T tapp_broadcast(
+    T const* arr, typename T::numeric_type const& scalar, Annot const& pre,
+    Annot const& post,
+    container::svector<std::int64_t> const& new_mode_extents) {
+  auto const pos = broadcast_operand_modes(pre, post);
+  auto const rank = pos.size();
+  SEQUANT_ASSERT(arr || pre.empty());
+  container::svector<std::int64_t> extents(rank);
+  for (std::size_t p = 0, k = 0; p < rank; ++p) {
+    if (pos[p]) {
+      extents[p] = arr->extents()[*pos[p]];
+      continue;
+    }
+    SEQUANT_ASSERT(k < new_mode_extents.size());
+    extents[p] = new_mode_extents[k++];
+  }
+  T result{extents};
+  if (!arr) {
+    for (auto& x : result) x = scalar;
+    return result;
+  }
+  container::svector<std::size_t> uextents(rank), out_strides(rank),
+      in_strides(rank);
+  for (std::size_t p = 0; p < rank; ++p) {
+    uextents[p] = static_cast<std::size_t>(extents[p]);
+    out_strides[p] = static_cast<std::size_t>(result.strides()[p]);
+    in_strides[p] =
+        pos[p] ? static_cast<std::size_t>(arr->strides()[*pos[p]]) : 0;
+  }
+  broadcast_copy(result.data(), uextents, out_strides, arr->data(), in_strides);
+  return result;
+}
+
 }  // namespace detail
 
 ///
@@ -283,6 +325,31 @@ class ResultTensorTAPP final : public Result {
     return eval_result<ResultTensorTAPP<T>>(std::move(result));
   }
 
+  [[nodiscard]] ResultPtr broadcast(
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    auto const pre_annot = std::any_cast<annot_t>(ann[0]);
+    auto const post_annot = std::any_cast<annot_t>(ann[1]);
+    detail::log_tapp(detail::ords_to_labels(post_annot), " = broadcast(",
+                     detail::ords_to_labels(pre_annot), ")\n");
+    return eval_result<ResultTensorTAPP<T>>(
+        detail::tapp_broadcast(&get<T>(), numeric_type{}, pre_annot, post_annot,
+                               new_mode_extents(new_mode_ranges)));
+  }
+
+  [[nodiscard]] ResultPtr broadcast_scalar(
+      Result const& scalar, std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    if (!scalar.is<ResultScalar<numeric_type>>())
+      throw Exception("broadcast: the scalar's type is not this tensor's");
+    auto const post_annot = std::any_cast<annot_t>(ann[1]);
+    detail::log_tapp(detail::ords_to_labels(post_annot), " = broadcast(",
+                     scalar.get<numeric_type>(), ")\n");
+    return eval_result<ResultTensorTAPP<T>>(detail::tapp_broadcast<T>(
+        nullptr, scalar.get<numeric_type>(), annot_t{}, post_annot,
+        new_mode_extents(new_mode_ranges)));
+  }
+
   void add_inplace(Result const& other) override {
     auto& t = get<T>();
     auto const& o = other.get<T>();
@@ -306,6 +373,22 @@ class ResultTensorTAPP final : public Result {
   }
 
  private:
+  /// the extent of each rank-1 range Result::broadcast receives
+  [[nodiscard]] static container::svector<std::int64_t> new_mode_extents(
+      container::svector<ResultPtr> const& new_mode_ranges) {
+    container::svector<std::int64_t> extents;
+    extents.reserve(new_mode_ranges.size());
+    for (auto const& r : new_mode_ranges) {
+      if (!r->is<ResultTensorTAPP<T>>())
+        throw Exception(
+            "broadcast: a mode range is not of this tensor's type; the "
+            "BackendArrayOps must build tensors of the evaluated type");
+      SEQUANT_ASSERT(r->get<T>().rank() == 1);
+      extents.push_back(r->get<T>().extents()[0]);
+    }
+    return extents;
+  }
+
   [[nodiscard]] std::size_t size_in_bytes() const final {
     const auto& tensor = get<T>();
     return tensor.volume() * sizeof(typename T::value_type);
