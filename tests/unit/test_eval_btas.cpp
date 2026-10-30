@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2_sequant.hpp"
+#include "tensor_power_fixtures.hpp"
 
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/context.hpp>
@@ -69,6 +70,12 @@ class rand_tensor_yield {
  public:
   rand_tensor_yield(size_t noccupied, size_t nvirtual)
       : nocc_{noccupied}, nvirt_{nvirtual} {}
+
+  /// Serve \p r for every occurrence of tensor \p tnsr (by tensor_to_key);
+  /// \p r must be in the tensor's slot layout.
+  void set_leaf(sequant::Tensor const& tnsr, sequant::ResultPtr r) {
+    label_to_tnsr_.insert_or_assign(tensor_to_key(tnsr), std::move(r));
+  }
 
   [[nodiscard]] Tensor_t make_rand_tensor(sequant::Tensor const& tnsr) const {
     using ranges::views::repeat_n;
@@ -906,6 +913,113 @@ TEST_CASE("eval_broadcast_sum_btas", "[eval_btas][broadcast]") {
             CHECK(
                 ngot(i1, i2, a1, a2) ==
                 Catch::Approx(v1(a1) + v2(a2) - v3(i1) - v4(i2)).margin(1e-12));
+  }
+}
+
+TEST_CASE("eval_inlined_system_btas", "[eval_btas][inline]") {
+  using namespace sequant;
+  namespace tp = sequant::tests::tensor_power;
+  namespace data = tp::data;
+  using BTensorD = btas::Tensor<double>;
+  using System = container::svector<ResultExpr>;
+  using Flags = container::svector<bool>;
+
+  // three occupied orbitals: with two, an antisymmetric pair leaves E{i_2;i_3}
+  // diagonal
+  const size_t nocc = 3, nvirt = 3;
+  auto yield_ = rand_tensor_yield<BTensorD>{nocc, nvirt};
+  // the consumer's contraction sees through the inlined Hadamard product, so
+  // its network holds L, M and D, as in hadamard_power_term()
+  auto _ = set_scoped_default_context(tp::lax_braket_context());
+
+  // serves f(slot ordinals of \p tnsr) for every occurrence of the leaf
+  // \p tnsr, in either orientation: a leaf node of a bra-ket symmetric tensor
+  // may hold either
+  auto pin = [&](ExprPtr const& tnsr, auto f) {
+    Tensor const& t = tnsr->as<Tensor>();
+    auto const nb = t.bra_rank();
+    auto pin_as = [&](Tensor const& as, bool swapped) {
+      std::vector<std::size_t> extents;
+      for (Index const& ix : as.const_braket_indices())
+        extents.push_back(ix.space().base_key() == L"i" ? nocc : nvirt);
+      BTensorD arr{btas::Range{extents}};
+      auto it = arr.begin();
+      for (auto const& idx : arr.range()) {
+        std::vector<std::size_t> x(idx.begin(), idx.end());
+        if (swapped) std::rotate(x.begin(), x.end() - nb, x.end());
+        *it++ = f(x);
+      }
+      yield_.set_leaf(as, eval_result<ResultTensorBTAS<BTensorD>>(arr));
+    };
+    pin_as(t, false);
+    pin_as(Tensor(t.label(), bra(t.ket()), ket(t.bra()), aux(t.aux()),
+                  TensorSymmetries{.perm = t.symmetry(),
+                                   .braket = t.braket_symmetry(),
+                                   .column = t.column_symmetry()}),
+           true);
+  };
+  using Ordinals = std::vector<std::size_t>;
+  pin(tp::antisymm(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}),
+      [](Ordinals const& x) { return data::M(x[0], x[1], x[2], x[3]); });
+  pin(tp::contractor(),
+      [](Ordinals const& x) { return data::L(x[0], x[1], x[2], x[3]); });
+
+  auto const e_layout = tidxs(tp::head(L"E"));
+  // the value of the one root of a system
+  auto eval_system = [&](System const& sys) {
+    auto const res = binarize<EvalExprBTAS>(sys);
+    REQUIRE(res.roots().size() == 1);
+    return evaluate(res.roots()[0].get(), e_layout, yield_)->get<BTensorD>();
+  };
+  // E{i_2;i_3} of consumer_E()
+  auto check_E = [&](BTensorD const& got) {
+    REQUIRE(got.range() == btas::Range{nocc, nocc});
+    for (std::size_t i2 = 0; i2 < nocc; ++i2)
+      for (std::size_t i3 = 0; i3 < nocc; ++i3)
+        CHECK(got(i2, i3) == Catch::Approx(data::contract_with_ell(
+                                               data::L, i3, i2, nocc, nvirt))
+                                 .margin(1e-12));
+  };
+
+  SECTION("inlined E equals the driver-chained E and the direct form") {
+    pin(tp::power_base(),
+        [](Ordinals const& x) { return data::D(x[0], x[1], x[2], x[3]); });
+    System const sys{tp::ell_definition(), tp::consumer_E()};
+    REQUIRE(binarize(sys).consumed == Flags{true, false});
+    auto const inlined = eval_system(sys);
+    check_E(inlined);
+
+    // ℓ evaluated by itself, then served as the leaf E reads, in either
+    // orientation (see pin)
+    for (Tensor const& use :
+         {tp::relabelled(tp::ell_definition().result_as_tensor(),
+                         bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}),
+          tp::relabelled(tp::ell_definition().result_as_tensor(),
+                         bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"})})
+      yield_.set_leaf(use,
+                      evaluate(binarize<EvalExprBTAS>(tp::ell_definition()),
+                               tidxs(use), yield_));
+    auto same = [&inlined](BTensorD const& got) {
+      REQUIRE(got.range() == inlined.range());
+      auto g = got.begin();
+      for (auto r = inlined.begin(); r != inlined.end(); ++r, ++g)
+        CHECK(*g == Catch::Approx(*r).margin(1e-12));
+    };
+    same(evaluate(binarize<EvalExprBTAS>(tp::consumer_E()), e_layout, yield_)
+             ->get<BTensorD>());
+    same(evaluate(binarize<EvalExprBTAS>(tp::hadamard_power_term()), e_layout,
+                  yield_)
+             ->get<BTensorD>());
+  }
+
+  SECTION("three levels: ε into D into ℓ into E") {
+    pin(ex<Tensor>(L"ε", bra{}, ket{L"a_1"}),
+        [](Ordinals const& x) { return data::eps_virt(x[0]); });
+    pin(ex<Tensor>(L"ε", bra{L"i_1"}, ket{}),
+        [](Ordinals const& x) { return data::eps_occ(x[0]); });
+    System const sys{tp::D_broadcast(), tp::ell_definition(), tp::consumer_E()};
+    REQUIRE(binarize(sys).consumed == Flags{true, true, false});
+    check_E(eval_system(sys));
   }
 }
 
