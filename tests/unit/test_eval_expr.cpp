@@ -1245,6 +1245,33 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
     REQUIRE(find(ures.trees[1], variable(L"c", true)));
   }
 
+  SECTION("a scalar head feeds a tensor-tensor contraction") {
+    // E = L{a_1,a_2;i_1,i_2} ℓ{i_1,i_2;a_1,a_2}
+    auto const e =
+        ResultExpr(Variable(L"E"),
+                   antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+                       antisymm_ell(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}));
+    // H{i_1;a_1} = E t{i_1;a_2} u{a_2;a_1}
+    auto const h = ResultExpr(Tensor(L"H", bra{L"i_1"}, ket{L"a_1"}),
+                              ex<Variable>(L"E") *
+                                  ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}) *
+                                  ex<Tensor>(L"u", bra{L"a_2"}, ket{L"a_1"}));
+    System const sys{e, h};
+    auto const res = binarize(sys);
+    REQUIRE(res.consumed == Flags{true, false});
+    Node const& root = res.trees[1];
+    REQUIRE(root->op_type() == EvalOp::Product);
+    REQUIRE(contracted_indices(root) == Index::index_vector{Index{L"a_2"}});
+    // the inlined E is a boundary in the operand that carries a_2
+    Node const* inlined = find(root, variable(L"E", false));
+    REQUIRE(inlined);
+    REQUIRE((*inlined)->is_equation_boundary());
+    REQUIRE((*inlined)->op_type() == EvalOp::Product);
+    Node const& operand =
+        find(root.left(), variable(L"E", false)) ? root.left() : root.right();
+    REQUIRE(find(operand, labelled(L"t", true)));
+  }
+
   SECTION("a scalar Power in a definition is inlined") {
     auto const c2 = ex<Power>(ex<Variable>(L"c"), 2);
     // X{i_1;a_1} = c^2 t{i_1;a_1}

@@ -4865,6 +4865,37 @@ TEST_CASE("meter batches a loop through an inlined head",
   }
 }
 
+// A scalar head inlined into a tensor-tensor contraction:
+// E = L{a_1,a_2;i_1,i_2} ℓ{i_1,i_2;a_1,a_2}, H{i_1;a_1} = E t{i_1;a_2}
+// u{a_2;a_1}; the inlined E is a boundary below the product contracting a_2.
+TEST_CASE("dryrun evaluates a scalar head inlined into a contraction",
+          "[dryrun][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+
+  auto const e = ResultExpr(
+      Variable(L"E"),
+      antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+          ex<Tensor>(relabelled(ell_definition().result_as_tensor(),
+                                bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"})));
+  auto const h = ResultExpr(Tensor(L"H", bra{L"i_1"}, ket{L"a_1"}),
+                            ex<Variable>(L"E") *
+                                ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}) *
+                                ex<Tensor>(L"u", bra{L"a_2"}, ket{L"a_1"}));
+  auto const sys = binarize<EvalExprDryRun>(std::vector<ResultExpr>{e, h});
+  REQUIRE(sys.roots().size() == 1);
+  auto const cm = std::make_shared<CostModel const>(backend_test_regime());
+  ResultPtr res;
+  REQUIRE_NOTHROW(res =
+                      evaluate(sys.roots()[0].get(), DryRunLeafEvaluator{cm}));
+  REQUIRE(res);
+  CHECK(res->size_in_bytes() ==
+        cm->memsize(container::svector<Index>{Index{L"i_1"}, Index{L"a_1"}}));
+}
+
 // the system {D, ℓ, E}: pow(D,-1) inside ℓ raises the inlined broadcast D,
 // whose trace spelling must read D as its head
 TEST_CASE("meter runs an inlined three-level system", "[meter][inline]") {
