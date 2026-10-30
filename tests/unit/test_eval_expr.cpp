@@ -859,6 +859,21 @@ TEST_CASE("binarize a broadcast sum", "[EvalExpr][broadcast]") {
         [](Node const& n) { REQUIRE((n.leaf() || !n->is_broadcast())); });
   }
 
+  SECTION("a non-Sum right-hand side cannot broadcast") {
+    for (std::wstring_view spec :
+         {L"D{i_1;a_1} = ε{;a_1}", L"D{i_1;a_1} = 2 ε{;a_1}", L"D{i_1;a_1} = E",
+          L"D{i_1;a_1} = ε{;a_1} ε{;a_1}"}) {
+      CAPTURE(toUtf8(spec));
+      const ResultExpr res = deserialize<ResultExpr>(spec);
+      REQUIRE_FALSE(is_valid(res));
+      REQUIRE_THROWS_WITH(
+          binarize(res),
+          Catch::Matchers::ContainsSubstring("lacks head indices i_1") &&
+              Catch::Matchers::ContainsSubstring(
+                  "broadcast is only defined for a Sum under a head"));
+    }
+  }
+
   SECTION("a nested Sum broadcasts at the top level only") {
     const ResultExpr res = deserialize<ResultExpr>(
         L"R{i_1;a_1} = (f{i_1;} + g{i_1;}) c + h{i_1;a_1}");

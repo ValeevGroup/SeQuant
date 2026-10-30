@@ -32,6 +32,7 @@
 #include <iterator>
 #include <optional>
 #include <ranges>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -1083,6 +1084,22 @@ EvalExprNode binarize(ResultExpr const& res, const BinarizationOptions& opts,
   // collect result indices so they are not contracted in the expression tree
   IndexSet uncontract;
   for (auto&& ix : res.indices()) uncontract.emplace(ix);
+
+  // only the summands of a Sum broadcast (see is_valid(const ResultExpr&))
+  if (!res.expression()->is<Sum>()) {
+    auto const supplied =
+        detail::supplied_result_indices(res, *res.expression());
+    std::string missing;
+    for (Index const& ix : res.indices())
+      if (!supplied.contains(ix))
+        missing += (missing.empty() ? "" : ", ") + toUtf8(ix.full_label());
+    if (!missing.empty())
+      throw Exception(
+          "binarize: the right-hand side of " +
+          toUtf8(io::serialization::to_string(res.result_as_tensor())) +
+          " lacks head indices " + missing +
+          "; broadcast is only defined for a Sum under a head");
+  }
 
   // the root's bra/ket would be positional (see the deprecated
   // binarize(ExprPtr)), but it is overwritten below with
