@@ -4266,7 +4266,8 @@ TEST_CASE("meter-batch-through-inlined-head", "[meter][tensor-power][inline]") {
     auto const sys = binarize<EvalExprDryRun>(
         std::vector<ResultExpr>{ell_definition(), consumer_E()});
     REQUIRE(sys.roots().size() == 1);
-    EvalNodeDryRun const& plain = sys.roots()[0].get();
+    auto const roots = sys.roots();
+    EvalNodeDryRun const& plain = roots[0].get();
     REQUIRE(plain.right()->is_equation_boundary());
     EvalNodeDryRun batched = plain;
     stamp_occ_loop(batched);
@@ -4343,7 +4344,8 @@ TEST_CASE("meter-batch-through-inlined-head", "[meter][tensor-power][inline]") {
     auto const sys =
         binarize<EvalExprDryRun>(std::vector<ResultExpr>{D3_broadcast(), x});
     REQUIRE(sys.roots().size() == 1);
-    EvalNodeDryRun const& plain = sys.roots()[0].get();
+    auto const roots = sys.roots();
+    EvalNodeDryRun const& plain = roots[0].get();
     EvalNodeDryRun batched = plain;
     stamp_occ_loop(batched);
 

@@ -2591,7 +2591,8 @@ TEST_CASE("mp2-energy", "[eval][mp2]") {
   SECTION("unbatched") {
     pin_leaves();
     auto const aops = yield_.array_ops();
-    auto const& root = inlined.roots()[0].get();
+    auto const roots = inlined.roots();
+    auto const& root = roots[0].get();
     auto cache = CacheManager<std::remove_cvref_t<decltype(root)>>::empty();
     cache.set_array_ops(&aops);
     double const e =
