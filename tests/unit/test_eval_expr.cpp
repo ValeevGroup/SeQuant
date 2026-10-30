@@ -1278,6 +1278,38 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
     }
   }
 
+  SECTION("a Sum chain keeps an inlined Sum opaque") {
+    auto t = [](std::wstring_view label) {
+      return ex<Tensor>(label, bra{L"i_1"}, ket{L"a_1"});
+    };
+    // X{i_1;a_1} = f{i_1;a_1} + g{i_1;a_1}
+    auto const x =
+        ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}), t(L"f") + t(L"g"));
+    // R{i_1;a_1} = X{i_1;a_1} + h{i_1;a_1} + k{i_1;a_1}, X at either end of
+    // the chain
+    for (bool x_first : {true, false}) {
+      auto const rhs = x_first
+                           ? ex<Sum>(ExprPtrList{t(L"X"), t(L"h"), t(L"k")})
+                           : ex<Sum>(ExprPtrList{t(L"h"), t(L"k"), t(L"X")});
+      auto const r = ResultExpr(Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}), rhs);
+      // the definition listed before and after its consumer
+      for (bool def_first : {true, false}) {
+        CAPTURE(x_first, def_first);
+        System const sys = def_first ? System{x, r} : System{r, x};
+        auto const res = binarize(sys);
+        REQUIRE(res.roots().size() == 1);
+        auto const expr = to_expr(res.roots()[0].get());
+        REQUIRE(expr->is<Sum>());
+        auto const& summands = expr->as<Sum>().summands();
+        REQUIRE(summands.size() == 3);
+        for (auto label : {L"X", L"h", L"k"})
+          REQUIRE(std::ranges::count_if(summands, [&](ExprPtr const& s) {
+                    return *s == *t(label);
+                  }) == 1);
+      }
+    }
+  }
+
   SECTION("a cyclic definition throws") {
     auto const x = ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}),
                               ex<Tensor>(L"Y", bra{L"i_1"}, ket{L"a_1"}));
