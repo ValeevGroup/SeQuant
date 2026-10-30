@@ -28,7 +28,6 @@ class GenerationOptimizer final : public Generator<MainContext> {
 
   enum class OperationType {
     Create,
-    CreateOnes,
     Load,
     LoadAndZero,
     Zero,
@@ -86,7 +85,6 @@ class GenerationOptimizer final : public Generator<MainContext> {
 
       switch (type()) {
         case OperationType::Create:
-        case OperationType::CreateOnes:
         case OperationType::Load:
         case OperationType::LoadAndZero:
           return other == OperationType::Destroy ||
@@ -96,7 +94,6 @@ class GenerationOptimizer final : public Generator<MainContext> {
         case OperationType::Destroy:
         case OperationType::Persist:
           return other == OperationType::Create ||
-                 other == OperationType::CreateOnes ||
                  other == OperationType::Load ||
                  other == OperationType::LoadAndZero;
         case OperationType::Zero:
@@ -110,7 +107,6 @@ class GenerationOptimizer final : public Generator<MainContext> {
     MemoryAction memory_action() const {
       switch (type()) {
         case OperationType::Create:
-        case OperationType::CreateOnes:
         case OperationType::Load:
         case OperationType::LoadAndZero:
           return MemoryAction::Allocate;
@@ -131,9 +127,6 @@ class GenerationOptimizer final : public Generator<MainContext> {
       switch (type()) {
         case OperationType::Create:
           str += "Create";
-          break;
-        case OperationType::CreateOnes:
-          str += "CreateOnes";
           break;
         case OperationType::Load:
           str += "Load";
@@ -221,23 +214,6 @@ class GenerationOptimizer final : public Generator<MainContext> {
 
    private:
     bool m_zero_init;
-  };
-
-  class CreateOnesOperation final : public AbstractOperation {
-   public:
-    CreateOnesOperation(Tensor tensor) : AbstractOperation(std::move(tensor)) {}
-
-    void execute(const Tensor &tensor, MainGenerator &generator,
-                 const MainContext &ctx) override {
-      generator.create_ones(tensor, ctx);
-    }
-
-    void execute(const Variable &, MainGenerator &,
-                 const MainContext &) override {
-      SEQUANT_UNREACHABLE;
-    }
-
-    OperationType type() const override { return OperationType::CreateOnes; }
   };
 
   class LoadOperation final : public AbstractOperation {
@@ -365,10 +341,11 @@ class GenerationOptimizer final : public Generator<MainContext> {
     ExprPtr m_expr;
   };
 
-  using Operation = pv::polymorphic_variant<
-      AbstractOperation, CreateOperation, CreateOnesOperation, LoadOperation,
-      LoadAndZeroOperation, ZeroOperation, UnloadOperation, DestroyOperation,
-      PersistOperation, ComputeOperation>;
+  using Operation =
+      pv::polymorphic_variant<AbstractOperation, CreateOperation, LoadOperation,
+                              LoadAndZeroOperation, ZeroOperation,
+                              UnloadOperation, DestroyOperation,
+                              PersistOperation, ComputeOperation>;
 
  public:
   GenerationOptimizer(MainGenerator generator)
@@ -390,10 +367,6 @@ class GenerationOptimizer final : public Generator<MainContext> {
     } else {
       m_queue.emplace_back(LoadOperation(tensor));
     }
-  }
-
-  void create_ones(const Tensor &tensor, const MainContext &) override {
-    m_queue.emplace_back(CreateOnesOperation(tensor));
   }
 
   void set_to_zero(const Tensor &tensor, const MainContext &) override {

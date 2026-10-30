@@ -112,15 +112,6 @@ class Generator {
   /// to bring it into RAM).
   virtual void load(const Tensor &tensor, bool set_to_zero,
                     const Context &ctx) = 0;
-  /// Semantic callback for creating the given all-ones tensor (see
-  /// make_ones()) and filling it with ones. This replaces create()/load() for
-  /// such a tensor: it is a reserved leaf that no caller provides.
-  /// @throw Exception unless overridden by a generator that supports it
-  virtual void create_ones(const Tensor &tensor, const Context &ctx) {
-    (void)tensor;
-    (void)ctx;
-    throw Exception(get_format_name() + " cannot create an all-ones tensor");
-  }
   /// Semantic callback for setting the given tensor to zero
   virtual void set_to_zero(const Tensor &tensor, const Context &ctx) = 0;
   /// Semantic callback for unloading the given tensor. This is expected to

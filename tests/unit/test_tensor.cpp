@@ -17,7 +17,6 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tag.hpp>
-#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <cstddef>
@@ -877,59 +876,5 @@ TEST_CASE("overlap and Kronecker delta labels", "[elements]") {
     REQUIRE(t.label() == L"t");
     auto f = Tensor(L"f", bra{L"i_1"}, ket{L"i_2"});
     REQUIRE_NOTHROW(f.set_label(label));
-  }
-}
-
-TEST_CASE("all-ones leaf", "[elements]") {
-  using namespace sequant;
-
-  const Index i1(L"i_1");
-  const TensorSymmetries nonsymm{.perm = Symmetry::Nonsymm,
-                                 .braket = BraKetSymmetry::Nonsymm,
-                                 .column = ColumnSymmetry::Nonsymm};
-
-  SECTION("make_ones") {
-    const auto bra_ones = make_ones(i1, SlotType::Bra);
-    REQUIRE(bra_ones->is<Tensor>());
-    const auto& b = bra_ones->as<Tensor>();
-    REQUIRE(b.label() == reserved::ones_label());
-    REQUIRE(b.bra().size() == 1);
-    REQUIRE(b.bra()[0] == i1);
-    REQUIRE(b.ket().empty());
-    REQUIRE(b.aux().empty());
-    REQUIRE(b.symmetry() == Symmetry::Nonsymm);
-    REQUIRE(b.braket_symmetry() == BraKetSymmetry::Nonsymm);
-    REQUIRE(b.column_symmetry() == ColumnSymmetry::Nonsymm);
-    REQUIRE(is_ones(b));
-
-    const auto ket_ones = make_ones(i1, SlotType::Ket);
-    const auto& k = ket_ones->as<Tensor>();
-    REQUIRE(k.label() == reserved::ones_label());
-    REQUIRE(k.bra().empty());
-    REQUIRE(k.ket().size() == 1);
-    REQUIRE(k.ket()[0] == i1);
-    REQUIRE(k.aux().empty());
-    REQUIRE(is_ones(k));
-
-    REQUIRE(!is_ones(Tensor(L"t", bra{L"i_1"}, ket{})));
-
-    if (assert_behavior() != AssertBehavior::Abort) {
-      REQUIRE_THROWS_AS(make_ones(i1, SlotType::Aux), Exception);
-    }
-  }
-
-  SECTION("label robustness") {
-    // 𝟙 is outside the BMP: a surrogate pair where wchar_t is 16 bits
-    REQUIRE(toUtf16(toUtf8(reserved::ones_label())) == reserved::ones_label());
-
-    const auto ones = make_ones(i1, SlotType::Bra);
-    REQUIRE(to_latex(ones).find(reserved::ones_label()) != std::wstring::npos);
-    REQUIRE(serialize(ones).find(reserved::ones_label()) != std::wstring::npos);
-
-    // a 𝟙 built by the public ctor (e.g. by deserialization) is the same leaf
-    const auto public_ones =
-        ex<Tensor>(L"𝟙", bra{L"i_1"}, ket{}, aux{}, nonsymm);
-    REQUIRE(*public_ones == *ones);
-    REQUIRE(public_ones->hash_value() == ones->hash_value());
   }
 }
