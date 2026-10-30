@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2_sequant.hpp"
+#include "tensor_power_fixtures.hpp"
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
@@ -2093,6 +2094,213 @@ TEST_CASE("eval_broadcast_sum_ta", "[eval][broadcast]") {
     check_elementwise(
         elements(evaluate(eval_node(res), std::string{"i_1,a_1"}, yield_)
                      ->get<TA::TArrayD>()),
+        expected);
+  }
+}
+
+TEST_CASE("eval_inlined_system_ta", "[eval][inline]") {
+  using namespace sequant;
+  namespace tp = sequant::tests::tensor_power;
+  namespace data = tp::data;
+  using System = container::svector<ResultExpr>;
+  using Flags = container::svector<bool>;
+  auto& world = TA::get_default_world();
+  // three occupied orbitals: with two, an antisymmetric pair leaves E{i_2;i_3}
+  // diagonal
+  const size_t nocc = 3, nvirt = 3;
+  auto yield_ = rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
+  // the consumer's contraction sees through the inlined Hadamard product, so
+  // its network holds L, M and D, as in hadamard_power_term()
+  auto _ = set_scoped_default_context(tp::lax_braket_context());
+
+  // the elements of an array in row-major order of its (single-tile) layout
+  auto elements = [](TA::TArrayD const& arr) {
+    std::vector<double> out;
+    for (auto it = arr.begin(); it != arr.end(); ++it) {
+      auto const tile = it->get();
+      out.insert(out.end(), tile.begin(), tile.end());
+    }
+    return out;
+  };
+  auto check_elementwise = [](std::vector<double> const& got,
+                              std::vector<double> const& expected) {
+    REQUIRE(got.size() == expected.size());
+    REQUIRE(!got.empty());
+    for (std::size_t k = 0; k < got.size(); ++k)
+      CHECK(got[k] == Catch::Approx(expected[k]).margin(1e-12));
+  };
+  // serves f(slot ordinals of \p tnsr) for every occurrence of the leaf
+  // \p tnsr, in either orientation: a leaf node of a bra-ket symmetric tensor
+  // may hold either
+  auto pin = [&](ExprPtr const& tnsr, auto f) {
+    Tensor const& t = tnsr->as<Tensor>();
+    auto const nb = t.bra_rank();
+    auto pin_as = [&](Tensor const& as, bool swapped) {
+      std::vector<TA::TiledRange1> tr1s;
+      for (Index const& ix : as.const_braket_indices())
+        tr1s.push_back(
+            yield_.tr1_for(L"", ix.space().base_key() == L"i" ? nocc : nvirt));
+      TA::TArrayD arr(world, TA::TiledRange(tr1s.begin(), tr1s.end()));
+      arr.init_tiles([f, nb, swapped](TA::Range const& r) {
+        TA::Tensor<double> tile(r);
+        for (auto const& idx : r) {
+          std::vector<std::size_t> x(idx.begin(), idx.end());
+          if (swapped) std::rotate(x.begin(), x.end() - nb, x.end());
+          tile(idx) = f(x);
+        }
+        return tile;
+      });
+      yield_.set_leaf(as, eval_result<ResultTensorTA<TA::TArrayD>>(arr));
+    };
+    pin_as(t, false);
+    pin_as(Tensor(t.label(), bra(t.ket()), ket(t.bra()), aux(t.aux()),
+                  TensorSymmetries{.perm = t.symmetry(),
+                                   .braket = t.braket_symmetry(),
+                                   .column = t.column_symmetry()}),
+           true);
+  };
+  auto const M = tp::antisymm(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+  auto const D = tp::power_base();
+  auto const L = tp::contractor();
+  auto pin_M = [&] {
+    pin(M, [](std::vector<std::size_t> const& x) {
+      return data::M(x[0], x[1], x[2], x[3]);
+    });
+  };
+  auto pin_D = [&] {
+    pin(D, [](std::vector<std::size_t> const& x) {
+      return data::D(x[0], x[1], x[2], x[3]);
+    });
+  };
+  auto pin_L = [&] {
+    pin(L, [](std::vector<std::size_t> const& x) {
+      return data::L(x[0], x[1], x[2], x[3]);
+    });
+  };
+  // the value of the one root of a system
+  auto eval_system = [&yield_](System const& sys, std::string const& layout) {
+    auto const res = binarize<EvalExprTA>(sys);
+    REQUIRE(res.roots().size() == 1);
+    return evaluate(res.roots()[0].get(), layout, yield_);
+  };
+  // ℓ read at the given slots
+  auto ell_use = [](auto b, auto k) {
+    return ex<Tensor>(tp::relabelled(tp::ell_definition().result_as_tensor(),
+                                     std::move(b), std::move(k)));
+  };
+  std::string const e_layout = "i_2,i_3";
+  // E{i_2;i_3} of consumer_E(), row-major
+  auto const expected_E = [&] {
+    std::vector<double> result;
+    for (std::size_t i2 = 0; i2 < nocc; ++i2)
+      for (std::size_t i3 = 0; i3 < nocc; ++i3)
+        result.push_back(data::contract_with_ell(data::L, i3, i2, nocc, nvirt));
+    return result;
+  };
+
+  SECTION("inlined E equals the driver-chained E and the direct form") {
+    pin_M();
+    pin_D();
+    pin_L();
+    System const sys{tp::ell_definition(), tp::consumer_E()};
+    REQUIRE(binarize(sys).consumed == Flags{true, false});
+    auto const inlined =
+        elements(eval_system(sys, e_layout)->get<TA::TArrayD>());
+    check_elementwise(inlined, expected_E());
+
+    // ℓ evaluated by itself, then served as the leaf E reads, in either
+    // orientation (see pin)
+    auto serve_ell = [&](ExprPtr const& use, std::string const& layout) {
+      yield_.set_leaf(
+          use->as<Tensor>(),
+          evaluate(eval_node(tp::ell_definition()), layout, yield_));
+    };
+    serve_ell(ell_use(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}),
+              "i_1,i_2,a_1,a_2");
+    serve_ell(ell_use(bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}),
+              "a_1,a_2,i_1,i_2");
+    check_elementwise(inlined, elements(evaluate(eval_node(tp::consumer_E()),
+                                                 e_layout, yield_)
+                                            ->get<TA::TArrayD>()));
+
+    check_elementwise(inlined,
+                      elements(evaluate(eval_node(tp::hadamard_power_term()),
+                                        e_layout, yield_)
+                                   ->get<TA::TArrayD>()));
+  }
+
+  SECTION("three levels: ε into D into ℓ into E") {
+    pin_M();
+    pin_L();
+    pin(ex<Tensor>(L"ε", bra{}, ket{L"a_1"}),
+        [](std::vector<std::size_t> const& x) { return data::eps_virt(x[0]); });
+    pin(ex<Tensor>(L"ε", bra{L"i_1"}, ket{}),
+        [](std::vector<std::size_t> const& x) { return data::eps_occ(x[0]); });
+    System const sys{tp::D_broadcast(), tp::ell_definition(), tp::consumer_E()};
+    REQUIRE(binarize(sys).consumed == Flags{true, true, false});
+    check_elementwise(elements(eval_system(sys, e_layout)->get<TA::TArrayD>()),
+                      expected_E());
+  }
+
+  SECTION("two uses of one definition") {
+    pin_M();
+    pin_D();
+    pin_L();
+    // G{i_2;i_3} = L{a_1,a_2;i_1,i_3} ℓ{i_1,i_2;a_1,a_2}
+    //            + K{a_1,a_2;i_1,i_2} ℓ{i_1,i_3;a_1,a_2}
+    auto const K = tp::antisymm(L"K", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+    pin(K, [](std::vector<std::size_t> const& x) {
+      return data::K(x[0], x[1], x[2], x[3]);
+    });
+    ResultExpr const g(
+        tp::head(L"G"),
+        L * ell_use(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) +
+            K * ell_use(bra{L"i_1", L"i_3"}, ket{L"a_1", L"a_2"}));
+    System const sys{tp::ell_definition(), g};
+    REQUIRE(binarize(sys).consumed == Flags{true, false});
+    std::vector<double> expected;
+    for (std::size_t i2 = 0; i2 < nocc; ++i2)
+      for (std::size_t i3 = 0; i3 < nocc; ++i3)
+        expected.push_back(
+            data::contract_with_ell(data::L, i3, i2, nocc, nvirt) +
+            data::contract_with_ell(data::K, i2, i3, nocc, nvirt));
+    check_elementwise(elements(eval_system(sys, e_layout)->get<TA::TArrayD>()),
+                      expected);
+  }
+
+  SECTION("a scalar head") {
+    pin_M();
+    pin_D();
+    pin_L();
+    // E = L{a_1,a_2;i_1,i_2} ℓ{i_1,i_2;a_1,a_2}
+    ResultExpr const e(
+        Variable(L"E"),
+        tp::antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+            ell_use(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}));
+    // F{i_1;a_1} = E t{i_1;a_1}
+    auto const t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"});
+    pin(t,
+        [](std::vector<std::size_t> const& x) { return data::t(x[0], x[1]); });
+    ResultExpr const f(Tensor(L"F", bra{L"i_1"}, ket{L"a_1"}),
+                       ex<Variable>(L"E") * t);
+    System const sys{tp::ell_definition(), e, f};
+    REQUIRE(binarize(sys).consumed == Flags{true, true, false});
+
+    // E through its own tree
+    double const e_val =
+        eval_system(System{tp::ell_definition(), e}, std::string{})
+            ->get<double>();
+    double e_ref = 0;
+    for (std::size_t i2 = 0; i2 < nocc; ++i2)
+      e_ref += data::contract_with_ell(data::L, i2, i2, nocc, nvirt);
+    CHECK(e_val == Catch::Approx(e_ref).margin(1e-12));
+
+    std::vector<double> expected;
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+        expected.push_back(e_val * data::t(i1, a1));
+    check_elementwise(
+        elements(eval_system(sys, std::string{"i_1,a_1"})->get<TA::TArrayD>()),
         expected);
   }
 }
