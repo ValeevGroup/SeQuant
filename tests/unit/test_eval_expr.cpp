@@ -950,6 +950,26 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
     root.visit_leaf([&](Node const& n) { result.insert(n->label()); });
     return result;
   };
+  // x equals tensor y, or y with bra and ket swapped (a leaf of a bra-ket
+  // symmetric tensor may hold either)
+  auto same_tensor = [](ExprPtr const& x, ExprPtr const& y) {
+    auto const& t = y->as<Tensor>();
+    return *x == *y ||
+           *x == Tensor(t.label(), bra(t.ket()), ket(t.bra()), aux(t.aux()),
+                        TensorSymmetries{.perm = t.symmetry(),
+                                         .braket = t.braket_symmetry(),
+                                         .column = t.column_symmetry()});
+  };
+  // x is m ⊙ pow(d,-1)
+  auto is_hadamard_power = [&same_tensor](ExprPtr const& x, ExprPtr const& m,
+                                          ExprPtr const& d) {
+    if (!x->is<Product>() || x->as<Product>().factors().size() != 2)
+      return false;
+    auto const& f = x->as<Product>().factors();
+    return same_tensor(f[0], m) && f[1]->is<TensorPower>() &&
+           f[1]->as<TensorPower>().exponent() == rational{-1} &&
+           same_tensor(f[1]->as<TensorPower>().base(), d);
+  };
   auto antisymm_ell = [](auto b, auto k) {
     return ex<Tensor>(relabelled(ell_definition().result_as_tensor(),
                                  std::move(b), std::move(k)));
@@ -1006,6 +1026,27 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
     REQUIRE(find_all(*d, [](Node const& n) {
               return n.leaf() && n->is_tensor() && is_ones(n->as_tensor());
             }).size() == 12);
+
+    // to_expr keeps the inlined equations below a node opaque
+    auto product_of = [](ExprPtr const& l, ExprPtr const& r) {
+      Product p;
+      p.append(1, l, Product::Flatten::No);
+      p.append(1, r, Product::Flatten::No);
+      return ex<Product>(std::move(p));
+    };
+    REQUIRE(*to_expr(e) ==
+            *product_of(contractor(), antisymm_ell(bra{L"i_1", L"i_2"},
+                                                   ket{L"a_1", L"a_2"})));
+    REQUIRE(is_hadamard_power(
+        to_expr(e.right()),
+        antisymm(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}),
+        power_base()));
+    Node const* power =
+        find(e, [](Node const& n) { return n->op_type() == EvalOp::Power; });
+    REQUIRE(power);
+    REQUIRE(*to_expr(*power) == *pow(power_base(), rational{-1}));
+    // a boundary node itself expands to its rhs
+    REQUIRE(to_expr(*d)->is<Sum>());
 
     System const rsys{consumer_E(), ell_definition(), D_broadcast()};
     auto const rev = binarize(rsys);
@@ -1131,6 +1172,13 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
     REQUIRE((*uses[0])->hash_value() == (*uses[1])->hash_value());
     REQUIRE((*uses[0])->as_tensor().bra()[1] !=
             (*uses[1])->as_tensor().bra()[1]);
+    // each use expands to the definition's rhs over its own indices
+    for (auto const* use : uses) {
+      Tensor const& head = (*use)->as_tensor();
+      REQUIRE(is_hadamard_power(
+          to_expr(*use), antisymm(L"M", bra(head.bra()), ket(head.ket())),
+          ex<Tensor>(L"D", bra(head.bra()), ket(head.ket()), symmetric())));
+    }
   }
 
   SECTION("a cyclic definition throws") {

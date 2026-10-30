@@ -820,6 +820,10 @@ rational power_exponent(meta::eval_node auto const& node) {
 /// Converts an `EvalExpr` to `ExprPtr`, passing the expression of every
 /// terminal through @p leaf_map.
 ///
+/// An inlined equation below @p node (see EvalExpr::is_equation_boundary) is a
+/// terminal: it contributes its head, not its rhs; @p node itself, boundary or
+/// not, is always expanded.
+///
 /// @param leaf_map Callable mapping the (shared) expression of a terminal to
 /// the expression that shall represent it in the result. It must not mutate its
 /// argument as that is shared with @p node.
@@ -837,14 +841,18 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
   // structural plumbing for the IR, not part of the symbolic form.
   if (op == EvalOp::Adjoint) return leaf_map(evxpr.expr());
 
-  if (op == EvalOp::Power)
-    return pow(to_expr(node.left(), leaf_map), power_exponent(node));
+  auto const child = [&leaf_map](auto const& c) {
+    return c->is_equation_boundary() ? leaf_map(c->expr())
+                                     : to_expr(c, leaf_map);
+  };
+
+  if (op == EvalOp::Power) return pow(child(node.left()), power_exponent(node));
 
   if (op == EvalOp::Product) {
     auto prod = Product{};
 
-    ExprPtr lexpr = to_expr(node.left(), leaf_map);
-    ExprPtr rexpr = to_expr(node.right(), leaf_map);
+    ExprPtr lexpr = child(node.left());
+    ExprPtr rexpr = child(node.right());
 
     prod.append(1, lexpr, Product::Flatten::No);
     prod.append(1, rexpr, Product::Flatten::No);
@@ -860,8 +868,7 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
 
   } else {
     SEQUANT_ASSERT(op == EvalOp::Sum && "unsupported operation type");
-    return ex<Sum>(
-        Sum{to_expr(node.left(), leaf_map), to_expr(node.right(), leaf_map)});
+    return ex<Sum>(Sum{child(node.left()), child(node.right())});
   }
 }
 

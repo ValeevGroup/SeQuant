@@ -4737,6 +4737,37 @@ TEST_CASE("meter batches a loop through an element-wise power",
 // of k composites on one cluster, each sized by the occupancy-adjusted M_k,
 // has the per-member product p * M_k^k, so nocc^rank times it is the
 // block-sparse volume sum_{nonnull clusters} d^k. Occupancy 1 is the identity.
+// the system {D, ℓ, E}: pow(D,-1) inside ℓ raises the inlined broadcast D,
+// whose trace spelling must read D as its head
+TEST_CASE("meter runs an inlined three-level system", "[meter][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+  container::svector<ResultExpr> const sys{D_broadcast(), ell_definition(),
+                                           consumer_E()};
+  auto res = binarize<EvalExprDryRun>(sys);
+  REQUIRE(res.roots().size() == 1);
+  EvalNodeDryRun e = res.trees[2];
+  std::vector<EvalNodeDryRun> const plain{e};
+  REQUIRE_NOTHROW(meter(plain, BatchPolicy{}, regime, CacheConfig{}));
+
+  stamp_occ_loop(e);
+  std::vector<EvalNodeDryRun> const batched{e};
+  auto policy = occ_contracted_policy();
+  policy.scheduler = BatchScheduler::ordered;
+  REQUIRE_NOTHROW(meter(batched, policy, regime, CacheConfig{}));
+}
+
 TEST_CASE("occupancy-adjusted moments satisfy the group-volume identity",
           "[dryrun][sizing]") {
   auto const& w20 = kWater20_pVDZF12;
