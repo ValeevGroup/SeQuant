@@ -4006,12 +4006,11 @@ TEST_CASE("meter-policy-executor", "[meter]") {
 
 // Issue #762: under forest descent, an External loop opened INSIDE an
 // enclosing batch loop must pre-size its scatter destination to the enclosing
-// loop's current batch on every mode the node carries. Here the root opens a
-// Contracted loop over i_1, and its left child X = g * h, which carries i_1
-// and a_1, opens an External loop over a_1 below it: each partial of X is
-// evaluated sliced to the current i_1 block, so a destination at the full
-// i_1 extent would disagree with it. The ordered scheduler realizes the same
-// stamps as a reference.
+// loops' current batches on every mode the node carries: each partial is
+// evaluated sliced to those batches, so a destination at their full extent
+// would disagree with it. In every section the root opens a Contracted loop
+// over i_1 and X = g * h, which carries i_1, opens the External loop(s) below
+// it. The ordered scheduler realizes the same stamps as a reference.
 TEST_CASE("forest-descent-nested-external-scatter", "[batch][forest_descent]") {
   using sequant::BatchModeType;
   using sequant::BatchPolicy;
@@ -4023,36 +4022,15 @@ TEST_CASE("forest-descent-nested-external-scatter", "[batch][forest_descent]") {
   using sequant::eval::dryrun::EvalNodeDryRun;
   using sequant::eval::dryrun::meter;
   using sequant::eval::dryrun::SizeRegime;
+  using Mask = container::svector<std::pair<Index, BatchModeType>>;
+  constexpr auto C = BatchModeType::Contracted;
+  constexpr auto E = BatchModeType::External;
 
   SizeRegime regime;
   regime.space_extent = {
       {L"i", 10},
       {L"a", 20},
   };
-
-  auto expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{i_1;a_3} * h{a_3;a_1}) * L{a_1;i_1,i_2}");
-  REQUIRE(static_cast<bool>(expr));
-
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  auto node = sequant::binarize<EvalExprDryRun>(expr);
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  REQUIRE_FALSE(node.leaf());
-  REQUIRE_FALSE(node.left().leaf());  // X = g * h
-
-  Index const i1{L"i_1"};
-  Index const a1{L"a_1"};
-  REQUIRE_FALSE(sequant::index_position(node, i1).has_value());
-  REQUIRE(sequant::index_position(node.left(), i1).has_value());
-  REQUIRE(sequant::index_position(node.left(), a1).has_value());
-
-  node->set_node_slice_mask({{i1, BatchModeType::Contracted}});
-  node->set_batch_loops_opened_here({{i1, BatchModeType::Contracted}});
-  node.left()->set_node_slice_mask(
-      {{i1, BatchModeType::Contracted}, {a1, BatchModeType::External}});
-  node.left()->set_batch_loops_opened_here({{a1, BatchModeType::External}});
-
-  std::vector<EvalNodeDryRun> const forest{node};
 
   BatchPolicy policy;
   policy.is_batchable_contracted_index = [](Index const& ix) {
@@ -4065,6 +4043,56 @@ TEST_CASE("forest-descent-nested-external-scatter", "[batch][forest_descent]") {
     return ix.basis().base_key() == L"i" ? std::size_t{3} : std::size_t{5};
   };
 
+  auto binarize_expr = [](std::wstring_view s) {
+    auto expr = sequant::deserialize<sequant::ExprPtr>(s);
+    REQUIRE(static_cast<bool>(expr));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    return sequant::binarize<EvalExprDryRun>(expr);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  };
+  // stamps a non-leaf node; every mode a loop opened here is carried by its
+  // children (a Contracted loop) or by the node itself (an External loop)
+  auto stamp = [](EvalNodeDryRun& n, Mask const& mask, Mask const& opens) {
+    REQUIRE_FALSE(n.leaf());
+    for (auto const& [ix, kind] : opens)
+      REQUIRE(sequant::index_position(n, ix).has_value() ==
+              (kind == BatchModeType::External));
+    n->set_node_slice_mask(mask);
+    n->set_batch_loops_opened_here(opens);
+  };
+
+  Index const i1{L"i_1"};
+  Index const i3{L"i_3"};
+  Index const a1{L"a_1"};
+  Index const a2{L"a_2"};
+
+  std::optional<EvalNodeDryRun> root;
+  SECTION("one External loop under one Contracted loop") {
+    auto& node = root.emplace(
+        binarize_expr(L"(g{i_1;a_3} * h{a_3;a_1}) * L{a_1;i_1,i_2}"));
+    stamp(node, {{i1, C}}, {{i1, C}});
+    stamp(node.left(), {{i1, C}, {a1, E}}, {{a1, E}});  // X
+  }
+  SECTION("one External loop under two Contracted loops") {
+    // the middle node opens a second Contracted loop, over i_3, that X also
+    // carries
+    auto& node = root.emplace(binarize_expr(
+        L"((g{i_1,i_3;a_3} * h{a_3;a_1}) * L{a_1;i_3}) * M{i_2;i_1}"));
+    stamp(node, {{i1, C}}, {{i1, C}});
+    stamp(node.left(), {{i1, C}, {i3, C}}, {{i3, C}});
+    stamp(node.left().left(), {{i1, C}, {i3, C}, {a1, E}}, {{a1, E}});  // X
+  }
+  SECTION("two External loops on one node under one Contracted loop") {
+    auto& node = root.emplace(
+        binarize_expr(L"(g{i_1;a_3} * h{a_3;a_1,a_2}) * L{a_1,a_2;i_1,i_2}"));
+    stamp(node, {{i1, C}}, {{i1, C}});
+    stamp(node.left(), {{i1, C}, {a1, E}, {a2, E}}, {{a1, E}, {a2, E}});  // X
+  }
+
+  REQUIRE(root);
+  auto const& node = *root;
+
+  std::vector<EvalNodeDryRun> const forest{node};
   CacheConfig const cfg;
 
   policy.scheduler = sequant::BatchScheduler::ordered;
