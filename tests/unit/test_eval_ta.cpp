@@ -32,6 +32,9 @@
 #include <tiledarray.h>
 #include <boost/regex.hpp>
 
+#include <data_info.hpp>
+#include <eval_utils.hpp>
+
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/intersperse.hpp>
@@ -43,6 +46,7 @@
 #include <cmath>
 #include <complex>
 #include <cstdlib>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -2480,6 +2484,151 @@ TEST_CASE("eval_inlined_system_ta", "[eval][inline]") {
     check_elementwise(
         elements(eval_system(sys, std::string{"i_1,a_1"})->get<TA::TArrayD>()),
         expected);
+  }
+}
+
+// The spin-orbital MP2 energy of water (STO-3G, the data of the eval
+// integration test), authored as a system of three equations:
+//
+//   D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}
+//   t{i_1,i_2;a_1,a_2} = g{i_1,i_2;a_1,a_2} ⊙ pow(D{i_1,i_2;a_1,a_2}, -1)
+//   E = -1/4 g{a_1,a_2;i_1,i_2} t{i_1,i_2;a_1,a_2}
+//
+// t is the first-order doubles amplitude, here with the sign convention
+// t = g / (ε_a + ε_b - ε_i - ε_j), hence the minus in E. D is a broadcast
+// sum: each rank-1 ε is repeated over the modes of D it lacks (EvalOp::
+// Broadcast, which shapes the added modes through the array ops of the
+// cache); pow(D, -1) is an element-wise power (TensorPower). t reads D, and E
+// reads t, through the head of the defining equation, so binarize(system)
+// inlines D into t and t into E: only the tree of E is left to evaluate.
+TEST_CASE("mp2-energy", "[eval][mp2]") {
+  using namespace sequant;
+  namespace tp = sequant::tests::tensor_power;
+  using Flags = container::svector<bool>;
+
+  // Fock matrix and antisymmetrized integrals <pq||rs> over all spin orbitals,
+  // occupied ones first, row-major as the files store them
+  std::string const dir = SEQUANT_EVAL_DATA_DIR;
+  REQUIRE(std::ifstream(dir + "/fock_so.dat").good());
+  REQUIRE(std::ifstream(dir + "/eri_so.dat").good());
+  eval::DataInfo const info(dir + "/fock_so.dat", dir + "/eri_so.dat");
+  std::size_t const nocc = info.nocc(), nvirt = info.nvirt(),
+                    nobs = nocc + nvirt;
+  REQUIRE(nocc == 10);
+  REQUIRE(nvirt == 4);
+  std::vector<double> fock(nobs * nobs), eri(nobs * nobs * nobs * nobs);
+  eval::read_tensor(info.fock_file(), fock);
+  eval::read_tensor(info.eri_file(), eri);
+  // orbital energies: the diagonal of the (canonical) Fock matrix
+  auto eps = [&](std::size_t p) { return fock[p * nobs + p]; };
+  auto g = [&](std::size_t p, std::size_t q, std::size_t r, std::size_t s) {
+    return eri[((p * nobs + q) * nobs + r) * nobs + s];
+  };
+
+  // leaves: ε as rank-1 tensors, g antisymmetric in each slot pair and
+  // bra-ket symmetric
+  auto& world = TA::get_default_world();
+  auto yield_ = rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
+  auto pin_leaves = [&] {
+    yield_.pin(
+        Tensor(L"ε", bra{}, ket{L"a_1"}),
+        [&](std::vector<std::size_t> const& x) { return eps(nocc + x[0]); });
+    yield_.pin(Tensor(L"ε", bra{L"i_1"}, ket{}),
+               [&](std::vector<std::size_t> const& x) { return eps(x[0]); });
+    // pin serves g{a,b;i,j} with the values of g{i,j;a,b}: the data is
+    // bra-ket symmetric (checked below)
+    yield_.pin(Tensor(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      tp::antisymmetric()),
+               [&](std::vector<std::size_t> const& x) {
+                 return g(x[0], x[1], nocc + x[2], nocc + x[3]);
+               });
+  };
+
+  // the reference: E = -1/4 Σ_{ijab} g_{ijab} g_{abij} / (ε_a+ε_b-ε_i-ε_j)
+  double e_ref = 0;
+  for (std::size_t i = 0; i < nocc; ++i)
+    for (std::size_t j = 0; j < nocc; ++j)
+      for (std::size_t a = nocc; a < nobs; ++a)
+        for (std::size_t b = nocc; b < nobs; ++b) {
+          REQUIRE(g(a, b, i, j) == Catch::Approx(g(i, j, a, b)).margin(1e-12));
+          e_ref -= g(i, j, a, b) * g(a, b, i, j) /
+                   (4 * (eps(a) + eps(b) - eps(i) - eps(j)));
+        }
+  // the eval integration program (tests/integration/eval/ta) prints the same
+  // value as the CCSD energy of its second iteration, the energy of the
+  // amplitudes after one update from zero
+  CHECK(e_ref == Catch::Approx(-0.04914988716234519).margin(1e-12));
+
+  // the system
+  Tensor const D(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                 TensorSymmetries{.perm = Symmetry::Symm,
+                                  .braket = BraKetSymmetry::Symm,
+                                  .column = ColumnSymmetry::Symm});
+  Tensor const t(L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                 TensorSymmetries{.perm = Symmetry::Antisymm,
+                                  .braket = BraKetSymmetry::Symm,
+                                  .column = ColumnSymmetry::Symm});
+  auto eps_a = [](wchar_t const* a) { return ex<Tensor>(L"ε", bra{}, ket{a}); };
+  auto eps_i = [](wchar_t const* i) { return ex<Tensor>(L"ε", bra{i}, ket{}); };
+  auto g_of = [](auto b, auto k) {
+    return ex<Tensor>(L"g", std::move(b), std::move(k), tp::antisymmetric());
+  };
+  ResultExpr const D_eq(
+      D, eps_a(L"a_1") + eps_a(L"a_2") - eps_i(L"i_1") - eps_i(L"i_2"));
+  ResultExpr const t_eq(t, g_of(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
+                               pow(ex<Tensor>(D), rational{-1}));
+  ResultExpr const E_eq(Variable(L"E"),
+                        ex<Constant>(rational{-1, 4}) *
+                            g_of(bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+                            ex<Tensor>(t));
+  container::svector<ResultExpr> const system{D_eq, t_eq, E_eq};
+
+  // D and t are inlined into their uses; E alone remains
+  auto const inlined = binarize<EvalExprTA>(system);
+  REQUIRE(inlined.consumed == Flags{true, true, false});
+  REQUIRE(inlined.roots().size() == 1);
+
+  SECTION("unbatched") {
+    pin_leaves();
+    auto const aops = yield_.array_ops();
+    auto const& root = inlined.roots()[0].get();
+    auto cache = CacheManager<std::remove_cvref_t<decltype(root)>>::empty();
+    cache.set_array_ops(&aops);
+    double const e =
+        evaluate(root, std::string{}, yield_, cache)->get<double>();
+    CHECK(e == Catch::Approx(e_ref).margin(1e-12));
+  }
+
+  SECTION("batched over i_1") {
+    // one occupied orbital per tile, so the loop over i_1 runs one batch per
+    // orbital
+    yield_.set_max_tile(1);
+    pin_leaves();
+    auto batched = inlined.roots()[0].get();
+    // the root scales by -1/4 the contraction g·t, its left operand, which
+    // sums over i_1
+    tp::stamp_occ_loop(batched.left());
+    auto policy = tp::occ_contracted_policy();
+    auto const aops = yield_.array_ops();
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      policy.scheduler = scheduler;
+      auto cache =
+          CacheManager<std::remove_cvref_t<decltype(batched)>>::empty();
+      cache.set_array_ops(&aops);
+      if (scheduler == BatchScheduler::forest_descent)
+        cache.set_custom_evaluator(
+            make_evaluator(policy, yield_, make_no_scope_guard{}));
+      auto const slices_before = detail::slice_counter().load();
+      double const e =
+          evaluate(std::vector{batched}, policy, std::string{}, yield_, cache)
+              ->get<double>();
+      CHECK(e == Catch::Approx(e_ref).margin(1e-12));
+      // the ordered executor runs the loop, slicing the operands per batch
+      if (scheduler == BatchScheduler::ordered)
+        CHECK(detail::slice_counter().load() > slices_before);
+    }
   }
 }
 
