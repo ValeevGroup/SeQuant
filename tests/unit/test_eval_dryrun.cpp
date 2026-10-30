@@ -4010,7 +4010,7 @@ TEST_CASE("meter-policy-executor", "[meter]") {
 // An element-wise power is a build of its own: the dry-run backend sizes it
 // like its operand and charges one operation per element, so the meter sees
 // both ops of a Hadamard product with a power factor, under either scheduler.
-TEST_CASE("meter accounts an element-wise power", "[meter]") {
+TEST_CASE("meter-elementwise-power", "[meter]") {
   using namespace sequant;
   using sequant::eval::dryrun::CacheConfig;
   using sequant::eval::dryrun::CostModel;
@@ -4070,7 +4070,7 @@ TEST_CASE("meter accounts an element-wise power", "[meter]") {
 // A broadcast Sum binarizes to Broadcast nodes over its short summands; the
 // dry-run backend shapes each from the array-ops (the operand's modes from the
 // operand), so the result is sized by the union of the head's indices.
-TEST_CASE("dryrun evaluates a broadcast sum", "[dryrun][broadcast]") {
+TEST_CASE("dryrun-broadcast-sum", "[dryrun][broadcast]") {
   using namespace sequant;
   using sequant::eval::dryrun::CostModel;
   using sequant::eval::dryrun::DryRunLeafEvaluator;
@@ -4144,8 +4144,7 @@ TEST_CASE("dryrun evaluates a broadcast sum", "[dryrun][broadcast]") {
 // contracts:
 // the loop opened at the root slices the Hadamard product and the power
 // below it, so both schedulers replay a batched loop through the Power node.
-TEST_CASE("meter batches a loop through an element-wise power",
-          "[meter][tensor-power]") {
+TEST_CASE("meter-batch-through-power", "[meter][tensor-power]") {
   using namespace sequant;
   using namespace sequant::tests::tensor_power;
   using sequant::eval::dryrun::CacheConfig;
@@ -4240,8 +4239,7 @@ TEST_CASE("meter batches a loop through an element-wise power",
 // below it as it slices the Hadamard product of the direct term, so the meter
 // sees the direct term's builds, flops and peak. Binarizing the system needs
 // no lax bra-ket context.
-TEST_CASE("meter batches a loop through an inlined head",
-          "[meter][tensor-power][inline]") {
+TEST_CASE("meter-batch-through-inlined-head", "[meter][tensor-power][inline]") {
   using namespace sequant;
   using namespace sequant::tests::tensor_power;
   using sequant::eval::dryrun::CacheConfig;
@@ -4390,8 +4388,7 @@ TEST_CASE("meter batches a loop through an inlined head",
 // A scalar head inlined into a tensor-tensor contraction:
 // E = L{a_1,a_2;i_1,i_2} ℓ{i_1,i_2;a_1,a_2}, H{i_1;a_1} = E t{i_1;a_2}
 // u{a_2;a_1}; the inlined E is a boundary below the product contracting a_2.
-TEST_CASE("dryrun evaluates a scalar head inlined into a contraction",
-          "[dryrun][inline]") {
+TEST_CASE("dryrun-inlined-scalar-head", "[dryrun][inline]") {
   using namespace sequant;
   using namespace sequant::tests::tensor_power;
   using sequant::eval::dryrun::CostModel;
@@ -4420,7 +4417,7 @@ TEST_CASE("dryrun evaluates a scalar head inlined into a contraction",
 
 // the system {D, ℓ, E}: pow(D,-1) inside ℓ raises the inlined broadcast D,
 // whose trace spelling must read D as its head
-TEST_CASE("meter runs an inlined three-level system", "[meter][inline]") {
+TEST_CASE("meter-inlined-three-level", "[meter][inline]") {
   using namespace sequant;
   using namespace sequant::tests::tensor_power;
   using sequant::eval::dryrun::CacheConfig;
@@ -4477,8 +4474,7 @@ TEST_CASE("occupancy-adjusted moments satisfy the group-volume identity",
 // reading the inlined broadcast D through ℓ: the Broadcast values of D are
 // sliced at a different position under each loop, which the ordered
 // executor's canonical loop axis does not spell
-TEST_CASE("batched consumers slice one Broadcast value at different modes",
-          "[meter][broadcast][inline]") {
+TEST_CASE("meter-broadcast-sliced-per-consumer", "[meter][broadcast][inline]") {
   using namespace sequant;
   using namespace sequant::tests::tensor_power;
   using sequant::eval::dryrun::CacheConfig;
@@ -4587,8 +4583,7 @@ sequant::BatchPolicy nested_contracted_policy() {
 // Broadcast operands −1·ε{i_1;} and −1·ε{i_2;} of the inlined D, under two
 // nested loops: the inner loop's scratch must not serve the value sliced
 // along the outer loop's i_1 to the occurrence that binds i_2.
-TEST_CASE("nested batch loops do not share differently sliced values",
-          "[meter][broadcast][inline]") {
+TEST_CASE("meter-nested-loops-distinct-slices", "[meter][broadcast][inline]") {
   using namespace sequant;
   using namespace sequant::tests::tensor_power;
   using sequant::eval::dryrun::CostModel;

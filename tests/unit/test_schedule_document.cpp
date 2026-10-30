@@ -528,8 +528,7 @@ sequant::ExprPtr power_root() {
 
 }  // namespace
 
-TEST_CASE("record_term then rebuild_pinned_term reproduce a TensorPower term",
-          "[schedule-document][tensor-power]") {
+TEST_CASE("record-term-tensor-power", "[schedule-document][tensor-power]") {
   using namespace sequant::opt::schedule;
   auto _ = sequant::set_scoped_default_context(lax_braket_context());
   auto canon = canonical_term(power_term());
@@ -839,8 +838,7 @@ TEST_CASE("record_root then pin reproduces the optimized Sum and annotations",
   REQUIRE_NOTHROW(session.finish());
 }
 
-TEST_CASE("record_root then pin reproduce a Sum with a TensorPower term",
-          "[schedule-document][tensor-power]") {
+TEST_CASE("record-root-tensor-power", "[schedule-document][tensor-power]") {
   using namespace sequant::opt::schedule;
   auto _ = sequant::set_scoped_default_context(lax_braket_context());
   auto const sum = power_root();
@@ -916,8 +914,7 @@ TEST_CASE("a pin loaded from JSON reproduces the recorded document",
   require_json_pin_round_trip(session_root());
 }
 
-TEST_CASE("a pin loaded from JSON reproduces a TensorPower term",
-          "[schedule-document][tensor-power]") {
+TEST_CASE("json-pin-tensor-power", "[schedule-document][tensor-power]") {
   auto _ = sequant::set_scoped_default_context(lax_braket_context());
   require_json_pin_round_trip(power_root());
 }
@@ -1263,7 +1260,7 @@ TEST_CASE("fingerprint captures DAG-shaping inputs and nothing size-dependent",
   REQUIRE(planner.count("roofline.block_prefactor") == 1);
 }
 
-TEST_CASE("fingerprint sees the base of a TensorPower leaf",
+TEST_CASE("fingerprint-tensor-power-base",
           "[schedule-document][tensor-power]") {
   using namespace sequant::opt::schedule;
   using sequant::eval::dryrun::EvalExprDryRun;
@@ -1669,8 +1666,7 @@ TEST_CASE("record_dag names an adjoint factor like a leaf, its operands below",
   REQUIRE(nadjoint > 0);
 }
 
-TEST_CASE("record_dag names a power factor like a leaf, its operands below",
-          "[schedule-document][tensor-power]") {
+TEST_CASE("record-dag-power-factor", "[schedule-document][tensor-power]") {
   using namespace sequant;
   using namespace sequant::tests::tensor_power;
   auto _ = set_scoped_default_context(lax_braket_context());
@@ -1716,8 +1712,7 @@ TEST_CASE("record_dag names a power factor like a leaf, its operands below",
   REQUIRE(compare(doc, from_json(to_json(doc))).empty());
 }
 
-TEST_CASE("record_dag names the nodes below a unary node's inlined operand",
-          "[schedule-document][inline]") {
+TEST_CASE("record-dag-unary-inlined-operand", "[schedule-document][inline]") {
   using namespace sequant;
   using namespace sequant::tests::tensor_power;
   using sequant::eval::dryrun::EvalExprDryRun;
@@ -1760,8 +1755,7 @@ TEST_CASE("record_dag names the nodes below a unary node's inlined operand",
   REQUIRE(compare(doc, from_json(to_json(doc))).empty());
 }
 
-TEST_CASE("record_dag places a Broadcast node like the other unary nodes",
-          "[schedule-document][broadcast]") {
+TEST_CASE("record-dag-broadcast", "[schedule-document][broadcast]") {
   using namespace sequant;
   using namespace sequant::tests::tensor_power;
   using sequant::eval::dryrun::EvalExprDryRun;
@@ -1809,7 +1803,7 @@ TEST_CASE("record_dag places a Broadcast node like the other unary nodes",
   REQUIRE(compare(doc, from_json(to_json(doc))).empty());
 }
 
-TEST_CASE("record_dag records an inlined head like the expression it replaces",
+TEST_CASE("record-dag-inlined-head",
           "[schedule-document][tensor-power][inline]") {
   using namespace sequant;
   using namespace sequant::tests::tensor_power;

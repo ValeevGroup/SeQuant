@@ -5585,10 +5585,8 @@ TEST_CASE("ordered-lockstep-vs-whole-escape",
 // under a loop over i_1 its root contracts. The ordered multi-root executor
 // fetches D once for both roots, builds the batched loop through the Power
 // node, and assembles each root to the size of its unbatched evaluation.
-TEST_CASE(
-    "evaluate_ordered_multiroot evaluates a batched loop through a "
-    "Power node",
-    "[ordered-executor][tensor-power]") {
+TEST_CASE("ordered-multiroot-batched-power",
+          "[ordered-executor][tensor-power]") {
   using namespace sequant::tests::tensor_power;
   using sequant::eval::dryrun::CostModel;
   using sequant::eval::dryrun::DryRunLeafEvaluator;

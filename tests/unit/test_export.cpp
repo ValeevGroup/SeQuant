@@ -848,7 +848,7 @@ TEST_CASE("export reuse-zero not applied to repeated leaf operand",
                        ContainsSubstring("] X:x["));
 }
 
-TEST_CASE("export element-wise tensor power to ITF", "[export]") {
+TEST_CASE("export-tensor-power-itf", "[export]") {
   // ITF has no element-wise power, so the snapshot files carry no ITF section
   // for a TensorPower; the refusal is asserted here instead
   auto resetter = to_export_context();
@@ -865,7 +865,7 @@ TEST_CASE("export element-wise tensor power to ITF", "[export]") {
       "ITF has no element-wise tensor power");
 }
 
-TEST_CASE("export element-wise tensor power to Julia", "[export]") {
+TEST_CASE("export-tensor-power-julia", "[export]") {
   using Catch::Matchers::ContainsSubstring;
 
   // ITensor and TensorKit have no element-wise power, so the snapshot files
@@ -923,7 +923,7 @@ TEST_CASE("export element-wise tensor power to Julia", "[export]") {
   }
 }
 
-TEST_CASE("export broadcast sum", "[export]") {
+TEST_CASE("export-broadcast-sum", "[export]") {
   using Catch::Matchers::ContainsSubstring;
 
   // ITF, ITensor and TensorKit cannot broadcast a summand over the modes it
