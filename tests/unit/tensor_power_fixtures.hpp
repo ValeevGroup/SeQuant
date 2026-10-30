@@ -138,6 +138,20 @@ inline ResultExpr D_broadcast() {
                         eps(bra{L"i_1"}, ket{}) - eps(bra{L"i_2"}, ket{}));
 }
 
+/// D3{i_1,i_2,i_3;a_1,a_2,a_3} = ε{;a_1} + ε{;a_2} + ε{;a_3} - ε{i_1;} -
+/// ε{i_2;} - ε{i_3;}, a triples-like denominator far larger than any of its
+/// rank-1 leaves; totally symmetric like power_base()
+inline ResultExpr D3_broadcast() {
+  auto eps = [](auto b, auto k) {
+    return ex<Tensor>(L"ε", std::move(b), std::move(k));
+  };
+  return ResultExpr(Tensor(L"D3", bra{L"i_1", L"i_2", L"i_3"},
+                           ket{L"a_1", L"a_2", L"a_3"}, symmetric()),
+                    eps(bra{}, ket{L"a_1"}) + eps(bra{}, ket{L"a_2"}) +
+                        eps(bra{}, ket{L"a_3"}) - eps(bra{L"i_1"}, ket{}) -
+                        eps(bra{L"i_2"}, ket{}) - eps(bra{L"i_3"}, ket{}));
+}
+
 /// leaf data for numerical tests of the inlined system, chosen so that the
 /// leaves honor their declared symmetries (random data would not, and the
 /// evaluator relies on them when it reorders slots) and every denominator is
