@@ -61,17 +61,20 @@ Broadcast sums
 ~~~~~~~~~~~~~~~~~
 
 The evaluation tree of a broadcast sum under a ``ResultExpr`` head (see :doc:`expressions`) contains
-:cpp:enumerator:`sequant::EvalOp::Broadcast` nodes, each adding one summand to the result over the head modes it lacks. The text
-and Python (NumPy and PyTorch ``einsum``) backends export them; e.g., for ``D{i_1;a_1} = ε{;a_1} - ε{i_1;}``:
+:cpp:enumerator:`sequant::EvalOp::Broadcast` nodes, each adding one summand to the result over the head modes it lacks. The text,
+Python (NumPy and PyTorch ``einsum``) and Julia TensorOperations backends export them; e.g., for
+``D{i_1;a_1} = ε{;a_1} - ε{i_1;}``:
 
 .. code-block:: text
 
    Compute D[i_1, a_1] += ε[a_1] (broadcast over i_1)                         (text)
    D_ov += np.einsum('a->a', ε_v, optimize=True)[None, :]                     (Python)
+   D_ov .+= reshape(ε_v, (1, nv))                                             (Julia TensorOperations)
 
-Python inserts ``None`` at each mode the summand lacks, after permuting the summand's modes to their order in the result. A
-scalar summand is added as is (``D_ov += -1 * E``), relying on the target language's broadcasting. The other shipped backends
-throw a :class:`sequant::Exception` ("<format> cannot broadcast a summand"). A custom backend opts in by overriding
+Python inserts ``None`` and Julia a dimension of ``1`` at each mode the summand lacks, after permuting the summand's modes to their
+order in the result. A scalar summand is added as is (``D_ov += -1 * E``), relying on the target language's broadcasting.
+:class:`sequant::ItfGenerator`, :class:`sequant::JuliaITensorGenerator` and :class:`sequant::JuliaTensorKitGenerator` throw a
+:class:`sequant::Exception` ("<format> cannot broadcast a summand"). A custom backend opts in by overriding
 :func:`sequant::Generator::broadcast_add`; the default throws.
 
 Each backend has its own ``Context`` type (e.g. ``ItfContext``) for backend-specific settings such as naming conventions; consult its

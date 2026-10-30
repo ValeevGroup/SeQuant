@@ -20,6 +20,18 @@ Unload ε[a_1]
 Persist D[i_1, a_1]
 
 =================================================
+Julia (TensorOperations)
+=================================================
+D_ov = zeros(Float64, nocc, nv)
+ε_o = deserialize("ε_o.jlbin")
+D_ov .+= -1 * reshape(ε_o, (nocc, 1))
+ε_o = nothing
+ε_v = deserialize("ε_v.jlbin")
+D_ov .+= reshape(ε_v, (1, nv))
+ε_v = nothing
+return D_ov
+
+=================================================
 Python (einsum)
 =================================================
 import numpy as np

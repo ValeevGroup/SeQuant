@@ -45,6 +45,12 @@ class JuliaTensorKitGenerator : public JuliaTensorOperationsGenerator<Context> {
                        domain(tensor, ctx));
   }
 
+  /// refuses, as the TensorOperations base would not
+  void broadcast_add(const Expr &operand, const Tensor &result,
+                     const Context &ctx) override {
+    Generator<Context>::broadcast_add(operand, result, ctx);
+  }
+
   void compute(const Expr &expression, const Tensor &result,
                const Context &ctx) override {
     if (Base::find_tensor_power(expression)) {
