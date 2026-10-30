@@ -199,6 +199,7 @@ class AnyIrrepContext {
   /// @throws Exception if the set is not of this context's IRREP type
   [[nodiscard]] bool is_totally_symmetric(const AnyIrrepSet &set) const;
   [[nodiscard]] AnyIrrepSet empty_set() const;
+  /// @sa IrrepContext::any_set
   [[nodiscard]] AnyIrrepSet any_set() const;
   /// @sa IrrepContext::canonical_irrep
   [[nodiscard]] AnyIrrep canonical_irrep(std::string_view name) const;
