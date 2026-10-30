@@ -779,11 +779,19 @@ struct InlineContext {
   }
 
   /// \return the equation whose scalar head \p leaf names, if any
+  /// \throw Exception if \p leaf is conjugated and names a scalar head
   std::optional<std::size_t> match(Variable const& leaf) const {
     auto const it = by_label_.find(std::wstring(leaf.label()));
     if (it == by_label_.end()) return std::nullopt;
-    for (std::size_t k : it->second)
-      if (!system_[k].produces_tensor()) return k;
+    for (std::size_t k : it->second) {
+      if (system_[k].produces_tensor()) continue;
+      if (leaf.conjugated())
+        throw Exception("inline: conjugated use of head " +
+                        toUtf8(leaf.label()) +
+                        " is not supported; define its conjugate as its own "
+                        "equation");
+      return k;
+    }
     return std::nullopt;
   }
 

@@ -1138,6 +1138,17 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
     REQUIRE_THROWS_WITH(binarize(selfref),
                         ContainsSubstring("inline: cyclic definition of"));
 
+    // a conjugated use of a scalar head is not inlined silently
+    auto e_conj = ex<Variable>(L"E");
+    e_conj->as<Variable>().conjugate();
+    auto const fc =
+        ResultExpr(Tensor(L"F", bra{L"i_1"}, ket{L"a_1"}),
+                   e_conj * ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+    System const conj{e, fc};
+    REQUIRE_THROWS_WITH(
+        binarize(conj),
+        ContainsSubstring("inline: conjugated use of head E is not supported"));
+
     // c has no definition
     auto const g = ResultExpr(
         Tensor(L"G", bra{L"i_1"}, ket{L"a_1"}),
