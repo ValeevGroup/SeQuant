@@ -162,17 +162,6 @@ class GenerationVisitor {
     const bool zeroReuse =
         static_cast<bool>(zeroStrategy & ZeroStrategy::ZeroOnReuse);
 
-    if constexpr (std::is_same_v<ExprType, Tensor>) {
-      if (is_ones(expr)) {
-        // a reserved leaf: no caller provides it, so the generated code makes
-        // it wherever another tensor would be loaded
-        if (!alreadyLoaded) {
-          m_generator.create_ones(expr, m_ctx);
-        }
-        return;
-      }
-    }
-
     if (create) {
       m_generator.create(expr, zeroCreate, m_ctx);
     } else if (load) {

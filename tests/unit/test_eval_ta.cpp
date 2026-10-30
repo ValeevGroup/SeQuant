@@ -498,19 +498,9 @@ class rand_tensor_yield {
         char const* e = std::getenv("SEQUANT_UT_YIELD_SPARSITY");
         return e ? std::atof(e) : 0.0;
       }();
-      // an all-ones leaf (see make_ones()) is served as ones, never sparse
-      bool const ones = is_ones(tnsr);
       std::size_t ord = 0;
       for (auto it = array.begin(); it != array.end(); ++it, ++ord) {
         if (!array.is_local(it.index())) continue;
-        if (ones) {
-          *it = world.taskq.add(
-              [](TA::Range const& r) {
-                return TA::Tensor<NumericT>(r, NumericT{1});
-              },
-              it.make_range());
-          continue;
-        }
         bool const zero =
             sparsity > 0.0 &&
             (static_cast<double>((ord * 2654435761u) % 1000u) / 1000.0 <

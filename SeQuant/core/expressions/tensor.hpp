@@ -1280,27 +1280,6 @@ inline ExprPtr make_kronecker(const Index &bra_index, const Index &ket_index) {
                                             .column = ColumnSymmetry::Symm}));
 }
 
-/// @return a rank-1 all-ones tensor, with @p idx in its bra (@p slot is
-/// SlotType::Bra) or ket (@p slot is SlotType::Ket) slot
-inline ExprPtr make_ones(const Index &idx, SlotType slot) {
-  SEQUANT_ENFORCE(slot == SlotType::Bra || slot == SlotType::Ket,
-                  "make_ones: the index of an all-ones tensor must be in a "
-                  "bra or ket slot");
-  using indices = container::svector<Index>;
-  const bool in_bra = slot == SlotType::Bra;
-  return ex<Tensor>(
-      Tensor(reserved::ones_label(), bra(in_bra ? indices{idx} : indices{}),
-             ket(in_bra ? indices{} : indices{idx}), aux{},
-             TensorSymmetries{.perm = Symmetry::Nonsymm,
-                              .braket = BraKetSymmetry::Nonsymm,
-                              .column = ColumnSymmetry::Nonsymm}));
-}
-
-/// @return true if @p t is an all-ones tensor (see make_ones())
-inline bool is_ones(const Tensor &t) {
-  return t.label() == reserved::ones_label();
-}
-
 /// @return true if an overlap between @p bra and @p ket is a Kronecker delta:
 /// the indices are in one orthonormal basis, i.e. have the same protoindices
 /// (compared in order, as by Index::operator==; symmetric ones are kept

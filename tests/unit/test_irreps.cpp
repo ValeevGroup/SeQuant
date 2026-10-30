@@ -415,9 +415,6 @@ TEST_CASE("irreps", "[irreps]") {
     REQUIRE(irreps(L"2 * c * t{a1;i1}") == Set{irrep("B1")});
     // Reserved tensors are totally symmetric
     REQUIRE(irreps(L"t{a1;i1} δ{i1;i2}") == Set{irrep("B1")});
-    // ... but an all-ones tensor is nonzero in every IRREP block
-    REQUIRE(irreps_of(*make_ones(Index(L"a_1"), SlotType::Bra), ctx).is_any());
-    REQUIRE(irreps_of(*make_ones(Index(L"i_1"), SlotType::Ket), ctx).is_any());
     // Vanishing expressions span no IRREP
     REQUIRE(irreps_of(Constant(0), ctx).empty());
     REQUIRE(irreps_of(Sum{}, ctx).empty());

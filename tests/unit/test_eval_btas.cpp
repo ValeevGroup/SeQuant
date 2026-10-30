@@ -99,11 +99,6 @@ class rand_tensor_yield {
 
     auto result = Tensor_t{rng};
     using numeric_type = typename Tensor_t::numeric_type;
-    // an all-ones leaf (see make_ones())
-    if (sequant::is_ones(tnsr)) {
-      result.fill(numeric_type{1});
-      return result;
-    }
     result.generate([]() -> numeric_type {
       auto const re = static_cast<double>(std::rand()) / RAND_MAX;
       if constexpr (sequant::meta::is_complex_v<numeric_type>) {
