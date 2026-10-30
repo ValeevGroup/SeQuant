@@ -98,11 +98,10 @@ head's indices, meaning that it is constant along those modes and is broadcast o
 ``D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}``. :func:`is_valid() <sequant::is_valid>` accepts such a ``ResultExpr``
 if every summand's external indices are a subset of the head's and together the summands supply all of them; a bare ``Sum``, which
 has no head to name the missing modes, must still be uniformly indexed. Aux modes cannot be broadcast over: a summand must carry
-every aux index of the head. :func:`sequant::binarize` and :func:`sequant::optimize` of
-a ``ResultExpr`` lower the broadcast first (:func:`sequant::lower_broadcast_sum`): each short summand becomes an outer product with
-one reserved all-ones leaf ``𝟙`` (:func:`sequant::make_ones`) per missing index. Numerical evaluation requests a ``𝟙`` leaf from the
-leaf evaluator like any other leaf, so the leaf evaluator must serve it (recognize it with :func:`sequant::is_ones`) as an all-ones
-tensor of its mode's extent; for code export see :doc:`export`.
+every aux index of the head. :func:`sequant::binarize` of a ``ResultExpr`` wraps each short summand in a unary
+:cpp:enumerator:`sequant::EvalOp::Broadcast` node, which expands it over the head modes it lacks; :func:`sequant::optimize` keeps
+the summands as they are. Numerical evaluation takes the ranges of the added modes from the backend array-ops (see
+:doc:`evaluation`). Code export of a broadcast sum is not supported.
 
 .. literalinclude:: /examples/user/expressions.cpp
    :language: cpp
@@ -117,7 +116,7 @@ Equations composed through heads, such as ``D``, ``ℓ`` and a consumer of ``ℓ
 :func:`sequant::binarize` of a ``std::span<const ResultExpr>`` returns an :class:`sequant::InlinedSystem` with one evaluation tree
 per equation, in input order, a ``consumed`` flag for each equation whose head another equation used, and ``roots()``, the trees of
 the equations no other equation used. Each leaf that names a head is replaced by that head's equation, binarized as it would be on
-its own (so a broadcast sum is lowered and nested definitions are inlined in turn); the equations may be given in any order.
+its own (so a broadcast sum gets its Broadcast nodes and nested definitions are inlined in turn); the equations may be given in any order.
 
 A :class:`sequant::Tensor` leaf names a head if its label, its bra, ket and aux ranks and the index space and number of proto
 indices of every slot agree with the head's. A leaf that agrees only with bra and ket swapped, as :func:`sequant::canonicalize`

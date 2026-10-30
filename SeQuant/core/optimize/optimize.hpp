@@ -31,8 +31,6 @@ ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts = {});
 OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts = {});
 
 /// \copydoc optimize(ExprPtr const&, OptimizeOptions)
-///
-/// A broadcast Sum on the rhs is lowered first (see lower_broadcast_sum()).
 ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts = {});
 
 /// \copydoc optimize(ExprPtr const&, OptimizeOptions)

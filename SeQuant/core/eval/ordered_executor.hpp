@@ -499,6 +499,20 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
   ++ordered_op_counts_slot().builds;
   EvalImplTimeline::Scope const _tl_compute_cell;
 
+  // The batch context a Broadcast node of this production slices the modes it
+  // adds by: the cell's own sliced positions, spelled by the production
+  // node's indices. ctx's axes are canonical block axes, which need not be
+  // the labels this production carries a mode under.
+  eval::BatchContext broadcast_ctx;
+  for (auto const& [pos, key] : resolver.registry().table().cells[cell].sliced)
+    for (auto const& e : ctx)
+      if (detail::same_key(e.level.key(), key)) {
+        SEQUANT_ASSERT(pos < node->canon_indices().size());
+        broadcast_ctx.push_back(
+            {node->canon_indices()[pos], e.level, e.range, std::nullopt});
+        break;
+      }
+
   // The op, with the in-place accumulation gate: a marked \c Sum whose left
   // operand is an internal node (a leaf's buffer comes from the caller's own
   // evaluator, which may be memoizing) that the table says is drained -- its
@@ -517,7 +531,7 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
     ResultPtr res =
         inplace_eligible
             ? sum_in_place_traced<EvalTrace>(nd, std::move(l), r, cache)
-            : apply_one_op_traced<EvalTrace>(nd, l, r, cache);
+            : apply_one_op_traced<EvalTrace>(nd, l, r, cache, &broadcast_ctx);
     note_fresh_build(nd, cache);
     return res;
   };

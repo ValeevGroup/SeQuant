@@ -61,7 +61,19 @@ enum class EvalOp {
   ///        power_exponent()). The node's expression is a symmetry-free
   ///        Tensor over the operand's slots; the result is
   ///        operand^exponent, element by element.
-  Power
+  Power,
+
+  ///
+  /// \brief Represents the expansion of one EvalExpr object (a summand of a
+  ///        broadcast Sum under a result head, see is_valid(const
+  ///        ResultExpr&)) over the head modes it lacks. Unary like Power: the
+  ///        left child is the operand subtree, a tensor or a scalar, and the
+  ///        right child is a Constant(1) sentinel. The node's expression is a
+  ///        symmetry-free Tensor over the head's slots and its canon indices
+  ///        are the head's indices in slot order; the result is constant
+  ///        along every mode the operand lacks and equals the operand along
+  ///        the others.
+  Broadcast
 };
 
 ///
@@ -226,6 +238,11 @@ class EvalExpr {
   /// \return True if this expression is an element-wise power (unary) node.
   ///
   [[nodiscard]] bool is_elementwise_power() const noexcept;
+
+  ///
+  /// \return True if this expression is a broadcast (unary) node.
+  ///
+  [[nodiscard]] bool is_broadcast() const noexcept;
 
   ///
   /// \brief Calls to<Tensor>() on ExprPtr held by this object.
@@ -639,8 +656,9 @@ FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
                                   detail::InlineContext* inline_ctx = nullptr);
 
 /// The head-aware binarization behind binarize(ResultExpr const&, ...):
-/// lowers a broadcast Sum, binarizes the rhs with the head's indices
-/// uncontracted and stamps the root with the head.
+/// binarizes the rhs with the head's indices uncontracted, wrapping each
+/// short summand of a broadcast Sum in an EvalOp::Broadcast node, and stamps
+/// the root with the head.
 /// \param node_counter see binarize(ExprPtr const&, ...) above
 /// \param inline_ctx see binarize(ExprPtr const&, ...) above
 FullBinaryNode<EvalExpr> binarize(ResultExpr const& res,
@@ -722,29 +740,13 @@ binarize(ExprPtr const& expr, IndexSet const& external = {},
   return detail::to_eval_node<ExprT>(std::move(tree));
 }
 
-/// Lowers a broadcast Sum under a result head to a Sum of uniformly indexed
-/// summands.
-///
-/// Under a head, the summands of a Sum may each supply only a subset of the
-/// head's indices (see is_valid(const ResultExpr&)); a summand is constant
-/// along the modes it lacks. Broadcast is defined only under a head, which
-/// supplies the missing modes; the evaluation tree has no such notion. Each
-/// summand that lacks head indices is therefore replaced by its product with
-/// one all-ones leaf (see make_ones()) per missing index, appended in head
-/// order (bra, ket, aux) and placed in the head slot of that index. A head
-/// index that a summand uses in any slot counts as present, also in the
-/// opposite bra/ket slot or in several slots (head indices are never
-/// contracted).
-/// @param res a ResultExpr; a broadcast Sum on its rhs must satisfy
-///        is_valid(const ResultExpr&)
-/// @return @p res with its broadcast summands made explicit; @p res itself if
-///         its expression is not a Sum or every summand covers the head
-/// @throw Exception if a summand lacks an aux index of the head
-ResultExpr lower_broadcast_sum(ResultExpr const& res);
-
 /// Creates a binary tree for evaluation from a ResultExpr.
-/// External indices are deduced from @p res (its non-null slots). A broadcast
-/// Sum on the rhs is lowered first (see lower_broadcast_sum()).
+/// External indices are deduced from @p res (its non-null slots). Each
+/// summand of a broadcast Sum on the rhs (see is_valid(const ResultExpr&))
+/// that lacks some of the head's indices becomes an EvalOp::Broadcast node
+/// over the head's indices.
+/// @throw Exception if a summand of a Sum on the rhs lacks an aux index of
+///        the head
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
 FullBinaryNode<ExprT> binarize(ResultExpr const& res,
@@ -854,6 +856,9 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
   };
 
   if (op == EvalOp::Power) return pow(child(node.left()), power_exponent(node));
+
+  // the broadcast is implied by the Sum under a head that holds the node
+  if (op == EvalOp::Broadcast) return child(node.left());
 
   if (op == EvalOp::Product) {
     auto prod = Product{};

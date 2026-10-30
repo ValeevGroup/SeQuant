@@ -109,14 +109,12 @@ int main() {
                      ex<Tensor>(L"ε", bra{L"i_2"}, ket{}));
   SEQUANT_ASSERT(is_valid(denominator));
 
-  // binarize() and optimize() lower it first: each summand is multiplied by
-  // one reserved all-ones leaf 𝟙 per head index it lacks
-  auto lowered = lower_broadcast_sum(denominator);
-  [[maybe_unused]] const auto& first_term =
-      lowered.expression()->as<Sum>().summand(0);
-  SEQUANT_ASSERT(first_term->as<Product>().factors().size() == 4);
+  // binarize() expands each summand over the head indices it lacks with a
+  // Broadcast node: here the root sums four of them
+  [[maybe_unused]] auto const tree = binarize(denominator);
+  SEQUANT_ASSERT(tree->is_sum() && tree.right()->is_broadcast());
 
-  std::wcout << std::format(L"{}", lowered.expression()) << std::endl;
+  std::wcout << std::format(L"{}", denominator.expression()) << std::endl;
   // end-snippet-6
 
   // start-snippet-7
