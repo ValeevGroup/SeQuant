@@ -64,9 +64,10 @@ because binarization keeps that factor as a leaf whose slots carry the head's in
 ``Constant`` sentinel on the right, and the head's indices, in slot order, as its canonical indices, so the Sum chain above it sees
 uniformly indexed operands. The node's hash combines the operand's with the result's modes and the position of each operand mode
 among them: one operand broadcast to different modes is a different value. At evaluation the ranges of the modes a node adds come
-from ``BackendArrayOps::make_zeros`` on a rank-1 descriptor per mode, sliced to the current batch of a loop over that mode (by the
-ordered executor, as the value's cell says it is sliced), and ``Result::broadcast`` fills the result; ``to_expr`` spells the node as
-its operand. Export of the node is not supported yet.
+from ``BackendArrayOps::make_zeros`` on a rank-1 descriptor per mode, sliced to the current batch of a loop over that mode by the tree
+evaluator (by the ordered executor, as the value's cell says it is sliced), and ``Result::broadcast`` fills the result; ``to_expr`` spells the node as
+its operand. The node carries its operand's phase, since a broadcast is linear, and its irreps are unconstrained (any) when it adds
+a mode. Code export spells it through the ``Generator::broadcast_add`` hook (see :doc:`export`).
 
 Inlining a system of equations
 -----------------------------------
