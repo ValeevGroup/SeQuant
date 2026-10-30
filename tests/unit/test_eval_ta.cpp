@@ -7431,3 +7431,39 @@ TEST_CASE("ta_lazy_views_shaped", "[eval][ta][lazy]") {
     REQUIRE(equal_tarrays(d->get<FlatArray>(), eD->get<FlatArray>(), "i,j"));
   }
 }
+
+TEST_CASE("ta_lazy_view_cell_bytes_balance", "[eval][ta][lazy]") {
+  // A pending view is charged 0 bytes when a cell stores it; a reader that
+  // asks for its value materializes it in place. Releasing the cell must give
+  // back what was charged, or live_bytes underflows.
+  using ResultD = sequant::ResultTensorTA<TA::TArrayD>;
+  auto& world = TA::get_default_world();
+  TA::TArrayD arr(world, TA::TiledRange{{0, 2, 4}, {0, 3, 6}});
+  arr.fill(1.0);
+  world.gop.fence();
+  auto const view = sequant::eval_result<ResultD>(arr)->slice_mode(0, 0, 2);
+  REQUIRE(view->is_buffer_alias());
+
+  sequant::eval::CellTable t;
+  sequant::eval::TableCell cell;
+  cell.value_id = 0;
+  cell.production.kind = sequant::eval::ProductionKind::Build;
+  cell.life = 2;
+  t.cells.push_back(cell);
+  sequant::eval::CellRegistry reg(t, {});
+
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  logger.eval.level = 1;  // size_in_bytes() is 0 untraced
+  reg.set(0, view);
+  CHECK(reg.live_bytes() == 0);
+  auto const r = reg.read(0);
+  CHECK(r->get<TA::TArrayD>().trange().dim(0).extent() == 2);
+  CHECK_FALSE(r->is_buffer_alias());
+  CHECK(r->size_in_bytes() > 0);
+  bool exhausted = false;
+  CHECK(reg.read(0, &exhausted) == r);
+  CHECK(exhausted);
+  CHECK(reg.live_bytes() == 0);
+  logger.eval.level = prev_level;
+}
