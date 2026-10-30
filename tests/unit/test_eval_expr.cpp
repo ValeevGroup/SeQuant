@@ -874,6 +874,16 @@ TEST_CASE("binarize a broadcast sum", "[EvalExpr][broadcast]") {
     }
   }
 
+  SECTION("a broadcast summand carrying a non-head index") {
+    const ResultExpr res =
+        deserialize<ResultExpr>(L"D{i_1;a_1} = ε{;a_1} + f{i_1,i_2;i_2}");
+    REQUIRE_THROWS_WITH(
+        binarize(res),
+        Catch::Matchers::ContainsSubstring("carries index i_2") &&
+            Catch::Matchers::ContainsSubstring(
+                "that is not an index of the result"));
+  }
+
   SECTION("a nested Sum broadcasts at the top level only") {
     const ResultExpr res = deserialize<ResultExpr>(
         L"R{i_1;a_1} = (f{i_1;} + g{i_1;}) c + h{i_1;a_1}");

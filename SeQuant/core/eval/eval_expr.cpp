@@ -760,6 +760,14 @@ EvalExprNode binarize_broadcast_sum(ResultExpr const& res,
         if (ix.nonnull() && !supplied.contains(ix))
           throw Exception("binarize: cannot broadcast over aux index " +
                           toUtf8(ix.full_label()));
+      // e.g. a trace inside the summand: its mode has no place in the result
+      for (Index const& ix : node->canon_indices())
+        if (std::ranges::find(head_indices, ix) == head_indices.end())
+          throw Exception("binarize: summand " +
+                          toUtf8(io::serialization::to_string(summand)) +
+                          " of a broadcast Sum carries index " +
+                          toUtf8(ix.full_label()) +
+                          " that is not an index of the result");
       // a broadcast is linear: it carries its operand's phase
       std::int8_t const phase = node->canon_phase();
       node = make_unary_node(EvalOp::Broadcast, std::move(node), Constant{1},
