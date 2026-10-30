@@ -847,6 +847,13 @@ class ResultTensorTA final : public Result {
     parent_ = ArrayT();
   }
 
+  /// the value this result stands for, without storing it: the held value
+  /// (shallow), or the pending view applied into a temporary. For read-only
+  /// consumers that must not turn a shared view into a held value.
+  [[nodiscard]] ArrayT applied_value() const {
+    return has_value() ? Result::get<ArrayT>() : materialize();
+  }
+
   /// the array a further view of this result is a view of (the parent while
   /// this one is pending, else the held value), and that view's mode map
   [[nodiscard]] ArrayT const& view_base() const {
@@ -931,7 +938,8 @@ class ResultTensorTA final : public Result {
   }
   [[nodiscard]] std::string tile_diff(Result const& other) const override {
     if (!other.is<this_type>()) return "(kind mismatch)";
-    return detail::ta_tile_diff(get<ArrayT>(), other.get<ArrayT>());
+    return detail::ta_tile_diff(applied_value(),
+                                other.as<this_type>().applied_value());
   }
 
   /// Scatter \p block into this result's value (materialized first if this
@@ -1286,6 +1294,13 @@ class ResultTensorOfTensorTA final : public Result {
     parent_ = ArrayT();
   }
 
+  /// the value this result stands for, without storing it: the held value
+  /// (shallow), or the pending view applied into a temporary. For read-only
+  /// consumers that must not turn a shared view into a held value.
+  [[nodiscard]] ArrayT applied_value() const {
+    return has_value() ? Result::get<ArrayT>() : materialize();
+  }
+
   // Diagnostic (see Result::fence): force all pending async work in this
   // array's world to complete so a lazily-executed op's timer captures
   // execution, not just dispatch.
@@ -1345,15 +1360,34 @@ class ResultTensorOfTensorTA final : public Result {
     return eval_result<this_type>(base, std::move(view));
   }
 
+  /// A pending block is reduced in place, not materialized. The norm does
+  /// not depend on inner-mode labels, so the parent is annotated over its
+  /// outer modes only (TA's make_tsrexpr) and no inner rank is needed.
   [[nodiscard]] double norm2() const override {
-    return detail::ta_norm2(get<ArrayT>());
+    if (has_value() || view_.blk_lo.empty())
+      return detail::ta_norm2(view_base());
+    if constexpr (requires(ArrayT const& a) {
+                    { TA::squared_norm(a) } -> std::convertible_to<double>;
+                  }) {
+      auto const& parent = std::as_const(parent_);
+      return static_cast<double>(
+          parent
+              .make_tsrexpr(TA::detail::dummy_annotation(
+                  static_cast<unsigned int>(parent.trange().rank())))
+              .block(view_.blk_lo, view_.blk_hi, TA::preserve_lobound)
+              .norm()
+              .get());
+    } else {
+      return -1.0;
+    }
   }
   [[nodiscard]] std::string layout_desc() const override {
     return detail::ta_trange_string(logical_trange());
   }
   [[nodiscard]] std::string tile_diff(Result const& other) const override {
     if (!other.is<this_type>()) return "(kind mismatch)";
-    return detail::ta_tile_diff(get<ArrayT>(), other.get<ArrayT>());
+    return detail::ta_tile_diff(applied_value(),
+                                other.as<this_type>().applied_value());
   }
 
   /// Scatter \p block into this result's value (materialized first if this

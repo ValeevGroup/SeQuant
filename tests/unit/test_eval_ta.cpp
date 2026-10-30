@@ -7277,6 +7277,17 @@ TEST_CASE("ta_lazy_views_nested", "[eval][ta][lazy]") {
         equal_tarrays(symV->get<ToTArray>(), symE->get<ToTArray>(), "i,j;a,b"));
   }
 
+  SECTION("the norm and the tile diff of a nested view read it in place") {
+    auto const v = sL();
+    REQUIRE(v->norm2() == Catch::Approx(std::sqrt(TA::squared_norm(Le).get())));
+    // a view of a slice of the same parent: the same tiles
+    auto const v2 = sL();
+    REQUIRE(v->tile_diff(*v2).find("only_this=0 only_other=0") !=
+            std::string::npos);
+    REQUIRE(v->is_buffer_alias());
+    REQUIRE(v2->is_buffer_alias());
+  }
+
   SECTION("a nested view as the block of a scatter") {
     ToTArray twiceFull;
     twiceFull("i,j;a,b") = 2.0 * L("i,j;a,b");
