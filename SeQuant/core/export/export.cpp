@@ -51,6 +51,10 @@ AnyIrrepSet RegisteredIrrepContext::empty_set() const {
   return m_ctx.irrep_context().empty_set();
 }
 
+AnyIrrepSet RegisteredIrrepContext::any_set() const {
+  return m_ctx.irrep_context().any_set();
+}
+
 AnyIrrepSet RegisteredIrrepContext::product(const AnyIrrepSet &lhs,
                                             const AnyIrrepSet &rhs) const {
   return m_ctx.irrep_context().product(lhs, rhs);

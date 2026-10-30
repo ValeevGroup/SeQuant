@@ -101,6 +101,7 @@ class ScannedIrrepContext {
     return m_registered.totally_symmetric();
   }
   AnyIrrepSet empty_set() const { return m_registered.empty_set(); }
+  AnyIrrepSet any_set() const { return m_registered.any_set(); }
   AnyIrrepSet product(const AnyIrrepSet &lhs, const AnyIrrepSet &rhs) const {
     return m_registered.product(lhs, rhs);
   }

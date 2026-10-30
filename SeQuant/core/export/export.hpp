@@ -478,6 +478,7 @@ class RegisteredIrrepContext {
   AnyIrrepSet irreps_of(const Tensor &tensor) const;
   AnyIrrepSet totally_symmetric() const;
   AnyIrrepSet empty_set() const;
+  AnyIrrepSet any_set() const;
   AnyIrrepSet product(const AnyIrrepSet &lhs, const AnyIrrepSet &rhs) const;
   AnyIrrepSet conjugate(const AnyIrrepSet &set) const;
 

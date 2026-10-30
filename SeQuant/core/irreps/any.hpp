@@ -192,6 +192,7 @@ class AnyIrrepContext {
   [[nodiscard]] AnyIrrepSet irreps_of(const Tensor &tensor) const;
   [[nodiscard]] AnyIrrepSet totally_symmetric() const;
   [[nodiscard]] AnyIrrepSet empty_set() const;
+  [[nodiscard]] AnyIrrepSet any_set() const;
   /// @throws Exception if the sets are not of this context's IRREP type
   [[nodiscard]] AnyIrrepSet product(const AnyIrrepSet &lhs,
                                     const AnyIrrepSet &rhs) const;
@@ -213,6 +214,7 @@ class AnyIrrepContext {
     virtual AnyIrrepSet irreps_of(const Tensor &tensor) const = 0;
     virtual AnyIrrepSet totally_symmetric() const = 0;
     virtual AnyIrrepSet empty_set() const = 0;
+    virtual AnyIrrepSet any_set() const = 0;
     virtual AnyIrrepSet product(const AnyIrrepSet &lhs,
                                 const AnyIrrepSet &rhs) const = 0;
     virtual AnyIrrepSet conjugate(const AnyIrrepSet &set) const = 0;
@@ -235,6 +237,7 @@ class AnyIrrepContext {
       return ctx.totally_symmetric();
     }
     AnyIrrepSet empty_set() const override { return ctx.empty_set(); }
+    AnyIrrepSet any_set() const override { return ctx.any_set(); }
     AnyIrrepSet product(const AnyIrrepSet &lhs,
                         const AnyIrrepSet &rhs) const override {
       return ctx.product(typed(lhs), typed(rhs));

@@ -434,6 +434,42 @@ TEST_CASE("irreps", "[irreps]") {
       REQUIRE(irreps_of(tree, ctx) == irreps_of(res, ctx));
     }
 
+    // A broadcast summand is constant along the modes it lacks, hence nonzero
+    // in every IRREP block of them
+    {
+      ResultExpr res(deserialize(L"R{a1;i2}")->as<Tensor>(),
+                     deserialize(L"t{a1;i2} + m{a1;}"));
+      REQUIRE(irreps_of(res, ctx).is_any());
+      auto tree = binarize(res);
+      std::size_t n_broadcast = 0;
+      irreps_of(tree, ctx, [&](const auto &node, const Set &set) {
+        if (node.leaf() || !node->is_broadcast()) return;
+        ++n_broadcast;
+        REQUIRE(set.is_any());
+        // its operand m{a1;} keeps its own IRREPs
+        REQUIRE(irreps_of(node.left(), ctx) == Set{irrep("B1"), irrep("B2")});
+      });
+      REQUIRE(n_broadcast == 1);
+      REQUIRE(irreps_of(tree, ctx).is_any());
+
+      ResultExpr const d =
+          deserialize<ResultExpr>(L"D{i_1;a_1} = m{;a_1} - t{i_1;}");
+      REQUIRE(irreps_of(d, ctx).is_any());
+      REQUIRE(irreps_of(binarize(d), ctx).is_any());
+
+      // a vanishing broadcast summand spans no IRREP
+      ResultExpr const zero(deserialize(L"R{a1;i2}")->as<Tensor>(),
+                            deserialize(L"t{a1;i2} + 0 m{a1;}"));
+      REQUIRE(irreps_of(zero, ctx) == Set{irrep("B1")});
+
+      // a Sum of complete summands is unchanged
+      ResultExpr const complete(
+          deserialize(L"R{a1;i2}")->as<Tensor>(),
+          deserialize(L"t{a1;i1} v{i1;i2} + p{a1;a2} f{a2;i2}"));
+      REQUIRE(irreps_of(complete, ctx) ==
+              irreps_of(*complete.expression(), ctx));
+    }
+
     // Callback is called for every node
     {
       ResultExpr res(deserialize(L"R{a1;i2}")->as<Tensor>(),

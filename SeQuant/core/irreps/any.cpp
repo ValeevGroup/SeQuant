@@ -133,6 +133,12 @@ AnyIrrepSet AnyIrrepContext::empty_set() const {
   return m_impl->empty_set();
 }
 
+AnyIrrepSet AnyIrrepContext::any_set() const {
+  SEQUANT_ASSERT(m_impl &&
+                 "moved-from AnyIrrepContext objects must not be used");
+  return m_impl->any_set();
+}
+
 AnyIrrepSet AnyIrrepContext::product(const AnyIrrepSet &lhs,
                                      const AnyIrrepSet &rhs) const {
   SEQUANT_ASSERT(m_impl &&
