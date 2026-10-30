@@ -4169,7 +4169,7 @@ TEST_CASE("batchability role-split building-block predicates",
   }
 }
 
-TEST_CASE("optimize accepts TensorPower factors", "[optimize][tensor-power]") {
+TEST_CASE("optimize-tensor-power-factors", "[optimize][tensor-power]") {
   using namespace sequant;
   // L·M·pow(D,-1) has i_1 in two bra slots (M's and D's)
   auto ctx = get_default_context();
@@ -4263,8 +4263,7 @@ TEST_CASE("optimize accepts TensorPower factors", "[optimize][tensor-power]") {
   }
 }
 
-TEST_CASE("single-term DP sees a TensorPower vertex through its base",
-          "[optimize][tensor-power]") {
+TEST_CASE("single-term-tensor-power-base", "[optimize][tensor-power]") {
   using namespace sequant;
   auto ctx = get_default_context();
   ctx.set(AssertStrictBraKetSymmetry::No);
@@ -4331,7 +4330,7 @@ TEST_CASE("single-term DP sees a TensorPower vertex through its base",
   }
 }
 
-TEST_CASE("optimize keeps a broadcast Sum symbolic", "[optimize][broadcast]") {
+TEST_CASE("optimize-broadcast-sum-symbolic", "[optimize][broadcast]") {
   using namespace sequant;
   ResultExpr res = deserialize<ResultExpr>(
       L"D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}");

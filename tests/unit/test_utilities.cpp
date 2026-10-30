@@ -219,7 +219,7 @@ TEST_CASE("join_strings", "[utilities]") {
           }) == "1-2-3");
 }
 
-TEST_CASE("utf conversion", "[utilities]") {
+TEST_CASE("utf-conversion", "[utilities]") {
   using namespace sequant;
 
   // BMP and astral-plane (a surrogate pair in UTF-16) characters

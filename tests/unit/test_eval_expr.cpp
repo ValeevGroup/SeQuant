@@ -659,7 +659,7 @@ TEST_CASE("proto-index-liveness", "[eval]") {
   CHECK(has_label(g_node->canon_indices(), L"i_2"));
 }
 
-TEST_CASE("binarize a broadcast sum", "[EvalExpr][broadcast]") {
+TEST_CASE("binarize-broadcast-sum", "[EvalExpr][broadcast]") {
   using namespace sequant;
   using Node = FullBinaryNode<EvalExpr>;
 
@@ -889,7 +889,7 @@ TEST_CASE("binarize a broadcast sum", "[EvalExpr][broadcast]") {
   }
 }
 
-TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
+TEST_CASE("binarize-system", "[EvalExpr][inline]") {
   using namespace sequant;
   using namespace sequant::tests::tensor_power;
   using Catch::Matchers::ContainsSubstring;
@@ -1461,8 +1461,7 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
   }
 }
 
-TEST_CASE("binarize a system under the strict bra-ket context",
-          "[EvalExpr][inline]") {
+TEST_CASE("binarize-system-strict-braket", "[EvalExpr][inline]") {
   using namespace sequant;
   using namespace sequant::tests::tensor_power;
   using Node = FullBinaryNode<EvalExpr>;

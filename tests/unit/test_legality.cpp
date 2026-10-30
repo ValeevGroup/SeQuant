@@ -409,10 +409,7 @@ TEST_CASE("forced_split_types keeps a named basis apart from its space",
 // carries the batched occupied mode and is read inside the loop, so the mode
 // is LoopLocal for it. Its operand is a leaf, which is read in slices and
 // never built, so it has no build-site axis.
-TEST_CASE(
-    "analyze_legality classifies an axis through a Power node like its "
-    "consumer, and its operand like any leaf",
-    "[legality][tensor-power]") {
+TEST_CASE("legality-through-power", "[legality][tensor-power]") {
   using namespace sequant::tests::tensor_power;
   using sequant::eval::LoopRole;
   using sequant::eval::dryrun::EvalExprDryRun;
@@ -482,10 +479,7 @@ TEST_CASE(
 // with the Hadamard product stamped as the head ℓ: every value takes the role
 // it has in the direct term. The roots' hashes differ (their right operand is
 // ℓ, not a Hadamard product), so values are matched by position.
-TEST_CASE(
-    "analyze_legality classifies an inlined head like the expression it "
-    "replaces",
-    "[legality][tensor-power][inline]") {
+TEST_CASE("legality-inlined-head", "[legality][tensor-power][inline]") {
   using namespace sequant::tests::tensor_power;
   using sequant::eval::LoopRole;
   using sequant::eval::dryrun::EvalExprDryRun;
