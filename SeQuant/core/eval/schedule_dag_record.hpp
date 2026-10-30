@@ -112,7 +112,10 @@ inline std::string output_kind_name(OutputKind k) {
 ///    TensorPower factor) takes one tree ordinal as a leaf would; its operand
 ///    is id "<key>#<ordinal>/0" and its Constant sentinel (Adjoint's
 ///    Constant{1}, Power's exponent) "<key>#<ordinal>/1", both at the same
-///    (term, node);
+///    (term, node); when the operand is a subtree (an inlined equation), its
+///    other nodes are "<operand id>.<j>" in left-first post-order, a unary
+///    node among them taking one j with its own "/0" and "/1" below, all at
+///    the same (term, node);
 ///  - the k-th partial sum of a root's left-fold Sum: (root label, k), id
 ///    "<label>+<k>".
 ///
@@ -214,14 +217,43 @@ DagRecord record_dag(
                         top.right().leaf() && top.right()->is_constant();
     if (scaled) tree = &top.left();
     std::size_t ordinal = 0;
+    auto const is_unary_node = [](Node const& n) {
+      return !n.leaf() && n->op_type() && is_unary(*n->op_type());
+    };
+    // a sub-position `id` at the ordinal and what hangs below it: a unary
+    // node's operand and sentinel at id/0 and id/1, the other nodes of a
+    // subtree (an inlined operand) at id.<j> in left-first post-order, a
+    // unary node among them counting as one
+    auto const place_sub = [&](auto const& self, Node const& n,
+                               std::string const& id) -> void {
+      place[&n] = {key, ordinal, id};
+      if (n.leaf()) return;
+      if (is_unary_node(n)) {
+        self(self, n.left(), id + "/0");
+        self(self, n.right(), id + "/1");
+        return;
+      }
+      std::size_t j = 0;
+      auto const below = [&](auto const& below_self, Node const& m) -> void {
+        if (!m.leaf() && !is_unary_node(m)) {
+          below_self(below_self, m.left());
+          below_self(below_self, m.right());
+          place[&m] = {key, ordinal, id + "." + std::to_string(j++)};
+        } else {
+          self(self, m, id + "." + std::to_string(j++));
+        }
+      };
+      below(below, n.left());
+      below(below, n.right());
+    };
     auto const walk = [&](auto const& self, Node const& n) -> void {
       if (!n.leaf()) {
-        if (n->op_type() && is_unary(*n->op_type())) {
+        if (is_unary_node(n)) {
           // the pinned factor (conjugated or raised): one ordinal, as a leaf;
           // its operand and Constant sentinel are sub-positions
           std::string const id = key + "#" + std::to_string(ordinal);
-          place[&n.left()] = {key, ordinal, id + "/0"};
-          place[&n.right()] = {key, ordinal, id + "/1"};
+          place_sub(place_sub, n.left(), id + "/0");
+          place_sub(place_sub, n.right(), id + "/1");
         } else {
           self(self, n.left());
           self(self, n.right());

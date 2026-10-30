@@ -1724,6 +1724,50 @@ TEST_CASE("record_dag names a power factor like a leaf, its operands below",
   REQUIRE(compare(doc, from_json(to_json(doc))).empty());
 }
 
+TEST_CASE("record_dag names the nodes below a unary node's inlined operand",
+          "[schedule-document][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  // pow(D,-1) inside ℓ raises the inlined broadcast D: a Sum subtree below
+  // the Power node
+  container::svector<ResultExpr> const sys{D_broadcast(), ell_definition(),
+                                           consumer_E()};
+  auto inlined = binarize<EvalExprDryRun>(sys);
+  std::vector<eval::dryrun::EvalNodeDryRun> forest{inlined.trees[2]};
+  stamp_occ_loop(forest[0]);
+  auto const policy = occ_contracted_policy();
+  eval::dryrun::SizeRegime const regime;
+  eval::dryrun::CostModel const cm{regime};
+  auto const rich =
+      eval::compute_dag_boulevard(forest, cm, policy.batch_target_size);
+  auto const legality = eval::analyze_legality(rich, forest, policy);
+  auto const ordered = eval::build_ordered_schedule(rich, legality, policy, {});
+  std::vector<RootRecord> const roots{
+      RootRecord{.label = "E", .terms = {TermRecord{.key = "E"}}}};
+
+  DagRecord dag;
+  REQUIRE_NOTHROW(dag = record_dag(rich, legality, ordered, forest, roots));
+  std::set<std::string> ids;
+  for (auto const& v : dag.values) REQUIRE(ids.insert(v.id).second);
+  REQUIRE(ids.size() == rich.cells.size());
+  // the power and its operand, the inlined D, keep their ids; D's own nodes
+  // hang below the operand
+  auto const power = std::ranges::find_if(dag.values, [](auto const& v) {
+    return v.expr.find(" ^ ") != std::string::npos;
+  });
+  REQUIRE(power != dag.values.end());
+  // (the exponent -1 is first met as a prefactor inside D, which names it)
+  REQUIRE(ids.count(power->id + "/0") == 1);
+  std::size_t nbelow = 0;
+  for (auto const& id : ids)
+    if (id.starts_with(power->id + "/0.")) ++nbelow;
+  REQUIRE(nbelow > 0);
+
+  auto const doc = doc_with(roots, dag);
+  REQUIRE(compare(doc, from_json(to_json(doc))).empty());
+}
+
 namespace {
 
 /// an index of each space the two-root fixture uses
