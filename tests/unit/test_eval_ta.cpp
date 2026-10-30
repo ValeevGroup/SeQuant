@@ -2058,7 +2058,7 @@ TEST_CASE("eval_broadcast_sum_ta", "[eval][broadcast]") {
     for (auto const& [e, v] : {std::pair{e1, v1}, std::pair{e2, v2},
                                std::pair{e3, v3}, std::pair{e4, v4}}) {
       TA::TArrayD arr(world, TA::TiledRange{yield_.tr1_for(L"", v.size())});
-      arr.init_tiles([&v](TA::Range const& r) {
+      arr.init_tiles([v](TA::Range const& r) {
         TA::Tensor<double> t(r);
         for (std::size_t k = 0; k < t.size(); ++k)
           t.at_ordinal(k) = v[r.lobound()[0] + k];
@@ -2121,7 +2121,7 @@ TEST_CASE("eval_broadcast_sum_ta", "[eval][broadcast]") {
     std::vector<double> const v1{0.5, 0.0, 2.3}, v3{0.37, -1.3};
     auto dense_of = [&](std::vector<double> const& v) {
       TA::TArrayD arr(world, TA::TiledRange{dyield.tr1_for(L"", v.size())});
-      arr.init_tiles([&v](TA::Range const& r) {
+      arr.init_tiles([v](TA::Range const& r) {
         TA::Tensor<double> t(r);
         for (std::size_t k = 0; k < t.size(); ++k)
           t.at_ordinal(k) = v[r.lobound()[0] + k];
