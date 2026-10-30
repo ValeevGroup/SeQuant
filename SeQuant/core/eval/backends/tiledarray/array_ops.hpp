@@ -30,12 +30,12 @@ namespace sequant {
 /// \details The two closures are the TA realization of external-axis batching's
 /// backend needs (see \c BackendArrayOps): \c make_zeros builds a zero
 /// destination -- flat or nested per the descriptor's proto structure, with a
-/// nested result's inner tiles left empty for the scatter writes to fill -- and
-/// \c axis_batches chunks an axis on its basis' tile boundaries. Tiling is a
-/// property of the basis, so both are sourced from \p tr1_of_base alone; no
-/// array in the DAG is consulted. Both mpqc (from its orbital/basis registries)
-/// and unit tests (from the tranges they build their leaves with) supply the
-/// map and call this.
+/// nested result's inner tiles left empty and a sparse flat result's shape all
+/// zero for the scatter writes to fill -- and \c axis_batches chunks an axis on
+/// its basis' tile boundaries. Tiling is a property of the basis, so both are
+/// sourced from \p tr1_of_base alone; no array in the DAG is consulted. Both
+/// mpqc (from its orbital/basis registries) and unit tests (from the tranges
+/// they build their leaves with) supply the map and call this.
 template <typename FlatArray, typename ToTArray = FlatArray>
 [[nodiscard]] BackendArrayOps make_ta_array_ops(
     std::map<std::wstring, TA::TiledRange1> tr1_of_base, TA::World& world) {
@@ -60,6 +60,17 @@ template <typename FlatArray, typename ToTArray = FlatArray>
     }
     TA::TiledRange otr(outer.begin(), outer.end());
     auto make_flat = [&]() -> ResultPtr {
+      using shape_type = typename FlatArray::shape_type;
+      if constexpr (!shape_type::is_dense()) {
+        // An all-zero shape holds no tiles, so neither this nor a slice of it
+        // allocates; the scatter's block assignment adds the tiles it writes
+        // to the shape. A tile is zero only if its norm is below the threshold,
+        // so under a zero threshold even a zero norm marks a tile nonzero: the
+        // shape would claim tiles that are never set.
+        if (shape_type::threshold() > 0)
+          return eval_result<ResultTensorTA<FlatArray>>(FlatArray(
+              world, otr, shape_type(typename shape_type::value_type(0), otr)));
+      }
       FlatArray dest(world, otr);
       dest.fill_local(numeric_type(0));
       world.gop.fence();
