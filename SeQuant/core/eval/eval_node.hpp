@@ -26,8 +26,12 @@ ExprPtr linearize_eval_node(Node const& node) {
   // the sentinel right child.
   if (is_unary(*node->op_type())) return to_expr(node);
 
-  ExprPtr lres = linearize_eval_node(node.left());
-  ExprPtr rres = linearize_eval_node(node.right());
+  // an inlined equation below node is a terminal, as in to_expr
+  auto const child = [](Node const& c) {
+    return c->is_equation_boundary() ? c->expr() : linearize_eval_node(c);
+  };
+  ExprPtr lres = child(node.left());
+  ExprPtr rres = child(node.right());
 
   SEQUANT_ASSERT(lres);
   SEQUANT_ASSERT(rres);
