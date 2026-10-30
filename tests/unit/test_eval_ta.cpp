@@ -1,4 +1,5 @@
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2_sequant.hpp"
@@ -4171,7 +4172,9 @@ TEST_CASE("batched-hoist-intermediate-level", "[eval]") {
   CHECK(r_evals == 3);
 }
 
-TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
+TEMPLATE_TEST_CASE("batched_eval_external_axis_scatter",
+                   "[eval][batched-external]", TA::DensePolicy,
+                   TA::SparsePolicy) {
   // Exactness gate: a batch mode stamped EXTERNAL on a node is a
   // external index that survives FREE onto the node's result (a Hadamard /
   // batched-matmul mode present on every operand and the result, contracted at
@@ -4188,17 +4191,21 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
   // mechanism under test is mode-agnostic -- occ vs aux matters only at the
   // DP/cost level (covered by the [dryrun-occ-*] gates). Same rationale as
   // "eval_forest_over_external_occ nests intra-term aux batching".
+  //
+  // Under SparsePolicy the scatter destination starts with an all-zero shape
+  // (see make_ta_array_ops), so this also checks that the scattered tiles land
+  // in it.
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
+  using TArrayD = TA::DistArray<TA::Tensor<double>, TestType>;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
 
   auto& world = TA::get_default_world();
   // virtual single-tiled (4); aux x multi-tiled (12 in tiles of 4 -> 3 tiles)
   // so the external mode genuinely partitions into > 1 block.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/4,
-                                                    /*nvirt=*/4, /*naux=*/12};
+  rand_tensor_yield<double, TestType> yield_{world, /*nocc=*/4, /*nvirt=*/4,
+                                             /*naux=*/12};
   yield_.set_max_tile(4);
 
   // A flat, fully binary tree whose result carries aux x_1 as a pure external:
@@ -4250,7 +4257,7 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
   // Reference: plain unbatched evaluation (node_slice_mask are ignored without
   // a custom evaluator). Computed first so yield_'s random leaves are generated
   // and cached, then reused by the batched run below.
-  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+  auto const ref = evaluate(node, target, yield_)->template get<TArrayD>();
   REQUIRE(TA::norm2(ref) > 0.0);  // guard: reference is nontrivially nonzero
 
   // Spy scope-guard: records the block count each time the evaluator FIRES
@@ -4276,7 +4283,8 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
           return target_batch_size;
         },
         accept_aux, spy, sequant::never_volatile{}));
-    auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+    auto const res =
+        evaluate(node, target, yield_, cache)->template get<TArrayD>();
 
     // Exactness: scattering disjoint blocks reconstructs the whole result.
     TArrayD diff;
@@ -4290,6 +4298,104 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
     std::size_t const expected_root_blocks = target_batch_size == 4 ? 3 : 2;
     CHECK(guard_calls.front() == expected_root_blocks);
   }
+}
+
+TEST_CASE("ta_array_ops_sparse_zeros_hold_no_tiles",
+          "[eval][batched-external]") {
+  // A sparse flat scatter destination, and its slice to an enclosing batch, are
+  // zero by shape rather than by zero-filled tiles: nothing is allocated before
+  // the scatter writes.
+  using TArrayD = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/4,
+                                                     /*nvirt=*/4, /*naux=*/12};
+  yield_.set_max_tile(4);
+  auto const aops = yield_.array_ops();
+
+  auto const count_nonzero_tiles = [](TArrayD const& arr) {
+    std::size_t n = 0;
+    for (std::size_t ord = 0; ord != arr.trange().tiles_range().volume(); ++ord)
+      if (!arr.is_zero(ord)) ++n;
+    return n;
+  };
+
+  auto const zeros =
+      aops.make_zeros({sequant::Index{L"i_1"}, sequant::Index{L"x_1"}});
+  auto const& full = zeros->get<TArrayD>();
+  CHECK(full.trange().dim(0).extent() == 4);
+  CHECK(full.trange().dim(1).extent() == 12);
+  CHECK(count_nonzero_tiles(full) == 0);
+  CHECK(TA::norm2(full) == 0.0);
+
+  auto const sliced = zeros->slice_mode(1, 4, 8);
+  auto const& sl = sliced->get<TArrayD>();
+  CHECK(sl.trange().dim(1).elements_range().first == 4);
+  CHECK(sl.trange().dim(1).elements_range().second == 8);
+  CHECK(count_nonzero_tiles(sl) == 0);
+
+  // A scatter write adds exactly the written tile to the shape.
+  TArrayD src(world, full.trange());
+  src.fill_random();
+  world.gop.fence();
+  auto const src_res =
+      sequant::eval_result<sequant::ResultTensorTA<TArrayD>>(src);
+  auto const blk = src_res->slice_mode(1, 4, 8);
+  zeros->write_into_slice(*blk, 1, 4, 8);
+  CHECK(count_nonzero_tiles(full) == 1);
+  CHECK(full.shape().nnz() == 1);
+  CHECK(TA::norm2(full) == Catch::Approx(TA::norm2(blk->get<TArrayD>())));
+}
+
+TEST_CASE("ta_array_ops_sparse_tot_zeros_hold_no_tiles",
+          "[eval][batched-external]") {
+  // The nested counterpart of ta_array_ops_sparse_zeros_hold_no_tiles. The
+  // slice of the zero destination goes through slice_array_over_mode's
+  // empty-inner branch, which must not allocate either.
+  using ToTArray =
+      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ResultToT = sequant::ResultTensorOfTensorTA<ToTArray>;
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/4,
+                                                     /*nvirt=*/4, /*naux=*/12};
+  yield_.set_max_tile(4);
+  auto const aops = yield_.array_ops<ToTArray>();
+
+  auto const count_nonzero_tiles = [](ToTArray const& arr) {
+    std::size_t n = 0;
+    for (std::size_t ord = 0; ord != arr.trange().tiles_range().volume(); ++ord)
+      if (!arr.is_zero(ord)) ++n;
+    return n;
+  };
+
+  // outer (i_1, x_1); a_1<i_1> is an inner mode
+  auto const zeros =
+      aops.make_zeros({sequant::Index{L"i_1"}, sequant::Index{L"x_1"},
+                       sequant::Index(L"a_1", {L"i_1"})});
+  REQUIRE(zeros->is<ResultToT>());
+  auto const& full = zeros->get<ToTArray>();
+  CHECK(full.trange().rank() == 2);
+  CHECK(full.trange().dim(1).extent() == 12);
+  CHECK(count_nonzero_tiles(full) == 0);
+
+  auto const sliced = zeros->slice_mode(1, 4, 8);
+  auto const& sl = sliced->get<ToTArray>();
+  CHECK(sl.trange().dim(1).elements_range().first == 4);
+  CHECK(sl.trange().dim(1).elements_range().second == 8);
+  CHECK(count_nonzero_tiles(sl) == 0);
+
+  // A scatter write adds exactly the written tile to the shape.
+  ToTArray src(world, full.trange());
+  for (auto it = src.begin(); it != src.end(); ++it)
+    if (src.is_local(it.index()))
+      *it = random_tensor_of_tensor<double>(it.make_range(), TA::Range{4});
+  world.gop.fence();
+  auto const src_res = sequant::eval_result<ResultToT>(src);
+  auto const blk = src_res->slice_mode(1, 4, 8);
+  zeros->write_into_slice(*blk, 1, 4, 8);
+  CHECK(count_nonzero_tiles(full) == 1);
+  CHECK(full.shape().nnz() == 1);
+  CHECK(sequant::detail::tot_inner_rank(full) == 1);
+  CHECK(TA::norm2(full) == Catch::Approx(TA::norm2(blk->get<ToTArray>())));
 }
 
 TEST_CASE("batched-external-hoist-slice-on-use", "[eval][batched-external]") {
@@ -4783,8 +4889,9 @@ TEST_CASE("batched_scratch_tot_presize_scatter", "[eval][batched-external]") {
   REQUIRE(out("i,j;a,b").dot(out("i,j;a,b")) > 0.0);
 }
 
-TEST_CASE("batched_eval_external_proto_occ_scatter",
-          "[eval][batched-external]") {
+TEMPLATE_TEST_CASE("batched_eval_external_proto_occ_scatter",
+                   "[eval][batched-external]", TA::DensePolicy,
+                   TA::SparsePolicy) {
   // D2.2 regression: the external-mode scatter locates and slices an external
   // occupied index that a CSV/PNO-CCk giant carries ONLY as a protoindex of a
   // composite PNO leg `a<i,j>` -- never written as a plain top-level slot on
@@ -4808,19 +4915,23 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
   // plain PAO leg alongside composite proto legs, or a leaf that does not carry
   // the occ at all): locating the occ returns nullopt there instead of
   // asserting.
+  //
+  // Under SparsePolicy the scatter destination starts with an all-zero shape
+  // (see make_ta_array_ops), so this also checks that the scattered tiles land
+  // in it.
   using sequant::evaluate;
   using sequant::Index;
   using sequant::index_position;
   using sequant::make_batched_custom_evaluator;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
-  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>, TestType>;
 
   auto& world = TA::get_default_world();
   // occupied multi-tiled (12 in tiles of 4 -> 3 tiles) so the proto occ mode
   // genuinely partitions into > 1 block; virtual/pao single-tiled.
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/12,
-                                                    /*nvirt=*/4, /*naux=*/8};
+  rand_tensor_yield<double, TestType> yield_{world, /*nocc=*/12, /*nvirt=*/4,
+                                             /*naux=*/8};
   yield_.set_max_tile(4);
 
   // g is a flat (mu~) operand carrying NO occ; the two C legs are composite
@@ -4898,7 +5009,7 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
   // Reference: plain unbatched evaluation (node_slice_mask ignored without a
   // custom evaluator). Computed first so yield_'s random leaves are cached and
   // reused.
-  auto const ref = evaluate(node, target, yield_)->get<ToTArray>();
+  auto const ref = evaluate(node, target, yield_)->template get<ToTArray>();
   REQUIRE(TA::norm2(ref) > 0.0);  // guard: reference is nontrivially nonzero
 
   // Footprint scaling: the occ outer mode spans the full extent (12) in the
@@ -4915,12 +5026,13 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
   };
 
   auto cache = cache_t::empty();
-  auto aops = yield_.array_ops<decltype(yield_)::array_tot_type>();
+  auto aops = yield_.template array_ops<ToTArray>();
   cache.set_array_ops(&aops);
   cache.set_custom_evaluator(make_batched_custom_evaluator(
       yield_, [](Index const&) -> std::size_t { return 4; }, accept_occ, spy,
       sequant::never_volatile{}));
-  auto const res = evaluate(node, target, yield_, cache)->get<ToTArray>();
+  auto const res =
+      evaluate(node, target, yield_, cache)->template get<ToTArray>();
 
   // Exactness: scattering the disjoint occ blocks reconstructs the whole ToT.
   ToTArray diff;
@@ -5176,6 +5288,96 @@ TEST_CASE("batched_eval_external_nested_contracted",
   // mode.
   REQUIRE(guard_calls.size() == 4);
   CHECK(std::count(guard_calls.begin(), guard_calls.end(), 3u) == 1);
+  CHECK(std::count(guard_calls.begin(), guard_calls.end(), 2u) == 3);
+}
+
+TEST_CASE("batched_eval_contracted_nested_external",
+          "[eval][batched-external][forest_descent]") {
+  // Issue #762: the mirror of batched_eval_external_nested_contracted -- a
+  // Contracted loop on the ROOT with an External scatter on an INNER node
+  // that also carries the root's loop mode. Every inner partial is sliced to
+  // the root's current block, so the inner scatter destination must be too.
+  //
+  // inner = u{i_1;i_2;x_1,x_2} * v{i_2;i_3}: contracts i_2, leaving x_1 and
+  // x_2 free on the inner node. root = inner * p{i_3;i_4;x_1,x_2}: contracts
+  // i_3 and both aux modes. One aux mode is the root's Contracted loop; the
+  // other is the inner node's External loop, opened inside it.
+  using sequant::evaluate;
+  using sequant::make_batched_custom_evaluator;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using cache_t = sequant::CacheManager<node_t>;
+
+  auto& world = TA::get_default_world();
+  // aux multi-tiled (12 in tiles of 4 -> 3 tiles), so both loops partition
+  // on tile boundaries other than 0
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 12};
+  yield_.set_max_tile(4);
+
+  auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
+      L"R{i_1;i_4} = ((u{i_1;i_2;x_1,x_2} * v{i_2;i_3})"
+      L" * p{i_3;i_4;x_1,x_2})");
+  auto node = eval_node(res_expr);  // mutable: batch modes stamped below
+  std::string const target = node->annot();
+
+  auto const aux_space =
+      sequant::get_default_context().index_basis_registry()->retrieve_space(
+          L"x");
+  auto accept_aux = [aux_space](sequant::Index const& ix) {
+    return ix.space() == aux_space;
+  };
+
+  // the inner node is the non-leaf child of the root
+  REQUIRE_FALSE(node.leaf());
+  node_t& inner = node.left().leaf() ? node.right() : node.left();
+  REQUIRE_FALSE(inner.leaf());
+
+  // the two aux modes, as the inner node carries them; the root carries
+  // neither
+  sequant::container::svector<sequant::Index> aux;
+  for (auto const& ix : inner->canon_indices())
+    if (accept_aux(ix)) aux.push_back(ix);
+  REQUIRE(aux.size() == 2);
+  sequant::Index const outer_axis = aux[0];  // root, Contracted
+  sequant::Index const inner_axis = aux[1];  // inner node, External
+  REQUIRE_FALSE(sequant::index_position(node, outer_axis).has_value());
+  REQUIRE_FALSE(sequant::index_position(node, inner_axis).has_value());
+
+  node->set_node_slice_mask({{outer_axis, sequant::BatchModeType::Contracted}});
+  inner->set_node_slice_mask({{outer_axis, sequant::BatchModeType::Contracted},
+                              {inner_axis, sequant::BatchModeType::External}});
+
+  // Reference: plain unbatched evaluation.
+  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
+  REQUIRE(TA::norm2(ref) > 0.0);
+
+  // outer -> target 4 over extent 12 = 3 blocks; inner -> target 8 = 2
+  // blocks, [0,8) and [8,12)
+  auto target_batch_size =
+      [outer_axis](sequant::Index const& ix) -> std::size_t {
+    return ix == outer_axis ? std::size_t{4} : std::size_t{8};
+  };
+  std::vector<std::size_t> guard_calls;
+  auto spy = [&guard_calls](std::size_t n) {
+    guard_calls.push_back(n);
+    return sequant::no_scope_guard{};
+  };
+
+  auto cache = cache_t::empty();
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
+  cache.set_custom_evaluator(make_batched_custom_evaluator(
+      yield_, target_batch_size, accept_aux, spy, sequant::never_volatile{}));
+  auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
+
+  TArrayD diff;
+  diff("i,j") = ref("i,j") - res("i,j");
+  REQUIRE(TA::norm2(diff) < 1e-10);
+
+  // the root fires once over the outer mode (3 blocks) and, per outer block,
+  // the inner node scatters over its mode (2 blocks): {3, 2, 2, 2}
+  REQUIRE(guard_calls.size() == 4);
+  CHECK(guard_calls.front() == 3u);
   CHECK(std::count(guard_calls.begin(), guard_calls.end(), 2u) == 3);
 }
 

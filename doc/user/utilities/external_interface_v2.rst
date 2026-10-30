@@ -79,6 +79,9 @@ wherever it is needed, so a pipeline tail that would otherwise be written out se
 Templates are expanded into ordinary steps before the pipeline runs, so everything described above - :code:`inherit_options_from`, output aliasing,
 input resolution - applies unchanged to the result.
 
+Templates can be shared between drivers by placing them in a separate file and pulling it in with :code:`$include` (see
+:ref:`external_interface_include`).
+
 Each entry of :code:`templates` maps a template name to a definition with two properties:
 
 * :code:`parameters` (Object): Declares the knobs the template exposes. Each entry maps a parameter name to a declaration object that must specify

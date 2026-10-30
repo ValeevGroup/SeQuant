@@ -2357,7 +2357,7 @@ template <Trace EvalTrace = Trace::Default, typename F,
                      "external batch mode is not free on the node's result");
       // Backend array-ops from the cache chain -- the same source the ordered
       // (DAG) executor reads, so forest and DAG build identical scatter
-      // destinations from the node's own (unsliced) index list.
+      // destinations from the node's own index list.
       BackendArrayOps const* const aops = cache.array_ops();
       SEQUANT_ASSERT(aops &&
                      "batched external-mode scatter requires backend array-ops "
@@ -2410,10 +2410,15 @@ template <Trace EvalTrace = Trace::Default, typename F,
             persistent_only, depth + 1, peak));
         ResultPtr part =
             evaluate_impl<EvalTrace>(node, leaf_evaluator, bs.cache);
-        // Pre-size the full-extent zero destination from the node's own
-        // (unsliced) index list on the first block; the backend realizes it
-        // (flat or nested) with no array in the DAG consulted.
-        if (!dest) dest = aops->make_zeros(node->canon_indices());
+        // Pre-size the zero destination from the node's own index list on the
+        // first block; the backend realizes it (flat or nested) with no array
+        // in the DAG consulted. Every part is sliced to the current batch of
+        // each enclosing loop the node carries, so the destination is too; K
+        // is not among them (pick_sliceable never re-picks an enclosing mode),
+        // so it stays at full extent for the scatter.
+        if (!dest)
+          dest = slice_to_use(aops->make_zeros(node->canon_indices()), node,
+                              cache.batch_context().size());
         dest->write_into_slice(*part, *dest_mode, e_lo, e_hi);
 
         if (peak) {

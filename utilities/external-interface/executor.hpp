@@ -5,24 +5,23 @@
 
 #include <nlohmann/json_fwd.hpp>
 
-#include <cstddef>
-#include <functional>
-#include <map>
-#include <string>
-
 namespace sequant::util::extint {
 
 class Executor {
  public:
   Executor() = default;
 
+  /// Executes the given pipeline of processing steps. Every call starts from
+  /// a fresh context, i.e. steps can't reference data produced in previous
+  /// calls. Data is released as soon as no later step references it anymore.
   void execute(const nlohmann::json &steps);
+
+  const ExecutionContext &context() const { return context_; }
 
   void reset();
 
  private:
   ExecutionContext context_;
-  std::map<std::string, std::size_t, std::less<>> num_outputs_;
 };
 
 }  // namespace sequant::util::extint

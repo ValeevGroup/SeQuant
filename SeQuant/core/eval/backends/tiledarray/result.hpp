@@ -126,6 +126,35 @@ template <typename ArrayT>
   return r;
 }
 
+/// \return a zero \p ArrayT over \p trange. Under a sparse policy with a
+/// positive SparseShape threshold its shape is all zero, so it holds no tiles;
+/// otherwise every tile is set, zero-filled for a regular array and holding
+/// empty inner tensors (so tot_inner_rank() == 0) for a tensor of tensors.
+template <typename ArrayT>
+[[nodiscard]] ArrayT make_zero_array(TA::World& world,
+                                     TA::TiledRange const& trange) {
+  using shape_type = typename ArrayT::shape_type;
+  if constexpr (!shape_type::is_dense()) {
+    // A tile is zero only if its norm is below the threshold, so under a zero
+    // threshold even a zero norm marks a tile nonzero: the shape would claim
+    // tiles that are never set.
+    if (shape_type::threshold() > 0)
+      return ArrayT(world, trange,
+                    shape_type(typename shape_type::value_type(0), trange));
+  }
+  using value_type = typename ArrayT::value_type;
+  ArrayT result(world, trange);
+  if constexpr (TA::detail::is_tensor_of_tensor_v<value_type>) {
+    for (auto it = result.begin(); it != result.end(); ++it)
+      if (result.is_local(it.index())) *it = value_type{it.make_range()};
+  } else {
+    result.fill_local(typename ArrayT::numeric_type(0));
+  }
+  world.gop.fence();
+  note_fence();
+  return result;
+}
+
 ///
 /// \brief Particle-symmetrize a TA::DistArray (tensor-of-scalar or
 ///        tensor-of-tensor).
@@ -1623,9 +1652,7 @@ template <typename... Args>
       // build the ToT annotation block() needs. The slice of zero is zero, so
       // build the sliced outer trange by hand (mode cut to [tile_lo,tile_hi),
       // every dim's original element lobound preserved, matching the
-      // preserve_lobound block() below) and return a zero ToT over it. The
-      // result is dense even if ArrayT's policy is sparse -- harmless, the
-      // array is identically zero.
+      // preserve_lobound block() below) and return a zero ToT over it.
       std::vector<TA::TiledRange1> tr1s;
       tr1s.reserve(rank);
       for (std::size_t d = 0; d < rank; ++d) {
@@ -1636,13 +1663,8 @@ template <typename... Args>
           bounds.push_back(static_cast<std::size_t>(dim.tile(t).second));
         tr1s.emplace_back(bounds.begin(), bounds.end());
       }
-      TA::DistArray<Args...> out{arr.world(),
-                                 TA::TiledRange(tr1s.begin(), tr1s.end())};
-      for (auto it = out.begin(); it != out.end(); ++it)
-        if (out.is_local(it.index())) *it = value_type{it.make_range()};
-      out.world().gop.fence();
-      ::sequant::detail::note_fence();
-      return out;
+      return detail::make_zero_array<TA::DistArray<Args...>>(
+          arr.world(), TA::TiledRange(tr1s.begin(), tr1s.end()));
     }
     annot = TA::detail::dummy_annotation(static_cast<unsigned int>(rank),
                                          static_cast<unsigned int>(inner_rank));

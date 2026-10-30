@@ -52,9 +52,7 @@ jobs:
           - os: ubuntu-26.04
             cxx: /usr/bin/g++-14
             sanitize_flags: -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
-            # "=1": TiledArray's DetectAlignSize forwards CXXFLAGS as try_compile
-            # CMAKE_FLAGS, which rejects a -D without a value
-            hardening_flags: -D_GLIBCXX_ASSERTIONS=1
+            hardening_flags: -D_GLIBCXX_ASSERTIONS
           - os: macos-26
             cxx: clang++
             sanitize_flags: -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
@@ -78,6 +76,7 @@ jobs:
         -DMPIEXEC_PREFLAGS='--bind-to;none;--allow-run-as-root'
         -DCMAKE_PREFIX_PATH='/usr/local/opt/boost'
         -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/install
+        -DSEQUANT_INSTALL_FETCHED_BACKENDS=TAPP
         -DSEQUANT_TESTS=ON
         -DSEQUANT_EVAL_TESTS=${{ !matrix.valgrind && !matrix.sanitize && !startswith(matrix.os, 'windows') }}
         -DSEQUANT_USE_SYSTEM_BOOST_HASH=OFF
@@ -224,7 +223,7 @@ jobs:
         mv "$version_file.bak" "$version_file"
 
         # with the master switch off nothing fetched is installed; the consumer then gets the dependencies from the first install
-        cmake -DSEQUANT_INSTALL_FETCHED_DEPENDENCIES=OFF -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install-nodeps build
+        cmake -DSEQUANT_INSTALL_FETCHED_DEPENDENCIES=OFF -DSEQUANT_INSTALL_FETCHED_BACKENDS= -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install-nodeps build
         cmake --install build
         test ! -e "$GITHUB_WORKSPACE/install-nodeps/lib/cmake/range-v3"
         cmake -S tests/consumer -B $RUNNER_TEMP/consumer-nodeps -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
@@ -233,15 +232,12 @@ jobs:
         $RUNNER_TEMP/consumer-nodeps/consumer
 
     - name: Test consuming installed SeQuant with a fetched backend
-      # TAPP is the cheapest fetched backend: built already, small to install
+      # TAPP is the cheapest fetched backend: small to install; the main build installs it (BUILD_CONFIG)
       if: ${{ !matrix.valgrind && !matrix.sanitize && !startswith(matrix.os, 'windows') }}
       shell: bash
       run: |
-        cmake -DSEQUANT_INSTALL_FETCHED_DEPENDENCIES=ON -DSEQUANT_INSTALL_FETCHED_BACKENDS=TAPP -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install-tapp build
-        cmake --build build -j 2
-        cmake --install build
         cmake -S tests/consumer -B $RUNNER_TEMP/consumer-tapp -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-          -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/install-tapp;/usr/local/opt/boost" -DSEQUANT_CONSUMER_BACKENDS=tapp
+          -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/install;/usr/local/opt/boost" -DSEQUANT_CONSUMER_BACKENDS=tapp
         cmake --build $RUNNER_TEMP/consumer-tapp
         $RUNNER_TEMP/consumer-tapp/consumer
 
