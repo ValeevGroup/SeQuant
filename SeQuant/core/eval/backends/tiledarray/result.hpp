@@ -1255,25 +1255,16 @@ class ResultTensorOfTensorTA final : public Result {
         static_cast<unsigned int>(inner));
   }
 
-  /// A zero nested array over \p tr: the value of a view of an array whose
-  /// inner tiles are all empty (there is no inner rank to annotate a block
-  /// with, and the slice of zero is zero). Dense even under a sparse policy
-  /// -- harmless, the array is identically zero.
-  [[nodiscard]] ArrayT zero_over(TA::TiledRange const& tr) const {
-    using value_type = typename ArrayT::value_type;
-    ArrayT out{view_base().world(), tr};
-    // every rank sets its own tiles with ready values: no fence needed
-    for (auto it = out.begin(); it != out.end(); ++it)
-      if (out.is_local(it.index())) *it = value_type{it.make_range()};
-    return out;
-  }
-
   /// the value this result stands for, as a fresh array: the pending block
-  /// applied in one pass (or a deep copy of the held value)
+  /// applied in one pass (or a deep copy of the held value). A view of an
+  /// array whose inner tiles are all empty has no inner rank to annotate a
+  /// block with; the slice of zero is zero.
   [[nodiscard]] ArrayT materialize() const {
     if (has_value()) return TA::clone(Result::get<ArrayT>());
     auto const inner = inner_rank();
-    if (inner == 0) return zero_over(logical_trange());
+    if (inner == 0)
+      return detail::make_zero_array<ArrayT>(view_base().world(),
+                                             logical_trange());
     auto const ann = dummy_annot(inner);
     auto const t0 = std::chrono::steady_clock::now();
     ArrayT out;
