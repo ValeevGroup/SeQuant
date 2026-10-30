@@ -243,6 +243,41 @@ class rand_tensor_yield {
   }
 
   using array_type = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
+
+  /// Serve f(slot ordinals of \p tnsr) for every occurrence of the leaf
+  /// \p tnsr, in either orientation: a leaf node of a bra-ket symmetric
+  /// tensor may hold either. Occupied (i) modes have nocc elements, all others
+  /// nvirt.
+  template <typename F>
+  void pin(sequant::Tensor const& tnsr, F f) {
+    using namespace sequant;
+    auto const nb = tnsr.bra_rank();
+    auto pin_as = [&](Tensor const& as, bool swapped) {
+      std::vector<TA::TiledRange1> tr1s;
+      for (Index const& ix : as.const_braket_indices())
+        tr1s.push_back(
+            tr1_for(L"", ix.space().base_key() == L"i" ? nocc_ : nvirt_));
+      array_type arr(world, TA::TiledRange(tr1s.begin(), tr1s.end()));
+      arr.init_tiles([f, nb, swapped](TA::Range const& r) {
+        TA::Tensor<NumericT> tile(r);
+        for (auto const& idx : r) {
+          std::vector<std::size_t> x(idx.begin(), idx.end());
+          if (swapped) std::rotate(x.begin(), x.end() - nb, x.end());
+          tile(idx) = f(x);
+        }
+        return tile;
+      });
+      set_leaf(as, eval_result<ResultTensorTA<array_type>>(arr));
+    };
+    pin_as(tnsr, false);
+    pin_as(
+        Tensor(tnsr.label(), bra(tnsr.ket()), ket(tnsr.bra()), aux(tnsr.aux()),
+               TensorSymmetries{.perm = tnsr.symmetry(),
+                                .braket = tnsr.braket_symmetry(),
+                                .column = tnsr.column_symmetry()}),
+        true);
+  }
+
   using array_tot_type =
       TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
   using numeric_type = NumericT;
@@ -2216,35 +2251,8 @@ TEST_CASE("eval_inlined_system_ta", "[eval][inline]") {
     for (std::size_t k = 0; k < got.size(); ++k)
       CHECK(got[k] == Catch::Approx(expected[k]).margin(1e-12));
   };
-  // serves f(slot ordinals of \p tnsr) for every occurrence of the leaf
-  // \p tnsr, in either orientation: a leaf node of a bra-ket symmetric tensor
-  // may hold either
   auto pin = [&](ExprPtr const& tnsr, auto f) {
-    Tensor const& t = tnsr->as<Tensor>();
-    auto const nb = t.bra_rank();
-    auto pin_as = [&](Tensor const& as, bool swapped) {
-      std::vector<TA::TiledRange1> tr1s;
-      for (Index const& ix : as.const_braket_indices())
-        tr1s.push_back(
-            yield_.tr1_for(L"", ix.space().base_key() == L"i" ? nocc : nvirt));
-      TA::TArrayD arr(world, TA::TiledRange(tr1s.begin(), tr1s.end()));
-      arr.init_tiles([f, nb, swapped](TA::Range const& r) {
-        TA::Tensor<double> tile(r);
-        for (auto const& idx : r) {
-          std::vector<std::size_t> x(idx.begin(), idx.end());
-          if (swapped) std::rotate(x.begin(), x.end() - nb, x.end());
-          tile(idx) = f(x);
-        }
-        return tile;
-      });
-      yield_.set_leaf(as, eval_result<ResultTensorTA<TA::TArrayD>>(arr));
-    };
-    pin_as(t, false);
-    pin_as(Tensor(t.label(), bra(t.ket()), ket(t.bra()), aux(t.aux()),
-                  TensorSymmetries{.perm = t.symmetry(),
-                                   .braket = t.braket_symmetry(),
-                                   .column = t.column_symmetry()}),
-           true);
+    yield_.pin(tnsr->as<Tensor>(), std::move(f));
   };
   auto const M = tp::antisymm(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
   auto const D = tp::power_base();
