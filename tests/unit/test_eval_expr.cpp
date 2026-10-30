@@ -1132,6 +1132,39 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
     auto const nonsymm = binarize(k_system(BraKetSymmetry::Nonsymm));
     REQUIRE(nonsymm.consumed == Flags{false, false});
     REQUIRE(find(nonsymm.trees[1], labelled(L"K", true)));
+
+    // a head matching as written wins over one matching swapped: with the
+    // conjugate X{a_1;i_1} = s{a_1;i_1} defined next to X{i_1;a_1} =
+    // t{i_1;a_1}, X{a_1;i_1} reads the former, in either order
+    auto x_pair = [](BraKetSymmetry bk) {
+      TensorSymmetries const syms{.perm = Symmetry::Nonsymm, .braket = bk};
+      return std::array{ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}, syms),
+                                   ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"})),
+                        ResultExpr(Tensor(L"X", bra{L"a_1"}, ket{L"i_1"}, syms),
+                                   ex<Tensor>(L"s", bra{L"a_1"}, ket{L"i_1"}))};
+    };
+    TensorSymmetries const conj{.perm = Symmetry::Nonsymm,
+                                .braket = BraKetSymmetry::Conjugate};
+    auto const r = ResultExpr(
+        Tensor(L"R", bra{L"a_1"}, ket{L"i_1"}),
+        ex<Constant>(2) * ex<Tensor>(L"X", bra{L"a_1"}, ket{L"i_1"}, conj));
+    auto const [x, x_conj] = x_pair(BraKetSymmetry::Conjugate);
+    for (auto const& [sys, flags] :
+         {std::pair{System{x, x_conj, r}, Flags{false, true, false}},
+          std::pair{System{x_conj, x, r}, Flags{true, false, false}}}) {
+      std::optional<InlinedSystem<EvalExpr>> cres;
+      REQUIRE_NOTHROW(cres.emplace(binarize(sys)));
+      REQUIRE(cres->consumed == flags);
+      Node const* xn = find(cres->trees[2], labelled(L"X", false));
+      REQUIRE(xn);
+      REQUIRE((*xn)->as_tensor() == x_conj.result_as_tensor());
+      REQUIRE(find(*xn, labelled(L"s", true)));
+      REQUIRE_FALSE(find(*xn, labelled(L"t", true)));
+    }
+    // a bra-ket symmetric head and its swapped spelling are one tensor
+    auto const symm_pair = x_pair(BraKetSymmetry::Symm);
+    REQUIRE_THROWS_WITH(binarize(System{symm_pair[0], symm_pair[1]}),
+                        ContainsSubstring("inline: duplicate definition of X"));
   }
 
   SECTION("a matching leaf with other symmetries throws") {

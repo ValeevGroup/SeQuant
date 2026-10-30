@@ -731,9 +731,15 @@ bool swapped_slot_spaces(X const& x, Y const& y) {
          same_spaces(x.aux(), y.aux());
 }
 
-/// \return true if two heads cannot be told apart by the leaves naming them
+/// \return true if two heads cannot be told apart by the leaves naming them:
+///         the same shape, or, if either is bra-ket symmetric, the same shape
+///         with bra and ket swapped
 bool same_shape(ResultExpr const& x, ResultExpr const& y) {
-  return x.produces_tensor() == y.produces_tensor() && same_slot_spaces(x, y);
+  if (x.produces_tensor() != y.produces_tensor()) return false;
+  if (same_slot_spaces(x, y)) return true;
+  return (x.braket_symmetry() == BraKetSymmetry::Symm ||
+          y.braket_symmetry() == BraKetSymmetry::Symm) &&
+         swapped_slot_spaces(x, y);
 }
 
 }  // namespace
@@ -783,27 +789,15 @@ struct InlineContext {
 
   /// \return the equation whose tensor head \p leaf names, if any; a leaf
   ///         that spells a bra-ket symmetric head with bra and ket swapped
-  ///         names it too
+  ///         names it too, unless another head with its label matches it as
+  ///         written
   /// \throw Exception if \p leaf matches a head but not its symmetries, or
   ///        spells a conjugate-symmetric head swapped
   std::optional<TensorMatch> match(Tensor const& leaf) const {
     auto const it = by_label_.find(std::wstring(leaf.label()));
     if (it == by_label_.end()) return std::nullopt;
-    for (std::size_t k : it->second) {
-      if (!system_[k].produces_tensor()) continue;
+    auto const matched = [&](std::size_t k, bool swapped) {
       Tensor const& head = heads_[k];
-      bool const swapped = !same_slot_spaces(leaf, head);
-      if (swapped) {
-        // a swapped spelling names the same object only if bra-ket symmetric
-        if (!swapped_slot_spaces(leaf, head) ||
-            head.braket_symmetry() == BraKetSymmetry::Nonsymm)
-          continue;
-        if (head.braket_symmetry() == BraKetSymmetry::Conjugate)
-          throw Exception(
-              "inline: bra-ket-swapped use of the conjugate-symmetric head " +
-              toUtf8(head.label()) +
-              " is not supported; define its conjugate as its own equation");
-      }
       if (leaf.symmetry() != head.symmetry() ||
           leaf.braket_symmetry() != head.braket_symmetry() ||
           leaf.column_symmetry() != head.column_symmetry())
@@ -812,6 +806,23 @@ struct InlineContext {
             " names head " + toUtf8(io::serialization::to_string(head)) +
             " but declares different symmetries; use result_as_tensor()");
       return TensorMatch{.k = k, .swapped = swapped};
+    };
+    for (std::size_t k : it->second)
+      if (system_[k].produces_tensor() && same_slot_spaces(leaf, heads_[k]))
+        return matched(k, false);
+    for (std::size_t k : it->second) {
+      if (!system_[k].produces_tensor()) continue;
+      Tensor const& head = heads_[k];
+      // a swapped spelling names the same object only if bra-ket symmetric
+      if (!swapped_slot_spaces(leaf, head) ||
+          head.braket_symmetry() == BraKetSymmetry::Nonsymm)
+        continue;
+      if (head.braket_symmetry() == BraKetSymmetry::Conjugate)
+        throw Exception(
+            "inline: bra-ket-swapped use of the conjugate-symmetric head " +
+            toUtf8(head.label()) +
+            " is not supported; define its conjugate as its own equation");
+      return matched(k, true);
     }
     return std::nullopt;
   }
