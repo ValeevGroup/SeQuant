@@ -1077,6 +1077,34 @@ TEST_CASE("binarize a system of ResultExprs", "[EvalExpr][inline]") {
       REQUIRE(dummy != Index{label});
   }
 
+  SECTION("a proto-indexed dummy keeps its space and follows the head") {
+    Index const a2i1(L"a_2", {L"i_1"});
+    // X{i_1;a_1} = S{a_1;a_2<i_1>} t{i_1;a_2<i_1>}
+    auto const x = ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}),
+                              ex<Tensor>(L"S", bra{L"a_1"}, ket{a2i1}) *
+                                  ex<Tensor>(L"t", bra{L"i_1"}, ket{a2i1}));
+    // F{i_3;a_1} = 2 X{i_3;a_1}
+    auto const f = ResultExpr(
+        Tensor(L"F", bra{L"i_3"}, ket{L"a_1"}),
+        ex<Constant>(2) * ex<Tensor>(L"X", bra{L"i_3"}, ket{L"a_1"}));
+    System const sys{x, f};
+    auto const res = binarize(sys);
+    REQUIRE(res.consumed == Flags{true, false});
+    Node const* xn = find(res.trees[1], labelled(L"X", false));
+    REQUIRE(xn);
+    Node const* sn = find(*xn, labelled(L"S", true));
+    Node const* tn = find(*xn, labelled(L"t", true));
+    REQUIRE(sn);
+    REQUIRE(tn);
+    Index const& dummy = (*sn)->as_tensor().ket()[0];
+    REQUIRE((*tn)->as_tensor().ket()[0] == dummy);
+    REQUIRE((*tn)->as_tensor().bra()[0] == Index{L"i_3"});
+    REQUIRE(dummy.label() != a2i1.label());
+    REQUIRE(dummy.space() == a2i1.space());
+    REQUIRE(dummy.proto_indices().size() == 1);
+    REQUIRE(dummy.proto_indices()[0] == Index{L"i_3"});
+  }
+
   SECTION("two uses of one definition share a hash") {
     // G{i_2;i_3} = L{a_1,a_2;i_1,i_3} ℓ{i_1,i_2;a_1,a_2}
     //            + K{a_1,a_2;i_1,i_2} ℓ{i_1,i_3;a_1,a_2}
