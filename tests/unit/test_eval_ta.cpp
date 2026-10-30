@@ -1,5 +1,6 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
 #include "tensor_power_fixtures.hpp"
@@ -1982,6 +1983,17 @@ TEST_CASE("eval_broadcast_sum_ta", "[eval][broadcast]") {
   auto& world = TA::get_default_world();
   const size_t nocc = 2, nvirt = 3;
   auto yield_ = rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
+  // a Broadcast node shapes the modes it adds through the array ops
+  auto eval_with = [](auto const& node, std::string const& layout,
+                      auto const& yield) {
+    auto const aops = yield.array_ops();
+    auto cache = CacheManager<std::remove_cvref_t<decltype(node)>>::empty();
+    cache.set_array_ops(&aops);
+    return evaluate(node, layout, yield, cache);
+  };
+  auto eval_aops = [&](auto const& node, std::string const& layout) {
+    return eval_with(node, layout, yield_);
+  };
 
   // the elements of an array in row-major order of its (single-tile) layout
   auto elements = [](TA::TArrayD const& arr) {
@@ -2024,10 +2036,10 @@ TEST_CASE("eval_broadcast_sum_ta", "[eval][broadcast]") {
         for (std::size_t a1 = 0; a1 < nvirt; ++a1)
           for (std::size_t a2 = 0; a2 < nvirt; ++a2)
             expected.push_back(ea[a1] + ea[a2] - ei[i1] - ei[i2]);
-    check_elementwise(elements(evaluate(eval_node(res),
-                                        std::string{"i_1,i_2,a_1,a_2"}, yield_)
-                                   ->get<TA::TArrayD>()),
-                      expected);
+    check_elementwise(
+        elements(
+            eval_aops(eval_node(res), "i_1,i_2,a_1,a_2")->get<TA::TArrayD>()),
+        expected);
   }
 
   SECTION("asymmetric head") {
@@ -2067,10 +2079,10 @@ TEST_CASE("eval_broadcast_sum_ta", "[eval][broadcast]") {
         for (std::size_t a1 = 0; a1 < nvirt; ++a1)
           for (std::size_t a2 = 0; a2 < nvirt; ++a2)
             expected.push_back(v1[a1] + v2[a2] - v3[i1] - v4[i2]);
-    check_elementwise(elements(evaluate(eval_node(res),
-                                        std::string{"i_1,i_2,a_1,a_2"}, yield_)
-                                   ->get<TA::TArrayD>()),
-                      expected);
+    check_elementwise(
+        elements(
+            eval_aops(eval_node(res), "i_1,i_2,a_1,a_2")->get<TA::TArrayD>()),
+        expected);
   }
 
   SECTION("scalar summand") {
@@ -2082,9 +2094,78 @@ TEST_CASE("eval_broadcast_sum_ta", "[eval][broadcast]") {
       for (std::size_t a1 = 0; a1 < nvirt; ++a1)
         expected.push_back(ea[a1] - ei[i1] - e);
     check_elementwise(
-        elements(evaluate(eval_node(res), std::string{"i_1,a_1"}, yield_)
-                     ->get<TA::TArrayD>()),
+        elements(eval_aops(eval_node(res), "i_1,a_1")->get<TA::TArrayD>()),
         expected);
+  }
+
+  SECTION("without array ops") {
+    ResultExpr res(Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}),
+                   eps_a(L"a_1") - eps_i(L"i_1"));
+    REQUIRE_THROWS_WITH(
+        evaluate(eval_node(res), std::string{"i_1,a_1"}, yield_),
+        Catch::Matchers::ContainsSubstring("needs BackendArrayOps"));
+  }
+
+  SECTION("sparse policy") {
+    using TSpArrayD = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
+    auto syield =
+        rand_tensor_yield<double, TA::SparsePolicy>{world, nocc, nvirt};
+    auto dyield =
+        rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
+    syield.set_max_tile(1);
+    dyield.set_max_tile(1);
+    // single-element tiles; the second of the ket vector is zero, so the
+    // sparse leaf screens it out
+    auto const e1 = ex<Tensor>(L"ε1", bra{}, ket{L"a_1"});
+    auto const e3 = ex<Tensor>(L"ε3", bra{L"i_1"}, ket{});
+    std::vector<double> const v1{0.5, 0.0, 2.3}, v3{0.37, -1.3};
+    auto dense_of = [&](std::vector<double> const& v) {
+      TA::TArrayD arr(world, TA::TiledRange{dyield.tr1_for(L"", v.size())});
+      arr.init_tiles([&v](TA::Range const& r) {
+        TA::Tensor<double> t(r);
+        for (std::size_t k = 0; k < t.size(); ++k)
+          t.at_ordinal(k) = v[r.lobound()[0] + k];
+        return t;
+      });
+      return arr;
+    };
+    for (auto const& [e, v] : {std::pair{e1, v1}, std::pair{e3, v3}}) {
+      auto const arr = dense_of(v);
+      dyield.set_leaf(e->as<Tensor>(),
+                      eval_result<ResultTensorTA<TA::TArrayD>>(arr));
+      syield.set_leaf(e->as<Tensor>(), eval_result<ResultTensorTA<TSpArrayD>>(
+                                           TA::to_sparse(arr)));
+    }
+
+    // a result tile is zero iff the operand tile it repeats is
+    {
+      auto const aops = syield.array_ops();
+      ResultPtr const operand = syield(e1->as<Tensor>());
+      REQUIRE(operand->get<TSpArrayD>().is_zero({1}));
+      auto const b =
+          operand->broadcast({std::string{"a_1"}, std::string{"i_1,a_1"}},
+                             {aops.make_zeros({Index{L"i_1"}})});
+      auto const& arr = b->get<TSpArrayD>();
+      REQUIRE(arr.trange().dim(0).tile_extent() == nocc);
+      REQUIRE(arr.trange().dim(1).tile_extent() == nvirt);
+      for (std::size_t i = 0; i < nocc; ++i)
+        for (std::size_t a = 0; a < nvirt; ++a) {
+          CHECK(arr.is_zero({i, a}) == (a == 1));
+          if (a != 1)
+            CHECK(arr.find({i, a}).get()(i, a) ==
+                  Catch::Approx(v1[a]).margin(1e-12));
+        }
+    }
+
+    ResultExpr res(Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}), e1 - e3);
+    auto const sparse =
+        eval_with(eval_node(res), "i_1,a_1", syield)->get<TSpArrayD>();
+    auto const dense =
+        eval_with(eval_node(res), "i_1,a_1", dyield)->get<TA::TArrayD>();
+    REQUIRE(sparse.trange() == dense.trange());
+    CHECK(equal_tarrays<Tight>(TA::to_dense(sparse), dense));
+    double const d10 = dense.find({1, 0}).get()(1, 0);
+    CHECK(d10 == Catch::Approx(v1[0] - v3[1]).margin(1e-12));
   }
 }
 
@@ -2099,6 +2180,17 @@ TEST_CASE("eval_inlined_system_ta", "[eval][inline]") {
   // diagonal
   const size_t nocc = 3, nvirt = 3;
   auto yield_ = rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
+  // a Broadcast node shapes the modes it adds through the array ops
+  auto eval_with = [](auto const& node, std::string const& layout,
+                      auto const& yield) {
+    auto const aops = yield.array_ops();
+    auto cache = CacheManager<std::remove_cvref_t<decltype(node)>>::empty();
+    cache.set_array_ops(&aops);
+    return evaluate(node, layout, yield, cache);
+  };
+  auto eval_aops = [&](auto const& node, std::string const& layout) {
+    return eval_with(node, layout, yield_);
+  };
   // the elements of an array in row-major order of its (single-tile) layout
   auto elements = [](TA::TArrayD const& arr) {
     std::vector<double> out;
@@ -2164,10 +2256,10 @@ TEST_CASE("eval_inlined_system_ta", "[eval][inline]") {
     });
   };
   // the value of the one root of a system
-  auto eval_system = [&yield_](System const& sys, std::string const& layout) {
+  auto eval_system = [&](System const& sys, std::string const& layout) {
     auto const res = binarize<EvalExprTA>(sys);
     REQUIRE(res.roots().size() == 1);
-    return evaluate(res.roots()[0].get(), layout, yield_);
+    return eval_aops(res.roots()[0].get(), layout);
   };
   // ℓ read at the given slots
   auto ell_use = [](auto b, auto k) {
@@ -2229,6 +2321,48 @@ TEST_CASE("eval_inlined_system_ta", "[eval][inline]") {
     REQUIRE(binarize(sys).consumed == Flags{true, true, false});
     check_elementwise(elements(eval_system(sys, e_layout)->get<TA::TArrayD>()),
                       expected_E());
+  }
+
+  SECTION("three levels batched over i_1, a mode the broadcasts add") {
+    // one occupied orbital per tile, so the loop over i_1 runs one batch per
+    // orbital; the Broadcast nodes of ε{;a_1}, ε{;a_2} and ε{i_2;} add i_1,
+    // so each builds its batch's slice of i_1 from the array ops
+    yield_.set_max_tile(1);
+    pin_M();
+    pin_L();
+    pin(ex<Tensor>(L"ε", bra{}, ket{L"a_1"}),
+        [](std::vector<std::size_t> const& x) { return data::eps_virt(x[0]); });
+    pin(ex<Tensor>(L"ε", bra{L"i_1"}, ket{}),
+        [](std::vector<std::size_t> const& x) { return data::eps_occ(x[0]); });
+    System const sys{tp::D_broadcast(), tp::ell_definition(), tp::consumer_E()};
+    auto const res = binarize<EvalExprTA>(sys);
+    REQUIRE(res.roots().size() == 1);
+    auto batched = res.roots()[0].get();
+    tp::stamp_occ_loop(batched);
+    auto policy = tp::occ_contracted_policy();
+    auto const unbatched =
+        elements(eval_aops(res.roots()[0].get(), e_layout)->get<TA::TArrayD>());
+    check_elementwise(unbatched, expected_E());
+    auto const aops = yield_.array_ops();
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      policy.scheduler = scheduler;
+      auto cache =
+          CacheManager<std::remove_cvref_t<decltype(batched)>>::empty();
+      cache.set_array_ops(&aops);
+      if (scheduler == BatchScheduler::forest_descent)
+        cache.set_custom_evaluator(
+            make_evaluator(policy, yield_, make_no_scope_guard{}));
+      auto const slices_before = detail::slice_counter().load();
+      auto const got =
+          evaluate(std::vector{batched}, policy, e_layout, yield_, cache);
+      check_elementwise(elements(got->get<TA::TArrayD>()), unbatched);
+      // the ordered executor runs the loop: the operands and the added modes
+      // of the Broadcast nodes are sliced per batch
+      if (scheduler == BatchScheduler::ordered)
+        CHECK(detail::slice_counter().load() > slices_before);
+    }
   }
 
   SECTION("two uses of one definition") {
