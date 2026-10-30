@@ -7,6 +7,7 @@
 #include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/polynomial_division.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
 #include <range/v3/algorithm/equal.hpp>
@@ -61,6 +62,9 @@ bool is_valid(const Expr &expr, std::string *msg = nullptr);
 bool is_valid(const ResultExpr &expr, std::string *msg = nullptr);
 
 /// @brief Applies index replacement rules to an ExprPtr
+/// @note All replacements are applied simultaneously (i.e. they are not
+/// chained). Indices of all tensors contained in the expression (including
+/// e.g. operators) are transformed.
 /// @param expr ExprPtr to transform
 /// @param index_replacements index replacement map
 /// @param scaling_factor to scale the result
@@ -203,6 +207,42 @@ replace(ResultExpr &expr, const ExprPtr &target, const ExprPtr &replacement,
 
   return replace(expr, ExprMatcher(*target, std::move(options)), *replacement);
 }
+
+/// Replaces a given (possibly composite) target expression by a given
+/// replacement
+///
+/// Atomic targets are handled as in replace(ExprPtr&, const ExprMatcher&, const
+/// Expr&) using TensorComparison::Identity for IndexMatching::Exact and
+/// TensorComparison::Block for IndexMatching::Relabel. That is, they are
+/// matched literally against the atoms of expr without prior simplification
+/// (e.g. the target x^(2) doesn't match x x).
+///
+/// Composite targets (e.g. products or sums) are factored out of the
+/// (simplified, i.e. expanded and canonicalized) expression via factor_out()
+/// using DivisionMode::Split. That is, only terms that contain the target in
+/// its entirety are affected and no other terms are introduced. Matching is
+/// performed up to renaming of dummy indices and the permutational symmetries
+/// of the involved tensors. With IndexMatching::Relabel, the target's external
+/// indices may additionally bind to arbitrary indices of the expression that
+/// belong to the same index space. Indices of the replacement that coincide
+/// with external indices of the target are adapted for every match.
+///
+/// @param expr The expression to perform the replacements in
+/// @param target The target expression to be replaced
+/// @param replacement The expression to replace the target with
+/// @param matching How the target's external indices are matched
+/// @returns A reference to expr, which has been modified in-place (useful for
+/// chaining)
+///
+/// @note For composite targets, the resulting expression is based on the
+/// simplified form of expr
+ExprPtr &replace(ExprPtr &expr, const ExprPtr &target, const Expr &replacement,
+                 IndexMatching matching);
+
+/// Like replace(ExprPtr&, const ExprPtr&, const Expr&, IndexMatching) but for a
+/// ResultExpr whose result indices are adapted as needed
+ResultExpr &replace(ResultExpr &expr, const ExprPtr &target,
+                    const Expr &replacement, IndexMatching matching);
 
 }  // namespace sequant
 

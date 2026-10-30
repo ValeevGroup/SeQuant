@@ -462,6 +462,8 @@ set(SeQuant_symb_src
         SeQuant/core/utility/nodiscard.hpp
         SeQuant/core/utility/overloads.hpp
         SeQuant/core/utility/permutation.hpp
+        SeQuant/core/utility/polynomial_division.cpp
+        SeQuant/core/utility/polynomial_division.hpp
         SeQuant/core/utility/scope.hpp
         SeQuant/core/utility/singleton.hpp
         SeQuant/core/utility/string.cpp
