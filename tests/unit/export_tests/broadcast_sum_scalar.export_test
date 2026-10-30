@@ -1,0 +1,27 @@
+D{i_1;a_1} = ε{;a_1} - ε{i_1;} - E
+
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index a_1
+
+Declare variable E
+
+Declare tensor D[i_1, a_1]
+Declare tensor ε[i_1]
+Declare tensor ε[a_1]
+
+Create D[i_1, a_1] and initialize to zero
+Load ε[i_1]
+Compute D[i_1, a_1] += -1 ε[i_1] (broadcast over a_1)
+Unload ε[i_1]
+Load ε[a_1]
+Compute D[i_1, a_1] += ε[a_1] (broadcast over i_1)
+Unload ε[a_1]
+Load E
+Compute D[i_1, a_1] += -1 E (broadcast over i_1, a_1)
+Unload E
+Persist D[i_1, a_1]
+
+=================================================

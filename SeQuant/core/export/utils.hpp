@@ -80,6 +80,17 @@ std::string format_power(
 std::string format_tensor_power(const TensorPower &power, std::string base_str,
                                 std::string_view pow_op, bool double_slash);
 
+/// @return the tensor that the operand of a broadcast carries: @p operand
+/// itself, the base of a TensorPower, or the one such factor of a Product
+/// with scalars; nullptr if @p operand is a scalar
+/// @throw Exception if @p operand has more than one non-scalar factor or a
+///        non-scalar that is neither a Tensor nor a TensorPower
+const Tensor *broadcast_operand_tensor(const Expr &operand);
+
+/// @return whether @p operand_tensor (as from broadcast_operand_tensor) has
+/// the mode @p idx; false if it is null
+bool broadcast_carries(const Tensor *operand_tensor, const Index &idx);
+
 /// Renders @p expr in infix notation: sums as `a + b`, products as their
 /// scalar prefactor (if not 1) and factors joined by @p product_separator
 /// @param expr the expression to render

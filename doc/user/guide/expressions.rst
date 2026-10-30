@@ -101,7 +101,7 @@ has no head to name the missing modes, must still be uniformly indexed. Aux mode
 every aux index of the head. :func:`sequant::binarize` of a ``ResultExpr`` wraps each short summand in a unary
 :cpp:enumerator:`sequant::EvalOp::Broadcast` node, which expands it over the head modes it lacks; :func:`sequant::optimize` keeps
 the summands as they are. Numerical evaluation takes the ranges of the added modes from the backend array-ops (see
-:doc:`evaluation`). Code export of a broadcast sum is not supported.
+:doc:`evaluation`); code export spells the Broadcast nodes per backend (see :doc:`export`).
 
 .. literalinclude:: /examples/user/expressions.cpp
    :language: cpp

@@ -61,8 +61,15 @@ Broadcast sums
 ~~~~~~~~~~~~~~~~~
 
 The evaluation tree of a broadcast sum under a ``ResultExpr`` head (see :doc:`expressions`) contains
-:cpp:enumerator:`sequant::EvalOp::Broadcast` nodes, which no shipped backend exports yet: the export throws a
-:class:`sequant::Exception`.
+:cpp:enumerator:`sequant::EvalOp::Broadcast` nodes, each adding one summand to the result over the head modes it lacks. The text
+backend exports them; e.g., for ``D{i_1;a_1} = ε{;a_1} - ε{i_1;}``:
+
+.. code-block:: text
+
+   Compute D[i_1, a_1] += ε[a_1] (broadcast over i_1)
+
+The other shipped backends throw a :class:`sequant::Exception` ("<format> cannot broadcast a summand"). A custom backend opts in
+by overriding :func:`sequant::Generator::broadcast_add`; the default throws.
 
 Each backend has its own ``Context`` type (e.g. ``ItfContext``) for backend-specific settings such as naming conventions; consult its
 reference documentation for details. Numerically *evaluating* an expression directly in-process, rather than generating source code
