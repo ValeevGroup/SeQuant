@@ -15,6 +15,7 @@
 #include <range/v3/view/transform.hpp>
 
 #include <cstdlib>
+#include <ranges>
 #include <string>
 #include <string_view>
 
@@ -321,6 +322,22 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   /// index order of @p result if that differs
   std::string broadcast_power(const Expr &expression, const TensorPower &power,
                               const Tensor &result, const Context &ctx) const {
+    std::string scalars = scalar_prefix(expression, power, ctx);
+    SEQUANT_ASSERT(power.base()->is<Tensor>());
+    const Tensor &operand = power.base()->as<Tensor>();
+    return scalars + detail::format_tensor_power(
+                         power,
+                         permuted(tensor_name(operand, ctx), operand,
+                                  result.const_indices()),
+                         " .^ ", /*double_slash*/ true);
+  }
+
+  /// @return the scalar factors of @p expression other than @p nonscalar, as
+  /// `<scalars> * `, or empty if there are none
+  /// @throw Exception if @p expression has a non-scalar factor other than
+  ///        @p nonscalar
+  std::string scalar_prefix(const Expr &expression, const Expr &nonscalar,
+                            const Context &ctx) const {
     std::string scalars;
     if (expression.is<Product>()) {
       const Product &product = expression.as<Product>();
@@ -328,9 +345,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
         scalars += represent(Constant(product.scalar()), ctx) + " * ";
       }
       for (const ExprPtr &factor : product.factors()) {
-        if (factor->is<TensorPower>() && &factor->as<TensorPower>() == &power) {
-          continue;
-        }
+        if (factor.get() == &nonscalar) continue;
         if (!factor->is_scalar()) {
           throw Exception(
               "Julia TensorOperations: an element-wise power cannot be part of "
@@ -339,16 +354,20 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
         scalars += to_julia_expr(*factor, ctx) + " * ";
       }
     }
+    return scalars;
+  }
 
-    SEQUANT_ASSERT(power.base()->is<Tensor>());
-    const Tensor &operand = power.base()->as<Tensor>();
-    std::string operand_str = tensor_name(operand, ctx);
-
+  /// @return @p operand_str (rendering @p operand) permuted by `permutedims`
+  /// so that its modes are @p target in that order, or as is if they already
+  /// are
+  template <std::ranges::input_range Indices>
+  static std::string permuted(std::string operand_str, const Tensor &operand,
+                              Indices &&target) {
     // permutedims(A, p) has A's dimension p[k] as its k-th dimension
     std::string perm;
     bool is_identity = true;
     std::size_t k = 0;
-    for (const Index &idx : result.const_indices()) {
+    for (const Index &idx : target) {
       ++k;
       std::size_t pos = 0;
       [[maybe_unused]] bool found = false;
@@ -365,12 +384,8 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
       perm += std::to_string(pos);
     }
     SEQUANT_ASSERT(k == operand.num_indices());
-    if (!is_identity) {
-      operand_str = "permutedims(" + operand_str + ", (" + perm + "))";
-    }
-
-    return scalars + detail::format_tensor_power(power, std::move(operand_str),
-                                                 " .^ ", /*double_slash*/ true);
+    if (is_identity) return operand_str;
+    return "permutedims(" + std::move(operand_str) + ", (" + perm + "))";
   }
 
   /// emits `<name> = <wrapper>(zeros(Float64, <dims>...), <shape>)`
