@@ -19,6 +19,7 @@
 
 #include <cctype>
 #include <cstdlib>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -260,6 +261,36 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
                    " += " + to_python_scalar_expr(expression, ctx) + "\n";
   }
 
+  /// Emits `<result> += <operand einsum>[<: or None per result mode>]`, the
+  /// einsum yielding the operand's modes in the order they have in @p result;
+  /// a scalar operand is added as is
+  void broadcast_add(const Expr &operand, const Tensor &result,
+                     const Context &ctx) override {
+    const Tensor *operand_tensor = detail::broadcast_operand_tensor(operand);
+    if (!operand_tensor) {
+      m_generated += m_indent + represent(result, ctx) +
+                     " += " + to_python_scalar_expr(operand, ctx) + "\n";
+      return;
+    }
+
+    std::vector<Index> carried;
+    std::string subscript = "[";
+    for (const Index &idx : result.const_indices()) {
+      if (subscript.size() > 1) subscript += ", ";
+      if (detail::broadcast_carries(operand_tensor, idx)) {
+        carried.push_back(idx);
+        subscript += ":";
+      } else {
+        subscript += "None";
+      }
+    }
+    subscript += "]";
+
+    m_generated += m_indent + represent(result, ctx) +
+                   " += " + to_einsum_expr(operand, carried, ctx, subscript) +
+                   "\n";
+  }
+
   void declare(const Index &, const Context &) override {
     // Indices don't need explicit declaration in Python
   }
@@ -441,21 +472,42 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     return candidate;
   }
 
-  /// Convert a tensor to its einsum subscript notation
-  std::string tensor_to_einsum_subscript(
-      const Tensor &tensor, const Context &ctx,
+  /// Convert a sequence of indices to its einsum subscript notation
+  template <std::ranges::input_range Indices>
+  std::string to_einsum_subscript(
+      Indices &&indices, const Context &ctx,
       boost::unordered::unordered_map<std::string, std::string> &index_map,
       boost::unordered::unordered_set<std::string> &used_chars) const {
     std::string subscript;
-    for (const Index &idx : tensor.const_indices()) {
+    for (const Index &idx : indices) {
       subscript += get_einsum_index(idx, ctx, index_map, used_chars);
     }
     return subscript;
   }
 
+  /// Convert a tensor to its einsum subscript notation
+  std::string tensor_to_einsum_subscript(
+      const Tensor &tensor, const Context &ctx,
+      boost::unordered::unordered_map<std::string, std::string> &index_map,
+      boost::unordered::unordered_set<std::string> &used_chars) const {
+    return to_einsum_subscript(tensor.const_indices(), ctx, index_map,
+                               used_chars);
+  }
+
   /// Convert an expression to an einsum call
   std::string to_einsum_expr(const Expr &expr, const Tensor &result,
                              const Context &ctx) const {
+    return to_einsum_expr(expr, result.const_indices(), ctx);
+  }
+
+  /// Convert an expression to an einsum call
+  /// @param result_indices the indices of the einsum's output, in order
+  /// @param subscript applied to the einsum (or to its element-wise power),
+  ///        before any scalar factor multiplies it
+  template <std::ranges::input_range Indices>
+  std::string to_einsum_expr(const Expr &expr, Indices &&result_indices,
+                             const Context &ctx,
+                             std::string_view subscript = {}) const {
     // Create local index mapping for this einsum operation
     // This ensures each operation uses optimal character assignments
     boost::unordered::unordered_map<std::string, std::string> index_map;
@@ -478,7 +530,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
     // Add output specification
     einsum_spec +=
-        "->" + tensor_to_einsum_subscript(result, ctx, index_map, used_chars);
+        "->" + to_einsum_subscript(result_indices, ctx, index_map, used_chars);
 
     // make sure there is at least one tensor, else return the scalar
     if (tensor_names.empty()) {
@@ -501,7 +553,9 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     if (power) {
       einsum_call = detail::format_tensor_power(*power, std::move(einsum_call),
                                                 "**", /*double_slash*/ false);
+      if (!subscript.empty()) einsum_call = "(" + einsum_call + ")";
     }
+    einsum_call += subscript;
 
     // Apply scalar factor if present
     if (!scalar_factor.empty() && scalar_factor != "1" &&

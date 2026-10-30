@@ -20,3 +20,33 @@ Unload ε[a_1]
 Persist D[i_1, a_1]
 
 =================================================
+Python (einsum)
+=================================================
+import numpy as np
+import os
+
+D_ov = np.zeros((nocc, nvirt), order='F')
+ε_o = np.load('ε_o.npy')
+D_ov += -1 * np.einsum('i->i', ε_o, optimize=True)[:, None]
+del ε_o
+ε_v = np.load('ε_v.npy')
+D_ov += np.einsum('a->a', ε_v, optimize=True)[None, :]
+del ε_v
+np.save('D_ov.npy', D_ov)
+
+=================================================
+PyTorch (einsum)
+=================================================
+import torch
+import os
+
+D_ov = torch.zeros((nocc, nvirt), dtype=torch.float64)
+ε_o = torch.load('ε_o.pt')
+D_ov += -1 * torch.einsum('i->i', ε_o)[:, None]
+del ε_o
+ε_v = torch.load('ε_v.pt')
+D_ov += torch.einsum('a->a', ε_v)[None, :]
+del ε_v
+torch.save(D_ov, 'D_ov.pt')
+
+=================================================
