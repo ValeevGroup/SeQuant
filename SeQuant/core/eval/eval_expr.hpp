@@ -426,7 +426,10 @@ class EvalExpr {
   /// payload is the (renamed) head of that equation, and a consumer's factor
   /// collection treats it as one factor instead of descending into it, so the
   /// head's layout and symmetry are what the consumer contracts with. Not part
-  /// of the hash. Default \c false (also for the root of a top-level tree).
+  /// of the hash. Default \c false, also for the root of a top-level tree,
+  /// except for an alias equation such as `E = ℓ` whose whole rhs is one
+  /// inlined definition: its root is that definition's root and keeps the
+  /// flag, harmlessly, since no product encloses it.
   ///
   [[nodiscard]] bool is_equation_boundary() const noexcept {
     return equation_boundary_;

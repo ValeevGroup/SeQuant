@@ -121,8 +121,9 @@ int main() {
 
   // start-snippet-7
   // binarize() of a system inlines each definition into its uses: a leaf
-  // names a head if label, ranks, index spaces and symmetries agree; D's head
-  // is D, the base of the power in ℓ, defined as the broadcast sum above
+  // names a head if label, ranks and index spaces agree (a leaf that names a
+  // head with other symmetries throws); D's head is D, the base of the power
+  // in ℓ, defined as the broadcast sum above
   auto D_def = ResultExpr(D->as<Tensor>(), denominator.expression());
 
   // R{i_2;i_3} = L{a_1,a_2;i_1,i_3} · ℓ{i_1,i_2;a_1,a_2}, ℓ taken from its head
