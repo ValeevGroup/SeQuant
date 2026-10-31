@@ -40,6 +40,13 @@ bool Variable::static_equal(const Expr &that) const {
          conjugated_ == static_cast<const Variable &>(that).conjugated_;
 }
 
+std::weak_ordering Variable::static_lexicographic_compare(
+    const Expr &that, const LexicographicCompareOptions &) const {
+  const auto &that_cast = static_cast<const Variable &>(that);
+  if (auto cmp = label_ <=> that_cast.label_; cmp != 0) return cmp;
+  return conjugated_ <=> that_cast.conjugated_;
+}
+
 std::wstring_view Variable::label() const { return label_; }
 
 void Variable::set_label(std::wstring label) {

@@ -41,10 +41,7 @@ sequant::ExprPtr dag_g(
 
 }  // namespace
 
-TEST_CASE(
-    "mode_to_level_from_signature: zips a slicing_signature into a "
-    "ModeToLevel",
-    "[dag-scope]") {
+TEST_CASE("mode-to-level", "[dag-scope]") {
   using sequant::DagScopeLevel;
   using sequant::Index;
   using sequant::ModeToLevel;

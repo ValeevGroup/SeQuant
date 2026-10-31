@@ -71,11 +71,11 @@ inline std::map<IndexBasis::optional_instance, std::size_t> instance_histogram(
 inline ExprPtr with_leg_instance(ExprPtr const& op,
                                  IndexBasis::optional_instance inst,
                                  bool occupied = false) {
-  auto const& isr = get_default_context().index_basis_registry();
+  auto const& ibr = get_default_context().index_basis_registry();
   container::map<Index, Index> m;
   for (auto const& idx : get_used_indices(op))
-    if (occupied ? isr->is_pure_occupied(idx.space())
-                 : isr->is_pure_unoccupied(idx.space()))
+    if (occupied ? ibr->is_pure_occupied(idx.space())
+                 : ibr->is_pure_unoccupied(idx.space()))
       m.emplace(idx, idx.replace_basis_instance(inst));
   return m.empty() ? op : transform_expr(op, m);
 }
@@ -132,17 +132,17 @@ inline std::size_t term_count(ExprPtr const& expr) {
 /// the registry CSV-CCSD is derived over: min SR spaces plus the DF space and
 /// the PAO basis (μ̃ -> {a, default_pao_basis_instance})
 inline std::shared_ptr<IndexBasisRegistry> csv_cc_registry() {
-  auto isr = mbpt::make_min_sr_spaces();
-  mbpt::add_df_spaces(isr);
-  mbpt::add_pao_basis(isr, IndexSpace::QuantumNumbers{mbpt::Spin::any});
-  return isr;
+  auto ibr = mbpt::make_min_sr_spaces();
+  mbpt::add_df_spaces(ibr);
+  mbpt::add_pao_basis(ibr, IndexSpace::QuantumNumbers{mbpt::Spin::any});
+  return ibr;
 }
 
-/// the Context CSV-CCSD is derived under, over @p isr (adopted: pass the only
+/// the Context CSV-CCSD is derived under, over @p ibr (adopted: pass the only
 /// owner), Complete canonicalization, column-Symm deserialization
 inline sequant::Context csv_cc_context(
-    std::shared_ptr<IndexBasisRegistry> isr) {
-  return Context({.index_basis_registry_shared_ptr = std::move(isr),
+    std::shared_ptr<IndexBasisRegistry> ibr) {
+  return Context({.index_basis_registry_shared_ptr = std::move(ibr),
                   .vacuum = Vacuum::SingleProduct,
                   .spbasis = SPBasis::Spinor,
                   .canonicalization_options =

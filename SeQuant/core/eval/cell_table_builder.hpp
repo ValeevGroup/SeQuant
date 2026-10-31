@@ -94,6 +94,8 @@ template <typename Node>
   std::wstring const space{c.carried[p].basis().base_key()};
   for (std::size_t i = 0; i < path.size(); ++i) {
     if (path_spaces[i] != space) continue;
+    // every occurrence carries the same stamp at p (ValueCell::key); any
+    // one that has it decides
     for (OccurrenceRec const& occ : c.occurrences)
       if (p < occ.loop_slot.size() && occ.loop_slot[p] >= 0 &&
           occ.loop_slot[p] == path[i].first.loop_slot)

@@ -156,10 +156,7 @@ TEST_CASE("lifetime mask OFF path is all-full (no External stamps)",
   CHECK(forest[0]->sliced_modes().empty());
 }
 
-TEST_CASE(
-    "lifetime mask does NOT proto-expand a batched composite index (array "
-    "semantics)",
-    "[lifetime_mask][proto]") {
+TEST_CASE("mask-proto-no-expand", "[lifetime_mask][proto]") {
   Index const i{L"i_1"}, j{L"i_2"};
   Index const a_pno{L"a_5",
                     {i, j}};  // PNO composite tied to the occ pair (i,j)
@@ -235,10 +232,7 @@ TEST_CASE("lifetime mask survey ground-truth semantics",
   CHECK(as_set(forest[3]->sliced_modes()).count(i3) == 0);
 }
 
-TEST_CASE(
-    "lifetime mask filters to a node's own slots (loop-invariant sibling stays "
-    "all-full)",
-    "[lifetime_mask]") {
+TEST_CASE("mask-own-slots", "[lifetime_mask]") {
   Index const i1{L"i_1"};
 
   // A scatter-like tree  R = A * B  under an External i_1 loop stamped at the
@@ -313,10 +307,7 @@ TEST_CASE("lifetime mask gates the run-scope veto", "[lifetime_mask][veto]") {
   CHECK(forest[2]->mask_all_full());
 }
 
-TEST_CASE(
-    "both residency stamps keep Contracted modes (no External-only filter) "
-    "(Contracted-mode discriminator)",
-    "[lifetime_mask][seed]") {
+TEST_CASE("mask-keeps-contracted", "[lifetime_mask][seed]") {
   Index const i{L"i_1"}, j{L"i_2"};
 
   // node_con: sliced by a Contracted (NOT External) mode i on its own result
@@ -365,10 +356,7 @@ TEST_CASE(
   CHECK_FALSE(forest[2]->mask_all_full());
 }
 
-TEST_CASE(
-    "lifetime mask veto is byte-identical on the OFF path (no External "
-    "stamps anywhere)",
-    "[lifetime_mask][veto]") {
+TEST_CASE("mask-veto-off-path", "[lifetime_mask][veto]") {
   // No node_slice_mask stamps anywhere => every mask is empty (all-full), the
   // SAME condition the retired per-node scalar placement level satisfied for
   // every un-annotated node. A repeated canonical node is therefore
@@ -388,8 +376,7 @@ TEST_CASE(
   CHECK(forest[0]->mask_all_full());
 }
 
-TEST_CASE("home_scope is the per-occurrence home, not the sliced_modes meet",
-          "[lifetime_mask][seed]") {
+TEST_CASE("home-scope", "[lifetime_mask][seed]") {
   // home_scope is a thin accessor over EvalExpr::occurrence_home, stamped by
   // stamp_occurrence_homes: the loops opened at or above THIS occurrence,
   // filtered to its own result slots, with NO cross-occurrence meet. It is a
@@ -441,10 +428,7 @@ TEST_CASE("home_scope is the per-occurrence home, not the sliced_modes meet",
 // DEEPEST meet on the node's own result slots.
 // ---------------------------------------------------------------------
 
-TEST_CASE(
-    "stamp_lifetime_masks keeps a mode sliced (any batch kind) in EVERY "
-    "occurrence",
-    "[lifetime_mask][seed]") {
+TEST_CASE("mask-seed-sliced-everywhere", "[lifetime_mask][seed]") {
   Index const i{L"i_1"};
 
   // Occurrence A slices i as External; occurrence B slices the SAME index i
@@ -463,10 +447,7 @@ TEST_CASE(
   CHECK(as_set(forest[1]->sliced_modes()) == index_set({i}));
 }
 
-TEST_CASE(
-    "stamp_lifetime_masks drops a mode carried full (unbatched) in ONE "
-    "occurrence",
-    "[lifetime_mask][seed]") {
+TEST_CASE("mask-seed-full-in-one", "[lifetime_mask][seed]") {
   Index const i{L"i_1"};
 
   // Occurrence A is Contracted-sliced by i on its own slot; occurrence B
@@ -485,9 +466,7 @@ TEST_CASE(
   CHECK(forest[1]->sliced_modes().empty());
 }
 
-TEST_CASE(
-    "stamp_lifetime_masks leaves a loop-invariant sibling unstamped (empty)",
-    "[lifetime_mask][seed]") {
+TEST_CASE("mask-seed-invariant-empty", "[lifetime_mask][seed]") {
   Index const i1{L"i_1"};
 
   // Same scatter shape as the dedicated per-slot-filter test above, but
@@ -513,10 +492,7 @@ TEST_CASE(
   CHECK(b->sliced_modes().empty());
 }
 
-TEST_CASE(
-    "stamp_lifetime_masks contains BOTH an External and a Contracted mode "
-    "on a mixed node",
-    "[lifetime_mask][seed]") {
+TEST_CASE("mask-seed-mixed-node", "[lifetime_mask][seed]") {
   Index const i{L"i_1"}, j{L"i_2"};
 
   // Every occurrence stamps i as External AND j as Contracted on the SAME
@@ -541,10 +517,7 @@ TEST_CASE(
   CHECK(as_set(forest[1]->sliced_modes()) == index_set({i, j}));
 }
 
-TEST_CASE(
-    "stamp_lifetime_masks does NOT proto-expand a batched composite index "
-    "(array semantics)",
-    "[lifetime_mask][seed][proto]") {
+TEST_CASE("mask-seed-proto-no-expand", "[lifetime_mask][seed][proto]") {
   Index const i{L"i_1"}, j{L"i_2"};
   Index const a_pno{L"a_5", {i, j}};  // PNO composite tied to the occ pair
 
@@ -627,8 +600,7 @@ TEST_CASE("product operand order is not part of node identity",
   CHECK(value_key_of(ab) == value_key_of(ba));
 }
 
-TEST_CASE("canonical child view is deterministic on node-id-equal operands",
-          "[lifetime_mask][eval][cache_manager]") {
+TEST_CASE("canonical-child-view", "[lifetime_mask][eval][cache_manager]") {
   using node_t = EvalNode<EvalExpr>;
   using sequant::canonical_children;
   using sequant::canonical_operand_cmp;

@@ -1,10 +1,28 @@
 #include <SeQuant/core/export/context.hpp>
+#include <SeQuant/core/irreps/any.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
 #include <type_traits>
 
 namespace sequant {
+
+namespace detail {
+
+struct ExportIrrepData {
+  struct Entry {
+    AnyIrrepSet irreps;
+    /// Whether the IRREPs have been computed (for an intermediate or
+    /// result) rather than being obtained from the IRREP context
+    bool computed = false;
+  };
+
+  std::optional<AnyIrrepContext> context;
+  std::map<Tensor, Entry, TensorBlockLessThanComparator> registry;
+};
+
+}  // namespace detail
 
 ZeroStrategy operator|(ZeroStrategy lhs, ZeroStrategy rhs) {
   using underlying_type = std::underlying_type_t<ZeroStrategy>;
@@ -25,13 +43,9 @@ bool operator!(ZeroStrategy strategy) {
 StrategyPair::StrategyPair(LoadStrategy load, ZeroStrategy zero)
     : load(load), zero(zero) {}
 
-StrategyPair::StrategyPair(LoadStrategy load) : StrategyPair() {
-  this->load = load;
-}
+StrategyPair::StrategyPair(LoadStrategy load) : load(load) {}
 
-StrategyPair::StrategyPair(ZeroStrategy zero) : StrategyPair() {
-  this->zero = zero;
-}
+StrategyPair::StrategyPair(ZeroStrategy zero) : zero(zero) {}
 
 UsageSet &UsageSet::operator=(Usage usage) {
   m_val = static_cast<Value>(usage);
@@ -88,8 +102,8 @@ LoadStrategy ExportContext::loadStrategy(const Tensor &tensor) const {
   if (auto map_iter = m_tensorStrategies.find(ID_GLOBAL);
       map_iter != m_tensorStrategies.end()) {
     auto iter = map_iter->second.find(tensor);
-    if (iter != map_iter->second.end()) {
-      return iter->second.load;
+    if (iter != map_iter->second.end() && iter->second.load.has_value()) {
+      return *iter->second.load;
     }
   }
 
@@ -97,8 +111,8 @@ LoadStrategy ExportContext::loadStrategy(const Tensor &tensor) const {
     if (auto map_iter = m_tensorStrategies.find(current_expression_id());
         map_iter != m_tensorStrategies.end()) {
       auto iter = map_iter->second.find(tensor);
-      if (iter != map_iter->second.end()) {
-        return iter->second.load;
+      if (iter != map_iter->second.end() && iter->second.load.has_value()) {
+        return *iter->second.load;
       }
     }
   }
@@ -110,8 +124,8 @@ LoadStrategy ExportContext::loadStrategy(const Variable &variable) const {
   if (auto map_iter = m_variableStrategies.find(ID_GLOBAL);
       map_iter != m_variableStrategies.end()) {
     auto iter = map_iter->second.find(variable);
-    if (iter != map_iter->second.end()) {
-      return iter->second.load;
+    if (iter != map_iter->second.end() && iter->second.load.has_value()) {
+      return *iter->second.load;
     }
   }
 
@@ -119,8 +133,8 @@ LoadStrategy ExportContext::loadStrategy(const Variable &variable) const {
     if (auto map_iter = m_variableStrategies.find(current_expression_id());
         map_iter != m_variableStrategies.end()) {
       auto iter = map_iter->second.find(variable);
-      if (iter != map_iter->second.end()) {
-        return iter->second.load;
+      if (iter != map_iter->second.end() && iter->second.load.has_value()) {
+        return *iter->second.load;
       }
     }
   }
@@ -162,8 +176,8 @@ ZeroStrategy ExportContext::zeroStrategy(const Tensor &tensor) const {
   if (auto map_iter = m_tensorStrategies.find(ID_GLOBAL);
       map_iter != m_tensorStrategies.end()) {
     auto iter = map_iter->second.find(tensor);
-    if (iter != map_iter->second.end()) {
-      return iter->second.zero;
+    if (iter != map_iter->second.end() && iter->second.zero.has_value()) {
+      return *iter->second.zero;
     }
   }
 
@@ -171,8 +185,8 @@ ZeroStrategy ExportContext::zeroStrategy(const Tensor &tensor) const {
     if (auto map_iter = m_tensorStrategies.find(current_expression_id());
         map_iter != m_tensorStrategies.end()) {
       auto iter = map_iter->second.find(tensor);
-      if (iter != map_iter->second.end()) {
-        return iter->second.zero;
+      if (iter != map_iter->second.end() && iter->second.zero.has_value()) {
+        return *iter->second.zero;
       }
     }
   }
@@ -184,8 +198,8 @@ ZeroStrategy ExportContext::zeroStrategy(const Variable &variable) const {
   if (auto map_iter = m_variableStrategies.find(ID_GLOBAL);
       map_iter != m_variableStrategies.end()) {
     auto iter = map_iter->second.find(variable);
-    if (iter != map_iter->second.end()) {
-      return iter->second.zero;
+    if (iter != map_iter->second.end() && iter->second.zero.has_value()) {
+      return *iter->second.zero;
     }
   }
 
@@ -193,8 +207,8 @@ ZeroStrategy ExportContext::zeroStrategy(const Variable &variable) const {
     if (auto map_iter = m_variableStrategies.find(current_expression_id());
         map_iter != m_variableStrategies.end()) {
       auto iter = map_iter->second.find(variable);
-      if (iter != map_iter->second.end()) {
-        return iter->second.zero;
+      if (iter != map_iter->second.end() && iter->second.zero.has_value()) {
+        return *iter->second.zero;
       }
     }
   }
@@ -287,5 +301,107 @@ bool ExportContext::is_index_batched(const Index &idx,
 
   return std::ranges::find(indices, idx) != indices.end();
 }
+
+void ExportContext::set_irrep_context(AnyIrrepContext ctx) {
+  m_irrepData.get_or_create().context = std::move(ctx);
+}
+
+bool ExportContext::has_irrep_context() const {
+  return m_irrepData.get() && m_irrepData.get()->context.has_value();
+}
+
+const AnyIrrepContext &ExportContext::irrep_context() const {
+  if (!has_irrep_context()) {
+    throw Exception("No IRREP context has been set");
+  }
+
+  return m_irrepData.get()->context.value();
+}
+
+const AnyIrrepSet *ExportContext::irreps_of(const Tensor &tensor) const {
+  if (!m_irrepData.get()) {
+    return nullptr;
+  }
+
+  const auto &registry = m_irrepData.get()->registry;
+  auto it = registry.find(tensor);
+
+  return it == registry.end() ? nullptr : &it->second.irreps;
+}
+
+const AnyIrrepSet *ExportContext::computed_irreps_of(
+    const Tensor &tensor) const {
+  if (!m_irrepData.get()) {
+    return nullptr;
+  }
+
+  const auto &registry = m_irrepData.get()->registry;
+  auto it = registry.find(tensor);
+
+  return it == registry.end() || !it->second.computed ? nullptr
+                                                      : &it->second.irreps;
+}
+
+void ExportContext::register_irreps(const Tensor &tensor, AnyIrrepSet irreps,
+                                    IrrepOrigin origin) {
+  auto &registry = m_irrepData.get_or_create().registry;
+  const bool computed = origin != IrrepOrigin::Input;
+
+  auto [it, inserted] = registry.try_emplace(
+      tensor,
+      detail::ExportIrrepData::Entry{.irreps = irreps, .computed = computed});
+  if (inserted) {
+    return;
+  }
+
+  detail::ExportIrrepData::Entry &entry = it->second;
+  entry.computed |= computed;
+
+  if (origin == IrrepOrigin::Result) {
+    entry.irreps.unite(irreps);
+  } else if (entry.irreps != irreps) {
+    throw Exception("Conflicting IRREPs for tensor " +
+                    toUtf8(tensor.to_latex()) + ": " +
+                    entry.irreps.to_string() + " vs. " + irreps.to_string());
+  }
+}
+
+namespace detail {
+
+ExportIrrepDataHolder::ExportIrrepDataHolder() = default;
+
+ExportIrrepDataHolder::ExportIrrepDataHolder(const ExportIrrepDataHolder &other)
+    : m_data(other.m_data ? std::make_unique<ExportIrrepData>(*other.m_data)
+                          : nullptr) {}
+
+ExportIrrepDataHolder::ExportIrrepDataHolder(
+    ExportIrrepDataHolder &&other) noexcept = default;
+
+ExportIrrepDataHolder &ExportIrrepDataHolder::operator=(
+    const ExportIrrepDataHolder &other) {
+  if (this != &other) {
+    m_data = other.m_data ? std::make_unique<ExportIrrepData>(*other.m_data)
+                          : nullptr;
+  }
+  return *this;
+}
+
+ExportIrrepDataHolder &ExportIrrepDataHolder::operator=(
+    ExportIrrepDataHolder &&other) noexcept = default;
+
+ExportIrrepDataHolder::~ExportIrrepDataHolder() = default;
+
+const ExportIrrepData *ExportIrrepDataHolder::get() const {
+  return m_data.get();
+}
+
+ExportIrrepData &ExportIrrepDataHolder::get_or_create() {
+  if (!m_data) {
+    m_data = std::make_unique<ExportIrrepData>();
+  }
+  return *m_data;
+}
+
+}  // namespace detail
 
 }  // namespace sequant

@@ -1,16 +1,19 @@
 if (NOT TARGET utf8cpp::utf8cpp)
     include(FetchContent)
 
+    sequant_find_unless_fetching(utf8cpp ${SEQUANT_OLDEST_UTFCPP_VERSION})
+
     FetchContent_Declare(
-        utfcpp
+        utf8cpp
         GIT_REPOSITORY "https://github.com/nemtrif/utfcpp.git"
 		GIT_TAG "${SEQUANT_TRACKED_UTFCPP_TAG}"
         GIT_SHALLOW
         SYSTEM
         EXCLUDE_FROM_ALL
+        FIND_PACKAGE_ARGS ${SEQUANT_OLDEST_UTFCPP_VERSION}
     )
 
-    FetchContent_MakeAvailable(utfcpp)
+    FetchContent_MakeAvailable(utf8cpp)
 
 	if (NOT TARGET utf8cpp::utf8cpp)
 		# https://github.com/nemtrif/utfcpp/pull/146

@@ -3,7 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
-#include <SeQuant/core/eval/schedule_dump.hpp>
+#include <SeQuant/core/eval/op_counts.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize/cost_model.hpp>
 #include <SeQuant/core/optimize/options.hpp>

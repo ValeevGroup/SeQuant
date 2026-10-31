@@ -56,9 +56,9 @@ void cartesian_foreach(const std::vector<R>& rs, F f) {
 /// \return View of an iterable with size_t-type elements.
 ///
 auto range1_limits(sequant::Tensor const& tensor, size_t nocc, size_t nvirt) {
-  auto isr = get_default_context().index_basis_registry();
-  static auto const ao = isr->retrieve_space(L"i");
-  static auto const au = isr->retrieve_space(L"a");
+  auto ibr = get_default_context().index_basis_registry();
+  static auto const ao = ibr->retrieve_space(L"i");
+  static auto const au = ibr->retrieve_space(L"a");
   return ranges::views::transform(tensor.const_braket(),
                                   [nocc, nvirt](auto const& idx) {
                                     const auto& sp = idx.space();

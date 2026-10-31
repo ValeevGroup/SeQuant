@@ -52,6 +52,14 @@ endif()
 target_link_libraries(your_executable_or_library_target PUBLIC SeQuant::SeQuant)
 ```
 
+## Versioning
+
+SeQuant uses [calendar versioning](https://calver.org/): `YY.N` for a release, where `YY` is the two-digit year and `N`
+counts the releases within that year starting from 0, and `YY.N.P` for the `P`-th patch release of `YY.N`; e.g. `26.2`
+is the third release of 2026 and `26.2.1` its first patch release. Releases up to `2.2.0` used
+[semantic versioning](https://semver.org/); `26.2` is the first calendar-versioned release. See the
+[release guide](https://valeevgroup.github.io/SeQuant/maintainer/release.html) for details.
+
 ## Developers
 
 The [Valeev Research Group (VRG)](https://valeevgroup.github.io) in the Department of Chemistry at Virginia Tech kickstarted the initial design and development of SeQuant. The ongoing development of SeQuant is driven by major [contributions](https://github.com/ValeevGroup/SeQuant/graphs/contributors) from VRG and the [Köhn Group](https://www.itheoc.uni-stuttgart.de/research/koehn) in the Department of Theoretical Chemistry at University of Stuttgart. 

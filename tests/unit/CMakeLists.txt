@@ -15,6 +15,7 @@ set(symb_test_sources
     "test_index.cpp"
     "test_iterator.cpp"
     "test_latex.cpp"
+    "test_lexicographic_order.cpp"
     "test_macros.cpp"
     "test_math.cpp"
     "test_meta.cpp"
@@ -48,6 +49,7 @@ target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE
 set(eval_test_sources
     "test_eval_expr.cpp"
     "test_eval_node.cpp"
+    "test_irreps.cpp"
     "test_basis.cpp"
     "test_lifetime_mask.cpp"
 )
@@ -68,6 +70,7 @@ target_compile_definitions(unit_tests-sequant-eval-obj PRIVATE
 set(optimize_test_sources
     "test_extract_subtrees.cpp"
     "test_fusion.cpp"
+    "test_name_recycling.cpp"
     "test_optimize.cpp"
 )
 add_library(unit_tests-sequant-optimize-obj OBJECT ${optimize_test_sources})
@@ -199,6 +202,7 @@ set(eval_dryrun_test_sources
     "test_ordered_executor.cpp"
     "test_ordered_schedule.cpp"
     "test_peak_profile.cpp"
+    "test_schedule_document.cpp"
     "test_slicing_signature.cpp"
 )
 add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})
@@ -340,9 +344,11 @@ endif()
 # Long cases in these objects (e.g. the water-20-sized eval fixtures) take
 # minutes each under ASan/UBSan, valgrind and MSVC's Debug STL; they are skipped
 # when SEQUANT_SKIP_LONG_TESTS is ON and in every Debug configuration.
-foreach(obj IN ITEMS symb mbpt eval-dryrun)
-    target_compile_definitions(unit_tests-sequant-${obj}-obj PRIVATE
-        $<${SEQUANT_SKIP_LONG_TESTS_GENEX}:SEQUANT_SKIP_LONG_TESTS=1>)
+foreach(obj IN ITEMS symb mbpt eval-dryrun eval-ta)
+    if (TARGET unit_tests-sequant-${obj}-obj)
+        target_compile_definitions(unit_tests-sequant-${obj}-obj PRIVATE
+            $<${SEQUANT_SKIP_LONG_TESTS_GENEX}:SEQUANT_SKIP_LONG_TESTS=1>)
+    endif()
 endforeach()
 
 target_set_compiler_flags(unit_tests-sequant)

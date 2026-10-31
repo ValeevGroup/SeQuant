@@ -78,7 +78,10 @@ void biorthogonal_transform(
 /// have identical graph hashes).
 /// @details This function processes a sum expression, grouping product terms by
 /// hash of their canonicalized tensor network forms. For each group, it
-/// retains only the terms with the largest absolute scalar coefficient.
+/// retains only the terms with the largest absolute scalar coefficient, scaled
+/// by n!/rank(M) (rank(M) = Catalan(n) for n external index groups) so that the
+/// idempotent NNS projector (biorthogonal_singlet_nns_project) rebuilds the
+/// full residual.
 /// @param expr The input expression, expected to be a `Sum` of `Product` terms.
 /// @param ext_idxs A vector of external index groups. The function will not
 /// apply the filtering logic if `ext_idxs.size()` is 2 or less.
@@ -162,6 +165,30 @@ namespace detail {
     double pseudoinverse_threshold =
         default_biorthogonalizer_pseudoinverse_threshold);
 
+/// \brief Computes the biorthogonalizer matrix, the pseudoinverse of the
+/// permutational overlap matrix of \p n_particles particles
+///
+/// \param n_particles The rank of external index pairs
+/// \param pseudoinverse_threshold The threshold to compute the pseudoinverse
+///        matrix (set to default_biorthogonalizer_pseudoinverse_threshold)
+///
+/// \return The matrix flattened row-major; for `n_particles <= 5`
+///         hardcoded_biorthogonalizer_coeffs tabulates it exactly
+[[nodiscard]] std::vector<double> compute_biorthogonalizer_coeffs(
+    std::size_t n_particles,
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold);
+
+/// \brief Provides the biorthogonalizer matrix hardcoded from Mathematica to
+/// avoid numerical precision loss (see the definition of
+/// hardcoded_biorthogonalizer_row for its derivation)
+///
+/// \param n_particles The rank of external index pairs, in the range [1,5]
+///
+/// \return The matrix flattened row-major
+[[nodiscard]] std::vector<rational> hardcoded_biorthogonalizer_coeffs(
+    std::size_t n_particles);
+
 /// \brief Provides permuted indices using libperm unrank function
 ///
 /// \param indices The indices to permute
@@ -186,7 +213,12 @@ container::svector<size_t> compute_permuted_indices(
 /// hardcoded from Mathematica to avoid numerical precision loss.
 ///
 /// The NNS projector is the idempotent projector onto the range of M,
-/// NNS projector = M_pinv · M.
+/// NNS projector = M · M_pinv (= M_pinv · M since M is symmetric).
+/// It must be applied to residuals evaluated from the V2 (WK-compacted)
+/// equations to reconstruct the terms dropped by the compaction.
+/// See
+/// [DOI 10.48550/ARXIV.1805.00565](https://doi.org/10.48550/ARXIV.1805.00565),
+/// for more details.
 ///
 /// \param n_particles The rank of external index pairs
 ///

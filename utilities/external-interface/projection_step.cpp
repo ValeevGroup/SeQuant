@@ -64,13 +64,7 @@ std::size_t ProjectionStep::process(std::string_view id_prefix,
   mbpt::biorthogonal_transform(transformed);
 
   for (std::size_t i = 0; i < transformed.size(); ++i) {
-    if (symmetrizers.at(i).has_value()) {
-      transformed.at(i).expression() =
-          ex<Product>(ExprPtrList{std::move(symmetrizers.at(i).value()),
-                                  std::move(transformed.at(i).expression())},
-                      Product::Flatten::No);
-    }
-
+    push_symmetrizer(transformed.at(i), std::move(symmetrizers.at(i)));
     simplify(transformed.at(i));
   }
 

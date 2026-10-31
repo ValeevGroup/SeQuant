@@ -24,6 +24,8 @@
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 
+#include "csv_size_fixtures.hpp"
+
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
@@ -66,17 +68,15 @@ std::string dotdump_slurp(std::string const& path) {
 
 }  // namespace
 
-TEST_CASE(
-    "dot dump: the residual forest and its value DAG, shared values coloured",
-    "[.][dot-dump]") {
+TEST_CASE("dot-dump-residual", "[.][dot-dump]") {
   using namespace sequant;
   using namespace sequant::eval::dryrun;
   namespace ev = sequant::eval;
 
   char const* const forest_path = std::getenv("SEQUANT_DOT_FOREST");
   char const* const dag_path = std::getenv("SEQUANT_DOT_DAG");
-  REQUIRE(forest_path != nullptr);
-  REQUIRE(dag_path != nullptr);
+  if (forest_path == nullptr || dag_path == nullptr)
+    SKIP("SEQUANT_DOT_FOREST and SEQUANT_DOT_DAG must both be set");
   bool const labels = std::getenv("SEQUANT_DOT_LABELS") != nullptr;
   char const* const latex_path = std::getenv("SEQUANT_DOT_LATEX");
   // SEQUANT_DOT_COLLAPSE_SUMS: a chain of Sum nodes (an equation's binarized
@@ -88,21 +88,19 @@ TEST_CASE(
   auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx0.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx0.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx0.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx0.set(ibr);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
 
   // The reference size regime (the same numbers the dry-run fixtures use), so
   // the unbatched factorization is the one a real run of that size picks.
-  SizeRegime regime;
-  regime.space_extent = {{L"i", 80u}, {L"μ̃", 896u}, {L"Κ", 1682u}};
-  regime.csv_pno_moment = {1.0, 23.175775480059084, 25.865548281212597,
-                           28.171416142614103, 30.03848680550367};
-  regime.csv_osv_moment = {1.0, 58.987499999999997, 59.289227520688783,
-                           59.584437469011633, 59.872014818179686};
+  // The water-20 problem size (extents, moments, pair occupancy) and its
+  // provenance: csv_size_fixtures.hpp.
+  SizeRegime regime = sequant::tests::csv_sizes::df_size_regime(
+      sequant::tests::csv_sizes::kWater20_pVDZF12);
   auto idx_to_extent = [&regime](Index const& idx) -> std::size_t {
     if (idx.has_proto_indices())
       return static_cast<std::size_t>(

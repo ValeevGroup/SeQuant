@@ -86,4 +86,14 @@ bool Constant::static_less_than(const Expr &that) const {
   return value_.imag() < that_value.imag();
 }
 
+std::weak_ordering Constant::static_lexicographic_compare(
+    const Expr &that, const LexicographicCompareOptions &) const {
+  const auto &that_value = static_cast<const Constant &>(that).value_;
+  if (auto cmp =
+          std::compare_weak_order_fallback(value_.real(), that_value.real());
+      cmp != 0)
+    return cmp;
+  return std::compare_weak_order_fallback(value_.imag(), that_value.imag());
+}
+
 }  // namespace sequant

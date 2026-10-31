@@ -12,6 +12,7 @@
 #include <deque>
 #include <functional>
 #include <map>
+#include <optional>
 #include <ranges>
 #include <string>
 #include <type_traits>
@@ -142,12 +143,35 @@ class ExecutionContext {
   std::vector<Data<const ProcessingData>> get_data(std::string_view id) const;
   std::vector<Data<ProcessingData>> get_data(std::string_view id);
 
+  /// Frees all data objects for which @p is_needed returns false for every ID
+  /// associated with them. The IDs themselves remain registered (keeping
+  /// alias and group bookkeeping intact) but retrieving the released data via
+  /// get_data throws.
+  /// @returns The number of released data objects
+  template <std::predicate<std::string_view> Predicate>
+  std::size_t release_data(Predicate &&is_needed) {
+    std::size_t n_released = 0;
+
+    for (const auto &[idx, ids] : data_idx_to_ids_) {
+      std::optional<ProcessingData> &slot = data_.at(idx);
+
+      if (!slot.has_value() || std::ranges::any_of(ids, is_needed)) {
+        continue;
+      }
+
+      slot.reset();
+      ++n_released;
+    }
+
+    return n_released;
+  }
+
   static bool is_valid_id(std::string_view id, bool allow_selectors);
 
   static std::vector<std::string> expand_id(std::string_view id);
 
  private:
-  std::deque<ProcessingData> data_;
+  std::deque<std::optional<ProcessingData>> data_;
   std::map<std::string, std::vector<std::size_t>, std::less<>>
       id_to_data_indices_;
   std::map<std::size_t, std::deque<std::string>> data_idx_to_ids_;

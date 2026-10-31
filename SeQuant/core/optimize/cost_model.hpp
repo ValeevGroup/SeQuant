@@ -781,7 +781,6 @@ struct PeakBatchedModel {
     container::vector<container::svector<std::uint32_t>> f_outer;
     container::vector<container::svector<std::uint32_t>> f_inner;
     container::vector<double> fo_ext;         // outer atom -> extent
-    container::vector<double> fi_ext;         // inner atom -> extent (fallback)
     container::vector<Index> fi_index;        // inner atom -> composite Index
     container::vector<std::uint32_t> fi_grp;  // inner atom -> proto-group id
     bool f_inner_engaged = false;
@@ -833,14 +832,11 @@ struct PeakBatchedModel {
         }
         while (i < AI.size()) f_union_in.push_back(AI[i++]);
         while (j < BI.size()) f_union_in.push_back(BI[j++]);
-        if (f_inner_engaged) {
-          for (auto id : f_union_in) ++f_grpcount[fi_grp[id]];
-          for (auto id : f_union_in)
-            mem *= f_inner_pow(fi_index[id], f_grpcount[fi_grp[id]]);
-          for (auto id : f_union_in) f_grpcount[fi_grp[id]] = 0;
-        } else {
-          for (auto id : f_union_in) mem *= fi_ext[id];
-        }
+        // f_inner_engaged whenever a composite exists (enforced at setup).
+        for (auto id : f_union_in) ++f_grpcount[fi_grp[id]];
+        for (auto id : f_union_in)
+          mem *= f_inner_pow(fi_index[id], f_grpcount[fi_grp[id]]);
+        for (auto id : f_union_in) f_grpcount[fi_grp[id]] = 0;
       }
       return mem == 1.0 ? 0.0 : mem;
     }
@@ -1071,7 +1067,8 @@ struct PeakBatchedModel {
     // (no batching of that mode => no recompute).
     ctx.nbatches.assign(ctx.m, 1.0);
     for (std::size_t k = 0; k < ctx.m; ++k) {
-      double const ext = static_cast<double>(idxsz(ctx.batchable_modes[k]));
+      double const ext = static_cast<double>(
+          detail::outer_extent(idxsz, ctx.batchable_modes[k]));
       double const tgt = static_cast<double>(batch(ctx.batchable_modes[k]));
       ctx.nbatches[k] = (tgt > 0.0) ? std::max(1.0, std::ceil(ext / tgt)) : 1.0;
     }
@@ -1152,14 +1149,23 @@ struct PeakBatchedModel {
       ctx.fo_ext.reserve(outer_atoms.size());
       for (auto const& a : outer_atoms) {
         oid.emplace(a, static_cast<std::uint32_t>(ctx.fo_ext.size()));
-        ctx.fo_ext.push_back(static_cast<double>(idxsz(a)));
+        ctx.fo_ext.push_back(
+            static_cast<double>(detail::outer_extent(idxsz, a)));
       }
+      // A composite (inner atom) is sized by inner_pow alone; there is no
+      // integer-extent fallback for it (sizing a composite by its base-space
+      // extent is the 4-PAO-integral class of bug), so a network with
+      // composites requires an engaged inner_pow -- the same rule
+      // inner_aware_volume enforces for the unbatched objectives.
+      if (!inner_atoms.empty() && !option_engaged(inner_pow))
+        throw Exception(
+            "PeakBatchedModel: composite (CSV/PNO) indices present but no "
+            "inner_pow provided -- sizing composites by base extent is a bug. "
+            "Pass a real inner_pow (e.g. SizeRegime::inner_pow_fn()).");
       std::map<std::wstring, std::uint32_t> gid;  // proto-signature -> group id
-      ctx.fi_ext.reserve(inner_atoms.size());
       for (auto const& c : inner_atoms) {
         iid.emplace(c, static_cast<std::uint32_t>(ctx.fi_index.size()));
         ctx.fi_index.push_back(c);
-        ctx.fi_ext.push_back(static_cast<double>(idxsz(c)));
         std::wstring sig;
         for (auto const& p : c.proto_indices()) {
           sig += p.full_label();

@@ -76,10 +76,7 @@ TEST_CASE("cell registry: set, read, life and batch clearing",
   CHECK(reg.peek(0) == r);  // whole leaf: untouched
 }
 
-TEST_CASE(
-    "cell registry: the read that spends a cell's last life hands over sole "
-    "ownership",
-    "[cell_registry]") {
+TEST_CASE("last-read-hands-over-ownership", "[cell_registry]") {
   // A cell with no reader left this evaluation must not keep its value alive:
   // the reader that took it is its only holder, driven by the flag this
   // read reports.
@@ -146,10 +143,7 @@ TEST_CASE("cell read resolver: declared slice against the batch context",
   CHECK(res.operand_drained(77));
 }
 
-TEST_CASE(
-    "cell read resolver: leaf first touch defers without consuming; a "
-    "non-leaf miss throws",
-    "[cell_registry]") {
+TEST_CASE("resolver-leaf-first-touch", "[cell_registry]") {
   auto const t = make_table();
   CellRegistry reg(t);
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
@@ -241,8 +235,7 @@ TEST_CASE("cell registry: cell_of finds a value's form by residency",
   CHECK_FALSE(reg.cell_of(6, root).has_value());
 }
 
-TEST_CASE("table_read spends one declared life and reports exhaustion once",
-          "[cell_registry]") {
+TEST_CASE("table-read-exhaustion", "[cell_registry]") {
   // The shared ownership helper: EVERY site that spends a table-declared
   // life routes through it -- CellReadResolver::fetch for a consumer's
   // operand reads, and the ordered executor's block-close handoffs for the
@@ -357,10 +350,7 @@ TEST_CASE("cell registry owns results: bytes, fill-once, persistence",
   CHECK_FALSE(reg2.peek(1));
 }
 
-TEST_CASE(
-    "cell registry: clear_bound_to clears an implicitly bound cell but leaves "
-    "a produce_if_absent cell for its instance alone",
-    "[cell_registry]") {
+TEST_CASE("registry-clear-bound-to", "[cell_registry]") {
   // Three non-persistent Build cells at the SAME scope [(1,0)], differing
   // only in how they relate to that loop instance:
   //   cell 0 -- sliced by (1,0): EXPLICITLY bound (detail::bound_instances).
@@ -424,9 +414,7 @@ TEST_CASE(
   CHECK_FALSE(reg2.peek(0));  // an instance it IS bound to: cleared
 }
 
-TEST_CASE(
-    "cell read resolver: a table value never fetched is NOT reported drained",
-    "[cell_registry]") {
+TEST_CASE("resolver-unfetched-not-drained", "[cell_registry]") {
   // operand_drained() gates in-place accumulation. With no record of ever
   // having served this value, the safe answer is "not drained" (some cell may
   // still be holding it for another reader): out-of-place costs one
@@ -442,8 +430,7 @@ TEST_CASE(
   CHECK(rr.operand_drained(999));        // not a table value: private
 }
 
-TEST_CASE("cell registry: forgo spends a read the executor will not perform",
-          "[cell_registry]") {
+TEST_CASE("registry-forgo", "[cell_registry]") {
   // make_table(): cell 0 is a PERSISTENT Leaf (life 2), cell 1 a
   // non-persistent Build with life 1, cell 2 a Build with life 0.
   auto const t = make_table();

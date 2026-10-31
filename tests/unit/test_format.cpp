@@ -6,6 +6,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <compare>
 #include <format>
 #include <initializer_list>
 #include <sstream>
@@ -22,6 +23,11 @@ struct LatexOnlyExpr : sequant::Expr {
   void adjoint() override {}
   // stateless; operator== has already matched the type id
   bool static_equal(const sequant::Expr&) const override { return true; }
+  std::weak_ordering static_lexicographic_compare(
+      const sequant::Expr&,
+      const sequant::LexicographicCompareOptions&) const override {
+    return std::weak_ordering::equivalent;
+  }
 };
 
 }  // namespace

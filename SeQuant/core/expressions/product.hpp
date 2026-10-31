@@ -365,6 +365,11 @@ class Product : public Expr {
   ExprPtr canonicalize_impl(CanonicalizeOptions);
 
   bool static_equal(const Expr &that) const override;
+
+  /// orders by factors (lexicographically), then by scalar (by real part, then
+  /// by imaginary part)
+  std::weak_ordering static_lexicographic_compare(
+      const Expr &that, const LexicographicCompareOptions &opts) const override;
 };  // class Product
 
 class CProduct : public Product {

@@ -497,6 +497,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(disconnected->as<FNOperator>().size() == 2);
   }
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
   SECTION("WickTheorem: tensors commute with the theorem") {
     // operators carrying dummies of two different tensors: the result must
     // equal that of the same operators with external indices, times the
@@ -517,6 +518,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       REQUIRE(simplify(lhs - rhs) == ex<Constant>(0));
     }
   }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
   SECTION("WickTheorem: projected survivors with partial contractions") {
     // {a†_p1 a_p2}{a†_u3 a_u4}: projecting an op is substituting
@@ -950,9 +952,9 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // without an active space (reference occupancy == vacuum occupancy)
     // MultiProduct reduces to SingleProduct. The SR registry declares both
     // occupancies, which MultiProduct requires.
-    auto sr_isr = mbpt::make_sr_spaces();
-    REQUIRE(sr_isr->reference_occupied_space() ==
-            sr_isr->vacuum_occupied_space());
+    auto sr_ibr = mbpt::make_sr_spaces();
+    REQUIRE(sr_ibr->reference_occupied_space() ==
+            sr_ibr->vacuum_occupied_space());
 
     // inputs carry their context's vacuum, so each is built per context
     auto make_input = [](std::size_t k) {
@@ -962,7 +964,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
                           ex<FNOperator>(cre({L"p_3"}), ann({L"p_4"}));
     };
     auto sr_ctx = get_default_context();
-    sr_ctx.set(sr_isr);
+    sr_ctx.set(sr_ibr);
     auto with_vacuum = [&](Vacuum v) {
       auto c = sr_ctx;
       c.set(v);

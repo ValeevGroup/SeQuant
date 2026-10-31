@@ -115,12 +115,11 @@ class CellRegistry {
       ResultPtr v = hooks_.persistent->get(hooks_.hash_of(cell.value_id));
       if (!v) continue;
       Slot& s = slots_[c];
-      if (s.value)
-        account(-static_cast<std::ptrdiff_t>(s.value->size_in_bytes()));
+      discharge(s);
       s.value = std::move(v);
       s.life = cell.life;
       s.filled_since_clear = true;
-      account(static_cast<std::ptrdiff_t>(s.value->size_in_bytes()));
+      charge(s);
     }
   }
 
@@ -151,12 +150,11 @@ class CellRegistry {
       SEQUANT_ASSERT(!s.filled_since_clear &&
                      "CellRegistry::set: fill-once violated");
     }
-    if (s.value)
-      account(-static_cast<std::ptrdiff_t>(s.value->size_in_bytes()));
+    discharge(s);
     s.value = std::move(v);
     s.life = cell.life;
     s.filled_since_clear = true;
-    if (s.value) account(static_cast<std::ptrdiff_t>(s.value->size_in_bytes()));
+    charge(s);
     if (cell.persistent && hooks_.persistent && hooks_.hash_of)
       hooks_.persistent->put(hooks_.hash_of(cell.value_id), s.value);
   }
@@ -207,7 +205,7 @@ class CellRegistry {
     // mirroring CacheManager::entry::access's stored_this_eval_ reset on the
     // same draining access.
     s.filled_since_clear = false;
-    account(-static_cast<std::ptrdiff_t>(s.value->size_in_bytes()));
+    discharge(s);
     return std::move(s.value);  // the slot is left null by the move
   }
 
@@ -252,8 +250,7 @@ class CellRegistry {
         bound = true;
       if (!bound) continue;
       Slot& s = slots_[c];
-      if (s.value)
-        account(-static_cast<std::ptrdiff_t>(s.value->size_in_bytes()));
+      discharge(s);
       s.value.reset();
       s.filled_since_clear = false;
     }
@@ -292,7 +289,7 @@ class CellRegistry {
     if (s.life != 0) return;
     s.filled_since_clear = false;
     if (s.value) {
-      account(-static_cast<std::ptrdiff_t>(s.value->size_in_bytes()));
+      discharge(s);
       s.value.reset();
     }
   }
@@ -303,8 +300,10 @@ class CellRegistry {
     return slot(c).life;
   }
 
-  /// \return the sum of \c Result::size_in_bytes() over every slot currently
-  /// holding a value (persistent and non-persistent alike).
+  /// \return the sum, over every slot currently holding a value (persistent
+  /// and non-persistent alike), of the \c Result::size_in_bytes() it measured
+  /// when stored. A value that grows while held (a pending view that
+  /// materializes) is counted at its stored size.
   [[nodiscard]] std::size_t live_bytes() const { return live_bytes_; }
 
   /// Invokes \p f(CellId, ResultPtr const&) for every slot currently holding
@@ -366,6 +365,11 @@ class CellRegistry {
     /// last time this slot was emptied (by \c clear_bound_to, or by a \c
     /// read that spent the cell's last life). See \c set.
     bool filled_since_clear = false;
+    /// What \c value was charged to \c live_bytes_ when it was stored. A
+    /// held result's size may change while held (a pending view materializes
+    /// when a reader asks for its value), so releasing it must give back what
+    /// was charged, not what it measures now.
+    std::size_t charged_bytes = 0;
   };
   Slot& slot(CellId c) {
     if (c >= slots_.size())
@@ -391,6 +395,18 @@ class CellRegistry {
     live_bytes_ = static_cast<std::size_t>(
         static_cast<std::ptrdiff_t>(live_bytes_) + delta);
     if (hooks_.on_bytes_changed) hooks_.on_bytes_changed(live_bytes_);
+  }
+
+  /// Charges \p s's (just stored) value to \c live_bytes_.
+  void charge(Slot& s) {
+    s.charged_bytes = s.value ? s.value->size_in_bytes() : 0;
+    account(static_cast<std::ptrdiff_t>(s.charged_bytes));
+  }
+
+  /// Gives back what \p s's value was charged; call before releasing it.
+  void discharge(Slot& s) {
+    account(-static_cast<std::ptrdiff_t>(s.charged_bytes));
+    s.charged_bytes = 0;
   }
 
   CellTable const* table_;

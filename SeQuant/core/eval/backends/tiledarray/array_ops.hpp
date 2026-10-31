@@ -30,12 +30,13 @@ namespace sequant {
 /// \details The two closures are the TA realization of external-axis batching's
 /// backend needs (see \c BackendArrayOps): \c make_zeros builds a zero
 /// destination -- flat or nested per the descriptor's proto structure, with a
-/// nested result's inner tiles left empty for the scatter writes to fill -- and
-/// \c axis_batches chunks an axis on its basis' tile boundaries. Tiling is a
-/// property of the basis, so both are sourced from \p tr1_of_base alone; no
-/// array in the DAG is consulted. Both mpqc (from its orbital/basis registries)
-/// and unit tests (from the tranges they build their leaves with) supply the
-/// map and call this.
+/// sparse result's shape all zero (given a positive SparseShape threshold) and
+/// a dense nested result's inner tiles left empty for the scatter writes to
+/// fill -- and \c axis_batches chunks an axis on its basis' tile boundaries.
+/// Tiling is a property of the basis, so both are sourced from \p tr1_of_base
+/// alone; no array in the DAG is consulted. Both mpqc (from its orbital/basis
+/// registries) and unit tests (from the tranges they build their leaves with)
+/// supply the map and call this.
 template <typename FlatArray, typename ToTArray = FlatArray>
 [[nodiscard]] BackendArrayOps make_ta_array_ops(
     std::map<std::wstring, TA::TiledRange1> tr1_of_base, TA::World& world) {
@@ -48,7 +49,6 @@ template <typename FlatArray, typename ToTArray = FlatArray>
   };
   aops.make_zeros =
       [map, &world](container::vector<Index> const& descriptor) -> ResultPtr {
-    using numeric_type = typename FlatArray::numeric_type;
     std::vector<TA::TiledRange1> outer;
     bool nested = false;
     for (auto const& ix : descriptor) {
@@ -59,11 +59,12 @@ template <typename FlatArray, typename ToTArray = FlatArray>
       outer.push_back(map->at(std::wstring(ix.basis().base_key())));
     }
     TA::TiledRange otr(outer.begin(), outer.end());
+    // Under a sparse policy the destination holds no tiles, so neither it nor
+    // a slice of it allocates; the scatter's block assignment adds the tiles
+    // it writes to the shape.
     auto make_flat = [&]() -> ResultPtr {
-      FlatArray dest(world, otr);
-      dest.fill_local(numeric_type(0));
-      world.gop.fence();
-      return eval_result<ResultTensorTA<FlatArray>>(std::move(dest));
+      return eval_result<ResultTensorTA<FlatArray>>(
+          detail::make_zero_array<FlatArray>(world, otr));
     };
     if constexpr (std::is_same_v<FlatArray, ToTArray>) {
       // Flat-only backend (default ToTArray == FlatArray): descriptors are
@@ -73,15 +74,10 @@ template <typename FlatArray, typename ToTArray = FlatArray>
       return make_flat();
     } else {
       if (!nested) return make_flat();
-      // Nested: the outer trange from the non-proto indices, every outer tile
-      // an empty-inner tensor (tot_inner_rank() == 0) -- a valid zero ToT whose
-      // real inner tensors the scatter's write_into_slice fills in per batch.
-      using OuterT = typename ToTArray::value_type;
-      ToTArray dest(world, otr);
-      for (auto it = dest.begin(); it != dest.end(); ++it)
-        if (dest.is_local(it.index())) *it = OuterT{it.make_range()};
-      world.gop.fence();
-      return eval_result<ResultTensorOfTensorTA<ToTArray>>(std::move(dest));
+      // Nested: the outer trange from the non-proto indices; the scatter's
+      // write_into_slice fills in the real inner tensors per batch.
+      return eval_result<ResultTensorOfTensorTA<ToTArray>>(
+          detail::make_zero_array<ToTArray>(world, otr));
     }
   };
   return aops;

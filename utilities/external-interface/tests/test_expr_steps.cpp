@@ -7,6 +7,7 @@
 #include "output_step.hpp"
 #include "projection_step.hpp"
 #include "simplify_step.hpp"
+#include "sort_step.hpp"
 #include "spintracing_step.hpp"
 #include "substitute_step.hpp"
 
@@ -41,6 +42,41 @@ TEST_CASE("simplify step", "[extint]") {
 
   SECTION("rejects options") {
     SimplifyStep step;
+    REQUIRE_THROWS_AS(step.set_options(json::object()), Exception);
+  }
+}
+
+TEST_CASE("sort step", "[extint]") {
+  ExecutionContext ctx;
+
+  SECTION("sorts the expressions lexicographically") {
+    seed_expr(ctx, {L"R1{a1;i1} = + g{a1;i1}:A-H-S + f{a1;i1}:A-H-S"});
+    SortStep step;
+    REQUIRE(step.run("s", ctx, {"in.0"}) == 1);
+    REQUIRE(ctx.has_data("s.0"));
+    const auto &out =
+        convert_data<ExpressionData>(ctx.get_data("s.0").front().data.get());
+    REQUIRE(out.expressions.size() == 1);
+    REQUIRE(out.expressions.front() ==
+            deserialize<ResultExpr>(
+                L"R1{a1;i1} = + f{a1;i1}:A-H-S + g{a1;i1}:A-H-S"));
+  }
+
+  SECTION("already sorted input is passed through") {
+    seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S + g{a1;i1}:A-H-S"});
+    SortStep step;
+    // the unchanged input is aliased as the output
+    REQUIRE(step.run("s", ctx, {"in.0"}) == 1);
+    REQUIRE(ctx.has_data("s.0"));
+    const auto &out =
+        convert_data<ExpressionData>(ctx.get_data("s.0").front().data.get());
+    const auto &in =
+        convert_data<ExpressionData>(ctx.get_data("in.0").front().data.get());
+    REQUIRE(out.expressions == in.expressions);
+  }
+
+  SECTION("rejects options") {
+    SortStep step;
     REQUIRE_THROWS_AS(step.set_options(json::object()), Exception);
   }
 }

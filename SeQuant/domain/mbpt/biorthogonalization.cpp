@@ -25,6 +25,7 @@
 #include <range/v3/algorithm/count_if.hpp>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/view/drop.hpp>
+#include <range/v3/view/iota.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
@@ -52,11 +53,12 @@ using ParticlePairings = container::svector<IndexPair>;
 /// constructed with elements (-2)^{c} × (-1)^{n_particles}, where c is the
 /// number of cycles in the relative permutation.
 ///
-/// The biorthogonal coefficients are the first row of the pseudoinverse of M,
-/// biorthogonal coefficients = M_pinv · e_1, where e_1 is the first unit
-/// vector.
+/// The biorthogonal coefficients are obtained from the unnormalized
+/// pseudoinverse of M.
+/// biorthogonal coefficients = M_pinv · e_1, where e_1 is the first unit vector.
 /// See [DOI 10.48550/ARXIV.1805.00565](https://doi.org/10.48550/ARXIV.1805.00565)
-/// for more details.
+/// for more details (Note that these biorthogonal coefficients are unnormalized,
+/// unlike those in the reference).
 ///
 /// \param n_particles The rank of external index pairs
 ///
@@ -146,14 +148,21 @@ make_hardcoded_biorthogonalizer_matrix(
   const auto n = first_row.size();
   Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic> M(n, n);
 
+  // entry (row, col) depends only on the permutation relating the permutations
+  // of rank row and col (formed as in permutational_overlap_matrix), and
+  // first_row tabulates it for row 0, so look up the column whose relation to
+  // row 0 is the same
+  const perm::Permutation first = perm::unrank(0, n_particles);
   for (std::size_t row = 0; row < n; ++row) {
+    perm::Permutation ref = perm::unrank(row, n_particles);
+    ref->invert();
+
     for (std::size_t col = 0; col < n; ++col) {
-      perm::Permutation row_perm = perm::unrank(n - 1 - row, n_particles);
-      perm::Permutation col_perm = perm::unrank(col, n_particles);
+      perm::Permutation current = perm::unrank(col, n_particles);
+      current->postMultiply(ref);
+      current->postMultiply(first);
 
-      col_perm->preMultiply(row_perm);
-
-      std::size_t source_idx = perm::rank(col_perm, n_particles);
+      std::size_t source_idx = perm::rank(current, n_particles);
       M(row, col) = first_row[source_idx];
     }
   }
@@ -240,6 +249,12 @@ Eigen::MatrixXd permutational_overlap_matrix(std::size_t n_particles) {
   return M;
 }
 
+/// rank of the permutational overlap matrix of @p n_particles particles = the
+/// number of linearly independent singlet couplings = Catalan number C_n
+sequant::intmax_t catalan(std::size_t n) {
+  return factorial(2 * n) / (factorial(n + 1) * factorial(n));
+}
+
 Eigen::MatrixXd compute_biorthogonalizer_matrix(std::size_t n_particles,
                                                 double threshold) {
   auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
@@ -251,6 +266,8 @@ Eigen::MatrixXd compute_biorthogonalizer_matrix(std::size_t n_particles,
       Eigen::CompleteOrthogonalDecomposition<decltype(perm_ovlp_mat)>();
   decomp.setThreshold(threshold);
   decomp.compute(perm_ovlp_mat);
+  // WK_biorthogonalization_filter_impl assumes this rank
+  SEQUANT_ASSERT(decomp.rank() == catalan(n_particles));
 
   Eigen::MatrixXd pinv = decomp.pseudoInverse();
   // The pseudo inverse of a symmetric matrix should also be symmetric
@@ -505,26 +522,32 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
     SEQUANT_ASSERT(num_perms == computed_coefficients->cols());
   }
 
+  const auto perm_ranks =
+      ranges::views::iota(std::size_t{0}, static_cast<std::size_t>(num_perms));
   for (std::size_t i = 0; i < result_exprs.size(); ++i) {
-    result_exprs.at(i).expression() = ex<Constant>(0);
     perm::Permutation reference = perm::unrank(ranks.at(i), n_particles);
     reference->invert();
 
-    for (std::size_t rank = 0; rank < num_perms; ++rank) {
-      perm::Permutation perm = perm::unrank(rank, n_particles);
-      perm->postMultiply(reference);
+    // Merge canonical terms before retaining the next permuted expression.
+    result_exprs.at(i).expression() = transform_sum_expr(
+        perm_ranks,
+        [&](std::size_t rank) {
+          perm::Permutation perm = perm::unrank(rank, n_particles);
+          perm->postMultiply(reference);
 
-      sequant::rational coeff =
-          (n_particles <= max_rank_hardcoded_biorthogonalizer_matrix)
-              ? (*hardcoded_coefficients)(ranks.at(i), rank)
-              : to_rational((*computed_coefficients)(ranks.at(i), rank),
-                            threshold);
+          sequant::rational coeff =
+              (n_particles <= max_rank_hardcoded_biorthogonalizer_matrix)
+                  ? (*hardcoded_coefficients)(ranks.at(i), rank)
+                  : to_rational((*computed_coefficients)(ranks.at(i), rank),
+                                threshold);
 
-      result_exprs.at(i).expression() +=
-          ex<Constant>(coeff) *
-          create_expr_for(externals.at(i), perm, externals, original_exprs);
-    }
-
+          auto contribution =
+              ex<Constant>(coeff) *
+              create_expr_for(externals.at(i), perm, externals, original_exprs);
+          simplify(contribution);
+          return contribution;
+        },
+        {.canonicalize = false});
     simplify(result_exprs.at(i).expression());
   }
 }
@@ -608,21 +631,6 @@ largest_coeff_terms_by_hash(const ExprPtr& expr) {
   return largest_coeff_terms;
 }
 
-// We need to normalize to the amount of non-zero eigenvalues via
-// normalization = #eigenvalues / #non-zero eigenvalues
-// Since perm_ovlp_mat is symmetric, it is diagonalizable and for every
-// diagonalizable matrix, its rank equals the amount of non-zero eigenvalues.
-// The WK filter keeps one member of each group, which the idempotent NNS
-// projector rebuilds scaled by the inverse of this normalization.
-rational biorthogonal_normalization(std::size_t n_particles) {
-  const auto M = permutational_overlap_matrix(n_particles);
-  auto decomp = Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd>();
-  decomp.setThreshold(default_biorthogonalizer_pseudoinverse_threshold);
-  decomp.compute(M);
-  return ratio(static_cast<std::int64_t>(M.rows()),
-               static_cast<std::int64_t>(decomp.rank()));
-}
-
 }  // namespace
 
 template <detail::index_group_range IdxGroups>
@@ -630,12 +638,17 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
   if (!expr->is<Sum>()) return expr;
   if (ext_idxs.size() <= 2) return expr;  // always skip R1 and R2
 
-  // hash filtering logic for R > 2
-  const auto normalization = biorthogonal_normalization(ext_idxs.size());
+  // the diagonal of the idempotent NNS projector is rank(M)/n!, so each kept
+  // term carries the reciprocal for the projector to rebuild its group at full
+  // weight; all terms tied for the largest coefficient are kept and scaled
+  // alike
+  const auto n = ext_idxs.size();
+  const auto rank = catalan(n);
+  const rational normalization(factorial(n), rank);
   Sum filtered;
   for (const auto& [_, terms] : largest_coeff_terms_by_hash(expr)) {
     for (const auto& t : terms) {
-      auto kept = t->clone();
+      auto kept = ex<Product>(t->as<Product>());
       kept->as<Product>().scale(normalization);
       filtered.append(std::move(kept));
     }
@@ -714,9 +727,9 @@ namespace detail {
 std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
                                          double threshold) {
   auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
-  auto normalized_pinv =
-      compute_biorthogonalizer_matrix(n_particles, threshold);
-  Eigen::MatrixXd nns_matrix = perm_ovlp_mat * normalized_pinv;
+  auto pinv = compute_biorthogonalizer_matrix(n_particles, threshold);
+  Eigen::MatrixXd nns_matrix = perm_ovlp_mat * pinv;
+  SEQUANT_ASSERT((nns_matrix * nns_matrix).isApprox(nns_matrix));
 
   auto num_perms = nns_matrix.rows();
   std::vector<double> coeffs;
@@ -725,6 +738,27 @@ std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
     coeffs.push_back(nns_matrix(num_perms - 1, i));
   }
   return coeffs;
+}
+
+template <typename Matrix>
+auto flatten_row_major(const Matrix& matrix) {
+  std::vector<typename Matrix::Scalar> coeffs;
+  coeffs.reserve(matrix.size());
+  for (Eigen::Index row = 0; row < matrix.rows(); ++row)
+    for (Eigen::Index col = 0; col < matrix.cols(); ++col)
+      coeffs.push_back(matrix(row, col));
+  return coeffs;
+}
+
+std::vector<double> compute_biorthogonalizer_coeffs(std::size_t n_particles,
+                                                    double threshold) {
+  return flatten_row_major(
+      compute_biorthogonalizer_matrix(n_particles, threshold));
+}
+
+std::vector<rational> hardcoded_biorthogonalizer_coeffs(
+    std::size_t n_particles) {
+  return flatten_row_major(hardcoded_biorthogonalizer_matrix(n_particles));
 }
 
 container::svector<size_t> compute_permuted_indices(

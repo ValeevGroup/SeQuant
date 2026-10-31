@@ -274,8 +274,7 @@ TEST_CASE("cache manager scope chain fall-through", "[cache_manager]") {
 // held at this level, whether or not the key is registered here) it must
 // still walk up the chain. reset() at the inner level must, symmetrically,
 // touch only its own bookkeeping and never reach into the parent.
-TEST_CASE("cache manager scope chain read-through survives local registration",
-          "[cache_manager]") {
+TEST_CASE("scope-chain-read-through", "[cache_manager]") {
   using hasher_t = sequant::TreeNodeHasher<node_type>;
   using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
   auto eval_result = [](int x) {
@@ -337,8 +336,7 @@ TEST_CASE("cache manager scope chain read-through survives local registration",
 // above. A node stored at an inner loop's ancestor (level k) must survive
 // resets of loops nested *inside* it (level > k) and be cleared only by a
 // reset() at its own level.
-TEST_CASE("cache manager scope chain per-loop storage survives inner resets",
-          "[cache_manager]") {
+TEST_CASE("scope-chain-per-loop-reset", "[cache_manager]") {
   using hasher_t = sequant::TreeNodeHasher<node_type>;
   using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
   auto eval_result = [](int x) {
@@ -406,8 +404,7 @@ TEST_CASE("cache manager scope chain per-loop storage survives inner resets",
 // `hops` scopes up does not have those `hops` innermost loops' slices baked in,
 // so exactly those loops must be sliced on use. Chain outer -> mid -> inner,
 // store X only in outer, and read it from each level.
-TEST_CASE("cache manager access_at surfaces the lifetime scope hop distance",
-          "[cache_manager]") {
+TEST_CASE("access-at-hop-distance", "[cache_manager]") {
   using hasher_t = sequant::TreeNodeHasher<node_type>;
   using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
   auto eval_result = [](int x) {
@@ -531,7 +528,7 @@ TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
   auto man = manager_type(std::move(counts), is_persistent);
   man.set_strict_fill_once(true);
 
-  SECTION("non-persistent: a re-store with an intervening reset() is fine") {
+  SECTION("restore-after-reset") {
     REQUIRE_NOTHROW(man.store_and_access(np, eval_result(1)));
     // reset() clears the tripwire -- a subsequent store_and_access() is the
     // legitimate (non-duplicate) case, even under strict fill-once.
@@ -539,17 +536,13 @@ TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
     REQUIRE_NOTHROW(man.store_and_access(np, eval_result(2)));
   }
 
-  SECTION(
-      "non-persistent: a re-store with NO intervening reset() throws under "
-      "strict fill-once") {
+  SECTION("restore-without-reset-throws") {
     REQUIRE_NOTHROW(man.store_and_access(np, eval_result(1)));
     REQUIRE_THROWS(
         man.store_and_access(np, eval_result(2)));  // 2nd, no reset(): flagged
   }
 
-  SECTION(
-      "persistent entries legitimately re-store with no reset(), even under "
-      "strict fill-once") {
+  SECTION("persistent-restore") {
     // A persistent entry legitimately re-stores across batch replays with no
     // intervening reset() -- this must never throw (the tripwire is not even
     // consulted for persistent entries).
@@ -557,21 +550,6 @@ TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
     REQUIRE_NOTHROW(
         man.store_and_access(p, eval_result(20)));  // re-store, no reset()
     REQUIRE_NOTHROW(man.store_and_access(p, eval_result(30)));
-  }
-
-  SECTION("assert-enabled + THROW: re-store without reset() throws") {
-    if (sequant::assert_behavior() != sequant::AssertBehavior::Throw) {
-      // Default build config (Release: IGNORE: no-op; Debug: ABORT: not
-      // catchable) -- nothing to observe via REQUIRE_THROWS here. The
-      // strict-fill-once sections above already exercise the guard's logic
-      // deterministically across build configs.
-      return;
-    }
-    (void)man.store_and_access(
-        np,
-        eval_result(1));  // 1st store since construction/reset: OK
-    REQUIRE_THROWS(
-        man.store_and_access(np, eval_result(2)));  // 2nd, no reset(): flagged
   }
 }
 
@@ -681,9 +659,9 @@ TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
     return a3;
   };
 
-  // baseline: no node_slice_mask annotation -> all-full mask, veto inert; the
-  // NV/V frontier is cached and persistent.
-  {
+  // no node_slice_mask annotation -> all-full mask, veto inert; the NV/V
+  // frontier is cached and persistent.
+  SECTION("baseline") {
     auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
     auto const a3 = find_a3(node);
     REQUIRE(a3);
@@ -700,7 +678,7 @@ TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
   // loop, not a whole run-scope entry), so it is VETOED from the run-scope
   // cache
   // -- not registered in the cache map, not persistent.
-  {
+  SECTION("vetoed") {
     auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
     auto const a3 = find_a3(node);
     REQUIRE(a3);
@@ -825,8 +803,7 @@ TEST_CASE("cache_manager chain_holds pointer identity", "[cache_manager]") {
   REQUIRE_FALSE(child.chain_holds(vX));
 }
 
-TEST_CASE("persistent value store survives reset and is local to the handle",
-          "[cache_manager][persistent_store]") {
+TEST_CASE("persistent-store-reset", "[cache_manager][persistent_store]") {
   auto cache = manager_type::empty();
   auto& store = cache.persistent_values();
   CHECK(store.size() == 0);

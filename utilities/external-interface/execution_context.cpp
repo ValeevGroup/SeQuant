@@ -50,13 +50,22 @@ std::vector<
     ExecutionContext::Data<meta::mimic_constness_t<DataVec, ProcessingData>>>
 get_data_impl(DataVec &&data, ID2DataIdxMap &&id2dataidx,
               DataIdx2IDMap &&dataidx2id,
-              const std::vector<std::size_t> &indices) {
+              const std::vector<std::size_t> &indices,
+              std::string_view requested_id) {
   using RefT = meta::mimic_constness_t<DataVec, ProcessingData>;
 
   std::vector<ExecutionContext::Data<RefT>> selected_data;
 
   for (std::size_t idx : indices) {
-    ExecutionContext::Data<RefT> ret_data{.data = data.at(idx)};
+    auto &slot = data.at(idx);
+    if (!slot.has_value()) {
+      throw Exception("Data for ID '" + std::string(requested_id) + "' (aka '" +
+                      dataidx2id.at(idx).front() +
+                      "') has already been released as no later step was "
+                      "determined to reference it");
+    }
+
+    ExecutionContext::Data<RefT> ret_data{.data = *slot};
 
     for (std::string_view alias : dataidx2id.at(idx)) {
 #if defined(__cpp_lib_associative_heterogeneous_insertion) && \
@@ -103,13 +112,13 @@ get_data_impl(DataVec &&data, ID2DataIdxMap &&id2dataidx,
 std::vector<ExecutionContext::Data<const ProcessingData>>
 ExecutionContext::get_data(std::string_view id) const {
   return get_data_impl(data_, id_to_data_indices_, data_idx_to_ids_,
-                       get_data_indices(std::ranges::single_view(id)));
+                       get_data_indices(std::ranges::single_view(id)), id);
 }
 
 std::vector<ExecutionContext::Data<ProcessingData>> ExecutionContext::get_data(
     std::string_view id) {
   return get_data_impl(data_, id_to_data_indices_, data_idx_to_ids_,
-                       get_data_indices(std::ranges::single_view(id)));
+                       get_data_indices(std::ranges::single_view(id)), id);
 }
 
 bool ExecutionContext::is_valid_id(std::string_view id, bool allow_selectors) {

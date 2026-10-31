@@ -103,15 +103,20 @@ and nested blocks; external requirements of an inner block propagate outward to 
 The ordered driver's optional ``mode_order`` ranks index spaces from outermost to innermost. It only breaks ties left
 by the recorded nesting constraints; there is no cost search over nest orders.
 
-Legality classifies a value relative to each loop as ``LoopLocal``, ``Reduction``, or ``LoopCarried``. A wholly local
-value is a ``BuildStep`` in its home block. A reduction or loop-carried value instead escapes through the block's
-outputs: ``AccumulateSum`` for reduction, ``AccumulateScatter`` for carried result modes. Multiple escapes form a
-chain, with raw production at the deepest site and forwarding at shallower sites. An escape can skip an interposed
-loop on which the value is invariant.
+Legality classifies a value relative to each loop as ``LoopLocal``, ``Reduction``, or ``LoopCarried``. A reduction is
+a property of the value's own node. The other two are decided per occurrence, against the recorded loop instances: an
+occurrence whose enclosing loops include the instance that slices the value's position reads it in lockstep, per
+batch; one they do not reads it assembled (``OccurrenceRole``). A value with a lockstep occurrence is ``LoopLocal``
+and a ``BuildStep`` in its home block; if it also has assembled readers it escapes from that block as well, and those
+readers follow the block in their own block's order. A value with no lockstep occurrence is ``LoopCarried``. A reduction or loop-carried value escapes through the block's outputs:
+``AccumulateSum`` for reduction, ``AccumulateScatter`` for carried result modes. Multiple escapes form a chain, with
+raw production at the deepest site and forwarding at shallower sites. An escape can skip an interposed loop on which
+the value is invariant.
 
 A consumer requiring a completed loop-carried value, or a completed reduction while it is inside that reduction's
-loop, moves to a later pass. A nest containing multiple passes becomes ordered sibling blocks, run in pass order; a
-later pass reads the earlier pass's assembled value. Values needed across a split are materialized, not recomputed.
+loop, or a loop-local value assembled over a loop instance while it is itself produced inside that instance, moves to
+a later pass. A nest containing multiple passes becomes ordered sibling blocks, run in pass order; a later pass reads
+the earlier pass's assembled value. Values needed across a split are materialized, not recomputed.
 Unsupported cases raise ``sequant::Exception``.
 
 .. _batched-evaluation-cell-table:
@@ -168,6 +173,26 @@ the optimizer's per-product estimate. It assumes real double-precision data.
 
 ``SeQuant/core/eval/ordered_dump.hpp`` provides environment-gated dumps of each pipeline stage;
 :doc:`/user/guide/evaluation` explains how to read evaluation traces.
+
+Schedule documents
+-----------------------------
+
+A schedule document (``SeQuant/core/eval/schedule_document.hpp``) is one JSON document that describes a batched
+schedule for inspection and for steering later runs. It has a pinnable ``roots`` section, which records the choices the
+optimizer made for each root and can be fed back to reproduce them, a read-only ``dag`` section, which describes the
+ordered schedule built from those choices, and an optional ``run`` section, which carries what an evaluation measured.
+The optimizer side lives in ``SeQuant/core/optimize/schedule_pin.hpp``: ``opt::schedule::record_root`` captures a root,
+and a ``PinSession`` or ``RecordSession`` set on ``OptimizeOptions::pinned`` or ``OptimizeOptions::recording`` replays
+pinned choices or collects the recorded ones during optimization. Recording or pinning a Sum makes the optimized Sum
+carry canonical dummy labels (each summand is optimized on its canonicalized clone). A term's key is its canonical
+form, so it is independent of the dummy labels and of the factor order the caller used, but not of the external index
+labels: a root must be spelled with the same external labels on every run that pins it. ``fingerprint_of`` summarizes the
+binarized forest a document was recorded for, and ``check_fingerprint``, run after binarization and before the DAG
+stages, throws when a loaded document's fingerprint no longer matches the live forest's. ``eval::schedule::record_dag`` (``SeQuant/core/eval/schedule_dag_record.hpp``) builds the ``dag``
+section from a rich schedule, its legality and the volatility predicate the evaluation runs with (a value's
+``persistent`` is the cell table's own flag). The ordered entry points in ``ordered_executor.hpp`` take an optional
+``RunRecord*`` out-parameter that is filled with the ``run`` section. The ``sequant-schedule`` command-line tool validates,
+diffs and renders documents.
 
 Current scope
 ----------------
