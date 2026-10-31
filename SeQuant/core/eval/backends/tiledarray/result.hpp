@@ -1205,20 +1205,26 @@ class ResultTensorTA final : public Result {
   }
 
  private:
-  /// a pending view holds no tiles of its own: 0 bytes
+  /// a pending view holds no tiles of its own: 0 bytes, unless it is the only
+  /// holder of its parent's (a phase or a prefactor applied to a value nobody
+  /// else kept), which are then its own
   [[nodiscard]] std::size_t size_in_bytes() const final {
-    if (!has_value()) return 0;
     if (Logger::instance().eval.level == 0)
       return 0;  // size_of disabled untraced: it is collective
     return measured_size_in_bytes();
   }
 
   [[nodiscard]] std::size_t measured_size_in_bytes() const final {
-    if (!has_value()) return 0;
-    auto& v = Result::get<ArrayT>();
-    auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
-    v.world().gop.sum(local_size);
-    return local_size;
+    auto const& v = view_base();
+    // one collective for both the bytes and the sole-holder test: whether a
+    // rank still holds another handle to the parent (a deferred deleter, a
+    // task in flight) can differ between ranks, and the bytes are counted
+    // only if no rank does
+    std::array<std::size_t, 2> buf{
+        TA::size_of<TA::MemorySpace::Host>(v),
+        (has_value() || parent_.is_unique()) ? std::size_t{0} : 1};
+    v.world().gop.sum(buf.data(), 2);
+    return buf[1] ? 0 : buf[0];
   }
 };
 
@@ -1727,20 +1733,26 @@ class ResultTensorOfTensorTA final : public Result {
   }
 
  private:
-  /// a pending view holds no tiles of its own: 0 bytes
+  /// a pending view holds no tiles of its own: 0 bytes, unless it is the only
+  /// holder of its parent's (a phase or a prefactor applied to a value nobody
+  /// else kept), which are then its own
   [[nodiscard]] std::size_t size_in_bytes() const final {
-    if (!has_value()) return 0;
     if (Logger::instance().eval.level == 0)
       return 0;  // size_of disabled untraced: it is collective
     return measured_size_in_bytes();
   }
 
   [[nodiscard]] std::size_t measured_size_in_bytes() const final {
-    if (!has_value()) return 0;
-    auto& v = Result::get<ArrayT>();
-    auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
-    v.world().gop.sum(local_size);
-    return local_size;
+    auto const& v = view_base();
+    // one collective for both the bytes and the sole-holder test: whether a
+    // rank still holds another handle to the parent (a deferred deleter, a
+    // task in flight) can differ between ranks, and the bytes are counted
+    // only if no rank does
+    std::array<std::size_t, 2> buf{
+        TA::size_of<TA::MemorySpace::Host>(v),
+        (has_value() || parent_.is_unique()) ? std::size_t{0} : 1};
+    v.world().gop.sum(buf.data(), 2);
+    return buf[1] ? 0 : buf[0];
   }
 };
 

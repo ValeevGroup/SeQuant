@@ -7081,6 +7081,16 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     REQUIRE(equal_tarrays(held->get<TArrayD>(), blk, "a,b,c"));
     // the parent is untouched throughout
     REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+    // a view that is the only holder of its parent's tiles owns their bytes:
+    // a phase applied to a value nobody else kept
+    auto const bytes =
+        eval_result<ResultD>(TA::clone(A))->measured_size_in_bytes();
+    REQUIRE(bytes > 0);
+    auto sole = eval_result<ResultD>(TA::clone(A))->mult_by_phase(-1);
+    REQUIRE(sole->is_buffer_alias());
+    REQUIRE(sole->measured_size_in_bytes() == bytes);
+    // not while the parent is held elsewhere
+    REQUIRE(rA->mult_by_phase(-1)->measured_size_in_bytes() == 0);
   }
 
   SECTION("the consumers of a scaled view fold the factor in") {
