@@ -658,6 +658,12 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
   auto phase = nd->canon_phase();
   if (phase == 1) return res;
 
+  // The cache total is taken before the phase view exists: an entry that is
+  // itself a view memoizes its bytes on its first measurement, and reports
+  // none while another view shares its parent.
+  [[maybe_unused]] size_t cache_bytes = 0;
+  if constexpr (detail::trace(EvalTrace)) cache_bytes = log::bytes(cache).value;
+
   ResultPtr post;
   auto const _ph0 = std::chrono::steady_clock::now();
   auto time =
@@ -665,7 +671,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
   eval::EvalImplTimeline::note_phase(_ph0);
 
   if constexpr (detail::trace(EvalTrace)) {
-    size_t hwmark = log::bytes(cache, post).value;
+    size_t hwmark = cache_bytes + log::bytes(post).value;
     if (!cache.alive(nd)) hwmark += log::bytes(res).value;
     hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
     auto stat = log::EvalStat{
