@@ -137,8 +137,8 @@ class VertexPainter {
   /// without doing some sort of canonicalization of the slots. To avoid
   /// the need for canonicalization the color will only depend on the
   /// attrributes that are invariant wrt to slot permutations. This means label,
-  /// order, and symmetries. More elaborate versions are possible, but have to
-  /// stop somewhere.
+  /// order, and symmetries, plus AbstractTensor::_color_salt() if nonzero.
+  /// More elaborate versions are possible, but have to stop somewhere.
   /// @sa to_hash_value()
   /// @warning this includes the default_salt
   std::size_t to_hash_value(const AbstractTensor &tensor) const;

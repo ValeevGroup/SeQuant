@@ -337,6 +337,31 @@ TEST_CASE("intermediate name recycling", "[optimize]") {
       CHECK((*it)->as<Tensor>().bra_rank() == 1);
       CHECK(std::ranges::begin((*it)->as<Tensor>().bra())->label() == L"i_1");
     }
+
+    // Element-wise power of a tensor (not yet supported by binarize), bare and
+    // adjointed; the visitor renames the bare tensor
+    for (bool adjointed : {false, true}) {
+      CAPTURE(adjointed);
+      ExprPtr base =
+          ex<Tensor>(L"X5", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                     BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+      if (adjointed) base->adjoint();
+
+      ExprPtr mapped = opt::detail::map_leaf_objects(
+          pow(base, rational{-1}), [](const ExprPtr& object) {
+            REQUIRE_FALSE(is_adjoint_label(object->as<Tensor>().label()));
+            ExprPtr renamed = object->clone();
+            renamed->as<Tensor>().set_label(L"X1");
+            return renamed;
+          });
+
+      REQUIRE(mapped->is<TensorPower>());
+      const TensorPower& power = mapped->as<TensorPower>();
+      CHECK(power.exponent() == rational{-1});
+      const Tensor& renamed = power.base()->as<Tensor>();
+      CHECK(is_adjoint_label(renamed.label()) == adjointed);
+      CHECK(strip_adjoint_label(renamed.label()) == L"X1");
+    }
   }
 
   SECTION("name pool") {

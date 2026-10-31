@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
+#include <SeQuant/core/eval/elementwise.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -638,6 +639,169 @@ template <typename ArrayT>
   return os.str();
 }
 
+/// \return a new array holding every element of \p arr raised to \p exponent
+///         (see Result::pow); for a nested array, every inner element
+/// \note The tiles are mapped into a fresh array by TA::foreach, so \p arr,
+///       which may be shared (e.g. a cached leaf), is not modified. A sparse
+///       array's zero tiles stay zero, which is only right for a positive
+///       exponent; other exponents require every tile to be present. The same
+///       holds for the empty inner tiles of a nested array.
+template <typename ArrayT>
+[[nodiscard]] ArrayT ta_elementwise_pow(ArrayT const& arr,
+                                        rational const& exponent) {
+  using tile_type = typename ArrayT::value_type;
+  using numeric_type = typename ArrayT::numeric_type;
+  if constexpr (TA::detail::is_tensor_of_tensor_v<tile_type>) {
+    // checked here rather than in the tile tasks: an exception thrown inside
+    // a MADNESS task aborts the process
+    if (!(exponent > 0)) {
+      int absent = 0;
+      for (auto it = arr.begin(); it != arr.end() && absent == 0; ++it) {
+        tile_type const tile = it->get();
+        for (std::size_t k = 0; k < tile.size(); ++k)
+          if (tile.data()[k].empty()) {
+            absent = 1;
+            break;
+          }
+      }
+      arr.world().gop.max(absent);
+      SEQUANT_ENFORCE(absent == 0,
+                      "element-wise power with a non-positive exponent of a "
+                      "nested array with an absent inner tile: its value "
+                      "(inf or 1) is not representable");
+    }
+  }
+  ElementwisePow const op{exponent};
+  auto const elem = [op](numeric_type const& x) { return op(x); };
+  auto const pow_tile = [elem](tile_type const& in) -> tile_type {
+    if constexpr (TA::detail::is_tensor_of_tensor_v<tile_type>) {
+      tile_type out(in.range());
+      for (std::size_t k = 0; k < in.size(); ++k)
+        if (!in.data()[k].empty()) out.data()[k] = in.data()[k].unary(elem);
+      return out;
+    } else {
+      return in.unary(elem);
+    }
+  };
+  if constexpr (TA::is_dense_v<typename ArrayT::policy_type>) {
+    return TA::foreach (arr, [pow_tile](tile_type& out, tile_type const& in) {
+      out = pow_tile(in);
+    });
+  } else {
+    SEQUANT_ENFORCE(exponent > 0 || arr.shape().sparsity() == 0,
+                    "element-wise power with a non-positive exponent of a "
+                    "sparse array with zero tiles");
+    return TA::foreach (
+        arr, [pow_tile](tile_type& out, tile_type const& in) -> float {
+          out = pow_tile(in);
+          return out.norm();
+        });
+  }
+}
+
+/// \return \p arr expanded over the modes of \p result_annot that \p
+///         operand_annot lacks (see Result::broadcast), or, for a null \p arr,
+///         an array every element of which is \p scalar
+/// \param world the World of the result
+/// \param new_dims the TiledRange1 of each mode of \p result_annot absent from
+///        \p operand_annot, in the result's mode order; a mode \p arr carries
+///        keeps \p arr's TiledRange1
+/// \note Each result tile is computed by a task that waits on the operand tile
+///       it repeats (the result's tile index without the added modes), so no
+///       fence is needed. For a sparse policy, a result tile is zero iff that
+///       operand tile is: its norm is the operand's per-element norm spread
+///       over the added modes, raised to the shape threshold if it would fall
+///       below it.
+template <typename ArrayT>
+[[nodiscard]] ArrayT ta_broadcast(
+    TA::World& world, ArrayT const* arr,
+    typename ArrayT::numeric_type const& scalar,
+    std::string const& operand_annot, std::string const& result_annot,
+    container::svector<TA::TiledRange1> const& new_dims) {
+  using tile_type = typename ArrayT::value_type;
+  auto const pos = broadcast_operand_modes(outer_annot_labels(operand_annot),
+                                           outer_annot_labels(result_annot));
+  auto const rank = pos.size();
+  std::size_t const operand_rank = static_cast<std::size_t>(
+      std::count_if(pos.begin(), pos.end(), [](auto const& q) { return q; }));
+  SEQUANT_ASSERT(arr || operand_rank == 0);
+  SEQUANT_ASSERT(new_dims.size() == rank - operand_rank);
+
+  std::vector<TA::TiledRange1> dims;
+  dims.reserve(rank);
+  for (std::size_t p = 0, k = 0; p < rank; ++p)
+    dims.push_back(pos[p] ? arr->trange().dim(*pos[p]) : new_dims[k++]);
+  TA::TiledRange const trange(dims.begin(), dims.end());
+
+  // the operand tile a result tile repeats
+  auto const operand_tile = [&pos, operand_rank](auto const& result_tile) {
+    container::svector<std::size_t> out(operand_rank);
+    for (std::size_t p = 0; p < pos.size(); ++p)
+      if (pos[p]) out[*pos[p]] = result_tile[p];
+    return out;
+  };
+
+  auto const make_result = [&]() -> ArrayT {
+    using policy_type = typename ArrayT::policy_type;
+    if constexpr (TA::is_dense_v<policy_type>) {
+      return ArrayT(world, trange);
+    } else {
+      using shape_type = typename ArrayT::shape_type;
+      using norm_type = typename shape_type::value_type;
+      norm_type const threshold = shape_type::threshold();
+      auto const norm_of = [&](TA::Range::index_type const& tile) -> norm_type {
+        auto const volume = trange.make_tile_range(tile).volume();
+        if (volume == 0) return 0;
+        norm_type per_element;
+        if (!arr) {
+          if (scalar == typename ArrayT::numeric_type{0}) return 0;
+          per_element = static_cast<norm_type>(std::abs(scalar) /
+                                               std::sqrt(double(volume)));
+        } else {
+          auto const op_tile = operand_tile(tile);
+          if (arr->is_zero(op_tile)) return 0;
+          auto const op_volume =
+              arr->trange().make_tile_range(op_tile).volume();
+          // the per-element norm of op_tile repeated volume/op_volume times
+          per_element = static_cast<norm_type>(
+              arr->shape()[op_tile] /
+              std::sqrt(double(volume) / double(op_volume)));
+        }
+        return std::max(per_element, threshold);
+      };
+      return ArrayT(world, trange,
+                    shape_type(norm_of, trange, /*do_not_scale=*/true));
+    }
+  };
+  ArrayT result = make_result();
+
+  if (!arr) {
+    result.init_tiles(
+        [scalar](TA::Range const& r) { return tile_type(r, scalar); });
+    return result;
+  }
+  auto const kernel = [pos](TA::Range const& r,
+                            tile_type const& in) -> tile_type {
+    tile_type out(r);
+    auto const n = pos.size();
+    container::svector<std::size_t> extents(n), out_strides(n), in_strides(n);
+    for (std::size_t p = 0; p < n; ++p) {
+      extents[p] = r.extent()[p];
+      out_strides[p] = r.stride()[p];
+      in_strides[p] = pos[p] ? in.range().stride()[*pos[p]] : 0;
+    }
+    broadcast_copy(out.data(), extents, out_strides, in.data(), in_strides);
+    return out;
+  };
+  for (auto const ord : *result.pmap()) {
+    if (result.is_zero(ord)) continue;
+    auto const tile = trange.tiles_range().idx(ord);
+    result.set(ord, world.taskq.add(kernel, trange.make_tile_range(ord),
+                                    arr->find(operand_tile(tile))));
+  }
+  return result;
+}
+
 }  // namespace detail
 
 /// TA::Tensor memory use logger
@@ -1087,6 +1251,43 @@ class ResultTensorTA final : public Result {
                                    TA::detail::is_complex_v<numeric_type>));
   }
 
+  [[nodiscard]] ResultPtr pow(rational const& exponent) const override {
+    auto result = detail::ta_elementwise_pow(get<ArrayT>(), exponent);
+    ::sequant::detail::wait_for_lazy_cleanup(result);
+    log_ta_tensor_host_memory_use();
+    return eval_result<this_type>(std::move(result));
+  }
+
+  [[nodiscard]] ResultPtr broadcast(
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    auto const pre_annot = std::any_cast<std::string>(ann[0]);
+    auto const post_annot = std::any_cast<std::string>(ann[1]);
+    detail::log_ta(post_annot, " = broadcast(", pre_annot, ")\n");
+    auto result = detail::ta_broadcast(get<ArrayT>().world(), &get<ArrayT>(),
+                                       numeric_type{}, pre_annot, post_annot,
+                                       new_mode_dims(new_mode_ranges));
+    ::sequant::detail::wait_for_lazy_cleanup(result);
+    log_ta_tensor_host_memory_use();
+    return eval_result<this_type>(std::move(result));
+  }
+
+  [[nodiscard]] ResultPtr broadcast_scalar(
+      Result const& scalar, std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    if (!scalar.is<ResultScalar<numeric_type>>())
+      throw Exception("broadcast: the scalar's type is not this array's");
+    auto const post_annot = std::any_cast<std::string>(ann[1]);
+    detail::log_ta(post_annot, " = broadcast(", scalar.get<numeric_type>(),
+                   ")\n");
+    auto result = detail::ta_broadcast<ArrayT>(
+        get<ArrayT>().world(), nullptr, scalar.get<numeric_type>(),
+        std::string{}, post_annot, new_mode_dims(new_mode_ranges));
+    ::sequant::detail::wait_for_lazy_cleanup(result);
+    log_ta_tensor_host_memory_use();
+    return eval_result<this_type>(std::move(result));
+  }
+
   /// the view of view_base() that is this result relabelled from \p pre_annot
   /// (its logical modes) to \p post_annot, conjugated once more if \p conj
   [[nodiscard]] view_type permuted_view(std::string const& pre_annot,
@@ -1146,6 +1347,22 @@ class ResultTensorTA final : public Result {
   }
 
  private:
+  /// the TiledRange1 of each rank-1 range Result::broadcast receives
+  [[nodiscard]] static container::svector<TA::TiledRange1> new_mode_dims(
+      container::svector<ResultPtr> const& new_mode_ranges) {
+    container::svector<TA::TiledRange1> dims;
+    dims.reserve(new_mode_ranges.size());
+    for (auto const& r : new_mode_ranges) {
+      if (!r->is<this_type>())
+        throw Exception(
+            "broadcast: a mode range is not of this array's type; the "
+            "BackendArrayOps must build arrays of the evaluated type");
+      SEQUANT_ASSERT(r->get<ArrayT>().trange().rank() == 1);
+      dims.push_back(r->get<ArrayT>().trange().dim(0));
+    }
+    return dims;
+  }
+
   /// a pending view holds no tiles of its own: 0 bytes
   [[nodiscard]] std::size_t size_in_bytes() const final {
     if (!has_value()) return 0;
@@ -1589,6 +1806,25 @@ class ResultTensorOfTensorTA final : public Result {
     ::sequant::detail::wait_for_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
+  }
+
+  [[nodiscard]] ResultPtr pow(rational const& exponent) const override {
+    auto result = detail::ta_elementwise_pow(get<ArrayT>(), exponent);
+    ::sequant::detail::wait_for_lazy_cleanup(result);
+    log_ta_tensor_host_memory_use();
+    return eval_result<this_type>(std::move(result));
+  }
+
+  [[nodiscard]] ResultPtr broadcast(
+      std::array<std::any, 2> const&,
+      container::svector<ResultPtr> const&) const override {
+    throw Exception("broadcast is not supported for tensor-of-tensor results");
+  }
+
+  [[nodiscard]] ResultPtr broadcast_scalar(
+      Result const&, std::array<std::any, 2> const&,
+      container::svector<ResultPtr> const&) const override {
+    throw Exception("broadcast is not supported for tensor-of-tensor results");
   }
 
   /// Accumulate \p other into this result's value (materialized first if this

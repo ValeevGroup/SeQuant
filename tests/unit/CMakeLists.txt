@@ -146,6 +146,15 @@ if (SEQUANT_HAS_TILEDARRAY)
         SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     set_source_files_properties(${eval_ta_test_sources}
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+    # the water STO-3G integrals of the eval integration test, read with its
+    # own reader (data_info, eval_utils.hpp)
+    set(eval_data_dir "${CMAKE_CURRENT_SOURCE_DIR}/../integration/eval")
+    target_sources(unit_tests-sequant-eval-ta-obj PRIVATE
+        "${eval_data_dir}/data_info.cpp")
+    target_include_directories(unit_tests-sequant-eval-ta-obj PRIVATE
+        "${eval_data_dir}")
+    target_compile_definitions(unit_tests-sequant-eval-ta-obj PRIVATE
+        SEQUANT_EVAL_DATA_DIR="${eval_data_dir}")
 endif()
 
 ##########################

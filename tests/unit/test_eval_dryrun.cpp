@@ -40,6 +40,7 @@
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 
 #include "csv_size_fixtures.hpp"
+#include "tensor_power_fixtures.hpp"
 
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/batch_policy.hpp>
@@ -70,6 +71,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -80,6 +82,7 @@
 #include <cstring>
 #include <fstream>
 #include <functional>
+#include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -4153,6 +4156,447 @@ TEST_CASE("forest-descent-nested-external-scatter", "[batch][forest_descent]") {
   CHECK(result->size_in_bytes() == ref->size_in_bytes());
 }
 
+// An element-wise power is a build of its own: the dry-run backend sizes it
+// like its operand and charges one operation per element, so the meter sees
+// both ops of a Hadamard product with a power factor, under either scheduler.
+TEST_CASE("meter-elementwise-power", "[meter]") {
+  using namespace sequant;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+  double const nelem = 10. * 10. * 20. * 20.;
+
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      TensorSymmetries{.perm = Symmetry::Antisymm});
+
+  SECTION("the power result is sized like its operand") {
+    auto cm = std::make_shared<CostModel const>(regime);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize<EvalExprDryRun>(pow(D, rational{-1}));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(node->op_type() == EvalOp::Power);
+    auto const res = evaluate(node, DryRunLeafEvaluator{cm});
+    REQUIRE(res);
+    auto const operand = DryRunLeafEvaluator{cm}(node.left());
+    CHECK(res->size_in_bytes() == operand->size_in_bytes());
+    CHECK(res->size_in_bytes() == static_cast<std::size_t>(nelem * 8));
+  }
+
+  SECTION("both schedulers meter the product and the power") {
+    ResultExpr ell(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                          TensorSymmetries{.perm = Symmetry::Antisymm}),
+                   M * pow(D, rational{-1}));
+    std::vector<EvalNodeDryRun> const forest{binarize<EvalExprDryRun>(ell)};
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      BatchPolicy policy;
+      policy.scheduler = scheduler;
+      auto const report = meter(forest, policy, regime, CacheConfig{});
+      CHECK(report.scheduler == scheduler);
+      CHECK(report.builds_total >= 2);
+      // the Hadamard product and the power each touch every element once
+      CHECK(report.flops_persistent + report.flops_volatile ==
+            Catch::Approx(2 * nelem));
+    }
+  }
+}
+
+// A broadcast Sum binarizes to Broadcast nodes over its short summands; the
+// dry-run backend shapes each from the array-ops (the operand's modes from the
+// operand), so the result is sized by the union of the head's indices.
+TEST_CASE("dryrun-broadcast-sum", "[dryrun][broadcast]") {
+  using namespace sequant;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+
+  auto const cm = std::make_shared<CostModel const>(backend_test_regime());
+  DryRunLeafEvaluator const yield{cm};
+  auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+
+  // D{i_1;a_1} = ε{;a_1} − ε{i_1;}
+  ResultExpr const res(Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}),
+                       ex<Tensor>(L"ε", bra{}, ket{L"a_1"}) -
+                           ex<Tensor>(L"ε", bra{L"i_1"}, ket{}));
+  auto const node = binarize<EvalExprDryRun>(res);
+  REQUIRE(node->op_type() == EvalOp::Sum);
+  REQUIRE(node.left()->is_broadcast());
+  REQUIRE(node.right()->is_broadcast());
+  container::svector<Index> const head_idx{Index{L"i_1"}, Index{L"a_1"}};
+  auto const head_bytes = cm->memsize(head_idx);
+
+  SECTION("tree evaluator") {
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    auto const got = evaluate(node, yield, cache);
+    REQUIRE(got);
+    CHECK(got->size_in_bytes() == head_bytes);
+  }
+
+  SECTION("a Broadcast node is sized from the array-ops") {
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    auto const got = evaluate(node.left(), yield, cache);
+    REQUIRE(got);
+    CHECK(got->size_in_bytes() == head_bytes);
+  }
+
+  SECTION("a scalar summand is broadcast over every head mode") {
+    ResultExpr const scalar(
+        Tensor(L"D", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Tensor>(L"ε", bra{}, ket{L"a_1"}) - ex<Variable>(L"E"));
+    auto const snode = binarize<EvalExprDryRun>(scalar);
+    REQUIRE(snode.right()->is_broadcast());
+    REQUIRE(snode.right().left()->is_scalar());
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    auto const got = evaluate(snode, yield, cache);
+    REQUIRE(got);
+    CHECK(got->size_in_bytes() == head_bytes);
+  }
+
+  SECTION("a Broadcast node needs array-ops") {
+    REQUIRE_THROWS_WITH(
+        evaluate(node, yield),
+        Catch::Matchers::ContainsSubstring("needs BackendArrayOps"));
+  }
+
+  SECTION("ordered executor") {
+    std::vector<EvalNodeDryRun> const forest{node};
+    BatchPolicy policy;
+    policy.scheduler = BatchScheduler::ordered;
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    auto const got = evaluate(forest, policy, std::wstring{}, yield, cache);
+    REQUIRE(got);
+    CHECK(got->size_in_bytes() == head_bytes);
+  }
+}
+
+// E{i_2;i_3} = L · (M ⊙ pow(D,-1)), batched over the occupied i_1 the root
+// contracts:
+// the loop opened at the root slices the Hadamard product and the power
+// below it, so both schedulers replay a batched loop through the Power node.
+TEST_CASE("meter-batch-through-power", "[meter][tensor-power]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+
+  auto _ = set_scoped_default_context(lax_braket_context());
+
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+  double const nelem = 10. * 10. * 20. * 20.;
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto const plain = binarize<EvalExprDryRun>(hadamard_power_term());
+  auto batched = binarize<EvalExprDryRun>(hadamard_power_term());
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(plain->op_type() == EvalOp::Product);
+  REQUIRE(plain.right()->op_type() == EvalOp::Product);
+  REQUIRE(plain.right().right()->op_type() == EvalOp::Power);
+  stamp_occ_loop(batched);
+  auto policy = occ_contracted_policy();
+
+  // the unbatched reference
+  std::vector<EvalNodeDryRun> const plain_forest{plain};
+  auto const ref = meter(plain_forest, BatchPolicy{}, regime, CacheConfig{});
+  auto const ref_flops = ref.flops_persistent + ref.flops_volatile;
+  auto const cm = std::make_shared<CostModel const>(regime);
+  auto const ref_bytes =
+      evaluate(plain, DryRunLeafEvaluator{cm})->size_in_bytes();
+  REQUIRE(ref_bytes == 10 * 10 * 8);
+
+  std::vector<EvalNodeDryRun> const forest{batched};
+  for (auto const scheduler :
+       {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+    CAPTURE(static_cast<int>(scheduler));
+    policy.scheduler = scheduler;
+    eval::dryrun::MeterReport report;
+    REQUIRE_NOTHROW(report = meter(forest, policy, regime, CacheConfig{}));
+    CHECK(report.scheduler == scheduler);
+    auto const flops = report.flops_persistent + report.flops_volatile;
+    if (scheduler == BatchScheduler::ordered) {
+      // one build of the power, the Hadamard product and the contraction per
+      // batch of i_1 (extent 10, batches of 1), each on its slice: the same
+      // flops as the unbatched run, in which the power and the Hadamard
+      // product each touch D's 10·10·20·20 elements once and the contraction
+      // costs i_1·i_2·i_3·a_1·a_2 = 10 times as much
+      CHECK(report.builds_total == 30);
+      CHECK(flops == Catch::Approx(ref_flops));
+      CHECK(ref_flops == Catch::Approx(12 * nelem));
+    } else {
+      // Pre-existing forest_descent metering blind spot (issue #755): the loop
+      // the root opens over a contracted mode is replayed (the result below
+      // assembles) but the meter tallies no builds or flops; the control L·D,
+      // with no power, reports the same zeros. When #755 is fixed these
+      // CHECKs should flip to the ordered scheduler's numbers above.
+      CHECK(report.builds_total == 0);
+      CHECK(flops == 0);
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      auto control = binarize<EvalExprDryRun>(base_term());
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+      stamp_occ_loop(control);
+      auto const control_report = meter(std::vector<EvalNodeDryRun>{control},
+                                        policy, regime, CacheConfig{});
+      CHECK(control_report.builds_total == 0);
+      CHECK(control_report.flops_persistent + control_report.flops_volatile ==
+            0);
+    }
+
+    // the batched result assembles to the unbatched one's size (10·10)
+    DryRunLeafEvaluator const yield{cm};
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+    cache.set_array_ops(&aops);
+    if (scheduler == BatchScheduler::forest_descent)
+      cache.set_custom_evaluator(
+          make_evaluator(policy, yield, make_no_scope_guard{}));
+    auto const res = evaluate(forest, policy, std::wstring{}, yield, cache);
+    REQUIRE(res);
+    CHECK(res->size_in_bytes() == ref_bytes);
+  }
+}
+
+// E{i_2;i_3} = L · ℓ with ℓ = M ⊙ pow(D,-1) inlined from its own equation:
+// the loop over i_1 opened at the root slices the inlined head and the power
+// below it as it slices the Hadamard product of the direct term, so the meter
+// sees the direct term's builds, flops and peak. Binarizing the system needs
+// no lax bra-ket context.
+TEST_CASE("meter-batch-through-inlined-head", "[meter][tensor-power][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::MeterReport;
+  using sequant::eval::dryrun::SizeRegime;
+  using Forest = std::vector<EvalNodeDryRun>;
+
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+  double const nelem = 10. * 10. * 20. * 20.;
+  auto const flops_of = [](MeterReport const& r) {
+    return r.flops_persistent + r.flops_volatile;
+  };
+  auto policy = occ_contracted_policy();
+
+  SECTION("the meter sees the direct Hadamard term") {
+    auto const sys = binarize<EvalExprDryRun>(
+        std::vector<ResultExpr>{ell_definition(), consumer_E()});
+    REQUIRE(sys.roots().size() == 1);
+    auto const roots = sys.roots();
+    EvalNodeDryRun const& plain = roots[0].get();
+    REQUIRE(plain.right()->is_equation_boundary());
+    EvalNodeDryRun batched = plain;
+    stamp_occ_loop(batched);
+
+    auto direct = [] {
+      auto _ = set_scoped_default_context(lax_braket_context());
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      return binarize<EvalExprDryRun>(hadamard_power_term());
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    }();
+    auto const direct_ref =
+        meter(Forest{direct}, BatchPolicy{}, regime, CacheConfig{});
+    stamp_occ_loop(direct);
+
+    // the unbatched reference
+    auto const ref = meter(Forest{plain}, BatchPolicy{}, regime, CacheConfig{});
+    CHECK(flops_of(ref) == Catch::Approx(12 * nelem));
+    CHECK(ref.peak_bytes == direct_ref.peak_bytes);
+
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      policy.scheduler = scheduler;
+      MeterReport report;
+      REQUIRE_NOTHROW(
+          report = meter(Forest{batched}, policy, regime, CacheConfig{}));
+      CHECK(report.scheduler == scheduler);
+      if (scheduler == BatchScheduler::ordered) {
+        // the numbers of "meter batches a loop through an element-wise
+        // power": one build of the power, ℓ and the contraction per batch of
+        // i_1 (extent 10, batches of 1)
+        CHECK(report.builds_total == 30);
+        CHECK(flops_of(report) == Catch::Approx(12 * nelem));
+        // the leaves L, M and D are each as large as ℓ and resident whole, so
+        // batching does not lower this peak; it matches the direct term's
+        auto const direct_report =
+            meter(Forest{direct}, policy, regime, CacheConfig{});
+        CHECK(report.builds_total == direct_report.builds_total);
+        CHECK(report.peak_bytes == direct_report.peak_bytes);
+      } else {
+        // the forest_descent blind spot of issue #755, as for the direct term
+        CHECK(report.builds_total == 0);
+        CHECK(flops_of(report) == 0);
+      }
+    }
+  }
+
+  SECTION("three levels of inlining") {
+    auto const sys = binarize<EvalExprDryRun>(
+        std::vector<ResultExpr>{D_broadcast(), ell_definition(), consumer_E()});
+    REQUIRE(sys.roots().size() == 1);
+    EvalNodeDryRun batched = sys.roots()[0].get();
+    stamp_occ_loop(batched);
+    policy.scheduler = BatchScheduler::ordered;
+    MeterReport report;
+    REQUIRE_NOTHROW(report =
+                        meter(Forest{batched}, policy, regime, CacheConfig{}));
+    // per batch of i_1 (extent 10, batches of 1), 7 builds: the
+    // contraction, ℓ and the power, as in the two-level system, and the four
+    // Broadcast nodes of D, each sliced to the batch along i_1. The three
+    // in-place Sum steps and the two -1 scalings tally no build.
+    CHECK(report.builds_total == 10 * (3 + 4));
+  }
+
+  SECTION("an inlined intermediate larger than every leaf is never whole") {
+    // X{i_2,i_3;a_2,a_3} = t{a_1;i_1} · pow(D3,-1), D3 the o³v³ broadcast Sum
+    // of rank-1 orbital energies, read through its head
+    Tensor const d3 = D3_broadcast().result_as_tensor();
+    auto const x = ResultExpr(
+        Tensor(L"X", bra{L"i_2", L"i_3"}, ket{L"a_2", L"a_3"},
+               TensorSymmetries{.perm = Symmetry::Nonsymm}),
+        ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
+            pow(ex<Tensor>(relabelled(d3, d3.bra(), d3.ket())), rational{-1}));
+    auto const sys =
+        binarize<EvalExprDryRun>(std::vector<ResultExpr>{D3_broadcast(), x});
+    REQUIRE(sys.roots().size() == 1);
+    auto const roots = sys.roots();
+    EvalNodeDryRun const& plain = roots[0].get();
+    EvalNodeDryRun batched = plain;
+    stamp_occ_loop(batched);
+
+    auto const cm = std::make_shared<CostModel const>(regime);
+    auto const d3_bytes = static_cast<double>(
+        cm->memsize({Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"}, Index{L"a_1"},
+                     Index{L"a_2"}, Index{L"a_3"}}));
+    policy.scheduler = BatchScheduler::ordered;
+    auto const ref = meter(Forest{plain}, BatchPolicy{}, regime, CacheConfig{});
+    MeterReport report;
+    REQUIRE_NOTHROW(report =
+                        meter(Forest{batched}, policy, regime, CacheConfig{}));
+    CAPTURE(ref.peak_bytes, report.peak_bytes, d3_bytes);
+    CHECK(ref.peak_bytes >= d3_bytes);
+    CHECK(report.peak_bytes < d3_bytes);
+
+    // the batch loop over i_1 slices the Broadcast nodes of D3 along i_1,
+    // which some of them add and the others' operands carry: the batched
+    // result assembles to the unbatched one's size on either scheduler
+    DryRunLeafEvaluator const yield{cm};
+    auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+    auto const x_bytes = cm->memsize(
+        {Index{L"i_2"}, Index{L"i_3"}, Index{L"a_2"}, Index{L"a_3"}});
+    for (auto const scheduler :
+         {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+      CAPTURE(static_cast<int>(scheduler));
+      policy.scheduler = scheduler;
+      auto cache = CacheManager<EvalNodeDryRun>::empty();
+      cache.set_array_ops(&aops);
+      if (scheduler == BatchScheduler::forest_descent)
+        cache.set_custom_evaluator(
+            make_evaluator(policy, yield, make_no_scope_guard{}));
+      ResultPtr res;
+      REQUIRE_NOTHROW(res = evaluate(Forest{batched}, policy, std::wstring{},
+                                     yield, cache));
+      REQUIRE(res);
+      CHECK(res->size_in_bytes() == x_bytes);
+    }
+  }
+}
+
+// A scalar head inlined into a tensor-tensor contraction:
+// E = L{a_1,a_2;i_1,i_2} ℓ{i_1,i_2;a_1,a_2}, H{i_1;a_1} = E t{i_1;a_2}
+// u{a_2;a_1}; the inlined E is a boundary below the product contracting a_2.
+TEST_CASE("dryrun-inlined-scalar-head", "[dryrun][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+
+  auto const e = ResultExpr(
+      Variable(L"E"),
+      antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+          ex<Tensor>(relabelled(ell_definition().result_as_tensor(),
+                                bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"})));
+  auto const h = ResultExpr(Tensor(L"H", bra{L"i_1"}, ket{L"a_1"}),
+                            ex<Variable>(L"E") *
+                                ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}) *
+                                ex<Tensor>(L"u", bra{L"a_2"}, ket{L"a_1"}));
+  auto const sys = binarize<EvalExprDryRun>(std::vector<ResultExpr>{e, h});
+  REQUIRE(sys.roots().size() == 1);
+  auto const cm = std::make_shared<CostModel const>(backend_test_regime());
+  ResultPtr res;
+  REQUIRE_NOTHROW(res =
+                      evaluate(sys.roots()[0].get(), DryRunLeafEvaluator{cm}));
+  REQUIRE(res);
+  CHECK(res->size_in_bytes() ==
+        cm->memsize(container::svector<Index>{Index{L"i_1"}, Index{L"a_1"}}));
+}
+
+// the system {D, ℓ, E}: pow(D,-1) inside ℓ raises the inlined broadcast D,
+// whose trace spelling must read D as its head
+TEST_CASE("meter-inlined-three-level", "[meter][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+
+  SizeRegime regime;
+  regime.space_extent = {
+      {L"i", 10},
+      {L"a", 20},
+  };
+  container::svector<ResultExpr> const sys{D_broadcast(), ell_definition(),
+                                           consumer_E()};
+  auto res = binarize<EvalExprDryRun>(sys);
+  REQUIRE(res.roots().size() == 1);
+  EvalNodeDryRun e = res.trees[2];
+  std::vector<EvalNodeDryRun> const plain{e};
+  REQUIRE_NOTHROW(meter(plain, BatchPolicy{}, regime, CacheConfig{}));
+
+  stamp_occ_loop(e);
+  std::vector<EvalNodeDryRun> const batched{e};
+  auto policy = occ_contracted_policy();
+  policy.scheduler = BatchScheduler::ordered;
+  REQUIRE_NOTHROW(meter(batched, policy, regime, CacheConfig{}));
+}
+
 // The contract the fixtures share with mpqc's CSVSizeMoments::extent: a group
 // of k composites on one cluster, each sized by the occupancy-adjusted M_k,
 // has the per-member product p * M_k^k, so nocc^rank times it is the
@@ -4174,4 +4618,192 @@ TEST_CASE("occupancy-adjusted moments satisfy the group-volume identity",
   auto const r = df_regime(w20);
   CHECK(r.csv_pno_moment[1] == Catch::Approx(w20.pno_occupancy * w20.pno_M[1]));
   CHECK(r.csv_osv_moment[2] == Catch::Approx(w20.osv_M[2]));
+}
+
+// E{i_2;i_3} = L{a_1,a_2;i_1,i_3} ℓ{i_1,i_2;a_1,a_2} batched over i_1 and
+// E2{i_1;i_3} = L{a_1,a_2;i_2,i_3} ℓ{i_1,i_2;a_1,a_2} batched over i_2, both
+// reading the inlined broadcast D through ℓ: the Broadcast values of D are
+// sliced at a different position under each loop, which the ordered
+// executor's canonical loop axis does not spell
+TEST_CASE("meter-broadcast-sliced-per-consumer", "[meter][broadcast][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::meter;
+  using sequant::eval::dryrun::SizeRegime;
+  using Forest = std::vector<EvalNodeDryRun>;
+  SizeRegime regime;
+  regime.space_extent = {{L"i", 10}, {L"a", 20}};
+  auto e2 = ex<Product>(ExprPtrList{});
+  e2->as<Product>().append(
+      1, antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_2", L"i_3"}),
+      Product::Flatten::No);
+  e2->as<Product>().append(
+      1,
+      ex<Tensor>(relabelled(ell_definition().result_as_tensor(),
+                            bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"})),
+      Product::Flatten::No);
+  auto const E2 =
+      ResultExpr(Tensor(L"E2", bra{L"i_1"}, ket{L"i_3"},
+                        TensorSymmetries{.perm = Symmetry::Nonsymm}),
+                 e2);
+  auto const sys = binarize<EvalExprDryRun>(std::vector<ResultExpr>{
+      D_broadcast(), ell_definition(), consumer_E(), E2});
+  REQUIRE(sys.roots().size() == 2);
+  EvalNodeDryRun a = sys.roots()[0].get();
+  EvalNodeDryRun b = sys.roots()[1].get();
+  stamp_occ_loop(a);
+  Index const i2{L"i_2"};
+  b->set_node_slice_mask({{i2, BatchModeType::Contracted}});
+  b->set_batch_loops_opened_here({{i2, BatchModeType::Contracted}});
+  auto policy = occ_contracted_policy();
+  for (auto const scheduler :
+       {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+    CAPTURE(static_cast<int>(scheduler));
+    policy.scheduler = scheduler;
+    REQUIRE_NOTHROW(meter(Forest{a, b}, policy, regime, CacheConfig{}));
+    auto const cm = std::make_shared<CostModel const>(regime);
+    DryRunLeafEvaluator const yield{cm};
+    auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    if (scheduler == BatchScheduler::forest_descent)
+      cache.set_custom_evaluator(
+          make_evaluator(policy, yield, make_no_scope_guard{}));
+    REQUIRE_NOTHROW(
+        evaluate(Forest{a, b}, policy, std::wstring{}, yield, cache));
+  }
+}
+
+namespace {
+
+/// meters and evaluates \p forest batched by \p policy on \p schedulers,
+/// requiring each to succeed with a result of \p result_bytes
+void require_batched_run(
+    std::vector<sequant::eval::dryrun::EvalNodeDryRun> const& forest,
+    sequant::BatchPolicy policy,
+    sequant::eval::dryrun::SizeRegime const& regime, std::size_t result_bytes,
+    std::initializer_list<sequant::BatchScheduler> schedulers = {
+        sequant::BatchScheduler::ordered,
+        sequant::BatchScheduler::forest_descent}) {
+  using namespace sequant;
+  using sequant::eval::dryrun::CacheConfig;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::DryRunLeafEvaluator;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  auto const cm = std::make_shared<CostModel const>(regime);
+  DryRunLeafEvaluator const yield{cm};
+  auto const aops = eval::dryrun::make_dryrun_array_ops(cm);
+  for (auto const scheduler : schedulers) {
+    CAPTURE(static_cast<int>(scheduler));
+    policy.scheduler = scheduler;
+    REQUIRE_NOTHROW(eval::dryrun::meter(forest, policy, regime, CacheConfig{}));
+    auto cache = CacheManager<EvalNodeDryRun>::empty();
+    cache.set_array_ops(&aops);
+    if (scheduler == BatchScheduler::forest_descent)
+      cache.set_custom_evaluator(
+          make_evaluator(policy, yield, make_no_scope_guard{}));
+    ResultPtr res;
+    REQUIRE_NOTHROW(res =
+                        evaluate(forest, policy, std::wstring{}, yield, cache));
+    REQUIRE(res);
+    CHECK(res->size_in_bytes() == result_bytes);
+  }
+}
+
+/// contracted occupied and virtual modes batchable, in batches of 3 and 7
+sequant::BatchPolicy nested_contracted_policy() {
+  using namespace sequant;
+  BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const&) { return true; };
+  policy.is_batchable_external_index = [](Index const&) { return true; };
+  policy.batch_target_size = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"i" ? 3 : 7;
+  };
+  policy.peak_threshold = 1;
+  return policy;
+}
+
+}  // namespace
+
+// Two canonically equal nodes binding different occupied indices, e.g. the
+// Broadcast operands −1·ε{i_1;} and −1·ε{i_2;} of the inlined D, under two
+// nested loops: the inner loop's scratch must not serve the value sliced
+// along the outer loop's i_1 to the occurrence that binds i_2.
+TEST_CASE("meter-nested-loops-distinct-slices", "[meter][broadcast][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::CostModel;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::dryrun::SizeRegime;
+
+  SizeRegime regime;
+  regime.space_extent = {{L"i", 10}, {L"a", 20}};
+  auto const cm = std::make_shared<CostModel const>(regime);
+  Index const i1{L"i_1"}, a1{L"a_1"}, a2{L"a_2"};
+
+  SECTION("two loops at the root of E, inlined D") {
+    auto const sys = binarize<EvalExprDryRun>(
+        std::vector<ResultExpr>{D_broadcast(), ell_definition(), consumer_E()});
+    EvalNodeDryRun e = sys.roots()[0].get();
+    e->set_node_slice_mask(
+        {{i1, BatchModeType::Contracted}, {a1, BatchModeType::Contracted}});
+    e->set_batch_loops_opened_here(
+        {{i1, BatchModeType::Contracted}, {a1, BatchModeType::Contracted}});
+    require_batched_run(
+        {e}, nested_contracted_policy(), regime,
+        cm->memsize(container::svector<Index>{Index{L"i_2"}, Index{L"i_3"}}));
+  }
+
+  SECTION("an outer loop at E, an inner one at the inlined ℓ") {
+    auto const sys = binarize<EvalExprDryRun>(
+        std::vector<ResultExpr>{D_broadcast(), ell_definition(), consumer_E()});
+    EvalNodeDryRun e = sys.roots()[0].get();
+    e->set_node_slice_mask({{i1, BatchModeType::Contracted}});
+    e->set_batch_loops_opened_here({{i1, BatchModeType::Contracted}});
+    auto& ell = e.right();
+    ell->set_node_slice_mask(
+        {{i1, BatchModeType::Contracted}, {a2, BatchModeType::External}});
+    ell->set_batch_loops_opened_here({{a2, BatchModeType::External}});
+    // ordered only: forest_descent does not slice the destination of an
+    // External loop opened below an enclosing loop by that loop, whether or
+    // not the tree holds a Broadcast node (the same system with D a leaf
+    // fails the same way)
+    require_batched_run(
+        {e}, nested_contracted_policy(), regime,
+        cm->memsize(container::svector<Index>{Index{L"i_2"}, Index{L"i_3"}}),
+        {BatchScheduler::ordered});
+  }
+
+  SECTION("without a broadcast: two equal sums over i_1 and i_2") {
+    // R{;i_3} = L{a_1;i_1,i_2,i_3} · ((x{i_1;} + y{i_1;}) (x{i_2;} + y{i_2;})
+    // g{;a_1}), the root contracting i_1, i_2 and a_1
+    auto s = [](wchar_t const* i) {
+      return ex<Tensor>(L"x", bra{i}, ket{}) + ex<Tensor>(L"y", bra{i}, ket{});
+    };
+    auto inner = ex<Product>(ExprPtrList{});
+    inner->as<Product>().append(1, s(L"i_1"), Product::Flatten::No);
+    inner->as<Product>().append(1, s(L"i_2"), Product::Flatten::No);
+    inner->as<Product>().append(1, ex<Tensor>(L"g", bra{}, ket{L"a_1"}),
+                                Product::Flatten::No);
+    auto rhs = ex<Product>(ExprPtrList{});
+    rhs->as<Product>().append(
+        1, ex<Tensor>(L"L", bra{L"a_1"}, ket{L"i_1", L"i_2", L"i_3"}),
+        Product::Flatten::No);
+    rhs->as<Product>().append(1, inner, Product::Flatten::No);
+    ResultExpr const r(Tensor(L"R", bra{}, ket{L"i_3"}), rhs);
+    EvalNodeDryRun root = binarize<EvalExprDryRun>(r);
+    REQUIRE(contracted_indices(root).size() == 3);
+    root->set_node_slice_mask(
+        {{i1, BatchModeType::Contracted}, {a1, BatchModeType::Contracted}});
+    root->set_batch_loops_opened_here(
+        {{i1, BatchModeType::Contracted}, {a1, BatchModeType::Contracted}});
+    require_batched_run({root}, nested_contracted_policy(), regime,
+                        cm->memsize(container::svector<Index>{Index{L"i_3"}}));
+  }
 }

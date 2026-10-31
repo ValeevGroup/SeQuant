@@ -11,6 +11,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -27,10 +28,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <iterator>
+#include <optional>
 #include <ranges>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace sequant {
 
@@ -244,6 +250,19 @@ bool EvalExpr::is_adjoint() const noexcept {
   return op_type() == EvalOp::Adjoint;
 }
 
+bool EvalExpr::is_elementwise_power() const noexcept {
+  return op_type() == EvalOp::Power;
+}
+
+bool EvalExpr::is_broadcast() const noexcept {
+  return op_type() == EvalOp::Broadcast;
+}
+
+bool is_unary(EvalOp op) noexcept {
+  return op == EvalOp::Adjoint || op == EvalOp::Power ||
+         op == EvalOp::Broadcast;
+}
+
 Tensor const& EvalExpr::as_tensor() const { return expr().as<Tensor>(); }
 
 Constant const& EvalExpr::as_constant() const { return expr().as<Constant>(); }
@@ -345,6 +364,8 @@ void all_indices(IndexSet& result, ExprPtr const& expr) {
       // proto-only indices are still live outer modes of the ToT array
       for (auto&& p : ix.proto_indices()) result.emplace(p);
     }
+  else if (expr->is<TensorPower>())
+    all_indices(result, expr->as<TensorPower>().base());
   else if (expr->is<Sum>() && !expr->empty())
     all_indices(result, expr->front());
   else if (expr->is<Product>())
@@ -359,7 +380,8 @@ IndexSet all_indices(ExprPtr const& expr) {
 
 ///
 /// \brief Collect tensors appearing as a factor at the leaf node of a product
-///        sub-tree, or, at the root node of a sum sub-tree.
+///        sub-tree, or, at the root node of a sum sub-tree or of an inlined
+///        equation (see EvalExpr::is_equation_boundary).
 ///
 template <typename Rng>
 void collect_tensor_factors(EvalExprNode const& node,  //
@@ -367,15 +389,16 @@ void collect_tensor_factors(EvalExprNode const& node,  //
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
 
   if (auto op = node->op_type();
-      node->is_tensor() &&
-      (!op || *op == EvalOp::Sum || *op == EvalOp::Adjoint))
-    // Treat Adjoint the same as Sum here: it produces a tensor result that
-    // enters a parent Product as a single factor — the parent shouldn't
-    // try to recurse past the Adjoint boundary, just collect the adjointed
-    // tensor (held in node->expr()) and move on.
+      node->is_tensor() && (!op || *op == EvalOp::Sum || is_unary(*op) ||
+                            node->is_equation_boundary()))
+    // Treat a unary node (Adjoint, Power) and an inlined equation the same as
+    // Sum here: each produces a tensor result that enters a parent Product as
+    // a single factor — the parent shouldn't recurse past its boundary, just
+    // collect the tensor held in node->expr() and move on.
     collect.emplace_back(
         ExprWithHash{.expr = node->expr(), .hash = node->hash_value()});
-  else if (node->op_type() == EvalOp::Product && !node.leaf()) {
+  else if (node->op_type() == EvalOp::Product && !node.leaf() &&
+           !node->is_equation_boundary()) {
     collect_tensor_factors(node.left(), collect);
     collect_tensor_factors(node.right(), collect);
   }
@@ -386,6 +409,47 @@ EvalExprNode binarize(Constant const& c) { return EvalExprNode{EvalExpr{c}}; }
 EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
 
 EvalExprNode binarize(Power const& p) { return EvalExprNode{EvalExpr{p}}; }
+
+namespace {
+
+/// Assembles a unary node (see is_unary) of type \p op over \p operand, with
+/// a Constant \p sentinel as the right child. The hash is the operand's
+/// combined with \p op and, for a Power, the exponent; for a Broadcast, the
+/// result's modes and the position among them of each operand mode, so two
+/// broadcasts of one operand agree only if they place it alike in the same
+/// result shape.
+EvalExprNode make_unary_node(EvalOp op, EvalExprNode operand,
+                             Constant const& sentinel, ExprPtr expr,
+                             EvalExpr::index_vector canon_indices,
+                             std::int8_t phase) {
+  SEQUANT_ASSERT(is_unary(op));
+  auto h = operand->hash_value();
+  hash::combine(h, static_cast<size_t>(op));
+  if (op == EvalOp::Power) {
+    SEQUANT_ASSERT(sentinel.value().imag() == 0);
+    hash::combine(h, hash::value(sentinel.value().real()));
+  }
+  if (op == EvalOp::Broadcast) {
+    hash::combine(h, hash_indices(canon_indices));
+    for (Index const& ix : operand->canon_indices()) {
+      auto const pos = std::ranges::find(canon_indices, ix);
+      SEQUANT_ASSERT(pos != canon_indices.end());
+      hash::combine(h, hash::value(static_cast<std::size_t>(
+                           std::distance(canon_indices.begin(), pos))));
+    }
+  }
+  EvalExpr node{op,
+                ResultType::Tensor,
+                std::move(expr),
+                std::move(canon_indices),
+                phase,
+                h,
+                nullptr};
+  return EvalExprNode{std::move(node), std::move(operand),
+                      EvalExprNode{EvalExpr{sentinel}}};
+}
+
+}  // namespace
 
 EvalExprNode binarize(Tensor const& t) {
   // Detect adjoint-marked tensor leaves (label ending in U+207A '⁺'). These
@@ -407,39 +471,44 @@ EvalExprNode binarize(Tensor const& t) {
     Tensor bare{t};
     bare.adjoint();
     SEQUANT_ASSERT(!is_adjoint_label(bare.label()));
-    EvalExprNode bare_leaf{EvalExpr{bare}};
 
-    // Sentinel right child.
-    EvalExprNode sentinel{EvalExpr{Constant{1}}};
-
-    // Build the Adjoint EvalExpr. Hash differs from the bare leaf so cache
-    // lookups don't collide.
-    auto h = bare_leaf->hash_value();
-    hash::combine(h, static_cast<size_t>(EvalOp::Adjoint));
-    EvalExpr adj{EvalOp::Adjoint,                                   //
-                 ResultType::Tensor,                                //
-                 t.clone(),                                         //
-                 t.indices() | ranges::to<EvalExpr::index_vector>,  //
-                 1,                                                 //
-                 h,                                                 //
-                 nullptr};
-    return EvalExprNode{std::move(adj), std::move(bare_leaf),
-                        std::move(sentinel)};
+    // Sentinel right child is Constant(1); the hash differs from the bare
+    // leaf's so cache lookups don't collide.
+    return make_unary_node(EvalOp::Adjoint, EvalExprNode{EvalExpr{bare}},
+                           Constant{1}, t.clone(),
+                           t.indices() | ranges::to<EvalExpr::index_vector>, 1);
   }
   return EvalExprNode{EvalExpr{t}};
 }
 
-EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
+EvalExprNode binarize(TensorPower const& power, IndexSet const& uncontract,
                       const BinarizationOptions& opts,
-                      std::size_t& node_counter) {
+                      std::size_t& node_counter,
+                      detail::InlineContext* inline_ctx) {
+  auto operand =
+      impl::binarize(power.base(), uncontract, opts, node_counter, inline_ctx);
+  auto const& t = operand->as_tensor();
+  auto expr = detail::make_tensor_wo_symmetries(opts, bra(t.bra()),
+                                                ket(t.ket()), aux(t.aux()));
+  auto canon_indices = operand->canon_indices();
+  // base = phase * canonical operand, so base^e = phase^e * operand^e; a
+  // non-integer exponent never meets phase -1 (pow() rejects antisymmetric
+  // bases there)
+  auto const& e = power.exponent();
+  bool const even = denominator(e) == 1 && numerator(e) % 2 == 0;
+  std::int8_t const phase = even ? 1 : operand->canon_phase();
+  return make_unary_node(EvalOp::Power, std::move(operand),
+                         Constant{power.exponent()}, std::move(expr),
+                         std::move(canon_indices), phase);
+}
+
+namespace {
+
+/// \return the left-folded chain of Sum nodes over the binarized \p summands
+EvalExprNode sum_chain(std::vector<EvalExprNode>&& summands,
+                       const BinarizationOptions& opts) {
   using ranges::views::move;
   using ranges::views::transform;
-  auto summands =
-      sum.summands()  //
-      | transform([&uncontract, &opts, &node_counter](ExprPtr const& x) {
-          return impl::binarize(x, uncontract, opts, node_counter);
-        })  //
-      | ranges::to_vector;
 
   bool const all_tensors =
       ranges::all_of(summands, [](auto&& n) { return n->is_tensor(); });
@@ -490,9 +559,27 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
   return fold_left_to_node(summands | move, make_sum);
 }
 
+}  // namespace
+
+EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
+                      const BinarizationOptions& opts,
+                      std::size_t& node_counter,
+                      detail::InlineContext* inline_ctx) {
+  using ranges::views::transform;
+  return sum_chain(sum.summands()  //
+                       | transform([&uncontract, &opts, &node_counter,
+                                    inline_ctx](ExprPtr const& x) {
+                           return impl::binarize(x, uncontract, opts,
+                                                 node_counter, inline_ctx);
+                         })  //
+                       | ranges::to_vector,
+                   opts);
+}
+
 EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                       const BinarizationOptions& opts,
-                      std::size_t& node_counter) {
+                      std::size_t& node_counter,
+                      detail::InlineContext* inline_ctx) {
   using ranges::views::filter;
   using ranges::views::move;
   using ranges::views::transform;
@@ -510,10 +597,10 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
   }();
 
   auto factors = prod.factors()  //
-                 | transform([i = 0, &ltr_uncontr_idxs, &opts,
-                              &node_counter](ExprPtr const& x) mutable {
+                 | transform([i = 0, &ltr_uncontr_idxs, &opts, &node_counter,
+                              inline_ctx](ExprPtr const& x) mutable {
                      return impl::binarize(x, ltr_uncontr_idxs.children[i++],
-                                           opts, node_counter);
+                                           opts, node_counter, inline_ctx);
                    })  //
                  | ranges::to_vector;
 
@@ -646,30 +733,435 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
   }
 }
 
+namespace {
+
+/// \return the left-folded chain of Sum nodes over the summands of the Sum
+///         on the rhs of \p res, each binarized with the head's indices
+///         \p uncontract uncontracted; a summand that does not supply every
+///         index of the head (see detail::supplied_result_indices; a
+///         symmetrizer factor supplies its indices, as the binarized summand
+///         carries them) is wrapped in an EvalOp::Broadcast node over the
+///         head's indices
+/// \throw Exception if a summand lacks an aux index of the head
+EvalExprNode binarize_broadcast_sum(ResultExpr const& res,
+                                    IndexSet const& uncontract,
+                                    const BinarizationOptions& opts,
+                                    std::size_t& node_counter,
+                                    detail::InlineContext* inline_ctx) {
+  SEQUANT_ASSERT(res.expression()->is<Sum>());
+  auto const head_indices = res.indices() | ranges::to<EvalExpr::index_vector>;
+  std::vector<EvalExprNode> summands;
+  for (ExprPtr const& summand : res.expression()->as<Sum>().summands()) {
+    auto node =
+        impl::binarize(summand, uncontract, opts, node_counter, inline_ctx);
+    auto const supplied = detail::supplied_result_indices(res, *summand);
+    if (supplied.size() != head_indices.size()) {
+      for (Index const& ix : res.aux())
+        if (ix.nonnull() && !supplied.contains(ix))
+          throw Exception("binarize: cannot broadcast over aux index " +
+                          toUtf8(ix.full_label()));
+      // e.g. a trace inside the summand: its mode has no place in the result
+      for (Index const& ix : node->canon_indices())
+        if (std::ranges::find(head_indices, ix) == head_indices.end())
+          throw Exception("binarize: summand " +
+                          toUtf8(io::serialization::to_string(summand)) +
+                          " of a broadcast Sum carries index " +
+                          toUtf8(ix.full_label()) +
+                          " that is not an index of the result");
+      // a broadcast is linear: it carries its operand's phase
+      std::int8_t const phase = node->canon_phase();
+      node = make_unary_node(EvalOp::Broadcast, std::move(node), Constant{1},
+                             detail::make_tensor(res.result_as_tensor(),
+                                                 /*with_symm=*/false, opts),
+                             head_indices, phase);
+    }
+    summands.push_back(std::move(node));
+  }
+  return sum_chain(std::move(summands), opts);
+}
+
+}  // namespace
+
+namespace detail {
+
+namespace {
+
+/// \return true if slots \p a and \p b have the same rank and, in every
+///         slot, the same index space and number of proto indices
+template <typename A, typename B>
+bool same_spaces(A const& a, B const& b) {
+  return std::ranges::equal(a, b, [](Index const& x, Index const& y) {
+    return x.space() == y.space() &&
+           x.proto_indices().size() == y.proto_indices().size();
+  });
+}
+
+/// \return true if \p x and \p y have the same bra, ket and aux ranks and
+///         slots alike in every position (see same_spaces)
+template <typename X, typename Y>
+bool same_slot_spaces(X const& x, Y const& y) {
+  return same_spaces(x.bra(), y.bra()) && same_spaces(x.ket(), y.ket()) &&
+         same_spaces(x.aux(), y.aux());
+}
+
+/// \return true if \p x with bra and ket swapped has the slot spaces of \p y
+template <typename X, typename Y>
+bool swapped_slot_spaces(X const& x, Y const& y) {
+  return same_spaces(x.ket(), y.bra()) && same_spaces(x.bra(), y.ket()) &&
+         same_spaces(x.aux(), y.aux());
+}
+
+/// \return true if two heads cannot be told apart by the leaves naming them:
+///         the same shape, or, if either is bra-ket symmetric, the same shape
+///         with bra and ket swapped
+bool same_shape(ResultExpr const& x, ResultExpr const& y) {
+  if (x.produces_tensor() != y.produces_tensor()) return false;
+  if (same_slot_spaces(x, y)) return true;
+  return (x.braket_symmetry() == BraKetSymmetry::Symm ||
+          y.braket_symmetry() == BraKetSymmetry::Symm) &&
+         swapped_slot_spaces(x, y);
+}
+
+}  // namespace
+
+/// The definitions of a system of equations and the state of inlining them;
+/// see binarize(std::span<const ResultExpr>, const BinarizationOptions&).
+struct InlineContext {
+  /// \param system the equations
+  /// \param consumed receives true for every equation inlined somewhere
+  InlineContext(std::span<const ResultExpr> system,
+                container::svector<bool>& consumed)
+      : system_(system), consumed_(consumed), fresh_([this](Index const& ix) {
+          return !used_labels_.contains(std::wstring(ix.label()));
+        }) {
+    for (std::size_t k = 0; k != system_.size(); ++k) {
+      ResultExpr const& res = system_[k];
+      if (!res.has_label())
+        throw Exception("inline: every equation needs a labelled head");
+      auto& same_label = by_label_[res.label()];
+      for (std::size_t j : same_label)
+        if (same_shape(system_[j], res))
+          throw Exception("inline: duplicate definition of " +
+                          toUtf8(res.label()));
+      same_label.push_back(k);
+      heads_.push_back(res.produces_tensor() ? res.result_as_tensor()
+                                             : Tensor{});
+
+      auto use = [this](Index const& ix) {
+        used_labels_.emplace(ix.label());
+        for (auto const& p : ix.proto_indices())
+          used_labels_.emplace(p.label());
+      };
+      for (auto const& ix : res.indices()) use(ix);
+      for (auto const& ix : get_used_indices(res.expression())) use(ix);
+    }
+  }
+
+  InlineContext(InlineContext const&) = delete;
+  InlineContext& operator=(InlineContext const&) = delete;
+
+  /// a Tensor leaf naming the head of equation \c k
+  struct TensorMatch {
+    std::size_t k;
+    /// the leaf spells the head with bra and ket swapped
+    bool swapped;
+  };
+
+  /// \return the equation whose tensor head \p leaf names, if any; a leaf
+  ///         that spells a bra-ket symmetric head with bra and ket swapped
+  ///         names it too, unless another head with its label matches it as
+  ///         written
+  /// \throw Exception if \p leaf matches a head but not its symmetries, or
+  ///        spells a conjugate-symmetric head swapped
+  std::optional<TensorMatch> match(Tensor const& leaf) const {
+    auto const it = by_label_.find(std::wstring(leaf.label()));
+    if (it == by_label_.end()) return std::nullopt;
+    auto const matched = [&](std::size_t k, bool swapped) {
+      Tensor const& head = heads_[k];
+      if (leaf.symmetry() != head.symmetry() ||
+          leaf.braket_symmetry() != head.braket_symmetry() ||
+          leaf.column_symmetry() != head.column_symmetry())
+        throw Exception(
+            "inline: leaf " + toUtf8(io::serialization::to_string(leaf)) +
+            " names head " + toUtf8(io::serialization::to_string(head)) +
+            " but declares different symmetries; use result_as_tensor()");
+      return TensorMatch{.k = k, .swapped = swapped};
+    };
+    for (std::size_t k : it->second)
+      if (system_[k].produces_tensor() && same_slot_spaces(leaf, heads_[k]))
+        return matched(k, false);
+    for (std::size_t k : it->second) {
+      if (!system_[k].produces_tensor()) continue;
+      Tensor const& head = heads_[k];
+      // a swapped spelling names the same object only if bra-ket symmetric
+      if (!swapped_slot_spaces(leaf, head) ||
+          head.braket_symmetry() == BraKetSymmetry::Nonsymm)
+        continue;
+      if (head.braket_symmetry() == BraKetSymmetry::Conjugate)
+        throw Exception(
+            "inline: bra-ket-swapped use of the conjugate-symmetric head " +
+            toUtf8(head.label()) +
+            " is not supported; define its conjugate as its own equation");
+      return matched(k, true);
+    }
+    return std::nullopt;
+  }
+
+  /// \return the equation whose scalar head \p leaf names, if any
+  /// \throw Exception if \p leaf is conjugated and names a scalar head
+  std::optional<std::size_t> match(Variable const& leaf) const {
+    auto const it = by_label_.find(std::wstring(leaf.label()));
+    if (it == by_label_.end()) return std::nullopt;
+    for (std::size_t k : it->second) {
+      if (system_[k].produces_tensor()) continue;
+      if (leaf.conjugated())
+        throw Exception("inline: conjugated use of head " +
+                        toUtf8(leaf.label()) +
+                        " is not supported; define its conjugate as its own "
+                        "equation");
+      return k;
+    }
+    return std::nullopt;
+  }
+
+  /// \return the tree of equation \p k, with every definition inlined
+  EvalExprNode binarize_equation(std::size_t k, BinarizationOptions const& opts,
+                                 std::size_t& node_counter) {
+    return binarize_guarded(k, system_[k], opts, node_counter);
+  }
+
+  /// \return the tree of equation \p k as a factor in place of \p leaf (null
+  ///         for a Variable leaf): its head's indices renamed to \p leaf's
+  ///         (the head's bra to the leaf's ket and vice versa if \p swapped)
+  ///         and every other index of its rhs to a fresh one; not stamped with
+  ///         \p opts.node_batch_axes
+  EvalExprNode inline_definition(std::size_t k, Tensor const* leaf,
+                                 BinarizationOptions const& opts,
+                                 bool swapped = false) {
+    consumed_[k] = true;
+    ResultExpr const& def = system_[k];
+
+    container::map<Index, Index> renaming;
+    Tensor head;
+    if (leaf) {
+      head = heads_[k];
+      auto map_slots = [&renaming](auto const& from, auto const& to) {
+        SEQUANT_ASSERT(std::ranges::size(from) == std::ranges::size(to));
+        auto t = std::ranges::begin(to);
+        for (auto const& ix : from) {
+          if (!ix.nonnull()) {
+            ++t;
+            continue;
+          }
+          auto const [it, inserted] = renaming.emplace(ix, *t);
+          if (!inserted && it->second != *t)
+            throw Exception("inline: a leaf names head index " +
+                            toUtf8(ix.full_label()) + " by two indices");
+          ++t;
+        }
+      };
+      if (swapped) {
+        map_slots(head.bra(), leaf->ket());
+        map_slots(head.ket(), leaf->bra());
+      } else {
+        map_slots(head.bra(), leaf->bra());
+        map_slots(head.ket(), leaf->ket());
+      }
+      map_slots(head.aux(), leaf->aux());
+      transform_indices(head, renaming);
+      reset_tags(head);
+    }
+    // every other index of the rhs (a dummy, or every index under a scalar
+    // head) gets a fresh one, so the subtree cannot collide with the
+    // consumer's or another inlined subtree's indices
+    container::svector<Index> dummies;
+    for (auto const& ix : get_used_indices(def.expression()))
+      if (!renaming.contains(ix)) dummies.push_back(ix);
+    for (auto const& ix : dummies) {
+      Index f = fresh_.make(ix.drop_proto_indices());
+      used_labels_.emplace(f.label());
+      renaming.emplace(ix, std::move(f));
+    }
+    // the proto indices of a renamed dummy follow the renaming
+    for (auto const& ix : dummies) {
+      if (!ix.has_proto_indices()) continue;
+      container::vector<Index> protos;
+      for (auto const& p : ix.proto_indices()) {
+        auto const it = renaming.find(p);
+        protos.push_back(it == renaming.end() ? p : it->second);
+      }
+      Index& f = renaming.at(ix);
+      f = Index(Index(f), std::move(protos), ix.symmetric_proto_indices());
+    }
+
+    ExprPtr rhs = transform_expr(def.expression(), renaming);
+    ResultExpr const renamed =
+        leaf ? ResultExpr(head, std::move(rhs))
+             : ResultExpr(def.result_as_variable(), std::move(rhs));
+    BinarizationOptions sub_opts = opts;
+    sub_opts.node_batch_axes.clear();
+    std::size_t node_counter = 0;
+    auto tree = binarize_guarded(k, renamed, sub_opts, node_counter);
+    tree->set_equation_boundary(true);
+    return tree;
+  }
+
+ private:
+  /// binarizes \p res, the (renamed) equation \p k, with \p k marked active
+  /// \throw Exception if \p k is active already
+  EvalExprNode binarize_guarded(std::size_t k, ResultExpr const& res,
+                                BinarizationOptions const& opts,
+                                std::size_t& node_counter) {
+    if (!active_.emplace(k).second)
+      throw Exception("inline: cyclic definition of " +
+                      toUtf8(system_[k].label()));
+    auto tree = impl::binarize(res, opts, node_counter, this);
+    active_.erase(k);
+    return tree;
+  }
+
+  std::span<const ResultExpr> system_;
+  container::svector<bool>& consumed_;
+  /// head label -> the equations with that label
+  container::map<std::wstring, container::svector<std::size_t>> by_label_;
+  /// the head of every equation as a Tensor (empty for a scalar head)
+  container::svector<Tensor> heads_;
+  /// the equations whose trees are being built
+  container::set<std::size_t> active_;
+  /// the labels of every index of the system and of every fresh index
+  container::set<std::wstring> used_labels_;
+  IndexFactory fresh_;
+};
+
+}  // namespace detail
+
 namespace impl {
 
 EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
                       const BinarizationOptions& opts,
-                      std::size_t& node_counter) {
+                      std::size_t& node_counter,
+                      detail::InlineContext* inline_ctx) {
   if (expr->is<Constant>())  //
     return binarize(expr->as<Constant>());
 
-  if (expr->is<Variable>())  //
-    return binarize(expr->as<Variable>());
+  if (expr->is<Variable>()) {
+    auto const& v = expr->as<Variable>();
+    if (inline_ctx)
+      if (auto const k = inline_ctx->match(v))
+        return inline_ctx->inline_definition(*k, nullptr, opts);
+    return binarize(v);
+  }
 
-  if (expr->is<Tensor>())  //
-    return binarize(expr->as<Tensor>());
+  if (expr->is<Tensor>()) {
+    auto const& t = expr->as<Tensor>();
+    if (inline_ctx)
+      if (auto const m = inline_ctx->match(t))
+        return inline_ctx->inline_definition(m->k, &t, opts, m->swapped);
+    return binarize(t);
+  }
 
   if (expr->is<Sum>())  //
-    return binarize(expr->as<Sum>(), uncontract, opts, node_counter);
+    return binarize(expr->as<Sum>(), uncontract, opts, node_counter,
+                    inline_ctx);
 
   if (expr->is<Product>())  //
-    return binarize(expr->as<Product>(), uncontract, opts, node_counter);
+    return binarize(expr->as<Product>(), uncontract, opts, node_counter,
+                    inline_ctx);
 
-  if (expr->is<Power>())  //
-    return binarize(expr->as<Power>());
+  if (expr->is<Power>()) {
+    auto const& p = expr->as<Power>();
+    if (inline_ctx && p.base()->is<Variable>() &&
+        inline_ctx->match(p.base()->as<Variable>()))
+      throw Exception("inline: head " +
+                      toUtf8(p.base()->as<Variable>().label()) +
+                      " cannot be used inside a scalar power; define the "
+                      "power as its own equation");
+    return binarize(p);
+  }
+
+  if (expr->is<TensorPower>())  //
+    return binarize(expr->as<TensorPower>(), uncontract, opts, node_counter,
+                    inline_ctx);
 
   throw Exception("Encountered unsupported expression in binarize.");
+}
+
+EvalExprNode binarize(ResultExpr const& res, const BinarizationOptions& opts,
+                      std::size_t& node_counter,
+                      detail::InlineContext* inline_ctx) {
+  // collect result indices so they are not contracted in the expression tree
+  IndexSet uncontract;
+  for (auto&& ix : res.indices()) uncontract.emplace(ix);
+
+  // only the summands of a Sum broadcast (see is_valid(const ResultExpr&))
+  if (!res.expression()->is<Sum>()) {
+    auto const supplied =
+        detail::supplied_result_indices(res, *res.expression());
+    std::string missing;
+    for (Index const& ix : res.indices())
+      if (!supplied.contains(ix))
+        missing += (missing.empty() ? "" : ", ") + toUtf8(ix.full_label());
+    if (!missing.empty())
+      throw Exception(
+          "binarize: the right-hand side of " +
+          toUtf8(io::serialization::to_string(res.result_as_tensor())) +
+          " lacks head indices " + missing +
+          "; broadcast is only defined for a Sum under a head");
+  }
+
+  // the root's bra/ket would be positional (see the deprecated
+  // binarize(ExprPtr)), but it is overwritten below with
+  // res.result_as_tensor(), so the layout is caller-determined
+  EvalExprNode tree = res.expression()->is<Sum>()
+                          ? sequant::binarize_broadcast_sum(
+                                res, uncontract, opts, node_counter, inline_ctx)
+                          : binarize(res.expression(), uncontract, opts,
+                                     node_counter, inline_ctx);
+
+  const bool is_scalar =
+      res.bra().empty() && res.ket().empty() && res.aux().empty();
+
+  if (tree.size() < 2) {
+    // We want to have a result node with the result from the ResultExpr.
+    // In order for that to work, we need a dedicated result node in the first
+    // place. Hence, we adapt the represented expression for terminals to be
+    // that terminal multiplied by 1.
+    EvalExpr result = is_scalar ? *sequant::binarize(res.result_as_variable())
+                                : *sequant::binarize(res.result_as_tensor());
+    EvalOpSetter{}.set(result, EvalOp::Product);
+
+    tree = EvalExprNode(std::move(result), std::move(tree),
+                        sequant::binarize(Constant(1)));
+  }
+  SEQUANT_ASSERT(tree.size() > 1);
+
+  if (is_scalar) {
+    if (res.has_label()) {
+      tree->expr()->as<Variable>().set_label(res.label());
+    }
+  } else {
+    tree->expr()->as<Tensor>() = res.result_as_tensor();
+  }
+
+  return tree;
+}
+
+container::svector<EvalExprNode> binarize_system(
+    std::span<const ResultExpr> system, const BinarizationOptions& opts,
+    container::svector<bool>& consumed) {
+  // node_batch_axes annotates the nodes of one term
+  if (!opts.node_batch_axes.empty())
+    throw Exception(
+        "binarize(system): node_batch_axes cannot describe several equations; "
+        "stamp the returned trees instead");
+  consumed.assign(system.size(), false);
+  detail::InlineContext ctx(system, consumed);
+  container::svector<EvalExprNode> trees;
+  for (std::size_t k = 0; k != system.size(); ++k) {
+    std::size_t node_counter = 0;
+    trees.emplace_back(ctx.binarize_equation(k, opts, node_counter));
+  }
+  return trees;
 }
 
 }  // namespace impl

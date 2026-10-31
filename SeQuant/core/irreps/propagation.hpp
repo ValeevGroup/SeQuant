@@ -6,13 +6,16 @@
 #include <SeQuant/core/irreps/algebra.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
 #include <range/v3/algorithm/contains.hpp>
+#include <range/v3/range/operations.hpp>
 
 #include <concepts>
+#include <cstddef>
 #include <functional>
 #include <map>
 #include <optional>
@@ -111,6 +114,9 @@ class IrrepContext {
 
   set_type empty_set() const { return {}; }
 
+  /// @returns the set of every IRREP
+  set_type any_set() const { return set_type::any(); }
+
   set_type product(const set_type &lhs, const set_type &rhs) const {
     return sequant::product(m_algebra, lhs, rhs);
   }
@@ -138,6 +144,7 @@ concept IrrepPropagationContext =
       { ctx.irreps_of(variable) } -> std::convertible_to<typename C::set_type>;
       { ctx.totally_symmetric() } -> std::convertible_to<typename C::set_type>;
       { ctx.empty_set() } -> std::convertible_to<typename C::set_type>;
+      { ctx.any_set() } -> std::convertible_to<typename C::set_type>;
       { ctx.product(set, set) } -> std::convertible_to<typename C::set_type>;
       { ctx.conjugate(set) } -> std::convertible_to<typename C::set_type>;
       mutable_set.unite(set);
@@ -183,7 +190,9 @@ std::function<IrrepSet<Irrep>(const Tensor &)> resolve_by_pattern(
 }
 
 /// The different kinds of nodes relevant for the propagation of IRREPs
-enum class IrrepNodeKind { Leaf, Product, Sum, Adjoint };
+/// (Broadcast: a child expanded over modes it lacks, constant along them and
+/// hence nonzero in every IRREP block of them)
+enum class IrrepNodeKind { Leaf, Product, Sum, Adjoint, Broadcast };
 
 /// Adapter that makes a given type of (expression) node accessible to the
 /// generic IRREP propagation. Specializations provide
@@ -230,6 +239,13 @@ typename Ctx::set_type fold_irreps(const Node &node, const Ctx &ctx,
       Traits::for_each_child(node, [&](const Node &child) {
         result.unite(ctx.conjugate(fold_irreps(child, ctx, on_node)));
       });
+      break;
+    case IrrepNodeKind::Broadcast:
+      result = ctx.empty_set();
+      Traits::for_each_child(node, [&](const Node &child) {
+        result.unite(fold_irreps(child, ctx, on_node));
+      });
+      if (!result.empty()) result = ctx.any_set();
       break;
   }
 
@@ -280,6 +296,10 @@ struct IrrepNodeTraits<Expr> {
       }
       return ctx.irreps_of(tensor);
     }
+    if (expr.is<TensorPower>()) {
+      // element-wise power of a tensor: irreps of the base
+      return leaf_irreps(*expr.as<TensorPower>().base(), ctx);
+    }
     if (expr.is<Constant>() || expr.is<Product>()) {
       // Only zero-valued products end up here (see kind())
       SEQUANT_ASSERT(expr.is<Constant>() || expr.is_zero());
@@ -315,10 +335,27 @@ typename Ctx::set_type irreps_of(const Expr &expr, const Ctx &ctx) {
   return detail::fold_irreps<Expr>(expr, ctx, no_op);
 }
 
-/// @returns The IRREPs spanned by the given result expression
+/// @returns The IRREPs spanned by the given result expression. A summand of a
+/// Sum on its rhs that lacks some of the head's indices (see
+/// is_valid(const ResultExpr&)) is broadcast over them: constant along those
+/// modes, it is nonzero in every IRREP block of them, so unless it vanishes it
+/// spans every IRREP.
 template <IrrepPropagationContext Ctx>
 typename Ctx::set_type irreps_of(const ResultExpr &result, const Ctx &ctx) {
-  return irreps_of(*result.expression(), ctx);
+  const ExprPtr &rhs = result.expression();
+  if (!rhs->is<Sum>()) return irreps_of(*rhs, ctx);
+
+  const auto n_head =
+      static_cast<std::size_t>(ranges::distance(result.indices()));
+  auto set = ctx.empty_set();
+  for (const ExprPtr &summand : rhs->as<Sum>().summands()) {
+    auto summand_set = irreps_of(*summand, ctx);
+    if (!summand_set.empty() &&
+        detail::supplied_result_indices(result, *summand).size() != n_head)
+      summand_set = ctx.any_set();
+    set.unite(summand_set);
+  }
+  return set;
 }
 
 }  // namespace sequant

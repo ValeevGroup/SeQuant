@@ -18,7 +18,9 @@
 
 #include <range/v3/algorithm/contains.hpp>
 
+#include <functional>
 #include <string>
+#include <typeinfo>
 
 namespace sequant {
 
@@ -85,9 +87,9 @@ namespace {
 
 /// @return whether an index occurs more than once in the slots of @p t,
 /// protoindices included
-bool has_repeated_index(const Tensor &t) {
+bool has_repeated_index(const AbstractTensor &t) {
   container::set<Index> seen;
-  for (const auto &idx : t.const_slots()) {
+  for (const auto &idx : t._slots()) {
     if (!seen.insert(idx).second) return true;
     for (const auto &proto : idx.proto_indices())
       if (!seen.insert(proto).second) return true;
@@ -97,30 +99,40 @@ bool has_repeated_index(const Tensor &t) {
 
 }  // namespace
 
-ExprPtr Tensor::canonicalize(CanonicalizeOptions opts) {
-  if (is_canonical(opts)) return {};
+ExprPtr canonicalize_tensor_leaf(
+    Expr &leaf, CanonicalizeOptions opts,
+    const std::function<void(const AbstractTensor &)> &assign) {
+  if (leaf.is_canonical(opts)) return {};
+  auto &tensor = leaf.as<AbstractTensor>();
   const auto contexts_version = current_contexts_version();
   const auto ctx = get_default_context_snapshot();
   ExprPtr byproduct;
-  if (has_repeated_index(*this)) {
+  if (has_repeated_index(tensor)) {
     // a repeated index is contracted, so this is a tensor network and is
     // canonicalized as one, like a Product of tensors
-    TensorNetwork tn(static_cast<const Expr &>(*this));
+    TensorNetwork tn(static_cast<const Expr &>(leaf));
     byproduct = tn.canonicalize(ctx.cardinal_tensor_labels(), opts);
     SEQUANT_ASSERT(tn.tensors().size() == 1);
-    const auto canonical = std::dynamic_pointer_cast<Tensor>(tn.tensors()[0]);
-    SEQUANT_ASSERT(canonical);
-    *this = *canonical;
+    const AbstractTensor &canonical = *tn.tensors()[0];
+    SEQUANT_ASSERT(typeid(canonical) == typeid(tensor));
+    assign(canonical);
   } else {
     const auto canonicalizer = ctx.tensor_canonicalizer_ptr(L"");
     if (!canonicalizer)
       throw Exception(
-          "Tensor::canonicalize: the current context has no default tensor "
-          "canonicalizer");
-    byproduct = canonicalizer->apply(*this);
+          "canonicalize_tensor_leaf: the current context has no default "
+          "tensor canonicalizer");
+    byproduct = canonicalizer->apply(tensor);
   }
-  mark_canonical(opts, contexts_version);
+  leaf.mark_canonical(opts, contexts_version);
   return byproduct;
+}
+
+ExprPtr Tensor::canonicalize(CanonicalizeOptions opts) {
+  return canonicalize_tensor_leaf(
+      *this, opts, [this](const AbstractTensor &canonical) {
+        *this = static_cast<const Tensor &>(canonical);
+      });
 }
 
 }  // namespace sequant

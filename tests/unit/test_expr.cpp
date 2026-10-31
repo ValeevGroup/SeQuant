@@ -16,6 +16,8 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tree_index.hpp>
+#include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
@@ -871,6 +873,17 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(lone_first->is<Product>());
       REQUIRE(lone_first->as<Product>().scalar() == 2);
       REQUIRE(has_factor(lone_first, *vx));
+    }
+
+    {  // transform_expr passes a scalar Power through
+      container::map<Index, Index> repl{{Index{L"i_1"}, Index{L"i_2"}}};
+      auto const sq = ex<Power>(vx, 2);
+      REQUIRE(*transform_expr(sq, repl) == *sq);
+      REQUIRE(*transform_expr(sq, repl, 3) == *(ex<Constant>(3) * sq));
+      auto const renamed =
+          transform_expr(sq * ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}), repl);
+      REQUIRE(*renamed == *(sq * ex<Tensor>(L"t", bra{L"i_2"}, ket{L"a_1"})));
+      REQUIRE(*transform_expr(sq + vx, repl) == *(sq + vx));
     }
   }
 
@@ -1760,6 +1773,166 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_THROWS_AS(TreeIndex({2}).select_from(expr), Exception);
       REQUIRE_THROWS_AS(TreeIndex({0, 1}).select_from(expr), Exception);
     }
+  }
+}
+
+TEST_CASE("tensor_power", "[elements]") {
+  using namespace sequant;
+  const auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                            TensorSymmetries{.perm = Symmetry::Symm,
+                                             .braket = BraKetSymmetry::Symm,
+                                             .column = ColumnSymmetry::Symm});
+  const auto t = ex<Tensor>(L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                            TensorSymmetries{.perm = Symmetry::Antisymm});
+  SECTION("construction") {
+    REQUIRE_NOTHROW(TensorPower(D, rational{-1}));
+    REQUIRE_NOTHROW(TensorPower(D, rational{1, 2}));
+    REQUIRE_NOTHROW(TensorPower(D, rational{0}));
+    REQUIRE_NOTHROW(TensorPower(t, rational{3}));
+    if (assert_behavior() != AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(TensorPower(t, rational{1, 2}),
+                        Exception);  // non-integer on Antisymm
+      REQUIRE_THROWS_AS(TensorPower(ex<Variable>(L"x"), rational{2}),
+                        Exception);  // scalar base
+      REQUIRE_THROWS_AS(TensorPower(D * D, rational{2}),
+                        Exception);  // compound base
+      REQUIRE_THROWS_AS(
+          TensorPower(ex<TensorPower>(D, rational{2}), rational{3}),
+          Exception);  // nesting
+    }
+    const TensorPower p(D, rational{-1});
+    CHECK(*p.base() == *D);
+    CHECK(p.base().get() != D.get());  // cloned
+    CHECK(p.exponent() == rational{-1});
+    CHECK_FALSE(p.is_scalar());
+    CHECK(p.is_cnumber());
+    CHECK(p.is<AbstractTensor>());
+  }
+  SECTION("pow factory") {
+    const auto x = ex<Variable>(L"x");
+    CHECK(pow(x, rational{2})->is<Power>());
+    CHECK(pow(ex<Constant>(2), rational{1, 2})->is<Power>());
+    CHECK(*pow(x, rational{1}) == *x);
+    CHECK(pow(pow(x, rational{2}), rational{3})->as<Power>().exponent() ==
+          rational{6});
+    CHECK(pow(D, rational{-1})->is<TensorPower>());
+    CHECK(*pow(D, rational{1}) == *D);
+    CHECK(
+        pow(pow(D, rational{-1}), rational{2})->as<TensorPower>().exponent() ==
+        rational{-2});
+    CHECK(*pow(pow(D, rational{3}), rational{1, 3}) ==
+          *D);  // odd inner: composes
+    REQUIRE_THROWS_AS(pow(pow(D, rational{2}), rational{1, 2}), Exception);
+    REQUIRE_THROWS_AS(pow(D * D, rational{-1}), Exception);
+    REQUIRE_THROWS_AS(pow(D + D, rational{-1}), Exception);
+    REQUIRE_THROWS_AS(pow(x * x, rational{2}), Exception);
+    // unsupported input is rejected by pow itself, whatever the assert
+    // behavior
+    REQUIRE_THROWS_AS(pow(t, rational{1, 2}), Exception);
+    REQUIRE_THROWS_AS(pow(pow(t, rational{3}), rational{1, 2}), Exception);
+    REQUIRE_THROWS_AS(
+        pow(ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"})), rational{2}),
+        Exception);
+    CHECK(pow(pow(D, rational{-1}), rational{1, 3})
+              ->as<TensorPower>()
+              .exponent() == rational{-1, 3});
+    REQUIRE_THROWS_AS(pow(pow(D, rational{-2}), rational{1, 2}), Exception);
+    auto xc = ex<Power>(x, rational{2});
+    xc->as<Power>().conjugate();
+    CHECK(pow(xc, rational{3})->as<Power>().conjugated());
+    REQUIRE_THROWS_AS(pow(pow(x, rational{2}), rational{1, 2}), Exception);
+    REQUIRE_THROWS_AS(pow(ex<Constant>(0), rational{-1}), Exception);
+    // exponent 0 on a tensor is a tensor of ones, not Constant(1)
+    CHECK(pow(D, rational{0})->is<TensorPower>());
+    CHECK(pow(D, rational{0})->as<AbstractTensor>()._symmetry() ==
+          Symmetry::Symm);
+  }
+  SECTION("hash and equality") {
+    const auto p1 = ex<TensorPower>(D, rational{-1});
+    const auto p2 = ex<TensorPower>(D, rational{-1});
+    const auto p3 = ex<TensorPower>(D, rational{-2});
+    CHECK(*p1 == *p2);
+    CHECK(p1->hash_value() == p2->hash_value());
+    CHECK(*p1 != *p3);
+    CHECK(p1->hash_value() != p3->hash_value());
+    CHECK(p1->hash_value() != D->hash_value());
+    CHECK(*p1 != *D);
+    CHECK((*p1 < *p3) != (*p3 < *p1));
+    auto s = D + p1;  // a power must not merge with its base
+    REQUIRE(s->is<Sum>());
+    CHECK(s->as<Sum>().summands().size() == 2);
+  }
+  SECTION("clone and copy are deep") {
+    const TensorPower p(D, rational{-1});
+    TensorPower q(p);
+    CHECK(q.base().get() != p.base().get());
+    CHECK(q == p);
+    auto c = p.clone();
+    CHECK(c->as<TensorPower>().base().get() != p.base().get());
+    CHECK(*c == p);
+  }
+  SECTION("symmetry rule") {
+    CHECK(TensorPower(t, rational{3}).as<AbstractTensor>()._symmetry() ==
+          Symmetry::Antisymm);
+    CHECK(TensorPower(t, rational{2}).as<AbstractTensor>()._symmetry() ==
+          Symmetry::Symm);
+    CHECK(TensorPower(t, rational{0}).as<AbstractTensor>()._symmetry() ==
+          Symmetry::Symm);
+    CHECK(TensorPower(D, rational{1, 2}).as<AbstractTensor>()._symmetry() ==
+          Symmetry::Symm);
+    CHECK(
+        TensorPower(D, rational{-1}).as<AbstractTensor>()._braket_symmetry() ==
+        D->as<Tensor>().braket_symmetry());
+    CHECK(
+        TensorPower(D, rational{-1}).as<AbstractTensor>()._column_symmetry() ==
+        ColumnSymmetry::Symm);
+  }
+  SECTION("base with an empty ket") {
+    auto eps = ex<Tensor>(L"ε", bra{L"a_1"}, ket{},
+                          TensorSymmetries{.braket = BraKetSymmetry::Symm});
+    auto p = ex<TensorPower>(eps, rational{-1});
+    CHECK(p->as<AbstractTensor>()._bra_rank() == 1);
+    CHECK(p->as<AbstractTensor>()._ket_rank() == 0);
+    CHECK(p->as<AbstractTensor>()._bra_net_rank() == 1);
+    CHECK(ranges::distance(p->as<AbstractTensor>()._braket()) == 1);
+  }
+  SECTION("adjoint acts on the base") {
+    auto p = ex<TensorPower>(t, rational{-1});
+    const auto h0 = p->hash_value();
+    p->adjoint();
+    auto tadj = t->clone();
+    tadj->adjoint();
+    CHECK(*p->as<TensorPower>().base() == *tadj);
+    CHECK(p->hash_value() != h0);
+  }
+  SECTION("utilities") {
+    auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                        TensorSymmetries{.perm = Symmetry::Antisymm});
+    auto p = pow(D, rational{-1});
+    std::string msg;
+    CHECK(is_valid(p, &msg));
+    auto groups = get_unique_indices(p);
+    CHECK(groups.bra == std::vector{Index{L"i_1"}, Index{L"i_2"}});
+    CHECK(groups.ket == std::vector{Index{L"a_1"}, Index{L"a_2"}});
+    // transform_expr renames inside the base
+    container::map<Index, Index> repl{{Index{L"i_1"}, Index{L"i_3"}},
+                                      {Index{L"a_1"}, Index{L"a_3"}}};
+    auto renamed = transform_expr(M * p, repl);
+    auto D3 = ex<Tensor>(L"D", bra{L"i_3", L"i_2"}, ket{L"a_3", L"a_2"},
+                         TensorSymmetries{.perm = Symmetry::Symm,
+                                          .braket = BraKetSymmetry::Symm,
+                                          .column = ColumnSymmetry::Symm});
+    REQUIRE(renamed->is<Product>());
+    CHECK(*renamed->as<Product>().factors()[1] == *pow(D3, rational{-1}));
+
+    CHECK(diff(*p, *p).empty());
+    CHECK(!diff(*p, *pow(D, rational{-2})).empty());
+
+    // a proto-indexed Sum is validated by counting index occurrences, which
+    // must see the indices of a power's base
+    auto T = ex<Tensor>(L"T", bra{Index(L"a_1", {L"i_1"})}, ket{L"i_1"},
+                        TensorSymmetries{.braket = BraKetSymmetry::Symm});
+    CHECK(is_valid(T + pow(T, rational{-1}), &msg));
   }
 }
 

@@ -269,6 +269,26 @@ struct ResultObjectLess {
   }
 };
 
+/// Invokes @p visitor on the Tensor @p tensor. An adjoint-marked tensor is
+/// visited in its bare (non-adjoint) form and the replacement is adjointed
+/// again.
+/// @returns the replacement, or null if @p visitor returned null
+template <typename Visitor>
+ExprPtr visit_tensor(const ExprPtr &tensor, Visitor &&visitor) {
+  if (!is_adjoint_label(tensor->as<Tensor>().label())) {
+    return visitor(tensor);
+  }
+
+  Tensor bare = tensor->as<Tensor>();
+  bare.adjoint();
+
+  ExprPtr replacement = visitor(ex<Tensor>(std::move(bare)));
+  if (replacement) {
+    replacement->as<Tensor>().adjoint();
+  }
+  return replacement;
+}
+
 /// Invokes @p visitor on every Tensor and Variable that is (or is the base of)
 /// the terminal expression @p leaf. If @p visitor returns a non-null ExprPtr,
 /// it replaces the visited object.
@@ -278,20 +298,12 @@ struct ResultObjectLess {
 /// replacement is adjointed again.
 template <typename Visitor>
 ExprPtr map_leaf_objects(const ExprPtr &leaf, Visitor &&visitor) {
-  if (leaf->is<Tensor>() && is_adjoint_label(leaf->as<Tensor>().label())) {
-    Tensor bare = leaf->as<Tensor>();
-    bare.adjoint();
-
-    ExprPtr replacement = visitor(ex<Tensor>(std::move(bare)));
-    if (!replacement) {
-      return leaf;
-    }
-
-    replacement->as<Tensor>().adjoint();
-    return replacement;
+  if (leaf->is<Tensor>()) {
+    ExprPtr replacement = visit_tensor(leaf, visitor);
+    return replacement ? replacement : leaf;
   }
 
-  if (leaf->is<Tensor>() || leaf->is<Variable>()) {
+  if (leaf->is<Variable>()) {
     ExprPtr replacement = visitor(leaf);
     return replacement ? replacement : leaf;
   }
@@ -307,6 +319,16 @@ ExprPtr map_leaf_objects(const ExprPtr &leaf, Visitor &&visitor) {
         }
         return result;
       }
+    }
+  }
+
+  if (leaf->is<TensorPower>()) {
+    const TensorPower &power = leaf->as<TensorPower>();
+    // the base of a TensorPower is a c-number Tensor leaf
+    SEQUANT_ASSERT(power.base()->is<Tensor>());
+    ExprPtr replacement = visit_tensor(power.base(), visitor);
+    if (replacement) {
+      return pow(std::move(replacement), power.exponent());
     }
   }
 

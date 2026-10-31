@@ -109,6 +109,12 @@ IndexGroups<Container> get_unique_indices([[maybe_unused]] const Power& power) {
   return {};
 }
 
+/// The indices of a TensorPower are those of its base
+template <typename Container = std::vector<Index>>
+IndexGroups<Container> get_unique_indices(const TensorPower& power) {
+  return get_unique_indices<Container>(power.base());
+}
+
 /// @returns Lists of non-contracted indices arising when contracting the two
 /// given tensors in the order bra, ket, auxiliary
 template <typename Container = container::svector<Index>>
@@ -257,6 +263,8 @@ IndexGroups<Container> get_unique_indices(const Expr& expr) {
     return get_unique_indices<Container>(expr.as<Product>());
   } else if (expr.is<Power>()) {
     return get_unique_indices<Container>(expr.as<Power>());
+  } else if (expr.is<TensorPower>()) {
+    return get_unique_indices<Container>(expr.as<TensorPower>());
   } else {
     throw Exception(
         "Encountered unsupported expression type in get_unique_indices");

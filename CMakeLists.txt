@@ -378,6 +378,8 @@ set(SeQuant_symb_src
         SeQuant/core/expressions/sum.hpp
         SeQuant/core/expressions/tensor.cpp
         SeQuant/core/expressions/tensor.hpp
+        SeQuant/core/expressions/tensor_power.cpp
+        SeQuant/core/expressions/tensor_power.hpp
         SeQuant/core/expressions/variable.cpp
         SeQuant/core/expressions/variable.hpp
         SeQuant/core/hash.cpp
@@ -528,11 +530,13 @@ set(SeQuant_eval_src
         SeQuant/core/eval/cell_table.hpp
         SeQuant/core/eval/cell_table_builder.hpp
         SeQuant/core/eval/dag_scope.hpp
+        SeQuant/core/eval/elementwise.hpp
         SeQuant/core/eval/eval.hpp
         SeQuant/core/eval/eval_expr.cpp
         SeQuant/core/eval/eval_expr.hpp
         SeQuant/core/eval/eval_node.hpp
         SeQuant/core/eval/eval_node_compare.hpp
+        SeQuant/core/eval/extent_array_ops.hpp
         SeQuant/core/eval/forest_combine.hpp
         SeQuant/core/eval/legality.hpp
         SeQuant/core/eval/lifetime_mask.hpp
@@ -609,6 +613,7 @@ set(SeQuant_eval_ta_src
 
 # BTAS backend sources (header-only)
 set(SeQuant_eval_btas_src
+        SeQuant/core/eval/backends/btas/array_ops.hpp
         SeQuant/core/eval/backends/btas/eval_expr.hpp
         SeQuant/core/eval/backends/btas/result.hpp
 )
@@ -617,6 +622,7 @@ set(SeQuant_eval_btas_src
 set(SeQuant_eval_tapp_src
         SeQuant/core/eval/backends/tapp/tensor.hpp
         SeQuant/core/eval/backends/tapp/ops.hpp
+        SeQuant/core/eval/backends/tapp/array_ops.hpp
         SeQuant/core/eval/backends/tapp/eval_expr.hpp
         SeQuant/core/eval/backends/tapp/result.hpp
 )

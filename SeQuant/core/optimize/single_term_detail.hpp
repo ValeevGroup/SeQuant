@@ -346,8 +346,7 @@ inline container::vector<Index> batchable_mode_list(
            (is_batchable_external && is_batchable_external(ix));
   };
   for (auto&& t : network.tensors()) {
-    auto tp = std::dynamic_pointer_cast<Tensor>(t);
-    for (auto&& ix : ranges::views::concat(tp->bra(), tp->ket(), tp->aux())) {
+    for (auto&& ix : slots(*t)) {
       if (match(ix) && ranges::find(aux, ix) == ranges::end(aux))
         aux.push_back(ix);
       for (auto&& p : ix.proto_indices())
@@ -423,7 +422,8 @@ container::vector<container::vector<double>> sliced_footprints(
 /// \param network           The TensorNetwork.
 /// \param is_volatile_leaf  Predicate identifying volatile leaf tensors; may
 ///        be empty.
-/// \return Bitmask with bit i set iff tensor i is a volatile leaf.
+/// \return Bitmask with bit i set iff tensor i is a volatile leaf, or a
+///         TensorPower of one.
 inline std::size_t leaf_volatile_mask(
     TensorNetwork const& network,
     std::function<bool(Tensor const&)> const& is_volatile_leaf) {
@@ -431,7 +431,13 @@ inline std::size_t leaf_volatile_mask(
   if (!is_volatile_leaf) return mask;
   std::size_t i = 0;
   for (auto&& t : network.tensors()) {
-    auto tp = std::dynamic_pointer_cast<Tensor>(t);
+    // a power is as volatile as its base, the leaf the evaluator sees
+    auto const* tp = dynamic_cast<Tensor const*>(t.get());
+    if (auto const* pw = dynamic_cast<TensorPower const*>(t.get())) {
+      // the base of a TensorPower is a c-number Tensor leaf
+      tp = dynamic_cast<Tensor const*>(&pw->base_tensor());
+      SEQUANT_ASSERT(tp);
+    }
     if (tp && is_volatile_leaf(*tp)) mask |= (std::size_t{1} << i);
     ++i;
   }
@@ -624,7 +630,7 @@ inline SubnetMetadata build_subnet_metadata(
     auto ts = bits::on_bits_index(n) | bits::sieve(network.tensors());
     container::vector<ExprPtr> ts_expr;
     for (auto&& t : ts)
-      ts_expr.emplace_back(std::dynamic_pointer_cast<Tensor>(t)->clone());
+      ts_expr.emplace_back(std::dynamic_pointer_cast<Expr>(t)->clone());
 
     auto tn = TensorNetwork{ts_expr};
     auto meta =

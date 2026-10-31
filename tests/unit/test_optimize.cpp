@@ -20,6 +20,8 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
+#include <range/v3/algorithm/contains.hpp>
+
 #include <algorithm>
 #include <bit>
 #include <cstddef>
@@ -1277,6 +1279,52 @@ TEST_CASE("optimize", "[optimize]") {
             opt::batch_priority_less(expressions[1], expressions[0], batch));
         REQUIRE_FALSE(
             opt::batch_priority_less(expressions[0], expressions[0], batch));
+      }
+    }
+
+    SECTION("TensorPower") {
+      // M ⊙ pow(D,-1) shares i_1 between two bra slots
+      auto knob_ctx = get_default_context();
+      knob_ctx.set(AssertStrictBraKetSymmetry::No);
+      auto knob_resetter = set_scoped_default_context(knob_ctx);
+
+      std::vector<EvalNode<EvalExpr>> expressions = parse_inputs(
+          std::vector<std::wstring>{L"R1 = (M{i1,i2;a1,a2} "
+                                    L"D{i1,i2;a1,a2}^(-1)) L{a1,a2;i1,i2}",
+                                    L"R2 = K{a1,a2;i1,i2} (M{i1,i2;a1,a2} "
+                                    L"D{i1,i2;a1,a2}^(-1))"});
+      opt::eliminate_common_subexpressions(
+          expressions, binarizer,
+          {.filter_predicate = opt::min_usage_filter<EvalNode<EvalExpr>>(2)});
+      auto const actual = collect_as_expr(expressions);
+      REQUIRE(actual.size() == 3);
+      auto const& def = actual[0];
+      REQUIRE(def.label() == L"CSE1");
+      REQUIRE(def.expression()->is<Product>());
+      auto const& factors = def.expression()->as<Product>().factors();
+      REQUIRE(factors.size() == 2);
+      std::size_t n_powers = 0;
+      for (auto const& f : factors) {
+        if (f->is<TensorPower>()) {
+          ++n_powers;
+          REQUIRE(f->as<TensorPower>().exponent() == rational{-1});
+          REQUIRE(f->as<TensorPower>().base_tensor()._label() == L"D");
+        } else {
+          REQUIRE(f->is<Tensor>());
+          REQUIRE(f->as<Tensor>().label() == L"M");
+        }
+      }
+      REQUIRE(n_powers == 1);
+      for (std::size_t r : {1, 2}) {
+        CAPTURE(r);
+        std::size_t uses = 0;
+        actual[r].expression()->visit(
+            [&uses](ExprPtr const& x) {
+              uses += x->is<Tensor>() && x->as<Tensor>().label() == L"CSE1";
+              REQUIRE(!x->is<TensorPower>());
+            },
+            /* atoms_only = */ true);
+        REQUIRE(uses == 1);
       }
     }
   }
@@ -4118,4 +4166,195 @@ TEST_CASE("batchability role-split building-block predicates",
     CHECK(cost.is_batchable_external_index(i));
     CHECK(cost.batch_target_size(a) == 8u);
   }
+}
+
+TEST_CASE("optimize-tensor-power-factors", "[optimize][tensor-power]") {
+  using namespace sequant;
+  // L·M·pow(D,-1) has i_1 in two bra slots (M's and D's)
+  auto ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  const TensorSymmetries asym{.perm = Symmetry::Antisymm,
+                              .braket = BraKetSymmetry::Symm,
+                              .column = ColumnSymmetry::Symm};
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+  auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, asym);
+  auto L = ex<Tensor>(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, asym);
+  auto const Dinv = pow(D, rational{-1});
+  REQUIRE(Dinv->is<TensorPower>());
+
+  auto count_powers = [&Dinv](ExprPtr const& e) {
+    std::size_t n = 0;
+    e->visit(
+        [&](ExprPtr const& x) {
+          if (x->is<TensorPower>()) {
+            REQUIRE(*x == *Dinv);
+            ++n;
+          }
+        },
+        /* atoms_only = */ true);
+    return n;
+  };
+
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"i" ? 10 : 100;
+  };
+
+  // batched objective: one annotation per contraction node, which binarize
+  // checks against the nodes it emits
+  auto batched_opts = [&idxsz]() {
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = idxsz;
+    opts.batch_policy.is_batchable_contracted_index = [](Index const& ix) {
+      return ix.space().base_key() == L"a";
+    };
+    opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
+      return 10;
+    };
+    opts.batch_policy.peak_threshold = 1e5;
+    opts.term_batch_axes = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<NodeBatchAnnotation>>>();
+    return opts;
+  };
+
+  auto binarize_annotated = [](ResultExpr const& res,
+                               OptimizeOptions const& opts) {
+    BinarizationOptions bopts;
+    if (opts.term_batch_axes)
+      if (auto it = opts.term_batch_axes->find(res.expression().get());
+          it != opts.term_batch_axes->end())
+        bopts.node_batch_axes = it->second;
+    return binarize(res, bopts);
+  };
+
+  SECTION("three factors") {
+    auto const term = L * M * Dinv;
+    OptimizeOptions subnet_opts;
+    subnet_opts.CSE.subnet = true;
+    for (auto const& opts : {OptimizeOptions{}, batched_opts(), subnet_opts}) {
+      auto const optimized = optimize_result(term, opts).expr;
+      REQUIRE(optimized->is<Product>());
+      REQUIRE(count_powers(optimized) == 1);
+      REQUIRE_NOTHROW(
+          binarize_annotated(ResultExpr{Variable{L"E"}, optimized}, opts));
+    }
+  }
+
+  SECTION("an element-wise product is unchanged up to factor order") {
+    auto const term = M * Dinv;
+    for (auto const& opts : {OptimizeOptions{}, batched_opts()}) {
+      auto const optimized = optimize(term, opts);
+      REQUIRE(optimized->is<Product>());
+      REQUIRE(optimized->size() == 2);
+      REQUIRE(count_powers(optimized) == 1);
+      REQUIRE(ranges::any_of(*optimized,
+                             [&M](ExprPtr const& f) { return *f == *M; }));
+      REQUIRE_NOTHROW(binarize_annotated(
+          ResultExpr{Tensor{L"ell", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}},
+                     optimized},
+          opts));
+    }
+  }
+}
+
+TEST_CASE("single-term-tensor-power-base", "[optimize][tensor-power]") {
+  using namespace sequant;
+  auto ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  auto t = [](std::wstring_view s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Nonsymm});
+  };
+  auto power_vertex = [](TensorNetwork const& net) {
+    std::size_t i = 0;
+    for (auto&& v : net.tensors()) {
+      if (dynamic_cast<TensorPower const*>(v.get())) return i;
+      ++i;
+    }
+    FAIL("no TensorPower vertex");
+    return i;
+  };
+
+  SECTION("volatility mask") {
+    TensorNetwork net{std::vector<ExprPtr>{
+        t(L"M{i_1;a_1}"), pow(t(L"D{i_1;a_1}"), rational{-1})}};
+    auto const p = power_vertex(net);
+    auto const mask = opt::detail::leaf_volatile_mask(
+        net, [](Tensor const& x) { return x.label() == L"D"; });
+    REQUIRE(mask == (std::size_t{1} << p));
+    REQUIRE(opt::detail::leaf_volatile_mask(net, [](Tensor const& x) {
+              return x.label() == L"M";
+            }) == (std::size_t{1} << (1 - p)));
+  }
+
+  SECTION("subnet CSE tells M·D from M·pow(D,-1)") {
+    // subsets {M_1, D_1} and {M_2, D_2 or pow(D_2,-1)} have the same shape
+    auto meta_ids = [&t](ExprPtr d2) {
+      std::vector<ExprPtr> ts{t(L"M{i_1;a_1}"), t(L"D{a_1;i_2}"),
+                              t(L"M{i_3;a_2}"), std::move(d2)};
+      TensorNetwork net{ts};
+      // vertex of each input factor, by the target index only it carries
+      std::vector<std::size_t> pos;
+      for (auto lbl : {L"i_1", L"i_2", L"i_3", L"i_4"}) {
+        std::size_t i = 0;
+        for (auto&& v : net.tensors()) {
+          if (ranges::contains(slots(*v), Index{lbl})) break;
+          ++i;
+        }
+        REQUIRE(i < ts.size());
+        pos.push_back(i);
+      }
+      container::svector<Index> targets{Index{L"i_1"}, Index{L"i_2"},
+                                        Index{L"i_3"}, Index{L"i_4"}};
+      container::vector<opt::detail::OptRes> results(std::size_t{1}
+                                                     << ts.size());
+      container::vector<char> connected(results.size(), 1);
+      opt::detail::init_results(net, targets, results, &connected);
+      auto md = opt::detail::build_subnet_metadata(net, results, connected);
+      auto bits = [&pos](std::size_t a, std::size_t b) {
+        return (std::size_t{1} << pos[a]) | (std::size_t{1} << pos[b]);
+      };
+      return std::pair{md.meta_ids[bits(0, 1)], md.meta_ids[bits(2, 3)]};
+    };
+    auto [md_plain, md_plain2] = meta_ids(t(L"D{a_2;i_4}"));
+    REQUIRE(md_plain == md_plain2);  // control: equal subnets share an id
+    auto [md_d, md_pow] = meta_ids(pow(t(L"D{a_2;i_4}"), rational{-1}));
+    REQUIRE(md_d != md_pow);
+  }
+}
+
+TEST_CASE("optimize-broadcast-sum-symbolic", "[optimize][broadcast]") {
+  using namespace sequant;
+  ResultExpr res = deserialize<ResultExpr>(
+      L"D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}");
+  const Tensor head = res.result_as_tensor();
+  const ExprPtr rhs = res.expression().clone();
+  optimize(res);
+  REQUIRE(res.result_as_tensor() == head);
+
+  // the summands stay the ε leaves, which binarize broadcasts
+  std::size_t n_eps = 0;
+  res.expression()->visit(
+      [&](ExprPtr const& x) {
+        REQUIRE(x->is<Tensor>());
+        REQUIRE(x->as<Tensor>().label() == L"ε");
+        ++n_eps;
+      },
+      /* atoms_only = */ true);
+  REQUIRE(n_eps == 4);
+  REQUIRE(res.expression()->size() == rhs->size());
+
+  std::optional<FullBinaryNode<EvalExpr>> tree;
+  REQUIRE_NOTHROW(tree.emplace(binarize(res)));
+  std::size_t n_bcast = 0;
+  tree->visit([&](const auto& node) {
+    if (!node.leaf() && node->is_broadcast()) ++n_bcast;
+  });
+  REQUIRE(n_bcast == 4);
 }

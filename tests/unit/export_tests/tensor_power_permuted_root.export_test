@@ -1,0 +1,53 @@
+I{i_2,i_1;a_1,a_2} = D{i_1,i_2;a_1,a_2}:N-S-S^(-1)
+
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index a_1
+Declare index a_2
+
+Declare tensor D[a_1, a_2, i_1, i_2]
+Declare tensor I[i_2, i_1, a_1, a_2]
+
+Create I[i_2, i_1, a_1, a_2] and initialize to zero
+Load D[a_1, a_2, i_1, i_2]
+Compute I[i_2, i_1, a_1, a_2] += D[a_1, a_2, i_1, i_2]^(-1)
+Unload D[a_1, a_2, i_1, i_2]
+Persist I[i_2, i_1, a_1, a_2]
+
+=================================================
+Julia (TensorOperations)
+=================================================
+I_oovv = zeros(Float64, nocc, nocc, nv, nv)
+D_vvoo = deserialize("D_vvoo.jlbin")
+I_oovv .+= permutedims(D_vvoo, (4, 3, 1, 2)) .^ (-1)
+D_vvoo = nothing
+return I_oovv
+
+=================================================
+Python (einsum)
+=================================================
+import numpy as np
+import os
+
+I_oovv = np.zeros((nocc, nocc, nvirt, nvirt), order='F')
+D_vvoo = np.load('D_vvoo.npy')
+I_oovv += np.einsum('abic->ciab', D_vvoo, optimize=True)**(-1)
+del D_vvoo
+np.save('I_oovv.npy', I_oovv)
+
+=================================================
+PyTorch (einsum)
+=================================================
+import torch
+import os
+
+I_oovv = torch.zeros((nocc, nocc, nvirt, nvirt), dtype=torch.float64)
+D_oovv = torch.load('D_oovv.pt')
+I_oovv += torch.einsum('iabc->aibc', D_oovv)**(-1)
+del D_oovv
+torch.save(I_oovv, 'I_oovv.pt')
+
+=================================================

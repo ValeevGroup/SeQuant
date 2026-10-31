@@ -39,7 +39,12 @@ std::size_t VertexPainter::to_hash_value(const AbstractTensor &tensor) const {
                  hash::value(tensor._column_symmetry()),
                  hash::value(tensor._braket_symmetry())};
 
-  return to_hash_value(hashes);
+  auto result = to_hash_value(hashes);
+  // a zero salt is not mixed in, so that undecorated tensors keep their shade
+  // (bliss orders vertices by color value)
+  if (const auto salt = tensor._color_salt(); salt != 0)
+    hash::combine(result, salt);
+  return result;
 }
 
 VertexPainter::Color VertexPainter::operator()(const BraGroup &group) {

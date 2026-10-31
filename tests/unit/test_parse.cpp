@@ -7,6 +7,7 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor_power.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -399,6 +400,32 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(prod2.factor(0) == ex<Variable>(L"δ"));
       REQUIRE(prod2.factor(1) == ex<Variable>(L"γ"));
       REQUIRE(prod2.factor(2)->is<Tensor>());
+    }
+
+    SECTION("TensorPower") {
+      auto p = deserialize<ExprPtr>(L"D{i_1,i_2;a_1,a_2}^(-1)");
+      REQUIRE(p->is<TensorPower>());
+      CHECK(p->as<TensorPower>().exponent() == rational{-1});
+      CHECK(*p->as<TensorPower>().base() ==
+            *deserialize<ExprPtr>(L"D{i_1,i_2;a_1,a_2}"));
+      auto half = deserialize<ExprPtr>(L"D{i_1,i_2;a_1,a_2}^(1/2)");
+      CHECK(half->as<TensorPower>().exponent() == rational{1, 2});
+      // scalar powers are unchanged
+      CHECK(deserialize<ExprPtr>(L"x^(2)")->is<Power>());
+      CHECK(deserialize<ExprPtr>(L"2^(1/2)")->is<Power>());
+      // in a product, with a prefactor
+      auto prod = deserialize<ExprPtr>(
+          L"2 * D{i_1,i_2;a_1,a_2}^(-1) * t{a_1,a_2;i_1,i_2}");
+      REQUIRE(prod->is<Product>());
+      CHECK(prod->as<Product>().factors().size() == 2);
+      CHECK(*deserialize<ExprPtr>(serialize(prod)) == *prod);
+      CHECK(*deserialize<ExprPtr>(serialize(p)) == *p);
+      REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"D{i_1,i_2;a_1,a_2}:A^(1/2)"),
+                        io::serialization::SerializationError);
+      REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"0^(-1)"),
+                        io::serialization::SerializationError);
+      REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"(D{i_1;a_1}^(2))^*"),
+                        io::serialization::SerializationError);
     }
 
     SECTION("Sum") {
