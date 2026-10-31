@@ -447,12 +447,14 @@ struct DryRunOps {
   /// Scatter \p block into the `[block_lo, block_hi)` element slice of the
   /// destination's mode \p mode -- the inverse of slice_mode(). Zero-data:
   /// updates only the destination's modelled size and assembled-coverage
-  /// bookkeeping. \p ov and \p cov are the destination's (mutated in place).
+  /// bookkeeping. \p ov and \p cov are the destination's (mutated in place),
+  /// \p lob its lobounds.
   static void write_into_slice(container::svector<Index> const& idx,
                                ExtentOverrides& ov, AssembledCoverage& cov,
                                std::shared_ptr<CostModel const> const& cm,
                                Result const& block, std::size_t mode,
-                               std::size_t block_lo, std::size_t block_hi) {
+                               std::size_t block_lo, std::size_t block_hi,
+                               ExtentOverrides const& lob) {
     SEQUANT_ASSERT(mode < idx.size());
     SEQUANT_ASSERT(block_lo < block_hi);
     Index const& mix = idx[mode];
@@ -490,16 +492,31 @@ struct DryRunOps {
           block_extent, mode, toUtf8(mix.full_label()), block_lo, block_hi));
     // The block's absolute position on this mode (if it is a slice) must be
     // the destination slice it is written into.
+    auto const blob = lobounds_of(block);
+    auto const bpos = find_position(bidx, mix);
+    if (bpos) {
+      if (auto lit = blob.find(*bpos);
+          lit != blob.end() && lit->second != block_lo)
+        throw Exception(std::format(
+            "[dryrun] write_into_slice: block lobound {} on mode {} ({}) != "
+            "destination slice lobound {}",
+            lit->second, mode, toUtf8(mix.full_label()), block_lo));
+    }
+    // Every other mode the block shares with the destination must realize the
+    // destination's range there (e.g. the same enclosing batch): the scatter
+    // places the block along `mode` only. Compare the block with the
+    // destination's view of the written region, which on `mode` is the range
+    // just checked above.
     {
-      auto const blob = lobounds_of(block);
-      if (auto const bpos = find_position(bidx, mix)) {
-        if (auto lit = blob.find(*bpos);
-            lit != blob.end() && lit->second != block_lo)
-          throw Exception(std::format(
-              "[dryrun] write_into_slice: block lobound {} on mode {} ({}) != "
-              "destination slice lobound {}",
-              lit->second, mode, toUtf8(mix.full_label()), block_lo));
-      }
+      auto view_ov = ov;
+      auto view_lob = lob;
+      view_ov[mode] = block_extent;
+      if (bpos && blob.count(*bpos))
+        view_lob[mode] = block_lo;
+      else
+        view_lob.erase(mode);
+      check_shared_ranges("write_into_slice", idx, view_ov, view_lob, bidx, bov,
+                          blob, cm);
     }
     // Merge the block's range into the assembled coverage, requiring
     // contiguity: a block that neither appends after nor prepends before the
@@ -700,7 +717,8 @@ class ResultDryRun final : public Result {
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     detail::DryRunOps::write_into_slice(indices_, overrides_, assembled_, cm_,
-                                        block, mode, block_lo, block_hi);
+                                        block, mode, block_lo, block_hi,
+                                        lobounds_);
   }
 
   void add_inplace(Result const& other) override {
@@ -873,7 +891,8 @@ class ResultDryRunNested final : public Result {
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     detail::DryRunOps::write_into_slice(indices_, overrides_, assembled_, cm_,
-                                        block, mode, block_lo, block_hi);
+                                        block, mode, block_lo, block_hi,
+                                        lobounds_);
   }
 
   void add_inplace(Result const& other) override {
