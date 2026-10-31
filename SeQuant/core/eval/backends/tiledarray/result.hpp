@@ -754,8 +754,11 @@ class ResultTensorTA final : public Result {
 
   /// a view of \p parent with \p view pending. A trivial view (an identity
   /// permutation, a slice over whole modes) is an alias too: it reads the
-  /// parent's tiles as they are and still copies before it is written to, so
-  /// no two results ever share tiles one of them accumulates into.
+  /// parent's tiles as they are and still copies before it is written to. The
+  /// parent may be accumulated into while a view of it is pending (a cached
+  /// prefactor view of an in-place Sum's accumulator): TiledArray's `+=`
+  /// builds the sum as a new array and rebinds the handle, so the view keeps
+  /// reading the tiles it was taken over.
   ResultTensorTA(ArrayT parent, view_type view)
       : Result{}, parent_(std::move(parent)), view_(std::move(view)) {}
 
