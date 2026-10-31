@@ -6490,13 +6490,13 @@ TEST_CASE("ordered-root-no-alias", "[eval][ordered]") {
 }
 
 // A flat TiledArray result may stand for a pending view of another result's
-// array (detail::ArrayView): a batch slice, a mode permutation, a conjugation.
-// The view shares the parent's tiles until a consumer needs an array. These
-// tests pin the contract: a view is an alias (no bytes of its own) until
-// get<>() materializes it; the expression consumers (products without a
-// Hadamard index, dot, scaling, sums, accumulation, the scatter) take the view
-// as is and leave it an alias; the array consumers (einsum, clone) materialize
-// it exactly; writes into a view never reach the parent.
+// array (detail::ArrayView): a batch slice, a mode permutation, a conjugation,
+// a scaling by a constant. The view shares the parent's tiles until a consumer
+// needs an array. These tests pin the contract: a view is an alias (no bytes
+// of its own) until get<>() materializes it; the expression consumers (the
+// products, dot, sums, accumulation, the scatter) take the view as is and
+// leave it an alias; the array consumers (einsum, clone) materialize it
+// exactly; writes into a view never reach the parent.
 
 // The tiles a consuming TiledArray expression receives from a view: what
 // with_expr() hands over, evaluated through its own engine in the view's
@@ -7026,6 +7026,200 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     REQUIRE(equal_tarrays(pp->get<TArrayD>(), expP, "b,a"));
   }
 
+  SECTION("scaling by a constant is a pending view") {
+    auto const A0 = TA::clone(A);
+    auto c = eval_result<ResultScalar<double>>(2.5);
+    auto scaled = rA->prod(*c, annot3("a,b,c", "", "a,b,c"), DeNest::False);
+    REQUIRE(scaled->is_buffer_alias());
+    REQUIRE(scaled->measured_size_in_bytes() == 0);
+    REQUIRE(scaled->as<ResultD>().logical_trange() == trA);
+    // the scalar on the left (ResultScalar::prod forwards to the tensor)
+    auto scaledL = c->prod(*rA, annot3("", "a,b,c", "a,b,c"), DeNest::False);
+    REQUIRE(scaledL->is_buffer_alias());
+    // the phase is a view as well, and the factors compose
+    auto neg = scaled->mult_by_phase(-1);
+    REQUIRE(neg->is_buffer_alias());
+    REQUIRE(scaled->is_buffer_alias());
+    TArrayD exp;
+    exp("a,b,c") = 2.5 * A("a,b,c");
+    REQUIRE(equal_tarrays(scaled->get<TArrayD>(), exp, "a,b,c"));
+    REQUIRE_FALSE(scaled->is_buffer_alias());
+    REQUIRE(equal_tarrays(scaledL->get<TArrayD>(), exp, "a,b,c"));
+    TArrayD expNeg;
+    expNeg("a,b,c") = -2.5 * A("a,b,c");
+    REQUIRE(equal_tarrays(neg->get<TArrayD>(), expNeg, "a,b,c"));
+    // the product annotation relabels the result: a permuted scaled view
+    auto sp = rA->prod(*c, annot3("a,b,c", "", "c,a,b"), DeNest::False);
+    REQUIRE(sp->is_buffer_alias());
+    TArrayD expP;
+    expP("c,a,b") = 2.5 * A("a,b,c");
+    REQUIRE(equal_tarrays(sp->get<TArrayD>(), expP, "c,a,b"));
+    // the factor survives a slice and a permutation of the scaled view
+    auto const blk = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2});
+    auto ss = rA->prod(*c, annot3("a,b,c", "", "a,b,c"), DeNest::False)
+                  ->slice_mode(2, 5, 10)
+                  ->permute(annot2("a,b,c", "c,a,b"));
+    REQUIRE(ss->is_buffer_alias());
+    TArrayD expSS;
+    expSS("c,a,b") = 2.5 * blk("a,b,c");
+    REQUIRE(equal_tarrays(ss->get<TArrayD>(), expSS, "c,a,b"));
+    // and a scaling of a slice composes with its phase
+    auto sc = rA->slice_mode(2, 5, 10)->mult_by_phase(-1)->prod(
+        *c, annot3("a,b,c", "", "a,b,c"), DeNest::False);
+    REQUIRE(sc->is_buffer_alias());
+    TArrayD expSC;
+    expSC("a,b,c") = -2.5 * blk("a,b,c");
+    REQUIRE(equal_tarrays(sc->get<TArrayD>(), expSC, "a,b,c"));
+    // a scaled view of a held value is a view of that value
+    auto held = eval_result<ResultD>(TA::clone(blk));
+    auto hs = held->prod(*c, annot3("a,b,c", "", "a,b,c"), DeNest::False);
+    REQUIRE(hs->is_buffer_alias());
+    REQUIRE_FALSE(held->is_buffer_alias());
+    TArrayD expHS;
+    expHS("a,b,c") = 2.5 * blk("a,b,c");
+    REQUIRE(equal_tarrays(hs->get<TArrayD>(), expHS, "a,b,c"));
+    REQUIRE(equal_tarrays(held->get<TArrayD>(), blk, "a,b,c"));
+    // the parent is untouched throughout
+    REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+  }
+
+  SECTION("the consumers of a scaled view fold the factor in") {
+    auto const A0 = TA::clone(A);
+    auto c2 = eval_result<ResultScalar<double>>(2.0);
+    auto c3 = eval_result<ResultScalar<double>>(-3.0);
+    auto scale = [&](ResultPtr const& r, std::string const& ann,
+                     ResultPtr const& c) {
+      return r->prod(*c, annot3(ann, "", ann), DeNest::False);
+    };
+    auto const blkA = eager_block(A, "a,b,c", {0, 0, 1}, {3, 4, 2});
+    auto const blkB = eager_block(B, "c,d", {1, 0}, {2, 2});
+    auto sA = scale(rA->slice_mode(2, 5, 10), "a,b,c", c2);
+    auto sB = scale(rB->slice_mode(0, 5, 10), "c,d", c3);
+    // a contraction, both operands scaled
+    auto prod = sA->prod(*sB, annot3("a,b,c", "c,d", "a,b,d"), DeNest::False);
+    REQUIRE(sA->is_buffer_alias());
+    REQUIRE(sB->is_buffer_alias());
+    REQUIRE_FALSE(prod->is_buffer_alias());
+    TArrayD exp;
+    exp("a,b,d") = -6.0 * (blkA("a,b,c") * blkB("c,d"));
+    REQUIRE(equal_tarrays(prod->get<TArrayD>(), exp, "a,b,d"));
+    // a product with a Hadamard index
+    TArrayD H(world, TA::TiledRange{{0, 3, 6, 9}, {0, 5, 10}});
+    H.fill_random();
+    world.gop.fence();
+    auto sH = scale(eval_result<ResultD>(H)->slice_mode(1, 5, 10), "a,c", c3);
+    auto hprod = sA->prod(*sH, annot3("a,b,c", "a,c", "a,b"), DeNest::False);
+    REQUIRE(sH->is_buffer_alias());
+    TArrayD expH;
+    expH("a,b") =
+        -6.0 * TA::einsum(blkA("a,b,c"),
+                          eager_block(H, "a,c", {0, 1}, {3, 2})("a,c"),
+                          "a,b")("a,b");
+    REQUIRE(equal_tarrays(hprod->get<TArrayD>(), expH, "a,b"));
+    // a dot product
+    auto sA3 = scale(rA->slice_mode(2, 5, 10), "a,b,c", c3);
+    auto dot = sA->prod(*sA3, annot3("a,b,c", "a,b,c", ""), DeNest::False);
+    REQUIRE(sA->is_buffer_alias());
+    REQUIRE(sA3->is_buffer_alias());
+    REQUIRE(dot->get<double>() ==
+            Catch::Approx(-6.0 * TA::dot(blkA("a,b,c"), blkA("a,b,c"))));
+    // a sum, relabelled
+    auto sum = sA->sum(*sA3, annot3("a,b,c", "a,b,c", "c,b,a"));
+    REQUIRE(sA->is_buffer_alias());
+    TArrayD expSum;
+    expSum("c,b,a") = -1.0 * blkA("a,b,c");
+    REQUIRE(equal_tarrays(sum->get<TArrayD>(), expSum, "c,b,a"));
+    // an accumulation into a held value
+    auto held = eval_result<ResultD>(TA::clone(blkA));
+    held->add_inplace(*sA);
+    REQUIRE(sA->is_buffer_alias());
+    TArrayD exp3;
+    exp3("a,b,c") = 3.0 * blkA("a,b,c");
+    REQUIRE(equal_tarrays(held->get<TArrayD>(), exp3, "a,b,c"));
+    // the norm
+    REQUIRE(sA->norm2() == Catch::Approx(2.0 * TA::norm2(blkA)));
+    REQUIRE(sA->is_buffer_alias());
+    // the scatter of a scaled view
+    TArrayD Zr(world, trA);
+    Zr.fill(0.0);
+    world.gop.fence();
+    auto dest = eval_result<ResultD>(TA::clone(Zr));
+    dest->write_into_slice(*sA, 2, 5, 10);
+    REQUIRE(sA->is_buffer_alias());
+    TArrayD expZ;
+    expZ("a,b,c") = Zr("a,b,c");
+    expZ("a,b,c").block({0, 0, 1}, {3, 4, 2}, TA::preserve_lobound) =
+        2.0 * blkA("a,b,c");
+    REQUIRE(equal_tarrays(dest->get<TArrayD>(), expZ, "a,b,c"));
+    // the clone
+    auto cl = sA->clone();
+    REQUIRE(sA->is_buffer_alias());
+    REQUIRE_FALSE(cl->is_buffer_alias());
+    TArrayD expCl;
+    expCl("a,b,c") = 2.0 * blkA("a,b,c");
+    REQUIRE(equal_tarrays(cl->get<TArrayD>(), expCl, "a,b,c"));
+    // writes into a scaled view never reach the parent
+    auto sv = scale(rA, "a,b,c", c2);
+    sv->add_inplace(*eval_result<ResultD>(TA::clone(A)));
+    REQUIRE_FALSE(sv->is_buffer_alias());
+    TArrayD expSV;
+    expSV("a,b,c") = 3.0 * A("a,b,c");
+    REQUIRE(equal_tarrays(sv->get<TArrayD>(), expSV, "a,b,c"));
+    REQUIRE(equal_tarrays(A, A0, "a,b,c"));
+  }
+
+  SECTION("the adjoint of a scaled complex view conjugates the factor") {
+    using Cplx = std::complex<double>;
+    TArrayZ Z(world, TA::TiledRange{{0, 3, 6}, {0, 5, 10}});
+    TArrayZ W(world, TA::TiledRange{{0, 5, 10}, {0, 4}});
+    Z.fill_random();
+    W.fill_random();
+    world.gop.fence();
+    auto rZ = eval_result<ResultZ>(Z);
+    auto rW = eval_result<ResultZ>(W);
+    Cplx const c{1.0, 2.0};
+    auto rc = eval_result<ResultScalar<Cplx>>(c);
+    auto cz = rZ->prod(*rc, annot3("i,a", "", "i,a"), DeNest::False);
+    REQUIRE(cz->is_buffer_alias());
+    REQUIRE(cz->norm2() == Catch::Approx(std::abs(c) * TA::norm2(Z)));
+    // (c Z)^dagger = conj(c) Z^dagger
+    auto adj = cz->adjoint(annot2("i,a", "a,i"));
+    REQUIRE(adj->is_buffer_alias());
+    REQUIRE(cz->is_buffer_alias());
+    TArrayZ expAdj;
+    expAdj("a,i") = std::conj(c) * Z("i,a").conj();
+    // consumed by a product: nothing materialized
+    auto prod = adj->prod(*rW, annot3("a,i", "a,j", "i,j"), DeNest::False);
+    REQUIRE(adj->is_buffer_alias());
+    TArrayZ expP;
+    expP("i,j") = expAdj("a,i") * W("a,j");
+    REQUIRE(equal_tarrays(prod->get<TArrayZ>(), expP, "i,j"));
+    REQUIRE(equal_tarrays(adj->get<TArrayZ>(), expAdj, "a,i"));
+    // scaling after the adjoint: c Z^dagger, the factor as given
+    auto adjc = rZ->adjoint(annot2("i,a", "a,i"))
+                    ->prod(*rc, annot3("a,i", "", "a,i"), DeNest::False);
+    REQUIRE(adjc->is_buffer_alias());
+    TArrayZ expAdjC;
+    expAdjC("a,i") = c * Z("i,a").conj();
+    REQUIRE(equal_tarrays(adjc->get<TArrayZ>(), expAdjC, "a,i"));
+    // the adjoint of the adjoint of a scaled view is the scaled view
+    auto adj2 =
+        cz->adjoint(annot2("i,a", "a,i"))->adjoint(annot2("a,i", "i,a"));
+    REQUIRE(adj2->is_buffer_alias());
+    TArrayZ expZ;
+    expZ("i,a") = c * Z("i,a");
+    REQUIRE(equal_tarrays(adj2->get<TArrayZ>(), expZ, "i,a"));
+    // a complex phase folds into the scaled conjugated view
+    auto negAdj = cz->adjoint(annot2("i,a", "a,i"))->mult_by_phase(-1);
+    REQUIRE(negAdj->is_buffer_alias());
+    TArrayZ expNeg;
+    expNeg("a,i") = -std::conj(c) * Z("i,a").conj();
+    REQUIRE(equal_tarrays(negAdj->get<TArrayZ>(), expNeg, "a,i"));
+    // the materialized scaled view itself
+    REQUIRE(equal_tarrays(cz->get<TArrayZ>(), expZ, "i,a"));
+    REQUIRE_FALSE(cz->is_buffer_alias());
+  }
+
   SECTION("block-sparse arrays: the view keeps the shape") {
     using SpArray = TA::TSpArrayD;
     using ResultS = ResultTensorTA<SpArray>;
@@ -7208,6 +7402,99 @@ TEST_CASE("ta_lazy_views_nested", "[eval][ta][lazy]") {
         equal_tarrays(symV->get<ToTArray>(), symE->get<ToTArray>(), "i,j;a,b"));
   }
 
+  SECTION("scaling a nested view is a pending view") {
+    auto c = eval_result<ResultScalar<double>>(2.0);
+    auto scale = [&](sequant::ResultPtr const& r, std::string const& ann,
+                     sequant::ResultPtr const& c) {
+      return r->prod(*c, annot3(ann, "", ann), DeNest::False);
+    };
+    auto l = sL();
+    auto scaled = scale(l, "i,j;a,b", c);
+    REQUIRE(scaled->is_buffer_alias());
+    REQUIRE(scaled->measured_size_in_bytes() == 0);
+    REQUIRE(l->is_buffer_alias());
+    auto neg = scaled->mult_by_phase(-1);
+    REQUIRE(neg->is_buffer_alias());
+    ToTArray twice;
+    twice("i,j;a,b") = 2.0 * Le("i,j;a,b");
+    REQUIRE(scaled->norm2() ==
+            Catch::Approx(std::sqrt(TA::squared_norm(twice).get())));
+    REQUIRE(scaled->is_buffer_alias());
+    REQUIRE(equal_tarrays(scaled->get<ToTArray>(), twice, "i,j;a,b"));
+    REQUIRE_FALSE(scaled->is_buffer_alias());
+    ToTArray expN;
+    expN("i,j;a,b") = -2.0 * Le("i,j;a,b");
+    REQUIRE(equal_tarrays(neg->get<ToTArray>(), expN, "i,j;a,b"));
+    // a slice of a scaled whole-array view keeps the factor
+    auto ws = scale(rL, "i,j;a,b", c)->slice_mode(1, 5, 10);
+    REQUIRE(ws->is_buffer_alias());
+    REQUIRE(equal_tarrays(ws->get<ToTArray>(), twice, "i,j;a,b"));
+    // a scaling that relabels is applied, as the permutation is
+    auto sp = scale(sL(), "i,j;a,b", c);
+    auto spp = sL()->prod(*c, annot3("i,j;a,b", "", "j,i;a,b"), DeNest::False);
+    ToTArray expPP;
+    expPP("j,i;a,b") = twice("i,j;a,b");
+    REQUIRE(equal_tarrays(spp->get<ToTArray>(), expPP, "j,i;a,b"));
+    // the consumers fold the factor in: nested x nested (outer Hadamard,
+    // inner contraction), the flattening inner contraction, the dot, the
+    // sum, the accumulation, the scatter
+    auto r = scale(sR(), "i,j;b,c", eval_result<ResultScalar<double>>(-3.0));
+    auto p =
+        sp->prod(*r, annot3("i,j;a,b", "i,j;b,c", "i,j;a,c"), DeNest::False);
+    REQUIRE(sp->is_buffer_alias());
+    REQUIRE(r->is_buffer_alias());
+    ToTArray expP;
+    expP("i,j;a,c") =
+        -6.0 * TA::einsum(Le("i,j;a,b"), Re("i,j;b,c"), "i,j;a,c")("i,j;a,c");
+    REQUIRE(equal_tarrays(p->get<ToTArray>(), expP, "i,j;a,c"));
+    auto d = sp->prod(*scale(sL(), "i,j;a,b", c),
+                      annot3("i,j;a,b", "i,j;a,b", "i,j"), DeNest::True);
+    REQUIRE(sp->is_buffer_alias());
+    TA::TSpArrayD expD;
+    expD("i,j") = 4.0 * TA::einsum<TA::DeNest::True>(
+                            Le("i,j;a,b"), Le("i,j;a,b"), "i,j")("i,j");
+    REQUIRE(equal_tarrays(d->get<TA::TSpArrayD>(), expD, "i,j"));
+    auto dot = sp->prod(*scale(sL(), "i,j;a,b", c),
+                        annot3("i,j;a,b", "i,j;a,b", ""), DeNest::False);
+    REQUIRE(dot->get<double>() ==
+            Catch::Approx(4.0 * TA::dot(Le("i,j;a,b"), Le("i,j;a,b"))));
+    auto sum = sp->sum(*scale(sL(), "i,j;a,b", c),
+                       annot3("i,j;a,b", "i,j;a,b", "i,j;a,b"));
+    ToTArray four;
+    four("i,j;a,b") = 4.0 * Le("i,j;a,b");
+    REQUIRE(equal_tarrays(sum->get<ToTArray>(), four, "i,j;a,b"));
+    auto acc = eval_result<ResultToT>(TA::clone(Le));
+    acc->add_inplace(*sp);
+    REQUIRE(sp->is_buffer_alias());
+    ToTArray three;
+    three("i,j;a,b") = 3.0 * Le("i,j;a,b");
+    REQUIRE(equal_tarrays(acc->get<ToTArray>(), three, "i,j;a,b"));
+    auto dest = eval_result<ResultToT>(TA::clone(L));
+    dest->write_into_slice(*sp, 1, 5, 10);
+    REQUIRE(sp->is_buffer_alias());
+    ToTArray expDest;
+    expDest("i,j;a,b") = L("i,j;a,b");
+    expDest("i,j;a,b").block({0, 1}, {2, 2}, TA::preserve_lobound) =
+        twice("i,j;a,b");
+    REQUIRE(equal_tarrays(dest->get<ToTArray>(), expDest, "i,j;a,b"));
+    // the permutation and the adjoint apply the factor
+    auto perm = sp->permute(annot2("i,j;a,b", "j,i;b,a"));
+    auto adj = sp->adjoint(annot2("i,j;a,b", "j,i;b,a"));
+    REQUIRE(sp->is_buffer_alias());
+    ToTArray expPerm;
+    expPerm("j,i;b,a") = twice("i,j;a,b");
+    REQUIRE(equal_tarrays(perm->get<ToTArray>(), expPerm, "j,i;b,a"));
+    REQUIRE(equal_tarrays(adj->get<ToTArray>(), expPerm, "j,i;b,a"));
+    // writes into a scaled view never reach the parent
+    auto sv = scale(rL, "i,j;a,b", c);
+    sv->add_inplace(*eval_result<ResultToT>(TA::clone(L)));
+    REQUIRE_FALSE(sv->is_buffer_alias());
+    ToTArray expSV;
+    expSV("i,j;a,b") = 3.0 * L("i,j;a,b");
+    REQUIRE(equal_tarrays(sv->get<ToTArray>(), expSV, "i,j;a,b"));
+    REQUIRE(equal_tarrays(L, L0, "i,j;a,b"));
+  }
+
   SECTION("the norm and the tile diff of a nested view read it in place") {
     auto const v = sL();
     REQUIRE(v->norm2() == Catch::Approx(std::sqrt(TA::squared_norm(Le).get())));
@@ -7255,6 +7542,7 @@ TEST_CASE("ta_lazy_views_nested", "[eval][ta][lazy]") {
 // every operand kind it supports.
 TEST_CASE("ta_lazy_views_shaped", "[eval][ta][lazy]") {
   using sequant::eval_result;
+  using sequant::ResultScalar;
   using sequant::ResultTensorOfTensorTA;
   using sequant::ResultTensorTA;
   using FlatArray = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
@@ -7351,6 +7639,42 @@ TEST_CASE("ta_lazy_views_shaped", "[eval][ta][lazy]") {
     REQUIRE(p2);
     REQUIRE(sT->is_buffer_alias());
     REQUIRE(equal_tarrays(p2->get<ToTArray>(), e->get<ToTArray>(), "i,d;x,y"));
+    // scaled operands: the nested operand's factor is put on the flat one
+    auto c2 = eval_result<ResultScalar<double>>(2.0);
+    auto c3 = eval_result<ResultScalar<double>>(-3.0);
+    auto scT =
+        sT->prod(*c2, annot3("i,c;x,y", "", "i,c;x,y"), sequant::DeNest::False);
+    auto scB = sB->prod(*c3, annot3("c,d", "", "c,d"), sequant::DeNest::False);
+    REQUIRE(scT->is_buffer_alias());
+    REQUIRE(scB->is_buffer_alias());
+    auto ps = shaped(*scT, *scB, an, false);
+    REQUIRE(ps);
+    ToTArray e6;
+    e6("i,d;x,y") = -6.0 * e->get<ToTArray>()("i,d;x,y");
+    REQUIRE(equal_tarrays(ps->get<ToTArray>(), e6, "i,d;x,y"));
+    auto ps2 = shaped(*scB, *scT, an2, false);
+    REQUIRE(ps2);
+    REQUIRE(equal_tarrays(ps2->get<ToTArray>(), e6, "i,d;x,y"));
+    // the unshaped product takes the same operands
+    auto pp = scT->prod(*scB, an, sequant::DeNest::False);
+    auto eu = eval_result<ResultToT>(Te)->prod(*eval_result<ResultF>(Be), an,
+                                               sequant::DeNest::False);
+    ToTArray eu6;
+    eu6("i,d;x,y") = -6.0 * eu->get<ToTArray>()("i,d;x,y");
+    REQUIRE(equal_tarrays(pp->get<ToTArray>(), eu6, "i,d;x,y"));
+    // a zero factor
+    auto zT =
+        sT->prod(*eval_result<ResultScalar<double>>(0.0),
+                 annot3("i,c;x,y", "", "i,c;x,y"), sequant::DeNest::False);
+    REQUIRE(zT->is_buffer_alias());
+    REQUIRE(zT->norm2() == 0.0);
+    auto pz = shaped(*zT, *sB, an, false);
+    REQUIRE(pz);
+    REQUIRE(pz->norm2() == 0.0);
+    auto zB = sB->prod(*eval_result<ResultScalar<double>>(0.0),
+                       annot3("c,d", "", "c,d"), sequant::DeNest::False);
+    REQUIRE(zB->norm2() == 0.0);
+    REQUIRE(zB->get<FlatArray>().trange() == Be.trange());
   }
 
   SECTION("nested x nested, nested and flattened results") {

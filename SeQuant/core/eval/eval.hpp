@@ -646,7 +646,8 @@ template <meta::can_evaluate Node>
 /// \c evaluate_impl (through its \c apply_phase lambda) and the ordered
 /// executor's \c detail::compute_cell, so both convert identically --
 /// including the \c MultByPhase trace event, whose \c note_working_set call
-/// is what puts the transient second buffer on the peak monitor.
+/// is what puts the transient second buffer, if the backend allocates one
+/// (a pending view reports no bytes of its own), on the peak monitor.
 ///
 /// A phase of 1 (the overwhelming majority) returns \p res untouched, with
 /// no event and no allocation.
@@ -1225,8 +1226,9 @@ ResultPtr evaluate_impl(Node const& node,         //
         //    unit tests) can hand out the same buffer to unrelated callers,
         //    so mutating it here would silently corrupt those other reads.
         //    Only an internal node's result is guaranteed freshly built by
-        //    this evaluation (prod()/sum()/permute() always allocate), so
-        //    only internal nodes are safe candidates.
+        //    this evaluation (prod()/sum() allocate, or hand back a pending
+        //    view that copies before it is written to), so only internal
+        //    nodes are safe candidates.
         //  - !cache.chain_holds_shared(f.left): even an internal node's result
         //    must not be a live, shared entry on the CacheManager's scope chain
         //    -- i.e. not referenced again elsewhere in this evaluation's
@@ -1347,9 +1349,11 @@ ResultPtr evaluate(Node const& node,           //
   if constexpr (detail::trace(EvalTrace)) {
     if (perm) {
       // result.pre aliases a cache buffer only when the inner evaluate returned
-      // it unchanged (node cached at some scope, no mult_by_phase fresh alloc);
+      // it unchanged (node cached at some scope, no mult_by_phase result);
       // chain_holds() tests that by pointer identity across the scope chain. A
-      // permuted/phase-shifted pre is a distinct buffer and is added.
+      // permuted/phase-shifted pre is a distinct result and is added, with
+      // the bytes the backend reports for it (none for a pending view that
+      // shares its parent's tiles).
       size_t hwmark = log::bytes(cache, result.post).value;
       if (!cache.chain_holds(result.pre))
         hwmark += log::bytes(result.pre).value;
