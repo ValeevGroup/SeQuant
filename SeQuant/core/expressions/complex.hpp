@@ -133,6 +133,12 @@ class ProjectionExpr : public Expr {
   bool static_less_than(const Expr& that) const override {
     return *inner_ < *static_cast<const ProjectionExpr&>(that).inner_;
   }
+  std::weak_ordering static_lexicographic_compare(
+      const Expr& that,
+      const LexicographicCompareOptions& opts) const override {
+    return inner_->lexicographic_compare(
+        *static_cast<const ProjectionExpr&>(that).inner_, opts);
+  }
 };
 
 }  // namespace detail

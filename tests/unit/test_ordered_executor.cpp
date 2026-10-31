@@ -5874,6 +5874,8 @@ TEST_CASE("ordered-lockstep-vs-whole-escape",
   auto ctx = sequant::get_default_context_snapshot();
   auto ibr = sequant::mbpt::make_sr_spaces();
   sequant::mbpt::add_df_spaces(ibr);
+  // the `S` braket letters below are derivable over a real basis only
+  sequant::tests::declare_real_basis(*ibr);
   ctx.set(sequant::Vacuum::SingleProduct)
       .set(sequant::SPBasis::Spinfree)
       .set(ibr);

@@ -399,7 +399,11 @@ class CellRegistry {
 
   /// Charges \p s's (just stored) value to \c live_bytes_.
   void charge(Slot& s) {
-    s.charged_bytes = s.value ? s.value->size_in_bytes() : 0;
+    // a pending view (Result::is_buffer_alias()) owns no tiles: charged 0,
+    // as the tracer charges it, although size_in_bytes() reports its logical
+    // size
+    s.charged_bytes =
+        s.value && !s.value->is_buffer_alias() ? s.value->size_in_bytes() : 0;
     account(static_cast<std::ptrdiff_t>(s.charged_bytes));
   }
 

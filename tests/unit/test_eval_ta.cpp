@@ -8038,7 +8038,8 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
       Z.fill_random();
       world.gop.fence();
       auto rZ = eval_result<ResultZ>(Z);
-      auto cz = rZ->slice_mode(1, 2, 6)->adjoint(annot2("a,b,c", "a,b,c"));
+      auto cz = rZ->slice_mode(1, 2, 6)->apply_transform(
+          sequant::CanonTransform{.conj = true}, annot2("a,b,c", "a,b,c"));
       auto const [tr, tiles] = view_consumer_tiles(cz->as<ResultZ>(), "a,b,c");
       REQUIRE_FALSE(consumer_reads_parent_tiles(Z, tr, tiles, {0, 1, 0}));
     }

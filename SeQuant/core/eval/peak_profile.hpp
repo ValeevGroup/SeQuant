@@ -445,13 +445,17 @@ using LoopInstance = std::pair<std::wstring, int>;
 [[nodiscard]] inline std::optional<LoopInstance> opened_instance(
     OccurrenceRec const& opener, Index const& ix, BatchModeType kind) {
   std::wstring const bk{loop_space_key(ix)};
+  // below a KramersFlip the loop is seen under its flipped label; the opener
+  // spells it unflipped (detail::kramers_image)
+  Index const img = detail::kramers_image(ix);
+  auto const is_mode = [&](Index const& m) { return m == ix || m == img; };
   if (kind == BatchModeType::Contracted) {
     for (auto const& [rm, rs] : opener.reduced_slot)
-      if (rm == ix) return LoopInstance{bk, rs};
+      if (is_mode(rm)) return LoopInstance{bk, rs};
     return std::nullopt;
   }
   for (std::size_t p = 0; p < opener.carried.size(); ++p)
-    if (opener.carried[p] == ix)
+    if (is_mode(opener.carried[p]))
       return p < opener.loop_slot.size() && opener.loop_slot[p] >= 0
                  ? std::optional<LoopInstance>{{bk, opener.loop_slot[p]}}
                  : std::nullopt;
@@ -488,9 +492,12 @@ using LoopInstance = std::pair<std::wstring, int>;
           std::to_string(occ.ectx_opener_point[k]) + ") is not an occurrence");
     OccurrenceRec const& opener = *pit->second.occ;
     Index const& L = occ.ectx[k].first;
+    // below a KramersFlip the enclosing loop is seen under its flipped label;
+    // the opener spells it unflipped
+    Index const L_img = detail::kramers_image(L);
     std::optional<LoopInstance> inst;
     for (auto const& [oix, okind] : opener.opens)
-      if (oix == L) {
+      if (oix == L || oix == L_img) {
         inst = opened_instance(opener, oix, okind);
         break;
       }

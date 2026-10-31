@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/irreps/algebra.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -183,7 +184,9 @@ std::function<IrrepSet<Irrep>(const Tensor &)> resolve_by_pattern(
 }
 
 /// The different kinds of nodes relevant for the propagation of IRREPs
-enum class IrrepNodeKind { Leaf, Product, Sum, Adjoint };
+/// Projection: the real or imaginary part of a scalar-valued child, which
+/// spans the IRREPs of the child and of its conjugate (Re E = (E + E*)/2)
+enum class IrrepNodeKind { Leaf, Product, Sum, Adjoint, Projection };
 
 /// Adapter that makes a given type of (expression) node accessible to the
 /// generic IRREP propagation. Specializations provide
@@ -231,6 +234,14 @@ typename Ctx::set_type fold_irreps(const Node &node, const Ctx &ctx,
         result.unite(ctx.conjugate(fold_irreps(child, ctx, on_node)));
       });
       break;
+    case IrrepNodeKind::Projection:
+      result = ctx.empty_set();
+      Traits::for_each_child(node, [&](const Node &child) {
+        const Set inner = fold_irreps(child, ctx, on_node);
+        result.unite(inner);
+        result.unite(ctx.conjugate(inner));
+      });
+      break;
   }
 
   on_node(node, result);
@@ -249,6 +260,9 @@ struct IrrepNodeTraits<Expr> {
     if (expr.is<Sum>()) {
       return IrrepNodeKind::Sum;
     }
+    if (expr.is<RealPart>() || expr.is<ImagPart>()) {
+      return IrrepNodeKind::Projection;
+    }
     return IrrepNodeKind::Leaf;
   }
 
@@ -259,6 +273,10 @@ struct IrrepNodeTraits<Expr> {
       for (const ExprPtr &factor : expr.as<Product>().factors()) {
         f(*factor);
       }
+    } else if (expr.is<RealPart>()) {
+      f(*expr.as<RealPart>().inner());
+    } else if (expr.is<ImagPart>()) {
+      f(*expr.as<ImagPart>().inner());
     } else {
       SEQUANT_ASSERT(expr.is<Sum>());
       for (const ExprPtr &summand : expr.as<Sum>().summands()) {
@@ -271,11 +289,11 @@ struct IrrepNodeTraits<Expr> {
   static typename Ctx::set_type leaf_irreps(const Expr &expr, const Ctx &ctx) {
     if (expr.is<Tensor>()) {
       const Tensor &tensor = expr.as<Tensor>();
-      if (is_adjoint_label(tensor.label())) {
+      if (tensor.adjointed() || is_adjoint_label(tensor.label())) {
         // Adjoint of a (non-symmetric) tensor -> resolve the bare tensor
         // (consistent with the explicit Adjoint nodes in evaluation trees)
         Tensor bare(tensor);
-        bare.adjoint();
+        (void)bare.adjoint();  // a sign does not change the irreps
         return ctx.conjugate(ctx.irreps_of(bare));
       }
       return ctx.irreps_of(tensor);

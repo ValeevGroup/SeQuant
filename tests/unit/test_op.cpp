@@ -239,10 +239,10 @@ TEST_CASE("op", "[elements]") {
     REQUIRE(o1.statistics == Statistics::FermiDirac);
     REQUIRE(o1.index() == Index(L"i_1"));
     REQUIRE(o1.action() == Action::Annihilate);
-    o1.adjoint();
+    (void)o1.adjoint();
     REQUIRE(o1.action() == Action::Create);
-    o1.adjoint();
-    o1.adjoint();
+    (void)o1.adjoint();
+    (void)o1.adjoint();
     REQUIRE(o1.action() == Action::Create);
 
     auto oper1 = adjoint(FOperator{fcre(L"i_1"), fann(L"i_2")});

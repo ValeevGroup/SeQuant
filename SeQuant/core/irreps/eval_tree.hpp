@@ -26,8 +26,12 @@ struct IrrepNodeTraits<FullBinaryNode<T>> {
         return IrrepNodeKind::Sum;
       case EvalOp::Product:
         return IrrepNodeKind::Product;
-      case EvalOp::Adjoint:
-        return IrrepNodeKind::Adjoint;
+      case EvalOp::RealPart:
+      case EvalOp::ImagPart:
+        return IrrepNodeKind::Projection;
+      case EvalOp::KramersFlip:
+        // the wrapper denotes its own (flipped-flavour) tensor (see to_expr)
+        return IrrepNodeKind::Leaf;
     }
 
     SEQUANT_UNREACHABLE;
@@ -36,8 +40,8 @@ struct IrrepNodeTraits<FullBinaryNode<T>> {
   template <typename F>
   static void for_each_child(const FullBinaryNode<T> &node, F &&f) {
     f(node.left());
-    if (node->op_type() != EvalOp::Adjoint) {
-      // The right child of an adjoint node is only a placeholder
+    if (!node->is_unary_op()) {
+      // The right child of a unary node is only a placeholder
       f(node.right());
     }
   }
@@ -46,7 +50,10 @@ struct IrrepNodeTraits<FullBinaryNode<T>> {
   static typename Ctx::set_type leaf_irreps(const FullBinaryNode<T> &node,
                                             const Ctx &ctx) {
     detail::NoOpIrrepCallback no_op;
-    return detail::fold_irreps<Expr>(*node->expr(), ctx, no_op);
+    // a leaf stores the array a provider serves; its states (the adjoint, the
+    // K-conjugation) ride on its transform and show in the denoted spelling
+    return detail::fold_irreps<Expr>(
+        node.leaf() ? *node->denoted_expr() : *node->expr(), ctx, no_op);
   }
 };
 

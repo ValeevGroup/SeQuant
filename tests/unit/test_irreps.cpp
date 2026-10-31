@@ -457,8 +457,8 @@ TEST_CASE("irreps", "[irreps]") {
 
     // Adjoint of t -> conjugate IRREP
     ExprPtr adjointed = deserialize(L"t{i1;a1}", nonsymm);
-    adjointed->adjoint();
-    REQUIRE(adjointed->as<Tensor>().label() != L"t");
+    (void)adjointed->adjoint();
+    REQUIRE(adjointed->as<Tensor>().adjointed());  // the state, not the label
     ExprPtr prod = adjointed * deserialize(L"v{i1;a2}", nonsymm);
     REQUIRE(irreps_of(*prod, ctx) == Set{Z3Irrep{0}});
 

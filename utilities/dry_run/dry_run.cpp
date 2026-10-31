@@ -95,7 +95,9 @@ struct Driver {
   // sizes
   std::vector<SpaceSpec> spaces;
   std::map<std::wstring, container::svector<std::size_t>> slices;
-  std::map<std::size_t, std::array<double, 5>> csv_moments;  // raw M_0..M_4
+  // raw M_0..M_k (k = dr::kMaxCompositeGroup); a driver written when the
+  // tables stopped at M_4 is padded with its last column
+  std::map<std::size_t, dr::MomentTable> csv_moments;
   // the fraction of each rank's dense cluster grid that is nonnull (1 when
   // the driver does not say)
   std::map<std::size_t, double> csv_occupancy;
@@ -181,10 +183,14 @@ void read_sizes(const json& d, Driver& c) {
     if (csv.contains("moments")) {
       c.csv_moments.clear();
       for (const auto& [rank, arr] : csv.at("moments").items()) {
-        if (arr.size() != 5)
-          throw Exception("csv.moments." + rank + " must hold M_0..M_4");
-        std::array<double, 5> M{};
-        for (std::size_t k = 0; k != 5; ++k) M[k] = arr[k].get<double>();
+        if (arr.size() < 5 || arr.size() > dr::kMaxCompositeGroup + 1)
+          throw Exception("csv.moments." + rank +
+                          " must hold M_0..M_4 up to M_0..M_" +
+                          std::to_string(dr::kMaxCompositeGroup));
+        dr::MomentTable M = dr::unit_moment_table();
+        std::size_t k = 0;
+        for (; k != arr.size(); ++k) M[k] = arr[k].get<double>();
+        for (; k != M.size(); ++k) M[k] = M[k - 1];
         c.csv_moments[std::stoul(rank)] = M;
       }
     }
@@ -320,12 +326,19 @@ std::shared_ptr<IndexBasisRegistry> make_mpqc_sr_spaces(bool vbs) {
   using namespace sequant::mbpt;
   auto isr = std::make_shared<IndexBasisRegistry>();
   const auto spin_any = IndexSpace::QuantumNumbers{Spin::any};
-  isr->add(L"i", 0b01, spin_any, is_vacuum_occupied, is_reference_occupied,
-           is_hole)
-      .add(L"a", 0b10, spin_any, is_particle)
-      .add_union(L"p", {L"i", L"a"}, is_complete);
+  isr->add(L"i", 0b01,
+           {.qns = spin_any,
+            .vacuum_occupied = true,
+            .reference_occupied = true,
+            .hole = true})
+      .add(L"a", 0b10, {.qns = spin_any, .particle = true})
+      .add_union(L"p", {L"i", L"a"}, {.complete = true});
   add_fermi_spin(*isr);
+  // the deprecated form on purpose: MPQC registers its AO bases this way and
+  // the driver's listing must reproduce MPQC's registry
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   add_ao_basis(isr, spin_any, vbs, /* abs = */ false);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   // the PAO bases as MPQC registers them: named instances of the particle
   // space and of its spin flavours with extents of their own (on a
   // 2-component reference the spin-PAS rows span both Kramers halves), not
@@ -333,12 +346,12 @@ std::shared_ptr<IndexBasisRegistry> make_mpqc_sr_spaces(bool vbs) {
   {
     const auto instance = default_pao_basis_instance;
     const auto uocc = isr->particle_space(/* nulltype_ok = */ false);
-    isr->add(L"μ̃", IndexBasis{isr->retrieve_space(uocc, spin_any), instance},
-             IndexBasisMetric::General);
+    isr->add(L"μ̃", isr->retrieve_space(uocc, spin_any), instance,
+             {.metric = IndexBasisMetric::General});
     for (const auto spin : {Spin::alpha, Spin::beta})
       if (const auto* uocc_spin = isr->retrieve_space_ptr(uocc, spin))
-        isr->add(spinannotation_add(std::wstring(L"μ̃"), spin),
-                 IndexBasis{*uocc_spin, instance}, IndexBasisMetric::General);
+        isr->add(spinannotation_add(std::wstring(L"μ̃"), spin), *uocc_spin,
+                 instance, {.metric = IndexBasisMetric::General});
   }
   add_df_spaces(isr);
   isr->physical_particle_attribute_mask(mask_v<Spin>);
@@ -397,21 +410,22 @@ void setup_context(const Driver& cfg) {
 /// (so k composites on one cluster carry the grid's sparsity once), as
 /// MPQC's CSVSizeMoments::extent sizes it
 double csv_extent(const Driver& cfg, std::size_t rank, std::size_t k) {
-  static const std::array<double, 5> ones{1, 1, 1, 1, 1};
+  static const dr::MomentTable ones = dr::unit_moment_table();
   auto it = cfg.csv_moments.find(std::max<std::size_t>(rank, 1));
   if (it == cfg.csv_moments.end() && rank > 2) it = cfg.csv_moments.find(2);
   const auto& M = it != cfg.csv_moments.end() ? it->second : ones;
   std::size_t k_eff = rank >= 2 ? std::max<std::size_t>(k, 2) : k;
-  k_eff = std::clamp<std::size_t>(k_eff, 1, 4);
+  k_eff = std::clamp<std::size_t>(k_eff, 1, dr::kMaxCompositeGroup);
   auto const po = cfg.csv_occupancy.find(std::max<std::size_t>(rank, 1));
   const double p = po != cfg.csv_occupancy.end() ? po->second : 1.0;
   const double k_occ = static_cast<double>(std::max<std::size_t>(k, 1));
   return std::pow(p, 1.0 / k_occ) * std::max(2.0, M[k_eff]);
 }
 
-std::array<double, 5> csv_floored(const Driver& cfg, std::size_t rank) {
-  std::array<double, 5> a{1, 1, 1, 1, 1};
-  for (std::size_t k = 1; k <= 4; ++k) a[k] = csv_extent(cfg, rank, k);
+dr::MomentTable csv_floored(const Driver& cfg, std::size_t rank) {
+  dr::MomentTable a = dr::unit_moment_table();
+  for (std::size_t k = 1; k <= dr::kMaxCompositeGroup; ++k)
+    a[k] = csv_extent(cfg, rank, k);
   return a;
 }
 

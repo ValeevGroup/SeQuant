@@ -278,16 +278,17 @@ struct ResultObjectLess {
 /// replacement is adjointed again.
 template <typename Visitor>
 ExprPtr map_leaf_objects(const ExprPtr &leaf, Visitor &&visitor) {
-  if (leaf->is<Tensor>() && is_adjoint_label(leaf->as<Tensor>().label())) {
+  if (leaf->is<Tensor>() && (leaf->as<Tensor>().adjointed() ||
+                             is_adjoint_label(leaf->as<Tensor>().label()))) {
     Tensor bare = leaf->as<Tensor>();
-    bare.adjoint();
+    (void)bare.adjoint();  // the name does not carry the sign
 
     ExprPtr replacement = visitor(ex<Tensor>(std::move(bare)));
     if (!replacement) {
       return leaf;
     }
 
-    replacement->as<Tensor>().adjoint();
+    (void)replacement->as<Tensor>().adjoint();
     return replacement;
   }
 

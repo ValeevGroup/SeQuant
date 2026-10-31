@@ -72,6 +72,11 @@ struct HashTie : public sequant::Expr {
   bool static_less_than(const sequant::Expr &that) const override {
     return label < static_cast<const HashTie &>(that).label;
   }
+  std::weak_ordering static_lexicographic_compare(
+      const sequant::Expr &that,
+      const sequant::LexicographicCompareOptions &) const override {
+    return label <=> static_cast<const HashTie &>(that).label;
+  }
 };
 
 template <typename T>

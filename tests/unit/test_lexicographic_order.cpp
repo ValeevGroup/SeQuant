@@ -83,7 +83,7 @@ TEST_CASE("lexicographic_order", "[elements]") {
     CHECK(compare(ex<Variable>(L"a"), ex<Variable>(L"b")) ==
           std::weak_ordering::less);
     auto conj_a = ex<Variable>(L"a");
-    conj_a->adjoint();
+    (void)conj_a->adjoint();
     CHECK(compare(ex<Variable>(L"a"), conj_a) == std::weak_ordering::less);
     CHECK(compare(ex<Power>(ex<Variable>(L"a"), 2),
                   ex<Power>(ex<Variable>(L"b"), 1)) ==

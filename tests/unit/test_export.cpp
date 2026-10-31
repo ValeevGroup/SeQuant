@@ -1815,7 +1815,6 @@ TEST_CASE("a context rewrite folds a tensor's marks into its label",
   REQUIRE(marked_integral.label() == L"g_adj");
   REQUIRE_FALSE(marked_integral.adjointed());
 }
-}
 
 namespace {
 

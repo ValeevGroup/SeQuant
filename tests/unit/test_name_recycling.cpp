@@ -315,8 +315,8 @@ TEST_CASE("intermediate name recycling", "[optimize]") {
       std::vector<Tree> trees = parse_trees({L"X5{a1;i1} = A{a1;i2} B{i2;i1}"});
       Tensor adjoint(L"X5", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-      adjoint.adjoint();
-      REQUIRE(is_adjoint_label(adjoint.label()));
+      (void)adjoint.adjoint();
+      REQUIRE(adjoint.adjointed());  // the state, not the label
       trees.push_back(binarize(ResultExpr(
           Tensor(L"R", bra{L"i_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
                  BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm),
@@ -329,11 +329,10 @@ TEST_CASE("intermediate name recycling", "[optimize]") {
       REQUIRE(trees.front()->as_tensor().label() == L"X1");
       const std::vector<ExprPtr> leaves = leaf_objects(trees.back());
       auto it = std::ranges::find_if(leaves, [](const ExprPtr& leaf) {
-        return leaf->is<Tensor>() &&
-               is_adjoint_label(leaf->as<Tensor>().label());
+        return leaf->is<Tensor>() && leaf->as<Tensor>().adjointed();
       });
       REQUIRE(it != leaves.end());
-      CHECK(strip_adjoint_label((*it)->as<Tensor>().label()) == L"X1");
+      CHECK((*it)->as<Tensor>().label() == L"X1");
       CHECK((*it)->as<Tensor>().bra_rank() == 1);
       CHECK(std::ranges::begin((*it)->as<Tensor>().bra())->label() == L"i_1");
     }
