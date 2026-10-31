@@ -122,22 +122,34 @@ struct Fingerprint {
   ContextRecord context;
 };
 
-struct OccurrenceRecord {
-  std::string term;
-  std::size_t node = 0;
-  std::optional<std::size_t> consumer;
-  std::vector<std::string> home, enclosing;
-  std::vector<AxisRecord> opens;
-};
-
 /// role: LoopLocal|Reduction|LoopCarried|LoopInvariant
 struct PerAxisRecord {
   std::string mode;
   std::string role;
 };
 
+struct OccurrenceRecord {
+  std::string term;
+  std::size_t node = 0;
+  std::optional<std::size_t> consumer;
+  std::vector<std::string> home, enclosing;
+  std::vector<AxisRecord> opens;
+  /// the value's batched result modes at this occurrence, each Lockstep
+  /// (read inside the loop instance that slices it) or Assembled (read
+  /// where that instance is not running)
+  std::vector<PerAxisRecord> roles;
+};
+
 struct ValueRecord {
-  std::string id, expr;
+  std::string id;
+  /// the short name: the root's label (with "/<term index>" when the root
+  /// has several terms) and the node ordinal of the id, "R12#3", or the id
+  /// itself for a root's partial sum, "R12+1"
+  std::string name;
+  /// "<name>[<slices>] = <operands>": the value in the form it is produced
+  /// in, then a leaf's tensor label or the two operands as the value reads
+  /// them, each a leaf's tensor label or an intermediate's name
+  std::string expr;
   std::string hash, key;
   bool leaf = false;
   std::vector<std::string> result_modes, home_modes, enclosing_modes,

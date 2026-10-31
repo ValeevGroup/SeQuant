@@ -44,20 +44,47 @@ bool is_valid_parameter_name(std::string_view name) {
       name, [](unsigned char c) { return std::isalnum(c) || c == '_'; });
 }
 
-/// @returns The parameter name iff @p str consists of exactly a single
-/// (unescaped) `${name}` placeholder and nothing else.
-std::optional<std::string> as_whole_placeholder(const std::string &str) {
+/// How a placeholder projects the referenced parameter: `${name}` yields the
+/// value itself, `${keys(name)}` / `${values(name)}` the keys / values of an
+/// object parameter as an array.
+enum class Accessor { Value, Keys, Values };
+
+struct Reference {
+  Accessor accessor;
+  std::string name;
+};
+
+/// @returns The reference denoted by the inside of a placeholder (the text
+/// between `${` and `}`), or nullopt if it is not well-formed.
+std::optional<Reference> parse_reference(std::string_view inner) {
+  constexpr std::pair<std::string_view, Accessor> accessors[] = {
+      {"keys(", Accessor::Keys}, {"values(", Accessor::Values}};
+  for (const auto &[prefix, accessor] : accessors) {
+    if (inner.starts_with(prefix) && inner.ends_with(')')) {
+      std::string name(
+          inner.substr(prefix.size(), inner.size() - prefix.size() - 1));
+      if (!is_valid_parameter_name(name)) {
+        return std::nullopt;
+      }
+      return Reference{accessor, std::move(name)};
+    }
+  }
+
+  if (!is_valid_parameter_name(inner)) {
+    return std::nullopt;
+  }
+  return Reference{Accessor::Value, std::string(inner)};
+}
+
+/// @returns The reference iff @p str consists of exactly a single (unescaped)
+/// placeholder and nothing else.
+std::optional<Reference> as_whole_placeholder(const std::string &str) {
   if (str.size() < 4 || str.front() != '$' || str[1] != '{' ||
       str.back() != '}') {
     return std::nullopt;
   }
 
-  std::string name = str.substr(2, str.size() - 3);
-  if (!is_valid_parameter_name(name)) {
-    return std::nullopt;
-  }
-
-  return name;
+  return parse_reference(std::string_view(str).substr(2, str.size() - 3));
 }
 
 std::string scalar_to_string(const json &value, std::string_view name) {
@@ -105,6 +132,12 @@ std::string interpolate(const std::string &str, const ParameterMap &params) {
       }
 
       std::string name = str.substr(i + 2, close - (i + 2));
+      if (std::optional<Reference> ref = parse_reference(name);
+          ref && ref->accessor != Accessor::Value) {
+        throw Exception("Template placeholder '${" + name +
+                        "}' yields an array and cannot be interpolated into '" +
+                        str + "'");
+      }
       if (!is_valid_parameter_name(name)) {
         throw Exception("Invalid template parameter name '" + name + "' in '" +
                         str + "'");
@@ -122,6 +155,27 @@ std::string interpolate(const std::string &str, const ParameterMap &params) {
   return result;
 }
 
+/// @returns The value @p ref denotes, or nullopt if the parameter is @c null.
+std::optional<json> resolve(const Reference &ref, const ParameterMap &params) {
+  const json &value = lookup(params, ref.name);
+  if (value.is_null()) {
+    return std::nullopt;
+  }
+  if (ref.accessor == Accessor::Value) {
+    return value;
+  }
+
+  if (!value.is_object()) {
+    throw Exception("Template parameter '" + ref.name +
+                    "' is not an object, so its keys/values cannot be taken");
+  }
+  json result = json::array();
+  for (const auto &[key, member] : value.items()) {
+    result.push_back(ref.accessor == Accessor::Keys ? json(key) : member);
+  }
+  return result;
+}
+
 /// Recursively substitutes template placeholders in @p node. An unset optional
 /// signals that the node is to be omitted entirely: this happens when a whole
 /// placeholder resolves to @c null, so that an optional template option simply
@@ -130,12 +184,8 @@ std::optional<json> substitute(const json &node, const ParameterMap &params) {
   if (node.is_string()) {
     const std::string str = node.get<std::string>();
 
-    if (std::optional<std::string> name = as_whole_placeholder(str)) {
-      const json &value = lookup(params, *name);
-      if (value.is_null()) {
-        return std::nullopt;
-      }
-      return value;
+    if (std::optional<Reference> ref = as_whole_placeholder(str)) {
+      return resolve(*ref, params);
     }
 
     return json(interpolate(str, params));
@@ -212,6 +262,34 @@ ParameterMap resolve_parameters(const json &definition, const json &provided,
   return params;
 }
 
+/// @returns Whether @p value counts as "given": anything but null, false and
+/// empty strings, arrays and objects.
+bool is_truthy(const json &value) {
+  if (value.is_null()) {
+    return false;
+  }
+  if (value.is_boolean()) {
+    return value.get<bool>();
+  }
+  if (value.is_string() || value.is_array() || value.is_object()) {
+    return !value.empty();
+  }
+  return true;
+}
+
+/// Evaluates the `when` condition of a template step: a whole-value
+/// placeholder is resolved, anything else is taken literally.
+bool evaluate_condition(const json &condition, const ParameterMap &params) {
+  if (condition.is_string()) {
+    if (std::optional<Reference> ref =
+            as_whole_placeholder(condition.get<std::string>())) {
+      return is_truthy(resolve(*ref, params).value_or(json()));
+    }
+  }
+
+  return is_truthy(condition);
+}
+
 /// @returns Whether @p ref refers to a step whose (local) ID is in @p ids,
 /// i.e. @p ref either equals an ID or begins with one followed by an output
 /// separator.
@@ -224,13 +302,25 @@ bool refers_to_internal(const std::string &ref,
   });
 }
 
+/// Marks a reference as optional (see resolve_optional_references).
+constexpr char optional_marker = '?';
+
+/// @returns @p ref without its optional marker, if it has one.
+std::string strip_optional_marker(const std::string &ref) {
+  if (ref.size() > 1 && ref.back() == optional_marker) {
+    return ref.substr(0, ref.size() - 1);
+  }
+  return ref;
+}
+
 void namespace_reference(json &ref, const std::set<std::string> &ids,
                          const std::string &prefix) {
   if (!ref.is_string()) {
     return;
   }
   const std::string value = ref.get<std::string>();
-  if (refers_to_internal(value, ids)) {
+  const std::string target = strip_optional_marker(value);
+  if (refers_to_internal(target, ids)) {
     ref = prefix + std::string(step_id_separator) + value;
   }
 }
@@ -256,6 +346,104 @@ void namespace_step(json &step, const std::set<std::string> &ids,
   if (step.contains("inherit_options_from")) {
     namespace_reference(step.at("inherit_options_from"), ids, prefix);
   }
+}
+
+/// Resolves the optional references (those with a trailing '?') in @p value,
+/// which is a reference, an array of references or (if @p allow_object) an
+/// object whose values are such. A reference to a step in @p ids loses its
+/// marker, any other is removed.
+/// @returns The resolved value, or nullopt if nothing is left of it.
+std::optional<json> resolve_optional_references(
+    const json &value, const std::set<std::string> &ids, bool allow_object) {
+  if (value.is_string()) {
+    const std::string ref = value.get<std::string>();
+    const std::string target = strip_optional_marker(ref);
+    if (target == ref) {
+      return value;
+    }
+    if (ids.contains(target.substr(0, target.find('.')))) {
+      return json(target);
+    }
+    return std::nullopt;
+  }
+
+  if (value.is_array() || (allow_object && value.is_object())) {
+    json result = value.is_array() ? json::array() : json::object();
+    for (const auto &[key, element] : value.items()) {
+      if (std::optional<json> resolved =
+              resolve_optional_references(element, ids, false)) {
+        if (value.is_array()) {
+          result.push_back(std::move(*resolved));
+        } else {
+          result[key] = std::move(*resolved);
+        }
+      }
+    }
+
+    if (result.empty() && !value.empty()) {
+      return std::nullopt;
+    }
+    return result;
+  }
+
+  return value;
+}
+
+/// Resolves all optional references of the (fully expanded) @p steps. A step
+/// all of whose inputs are optional references that can't be resolved is
+/// removed as well, so that a missing step takes everything that only
+/// processes it along.
+std::vector<json> resolve_optional_references(std::vector<json> steps) {
+  std::set<std::string> ids;
+  std::vector<json> result;
+
+  for (json &step : steps) {
+    if (step.is_object()) {
+      if (step.contains("inputs")) {
+        std::optional<json> inputs =
+            resolve_optional_references(step.at("inputs"), ids, false);
+        if (!inputs) {
+          continue;
+        }
+        step["inputs"] = std::move(*inputs);
+      }
+
+      if (step.contains("inherit_options_from")) {
+        std::optional<json> inherit = resolve_optional_references(
+            step.at("inherit_options_from"), ids, false);
+        if (inherit) {
+          step["inherit_options_from"] = std::move(*inherit);
+        } else {
+          step.erase("inherit_options_from");
+        }
+      }
+
+      if (step.contains("options") && step.at("options").is_object()) {
+        json &options = step.at("options");
+        for (const char *key : {"grouping", "merge_inputs", "relative_order"}) {
+          if (!options.contains(key)) {
+            continue;
+          }
+
+          std::optional<json> resolved =
+              resolve_optional_references(options.at(key), ids, true);
+          if (resolved) {
+            options[key] = std::move(*resolved);
+          } else {
+            options.erase(key);
+          }
+        }
+      }
+
+      if (step.contains("id") && step.at("id").is_string()) {
+        ids.insert(step.at("id").get<std::string>());
+      }
+    }
+
+    result.push_back(std::move(step));
+  }
+
+  return result;
 }
 
 std::vector<json> expand_use(const json &use, const json &templates,
@@ -326,8 +514,25 @@ std::vector<json> expand_use(const json &use, const json &templates,
   stack.push_back(name);
 
   std::vector<json> substituted;
+  // IDs of steps left out by a failed `when`. References to them are still
+  // namespaced so that they don't end up pointing at an unrelated step.
+  std::set<std::string> skipped;
   for (const json &raw_step : definition.at("steps")) {
-    std::optional<json> step = substitute(raw_step, params);
+    json unconditional = raw_step;
+    if (unconditional.is_object() && unconditional.contains("when")) {
+      const bool keep = evaluate_condition(unconditional.at("when"), params);
+      unconditional.erase("when");
+
+      if (!keep) {
+        if (unconditional.contains("id") &&
+            unconditional.at("id").is_string()) {
+          skipped.insert(unconditional.at("id").get<std::string>());
+        }
+        continue;
+      }
+    }
+
+    std::optional<json> step = substitute(unconditional, params);
     // A step is an object, which is never omitted as a whole.
     SEQUANT_ASSERT(step.has_value());
 
@@ -347,7 +552,7 @@ std::vector<json> expand_use(const json &use, const json &templates,
 
   stack.pop_back();
 
-  std::set<std::string> ids;
+  std::set<std::string> ids = skipped;
   for (const json &step : expanded) {
     if (step.contains("id")) {
       ids.insert(step.at("id").get<std::string>());
@@ -375,7 +580,8 @@ json expand_templates(const json &steps, const json &templates) {
       templates.is_null() ? json::object() : templates;
 
   std::vector<std::string> stack;
-  std::vector<json> expanded = expand_steps(steps, resolved_templates, stack);
+  std::vector<json> expanded = resolve_optional_references(
+      expand_steps(steps, resolved_templates, stack));
 
   json result = json::array();
   for (json &step : expanded) {

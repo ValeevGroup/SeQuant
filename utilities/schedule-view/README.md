@@ -29,7 +29,7 @@ section: `n_batches`, `footprint` and `builds` come from the ordered dry run,
 
 `sequant-schedule validate <doc.json>` checks a document and prints a summary.
 
-A realistic document comes from the hidden `[dryrun-2iter-report]` unit test,
+A realistic document comes from the `[dryrun-2iter-report]` unit test,
 which runs the DF-CCSD doubles residual through the ordered executor as a dry
 run at water-20 or C60 PNO-CCSD scale:
 
@@ -45,12 +45,19 @@ lists further knobs.)
 
 - Notation: `X[i]` is value `X` sliced on loop `i`; `X[Σi]` is the per-batch
   partial of a reduction over loop `i`, the same shape as the whole. A value's
-  `expr` spells each operand in the form the value reads it inside its own
-  loops: sliced or partial there, bare when it reads the assembled whole. The
+  `expr` is its short name (`R12#3`: root label, node ordinal) in the form it
+  is produced in, then what makes it: a leaf's tensor label (`R0#2 = C`) or
+  its two operands, each a leaf's tensor label or an intermediate's short name
+  in the form the value reads it inside its own loops, sliced or partial
+  there, bare when it reads the assembled whole
+  (`R38#11[ΣΚ_1] = R13#10[Κ_1] * R13#11[Κ_1]`). The
   inspector's producers and consumers say how each pair meets (same block,
   read in slices, assembled by a sum or a scatter over a loop).
 - Left: folding outline of blocks and the values built in them, in `steps`
-  order; `read X[i]` rows are slice reads of a value homed in an outer block.
+  order, then the values the block accumulates without a step of its own
+  (produced inside its Assemble step per batch: summed partials, scattered
+  slices), tagged as such; `read X[i]` rows are slice reads of a value homed
+  in an outer block.
   Blocks open to nesting depth 1 (root and its direct children); click the caret to fold. Consecutive rows of one
   term form a group named by its root (`R12`, or `R12/2` when a root has several terms), folded by default in a
   block of more than 24 values. A value's short name is that root name plus its node ordinal (`R12#3`); the full

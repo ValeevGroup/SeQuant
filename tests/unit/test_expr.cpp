@@ -19,6 +19,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -44,6 +45,11 @@ struct Dummy : public sequant::Expr {
   std::int8_t adjoint() override { return 1; }
   std::int8_t kconjugate() override { return 1; }
   bool static_equal(const sequant::Expr &) const override { return true; }
+  std::weak_ordering static_lexicographic_compare(
+      const sequant::Expr &,
+      const sequant::LexicographicCompareOptions &) const override {
+    return std::weak_ordering::equivalent;
+  }
 };
 
 /// Distinct expressions that all share ONE hash value: Sum canonicalization
@@ -138,6 +144,23 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
            static_cast<const base_type &>(static_cast<const VecExpr &>(that));
   }
 
+  std::weak_ordering static_lexicographic_compare(
+      const sequant::Expr &that,
+      const sequant::LexicographicCompareOptions &opts) const override {
+    const auto &that_cast =
+        static_cast<const base_type &>(static_cast<const VecExpr &>(that));
+    return std::lexicographical_compare_three_way(
+        base_type::begin(), base_type::end(), that_cast.begin(),
+        that_cast.end(), [&opts](const T &a, const T &b) -> std::weak_ordering {
+          if constexpr (sequant::Expr::is_shared_ptr_of_expr_or_derived<
+                            T>::value) {
+            return a->lexicographic_compare(*b, opts);
+          } else {
+            return std::weak_order(a, b);
+          }
+        });
+  }
+
   sequant::ExprPtr clone() const override {
     return sequant::ex<VecExpr>(this->begin(), this->end());
   }
@@ -156,6 +179,11 @@ struct Adjointable : public sequant::Expr {
   }
   bool static_equal(const sequant::Expr &that) const override {
     return v == that.as<Adjointable>().v;
+  }
+  std::weak_ordering static_lexicographic_compare(
+      const sequant::Expr &that,
+      const sequant::LexicographicCompareOptions &) const override {
+    return v <=> that.as<Adjointable>().v;
   }
   std::int8_t adjoint() override {
     v = -v;
@@ -181,6 +209,11 @@ struct MinimalExpr : public sequant::Expr {
   std::int8_t adjoint() override { return 1; }
   std::int8_t kconjugate() override { return 1; }
   bool static_equal(const sequant::Expr &) const override { return true; }
+  std::weak_ordering static_lexicographic_compare(
+      const sequant::Expr &,
+      const sequant::LexicographicCompareOptions &) const override {
+    return std::weak_ordering::equivalent;
+  }
 };
 
 struct DeclaredExpr : public MinimalExpr<DeclaredExpr> {
@@ -566,7 +599,7 @@ TEST_CASE("expr", "[elements]") {
        // the scalar, the rest into a single Power R^(1/D)
       const auto half = rational{1, 2};
       const auto third = rational{1, 3};
-      const auto factors = [](const ExprPtr &e) {
+      const auto factors = [](const ExprPtr &e) -> const auto & {
         return e->as<Product>().factors();
       };
       const auto has_factor = [&](const ExprPtr &e, const Expr &f) {
@@ -772,7 +805,7 @@ TEST_CASE("expr", "[elements]") {
        // Powers, into one factor per Variable
       const auto half = rational{1, 2};
       const auto vy = ex<Variable>(L"y");
-      const auto factors = [](const ExprPtr &e) {
+      const auto factors = [](const ExprPtr &e) -> const auto & {
         return e->as<Product>().factors();
       };
       const auto has_factor = [&](const ExprPtr &e, const Expr &f) {
@@ -891,17 +924,17 @@ TEST_CASE("expr", "[elements]") {
   }
 
   SECTION("adjoint") {
-    {  // implemented in Adjointable
+    SECTION("Adjointable") {
       const auto e = std::make_shared<Adjointable>();
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE_NOTHROW(adjoint(e));  // check free-function adjoint
     }
-    {  // Constant
+    SECTION("Constant") {
       const auto e = std::make_shared<Constant>(Constant::scalar_type{1, 2});
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->value() == Constant::scalar_type{1, -2});
     }
-    {  // Variable
+    SECTION("Variable") {
       const auto e = std::make_shared<Variable>(L"q");
       REQUIRE(e->conjugated() == false);
       REQUIRE_NOTHROW(e->adjoint());
@@ -910,34 +943,21 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->conjugated() == false);
     }
-    {  // Product
-      const auto e = std::make_shared<Product>();
+    // Product and NCProduct reverse the factor order, CProduct does not
+    const auto check_product = [](auto e, bool reverses) {
       e->append(Constant::scalar_type{2, -1}, ex<Adjointable>());
       e->append(1, ex<Adjointable>(-2));
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->scalar() == Constant::scalar_type{2, 1});
-      REQUIRE(e->factors()[0]->as<Adjointable>().v == 2);
-      REQUIRE(e->factors()[1]->as<Adjointable>().v == -1);
-    }
-    {  // CProduct
-      const auto e = std::make_shared<CProduct>();
-      e->append(Constant::scalar_type{2, -1}, ex<Adjointable>());
-      e->append(1, ex<Adjointable>(-2));
-      REQUIRE_NOTHROW(e->adjoint());
-      REQUIRE(e->scalar() == Constant::scalar_type{2, 1});
-      REQUIRE(e->factors()[0]->as<Adjointable>().v == -1);
-      REQUIRE(e->factors()[1]->as<Adjointable>().v == 2);
-    }
-    {  // NCProduct
-      const auto e = std::make_shared<NCProduct>();
-      e->append(Constant::scalar_type{2, -1}, ex<Adjointable>());
-      e->append(1, ex<Adjointable>(-2));
-      REQUIRE_NOTHROW(e->adjoint());
-      REQUIRE(e->scalar() == Constant::scalar_type{2, 1});
-      REQUIRE(e->factors()[0]->as<Adjointable>().v == 2);
-      REQUIRE(e->factors()[1]->as<Adjointable>().v == -1);
-    }
-    {  // Sum
+      REQUIRE(e->factors()[reverses ? 0 : 1]->template as<Adjointable>().v ==
+              2);
+      REQUIRE(e->factors()[reverses ? 1 : 0]->template as<Adjointable>().v ==
+              -1);
+    };
+    SECTION("Product") { check_product(std::make_shared<Product>(), true); }
+    SECTION("CProduct") { check_product(std::make_shared<CProduct>(), false); }
+    SECTION("NCProduct") { check_product(std::make_shared<NCProduct>(), true); }
+    SECTION("Sum") {
       const auto e = std::make_shared<Sum>();
       e->append(ex<Adjointable>());
       e->append(ex<Adjointable>(-2));
@@ -945,7 +965,8 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e->summands()[0]->as<Adjointable>().v == -1);
       REQUIRE(e->summands()[1]->as<Adjointable>().v == 2);
     }
-    {  // Power: adjoint flips the conjugation flag; base/exponent unchanged
+    SECTION("Power") {
+      // adjoint flips the conjugation flag; base/exponent unchanged
       Power pv(ex<Variable>(L"z"), rational{1, 2});
       REQUIRE(!pv.conjugated());
       REQUIRE(pv.adjoint() == 1);
@@ -1004,6 +1025,33 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_FALSE(e->is_commutative());
       const auto e_clone = e->clone();
       REQUIRE_FALSE(e_clone.as<Product>().is_commutative());
+    }
+    {  // Product::deep_copy owns new factors and keeps nested products
+      Product p(2, ExprPtrList{});
+      p.append(1, ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}));
+      p.append(
+          1,
+          ex<Product>(ExprPtrList{ex<Tensor>(L"f", bra{L"i_1"}, ket{L"i_2"}),
+                                  ex<Tensor>(L"g", bra{L"a_1"}, ket{L"a_2"})}),
+          Product::Flatten::No);
+      const auto copy = p.deep_copy();
+      REQUIRE(copy == p);
+      REQUIRE(copy.scalar() == p.scalar());
+      REQUIRE(copy.factors().size() == 2);
+      REQUIRE(copy.factors()[1]->is<Product>());
+      for (std::size_t i = 0; i != p.factors().size(); ++i)
+        REQUIRE(copy.factors()[i].get() != p.factors()[i].get());
+      REQUIRE(copy.factors()[1]->as<Product>().factors()[0].get() !=
+              p.factors()[1]->as<Product>().factors()[0].get());
+    }
+    {  // Product::deep_copy keeps the canonical mark
+      ExprPtr e = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
+                  ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+      const auto opts = CanonicalizeOptions::default_options().copy_and_set(
+          CanonicalizationMethod::Complete);
+      e->mark_canonical(opts);
+      REQUIRE(e->is_canonical(opts));
+      REQUIRE(e->as<Product>().deep_copy().is_canonical(opts));
     }
   }  // SECTION("clone")
 
@@ -1346,94 +1394,49 @@ TEST_CASE("expr", "[elements]") {
 
     {  // Power::flatten
 
-      // Constant base + integer exponent folds in place
-      auto pf1 = ex<Power>(2, 3);
-      Power::flatten(pf1);
-      REQUIRE(pf1 == ex<Constant>(rational{8}));
-
-      // non-integer exponent without an exact root is a no-op
-      auto pf2 = ex<Power>(2, rational{1, 2});
-      Power::flatten(pf2);
-      REQUIRE(pf2->is<Power>());
-
-      // Variable base is a no-op
-      auto pf3 = ex<Power>(L"x", 2);
-      Power::flatten(pf3);
-      REQUIRE(pf3->is<Power>());
-
-      // Variable base, zero exponent: x^0 = 1
-      auto pf4 = ex<Power>(L"x", 0);
-      Power::flatten(pf4);
-      REQUIRE(pf4 == ex<Constant>(rational{1}));
-
-      // 2^(-20) = 1/1048576
-      auto pf5 = ex<Power>(2, -20);
-      Power::flatten(pf5);
-      REQUIRE(pf5 == ex<Constant>(rational{1, 1048576}));
-
-      // square-root exponent with perfect-square base folds
-      // 4^(1/2) = 2
-      auto pf6 = ex<Power>(4, rational{1, 2});
-      Power::flatten(pf6);
-      REQUIRE(pf6 == ex<Constant>(rational{2}));
-
-      // (1/4)^(1/2) = 1/2
-      auto pf7 = ex<Power>(rational{1, 4}, rational{1, 2});
-      Power::flatten(pf7);
-      REQUIRE(pf7 == ex<Constant>(rational{1, 2}));
-
-      // (1/4)^(-1/2) = 2
-      auto pf8 = ex<Power>(rational{1, 4}, rational{-1, 2});
-      Power::flatten(pf8);
-      REQUIRE(pf8 == ex<Constant>(rational{2}));
-
-      // (9/16)^(3/2) = 27/64
-      auto pf9 = ex<Power>(rational{9, 16}, rational{3, 2});
-      Power::flatten(pf9);
-      REQUIRE(pf9 == ex<Constant>(rational{27, 64}));
-
-      // (-1)^(1/2) is imaginary; left as Power
-      auto pf10 = ex<Power>(-1, rational{1, 2});
-      Power::flatten(pf10);
-      REQUIRE(pf10->is<Power>());
-
-      // negative-real base with half-integer exponent: not folded
-      auto pf11 = ex<Power>(-4, rational{1, 2});
-      Power::flatten(pf11);
-      REQUIRE(pf11->is<Power>());
-
-      // complex base (imag != 0) with half-integer exponent: not folded
-      auto pf12 = ex<Power>(Constant::scalar_type{1, 1}, rational{1, 2});
-      Power::flatten(pf12);
-      REQUIRE(pf12->is<Power>());
-
-      // roots of any order fold when exact: 8^(1/3) = 2, (1/8)^(1/3) = 1/2
-      auto pf13 = ex<Power>(8, rational{1, 3});
-      Power::flatten(pf13);
-      REQUIRE(pf13 == ex<Constant>(rational{2}));
-      auto pf13b = ex<Power>(rational{1, 8}, rational{1, 3});
-      Power::flatten(pf13b);
-      REQUIRE(pf13b == ex<Constant>(rational{1, 2}));
-      // ... and not otherwise, even if a rational factor could come out
-      auto pf13c = ex<Power>(8, rational{1, 2});
-      Power::flatten(pf13c);
-      REQUIRE(pf13c->is<Power>());
-
-      // 0^(1/3) = 0
-      auto pf13d = ex<Power>(0, rational{1, 3});
-      Power::flatten(pf13d);
-      REQUIRE(pf13d == ex<Constant>(rational{0}));
-
-      // an integer power too large to build is left alone
-      auto pf13e = ex<Power>(2, rational{sequant::intmax_t{1} << 17});
-      Power::flatten(pf13e);
-      REQUIRE(pf13e->is<Power>());
-      auto pf13f = ex<Power>(-2, rational{sequant::intmax_t{1} << 17});
-      Power::flatten(pf13f);
-      REQUIRE(pf13f->is<Power>());
-      auto pf13g = ex<Power>(-2, rational{sequant::intmax_t{1} << 15});
-      Power::flatten(pf13g);
-      REQUIRE(pf13g == ex<Constant>(rational{sequant::intmax_t{1} << 32768}));
+      // {what, Power, folded value (null: stays a Power)}
+      const auto folds_to = [](auto... args) {
+        return ex<Constant>(rational{args...});
+      };
+      const std::vector<std::tuple<const char *, ExprPtr, ExprPtr>> rows{
+          {"constant base, integer exponent", ex<Power>(2, 3), folds_to(8)},
+          {"no exact root", ex<Power>(2, rational{1, 2}), nullptr},
+          {"variable base", ex<Power>(L"x", 2), nullptr},
+          {"variable base, zero exponent", ex<Power>(L"x", 0), folds_to(1)},
+          {"2^(-20)", ex<Power>(2, -20), folds_to(1, 1048576)},
+          {"4^(1/2)", ex<Power>(4, rational{1, 2}), folds_to(2)},
+          {"(1/4)^(1/2)", ex<Power>(rational{1, 4}, rational{1, 2}),
+           folds_to(1, 2)},
+          {"(1/4)^(-1/2)", ex<Power>(rational{1, 4}, rational{-1, 2}),
+           folds_to(2)},
+          {"(9/16)^(3/2)", ex<Power>(rational{9, 16}, rational{3, 2}),
+           folds_to(27, 64)},
+          {"(-1)^(1/2) is imaginary", ex<Power>(-1, rational{1, 2}), nullptr},
+          {"negative base, half-integer exponent",
+           ex<Power>(-4, rational{1, 2}), nullptr},
+          {"complex base, half-integer exponent",
+           ex<Power>(Constant::scalar_type{1, 1}, rational{1, 2}), nullptr},
+          {"8^(1/3)", ex<Power>(8, rational{1, 3}), folds_to(2)},
+          {"(1/8)^(1/3)", ex<Power>(rational{1, 8}, rational{1, 3}),
+           folds_to(1, 2)},
+          {"no exact root, rational factor could come out",
+           ex<Power>(8, rational{1, 2}), nullptr},
+          {"0^(1/3)", ex<Power>(0, rational{1, 3}), folds_to(0)},
+          {"2^(2^17) is too large to build",
+           ex<Power>(2, rational{sequant::intmax_t{1} << 17}), nullptr},
+          {"(-2)^(2^17) is too large to build",
+           ex<Power>(-2, rational{sequant::intmax_t{1} << 17}), nullptr},
+          {"(-2)^(2^15)", ex<Power>(-2, rational{sequant::intmax_t{1} << 15}),
+           folds_to(sequant::intmax_t{1} << 32768)},
+      };
+      for (auto [what, power, expected] : rows) {
+        CAPTURE(what);
+        Power::flatten(power);
+        if (expected)
+          REQUIRE(power == expected);
+        else
+          REQUIRE(power->is<Power>());
+      }
       // ... the bound accounts for both denominators of a complex base:
       // (1/2 + i/3)^20000 folds, with a 6^20000 denominator, while
       // (1/2 + i/3)^30000 would exceed the cap and is left alone
@@ -1469,7 +1472,7 @@ TEST_CASE("expr", "[elements]") {
     auto hasher = [](const std::shared_ptr<const Expr> &) -> unsigned int {
       return 0;
     };
-    REQUIRE_NOTHROW(ex<Constant>(1)->hash_value(hasher) == 0);
+    REQUIRE(ex<Constant>(1)->hash_value(hasher) == 0);
 
     {  // Power
       const auto c2 = ex<Constant>(rational{1, 2});
@@ -1768,8 +1771,7 @@ TEST_CASE("expr", "[elements]") {
     std::vector<std::tuple<std::string, TreeIndex, std::string>> tests = {
         {"Var", {}, "Var"},           {"A * B", {}, "A * B"},
         {"A + B", {0}, "A"},          {"A + B", {1}, "B"},
-        {"A + B", {}, "A + B"},       {"A + B", {0}, "A"},
-        {"A + B", {1}, "B"},          {"A + B * C", {0}, "A"},
+        {"A + B", {}, "A + B"},       {"A + B * C", {0}, "A"},
         {"A + B * C", {1}, "B * C"},  {"A + B * C", {1, 0}, "B"},
         {"A + B * C", {1, 1}, "C"},   {"(A + B) * C", {0}, "A + B"},
         {"(A + B) * C", {0, 1}, "B"}, {"(A + B) * C", {1}, "C"},
@@ -1802,6 +1804,86 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_THROWS_AS(TreeIndex({2}).select_from(expr), Exception);
       REQUIRE_THROWS_AS(TreeIndex({0, 1}).select_from(expr), Exception);
     }
+  }
+}
+
+TEST_CASE("sum_move_omits_zeros_and_combines_constants", "[elements]") {
+  using namespace sequant;
+
+  SECTION("merging the final constant") {
+    Sum result(Sum::summands_type{ex<Constant>(1), ex<Constant>(2)},
+               Sum::move_only_tag{});
+    REQUIRE(result.size() == 1);
+    REQUIRE(result.front().as<Constant>().value() == 3);
+  }
+
+  SECTION("constants and zeros interleaved with variables") {
+    Sum result(
+        Sum::summands_type{ex<Constant>(0), ex<Variable>(L"x"), ex<Constant>(1),
+                           ex<Constant>(2), ex<Constant>(0), ex<Variable>(L"y"),
+                           ex<Constant>(3)},
+        Sum::move_only_tag{});
+    REQUIRE(result.size() == 3);
+    REQUIRE(result.summand(0)->as<Variable>().label() == L"x");
+    REQUIRE(result.summand(1)->as<Constant>().value() == 6);
+    REQUIRE(result.summand(2)->as<Variable>().label() == L"y");
+
+    // the recorded constant position is observable only through a later
+    // append: a correct position folds the new constant in, a stale one
+    // appends a second constant or trips the assert
+    result.append(ex<Constant>(4));
+    REQUIRE(result.size() == 3);
+    REQUIRE(result.summand(1)->as<Constant>().value() == 10);
+  }
+
+  SECTION("adjacent and trailing zeros") {
+    Sum result(
+        Sum::summands_type{ex<Variable>(L"x"), ex<Constant>(0), ex<Constant>(0),
+                           ex<Variable>(L"y"), ex<Constant>(0)},
+        Sum::move_only_tag{});
+    REQUIRE(result.size() == 2);
+    REQUIRE(result.summand(0)->as<Variable>().label() == L"x");
+    REQUIRE(result.summand(1)->as<Variable>().label() == L"y");
+  }
+}
+
+TEST_CASE("sum_constant_fold", "[elements]") {
+  using namespace sequant;
+
+  SECTION("folding leaves the caller's constants intact") {
+    auto c1 = ex<Constant>(1);
+    auto c2 = ex<Constant>(2);
+    Sum result(Sum::summands_type{c1, c2, ex<Variable>(L"x")},
+               Sum::move_only_tag{});
+    REQUIRE(result.size() == 2);
+    REQUIRE(result.summand(0)->as<Constant>().value() == 3);
+    REQUIRE(c1->as<Constant>().value() == 1);
+    REQUIRE(c2->as<Constant>().value() == 2);
+  }
+
+  SECTION("constants that cancel are dropped") {
+    Sum moved(Sum::summands_type{ex<Constant>(1), ex<Constant>(-1),
+                                 ex<Variable>(L"x")},
+              Sum::move_only_tag{});
+    REQUIRE(moved.size() == 1);
+    REQUIRE(moved.summand(0)->is<Variable>());
+
+    Sum appended(ExprPtrList{ex<Variable>(L"x"), ex<Constant>(1)});
+    appended.append(ex<Constant>(-1));
+    REQUIRE(appended.size() == 1);
+    REQUIRE(appended.summand(0)->is<Variable>());
+    // the constant slot is released: a later constant starts a new one
+    appended.append(ex<Constant>(2));
+    REQUIRE(appended.size() == 2);
+    REQUIRE(appended.summand(1)->as<Constant>().value() == 2);
+
+    Sum prepended(ExprPtrList{ex<Constant>(1), ex<Variable>(L"x")});
+    prepended.prepend(ex<Constant>(-1));
+    REQUIRE(prepended.size() == 1);
+    REQUIRE(prepended.summand(0)->is<Variable>());
+    prepended.prepend(ex<Constant>(2));
+    REQUIRE(prepended.size() == 2);
+    REQUIRE(prepended.summand(0)->as<Constant>().value() == 2);
   }
 }
 

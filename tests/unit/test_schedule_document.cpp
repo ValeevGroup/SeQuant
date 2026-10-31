@@ -6,6 +6,7 @@
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/legality.hpp>
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
@@ -25,12 +26,14 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
+#include "csv_size_fixtures.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <fstream>
@@ -269,6 +272,7 @@ Document make_dag_doc() {
     o.home = {"i_1"};
     o.enclosing = {"a_1"};
     o.opens = {{"i_1", ModeKind::External}};
+    o.roles = {{"i_1", "Lockstep"}};
     v.occurrences = {o};
     v.siblings = {id == "v0" ? "v1" : "v0"};
     dag.values.push_back(std::move(v));
@@ -316,6 +320,13 @@ TEST_CASE("schedule document round-trips the dag and run sections",
   REQUIRE(back.run->n_batches.at(1) == 2);
   REQUIRE(back.run->planner.at("peak") == "1e9");
   REQUIRE(back.dag->values[0].occurrences[0].consumer == 1);
+  REQUIRE(back.dag->values[0].occurrences[0].roles.size() == 1);
+  REQUIRE(back.dag->values[0].occurrences[0].roles[0].role == "Lockstep");
+  // a role is one of the names the writer produces
+  REQUIRE_THROWS_WITH(from_json(mutate(d, "\"Lockstep\"", "\"Sideways\"")),
+                      Catch::Matchers::ContainsSubstring("unknown role"));
+  REQUIRE_THROWS_WITH(from_json(mutate(d, "\"LoopLocal\"", "\"Local\"")),
+                      Catch::Matchers::ContainsSubstring("unknown role"));
   REQUIRE(back.dag->blocks[1].outputs[0].second == "AccumulateSum");
   REQUIRE(std::get<2>(back.dag->loop_order[0]) == 2);
   REQUIRE(summary_line(d) == "roots=1 terms=1 values=2 blocks=2 depth=1");
@@ -495,10 +506,7 @@ TEST_CASE("record_term then rebuild_pinned_term reproduces the optimized tree",
   REQUIRE(*pinned2.expr == *optimized);
 }
 
-TEST_CASE(
-    "record_term handles a lone tensor, a scalar, identical factors, and "
-    "rejects mixed products",
-    "[schedule-document]") {
+TEST_CASE("record-term", "[schedule-document]") {
   using namespace sequant::opt::schedule;
   using Catch::Matchers::ContainsSubstring;
 
@@ -583,9 +591,7 @@ TEST_CASE("rebuild_pinned_term rejects foreign factors and unknown axis labels",
                       ContainsSubstring("z_9"));
 }
 
-TEST_CASE(
-    "record_term gives every inner node of a pure tensor tree one annotation",
-    "[schedule-document]") {
+TEST_CASE("record-term-inner-annotations", "[schedule-document]") {
   using namespace sequant::opt::schedule;
   // i_2 is contracted between X and Y only: the (X Y) subtree is fully
   // contracted unless binarize is told i_2 is external; the optimizer still
@@ -1267,13 +1273,20 @@ DagFixture two_root_fixture() {
       external_occ_policy());
 }
 
+/// what a value's expr spells it from: a leaf's tensor label, else the
+/// operands
+std::string rhs_of(ValueRecord const& v) {
+  auto const eq = v.expr.find(" = ");
+  REQUIRE(eq != std::string::npos);
+  return v.expr.substr(eq + 3);
+}
+
 /// the products of g and t (the X of the fixture), by id
 std::vector<ValueRecord> x_values(DagRecord const& dag) {
   std::vector<ValueRecord> xs;
   for (auto const& v : dag.values) {
-    auto const eq = v.expr.find(" = ");
-    if (v.leaf || eq == std::string::npos) continue;
-    auto const rhs = v.expr.substr(eq + 3);
+    if (v.leaf) continue;
+    auto const rhs = rhs_of(v);
     if ((rhs.starts_with("g") && rhs.find(" * t") != std::string::npos) ||
         (rhs.starts_with("t") && rhs.find(" * g") != std::string::npos))
       xs.push_back(v);
@@ -1292,10 +1305,7 @@ Document doc_with(std::vector<RootRecord> const& roots, DagRecord dag) {
 
 }  // namespace
 
-TEST_CASE(
-    "record_dag gives a node sliced by two loops two values with each other "
-    "as siblings",
-    "[schedule-document]") {
+TEST_CASE("record-dag-two-loop-siblings", "[schedule-document]") {
   auto const fx = two_root_fixture();
   auto const dag =
       record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
@@ -1341,13 +1351,37 @@ TEST_CASE(
   REQUIRE(!edge(x.id, *consumer).sliced);
 }
 
+TEST_CASE("record_dag spells every value as its name and what makes it",
+          "[schedule-document]") {
+  auto const fx = two_root_fixture();
+  auto const dag =
+      record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots);
+  std::set<std::string> names;
+  for (auto const& v : dag.values) {
+    CAPTURE(v.id, v.name, v.expr);
+    REQUIRE(names.insert(v.name).second);
+    // the name opens expr, bare or in the form the value is produced in
+    REQUIRE(v.expr.starts_with(v.name));
+    auto const after = v.expr.substr(v.name.size());
+    REQUIRE((after.starts_with(" = ") || after.starts_with("[")));
+    auto const rhs = rhs_of(v);
+    if (v.leaf) {
+      REQUIRE(std::set<std::string>{"f", "g", "h", "t"}.contains(rhs));
+    } else {
+      REQUIRE((rhs.find(" * ") != std::string::npos ||
+               rhs.find(" + ") != std::string::npos));
+    }
+  }
+  // the whole X of R1's loop, assembled from per-batch partials, by name
+  auto const xs = x_values(dag);
+  REQUIRE(!xs.empty());
+  for (auto const& x : xs) REQUIRE(x.name.starts_with("R"));
+}
+
 TEST_CASE("record_dag takes persistence from the cell table",
           "[schedule-document]") {
   using sequant::eval::dryrun::EvalNodeDryRun;
   auto const fx = two_root_fixture();
-  auto const leaf_label = [](ValueRecord const& v) {
-    return v.expr.substr(0, v.expr.find('['));
-  };
   // nothing volatile: a value survives an evaluation only when nothing reads
   // it again, i.e. the roots; every leaf and every X is read again or bound
   auto const dag0 =
@@ -1365,7 +1399,7 @@ TEST_CASE("record_dag takes persistence from the cell table",
   for (auto const& v : dag1.values) {
     if (v.leaf) {
       ++leaves;
-      REQUIRE(v.persistent == (leaf_label(v) != "t"));
+      REQUIRE(v.persistent == (rhs_of(v) != "t"));
     } else {
       REQUIRE(!v.persistent);
     }
@@ -1404,7 +1438,7 @@ TEST_CASE("record_dag persistence is the flag of the assembled form",
   REQUIRE(x.persistent);
   // g and h feed only the partial, whose whole holds no t: not persistent
   for (auto const& v : dag.values)
-    if (v.leaf && (v.expr.rfind("g", 0) == 0 || v.expr.rfind("h", 0) == 0))
+    if (v.leaf && (rhs_of(v) == "g" || rhs_of(v) == "h"))
       REQUIRE(!v.persistent);
 }
 
@@ -1659,7 +1693,7 @@ TEST_CASE("ordered dry run fills the run record", "[schedule-document]") {
 /// fixture's own policy and pinned extents.
 TEST_CASE("write the viewer example document", "[.write-example]") {
   char const* const out_path = std::getenv("SEQUANT_SCHEDULE_EXAMPLE_OUT");
-  REQUIRE(out_path != nullptr);
+  if (out_path == nullptr) SKIP("SEQUANT_SCHEDULE_EXAMPLE_OUT is not set");
 
   auto const fx = two_root_fixture();
   Document doc;
@@ -1726,27 +1760,13 @@ TEST_CASE("ordered executor is unchanged without a run record",
 // tests/unit/CMakeLists.txt).
 // ---------------------------------------------------------------------------
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 namespace {
 
-struct SizeIndProblemSize {
-  std::size_t mu_tilde;
-  std::size_t aux;
-  std::size_t i_occ;
-  std::array<double, 5> pno_M;
-  std::array<double, 5> osv_M;
-};
-
-// water-20 pVDZ-F12
-inline constexpr SizeIndProblemSize kSizeIndWater20{
-    /*mu_tilde=*/896u,
-    /*aux=*/1682u,
-    /*i_occ=*/80u,
-    /*pno_M=*/
-    {1.0, 23.175775480059084, 25.865548281212597, 28.171416142614103,
-     30.03848680550367},
-    /*osv_M=*/
-    {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
-     59.872014818179686}};
+// Problem size, provenance and occupancy adjustment: csv_size_fixtures.hpp.
+using SizeIndProblemSize = sequant::tests::csv_sizes::CsvProblemSize;
+inline constexpr auto const& kSizeIndWater20 =
+    sequant::tests::csv_sizes::kWater20_pVDZF12;
 
 /// every extent doubled
 SizeIndProblemSize sizeind_doubled(SizeIndProblemSize p) {
@@ -1765,16 +1785,7 @@ std::string sizeind_slurp(std::string const& path) {
 
 sequant::eval::dryrun::SizeRegime sizeind_df_regime(
     SizeIndProblemSize const& p) {
-  sequant::eval::dryrun::SizeRegime r;
-  r.space_extent = {
-      {L"i", p.i_occ},
-      {L"μ̃", p.mu_tilde},
-      {L"Κ", p.aux},
-      {L"a", p.mu_tilde},
-  };
-  r.csv_pno_moment = p.pno_M;
-  r.csv_osv_moment = p.osv_M;
-  return r;
+  return sequant::tests::csv_sizes::df_size_regime(p);
 }
 
 sequant::ExprPtr sizeind_flatten_product(sequant::ExprPtr const& e) {
@@ -1918,3 +1929,4 @@ TEST_CASE("a pinned schedule is identical across two problem sizes",
   REQUIRE_NOTHROW(sequant::opt::schedule::check_fingerprint(
       docA.fingerprint, docB_pinned.fingerprint));
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)

@@ -189,10 +189,14 @@ struct ExportOptions {
   std::size_t max_batched = std::numeric_limits<std::size_t>::max();
 };
 
-ExportNode<> prepareForExport(const ResultExpr &result,
+ExportNode<> prepareForExport(ResultExpr &result,
                               const ItfGenerator<ItfExportContext> &generator,
                               ItfExportContext &ctx,
                               const ExportOptions &opts) {
+  // use an order that does not depend on the hashing algorithm, to make the
+  // generated code reproducible
+  sort_expr(result);
+
   ExportNode<> tree = to_export_tree(result);
 
   if (result.produces_tensor()) {
@@ -413,7 +417,7 @@ void generateITF(const json &blocks, std::string_view out_file,
             return false;
           }();
 
-          if (needsSymmetrization(current.expression())) {
+          if (has_symmetrizer(current.expression())) {
             std::optional<ExprPtr> symmetrizer =
                 pop_tensor(current.expression(), reserved::symm_label());
             SEQUANT_ASSERT(symmetrizer.has_value());
@@ -448,7 +452,7 @@ void generateITF(const json &blocks, std::string_view out_file,
       }
 
       for (const Tensor &current : tensorsToSymmetrize) {
-        ExprPtr symmetrization = generateResultSymmetrization(
+        ExprPtr symmetrization = result_symmetrization(
             current, std::wstring(current.label()) + L"u");
 
         ResultExpr symmetrizedResult(current, std::move(symmetrization));
@@ -617,8 +621,8 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
     std::wstring label = toUtf16(current.at("label").get<std::string>());
     Field field =
         current.value("real_valued", false) ? Field::Real : Field::Complex;
-    registry.add(label, type, size, field,
-                 IndexSpace::QuantumNumbers{mbpt::Spin::any});
+    registry.add(label, type,
+                 {.dimension = size, .qns = mbpt::Spin::any, .field = field});
 
     spdlog::debug("Registered index '{}' with size {}", toUtf8(label), size);
 

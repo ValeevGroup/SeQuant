@@ -75,7 +75,10 @@ void biorthogonal_transform(
 /// have identical graph hashes).
 /// @details This function processes a sum expression, grouping product terms by
 /// hash of their canonicalized tensor network forms. For each group, it
-/// retains only the terms with the largest absolute scalar coefficient.
+/// retains only the terms with the largest absolute scalar coefficient, scaled
+/// by n!/rank(M) (rank(M) = Catalan(n) for n external index groups) so that the
+/// idempotent NNS projector (biorthogonal_nns_project) rebuilds the full
+/// residual.
 /// @param expr The input expression, expected to be a `Sum` of `Product` terms.
 /// @param ext_idxs A vector of external index groups. The function will not
 /// apply the filtering logic if `ext_idxs.size()` is 2 or less.
@@ -123,6 +126,30 @@ namespace detail {
     double pseudoinverse_threshold =
         default_biorthogonalizer_pseudoinverse_threshold);
 
+/// \brief Computes the biorthogonalizer matrix, the pseudoinverse of the
+/// permutational overlap matrix of \p n_particles particles
+///
+/// \param n_particles The rank of external index pairs
+/// \param pseudoinverse_threshold The threshold to compute the pseudoinverse
+///        matrix (set to default_biorthogonalizer_pseudoinverse_threshold)
+///
+/// \return The matrix flattened row-major; for `n_particles <= 5`
+///         hardcoded_biorthogonalizer_coeffs tabulates it exactly
+[[nodiscard]] std::vector<double> compute_biorthogonalizer_coeffs(
+    std::size_t n_particles,
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold);
+
+/// \brief Provides the biorthogonalizer matrix hardcoded from Mathematica to
+/// avoid numerical precision loss (see the definition of
+/// hardcoded_biorthogonalizer_row for its derivation)
+///
+/// \param n_particles The rank of external index pairs, in the range [1,5]
+///
+/// \return The matrix flattened row-major
+[[nodiscard]] std::vector<rational> hardcoded_biorthogonalizer_coeffs(
+    std::size_t n_particles);
+
 /// \brief Provides permuted indices using libperm unrank function
 ///
 /// \param indices The indices to permute
@@ -137,10 +164,13 @@ container::svector<size_t> compute_permuted_indices(
 /// \brief Provides one row of the NNS projector matrix,
 /// hardcoded from Mathematica to avoid numerical precision loss.
 ///
-/// The NNS projector weights are obtained from the normalized pseudoinverse
-/// of M: first compute M_pinv (the pseudoinverse), then normalize it by the
-/// factor ((n_particles)!/rank(M)).
-/// Finally, NNS projector = normalized_M_pinv · M.
+/// The NNS projector is the idempotent projector onto the range of M,
+/// NNS projector = M · M_pinv (= M_pinv · M since M is symmetric).
+/// It must be applied to residuals evaluated from the V2 (WK-compacted)
+/// equations to reconstruct the terms dropped by the compaction.
+/// See
+/// [DOI 10.48550/ARXIV.1805.00565](https://doi.org/10.48550/ARXIV.1805.00565),
+/// for more details.
 ///
 /// \param n_particles The rank of external index pairs
 ///
@@ -157,50 +187,50 @@ std::optional<std::vector<T>> hardcoded_nns_projector(std::size_t n_particles) {
       return std::vector<T>{T(0) / T(1), T(1) / T(1)};
 
     case 3:
-      return std::vector<T>{T(-1) / T(5), T(-1) / T(5), T(-1) / T(5),
-                            T(-1) / T(5), T(-1) / T(5), T(1) / T(1)};
+      return std::vector<T>{T(-1) / T(6), T(-1) / T(6), T(-1) / T(6),
+                            T(-1) / T(6), T(-1) / T(6), T(5) / T(6)};
 
     case 4:
       return std::vector<T>{
-          T(1) / T(7),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(14),
-          T(1) / T(7),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(14),
-          T(-1) / T(14), T(-1) / T(14), T(1) / T(7),   T(-2) / T(7),
-          T(-1) / T(14), T(1) / T(7),   T(-1) / T(14), T(-2) / T(7),
-          T(1) / T(7),   T(-1) / T(14), T(-1) / T(14), T(-2) / T(7),
-          T(-2) / T(7),  T(-2) / T(7),  T(-2) / T(7),  T(1) / T(1)};
+          T(1) / T(12),  T(1) / T(12),  T(1) / T(12),  T(-1) / T(24),
+          T(1) / T(12),  T(1) / T(12),  T(1) / T(12),  T(-1) / T(24),
+          T(-1) / T(24), T(-1) / T(24), T(1) / T(12),  T(-1) / T(6),
+          T(-1) / T(24), T(1) / T(12),  T(-1) / T(24), T(-1) / T(6),
+          T(1) / T(12),  T(-1) / T(24), T(-1) / T(24), T(-1) / T(6),
+          T(-1) / T(6),  T(-1) / T(6),  T(-1) / T(6),  T(7) / T(12)};
 
     case 5:
       return std::vector<T>{
-          T(-1) / T(14), T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
-          T(2) / T(21),  T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
-          T(-1) / T(14), T(2) / T(21),  T(-1) / T(14), T(-1) / T(14),
-          T(-1) / T(14), T(-1) / T(14), T(2) / T(21),  T(2) / T(21),
-          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(0) / T(1),
-          T(-1) / T(14), T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
-          T(2) / T(21),  T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
-          T(-1) / T(14), T(2) / T(21),  T(-1) / T(14), T(-1) / T(14),
-          T(-1) / T(14), T(-1) / T(14), T(2) / T(21),  T(2) / T(21),
-          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(0) / T(1),
-          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(2) / T(21),
-          T(0) / T(1),   T(2) / T(21),  T(2) / T(21),  T(-1) / T(21),
-          T(2) / T(21),  T(0) / T(1),   T(-1) / T(21), T(-1) / T(21),
-          T(-1) / T(21), T(-1) / T(21), T(1) / T(7),   T(0) / T(1),
-          T(0) / T(1),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(3),
-          T(2) / T(21),  T(-1) / T(21), T(2) / T(21),  T(2) / T(21),
-          T(0) / T(1),   T(-1) / T(21), T(-1) / T(21), T(-1) / T(21),
-          T(-1) / T(21), T(1) / T(7),   T(2) / T(21),  T(-1) / T(21),
-          T(2) / T(21),  T(2) / T(21),  T(0) / T(1),   T(0) / T(1),
-          T(1) / T(7),   T(0) / T(1),   T(1) / T(7),   T(-1) / T(3),
-          T(-1) / T(21), T(-1) / T(21), T(-1) / T(21), T(-1) / T(21),
-          T(1) / T(7),   T(-1) / T(21), T(2) / T(21),  T(2) / T(21),
-          T(2) / T(21),  T(0) / T(1),   T(-1) / T(21), T(2) / T(21),
-          T(2) / T(21),  T(2) / T(21),  T(0) / T(1),   T(1) / T(7),
-          T(0) / T(1),   T(0) / T(1),   T(1) / T(7),   T(-1) / T(3),
-          T(0) / T(1),   T(1) / T(7),   T(1) / T(7),   T(0) / T(1),
-          T(-1) / T(3),  T(1) / T(7),   T(0) / T(1),   T(1) / T(7),
-          T(0) / T(1),   T(-1) / T(3),  T(1) / T(7),   T(1) / T(7),
-          T(0) / T(1),   T(0) / T(1),   T(-1) / T(3),  T(-1) / T(3),
-          T(-1) / T(3),  T(-1) / T(3),  T(-1) / T(3),  T(1) / T(1)};
+          T(-1) / T(40), T(-1) / T(40), T(-1) / T(40), T(-1) / T(40),
+          T(1) / T(30),  T(-1) / T(40), T(-1) / T(40), T(-1) / T(40),
+          T(-1) / T(40), T(1) / T(30),  T(-1) / T(40), T(-1) / T(40),
+          T(-1) / T(40), T(-1) / T(40), T(1) / T(30),  T(1) / T(30),
+          T(1) / T(30),  T(1) / T(30),  T(-1) / T(60), T(0) / T(1),
+          T(-1) / T(40), T(-1) / T(40), T(-1) / T(40), T(-1) / T(40),
+          T(1) / T(30),  T(-1) / T(40), T(-1) / T(40), T(-1) / T(40),
+          T(-1) / T(40), T(1) / T(30),  T(-1) / T(40), T(-1) / T(40),
+          T(-1) / T(40), T(-1) / T(40), T(1) / T(30),  T(1) / T(30),
+          T(1) / T(30),  T(1) / T(30),  T(-1) / T(60), T(0) / T(1),
+          T(1) / T(30),  T(1) / T(30),  T(-1) / T(60), T(1) / T(30),
+          T(0) / T(1),   T(1) / T(30),  T(1) / T(30),  T(-1) / T(60),
+          T(1) / T(30),  T(0) / T(1),   T(-1) / T(60), T(-1) / T(60),
+          T(-1) / T(60), T(-1) / T(60), T(1) / T(20),  T(0) / T(1),
+          T(0) / T(1),   T(1) / T(20),  T(1) / T(20),  T(-7) / T(60),
+          T(1) / T(30),  T(-1) / T(60), T(1) / T(30),  T(1) / T(30),
+          T(0) / T(1),   T(-1) / T(60), T(-1) / T(60), T(-1) / T(60),
+          T(-1) / T(60), T(1) / T(20),  T(1) / T(30),  T(-1) / T(60),
+          T(1) / T(30),  T(1) / T(30),  T(0) / T(1),   T(0) / T(1),
+          T(1) / T(20),  T(0) / T(1),   T(1) / T(20),  T(-7) / T(60),
+          T(-1) / T(60), T(-1) / T(60), T(-1) / T(60), T(-1) / T(60),
+          T(1) / T(20),  T(-1) / T(60), T(1) / T(30),  T(1) / T(30),
+          T(1) / T(30),  T(0) / T(1),   T(-1) / T(60), T(1) / T(30),
+          T(1) / T(30),  T(1) / T(30),  T(0) / T(1),   T(1) / T(20),
+          T(0) / T(1),   T(0) / T(1),   T(1) / T(20),  T(-7) / T(60),
+          T(0) / T(1),   T(1) / T(20),  T(1) / T(20),  T(0) / T(1),
+          T(-7) / T(60), T(1) / T(20),  T(0) / T(1),   T(1) / T(20),
+          T(0) / T(1),   T(-7) / T(60), T(1) / T(20),  T(1) / T(20),
+          T(0) / T(1),   T(0) / T(1),   T(-7) / T(60), T(-7) / T(60),
+          T(-7) / T(60), T(-7) / T(60), T(-7) / T(60), T(7) / T(20)};
 
     default:
       return std::nullopt;

@@ -87,10 +87,10 @@ TEST_CASE("iterators", "[elements]") {
       using std::end;
       REQUIRE_NOTHROW(begin(rng1));
       REQUIRE_NOTHROW(end(rng1));
-      REQUIRE_NOTHROW(std::distance(begin(rng1), end(rng1)) == 2);
+      REQUIRE(std::distance(begin(rng1), end(rng1)) == 4);
       REQUIRE_NOTHROW(begin(rng2));
       REQUIRE_NOTHROW(end(rng2));
-      REQUIRE_NOTHROW(std::distance(begin(rng2), end(rng2)) == 10);
+      REQUIRE(std::distance(begin(rng2), end(rng2)) == 10);
       auto it2 = begin(rng2);
       for (auto i = 0; i != 10; ++i) {
         REQUIRE(ranges::get_cursor(it2).ordinal() == i);

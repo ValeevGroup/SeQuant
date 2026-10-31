@@ -56,7 +56,7 @@ TEST_CASE("latex", "[util]") {
             U"\\Gamma");
   }
 
-  SECTION("diactrids->latex") {
+  SECTION("diacritics->latex") {
     std::wstring tilde__a = L"ã";
     REQUIRE(tilde__a.size() == 2);
     REQUIRE(io::latex::diactrics_to_string(tilde__a) == L"\\tilde{a}");

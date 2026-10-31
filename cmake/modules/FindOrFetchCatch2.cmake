@@ -1,6 +1,8 @@
 include(FetchContent)
 
 if (NOT TARGET Catch2::Catch2)
+    sequant_find_unless_fetching(Catch2 ${SEQUANT_OLDEST_CATCH2_VERSION})
+
     FetchContent_Declare(
         Catch2
         GIT_REPOSITORY "https://github.com/catchorg/Catch2.git"

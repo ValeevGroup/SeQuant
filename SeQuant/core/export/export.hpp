@@ -12,7 +12,10 @@
 #include <SeQuant/core/export/marked_name.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
+#include <SeQuant/core/irreps/any.hpp>
+#include <SeQuant/core/irreps/eval_tree.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/optimize/name_recycling.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -34,6 +37,26 @@
 
 namespace sequant {
 
+/// Invokes @p tensor_fn or @p variable_fn for the tensor or variable that the
+/// given leaf expression represents. Powers are represented by their base. Does
+/// nothing for any other expression.
+template <typename TensorFn, typename VariableFn>
+void visit_leaf_expr(const Expr &expr, TensorFn &&tensor_fn,
+                     VariableFn &&variable_fn) {
+  if (expr.is<Tensor>()) {
+    tensor_fn(expr.as<Tensor>());
+  } else if (expr.is<Variable>()) {
+    variable_fn(expr.as<Variable>());
+  } else if (expr.is<Power>()) {
+    const Power &power = expr.as<Power>();
+    if (power.base().is<Tensor>()) {
+      tensor_fn(power.base().as<Tensor>());
+    } else if (power.base().is<Variable>()) {
+      variable_fn(power.base().as<Variable>());
+    }
+  }
+}
+
 namespace detail {
 
 /// A collection of various meta-data that the preprocessing stage will collect
@@ -45,6 +68,18 @@ struct PreprocessResult {
 
   std::map<Tensor, std::size_t, TensorBlockLessThanComparator> tensorReferences;
   std::map<Variable, std::size_t> variableReferences;
+
+  /// Names of all tensors and variables encountered so far along with how
+  /// often they are currently referenced. Labels are generated as basename,
+  /// basename2, basename3, ...
+  opt::IntermediateNamePool names{
+      [](std::wstring_view basename, std::size_t counter) {
+        return counter == 1 ? std::wstring(basename)
+                            : std::wstring(basename) + std::to_wstring(counter);
+      }};
+
+  /// The IRREPs of the result of every node (only if an IRREP context is set)
+  std::unordered_map<std::size_t, AnyIrrepSet> nodeIrreps;
 };
 
 /// Maps the ASCII name an object is exported under (export_label(), which folds
@@ -515,11 +550,53 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result,
 
 /// Renames the given Tensor to a name that doesn't collide with any currently
 /// loaded object. This may reuse previously used/declares tensors.
-bool rename(Tensor &tensor, PreprocessResult &result);
+/// @param acceptable If provided, only names for which this predicate returns
+///        true are considered. In this case, the tensor need not be loaded.
+bool rename(Tensor &tensor, PreprocessResult &result,
+            const std::function<bool(const Tensor &)> &acceptable = {});
 /// Renames the given Variable to a name that doesn't collide with any
 /// currently loaded object. This may reuse previously used/declares
 /// variables.
-bool rename(Variable &variable, PreprocessResult &result);
+/// @param acceptable If provided, only names for which this predicate returns
+///        true are considered. In this case, the variable need not be loaded.
+bool rename(Variable &variable, PreprocessResult &result,
+            const std::function<bool(const Variable &)> &acceptable = {});
+
+/// Context for IRREP propagation during export. Tensors whose IRREPs have
+/// already been computed during the export (i.e. results of previously
+/// processed trees) are resolved via the ExportContext's registry. All others
+/// are resolved via the user-provided IRREP context.
+class RegisteredIrrepContext {
+ public:
+  using set_type = AnyIrrepSet;
+
+  explicit RegisteredIrrepContext(const ExportContext &ctx);
+
+  AnyIrrepSet irreps_of(const Tensor &tensor) const;
+  AnyIrrepSet irreps_of(const Variable &variable) const;
+  AnyIrrepSet totally_symmetric() const;
+  AnyIrrepSet empty_set() const;
+  AnyIrrepSet product(const AnyIrrepSet &lhs, const AnyIrrepSet &rhs) const;
+  AnyIrrepSet conjugate(const AnyIrrepSet &set) const;
+
+ private:
+  const ExportContext &m_ctx;
+};
+
+/// @returns The IRREPs of the result of every node in the given tree, keyed by
+/// the nodes' IDs
+template <typename T>
+std::unordered_map<std::size_t, AnyIrrepSet> compute_node_irreps(
+    const ExportNode<T> &tree, const ExportContext &ctx) {
+  std::unordered_map<std::size_t, AnyIrrepSet> irreps;
+
+  irreps_of(tree, RegisteredIrrepContext(ctx),
+            [&](const ExportNode<T> &node, const AnyIrrepSet &set) {
+              irreps[node->id()] = set;
+            });
+
+  return irreps;
+}
 
 /// Preprocesses the given expression
 template <typename ExprType, typename Node>
@@ -575,6 +652,31 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
   // reordered
   storeExpr |= ctx.rewrite(expr);
 
+  // Every tensor block must be associated with a unique set of IRREPs. Hence,
+  // intermediates must not (re)use a tensor block that is associated with
+  // different IRREPs.
+  // Note: non-leaf children of sums are skipped as they will adopt their
+  // parent's result tensor (see PreprocessVisitor's
+  // prune_redundant_intermediate)
+  std::function<bool(const ExprType &)> irreps_compatible;
+  if constexpr (std::is_same_v<ExprType, Tensor>) {
+    auto it = result.nodeIrreps.find(node->id());
+    if (it != result.nodeIrreps.end() && !node.leaf() && !node.root() &&
+        node.parent()->op_type() != EvalOp::Sum) {
+      irreps_compatible = [&ctx, &irreps = it->second](const Tensor &tensor) {
+        const AnyIrrepSet *known = ctx.irreps_of(tensor);
+        return known == nullptr || *known == irreps;
+      };
+
+      if (!irreps_compatible(expr)) {
+        // In case the new name refers to a previously used tensor, it gets
+        // zeroed before reuse by the result reuse handling below
+        rename(expr, result, irreps_compatible);
+        storeExpr = true;
+      }
+    }
+  }
+
   if (node.leaf()) {
     // Anything but loading doesn't make sense for leaf nodes
     ctx.setLoadStrategy(expr, LoadStrategy::Load);
@@ -613,7 +715,7 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
       if (currentlyLoaded) {
         // This expr is currently in use -> can't use it as a result as that
         // would overwrite the currently used value -> need to rename expr
-        if (rename(expr, result)) {
+        if (rename(expr, result, irreps_compatible)) {
           // We renamed expr to another expression that has been used before
           // but is currently not used/loaded -> set to zero before adding new
           // data
@@ -659,25 +761,16 @@ void track_usage(const EvalNode<T> &node, PreprocessResult &result) {
     result.indices.insert(indices.begin(), indices.end());
 
     result.tensorReferences[tensor]++;
+    result.names.occupy(tensor);
   };
   auto handle_variable = [&](const Variable &variable) {
     result.variables[variable] |= usage;
 
     result.variableReferences[variable]++;
+    result.names.occupy(variable);
   };
 
-  if (expr.is<Tensor>()) {
-    handle_tensor(expr.as<Tensor>());
-  } else if (expr.is<Variable>()) {
-    handle_variable(expr.as<Variable>());
-  } else if (expr.is<Power>()) {
-    const Power &power = expr.as<Power>();
-    if (power.base().is<Tensor>()) {
-      handle_tensor(power.base().as<Tensor>());
-    } else if (power.base().is<Variable>()) {
-      handle_variable(power.base().as<Variable>());
-    }
-  }
+  visit_leaf_expr(expr, handle_tensor, handle_variable);
 }
 
 /// @returns Whether the given node may be pruned from its parent in order to
@@ -759,6 +852,7 @@ class PreprocessVisitor {
         // as the latter might change the result expression on the current
         // node
         track_usage(tree, m_result);
+        register_irreps(tree);
         break;
       case TreeTraversal::PostOrder:
         if (!tree.leaf()) {
@@ -907,17 +1001,46 @@ class PreprocessVisitor {
       // it with the parent's result (to prune the existence of the redundant
       // intermediate on node)
       node->set_expr(node.parent()->expr());
+
+      if (auto it = m_result.nodeIrreps.find(node.parent()->id());
+          it != m_result.nodeIrreps.end()) {
+        AnyIrrepSet irreps = it->second;
+        m_result.nodeIrreps[node->id()] = std::move(irreps);
+      }
     }
+  }
+
+  void register_irreps(const ExportNode<T> &node) {
+    auto it = m_result.nodeIrreps.find(node->id());
+    if (it == m_result.nodeIrreps.end() || !node->is_tensor()) {
+      return;
+    }
+
+    // Results (also the ones accumulated into via a sum) may receive
+    // contributions of different IRREPs from different trees
+    const IrrepOrigin origin = [&]() {
+      if (node.leaf()) {
+        return IrrepOrigin::Input;
+      }
+      if (node.root() || node.parent()->op_type() == EvalOp::Sum) {
+        return IrrepOrigin::Result;
+      }
+      return IrrepOrigin::Intermediate;
+    }();
+
+    m_ctx.register_irreps(node->as_tensor(), it->second, origin);
   }
 
   void release_used_terms(ExportNode<T> &node) {
     auto handle_tensor = [&](const Tensor &tensor) {
       SEQUANT_ASSERT(m_result.tensorReferences[tensor] > 0);
       m_result.tensorReferences[tensor]--;
+      m_result.names.release(tensor);
     };
     auto handle_variable = [&](const Variable &variable) {
       SEQUANT_ASSERT(m_result.variableReferences[variable] > 0);
       m_result.variableReferences[variable]--;
+      m_result.names.release(variable);
     };
 
     // Mark tensors/variables as no longer in use
@@ -970,6 +1093,10 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
                      },
                      [](const ExportNode<T>) -> std::string { return ""; })
               << "\n";
+  }
+
+  if (ctx.has_irrep_context()) {
+    result.nodeIrreps = compute_node_irreps(tree, ctx);
   }
 
   detail::PreprocessVisitor<T> preprocessor(result, ctx, prunable,

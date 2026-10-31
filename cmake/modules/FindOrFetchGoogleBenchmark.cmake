@@ -3,6 +3,8 @@ if (NOT TARGET benchmark::benchmark)
 
     set(BENCHMARK_ENABLE_TESTING OFF CACHE INTERNAL "" FORCE)
 
+    sequant_find_unless_fetching(benchmark ${SEQUANT_OLDEST_GOOGLEBENCHMARK_VERSION})
+
     FetchContent_Declare(
         googlebenchmark
         GIT_REPOSITORY "https://github.com/google/benchmark.git"

@@ -66,20 +66,20 @@ class rand_tensor_yield {
   [[nodiscard]] Tensor_t make_rand_tensor(sequant::Tensor const& tnsr) const {
     using ranges::views::transform;
     using sequant::IndexSpace;
-    auto isr = sequant::get_default_context().index_basis_registry();
+    auto ibr = sequant::get_default_context().index_basis_registry();
 
     SEQUANT_ASSERT(
         ranges::all_of(tnsr.const_braket_indices(),
-                       [&isr](auto const& idx) {
-                         return idx.space() == isr->retrieve_space(L"i") ||
-                                idx.space() == isr->retrieve_space(L"a");
+                       [&ibr](auto const& idx) {
+                         return idx.space() == ibr->retrieve_space(L"i") ||
+                                idx.space() == ibr->retrieve_space(L"a");
                        }) &&
         "Unsupported IndexSpace type found while generating tensor.");
 
     auto extents =
-        tnsr.const_braket_indices() | transform([this, &isr](auto const& idx) {
+        tnsr.const_braket_indices() | transform([this, &ibr](auto const& idx) {
           return static_cast<int64_t>(
-              idx.space() == isr->retrieve_space(L"i") ? nocc_ : nvirt_);
+              idx.space() == ibr->retrieve_space(L"i") ? nocc_ : nvirt_);
         }) |
         ranges::to<sequant::container::svector<int64_t>>;
 
@@ -414,7 +414,8 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
                                100 * std::numeric_limits<double>::epsilon()));
 
     // high-rank residuals: cleanup applies:
-    // result = identity - (1/ket_rank!) * sum_of_ket_permutations
+    // result = 5/6 * identity - 1/6 * sum of the other ket permutations
+    // (the idempotent NNS projector row)
     auto expr2 = parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}");
     auto tidx2 = tidxs(L"a_1,a_2,a_3,i_1,i_2,i_3");
     auto eval2 = eval_biorthogonal_nns_project(expr2, tidx2);
@@ -423,6 +424,7 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
     TAPPTensorD man2{r2.extents()};
     for (size_t i = 0; i < r2.volume(); ++i)
       const_cast<double*>(man2.data())[i] = r2.data()[i];
+    tapp_ops::scal(5.0 / 6.0, man2);
 
     TAPPTensorD perm_sum{r2.extents()};
     perm_sum.fill(0);
@@ -439,7 +441,7 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
     tapp_ops::permute(r2, {0, 1, 2, 3, 4, 5}, perm_res, {0, 1, 2, 5, 4, 3});
     perm_sum += perm_res;
 
-    tapp_ops::scal(1.0 / 5.0, perm_sum);
+    tapp_ops::scal(1.0 / 6.0, perm_sum);
     auto man2_result = man2 - perm_sum;
     REQUIRE(norm(eval2) == Catch::Approx(norm(man2_result)));
 
@@ -568,7 +570,7 @@ TEST_CASE("evaluate consults the custom evaluator and short-circuits",
     CHECK(result == marker);      // the custom result is used as-is
   }
 
-  SECTION("null result declines: the standard scheme evaluates the children") {
+  SECTION("declines-to-standard") {
     auto cache = cache_manager(std::vector{node});
     size_t decline_calls = 0;
     cache.set_custom_evaluator([&](auto const&, auto&) -> ResultPtr {

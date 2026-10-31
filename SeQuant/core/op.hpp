@@ -18,6 +18,8 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
+#include <algorithm>
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -31,6 +33,7 @@
 #include <utility>
 
 #include <range/v3/algorithm/adjacent_find.hpp>
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/sort.hpp>
@@ -38,6 +41,7 @@
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/range/access.hpp>
 #include <range/v3/range/primitives.hpp>
+#include <range/v3/range/traits.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/counted.hpp>
 #include <range/v3/view/reverse.hpp>
@@ -123,6 +127,11 @@ template <Statistics S1, Statistics S2>
 inline bool operator<(const Op<S1> &op1, const Op<S2> &op2) {
   if constexpr (S1 == S2) {
     if (op1.action() == op2.action()) {
+      // Equality ignores tags, while ordering can distinguish two tagged
+      // indices.
+      if (!op1.index().tag().has_value() || !op2.index().tag().has_value()) {
+        return op1.index() < op2.index();
+      }
       if (op1.index() == op2.index()) {
         return false;
       } else {
@@ -156,6 +165,14 @@ bool operator==(const Op<S> &op1, const Op<S> &op2) {
 template <Statistics S>
 bool operator!=(const Op<S> &op1, const Op<S> &op2) {
   return !(op1 == op2);
+}
+
+/// @return the order of @p op1 relative to @p op2 : by action (cre < ann),
+/// then by index
+template <Statistics S>
+std::weak_ordering lexicographic_compare(const Op<S> &op1, const Op<S> &op2) {
+  if (auto cmp = op1.action() <=> op2.action(); cmp != 0) return cmp;
+  return op1.index() <=> op2.index();
 }
 
 using BOp = Op<Statistics::BoseEinstein>;
@@ -199,22 +216,22 @@ bool is_annihilator(const Op<S> &op) {
 template <Statistics S>
 bool is_pure_qpcreator(const Op<S> &op,
                        Vacuum vacuum = get_default_context(S).vacuum(),
-                       const std::shared_ptr<const IndexBasisRegistry> &isr =
+                       const std::shared_ptr<const IndexBasisRegistry> &ibr =
                            get_default_context(S).index_basis_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::Create;
     case Vacuum::SingleProduct: {
-      return (isr->is_pure_occupied(op.index().space()) &&
+      return (ibr->is_pure_occupied(op.index().space()) &&
               op.action() == Action::Annihilate) ||
-             (isr->is_pure_unoccupied(op.index().space()) &&
+             (ibr->is_pure_unoccupied(op.index().space()) &&
               op.action() == Action::Create);
     }
     case Vacuum::MultiProduct: {
       const auto &sp = op.index().space();
       const auto &target = op.action() == Action::Create
-                               ? isr->vacuum_unoccupied_space(sp.qns())
-                               : isr->reference_occupied_space(sp.qns());
+                               ? ibr->vacuum_unoccupied_space(sp.qns())
+                               : ibr->reference_occupied_space(sp.qns());
       return target.type().includes(sp.type());
     }
   }
@@ -227,22 +244,22 @@ bool is_pure_qpcreator(const Op<S> &op,
 template <Statistics S>
 bool is_qpcreator(const Op<S> &op,
                   Vacuum vacuum = get_default_context(S).vacuum(),
-                  const std::shared_ptr<const IndexBasisRegistry> &isr =
+                  const std::shared_ptr<const IndexBasisRegistry> &ibr =
                       get_default_context(S).index_basis_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::Create;
     case Vacuum::SingleProduct: {
-      return (isr->contains_occupied(op.index().space()) &&
+      return (ibr->contains_occupied(op.index().space()) &&
               op.action() == Action::Annihilate) ||
-             (isr->contains_unoccupied(op.index().space()) &&
+             (ibr->contains_unoccupied(op.index().space()) &&
               op.action() == Action::Create);
     }
     case Vacuum::MultiProduct: {
       const auto &sp = op.index().space();
       const auto &target = op.action() == Action::Create
-                               ? isr->vacuum_unoccupied_space(sp.qns())
-                               : isr->reference_occupied_space(sp.qns());
+                               ? ibr->vacuum_unoccupied_space(sp.qns())
+                               : ibr->reference_occupied_space(sp.qns());
       return static_cast<bool>(sp.type().intersection(target.type()));
     }
   }
@@ -253,7 +270,7 @@ bool is_qpcreator(const Op<S> &op,
 template <Statistics S>
 IndexSpace qpcreator_space(
     const Op<S> &op, Vacuum vacuum = get_default_context(S).vacuum(),
-    const std::shared_ptr<const IndexBasisRegistry> &isr =
+    const std::shared_ptr<const IndexBasisRegistry> &ibr =
         get_default_context(S).index_basis_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
@@ -261,18 +278,18 @@ IndexSpace qpcreator_space(
                                            : IndexSpace::null;
     case Vacuum::SingleProduct:
       return op.action() == Action::Annihilate
-                 ? isr->intersection(
+                 ? ibr->intersection(
                        op.index().space(),
-                       isr->vacuum_occupied_space(op.index().space().qns()))
-                 : isr->intersection(
+                       ibr->vacuum_occupied_space(op.index().space().qns()))
+                 : ibr->intersection(
                        op.index().space(),
-                       isr->vacuum_unoccupied_space(op.index().space().qns()));
+                       ibr->vacuum_unoccupied_space(op.index().space().qns()));
     case Vacuum::MultiProduct: {
       const auto &sp = op.index().space();
       return op.action() == Action::Create
-                 ? isr->intersection(sp, isr->vacuum_unoccupied_space(sp.qns()))
-                 : isr->intersection(sp,
-                                     isr->reference_occupied_space(sp.qns()));
+                 ? ibr->intersection(sp, ibr->vacuum_unoccupied_space(sp.qns()))
+                 : ibr->intersection(sp,
+                                     ibr->reference_occupied_space(sp.qns()));
     }
   }
 
@@ -284,22 +301,22 @@ IndexSpace qpcreator_space(
 template <Statistics S>
 bool is_pure_qpannihilator(
     const Op<S> &op, Vacuum vacuum = get_default_context(S).vacuum(),
-    const std::shared_ptr<const IndexBasisRegistry> &isr =
+    const std::shared_ptr<const IndexBasisRegistry> &ibr =
         get_default_context(S).index_basis_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::Annihilate;
     case Vacuum::SingleProduct: {
-      return (isr->is_pure_unoccupied(op.index().space()) &&
+      return (ibr->is_pure_unoccupied(op.index().space()) &&
               op.action() == Action::Annihilate) ||
-             (isr->is_pure_occupied(op.index().space()) &&
+             (ibr->is_pure_occupied(op.index().space()) &&
               op.action() == Action::Create);
     }
     case Vacuum::MultiProduct: {
       const auto &sp = op.index().space();
       const auto &target = op.action() == Action::Annihilate
-                               ? isr->vacuum_unoccupied_space(sp.qns())
-                               : isr->reference_occupied_space(sp.qns());
+                               ? ibr->vacuum_unoccupied_space(sp.qns())
+                               : ibr->reference_occupied_space(sp.qns());
       return target.type().includes(sp.type());
     }
   }
@@ -312,22 +329,22 @@ bool is_pure_qpannihilator(
 template <Statistics S>
 bool is_qpannihilator(const Op<S> &op,
                       Vacuum vacuum = get_default_context(S).vacuum(),
-                      const std::shared_ptr<const IndexBasisRegistry> &isr =
+                      const std::shared_ptr<const IndexBasisRegistry> &ibr =
                           get_default_context(S).index_basis_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::Annihilate;
     case Vacuum::SingleProduct: {
-      return (isr->contains_occupied(op.index().space()) &&
+      return (ibr->contains_occupied(op.index().space()) &&
               op.action() == Action::Create) ||
-             (isr->contains_unoccupied(op.index().space()) &&
+             (ibr->contains_unoccupied(op.index().space()) &&
               op.action() == Action::Annihilate);
     }
     case Vacuum::MultiProduct: {
       const auto &sp = op.index().space();
       const auto &target = op.action() == Action::Annihilate
-                               ? isr->vacuum_unoccupied_space(sp.qns())
-                               : isr->reference_occupied_space(sp.qns());
+                               ? ibr->vacuum_unoccupied_space(sp.qns())
+                               : ibr->reference_occupied_space(sp.qns());
       return static_cast<bool>(sp.type().intersection(target.type()));
     }
   }
@@ -338,7 +355,7 @@ bool is_qpannihilator(const Op<S> &op,
 template <Statistics S>
 IndexSpace qpannihilator_space(
     const Op<S> &op, Vacuum vacuum = get_default_context(S).vacuum(),
-    const std::shared_ptr<const IndexBasisRegistry> &isr =
+    const std::shared_ptr<const IndexBasisRegistry> &ibr =
         get_default_context(S).index_basis_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
@@ -346,18 +363,18 @@ IndexSpace qpannihilator_space(
                                                : IndexSpace::null;
     case Vacuum::SingleProduct:
       return op.action() == Action::Create
-                 ? isr->intersection(
+                 ? ibr->intersection(
                        op.index().space(),
-                       isr->vacuum_occupied_space(op.index().space().qns()))
-                 : isr->intersection(
+                       ibr->vacuum_occupied_space(op.index().space().qns()))
+                 : ibr->intersection(
                        op.index().space(),
-                       isr->vacuum_unoccupied_space(op.index().space().qns()));
+                       ibr->vacuum_unoccupied_space(op.index().space().qns()));
     case Vacuum::MultiProduct: {
       const auto &sp = op.index().space();
       return op.action() == Action::Annihilate
-                 ? isr->intersection(sp, isr->vacuum_unoccupied_space(sp.qns()))
-                 : isr->intersection(sp,
-                                     isr->reference_occupied_space(sp.qns()));
+                 ? ibr->intersection(sp, ibr->vacuum_unoccupied_space(sp.qns()))
+                 : ibr->intersection(sp,
+                                     ibr->reference_occupied_space(sp.qns()));
     }
   }
 
@@ -370,18 +387,18 @@ IndexSpace qpannihilator_space(
 template <Statistics S>
 bool can_contract(const Op<S> &left, const Op<S> &right,
                   Vacuum vacuum = get_default_context(S).vacuum(),
-                  const std::shared_ptr<const IndexBasisRegistry> &isr =
+                  const std::shared_ptr<const IndexBasisRegistry> &ibr =
                       get_default_context(S).index_basis_registry()) {
   // only cre.ann and ann.cre have nonzero reference expectation values; an
   // active op is both a qp creator and a qp annihilator, so the actions must
   // be checked explicitly
   if (vacuum == Vacuum::MultiProduct && left.action() == right.action())
     return false;
-  if (is_qpannihilator<S>(left, vacuum, isr) &&
-      is_qpcreator<S>(right, vacuum, isr)) {
-    const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
-    const auto qpspace_right = qpcreator_space<S>(right, vacuum, isr);
-    const auto qpspace_common = isr->intersection(qpspace_left, qpspace_right);
+  if (is_qpannihilator<S>(left, vacuum, ibr) &&
+      is_qpcreator<S>(right, vacuum, ibr)) {
+    const auto qpspace_left = qpannihilator_space<S>(left, vacuum, ibr);
+    const auto qpspace_right = qpcreator_space<S>(right, vacuum, ibr);
+    const auto qpspace_common = ibr->intersection(qpspace_left, qpspace_right);
     if (qpspace_common) return true;
   }
   return false;
@@ -580,6 +597,12 @@ class Operator
 
   bool static_equal(const Expr &that) const override;
 
+ protected:
+  /// orders by the Op objects (lexicographically)
+  std::weak_ordering static_lexicographic_compare(
+      const Expr &that, const LexicographicCompareOptions &opts) const override;
+
+ private:
   bool is_cnumber() const override { return false; }
 
   bool commutes_with_atom(const Expr &that) const override {
@@ -631,6 +654,19 @@ template <Statistics S>
 bool Operator<S>::static_equal(const Expr &that) const {
   const auto &that_cast = static_cast<const Operator &>(that);
   return *this == that_cast;
+}
+
+template <Statistics S>
+std::weak_ordering Operator<S>::static_lexicographic_compare(
+    const Expr &that, const LexicographicCompareOptions &) const {
+  const auto &this_ops = static_cast<const base_type &>(*this);
+  const auto &that_ops =
+      static_cast<const base_type &>(static_cast<const Operator &>(that));
+  return std::lexicographical_compare_three_way(
+      this_ops.begin(), this_ops.end(), that_ops.begin(), that_ops.end(),
+      [](const Op<S> &a, const Op<S> &b) {
+        return sequant::lexicographic_compare(a, b);
+      });
 }
 
 template <Statistics S, typename T>
@@ -988,10 +1024,32 @@ class NormalOperator : public Operator<S>,
     }
   }
 
+  /// orders by label (see LexicographicCompareOptions::cardinal_tensor_labels
+  /// ), then by the numbers of creators and annihilators, then by the Op
+  /// objects (lexicographically), then by vacuum
+  std::weak_ordering static_lexicographic_compare(
+      const Expr &that,
+      const LexicographicCompareOptions &opts) const override {
+    const auto &that_cast = static_cast<const NormalOperator<S> &>(that);
+    if (auto cmp = detail::lexicographic_compare_tensor_labels(
+            this->label(), that_cast.label(), opts);
+        cmp != 0)
+      return cmp;
+    if (auto cmp = this->ncreators() <=> that_cast.ncreators(); cmp != 0)
+      return cmp;
+    if (auto cmp = this->nannihilators() <=> that_cast.nannihilators();
+        cmp != 0)
+      return cmp;
+    if (auto cmp = Operator<S>::static_lexicographic_compare(that, opts);
+        cmp != 0)
+      return cmp;
+    return this->vacuum() <=> that_cast.vacuum();
+  }
+
   template <Statistics>
   friend class Operator;
   bool commutes_with_atom(const Expr &that) const override {
-    const auto &isr = get_default_context(S).index_basis_registry();
+    const auto &ibr = get_default_context(S).index_basis_registry();
 
     bool result = true;
     /// does not commute with Operator<S>
@@ -1004,7 +1062,7 @@ class NormalOperator : public Operator<S>,
           op_that.vacuum()) {  // can only check commutativity for same vacua
         for (auto &&op_l : *this) {
           for (auto &&op_r : op_that) {
-            if (sequant::can_contract(op_l, op_r, vacuum_, isr)) {
+            if (sequant::can_contract(op_l, op_r, vacuum_, ibr)) {
               return false;
             }
           }
@@ -1039,8 +1097,10 @@ class NormalOperator : public Operator<S>,
            ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
+  // empty, but not a default-constructed any_view: range-v3's end() of one
+  // dereferences a null pointer
   AbstractTensor::const_any_view_randsz _aux() const override final {
-    return {};
+    return ranges::counted_view<const Index *>(nullptr, 0);
   }
   AbstractTensor::const_any_view_rand _braket() const override final {
     return ranges::views::concat(annihilators(), creators()) |
@@ -1079,13 +1139,22 @@ class NormalOperator : public Operator<S>,
   Hermiticity _hermiticity() const override final {
     if (this->_bra_rank() != this->_ket_rank())
       return Hermiticity::NonHermitian;
+    // Sort borrowed indices to compare multisets without copying protoindices;
+    // the operator owns the indices throughout this comparison.
     auto sorted_indices = [](auto &&idx_view) {
-      container::svector<Index> indices;
-      for (const Index &idx : idx_view) indices.push_back(idx);
-      ranges::sort(indices);
+      static_assert(
+          std::is_lvalue_reference_v<ranges::range_reference_t<
+              std::remove_cvref_t<decltype(idx_view)>>>,
+          "the view must yield the operator's own indices, not copies");
+      container::svector<const Index *> indices;
+      for (const Index &idx : idx_view) indices.push_back(&idx);
+      ranges::sort(indices,
+                   [](const Index *a, const Index *b) { return *a < *b; });
       return indices;
     };
-    return sorted_indices(this->_bra()) == sorted_indices(this->_ket())
+    return ranges::equal(
+               sorted_indices(this->_bra()), sorted_indices(this->_ket()),
+               [](const Index *a, const Index *b) { return *a == *b; })
                ? Hermiticity::Hermitian
                : Hermiticity::NonHermitian;
   }
@@ -1141,7 +1210,9 @@ class NormalOperator : public Operator<S>,
            ranges::views::transform(
                [](auto &&op) -> Index & { return op.index(); });
   }
-  AbstractTensor::any_view_randsz _aux_mutable() override final { return {}; }
+  AbstractTensor::any_view_randsz _aux_mutable() override final {
+    return ranges::counted_view<Index *>(nullptr, 0);
+  }
 
   void _permute_aux(std::span<const std::size_t> perm) override final {
     if (perm.size() != 0)
@@ -1357,6 +1428,21 @@ class NormalOperatorSequence
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const NormalOperatorSequence &>(that);
     return *this == that_cast;
+  }
+
+  /// orders by vacuum, then by the NormalOperator objects (lexicographically)
+  std::weak_ordering static_lexicographic_compare(
+      const Expr &that,
+      const LexicographicCompareOptions &opts) const override {
+    const auto &that_cast = static_cast<const NormalOperatorSequence &>(that);
+    if (auto cmp = this->vacuum() <=> that_cast.vacuum(); cmp != 0) return cmp;
+    const auto &this_nops = static_cast<const base_type &>(*this);
+    const auto &that_nops = static_cast<const base_type &>(that_cast);
+    return std::lexicographical_compare_three_way(
+        this_nops.begin(), this_nops.end(), that_nops.begin(), that_nops.end(),
+        [&opts](const NormalOperator<S> &a, const NormalOperator<S> &b) {
+          return a.lexicographic_compare(b, opts);
+        });
   }
 };
 

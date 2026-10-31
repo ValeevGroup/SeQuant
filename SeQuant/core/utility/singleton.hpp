@@ -6,6 +6,7 @@
 #define SEQUANT_CORE_UTILITY_SINGLETON_HPP
 
 #include <SeQuant/core/utility/exception.hpp>
+#include <atomic>
 #include <cassert>
 #include <memory>
 #include <mutex>
@@ -37,6 +38,7 @@ namespace sequant {
 /// // the instance of A will be destroyed with other static-linkage objects
 /// \endcode
 /// Singleton is thread-safe, in that multiple threads can call `A::instance()`, even if `A::set_instance()` has not been called yet.
+/// The instance must not be used after it has been destroyed, i.e. do not call `A::instance()` from the destructor of a static-linkage object that was constructed before the instance of A.
 // clang-format on
 template <typename Derived>
 class Singleton {
@@ -51,8 +53,8 @@ class Singleton {
   /// Derived is not default-constructible and set_instance() had not been
   /// called)
   static Derived& instance() {
-    const auto& result_ptr = instance_accessor();
-    if (result_ptr != nullptr) return *result_ptr;
+    if (auto* result_ptr = published_instance().load(std::memory_order_acquire))
+      return *result_ptr;
     if constexpr (has_default_ctor<Derived>) {
       return set_default_instance();
     } else
@@ -61,13 +63,14 @@ class Singleton {
           "has not been called");
   }
 
-  /// same as instance(), but returns pointer to the instance, or nullptr if
-  /// the instance has not been constructed
-  /// @return pointer to the instance, or nullptr if it has not yet been
-  /// constructed
+  /// same as instance(), but instead of throwing returns nullptr if the
+  /// instance has not been constructed; like instance(), constructs the
+  /// instance on first use if Derived is default-constructible
+  /// @return pointer to the instance, or nullptr if Derived is not
+  /// default-constructible and set_instance() has not been called
   static Derived* instance_ptr() {
-    const auto& result_ptr = instance_accessor();
-    if (result_ptr != nullptr) return result_ptr.get();
+    if (auto* result_ptr = published_instance().load(std::memory_order_acquire))
+      return result_ptr;
     if constexpr (has_default_ctor<Derived>) {
       return set_default_instance();
     } else
@@ -91,37 +94,62 @@ class Singleton {
       throw Exception(
           "sequant::Singleton::set_instance: instance has already been "
           "constructed");
-    instance_accessor() = std::move(
+    // Note: std::make_unique can't deal with private friend ctors
+    return publish(
         std::unique_ptr<Derived>(new Derived(std::forward<Args>(args)...)));
-    return *instance_accessor();
   }
 
  protected:
   template <typename... Args>
   Singleton(Args&&...) {}  // all constructors are private
 
-  static auto& instance_accessor() {
-    static std::unique_ptr<Derived> instance;
-    return instance;
-  }
-  // provides mutex that controls access to instance_accessor()'s object
+  /// provides mutex that serializes construction of the instance
   static auto& instance_mutex() {
     static std::mutex mtx;
     return mtx;
   }
 
  private:
+  /// owns the instance; read and written only under instance_mutex(), and
+  /// written only by publish()
+  static std::unique_ptr<Derived>& instance_accessor() {
+    // the atomic outlives the owner (it is trivially destructible), so clear
+    // it before the instance is destroyed: a reader that runs later falls
+    // back to the slow path instead of seeing a dangling pointer
+    struct Owner {
+      std::unique_ptr<Derived> instance;
+      ~Owner() {
+        published_instance().store(nullptr, std::memory_order_release);
+      }
+    };
+    static Owner owner;
+    return owner.instance;
+  }
+  /// the constructed instance, published for lock-free reads; null until
+  /// publish() has been called
+  static std::atomic<Derived*>& published_instance() {
+    static std::atomic<Derived*> instance{nullptr};
+    return instance;
+  }
+
+  /// Takes ownership of @p instance and makes it visible to instance() and
+  /// instance_ptr(). Must be called under instance_mutex(), at most once.
+  static Derived& publish(std::unique_ptr<Derived> instance) {
+    auto& owner = instance_accessor();
+    owner = std::move(instance);
+    published_instance().store(owner.get(), std::memory_order_release);
+    return *owner;
+  }
+
   /// Constructs a default-constructed instance. If called from multiple threads
   /// only the first call will construct the instance.
   static Derived& set_default_instance()
     requires(has_default_ctor<Derived>)
   {
     std::scoped_lock lock(instance_mutex());
-    if (!instance_accessor()) {
-      // Note: std::make_unique can't deal with private friend ctors
-      instance_accessor().reset(new Derived());
-    }
-    return *instance_accessor();
+    if (instance_accessor()) return *instance_accessor();
+    // Note: std::make_unique can't deal with private friend ctors
+    return publish(std::unique_ptr<Derived>(new Derived()));
   }
 };
 

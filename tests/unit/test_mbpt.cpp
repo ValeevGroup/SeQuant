@@ -12,6 +12,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
@@ -100,7 +101,7 @@ sequant::ExprPtr in_base_spaces(
     sequant::ExprPtr expr,
     const sequant::container::set<sequant::Index>& externals = {}) {
   using namespace sequant;
-  const auto isr = get_default_context().index_basis_registry();
+  const auto ibr = get_default_context().index_basis_registry();
   auto terms_of = [](const ExprPtr& e) {
     return e->is<Sum>() ? e->as<Sum>().summands() | ranges::to_vector
                         : std::vector<ExprPtr>{e};
@@ -129,13 +130,13 @@ sequant::ExprPtr in_base_spaces(
     auto result = std::make_shared<Sum>();
     for (const auto& term : terms_of(expr)) {
       const auto idx = first_index(
-          term, [&](const Index& i) { return !isr->is_base(i.space()); });
+          term, [&](const Index& i) { return !ibr->is_base(i.space()); });
       if (!idx) {
         result->append(term);
         continue;
       }
       split = true;
-      for (const auto& base : isr->base_spaces())
+      for (const auto& base : ibr->base_spaces())
         if (base.qns() == idx->space().qns() &&
             idx->space().type().includes(base.type()))
           result->append(transform_expr(
@@ -266,6 +267,64 @@ TEST_CASE("mbpt operator commutativity", "[mbpt]") {
           });
     };
     CHECK_FALSE(cre_p()->commutes_with(*cre_p()));
+  }
+}
+
+TEST_CASE("mbpt quantum numbers combine and vacuum", "[mbpt]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  SECTION("single-product vacuum") {
+    auto ctx = get_default_context();
+    ctx.set(make_sr_spaces());
+    auto ctx_resetter = set_scoped_default_context(ctx);
+
+    const qns_t vac;
+    const auto t1 = excitation_type_qns(1);
+    const auto l1 = deexcitation_type_qns(1);
+
+    REQUIRE(is_vacuum(vac));
+    REQUIRE_FALSE(is_vacuum(t1));
+    REQUIRE_FALSE(is_vacuum(l1));
+    auto zero_or_one = vac;  // contains zero, but is not the vacuum
+    zero_or_one[0] = {0ul, 1ul};
+    REQUIRE_FALSE(is_vacuum(zero_or_one));
+
+    REQUIRE(combine(t1, vac) == t1);
+    REQUIRE(combine(vac, t1) == t1);
+    // excitations do not contract with each other
+    REQUIRE(combine(t1, t1) == excitation_type_qns(2));
+
+    // l1 to the left of t1 can contract partly or fully, so every count can
+    // drop to zero; t1 to the left of l1 cannot contract at all
+    qns_t contracted, uncontracted;
+    for (std::size_t s = 0; s != vac.size(); ++s) {
+      uncontracted[s] = t1[s] + l1[s];
+      contracted[s] = {0l, uncontracted[s].upper()};
+    }
+    REQUIRE(combine(l1, t1) == contracted);
+    REQUIRE(combine(t1, l1) == uncontracted);
+  }
+
+  SECTION("physical vacuum") {
+    auto ctx = get_default_context();
+    ctx.set(Vacuum::Physical);
+    auto ctx_resetter = set_scoped_default_context(ctx);
+
+    qns_t cre1, ann1;
+    cre1[0] = {1ul, 1ul};
+    ann1[1] = {1ul, 1ul};
+
+    // an annihilator to the left of a creator can contract with it
+    qns_t contracted;
+    contracted[0] = {0ul, 1ul};
+    contracted[1] = {0ul, 1ul};
+    REQUIRE(combine(ann1, cre1) == contracted);
+
+    qns_t uncontracted;
+    uncontracted[0] = {1ul, 1ul};
+    uncontracted[1] = {1ul, 1ul};
+    REQUIRE(combine(cre1, ann1) == uncontracted);
   }
 }
 
@@ -1457,10 +1516,10 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     SECTION("batching") {
       // update context to use batching index
-      auto isr = sequant::mbpt::make_legacy_spaces();
-      mbpt::add_batching_spaces(isr);
+      auto ibr = sequant::mbpt::make_legacy_spaces();
+      mbpt::add_batching_spaces(ibr);
       auto ctx_resetter =
-          set_scoped_default_context({.index_basis_registry_shared_ptr = isr,
+          set_scoped_default_context({.index_basis_registry_shared_ptr = ibr,
                                       .vacuum = Vacuum::SingleProduct});
       REQUIRE_NOTHROW(
           get_default_context().index_basis_registry()->retrieve_space(L"z"));
@@ -1746,7 +1805,7 @@ SECTION("MRSO") {
   ctx.set(mbpt::make_mr_spaces());
   auto ctx_resetter = set_scoped_default_context(ctx);
 
-  SECTION("ref_av rejects connectivity when reference differs from vacuum") {
+  SECTION("ref_av-rejects-connectivity") {
     const auto expr = t::h(1) * t::t(1);
     const auto unconstrained = t::ref_av(expr);
     REQUIRE(unconstrained != ex<Constant>(0));
@@ -1828,18 +1887,6 @@ SECTION("MRSO") {
     REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
                                       L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
   }
-
-#if 0
-    // H**T12 -> R2
-    SECTION("wick(H**T2 -> R2)") {
-      auto result = t::ref_av(t::A(-2) * t::H() * t::t(2), {.connect = {{1, 2}}});
-
-      {
-        std::wcout << "H*T2 -> R2 = " << to_latex_align(result, 0, 1)
-                   << std::endl;
-      }
-    }
-#endif
 }  // SECTION("MRSO")
 
 SECTION("MRSO-MultiProduct") {
@@ -1918,12 +1965,12 @@ SECTION("MRSO-MultiProduct") {
   // relative to a fixed-N reference, a GNO string {x} is defined by
   // x = Σ ± Π κ(B) {x minus the legs of every B} over all sets of disjoint
   // blocks B of the ops of x, each with as many creators as annihilators
-  // (a pair is a γ or an η), the sign being that of moving the blocks'
-  // legs, in order, to the front; κ(B) is the ordered cumulant of the
-  // reference averages of B's substrings. Built so from core-vacuum
-  // averages, {x} is an elementary-operator expression, which makes
-  // products of GNO strings, number-conserving or not, comparable on the
-  // two paths
+  // (a pair is a γ or an η), the sign being that of moving the blocks' legs,
+  // in order, to the front; κ(B) is the ordered cumulant of the reference
+  // averages of B's substrings. Built so from core-vacuum averages, {x} is an
+  // elementary-operator expression, which makes products of GNO strings,
+  // number-conserving or not, comparable on the two paths
+#ifndef SEQUANT_SKIP_LONG_TESTS
   SECTION("GNO products match the core-vacuum path") {
     struct Leg {
       Index index;
@@ -2019,8 +2066,8 @@ SECTION("MRSO-MultiProduct") {
         string = string *
                  (l.action == Action::Create ? fcrex(l.index) : fannx(l.index));
       auto contracted = FWickTheorem{string}.full_contractions(false).compute();
-      const auto isr = get_default_context().index_basis_registry();
-      const auto& active = isr->retrieve_space(L"u");
+      const auto ibr = get_default_context().index_basis_registry();
+      const auto& active = ibr->retrieve_space(L"u");
       auto average = [&](ExprPtr& f) {
         if (f->is<FNOperator>()) {
           const auto& nop = f->as<FNOperator>();
@@ -2092,16 +2139,16 @@ SECTION("MRSO-MultiProduct") {
       std::iota(all.begin(), all.end(), 0);
       return gno(gno, all);
     };
-    // a leg over a union of base spaces (e.g. I = i ∪ u) is split into them
-    // on the core-vacuum side, whose averages take base-space legs; every
-    // density leg of the MultiProduct result must be active
-    const auto isr = get_default_context().index_basis_registry();
+    // a leg over a union of base spaces (e.g. I = i ∪ u) is split into them on
+    // the core-vacuum side, whose averages take base-space legs; every density
+    // leg of the MultiProduct result must be active
+    const auto ibr = get_default_context().index_basis_registry();
     auto check = [&](std::initializer_list<Legs> strings_il) {
       container::svector<Legs> strings(strings_il);
       container::set<Index> externals;
       for (const auto& legs : strings)
         for (const auto& l : legs)
-          if (!isr->is_base(l.index.space())) externals.insert(l.index);
+          if (!ibr->is_base(l.index.space())) externals.insert(l.index);
       ExprPtr mp_input = ex<Constant>(1);
       for (const auto& legs : strings) {
         container::svector<Index> cre_idxs, ann_idxs;
@@ -2120,10 +2167,10 @@ SECTION("MRSO-MultiProduct") {
       for (std::size_t s_i = 0; s_i != strings.size(); ++s_i)
         for (std::size_t l_i = 0; l_i != strings[s_i].size(); ++l_i) {
           const auto& idx = strings[s_i][l_i].index;
-          if (isr->is_base(idx.space())) continue;
+          if (ibr->is_base(idx.space())) continue;
           decltype(assignments) next;
           for (const auto& asg : assignments)
-            for (const auto& base : isr->base_spaces())
+            for (const auto& base : ibr->base_spaces())
               if (base.qns() == idx.space().qns() &&
                   idx.space().type().includes(base.type())) {
                 auto a2 = asg;
@@ -2162,7 +2209,7 @@ SECTION("MRSO-MultiProduct") {
             if (t.label() == L"γ" || t.label() == L"η" || t.label() == L"κ")
               for (const auto& idx : t.const_braket())
                 active_only =
-                    active_only && idx.space() == isr->retrieve_space(L"u");
+                    active_only && idx.space() == ibr->retrieve_space(L"u");
           },
           /*atoms_only=*/true);
       INFO("mp: " << toUtf8(to_latex(mp)));
@@ -2302,6 +2349,7 @@ SECTION("MRSO-MultiProduct") {
                    gno_string({i2}, {})});
     check_partial({gno_string({u1, u2}, {u3}), gno_string({u4}, {u6, u5})});
   }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
   SECTION("wick(H2**T2) runs in generalized normal order") {
     ExprPtr result;
@@ -2414,66 +2462,52 @@ SECTION("MRSF") {
 SECTION("rules") {
   using namespace sequant;
 
+  const auto aux_space = [] {
+    return get_default_context().index_basis_registry()->retrieve_space(L"x");
+  };
+
   SECTION("density-fit") {
-    const std::vector<std::wstring> inputs = {
-        L"t{a1,a2;i1,i2} t{a3;i3}",
-        L"t{a1,a2;i1,i2} g{a3;i3}",
-        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
-        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
-    };
-    const std::vector<std::wstring> expected = {
-        L"t{a1,a2;i1,i2} t{a3;i3}",
-        L"t{a1,a2;i1,i2} g{a3;i3}",
-        L"t{a1,a2;i1,i2} B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S",
-        L"t{a1,a2;i1,i2} (B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S "
-        "- B{i2;a1;x_1}:N-C-S B{i1;a2;x_1}:N-C-S)",
+    // {input, expected}
+    const std::vector<std::pair<std::wstring, std::wstring>> rows = {
+        {L"t{a1,a2;i1,i2} t{a3;i3}", L"t{a1,a2;i1,i2} t{a3;i3}"},
+        {L"t{a1,a2;i1,i2} g{a3;i3}", L"t{a1,a2;i1,i2} g{a3;i3}"},
+        {L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
+         L"t{a1,a2;i1,i2} B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S"},
+        {L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
+         L"t{a1,a2;i1,i2} (B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S "
+         L"- B{i2;a1;x_1}:N-C-S B{i1;a2;x_1}:N-C-S)"},
     };
 
-    REQUIRE(inputs.size() == expected.size());
+    for (const auto& [input, expected] : rows) {
+      CAPTURE(toUtf8(input));
 
-    for (std::size_t i = 0; i < inputs.size(); ++i) {
-      CAPTURE(inputs.at(i));
+      ExprPtr actual =
+          mbpt::density_fit(deserialize(input), aux_space(), L"g", L"B");
 
-      ExprPtr input_expr = deserialize(inputs.at(i));
-
-      const IndexSpace aux_space =
-          get_default_context().index_basis_registry()->retrieve_space(L"x");
-
-      ExprPtr actual = mbpt::density_fit(input_expr, aux_space, L"g", L"B");
-
-      REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
+      REQUIRE_THAT(actual, EquivalentTo(expected));
     }
   }
 
   SECTION("tensor-hypercontract") {
-    const std::vector<std::wstring> inputs = {
-        L"t{a1,a2;i1,i2} t{a3;i3}",
-        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
-        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
-    };
-    const std::vector<std::wstring> expected = {
-        L"t{a1,a2;i1,i2} t{a3;i3}",
-        L"t{a1,a2;i1,i2} B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i2;;x_2} "
-        L"B{;a2;x_2}",
-        L"t{a1,a2;i1,i2} (B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i2;;x_2} "
-        L"B{;a2;x_2}"
-        " - B{i2;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i1;;x_2} B{;a2;x_2})",
+    // {input, expected}
+    const std::vector<std::pair<std::wstring, std::wstring>> rows = {
+        {L"t{a1,a2;i1,i2} t{a3;i3}", L"t{a1,a2;i1,i2} t{a3;i3}"},
+        {L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
+         L"t{a1,a2;i1,i2} B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i2;;x_2} "
+         L"B{;a2;x_2}"},
+        {L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
+         L"t{a1,a2;i1,i2} (B{i1;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i2;;x_2} "
+         L"B{;a2;x_2}"
+         L" - B{i2;;x_1} B{;a1;x_1} C{;;x_1,x_2} B{i1;;x_2} B{;a2;x_2})"},
     };
 
-    REQUIRE(inputs.size() == expected.size());
+    for (const auto& [input, expected] : rows) {
+      CAPTURE(toUtf8(input));
 
-    for (std::size_t i = 0; i < inputs.size(); ++i) {
-      CAPTURE(inputs.at(i));
+      ExprPtr actual = mbpt::tensor_hypercontract(
+          deserialize(input), aux_space(), L"g", L"B", L"C");
 
-      ExprPtr input_expr = deserialize(inputs.at(i));
-
-      const IndexSpace aux_space =
-          get_default_context().index_basis_registry()->retrieve_space(L"x");
-
-      ExprPtr actual =
-          mbpt::tensor_hypercontract(input_expr, aux_space, L"g", L"B", L"C");
-
-      REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
+      REQUIRE_THAT(actual, EquivalentTo(expected));
     }
   }
 
@@ -2890,6 +2924,7 @@ SECTION("rdm-decomposition symmetries") {
   }
 }
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 SECTION("cumulant-to-density decompositions") {
   using namespace sequant;
   auto ctx_resetter = set_scoped_default_context(
@@ -3098,6 +3133,7 @@ SECTION("cumulant-to-density decompositions") {
   REQUIRE(simplify(cumulants_to_densities(density::make_cumulant(nop4)) -
                    densities4) == ex<Constant>(0));
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 }
 
 TEST_CASE("density_fit_metric_leaf", "[mbpt][df]") {

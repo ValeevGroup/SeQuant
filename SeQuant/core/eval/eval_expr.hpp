@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -907,12 +908,20 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res,
 /// and the value the tree denotes is the product or sum of what its leaves
 /// denote.
 ///
-ExprPtr to_expr(meta::eval_node auto const& node) {
+/// The expression of every terminal passes through @p leaf_map.
+///
+/// @param leaf_map Callable mapping the (shared) expression of a terminal to
+/// the expression that shall represent it in the result. It must not mutate its
+/// argument as that is shared with @p node.
+///
+template <typename LeafMap>
+  requires std::is_invocable_r_v<ExprPtr, LeafMap&, ExprPtr const&>
+ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
   auto const op = node->op_type();
   auto const& evxpr = *node;
 
   if (node.leaf()) {
-    ExprPtr e = evxpr.denoted_expr();
+    ExprPtr e = leaf_map(evxpr.denoted_expr());
     if (evxpr.canon_phase() == 1) return e;
     return ex<Product>(evxpr.canon_phase(), ExprPtrList{std::move(e)},
                        Product::Flatten::No);
@@ -920,19 +929,19 @@ ExprPtr to_expr(meta::eval_node auto const& node) {
 
   // a KramersFlip wrapper denotes its own (flipped-flavour) tensor; the
   // flip it applies to its child is not an expression
-  if (op == EvalOp::KramersFlip) return evxpr.expr();
+  if (op == EvalOp::KramersFlip) return leaf_map(evxpr.expr());
 
   if (op == EvalOp::Product) {
     auto prod = Product{};
 
     // a leaf child's phase scales this product rather than nesting a signed
     // one-factor product as an operand
-    auto append = [&prod](auto const& child) {
+    auto append = [&prod, &leaf_map](auto const& child) {
       if (child.leaf()) {
         prod.scale(child->canon_phase());
-        prod.append(1, child->denoted_expr(), Product::Flatten::No);
+        prod.append(1, leaf_map(child->denoted_expr()), Product::Flatten::No);
       } else {
-        prod.append(1, to_expr(child), Product::Flatten::No);
+        prod.append(1, to_expr(child, leaf_map), Product::Flatten::No);
       }
     };
     append(node.left());
@@ -955,8 +964,28 @@ ExprPtr to_expr(meta::eval_node auto const& node) {
 
   } else {
     SEQUANT_ASSERT(op == EvalOp::Sum && "unsupported operation type");
-    return ex<Sum>(Sum{to_expr(node.left()), to_expr(node.right())});
+    // Collect the operands of the entire chain of sums, since Sum flattens
+    // (and thereby copies) its summands on construction
+    container::svector<ExprPtr> summands;
+    auto collect = [&](const auto& current, const auto& self) -> void {
+      if (!current.leaf() && current->op_type() == EvalOp::Sum) {
+        self(current.left(), self);
+        self(current.right(), self);
+      } else {
+        summands.push_back(to_expr(current, leaf_map));
+      }
+    };
+    collect(node, collect);
+
+    return ex<Sum>(Sum(summands.begin(), summands.end()));
   }
+}
+
+///
+/// Converts an `EvalExpr` to `ExprPtr`.
+///
+ExprPtr to_expr(meta::eval_node auto const& node) {
+  return to_expr(node, std::identity{});
 }
 
 /// \brief The indices contracted at a binary evaluation node.

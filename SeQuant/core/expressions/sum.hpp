@@ -82,7 +82,8 @@ class Sum : public Expr {
   struct move_only_tag {};
 
   /// construct a Sum by moving in the summands, no flattening is performed,
-  /// but zeros will be omitted and constants added up
+  /// but zeros will be omitted and constants added up (and omitted if they
+  /// add up to zero)
   /// @param summands the summands to move in
   explicit Sum(summands_type &&summands, move_only_tag);
 
@@ -158,9 +159,31 @@ class Sum : public Expr {
 
  private:
   summands_type summands_{};
-  std::optional<size_t>
-      constant_summand_idx_{};  // points to the constant summand, if any; used
-                                // to sum up constants in append/prepend
+  /// points to the constant summand, if any; used to sum up constants in the
+  /// move-only ctor, append and prepend
+  /// @warning only meaningful if constant_summand_idx_valid_ is true, use
+  /// constant_summand_idx() to read
+  mutable std::optional<size_t> constant_summand_idx_{};
+  /// false if the summands may have been mutated via the mutable subexpression
+  /// iterators (which also invalidates the memoized hash), hence
+  /// constant_summand_idx_ needs to be recomputed
+  mutable bool constant_summand_idx_valid_ = true;
+
+  /// @return the position of the constant summand, if any; recomputed if it
+  /// was invalidated
+  std::optional<size_t> constant_summand_idx() const;
+
+  /// invalidates the memoized hash and the position of the constant summand;
+  /// to be called whenever mutable access to the summands is handed out
+  void invalidate_summand_caches() const;
+
+  /// replaces the constant summand recorded by constant_summand_idx_, which
+  /// must be set, with its sum with @p constant
+  void fold_constant(const Constant &constant);
+
+  /// erases the constant summand recorded by constant_summand_idx_ if it is
+  /// zero and clears the record
+  void drop_zero_constant();
 
   /// @return the hash of this object
   /// @note this ensures that hash of a Sum of a single summand is
@@ -180,6 +203,10 @@ class Sum : public Expr {
               CanonicalizationMethod::Rapid)) override;
 
   bool static_equal(const Expr &that) const override;
+
+  /// orders by summands (lexicographically)
+  std::weak_ordering static_lexicographic_compare(
+      const Expr &that, const LexicographicCompareOptions &opts) const override;
 };  // class Sum
 
 /// @brief utility for eagerly accumulating summands in a hash table
@@ -196,7 +223,9 @@ class HashingAccumulator {
   SumPtr make_canonicalized_sum();
 
   /// @param canonicalize if true, will sort the summands to canonical order
-  /// defined by ExprPtr::operator<
+  /// defined by their hash values (and Expr::operator<)
+  /// @note use sort_expr() to sort in an order that does not depend on the
+  /// hashing algorithm
   /// @return summands as a Sum (if have more than 1 summand), Constant (if have
   /// zero summands), or the lone summand itself
   ExprPtr make_expr(bool canonicalize = true);
@@ -219,6 +248,8 @@ struct TransformSumExprOptions {
 };
 
 /// variant of sequant::transform_reduce for eager sum reduction of Expr's
+/// @param rng a sized range; @p map is applied to each of its elements
+/// @param map maps an element of @p rng to an ExprPtr (null to skip it)
 /// @sa HashingAccumulator
 template <typename SizedRange, typename UnaryMapOp>
   requires(meta::is_range_v<std::remove_cvref_t<SizedRange>>)
@@ -229,7 +260,7 @@ ExprPtr transform_sum_expr(SizedRange &&rng, const UnaryMapOp &map,
 
   auto task = [&result_acc, &result_mtx, &map,
                canonicalize = options.canonicalize,
-               flatten = options.flatten](const ExprPtr &input) {
+               flatten = options.flatten](const auto &input) {
     auto task_result = map(input);
     if (task_result) {
       if (canonicalize) {

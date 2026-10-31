@@ -103,15 +103,20 @@ and nested blocks; external requirements of an inner block propagate outward to 
 The ordered driver's optional ``mode_order`` ranks index spaces from outermost to innermost. It only breaks ties left
 by the recorded nesting constraints; there is no cost search over nest orders.
 
-Legality classifies a value relative to each loop as ``LoopLocal``, ``Reduction``, or ``LoopCarried``. A wholly local
-value is a ``BuildStep`` in its home block. A reduction or loop-carried value instead escapes through the block's
-outputs: ``AccumulateSum`` for reduction, ``AccumulateScatter`` for carried result modes. Multiple escapes form a
-chain, with raw production at the deepest site and forwarding at shallower sites. An escape can skip an interposed
-loop on which the value is invariant.
+Legality classifies a value relative to each loop as ``LoopLocal``, ``Reduction``, or ``LoopCarried``. A reduction is
+a property of the value's own node. The other two are decided per occurrence, against the recorded loop instances: an
+occurrence whose enclosing loops include the instance that slices the value's position reads it in lockstep, per
+batch; one they do not reads it assembled (``OccurrenceRole``). A value with a lockstep occurrence is ``LoopLocal``
+and a ``BuildStep`` in its home block; if it also has assembled readers it escapes from that block as well, and those
+readers follow the block in their own block's order. A value with no lockstep occurrence is ``LoopCarried``. A reduction or loop-carried value escapes through the block's outputs:
+``AccumulateSum`` for reduction, ``AccumulateScatter`` for carried result modes. Multiple escapes form a chain, with
+raw production at the deepest site and forwarding at shallower sites. An escape can skip an interposed loop on which
+the value is invariant.
 
 A consumer requiring a completed loop-carried value, or a completed reduction while it is inside that reduction's
-loop, moves to a later pass. A nest containing multiple passes becomes ordered sibling blocks, run in pass order; a
-later pass reads the earlier pass's assembled value. Values needed across a split are materialized, not recomputed.
+loop, or a loop-local value assembled over a loop instance while it is itself produced inside that instance, moves to
+a later pass. A nest containing multiple passes becomes ordered sibling blocks, run in pass order; a later pass reads
+the earlier pass's assembled value. Values needed across a split are materialized, not recomputed.
 Unsupported cases raise ``sequant::Exception``.
 
 .. _batched-evaluation-cell-table:

@@ -892,6 +892,16 @@ class WickTheorem {
           nop_adjacency_matrix(ntri(nopseq.size()), 0),
           nop_nconnections(nopseq.size(), 0) {
       init_topological_partitions();
+      // Cache map lookups outside recursion, preserving the map's treatment
+      // of equivalent operator keys rather than numbering occurrences anew.
+      op_input_ordinals.reserve(nopseq_size);
+      auto operators =
+          flattened_rangenest<NormalOperatorSequence<S>>(&this->nopseq);
+      for (const auto &op : operators) {
+        const auto it = wick.op_to_input_ordinal_.find(op);
+        SEQUANT_ASSERT(it != wick.op_to_input_ordinal_.end());
+        op_input_ordinals.push_back(it->second);
+      }
     }
 
     NontensorWickState(const NontensorWickState &) = delete;
@@ -901,8 +911,10 @@ class WickTheorem {
 
     const WickTheorem<S> &wick;        //!< the WickTheorem object using this
     NormalOperatorSequence<S> nopseq;  //!< current state of operator sequence
-    std::size_t nopseq_size;           //!< current size of nopseq
-    Context ctx;                       //!< current context
+    // Original input positions, erased and restored alongside the active ops.
+    container::svector<std::size_t> op_input_ordinals;
+    std::size_t nopseq_size;                 //!< current size of nopseq
+    Context ctx;                             //!< current context
     container::set<Index> external_indices;  //!< external indices of the input
     container::set<Index>
         noncovariant_indices;         //!< noncovariant indices of the input
@@ -1321,7 +1333,7 @@ class WickTheorem {
     using std::end;
 
     const auto &ctx = state.ctx;
-    const auto &isr = ctx.index_basis_registry();
+    const auto &ibr = ctx.index_basis_registry();
 
     static const container::svector<std::bitset<max_input_size>> unconstrained;
     const auto &target_connections =
@@ -1336,7 +1348,7 @@ class WickTheorem {
 
     // optimization: can't contract fully if first op is not a qp annihilator
     if (full_contractions_ &&
-        !is_qpannihilator(*op_left_iter, input_->vacuum(), isr))
+        !is_qpannihilator(*op_left_iter, input_->vacuum(), ibr))
       return;
 
     const auto op_left_iter_fence =
@@ -1344,16 +1356,20 @@ class WickTheorem {
     for (; op_left_iter != op_left_iter_fence;
          ++op_left_iter, ++left_op_offset) {
       auto &op_left_cursor = ranges::get_cursor(op_left_iter);
+      const auto op_left_ordinal = op_left_cursor.ordinal();
       const auto op_left_input_ordinal =
-          op_to_input_ordinal_.find(*op_left_iter)
-              ->second;  // ordinal of op_left in input_
+          state.op_input_ordinals[op_left_ordinal];
+      SEQUANT_ASSERT(op_left_input_ordinal ==
+                     op_to_input_ordinal_.find(*op_left_iter)->second);
 
       auto op_right_iter = ranges::next(op_left_iter);
       for (; op_right_iter != end(nopseq_view);) {
         auto &op_right_cursor = ranges::get_cursor(op_right_iter);
+        const auto op_right_ordinal = op_right_cursor.ordinal();
         const auto op_right_input_ordinal =
-            op_to_input_ordinal_.find(*op_right_iter)
-                ->second;  // ordinal of op_left in input_
+            state.op_input_ordinals[op_right_ordinal];
+        SEQUANT_ASSERT(op_right_input_ordinal ==
+                       op_to_input_ordinal_.find(*op_right_iter)->second);
 
         if (op_right_iter != op_left_iter &&
             op_left_cursor.range_iter() !=
@@ -1588,9 +1604,13 @@ class WickTheorem {
                 // remove from back to front
                 Op<S> right = *op_right_iter;
                 ranges::get_cursor(op_right_iter).erase();
+                state.op_input_ordinals.erase(state.op_input_ordinals.begin() +
+                                              op_right_ordinal);
                 --state.nopseq_size;
                 Op<S> left = *op_left_iter;
                 ranges::get_cursor(op_left_iter).erase();
+                state.op_input_ordinals.erase(state.op_input_ordinals.begin() +
+                                              op_left_ordinal);
                 --state.nopseq_size;
 
                 // std::wcout << "  nopseq after contraction = " <<
@@ -1705,8 +1725,14 @@ class WickTheorem {
                 state.sp = std::move(sp_copy);
                 // restore from front to back
                 ranges::get_cursor(op_left_iter).insert(std::move(left));
+                state.op_input_ordinals.insert(
+                    state.op_input_ordinals.begin() + op_left_ordinal,
+                    op_left_input_ordinal);
                 ++state.nopseq_size;
                 ranges::get_cursor(op_right_iter).insert(std::move(right));
+                state.op_input_ordinals.insert(
+                    state.op_input_ordinals.begin() + op_right_ordinal,
+                    op_right_input_ordinal);
                 ++state.nopseq_size;
                 state.disconnect(target_connections,
                                  ranges::get_cursor(op_left_iter),
@@ -1728,12 +1754,12 @@ class WickTheorem {
   static bool can_contract(
       const Op<S> &left, const Op<S> &right,
       Vacuum vacuum = get_default_context(S).vacuum(),
-      const std::shared_ptr<const IndexBasisRegistry> &isr =
+      const std::shared_ptr<const IndexBasisRegistry> &ibr =
           get_default_context(S).index_basis_registry()) {
     // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
       SEQUANT_ENFORCE(vacuum == Vacuum::Physical);
-    return sequant::can_contract(left, right, vacuum, isr);
+    return sequant::can_contract(left, right, vacuum, ibr);
   }
 
   /// the value of a single contraction between @p bra (the annihilator's
@@ -1757,9 +1783,9 @@ class WickTheorem {
 
   static ExprPtr contract(const Op<S> &left, const Op<S> &right,
                           Vacuum vacuum = get_default_context(S).vacuum(),
-                          const std::shared_ptr<const IndexBasisRegistry> &isr =
+                          const std::shared_ptr<const IndexBasisRegistry> &ibr =
                               get_default_context(S).index_basis_registry()) {
-    SEQUANT_ASSERT(can_contract(left, right, vacuum, isr));
+    SEQUANT_ASSERT(can_contract(left, right, vacuum, ibr));
     // contraction result depends on whether the left/right (L, R) spaces
     // are pure qp annihilator (hole, H) or qp creator (particle, P) subspaces
     // or not, i.e. on whether L ⊆ H and R ⊆ P. The either of the conditions
@@ -1773,22 +1799,22 @@ class WickTheorem {
     // N.B. This is a simplified version of the reality, since qp character
     // depends on the Op's action, so the H/P depend on whether left/right is
     // a creator/annihilator
-    const auto left_is_pure = is_pure_qpannihilator<S>(left, vacuum, isr);
-    const auto right_is_pure = is_pure_qpcreator<S>(right, vacuum, isr);
+    const auto left_is_pure = is_pure_qpannihilator<S>(left, vacuum, ibr);
+    const auto right_is_pure = is_pure_qpcreator<S>(right, vacuum, ibr);
 
     IndexSpace qpspace_common;
     if (!left_is_pure || !right_is_pure) {
-      const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
-      const auto qpspace_right = qpcreator_space<S>(right, vacuum, isr);
-      qpspace_common = isr->intersection(qpspace_left, qpspace_right);
+      const auto qpspace_left = qpannihilator_space<S>(left, vacuum, ibr);
+      const auto qpspace_right = qpcreator_space<S>(right, vacuum, ibr);
+      qpspace_common = ibr->intersection(qpspace_left, qpspace_right);
     }
 
     if constexpr (S == Statistics::FermiDirac) {
       if (vacuum == Vacuum::MultiProduct) {
         detail::assert_protoindexed_not_active(
-            *isr,
+            *ibr,
             left_is_pure && right_is_pure
-                ? isr->intersection(left.index().space(), right.index().space())
+                ? ibr->intersection(left.index().space(), right.index().space())
                 : qpspace_common,
             left.index(), right.index());
       }
@@ -1798,7 +1824,7 @@ class WickTheorem {
     // index's own basis instance: a subset of a basis is still that basis
     auto project = [&](const Index &idx) {
       return Index::make_tmp_index(
-          isr->resolve(
+          ibr->resolve(
               IndexBasis(qpspace_common, idx.basis().basis_instance())),
           idx.proto_indices(), idx.symmetric_proto_indices());
     };

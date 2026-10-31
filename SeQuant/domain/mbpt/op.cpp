@@ -22,6 +22,7 @@
 #include <range/v3/view/reverse.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <algorithm>
 #include <memory>
 #include <mutex>
 
@@ -84,13 +85,13 @@ qns_t make_qp_qns(std::size_t particle_rank, std::size_t hole_rank,
     result[0] = {0ul, deexcitation ? particle_rank : hole_rank};
     result[1] = {0ul, deexcitation ? hole_rank : particle_rank};
   } else {
-    auto isr = get_default_context().index_basis_registry();
-    const auto& base_spaces = isr->base_spaces();
-    if (!particle_space) particle_space = isr->particle_space(SQN);
-    if (!hole_space) hole_space = isr->hole_space(SQN);
+    auto ibr = get_default_context().index_basis_registry();
+    const auto& base_spaces = ibr->base_spaces();
+    if (!particle_space) particle_space = ibr->particle_space(SQN);
+    if (!hole_space) hole_space = ibr->hole_space(SQN);
     // are the active qp spaces base spaces?
-    const bool aps_base = !interval && isr->is_base(isr->particle_space(SQN));
-    const bool ahs_base = !interval && isr->is_base(isr->hole_space(SQN));
+    const bool aps_base = !interval && ibr->is_base(ibr->particle_space(SQN));
+    const bool ahs_base = !interval && ibr->is_base(ibr->hole_space(SQN));
     // ex: creators in particle space, annihilators in hole space
     // deex: annihilators in particle space, creators in hole space
     for (std::size_t i = 0; i < base_spaces.size(); i++) {
@@ -145,7 +146,8 @@ qns_t interval_deexcitation_type_qns(std::size_t K,
 
 qns_t general_type_qns(std::size_t K) {
   qnc_t result;
-  for (int i = 0; i < result.size(); i++) {
+  const auto n = result.size();
+  for (int i = 0; i < n; i++) {
     result[i] = {0, K};
   }
   return result;
@@ -169,23 +171,24 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
 
 // By counting the number of contractions between indices of proper type, we can
 // know the quantum numbers of a combined result.
-qns_t combine(qns_t a, qns_t b) {
+qns_t combine(qns_t a, const qns_t& b) {
   SEQUANT_ASSERT(a.size() == b.size());
-  qns_t result;
 
+  // Reuse the by-value first input's storage; compute both counts in each
+  // pair before overwriting either, since both depend on the original values.
   if (get_default_context().vacuum() == Vacuum::Physical) {
     const auto ncontr = qninterval_t{0, std::min(b[0].upper(), a[1].upper())};
     const auto nc = nonnegative(a[0] + b[0] - ncontr);
     const auto na = nonnegative(a[1] + b[1] - ncontr);
-    result[0] = nc;
-    result[1] = na;
-    return result;
+    a[0] = nc;
+    a[1] = na;
+    return a;
   } else if (get_default_context().vacuum() == Vacuum::SingleProduct ||
              get_default_context().vacuum() == Vacuum::MultiProduct) {
     const bool multiproduct =
         get_default_context().vacuum() == Vacuum::MultiProduct;
-    auto isr = get_default_context().index_basis_registry();
-    const auto& base_spaces = isr->base_spaces();
+    auto ibr = get_default_context().index_basis_registry();
+    const auto& base_spaces = ibr->base_spaces();
     for (auto i = 0; i < base_spaces.size(); i++) {
       const auto cre = qns_t::cre_slot(i);
       const auto ann = qns_t::ann_slot(i);
@@ -195,8 +198,8 @@ qns_t combine(qns_t a, qns_t b) {
       // creators and annihilators from the two sides
       const bool active =
           multiproduct &&
-          isr->intersection(base_spaces[i], isr->active_space(qns));
-      auto base_is_fermi_occupied = isr->is_pure_occupied(
+          ibr->intersection(base_spaces[i], ibr->active_space(qns));
+      auto base_is_fermi_occupied = ibr->is_pure_occupied(
           base_spaces[i]);  // need to distinguish particle and hole
                             // contractions.
       auto ncontr_space =
@@ -207,10 +210,10 @@ qns_t combine(qns_t a, qns_t b) {
               : qninterval_t{0, std::min(b[cre].upper(), a[ann].upper())};
       auto nc_space = nonnegative(b[cre] + a[cre] - ncontr_space);
       auto na_space = nonnegative(b[ann] + a[ann] - ncontr_space);
-      result[cre] = nc_space;
-      result[ann] = na_space;
+      a[cre] = nc_space;
+      a[ann] = na_space;
     }
-    return result;
+    return a;
   } else {
     throw Exception("Unsupported vacuum context.");
   }
@@ -219,7 +222,9 @@ qns_t combine(qns_t a, qns_t b) {
 // must be defined including op.ipp since it's used there
 template <>
 bool is_vacuum<qns_t>(qns_t qns) {
-  return qns == qns_t{};
+  return std::all_of(qns.begin(), qns.end(), [](const auto& interval) {
+    return boost::numeric::equal(interval, qninterval_t{0});
+  });
 }
 
 }  // namespace sequant::mbpt
@@ -228,9 +233,10 @@ namespace sequant {
 
 mbpt::qns_t adjoint(mbpt::qns_t qns) {
   mbpt::qns_t new_qnst;
-  new_qnst.resize(qns.size());
+  const auto n = qns.size();
+  new_qnst.resize(n);
   auto is_even = [](int i) { return i % 2 == 0; };
-  for (int i = 0; i < qns.size(); i++) {
+  for (int i = 0; i < n; i++) {
     if (is_even(i)) {
       new_qnst[i + 1] = qns[i];
     } else {
@@ -519,7 +525,7 @@ template <Statistics S>
 ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
                                std::optional<Symmetry> opsymm_opt,
                                std::optional<std::wstring> grants_of) const {
-  auto isr = get_default_context(Statistics::FermiDirac).index_basis_registry();
+  auto ibr = get_default_context(Statistics::FermiDirac).index_basis_registry();
 
   // if not given dep, use mbpt::Context::CSV to determine whether to use
   // dependent indices for pure (de)excitation ops
@@ -540,14 +546,14 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
     if (opclass == OpClass::Ex) {
       if constexpr (assert_enabled()) {
         for ([[maybe_unused]] const auto& s : cre_spaces_) {
-          SEQUANT_ASSERT(isr->contains_unoccupied(s));
+          SEQUANT_ASSERT(ibr->contains_unoccupied(s));
         }
       }
       dep = UseDepIdx::Bra;
     } else if (opclass == OpClass::Deex) {
       if constexpr (assert_enabled()) {
         for ([[maybe_unused]] const auto& s : ann_spaces_) {
-          SEQUANT_ASSERT(isr->contains_unoccupied(s));
+          SEQUANT_ASSERT(ibr->contains_unoccupied(s));
         }
       }
       dep = UseDepIdx::Ket;
@@ -671,10 +677,10 @@ ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
                               // without providing an occupied indexspace
     // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
     auto make_g_contribution = [](const auto& occ_space) {
-      auto isr = get_default_context().index_basis_registry();
+      auto ibr = get_default_context().index_basis_registry();
       return mbpt::OpMaker<Statistics::FermiDirac>::make(
-          OpClass::Gen, {isr->complete_space(Spin::any)},
-          {isr->complete_space(Spin::any)},
+          OpClass::Gen, {ibr->complete_space(Spin::any)},
+          {ibr->complete_space(Spin::any)},
           [=](auto braidxs, auto ketidxs, Symmetry opsymm) {
             auto m1 = Index::make_tmp_index(occ_space);
             auto m2 = Index::make_tmp_index(occ_space);
@@ -709,7 +715,7 @@ ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
             }
           });
     };
-    auto isr = get_default_context().index_basis_registry();
+    auto ibr = get_default_context().index_basis_registry();
     SEQUANT_ASSERT(registry->contains(L"h"));
     return OpMaker<Statistics::FermiDirac>(L"h", 1)() +
            make_g_contribution(reference_occupied);
@@ -1297,9 +1303,9 @@ std::shared_ptr<const tensor_index_comparer_t> active_first_index_comparer(
         [base](const Index& idx1, const Index& idx2) -> bool {
           // the registry of the context in effect, i.e. of the scope that
           // installs this comparer
-          const auto isr = get_default_context().index_basis_registry();
-          auto active_space = isr->intersection(isr->particle_space(Spin::any),
-                                                isr->hole_space(Spin::any));
+          const auto ibr = get_default_context().index_basis_registry();
+          auto active_space = ibr->intersection(ibr->particle_space(Spin::any),
+                                                ibr->hole_space(Spin::any));
           const auto idx1_active = idx1.space().type() == active_space.type();
           const auto idx2_active = idx2.space().type() == active_space.type();
           if (idx1_active) {
@@ -1348,15 +1354,15 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
   const bool multiproduct =
       get_default_context().vacuum() == Vacuum::MultiProduct;
 
-  auto isr = get_default_context().index_basis_registry();
+  auto ibr = get_default_context().index_basis_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
   // convention is to use different label for spin-orbital and spin-free RDM
   const auto& rdm_label =
       spinor ? density::rdm_label() : density::spinfree_rdm_label();
 
   // N.B. reference < vacuum is not yet supported
-  if (isr->reference_occupied_space().intersection(
-          isr->vacuum_occupied_space()) != isr->vacuum_occupied_space()) {
+  if (ibr->reference_occupied_space().intersection(
+          ibr->vacuum_occupied_space()) != ibr->vacuum_occupied_space()) {
     throw Exception(
         "mbpt::tensor::expectation_value_impl: vacuum occupied orbitals must "
         "be same as or "
@@ -1384,17 +1390,17 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
   // including a density occupied partition using a "single-reference" method
   // will replace FNOPs with RDMs. i.e. "multi-reference" RDM replacement rules
   // work in the limit of one reference.
-  if (multiproduct || isr->reference_occupied_space() == IndexSpace::Type{} ||
-      isr->reference_occupied_space(Spin::any) ==
-          isr->vacuum_occupied_space(Spin::any)) {
+  if (multiproduct || ibr->reference_occupied_space() == IndexSpace::Type{} ||
+      ibr->reference_occupied_space(Spin::any) ==
+          ibr->vacuum_occupied_space(Spin::any)) {
     restore_scalars(result);
     return result;
   } else {
     const auto target_rdm_space_type =
         get_default_context().vacuum() == Vacuum::SingleProduct
-            ? isr->intersection(isr->particle_space(Spin::any),
-                                isr->hole_space(Spin::any))
-            : isr->reference_occupied_space(Spin::any);
+            ? ibr->intersection(ibr->particle_space(Spin::any),
+                                ibr->hole_space(Spin::any))
+            : ibr->reference_occupied_space(Spin::any);
 
     // STEP1. replace NOPs by RDM
     auto replace_nop_with_rdm = [&rdm_label](ExprPtr& exptr) {
@@ -1488,7 +1494,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
         container::svector<ExprPtr> restrictions;
         for (const auto& [idx, in_bra] : rdm_index_in_bra) {
           const auto target_type =
-              isr->intersection(idx.space(), target_rdm_space_type);
+              ibr->intersection(idx.space(), target_rdm_space_type);
           if (!target_type) continue;
           const bool external = is_external(idx);
           if (external && target_type == idx.space()) continue;

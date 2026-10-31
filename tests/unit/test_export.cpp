@@ -17,6 +17,9 @@
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/irreps/any.hpp>
+#include <SeQuant/core/irreps/propagation.hpp>
+#include <SeQuant/core/irreps/z2_algebra.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -193,9 +196,67 @@ void add_to_context(TextGeneratorContext &ctx, std::string_view key,
         std::string(key) + "'");
   }
 }
+/// Sets the IRREPs of tensors based on a specification of the form
+/// "t:B1|Gx, f:A" (IRREP sets of tensors by label) if the context's IRREP
+/// algebra uses the given group
+template <typename Group>
+bool set_irreps_by_label(ItfContext &ctx, std::string_view spec) {
+  using Irrep = Z2Irrep<Group>;
+
+  if (!ctx.has_irrep_context() ||
+      ctx.irrep_context().as<Z2Algebra<Group>>() == nullptr) {
+    return false;
+  }
+
+  container::map<std::wstring, IrrepSet<Irrep>> irreps;
+  for (auto entry : std::ranges::views::split(spec, ',')) {
+    std::string current(entry.begin(), entry.end());
+    boost::trim(current);
+    auto pos = current.find(':');
+    if (pos == std::string::npos) {
+      throw Exception("Malformed IRREP specification '" + current + "'");
+    }
+
+    IrrepSet<Irrep> set;
+    for (auto name : std::ranges::views::split(
+             std::string_view(current).substr(pos + 1), '|')) {
+      set.insert(make_irrep<Group>(std::string_view(name.begin(), name.end())));
+    }
+
+    irreps.emplace(toUtf16(current.substr(0, pos)), std::move(set));
+  }
+
+  ctx.set_irrep_context(IrrepContext<Z2Algebra<Group>>(
+      resolve_by_label<Irrep>(std::move(irreps))));
+
+  return true;
+}
+
+template <typename Group>
+void set_point_group(ItfContext &ctx) {
+  ctx.set_irrep_context(
+      IrrepContext<Z2Algebra<Group>>(resolve_by_label<Z2Irrep<Group>>({})));
+}
+
 void add_to_context(ItfContext &ctx, std::string_view key,
                     std::string_view value) {
-  if (key == "batch_indices") {
+  if (key == "point_group") {
+    if (value == "symbolic") {
+      set_point_group<NoConcreteGroup>(ctx);
+    } else if (value == "D2") {
+      set_point_group<point_groups::D2>(ctx);
+    } else if (value == "D2h") {
+      set_point_group<point_groups::D2h>(ctx);
+    } else {
+      throw Exception("Unsupported point group '" + std::string(value) + "'");
+    }
+  } else if (key == "irreps") {
+    if (!set_irreps_by_label<NoConcreteGroup>(ctx, value) &&
+        !set_irreps_by_label<point_groups::D2>(ctx, value) &&
+        !set_irreps_by_label<point_groups::D2h>(ctx, value)) {
+      throw Exception("'irreps' requires a preceding 'point_group'");
+    }
+  } else if (key == "batch_indices") {
     std::vector<Index> indices;
     for (auto current : std::ranges::views::split(value, ',')) {
       Index idx(std::string(current.begin(), current.end()));
@@ -494,7 +555,7 @@ TEST_CASE("export", "[export]") {
     // space, is the one moved to the fastest position
     auto reg = *get_default_context().index_basis_registry();
     const IndexSpace virt = reg.retrieve_space(L"a");
-    reg.add(L"ã", IndexBasis{virt, 1}, 1000ul);
+    reg.add(L"ã", virt, 1, {.extent = 1000});
     // the Symm braket pins below are derivable only over a real basis
     tests::declare_real_basis(reg);
     auto ctx_resetter = set_scoped_default_context(
@@ -687,156 +748,6 @@ TEST_CASE("export", "[export]") {
                 "Persist R[a_1, a_2, i_1, i_2]\n"
                 "End batching\n"));
       }
-
-      // The following test cases will only become relevant once the optimizer
-      // is further improved
-#if 0
-      SECTION("multiple with reordering") {
-        // When stripping redundant load/unload operations, load of tensor C
-        // needs to be moved before the load of B in order to retain
-        // compatibility to frameworks with stack-based memory models
-        export_expression(
-            to_export_tree(deserialize<ResultExpr>(
-                L"R{a1;i1} = 2 B{a1;i1} + B{a1;i1} C - C D{a1;i1}")),
-            generator, ctx);
-
-        REQUIRE_THAT(
-            generator.get_generated_code(),
-            DiffedStringEquals("Declare index i_1\n"
-                               "Declare index a_1\n"
-                               "\n"
-                               "Declare variable C\n"
-                               "\n"
-                               "Declare tensor B[a_1, i_1]\n"
-                               "Declare tensor D[a_1, i_1]\n"
-                               "Declare tensor R[a_1, i_1]\n"
-                               "\n"
-                               "Create R[a_1, i_1] and initialize to zero\n"
-                               "Load C\n"
-                               "Load B[a_1, i_1]\n"
-                               "Compute R[a_1, i_1] += 2 B[a_1, i_1]\n"
-                               "Compute R[a_1, i_1] += B[a_1, i_1] C\n"
-                               "Unload B[a_1, i_1]\n"
-                               "Load D[a_1, i_1]\n"
-                               "Compute R[a_1, i_1] += -1 C D[a_1, i_1]\n"
-                               "Unload D[a_1, i_1]\n"
-                               "Unload C\n"
-                               "Persist R[a_1, i_1]\n"));
-      }
-      SECTION("reused intermediates") {
-        export_expression(to_export_tree(deserialize<ResultExpr>(
-                              L"ECC = 2 K{i1,i2;a1,a2} t{a1;i1} t{a2;i2} - "
-                              L"K{i1,i2;a1,a2} t{a1;i2} t{a2;i1}")),
-                          generator, ctx);
-
-        REQUIRE_THAT(
-            generator.get_generated_code(),
-            DiffedStringEquals(
-                "Declare index i_1\n"
-                "Declare index i_2\n"
-                "Declare index a_1\n"
-                "Declare index a_2\n"
-                "\n"
-                "Declare variable ECC\n"
-                "\n"
-                "Declare tensor I[i_2, a_2]\n"
-                "Declare tensor K[i_1, i_2, a_1, a_2]\n"
-                "Declare tensor t[a_1, i_1]\n"
-                "\n"
-                "Create ECC and initialize to zero\n"
-                "Load t[a_1, i_1]\n"
-                "Create I[i_2, a_2] and initialize to zero\n"
-                "Load K[i_1, i_2, a_1, a_2]\n"
-                "Compute I[i_2, a_2] += K[i_1, i_2, a_1, a_2] t[a_1, i_1]\n"
-                "Unload K[i_1, i_2, a_1, a_2]\n"
-                "Compute ECC += 2 I[i_2, a_2] t[a_2, i_2]\n"
-                "Unload I[i_2, a_2]\n"
-                "Load I[i_1, a_2] and set it to zero\n"
-                "Load K[i_1, i_2, a_1, a_2]\n"
-                "Compute I[i_1, a_2] += K[i_1, i_2, a_1, a_2] t[a_1, i_2]\n"
-                "Unload K[i_1, i_2, a_1, a_2]\n"
-                "Compute ECC += -1 I[i_1, a_2] t[a_2, i_1]\n"
-                "Unload I[i_1, a_2]\n"
-                "Unload t[a_2, i_1]\n"
-                "Persist ECC\n"));
-      }
-      SECTION("requires caution") {
-        export_expression(
-            to_export_tree(deserialize<ResultExpr>(
-                L"R{a1,a2;i1,i2} = g{i3,i4;a3,a4} t{a4;i2} t{a1,a3;i1,i4} "
-                L"t{a2;i3} "
-                "- 2 g{i3,i4;a3,a4} t{a4;i2} t{a1,a3;i1,i3} t{a2;i4} ")),
-            generator, ctx);
-
-        REQUIRE_THAT(generator.get_generated_code(),
-                     DiffedStringEquals(
-                         "Declare index i_1\n"
-                         "Declare index i_2\n"
-                         "Declare index i_3\n"
-                         "Declare index i_4\n"
-                         "Declare index a_1\n"
-                         "Declare index a_2\n"
-                         "Declare index a_3\n"
-                         "Declare index a_4\n"
-                         "\n"
-                         "Declare tensor I[i_3, i_4, i_2, a_3]\n"
-                         "Declare tensor I[i_4, a_1, i_1, i_2]\n"
-                         "Declare tensor R[a_1, a_2, i_1, i_2]\n"
-                         "Declare tensor g[i_3, i_4, a_3, a_4]\n"
-                         "Declare tensor t[a_4, i_2]\n"
-                         "Declare tensor t[a_1, a_3, i_1, i_3]\n"
-                         "\n"
-                         "Create R[a_1, a_2, i_1, i_2] and initialize to zero\n"
-                         "Create I[i_4, a_1, i_1, i_2] and initialize to zero\n"
-                         "Create I[i_3, i_4, i_2, a_3] and initialize to zero\n"
-                         "Load g[i_3, i_4, a_3, a_4]\n"
-                         "Load t[a_4, i_2]\n"
-                         "Compute I[i_3, i_4, i_2, a_3] += g[i_3, i_4, a_3, "
-                         "a_4] t[a_4, i_2]\n"
-                         "Unload t[a_4, i_2]\n"
-                         "Unload g[i_3, i_4, a_3, a_4]\n"
-                         "Load t[a_1, a_3, i_1, i_3]\n"
-                         "Compute I[i_4, a_1, i_1, i_2] += I[i_3, i_4, i_2, "
-                         "a_3] t[a_1, a_3, i_1, i_3]\n"
-                         "Unload t[a_1, a_3, i_1, i_3]\n"
-                         "Unload I[i_3, i_4, i_2, a_3]\n"
-                         "Load t[a_2, i_4]\n"
-                         "Compute R[a_1, a_2, i_1, i_2] += -2 I[i_4, a_1, i_1, "
-                         "i_2] t[a_2, i_4]\n"
-                         "Unload t[a_2, i_4]\n"
-                         "Unload I[i_4, a_1, i_1, i_2]\n"
-                         "Load I[i_3, a_1, i_1, i_2] and set it to zero\n"
-                         "Load I[i_3, i_4, i_2, a_3] and set it to zero\n"
-                         "Load g[i_3, i_4, a_3, a_4]\n"
-                         "Load t[a_4, i_2]\n"
-                         "Compute I[i_3, i_4, i_2, a_3] += g[i_3, i_4, a_3, "
-                         "a_4] t[a_4, i_2]\n"
-                         "Unload t[a_4, i_2]\n"
-                         "Unload g[i_3, i_4, a_3, a_4]\n"
-                         "Load t[a_1, a_3, i_1, i_4]\n"
-                         "Compute I[i_3, a_1, i_1, i_2] += I[i_3, i_4, i_2, "
-                         "a_3] t[a_1, a_3, i_1, i_4]\n"
-                         "Unload t[a_1, a_3, i_1, i_4]\n"
-                         "Unload I[i_3, i_4, i_2, a_3]\n"
-                         "Load t[a_2, i_3]\n"
-                         "Compute R[a_1, a_2, i_1, i_2] += I[i_3, a_1, i_1, "
-                         "i_2] t[a_2, i_3]\n"
-                         "Unload t[a_2, i_3]\n"
-                         "Unload I[i_3, a_1, i_1, i_2]\n"
-                         "Persist R[a_1, a_2, i_1, i_2]\n"));
-      }
-      SECTION("tbd2") {
-        export_expression(
-            to_export_tree(deserialize<ResultExpr>(
-                L"R1{u_1;i_1;} = "
-                L"+ 2 g{u_2, i_2;a_1, a_2;} (GAM0{u_3, u_4;u_5, u_2;} T2g{a_2, "
-                L"u_5;u_3, i_2;}) T2g{a_1, u_1;i_1, u_4;} "
-                "+ -4 g{u_2, i_2;a_1, a_2;} (GAM0{u_3, u_4;u_5, u_2;} T2g{a_1, "
-                "u_5;i_2, u_3;}) T2g{a_2, u_1;u_4, i_1;} ")),
-            generator, ctx);
-        REQUIRE_THAT(generator.get_generated_code(), DiffedStringEquals(""));
-      }
-#endif
     }
   }
 
@@ -857,104 +768,51 @@ TEST_CASE("export", "[export]") {
         REQUIRE_THAT(tensor, EquivalentTo("g{a1;i1}:N-N-N"));
       }
 
+      // {name, index order of the symmetry-unpermuted integral, expected}
+      using Row = std::tuple<const char *, std::vector<Index>, const char *>;
+      const auto check_rewrites = [&](const std::vector<Row> &rows) {
+        for (const auto &[name, indices, expected] : rows) {
+          REQUIRE(indices.size() == 4);
+
+          for (const std::vector<std::size_t> &indexPerm :
+               twoElectronIntegralSymmetries()) {
+            CAPTURE(name, indexPerm);
+            REQUIRE(indexPerm.size() == 4);
+
+            Tensor integral(int_label,
+                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
+                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
+
+            bool rewritten = ctx.rewrite(integral);
+            REQUIRE_THAT(integral, EquivalentTo(expected));
+            REQUIRE(rewritten);
+          }
+        }
+      };
+
       SECTION("K") {
-        SECTION("occ,occ,occ,occ") {
-          std::vector<Index> indices = {L"i_1", L"i_2", L"i_3", L"i_4"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            CAPTURE(indexPerm);
-
-            REQUIRE(indexPerm.size() == 4);
-
-            Tensor integral(int_label,
-                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            bool rewritten = ctx.rewrite(integral);
-            REQUIRE_THAT(integral, EquivalentTo("K{i1,i2;i3,i4}"));
-            REQUIRE(rewritten);
-          }
-        }
-
-        SECTION("virt,virt,occ,occ") {
-          std::vector<Index> indices = {L"a_1", L"a_2", L"i_1", L"i_2"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            CAPTURE(indexPerm);
-            REQUIRE(indexPerm.size() == 4);
-
-            Tensor integral(int_label,
-                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            bool rewritten = ctx.rewrite(integral);
-            REQUIRE_THAT(integral, EquivalentTo("K{a1,a2;i1,i2}"));
-            REQUIRE(rewritten);
-          }
-        }
-
-        SECTION("virt,virt,virt,virt") {
-          std::vector<Index> indices = {L"a_1", L"a_2", L"a_3", L"a_4"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            CAPTURE(indexPerm);
-            REQUIRE(indexPerm.size() == 4);
-
-            Tensor integral(int_label,
-                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            bool rewritten = ctx.rewrite(integral);
-            REQUIRE_THAT(integral, EquivalentTo("K{a1,a2;a3,a4}"));
-            REQUIRE(rewritten);
-          }
-        }
+        check_rewrites({
+            {"occ,occ,occ,occ",
+             {L"i_1", L"i_2", L"i_3", L"i_4"},
+             "K{i1,i2;i3,i4}"},
+            {"virt,virt,occ,occ",
+             {L"a_1", L"a_2", L"i_1", L"i_2"},
+             "K{a1,a2;i1,i2}"},
+            {"virt,virt,virt,virt",
+             {L"a_1", L"a_2", L"a_3", L"a_4"},
+             "K{a1,a2;a3,a4}"},
+        });
       }
 
       SECTION("J") {
-        SECTION("virt,occ,virt,occ") {
-          std::vector<Index> indices = {L"a_1", L"i_1", L"a_2", L"i_2"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            CAPTURE(indexPerm);
-            REQUIRE(indexPerm.size() == 4);
-
-            Tensor integral(int_label,
-                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            bool rewritten = ctx.rewrite(integral);
-            REQUIRE_THAT(integral, EquivalentTo("J{a1,a2;i1,i2}"));
-            REQUIRE(rewritten);
-          }
-        }
-
-        SECTION("virt,occ,virt,virt") {
-          std::vector<Index> indices = {L"a_1", L"i_1", L"a_2", L"a_3"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            CAPTURE(indexPerm);
-            REQUIRE(indexPerm.size() == 4);
-
-            Tensor integral(int_label,
-                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            bool rewritten = ctx.rewrite(integral);
-            REQUIRE_THAT(integral, EquivalentTo("J{a1,a2;a3,i1}"));
-            REQUIRE(rewritten);
-          }
-        }
+        check_rewrites({
+            {"virt,occ,virt,occ",
+             {L"a_1", L"i_1", L"a_2", L"i_2"},
+             "J{a1,a2;i1,i2}"},
+            {"virt,occ,virt,virt",
+             {L"a_1", L"i_1", L"a_2", L"a_3"},
+             "J{a1,a2;a3,i1}"},
+        });
       }
     }
   }
@@ -1956,4 +1814,130 @@ TEST_CASE("a context rewrite folds a tensor's marks into its label",
   REQUIRE(ctx.rewrite(marked_integral));
   REQUIRE(marked_integral.label() == L"g_adj");
   REQUIRE_FALSE(marked_integral.adjointed());
+}
+}
+
+namespace {
+
+/// ITF context spelling out (concrete) D2 IRREPs by their 1-based number
+class NumberedIrrepItfContext : public ItfContext {
+ public:
+  std::string irrep_name(const AnyIrrep &irrep) const override {
+    const auto *typed = irrep.as<Z2Irrep<point_groups::D2>>();
+    REQUIRE(typed != nullptr);
+    return std::to_string(typed->concrete() + 1);
+  }
+};
+
+}  // namespace
+
+TEST_CASE("export-irrep-name", "[export][irreps]") {
+  using Catch::Matchers::ContainsSubstring;
+  using Irrep = Z2Irrep<point_groups::D2>;
+  auto resetter = to_export_context();
+
+  NumberedIrrepItfContext ctx;
+  configure_context_defaults(ctx);
+  ctx.set_irrep_context(IrrepContext<Z2Algebra<point_groups::D2>>(
+      resolve_by_label<Irrep>({{L"t", {make_irrep<point_groups::D2>("B1")}},
+                               {L"v", {make_irrep<point_groups::D2>("B2")}},
+                               {L"f", {make_irrep<point_groups::D2>("A")}}})));
+
+  auto groups =
+      parse_expression_spec("R{a1;i1} = t{a1;i2} f{i2;i3} v{i3;i1}", false);
+  ItfGenerator<NumberedIrrepItfContext> generator;
+  export_groups<>(groups, generator, ctx);
+
+  const std::string code = generator.get_generated_code();
+  // B1 is the 4th IRREP of D2, B3 the 2nd
+  CHECK_THAT(code, ContainsSubstring("!Create{type:plain; irrep:4}"));
+  CHECK_THAT(code, ContainsSubstring("R:ec // irrep:2"));
+  CHECK_THAT(code, ContainsSubstring("v:cc // irrep:3"));
+  // f is totally symmetric and therefore not annotated
+  CHECK_THAT(code, ContainsSubstring("f:cc[kl], f:cc\n"));
+  CHECK_THAT(code, !ContainsSubstring("f:cc //"));
+}
+
+TEST_CASE("export-irreps", "[export][irreps]") {
+  using point_groups::D2;
+  using Irrep = Z2Irrep<D2>;
+  using Set = IrrepSet<Irrep>;
+  auto resetter = to_export_context();
+  auto irrep = [](std::string_view name) { return make_irrep<D2>(name); };
+
+  SECTION("registry") {
+    ExportContext ctx;
+    REQUIRE(!ctx.has_irrep_context());
+    REQUIRE_THROWS_AS(ctx.irrep_context(), Exception);
+
+    const Tensor t = deserialize(L"t{a1;i1}")->as<Tensor>();
+    // Same tensor block as t
+    const Tensor t_other = deserialize(L"t{a2;i2}")->as<Tensor>();
+
+    REQUIRE(ctx.irreps_of(t) == nullptr);
+    ctx.register_irreps(t, Set{irrep("B1")}, IrrepOrigin::Input);
+    REQUIRE(ctx.irreps_of(t_other) != nullptr);
+    REQUIRE(*ctx.irreps_of(t_other) == AnyIrrepSet(Set{irrep("B1")}));
+    REQUIRE(ctx.computed_irreps_of(t) == nullptr);
+
+    REQUIRE_NOTHROW(
+        ctx.register_irreps(t_other, Set{irrep("B1")}, IrrepOrigin::Input));
+    REQUIRE_THROWS_AS(
+        ctx.register_irreps(t, Set{irrep("B2")}, IrrepOrigin::Input),
+        Exception);
+    REQUIRE_THROWS_AS(
+        ctx.register_irreps(t, Set{irrep("B2")}, IrrepOrigin::Intermediate),
+        Exception);
+
+    ctx.register_irreps(t, Set{irrep("B2")}, IrrepOrigin::Result);
+    const AnyIrrepSet merged(Set{irrep("B1"), irrep("B2")});
+    REQUIRE(*ctx.irreps_of(t) == merged);
+    REQUIRE(ctx.computed_irreps_of(t) != nullptr);
+
+    // Copies are independent of each other
+    ExportContext copy(ctx);
+    copy.register_irreps(t, Set{irrep("B3")}, IrrepOrigin::Result);
+    REQUIRE(*ctx.irreps_of(t) == merged);
+    REQUIRE(*copy.irreps_of(t) ==
+            AnyIrrepSet(Set{irrep("B1"), irrep("B2"), irrep("B3")}));
+  }
+
+  SECTION("conflicting leaf IRREPs") {
+    // A resolver that (inconsistently) assigns different IRREPs to the same
+    // tensor block on subsequent calls
+    std::size_t calls = 0;
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ctx.set_irrep_context(
+        IrrepContext<Z2Algebra<D2>>([&](const Tensor &tensor) -> Set {
+          if (tensor.label() == L"t") {
+            return {calls++ == 0 ? irrep("B1") : irrep("B2")};
+          }
+          return {irrep("A")};
+        }));
+
+    // Conflict across different expressions
+    auto groups = parse_expression_spec(
+        "R{a1;i1} = t{a1;i2} f{i2;i1}\nS{a1;i1} = t{a1;i2} f{i2;i1}", false);
+    ItfGenerator<ItfContext> generator;
+    REQUIRE_THROWS_AS(export_groups<>(groups, generator, ctx), Exception);
+
+    // Conflict within the same expression
+    calls = 0;
+    groups =
+        parse_expression_spec("R{a1;i1} = t{a1;i2} f{i2;a2} t{a2;i1}", false);
+    REQUIRE_THROWS_AS(export_groups<>(groups, generator, ctx), Exception);
+  }
+
+  SECTION("empty IRREP set") {
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ctx.set_irrep_context(IrrepContext<Z2Algebra<D2>>(
+        resolve_by_label<Irrep>({{L"t", Set{}}, {L"f", Set{irrep("A")}}})));
+
+    auto groups =
+        parse_expression_spec("R{a1;i1} = t{a1;i2} f{i2;i3} f{i3;i1}", false);
+    ItfGenerator<ItfContext> generator;
+    REQUIRE_THROWS_AS(export_groups<>(groups, generator, ctx), Exception);
+  }
 }

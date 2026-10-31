@@ -55,6 +55,10 @@ class OBOProcessFunctionMember<void> {
                               ExecutionContext &ctx) = 0;
 };
 
+/// Removes the step name from @p id (everything up to and including the first
+/// '.'), allowing e.g. 'res' to be referenced instead of 'step5.res'.
+std::string_view strip_step_prefix(std::string_view id);
+
 /// Strips a previous step's id prefix from @p id (keeping from the last
 /// leading segment onward) and returns std::nullopt if what remains is an
 /// auto-generated numeric id, not worth preserving as a named alias.

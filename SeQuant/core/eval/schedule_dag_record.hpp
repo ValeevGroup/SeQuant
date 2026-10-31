@@ -77,6 +77,16 @@ inline std::string role_name(LoopRole r) {
   throw Exception("record_dag: unknown LoopRole");
 }
 
+inline std::string role_name(OccurrenceRole r) {
+  switch (r) {
+    case OccurrenceRole::Lockstep:
+      return "Lockstep";
+    case OccurrenceRole::Assembled:
+      return "Assembled";
+  }
+  throw Exception("record_dag: unknown OccurrenceRole");
+}
+
 inline std::string output_kind_name(OutputKind k) {
   switch (k) {
     case OutputKind::Transient:
@@ -311,6 +321,16 @@ DagRecord record_dag(
   // ---- 3. value ids: the first occurrence, whose labels are the cell's frame
   std::size_t const ncells = rich.cells.size();
   std::vector<std::string> id_of(ncells);
+  // the short name of a term's values: the root label, with the term index
+  // when the root has several terms
+  std::unordered_map<std::string, std::string> short_of_term;
+  for (auto const& root : roots)
+    for (std::size_t t = 0; t < root.terms.size(); ++t)
+      short_of_term.emplace(root.terms[t].key,
+                            root.terms.size() > 1
+                                ? root.label + "/" + std::to_string(t)
+                                : root.label);
+  std::vector<std::string> name_of(ncells);
   std::unordered_map<std::string, std::size_t> value_of_occurrence;  // by id
   for (std::size_t v = 0; v < ncells; ++v) {
     auto const& c = rich.cells[v];
@@ -327,7 +347,12 @@ DagRecord record_dag(
             " holds node " + detail::hex_string(h) + " but value " +
             std::to_string(v) + " is node " + detail::hex_string(c.hash));
     }
-    id_of[v] = place_of(c.occurrences.front().point).id;
+    auto const& first = place_of(c.occurrences.front().point);
+    id_of[v] = first.id;
+    auto const sit = short_of_term.find(first.term);
+    name_of[v] = sit == short_of_term.end()
+                     ? first.id
+                     : sit->second + first.id.substr(first.term.size());
   }
   auto const vid_name = [&](std::size_t v) -> std::string const& {
     if (v >= ncells)
@@ -477,11 +502,15 @@ DagRecord record_dag(
           std::ranges::find(out, carried[pos]) == out.end())
         out.push_back(carried[pos]);
   };
+  // as an operand: a leaf by its tensor label, an intermediate by its name
+  auto const label_of = [&](std::size_t w) {
+    return rich.cells[w].is_leaf ? detail::bare_label(node_of(w)) : name_of[w];
+  };
+  // the left-hand side of expr: the name in the form the value is produced in
   auto const own_form = [&](std::size_t w) {
     std::vector<std::string> slices;
     if (production[w]) sliced_labels(w, production[w]->sliced, slices);
-    return detail::form_label(detail::bare_label(node_of(w)), slices,
-                              reduced_of(w));
+    return detail::form_label(name_of[w], slices, reduced_of(w));
   };
   // (consumer value, operand value) -> the read's source cell and slicing
   struct ReadForm {
@@ -505,12 +534,12 @@ DagRecord record_dag(
     if (wit == value_of_occurrence.end()) return detail::bare_label(child);
     std::size_t const w = wit->second;
     auto const rit = read_form.find({v, w});
-    if (rit == read_form.end()) return detail::bare_label(node_of(w));
+    if (rit == read_form.end()) return label_of(w);
     TableCell const& source = table.cells[rit->second.source];
     std::vector<std::string> slices;
     sliced_labels(w, source.sliced, slices);
     sliced_labels(w, *rit->second.slice, slices);
-    return detail::form_label(detail::bare_label(node_of(w)), slices,
+    return detail::form_label(label_of(w), slices,
                               source.production.kind == ProductionKind::Build
                                   ? reduced_of(w)
                                   : std::vector<std::string>{});
@@ -520,16 +549,19 @@ DagRecord record_dag(
     auto const& c = rich.cells[v];
     ValueRecord rec;
     rec.id = id_of[v];
+    rec.name = name_of[v];
     {
       auto const& node = node_of(v);
-      rec.expr = own_form(v);
-      if (!node.leaf()) {
+      rec.expr = own_form(v) + " = ";
+      if (node.leaf()) {
+        rec.expr += detail::bare_label(node);
+      } else {
         auto const op = node->op_type();
         if (node->is_unary_op())
-          rec.expr += " = " + detail::unary_name(*op) + "[" +
-                      operand_of(v, node.left()) + "]";
+          rec.expr +=
+              detail::unary_name(*op) + "[" + operand_of(v, node.left()) + "]";
         else
-          rec.expr += " = " + operand_of(v, node.left()) +
+          rec.expr += operand_of(v, node.left()) +
                       (op && *op == EvalOp::Sum ? " + " : " * ") +
                       operand_of(v, node.right());
       }
@@ -571,6 +603,24 @@ DagRecord record_dag(
       o.home = spell_modes(occ.home);
       for (auto const& e : occ.ectx)
         o.enclosing.push_back(mode_spelling(e.first));
+      // a per-occurrence role is on a carried position of the value; spell
+      // the position in this occurrence's own frame, as home and enclosing
+      // are (ac.axis is in the first occurrence's)
+      for (auto const& ac : cl.per_axis)
+        for (auto const& por : ac.per_occurrence) {
+          if (por.point != occ.point) continue;
+          auto const pit =
+              std::find(c.carried.begin(), c.carried.end(), ac.axis);
+          std::size_t const pos =
+              static_cast<std::size_t>(pit - c.carried.begin());
+          if (pit == c.carried.end() || pos >= occ.carried.size())
+            throw Exception("record_dag: value " + rec.id +
+                            " has an occurrence role on " +
+                            mode_spelling(ac.axis) +
+                            ", which is not a carried position of the value");
+          o.roles.push_back(
+              {mode_spelling(occ.carried[pos]), detail::role_name(por.role)});
+        }
       for (auto const& [ix, kind] : occ.opens)
         o.opens.push_back({mode_spelling(ix), kind == BatchModeType::External
                                                   ? ModeKind::External

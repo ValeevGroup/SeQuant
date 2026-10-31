@@ -1,4 +1,5 @@
 #include "export_step.hpp"
+#include "filter_step.hpp"
 #include "processing_data.hpp"
 #include "processing_step_factory.hpp"
 #include "utils.hpp"
@@ -10,12 +11,19 @@
 #include <SeQuant/core/export/generation_optimizer.hpp>
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/export/itf.hpp>
+#include <SeQuant/core/export/name_recycling.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
+#include <SeQuant/core/irreps/any.hpp>
+#include <SeQuant/core/irreps/config.hpp>
+#include <SeQuant/core/irreps/propagation.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/topological.hpp>
 
+#include <boost/algorithm/string/trim.hpp>
 #include <range/v3/view/concat.hpp>
 
 #include <nlohmann/json.hpp>
@@ -26,10 +34,13 @@
 #include <fstream>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <numeric>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 namespace sequant::util::extint {
@@ -44,7 +55,7 @@ class MetaAwareIftContext : public ItfContext {
     SEQUANT_ASSERT(meta_);
     auto it = meta_->index_spaces.find(space);
     if (it == meta_->index_spaces.end()) {
-      return ItfContext::get_name(space);
+      return ItfContext::get_tag(space);
     }
 
     return it->second.tag;
@@ -54,15 +65,143 @@ class MetaAwareIftContext : public ItfContext {
     SEQUANT_ASSERT(meta_);
     auto it = meta_->index_spaces.find(space);
     if (it == meta_->index_spaces.end()) {
-      return ItfContext::get_tag(space);
+      return ItfContext::get_name(space);
     }
 
     return it->second.name;
   }
 
+  std::string irrep_name(const AnyIrrep &irrep) const override {
+    SEQUANT_ASSERT(meta_);
+    std::string name = irrep.to_string();
+    auto it = meta_->irrep_names.find(name);
+
+    return it == meta_->irrep_names.end() ? name : it->second;
+  }
+
+  std::string any_irreps_name() const override {
+    SEQUANT_ASSERT(meta_);
+    auto it = meta_->irrep_names.find("*");
+
+    return it == meta_->irrep_names.end() ? ItfContext::any_irreps_name()
+                                          : it->second;
+  }
+
  private:
   const ExportStep::ItfMeta *meta_ = nullptr;
 };
+
+namespace {
+
+using json = nlohmann::json;
+
+/// Parses a set of IRREPs given either as a single IRREP name or as an array
+/// of IRREP names. The name "*" refers to any IRREP.
+IrrepContextSpec::IrrepNames parse_irrep_names(const json &value,
+                                               std::string_view what) {
+  auto add = [&](const json &entry, IrrepContextSpec::IrrepNames &names) {
+    if (!entry.is_string()) {
+      throw Exception("Expected IRREPs of " + std::string(what) +
+                      " to be given as string(s)");
+    }
+
+    names.push_back(entry.get<std::string>());
+  };
+
+  IrrepContextSpec::IrrepNames names;
+  if (value.is_array() && !value.empty()) {
+    for (const json &entry : value) {
+      add(entry, names);
+    }
+  } else if (value.is_string()) {
+    add(value, names);
+  } else {
+    throw Exception("Expected IRREPs of " + std::string(what) +
+                    " to be given as a string or a non-empty array of strings");
+  }
+
+  return names;
+}
+
+/// @returns The list of strings in the given array
+std::vector<std::string> string_list(const json &value, const char *key) {
+  if (!value.is_array()) {
+    throw Exception("Expected '" + std::string(key) +
+                    "' to be an array of strings");
+  }
+
+  std::vector<std::string> list;
+  for (const json &entry : value) {
+    if (!entry.is_string()) {
+      throw Exception("Expected '" + std::string(key) +
+                      "' to be an array of strings");
+    }
+    list.push_back(entry.get<std::string>());
+  }
+
+  return list;
+}
+
+/// Parses a multiplication table
+IrrepContextSpec::Table parse_table(const json &group) {
+  for (const auto &[key, value] : group.items()) {
+    if (key != "totally_symmetric" && key != "products" &&
+        key != "conjugates") {
+      throw Exception("Unknown key '" + key + "' in multiplication table");
+    }
+  }
+
+  if (!group.contains("totally_symmetric") ||
+      !group.at("totally_symmetric").is_string()) {
+    throw Exception(
+        "Multiplication table requires 'totally_symmetric' to be a string");
+  }
+
+  IrrepContextSpec::Table table;
+  table.totally_symmetric = group.at("totally_symmetric").get<std::string>();
+
+  if (group.contains("products")) {
+    const json &products = group.at("products");
+    if (!products.is_object()) {
+      throw Exception("Expected 'products' to be an object");
+    }
+
+    for (const auto &[key, value] : products.items()) {
+      table.products.emplace_back(
+          key, parse_irrep_names(value, "product '" + key + "'"));
+    }
+  }
+
+  if (group.contains("conjugates")) {
+    const json &value = group.at("conjugates");
+    if (!value.is_object()) {
+      throw Exception("Expected 'conjugates' to be an object");
+    }
+
+    for (const auto &[irrep, conjugate] : value.items()) {
+      if (!conjugate.is_string()) {
+        throw Exception("Expected conjugate of '" + irrep + "' to be a string");
+      }
+      table.conjugates.emplace_back(irrep, conjugate.get<std::string>());
+    }
+  }
+
+  return table;
+}
+
+/// Invokes @p fn with a copy of the tensor or variable that the given tree
+/// computes
+template <typename Fn>
+void visit_result(const ExportNode<> &tree, Fn &&fn) {
+  if (tree->is_tensor()) {
+    fn(Tensor(tree->as_tensor()));
+  } else {
+    SEQUANT_ASSERT(tree->is_variable());
+    fn(Variable(tree->as_variable()));
+  }
+}
+
+}  // namespace
 
 SEQUANT_EXTINT_REGISTER_STEP_TYPE(ExportStep);
 
@@ -113,6 +252,8 @@ void ExportStep::set_options(const nlohmann::json &options) {
 
         group_assoc_.emplace(ids.get<std::string>(), name);
       }
+    } else if (key == "irreps") {
+      irrep_context_ = parse_irreps(value);
     } else if (key == "meta") {
       // Processing happens later as we need to ensure we know the target
       // language beforehand
@@ -147,6 +288,8 @@ void ExportStep::set_options(const nlohmann::json &options) {
                         {.tensor_cmp = TensorComparison::Block}),
             name.get<std::string>());
       }
+    } else if (key == "recycle_intermediates") {
+      recycle_intermediates_ = parse_recycling(value);
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
     }
@@ -256,12 +399,38 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
                           Generator<std::remove_cvref_t<decltype(genctx)>>>)
   {
     // Setup load/store/create/import strategies
+    std::set<std::size_t> always_create_ids;
     std::vector<ExpressionGroup<>> groups =
-        prepare_expressions(exctx, inputs, genctx);
+        prepare_expressions(exctx, inputs, genctx, always_create_ids);
+
+    if (recycle_intermediates_.has_value()) {
+      // Entries flagged to overwrite their previous result (CSE
+      // intermediates) are the ones whose names may be recycled
+      auto overwrites = [&always_create_ids](const ExportNode<> &tree) {
+        return always_create_ids.contains(tree->id());
+      };
+
+      recycle_intermediate_names(groups, genctx, overwrites,
+                                 recycle_intermediates_.value());
+
+      for (const ExpressionGroup<> &group : groups) {
+        // Renamed results need the same zero strategy as the one set for
+        // their original names in prepare_expressions
+        for (const ExportNode<> &tree : group) {
+          if (!overwrites(tree)) {
+            continue;
+          }
+
+          visit_result(tree, [&](auto result) {
+            genctx.rewrite(result);
+            genctx.setZeroStrategy(result, ZeroStrategy::ZeroOnCreate);
+          });
+        }
+      }
+    }
 
     for (const ExpressionGroup<> &current_group : groups) {
-      std::set<Tensor> created_tensors;
-      std::set<Variable> created_variables;
+      std::tuple<std::set<Tensor>, std::set<Variable>> created_results;
 
       for (const ExportNode<> &current_node : current_group) {
         std::string import_name;
@@ -270,42 +439,31 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
           import_name = it->second;
         }
 
-        if (current_node->is_tensor()) {
-          Tensor result = current_node->as_tensor();
+        // Entries flagged to overwrite their previous result (e.g. CSE
+        // intermediates) are always created fresh and intentionally not
+        // recorded in the shared-result tracking, so that two unrelated
+        // subexpressions reusing the same result name+block each get their own
+        // allocation instead of accumulating onto one another.
+        const bool force_create = always_create_ids.find(current_node->id()) !=
+                                  always_create_ids.end();
+
+        visit_result(current_node, [&](auto result) {
           genctx.rewrite(result);
 
           if (!import_name.empty()) {
             genctx.set_import_name(result, import_name);
           }
 
-          if (created_tensors.find(result) == created_tensors.end()) {
+          auto &created = std::get<std::set<decltype(result)>>(created_results);
+          if (force_create || created.find(result) == created.end()) {
             genctx.setLoadStrategy(result, LoadStrategy::Create,
                                    current_node->id());
-
-            created_tensors.emplace(std::move(result));
+            if (!force_create) created.emplace(std::move(result));
           } else {
             genctx.setLoadStrategy(result, LoadStrategy::Load,
                                    current_node->id());
           }
-        } else {
-          SEQUANT_ASSERT(current_node->is_variable());
-          Variable result = current_node->as_variable();
-          genctx.rewrite(result);
-
-          if (!import_name.empty()) {
-            genctx.set_import_name(result, import_name);
-          }
-
-          if (created_variables.find(result) == created_variables.end()) {
-            genctx.setLoadStrategy(result, LoadStrategy::Create,
-                                   current_node->id());
-
-            created_variables.emplace(std::move(result));
-          } else {
-            genctx.setLoadStrategy(result, LoadStrategy::Load,
-                                   current_node->id());
-          }
-        }
+        });
       }
     }
 
@@ -320,7 +478,22 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
 
   if (language_ == "itf") {
     ItfGenerator<MetaAwareIftContext> generator;
-    MetaAwareIftContext genctx(std::get<ItfMeta>(meta_));
+    ItfMeta meta = std::get<ItfMeta>(meta_);
+    if (irrep_context_.has_value()) {
+      // Names are looked up by canonical IRREP (e.g. "A1" may equal "1")
+      decltype(meta.irrep_names) names;
+      for (const auto &[irrep, name] : meta.irrep_names) {
+        names.emplace(irrep == "*"
+                          ? irrep
+                          : irrep_context_->canonical_irrep(irrep).to_string(),
+                      name);
+      }
+      meta.irrep_names = std::move(names);
+    }
+    MetaAwareIftContext genctx(meta);
+    if (irrep_context_.has_value()) {
+      genctx.set_irrep_context(irrep_context_.value());
+    }
 
     if (optimize_) {
       generated = perform_export(
@@ -339,6 +512,45 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
   stream << generated;
 
   return 0;
+}
+
+std::optional<opt::ShapeCompatibility> ExportStep::parse_recycling(
+    const nlohmann::json &value) {
+  if (value.is_boolean()) {
+    if (!value.get<bool>()) {
+      return std::nullopt;
+    }
+    return opt::ShapeCompatibility::IndexMultiset;
+  }
+
+  if (!value.is_object()) {
+    throw Exception(
+        "Value for export option 'recycle_intermediates' must be a boolean or "
+        "an object");
+  }
+
+  opt::ShapeCompatibility compatibility =
+      opt::ShapeCompatibility::IndexMultiset;
+  for (const auto &[key, entry] : value.items()) {
+    if (key != "shape") {
+      throw Exception(
+          "Unknown key in export option 'recycle_intermediates': '" + key +
+          "'");
+    }
+
+    const std::string shape = entry.is_string() ? entry.get<std::string>() : "";
+    if (shape == "multiset") {
+      compatibility = opt::ShapeCompatibility::IndexMultiset;
+    } else if (shape == "block") {
+      compatibility = opt::ShapeCompatibility::ExactBlock;
+    } else {
+      throw Exception(
+          "Value for 'recycle_intermediates.shape' must be either 'multiset' "
+          "or 'block'");
+    }
+  }
+
+  return compatibility;
 }
 
 ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
@@ -369,6 +581,19 @@ ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
         }
 
         data.idx_id_offset = value.get<std::size_t>();
+      } else if (key == "irrep_names") {
+        if (!value.is_object()) {
+          throw Exception("Expected '" + key + "' to be an object");
+        }
+
+        for (const auto &[irrep, name] : value.items()) {
+          if (!name.is_string()) {
+            throw Exception("Expected the name of IRREP '" + irrep +
+                            "' to be a string");
+          }
+          data.irrep_names.emplace(normalize_irrep_spec(irrep),
+                                   name.get<std::string>());
+        }
       } else {
         throw Exception("Unknown meta data type '" + key + "' for language '" +
                         std::string(language) + "'");
@@ -386,9 +611,86 @@ ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
   }
 }
 
+AnyIrrepContext ExportStep::parse_irreps(const nlohmann::json &irreps) {
+  try {
+    if (!irreps.is_object()) {
+      throw Exception("Expected an object");
+    }
+
+    for (const auto &[key, value] : irreps.items()) {
+      if (key != "group" && key != "relations" && key != "symbols" &&
+          key != "tensors" && key != "variables" && key != "default") {
+        throw Exception("Unknown key '" + key + "'");
+      }
+    }
+
+    if (!irreps.contains("group")) {
+      throw Exception("The 'group' entry is mandatory");
+    }
+
+    IrrepContextSpec spec;
+
+    const json &group = irreps.at("group");
+    if (group.is_object()) {
+      spec.table = parse_table(group);
+    } else if (group.is_string()) {
+      spec.group = group.get<std::string>();
+    } else {
+      throw Exception(
+          "Expected 'group' to be the name of a point group or a "
+          "multiplication table");
+    }
+
+    if (irreps.contains("symbols")) {
+      spec.symbols = string_list(irreps.at("symbols"), "symbols");
+    }
+    if (irreps.contains("relations")) {
+      spec.relations = string_list(irreps.at("relations"), "relations");
+    }
+
+    if (irreps.contains("tensors")) {
+      const json &tensors = irreps.at("tensors");
+      if (!tensors.is_object()) {
+        throw Exception("Expected 'tensors' to be an object");
+      }
+
+      for (const auto &[key, value] : tensors.items()) {
+        spec.tensors.emplace_back(
+            key, parse_irrep_names(value, "tensor '" + key + "'"));
+      }
+    }
+
+    if (irreps.contains("variables")) {
+      const json &variables = irreps.at("variables");
+      if (!variables.is_object()) {
+        throw Exception("Expected 'variables' to be an object");
+      }
+
+      for (const auto &[key, value] : variables.items()) {
+        spec.variables.emplace_back(
+            key, parse_irrep_names(value, "variable '" + key + "'"));
+      }
+    }
+
+    if (irreps.contains("default")) {
+      const json &value = irreps.at("default");
+      if (value.is_string() && value.get<std::string>() == "error") {
+        spec.error_on_unspecified = true;
+      } else {
+        spec.default_irreps = parse_irrep_names(value, "the default");
+      }
+    }
+
+    return make_irrep_context(spec);
+  } catch (const Exception &e) {
+    throw Exception("Invalid 'irreps' option for export: " +
+                    std::string(e.what()));
+  }
+}
+
 std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
     ExecutionContext &exctx, const std::vector<std::string_view> &inputs,
-    ExportContext &genctx) const {
+    ExportContext &genctx, std::set<std::size_t> &always_create_ids) const {
   using CtxData = ExecutionContext::Data<ProcessingData>;
 
   std::vector<CtxData> data;
@@ -401,6 +703,14 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
   auto tree_data = data | std::views::transform([](const CtxData &dat) {
                      return convert_data<ExportTreeData>(dat.data.get());
                    });
+
+  std::map<std::size_t, const CtxData *> producers;
+  for (const CtxData &current : data) {
+    for (const auto &entry :
+         convert_data<ExportTreeData>(current.data.get()).entries) {
+      producers.emplace(entry.tree->id(), &current);
+    }
+  }
 
   // Pre-compute CtxData inter-dependencies
   std::map<const CtxData *, container::svector<const CtxData *>> dependencies;
@@ -416,19 +726,10 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
         std::views::join;
 
     for (std::size_t id : all_dep_ids) {
-      auto it = std::ranges::find_if(
-          tree_data, [id](const ExportTreeData &tree_data) {
-            for (const auto &entry : tree_data.entries) {
-              if (entry.tree->id() == id) {
-                return true;
-              }
-            }
-            return false;
-          });
+      auto it = producers.find(id);
+      SEQUANT_ASSERT(it != producers.end());
 
-      SEQUANT_ASSERT(it != end(tree_data));
-
-      const CtxData *producer = &(*it.base());
+      const CtxData *producer = it->second;
 
       // A dependency resolving to an entry in the same group (e.g. after a
       // merge_inputs cse pulled dependent results into a single group) is
@@ -465,14 +766,7 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
       for (std::string_view current :
            ranges::views::concat(data.at(idx).associated_ids,
                                  data.at(idx).associated_group_ids)) {
-        auto pos = current.find('.');
-        if (pos != std::string_view::npos) {
-          // Strip step name from ID to allow referencing e.g. 'res' instead of
-          // 'step5.res'
-          current = current.substr(pos + 1);
-        }
-
-        auto it = group_assoc_.find(current);
+        auto it = group_assoc_.find(detail::strip_step_prefix(current));
         if (it != group_assoc_.end()) {
           return it->second;
         }
@@ -500,15 +794,29 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
       group.add(current.tree);
 
       if (current.overwrite_previous.has_value()) {
-        ZeroStrategy strategy =
-            current.overwrite_previous.value()
-                ? ZeroStrategy::ZeroOnReuse | ZeroStrategy::ZeroOnCreate
-                : ZeroStrategy::ZeroOnCreate;
-        if (current.tree->is_tensor()) {
-          genctx.setZeroStrategy(current.tree->as_tensor(), strategy);
-        } else {
-          SEQUANT_ASSERT(current.tree->is_variable());
-          genctx.setZeroStrategy(current.tree->as_variable(), strategy);
+        // Never ZeroOnReuse: the summands of a sum all accumulate into the same
+        // result, so zeroing on every reappearance would discard what the
+        // earlier summands have already added.
+        constexpr ZeroStrategy strategy = ZeroStrategy::ZeroOnCreate;
+        // Key the strategy by the rewritten result, as every other strategy
+        // set-site does (and as the code generator's lookup expects):
+        // genctx.rewrite() may reorder a tensor's slots, so setting it on the
+        // unrewritten result would store it under a key the lookup never hits.
+        // rewrite() is the generic per-generator hook, so this holds for every
+        // backend.
+        visit_result(current.tree, [&](auto result) {
+          genctx.rewrite(result);
+          genctx.setZeroStrategy(result, strategy);
+        });
+
+        // An entry flagged to overwrite its previous result (e.g. a CSE
+        // intermediate) must be allocated freshly rather than accumulated onto.
+        // Different equations can reuse the same intermediate name+block for
+        // unrelated subexpressions; without this, the shared-result tracking
+        // below would treat the second definition as a continuation of the
+        // first and emit a load-and-accumulate, corrupting the value.
+        if (current.overwrite_previous.value()) {
+          always_create_ids.insert(current.tree->id());
         }
       }
 
@@ -545,7 +853,7 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
       SEQUANT_ASSERT(it != group.rend());
 
       ResultExpr symmetrization(
-          symm_res, generateResultSymmetrization(symm_res, unsymm_res.label()));
+          symm_res, result_symmetrization(symm_res, unsymm_res.label()));
 
       const auto batch_indices = genctx.batch_indices((*it)->id());
 

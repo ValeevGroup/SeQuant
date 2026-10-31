@@ -38,7 +38,7 @@ std::size_t ToExportTreeStep::process(std::string_view id_prefix,
     std::optional<Tensor> symmetrized_result;
 
     ExportNode<> tree = [&]() {
-      if (!needsSymmetrization(current.expression())) {
+      if (!has_symmetrizer(current.expression())) {
         return to_export_tree(current);
       }
 

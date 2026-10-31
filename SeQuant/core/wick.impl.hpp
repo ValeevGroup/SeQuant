@@ -131,7 +131,7 @@ compute_index_replacement_rules(
     const container::set<Index> &noncovariant_indices,
     const container::set<Index> &unpaired_indices,
     const std::set<Index, Index::LabelCompare> &all_indices,
-    const std::shared_ptr<const IndexBasisRegistry> &isr) {
+    const std::shared_ptr<const IndexBasisRegistry> &ibr) {
   bool zero_result_status = false;
   auto zero_result = [&zero_result_status]() -> void {
     zero_result_status = true;
@@ -179,12 +179,12 @@ compute_index_replacement_rules(
   // null instance is the space's own basis and
   // includes every instance of the space; two different instances are not
   // related by an identity, so the caller never asks for their intersection
-  auto intersection = [&isr](const IndexBasis &b1,
+  auto intersection = [&ibr](const IndexBasis &b1,
                              const IndexBasis &b2) -> IndexBasis {
     SEQUANT_ASSERT(!different_instances(b1, b2));
-    return isr->resolve(IndexBasis(
+    return ibr->resolve(IndexBasis(
         b1.space() == b2.space() ? b1.space()
-                                 : isr->intersection(b1.space(), b2.space()),
+                                 : ibr->intersection(b1.space(), b2.space()),
         b1.has_basis_instance() ? b1.basis_instance() : b2.basis_instance()));
   };
 
@@ -467,7 +467,7 @@ compute_index_replacement_rules(
     const auto ket_basis = resolved_basis(ket);
     if (different_instances(bra_basis, ket_basis)) {
       if (!do_skip &&
-          !isr->intersection(resolved_space(bra), resolved_space(ket)))
+          !ibr->intersection(resolved_space(bra), resolved_space(ket)))
         return Outcome::Zero;
       if (is_kronecker)
         throw Exception("WickTheorem::reduce: Kronecker delta between " +
@@ -484,7 +484,7 @@ compute_index_replacement_rules(
     if (is_overlap && !do_skip &&
         (resolved_metric(bra) != IndexBasisMetric::Unit ||
          resolved_metric(ket) != IndexBasisMetric::Unit)) {
-      if (!isr->intersection(resolved_space(bra), resolved_space(ket)))
+      if (!ibr->intersection(resolved_space(bra), resolved_space(ket)))
         return Outcome::Zero;
       do_skip = true;
     }

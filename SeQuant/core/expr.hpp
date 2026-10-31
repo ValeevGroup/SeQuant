@@ -14,6 +14,7 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/expr_range.hpp>
 #include <SeQuant/core/expressions/labeled.hpp>
+#include <SeQuant/core/expressions/lexicographic_order.hpp>
 #include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>

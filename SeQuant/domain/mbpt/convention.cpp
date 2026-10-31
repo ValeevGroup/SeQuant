@@ -14,6 +14,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/context.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <cassert>
 #include <cstdlib>
@@ -32,37 +33,37 @@ void load(Convention conv, SpinConvention spconv) {
     throw Exception(
         "mbpt::load: cannot install a process-wide context while a scoped "
         "context is active on this thread");
-  std::shared_ptr<IndexBasisRegistry> isr;
+  std::shared_ptr<IndexBasisRegistry> ibr;
   switch (conv) {
     case Convention::Minimal:
-      isr = make_min_sr_spaces(spconv);
+      ibr = make_min_sr_spaces(spconv);
       break;
     case Convention::SR:
-      isr = make_sr_spaces(spconv);
+      ibr = make_sr_spaces(spconv);
       break;
     case Convention::MinimalMR:
-      isr = make_min_mr_spaces(spconv);
+      ibr = make_min_mr_spaces(spconv);
       break;
     case Convention::MR:
-      isr = make_mr_spaces(spconv);
+      ibr = make_mr_spaces(spconv);
       break;
     case Convention::F12:
-      isr = make_F12_sr_spaces(spconv);
+      ibr = make_F12_sr_spaces(spconv);
       break;
     case Convention::QCiFS:
-      isr = make_legacy_spaces(spconv);
+      ibr = make_legacy_spaces(spconv);
       break;
   }
   sequant::Context ctx = get_default_context_snapshot();
-  ctx.set(std::move(isr));
+  ctx.set(std::move(ibr));
   ctx.set(Vacuum::SingleProduct);
   set_default_context(std::move(ctx));
 }
 
-void add_fermi_spin(IndexBasisRegistry& isr) {
-  IndexBasisRegistry result = isr;
+void add_fermi_spin(IndexBasisRegistry& ibr) {
+  IndexBasisRegistry result = ibr;
 
-  for (auto&& space : isr) {
+  for (auto&& space : ibr) {
     if (space.base_key() != L"") {
       // the spin label does not change the basis, so the parent space's field
       // carries over
@@ -78,28 +79,28 @@ void add_fermi_spin(IndexBasisRegistry& isr) {
     }
   }
   const bool nulltype_ok = true;
-  result.reference_occupied_space(isr.reference_occupied_space(nulltype_ok));
-  result.vacuum_occupied_space(isr.vacuum_occupied_space(nulltype_ok));
-  result.particle_space(isr.particle_space(nulltype_ok));
-  result.hole_space(isr.hole_space(nulltype_ok));
-  result.complete_space(isr.complete_space(nulltype_ok));
+  result.reference_occupied_space(ibr.reference_occupied_space(nulltype_ok));
+  result.vacuum_occupied_space(ibr.vacuum_occupied_space(nulltype_ok));
+  result.particle_space(ibr.particle_space(nulltype_ok));
+  result.hole_space(ibr.hole_space(nulltype_ok));
+  result.complete_space(ibr.complete_space(nulltype_ok));
 
-  isr = std::move(result);
+  ibr = std::move(result);
 }
 
 namespace {
 
 /// @throw Exception, naming @p caller, if a label of @p bases is registered
-/// in @p isr or @p instance of its space is named there
+/// in @p ibr or @p instance of its space is named there
 void require_unregistered(
-    const IndexBasisRegistry& isr, const char* caller,
+    const IndexBasisRegistry& ibr, const char* caller,
     const container::svector<std::pair<std::wstring, IndexSpace>>& bases,
     IndexBasis::instance_type instance) {
   for (const auto& [label, space] : bases) {
-    if (isr.contains(label))
+    if (ibr.contains(label))
       throw Exception(std::string(caller) + ": the label '" + toUtf8(label) +
                       "' is already registered");
-    if (auto taken = isr.basis_label(IndexBasis{space, instance}))
+    if (auto taken = ibr.basis_label(IndexBasis{space, instance}))
       throw Exception(std::string(caller) + ": instance " +
                       std::to_string(instance) + " of space " +
                       toUtf8(space.base_key()) + " is already named '" +
@@ -109,7 +110,33 @@ void require_unregistered(
 
 }  // namespace
 
-void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
+void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
+                  IndexSpace::QuantumNumbers spin_any) {
+  // the OBS AOs span the complete space less the CABS `α'`, if one is
+  // registered as a space: the CABS is the F12 complement of the OBS, and
+  // has no role. Every lookup and check precedes the registration, so a
+  // failure leaves the registry untouched; the space is taken by value, since
+  // add() may reallocate the registry's table
+  if (!ibr->complete_space(/* nulltype_ok = */ true))
+    throw Exception(
+        "add_ao_basis: the registry designates no complete space, which the "
+        "OBS AO basis 'μ' spans");
+  IndexSpace::Type obs_type = ibr->complete_space(spin_any).type();
+  if (const auto* cabs = ibr->retrieve_space_ptr(L"α'"))
+    obs_type = obs_type.xOr(obs_type.intersection(cabs->type()));
+  const auto* obs_ptr = ibr->retrieve_space_ptr(obs_type, spin_any);
+  if (!obs_ptr)
+    throw Exception(
+        "add_ao_basis: the AO basis 'μ' spans the complete space less the "
+        "CABS, which is not registered");
+  const IndexSpace obs = *obs_ptr;
+  require_unregistered(*ibr, "add_ao_basis", {{L"μ", obs}},
+                       default_ao_basis_instance);
+  ibr->add(L"μ", obs, default_ao_basis_instance,
+           {.metric = IndexBasisMetric::General});
+}
+
+void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
                   IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs,
                   IndexBasis::instance_type instance) {
   // matches the MPQC layout, see spindex.h
@@ -122,7 +149,7 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
   auto union_space = [&](std::wstring_view label, const IndexSpace& s1,
                          const IndexSpace& s2) -> IndexSpace {
     const auto* space =
-        isr->retrieve_space_ptr(s1.type() | s2.type(), spin_any);
+        ibr->retrieve_space_ptr(s1.type() | s2.type(), spin_any);
     if (!space)
       throw Exception("add_ao_basis: the AO basis '" + toUtf8(label) +
                       "' spans the union of the spaces " +
@@ -131,98 +158,116 @@ void add_ao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
     return *space;
   };
   container::svector<std::pair<std::wstring, IndexSpace>> bases;
-  const IndexSpace obs = isr->retrieve_space(vbs ? L"m" : L"p");
+  const IndexSpace obs = ibr->retrieve_space(vbs ? L"m" : L"p");
   bases.emplace_back(L"μ", obs);  // OBS AO
   IndexSpace vbs_plus;
   if (vbs) {
-    const IndexSpace vbs_space = isr->retrieve_space(L"e");
+    const IndexSpace vbs_space = ibr->retrieve_space(L"e");
     vbs_plus = union_space(L"Γ", obs, vbs_space);
     bases.emplace_back(L"Α", vbs_space);  // VBS AO
     bases.emplace_back(L"Γ", vbs_plus);   // VBS+ = OBS + VBS
   }
   if (abs) {
-    const IndexSpace abs_space = isr->retrieve_space(L"α'");
+    const IndexSpace abs_space = ibr->retrieve_space(L"α'");
     bases.emplace_back(L"σ", abs_space);  // ABS AO in F12 methods
     bases.emplace_back(L"ρ", union_space(L"ρ", obs, abs_space));  // OBS + ABS
     if (vbs)  // VABS+ = VBS+ + ABS
       bases.emplace_back(L"Ρ", union_space(L"Ρ", vbs_plus, abs_space));
   }
-  require_unregistered(*isr, "add_ao_basis", bases, instance);
+  require_unregistered(*ibr, "add_ao_basis", bases, instance);
   for (const auto& [label, space] : bases)
-    isr->add(label, IndexBasis{space, instance}, IndexBasisMetric::General);
+    ibr->add(label, space, instance, {.metric = IndexBasisMetric::General});
 }
 
-void add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
+void add_ao_spaces(std::shared_ptr<IndexBasisRegistry>& ibr,
                    IndexSpace::QuantumNumbers spin_any, bool vbs, bool abs) {
-  add_ao_basis(isr, spin_any, vbs, abs);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  add_ao_basis(ibr, spin_any, vbs, abs);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
-void add_pao_spaces(std::shared_ptr<IndexBasisRegistry>& isr,
+void add_pao_spaces(std::shared_ptr<IndexBasisRegistry>& ibr,
                     IndexSpace::QuantumNumbers spin_any) {
-  add_pao_basis(isr, spin_any);
+  add_pao_basis(ibr, spin_any);
 }
 
-void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& isr,
+void add_pao_basis(std::shared_ptr<IndexBasisRegistry>& ibr,
                    IndexSpace::QuantumNumbers spin_any,
-                   IndexBasis::instance_type instance,
-                   std::wstring_view label) {
+                   const PAOBasisSpec& spec) {
   // the PAOs are the AOs projected on the particle space (of either spin),
-  // so every PAO basis follows the OBS AO basis for its extent, metric and
+  // so every PAO basis follows the AO basis for its extent, metric and
   // field. Everything is checked before anything is registered, so a failure
   // leaves the registry untouched. The spaces are taken by value: add() may
   // reallocate the table
-  if (label == L"μ")
-    throw Exception(
-        "add_pao_basis: 'μ' is the label of the OBS AO basis the PAO bases "
-        "follow");
-  const auto uocc_type = isr->particle_space(/* nulltype_ok = */ false);
+  const std::wstring label(spec.label), followed(spec.ao_basis);
+  if (label == followed)
+    throw Exception("add_pao_basis: '" + toUtf8(label) +
+                    "' is the label of the AO basis the PAO bases follow");
+  const auto uocc_type = ibr->particle_space(/* nulltype_ok = */ false);
   container::svector<std::pair<std::wstring, IndexSpace>> bases;
-  bases.emplace_back(std::wstring(label),
-                     isr->retrieve_space(uocc_type, spin_any));
+  bases.emplace_back(label, ibr->retrieve_space(uocc_type, spin_any));
   for (const auto spin : {Spin::alpha, Spin::beta})
-    if (const auto* uocc_spin = isr->retrieve_space_ptr(uocc_type, spin))
+    if (const auto* uocc_spin = ibr->retrieve_space_ptr(uocc_type, spin))
       bases.emplace_back(spinannotation_add(label, spin), *uocc_spin);
-  require_unregistered(*isr, "add_pao_basis", bases, instance);
-  if (!isr->contains(L"μ"))
-    add_ao_basis(isr, spin_any);
-  else if (!isr->retrieve(L"μ").has_basis_instance())
-    throw Exception(
-        "add_pao_basis: 'μ' is a space, not the OBS AO basis the PAO bases "
-        "follow");
-  else if (auto source = isr->follows(L"μ"))
-    throw Exception("add_pao_basis: the OBS AO basis 'μ' follows '" +
-                    toUtf8(*source) + "', so the PAO bases cannot follow it");
+  require_unregistered(*ibr, "add_pao_basis", bases, spec.instance);
+  bool registered_ao = false;
+  if (!ibr->contains(followed)) {
+    if (followed != L"μ")
+      throw Exception("add_pao_basis: the AO basis '" + toUtf8(followed) +
+                      "' the PAO bases follow is not registered");
+    add_ao_basis(ibr, spin_any);
+    registered_ao = true;
+  } else if (!ibr->retrieve(followed).has_basis_instance())
+    throw Exception("add_pao_basis: '" + toUtf8(followed) +
+                    "' is a space, not the AO basis the PAO bases follow");
+  else if (auto source = ibr->follows(followed))
+    throw Exception("add_pao_basis: the AO basis '" + toUtf8(followed) +
+                    "' follows '" + toUtf8(*source) +
+                    "', so the PAO bases cannot follow it");
+  // the AOs must span the PAOs they are projected on
+  const IndexSpace ao_space = ibr->retrieve(followed).space();
   for (const auto& [l, space] : bases)
-    isr->add(l, IndexBasis{space, instance}).follow(l, L"μ");
+    if (!includes(ao_space, space)) {
+      if (registered_ao) ibr->remove(followed);
+      throw Exception("add_pao_basis: the AO basis '" + toUtf8(followed) +
+                      "' spans " + toUtf8(ao_space.base_key()) +
+                      ", which does not include the particle space " +
+                      toUtf8(space.base_key()) + " of '" + toUtf8(l) + "'");
+    }
+  for (const auto& [l, space] : bases)
+    ibr->add(l, space, spec.instance, {.follows = followed});
 }
 
-void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& isr) {
+void add_df_spaces(std::shared_ptr<IndexBasisRegistry>& ibr) {
   // matches the MPQC layout, see spindex.h
-  isr->add(IndexSpace{L"Κ", 0b00001, TensorFactorizationQNS::df});  // DFBS AO
+  ibr->add(IndexSpace{L"Κ", 0b00001, TensorFactorizationQNS::df});  // DFBS AO
 }
 
-void add_batching_spaces(std::shared_ptr<IndexBasisRegistry>& isr) {
-  isr->add(IndexSpace{L"z", 0b100000, BatchingQNS::batch});  // Batching Space
+void add_batching_spaces(std::shared_ptr<IndexBasisRegistry>& ibr) {
+  ibr->add(IndexSpace{L"z", 0b100000, BatchingQNS::batch});  // Batching Space
 }
 
-void add_thc_spaces(std::shared_ptr<IndexBasisRegistry>& isr) {
-  isr->add(IndexSpace{L"L", 0b000001, TensorFactorizationQNS::thc})  // THC AO
+void add_thc_spaces(std::shared_ptr<IndexBasisRegistry>& ibr) {
+  ibr->add(IndexSpace{L"L", 0b000001, TensorFactorizationQNS::thc})  // THC AO
       ;
 }
 
 std::shared_ptr<IndexBasisRegistry> make_min_sr_spaces(SpinConvention spconv) {
-  auto isr = std::make_shared<IndexBasisRegistry>();
+  auto ibr = std::make_shared<IndexBasisRegistry>();
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
-  isr->add(L"i", 0b01, spin_any, is_vacuum_occupied, is_reference_occupied,
-           is_hole)
-      .add(L"a", 0b10, spin_any, is_particle)
-      .add_union(L"p", {L"i", L"a"}, is_complete);
-  if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
-  isr->physical_particle_attribute_mask(bitset_t(spin_any));
+  ibr->add(L"i", 0b01,
+           {.qns = spin_any,
+            .vacuum_occupied = true,
+            .reference_occupied = true,
+            .hole = true})
+      .add(L"a", 0b10, {.qns = spin_any, .particle = true})
+      .add_union(L"p", {L"i", L"a"}, {.complete = true});
+  if (spconv == SpinConvention::Default) add_fermi_spin(*ibr);
+  ibr->physical_particle_attribute_mask(bitset_t(spin_any));
 
-  return isr;
+  return ibr;
 }
 
 // Multireference supspace uses a subset of its occupied orbitals to define a
@@ -230,76 +275,78 @@ std::shared_ptr<IndexBasisRegistry> make_min_sr_spaces(SpinConvention spconv) {
 //  this leaves an active space which is partially occupied/unoccupied. This
 //  definition is convenient when coupled with SR vacuum.
 std::shared_ptr<IndexBasisRegistry> make_mr_spaces(SpinConvention spconv) {
-  auto isr = std::make_shared<IndexBasisRegistry>();
+  auto ibr = std::make_shared<IndexBasisRegistry>();
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
-  isr->add(L"o", 0b00001, spin_any)
-      .add(L"i", 0b00010, spin_any)
-      .add(L"u", 0b00100, spin_any)
-      .add(L"a", 0b01000, spin_any)
-      .add(L"g", 0b10000, spin_any)
-      .add_union(L"O", {L"o", L"i"}, is_vacuum_occupied)
-      .add_union(L"M", {L"o", L"i", L"u"}, is_reference_occupied)
-      .add_union(L"I", {L"i", L"u"}, is_hole)
+  ibr->add(L"o", 0b00001, {.qns = spin_any})
+      .add(L"i", 0b00010, {.qns = spin_any})
+      .add(L"u", 0b00100, {.qns = spin_any})
+      .add(L"a", 0b01000, {.qns = spin_any})
+      .add(L"g", 0b10000, {.qns = spin_any})
+      .add_union(L"O", {L"o", L"i"}, {.vacuum_occupied = true})
+      .add_union(L"M", {L"o", L"i", L"u"}, {.reference_occupied = true})
+      .add_union(L"I", {L"i", L"u"}, {.hole = true})
       .add_union(L"E", {L"u", L"a", L"g"})
-      .add_union(L"A", {L"u", L"a"}, is_particle)
-      .add_union(L"p", {L"M", L"E"}, is_complete);
+      .add_union(L"A", {L"u", L"a"}, {.particle = true})
+      .add_union(L"p", {L"M", L"E"}, {.complete = true});
 
-  if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
-  isr->physical_particle_attribute_mask(bitset_t(spin_any));
+  if (spconv == SpinConvention::Default) add_fermi_spin(*ibr);
+  ibr->physical_particle_attribute_mask(bitset_t(spin_any));
 
-  return isr;
+  return ibr;
 }
 
 std::shared_ptr<IndexBasisRegistry> make_min_mr_spaces(SpinConvention spconv) {
-  auto isr = std::make_shared<IndexBasisRegistry>();
+  auto ibr = std::make_shared<IndexBasisRegistry>();
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
-  isr->add(L"i", 0b0001, spin_any, is_vacuum_occupied)
-      .add(L"u", 0b0010, spin_any)
-      .add(L"a", 0b0100, spin_any)
-      .add_union(L"I", {L"i", L"u"}, is_reference_occupied, is_hole)
-      .add_union(L"A", {L"u", L"a"}, is_particle)
-      .add_union(L"p", {L"I", L"a"}, is_complete);
+  ibr->add(L"i", 0b0001, {.qns = spin_any, .vacuum_occupied = true})
+      .add(L"u", 0b0010, {.qns = spin_any})
+      .add(L"a", 0b0100, {.qns = spin_any})
+      .add_union(L"I", {L"i", L"u"}, {.reference_occupied = true, .hole = true})
+      .add_union(L"A", {L"u", L"a"}, {.particle = true})
+      .add_union(L"p", {L"I", L"a"}, {.complete = true});
 
-  if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
-  isr->physical_particle_attribute_mask(bitset_t(spin_any));
+  if (spconv == SpinConvention::Default) add_fermi_spin(*ibr);
+  ibr->physical_particle_attribute_mask(bitset_t(spin_any));
 
-  return isr;
+  return ibr;
 }
 
 std::shared_ptr<IndexBasisRegistry> make_sr_spaces(SpinConvention spconv) {
-  auto isr = std::make_shared<IndexBasisRegistry>();
+  auto ibr = std::make_shared<IndexBasisRegistry>();
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
-  isr->add(L"o", 0b0001, spin_any)
-      .add(L"i", 0b0010, spin_any, is_hole)
-      .add(L"a", 0b0100, spin_any, is_particle)
-      .add(L"g", 0b1000, spin_any)
-      .add_union(L"m", {L"o", L"i"}, is_vacuum_occupied, is_reference_occupied)
+  ibr->add(L"o", 0b0001, {.qns = spin_any})
+      .add(L"i", 0b0010, {.qns = spin_any, .hole = true})
+      .add(L"a", 0b0100, {.qns = spin_any, .particle = true})
+      .add(L"g", 0b1000, {.qns = spin_any})
+      .add_union(L"m", {L"o", L"i"},
+                 {.vacuum_occupied = true, .reference_occupied = true})
       .add_union(L"e", {L"a", L"g"})
       .add_union(L"x", {L"i", L"a"})
-      .add_union(L"p", {L"m", L"e"}, is_complete);
-  if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
-  isr->physical_particle_attribute_mask(bitset_t(spin_any));
+      .add_union(L"p", {L"m", L"e"}, {.complete = true});
+  if (spconv == SpinConvention::Default) add_fermi_spin(*ibr);
+  ibr->physical_particle_attribute_mask(bitset_t(spin_any));
 
-  return isr;
+  return ibr;
 }
 
 std::shared_ptr<IndexBasisRegistry> make_F12_sr_spaces(SpinConvention spconv) {
-  auto isr = std::make_shared<IndexBasisRegistry>();
+  auto ibr = std::make_shared<IndexBasisRegistry>();
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
-  isr->add(L"o", 0b00001, spin_any)
-      .add(L"i", 0b00010, spin_any, is_hole)
-      .add(L"a", 0b00100, spin_any, is_particle)
-      .add(L"g", 0b01000, spin_any)
-      .add(L"α'", 0b10000, spin_any)
-      .add_union(L"m", {L"o", L"i"}, is_vacuum_occupied, is_reference_occupied)
+  ibr->add(L"o", 0b00001, {.qns = spin_any})
+      .add(L"i", 0b00010, {.qns = spin_any, .hole = true})
+      .add(L"a", 0b00100, {.qns = spin_any, .particle = true})
+      .add(L"g", 0b01000, {.qns = spin_any})
+      .add(L"α'", 0b10000, {.qns = spin_any})
+      .add_union(L"m", {L"o", L"i"},
+                 {.vacuum_occupied = true, .reference_occupied = true})
       .add_union(L"e", {L"a", L"g"})
       .add_union(L"x", {L"i", L"a"})
       .add_union(L"p", {L"m", L"e"})
@@ -307,72 +354,72 @@ std::shared_ptr<IndexBasisRegistry> make_F12_sr_spaces(SpinConvention spconv) {
       .add_unIon(L"c", {L"g", L"α'"})
       .add_union(L"α", {L"e", L"α'"})
       .add_union(L"H", {L"i", L"α"})
-      .add_union(L"κ", {L"p", L"α'"}, is_complete);
-  if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
-  isr->physical_particle_attribute_mask(bitset_t(spin_any));
+      .add_union(L"κ", {L"p", L"α'"}, {.complete = true});
+  if (spconv == SpinConvention::Default) add_fermi_spin(*ibr);
+  ibr->physical_particle_attribute_mask(bitset_t(spin_any));
 
-  return isr;
+  return ibr;
 }
 
 std::shared_ptr<IndexBasisRegistry> make_legacy_spaces(SpinConvention spconv) {
-  auto isr = std::make_shared<IndexBasisRegistry>();
+  auto ibr = std::make_shared<IndexBasisRegistry>();
 
   const auto spin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
-  isr->add(L"o", 0b0000001, spin_any)
-      .add(L"n", 0b0000010, spin_any)
-      .add(L"i", 0b0000100, spin_any, is_hole)
-      .add(L"u", 0b0001000, spin_any)
-      .add(L"a", 0b0010000, spin_any, is_particle)
-      .add(L"g", 0b0100000, spin_any)
-      .add(L"α'", 0b1000000, spin_any)
-      .add_union(L"m", {L"o", L"n", L"i"}, is_vacuum_occupied,
-                 is_reference_occupied)
+  ibr->add(L"o", 0b0000001, {.qns = spin_any})
+      .add(L"n", 0b0000010, {.qns = spin_any})
+      .add(L"i", 0b0000100, {.qns = spin_any, .hole = true})
+      .add(L"u", 0b0001000, {.qns = spin_any})
+      .add(L"a", 0b0010000, {.qns = spin_any, .particle = true})
+      .add(L"g", 0b0100000, {.qns = spin_any})
+      .add(L"α'", 0b1000000, {.qns = spin_any})
+      .add_union(L"m", {L"o", L"n", L"i"},
+                 {.vacuum_occupied = true, .reference_occupied = true})
       .add_union(L"M", {L"m", L"u"})
       .add_union(L"e", {L"a", L"g"})
       .add_union(L"E", {L"u", L"e"})
       .add_union(L"x", {L"i", L"u", L"a"})
       .add_union(L"p", {L"m", L"x", L"e"})
-      .add_union(L"κ", {L"p", L"α'"}, is_complete);
+      .add_union(L"κ", {L"p", L"α'"}, {.complete = true});
 
-  if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
-  isr->physical_particle_attribute_mask(bitset_t(spin_any));
+  if (spconv == SpinConvention::Default) add_fermi_spin(*ibr);
+  ibr->physical_particle_attribute_mask(bitset_t(spin_any));
 
-  return isr;
+  return ibr;
 }
 
 std::pair<std::shared_ptr<IndexBasisRegistry>,
           std::shared_ptr<IndexBasisRegistry>>
 make_fermi_and_bose_spaces(SpinConvention spconv) {
-  auto isr = std::make_shared<IndexBasisRegistry>();
+  auto ibr = std::make_shared<IndexBasisRegistry>();
 
   const auto fspin_any = IndexSpace::QuantumNumbers{
       spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
-  isr->add(L"i", 0b001, fspin_any)    // fermi occupied
-      .add(L"a", 0b010, fspin_any)    // fermi unoccupied
-      .add_union(L"p", {L"i", L"a"})  // fermi all
+  ibr->add(L"i", 0b001, {.qns = fspin_any})  // fermi occupied
+      .add(L"a", 0b010, {.qns = fspin_any})  // fermi unoccupied
+      .add_union(L"p", {L"i", L"a"})         // fermi all
       ;
-  if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
+  if (spconv == SpinConvention::Default) add_fermi_spin(*ibr);
   const auto bspin_any = IndexSpace::QuantumNumbers{Spin::any};
-  isr->add(L"β", 0b100, bspin_any);  // bose
+  ibr->add(L"β", 0b100, {.qns = bspin_any});  // bose
 
-  auto fermi_isr = std::make_shared<IndexBasisRegistry>(isr->bases());
-  fermi_isr->vacuum_occupied_space(L"i");
-  fermi_isr->reference_occupied_space(L"i");
-  fermi_isr->hole_space(L"i");
-  fermi_isr->particle_space(L"a");
-  fermi_isr->complete_space(L"p");
-  fermi_isr->physical_particle_attribute_mask(bitset_t(fspin_any));
+  auto fermi_ibr = std::make_shared<IndexBasisRegistry>(ibr->bases());
+  fermi_ibr->vacuum_occupied_space(L"i");
+  fermi_ibr->reference_occupied_space(L"i");
+  fermi_ibr->hole_space(L"i");
+  fermi_ibr->particle_space(L"a");
+  fermi_ibr->complete_space(L"p");
+  fermi_ibr->physical_particle_attribute_mask(bitset_t(fspin_any));
 
-  auto bose_isr = std::make_shared<IndexBasisRegistry>(isr->bases());
-  bose_isr->vacuum_occupied_space(IndexSpace::null);
-  bose_isr->reference_occupied_space(IndexSpace::null);
-  bose_isr->hole_space(IndexSpace::null);
-  bose_isr->particle_space(L"β");
-  bose_isr->complete_space(L"β");
-  bose_isr->physical_particle_attribute_mask(bitset_t(bspin_any));
+  auto bose_ibr = std::make_shared<IndexBasisRegistry>(ibr->bases());
+  bose_ibr->vacuum_occupied_space(IndexSpace::null);
+  bose_ibr->reference_occupied_space(IndexSpace::null);
+  bose_ibr->hole_space(IndexSpace::null);
+  bose_ibr->particle_space(L"β");
+  bose_ibr->complete_space(L"β");
+  bose_ibr->physical_particle_attribute_mask(bitset_t(bspin_any));
 
-  return std::make_pair(std::move(fermi_isr), std::move(bose_isr));
+  return std::make_pair(std::move(fermi_ibr), std::move(bose_ibr));
 }
 
 }  // namespace mbpt

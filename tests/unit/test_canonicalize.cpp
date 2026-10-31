@@ -39,10 +39,10 @@ using namespace sequant::tests;
 TEST_CASE("canonicalization", "[algorithms]") {
   using namespace sequant;
 
-  auto isr = sequant::mbpt::make_legacy_spaces();
-  mbpt::add_pao_basis(isr, mbpt::Spin::any);
+  auto ibr = sequant::mbpt::make_legacy_spaces();
+  mbpt::add_pao_basis(ibr, mbpt::Spin::any);
   auto ctx = get_default_context();
-  ctx.set(isr);
+  ctx.set(ibr);
   auto ctx_resetter = set_scoped_default_context(ctx);
 
   SECTION("Tensors") {
@@ -707,7 +707,7 @@ TEST_CASE("context_tensor_canonicalizers", "[algorithms]") {
     return ex<Tensor>(L"Q", bra(b), ket(k), Symmetry::Antisymm);
   };
 
-  SECTION("Tensor::canonicalize uses the context's default canonicalizer") {
+  SECTION("tensor-default-canonicalizer") {
     {
       auto scoped = set_scoped_default_context(
           Context(get_default_context())
@@ -777,7 +777,7 @@ TEST_CASE("context_tensor_canonicalizers", "[algorithms]") {
     CHECK(*q == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
   }
 
-  SECTION("Product canonicalization follows the context's cardinal labels") {
+  SECTION("product-cardinal-labels") {
     auto canonical_labels = [] {
       auto product = ex<Tensor>(L"Z", bra{L"i_1"}, ket{L"a_1"}) *
                      ex<Tensor>(L"Y", bra{L"a_1"}, ket{L"i_1"});
@@ -806,9 +806,9 @@ TEST_CASE("context_tensor_canonicalizers", "[algorithms]") {
 TEST_CASE("canonicalization_zero_by_symmetry", "[algorithms][canonicalize]") {
   using namespace sequant;
 
-  auto isr = sequant::mbpt::make_legacy_spaces();
+  auto ibr = sequant::mbpt::make_legacy_spaces();
   auto ctx = get_default_context();
-  ctx.set(isr);
+  ctx.set(ibr);
   auto ctx_resetter = set_scoped_default_context(ctx);
 
   auto is_zero = [](const ExprPtr& expr) {

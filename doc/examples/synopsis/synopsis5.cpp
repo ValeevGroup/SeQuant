@@ -10,21 +10,21 @@
 
 void test0() {
   using namespace sequant;
-  IndexBasisRegistry isr;
+  IndexBasisRegistry ibr;
 
   // base spaces
-  isr.add(L"i", 0b01).add(L"a", 0b10);
+  ibr.add(L"i", 0b01).add(L"a", 0b10);
   // union of 2 base spaces
-  // can create manually, as isr.add(L"p", 0b11) , or explicitly ...
-  isr.add_union(L"p", {L"i", L"a"});  // union of i and a
+  // can create manually, as ibr.add(L"p", 0b11) , or explicitly ...
+  ibr.add_union(L"p", {L"i", L"a"});  // union of i and a
 
   // can access unions and intersections of base and composite spaces
-  SEQUANT_ASSERT(isr.unIon(L"i", L"a") == isr.retrieve_space(L"p"));
-  SEQUANT_ASSERT(isr.intersection(L"p", L"i") == isr.retrieve_space(L"i"));
+  SEQUANT_ASSERT(ibr.unIon(L"i", L"a") == ibr.retrieve_space(L"p"));
+  SEQUANT_ASSERT(ibr.intersection(L"p", L"i") == ibr.retrieve_space(L"i"));
 
-  // to use the vocabulary defined by isr use it to make a Context object and
+  // to use the vocabulary defined by ibr use it to make a Context object and
   // make it the default
-  set_default_context({.index_basis_registry = std::move(isr)});
+  set_default_context({.index_basis_registry = std::move(ibr)});
 
   // now can use space labels to construct Index objects representing said
   // spaces
@@ -39,20 +39,20 @@ void test0() {
 
 void test1() {
   using namespace sequant;
-  IndexBasisRegistry isr;
+  IndexBasisRegistry ibr;
 
-  isr.add(L"x", 0b001)
+  ibr.add(L"x", 0b001)
       .add(L"y", 0b010)
       .add(L"z", 0b100)
       .add(L"xy", 0b011)                   // union of x and y
       .add_union(L"yz", {L"y", L"z"})      // union of y and z, explicit
       .add_union(L"xyz", {L"xy", L"yz"});  // union of x, y, and z
 
-  SEQUANT_ASSERT(isr.unIon(L"x", L"y") == isr.retrieve_space(L"xy"));
-  SEQUANT_ASSERT(isr.intersection(L"xyz", L"y") == isr.retrieve_space(L"y"));
+  SEQUANT_ASSERT(ibr.unIon(L"x", L"y") == ibr.retrieve_space(L"xy"));
+  SEQUANT_ASSERT(ibr.intersection(L"xyz", L"y") == ibr.retrieve_space(L"y"));
 
   // use the registry in global context to streamline composition
-  set_default_context({.index_basis_registry = std::move(isr)});
+  set_default_context({.index_basis_registry = std::move(ibr)});
   Index xy1(L"xy_1");  // now can use space labels to define indices
 }
 
@@ -60,8 +60,8 @@ void test2() {
   using namespace sequant;
   using namespace sequant::mbpt;
   // makes 2 base spaces, i and a, and their union
-  auto isr = make_min_sr_spaces();
-  set_default_context({.index_basis_registry_shared_ptr = isr});
+  auto ibr = make_min_sr_spaces();
+  set_default_context({.index_basis_registry_shared_ptr = ibr});
 
   // set theoretic operations on spaces
   auto i1 = Index(L"i_1");

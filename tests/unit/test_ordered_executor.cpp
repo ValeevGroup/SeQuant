@@ -25,6 +25,7 @@
 #include <SeQuant/core/eval/backends/dryrun/meter.hpp>
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/cell_table_builder.hpp>
 #include <SeQuant/core/eval/dag_scope.hpp>
@@ -57,6 +58,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
+#include "csv_size_fixtures.hpp"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -77,6 +79,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 namespace {
@@ -155,10 +158,7 @@ ScalarNode scalar_tree(std::wstring_view spec) {
 
 }  // namespace
 
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent for an unbatched "
-    "forest",
-    "[ordered-executor]") {
+TEST_CASE("ordered-vs-forest-unbatched", "[ordered-executor]") {
   // A two-root forest, a
   // nontrivial Sum-of-Products over named scalar Variables sharing a common
   // subexpression pattern (2*a*b appears in both roots' construction path
@@ -207,6 +207,9 @@ TEST_CASE(
                                                   yield, ordered_cache, target);
   double const got_val = got->as<ResultScalar<double>>().value();
 
+  // evaluate_ordered_schedule builds and validates a cell table first.
+  CHECK(sequant::eval::detail::ordered_last_cell_table_size() > 0);
+
   // Hand-computed cross-check that the reference itself is right:
   //   p1 = 2*a*b - c = 2*2*(-3.5) - 7.25 = -14 - 7.25 = -21.25
   //   p2 = a*a + 3*b - 2*c = 4 + 3*(-3.5) - 2*7.25 = 4 - 10.5 - 14.5 = -21
@@ -217,46 +220,12 @@ TEST_CASE(
   CHECK(got_val == Catch::Approx(expected));
 }
 
-// Explicit value cells: evaluate_ordered_schedule builds and
-// statically validates a cell table before evaluating a schedule at all --
-// same fixture as the case above, corrupting nothing, so the run must succeed
-// and the test-facing diagnostic must report the table's own cell count.
-TEST_CASE("ordered executor asserts the cell table before evaluating",
-          "[ordered][cell_table]") {
-  std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b - c"),
-                                 scalar_tree(L"a * a + 3 * b - 2 * c")};
-
-  ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
-
-  sequant::BatchPolicy const policy;
-
-  SizeRegime const regime;
-  CostModel const cm{regime};
-  auto const block_of = [](Index const&) -> std::size_t { return 1; };
-  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
-  auto const legality = analyze_legality(rich, forest, policy);
-  OrderedSchedule const ordered =
-      build_ordered_schedule(rich, legality, policy, {});
-
-  auto ordered_cache = sequant::CacheManager<ScalarNode>::empty();
-  std::function<std::size_t(Index const&)> const target =
-      [](Index const&) -> std::size_t { return 1; };
-  ResultPtr const got = evaluate_ordered_schedule(forest, ordered, rich,
-                                                  ScalarEvalExpr::annot_t{},
-                                                  yield, ordered_cache, target);
-  REQUIRE(got);
-  CHECK(sequant::eval::detail::ordered_last_cell_table_size() > 0);
-}
-
 // The same equivalence, but reached through the BatchPolicy-gated dispatch
 // entry (sequant::evaluate(Nodes const&, BatchPolicy const&, ...),
 // ordered_executor.hpp) with policy.scheduler == BatchScheduler::ordered -- the
 // actual caller-facing seam, rather than calling
 // evaluate_ordered_schedule directly as the test above does.
-TEST_CASE(
-    "BatchPolicy::scheduler == BatchScheduler::ordered routes through the "
-    "ordered executor and matches forest descent",
-    "[ordered-executor]") {
+TEST_CASE("ordered-dispatch-matches-forest", "[ordered-executor]") {
   std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b - c"),
                                  scalar_tree(L"a * a + 3 * b - 2 * c")};
   ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
@@ -283,10 +252,7 @@ TEST_CASE(
 // sequant::evaluate(Nodes const&, layout, leaf_evaluator, cache)) -- i.e.
 // the ordered branch must not disturb it when the scheduler is not set to
 // ordered.
-TEST_CASE(
-    "BatchScheduler defaults to forest_descent and does not disturb the "
-    "pre-existing BatchPolicy dispatch arms",
-    "[ordered-executor]") {
+TEST_CASE("scheduler-default-forest", "[ordered-executor]") {
   std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b - c"),
                                  scalar_tree(L"a * a + 3 * b - 2 * c")};
   ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
@@ -316,7 +282,7 @@ TEST_CASE(
 // (CSE) -- eliminating the per-block rebuild of a root-homed composite that
 // the whole ordered-scope effort exists to remove.
 //
-// `[.]` hidden (run-by-name): a multi-second DryRun optimize+binarize of ~40
+// A multi-second DryRun optimize+binarize of ~40
 // residual terms. The fixture construction below is
 // replicated (with an `orderedexec_` prefix) from
 // test_ordered_schedule.cpp's water-20 fixture rather than shared via a header:
@@ -331,61 +297,46 @@ TEST_CASE(
 
 namespace {
 
-std::string orderedexec_witness_slurp(std::string const& path) {
+[[maybe_unused]] std::string orderedexec_witness_slurp(
+    std::string const& path) {
   std::ifstream in(path);
   std::stringstream ss;
   ss << in.rdbuf();
   return ss.str();
 }
 
-struct OrderedExecWater20ProblemSize {
-  std::size_t mu_tilde;
-  std::size_t aux;
-  std::size_t i_occ;
-  std::array<double, 5> pno_M;
-  std::array<double, 5> osv_M;
-};
+// The water-20 / C60 problem sizes, their provenance and the occupancy
+// adjustment live in csv_size_fixtures.hpp (a named namespace, so sharing it
+// across files is unity-build safe); these aliases keep this file's names.
+using OrderedExecWater20ProblemSize = sequant::tests::csv_sizes::CsvProblemSize;
+[[maybe_unused]] inline constexpr auto const& kOrderedExecWater20_pVDZF12 =
+    sequant::tests::csv_sizes::kWater20_pVDZF12;
+[[maybe_unused]] inline constexpr auto const& kOrderedExecC60_pVDZF12 =
+    sequant::tests::csv_sizes::kC60_pVDZF12;
 
-// Same (molecule, basis, parameter-set) size as test_ordered_schedule.cpp's
-// kOrderedSchedWater20_pVDZF12 (job-log / mpqc PaoPnoRMP2 moments) --
-// duplicated per the file-header note above.
-inline constexpr OrderedExecWater20ProblemSize kOrderedExecWater20_pVDZF12{
-    /*mu_tilde=*/896u,
-    /*aux=*/1682u,
-    /*i_occ=*/80u,
-    /*pno_M=*/
-    {1.0, 23.175775480059084, 25.865548281212597, 28.171416142614103,
-     30.03848680550367},
-    /*osv_M=*/
-    {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
-     59.872014818179686}};
-
-// C60 pVDZ-F12 problem size (copied from test_eval_dryrun.cpp's kC60_pVDZF12).
-inline constexpr OrderedExecWater20ProblemSize kOrderedExecC60_pVDZF12{
-    /*mu_tilde=*/1800u,
-    /*aux=*/4320u,
-    /*i_occ=*/120u,
-    /*pno_M=*/
-    {1.0, 42.029069767441861, 46.039206412923569, 49.766252354482994,
-     53.151291880343109},
-    /*osv_M=*/
-    {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926}};
-
-sequant::eval::dryrun::SizeRegime orderedexec_witness_df_regime(
-    OrderedExecWater20ProblemSize const& p) {
-  sequant::eval::dryrun::SizeRegime r;
-  r.space_extent = {
-      {L"i", p.i_occ},
-      {L"μ̃", p.mu_tilde},
-      {L"Κ", p.aux},
-      {L"a", p.mu_tilde},
-  };
-  r.csv_pno_moment = p.pno_M;
-  r.csv_osv_moment = p.osv_M;
-  return r;
+[[maybe_unused]] sequant::eval::dryrun::SizeRegime
+orderedexec_witness_df_regime(OrderedExecWater20ProblemSize const& p) {
+  return sequant::tests::csv_sizes::df_size_regime(p);
 }
 
-sequant::ExprPtr orderedexec_witness_flatten_product(
+// Peak budget for the w20 STRUCTURE tests below (cell kinds, escapes,
+// produce-if-absent rebinding, scatter-destination sizing). Their budgets were
+// chosen against the dense-occupancy regime (every ordered pair nonnull). The
+// occupancy-adjusted moments shrink a one-cluster value by p and a two-cluster
+// value by p^2, so the same absolute budget opens different loops and the cell
+// kind a test probes may not arise. Each test therefore scales its dense
+// budget by p^n, with n the smallest power that restores its probed schedule
+// shape (the shape is not monotone in the budget, so n is per test).
+// [[maybe_unused]]: every caller is a long test, compiled out under
+// SEQUANT_SKIP_LONG_TESTS (the Debug CI configuration).
+[[maybe_unused]] double orderedexec_structure_budget(
+    double dense_budget, OrderedExecWater20ProblemSize const& p,
+    int occupancy_power) {
+  return dense_budget *
+         std::pow(p.pno_occupancy, static_cast<double>(occupancy_power));
+}
+
+[[maybe_unused]] sequant::ExprPtr orderedexec_witness_flatten_product(
     sequant::ExprPtr const& e) {
   if (!e->is<sequant::Product>()) return e;
   auto const& p = e->as<sequant::Product>();
@@ -448,7 +399,7 @@ orderedexec_per_leg_operands(sequant::eval::RichSchedule const& rich,
   };
 }
 
-std::optional<std::size_t> orderedexec_index_of_build_step(
+[[maybe_unused]] std::optional<std::size_t> orderedexec_index_of_build_step(
     sequant::eval::ScopeBlock const& block, std::size_t value_id) {
   for (std::size_t i = 0; i < block.steps.size(); ++i)
     if (auto const* b =
@@ -459,12 +410,8 @@ std::optional<std::size_t> orderedexec_index_of_build_step(
 
 }  // namespace
 
-TEST_CASE(
-    "ordered-executor witness: water-20 aux-only residual -- forest descent "
-    "and the ordered executor model the same result shape, and "
-    "the Κ-free home={} composite builds exactly once under the ordered "
-    "executor",
-    "[.][ordered-executor-witness-water20]") {
+#ifndef SEQUANT_SKIP_LONG_TESTS
+TEST_CASE("ordered-w20-aux-witness", "[ordered-executor-witness-water20]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -903,6 +850,7 @@ TEST_CASE(
   // above) and executed to completion.
   CHECK(sequant::eval::well_formed(ordered));
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // AUX+OCC dry-run WALK gate (default-on, NOT hidden): the MPQC water-20 CSV-CCk
@@ -927,7 +875,8 @@ namespace {
 // SEQUANT_UT_SCHED_TREE: the block tree of an ordered schedule (depth, axis,
 // kind, step count, escaped outputs), independent of whether the cell table
 // later validates.
-void ut_dump_sched_tree(sequant::eval::OrderedSchedule const& sched) {
+[[maybe_unused]] void ut_dump_sched_tree(
+    sequant::eval::OrderedSchedule const& sched) {
   std::function<void(sequant::eval::ScopeBlock const&, int)> dump =
       [&](sequant::eval::ScopeBlock const& b, int depth) {
         std::size_t builds = 0, children = 0;
@@ -964,9 +913,9 @@ void ut_dump_sched_tree(sequant::eval::OrderedSchedule const& sched) {
 // identities (carried positions' loop_slot, reduced_slot, modes contracted in
 // batches, loops opened), the operands and the consumer of every occurrence
 // of those values.
-void ut_dump_role_diag(sequant::eval::RichSchedule const& rich,
-                       sequant::eval::LegalitySchedule const& legality,
-                       char const* rd) {
+[[maybe_unused]] void ut_dump_role_diag(
+    sequant::eval::RichSchedule const& rich,
+    sequant::eval::LegalitySchedule const& legality, char const* rd) {
   std::set<std::size_t> want;
   std::istringstream toks{rd};
   for (std::string tok; std::getline(toks, tok, ',');)
@@ -1063,11 +1012,7 @@ void ut_dump_role_diag(sequant::eval::RichSchedule const& rich,
 
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "ordered executor: water-20 aux+occ residual dry-run walk completes "
-    "without "
-    "a vanished home value",
-    "[ordered][w20-auxocc-walk]") {
+TEST_CASE("ordered-w20-auxocc-dryrun", "[ordered][w20-auxocc-walk]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -1603,7 +1548,8 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
-  policy.peak_threshold = 1e11;
+  policy.peak_threshold =
+      orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
@@ -1900,26 +1846,30 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
-// The SAME derivation on the configuration mirrored from a real input, set
-// DIRECTLY here (no environment variable, so this runs in every suite): the
-// only difference from the default configuration above is the finite peak
-// budget, which is what makes the optimizer produce the two schedule shapes
-// this stage had to learn to describe --
+// The configuration mirrored from a real input, set DIRECTLY here (no
+// environment variable), uses a fixed peak budget of 25e9, distinct from the
+// default structural case's occupancy-scaled budget. Two budget-sensitive
+// schedule shapes of interest are:
 //   (1) an escape chain that SKIPS a level the value is invariant to (the
 //       Assemble's source sits more than one level deeper), and
 //   (2) a member MATERIALIZED across the forced loop split: built in its home
 //       block for its in-nest readers AND escaped out of it for the other
 //       pass, so the value has a Build cell and an Assemble cell at a
 //       strictly shallower scope.
+// Their occurrence depends on the optimizer's loop placement and value
+// identity; the diagnostics below report them rather than require both shapes.
+// The dedicated [per-nest-split] fixtures pin mixed-pass materialization.
 // The objective is the same enumerator the [w20-auxocc-walk] fixture's
 // SEQUANT_UT_OBJECTIVE=dense_time_space_batched override selects
-// (DenseTimeSpaceBatched -- also its default). The executor is NOT run here;
-// the [w20-auxocc-walk] case does that.
+// (DenseTimeSpaceBatched -- also its default).
+// This case derives and validates the cell table, then RUNS the strict
+// dry-run executor.
+// It exercises the mirrored configuration in every suite that enables long
+// tests, without requiring the [w20-auxocc-walk] environment overrides.
 // ===========================================================================
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
-          "[cell_table][ordered]") {
+TEST_CASE("ordered-mirrored-strict-walk", "[ordered][cell_table]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -1998,9 +1948,7 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
   REQUIRE(sequant::eval::well_formed(ordered));
   auto const sma = sequant::eval::compute_sliced_mode_assignment(ordered, rich);
   auto const vmap = sequant::eval::build_value_node_map(forest);
-  // Real per-loop batch counts for n_batches_of (see
-  // the walk-gate case's own note); aops is otherwise unused in this
-  // static-only fixture.
+  // Use the same real per-loop batch counts as the executor.
   auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
 
   sequant::eval::CellTableInputs in;
@@ -2050,11 +1998,10 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
       ++level_skipping_chains;
   WARN("level_skipping_chains = " << level_skipping_chains);
 
-  // (2) at least one value is MATERIALIZED across the forced split. In the
-  // TABLE that shows up as a Build cell whose value also has an Assemble cell
-  // at a strictly shallower scope -- necessary but not sufficient, since the
-  // implicit per-batch Build the builder synthesizes for an ordinary escape
-  // matches it too.
+  // (2) at least one Build cell's value also has an Assemble cell at a strictly
+  // shallower scope. This TABLE shape is necessary but not sufficient for a
+  // member MATERIALIZED across the forced split, since the implicit per-batch
+  // Build the builder synthesizes for an ordinary escape matches it too.
   std::size_t build_with_shallower_assemble = 0;
   for (auto const& b : table.cells) {
     if (b.production.kind != sequant::eval::ProductionKind::Build) continue;
@@ -2088,14 +2035,53 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
       };
   scan(ordered.root);
   // Under value identity ("Loop identity and value identity") the water-20
-  // default schedule no longer materializes a member across a split: the
+  // mirrored schedule no longer materializes a member across a split: the
   // later-pass reader of a nest-homed value was a merged-frame occurrence,
   // now its own value in its own nest. The mixed-pass shape stays pinned by
   // the [per-nest-split] fixtures; here it is reported, not required.
   WARN("built_and_escaped_here = " << built_and_escaped_here);
+
+  // Explicit value cells: the input-mirrored configuration is EXECUTED, not
+  // merely validated. The static gate above proves the table is well formed;
+  // only a run proves the executor can walk the resulting schedule, including
+  // level-skipping escape chains and materialized members when present.
+  // Reuse the forest and schedule validated above (peak threshold 25e9 and
+  // the batched time-then-space objective, set directly rather than through
+  // the environment), then run the strict dry-run walk the default fixture
+  // uses: range/lobound checks in the backend plus the cache-fill-once
+  // tripwire. The [w20-auxocc-walk] fixture retains its environment-driven
+  // mirroring; this case makes the mirrored RUN part of every suite enabling
+  // long tests.
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const& ix) -> std::size_t {
+    return ix.basis().base_key() == L"Κ" ? 256 : 16;
+  };
+  std::function<bool(Node const&)> const is_volatile_node =
+      [p = policy.is_volatile_leaf](Node const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  logger.eval.level = 0;
+  auto ordered_cache = sequant::cache_manager(forest);
+  ordered_cache.set_array_ops(&aops);
+
+  // Per-instance override; see [block-skip]'s note on the env latch.
+  ordered_cache.set_strict_fill_once(true);
+  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
+      forest, ordered, rich, layout, yield, ordered_cache, target, {},
+      is_volatile_node));
+
+  logger.eval.level = prev_level;
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 // ===========================================================================
 // Diagnostic-only dump:
 // characterize, on the mirrored w20 configuration, the values that the
@@ -2103,18 +2089,16 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
 // built or escaped, and who consumes it and where. Those gaps are FIXED: the
 // mirrored configuration now derives a table that validates clean (see the
 // unconditional gate block in the [w20-auxocc-walk] case, and the
-// "cell table: the input-mirrored configuration derives a valid table" case
-// which asserts it without any environment variable). This case is kept as
-// the shape characterization behind the fix. Hidden ("[.]") so it never runs
-// in the default or CI suites; run explicitly with the mirrored environment
+// mirrored execution case, which asserts it without any environment variable).
+// This case is kept as the shape characterization behind the fix.
+// Run with the mirrored environment
 // (SEQUANT_UT_PEAK_THRESHOLD=25e9,
 // SEQUANT_UT_OBJECTIVE=dense_time_space_batched) to see the report on
 // stderr. The watched value ids are only meaningful under that mirrored
 // configuration.
 // ===========================================================================
-TEST_CASE(
-    "cell table: dump the mixed-pass members of the mirrored w20 schedule",
-    "[cell_table][ordered][.][mixed-pass-dump]") {
+TEST_CASE("mirrored-w20-mixed-pass-dump",
+          "[cell_table][ordered][mixed-pass-dump]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -2288,6 +2272,7 @@ TEST_CASE(
   }
   SUCCEED("characterization printed to stderr");
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // Cache-halt across CC iterations: a Κ-free PERSISTENT composite (I(i,i;a,a),
@@ -2304,10 +2289,7 @@ TEST_CASE(
 // ===========================================================================
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "ordered executor: cache-halt gate does not re-form a resident persistent "
-    "composite, and skips its dead batch-block prerequisites when present",
-    "[ordered][cache-halt]") {
+TEST_CASE("ordered-cache-halt", "[ordered][cache-halt]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -2575,8 +2557,9 @@ TEST_CASE(
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 // ===========================================================================
-// [.][dryrun-2iter-report] (hidden report, not a strict gate): a 2-ITERATION
+// dryrun-2iter-report (a report, not a strict gate): a 2-ITERATION
 // dry-run cost report -- iter 1 (cold cache) vs iter 2 (warm cache: persistent
 // composites resident + the needed_build cache-halt active) -- of builds /
 // FLOPs / peak, for BOTH forest descent and the ordered/DAG executor, at w20
@@ -2589,10 +2572,7 @@ TEST_CASE(
 // schedule, and `run` is what the ordered COLD iteration measured. Render it
 // with `sequant-schedule view <path>`.
 // ===========================================================================
-TEST_CASE(
-    "dry-run 2-iteration report: forest vs ordered, cold vs warm cache "
-    "(builds/FLOPs/peak) at w20 residual scale",
-    "[.][dryrun-2iter-report]") {
+TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -3179,7 +3159,9 @@ TEST_CASE(
   CHECK(f2.builds <= f1.builds);
   if (ordered_ok) CHECK(o2.builds <= o1.builds);
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 // ===========================================================================
 // Dry == wet schedule
 // EQUIVALENCE for the ordered executor. This guards a real dry-run/wet-run
@@ -3201,10 +3183,7 @@ TEST_CASE(
 // duplicated here as-is, matching the file's own stated precedent for these
 // fixtures (see the file-header note above the witness TEST_CASE).
 // ===========================================================================
-TEST_CASE(
-    "b3: meter()'s ordered replay peak equals a direct evaluate_ordered_"
-    "schedule (PeakMonitor) replay on the water-20 aux-only residual forest",
-    "[.][ordered-executor][meter]") {
+TEST_CASE("meter-replay-equals-direct", "[ordered-executor][meter]") {
   using sequant::eval::dryrun::CacheConfig;
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
@@ -3385,16 +3364,17 @@ TEST_CASE(
   CHECK(meter_report.peak_bytes ==
         Catch::Approx(double(direct_mon.hwmark_bytes)).margin(1.0));
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
 // ===========================================================================
 // ANALYSIS PROBE (uncommitted diagnostic): decompose the water-20 ORDERED
 // executor dense-model peak into tier A (root-homed Κ-free composites) vs
 // tier B (Κ-carrying aux-loop working set), and snapshot the co-resident set
 // at the instant of realized high-water. Reuses the same fixture as the
-// witness above. Run by name: [.][w20-peak-composition].
+// witness above. Run by name: [w20-peak-composition].
 // ===========================================================================
-TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
-          "[.][w20-peak-composition]") {
+TEST_CASE("w20-peak-composition", "[w20-peak-composition]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -3952,6 +3932,7 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
   std::wcerr << L"====================================================\n";
   CHECK(mon.hwmark_bytes > 0);
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // A value MATERIALIZED across a forced loop split is built in its home block
@@ -3961,8 +3942,7 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
 // BuildStep or is an ancestor of the block that does. Any other combination
 // of build and escape sites is still duplicate production.
 // ===========================================================================
-TEST_CASE("well_formed accepts a value built and escaped in its home block",
-          "[ordered][escape-chain]") {
+TEST_CASE("well-formed-home-escape", "[ordered][escape-chain]") {
   using sequant::eval::BuildStep;
   using sequant::eval::OrderedSchedule;
   using sequant::eval::OutputKind;
@@ -4073,10 +4053,7 @@ template <typename CV>
 concept has_coloring_member = requires(CV const& v) { v.coloring; };
 }  // namespace
 
-TEST_CASE(
-    "cache manager and ordered schedule have no legacy value-keyed cache "
-    "machinery",
-    "[ordered][cell_table]") {
+TEST_CASE("no-legacy-value-cache", "[ordered][cell_table]") {
   static_assert(!has_ensure_home_slot_1<sequant::CacheManager<ScalarNode>>,
                 "ensure_home_slot(key) must be gone from the cache");
   static_assert(
@@ -4123,10 +4100,7 @@ TEST_CASE(
 // resolves to, and this pins it without depending on a schedule shape that
 // happens to touch some leaf first inside a loop.
 // ===========================================================================
-TEST_CASE(
-    "ordered executor: a leaf's first touch inside a batch loop is served "
-    "through its Read, with the declared slice",
-    "[ordered][cell_registry]") {
+TEST_CASE("ordered-leaf-first-touch-read", "[ordered][cell_registry]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
 
@@ -4236,130 +4210,6 @@ TEST_CASE(
   CHECK_THROWS(resolver.fetch(x_hash, bctx));
 }
 // ===========================================================================
-// Explicit value cells, final round (I2): the input-mirrored configuration is
-// EXECUTED, not merely validated. The static gate above ("cell table: the
-// input-mirrored configuration derives a valid table") proves the table is
-// well formed under that configuration; only a run proves the executor can
-// walk it -- the level-skipping escape chain and the materialized member the
-// mirrored schedule contains are runtime shapes the default configuration
-// never produces. Same construction as the static case (peak threshold 25e9,
-// the batched time-then-space objective, set directly rather than through the
-// environment), then the strict dry-run walk the default fixture uses:
-// range/lobound checks in the backend plus the cache-fill-once tripwire.
-// The [w20-auxocc-walk] fixture keeps its environment-driven mirroring
-// unchanged; this case makes the mirrored RUN part of the default suite.
-// ===========================================================================
-// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
-#ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "ordered executor: the input-mirrored configuration RUNS the strict "
-    "dry-run walk to completion",
-    "[ordered][cell_table]") {
-  using sequant::eval::dryrun::EvalExprDryRun;
-  using sequant::eval::dryrun::EvalNodeDryRun;
-  using Node = EvalNodeDryRun;
-  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
-
-  auto const body =
-      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                                "/data/csv_ccsd_doubles_residual_df.txt");
-  REQUIRE(!body.empty());
-  std::string line = body;
-  if (auto nl = line.find('\n'); nl != std::string::npos)
-    line = line.substr(0, nl);
-  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
-  REQUIRE(expr->is<sequant::Sum>());
-  auto const& summands = expr->as<sequant::Sum>().summands();
-  auto regime = orderedexec_witness_df_regime(kOrderedExecWater20_pVDZF12);
-  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
-  sequant::BatchPolicy policy;
-  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.basis().base_key() == L"Κ";
-  };
-  policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    auto const reg = sequant::get_default_context().index_basis_registry();
-    return reg && ix.space() && reg->is_pure_occupied(ix.space());
-  };
-  policy.batch_spectator_indices = true;
-  policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"Κ" ? 256 : 16;
-  };
-  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
-    return t.label() == L"t";
-  };
-  policy.accumulation_factor = 1.0;
-  policy.persistent_only = false;
-  policy.peak_threshold = 25e9;  // THE mirrored setting
-  auto axes_map = std::make_shared<std::unordered_map<
-      sequant::Expr const*,
-      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
-  sequant::OptimizeOptions opts;
-  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
-  opts.idx_to_extent = regime.idx_to_extent();
-  opts.inner_pow = regime.inner_pow_fn();
-  opts.batch_policy = policy;
-  opts.volatile_weight = 20.0;
-  opts.roofline.machine_balance = 200.0;
-  opts.roofline.fast_mem_elems = 1000000.0;
-  opts.term_batch_axes = axes_map;
-  std::vector<Node> forest;
-  for (auto const& s : summands) {
-    sequant::ExprPtr const term = orderedexec_witness_flatten_product(s);
-    if (!term) continue;
-    sequant::ExprPtr optimized;
-    try {
-      optimized = sequant::optimize(term, opts);
-    } catch (std::exception const&) {
-      continue;
-    }
-    if (!optimized) continue;
-    sequant::BinarizationOptions bopts;
-    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
-      bopts.node_batch_axes = it->second;
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  }
-  REQUIRE(!forest.empty());
-  auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"Κ" ? 256 : 16;
-  };
-  auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
-  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
-  auto const ordered = sequant::eval::build_ordered_schedule(
-      rich, legality, policy, std::initializer_list<std::wstring>{});
-  REQUIRE(sequant::eval::well_formed(ordered));
-
-  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
-  annot_t const layout{};
-  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
-  std::function<std::size_t(sequant::Index const&)> const target =
-      [](sequant::Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"Κ" ? 256 : 16;
-  };
-  std::function<bool(Node const&)> const is_volatile_node =
-      [p = policy.is_volatile_leaf](Node const& n) -> bool {
-    if (!n.leaf() || !n->is_tensor()) return false;
-    return p && p(n->as_tensor());
-  };
-
-  auto& logger = sequant::Logger::instance();
-  auto const prev_level = logger.eval.level;
-  logger.eval.level = 0;
-  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
-  auto ordered_cache = sequant::cache_manager(forest);
-  ordered_cache.set_array_ops(&aops);
-
-  // Per-instance override; see [block-skip]'s note on the env latch.
-  ordered_cache.set_strict_fill_once(true);
-  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
-      forest, ordered, rich, layout, yield, ordered_cache, target, {},
-      is_volatile_node));
-
-  logger.eval.level = prev_level;
-}
-#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
-// ===========================================================================
 // An Assemble step's destination is sized from ITS OWN CELL'S FORM (the
 // table), never inferred from where the escaped axis happens to sit on the
 // node: the descriptor is the value's own canonical index list, narrowed by
@@ -4377,10 +4227,7 @@ TEST_CASE(
 // ===========================================================================
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "ordered executor: an Assemble step's scatter destination is sized from "
-    "its own cell form",
-    "[ordered][assemble-dest]") {
+TEST_CASE("ordered-assemble-dest-size", "[ordered][assemble-dest]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -4420,7 +4267,8 @@ TEST_CASE(
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
-  policy.peak_threshold = 1e11;
+  policy.peak_threshold =
+      orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -4689,10 +4537,7 @@ TEST_CASE(
 // ===========================================================================
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "ordered executor: a loop-invariant escape is not re-formed on later "
-    "batches",
-    "[ordered][block-skip]") {
+TEST_CASE("ordered-invariant-escape-once", "[ordered][block-skip]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -4735,7 +4580,8 @@ TEST_CASE(
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
-  policy.peak_threshold = 1e11;
+  policy.peak_threshold =
+      orderedexec_structure_budget(1e11, kOrderedExecWater20_pVDZF12, 2);
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -4877,10 +4723,7 @@ TEST_CASE(
 // ===========================================================================
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "ordered executor: a produce-if-absent cell bound to an enclosing loop is "
-    "re-produced on that loop's batches",
-    "[ordered][pia-rebind]") {
+TEST_CASE("ordered-pia-bound-reproduced", "[ordered][pia-rebind]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -4916,7 +4759,8 @@ TEST_CASE(
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
-  policy.peak_threshold = 25e9;  // THE mirrored setting
+  policy.peak_threshold = orderedexec_structure_budget(
+      25e9, kOrderedExecWater20_pVDZF12, 1);  // THE mirrored setting
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
@@ -5054,10 +4898,7 @@ TEST_CASE(
 // mark outlives the clear); an UNBOUND one is reachable by no clear and so may
 // be. Before the fix the seeding rule was "produce_if_absent and currently
 // held", which admits the bound cell and elides its re-production.
-TEST_CASE(
-    "ordered executor: only an unbound produce-if-absent cell may be seeded "
-    "into a per-visit skip set",
-    "[ordered][pia-rebind]") {
+TEST_CASE("ordered-pia-unbound-seed", "[ordered][pia-rebind]") {
   using sequant::eval::CellRegistry;
   using sequant::eval::CellTable;
   using sequant::eval::LoopKey;
@@ -6011,4 +5852,187 @@ TEST_CASE(
   REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
       is_volatile_node));
+}
+
+// Issue #720: a shared, batched intermediate read by one term in lockstep
+// inside its loop and by another term whole, at the root. W = g{i;i;K} g{a;a;K}
+// is sliced on a_2 in both terms of a two-term DF doubles residual and the two
+// occurrences fold into one value. Term 1 reads W inside the a_2 loop; in term
+// 2 W opens the a_2 loop itself and W t2 reads it assembled. Legality must
+// classify the two occurrences separately (lockstep / outside), the schedule
+// must build W inside the loop (for term 1) and also scatter it out (for term
+// 2), and the cell table must validate. Decided per recorded loop instance, not
+// by basis key.
+// ===========================================================================
+TEST_CASE("ordered-lockstep-vs-whole-escape",
+          "[ordered][cell_table][legality]") {
+  using sequant::Index;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context_snapshot();
+  auto ibr = sequant::mbpt::make_sr_spaces();
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(sequant::Vacuum::SingleProduct)
+      .set(sequant::SPBasis::Spinfree)
+      .set(ibr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  // R{a1,a2;i1,i2} = -g{i1;i3;Κ2} g{a3;a2;Κ2} t{a1;i3} t{a3;i2}
+  //                 - 2 g{i1;i3;Κ2} g{a3;a2;Κ2} t{a1,a3;i3,i2}
+  auto const rhs = sequant::deserialize<sequant::ExprPtr>(
+      L"-1 g{i_1;i_3;Κ_2}:N-S-S * g{a_3;a_2;Κ_2}:N-S-S * t{a_1;i_3}:N-N-S "
+      L"* t{a_3;i_2}:N-N-S "
+      L"- 2 g{i_1;i_3;Κ_2}:N-S-S * g{a_3;a_2;Κ_2}:N-S-S "
+      L"* t{a_1,a_3;i_3,i_2}:N-N-S");
+  sequant::ResultExpr const res(
+      sequant::Tensor(L"R", sequant::bra{L"a_1", L"a_2"},
+                      sequant::ket{L"i_1", L"i_2"}),
+      rhs);
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 4}, {L"a", 8}, {L"Κ", 24}};
+
+  // Slice the virtuals (external role) in blocks of 4 under a peak budget
+  // tight enough that both occurrences of W are sliced the same way and
+  // merge into one value.
+  auto const is_a = [](Index const& ix) {
+    return ix.space() && ix.basis().base_key() == L"a";
+  };
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = is_a;
+  policy.batch_spectator_indices = true;
+  policy.batch_target_size = [is_a](Index const& ix) -> std::size_t {
+    return is_a(ix) ? 4 : 0;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.peak_threshold = 8000;
+  policy.scheduler = sequant::BatchScheduler::ordered;
+
+  auto axes = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.batch_policy = policy;
+  opts.term_batch_axes = axes;
+  opts.volatile_weight = 10;
+  auto const optimized = sequant::optimize_result(res.expression(), opts).expr;
+  sequant::BinarizationOptions bopts;
+  if (auto it = axes->find(optimized.get()); it != axes->end())
+    bopts.node_batch_axes = it->second;
+  std::vector<Node> const forest{sequant::binarize<EvalExprDryRun>(
+      sequant::ResultExpr(res.result_as_tensor(), optimized), bopts)};
+
+  auto const target = policy.batch_target_size;
+  auto const rich = sequant::eval::compute_dag_boulevard(
+      forest,
+      sequant::eval::dryrun::CostModel{sequant::eval::dryrun::SizeRegime{}},
+      target);
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+
+  // W is the only CSE-shared non-leaf value: two occurrences, one under an
+  // enclosing a loop (term 1) and one with none (term 2, W opens the loop).
+  // This pins the cost model's choice at this budget; if the optimizer ever
+  // shares a second intermediate here, or none, the fixture no longer
+  // produces the issue's shape and needs a new budget, not a new assertion.
+  std::optional<std::size_t> w_vid;
+  for (auto const& vc : rich.cells) {
+    if (vc.is_leaf || vc.occurrences.size() != 2) continue;
+    INFO("a second CSE-shared non-leaf value ("
+         << vc.value_id << "): the fixture no longer isolates W");
+    REQUIRE_FALSE(w_vid.has_value());
+    w_vid = vc.value_id;
+  }
+  INFO(
+      "no CSE-shared non-leaf value: the optimizer no longer shares W at "
+      "this budget");
+  REQUIRE(w_vid.has_value());
+  auto const& w_cell = rich.cells[*w_vid];
+  {
+    bool one_enclosed = false, one_bare = false;
+    for (auto const& occ : w_cell.occurrences)
+      (occ.ectx.empty() ? one_bare : one_enclosed) = true;
+    REQUIRE((one_enclosed && one_bare));
+  }
+  std::unordered_map<std::size_t, std::size_t> point_owner;
+  for (auto const& vc : rich.cells)
+    for (auto const& occ : vc.occurrences) point_owner[occ.point] = vc.value_id;
+  // the term-1 reader of W, inside the loop
+  std::optional<std::size_t> lockstep_reader;
+  for (auto const& occ : w_cell.occurrences)
+    if (!occ.ectx.empty()) lockstep_reader = point_owner.at(occ.consumer_point);
+  REQUIRE(lockstep_reader.has_value());
+
+  // Legality: one a axis, LoopLocal for the value (it has a lockstep reader),
+  // with the two occurrences classified separately.
+  auto const cl_it = std::find_if(
+      legality.cells.begin(), legality.cells.end(), [&](auto const& cl) {
+        return cl.hash == sequant::eval::value_key_of(w_cell);
+      });
+  REQUIRE(cl_it != legality.cells.end());
+  REQUIRE(cl_it->per_axis.size() == 1);
+  auto const& ac = cl_it->per_axis.front();
+  CHECK(ac.axis.basis().base_key() == L"a");
+  CHECK(ac.role == sequant::eval::LoopRole::LoopLocal);
+  REQUIRE(ac.per_occurrence.size() == 2);
+  {
+    std::size_t n_lockstep = 0, n_outside = 0;
+    for (auto const& o : ac.per_occurrence) {
+      if (o.role == sequant::eval::OccurrenceRole::Lockstep) ++n_lockstep;
+      if (o.role == sequant::eval::OccurrenceRole::Assembled) ++n_outside;
+    }
+    CHECK(n_lockstep == 1);
+    CHECK(n_outside == 1);
+  }
+  CHECK(cl_it->home_floor.size() == 1);
+  CHECK(cl_it->forced_split_axes.empty());
+
+  // Schedule: W has a BuildStep in an a block that also scatters it out, and
+  // its lockstep reader is built in that same block (same pass).
+  sequant::eval::OrderedSchedule ordered;
+  REQUIRE_NOTHROW(ordered = sequant::eval::build_ordered_schedule(
+                      rich, legality, policy, {}));
+  sequant::eval::ScopeBlock const* w_block = nullptr;
+  std::function<void(sequant::eval::ScopeBlock const&)> const find_w =
+      [&](sequant::eval::ScopeBlock const& b) {
+        for (auto const& st : b.steps) {
+          if (auto const* bs = std::get_if<sequant::eval::BuildStep>(&st.value);
+              bs && bs->value_id == *w_vid)
+            w_block = &b;
+          if (auto const* child =
+                  std::get_if<sequant::eval::ScopeBlock>(&st.value))
+            find_w(*child);
+        }
+      };
+  find_w(ordered.root);
+  REQUIRE(w_block != nullptr);
+  CHECK(w_block->level.depth == 1);
+  CHECK(w_block->axis.basis().base_key() == L"a");
+  CHECK(std::count_if(w_block->outputs.begin(), w_block->outputs.end(),
+                      [&](auto const& o) {
+                        return o.first == *w_vid &&
+                               o.second ==
+                                   sequant::eval::OutputKind::AccumulateScatter;
+                      }) == 1);
+  CHECK(std::any_of(
+      w_block->steps.begin(), w_block->steps.end(), [&](auto const& st) {
+        auto const* bs = std::get_if<sequant::eval::BuildStep>(&st.value);
+        return bs && bs->value_id == *lockstep_reader;
+      }));
+
+  // The cell table is built and validated before any replay; then the
+  // zero-data replay itself must run.
+  auto const cm =
+      std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+  auto cache = sequant::cache_manager(forest);
+  auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  cache.set_array_ops(&aops);
+  REQUIRE_NOTHROW((void)sequant::eval::evaluate_ordered_multiroot(
+      forest, ordered, rich, {""},
+      sequant::eval::dryrun::DryRunLeafEvaluator{cm}, cache, target));
 }

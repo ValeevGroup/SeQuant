@@ -124,10 +124,7 @@ sequant::eval::CellTable make_sum_table() {
 }
 }  // namespace
 
-TEST_CASE(
-    "cell table validator: a sum assemble requires its source's "
-    "partial_over to record the closing instance, and the same value_id",
-    "[cell_table]") {
+TEST_CASE("validator-sum-assemble", "[cell_table]") {
   using namespace sequant::eval;
   {
     auto const t = make_sum_table();
@@ -154,18 +151,14 @@ TEST_CASE(
   }
 }
 
-TEST_CASE("cell table validator: a consistent two-level table is valid",
-          "[cell_table]") {
+TEST_CASE("validator-consistent-table", "[cell_table]") {
   auto const t = make_two_level_table();
   auto const v = validate_cell_table(t, empty_root());
   for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
   CHECK(v.empty());
 }
 
-TEST_CASE(
-    "cell table validator: a read of a non-resident cell is a "
-    "visibility violation",
-    "[cell_table]") {
+TEST_CASE("validator-visibility", "[cell_table]") {
   auto t = make_two_level_table();
   // the root consumer reads the INNER per-batch cell (1) instead of the
   // assembled form (2): not resident at root
@@ -177,8 +170,7 @@ TEST_CASE(
   CHECK(v.front().rule == "visibility");
 }
 
-TEST_CASE("cell table validator: life must equal the read count",
-          "[cell_table]") {
+TEST_CASE("validator-life-read-count", "[cell_table]") {
   auto t = make_two_level_table();
   t.cells[2].life = 5;
   auto const v = validate_cell_table(t, empty_root());
@@ -186,10 +178,7 @@ TEST_CASE("cell table validator: life must equal the read count",
   CHECK(v.front().rule == "life");
 }
 
-TEST_CASE(
-    "cell table validator: an assemble whose source is not sliced "
-    "by the assembled instance is a chain violation",
-    "[cell_table]") {
+TEST_CASE("validator-assemble-source-chain", "[cell_table]") {
   auto t = make_two_level_table();
   t.cells[1].sliced.clear();  // source no longer sliced by (1,0)
   auto const v = validate_cell_table(t, empty_root());
@@ -197,10 +186,7 @@ TEST_CASE(
   CHECK(v.front().rule == "chain");
 }
 
-TEST_CASE(
-    "cell table validator: two Build cells of one value in one scope "
-    "is a uniqueness violation",
-    "[cell_table]") {
+TEST_CASE("validator-build-uniqueness", "[cell_table]") {
   auto t = make_two_level_table();
   t.cells.push_back(t.cells[3]);  // second root Build of value 2
   auto const v = validate_cell_table(t, empty_root());
@@ -208,10 +194,7 @@ TEST_CASE(
   CHECK(v.back().rule == "uniqueness");
 }
 
-TEST_CASE(
-    "cell table validator: operands bound to different instances of "
-    "one loop group is a form violation",
-    "[cell_table]") {
+TEST_CASE("validator-form-mismatch", "[cell_table]") {
   using namespace sequant::eval;
   CellTable t;
   TableCell a;  // value 0, sliced by (1,0)
@@ -248,10 +231,7 @@ TEST_CASE(
   CHECK(visibility);   // cell 1 lives in (1,1), not visible inside (1,0)
 }
 
-TEST_CASE(
-    "cell table validator: an explicitly invariant read is not a form "
-    "mismatch, but the same read without the marker is",
-    "[cell_table]") {
+TEST_CASE("validator-invariant-read", "[cell_table]") {
   using namespace sequant::eval;
   CellTable t;
   TableCell a;  // value 0, sliced by (1,0)
@@ -308,10 +288,7 @@ TEST_CASE(
   }
 }
 
-TEST_CASE(
-    "cell table: a whole Assemble is resident at root; a plain Build inside "
-    "a loop is confined to its own scope regardless of persistent",
-    "[cell_table]") {
+TEST_CASE("assemble-and-build-residency", "[cell_table]") {
   using namespace sequant::eval;
 
   // valid: a whole Assemble (kind Assemble, bound to none of its own
@@ -389,10 +366,7 @@ TEST_CASE(
   }
 }
 
-TEST_CASE(
-    "cell table validator: life weighs a read by the consumer's extra "
-    "batches against the SOURCE'S RESIDENCY scope, not its raw scope",
-    "[cell_table]") {
+TEST_CASE("validator-life-weighting", "[cell_table]") {
   using namespace sequant::eval;
   auto const n_batches_of = [](LoopKey const& k) -> std::size_t {
     return k.depth == 1 ? 3 : 1;
@@ -525,10 +499,7 @@ TEST_CASE("cell table: empty table and out-of-range read ids", "[cell_table]") {
   }
 }
 
-TEST_CASE(
-    "cell table validator: the form rule covers every instance the consumer "
-    "is BOUND to, a partial sum over a loop included",
-    "[cell_table]") {
+TEST_CASE("validator-form-bound-instances", "[cell_table]") {
   using namespace sequant::eval;
   // value 2 is a partial sum over loop (1,0) -- it slices no position of its
   // own, so only partial_over records the binding. Its two operands: value 0,
@@ -586,10 +557,7 @@ TEST_CASE(
   }
 }
 
-TEST_CASE(
-    "cell table validator: two legs of one consumer reading one value are "
-    "two reads",
-    "[cell_table]") {
+TEST_CASE("validator-two-legs", "[cell_table]") {
   using namespace sequant::eval;
   // value 1 = value 0 contracted with itself: one consumer, one source, TWO
   // reads (the runtime accesses the source's home once per leg).
@@ -621,8 +589,7 @@ TEST_CASE(
   }
 }
 
-TEST_CASE("cell table validator: a read of a partial sum is a chain violation",
-          "[cell_table]") {
+TEST_CASE("validator-partial-sum-read", "[cell_table]") {
   using namespace sequant::eval;
   auto t = make_sum_table();
   // a root Build reads the PARTIAL (cell 0) instead of its assembled form.
@@ -642,10 +609,7 @@ TEST_CASE("cell table validator: a read of a partial sum is a chain violation",
   CHECK(n_other == 0);
 }
 
-TEST_CASE(
-    "cell table validator: a scatter assemble with an empty map, and an "
-    "assemble that does not enclose its source, are chain violations",
-    "[cell_table]") {
+TEST_CASE("validator-scatter-empty-map", "[cell_table]") {
   using namespace sequant::eval;
   {
     auto t = make_two_level_table();
@@ -669,10 +633,7 @@ TEST_CASE(
   }
 }
 
-TEST_CASE(
-    "cell table validator: a produced cell nobody reads is a life violation "
-    "unless it sits at the root scope",
-    "[cell_table]") {
+TEST_CASE("validator-unread-cell", "[cell_table]") {
   using namespace sequant::eval;
   {
     // an extra Build inside (1,0) that no read and no Assemble consumes
@@ -752,10 +713,7 @@ sequant::eval::CellTable make_level_skipping_chain_table() {
 }
 }  // namespace
 
-TEST_CASE(
-    "cell table validator: an escape chain may skip a level the value is "
-    "invariant to, but every link must strictly enclose its source",
-    "[cell_table]") {
+TEST_CASE("validator-escape-skip-level", "[cell_table]") {
   using namespace sequant::eval;
   {
     auto const t = make_level_skipping_chain_table();
@@ -785,10 +743,7 @@ TEST_CASE(
 // on the loop group either way, so neither consumer sees a whole operand
 // against a bound one.
 // ===========================================================================
-TEST_CASE(
-    "cell table validator: two consumers may bind DIFFERENT positions of one "
-    "shared value to one loop instance",
-    "[cell_table]") {
+TEST_CASE("validator-bind-positions", "[cell_table]") {
   using namespace sequant::eval;
   CellTable t;
   // cell 0: the shared value 0, produced WHOLE at the root (a leaf-like

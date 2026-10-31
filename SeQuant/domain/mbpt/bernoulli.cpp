@@ -81,7 +81,7 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
 bool is_N_term(const sequant::ExprPtr& term, std::size_t cutoff,
                std::size_t min_rank) {
   using namespace sequant;
-  auto isr = get_default_context().index_basis_registry();
+  auto ibr = get_default_context().index_basis_registry();
 
   const auto* nop = find_nop(term);
   if (!nop) return false;
@@ -93,12 +93,12 @@ bool is_N_term(const sequant::ExprPtr& term, std::size_t cutoff,
 
   auto all_unocc = [&](auto&& ops) {
     return ranges::all_of(ops, [&](const auto& o) {
-      return isr->is_pure_unoccupied(o.index().space());
+      return ibr->is_pure_unoccupied(o.index().space());
     });
   };
   auto all_occ = [&](auto&& ops) {
     return ranges::all_of(ops, [&](const auto& o) {
-      return isr->is_pure_occupied(o.index().space());
+      return ibr->is_pure_occupied(o.index().space());
     });
   };
 
@@ -228,8 +228,8 @@ namespace {
 /// Core of expand_to_blocks for input already in wick_reduce'd form; reducing
 /// again would be an identity. @p expr is not mutated.
 ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
-  auto isr = get_default_context().index_basis_registry();
-  const auto& bases = isr->base_spaces();
+  auto ibr = get_default_context().index_basis_registry();
+  const auto& bases = ibr->base_spaces();
 
   auto is_base_space = [&](const IndexSpace& sp) {
     return ranges::any_of(bases, [&](const auto& b) { return b == sp; });
@@ -238,8 +238,8 @@ ExprPtr expand_to_blocks_reduced(const ExprPtr& expr) {
   // Split each general index over the hole and particle base spaces only; see
   // the @warning on hbar for the others. 2-way per index instead of 4-way,
   // which compounds across the nested commutators.
-  const auto& hole_t = isr->hole_space();
-  const auto& particle_t = isr->particle_space();
+  const auto& hole_t = ibr->hole_space();
+  const auto& particle_t = ibr->particle_space();
   auto physical = [&](const IndexSpace& b) {
     return hole_t.includes(b.type()) || particle_t.includes(b.type());
   };

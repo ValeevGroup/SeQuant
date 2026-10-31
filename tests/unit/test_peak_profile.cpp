@@ -208,10 +208,7 @@ TEST_CASE("cell_footprint sizes enclosing-home modes at BLOCK, others FULL",
   }
 }
 
-TEST_CASE(
-    "cell_footprint no longer doubles a divergent-mode home (the 2x fudge is "
-    "gone; divergent_modes is informational)",
-    "[peak_profile]") {
+TEST_CASE("footprint-no-divergent-double", "[peak_profile]") {
   // The flat 2x pricing fudge (placeholder 46b495eba) is DELETED: a divergent
   // value homed at a sub-scope is UN-FOLDED into two real, non-divergent
   // ValueCells, each priced ONCE here at its own home; peak co-residency is
@@ -403,9 +400,7 @@ TEST_CASE(
   }
 }
 
-TEST_CASE(
-    "peak_profile_replay == sweep with a DEMOTED value (empty cross-occ meet)",
-    "[peak_profile]") {
+TEST_CASE("replay-demoted", "[peak_profile]") {
   // The core O3b demoted case: an internal value V occurs TWICE.
   //   - In tree 1, V sits under a parent P that realizes an External i_1 loop.
   //     stamp_lifetime_masks accumulates i_1 down to V, and i_1 is one of V's
@@ -421,7 +416,9 @@ TEST_CASE(
   auto make_V = [] {
     return inode("V{i_1;i_2}", leaf("V1{i_1;x_1}"), leaf("V2{x_1;i_2}"));
   };
-  auto P = inode("P{i_2;a_1}", make_V(), leaf("W{i_1;a_1}"));
+  // P carries i_1, as an External open site must: the DP opens an external
+  // loop only at a node that carries its mode.
+  auto P = inode("P{i_1,i_2;a_1}", make_V(), leaf("W{i_1;a_1}"));
   stamp_ext(P, Index{L"i_1"});  // realized i_1 loop above V in tree 1
   auto Q = inode("Q{i_1;i_2}", make_V(), leaf("U{i_2;i_1}"));  // no loop
 
@@ -460,7 +457,8 @@ SizeRegime anchor_regime() {
   SizeRegime r;
   r.space_extent = {{L"i", 10}, {L"a", 20}};
   double const pno = 4.0;
-  for (std::size_t k = 0; k <= 4; ++k) r.csv_pno_moment[k] = std::pow(pno, k);
+  for (std::size_t k = 0; k <= sequant::eval::dryrun::kMaxCompositeGroup; ++k)
+    r.csv_pno_moment[k] = std::pow(pno, k);
   r.csv_osv_moment = r.csv_pno_moment;
   return r;
 }
@@ -608,10 +606,7 @@ void check_split_propagates(std::vector<EvalNode<EvalExpr>> const& forest,
   CHECK(produced == expected_produced);
 }
 
-TEST_CASE(
-    "compute_dag_boulevard opens separate cells for two values that COLLIDE "
-    "on the value key",
-    "[peak_profile][value-cell]") {
+TEST_CASE("boulevard-key-collision-operands", "[peak_profile][value-cell]") {
   // The grouping used to be `hash_to_cell.find(r.key)` alone: a bucket hit on
   // the 64-bit value key WAS identity. Two distinct values colliding there
   // would merge into one ValueCell, and the schedule would then build one of
@@ -639,10 +634,7 @@ TEST_CASE(
   check_split_propagates({X, Y}, 6, collide);
 }
 
-TEST_CASE(
-    "compute_dag_boulevard separates key-colliding values with IDENTICAL "
-    "operands",
-    "[peak_profile][value-cell]") {
+TEST_CASE("boulevard-key-collision-identical", "[peak_profile][value-cell]") {
   // The companion case: the two colliding products contract the SAME two
   // leaves, so they fold to the same child CELLS and the same (empty)
   // loop_slot / reduced_slot -- every cheap discriminator ties, and only
@@ -666,8 +658,7 @@ TEST_CASE(
 TEST_CASE("the value->node bridges hold the FOREST's nodes, not copies of them",
           "[peak_profile][value-node-map]") {
   // Deliverable of the pointer conversion, pinned in a test that RUNS by
-  // default (the deep-spine case that carries the memory numbers is hidden
-  // behind [.]). ValueNodeMap holds `Node const*`; an entry must therefore BE
+  // default. ValueNodeMap holds `Node const*`; an entry must therefore BE
   // the address of the forest node it was built from. A by-value map -- the
   // shape this replaced, whose entries were deep copies of whole subtrees --
   // cannot satisfy this, and cannot even compile against it.
@@ -696,10 +687,8 @@ TEST_CASE("the value->node bridges hold the FOREST's nodes, not copies of them",
   CHECK(&vmap.at(sequant::value_key_of(root.left()))->parent() == &root);
 }
 
-TEST_CASE(
-    "the ordered prepasses walk a deep Sum spine without overflowing the "
-    "stack",
-    "[.][peak_profile][stack-safety]") {
+#ifndef SEQUANT_SKIP_LONG_TESTS
+TEST_CASE("prepass-deep-sum", "[peak_profile][stack-safety]") {
   // An equation's residual/energy reaches the ordered path as a SINGLE
   // in-place Sum tree with one node per summand, so its LEFT SPINE is as deep
   // as the number of terms -- thousands for a large equation. Every prepass
@@ -707,8 +696,6 @@ TEST_CASE(
   // executor itself already does); a recursive descent overflows the call
   // stack long before the executor is reached.
   //
-  // Hidden ([.]) only because 40000 nodes cost ~4 GB to hold; the walks
-  // themselves are sub-second. Run it by name or by [stack-safety];
   // SEQUANT_UT_SPINE_N overrides the depth.
   //
   // build_value_node_map / build_value_key_node_map are covered here too (see
@@ -776,3 +763,4 @@ TEST_CASE(
   CHECK(vmap.at(sequant::value_key_of(forest.front())) == &forest.front());
   CHECK(vkmap.at(sequant::value_key_of(forest.front())) == &forest.front());
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)

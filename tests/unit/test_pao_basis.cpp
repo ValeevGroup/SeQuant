@@ -24,9 +24,9 @@ constexpr std::size_t n_pao = 300;
 /// the CSV-CCSD registry with the AO (and so the PAO) extent set; sized before
 /// a Context adopts it, since a registry inside a Context is immutable
 std::shared_ptr<IndexBasisRegistry> sized_registry() {
-  auto isr = csv::csv_cc_registry();
-  isr->extent(L"μ", n_pao);
-  return isr;
+  auto ibr = csv::csv_cc_registry();
+  ibr->extent(L"μ", n_pao);
+  return ibr;
 }
 
 /// csv_cc_context over the sized registry, with tmp ordinals allowed in parsed
@@ -44,14 +44,14 @@ std::vector<ExprPtr> derive() {
   auto mbpt_ctx = mbpt::set_scoped_default_mbpt_context(
       mbpt::Context({.csv = mbpt::CSV::Yes,
                      .op_registry_ptr = csv::granted_registry({{L"t", 0}})}));
-  const auto& isr = get_default_context().index_basis_registry();
+  const auto& ibr = get_default_context().index_basis_registry();
   Index::reset_tmp_index();
   std::vector<ExprPtr> out;
   for (auto const& eq : mbpt::CC{2}.t(2, 0)) {
     ExprPtr e = mbpt::closed_shell_CC_spintrace(
         eq, {.method = mbpt::BiorthogonalizationMethod::V1});
-    e = mbpt::density_fit(e, isr->retrieve_space(L"Κ"), L"g", L"g");
-    e = mbpt::csv_transform(e, isr->retrieve(L"μ̃"));
+    e = mbpt::density_fit(e, ibr->retrieve_space(L"Κ"), L"g", L"g");
+    e = mbpt::csv_transform(e, ibr->retrieve(L"μ̃"));
     flatten(e);
     out.push_back(e);
   }
@@ -62,14 +62,13 @@ std::vector<ExprPtr> derive() {
 TEST_CASE("pao-named-basis", "[mbpt][csv][basis][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::tests::pao;
-  const auto eqs = derive();
-  REQUIRE(eqs.size() == 3);
-
   const Context ctx = gate_context();
   const IndexBasis pao = ctx.index_basis_registry()->retrieve(L"μ̃");
   auto scoped = set_scoped_default_context(ctx);
 
   SECTION("round trip and metadata") {
+    const auto eqs = derive();
+    REQUIRE(eqs.size() == 3);
     for (auto const& e : eqs) CHECK(deserialize<ExprPtr>(serialize(e)) == e);
     CHECK(Index(L"μ̃_3") == Index(pao, 3));
     CHECK(Index(pao, 3).full_label() == L"μ̃_3");

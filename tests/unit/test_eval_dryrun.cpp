@@ -39,6 +39,8 @@
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 
+#include "csv_size_fixtures.hpp"
+
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/context.hpp>
@@ -93,6 +95,8 @@
 #include <vector>
 
 using namespace sequant;
+using sequant::eval::dryrun::kMaxCompositeGroup;
+using sequant::eval::dryrun::MomentTable;
 using sequant::eval::dryrun::SizeRegime;
 
 namespace {
@@ -117,7 +121,7 @@ SizeRegime probe_regime() {
   };
   // CC-average PNO ~58, OSV ~20 (order-of-magnitude stand-ins; see report).
   double const pno = 58.0, osv = 20.0;
-  for (std::size_t k = 0; k <= 4; ++k) {
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
     r.csv_pno_moment[k] = std::pow(pno, double(k));
     r.csv_osv_moment[k] = std::pow(osv, double(k));
   }
@@ -169,13 +173,13 @@ TEST_CASE("dryrun size regime basic extents", "[dryrun-probe]") {
 TEST_CASE("dryrun size regime keys a named basis by its label",
           "[dryrun][sizing][basis]") {
   using namespace sequant;
-  auto isr = mbpt::make_min_sr_spaces();
-  const IndexSpace a = isr->retrieve_space(L"a");
+  auto ibr = mbpt::make_min_sr_spaces();
+  const IndexSpace a = ibr->retrieve_space(L"a");
   constexpr IndexBasis::instance_type P =
       std::numeric_limits<IndexBasis::instance_type>::max();
-  isr->add(L"μ̃", IndexBasis{a, P});  // before the Context adopts the registry
+  ibr->add(L"μ̃", a, P);  // before the Context adopts the registry
   auto ctx = set_scoped_default_context(
-      Context({.index_basis_registry_shared_ptr = std::move(isr),
+      Context({.index_basis_registry_shared_ptr = std::move(ibr),
                .vacuum = Vacuum::SingleProduct}));
   const auto& registry = *get_default_context().index_basis_registry();
   eval::dryrun::SizeRegime r;
@@ -190,6 +194,51 @@ TEST_CASE("dryrun size regime keys a named basis by its label",
   CHECK(r.extent(unnamed) == 40);
   CHECK(r.slice_extents(pao).size() == 3);
   CHECK(r.slice_extents(virt).empty());
+}
+
+TEST_CASE("dryrun size regime prices a composite by its basis instance",
+          "[dryrun][sizing][basis]") {
+  using namespace sequant;
+  eval::dryrun::SizeRegime r;
+  r.space_extent = {{L"i", 10u}, {L"a", 300u}};
+  eval::dryrun::SizeRegime::CsvMomentTables perturbed;
+  // every table varies with k, so a check also pins the column it reads
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
+    auto const dk = static_cast<double>(k);
+    r.csv_pno_moment[k] = 14.0 + dk;
+    r.csv_osv_moment[k] = 9.0 + dk;
+    perturbed.pno[k] = 19.0 + dk;
+    perturbed.osv[k] = 12.0 + dk;
+    perturbed.by_rank[3][k] = 25.0 + dk;
+  }
+  constexpr IndexBasis::instance_type P = 10;
+  const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3"), i4(L"i_4");
+  r.csv_moment_by_instance[eval::dryrun::SizeRegime::csv_basis_key(
+      Index(L"a_1").space(), P)] = perturbed;
+  const Index pno(L"a_1", {i1, i2}), osv(L"a_2", {i1}),
+      triple(L"a_3", {i1, i2, i3}), quad(L"a_4", {i1, i2, i3, i4});
+  // no instance: the default tables
+  CHECK(r.inner_pow(pno, 2) == Catch::Approx(16.0));
+  CHECK(r.inner_pow(osv, 1) == Catch::Approx(10.0));
+  CHECK(r.inner_pow(triple, 1) == Catch::Approx(15.0));
+  CHECK(r.inner_pow(quad, 3) == Catch::Approx(17.0));
+  // the listed instance: its own tables, rank dispatch included
+  CHECK(r.inner_pow(pno.replace_basis_instance(P), 2) == Catch::Approx(21.0));
+  CHECK(r.inner_pow(osv.replace_basis_instance(P), 1) == Catch::Approx(13.0));
+  CHECK(r.inner_pow(triple.replace_basis_instance(P), 1) ==
+        Catch::Approx(26.0));
+  // a rank without a table of its own falls back to the instance's PNO table,
+  // not to the default one
+  CHECK(r.inner_pow(quad.replace_basis_instance(P), 3) == Catch::Approx(22.0));
+  // an instance that is not listed: the default tables
+  CHECK(r.inner_pow(pno.replace_basis_instance(P + 1), 2) ==
+        Catch::Approx(16.0));
+  // the same instance number of another space is another basis instance
+  CHECK(r.inner_pow(Index(L"p_1", {i1, i2}).replace_basis_instance(P), 2) ==
+        Catch::Approx(16.0));
+  // a plain index is sized by its space extent whatever its instance
+  CHECK(r.inner_pow(Index(L"a_5").replace_basis_instance(P), 2) ==
+        Catch::Approx(9.0e4));
 }
 
 TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
@@ -239,14 +288,56 @@ TEST_CASE("dryrun regime self-consistency (no cluster anchors needed)",
 // raw moments would be caught even though the CURRENT SizeRegime factories
 // in this file (probe_regime/df_regime) all use a constant domain, for which
 // M_k == d for every k and the bug would otherwise be invisible.
+// SizeRegime::extent is the integer extent of a proto-FREE index; a composite
+// (proto-indexed CSV/PNO index) is sized by inner_pow and has no integer
+// extent, so asking for one is refused rather than answered with the extent
+// registered under the composite's base key (which names the space it is
+// expanded in, e.g. the PAO count, not its size).
+// A group of more than four composites on one cluster is priced by its own
+// column, p * M_k^k, not by reusing column 4 (which under-priced it by
+// p^((k - 4)/4)); a group beyond the table is an error, not an extrapolation.
+TEST_CASE("regime-max-composite-group", "[dryrun][sizing][extent-contract]") {
+  SizeRegime r;
+  r.space_extent = {{L"i", 10u}};
+  double const p = 0.25;
+  for (std::size_t k = 1; k <= kMaxCompositeGroup; ++k)
+    r.csv_pno_moment[k] = std::pow(p, 1.0 / double(k)) * (20.0 + 2.0 * k);
+  Index const i1(L"i_1"), i2(L"i_2");
+  Index const a(L"a_1", {i1, i2});
+  for (std::size_t k = 1; k <= kMaxCompositeGroup; ++k) {
+    double prod = 1.0;
+    for (std::size_t m = 0; m < k; ++m) prod *= r.inner_pow(a, k);
+    CHECK(prod == Catch::Approx(p * std::pow(20.0 + 2.0 * k, double(k))));
+  }
+  CHECK_THROWS_AS(r.inner_pow(a, kMaxCompositeGroup + 1), sequant::Exception);
+  CHECK_THROWS_AS(r.inner_pow(a, 0), sequant::Exception);
+  // a plain index is unaffected by the table bound
+  CHECK(r.inner_pow(i1, 5) == Catch::Approx(1e5));
+}
+
+TEST_CASE("SizeRegime refuses the integer extent of a composite",
+          "[dryrun][sizing][extent-contract]") {
+  SizeRegime r;
+  r.space_extent = {{L"i", 10u}, {L"a", 300u}};
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k)
+    r.csv_pno_moment[k] = 7.0;
+  Index const i1(L"i_1"), i2(L"i_2");
+  Index const a_i1i2(L"a_1", {i1, i2});
+  CHECK(r.extent(i1) == 10);
+  CHECK_THROWS_AS(r.extent(a_i1i2), sequant::Exception);
+  CHECK_THROWS_AS(r.idx_to_extent()(a_i1i2), sequant::Exception);
+  CHECK(r.inner_pow(a_i1i2, 1) == Catch::Approx(7.0));
+}
+
 TEST_CASE("dryrun power-mean sizing contract", "[dryrun][sizing]") {
   // Heavy-tailed PNO domain: power means strictly increasing in k.
   // (For any non-degenerate distribution, M_1 < M_2 < M_3 < M_4 by Jensen.)
   SizeRegime r;
   const std::size_t occ = 10;
   r.space_extent[L"i"] = occ;  // occupied index extent
-  const std::array<double, 5> Mk{1.0, 30.0, 40.0, 55.0, 75.0};  // M_0..M_4
-  for (std::size_t k = 0; k <= 4; ++k) {
+  // M_0..M_8 (heavy tail, non-decreasing)
+  const MomentTable Mk{1.0, 30.0, 40.0, 55.0, 75.0, 90.0, 100.0, 108.0, 115.0};
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
     r.csv_pno_moment[k] = Mk[k];
     r.csv_osv_moment[k] = Mk[k];
   }
@@ -284,7 +375,7 @@ TEST_CASE("dryrun power-mean sizing contract", "[dryrun][sizing]") {
 // behavior where every proto-rank >= 2 used the PNO table).
 TEST_CASE("dryrun rank-general CSV moment dispatch", "[dryrun][sizing]") {
   SizeRegime r;
-  for (std::size_t k = 0; k <= 4; ++k) {
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k) {
     r.csv_osv_moment[k] = 3.0;   // rank-1 table (flat, distinct value)
     r.csv_pno_moment[k] = 30.0;  // rank-2 table (flat, distinct value)
   }
@@ -340,65 +431,31 @@ namespace {
 // ...) sizes a k-composite group as mean(d^k), the true block-sparse volume.
 // pno_M[k]/osv_M[k] for k in [1,4]; index 0 unused (kept 1). Rank >= 3
 // (CSV-CCSDT) is not populated here (CCSD is ranks 1-2).
-SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux, std::size_t i_occ,
-                     std::array<double, 5> const& pno_M,
-                     std::array<double, 5> const& osv_M) {
-  SizeRegime r;
-  r.space_extent = {
-      {L"i", i_occ},
-      {L"μ̃", mu_tilde},
-      {L"Κ", aux},
-      {L"a", mu_tilde},
-  };
-  r.csv_pno_moment = pno_M;
-  r.csv_osv_moment = osv_M;
-  return r;
+// The named problem sizes (kWater20_pVDZF12, kC60_pVDZF12), their provenance
+// and the occupancy adjustment mpqc applies to the moment tables live in
+// csv_size_fixtures.hpp; the aliases below keep this file's historical names.
+using sequant::tests::csv_sizes::occupancy_adjusted_moments;
+using ProblemSize = sequant::tests::csv_sizes::CsvProblemSize;
+inline constexpr auto const& kC60_pVDZF12 =
+    sequant::tests::csv_sizes::kC60_pVDZF12;
+inline constexpr auto const& kWater20_pVDZF12 =
+    sequant::tests::csv_sizes::kWater20_pVDZF12;
+
+// Regime for the post-transform (mu~ + K) residual from explicit extents and
+// moments (occupancy 1 unless given): see df_size_regime for the shape.
+[[maybe_unused]] SizeRegime df_regime(std::size_t mu_tilde, std::size_t aux,
+                                      std::size_t i_occ,
+                                      MomentTable const& pno_M,
+                                      MomentTable const& osv_M,
+                                      double pno_occupancy = 1.0,
+                                      double osv_occupancy = 1.0) {
+  return sequant::tests::csv_sizes::df_size_regime(ProblemSize{
+      mu_tilde, aux, i_occ, pno_M, osv_M, pno_occupancy, osv_occupancy});
 }
-
-// One named (molecule, basis, parameter-set) problem size for the DryRun cost
-// model: base-space extents + the measured heavy-tailed CSV power means. Single
-// source of truth -- use df_regime(kFoo) at every call site instead of
-// repeating the literals, so a moment re-measurement is a one-line edit.
-struct ProblemSize {
-  std::size_t mu_tilde;         // PAO domain extent (= #AO)
-  std::size_t aux;              // DF aux (K) extent
-  std::size_t i_occ;            // active occupied extent
-  std::array<double, 5> pno_M;  // per-pair PNO power means M_0..M_4 (0 unused)
-  std::array<double, 5> osv_M;  // per-orbital OSV power means M_0..M_4
-};
-
-// C60, cc-pVDZ-F12, TCUTPNO=1e-8 / TCUTOSV=1e-9. Extents from the Owl job log;
-// PNO/OSV power means M_1..M_4 measured by mpqc PaoPnoRMP2 (job 617809 -- the
-// TRUE pVDZ-F12 values; NOTE the earlier 48.60/64.35 PNO + 206/234 OSV numbers
-// were from job 617653, which was mis-configured with an aug-cc-pVTZ OBS).
-inline constexpr ProblemSize kC60_pVDZF12{
-    /*mu_tilde=*/1800u,
-    /*aux=*/4320u,
-    /*i_occ=*/120u,
-    /*pno_M=*/
-    {1.0, 42.029069767441861, 46.039206412923569, 49.766252354482994,
-     53.151291880343109},
-    /*osv_M=*/
-    {1.0, 148.25, 155.04434849422921, 161.33527408797721, 166.85553430303926}};
-
-// Water-20 (H2O)20 / cc-pVDZ-F12, extracted from Owl job 649160:
-//   ext(i)=80 (active occ), ext(K)=1682 (DF aux; from g(i,i,K)=86.1MB),
-//   ext(mu~)=896 (PAO; from g(mu~,mu~,K)=10.8GB), and the measured heavy-tailed
-//   CSV moments (PNO M_1..M_4 per pair, OSV M_1..M_4 per orbital).
-inline constexpr ProblemSize kWater20_pVDZF12{
-    /*mu_tilde=*/896u,
-    /*aux=*/1682u,
-    /*i_occ=*/80u,
-    /*pno_M=*/
-    {1.0, 23.175775480059084, 25.865548281212597, 28.171416142614103,
-     30.03848680550367},
-    /*osv_M=*/
-    {1.0, 58.987499999999997, 59.289227520688783, 59.584437469011633,
-     59.872014818179686}};
 
 // Build a SizeRegime from a named ProblemSize.
 SizeRegime df_regime(ProblemSize const& p) {
-  return df_regime(p.mu_tilde, p.aux, p.i_occ, p.pno_M, p.osv_M);
+  return sequant::tests::csv_sizes::df_size_regime(p);
 }
 
 // Batchable = the two modes mpqc's runtime batches on the CSV path: PAO (mu~)
@@ -412,7 +469,7 @@ bool is_df_batchable(Index const& ix) {
 
 }  // namespace
 
-// Diagnostic ([.]): does the order-aware ordered-key DP actually ENGAGE on the
+// Diagnostic: does the order-aware ordered-key DP actually ENGAGE on the
 // real C60 giant, or does build_cells' m>7 fallback (enumeration blowup guard)
 // make it inert? Prints m (# batchable indices), ordered, nCells. Fast: only
 // Regression (fast, no DP solve): is_valid must ACCEPT a CSV (proto-indexed)
@@ -565,8 +622,7 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
 // contraction, binarize's node_counter == node_batch_axes.size() assertion
 // aborts. Mirrors MPQC's path: DenseTimeSpaceBatched optimize + head-pinned
 // binarize with the CSV rank-1 residual head R{a<i>;i}.
-TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
-          "[optimize][batch][r1-offbyone]") {
+TEST_CASE("node-axes-match-binarize", "[optimize][batch][r1-offbyone]") {
   using namespace sequant;
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
@@ -632,7 +688,7 @@ TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
 
 // build_context, no DP solve.
 TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
-          "[.][ordered-key-c60-m]") {
+          "[ordered-key-c60-m]") {
   using namespace sequant;
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
@@ -669,183 +725,11 @@ TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
              << ctx.nCells << L" (nB=" << ctx.nB << L")\n";
 }
 
-// Diagnostic + regression ([.]): scan EVERY summand of the C60 CSV-CCSD doubles
-// residual under the batching configuration recommended for deployment, and
-// report the modeled peak per term.
-//
-// Configuration (see the role-based batchability control):
-//   - PAOs (mu~) are NOT batchable at all;
-//   - the DF aux (K) is batchable in the CONTRACTED role;
-//   - the occupied space is batchable in BOTH roles. Admitting its CONTRACTED
-//     occurrences is what controls the g.g-over-K intermediates
-//     (mu~,i3,mu~,i4): with external-occ only, those plateau at a ~391 GB floor
-//     that NO occ block size can reach, because i3,i4 occur contracted there.
-//     Re-admitting them brings the whole residual under budget.
-//
-// A correct inner_pow (CSV composite sizing) is REQUIRED: without it composites
-// size at their base PAO extent and the factorization inverts (4-PAO integral).
-TEST_CASE("C60 residual peak per summand under the recommended batching",
-          "[.][occ-driver-scan]") {
-  using namespace sequant;
-  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
-
-  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                          "/data/csv_ccsd_doubles_residual_df.txt");
-  REQUIRE(!body.empty());
-  std::string line = body;
-  if (auto nl = line.find('\n'); nl != std::string::npos)
-    line = line.substr(0, nl);
-  auto expr = deserialize<ExprPtr>(line);
-  REQUIRE(expr);
-  REQUIRE(expr->is<Sum>());
-  auto const& summands = expr->as<Sum>().summands();
-
-  auto regime = df_regime(kC60_pVDZF12);
-  auto idxsz = regime.idx_to_extent();
-  auto inner_pow = regime.inner_pow_fn();
-  std::function<bool(Tensor const&)> is_vol = [](Tensor const& t) {
-    return t.label() == L"t";
-  };
-  // aux + occ are contracted-batchable; PAOs are not batchable at all.
-  auto is_batchable_contracted = [](Index const& ix) {
-    auto const k = ix.basis().base_key();
-    return k == L"Κ" || k == L"i";  // DF aux (Greek Kappa) + occupied
-  };
-  // occ is additionally batchable in the external (spectator) role.
-  std::function<bool(Index const&)> is_batchable_external =
-      [](Index const& ix) { return ix.basis().base_key() == L"i"; };
-  std::function<std::size_t(Index const&)> bts =
-      [](Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"i" ? std::size_t{8} : std::size_t{72};
-  };
-
-  auto measure = [&](TensorNetwork const& net,
-                     container::svector<Index> const& tgt, bool spectator,
-                     double& flops_out) {
-    opt::detail::PeakBatchedModel model{idxsz, bts, is_vol, inner_pow};
-    model.is_batchable_contracted_index = is_batchable_contracted;
-    model.is_batchable_external_index = is_batchable_external;
-    model.batch_spectator_indices = spectator;
-    model.perf_first = true;
-    model.peak_threshold = 100e9;
-    model.numeric_size = 8.0;
-    auto ctx = model.build_context(net, tgt);
-    auto st = opt::detail::solve_single_term(model, net, tgt, ctx);
-    std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
-    int const best = model.select_root(ctx, st);
-    flops_out = (best >= 0) ? st[root][0][best].flops : 0.0;
-    double pk = 0.0;
-    (void)model.reconstruct_batched_modes(ctx, st, &pk);
-    return pk / 1e9;  // GB
-  };
-
-  double max_on = 0.0, tot_off = 0.0, tot_on = 0.0;
-  std::size_t arg_on = 0;
-  for (std::size_t gi = 0; gi < summands.size(); ++gi) {
-    ExprPtr g = summands[gi];
-    if (g->is<Product>())
-      g = ex<Product>(g->as<Product>().scalar(), g->as<Product>().factors(),
-                      Product::Flatten::Yes);
-    if (!g->is<Product>()) continue;
-    TensorNetwork net(g->as<Product>().factors());
-    container::svector<Index> targets;
-    double f_off = 0.0, f_on = 0.0;
-    double const p_off = measure(net, targets, false, f_off);
-    double const p_on = measure(net, targets, true, f_on);
-    tot_off += f_off;
-    tot_on += f_on;
-    if (p_on > max_on) {
-      max_on = p_on;
-      arg_on = gi;
-    }
-    if (p_off > 50.0 || p_on != p_off)
-      std::wcerr << L"[occ-driver] summand " << gi << L": peak " << p_off
-                 << L" -> " << p_on << L" GB   flops " << f_off << L" -> "
-                 << f_on << L"\n";
-  }
-  std::wcerr << L"[occ-driver] MAX peak=" << max_on << L" GB (summand "
-             << arg_on << L"), budget 100 GB;  total flops " << tot_off
-             << L" -> " << tot_on << L" (added compute "
-             << (tot_off > 0.0 ? (tot_on - tot_off) / tot_off * 100.0 : 0.0)
-             << L"%)\n";
-  // Batching an external/spectator mode is work-neutral: no recompute is added.
-  CHECK(tot_on == tot_off);
-}
-
-// Regression ([.]): the C60 giant (summand 38) is (g.C)(g.C).t where the two
-// DF integrals g share the same aux Κ. Contracting Κ early reconstructs the
-// (μ̃μ̃|μ̃μ̃) 4-PAO integral -- ~1800^4*8 ≈ 84 TB. That factorization ONLY looks
-// competitive when the PNO composites a<i,j> are mis-sized at their base PAO
-// extent (1800) instead of the per-pair PNO domain, i.e. when inner_pow is
-// omitted. With correct inner_pow the DP picks the g.C 3-center path (Κ sliced)
-// and the modeled peak is orders of magnitude below any 4-PAO scale. Guards
-// both: (1) omitting inner_pow now THROWS; (2) with it, no 4-PAO node forms.
-TEST_CASE("no 4-PAO integral with correct composite sizing (C60 giant)",
-          "[.][roofline-4pao]") {
-  using namespace sequant;
-  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
-
-  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                          "/data/csv_ccsd_doubles_residual_df.txt");
-  REQUIRE(!body.empty());
-  std::string line = body;
-  if (auto nl = line.find('\n'); nl != std::string::npos)
-    line = line.substr(0, nl);
-  auto expr = deserialize<ExprPtr>(line);
-  REQUIRE(expr);
-  REQUIRE(expr->is<Sum>());
-  auto const& summands = expr->as<Sum>().summands();
-  std::size_t const gi = 38 < summands.size() ? 38 : 0;
-  ExprPtr giant = summands[gi];
-  if (giant->is<Product>())
-    giant = ex<Product>(giant->as<Product>().scalar(),
-                        giant->as<Product>().factors(), Product::Flatten::Yes);
-  REQUIRE(giant->is<Product>());
-  TensorNetwork net(giant->as<Product>().factors());
-  container::svector<Index> targets;
-
-  auto regime = df_regime(kC60_pVDZF12);
-  auto idxsz = regime.idx_to_extent();
-  std::function<std::size_t(Index const&)> bts = [](Index const& ix) {
-    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
-  };
-  auto is_aux = [](Index const& ix) {
-    return ix.basis().base_key() == L"Κ";  // K only; PAO NOT batchable
-  };
-  std::function<bool(Tensor const&)> is_vol = [](Tensor const& t) {
-    return t.label() == L"t";
-  };
-
-  // (1) Omitting inner_pow on this composite network is now a hard error.
-  {
-    opt::detail::PeakBatchedModel bad{idxsz, bts, is_vol, {}};
-    bad.is_batchable_contracted_index = is_aux;
-    CHECK_THROWS_AS(bad.build_context(net, targets), sequant::Exception);
-  }
-
-  // (2) With correct composite sizing, the DP forms NO 4-PAO integral.
-  opt::detail::PeakBatchedModel model{idxsz, bts, is_vol,
-                                      regime.inner_pow_fn()};
-  model.is_batchable_contracted_index = is_aux;
-  model.perf_first = true;
-  model.volatile_weight = 20.0;
-  model.peak_threshold = std::numeric_limits<double>::infinity();
-  model.numeric_size = 8.0;
-  auto ctx = model.build_context(net, targets);
-  auto st = opt::detail::solve_single_term(model, net, targets, ctx);
-  double peak_bytes = 0.0;
-  (void)model.reconstruct_batched_modes(ctx, st, &peak_bytes);
-  std::wcerr << L"[roofline-4pao] K-only modeled peak=" << (peak_bytes / 1e9)
-             << L" GB (a 4-PAO mu~^4 node would be ~84000 GB)\n";
-  // A μ̃^4 node is 1800^4*8 ≈ 84000 GB; correct sizing keeps the peak far below.
-  CHECK(peak_bytes < 10000e9);
-}
-
-// Hidden ([.]) whole-residual dev sweep (no correctness assertions): optimizes
+#ifndef SEQUANT_SKIP_LONG_TESTS
+// Whole-residual dev sweep (no correctness assertions): optimizes
 // every summand and prints, per term, whether its free-mu~ giant got a mu~/K
-// batch mode or escaped slicing. Select explicitly:
-//   ./unit_tests-sequant "[dryrun-df]"
-TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
+// batch mode or escaped slicing.
+TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[dryrun-df]") {
   // Augment the default mbpt registry with PAO (mu~) and DF-aux (K) so the
   // post-transform fixture deserializes; raise the dummy-ordinal ceiling for
   // mpqc's high internal ordinals (mu~_1152, a_21674, ...).
@@ -958,8 +842,11 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
   auto regime = df_regime(
       /*mu_tilde=*/kC60_pVDZF12.mu_tilde, /*aux=*/kC60_pVDZF12.aux,
       /*i_occ=*/occ_ext,
-      std::array<double, 5>{1.0, pno_mom, pno_m2, pno_m3, pno_m4},
-      std::array<double, 5>{1.0, osv_mom, osv_m2, osv_m3, osv_m4});
+      // M_5..M_8 flat at M_4 (unmeasured; see csv_size_fixtures.hpp)
+      MomentTable{1.0, pno_mom, pno_m2, pno_m3, pno_m4, pno_m4, pno_m4, pno_m4,
+                  pno_m4},
+      MomentTable{1.0, osv_mom, osv_m2, osv_m3, osv_m4, osv_m4, osv_m4, osv_m4,
+                  osv_m4});
   std::wcerr << L"[dryrun-df] moments: PNO M_1..M_4=" << pno_mom << L","
              << pno_m2 << L"," << pno_m3 << L"," << pno_m4 << L"  OSV M_1..M_4="
              << osv_mom << L"," << osv_m2 << L"," << osv_m3 << L"," << osv_m4
@@ -1313,6 +1200,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
   REQUIRE(total_mu_nodes > 0);
   SUCCEED();
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // DryRun eval BACKEND (zero-data Result + eval_expr) and the
@@ -1345,7 +1233,7 @@ SizeRegime backend_test_regime() {
       {L"a", 20},
   };
   double const pno = 4.0;
-  for (std::size_t k = 0; k <= 4; ++k)
+  for (std::size_t k = 0; k <= kMaxCompositeGroup; ++k)
     r.csv_pno_moment[k] = std::pow(pno, double(k));
   r.csv_osv_moment = r.csv_pno_moment;
   return r;
@@ -1452,10 +1340,7 @@ TEST_CASE("dryrun cost model flops and exec_cost are finite/positive",
                      cm.memsize(out)) > 0.0);
 }
 
-TEST_CASE(
-    "dryrun product roofline exec charges both operands and the result, "
-    "order-independently",
-    "[dryrun-costmodel][roofline]") {
+TEST_CASE("roofline-exec-charges", "[dryrun-costmodel][roofline]") {
   // The roofline `traffic` term is the COMPULSORY single-pass data movement of
   // one contraction -- read both operands, WRITE the result -- which is what
   // the optimizer's DP charges (S[lp] + S[rp] + S[n]; PeakModel::relax and
@@ -1558,8 +1443,7 @@ TEST_CASE("dryrun flat result size delegates to cost model",
   CHECK(rt.size_in_bytes() == cm->memsize(idx));
 }
 
-TEST_CASE("dryrun flat result prod yields the result annotation index set",
-          "[dryrun-result]") {
+TEST_CASE("flat-result-prod-annotation", "[dryrun-result]") {
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
   ResultDryRun l{{Index{L"a_3"}, Index{L"i_2"}}, cm};
@@ -1612,8 +1496,7 @@ TEST_CASE("dryrun axis_batches tiles the axis space extent",
   CHECK(batches.back().second == 20);
 }
 
-TEST_CASE("dryrun make_zeros builds a full-extent flat scatter destination",
-          "[dryrun-result][pre-sized]") {
+TEST_CASE("make-zeros-flat", "[dryrun-result][pre-sized]") {
   // The runtime External-mode scatter builds its destination from the node's
   // own (unsliced) index list via BackendArrayOps::make_zeros -- every mode at
   // its space's full extent, a structural fact queryable immediately via
@@ -1633,8 +1516,7 @@ TEST_CASE("dryrun make_zeros builds a full-extent flat scatter destination",
   CHECK(dest->size_in_bytes() == full_bytes);
 }
 
-TEST_CASE("dryrun make_zeros builds a full-extent nested scatter destination",
-          "[dryrun-result][pre-sized]") {
+TEST_CASE("make-zeros-nested", "[dryrun-result][pre-sized]") {
   // ToT analogue of the flat case above -- CSV/PNO residuals carry
   // ResultDryRunNested tokens, so make_zeros must build a nested full-extent
   // destination when the descriptor carries a proto-indexed (composite) leg.
@@ -1657,10 +1539,7 @@ TEST_CASE("dryrun make_zeros builds a full-extent nested scatter destination",
   CHECK(dest->size_in_bytes() == full_bytes);
 }
 
-TEST_CASE(
-    "dryrun result write_into_slice assembles disjoint blocks into a "
-    "pre-sized destination",
-    "[dryrun-result][write-into-slice]") {
+TEST_CASE("write-into-slice-blocks", "[dryrun-result][write-into-slice]") {
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
 
@@ -1712,9 +1591,8 @@ TEST_CASE(
         std::pair<std::size_t, std::size_t>{2, 6});
 }
 
-TEST_CASE(
-    "dryrun result write_into_slice REFUSES a gapped or overlapping block",
-    "[dryrun-result][write-into-slice]") {
+TEST_CASE("write-into-slice-refuses-gaps",
+          "[dryrun-result][write-into-slice]") {
   // Copilot review (PR #613): the contiguity requirement used to be carried by
   // a SEQUANT_ASSERT alone. Asserts are compiled out in non-Debug builds (and
   // CI builds with SEQUANT_ASSERT_BEHAVIOR=THROW rather than relying on the
@@ -1760,8 +1638,7 @@ TEST_CASE(
   }
 }
 
-TEST_CASE("dryrun nested result uses moment-aware inner extent, not extent^k",
-          "[dryrun-nested]") {
+TEST_CASE("nested-moment-aware-extent", "[dryrun-nested]") {
   auto r = backend_test_regime();
   // Non-trivial second moment: <#PNO^2> != <#PNO>^2 (dispersion inflates it).
   r.csv_pno_moment[1] = 4.0;
@@ -1792,8 +1669,7 @@ TEST_CASE("dryrun nested result uses moment-aware inner extent, not extent^k",
   CHECK(rc.size_in_bytes() == with_composite);
 }
 
-TEST_CASE("dryrun make_dryrun_result dispatches flat vs nested by content",
-          "[dryrun-nested]") {
+TEST_CASE("make-dryrun-result-dispatch", "[dryrun-nested]") {
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
   Index i1{L"i_1"}, i2{L"i_2"};
@@ -1834,19 +1710,24 @@ TEST_CASE("dryrun leaf yielder builds a sized token from a tensor leaf",
   CHECK(res->size_in_bytes() == cm->memsize(idx));
 }
 
-TEST_CASE(
-    "dryrun external-mode scatter replay models the sliced footprint (D3.1)",
-    "[dryrun-extmode][eval]") {
-  // The runtime External-mode scatter branch in make_batched_custom_evaluator
-  // (eval.hpp) builds its destination once via BackendArrayOps::make_zeros and
-  // then calls dest->write_into_slice(...) for every block; the dry-run Result
-  // classes model both, so the witness measures external batching. This test
-  // drives that same scatter branch the TA regression
-  // `batched_eval_external_proto_occ_scatter` (test_eval_ta.cpp) exercises, on
-  // the dry-run backend: a small forest carrying the occupied index only as a
-  // protoindex of a composite PNO leg (canonicalization promotes it to a plain
-  // outer canon index, so index_position locates it directly -- no proto-aware
-  // locator needed, exactly as that TA test documents).
+TEST_CASE("external-scatter-replay", "[dryrun-extmode][eval]") {
+  // D3.1 regression: the runtime External-mode scatter branch in
+  // make_batched_custom_evaluator (eval.hpp) calls, on the first block,
+  // part->pre_sized_zeros_over_mode(dest_mode, carrier_full, carrier_mode),
+  // then dest->write_into_slice(...) for every block. Before this task the
+  // dry-run Result classes did not override pre_sized_zeros_over_mode, so
+  // the replay hit the base class's `throw
+  // detail::unimplemented_method("pre_sized_zeros_over_mode")` the moment an
+  // External mode was stamped -- the witness could not measure external
+  // batching at all (doc/developer/cost_model.rst,
+  // "Ordered batch contexts and costing").
+  // This test drives the SAME scatter branch the TA
+  // regression `batched_eval_external_proto_occ_scatter` (test_eval_ta.cpp)
+  // exercises, on the dry-run backend: a small forest carrying the occupied
+  // index ONLY as a protoindex of a composite PNO leg (canonicalization
+  // promotes it to a plain outer canon index, so index_position locates it
+  // directly -- no proto-aware locator needed, exactly as that TA test
+  // documents).
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
@@ -1970,10 +1851,7 @@ TEST_CASE(
 
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "dryrun eval backend replays the post-transform giant term through the "
-    "real batched runtime",
-    "[dryrun-eval]") {
+TEST_CASE("giant-term-replay", "[dryrun-eval]") {
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -2249,10 +2127,7 @@ TEST_CASE(
 // so no ASSERTION is made about it.
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
-TEST_CASE(
-    "dryrun perf-first never forms the 4-PAO AO integral and peaks on the "
-    "genuine 4-PNO W node (C60 giant)",
-    "[dryrun-objective]") {
+TEST_CASE("perf-first-no-4pao", "[dryrun-objective]") {
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -2522,18 +2397,20 @@ TEST_CASE(
   // dominated by the GENUINE 4-PNO intermediate the perf-first schedule forms
   // -- the CC doubles W node {a_1<i,i> a_2<i,i> a_3<i,i> a_4<i,i>} with FOUR
   // distinct PNO legs over one occ-pair (see SEQUANT_UT_DRYRUN_PERF_TREE
-  // dump). With the FAITHFUL measured moments (kC60_pVDZF12), it is sized
-  // occ^2 * M_4^4 = 120^2 * 53.151^4 * 8 ~= 0.92 TB (dense occ^2 pairs; the
-  // screened ~6300 CC pairs would give ~0.40 TB). This is the CORRECT,
-  // moment-aware size (df_regime's csv_pno_moment[k] are power means), NOT a
-  // naive-product artifact and NOT a mis-sized twin R{a<i,i>,a<i,i>} (which
-  // would be occ^2*M_2^2 ~= 0.3 GB). The Kappa mode is CONTRACTED at this
-  // node, so batching cannot shrink W -- it is the irreducible peak floor of
-  // the flop-optimal factorization, and precisely why perf-first (which forms
-  // it) OOMs C60 while peak-first (which does not) does not. A 0.5..2 TB band
-  // brackets the real-moment value with margin and is non-flaky.
-  CHECK(perf_first.peak_bytes < 2e12);
-  CHECK(perf_first.peak_bytes > 5e11);
+  // dump). With the FAITHFUL measured moments and pair occupancy
+  // (kC60_pVDZF12), it is sized occ^2 * p * M_4^4 = 120^2 * 0.4375 *
+  // 53.151^4 * 8 ~= 0.40 TB (the ~6300 stored CC pairs of 120^2; the dense
+  // pair grid, p = 1, would give ~0.92 TB). This is the CORRECT, moment- and
+  // occupancy-aware size (df_regime's csv_pno_moment[k] are the
+  // occupancy-folded power means), NOT a naive-product artifact and NOT a
+  // mis-sized twin R{a<i,i>,a<i,i>} (which would be occ^2*p*M_2^2 ~= 0.15
+  // GB). The Kappa mode is CONTRACTED at this node, so batching cannot shrink
+  // W -- it is the irreducible peak floor of the flop-optimal factorization,
+  // and precisely why perf-first (which forms it) OOMs C60 while peak-first
+  // (which does not) does not. A 0.2..1 TB band brackets the real value with
+  // margin and is non-flaky.
+  CHECK(perf_first.peak_bytes < 1e12);
+  CHECK(perf_first.peak_bytes > 2e11);
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
@@ -2544,9 +2421,7 @@ TEST_CASE(
 // BatchModeType::External only on occ labels; with the flag off the reported
 // peak stays over budget and no External mode is stamped. The size of the drop
 // is not pinned.
-TEST_CASE(
-    "dryrun external-mode seeding lowers the DP-reported peak of the C60 giant",
-    "[dryrun-extmode]") {
+TEST_CASE("external-seeding-lowers-peak", "[dryrun-extmode]") {
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -2694,11 +2569,8 @@ TEST_CASE(
 // tests), the footprint would not move.
 //
 // This does NOT touch runtime, optimize() selection, or emit wiring. It sizes
-// ONE node's free-index set twice, with two extent functions. Hidden tag; run:
-//   ./tests/unit/unit_tests-sequant "[dryrun-occ-sizing]"
-TEST_CASE(
-    "dryrun external-occ slicing shrinks the PPL W footprint (P1 sizing gate)",
-    "[.][dryrun-occ-sizing]") {
+// ONE node's free-index set twice, with two extent functions.
+TEST_CASE("external-occ-sizing", "[dryrun-occ-sizing]") {
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -2875,165 +2747,7 @@ TEST_CASE(
         Catch::Approx(giant_full_bytes * expected_ratio).epsilon(1e-9));
 }
 
-// P1 recognition gate: prove the batched DP's batchable-mode scan
-// (batchable_mode_list) now admits the external occupied protoindices carried
-// on the C60 giant's composite (PNO) legs. Before the proto-aware change,
-// batchable_mode_list scanned only the top-level bra/ket/aux slots, so the
-// residual's external occ pair -- which lives ONLY as protoindices of the
-// composite legs and never as a top-level slot -- was dropped from
-// canon_indices_ and could never enter the batchable set. The forest-batching
-// feature needs it there. This is the recognition twin of the
-// [dryrun-occ-sizing] sizing gate: same C60 term, same optimize+binarize, same
-// giant-node locator and ext_occ extraction; it asserts on the batchable list,
-// not the footprint. Hidden tag; run:
-//   ./tests/unit/unit_tests-sequant "[dryrun-occ-recognize]"
-TEST_CASE(
-    "dryrun external occ is recognized as a batchable mode (P1 recognition "
-    "gate)",
-    "[.][dryrun-occ-recognize]") {
-  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
-
-  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                          "/data/csv_ccsd_doubles_residual_df.txt");
-  REQUIRE(!body.empty());
-  std::string line = body;
-  if (auto nl = line.find('\n'); nl != std::string::npos)
-    line = line.substr(0, nl);
-  auto expr = deserialize<ExprPtr>(line);
-  REQUIRE(static_cast<bool>(expr));
-  REQUIRE(expr->is<Sum>());
-  auto const& summands = expr->as<Sum>().summands();
-  REQUIRE(!summands.empty());
-  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
-    if (!e->is<Product>()) return e;
-    auto const& p = e->as<Product>();
-    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
-  };
-  // Same term as [dryrun-occ-sizing]: index 38 is the C60 PPL/ladder giant.
-  std::size_t giant_idx = 38;
-  if (giant_idx >= summands.size()) giant_idx = 0;
-  ExprPtr giant = flatten_product(summands[giant_idx]);
-  REQUIRE(giant);
-
-  // FAITHFUL real C60 config -- SAME regime/policy as [dryrun-occ-sizing].
-  auto regime = df_regime(kC60_pVDZF12);
-
-  sequant::BatchPolicy policy;
-  policy.is_batchable_contracted_index = is_df_batchable;
-  policy.batch_target_size = [](Index const& ix) -> std::size_t {
-    return ix.basis().base_key() == L"μ̃" ? std::size_t{256} : std::size_t{72};
-  };
-  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
-  policy.accumulation_factor = 1.0;
-  policy.peak_threshold = 40.0 * 1e9;
-
-  auto axes_map = std::make_shared<std::unordered_map<
-      Expr const*, container::vector<NodeBatchAnnotation>>>();
-  OptimizeOptions opts;
-  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
-  opts.idx_to_extent = regime.idx_to_extent();
-  opts.inner_pow = regime.inner_pow_fn();
-  opts.batch_policy = policy;
-  opts.volatile_weight = 20.0;
-  opts.roofline.machine_balance = 200.0;
-  opts.roofline.fast_mem_elems = 1000000.0;
-  opts.term_batch_axes = axes_map;
-
-  auto optimized = optimize(giant, opts);
-  REQUIRE(static_cast<bool>(optimized));
-  auto it = axes_map->find(optimized.get());
-  container::vector<NodeBatchAnnotation> node_axes;
-  if (it != axes_map->end()) node_axes = it->second;
-  BinarizationOptions bopts;
-  bopts.node_batch_axes = node_axes;
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  auto node = binarize<EvalExprDryRun>(optimized, {}, bopts);
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-
-  // Locate the giant PPL W node (identical locator to [dryrun-occ-sizing]) and
-  // grab its intermediate tensor: the perf-first (gC)^2 ladder W whose four PNO
-  // composite legs share one occ pair, carries NO free mu~ and NO free K, and
-  // has >= 2 PNO legs. That tensor's composite legs carry the external occ pair
-  // as protoindices -- the external mode the forest batching targets.
-  auto memsize_full = sequant::opt::detail::memsize_counter(
-      regime.idx_to_extent(), regime.inner_pow_fn());
-  auto free_has_bare = [](std::vector<Index> const& ixs, std::wstring_view bk) {
-    for (auto const& ix : ixs)
-      if (ix.basis().base_key() == bk) return true;
-    return false;
-  };
-  auto count_pno = [](std::vector<Index> const& ixs) {
-    std::size_t n = 0;
-    for (auto const& ix : ixs)
-      if (ix.proto_indices().size() >= 2) ++n;
-    return n;
-  };
-  double giant_full_bytes = 0.0;
-  ExprPtr giant_tensor;
-  node.visit_internal([&](auto const& n) {
-    if (!n->is_tensor()) return;
-    auto free_ixs = node_free_indices(*n);
-    if (free_has_bare(free_ixs, L"μ̃") || free_has_bare(free_ixs, L"Κ")) return;
-    if (count_pno(free_ixs) < 2) return;
-    double const bytes =
-        memsize_full(free_ixs, std::vector<Index>{}, std::vector<Index>{}) *
-        8.0;
-    if (bytes > giant_full_bytes) {
-      giant_full_bytes = bytes;
-      giant_tensor = n->as_tensor().clone();
-    }
-  });
-  REQUIRE(giant_full_bytes > 0.0);
-  REQUIRE(static_cast<bool>(giant_tensor));
-
-  // The external occ protos the recognition must surface (same extraction as
-  // [dryrun-occ-sizing]): distinct occupied ("i") protos of the giant's
-  // composite legs.
-  std::vector<Index> ext_occ;
-  for (auto const& ix : giant_tensor->as<Tensor>().const_braketaux_indices())
-    for (auto const& p : ix.proto_indices())
-      if (p.basis().base_key() == L"i") {
-        bool seen = false;
-        for (auto const& e : ext_occ)
-          if (e.full_label() == p.full_label()) seen = true;
-        if (!seen) ext_occ.push_back(p);
-      }
-  REQUIRE(!ext_occ.empty());
-
-  // Build a one-tensor network from the giant W node and scan it exactly as the
-  // batched DP does (cost_model's build_context calls this same function with
-  // the same is_batchable predicate). is_df_batchable admits ONLY mu~/K; before
-  // the proto-aware change the returned list carries NO occupied index, so this
-  // gate FAILS. After it, the external occ pair must appear.
-  auto tn = TensorNetwork{container::vector<ExprPtr>{giant_tensor}};
-  auto batchable =
-      sequant::opt::detail::batchable_mode_list(tn, is_df_batchable);
-
-  std::vector<Index> batchable_v(batchable.begin(), batchable.end());
-  std::wcerr << L"\n=== [dryrun-occ-recognize] P1 RECOGNITION GATE (C60 giant, "
-             << L"term " << giant_idx << L") ===\n"
-             << L"external occ protos on giant (" << ext_occ.size() << L") = {"
-             << describe_indices(ext_occ) << L"}\n"
-             << L"batchable_mode_list (" << batchable_v.size() << L") = {"
-             << describe_indices(batchable_v) << L"}\n";
-
-  auto is_active_occ = [](Index const& ix) {
-    return ix.basis().base_key() == L"i";
-  };
-  // The giant's external occ must now be a batchable mode, even though it has
-  // no top-level slot on the node.
-  CHECK(std::any_of(batchable.begin(), batchable.end(), is_active_occ));
-
-  // ...and the surfaced occ mode is exactly one of the giant's external occ
-  // protos, not some unrelated occupied index.
-  bool matches_ext = false;
-  for (auto const& b : batchable)
-    if (is_active_occ(b))
-      for (auto const& e : ext_occ)
-        if (b.full_label() == e.full_label()) matches_ext = true;
-  CHECK(matches_ext);
-}
-
+#ifndef SEQUANT_SKIP_LONG_TESTS
 // P4 GO/NO-GO AUDIT (Concern #3): across ALL C60 residual terms under the
 // perf-first (DenseTimeSpaceBatched) objective, does external-occ FOREST
 // batching (P3, the result-external occ carried as composite protos)
@@ -3052,10 +2766,7 @@ TEST_CASE(
 // P1 [dryrun-occ-sizing] slice -- O(1), no DP), giving the footprint AFTER
 // external-occ forest batching. The verdict classifies each term as
 // BOUNDED-by-P3 (occ slice fits) / NEEDS-mu-forest / NEEDS-k-forest / GAP.
-// Hidden; run:
-//   ./tests/unit/unit_tests-sequant "[dryrun-c60-batchability-audit]"
-TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
-          "[.][dryrun-c60-batchability-audit]") {
+TEST_CASE("c60-perf-first-audit", "[dryrun-c60-batchability-audit]") {
   auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -3384,6 +3095,7 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
 
   REQUIRE(verdicts.size() > 0);
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // The opt-in scratch-fold peak sink captures the batched-inner peak the
 // OUTER cache.working_set_hwmark() misses. Reuse the [dryrun-objective]
@@ -3896,117 +3608,6 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
       << (task_cache.exists(small_node) ? L"YES" : L"no") << L"\n";
 }
 
-// PNO-CCSD water-20 aux-batching FRAGMENTATION surrogate. Faithfully mirrors
-// the MPQC water-20 pVDZ-F12 PNO-CCSD run (job 658937): the SAME csv doubles
-// residual equation, df_regime(kWater20_pVDZF12) (extents/moments verified
-// against the job log), and the EXACT batch config make_csv_batch_policy emits
-// for aux-only batching (objective dense_time_space, K contracted-batchable,
-// target 256, peak_threshold 1e11, persistent_only false, no PAO/occ axis).
-// MPQC drives batching through this same DP, so the aprime decisions reproduce
-// by construction. Purpose: reproduce the batched-member explosion (the
-// ~405-vs-83 group fragmentation the new-vs-old logs showed) and, under
-// SEQUANT_DP_RECOMPUTE_DEBUG=1, expose why -- the K-carrying gC-class
-// composites are charged rf==1 (the escaped-mode recompute model charges ZERO
-// recompute to a node that CARRIES the only batch mode), so the DP prices
-// slicing them as free and over-batches; the runtime then rebuilds them per
-// batch group (the measured 2.5x product-work regression). See
-// cost_model.hpp:1811-1817 ("if the expensive gC-class nodes show rf==1, the DP
-// is not pricing the runtime recompute").
-TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
-          "[.][dryrun-water-frag]") {
-  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
-
-  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                          "/data/csv_ccsd_doubles_residual_df.txt");
-  REQUIRE(!body.empty());
-  std::string line = body;
-  if (auto nl = line.find('\n'); nl != std::string::npos)
-    line = line.substr(0, nl);
-  auto expr = deserialize<ExprPtr>(line);
-  REQUIRE(static_cast<bool>(expr));
-  REQUIRE(expr->is<Sum>());
-  auto const& summands = expr->as<Sum>().summands();
-  REQUIRE(!summands.empty());
-  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
-    if (!e->is<Product>()) return e;
-    auto const& p = e->as<Product>();
-    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
-  };
-  std::size_t nterms = summands.size();
-  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
-    nterms = std::min<std::size_t>(nterms, std::atoll(nt));
-  auto regime = df_regime(kWater20_pVDZF12);
-
-  // EXACT MPQC aux-only config (make_csv_batch_policy with aux_target=256,
-  // pao_target=0, occ_target=0): K is the ONLY batchable mode, contracted role.
-  sequant::BatchPolicy policy;
-  policy.is_batchable_contracted_index = [](Index const& ix) {
-    return ix.basis().base_key() == L"Κ";
-  };
-  policy.is_batchable_external_index = [](Index const&) { return false; };
-  policy.batch_spectator_indices = false;
-  policy.batch_target_size = [](Index const&) -> std::size_t { return 256; };
-  policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
-  policy.accumulation_factor = 1.0;
-  policy.persistent_only = false;
-  policy.peak_threshold = 1e11;
-
-  auto axes_map = std::make_shared<std::unordered_map<
-      Expr const*, container::vector<NodeBatchAnnotation>>>();
-  OptimizeOptions opts;
-  // MPQC "dense_time_space" + aux batch keywords => the perf-first BATCHED
-  // objective (the batchability model that emits the contracted-K aprime; plain
-  // DenseTimeSpace carries no per-index batch model, options.hpp:62).
-  opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
-  opts.idx_to_extent = regime.idx_to_extent();
-  opts.inner_pow = regime.inner_pow_fn();
-  opts.batch_policy = policy;
-  opts.volatile_weight = 20.0;
-  opts.roofline.machine_balance = 200.0;
-  opts.roofline.fast_mem_elems = 1000000.0;
-  opts.term_batch_axes = axes_map;
-
-  std::size_t n_kcon = 0;      // K-contracted batched-member annotations
-  std::size_t n_terms_ok = 0;  // terms that optimized
-  for (std::size_t s = 0; s < nterms; ++s) {
-    ExprPtr const term = flatten_product(summands[s]);
-    if (!term) continue;
-    ExprPtr optimized;
-    try {
-      optimized = optimize(term, opts);
-    } catch (std::exception const&) {
-      continue;
-    }
-    if (!optimized) continue;
-    ++n_terms_ok;
-    auto it = axes_map->find(optimized.get());
-    if (it == axes_map->end()) continue;
-    for (auto const& na : it->second)
-      for (auto const& e : na.axes)
-        if (e.second == sequant::BatchModeType::Contracted &&
-            e.first.basis().base_key() == L"Κ")
-          ++n_kcon;
-  }
-  std::wcerr
-      << L"\n=== [dryrun-water-frag] water-20 aux-only, " << n_terms_ok
-      << L" terms optimized ===\n  K-contracted batched-member "
-         L"annotations: "
-      << n_kcon
-      << L"\n  (SEQUANT_DP_RECOMPUTE_DEBUG=1 dumps per-node rf; CONFIRMED "
-         L"all 91 K-carrying gC composites -- largest 34 GB -- priced "
-         L"rf==1 while the 46 K-escaping nodes are charged rf==7: the DP "
-         L"prices slicing the gC giants as free, cost_model.hpp:1811)\n";
-  CHECK(n_terms_ok > 0);
-  // Reproduces the MPQC-log fragmentation (~35 distinct batched-member shapes):
-  // aux batching promotes MANY nodes to K-batched members. The mechanism is the
-  // rf==1 pricing of every K-carrying gC composite (confirmed via
-  // SEQUANT_DP_RECOMPUTE_DEBUG): the escaped-mode recompute model charges zero
-  // to a node that CARRIES the only batch mode, so the flops-neutral slice
-  // looks free -- but the runtime rebuilds each such composite per consumer
-  // batch group (the measured 2.5x product-work regression, not modeled here).
-  CHECK(n_kcon > 20);
-}
-
 // Does canonicalization preserve DISTINCT composite (PNO) proto pairs? A
 // contraction spanning composites on different occ pairs (a<i_1,i_2>,
 // b<i_2,i_3>) physically spans THREE occ; if canon_indices collapsed the pairs
@@ -4018,11 +3619,11 @@ TEST_CASE("canon_indices preserves distinct composite proto pairs",
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
+  auto ibr = std::make_shared<sequant::IndexBasisRegistry>(
       *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
+  sequant::mbpt::add_pao_basis(ibr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(ibr);
+  ctx.set(ibr);
   auto resetter = set_scoped_default_context(std::move(ctx));
 
   Index const i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
@@ -4104,10 +3705,7 @@ TEST_CASE("PeakMonitor tracks hierarchy-wide co-resident high-water",
   CHECK(peaks == std::vector<std::size_t>{100, 300});
 }
 
-TEST_CASE(
-    "PeakMonitor wired onto a CacheManager observes the same high-water as "
-    "the cache's own working_set_hwmark()",
-    "[meter]") {
+TEST_CASE("peak-monitor-cache-hwmark", "[meter]") {
   using sequant::eval::dryrun::CostModel;
   using sequant::eval::dryrun::DryRunLeafEvaluator;
   using sequant::eval::dryrun::EvalExprDryRun;
@@ -4169,10 +3767,7 @@ TEST_CASE(
   CHECK(mon.hwmark_bytes == cache.working_set_hwmark());
 }
 
-TEST_CASE(
-    "assemble_report rolls a metered dry-run replay's per-node build tally "
-    "into a MeterReport (peak, persistent/volatile FLOPs+time, build-vs-home)",
-    "[meter]") {
+TEST_CASE("meter-assemble-report", "[meter]") {
   using sequant::eval::compute_dag_boulevard;
   using sequant::eval::PeakMonitor;
   using sequant::eval::dryrun::assemble_report;
@@ -4317,10 +3912,7 @@ TEST_CASE(
 // PeakMonitor parent-chain under a real batched walk); with it forest_descent,
 // the SAME forest runs through today's unbatched per-tree descent. Both modes
 // must report a positive peak/build count and the matching `scheduler` value.
-TEST_CASE(
-    "meter runs the policy-selected executor (ordered and forest) with "
-    "the sizing backend and a metered cache",
-    "[meter]") {
+TEST_CASE("meter-policy-executor", "[meter]") {
   using sequant::BatchModeType;
   using sequant::BatchPolicy;
   using sequant::Index;
@@ -4340,11 +3932,11 @@ TEST_CASE(
 
   // A single-root, fully-contracted product -- a_3 is a genuine operand
   // index of BOTH factors (contracted away at the root), hand-stamped as the
-  // root's one Contracted batch axis (no optimize() involved, matching
-  // test_eval_dryrun.cpp's hand-built batch-annotation recipe): the driver
-  // entry rebuilds its schedule from the forest's OWN node_slice_mask()
-  // stamps, not from BatchPolicy predicates, so this alone is enough for it
-  // to realize a non-root-only loop nest.
+  // root's one Contracted batch axis and as the loop the root opens (no
+  // optimize() involved, matching test_eval_dryrun.cpp's hand-built
+  // batch-annotation recipe): the driver entry rebuilds its schedule from the
+  // forest's OWN stamps, not from BatchPolicy predicates, so these two stamps
+  // are enough for it to realize a non-root-only loop nest.
   auto expr =
       sequant::deserialize<sequant::ExprPtr>(L"g{i_1;a_3} * h{a_3;i_1}");
   REQUIRE(static_cast<bool>(expr));
@@ -4356,6 +3948,10 @@ TEST_CASE(
 
   Index const a3{L"a_3"};
   node->set_node_slice_mask({{a3, BatchModeType::Contracted}});
+  // The root reduces a_3 in batches, so it is also the node that opens that
+  // loop; the DP records both (NodeBatchAnnotation::opened_here), and the
+  // boulevard reads the loop's kind off the open.
+  node->set_batch_loops_opened_here({{a3, BatchModeType::Contracted}});
 
   std::vector<EvalNodeDryRun> const forest{node};
 
@@ -4408,4 +4004,27 @@ TEST_CASE("range evaluate does not accumulate into a cached result",
   // 3 * (2 * 2); with the cache buffer used as the accumulator the third use
   // reads the partial sum (2A) and the total comes out 4A = 16
   REQUIRE(sum->get<double>() == Catch::Approx(12.0));
+}
+
+// The contract the fixtures share with mpqc's CSVSizeMoments::extent: a group
+// of k composites on one cluster, each sized by the occupancy-adjusted M_k,
+// has the per-member product p * M_k^k, so nocc^rank times it is the
+// block-sparse volume sum_{nonnull clusters} d^k. Occupancy 1 is the identity.
+TEST_CASE("occupancy-adjusted moments satisfy the group-volume identity",
+          "[dryrun][sizing]") {
+  auto const& w20 = kWater20_pVDZF12;
+  for (double p : {1.0, w20.pno_occupancy, 0.01}) {
+    auto const adj = occupancy_adjusted_moments(w20.pno_M, p);
+    CHECK(adj[0] == 1.0);
+    for (std::size_t k = 1; k <= kMaxCompositeGroup; ++k) {
+      double prod = 1.0;
+      for (std::size_t member = 0; member < k; ++member) prod *= adj[k];
+      CHECK(prod == Catch::Approx(p * std::pow(w20.pno_M[k], double(k))));
+    }
+  }
+  // The regime builder applies it to both tables, and an occupancy of 1
+  // leaves the moments untouched.
+  auto const r = df_regime(w20);
+  CHECK(r.csv_pno_moment[1] == Catch::Approx(w20.pno_occupancy * w20.pno_M[1]));
+  CHECK(r.csv_osv_moment[2] == Catch::Approx(w20.osv_M[2]));
 }

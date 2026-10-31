@@ -148,16 +148,19 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
   function tint(node, bid) { node.classList.add("tint"); node.style.setProperty("--h", hueOf(bid)); }
   function swatch(bid) { var s = el("span", "swatch"); s.style.setProperty("--h", hueOf(bid)); return s; }
   function axisName(b) { return b.axis ? b.axis.split(":")[0] : null; }
-  // "I[i_1] = t * g" -> "i_1"; leaves have no bracket
+  // "R1#3[i_1] = t * g" -> "i_1"; leaves have no bracket
   function sliceOf(v) {
     var m = /^[^\[=]*\[([^\]]*)\]/.exec(v.expr);
     return m ? m[1] : null;
   }
-  function baseName(v) { return v.expr.split(/\s*=\s*/)[0].replace(/\[.*$/, "").trim() || v.expr; }
-  function nodeLabel(v) {
-    var s = v.expr.replace(/^([^\[=]*)\[[^\]]*\]/, "$1");
-    return s;
+  // "<name> = <what makes it>"; a document written before leaves were spelled so gets the name prepended
+  function exprOf(v) { return v.expr.indexOf(" = ") >= 0 ? v.expr : shortOf(v.id) + " = " + v.expr; }
+  // what a read of the value is labelled by: a leaf's tensor label, an intermediate's name
+  function baseName(v) {
+    var e = exprOf(v);
+    return v.leaf ? e.slice(e.indexOf(" = ") + 3) : e.split(/\s*=\s*/)[0].replace(/\[.*$/, "").trim();
   }
+  function nodeLabel(v) { return exprOf(v).replace(/^([^\[=]*)\[[^\]]*\]/, "$1"); }
   function portLabel(v) {
     var s = sliceOf(v);
     if (s) return "[" + s + "]";
@@ -188,8 +191,11 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     var p = id.lastIndexOf("+");
     return p >= 0 ? id.slice(0, p) : id;
   }
-  // short name: the root label (and term index) for the term key, so "R12#3", "R12#scale", "R12+1"
+  // short name: the record's `name` (the root label and term index for the term key, so "R12#3", "R12#scale", "R12+1"),
+  // derived here for a document written without it
   function shortOf(id) {
+    var v = vById.get(id);
+    if (v && v.name) return v.name;
     var t = termOf(id);
     return termShort.has(t) ? termShort.get(t) + id.slice(t.length) : id;
   }
@@ -266,7 +272,16 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
   function blockValues(b) {
     var out = [];
     (b.steps || []).forEach(function (s) { if (s.build) out.push(s.build); });
+    accumulated(b).forEach(function (o) { out.push(o[0]); });
     return out;
+  }
+  // the values a block accumulates that no step of it builds: the executor
+  // produces them inside the block's Assemble step (a per-batch partial sum,
+  // or the per-batch slice it scatters), so they are rows of the block too
+  function accumulated(b) {
+    var built = {};
+    (b.steps || []).forEach(function (s) { if (s.build) built[s.build] = true; });
+    return (b.outputs || []).filter(function (o) { return !built[o[0]]; });
   }
   function nestedCount(bid) {
     var n = 0;
@@ -294,12 +309,12 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     if (groupOpen.has(k)) return groupOpen.get(k);
     return blockValues(b).length <= GROUP_FOLD_ABOVE;
   }
-  function valueRow(v) {
+  function valueRow(v, tag) {
     var r = el("div", "row"); r.dataset.vid = v.id;
     r.appendChild(el("span", "caret", ""));
     r.appendChild(swatch(v.home_block));
-    r.appendChild(el("span", "tag mono", shortOf(v.id)));
-    r.appendChild(el("span", "mono", v.expr));
+    r.appendChild(el("span", "mono", exprOf(v)));
+    if (tag) r.appendChild(el("span", "tag", tag));
     if (v.leaf) r.appendChild(el("span", "tag", "leaf"));
     if (v.persistent) r.appendChild(el("span", "tag", "persistent"));
     if (run && run.builds && run.builds[v.id] !== undefined) r.appendChild(el("span", "tag", "×" + run.builds[v.id]));
@@ -322,13 +337,13 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
       kids.appendChild(r); any = true;
     });
     // consecutive build rows of one term form a group (a run of one is a plain row); nested blocks break runs
-    var pending = [], pendingKey = null;
+    var pending = [], pendingKey = null, tagOf = {};
     var flush = function () {
       if (!pending.length) return;
       var vs = pending.filter(function (v) { return !f || valueMatches(v, f); });
       if (vs.length) {
         if (pending.length === 1) {
-          kids.appendChild(valueRow(vs[0]));
+          kids.appendChild(valueRow(vs[0], tagOf[vs[0].id]));
         } else {
           var open = isGroupOpen(b, pendingKey, !!f);
           var g = el("div");
@@ -338,25 +353,35 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
           line.appendChild(el("span", "mono", pendingKey + " · " + pending.length + " values"));
           line.title = termOf(pending[0].id);
           g.appendChild(line);
-          if (open) { var gk = el("div", "children"); vs.forEach(function (v) { gk.appendChild(valueRow(v)); }); g.appendChild(gk); }
+          if (open) { var gk = el("div", "children"); vs.forEach(function (v) { gk.appendChild(valueRow(v, tagOf[v.id])); }); g.appendChild(gk); }
           kids.appendChild(g);
         }
         any = true;
       }
       pending = []; pendingKey = null;
     };
+    var pushValue = function (v) {
+      var key = groupOf(v);
+      if (pending.length && key !== pendingKey) flush();
+      pending.push(v); pendingKey = key;
+    };
     (b.steps || []).forEach(function (s) {
       if (s.build) {
         var v = vById.get(s.build); if (!v) return;
-        var key = groupOf(v);
-        if (pending.length && key !== pendingKey) flush();
-        pending.push(v); pendingKey = key;
+        pushValue(v);
       } else if (s.block !== null && s.block !== undefined) {
         flush();
         var cb = bById.get(s.block); if (!cb) return;
         var n = buildBlock(cb, f);
         if (n) { kids.appendChild(n); any = true; }
       }
+    });
+    flush();
+    // after the steps: what the block's Assemble steps produce per batch
+    accumulated(b).forEach(function (o) {
+      var v = vById.get(o[0]); if (!v) return;
+      tagOf[v.id] = o[1] === "AccumulateSum" ? "\u03a3 per batch, summed" : "per batch, scattered";
+      pushValue(v);
     });
     flush();
     if (f && !any) return null;
@@ -466,7 +491,7 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     var vs = byHash.get(h);
     var b = el("div", "box"); b.dataset.hash = h;
     if (h === st.hash) b.classList.add("sel");
-    var hd = el("div", "bh mono", shortOf(vs[0].id) + "  " + nodeLabel(vs[0]) + (vs.length > 1 ? "  ×" + vs.length : ""));
+    var hd = el("div", "bh mono", nodeLabel(vs[0]) + (vs.length > 1 ? "  ×" + vs.length : ""));
     tint(hd, vs[0].home_block); hd.title = "node " + h;
     b.appendChild(hd);
     vs.forEach(function (v) {
@@ -485,7 +510,7 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
   function link(text, fn) { var a = el("a", "link", text); a.addEventListener("click", fn); return a; }
   function vlink(id) {
     var v = vById.get(id);
-    var a = link(v ? shortOf(id) + " " + v.expr : id, function () { selectValue(id, true); });
+    var a = link(v ? exprOf(v) : id, function () { selectValue(id, true); });
     a.title = id; return a;
   }
   function blink(bid) { return link("block " + bid, function () { selectBlock(bid); }); }
@@ -530,7 +555,7 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
     var frame = el("span");
     frame.appendChild(el("span", "pill", shortOf(v.id)));
     frame.appendChild(document.createTextNode(" labels of this occurrence; " + occs.length + " occurrence" + (occs.length === 1 ? "" : "s") + " in " + Object.keys(terms).length + " term" + (Object.keys(terms).length === 1 ? "" : "s")));
-    kv(tb, "name", shortOf(v.id)); kv(tb, "frame", frame); kv(tb, "expr", v.expr); kv(tb, "leaf", v.leaf);
+    kv(tb, "name", shortOf(v.id)); kv(tb, "frame", frame); kv(tb, "expr", exprOf(v)); kv(tb, "leaf", v.leaf);
     ["result_modes", "home_modes", "enclosing_modes", "divergent_modes"].forEach(function (k) { kv(tb, k, listOf(v[k])); });
     var hb = el("span"); hb.appendChild(blink(v.home_block)); kv(tb, "home_block", hb);
     kv(tb, "home_depth", v.home_depth); kv(tb, "persistent", v.persistent);
@@ -544,7 +569,8 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
       d.title = o.term;
       d.textContent = "term " + (termShort.get(o.term) || o.term) + " · node " + o.node + " · consumer " + (o.consumer === null || o.consumer === undefined ? "—" : o.consumer) +
         " · home [" + (o.home || []).join(", ") + "] · enclosing [" + (o.enclosing || []).join(", ") + "] · opens " +
-        JSON.stringify(o.opens || []);
+        JSON.stringify(o.opens || []) +
+        ((o.roles || []).length ? " · roles [" + o.roles.map(function (r) { return r.mode + ": " + r.role; }).join(", ") + "]" : "");
       oc.appendChild(d);
     });
     kv(tb, "occurrences", oc);

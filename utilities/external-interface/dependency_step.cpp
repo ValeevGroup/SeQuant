@@ -3,6 +3,7 @@
 #include "processing_step_factory.hpp"
 
 #include <SeQuant/core/binary_node.hpp>
+#include <SeQuant/core/export/export.hpp>
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -27,30 +28,6 @@ void add_dependency(ExportTreeData::Entry &entry, std::size_t id) {
   if (std::ranges::find(entry.dependencies, id) == entry.dependencies.end()) {
     entry.dependencies.push_back(id);
   }
-}
-
-/// Invokes @p tensor_fn / @p variable_fn for the tensor/variable represented by
-/// every leaf of @p tree. Mirrors the leaf dispatch used when collecting tensor
-/// usage during export (see track_usage in SeQuant/core/export/export.hpp).
-template <typename TensorFn, typename VariableFn>
-void for_each_leaf(const ExportNode<> &tree, TensorFn &&tensor_fn,
-                   VariableFn &&variable_fn) {
-  tree.visit_leaf([&](const auto &node) {
-    const Expr &expr = *node->expr();
-
-    if (expr.is<Tensor>()) {
-      tensor_fn(expr.as<Tensor>());
-    } else if (expr.is<Variable>()) {
-      variable_fn(expr.as<Variable>());
-    } else if (expr.is<Power>()) {
-      const Power &power = expr.as<Power>();
-      if (power.base().is<Tensor>()) {
-        tensor_fn(power.base().as<Tensor>());
-      } else if (power.base().is<Variable>()) {
-        variable_fn(power.base().as<Variable>());
-      }
-    }
-  });
 }
 
 }  // namespace
@@ -162,32 +139,34 @@ std::size_t DependencyStep::run(std::string_view step_id,
       for (ExportTreeData::Entry &entry : tree_data.entries) {
         const std::size_t self_id = entry.tree->id();
 
-        for_each_leaf(
-            entry.tree,
-            [&](const Tensor &tensor) {
-              auto it = tensor_producers.find(tensor);
-              if (it == tensor_producers.end()) {
-                return;
-              }
-
-              for (std::size_t producer_id : it->second) {
-                if (producer_id != self_id) {
-                  add_dependency(entry, producer_id);
+        entry.tree.visit_leaf([&](const auto &node) {
+          visit_leaf_expr(
+              *node->expr(),
+              [&](const Tensor &tensor) {
+                auto it = tensor_producers.find(tensor);
+                if (it == tensor_producers.end()) {
+                  return;
                 }
-              }
-            },
-            [&](const Variable &variable) {
-              auto it = variable_producers.find(variable);
-              if (it == variable_producers.end()) {
-                return;
-              }
 
-              for (std::size_t producer_id : it->second) {
-                if (producer_id != self_id) {
-                  add_dependency(entry, producer_id);
+                for (std::size_t producer_id : it->second) {
+                  if (producer_id != self_id) {
+                    add_dependency(entry, producer_id);
+                  }
                 }
-              }
-            });
+              },
+              [&](const Variable &variable) {
+                auto it = variable_producers.find(variable);
+                if (it == variable_producers.end()) {
+                  return;
+                }
+
+                for (std::size_t producer_id : it->second) {
+                  if (producer_id != self_id) {
+                    add_dependency(entry, producer_id);
+                  }
+                }
+              });
+        });
       }
     }
   }

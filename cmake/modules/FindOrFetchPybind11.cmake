@@ -1,6 +1,8 @@
 if (NOT TARGET pybind11::module)
     include(FetchContent)
 
+    sequant_find_unless_fetching(pybind11 ${SEQUANT_OLDEST_PYBIND11_VERSION})
+
     FetchContent_Declare(
         Pybind11
         GIT_REPOSITORY "https://github.com/pybind/pybind11.git"
