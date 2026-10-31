@@ -389,8 +389,11 @@ class Result {
   ///
   /// \return Cast the type-erased data to the type \tparam T, and return a ref.
   ///
+  /// A result that is a pending view of another result's storage (see
+  /// is_buffer_alias()) materializes its value here first, once.
   template <typename T>
   [[nodiscard]] T& get() {
+    ensure_value();
     SEQUANT_ASSERT(has_value());
     return *std::any_cast<T>(&value_);
   }
@@ -399,11 +402,23 @@ class Result {
   /// \return Cast the type-erased data to the type \tparam T, and return a
   ///         const ref.
   ///
+  /// A result that is a pending view of another result's storage (see
+  /// is_buffer_alias()) materializes its value here first, once.
   template <typename T>
   [[nodiscard]] T const& get() const {
+    ensure_value();
     SEQUANT_ASSERT(has_value());
     return *std::any_cast<const T>(&value_);
   }
+
+  /// \return true while this result stands for a transformation of another
+  ///         result's storage that has not been applied -- a batch slice, a
+  ///         mode permutation, a conjugation -- and so holds no tiles of its
+  ///         own: it costs no allocation, and a backend consumer that can take
+  ///         the transformation into its own expression does so instead of
+  ///         asking for the value. get<T>() applies it (once) on demand.
+  ///         Default: false (a value held).
+  [[nodiscard]] virtual bool is_buffer_alias() const noexcept { return false; }
 
   /// @return the size of the object in bytes
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
@@ -431,6 +446,18 @@ class Result {
   explicit Result(T&& arg) noexcept
       : value_{std::make_any<std::decay_t<T>>(std::forward<T>(arg))} {}
 
+  /// a result without a value yet: a pending view (see is_buffer_alias()),
+  /// which stores its value through set_value() when first asked for it
+  Result() noexcept = default;
+
+  /// Stores \p value as this result's value. Logically const: a pending view
+  /// materializing itself does not change what the result stands for.
+  void set_value(std::any value) const noexcept { value_ = std::move(value); }
+
+  /// Called by get<T>() before the cast: a pending view materializes its value
+  /// here (set_value()). Default no-op.
+  virtual void ensure_value() const {}
+
   [[nodiscard]] virtual id_t type_id() const noexcept = 0;
 
   template <typename T>
@@ -440,7 +467,8 @@ class Result {
   }
 
  private:
-  std::any value_;
+  /// mutable: a pending view fills it in from a const get<T>() (set_value())
+  mutable std::any value_;
 
   [[nodiscard]] static id_t next_id() noexcept;
 };
