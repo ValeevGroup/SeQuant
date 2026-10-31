@@ -1,4 +1,5 @@
 #include "executor.hpp"
+#include "json_include.hpp"
 #include "processing.hpp"
 #include "template_expansion.hpp"
 #include "utils.hpp"
@@ -734,11 +735,7 @@ int main(int argc, char **argv) {
   IndexSpaceMeta spaceMeta;
 
   try {
-    std::ifstream in(driver);
-    json driver_info;
-    driver_info =
-        json::parse(in, /*callback*/ nullptr, /*allow_exceptions*/ true,
-                    /*skip_comments*/ true);
+    const json driver_info = util::extint::load_json_with_includes(driver);
 
     util::extint::process(driver_info, spaceMeta);
   } catch (const std::exception &e) {

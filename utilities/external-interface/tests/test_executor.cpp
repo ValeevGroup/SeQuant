@@ -124,3 +124,78 @@ TEST_CASE("Executor step identity", "[extint]") {
     REQUIRE_NOTHROW(exec.execute(steps));
   }
 }
+
+TEST_CASE("Executor releases data only after its last use", "[extint]") {
+  test_support::ScopedStreamSilencer silence;
+  Executor exec;
+
+  SECTION("non-adjacent use") {
+    json steps = json::array({read_step(),
+                              {{"kind", "sort"}, {"inputs", "in"}},
+                              {{"kind", "canonicalize"}, {"inputs", "in"}},
+                              {{"kind", "validate"}, {"inputs", "in[0]"}}});
+    REQUIRE_NOTHROW(exec.execute(steps));
+  }
+
+  SECTION("auto-generated step IDs") {
+    json steps =
+        json::array({read_step(),
+                     {{"kind", "sort"}, {"inputs", "in"}},
+                     {{"kind", "canonicalize"}, {"inputs", "in"}},
+                     {{"kind", "validate"}, {"inputs", "step1.sort"}}});
+    REQUIRE_NOTHROW(exec.execute(steps));
+  }
+
+  SECTION("inputs aliased by a later step") {
+    // c2 leaves its (already canonical) input in place and merely aliases it
+    json steps =
+        json::array({read_step(),
+                     {{"id", "c1"}, {"kind", "canonicalize"}, {"inputs", "in"}},
+                     {{"id", "c2"}, {"kind", "canonicalize"}, {"inputs", "c1"}},
+                     {{"kind", "validate"}, {"inputs", "c2"}}});
+    REQUIRE_NOTHROW(exec.execute(steps));
+  }
+
+  SECTION("IDs referenced in options") {
+    json steps = json::array(
+        {read_step(),
+         {{"id", "t1"}, {"kind", "to_export_tree"}, {"inputs", "in"}},
+         {{"id", "t2"}, {"kind", "to_export_tree"}, {"inputs", "in"}},
+         {{"kind", "dependencies"},
+          {"inputs", "t2"},
+          {"options", {{"deps", {{"t2", "t1"}}}}}}});
+    REQUIRE_NOTHROW(exec.execute(steps));
+  }
+
+  SECTION("all data is released at the end") {
+    json steps = json::array({read_step(),
+                              {{"id", "s"}, {"kind", "sort"}, {"inputs", "in"}},
+                              {{"kind", "validate"}, {"inputs", "s"}}});
+    REQUIRE_NOTHROW(exec.execute(steps));
+
+    // IDs remain known but their data is gone
+    REQUIRE(exec.context().has_data("in.0"));
+    REQUIRE(exec.context().has_data("s"));
+    REQUIRE_THROWS_WITH(
+        exec.context().get_data("s"),
+        Catch::Matchers::ContainsSubstring("has already been released"));
+    REQUIRE_THROWS_AS(exec.context().get_data("in"), Exception);
+  }
+
+  SECTION("each execution starts from scratch") {
+    REQUIRE_NOTHROW(exec.execute(json::array({read_step()})));
+    REQUIRE_NOTHROW(exec.execute(json::array({read_step()})));
+    REQUIRE_THROWS_WITH(
+        exec.execute(json::array({{{"kind", "validate"}, {"inputs", "in"}}})),
+        Catch::Matchers::ContainsSubstring("No data available for ID 'in'"));
+  }
+
+  SECTION("invalid references report the step") {
+    json steps =
+        json::array({read_step(),
+                     {{"id", "v"}, {"kind", "validate"}, {"inputs", "in[0-"}}});
+    REQUIRE_THROWS_WITH(exec.execute(steps),
+                        Catch::Matchers::ContainsSubstring(
+                            "Invalid reference in step 'v' (validate)"));
+  }
+}

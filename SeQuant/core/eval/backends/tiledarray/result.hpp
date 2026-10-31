@@ -25,6 +25,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace sequant {
 
@@ -158,6 +159,35 @@ template <typename ArrayT>
     arr.world().gop.max(r);
   }
   return r;
+}
+
+/// \return a zero \p ArrayT over \p trange. Under a sparse policy with a
+/// positive SparseShape threshold its shape is all zero, so it holds no tiles;
+/// otherwise every tile is set, zero-filled for a regular array and holding
+/// empty inner tensors (so tot_inner_rank() == 0) for a tensor of tensors.
+template <typename ArrayT>
+[[nodiscard]] ArrayT make_zero_array(TA::World& world,
+                                     TA::TiledRange const& trange) {
+  using shape_type = typename ArrayT::shape_type;
+  if constexpr (!shape_type::is_dense()) {
+    // A tile is zero only if its norm is below the threshold, so under a zero
+    // threshold even a zero norm marks a tile nonzero: the shape would claim
+    // tiles that are never set.
+    if (shape_type::threshold() > 0)
+      return ArrayT(world, trange,
+                    shape_type(typename shape_type::value_type(0), trange));
+  }
+  using value_type = typename ArrayT::value_type;
+  ArrayT result(world, trange);
+  if constexpr (TA::detail::is_tensor_of_tensor_v<value_type>) {
+    for (auto it = result.begin(); it != result.end(); ++it)
+      if (result.is_local(it.index())) *it = value_type{it.make_range()};
+  } else {
+    result.fill_local(typename ArrayT::numeric_type(0));
+  }
+  world.gop.fence();
+  note_fence();
+  return result;
 }
 
 ///
@@ -922,6 +952,21 @@ template <typename X, typename Y>
 
 }  // namespace detail
 
+/// A result may be a VIEW of another result's array -- a tile block of it (a
+/// batch slice), a mode relabeling, a conjugation, a phase, the half-signs of
+/// the time-reversal flip, or any combination -- pending rather than applied
+/// (View). The view shares the parent's tiles, so it costs no allocation and
+/// no pass over the data (TiledArray copies the tiles of a block of a MUTABLE
+/// array; with_expr() hands the parent over as a const array, whose
+/// preserve_lobound block is a view there): consumers that are TiledArray
+/// expressions -- the products, the dot product, scaling, sums, accumulation
+/// of the operand, the batch scatter -- fold it into their expression through
+/// with_expr(); a consumer that needs an array (clone, the symmetrizers,
+/// Result::get<ArrayT>()) materializes it once, into this result's own value,
+/// after which the parent is released. A view with half-signs materializes
+/// when consumed unless a product moves its signs onto a smaller operand
+/// (detail::move_signs).
+///
 template <typename ArrayT, typename = std::enable_if_t<TA::detail::is_tensor_v<
                                typename ArrayT::value_type>>>
 class ResultTensorTA final : public Result {
@@ -1010,10 +1055,19 @@ class ResultTensorTA final : public Result {
   /// the block cut by block(), the conjugation by conj(), the phase as a
   /// scalar factor. A view with half-signs is materialized first. \p f must
   /// return the same type whatever expression it receives.
+  ///
+  /// The parent is handed to TiledArray as a CONST array. A block of a const
+  /// array that keeps the parent's element coordinates (preserve_lobound) is
+  /// a view there: the consuming expression reads the parent's own tiles,
+  /// whereas a block of a mutable array is copied tile by tile. The const is
+  /// the promise that nothing writes the parent's tiles while the expression
+  /// is alive, which holds: a view is never written through, and the parent
+  /// is released once this result holds a value of its own.
   template <typename F>
   decltype(auto) with_expr(std::string const& annot, F&& f) const {
     if (!has_value() && !view_.signed_halves.empty()) ensure_materialized();
     if (has_value()) return std::forward<F>(f)(Result::get<ArrayT>()(annot));
+    auto const& parent = std::as_const(parent_);
     auto const stored = detail::stored_annot(annot, view_.perm);
     auto const ph = view_.phase;
     bool const conj = TA::detail::is_complex_v<numeric_type> && view_.conj;
@@ -1026,9 +1080,14 @@ class ResultTensorTA final : public Result {
       if (ph != 1) return std::forward<F>(f)(numeric_type(ph) * e);
       return std::forward<F>(f)(e);
     };
-    if (view_.blk_lo.empty()) return apply(parent_(stored));
-    return apply(parent_(stored).block(view_.blk_lo, view_.blk_hi,
-                                       TA::preserve_lobound));
+    if (view_.blk_lo.empty()) return apply(parent(stored));
+    // The block keeps every mode's element coordinates (TA's
+    // preserve_lobound), like the eager slice did, so a spectator mode with a
+    // nonzero lobound still matches the operand it is contracted against;
+    // the expressions derived from the block (conj(), scaling, negation)
+    // carry the lobound along.
+    return apply(
+        parent(stored).block(view_.blk_lo, view_.blk_hi, TA::preserve_lobound));
   }
 
   // --- the half-sign move protocol (detail::move_signs) ---
@@ -1152,6 +1211,13 @@ class ResultTensorTA final : public Result {
     parent_ = ArrayT();
   }
 
+  /// the value this result stands for, without storing it: the held value
+  /// (shallow), or the pending view applied into a temporary. For read-only
+  /// consumers that must not turn a shared view into a held value.
+  [[nodiscard]] ArrayT applied_value() const {
+    return has_value() ? Result::get<ArrayT>() : materialize();
+  }
+
   /// the logical labels of \p pre in \p post's order, composed onto this
   /// result's relabeling
   [[nodiscard]] View relabeled(std::string const& pre,
@@ -1255,7 +1321,8 @@ class ResultTensorTA final : public Result {
   }
   [[nodiscard]] std::string tile_diff(Result const& other) const override {
     if (!other.is<this_type>()) return "(kind mismatch)";
-    return detail::ta_tile_diff(get<ArrayT>(), other.get<ArrayT>());
+    return detail::ta_tile_diff(applied_value(),
+                                other.as<this_type>().applied_value());
   }
 
   /// Scatter \p block into this result's value (materialized first if this
@@ -1372,6 +1439,8 @@ class ResultTensorTA final : public Result {
     return eval_result<this_type>(std::move(result));
   }
 
+  /// The phase rides on the view: nothing is materialized or scaled here, a
+  /// consumer folds the phase in through with_expr().
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
     View v = base_view();
     v.phase = static_cast<std::int8_t>(v.phase * factor);
@@ -1553,10 +1622,13 @@ class ResultTensorOfTensorTA final : public Result {
   /// Hands \p f the TiledArray expression of this result's value for the
   /// nested logical annotation \p annot (`outer;inner`); see
   /// ResultTensorTA::with_expr. A view with half-signs is materialized first.
+  /// The parent is handed over as a const array, which makes the block a view
+  /// in TiledArray (see ResultTensorTA::with_expr).
   template <typename F>
   decltype(auto) with_expr(std::string const& annot, F&& f) const {
     if (!has_value() && !view_.signed_halves.empty()) ensure_materialized();
     if (has_value()) return std::forward<F>(f)(Result::get<ArrayT>()(annot));
+    auto const& parent = std::as_const(parent_);
     auto const stored = translate(annot);
     auto const ph = view_.phase;
     bool const conj = TA::detail::is_complex_v<numeric_type> && view_.conj;
@@ -1569,9 +1641,9 @@ class ResultTensorOfTensorTA final : public Result {
       if (ph != 1) return std::forward<F>(f)(numeric_type(ph) * e);
       return std::forward<F>(f)(e);
     };
-    if (view_.blk_lo.empty()) return apply(parent_(stored));
-    return apply(parent_(stored).block(view_.blk_lo, view_.blk_hi,
-                                       TA::preserve_lobound));
+    if (view_.blk_lo.empty()) return apply(parent(stored));
+    return apply(
+        parent(stored).block(view_.blk_lo, view_.blk_hi, TA::preserve_lobound));
   }
 
   // --- the half-sign move protocol (detail::move_signs) ---
@@ -1667,23 +1739,16 @@ class ResultTensorOfTensorTA final : public Result {
         static_cast<unsigned int>(inner));
   }
 
-  /// A zero nested array over \p tr: the value of a view of an array whose
-  /// inner tiles are all empty (there is no inner rank to annotate a block
-  /// with, and the slice of zero is zero). Dense even under a sparse policy
-  /// -- harmless, the array is identically zero. Every rank sets its own
-  /// tiles with ready values: no fence.
-  [[nodiscard]] ArrayT zero_over(TA::TiledRange const& tr) const {
-    using value_type = typename ArrayT::value_type;
-    ArrayT out{view_base().world(), tr};
-    for (auto it = out.begin(); it != out.end(); ++it)
-      if (out.is_local(it.index())) *it = value_type{it.make_range()};
-    return out;
-  }
-
+  /// the value this result stands for, as a fresh array: the pending block
+  /// applied in one pass (or a deep copy of the held value). A view of an
+  /// array whose inner tiles are all empty has no inner rank to annotate a
+  /// block with; the slice of zero is zero.
   [[nodiscard]] ArrayT materialize() const {
     if (has_value()) return TA::clone(Result::get<ArrayT>());
     auto const inner = inner_rank();
-    if (inner == 0) return zero_over(logical_trange());
+    if (inner == 0)
+      return detail::make_zero_array<ArrayT>(view_base().world(),
+                                             logical_trange());
     auto const ann = dummy_annot(inner);
     auto const t0 = std::chrono::steady_clock::now();
     ArrayT out;
@@ -1766,6 +1831,13 @@ class ResultTensorOfTensorTA final : public Result {
     return s + "]";
   }
 
+  /// the value this result stands for, without storing it: the held value
+  /// (shallow), or the pending view applied into a temporary. For read-only
+  /// consumers that must not turn a shared view into a held value.
+  [[nodiscard]] ArrayT applied_value() const {
+    return has_value() ? Result::get<ArrayT>() : materialize();
+  }
+
   /// Allocating addition. For nested arrays an addend whose inner tiles are
   /// all empty acts as the additive identity (the arena nested-tensor
   /// addition the pinned TiledArray provides). A relabeled inner view is
@@ -1837,15 +1909,34 @@ class ResultTensorOfTensorTA final : public Result {
     return noted(eval_result<this_type>(base, std::move(view)), inner_rank_);
   }
 
+  /// A pending block is reduced in place, not materialized. The norm does
+  /// not depend on inner-mode labels, so the parent is annotated over its
+  /// outer modes only (TA's make_tsrexpr) and no inner rank is needed.
   [[nodiscard]] double norm2() const override {
-    return detail::ta_norm2(get<ArrayT>());
+    if (has_value() || view_.blk_lo.empty())
+      return detail::ta_norm2(view_base());
+    if constexpr (requires(ArrayT const& a) {
+                    { TA::squared_norm(a) } -> std::convertible_to<double>;
+                  }) {
+      auto const& parent = std::as_const(parent_);
+      return static_cast<double>(
+          parent
+              .make_tsrexpr(TA::detail::dummy_annotation(
+                  static_cast<unsigned int>(parent.trange().rank())))
+              .block(view_.blk_lo, view_.blk_hi, TA::preserve_lobound)
+              .norm()
+              .get());
+    } else {
+      return -1.0;
+    }
   }
   [[nodiscard]] std::string layout_desc() const override {
     return detail::ta_trange_string(logical_trange());
   }
   [[nodiscard]] std::string tile_diff(Result const& other) const override {
     if (!other.is<this_type>()) return "(kind mismatch)";
-    return detail::ta_tile_diff(get<ArrayT>(), other.get<ArrayT>());
+    return detail::ta_tile_diff(applied_value(),
+                                other.as<this_type>().applied_value());
   }
 
   /// Scatter \p block into this result's value (materialized first if this
@@ -1915,7 +2006,8 @@ class ResultTensorOfTensorTA final : public Result {
     dims.reserve(rank);
     for (std::size_t d = 0; d < rank; ++d) dims.push_back(self_tr.dim(d));
     dims[mode] = axis_dim;
-    auto dest = zero_over(TA::TiledRange(dims.begin(), dims.end()));
+    auto dest = detail::make_zero_array<ArrayT>(
+        view_base().world(), TA::TiledRange(dims.begin(), dims.end()));
     log_ta_tensor_host_memory_use();
     return noted(eval_result<this_type>(std::move(dest)), std::size_t{0});
   }
@@ -2065,6 +2157,8 @@ class ResultTensorOfTensorTA final : public Result {
     }
   }
 
+  /// The phase rides on the view: nothing is materialized or scaled here, a
+  /// consumer folds the phase in through with_expr().
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
     View v = base_view();
     v.phase = static_cast<std::int8_t>(v.phase * factor);
@@ -2213,9 +2307,7 @@ template <typename... Args>
       // build the ToT annotation block() needs. The slice of zero is zero, so
       // build the sliced outer trange by hand (mode cut to [tile_lo,tile_hi),
       // every dim's original element lobound preserved, matching the
-      // preserve_lobound block() below) and return a zero ToT over it. The
-      // result is dense even if ArrayT's policy is sparse -- harmless, the
-      // array is identically zero.
+      // preserve_lobound block() below) and return a zero ToT over it.
       std::vector<TA::TiledRange1> tr1s;
       tr1s.reserve(rank);
       for (std::size_t d = 0; d < rank; ++d) {
@@ -2226,13 +2318,8 @@ template <typename... Args>
           bounds.push_back(static_cast<std::size_t>(dim.tile(t).second));
         tr1s.emplace_back(bounds.begin(), bounds.end());
       }
-      TA::DistArray<Args...> out{arr.world(),
-                                 TA::TiledRange(tr1s.begin(), tr1s.end())};
-      for (auto it = out.begin(); it != out.end(); ++it)
-        if (out.is_local(it.index())) *it = value_type{it.make_range()};
-      out.world().gop.fence();
-      ::sequant::detail::note_fence();
-      return out;
+      return detail::make_zero_array<TA::DistArray<Args...>>(
+          arr.world(), TA::TiledRange(tr1s.begin(), tr1s.end()));
     }
     annot = TA::detail::dummy_annotation(static_cast<unsigned int>(rank),
                                          static_cast<unsigned int>(inner_rank));

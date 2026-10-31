@@ -46,6 +46,34 @@ Any error encountered anywhere - be it a malformed driver file, an invalid optio
 (reported on stderr, non-zero exit code). There is no partial or best-effort processing.
 
 
+.. _external_interface_include:
+
+Including Other JSON Files
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To share definitions such as index spaces or templates between drivers, any JSON value in the driver file may be replaced by an object of the form
+:code:`{"$include": "shared.json"}`, which is substituted by the content of the referenced file. Included files may include further files themselves.
+
+* If the object has additional members, the included file must contain an object, and its members are merged with the additional ones. Defining the
+  same key on both sides is an error.
+* Inside an array, including a file that contains an array splices its elements into the surrounding array.
+* A relative include path is resolved relative to the file containing the :code:`$include`.
+* Cyclic includes are an error.
+
+.. code-block:: json
+
+   {
+     "driver_format_version": 2,
+     "index_spaces": { "$include": "common/spaces.json" },
+     "templates": { "$include": "common/templates.json", "local_template": { "steps": [] } },
+     "steps": []
+   }
+
+.. note::
+   Only the :code:`$include` path itself is relative to the including file. All other paths (e.g. :code:`file_path` of :code:`read_input`) are
+   still relative to the *driver* file, regardless of which included file they are written in.
+
+
 Driver File
 -----------
 
