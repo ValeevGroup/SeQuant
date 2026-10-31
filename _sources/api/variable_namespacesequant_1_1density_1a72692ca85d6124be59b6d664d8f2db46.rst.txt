@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1density_1a72692ca85d6124be59b6d664d8f2db46:
+
+Variable sequant::density::rdm_symmetries
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_density.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::density::rdm_symmetries
+   :project: SeQuant

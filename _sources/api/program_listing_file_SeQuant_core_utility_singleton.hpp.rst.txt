@@ -1,0 +1,123 @@
+
+.. _program_listing_file_SeQuant_core_utility_singleton.hpp:
+
+Program Listing for File singleton.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_utility_singleton.hpp>` (``SeQuant/core/utility/singleton.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 2019-03-11.
+   //
+   
+   #ifndef SEQUANT_CORE_UTILITY_SINGLETON_HPP
+   #define SEQUANT_CORE_UTILITY_SINGLETON_HPP
+   
+   #include <SeQuant/core/utility/exception.hpp>
+   #include <atomic>
+   #include <cassert>
+   #include <memory>
+   #include <mutex>
+   
+   #include <type_traits>
+   
+   namespace sequant {
+   
+   // clang-format off
+   // clang-format on
+   template <typename Derived>
+   class Singleton {
+     // can't use std::is_default_constructible since Derived's ctors should be
+     // private
+     template <typename T>
+     static constexpr bool has_default_ctor = requires { T{}; };
+   
+    public:
+     static Derived& instance() {
+       if (auto* result_ptr = published_instance().load(std::memory_order_acquire))
+         return *result_ptr;
+       if constexpr (has_default_ctor<Derived>) {
+         return set_default_instance();
+       } else
+         throw Exception(
+             "sequant::Singleton: is not default-constructible and set_instance() "
+             "has not been called");
+     }
+   
+     static Derived* instance_ptr() {
+       if (auto* result_ptr = published_instance().load(std::memory_order_acquire))
+         return result_ptr;
+       if constexpr (has_default_ctor<Derived>) {
+         return set_default_instance();
+       } else
+         return nullptr;
+     }
+   
+     template <typename... Args>
+     static Derived& set_instance(Args&&... args) {
+       //    WARNING: can't check constructibility since the ctor may be private
+       //    static_assert(std::is_constructible_v<Derived, Args...>,
+       //                  "sequant::Singleton::set_instance: Derived is not
+       //                  constructible with Args");
+       std::scoped_lock lock(instance_mutex());
+       if (instance_accessor() != nullptr)
+         throw Exception(
+             "sequant::Singleton::set_instance: instance has already been "
+             "constructed");
+       // Note: std::make_unique can't deal with private friend ctors
+       return publish(
+           std::unique_ptr<Derived>(new Derived(std::forward<Args>(args)...)));
+     }
+   
+    protected:
+     template <typename... Args>
+     Singleton(Args&&...) {}  // all constructors are private
+   
+     static auto& instance_mutex() {
+       static std::mutex mtx;
+       return mtx;
+     }
+   
+    private:
+     static std::unique_ptr<Derived>& instance_accessor() {
+       // the atomic outlives the owner (it is trivially destructible), so clear
+       // it before the instance is destroyed: a reader that runs later falls
+       // back to the slow path instead of seeing a dangling pointer
+       struct Owner {
+         std::unique_ptr<Derived> instance;
+         ~Owner() {
+           published_instance().store(nullptr, std::memory_order_release);
+         }
+       };
+       static Owner owner;
+       return owner.instance;
+     }
+     static std::atomic<Derived*>& published_instance() {
+       static std::atomic<Derived*> instance{nullptr};
+       return instance;
+     }
+   
+     static Derived& publish(std::unique_ptr<Derived> instance) {
+       auto& owner = instance_accessor();
+       owner = std::move(instance);
+       published_instance().store(owner.get(), std::memory_order_release);
+       return *owner;
+     }
+   
+     static Derived& set_default_instance()
+       requires(has_default_ctor<Derived>)
+     {
+       std::scoped_lock lock(instance_mutex());
+       if (instance_accessor()) return *instance_accessor();
+       // Note: std::make_unique can't deal with private friend ctors
+       return publish(std::unique_ptr<Derived>(new Derived()));
+     }
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_UTILITY_SINGLETON_HPP

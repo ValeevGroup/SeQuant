@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1aff7f522581c45b80813bda52cd0411d3:
+
+Function sequant::opt::detail::label_basename
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::label_basename(std::wstring_view)
+   :project: SeQuant

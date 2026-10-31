@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1meta_1a75f788fa5020a9e7167be94f8a16a76e:
+
+Typedef sequant::meta::char_t
+=============================
+
+- Defined in :ref:`file_SeQuant_core_utility_string.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::meta::char_t
+   :project: SeQuant

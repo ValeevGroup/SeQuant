@@ -1,0 +1,190 @@
+
+.. _program_listing_file_SeQuant_core_irreps_algebra.hpp:
+
+Program Listing for File algebra.hpp
+====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_irreps_algebra.hpp>` (``SeQuant/core/irreps/algebra.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_IRREPS_ALGEBRA_HPP
+   #define SEQUANT_CORE_IRREPS_ALGEBRA_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   
+   #include <algorithm>
+   #include <compare>
+   #include <concepts>
+   #include <format>
+   #include <initializer_list>
+   #include <string>
+   #include <utility>
+   
+   namespace sequant {
+   
+   template <typename Irrep>
+     requires std::default_initializable<std::formatter<Irrep>>
+   std::string irrep_to_string(const Irrep &irrep) {
+     return std::format("{}", irrep);
+   }
+   
+   template <typename Irrep>
+   class IrrepSet {
+    public:
+     using value_type = Irrep;
+     using container_type = container::svector<Irrep, 2>;
+     using const_iterator = typename container_type::const_iterator;
+   
+     IrrepSet() = default;
+     IrrepSet(std::initializer_list<Irrep> irreps) {
+       for (const Irrep &current : irreps) {
+         insert(current);
+       }
+     }
+   
+     static IrrepSet any() {
+       IrrepSet set;
+       set.m_any = true;
+       return set;
+     }
+   
+     [[nodiscard]] bool is_any() const { return m_any; }
+     [[nodiscard]] bool empty() const { return !m_any && m_irreps.empty(); }
+     [[nodiscard]] std::size_t size() const { return m_irreps.size(); }
+   
+     [[nodiscard]] bool contains(const Irrep &irrep) const {
+       return m_any || std::ranges::binary_search(m_irreps, irrep);
+     }
+   
+     IrrepSet &insert(Irrep irrep) {
+       if (m_any) {
+         return *this;
+       }
+   
+       auto it = std::ranges::lower_bound(m_irreps, irrep);
+       if (it == m_irreps.end() || *it != irrep) {
+         m_irreps.insert(it, std::move(irrep));
+       }
+   
+       return *this;
+     }
+   
+     IrrepSet &unite(const IrrepSet &other) {
+       if (other.m_any) {
+         *this = any();
+       } else {
+         for (const Irrep &current : other.m_irreps) {
+           insert(current);
+         }
+       }
+   
+       return *this;
+     }
+   
+     const_iterator begin() const { return m_irreps.begin(); }
+     const_iterator end() const { return m_irreps.end(); }
+   
+     friend bool operator==(const IrrepSet &lhs, const IrrepSet &rhs) {
+       return lhs.m_any == rhs.m_any && lhs.m_irreps == rhs.m_irreps;
+     }
+   
+     friend auto operator<=>(const IrrepSet &lhs, const IrrepSet &rhs) {
+       using Ordering = std::compare_three_way_result_t<Irrep>;
+       if (lhs.m_any != rhs.m_any) {
+         return lhs.m_any ? Ordering(std::strong_ordering::greater)
+                          : Ordering(std::strong_ordering::less);
+       }
+   
+       return std::lexicographical_compare_three_way(
+           lhs.m_irreps.begin(), lhs.m_irreps.end(), rhs.m_irreps.begin(),
+           rhs.m_irreps.end());
+     }
+   
+    private:
+     container_type m_irreps;
+     bool m_any = false;
+   };
+   
+   template <typename Irrep>
+   std::string to_string(const IrrepSet<Irrep> &set) {
+     if (set.is_any()) {
+       return "*";
+     }
+   
+     std::string str = "{";
+     bool first = true;
+     for (const Irrep &current : set) {
+       if (!first) {
+         str += ",";
+       }
+       first = false;
+       str += irrep_to_string(current);
+     }
+     str += "}";
+   
+     return str;
+   }
+   
+   template <typename A>
+   concept IrrepAlgebra =
+       std::copyable<A> && std::three_way_comparable<typename A::irrep_type> &&
+       std::copyable<typename A::irrep_type> &&
+       requires(const A &algebra, const typename A::irrep_type &irrep) {
+         {
+           algebra.totally_symmetric()
+         } -> std::convertible_to<typename A::irrep_type>;
+         {
+           algebra.product(irrep, irrep)
+         } -> std::convertible_to<IrrepSet<typename A::irrep_type>>;
+         {
+           algebra.conjugate(irrep)
+         } -> std::convertible_to<typename A::irrep_type>;
+         { irrep_to_string(irrep) } -> std::convertible_to<std::string>;
+       };
+   
+   template <IrrepAlgebra A>
+   IrrepSet<typename A::irrep_type> product(
+       const A &algebra, const IrrepSet<typename A::irrep_type> &lhs,
+       const IrrepSet<typename A::irrep_type> &rhs) {
+     using Set = IrrepSet<typename A::irrep_type>;
+   
+     if (lhs.empty() || rhs.empty()) {
+       return {};
+     }
+     if (lhs.is_any() || rhs.is_any()) {
+       return Set::any();
+     }
+   
+     Set result;
+     for (const auto &left : lhs) {
+       for (const auto &right : rhs) {
+         result.unite(algebra.product(left, right));
+       }
+     }
+   
+     return result;
+   }
+   
+   template <IrrepAlgebra A>
+   IrrepSet<typename A::irrep_type> conjugate(
+       const A &algebra, const IrrepSet<typename A::irrep_type> &set) {
+     using Set = IrrepSet<typename A::irrep_type>;
+   
+     if (set.is_any()) {
+       return Set::any();
+     }
+   
+     Set result;
+     for (const auto &current : set) {
+       result.insert(algebra.conjugate(current));
+     }
+   
+     return result;
+   }
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_IRREPS_ALGEBRA_HPP

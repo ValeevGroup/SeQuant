@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1eval_1a5cfffd57c15bc81801995f0d9a71c1f1:
+
+Typedef sequant::eval::CellId
+=============================
+
+- Defined in :ref:`file_SeQuant_core_eval_cell_table.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::eval::CellId
+   :project: SeQuant

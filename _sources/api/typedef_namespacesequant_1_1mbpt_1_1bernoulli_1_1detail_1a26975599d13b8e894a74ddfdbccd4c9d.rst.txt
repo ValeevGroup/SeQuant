@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1mbpt_1_1bernoulli_1_1detail_1a26975599d13b8e894a74ddfdbccd4c9d:
+
+Typedef sequant::mbpt::bernoulli::detail::PartitionPathCoefficients
+===================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_bernoulli.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::mbpt::bernoulli::detail::PartitionPathCoefficients
+   :project: SeQuant

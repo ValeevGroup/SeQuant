@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1opt_1_1detail_1a0997a0b011dd722b51036a8fcbdc99db:
+
+Typedef sequant::opt::detail::TensorNormalizer
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::opt::detail::TensorNormalizer
+   :project: SeQuant

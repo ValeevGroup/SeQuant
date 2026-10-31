@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1a09cf7c615a85a4a5cf6ba47acf4ebe77:
+
+Typedef sequant::eval::dryrun::annot_t
+======================================
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_result.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::eval::dryrun::annot_t
+   :project: SeQuant

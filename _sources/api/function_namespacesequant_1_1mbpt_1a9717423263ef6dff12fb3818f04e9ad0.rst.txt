@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a9717423263ef6dff12fb3818f04e9ad0:
+
+Function sequant::mbpt::op_hermiticity
+======================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_context.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::op_hermiticity(const std::wstring&)
+   :project: SeQuant

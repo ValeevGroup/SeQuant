@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1detail_1aee878427f59fc50203a4277675aa62c5:
+
+Variable sequant::detail::label_tensor
+======================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::detail::label_tensor
+   :project: SeQuant

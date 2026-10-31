@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1a831ed846d542e6d130093b9480435cca:
+
+Define SEQUANT_UNREACHABLE_TOKEN
+================================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_UNREACHABLE_TOKEN
+   :project: SeQuant

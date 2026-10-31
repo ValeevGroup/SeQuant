@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1detail_1a84abd31bd027109a6065aa2989eb4a06:
+
+Typedef sequant::detail::OpProvenance
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_wick_extended.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::detail::OpProvenance
+   :project: SeQuant

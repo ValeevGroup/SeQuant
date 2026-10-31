@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a329ba4198c8f57657cfecf9da62c8903:
+
+Function sequant::eval::detail::fork_subchain
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::fork_subchain(container::vector<Step> const&, std::function<bool(std::size_t)> const&)
+   :project: SeQuant

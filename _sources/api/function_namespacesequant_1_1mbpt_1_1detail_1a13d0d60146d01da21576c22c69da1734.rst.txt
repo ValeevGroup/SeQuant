@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1detail_1a13d0d60146d01da21576c22c69da1734:
+
+Function sequant::mbpt::detail::hardcoded_biorthogonalizer_coeffs
+=================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::detail::hardcoded_biorthogonalizer_coeffs(std::size_t)
+   :project: SeQuant

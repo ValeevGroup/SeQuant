@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a9055b0364cde59fbbfe630aba81bf2d8:
+
+Template Function sequant::detail::result_irreps
+================================================
+
+- Defined in :ref:`file_SeQuant_core_export_name_recycling.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::result_irreps(const Range&, const ExportContext&, const Predicate&, ScannedIrrepContext::Registry&)
+   :project: SeQuant

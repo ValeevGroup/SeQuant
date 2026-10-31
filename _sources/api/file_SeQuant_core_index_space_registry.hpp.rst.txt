@@ -1,0 +1,38 @@
+
+.. _file_SeQuant_core_index_space_registry.hpp:
+
+File index_space_registry.hpp
+=============================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/index_space_registry.hpp``)
+------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_index_space_registry.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/index_basis_registry.hpp`` (:ref:`file_SeQuant_core_index_basis_registry.hpp`)
+
+
+
+
+

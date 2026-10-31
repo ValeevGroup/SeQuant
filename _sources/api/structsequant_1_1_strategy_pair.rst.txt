@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_strategy_pair:
+
+Struct StrategyPair
+===================
+
+- Defined in :ref:`file_SeQuant_core_export_context.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::StrategyPair
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

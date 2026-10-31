@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a1036fec98d33a3adcc511a47010d8c26:
+
+Function sequant::opt::detail::same_slot_groups
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::same_slot_groups(const Tensor&, const Tensor&)
+   :project: SeQuant

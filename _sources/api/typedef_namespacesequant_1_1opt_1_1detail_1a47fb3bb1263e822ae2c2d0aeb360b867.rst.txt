@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1opt_1_1detail_1a47fb3bb1263e822ae2c2d0aeb360b867:
+
+Typedef sequant::opt::detail::ObjectMap
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::opt::detail::ObjectMap
+   :project: SeQuant

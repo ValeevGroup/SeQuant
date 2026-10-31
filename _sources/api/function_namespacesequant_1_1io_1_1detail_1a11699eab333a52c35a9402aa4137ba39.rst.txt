@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1detail_1a11699eab333a52c35a9402aa4137ba39:
+
+Template Function sequant::io::detail::insert_expression
+========================================================
+
+- Defined in :ref:`file_SeQuant_core_io_format.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::detail::insert_expression(std::basic_ostream<Char, Traits>&, const T *, bool)
+   :project: SeQuant

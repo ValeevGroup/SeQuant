@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_irrep_context:
+
+Template Class IrrepContext
+===========================
+
+- Defined in :ref:`file_SeQuant_core_irreps_propagation.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::IrrepContext
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

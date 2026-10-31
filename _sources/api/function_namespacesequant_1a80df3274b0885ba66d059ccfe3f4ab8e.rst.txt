@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a80df3274b0885ba66d059ccfe3f4ab8e:
+
+Function sequant::lexicographic_compare()
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::lexicographic_compare()
+   :project: SeQuant

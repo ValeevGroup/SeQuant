@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a561a709103843a6f0295c5bda1c3b2c0:
+
+Template Function sequant::has_duplicates
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::has_duplicates(const Range&)
+   :project: SeQuant

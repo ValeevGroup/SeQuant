@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1schedule_1a36fa5caed2a3cd685e2ab6ebd8cd31e4:
+
+Function sequant::opt::schedule::record_unpinnable_term
+=======================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_schedule_pin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::schedule::record_unpinnable_term(ExprPtr const&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a4575e3b14bbd6a2c855b7ffc610159fb:
+
+Function sequant::pow2
+======================
+
+- Defined in :ref:`file_SeQuant_core_math.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::pow2(std::size_t)
+   :project: SeQuant

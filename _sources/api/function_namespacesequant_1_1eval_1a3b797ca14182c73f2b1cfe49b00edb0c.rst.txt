@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1a3b797ca14182c73f2b1cfe49b00edb0c:
+
+Function sequant::eval::well_formed
+===================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::well_formed(OrderedSchedule const&)
+   :project: SeQuant

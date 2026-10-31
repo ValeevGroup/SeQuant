@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a6b236c0b18d299683c9c11866edb656c:
+
+Function sequant::pop_symmetrizer(ExprPtr&)
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::pop_symmetrizer(ExprPtr&)
+   :project: SeQuant

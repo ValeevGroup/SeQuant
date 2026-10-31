@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a15fbc6895121e548cb6b84f4f5a18a47:
+
+Function sequant::opt::detail::freely_permutable
+================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::freely_permutable(const Tensor&)
+   :project: SeQuant

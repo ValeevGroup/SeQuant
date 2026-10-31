@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1aa5d27162714f32ae8fe01c409286c21a:
+
+Function sequant::eval::detail::emit_build_cell
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_cell_table_builder.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::emit_build_cell(CellTableInputs const&, std::size_t, container::svector<std::pair<LoopKey, int>> const&, container::svector<std::wstring> const&, container::svector<ScopeBlock const *> const&, CellBuildState&)
+   :project: SeQuant

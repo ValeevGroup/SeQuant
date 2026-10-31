@@ -1,0 +1,29 @@
+.. _exhale_class_classsequant_1_1opt_1_1_intermediate_name_pool:
+
+Class IntermediateNamePool
+==========================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1_intermediate_name_pool_1_1_allocation`
+- :ref:`exhale_struct_structsequant_1_1opt_1_1_intermediate_name_pool_1_1_recycled_tensor`
+- :ref:`exhale_struct_structsequant_1_1opt_1_1_intermediate_name_pool_1_1_state`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::opt::IntermediateNamePool
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

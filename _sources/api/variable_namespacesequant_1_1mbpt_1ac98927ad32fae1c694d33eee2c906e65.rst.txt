@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1mbpt_1ac98927ad32fae1c694d33eee2c906e65:
+
+Variable sequant::mbpt::default_ao_basis_instance
+=================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_convention.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::mbpt::default_ao_basis_instance
+   :project: SeQuant

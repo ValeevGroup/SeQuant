@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1mbpt_1a9d3581dd7193ca521286e52579b742ea:
+
+Typedef sequant::mbpt::qnc_t
+============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::mbpt::qnc_t
+   :project: SeQuant

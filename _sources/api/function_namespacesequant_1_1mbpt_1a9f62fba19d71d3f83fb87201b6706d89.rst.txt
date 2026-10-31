@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a9f62fba19d71d3f83fb87201b6706d89:
+
+Function sequant::mbpt::sort_pairings
+=====================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::sort_pairings(ParticlePairings&)
+   :project: SeQuant

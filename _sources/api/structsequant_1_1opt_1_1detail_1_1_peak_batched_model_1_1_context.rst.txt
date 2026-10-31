@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1opt_1_1detail_1_1_peak_batched_model_1_1_context:
+
+Struct PeakBatchedModel::Context
+================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_cost_model.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_peak_batched_model`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::opt::detail::PeakBatchedModel::Context
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

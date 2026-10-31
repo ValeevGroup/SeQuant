@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1_type_attr:
+
+Class TypeAttr
+==============
+
+- Defined in :ref:`file_SeQuant_core_space.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Derived Type
+************
+
+- ``public sequant::IndexSpace::Attr`` (:ref:`exhale_struct_structsequant_1_1_index_space_1_1_attr`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::TypeAttr
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

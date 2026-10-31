@@ -1,0 +1,14 @@
+.. _exhale_define_deprecated__member_8hpp_1a8a35c07a2b2d929383f363140cd9cba0:
+
+Define SEQUANT_DEPRECATED_MEMBER
+================================
+
+- Defined in :ref:`file_SeQuant_core_utility_deprecated_member.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_DEPRECATED_MEMBER
+   :project: SeQuant

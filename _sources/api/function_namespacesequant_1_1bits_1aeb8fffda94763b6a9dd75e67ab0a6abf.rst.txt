@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1bits_1aeb8fffda94763b6a9dd75e67ab0a6abf:
+
+Function sequant::bits::on_bits_index
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::bits::on_bits_index(std::unsigned_integral auto)
+   :project: SeQuant

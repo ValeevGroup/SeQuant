@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1detail_1_1_export_irrep_data_1_1_entry:
+
+Struct ExportIrrepData::Entry
+=============================
+
+- Defined in :ref:`file_SeQuant_core_export_context.cpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_struct_structsequant_1_1detail_1_1_export_irrep_data`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::ExportIrrepData::Entry
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

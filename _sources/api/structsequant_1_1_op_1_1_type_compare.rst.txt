@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1_op_1_1_type_compare:
+
+Struct Op::TypeCompare
+======================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_op`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::Op::TypeCompare
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,94 @@
+
+.. _namespace_sequant__eval__dryrun:
+
+Namespace sequant::eval::dryrun
+===============================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant__eval__dryrun__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_cache_config`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_cost_sink`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_dry_run_leaf_evaluator`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_home_fidelity`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_meter_report`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_result_dry_run_1_1_payload`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_result_dry_run_nested_1_1_payload`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_size_regime`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_size_regime_1_1_csv_moment_tables`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1dryrun_1_1_cost_model`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1dryrun_1_1_eval_expr_dry_run`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1dryrun_1_1_result_dry_run`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1dryrun_1_1_result_dry_run_nested`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a2244d02eab00bcfb8e0121810c259992`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a27f6d3d523d64d15ac4eb833e4edd517`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a9935445cb9811c990ff064edc8e56905`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a88eb58ac0d9a061b679135285affdaa5`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a09b68cc7e308cc28694531440c3a94bf`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a465c4dbe8d5c099e5278c4e8150e49f0`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a90935ca07acabe837c35455cd26527c1`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a33e7928a3dc346bba1c9b83db1a808d1`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1a09cf7c615a85a4a5cf6ba47acf4ebe77`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1a5667a6e68f873a74b3c94dc9c69c1dfa`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1aaea02219a5e0d90dce5836356b3f805b`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1a0f49ad81610ad059ca5a7d597d2546c5`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1aa193cdb2042264395a2d2690f91f474e`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1eval_1_1dryrun_1a50b34cd74f86fa0a881e4d1e37b86908`

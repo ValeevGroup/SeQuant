@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1afb9aa4f7b2e4b351def274f8e2de6755:
+
+Typedef sequant::tensor_index_pair_t
+====================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_canonicalizer_fwd.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::tensor_index_pair_t
+   :project: SeQuant

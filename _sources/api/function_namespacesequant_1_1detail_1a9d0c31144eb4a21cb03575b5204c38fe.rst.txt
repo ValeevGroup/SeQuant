@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a9d0c31144eb4a21cb03575b5204c38fe:
+
+Function sequant::detail::basis_instance_tag
+============================================
+
+- Defined in :ref:`file_SeQuant_core_export_utils.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::basis_instance_tag(const Index&)
+   :project: SeQuant

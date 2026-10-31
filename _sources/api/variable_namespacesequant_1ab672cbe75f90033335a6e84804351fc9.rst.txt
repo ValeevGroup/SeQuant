@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1ab672cbe75f90033335a6e84804351fc9:
+
+Variable sequant::is_constant_v
+===============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_traits.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::is_constant_v
+   :project: SeQuant

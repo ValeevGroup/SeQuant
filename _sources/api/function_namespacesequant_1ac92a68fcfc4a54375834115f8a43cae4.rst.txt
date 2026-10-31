@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ac92a68fcfc4a54375834115f8a43cae4:
+
+Function sequant::make_irrep_context
+====================================
+
+- Defined in :ref:`file_SeQuant_core_irreps_config.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::make_irrep_context(const IrrepContextSpec&)
+   :project: SeQuant

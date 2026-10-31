@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a457f89ec7c8dc605797849946c6e8524:
+
+Function sequant::as_index_group_view
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::as_index_group_view(SlottedIndexGroup auto&&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a503cf8d3ae170139a42cd48b825f71b6:
+
+Function sequant::toplevel_diff(const Tensor&, const Tensor&)
+=============================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::toplevel_diff(const Tensor&, const Tensor&)
+   :project: SeQuant

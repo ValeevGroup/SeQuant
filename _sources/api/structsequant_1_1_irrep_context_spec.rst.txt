@@ -1,0 +1,27 @@
+.. _exhale_struct_structsequant_1_1_irrep_context_spec:
+
+Struct IrrepContextSpec
+=======================
+
+- Defined in :ref:`file_SeQuant_core_irreps_config.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1_irrep_context_spec_1_1_table`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::IrrepContextSpec
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

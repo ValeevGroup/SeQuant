@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1density_1aa5056d82b830b86882bbb6f005e874cd:
+
+Function sequant::density::symmetries
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_density.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::density::symmetries(std::wstring_view, std::size_t)
+   :project: SeQuant

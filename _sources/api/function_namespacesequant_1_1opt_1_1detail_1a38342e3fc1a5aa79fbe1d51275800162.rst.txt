@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a38342e3fc1a5aa79fbe1d51275800162:
+
+Function sequant::opt::detail::same_symmetries
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::same_symmetries(const Tensor&, const Tensor&)
+   :project: SeQuant

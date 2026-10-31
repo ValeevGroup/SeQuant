@@ -1,0 +1,47 @@
+
+.. _file_SeQuant_core_irreps_table_algebra.cpp:
+
+File table_algebra.cpp
+======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_irreps>` (``SeQuant/core/irreps``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/irreps/table_algebra.cpp``)
+------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_irreps_table_algebra.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/irreps/table_algebra.hpp`` (:ref:`file_SeQuant_core_irreps_table_algebra.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+

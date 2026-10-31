@@ -1,0 +1,31 @@
+
+.. _program_listing_file_SeQuant_core_tensor_canonicalizer_fwd.hpp:
+
+Program Listing for File tensor_canonicalizer_fwd.hpp
+=====================================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_tensor_canonicalizer_fwd.hpp>` (``SeQuant/core/tensor_canonicalizer_fwd.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_TENSOR_CANONICALIZER_FWD_HPP
+   #define SEQUANT_CORE_TENSOR_CANONICALIZER_FWD_HPP
+   
+   #include <functional>
+   #include <utility>
+   
+   namespace sequant {
+   
+   class Index;
+   class TensorCanonicalizer;
+   
+   using tensor_index_comparer_t = std::function<bool(const Index&, const Index&)>;
+   using tensor_index_pair_t = std::pair<const Index, const Index>;
+   using tensor_index_pair_comparer_t =
+       std::function<bool(const tensor_index_pair_t&, const tensor_index_pair_t)>;
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_TENSOR_CANONICALIZER_FWD_HPP

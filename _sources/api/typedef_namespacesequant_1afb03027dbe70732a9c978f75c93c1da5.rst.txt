@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1afb03027dbe70732a9c978f75c93c1da5:
+
+Typedef sequant::EvalNode
+=========================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::EvalNode
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1abcbf2081965ec76c3517683c7bb8a892:
+
+Function sequant::mbpt::operator&(ProjectionTerms, ProjectionTerms)
+===================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_rules_pno.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::operator&(ProjectionTerms, ProjectionTerms)
+   :project: SeQuant

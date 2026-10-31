@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a0e3a17a17055bf26e022b327b8d9ccdd:
+
+Template Function sequant::eval::detail::compute_cell
+=====================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::compute_cell(node_t const&, CellId, CellReadResolver&, F const&, CacheManager<N, FHC>&, eval::BatchContext const&)
+   :project: SeQuant

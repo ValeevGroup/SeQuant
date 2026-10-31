@@ -1,0 +1,736 @@
+
+.. _program_listing_file_SeQuant_core_optimize_name_recycling.hpp:
+
+Program Listing for File name_recycling.hpp
+===========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_optimize_name_recycling.hpp>` (``SeQuant/core/optimize/name_recycling.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_OPTIMIZE_NAME_RECYCLING_HPP
+   #define SEQUANT_CORE_OPTIMIZE_NAME_RECYCLING_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/eval_expr.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/utility/aggregate.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   #include <SeQuant/core/utility/tensor.hpp>
+   
+   #include <algorithm>
+   #include <concepts>
+   #include <cstddef>
+   #include <cwctype>
+   #include <functional>
+   #include <map>
+   #include <optional>
+   #include <ranges>
+   #include <set>
+   #include <string>
+   #include <string_view>
+   #include <utility>
+   #include <vector>
+   
+   namespace sequant::opt {
+   
+   enum class ShapeCompatibility {
+     ExactBlock,
+     IndexMultiset,
+   };
+   
+   using SlotMap = container::svector<std::size_t>;
+   
+   namespace detail {
+   
+   inline std::wstring_view result_label(const Expr &object) {
+     if (object.is<Tensor>()) {
+       return object.as<Tensor>().label();
+     }
+   
+     SEQUANT_ASSERT(object.is<Variable>());
+     return object.as<Variable>().label();
+   }
+   
+   inline std::wstring_view label_basename(std::wstring_view label) {
+     std::size_t size = label.size();
+     while (size > 0 && std::iswdigit(label.at(size - 1))) {
+       --size;
+     }
+   
+     return size == 0 ? label : label.substr(0, size);
+   }
+   
+   inline bool same_slot_type(const Index &lhs, const Index &rhs) {
+     if (lhs.basis() != rhs.basis() ||
+         lhs.proto_indices().size() != rhs.proto_indices().size()) {
+       return false;
+     }
+   
+     return std::ranges::equal(lhs.proto_indices(), rhs.proto_indices(),
+                               std::equal_to<>{}, &Index::basis, &Index::basis);
+   }
+   
+   inline bool same_symmetries(const Tensor &lhs, const Tensor &rhs) {
+     return lhs.symmetry() == rhs.symmetry() &&
+            lhs.braket_symmetry() == rhs.braket_symmetry() &&
+            lhs.column_symmetry() == rhs.column_symmetry();
+   }
+   
+   inline bool same_slot_groups(const Tensor &lhs, const Tensor &rhs) {
+     return lhs.bra_rank() == rhs.bra_rank() && lhs.ket_rank() == rhs.ket_rank() &&
+            lhs.aux_rank() == rhs.aux_rank();
+   }
+   
+   inline bool same_block(const Tensor &lhs, const Tensor &rhs) {
+     if (!same_slot_groups(lhs, rhs) || !same_symmetries(lhs, rhs)) {
+       return false;
+     }
+   
+     auto lhs_slots = lhs.const_slots();
+     auto rhs_slots = rhs.const_slots();
+   
+     for (auto lit = lhs_slots.begin(), rit = rhs_slots.begin();
+          lit != lhs_slots.end(); ++lit, ++rit) {
+       SEQUANT_ASSERT(rit != rhs_slots.end());
+       if (lit->nonnull() != rit->nonnull() ||
+           (lit->nonnull() && !same_slot_type(*lit, *rit))) {
+         return false;
+       }
+     }
+   
+     return true;
+   }
+   
+   inline bool freely_permutable(const Tensor &tensor) {
+     return tensor.symmetry() == Symmetry::Nonsymm &&
+            tensor.braket_symmetry() == BraKetSymmetry::Nonsymm &&
+            tensor.column_symmetry() == ColumnSymmetry::Nonsymm &&
+            tensor.num_slots() == tensor.num_indices();
+   }
+   
+   inline std::optional<SlotMap> slot_map_onto(const Tensor &layout,
+                                               const Tensor &candidate,
+                                               ShapeCompatibility compatibility) {
+     if (same_block(layout, candidate)) {
+       return SlotMap{};
+     }
+   
+     if (compatibility != ShapeCompatibility::IndexMultiset ||
+         !same_slot_groups(layout, candidate) || !freely_permutable(layout) ||
+         !freely_permutable(candidate)) {
+       return std::nullopt;
+     }
+   
+     container::svector<Index> layout_slots(layout.const_slots().begin(),
+                                            layout.const_slots().end());
+     container::svector<Index> candidate_slots(candidate.const_slots().begin(),
+                                               candidate.const_slots().end());
+   
+     SlotMap slot_map(layout_slots.size());
+     container::svector<bool> taken(candidate_slots.size(), false);
+   
+     const std::size_t group_ends[] = {
+         layout.bra_rank(), layout.bra_rank() + layout.ket_rank(),
+         layout.bra_rank() + layout.ket_rank() + layout.aux_rank()};
+   
+     std::size_t group_begin = 0;
+     for (std::size_t group_end : group_ends) {
+       for (std::size_t k = group_begin; k < group_end; ++k) {
+         bool found = false;
+         for (std::size_t j = group_begin; j < group_end; ++j) {
+           if (!taken[j] && same_slot_type(layout_slots[k], candidate_slots[j])) {
+             taken[j] = true;
+             slot_map[k] = j;
+             found = true;
+             break;
+           }
+         }
+   
+         if (!found) {
+           return std::nullopt;
+         }
+       }
+   
+       group_begin = group_end;
+     }
+   
+     return slot_map;
+   }
+   
+   inline Tensor relabeled(const Tensor &tensor, std::wstring_view label,
+                           const SlotMap &slot_map) {
+     if (slot_map.empty()) {
+       Tensor result = tensor;
+       result.set_label(std::wstring(label));
+       return result;
+     }
+   
+     container::svector<Index> slots(tensor.const_slots().begin(),
+                                     tensor.const_slots().end());
+     SEQUANT_ASSERT(slot_map.size() == slots.size());
+   
+     container::svector<Index> rearranged;
+     rearranged.reserve(slots.size());
+     for (std::size_t source : slot_map) {
+       rearranged.push_back(slots.at(source));
+     }
+   
+     auto bra_end = rearranged.begin() + tensor.bra_rank();
+     auto ket_end = bra_end + tensor.ket_rank();
+   
+     return Tensor(std::wstring(label),
+                   bra(container::svector<Index>(rearranged.begin(), bra_end)),
+                   ket(container::svector<Index>(bra_end, ket_end)),
+                   aux(container::svector<Index>(ket_end, rearranged.end())),
+                   TensorSymmetries{.perm = tensor.symmetry(),
+                                    .braket = tensor.braket_symmetry(),
+                                    .hermiticity = tensor.hermiticity(),
+                                    .column = tensor.column_symmetry()});
+   }
+   
+   inline Variable relabeled(const Variable &variable, std::wstring_view label) {
+     Variable result = variable;
+     result.set_label(std::wstring(label));
+     return result;
+   }
+   
+   using TensorNormalizer = std::function<void(Tensor &)>;
+   
+   struct ResultObjectLess {
+     using is_transparent = void;
+   
+     TensorNormalizer normalize = {};
+   
+     bool operator()(const Expr &lhs, const Expr &rhs) const {
+       if (normalize && lhs.is<Tensor>() && rhs.is<Tensor>()) {
+         Tensor normalized_lhs = lhs.as<Tensor>();
+         Tensor normalized_rhs = rhs.as<Tensor>();
+         normalize(normalized_lhs);
+         normalize(normalized_rhs);
+         return compare(normalized_lhs, normalized_rhs);
+       }
+   
+       return compare(lhs, rhs);
+     }
+   
+     bool operator()(const ExprPtr &lhs, const ExprPtr &rhs) const {
+       return (*this)(*lhs, *rhs);
+     }
+     bool operator()(const ExprPtr &lhs, const Expr &rhs) const {
+       return (*this)(*lhs, rhs);
+     }
+     bool operator()(const Expr &lhs, const ExprPtr &rhs) const {
+       return (*this)(lhs, *rhs);
+     }
+   
+    private:
+     static bool compare(const Expr &lhs, const Expr &rhs) {
+       const bool lhs_tensor = lhs.is<Tensor>();
+       const bool rhs_tensor = rhs.is<Tensor>();
+   
+       if (lhs_tensor != rhs_tensor) {
+         return lhs_tensor;
+       }
+   
+       if (lhs_tensor) {
+         // Same notion of tensor identity as used by the export
+         return TensorBlockLessThanComparator{}(lhs.as<Tensor>(),
+                                                rhs.as<Tensor>());
+       }
+   
+       // A variable and its complex conjugate refer to the same object
+       return result_label(lhs) < result_label(rhs);
+     }
+   };
+   
+   template <typename Visitor>
+   ExprPtr map_leaf_objects(const ExprPtr &leaf, Visitor &&visitor) {
+     if (leaf->is<Tensor>() && is_adjoint_label(leaf->as<Tensor>().label())) {
+       Tensor bare = leaf->as<Tensor>();
+       bare.adjoint();
+   
+       ExprPtr replacement = visitor(ex<Tensor>(std::move(bare)));
+       if (!replacement) {
+         return leaf;
+       }
+   
+       replacement->as<Tensor>().adjoint();
+       return replacement;
+     }
+   
+     if (leaf->is<Tensor>() || leaf->is<Variable>()) {
+       ExprPtr replacement = visitor(leaf);
+       return replacement ? replacement : leaf;
+     }
+   
+     if (leaf->is<Power>()) {
+       const Power &power = leaf->as<Power>();
+       if (power.base()->is<Tensor>() || power.base()->is<Variable>()) {
+         ExprPtr replacement = visitor(power.base());
+         if (replacement) {
+           auto result = ex<Power>(std::move(replacement), power.exponent());
+           if (power.conjugated()) {
+             result->as<Power>().conjugate();
+           }
+           return result;
+         }
+       }
+     }
+   
+     return leaf;
+   }
+   
+   using ObjectMap = std::map<ExprPtr, std::size_t, ResultObjectLess>;
+   
+   struct RecyclableValue {
+     ExprPtr original;
+     std::size_t first_def = 0;
+     std::size_t last_use = 0;
+     bool pinned = false;
+     ExprPtr renamed = {};
+     SlotMap slot_map = {};
+   };
+   
+   struct TreeBindings {
+     ObjectMap uses;
+     std::optional<std::size_t> defines = {};
+   };
+   
+   }  // namespace detail
+   
+   class IntermediateNamePool {
+    public:
+     using LabelGenerator =
+         std::function<std::wstring(std::wstring_view basename, std::size_t)>;
+   
+     struct RecycledTensor {
+       Tensor tensor;
+       SlotMap slot_map;
+     };
+   
+     struct Allocation {
+       std::wstring label;
+       bool recycled;
+     };
+   
+     static LabelGenerator default_label_generator() {
+       return [](std::wstring_view basename, std::size_t counter) {
+         return std::wstring(basename) + std::to_wstring(counter);
+       };
+     }
+   
+     explicit IntermediateNamePool(
+         LabelGenerator label_gen = default_label_generator(),
+         detail::TensorNormalizer normalize = {})
+         : label_gen_(std::move(label_gen)),
+           objects_(detail::ResultObjectLess{.normalize = std::move(normalize)}) {}
+   
+     void reserve(std::wstring label) { reserved_.insert(std::move(label)); }
+   
+     void occupy(const Expr &object) { ++entry(object).uses; }
+   
+     void release(const Expr &object) {
+       State &state = entry(object);
+       SEQUANT_ASSERT(state.uses > 0);
+       --state.uses;
+     }
+   
+     std::wstring fresh_label(std::wstring_view basename, const Expr &candidate) {
+       ExprPtr object = candidate.clone();
+   
+       for (std::size_t counter = 1;; ++counter) {
+         std::wstring label = label_gen_(basename, counter);
+         if (reserved_.contains(label)) {
+           continue;
+         }
+   
+         set_label(*object, label);
+         if (objects_.contains(*object)) {
+           continue;
+         }
+   
+         occupy(*object);
+         return label;
+       }
+     }
+   
+     template <typename T>
+       requires std::same_as<T, Tensor> || std::same_as<T, Variable>
+     Allocation lowest_available(
+         std::wstring_view basename, const T &candidate,
+         const std::function<bool(const T &)> &acceptable = {}) const {
+       T object = candidate;
+   
+       for (std::size_t counter = 1;; ++counter) {
+         std::wstring label = label_gen_(basename, counter);
+         if (reserved_.contains(label)) {
+           continue;
+         }
+   
+         object.set_label(label);
+         auto it = objects_.find(static_cast<const Expr &>(object));
+         if ((it != objects_.end() && it->second.uses > 0) ||
+             (acceptable && !acceptable(object))) {
+           continue;
+         }
+   
+         return Allocation{.label = std::move(label),
+                           .recycled = it != objects_.end()};
+       }
+     }
+   
+     std::optional<RecycledTensor> acquire(
+         const Tensor &candidate, ShapeCompatibility compatibility,
+         const std::function<bool(const Tensor &)> &acceptable = {}) {
+       const Tensor *best = nullptr;
+       std::size_t best_order = 0;
+       SlotMap best_map;
+   
+       for (const auto &[object, state] : objects_) {
+         if (state.uses > 0 || !object->is<Tensor>() ||
+             (best && state.order >= best_order)) {
+           continue;
+         }
+   
+         const Tensor &freed = object->as<Tensor>();
+         std::optional<SlotMap> slot_map =
+             detail::slot_map_onto(freed, candidate, compatibility);
+         if (!slot_map.has_value() || (acceptable && !acceptable(freed))) {
+           continue;
+         }
+   
+         best = &freed;
+         best_order = state.order;
+         best_map = std::move(slot_map.value());
+       }
+   
+       if (!best) {
+         return std::nullopt;
+       }
+   
+       occupy(*best);
+   
+       return RecycledTensor{
+           .tensor = detail::relabeled(candidate, best->label(), best_map),
+           .slot_map = std::move(best_map)};
+     }
+   
+     std::optional<Variable> acquire(
+         const Variable &candidate,
+         const std::function<bool(const Variable &)> &acceptable = {}) {
+       const Variable *best = nullptr;
+       std::size_t best_order = 0;
+   
+       for (const auto &[object, state] : objects_) {
+         if (state.uses > 0 || !object->is<Variable>() ||
+             (best && state.order >= best_order)) {
+           continue;
+         }
+   
+         const Variable &freed = object->as<Variable>();
+         if (acceptable && !acceptable(freed)) {
+           continue;
+         }
+   
+         best = &freed;
+         best_order = state.order;
+       }
+   
+       if (!best) {
+         return std::nullopt;
+       }
+   
+       occupy(*best);
+   
+       return detail::relabeled(candidate, best->label());
+     }
+   
+    private:
+     struct State {
+       std::size_t order;
+       std::size_t uses;
+     };
+   
+     LabelGenerator label_gen_;
+     std::set<std::wstring, std::less<>> reserved_;
+     std::map<ExprPtr, State, detail::ResultObjectLess> objects_;
+   
+     static void set_label(Expr &object, std::wstring label) {
+       if (object.is<Tensor>()) {
+         object.as<Tensor>().set_label(std::move(label));
+       } else {
+         object.as<Variable>().set_label(std::move(label));
+       }
+     }
+   
+     State &entry(const Expr &object) {
+       SEQUANT_ASSERT(object.is<Tensor>() || object.is<Variable>());
+       auto it = objects_.find(object);
+       if (it == objects_.end()) {
+         it = objects_
+                  .emplace(object.clone(),
+                           State{.order = objects_.size(), .uses = 0})
+                  .first;
+       }
+       return it->second;
+     }
+   };
+   
+   template <typename TreeNode>
+   struct NameRecyclingOptions {
+     SEQUANT_DESIGNATED_INIT_ONLY;
+   
+     std::function<bool(std::size_t, const TreeNode &)> is_recyclable;
+     std::function<bool(std::size_t, const TreeNode &)> starts_new_value = {};
+     ShapeCompatibility shape_compatibility = ShapeCompatibility::ExactBlock;
+     std::function<bool(const TreeNode &previous, const TreeNode &current)>
+         extra_compatible = {};
+     std::vector<std::pair<std::size_t, std::size_t>> repeated_regions = {};
+     IntermediateNamePool::LabelGenerator label_gen =
+         IntermediateNamePool::default_label_generator();
+     detail::TensorNormalizer normalize = {};
+     std::function<void(const TreeNode &original, TreeNode &rebuilt)> on_rebuilt =
+         {};
+   };
+   
+   struct NameRecyclingResult {
+     std::size_t num_values = 0;
+     std::size_t num_names = 0;
+   };
+   
+   template <std::ranges::random_access_range VectorLike, typename Transformer>
+     requires meta::eval_node<std::ranges::range_value_t<VectorLike>> &&
+              std::regular_invocable<Transformer, ResultExpr>
+   NameRecyclingResult recycle_intermediate_names(
+       VectorLike &trees, const Transformer &expr_to_tree,
+       const NameRecyclingOptions<std::ranges::range_value_t<VectorLike>> &opts) {
+     using TreeNode = std::ranges::range_value_t<VectorLike>;
+     SEQUANT_ASSERT(opts.is_recyclable);
+   
+     using Value = detail::RecyclableValue;
+     using TreeBindings = detail::TreeBindings;
+   
+     const std::size_t num_trees = std::ranges::size(trees);
+     auto tree_at = [&](std::size_t i) -> TreeNode & {
+       return *(std::ranges::begin(trees) + i);
+     };
+   
+     auto live_until = [&](std::size_t use, std::size_t def) {
+       std::size_t last = use;
+       for (const auto &[begin, end] : opts.repeated_regions) {
+         const bool use_inside = begin <= use && use < end;
+         const bool def_inside = begin <= def && def < end;
+         if (use_inside && !def_inside) {
+           last = std::max(last, end - 1);
+         }
+       }
+       return last;
+     };
+   
+     const detail::ResultObjectLess identity{.normalize = opts.normalize};
+   
+     std::vector<Value> values;
+     std::vector<TreeBindings> bindings(
+         num_trees, TreeBindings{.uses = detail::ObjectMap(identity)});
+     std::set<std::wstring> reserved;
+     detail::ObjectMap current_values(identity);
+   
+     // 1. Determine values and their live ranges
+     for (std::size_t i = 0; i < num_trees; ++i) {
+       const TreeNode &tree = tree_at(i);
+       TreeBindings &current = bindings[i];
+   
+       (void)to_expr(tree, [&](const ExprPtr &leaf) {
+         return detail::map_leaf_objects(leaf, [&](const ExprPtr &object) {
+           if (auto it = current_values.find(object); it != current_values.end()) {
+             Value &value = values.at(it->second);
+             value.last_use =
+                 std::max(value.last_use, live_until(i, value.first_def));
+             current.uses.emplace(object, it->second);
+           } else {
+             reserved.emplace(detail::result_label(*object));
+           }
+           return ExprPtr{};
+         });
+       });
+   
+       const ExprPtr result = tree->expr();
+       if (!result->is<Tensor>() && !result->is<Variable>()) {
+         continue;
+       }
+   
+       auto it = current_values.find(result);
+       const bool recyclable = opts.is_recyclable(i, tree);
+   
+       if (it == current_values.end() && !recyclable) {
+         reserved.emplace(detail::result_label(*result));
+         continue;
+       }
+   
+       const bool new_value =
+           it == current_values.end() ||
+           (recyclable && opts.starts_new_value && opts.starts_new_value(i, tree));
+   
+       if (new_value) {
+         current_values.insert_or_assign(result, values.size());
+         values.push_back(
+             Value{.original = result, .first_def = i, .last_use = i});
+         current.defines = values.size() - 1;
+       } else {
+         Value &value = values.at(it->second);
+         value.last_use = std::max(value.last_use, live_until(i, value.first_def));
+         value.pinned |= !recyclable;
+         current.defines = it->second;
+       }
+     }
+   
+     // 2. Assign names
+     IntermediateNamePool pool(opts.label_gen, opts.normalize);
+     for (const Value &value : values) {
+       if (value.pinned) {
+         reserved.emplace(detail::result_label(*value.original));
+       }
+     }
+     for (const std::wstring &label : reserved) {
+       pool.reserve(label);
+     }
+   
+     // Values that hold a name, ordered by the end of their live range
+     std::multimap<std::size_t, std::size_t> active;
+     // Value currently (or most recently) holding a given name
+     detail::ObjectMap holder(identity);
+   
+     auto previous_def_compatible = [&](const Expr &freed, const Value &value) {
+       if (!opts.extra_compatible) {
+         return true;
+       }
+       auto it = holder.find(freed);
+       SEQUANT_ASSERT(it != holder.end());
+       return opts.extra_compatible(tree_at(values.at(it->second).first_def),
+                                    tree_at(value.first_def));
+     };
+   
+     NameRecyclingResult stats;
+     std::set<ExprPtr, detail::ResultObjectLess> used_names(identity);
+   
+     for (std::size_t v = 0; v < values.size(); ++v) {
+       Value &value = values[v];
+       if (value.pinned) {
+         continue;
+       }
+   
+       while (!active.empty() && active.begin()->first < value.first_def) {
+         const Value &done = values.at(active.begin()->second);
+         pool.release(*done.renamed);
+         active.erase(active.begin());
+       }
+   
+       const std::wstring basename(
+           detail::label_basename(detail::result_label(*value.original)));
+   
+       if (value.original->is<Tensor>()) {
+         const Tensor &original = value.original->as<Tensor>();
+         auto recycled = pool.acquire(
+             original, opts.shape_compatibility, [&](const Tensor &freed) {
+               return previous_def_compatible(freed, value);
+             });
+   
+         if (recycled.has_value()) {
+           value.renamed = ex<Tensor>(std::move(recycled->tensor));
+           value.slot_map = std::move(recycled->slot_map);
+         } else {
+           value.renamed = ex<Tensor>(detail::relabeled(
+               original, pool.fresh_label(basename, original), SlotMap{}));
+         }
+       } else {
+         const Variable &original = value.original->as<Variable>();
+         auto recycled = pool.acquire(original, [&](const Variable &freed) {
+           return previous_def_compatible(freed, value);
+         });
+   
+         value.renamed = ex<Variable>(
+             recycled.has_value()
+                 ? std::move(recycled.value())
+                 : detail::relabeled(original,
+                                     pool.fresh_label(basename, original)));
+       }
+   
+       holder.insert_or_assign(value.renamed, v);
+       used_names.insert(value.renamed);
+       active.emplace(value.last_use, v);
+       ++stats.num_values;
+     }
+   
+     stats.num_names = used_names.size();
+   
+     // 3. Rewrite trees
+     auto rename_object = [&](const ExprPtr &object, const Value &value) {
+       if (object->is<Tensor>()) {
+         return ex<Tensor>(detail::relabeled(object->as<Tensor>(),
+                                             detail::result_label(*value.renamed),
+                                             value.slot_map));
+       }
+       return ex<Variable>(detail::relabeled(
+           object->as<Variable>(), detail::result_label(*value.renamed)));
+     };
+   
+     auto needs_renaming = [&](std::size_t value) {
+       return !values.at(value).pinned;
+     };
+   
+     for (std::size_t i = 0; i < num_trees; ++i) {
+       const TreeBindings &current = bindings[i];
+   
+       const bool rename_result =
+           current.defines.has_value() && needs_renaming(*current.defines);
+       const bool rename_uses =
+           std::ranges::any_of(current.uses, needs_renaming,
+                               [](const auto &pair) { return pair.second; });
+   
+       if (!rename_result && !rename_uses) {
+         continue;
+       }
+   
+       TreeNode &tree = tree_at(i);
+   
+       ExprPtr expression = to_expr(tree, [&](const ExprPtr &leaf) {
+         return detail::map_leaf_objects(leaf, [&](const ExprPtr &object) {
+           auto it = current.uses.find(object);
+           if (it == current.uses.end() || !needs_renaming(it->second)) {
+             return ExprPtr{};
+           }
+           return rename_object(object, values.at(it->second));
+         });
+       });
+   
+       ExprPtr result = tree->expr();
+       if (rename_result) {
+         result = rename_object(result, values.at(*current.defines));
+       }
+   
+       TreeNode rebuilt = [&]() {
+         if (result->is<Tensor>()) {
+           return expr_to_tree(
+               ResultExpr(result->as<Tensor>(), std::move(expression)));
+         }
+         return expr_to_tree(
+             ResultExpr(result->as<Variable>(), std::move(expression)));
+       }();
+   
+       if (opts.on_rebuilt) {
+         opts.on_rebuilt(tree, rebuilt);
+       }
+   
+       tree = std::move(rebuilt);
+     }
+   
+     return stats;
+   }
+   
+   }  // namespace sequant::opt
+   
+   #endif  // SEQUANT_CORE_OPTIMIZE_NAME_RECYCLING_HPP

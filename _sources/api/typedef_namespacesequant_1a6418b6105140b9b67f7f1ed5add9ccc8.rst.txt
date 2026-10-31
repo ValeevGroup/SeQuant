@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a6418b6105140b9b67f7f1ed5add9ccc8:
+
+Typedef sequant::IndexSpecificTensorBlockEqualComparator
+========================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_tensor.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::IndexSpecificTensorBlockEqualComparator
+   :project: SeQuant

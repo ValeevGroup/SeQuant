@@ -1,0 +1,33 @@
+.. _exhale_struct_structsequant_1_1_expression_filter_1_1_rule:
+
+Struct ExpressionFilter::Rule
+=============================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr_filter.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_expression_filter`.
+
+
+Inheritance Relationships
+-------------------------
+
+Derived Types
+*************
+
+- ``public sequant::ContainsRule`` (:ref:`exhale_struct_structsequant_1_1_contains_rule`)
+- ``public sequant::LabelRule`` (:ref:`exhale_struct_structsequant_1_1_label_rule`)
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::ExpressionFilter::Rule
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

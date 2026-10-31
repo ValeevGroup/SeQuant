@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a5c349df2e2aff230df205feccb512e2c:
+
+Template Function sequant::resolve_by_block
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_irreps_propagation.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::resolve_by_block(std::map<Tensor, IrrepSet<Irrep>, TensorBlockLessThanComparator>)
+   :project: SeQuant

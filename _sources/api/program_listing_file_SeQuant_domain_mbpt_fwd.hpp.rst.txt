@@ -1,0 +1,36 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_fwd.hpp:
+
+Program Listing for File fwd.hpp
+================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_fwd.hpp>` (``SeQuant/domain/mbpt/fwd.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 7/18/23.
+   //
+   
+   #ifndef SEQUANT_DOMAIN_MBPT_FWD_HPP
+   #define SEQUANT_DOMAIN_MBPT_FWD_HPP
+   
+   #include <SeQuant/core/fwd.hpp>
+   
+   #include <cstdint>
+   
+   namespace sequant {
+   
+   namespace mbpt {
+   
+   inline namespace op {
+   
+   namespace tensor {}
+   
+   }  // namespace op
+   }  // namespace mbpt
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_FWD_HPP

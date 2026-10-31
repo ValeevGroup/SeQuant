@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a4f477f2a3327b24a2432f01a2c9726b3:
+
+Typedef sequant::TensorBlockEqualComparator
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_utility_tensor.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::TensorBlockEqualComparator
+   :project: SeQuant

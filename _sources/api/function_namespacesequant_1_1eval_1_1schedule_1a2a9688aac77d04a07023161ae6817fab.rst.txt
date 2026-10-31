@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1schedule_1a2a9688aac77d04a07023161ae6817fab:
+
+Template Function sequant::eval::schedule::record_dag
+=====================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_schedule_dag_record.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::schedule::record_dag(RichSchedule const&, LegalitySchedule const&, OrderedSchedule const&, R const&, std::vector<RootRecord> const&, std::function<bool(std::ranges::range_value_t<R> const&)> const&)
+   :project: SeQuant

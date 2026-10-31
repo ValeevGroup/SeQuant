@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1detail_1a10d99a041f696df04cd34e44d44e236d:
+
+Typedef sequant::detail::perm_t
+===============================
+
+- Defined in :ref:`file_SeQuant_core_eval_result.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::detail::perm_t
+   :project: SeQuant

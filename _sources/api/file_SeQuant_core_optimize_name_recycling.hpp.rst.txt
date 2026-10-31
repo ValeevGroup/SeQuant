@@ -1,0 +1,165 @@
+
+.. _file_SeQuant_core_optimize_name_recycling.hpp:
+
+File name_recycling.hpp
+=======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_optimize>` (``SeQuant/core/optimize``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/optimize/name_recycling.hpp``)
+---------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize_name_recycling.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval/eval_expr.hpp`` (:ref:`file_SeQuant_core_eval_eval_expr.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/utility/aggregate.hpp`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/tensor.hpp`` (:ref:`file_SeQuant_core_utility_tensor.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``concepts`` (:ref:`file_SeQuant_core_io_concepts.hpp`)
+
+- ``cstddef``
+
+- ``cwctype``
+
+- ``functional``
+
+- ``map`` (:ref:`file_SeQuant_core_eval_value_node_map.hpp`)
+
+- ``optional``
+
+- ``ranges`` (:ref:`file_SeQuant_core_ranges.hpp`)
+
+- ``set`` (:ref:`file_SeQuant_core_bitset.hpp`)
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_export_export.hpp`
+
+- :ref:`file_SeQuant_core_export_name_recycling.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__opt`
+
+- :ref:`namespace_sequant__opt__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_recyclable_value`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_result_object_less`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1detail_1_1_tree_bindings`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1_intermediate_name_pool_1_1_allocation`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1_intermediate_name_pool_1_1_recycled_tensor`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1_intermediate_name_pool_1_1_state`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1_name_recycling_options`
+
+- :ref:`exhale_struct_structsequant_1_1opt_1_1_name_recycling_result`
+
+- :ref:`exhale_class_classsequant_1_1opt_1_1_intermediate_name_pool`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1_1opt_1a7051d7a38153b52e30098e2e513fc03b`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a15fbc6895121e548cb6b84f4f5a18a47`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1aff7f522581c45b80813bda52cd0411d3`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1aaa7a7c411c0e68921f933ae86f8e4943`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1afd7b8774758145f26abc07af9cefb744`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a8fc66d296cd9fc6b1c757325a73dbc73`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1aa5aa0d553f9806086724d8b1c7ba6162`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1ab495832c6f43528f518dcc69ea2ade8b`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a1036fec98d33a3adcc511a47010d8c26`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a27bee857ac6017079109024e3037782f`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a38342e3fc1a5aa79fbe1d51275800162`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1ac8ad20f7042d8f5c642979eabf4b63e5`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a485618e0a38379665a6c37cbc0afcb82`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1opt_1_1detail_1a47fb3bb1263e822ae2c2d0aeb360b867`
+
+- :ref:`exhale_typedef_namespacesequant_1_1opt_1_1detail_1a0997a0b011dd722b51036a8fcbdc99db`
+
+- :ref:`exhale_typedef_namespacesequant_1_1opt_1a386c5e613c8f3303ea384abd40d89aa7`
+

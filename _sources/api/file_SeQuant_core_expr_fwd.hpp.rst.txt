@@ -1,0 +1,100 @@
+
+.. _file_SeQuant_core_expr_fwd.hpp:
+
+File expr_fwd.hpp
+=================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expr_fwd.hpp``)
+------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expr_fwd.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``memory`` (:ref:`file_SeQuant_core_memory_layout.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_export_generator.hpp`
+
+- :ref:`file_SeQuant_core_export_utils.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_algorithms.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_ptr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_traits.hpp`
+
+- :ref:`file_SeQuant_core_fwd.hpp`
+
+- :ref:`file_SeQuant_core_io_serialization_serialization.hpp`
+
+- :ref:`file_SeQuant_core_io_shorthands.hpp`
+
+- :ref:`file_SeQuant_core_optimize_optimize.hpp`
+
+- :ref:`file_SeQuant_core_optimize_schedule_pin.hpp`
+
+- :ref:`file_SeQuant_core_optimize_sum.hpp`
+
+- :ref:`file_SeQuant_core_tree_index.hpp`
+
+- :ref:`file_SeQuant_core_utility_expr_filter.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_df.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_thc.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1aa76f39bb994067cbae603a4fb36b1d61`
+
+- :ref:`exhale_typedef_namespacesequant_1ad9f229ebfea204600e262fbd730b3f79`
+
+- :ref:`exhale_typedef_namespacesequant_1a6d79870a4fd5e190b1d4c4f32045b5cd`
+
+- :ref:`exhale_typedef_namespacesequant_1a6fb1a0ba8d942026e5cc58b572aec1d1`
+
+- :ref:`exhale_typedef_namespacesequant_1a972a28a14c55baaaff99c43a19ba2c2b`
+
+- :ref:`exhale_typedef_namespacesequant_1a45c0f4acfa2d7475f63d0c076a3b182f`
+
+- :ref:`exhale_typedef_namespacesequant_1a916eb35addc9b5f49914553d1f5d2dee`
+
+- :ref:`exhale_typedef_namespacesequant_1aba54db4207e3a370a05bb03742cb8666`
+

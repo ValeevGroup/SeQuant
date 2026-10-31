@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a4482d9249efb0bc116755e9f0bf2dc19:
+
+Template Function sequant::sort_expr(ResultExpr&, const Compare&)
+=================================================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_lexicographic_order.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::sort_expr(ResultExpr&, const Compare&)
+   :project: SeQuant

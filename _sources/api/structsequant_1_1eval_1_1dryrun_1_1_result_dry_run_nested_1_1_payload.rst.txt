@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_result_dry_run_nested_1_1_payload:
+
+Struct ResultDryRunNested::Payload
+==================================
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_result.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1eval_1_1dryrun_1_1_result_dry_run_nested`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::eval::dryrun::ResultDryRunNested::Payload
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

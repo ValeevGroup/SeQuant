@@ -1,0 +1,39 @@
+
+.. _program_listing_file_SeQuant_core_eval_node_batch_annotation.hpp:
+
+Program Listing for File node_batch_annotation.hpp
+==================================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_node_batch_annotation.hpp>` (``SeQuant/core/eval/node_batch_annotation.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Per-contraction-node batch annotation emitted by the order-aware batched
+   // cost model and threaded to the eval tree.
+   //
+   
+   #ifndef SEQUANT_EVAL_NODE_BATCH_ANNOTATION_HPP
+   #define SEQUANT_EVAL_NODE_BATCH_ANNOTATION_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/fwd.hpp>
+   #include <SeQuant/core/index.hpp>
+   
+   #include <cstddef>
+   #include <utility>
+   
+   namespace sequant {
+   
+   struct NodeBatchAnnotation {
+     container::svector<std::pair<Index, BatchModeType>> axes{};
+     container::svector<std::pair<Index, BatchModeType>> opened_here{};
+     std::size_t effective_count = 1;
+     bool order_aware = false;
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EVAL_NODE_BATCH_ANNOTATION_HPP

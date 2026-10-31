@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1mbpt_1a9e6475e9cc5114d28dbd317b80edc9e3:
+
+Typedef sequant::mbpt::BasisGrant
+=================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::mbpt::BasisGrant
+   :project: SeQuant

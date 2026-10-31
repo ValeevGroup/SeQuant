@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1ac1905c44a5f160054cb004d62f818ce2:
+
+Template Function sequant::opt::batch_priority_less
+===================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::batch_priority_less(const TreeNode&, const TreeNode&, std::span<const Index>)
+   :project: SeQuant

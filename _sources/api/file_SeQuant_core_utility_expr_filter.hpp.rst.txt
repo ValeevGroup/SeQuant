@@ -1,0 +1,74 @@
+
+.. _file_SeQuant_core_utility_expr_filter.hpp:
+
+File expr_filter.hpp
+====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_utility>` (``SeQuant/core/utility``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/utility/expr_filter.hpp``)
+-----------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_utility_expr_filter.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr_fwd.hpp`` (:ref:`file_SeQuant_core_expr_fwd.hpp`)
+
+- ``SeQuant/core/utility/expr_matcher.hpp`` (:ref:`file_SeQuant_core_utility_expr_matcher.hpp`)
+
+- ``memory`` (:ref:`file_SeQuant_core_memory_layout.hpp`)
+
+- ``regex``
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_irreps_config.cpp`
+
+- :ref:`file_SeQuant_core_utility_expr_filter.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_contains_rule`
+
+- :ref:`exhale_struct_structsequant_1_1_expression_filter_1_1_rule`
+
+- :ref:`exhale_struct_structsequant_1_1_label_rule`
+
+- :ref:`exhale_class_classsequant_1_1_expression_filter`
+

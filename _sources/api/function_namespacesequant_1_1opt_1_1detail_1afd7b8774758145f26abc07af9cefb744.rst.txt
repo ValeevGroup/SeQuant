@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1afd7b8774758145f26abc07af9cefb744:
+
+Function sequant::opt::detail::relabeled(const Variable&, std::wstring_view)
+============================================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::relabeled(const Variable&, std::wstring_view)
+   :project: SeQuant

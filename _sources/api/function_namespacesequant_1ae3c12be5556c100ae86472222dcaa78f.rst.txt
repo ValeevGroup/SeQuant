@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ae3c12be5556c100ae86472222dcaa78f:
+
+Template Function sequant::retrieve_space
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_space.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::retrieve_space(StrView)
+   :project: SeQuant

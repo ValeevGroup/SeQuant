@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1aaa7a7c411c0e68921f933ae86f8e4943:
+
+Template Function sequant::opt::detail::map_leaf_objects
+========================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_name_recycling.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::map_leaf_objects(const ExprPtr&, Visitor&&)
+   :project: SeQuant
