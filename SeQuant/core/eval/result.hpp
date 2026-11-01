@@ -413,14 +413,22 @@ class Result {
 
   /// \return true while this result stands for a transformation of another
   ///         result's storage that has not been applied -- a batch slice, a
-  ///         mode permutation, a conjugation -- and so holds no tiles of its
-  ///         own: it costs no allocation, and a backend consumer that can take
-  ///         the transformation into its own expression does so instead of
+  ///         mode permutation, a conjugation, a scaling by a constant -- and
+  ///         so shares that storage instead of holding its own: it costs no
+  ///         allocation, and a backend consumer that can take the
+  ///         transformation into its own expression does so instead of
   ///         asking for the value. get<T>() applies it (once) on demand.
   ///         Default: false (a value held).
   [[nodiscard]] virtual bool is_buffer_alias() const noexcept { return false; }
 
-  /// @return the size of the object in bytes
+  /// @return the bytes of storage this result keeps alive that no other
+  ///         result accounts for: for a result that holds its own value, the
+  ///         value's size. Storage shared between results (see
+  ///         is_buffer_alias()) is meant to be reported by exactly one of
+  ///         them; a backend that cannot tell which may approximate this, so
+  ///         a sum over results is exact only where results never share
+  ///         storage. Within SeQuant it feeds diagnostics (the eval trace,
+  ///         the peak monitor, the residency counts), not evaluation.
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
 
   /// @return the size of the object in bytes, measured even where
