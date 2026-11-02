@@ -9,7 +9,7 @@
 namespace sequant {
 
 template class ResultTensorOfTensorTA<TA::DistArray<
-    TA::Tensor<TA::Tensor<std::complex<double>>>, TA::SparsePolicy>>;
+    TA::Tensor<TA::ArenaTensor<std::complex<double>>>, TA::SparsePolicy>>;
 
 }  // namespace sequant
 

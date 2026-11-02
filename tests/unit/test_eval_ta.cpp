@@ -30,6 +30,8 @@
 #include <cstddef>
 #include <utility>
 
+#include <TiledArray/tensor/arena_kernels.h>
+#include <TiledArray/tensor/arena_tensor.h>
 #include <tiledarray.h>
 #include <boost/regex.hpp>
 
@@ -182,17 +184,50 @@ auto random_tensor(TA::Range const& rng) {
   return result;
 }
 
+/// The inner tile of every nested (ToT) array in these tests: the arena-pinned
+/// view a CSV/PNO array stores (the inner tile SeQuant-eval-ta instantiates its
+/// nested Result for), not an owning TA::Tensor<T>. An arena cell is a view
+/// into its outer tile's slab, so a nested tile is built in one pass through
+/// make_tot_tile() instead of by assigning inner tensors into an outer tile.
+template <typename NumericT>
+using tot_inner_t = TA::ArenaTensor<NumericT>;
+template <typename NumericT>
+using tot_tile_t = TA::Tensor<tot_inner_t<NumericT>>;
+
+/// A nested tile over \p outer_rng whose inner cell at outer ordinal \c o spans
+/// \c inner_rng(o) (a TA::Range; zero volume leaves the cell empty) and holds
+/// \c fill(o, k) at its ordinal \c k. An arena cell's range is zero-based, so
+/// only the extents of \c inner_rng(o) carry over.
+template <typename NumericT, typename InnerRangeFn, typename FillFn>
+tot_tile_t<NumericT> make_tot_tile(TA::Range const& outer_rng,
+                                   InnerRangeFn&& inner_rng, FillFn&& fill) {
+  using inner_range_t = typename tot_inner_t<NumericT>::range_type;
+  return TA::detail::make_nested_tile<tot_tile_t<NumericT>>(
+      outer_rng,
+      [&](auto const& idx) {
+        // extent() is a view into the range, which must outlive it; the arena
+        // range type is built from an extent vector, not from a TA::Range.
+        TA::Range const r = inner_rng(outer_rng.ordinal(idx));
+        auto const ext = r.extent();
+        return inner_range_t(std::vector<std::size_t>(ext.begin(), ext.end()));
+      },
+      [&](auto& cell, auto const& idx) {
+        auto const o = outer_rng.ordinal(idx);
+        for (std::size_t k = 0; k < cell.size(); ++k)
+          cell.data()[k] = fill(o, k);
+      });
+}
+
 // note: all the inner tensors (elements of the outer tensor)
 //       have the same @c inner_rng
 template <typename NumericT>
 auto random_tensor_of_tensor(TA::Range const& outer_rng,
                              TA::Range const& inner_rng) {
-  TA::Tensor<TA::Tensor<NumericT>> result{outer_rng};
-
-  std::generate(result.begin(), result.end(),
-                [inner_rng]() { return random_tensor<NumericT>(inner_rng); });
-
-  return result;
+  return make_tot_tile<NumericT>(
+      outer_rng, [&inner_rng](std::size_t) { return inner_rng; },
+      [](std::size_t, std::size_t) {
+        return TA::detail::MakeRandom<NumericT>::generate_value();
+      });
 }
 
 template <typename NumericT = double, typename TAPolicyT = TA::SparsePolicy>
@@ -227,8 +262,7 @@ class rand_tensor_yield {
   }
 
   using array_type = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
-  using array_tot_type =
-      TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
+  using array_tot_type = TA::DistArray<tot_tile_t<NumericT>, TAPolicyT>;
   using numeric_type = NumericT;
 
   rand_tensor_yield(TA::World& world_, size_t nocc, size_t nvirt)
@@ -504,7 +538,7 @@ class rand_tensor_yield {
       result = eval_result<ResultTensorTA<ArrayT>>(array);
     } else {
       // tensor of tensor
-      using ArrayT = TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
+      using ArrayT = TA::DistArray<tot_tile_t<NumericT>, TAPolicyT>;
 
       auto const inner_extent = make_extents(nested.inner);
       auto const inner_r = TA::Range(inner_extent);
@@ -600,8 +634,7 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
   using sequant::ResultPtr;
   using sequant::ResultTensorOfTensorTA;
   using sequant::detail::tot_inner_rank;
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
   using ResultToT = ResultTensorOfTensorTA<ToTArray>;
 
   auto& world = TA::get_default_world();
@@ -616,13 +649,10 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
     TA::Range inner_r(inner_ext);
 
     auto tile_fn = [inner_r, empty_inner](TA::Range const& orng) {
-      TA::Tensor<TA::Tensor<double>> t{orng};
-      if (!empty_inner)
-        for (auto& inner : t) {
-          inner = TA::Tensor<double>{inner_r};
-          std::fill(inner.begin(), inner.end(), 1.0);
-        }
-      return t;
+      return make_tot_tile<double>(
+          orng,
+          [&](std::size_t) { return empty_inner ? TA::Range{} : inner_r; },
+          [](std::size_t, std::size_t) { return 1.0; });
     };
 
     ToTArray arr{world, outer_tr};
@@ -649,7 +679,8 @@ TEST_CASE("tot_all_empty_inner", "[eval][tot]") {
       if (res.is_local(it.index()))
         for (auto const& inner : it->get()) {
           REQUIRE_FALSE(inner.empty());
-          for (auto const& x : inner) REQUIRE(x == 1.0);
+          for (std::size_t k = 0; k < inner.size(); ++k)
+            REQUIRE(inner[k] == 1.0);
         }
   }
 
@@ -2039,8 +2070,7 @@ TEST_CASE("eval_write_into_slice", "[eval]") {
   }
 
   SECTION("tot: disjoint tile-aligned blocks reassemble exactly") {
-    using ToTArray =
-        TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+    using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
     using ResultToT = ResultTensorOfTensorTA<ToTArray>;
 
     // outer mode 0: two size-3 tiles (multi-element, tile-spanning split);
@@ -2053,19 +2083,15 @@ TEST_CASE("eval_write_into_slice", "[eval]") {
     auto build = [&world, inner_r](TA::TiledRange const& otr,
                                    bool zero) -> ToTArray {
       auto tile_fn = [inner_r, zero](TA::Range const& orng) {
-        TA::Tensor<TA::Tensor<double>> t{orng};
-        std::size_t o = 0;
-        for (auto const& coord : orng) {
-          auto& inner = t[o++];
-          inner = TA::Tensor<double>{inner_r};
-          double base = 0.0;
-          if (!zero)
-            for (auto c : coord)
-              base = base * 37.0 + static_cast<double>(c + 1);
-          std::size_t k = 0;
-          for (auto& x : inner) x = zero ? 0.0 : base * 100.0 + (++k);
-        }
-        return t;
+        return make_tot_tile<double>(
+            orng, [&](std::size_t) { return inner_r; },
+            [&](std::size_t o, std::size_t k) {
+              if (zero) return 0.0;
+              double base = 0.0;
+              for (auto c : orng.idx(o))
+                base = base * 37.0 + static_cast<double>(c + 1);
+              return base * 100.0 + static_cast<double>(k + 1);
+            });
       };
       ToTArray arr{world, otr};
       for (auto it = arr.begin(); it != arr.end(); ++it)
@@ -2702,25 +2728,24 @@ TEST_CASE("ordered-mixed-open-aux-sparse",
 }
 
 // Minimal TA-level probe for the nested-tile permutation crash seen in the
-// ToT culprit replica: permute a Tensor<Tensor<double>> array on its outer
-// modes only, on inner only, and on both, through TA expressions.
+// ToT culprit replica: permute a nested array on its outer modes only, on
+// inner only, and on both, through TA expressions.
 TEST_CASE("TA nested-tile permutation probe", "[tot][tot-perm-probe]") {
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
   auto& world = TA::get_default_world();
   TA::TiledRange tr{{0, 2, 4}, {0, 3, 6}};
   ToTArray in{world, tr};
   for (auto it = in.begin(); it != in.end(); ++it) {
     if (!in.is_local(it.index())) continue;
-    auto const r = it.make_range();
-    TA::Tensor<TA::Tensor<double>> tile(r);
-    std::size_t k = 0;
-    for (auto& el : tile) {
-      // inner 2x3 tensors, a few left EMPTY (screened cells)
-      if ((k++ % 5) == 3) continue;
-      el = TA::Tensor<double>(TA::Range{2, 3}, 1.0 + k);
-    }
-    *it = tile;
+    // inner 2x3 tensors, a few left EMPTY (screened cells)
+    *it = make_tot_tile<double>(
+        it.make_range(),
+        [](std::size_t o) {
+          return o % 5 == 3 ? TA::Range{} : TA::Range{2, 3};
+        },
+        [](std::size_t o, std::size_t) {
+          return 2.0 + static_cast<double>(o);
+        });
   }
   world.gop.fence();
   ToTArray outer_only, inner_only, both;
@@ -2781,8 +2806,7 @@ TEST_CASE("ordered-tot-culprit",
   using sequant::eval::evaluate_ordered_schedule;
   using sequant::eval::OrderedSchedule;
   using sequant::eval::RichSchedule;
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using sequant::BatchModeType;
 
@@ -3167,8 +3191,7 @@ TEST_CASE("ordered-vs-forest-tot", "[eval][ordered-executor]") {
   using sequant::eval::OrderedSchedule;
   using sequant::eval::RichSchedule;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
 
   auto& world = TA::get_default_world();
   rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/12,
@@ -4245,8 +4268,7 @@ TEST_CASE("ta_array_ops_sparse_tot_zeros_hold_no_tiles",
   // The nested counterpart of ta_array_ops_sparse_zeros_hold_no_tiles. The
   // slice of the zero destination goes through slice_array_over_mode's
   // empty-inner branch, which must not allocate either.
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
   using ResultToT = sequant::ResultTensorOfTensorTA<ToTArray>;
   auto& world = TA::get_default_world();
   rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/4,
@@ -4299,8 +4321,7 @@ TEST_CASE("ta_array_ops_zeros_under_zero_threshold",
   // must allocate every tile, zero-filled (flat) or with empty inner tensors
   // (nested) -- the same path a dense array takes.
   using TArrayD = TA::TSpArrayD;
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
   using ResultToT = sequant::ResultTensorOfTensorTA<ToTArray>;
   using shape_t = TA::SparseShape<float>;
   struct ThresholdResetter {
@@ -4790,8 +4811,7 @@ TEST_CASE("batched_scratch_tot_presize_scatter", "[eval][batched-external]") {
   using sequant::eval_result;
   using sequant::ResultTensorOfTensorTA;
   using sequant::slice_array_over_mode;
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
   using ResultToT = ResultTensorOfTensorTA<ToTArray>;
   auto& world = TA::get_default_world();
 
@@ -4804,18 +4824,15 @@ TEST_CASE("batched_scratch_tot_presize_scatter", "[eval][batched-external]") {
   auto build = [&world, inner_r](TA::TiledRange const& otr,
                                  bool zero) -> ToTArray {
     auto tile_fn = [inner_r, zero](TA::Range const& orng) {
-      TA::Tensor<TA::Tensor<double>> t{orng};
-      std::size_t o = 0;
-      for (auto const& coord : orng) {
-        auto& inner = t[o++];
-        inner = TA::Tensor<double>{inner_r};
-        double base = 0.0;
-        if (!zero)
-          for (auto c : coord) base = base * 37.0 + static_cast<double>(c + 1);
-        std::size_t k = 0;
-        for (auto& x : inner) x = zero ? 0.0 : base * 100.0 + (++k);
-      }
-      return t;
+      return make_tot_tile<double>(
+          orng, [&](std::size_t) { return inner_r; },
+          [&](std::size_t o, std::size_t k) {
+            if (zero) return 0.0;
+            double base = 0.0;
+            for (auto c : orng.idx(o))
+              base = base * 37.0 + static_cast<double>(c + 1);
+            return base * 100.0 + static_cast<double>(k + 1);
+          });
     };
     ToTArray arr{world, otr};
     for (auto it = arr.begin(); it != arr.end(); ++it)
@@ -4893,8 +4910,7 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
   using sequant::make_batched_custom_evaluator;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using cache_t = sequant::CacheManager<node_t>;
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
 
   auto& world = TA::get_default_world();
   // occupied multi-tiled (12 in tiles of 4 -> 3 tiles) so the proto occ mode
@@ -5590,8 +5606,7 @@ TEST_CASE("shape_spike_tot_general_product", "[shape-spike]") {
   // Contraction: outer i_3, inner a_4.  Fused outer (Hadamard): i_1, i_2.
   // Result outer: (i_2, i_1), each with 2 tiles -> 4 outer tiles total.
 
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
 
   auto& world = TA::get_default_world();
 
@@ -5671,7 +5686,7 @@ TEST_CASE("shape_spike_tot_general_product", "[shape-spike]") {
     auto const& idx = it.index();
     REQUIRE_FALSE(C0.is_zero(idx));
 
-    auto const& outer0 = C0.find(idx).get();  // TA::Tensor<TA::Tensor<double>>
+    auto const& outer0 = C0.find(idx).get();  // tot_tile_t<double>
     auto const& outer1 = it->get();
     REQUIRE(outer0.range() == outer1.range());
 
@@ -5701,8 +5716,7 @@ TEST_CASE("shape_spike_T_times_ToT_general_product", "[shape-spike]") {
   // ToT).  Result outer (i_1, i_2), each with 2 tiles -> 4 outer tiles.
 
   using FlatArray = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
 
   auto& world = TA::get_default_world();
 
@@ -5817,8 +5831,7 @@ TEST_CASE("shape_spike_ToT_inner_contraction_to_flat_T", "[shape-spike]") {
   // Outer i_1,i_2 are Hadamard (survive); result outer (i_1,i_2) -> 2x2 tiles.
 
   using FlatArray = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
 
   auto& world = TA::get_default_world();
 
@@ -6915,8 +6928,7 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
   }
 
   SECTION("nested-array slices are views too") {
-    using ToTArray =
-        TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+    using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
     using ResultToT = sequant::ResultTensorOfTensorTA<ToTArray>;
     // T(i,c;x,y) nested over tiles 2 x 2, inner 3 x 2
     TA::TiledRange const trT{{0, 2, 4}, {0, 5, 10}};
@@ -7311,8 +7323,7 @@ TEST_CASE("ta_lazy_views_nested", "[eval][ta][lazy]") {
   using sequant::eval_result;
   using sequant::ResultScalar;
   using sequant::ResultTensorOfTensorTA;
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
   using ResultToT = ResultTensorOfTensorTA<ToTArray>;
 
   auto& world = TA::get_default_world();
@@ -7583,8 +7594,7 @@ TEST_CASE("ta_lazy_views_nested", "[eval][ta][lazy]") {
   SECTION("a view of an all-empty nested array is zero over the slice") {
     ToTArray E(world, tr);
     for (auto it = E.begin(); it != E.end(); ++it)
-      if (E.is_local(it.index()))
-        *it = TA::Tensor<TA::Tensor<double>>(it.make_range());
+      if (E.is_local(it.index())) *it = tot_tile_t<double>(it.make_range());
     world.gop.fence();
     auto rE = eval_result<ResultToT>(E);
     auto v = rE->slice_mode(1, 5, 10);
@@ -7605,8 +7615,7 @@ TEST_CASE("ta_lazy_views_shaped", "[eval][ta][lazy]") {
   using sequant::ResultTensorOfTensorTA;
   using sequant::ResultTensorTA;
   using FlatArray = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
-  using ToTArray =
-      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
   using ResultF = ResultTensorTA<FlatArray>;
   using ResultToT = ResultTensorOfTensorTA<ToTArray>;
 

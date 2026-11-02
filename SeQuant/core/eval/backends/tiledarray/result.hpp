@@ -1782,15 +1782,17 @@ class ResultTensorOfTensorTA final : public Result {
 // The block-sparse real and complex results are instantiated once, in
 // SeQuant-eval-ta (result_inst_*.cpp, one class per TU): every virtual member
 // expands the TiledArray expressions for each pair of operand forms that
-// with_expr() hands out, which costs GBs of compiler memory per class.
+// with_expr() hands out, which costs GBs of compiler memory per class. The
+// nested results are instantiated over the arena-pinned inner tile
+// (TA::ArenaTensor), the inner tile of a CSV/PNO array.
 extern template class ResultTensorTA<
     TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>>;
 extern template class ResultTensorTA<
     TA::DistArray<TA::Tensor<std::complex<double>>, TA::SparsePolicy>>;
 extern template class ResultTensorOfTensorTA<
-    TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>>;
+    TA::DistArray<TA::Tensor<TA::ArenaTensor<double>>, TA::SparsePolicy>>;
 extern template class ResultTensorOfTensorTA<TA::DistArray<
-    TA::Tensor<TA::Tensor<std::complex<double>>>, TA::SparsePolicy>>;
+    TA::Tensor<TA::ArenaTensor<std::complex<double>>>, TA::SparsePolicy>>;
 
 /// \brief Restrict a TA::DistArray to a contiguous tile range of one mode.
 ///
@@ -1946,12 +1948,11 @@ void write_array_into_mode(TA::DistArray<Args...>& dest,
 /// detail::result_outer_trange). This is the trange handed to the result-shape
 /// provider. \tparam NumericT, \tparam PolicyT name the concrete array types.
 /// \tparam InnerTileT the inner tile type of a nested (ToT) operand; defaults
-/// to the plain \c TA::Tensor<NumericT>, but the CSV/PNO path uses an
-/// arena-pinned inner tile (\c TA::ArenaTensor<NumericT>), which is a distinct
-/// (type-id) Result kind and must be named here for \c Result::is<> to
-/// recognize it.
+/// to the arena-pinned \c TA::ArenaTensor<NumericT> of a CSV/PNO array. A
+/// nested Result over another inner tile is a distinct (type-id) Result kind
+/// and must be named here for \c Result::is<> to recognize it.
 template <typename NumericT, typename PolicyT,
-          typename InnerTileT = TA::Tensor<NumericT>>
+          typename InnerTileT = TA::ArenaTensor<NumericT>>
 [[nodiscard]] TA::TiledRange result_outer_trange_from_results(
     Result const& left, Result const& right,
     std::array<std::any, 3> const& annot) {
@@ -2002,7 +2003,7 @@ template <typename NumericT, typename PolicyT,
 ///         null ResultPtr if the operand kinds are not a supported shaped form
 ///         (the caller then falls through to the unshaped prod()).
 template <typename NumericT, typename PolicyT,
-          typename InnerTileT = TA::Tensor<NumericT>>
+          typename InnerTileT = TA::ArenaTensor<NumericT>>
 [[nodiscard]] ResultPtr apply_shaped_product(
     Result const& left, Result const& right,
     std::array<std::any, 3> const& annot, TA::SparseShape<float> const& shape,
