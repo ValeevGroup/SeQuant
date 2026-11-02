@@ -600,11 +600,21 @@ set(SeQuant_export_src
         SeQuant/core/export/utils.cpp
 )
 
-# TiledArray backend sources
+# TiledArray backend sources; each explicit instantiation of a Result class
+# needs GBs of compiler memory, so they are kept out of unity batches
+set(SeQuant_eval_ta_inst_src
+        SeQuant/core/eval/backends/tiledarray/result_inst_d.cpp
+        SeQuant/core/eval/backends/tiledarray/result_inst_z.cpp
+        SeQuant/core/eval/backends/tiledarray/result_inst_tot_d.cpp
+        SeQuant/core/eval/backends/tiledarray/result_inst_tot_z.cpp
+)
+set_source_files_properties(${SeQuant_eval_ta_inst_src}
+        PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set(SeQuant_eval_ta_src
         SeQuant/core/eval/backends/tiledarray/eval_expr.hpp
         SeQuant/core/eval/backends/tiledarray/result.hpp
         SeQuant/core/eval/backends/tiledarray/result.cpp
+        ${SeQuant_eval_ta_inst_src}
 )
 
 # BTAS backend sources (header-only)
