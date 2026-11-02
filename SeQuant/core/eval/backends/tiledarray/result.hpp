@@ -700,7 +700,7 @@ template <typename ArrayT>
       int absent = 0;
       for (auto it = arr.begin(); it != arr.end() && absent == 0; ++it) {
         tile_type const tile = it->get();
-        for (std::size_t k = 0; k < tile.size(); ++k)
+        for (std::size_t k = 0; k < tile.total_size(); ++k)
           if (tile.data()[k].empty()) {
             absent = 1;
             break;
@@ -721,7 +721,7 @@ template <typename ArrayT>
       // the outer tile is cloned (a fresh slab, absent inner tiles kept
       // absent) and powered in place
       tile_type out = in.clone();
-      for (std::size_t k = 0; k < out.size(); ++k) {
+      for (std::size_t k = 0; k < out.total_size(); ++k) {
         auto& inner = out.data()[k];
         auto* const x = inner.data();
         for (std::size_t e = 0; e < inner.size(); ++e) x[e] = elem(x[e]);
