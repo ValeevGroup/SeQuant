@@ -17,8 +17,11 @@
 #include <range/v3/view/iota.hpp>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
+#include <complex>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -710,17 +713,17 @@ inline void fill_signed_bounds(TA::TiledRange const& tr,
   }
 }
 
-/// A copy of @p arr with a pending transform applied: @p phase times (the
+/// A copy of @p arr with a pending transform applied: @p factor times (the
 /// elementwise conjugate when @p conj of) every tile, and the factor -1 on
 /// every tile whose element lobound along mode @p modes[k] is at or past
 /// @p bounds[k] -- the ⇓ half of a Kramers-union axis, the sign of the
-/// time-reversal flip (see ResultTensorTA::View::signed_halves). Tile by
+/// time-reversal flip (see ArrayView::signed_halves). Tile by
 /// tile, same tiling, shape and process map (the transform leaves every tile
 /// norm unchanged); always a deep copy, never a tile shared with @p arr. The
 /// copy's tiles are futures of local tasks: no fence is needed.
 template <typename ArrayT>
-ArrayT signed_copy(ArrayT const& arr, std::int8_t phase, bool conj,
-                   container::svector<std::size_t> const& modes,
+ArrayT signed_copy(ArrayT const& arr, typename ArrayT::numeric_type factor,
+                   bool conj, container::svector<std::size_t> const& modes,
                    container::svector<std::int64_t> const& bounds) {
   using value_type = typename ArrayT::value_type;
   using numeric_type = typename ArrayT::numeric_type;
@@ -734,12 +737,11 @@ ArrayT signed_copy(ArrayT const& arr, std::int8_t phase, bool conj,
     auto const ord = *it;
     if (dst.is_zero(ord)) continue;
     auto const idx = tiles.idx(ord);
-    double sign = static_cast<double>(phase);
+    numeric_type f = factor;
     for (std::size_t k = 0; k < modes.size(); ++k)
       if (static_cast<std::int64_t>(
               tr.dim(modes[k]).tile(idx[modes[k]]).first) >= bounds[k])
-        sign = -sign;
-    numeric_type const f = numeric_type(1) * sign;
+        f = -f;
     dst.set(ord, world.taskq.add(
                      [f, conj](value_type const& src) -> value_type {
                        if constexpr (TA::detail::is_complex_v<numeric_type>)
@@ -950,18 +952,114 @@ template <typename X, typename Y>
   return out;
 }
 
+/// \brief A pending, zero-copy transform of the parent array a result shares:
+///        the view a ResultTensorTA or a ResultTensorOfTensorTA stands for
+///        instead of holding a value.
+///
+/// Composable parts, all optional: a tile block (a batch slice), a mode
+/// relabeling (of the outer modes, and for a nested result of the inner modes
+/// too), an elementwise conjugation, a scaling by a constant (a prefactor, a
+/// phase), and the sign -1 on the ⇓ half of Kramers-union modes (the
+/// time-reversal flip, F = phase · conj ∘ swap ∘ sign, whose swap MPQC serves
+/// as an alias array and whose sign, conjugation and phase ride here). The
+/// block and the relabelings are in the STORED array's mode order; the
+/// result's own (logical) modes are the stored ones permuted by \c perm. The
+/// view's value is `scale * conj(block(permuted stored))`, the half-signs
+/// applied on top: the conjugation acts on the stored data, the factor on the
+/// result. A consumer that is itself a TiledArray expression folds the view
+/// in through with_expr(), as `scale * arr(stored annot).block(blk_lo,
+/// blk_hi, preserve_lobound).conj()`, or hoists the factor through
+/// with_unscaled_expr(); no expression spells a sign per half, so a signed
+/// view materializes (detail::signed_copy) when consumed, unless a product
+/// moves its signs onto a smaller operand (detail::move_signs).
+/// Materialization happens from a const read path and is unsynchronized: a
+/// Result is read and mutated by one thread at a time, which the evaluation
+/// engine guarantees.
+/// \tparam Scalar the numeric type of the array
+template <typename Scalar>
+struct ArrayView {
+  /// the factor the (conjugated) block is scaled by
+  Scalar scale = Scalar(1);
+  /// elementwise conjugation pending
+  bool conj = false;
+  /// stored (outer) mode \c s holds logical mode \c perm[s]; empty = identity
+  container::svector<std::size_t> perm;
+  /// the inner modes' relabeling of a nested result, as \c perm; empty =
+  /// identity (a flat result has none)
+  container::svector<std::size_t> iperm;
+  /// tile bounds `[blk_lo[s], blk_hi[s])` per STORED (outer) mode, in the
+  /// stored array's tile coordinates; empty = the whole array
+  container::svector<std::size_t> blk_lo, blk_hi;
+  /// STORED (outer) modes along which the ⇓ half carries the factor -1
+  container::svector<std::size_t> signed_halves;
+  /// the element coordinate at which the ⇓ half begins, per entry of
+  /// signed_halves; filled from the parent's tiling when left empty
+  container::svector<std::int64_t> signed_bounds;
+
+  [[nodiscard]] bool trivial() const noexcept {
+    return scale == Scalar(1) && !conj && perm.empty() && iperm.empty() &&
+           blk_lo.empty() && signed_halves.empty();
+  }
+  [[nodiscard]] bool relabeled() const noexcept {
+    return !perm.empty() || !iperm.empty();
+  }
+  /// the stored mode that holds logical (outer) mode \p logical
+  [[nodiscard]] std::size_t stored_mode(std::size_t logical) const {
+    return stored_mode_of(perm, logical);
+  }
+};
+
+/// Hands \p f the factor of a product of two flat operands, \p l and \p r
+/// (results that may be scaled pending views), and their unscaled
+/// expressions for \p la and \p ra: `f(factor, le, re)`. The consumer
+/// applies the factor to its own result, so no operand's tiles are scaled:
+/// TiledArray folds a product's scalar into the contraction kernel, and a
+/// dot product scales the number it returns. A signed operand is
+/// materialized by scale() first, so its factor is 1 here.
+template <typename L, typename R, typename F>
+decltype(auto) with_flat_product_operands(L const& l, std::string const& la,
+                                          R const& r, std::string const& ra,
+                                          F&& f) {
+  auto const factor = l.scale() * r.scale();
+  return l.with_unscaled_expr(la, [&](auto&& le) -> decltype(auto) {
+    return r.with_unscaled_expr(ra, [&](auto&& re) -> decltype(auto) {
+      return std::forward<F>(f)(factor, le, re);
+    });
+  });
+}
+
+/// Hands \p f the expressions of the two operands of a product in which
+/// either is nested: \p l's unscaled, \p r's scaled by both operands'
+/// factors, `f(le, re)`. A product-level scalar is not an option here: on a
+/// nested-tile product it trips a range-congruence assert in TiledArray's
+/// inner tile op, even with a factor of 1.
+template <typename L, typename R, typename F>
+decltype(auto) with_nested_product_operands(L const& l, std::string const& la,
+                                            R const& r, std::string const& ra,
+                                            F&& f) {
+  return l.with_unscaled_expr(la, [&](auto&& le) -> decltype(auto) {
+    return r.with_expr_scaled_by(ra, l.scale(),
+                                 [&](auto&& re) -> decltype(auto) {
+                                   return std::forward<F>(f)(le, re);
+                                 });
+  });
+}
+
 }  // namespace detail
 
 /// A result may be a VIEW of another result's array -- a tile block of it (a
-/// batch slice), a mode relabeling, a conjugation, a phase, the half-signs of
-/// the time-reversal flip, or any combination -- pending rather than applied
-/// (View). The view shares the parent's tiles, so it costs no allocation and
-/// no pass over the data (TiledArray copies the tiles of a block of a MUTABLE
-/// array; with_expr() hands the parent over as a const array, whose
-/// preserve_lobound block is a view there): consumers that are TiledArray
-/// expressions -- the products, the dot product, scaling, sums, accumulation
-/// of the operand, the batch scatter -- fold it into their expression through
-/// with_expr(); a consumer that needs an array (clone, the symmetrizers,
+/// batch slice), a mode relabeling, a conjugation, a scaling by a constant (a
+/// prefactor, a phase), the half-signs of the time-reversal flip, or any
+/// combination -- pending rather than applied (detail::ArrayView). The view
+/// shares the parent's tiles, so it costs no allocation and no pass over the
+/// data (TiledArray copies the tiles of a block of a MUTABLE array;
+/// with_expr() hands the parent over as a const array, whose preserve_lobound
+/// block is a view there): consumers that are TiledArray expressions -- sums,
+/// accumulation of the operand, the batch scatter -- fold it into their
+/// expression through with_expr(), and the products and dot products through
+/// detail::with_flat_product_operands() or
+/// detail::with_nested_product_operands(), which also place the factors; a
+/// consumer that needs an array (clone, the symmetrizers,
 /// Result::get<ArrayT>()) materializes it once, into this result's own value,
 /// after which the parent is released. A view with half-signs materializes
 /// when consumed unless a product moves its signs onto a smaller operand
@@ -973,55 +1071,23 @@ class ResultTensorTA final : public Result {
  public:
   using Result::id_t;
   using numeric_type = typename ArrayT::numeric_type;
-
-  /// A pending, zero-copy transform of the parent array the result shares:
-  /// the view a result stands for instead of holding a value. Composable
-  /// parts, all optional: a tile block (a batch slice), a mode relabeling, an
-  /// elementwise conjugation, a phase, and the sign -1 on the ⇓ half of
-  /// Kramers-union modes (the time-reversal flip, F = phase · conj ∘ swap ∘
-  /// sign, whose swap MPQC serves as an alias array and whose sign,
-  /// conjugation and phase ride here). The block and the relabeling are in
-  /// the STORED array's mode order; the result's own (logical) modes are the
-  /// stored ones permuted by \c perm. A consumer that is itself a TiledArray
-  /// expression folds the view in through with_expr(), as `phase *
-  /// arr(stored annot).block(blk_lo, blk_hi, preserve_lobound).conj()`; no
-  /// expression spells a sign per half, so a signed view materializes
-  /// (detail::signed_copy) when consumed, unless a product moves its signs
-  /// onto a smaller operand (detail::move_signs). Materialization happens
-  /// from a const read path and is unsynchronized: a Result is read and
-  /// mutated by one thread at a time, which the evaluation engine guarantees.
-  struct View {
-    std::int8_t phase = 1;
-    bool conj = false;
-    /// stored mode \c s holds logical mode \c perm[s]; empty = identity
-    container::svector<std::size_t> perm;
-    /// tile bounds `[blk_lo[s], blk_hi[s])` per STORED mode; empty = the
-    /// whole array
-    container::svector<std::size_t> blk_lo, blk_hi;
-    /// STORED modes along which the ⇓ half carries the factor -1
-    container::svector<std::size_t> signed_halves;
-    /// the element coordinate at which the ⇓ half begins, per entry of
-    /// signed_halves; filled from the parent's tiling when left empty
-    container::svector<std::int64_t> signed_bounds;
-
-    [[nodiscard]] bool trivial() const noexcept {
-      return phase == 1 && !conj && perm.empty() && blk_lo.empty() &&
-             signed_halves.empty();
-    }
-    [[nodiscard]] std::size_t stored_mode(std::size_t logical) const {
-      return detail::stored_mode_of(perm, logical);
-    }
-  };
+  using view_type = detail::ArrayView<numeric_type>;
 
   explicit ResultTensorTA(ArrayT arr) : Result{std::move(arr)} {}
 
   /// a view of \p parent with \p view pending; an alias of \p parent's tiles
   /// (also when the view is trivial: it reads the tiles as they are and still
   /// copies before it is written to, so no two results share tiles one of
-  /// them accumulates into)
-  ResultTensorTA(ArrayT parent, View view)
+  /// them accumulates into). The parent may be accumulated into while a view
+  /// of it is pending (a cached prefactor view of an in-place Sum's
+  /// accumulator): TiledArray's `+=` builds the sum as a new array and
+  /// rebinds the handle, so the view keeps reading the tiles it was taken
+  /// over.
+  ResultTensorTA(ArrayT parent, view_type view)
       : Result{}, parent_(std::move(parent)), view_(std::move(view)) {
     SEQUANT_ASSERT(parent_.is_initialized());
+    SEQUANT_ASSERT(view_.iperm.empty() &&
+                   "a flat result relabels no inner modes");
     detail::fill_signed_bounds(parent_.trange(), view_.signed_halves,
                                view_.signed_bounds);
   }
@@ -1035,7 +1101,7 @@ class ResultTensorTA final : public Result {
   }
 
   /// the pending view (meaningful while is_view())
-  [[nodiscard]] View const& view() const noexcept { return view_; }
+  [[nodiscard]] view_type const& view() const noexcept { return view_; }
 
   /// the tiled range of the value this result stands for, with the pending
   /// block cut and the modes relabeled; never materializes
@@ -1052,9 +1118,41 @@ class ResultTensorTA final : public Result {
   /// Hands \p f the TiledArray expression of this result's value for the
   /// logical annotation \p annot: `value(annot)` when the value is held, else
   /// the parent array with the pending view folded in -- its modes relabeled,
-  /// the block cut by block(), the conjugation by conj(), the phase as a
-  /// scalar factor. A view with half-signs is materialized first. \p f must
-  /// return the same type whatever expression it receives.
+  /// the block cut by block(), the conjugation by conj(), the factor by
+  /// scale(). A view with half-signs is materialized first. \p f must return
+  /// the same type whatever expression it receives.
+  template <typename F>
+  decltype(auto) with_expr(std::string const& annot, F&& f) const {
+    return with_expr_scaled_by(annot, numeric_type(1), std::forward<F>(f));
+  }
+
+  /// with_expr() with the expression scaled by \p extra on top of the view's
+  /// own factor: `extra * scale() * (unscaled expression)`. A two-operand
+  /// consumer that cannot take a product-level scalar puts both operands'
+  /// factors on one operand this way and takes the other one unscaled, which
+  /// keeps the number of expression types it is instantiated for down.
+  template <typename F>
+  decltype(auto) with_expr_scaled_by(std::string const& annot,
+                                     numeric_type extra, F&& f) const {
+    auto const factor = extra * scale();
+    return with_unscaled_expr(annot, [&](auto&& e) -> decltype(auto) {
+      if (factor == numeric_type(1)) return std::forward<F>(f)(e);
+      return std::forward<F>(f)(factor * e);
+    });
+  }
+
+  /// the factor of the pending view (see ArrayView::scale); 1 for a held
+  /// value. A view with half-signs is materialized first (its factor goes
+  /// into the signed copy), so the factor and with_unscaled_expr() agree.
+  [[nodiscard]] numeric_type scale() const {
+    if (!has_value() && !view_.signed_halves.empty()) ensure_materialized();
+    return has_value() ? numeric_type(1) : view_.scale;
+  }
+
+  /// with_expr() without the factor: the expression of this result's value
+  /// divided by scale(). For a consumer that applies the factor itself, such
+  /// as a product that hoists it into its own scalar (TiledArray folds that
+  /// into the contraction kernel instead of scaling the operand's tiles).
   ///
   /// The parent is handed to TiledArray as a CONST array. A block of a const
   /// array that keeps the parent's element coordinates (preserve_lobound) is
@@ -1064,20 +1162,15 @@ class ResultTensorTA final : public Result {
   /// is alive, which holds: a view is never written through, and the parent
   /// is released once this result holds a value of its own.
   template <typename F>
-  decltype(auto) with_expr(std::string const& annot, F&& f) const {
+  decltype(auto) with_unscaled_expr(std::string const& annot, F&& f) const {
     if (!has_value() && !view_.signed_halves.empty()) ensure_materialized();
     if (has_value()) return std::forward<F>(f)(Result::get<ArrayT>()(annot));
     auto const& parent = std::as_const(parent_);
     auto const stored = detail::stored_annot(annot, view_.perm);
-    auto const ph = view_.phase;
     bool const conj = TA::detail::is_complex_v<numeric_type> && view_.conj;
     auto apply = [&](auto&& e) -> decltype(auto) {
-      if constexpr (TA::detail::is_complex_v<numeric_type>) {
-        if (conj && ph != 1)
-          return std::forward<F>(f)(numeric_type(ph) * e.conj());
+      if constexpr (TA::detail::is_complex_v<numeric_type>)
         if (conj) return std::forward<F>(f)(e.conj());
-      }
-      if (ph != 1) return std::forward<F>(f)(numeric_type(ph) * e);
       return std::forward<F>(f)(e);
     };
     if (view_.blk_lo.empty()) return apply(parent(stored));
@@ -1116,7 +1209,7 @@ class ResultTensorTA final : public Result {
   [[nodiscard]] ResultPtr with_signs(
       container::svector<std::size_t> const& modes,
       container::svector<std::int64_t> const& bounds) const {
-    View v = base_view();
+    view_type v = base_view();
     for (std::size_t k = 0; k < modes.size(); ++k) {
       v.signed_halves.push_back(modes[k]);
       v.signed_bounds.push_back(bounds[k]);
@@ -1125,7 +1218,7 @@ class ResultTensorTA final : public Result {
   }
   /// this result's view with its signs dropped, as a result
   [[nodiscard]] ResultPtr without_signs() const {
-    View v = base_view();
+    view_type v = base_view();
     v.signed_halves.clear();
     v.signed_bounds.clear();
     return with_view(std::move(v));
@@ -1138,7 +1231,7 @@ class ResultTensorTA final : public Result {
   /// the parent array of a pending view: an empty handle once the value is
   /// held (mutable: released by the const materialization)
   mutable ArrayT parent_;
-  View view_;
+  view_type view_;
 
   [[nodiscard]] id_t type_id() const noexcept override {
     return id_for_type<this_type>();
@@ -1157,8 +1250,10 @@ class ResultTensorTA final : public Result {
   [[nodiscard]] ArrayT const& view_base() const {
     return has_value() ? Result::get<ArrayT>() : parent_;
   }
-  [[nodiscard]] View base_view() const { return has_value() ? View{} : view_; }
-  [[nodiscard]] ResultPtr with_view(View v) const {
+  [[nodiscard]] view_type base_view() const {
+    return has_value() ? view_type{} : view_;
+  }
+  [[nodiscard]] ResultPtr with_view(view_type v) const {
     return eval_result<this_type>(view_base(), std::move(v));
   }
 
@@ -1187,7 +1282,7 @@ class ResultTensorTA final : public Result {
         blk(stored) = parent_(stored).block(view_.blk_lo, view_.blk_hi,
                                             TA::preserve_lobound);
       auto const s =
-          detail::signed_copy(blk, view_.phase, view_.conj, view_.signed_halves,
+          detail::signed_copy(blk, view_.scale, view_.conj, view_.signed_halves,
                               view_.signed_bounds);
       if (view_.perm.empty())
         out = s;
@@ -1220,9 +1315,9 @@ class ResultTensorTA final : public Result {
 
   /// the logical labels of \p pre in \p post's order, composed onto this
   /// result's relabeling
-  [[nodiscard]] View relabeled(std::string const& pre,
-                               std::string const& post) const {
-    View v = base_view();
+  [[nodiscard]] view_type relabeled(std::string const& pre,
+                                    std::string const& post) const {
+    view_type v = base_view();
     auto const pre_t = detail::split_labels(pre);
     auto const post_t = detail::split_labels(post);
     if (pre_t == post_t) return v;
@@ -1368,28 +1463,28 @@ class ResultTensorTA final : public Result {
     auto const a = annot_wrap{annot};
 
     if (other.is<ResultScalar<numeric_type>>()) {
+      // Scaling is a pending view: the factor is folded into the view, and
+      // so is the relabelling from the operand's to the result's modes.
       auto scalar = other.get<numeric_type>();
 
       detail::log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
 
-      ArrayT result;
-      with_expr(a.lannot,
-                [&](auto&& le) { result(a.this_annot) = scalar * le; });
-      ::sequant::detail::drain_lazy_cleanup(result);
-      log_ta_tensor_host_memory_use();
-      return eval_result<this_type>(std::move(result));
+      view_type v = relabeled(a.lannot, a.this_annot);
+      v.scale *= scalar;
+      return with_view(std::move(v));
     }
 
     if (a.this_annot.empty()) {
       // the dot product reduces the two TA expressions, which carry the
-      // pending transforms: neither operand's view is materialized
+      // pending transforms: neither operand's view is materialized; the
+      // operands' factors multiply the number
       SEQUANT_ASSERT(other.is<this_type>());
       auto const& od = static_cast<this_type const&>(other);
-      numeric_type const d =
-          with_expr(a.lannot, [&](auto&& le) -> numeric_type {
-            return od.with_expr(a.rannot, [&](auto&& re) -> numeric_type {
-              return TA::dot(le, re);
-            });
+      numeric_type const d = detail::with_flat_product_operands(
+          *this, a.lannot, od, a.rannot,
+          [](numeric_type factor, auto&& le, auto&& re) -> numeric_type {
+            numeric_type const v = TA::dot(le, re);
+            return factor * v;
           });
       ::sequant::detail::drain_lazy_cleanup(view_base());
       ::sequant::detail::drain_lazy_cleanup(od.view_base());
@@ -1421,10 +1516,11 @@ class ResultTensorTA final : public Result {
     this_type const& ly = mv.y ? static_cast<this_type const&>(*mv.y) : o;
     ArrayT result;
     try {
-      lx.with_expr(a.lannot, [&](auto&& le) {
-        ly.with_expr(a.rannot,
-                     [&](auto&& re) { result(a.this_annot) = le * re; });
-      });
+      detail::with_flat_product_operands(
+          lx, a.lannot, ly, a.rannot,
+          [&](numeric_type factor, auto&& le, auto&& re) {
+            result(a.this_annot) = factor * (le * re);
+          });
     } catch (std::exception const& ex) {
       throw std::runtime_error("TA product failed: " + std::string(ex.what()) +
                                " | " + a.lannot + " * " + a.rannot + " -> " +
@@ -1432,18 +1528,18 @@ class ResultTensorTA final : public Result {
                                " B extents " + o.extents());
     }
     if (!mv.result_modes.empty())
-      result = detail::signed_copy(result, 1, false, mv.result_modes,
-                                   mv.result_bounds);
+      result = detail::signed_copy(result, numeric_type(1), false,
+                                   mv.result_modes, mv.result_bounds);
     ::sequant::detail::drain_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
 
-  /// The phase rides on the view: nothing is materialized or scaled here, a
-  /// consumer folds the phase in through with_expr().
+  /// A phase is a pending view: the factor rides on the view; a consumer
+  /// folds it in through with_expr() or hoists it (with_unscaled_expr()).
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
-    View v = base_view();
-    v.phase = static_cast<std::int8_t>(v.phase * factor);
+    view_type v = base_view();
+    v.scale *= numeric_type(factor);
     return with_view(std::move(v));
   }
 
@@ -1477,10 +1573,15 @@ class ResultTensorTA final : public Result {
 
     detail::log_ta(post_annot, " = apply_transform(", pre_annot, ") (view)\n");
 
-    View v = relabeled(pre_annot, post_annot);
-    v.phase = static_cast<std::int8_t>(v.phase * t.phase);
+    view_type v = relabeled(pre_annot, post_annot);
     if constexpr (TA::detail::is_complex_v<numeric_type>)
-      if (t.conj) v.conj = !v.conj;
+      if (t.conj) {
+        // the value is scale * conj(stored): conjugating it conjugates the
+        // factor as well
+        v.conj = !v.conj;
+        v.scale = std::conj(v.scale);
+      }
+    v.scale *= numeric_type(t.phase);
     return with_view(std::move(v));
   }
 
@@ -1545,36 +1646,14 @@ class ResultTensorOfTensorTA final : public Result {
  public:
   using Result::id_t;
   using numeric_type = typename ArrayT::numeric_type;
-
-  /// The nested result's pending view (see ResultTensorTA::View): a tile
-  /// block over the OUTER modes, an outer and an inner relabeling (stored
-  /// mode s holds logical mode operm[s] / iperm[s]), a conjugation, a phase,
-  /// and the half-signs on outer modes.
-  struct View {
-    std::int8_t phase = 1;
-    bool conj = false;
-    container::svector<std::size_t> operm;
-    container::svector<std::size_t> iperm;
-    container::svector<std::size_t> blk_lo, blk_hi;
-    container::svector<std::size_t> signed_halves;
-    container::svector<std::int64_t> signed_bounds;
-
-    [[nodiscard]] bool trivial() const noexcept {
-      return phase == 1 && !conj && operm.empty() && iperm.empty() &&
-             blk_lo.empty() && signed_halves.empty();
-    }
-    [[nodiscard]] bool relabeled() const noexcept {
-      return !operm.empty() || !iperm.empty();
-    }
-    [[nodiscard]] std::size_t stored_mode(std::size_t logical) const {
-      return detail::stored_mode_of(operm, logical);
-    }
-  };
+  using view_type = detail::ArrayView<numeric_type>;
 
   explicit ResultTensorOfTensorTA(ArrayT arr) : Result{std::move(arr)} {}
 
-  /// a view of \p parent with \p view pending (see the flat result)
-  ResultTensorOfTensorTA(ArrayT parent, View view)
+  /// a view of \p parent with \p view pending (see the flat result): a tile
+  /// block over the OUTER modes, an outer and an inner relabeling, a
+  /// conjugation, a factor, and the half-signs on outer modes
+  ResultTensorOfTensorTA(ArrayT parent, view_type view)
       : Result{}, parent_(std::move(parent)), view_(std::move(view)) {
     SEQUANT_ASSERT(parent_.is_initialized());
     detail::fill_signed_bounds(parent_.trange(), view_.signed_halves,
@@ -1587,7 +1666,7 @@ class ResultTensorOfTensorTA final : public Result {
     return !has_value();
   }
 
-  [[nodiscard]] View const& view() const noexcept { return view_; }
+  [[nodiscard]] view_type const& view() const noexcept { return view_; }
 
   /// the rank of the inner tensors, read from a populated inner tile of the
   /// array this result stands for (detail::tot_inner_rank(), a
@@ -1605,7 +1684,7 @@ class ResultTensorOfTensorTA final : public Result {
   /// pending block cut and the outer modes relabeled; never materializes
   [[nodiscard]] TA::TiledRange logical_trange() const {
     if (has_value()) return Result::get<ArrayT>().trange();
-    return detail::logical_trange(parent_.trange(), view_.operm, view_.blk_lo,
+    return detail::logical_trange(parent_.trange(), view_.perm, view_.blk_lo,
                                   view_.blk_hi);
   }
 
@@ -1616,29 +1695,50 @@ class ResultTensorOfTensorTA final : public Result {
   /// the STORED annotation for the logical nested annotation \p logical
   [[nodiscard]] std::string translate(std::string const& logical) const {
     if (has_value()) return logical;
-    return detail::stored_annot_nested(logical, view_.operm, view_.iperm);
+    return detail::stored_annot_nested(logical, view_.perm, view_.iperm);
   }
 
   /// Hands \p f the TiledArray expression of this result's value for the
   /// nested logical annotation \p annot (`outer;inner`); see
-  /// ResultTensorTA::with_expr. A view with half-signs is materialized first.
-  /// The parent is handed over as a const array, which makes the block a view
-  /// in TiledArray (see ResultTensorTA::with_expr).
+  /// ResultTensorTA::with_expr: the block over the outer modes, the outer and
+  /// the inner relabeling, the conjugation and the factor folded in. A view
+  /// with half-signs is materialized first.
   template <typename F>
   decltype(auto) with_expr(std::string const& annot, F&& f) const {
+    return with_expr_scaled_by(annot, numeric_type(1), std::forward<F>(f));
+  }
+
+  /// with_expr() scaled by \p extra on top of the view's own factor (see
+  /// ResultTensorTA::with_expr_scaled_by)
+  template <typename F>
+  decltype(auto) with_expr_scaled_by(std::string const& annot,
+                                     numeric_type extra, F&& f) const {
+    auto const factor = extra * scale();
+    return with_unscaled_expr(annot, [&](auto&& e) -> decltype(auto) {
+      if (factor == numeric_type(1)) return std::forward<F>(f)(e);
+      return std::forward<F>(f)(factor * e);
+    });
+  }
+
+  /// the factor of the pending view (see ResultTensorTA::scale)
+  [[nodiscard]] numeric_type scale() const {
+    if (!has_value() && !view_.signed_halves.empty()) ensure_materialized();
+    return has_value() ? numeric_type(1) : view_.scale;
+  }
+
+  /// with_expr() without the factor (see ResultTensorTA::with_unscaled_expr).
+  /// The parent is handed over as a const array, which makes the block a view
+  /// in TiledArray (see ResultTensorTA::with_unscaled_expr).
+  template <typename F>
+  decltype(auto) with_unscaled_expr(std::string const& annot, F&& f) const {
     if (!has_value() && !view_.signed_halves.empty()) ensure_materialized();
     if (has_value()) return std::forward<F>(f)(Result::get<ArrayT>()(annot));
     auto const& parent = std::as_const(parent_);
     auto const stored = translate(annot);
-    auto const ph = view_.phase;
     bool const conj = TA::detail::is_complex_v<numeric_type> && view_.conj;
     auto apply = [&](auto&& e) -> decltype(auto) {
-      if constexpr (TA::detail::is_complex_v<numeric_type>) {
-        if (conj && ph != 1)
-          return std::forward<F>(f)(numeric_type(ph) * e.conj());
+      if constexpr (TA::detail::is_complex_v<numeric_type>)
         if (conj) return std::forward<F>(f)(e.conj());
-      }
-      if (ph != 1) return std::forward<F>(f)(numeric_type(ph) * e);
       return std::forward<F>(f)(e);
     };
     if (view_.blk_lo.empty()) return apply(parent(stored));
@@ -1663,7 +1763,7 @@ class ResultTensorOfTensorTA final : public Result {
     return detail::split_labels(detail::outer_part(translate(annot)));
   }
   [[nodiscard]] container::svector<std::size_t> outer_perm() const {
-    return base_view().operm;
+    return base_view().perm;
   }
   [[nodiscard]] std::size_t logical_volume() const {
     return logical_trange().elements_range().volume();
@@ -1671,7 +1771,7 @@ class ResultTensorOfTensorTA final : public Result {
   [[nodiscard]] ResultPtr with_signs(
       container::svector<std::size_t> const& modes,
       container::svector<std::int64_t> const& bounds) const {
-    View v = base_view();
+    view_type v = base_view();
     for (std::size_t k = 0; k < modes.size(); ++k) {
       v.signed_halves.push_back(modes[k]);
       v.signed_bounds.push_back(bounds[k]);
@@ -1679,7 +1779,7 @@ class ResultTensorOfTensorTA final : public Result {
     return with_view(std::move(v));
   }
   [[nodiscard]] ResultPtr without_signs() const {
-    View v = base_view();
+    view_type v = base_view();
     v.signed_halves.clear();
     v.signed_bounds.clear();
     return with_view(std::move(v));
@@ -1701,7 +1801,7 @@ class ResultTensorOfTensorTA final : public Result {
   using that_type = ResultTensorTA<compatible_regular_distarray_type>;
 
   mutable ArrayT parent_;
-  View view_;
+  view_type view_;
   mutable std::optional<std::size_t> inner_rank_;
 
   static std::size_t inner_count(std::string const& annot) {
@@ -1727,8 +1827,10 @@ class ResultTensorOfTensorTA final : public Result {
   [[nodiscard]] ArrayT const& view_base() const {
     return has_value() ? Result::get<ArrayT>() : parent_;
   }
-  [[nodiscard]] View base_view() const { return has_value() ? View{} : view_; }
-  [[nodiscard]] ResultPtr with_view(View v) const {
+  [[nodiscard]] view_type base_view() const {
+    return has_value() ? view_type{} : view_;
+  }
+  [[nodiscard]] ResultPtr with_view(view_type v) const {
     return noted(eval_result<this_type>(view_base(), std::move(v)),
                  inner_rank_);
   }
@@ -1761,7 +1863,7 @@ class ResultTensorOfTensorTA final : public Result {
         blk(stored) = parent_(stored).block(view_.blk_lo, view_.blk_hi,
                                             TA::preserve_lobound);
       auto const s =
-          detail::signed_copy(blk, view_.phase, view_.conj, view_.signed_halves,
+          detail::signed_copy(blk, view_.scale, view_.conj, view_.signed_halves,
                               view_.signed_bounds);
       if (view_.relabeled())
         out(ann) = s(stored);
@@ -1806,9 +1908,9 @@ class ResultTensorOfTensorTA final : public Result {
       cur = std::move(np);
   }
 
-  [[nodiscard]] View relabeled(std::string const& pre,
-                               std::string const& post) const {
-    View v = base_view();
+  [[nodiscard]] view_type relabeled(std::string const& pre,
+                                    std::string const& post) const {
+    view_type v = base_view();
     auto split = [](std::string const& s) {
       auto const semi = s.find(';');
       return std::pair{
@@ -1819,7 +1921,7 @@ class ResultTensorOfTensorTA final : public Result {
     };
     auto const [pre_o, pre_i] = split(pre);
     auto const [post_o, post_i] = split(post);
-    compose_perm(pre_o, post_o, v.operm);
+    compose_perm(pre_o, post_o, v.perm);
     compose_perm(pre_i, post_i, v.iperm);
     return v;
   }
@@ -1909,26 +2011,31 @@ class ResultTensorOfTensorTA final : public Result {
     return noted(eval_result<this_type>(base, std::move(view)), inner_rank_);
   }
 
-  /// A pending block is reduced in place, not materialized. The norm does
-  /// not depend on inner-mode labels, so the parent is annotated over its
-  /// outer modes only (TA's make_tsrexpr) and no inner rank is needed.
+  /// A pending block is reduced in place, not materialized, and the view's
+  /// factor scales the norm. The norm does not depend on inner-mode labels,
+  /// so the parent is annotated over its outer modes only (TA's make_tsrexpr)
+  /// and no inner rank is needed.
   [[nodiscard]] double norm2() const override {
-    if (has_value() || view_.blk_lo.empty())
-      return detail::ta_norm2(view_base());
-    if constexpr (requires(ArrayT const& a) {
-                    { TA::squared_norm(a) } -> std::convertible_to<double>;
-                  }) {
-      auto const& parent = std::as_const(parent_);
-      return static_cast<double>(
-          parent
-              .make_tsrexpr(TA::detail::dummy_annotation(
-                  static_cast<unsigned int>(parent.trange().rank())))
-              .block(view_.blk_lo, view_.blk_hi, TA::preserve_lobound)
-              .norm()
-              .get());
-    } else {
-      return -1.0;
-    }
+    auto const unscaled = [&]() -> double {
+      if (has_value() || view_.blk_lo.empty())
+        return detail::ta_norm2(view_base());
+      if constexpr (requires(ArrayT const& a) {
+                      { TA::squared_norm(a) } -> std::convertible_to<double>;
+                    }) {
+        auto const& parent = std::as_const(parent_);
+        return static_cast<double>(
+            parent
+                .make_tsrexpr(TA::detail::dummy_annotation(
+                    static_cast<unsigned int>(parent.trange().rank())))
+                .block(view_.blk_lo, view_.blk_hi, TA::preserve_lobound)
+                .norm()
+                .get());
+      } else {
+        return -1.0;
+      }
+    }();
+    // -1 flags a tile type without a norm (see ta_norm2)
+    return unscaled < 0 ? unscaled : std::abs(scale()) * unscaled;
   }
   [[nodiscard]] std::string layout_desc() const override {
     return detail::ta_trange_string(logical_trange());
@@ -2043,22 +2150,21 @@ class ResultTensorOfTensorTA final : public Result {
 
       detail::log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
 
-      ArrayT result;
-      with_expr(a.lannot,
-                [&](auto&& le) { result(a.this_annot) = scalar * le; });
-      ::sequant::detail::drain_lazy_cleanup(result);
-      log_ta_tensor_host_memory_use();
-      return noted(eval_result<this_type>(std::move(result)),
-                   inner_count(a.this_annot));
+      // scaling is a pending view, and so is the relabeling from the
+      // operand's to the result's modes
+      view_type v = relabeled(a.lannot, a.this_annot);
+      v.scale *= scalar;
+      return with_view(std::move(v));
     } else if (a.this_annot.empty()) {
-      // DOT product: the two expressions are reduced, views taken as is
+      // DOT product: the two expressions are reduced, views taken as is; the
+      // operands' factors multiply the number
       SEQUANT_ASSERT(other.is<this_type>());
       auto const& o = static_cast<this_type const&>(other);
-      numeric_type const d =
-          with_expr(a.lannot, [&](auto&& le) -> numeric_type {
-            return o.with_expr(a.rannot, [&](auto&& re) -> numeric_type {
-              return TA::dot(le, re);
-            });
+      numeric_type const d = detail::with_flat_product_operands(
+          *this, a.lannot, o, a.rannot,
+          [](numeric_type factor, auto&& le, auto&& re) -> numeric_type {
+            numeric_type const v = TA::dot(le, re);
+            return factor * v;
           });
       ::sequant::detail::drain_lazy_cleanup(view_base());
       ::sequant::detail::drain_lazy_cleanup(o.view_base());
@@ -2090,16 +2196,15 @@ class ResultTensorOfTensorTA final : public Result {
       that_type const& ly = mv.y ? static_cast<that_type const&>(*mv.y) : o;
       ArrayT result;
       try {
-        lx.with_expr(a.lannot, [&](auto&& le) {
-          ly.with_expr(a.rannot,
-                       [&](auto&& re) { emit_product(result, le, re, a); });
-        });
+        detail::with_nested_product_operands(
+            lx, a.lannot, ly, a.rannot,
+            [&](auto&& le, auto&& re) { emit_product(result, le, re, a); });
       } catch (std::exception const& ex) {
         throw std::runtime_error(describe(ex.what()));
       }
       if (!mv.result_modes.empty())
-        result = detail::signed_copy(result, 1, false, mv.result_modes,
-                                     mv.result_bounds);
+        result = detail::signed_copy(result, numeric_type(1), false,
+                                     mv.result_modes, mv.result_bounds);
       ::sequant::detail::drain_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
       return noted(eval_result<this_type>(std::move(result)),
@@ -2114,17 +2219,16 @@ class ResultTensorOfTensorTA final : public Result {
       this_type const& ly = mv.y ? static_cast<this_type const&>(*mv.y) : o;
       compatible_regular_distarray_type result;
       try {
-        lx.with_expr(a.lannot, [&](auto&& le) {
-          ly.with_expr(a.rannot, [&](auto&& re) {
-            result(a.this_annot) = le.dot_inner(re);
-          });
-        });
+        detail::with_nested_product_operands(
+            lx, a.lannot, ly, a.rannot, [&](auto&& le, auto&& re) {
+              result(a.this_annot) = le.dot_inner(re);
+            });
       } catch (std::exception const& ex) {
         throw std::runtime_error(describe(ex.what()));
       }
       if (!mv.result_modes.empty())
-        result = detail::signed_copy(result, 1, false, mv.result_modes,
-                                     mv.result_bounds);
+        result = detail::signed_copy(result, numeric_type(1), false,
+                                     mv.result_modes, mv.result_bounds);
       ::sequant::detail::drain_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
       return eval_result<that_type>(std::move(result));
@@ -2138,16 +2242,15 @@ class ResultTensorOfTensorTA final : public Result {
       this_type const& ly = mv.y ? static_cast<this_type const&>(*mv.y) : o;
       ArrayT result;
       try {
-        lx.with_expr(a.lannot, [&](auto&& le) {
-          ly.with_expr(a.rannot,
-                       [&](auto&& re) { emit_product(result, le, re, a); });
-        });
+        detail::with_nested_product_operands(
+            lx, a.lannot, ly, a.rannot,
+            [&](auto&& le, auto&& re) { emit_product(result, le, re, a); });
       } catch (std::exception const& ex) {
         throw std::runtime_error(describe(ex.what()));
       }
       if (!mv.result_modes.empty())
-        result = detail::signed_copy(result, 1, false, mv.result_modes,
-                                     mv.result_bounds);
+        result = detail::signed_copy(result, numeric_type(1), false,
+                                     mv.result_modes, mv.result_bounds);
       ::sequant::detail::drain_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
       return noted(eval_result<this_type>(std::move(result)),
@@ -2157,11 +2260,11 @@ class ResultTensorOfTensorTA final : public Result {
     }
   }
 
-  /// The phase rides on the view: nothing is materialized or scaled here, a
-  /// consumer folds the phase in through with_expr().
+  /// A phase is a pending view: the factor rides on the view (see the flat
+  /// result)
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
-    View v = base_view();
-    v.phase = static_cast<std::int8_t>(v.phase * factor);
+    view_type v = base_view();
+    v.scale *= numeric_type(factor);
     return with_view(std::move(v));
   }
 
@@ -2193,10 +2296,15 @@ class ResultTensorOfTensorTA final : public Result {
 
     detail::log_ta(post_annot, " = apply_transform(", pre_annot, ") (view)\n");
 
-    View v = relabeled(pre_annot, post_annot);
-    v.phase = static_cast<std::int8_t>(v.phase * t.phase);
+    view_type v = relabeled(pre_annot, post_annot);
     if constexpr (TA::detail::is_complex_v<numeric_type>)
-      if (t.conj) v.conj = !v.conj;
+      if (t.conj) {
+        // the value is scale * conj(stored): conjugating it conjugates the
+        // factor as well
+        v.conj = !v.conj;
+        v.scale = std::conj(v.scale);
+      }
+    v.scale *= numeric_type(t.phase);
     return with_view(std::move(v));
   }
 
@@ -2508,17 +2616,17 @@ template <typename NumericT, typename PolicyT,
   // tile work against the executor's bookkeeping.
 
   // A flat operand may be a pending view (a batch slice, a permutation, a
-  // conjugation): with_expr() folds it into the expression, so it is not
-  // materialized here.
+  // conjugation, a scaling): with_expr() folds it into the expression, so it
+  // is not materialized here.
 
   // T * T -> T
   if (l_flat && r_flat) {
     FlatArray out;
-    left.as<FlatResult>().with_expr(a.lannot, [&](auto&& le) {
-      right.as<FlatResult>().with_expr(a.rannot, [&](auto&& re) {
-        out(a.this_annot) = (le * re).set_shape(shape);
-      });
-    });
+    detail::with_flat_product_operands(
+        left.as<FlatResult>(), a.lannot, right.as<FlatResult>(), a.rannot,
+        [&](NumericT factor, auto&& le, auto&& re) {
+          out(a.this_annot) = (factor * (le * re)).set_shape(shape);
+        });
     ::sequant::detail::drain_lazy_cleanup(out);
     return eval_result<FlatResult>(std::move(out));
   }
@@ -2532,17 +2640,17 @@ template <typename NumericT, typename PolicyT,
       return nullptr;
     ToTArray out;
     if (l_flat) {
-      left.as<FlatResult>().with_expr(a.lannot, [&](auto&& le) {
-        right.as<ToTResult>().with_expr(a.rannot, [&](auto&& re) {
-          out(a.this_annot) = (le * re).set_shape(shape);
-        });
-      });
+      detail::with_nested_product_operands(
+          left.as<FlatResult>(), a.lannot, right.as<ToTResult>(), a.rannot,
+          [&](auto&& le, auto&& re) {
+            out(a.this_annot) = (le * re).set_shape(shape);
+          });
     } else {
-      left.as<ToTResult>().with_expr(a.lannot, [&](auto&& le) {
-        right.as<FlatResult>().with_expr(a.rannot, [&](auto&& re) {
-          out(a.this_annot) = (le * re).set_shape(shape);
-        });
-      });
+      detail::with_nested_product_operands(
+          left.as<ToTResult>(), a.lannot, right.as<FlatResult>(), a.rannot,
+          [&](auto&& le, auto&& re) {
+            out(a.this_annot) = (le * re).set_shape(shape);
+          });
     }
     ::sequant::detail::drain_lazy_cleanup(out);
     return eval_result<ToTResult>(std::move(out));
@@ -2553,11 +2661,11 @@ template <typename NumericT, typename PolicyT,
     if (de_nest) {
       // ToT * ToT -> flat T (inner contraction / denest)
       FlatArray out;
-      left.as<ToTResult>().with_expr(a.lannot, [&](auto&& le) {
-        right.as<ToTResult>().with_expr(a.rannot, [&](auto&& re) {
-          out(a.this_annot) = le.dot_inner(re).set_shape(shape);
-        });
-      });
+      detail::with_nested_product_operands(
+          left.as<ToTResult>(), a.lannot, right.as<ToTResult>(), a.rannot,
+          [&](auto&& le, auto&& re) {
+            out(a.this_annot) = le.dot_inner(re).set_shape(shape);
+          });
       ::sequant::detail::drain_lazy_cleanup(out);
       return eval_result<FlatResult>(std::move(out));
     } else {
@@ -2571,11 +2679,11 @@ template <typename NumericT, typename PolicyT,
                                                   a.this_annot))
         return nullptr;
       ToTArray out;
-      left.as<ToTResult>().with_expr(a.lannot, [&](auto&& le) {
-        right.as<ToTResult>().with_expr(a.rannot, [&](auto&& re) {
-          out(a.this_annot) = (le * re).set_shape(shape);
-        });
-      });
+      detail::with_nested_product_operands(
+          left.as<ToTResult>(), a.lannot, right.as<ToTResult>(), a.rannot,
+          [&](auto&& le, auto&& re) {
+            out(a.this_annot) = (le * re).set_shape(shape);
+          });
       ::sequant::detail::drain_lazy_cleanup(out);
       return eval_result<ToTResult>(std::move(out));
     }

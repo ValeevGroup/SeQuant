@@ -452,17 +452,22 @@ class Result {
   }
 
   /// @return whether this result is a pending view of another result's
-  ///         storage -- a batch slice, a relabeling, a conjugation, a phase,
-  ///         a half-sign recorded instead of performed -- and so holds no
-  ///         tiles of its own: producing one allocates nothing, so a tracer
-  ///         charges it 0 allocated bytes (size_in_bytes() reports the
-  ///         value's logical size) and must not count its buffer twice in a
-  ///         working set. get<T>() applies the view (once) on first read.
+  ///         storage -- a batch slice, a relabeling, a conjugation, a scaling
+  ///         by a constant (a prefactor, a phase), a half-sign recorded
+  ///         instead of performed -- and so holds no tiles of its own:
+  ///         producing one allocates nothing, so a tracer charges it 0
+  ///         allocated bytes (size_in_bytes() reports the value's logical
+  ///         size) and must not count its buffer twice in a working set. A
+  ///         backend consumer that can take the transformation into its own
+  ///         expression does so instead of asking for the value; get<T>()
+  ///         applies the view (once) on first read.
   [[nodiscard]] virtual bool is_buffer_alias() const noexcept { return false; }
 
   /// @return the size of the object in bytes. For a pending view (see
   ///         is_buffer_alias()) this is the _logical_ size of the value it
-  ///         stands for, not a buffer of its own.
+  ///         stands for, not a buffer of its own. Within SeQuant it feeds
+  ///         diagnostics (the eval trace, the peak monitor, the residency
+  ///         counts), not evaluation.
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
 
   /// @return the size of the object in bytes, measured even where
