@@ -21,6 +21,7 @@ set(symb_test_sources
     "test_meta.cpp"
     "test_op.cpp"
     "test_parse.cpp"
+    "test_polynomial_division.cpp"
     "test_runtime.cpp"
     "test_space.cpp"
     "test_tensor.cpp"
