@@ -85,8 +85,8 @@ int main() {
   auto ccsd_eqs = CC{2}.t();
   auto t2_eq = t_eqs[2];
 
-  // Convert to the closed-shell spin-traced form
-  auto t2_cs = closed_shell_CC_spintrace(t2_eq);
+  // Convert to the closed-shell singlet spin-traced form
+  auto t2_cs = closed_shell_CC_singlet_spintrace(t2_eq);
   std::wcout << "Closed-shell spin-traced CCSD-R2: " << to_latex(t2_cs) << "\n";
 
   // Convert to the open-shell spin-traced form

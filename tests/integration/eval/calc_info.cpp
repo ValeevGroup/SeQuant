@@ -13,7 +13,7 @@ container::vector<ExprPtr> CalcInfo::exprs() const {
   container::vector<ExprPtr> result{};
   for (auto r = 1; r < exprs.size(); ++r)
     result.emplace_back(eqn_opts.spintrace
-                            ? mbpt::closed_shell_CC_spintrace(exprs[r])
+                            ? mbpt::closed_shell_CC_singlet_spintrace(exprs[r])
                             : exprs[r]);
   return result;
 }
