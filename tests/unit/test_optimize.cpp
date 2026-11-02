@@ -16,6 +16,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
@@ -4118,4 +4119,32 @@ TEST_CASE("batchability role-split building-block predicates",
     CHECK(cost.is_batchable_external_index(i));
     CHECK(cost.batch_target_size(a) == 8u);
   }
+}
+
+// an index held only as a proto of a composite contracted inside a subset
+// stays open if the rest of the term carries it, as a slot or as a proto
+TEST_CASE("CSV protos of contracted composites stay open", "[optimize][csv]") {
+  using namespace sequant;
+  // A B contracts a_1<i_1,i_2> and i_2; C D contracts i_1 and p_1
+  auto prod =
+      deserialize(
+          L"A{a_1<i_1,i_2>;i_2} B{i_2;a_1<i_1,i_2>} C{i_1;p_1} D{p_1;i_1}")
+          ->as<Product>();
+  container::svector<container::svector<Index>> slots;
+  for (auto&& f : prod.factors())
+    slots.emplace_back(f->as<Tensor>().const_braketaux_indices() |
+                       ranges::to<container::svector<Index>>);
+  auto const open = subset_target_indices(slots, container::svector<Index>{});
+  using IndexSet = std::decay_t<decltype(open)>::value_type;
+  enum : std::size_t { A = 1, B = 2, C = 4, D = 8 };
+  Index const i1(L"i_1"), i2(L"i_2");
+  Index const a1 = prod.factor(0)->as<Tensor>().bra()[0];  // a_1<i_1,i_2>
+  // A B: i_1 lives only in the contracted a_1<i_1,i_2>, yet C D needs it;
+  // i_2 is consumed inside A B and stays summed
+  CHECK(open[A | B] == IndexSet{i1});
+  // C D contracts i_1, but A B still carries it as a proto of a_1
+  CHECK(open[C | D] == IndexSet{i1});
+  // an open composite already carries its protos: no duplicate plain i_1
+  CHECK(open[A] == IndexSet({a1, i2}));
+  CHECK(open[A | B | C | D].empty());
 }
