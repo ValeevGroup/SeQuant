@@ -866,7 +866,9 @@ auto subset_index_counts(meta::range_of<Index, 2> auto const& rng,
 /// the complementary subset (implied by `counts.at(counts.size() - i -
 /// 1).contains(k)`) are included, which effectively identifies contracted
 /// indices that need to be preserved as open indices if they are matched in the
-/// complement.
+/// complement. An index carried only as a protoindex of a composite contracted
+/// in the subset stays open if the complement also carries it (as a slot or a
+/// proto) or it is a target, unless an open composite of the subset carries it.
 ///
 /// @param rng A range of ranges of `Index`. The outer range represents a
 /// collection of index groups.
@@ -908,10 +910,27 @@ auto subset_target_indices(meta::range_of<Index, 2> auto const& rng,
   for (auto&& [k, v] : *counts.rbegin())
     if (v == 1 || ranges::contains(tixs, k)) result.rbegin()->emplace(k);
 
+  // carriers[p] = tensors holding protoindex p as a proto or as a slot
+  container::map<Index, size_t, Index::FullLabelCompare> carriers;
+  for (size_t t = 0; t < N; ++t)
+    for (auto&& ix : ranges::at(rng, t))
+      for (auto&& p : ix.proto_indices()) carriers[p] |= size_t{1} << t;
+  for (size_t t = 0; t < N; ++t)
+    for (auto&& ix : ranges::at(rng, t))
+      if (auto it = carriers.find(ix); it != carriers.end())
+        it->second |= size_t{1} << t;
+
   for (size_t i = 0; i < result.size(); ++i) {
     if (connected && !(*connected)[i]) continue;  // pruned: result[i] unused
     for (auto&& [k, v] : counts[i])
       if (v == 1 || (v > 0 && counts.at(counts.size() - i - 1).contains(k)))
+        result[i].emplace(k);
+    for (auto&& [k, m] : carriers)
+      if ((m & i) && !result[i].contains(k) &&
+          ((m & (S - 1 - i)) || ranges::contains(tixs, k)) &&
+          !ranges::any_of(result[i], [&k](Index const& ix) {
+            return ranges::contains(ix.proto_indices(), k);
+          }))
         result[i].emplace(k);
   }
 

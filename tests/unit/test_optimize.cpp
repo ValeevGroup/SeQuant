@@ -18,6 +18,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
@@ -4640,4 +4641,55 @@ TEST_CASE("field cost factors", "[optimize][roofline]") {
     auto const real_prod = deserialize(L"g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
     CHECK(tensors_field(real_prod->as<Product>().factors()) == Field::Real);
   }
+}
+
+// an index held only as a proto of a contracted composite stays open if the
+// rest of the term uses it
+TEST_CASE("CSV protos of contracted composites stay open", "[optimize][csv]") {
+  using namespace sequant;
+  auto reg = std::make_shared<IndexBasisRegistry>(
+      *get_default_context().index_basis_registry());
+  mbpt::add_df_spaces(reg);
+  mbpt::add_pao_basis(reg, mbpt::Spin::any);
+  auto ctx_resetter =
+      set_scoped_default_context(get_default_context_snapshot().set(reg));
+
+  auto prod =
+      deserialize(
+          L"C{a_1<i_1,i_3>;μ̃_2} C{a_3<i_2,i_4>;μ̃_4} C{a_5<i_1,i_3>;μ̃_6} "
+          L"C{a_7<i_2,i_4>;μ̃_8} C{a_9<i_3,i_4>;μ̃_10} C{a_11<i_3,i_4>;μ̃_12} "
+          L"C{μ̃_13;a_9<i_3,i_4>} C{μ̃_14;a_11<i_3,i_4>} C{μ̃_15;a_1<i_1,i_2>} "
+          L"C{μ̃_16;a_2<i_1,i_2>} g{μ̃_10;i_3;Κ_1} g{μ̃_12;i_4;Κ_1} "
+          L"s{μ̃_2;μ̃_15} s{μ̃_4;μ̃_14} s{μ̃_6;μ̃_13} s{μ̃_8;μ̃_16} "
+          L"t{a_1<i_1,i_3>,a_5<i_1,i_3>;i_1,i_3} "
+          L"t{a_3<i_2,i_4>,a_7<i_2,i_4>;i_2,i_4}")
+          ->as<Product>();
+  container::svector<container::svector<Index>> slots;
+  for (auto&& f : prod.factors()) {
+    container::svector<Index> s;
+    for (auto&& ix : f->as<Tensor>().const_braketaux_indices())
+      s.emplace_back(ix);
+    slots.emplace_back(std::move(s));
+  }
+  auto const open = subset_target_indices(slots, container::svector<Index>{});
+  auto has = [&open](std::size_t mask, std::wstring_view label) {
+    return ranges::any_of(open[mask], [label](Index const& ix) {
+      return ix.full_label() == label;
+    });
+  };
+
+  // the i_4 half: C{a_3<i_2,i_4>} C{a_11<i_3,i_4>} C{μ̃_14;a_11} g{;i_4;} s
+  std::size_t const half =
+      (1u << 1) | (1u << 5) | (1u << 7) | (1u << 11) | (1u << 13);
+  CHECK(has(half, L"i_3"));
+  CHECK(has(half, L"Κ_1"));
+  // the half joined with S^{24,12} t_{24}: a_3<i_2,i_4> is contracted, so
+  // i_4 is carried by nothing open, yet the i_3 half still uses it
+  std::size_t const joined =
+      half | (1u << 3) | (1u << 9) | (1u << 15) | (1u << 17);
+  CHECK(has(joined, L"i_3"));
+  CHECK(has(joined, L"i_4"));
+  // an open composite already carries its protos: no duplicate plain index
+  std::size_t const overlap = (1u << 8) | (1u << 12);  // C{μ̃_15;a_1<i_1,i_2>} s
+  CHECK_FALSE(has(overlap, L"i_1"));
 }
