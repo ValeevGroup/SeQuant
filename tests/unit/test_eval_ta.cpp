@@ -47,16 +47,6 @@
 #include <string>
 #include <vector>
 
-// Force compile-instantiation of the complex tensor-of-tensors Result so its
-// adjoint() override (`result(annot) = arr(annot).conj()`, relying on TA's
-// recursive conj for nested tiles) is type-checked. No TA eval test constructs
-// a complex ToT adjoint, and Result::adjoint() is private (reachable only
-// through the EvalOp::Adjoint IR node); the ta_tot_conj_complex test below
-// runtime-checks the underlying TA conj while this instantiation compile-checks
-// the override.
-template class sequant::ResultTensorOfTensorTA<TA::DistArray<
-    TA::Tensor<TA::Tensor<std::complex<double>>>, TA::SparsePolicy>>;
-
 namespace TiledArray {
 template <typename>
 constexpr bool is_tnsr_expr_v{};
