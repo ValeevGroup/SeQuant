@@ -731,6 +731,46 @@ TEST_CASE("measured-size-trace-gate", "[eval]") {
   logger.eval.level = prev_level;
 }
 
+TEST_CASE("canon-phase-of-a-cached-view", "[eval]") {
+  // A cache entry memoizes its bytes when first measured. An entry that is
+  // itself a phase view, the only holder of its parent's tiles, owns those
+  // bytes; the read that applies the node's phase again must not make it
+  // look shared before the cache measures it.
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using ResultD = sequant::ResultTensorTA<TA::TArrayD>;
+  auto& world = TA::get_default_world();
+  // the phase of the antisymmetric g, written out of canonical order, sits on
+  // the product (see ordered-canon-phase-once)
+  auto const node = eval_node(sequant::deserialize<sequant::ExprPtr>(
+      L"g{a_2,a_1;i_3,i_4} * t{i_3,i_4;i_1,i_2}",
+      {.def_perm_symm = sequant::Symmetry::Antisymm}));
+  REQUIRE(node->canon_phase() == -1);
+  TA::TArrayD arr(world,
+                  TA::TiledRange{{0, 2, 4}, {0, 2, 4}, {0, 2, 4}, {0, 2, 4}});
+  arr.fill(1.0);
+  world.gop.fence();
+
+  auto& level = sequant::Logger::instance().eval.level;
+  struct Restore {
+    std::size_t& level;
+    std::size_t prev;
+    ~Restore() { level = prev; }
+  } const restore{level, level};
+  level = 1;  // size_in_bytes() measures only traced
+
+  auto const bytes = sequant::eval_result<ResultD>(arr)->size_in_bytes();
+  REQUIRE(bytes > 0);
+  sequant::CacheManager<node_t> cache{
+      std::vector<std::pair<node_t, std::size_t>>{{node, 2}}};
+  auto const stored = cache.store_and_access(
+      node, sequant::eval_result<ResultD>(TA::clone(arr))->mult_by_phase(-1));
+  REQUIRE(stored->is_buffer_alias());
+  auto const read =
+      sequant::apply_canon_phase<sequant::Trace::On>(node, stored, cache);
+  REQUIRE(read->is_buffer_alias());
+  REQUIRE(cache.size_in_bytes() == bytes);
+}
+
 TEST_CASE("eval_with_tiledarray", "[eval]") {
   // Reproducer for the mpqc4 cck real-field NaN regression. The eval-graph
   // head's bra/ket split is purely positional: each external index ends up in
@@ -7572,6 +7612,15 @@ TEST_CASE("ta_lazy_views_nested", "[eval][ta][lazy]") {
     expSV("i,j;a,b") = 3.0 * L("i,j;a,b");
     REQUIRE(equal_tarrays(sv->get<ToTArray>(), expSV, "i,j;a,b"));
     REQUIRE(equal_tarrays(L, L0, "i,j;a,b"));
+    // a view that is the only holder of its parent's tiles owns their bytes,
+    // and not while the parent is held elsewhere
+    auto const bytes =
+        eval_result<ResultToT>(TA::clone(L))->measured_size_in_bytes();
+    REQUIRE(bytes > 0);
+    auto sole = eval_result<ResultToT>(TA::clone(L))->mult_by_phase(-1);
+    REQUIRE(sole->is_buffer_alias());
+    REQUIRE(sole->measured_size_in_bytes() == bytes);
+    REQUIRE(rL->mult_by_phase(-1)->measured_size_in_bytes() == 0);
   }
 
   SECTION("the norm and the tile diff of a nested view read it in place") {
