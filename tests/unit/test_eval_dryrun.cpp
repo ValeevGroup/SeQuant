@@ -2922,9 +2922,8 @@ TEST_CASE("c60-perf-first-audit", "[dryrun-c60-batchability-audit]") {
       for (auto const& f : giant->as<Product>().factors())
         if (f->is<Tensor>()) gts.push_back(f);
       TensorNetwork gtn{gts};
-      container::svector<Index> const empty_tidxs{};  // matches single_term_opt
-      auto conn =
-          sequant::opt::detail::outer_product_connectivity(gtn, empty_tidxs);
+      auto conn = sequant::opt::detail::outer_product_connectivity(
+          gtn, gtn.ext_indices());
       std::size_t const nt = gts.size();
       std::size_t total_ge2 = 0, connected_ge2 = 0;
       for (std::size_t n = 1; n < conn.size(); ++n) {
