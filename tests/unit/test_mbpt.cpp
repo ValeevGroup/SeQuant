@@ -2326,9 +2326,8 @@ SECTION("manuscript-examples") {
   };
 
   SECTION("CCD Term") {
-    auto expr = ref_av(P(2) * H() * t(2) * t(2),
-                       {.connect = {{L"f", L"t"}, {L"g", L"t"}}});
-    REQUIRE(expr.size() == 4);
+    auto expr = ref_av(P(2) * H() * t(2) * t(2));
+    REQUIRE(expr.size() == 5);
   }
 
   SECTION("Ground State Amplitudes") {
