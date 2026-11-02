@@ -646,7 +646,8 @@ template <meta::can_evaluate Node>
 /// \c evaluate_impl (through its \c apply_phase lambda) and the ordered
 /// executor's \c detail::compute_cell, so both convert identically --
 /// including the \c MultByPhase trace event, whose \c note_working_set call
-/// is what puts the transient second buffer on the peak monitor.
+/// is what puts the transient second buffer, if the backend allocates one
+/// (a pending view reports no bytes of its own), on the peak monitor.
 ///
 /// A phase of 1 (the overwhelming majority) returns \p res untouched, with
 /// no event and no allocation.
@@ -657,6 +658,12 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
   auto phase = nd->canon_phase();
   if (phase == 1) return res;
 
+  // The cache total is taken before the phase view exists: an entry that is
+  // itself a view memoizes its bytes on its first measurement, and reports
+  // none while another view shares its parent.
+  [[maybe_unused]] size_t cache_bytes = 0;
+  if constexpr (detail::trace(EvalTrace)) cache_bytes = log::bytes(cache).value;
+
   ResultPtr post;
   auto const _ph0 = std::chrono::steady_clock::now();
   auto time =
@@ -664,7 +671,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
   eval::EvalImplTimeline::note_phase(_ph0);
 
   if constexpr (detail::trace(EvalTrace)) {
-    size_t hwmark = log::bytes(cache, post).value;
+    size_t hwmark = cache_bytes + log::bytes(post).value;
     if (!cache.alive(nd)) hwmark += log::bytes(res).value;
     hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
     auto stat = log::EvalStat{
@@ -1225,8 +1232,9 @@ ResultPtr evaluate_impl(Node const& node,         //
         //    unit tests) can hand out the same buffer to unrelated callers,
         //    so mutating it here would silently corrupt those other reads.
         //    Only an internal node's result is guaranteed freshly built by
-        //    this evaluation (prod()/sum()/permute() always allocate), so
-        //    only internal nodes are safe candidates.
+        //    this evaluation (prod()/sum() allocate, or hand back a pending
+        //    view that copies before it is written to), so only internal
+        //    nodes are safe candidates.
         //  - !cache.chain_holds_shared(f.left): even an internal node's result
         //    must not be a live, shared entry on the CacheManager's scope chain
         //    -- i.e. not referenced again elsewhere in this evaluation's
@@ -1347,9 +1355,11 @@ ResultPtr evaluate(Node const& node,           //
   if constexpr (detail::trace(EvalTrace)) {
     if (perm) {
       // result.pre aliases a cache buffer only when the inner evaluate returned
-      // it unchanged (node cached at some scope, no mult_by_phase fresh alloc);
+      // it unchanged (node cached at some scope, no mult_by_phase result);
       // chain_holds() tests that by pointer identity across the scope chain. A
-      // permuted/phase-shifted pre is a distinct buffer and is added.
+      // permuted/phase-shifted pre is a distinct result and is added, with
+      // the bytes the backend reports for it (none for a pending view that
+      // shares its parent's tiles).
       size_t hwmark = log::bytes(cache, result.post).value;
       if (!cache.chain_holds(result.pre))
         hwmark += log::bytes(result.pre).value;
