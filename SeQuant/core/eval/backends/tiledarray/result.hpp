@@ -518,10 +518,6 @@ struct ArrayView {
   /// the factor the (conjugated) block is scaled by
   Scalar scale = Scalar(1);
 
-  [[nodiscard]] bool trivial() const noexcept {
-    return perm.empty() && blk_lo.empty() && !conj && scale == Scalar(1);
-  }
-
   /// the stored mode that holds logical mode \p logical
   [[nodiscard]] std::size_t stored_mode(std::size_t logical) const {
     if (perm.empty()) return logical;
