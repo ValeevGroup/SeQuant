@@ -4144,7 +4144,48 @@ TEST_CASE("CSV protos of contracted composites stay open", "[optimize][csv]") {
   CHECK(open[A | B] == IndexSet{i1});
   // C D contracts i_1, but A B still carries it as a proto of a_1
   CHECK(open[C | D] == IndexSet{i1});
-  // an open composite already carries its protos: no duplicate plain i_1
-  CHECK(open[A] == IndexSet({a1, i2}));
+  // the protos of an open composite are open outer modes themselves
+  CHECK(open[A] == IndexSet({a1, i1, i2}));
   CHECK(open[A | B | C | D].empty());
+}
+
+// an index carried only as a protoindex is external, and single_term_opt
+// declares it: here that decides the schedule
+TEST_CASE("pure protoindex is declared external", "[optimize][csv]") {
+  using namespace sequant;
+  // i_1 is a protoindex of a_1 and never a slot; A D contract a_1<i_1>
+  auto prod =
+      deserialize(L"A{a_1<i_1>;p_1} B{p_1;p_2} C{p_2;p_3} D{p_3;a_1<i_1>}",
+                  {.def_perm_symm = Symmetry::Nonsymm})
+          ->as<Product>();
+  std::vector<ExprPtr> ts(prod.factors().begin(), prod.factors().end());
+  TensorNetwork net{ts};
+  Index const i1(L"i_1");
+  REQUIRE(net.ext_indices() == IndexSet{i1});
+
+  container::svector<container::svector<Index>> slots;
+  for (auto&& f : ts)
+    slots.emplace_back(f->as<Tensor>().const_braketaux_indices() |
+                       ranges::to<container::svector<Index>>);
+  container::svector<Index> const none;
+  CHECK_FALSE(subset_target_indices(slots, none).back().contains(i1));
+  CHECK(subset_target_indices(slots, net.ext_indices()).back().contains(i1));
+
+  // extents under which pricing i_1 changes the optimum
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    auto const key = ix.basis().base_key();
+    if (key == L"i" || key == L"a") return 10;
+    return 10 + static_cast<std::size_t>(ix.label().back() - L'0');
+  };
+  std::function<double(Index const&, std::size_t)> const inner_pow =
+      [](Index const&, std::size_t) { return 10.; };
+  opt::detail::PeakModel model{idxsz, inner_pow};
+  auto const summed = opt::detail::run_single_term_opt(model, net, none);
+  auto const open =
+      opt::detail::run_single_term_opt(model, net, net.ext_indices());
+  REQUIRE(summed != open);
+  CostParams cost;
+  cost.inner_pow = inner_pow;
+  CHECK(opt::detail::single_term_opt<ObjectiveFunction::DenseSpaceTime>(
+            net, idxsz, false, cost) == open);
 }

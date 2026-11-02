@@ -68,7 +68,9 @@ EvalSequence single_term_opt(
     CostParams const& cost = {},
     container::vector<NodeBatchAnnotation>* out_axes = nullptr) {
   if (out_axes) out_axes->clear();
-  decltype(OptRes::indices) tidxs{};
+  // the slot counts recover an external slot index on their own, but not an
+  // index carried only as a protoindex of the externals, so declare them all
+  auto const& tidxs = network.ext_indices();
   // Unpack the cost knobs into the names the recurrence arms below use, so the
   // arms are unchanged. (void)-cast all, since each if-constexpr arm uses only
   // a subset.
