@@ -4252,6 +4252,80 @@ TEST_CASE("ta_array_ops_sparse_tot_zeros_hold_no_tiles",
   CHECK(TA::norm2(full) == Catch::Approx(TA::norm2(blk->get<ToTArray>())));
 }
 
+TEST_CASE("ta_array_ops_zeros_under_zero_threshold",
+          "[eval][batched-external]") {
+  // Under a zero SparseShape threshold even a zero norm marks a tile nonzero,
+  // so an all-zero shape cannot express an empty destination: make_zeros
+  // must allocate every tile, zero-filled (flat) or with empty inner tensors
+  // (nested) -- the same path a dense array takes.
+  using TArrayD = TA::TSpArrayD;
+  using ToTArray =
+      TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>;
+  using ResultToT = sequant::ResultTensorOfTensorTA<ToTArray>;
+  using shape_t = TA::SparseShape<float>;
+  struct ThresholdResetter {
+    float const saved = shape_t::threshold();
+    ~ThresholdResetter() { shape_t::threshold(saved); }
+  } const threshold_resetter;
+  shape_t::threshold(0);
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, /*nocc=*/4,
+                                                     /*nvirt=*/4, /*naux=*/12};
+  yield_.set_max_tile(4);
+  auto const aops = yield_.array_ops<ToTArray>();
+
+  auto const all_tiles_nonzero = [](auto const& arr) {
+    for (std::size_t ord = 0; ord != arr.trange().tiles_range().volume(); ++ord)
+      if (arr.is_zero(ord)) return false;
+    return true;
+  };
+
+  SECTION("flat") {
+    auto const zeros =
+        aops.make_zeros({sequant::Index{L"i_1"}, sequant::Index{L"x_1"}});
+    REQUIRE(zeros->is<sequant::ResultTensorTA<TArrayD>>());
+    auto const& full = zeros->get<TArrayD>();
+    CHECK(all_tiles_nonzero(full));
+    CHECK(TA::norm2(full) == 0.0);
+
+    TArrayD src(world, full.trange());
+    src.fill_random();
+    world.gop.fence();
+    auto const blk =
+        sequant::eval_result<sequant::ResultTensorTA<TArrayD>>(src)->slice_mode(
+            1, 4, 8);
+    zeros->write_into_slice(*blk, 1, 4, 8);
+    CHECK(TA::norm2(full) == Catch::Approx(TA::norm2(blk->get<TArrayD>())));
+  }
+
+  SECTION("nested") {
+    auto const zeros =
+        aops.make_zeros({sequant::Index{L"i_1"}, sequant::Index{L"x_1"},
+                         sequant::Index(L"a_1", {L"i_1"})});
+    REQUIRE(zeros->is<ResultToT>());
+    auto const& full = zeros->get<ToTArray>();
+    CHECK(all_tiles_nonzero(full));
+    CHECK(sequant::detail::tot_inner_rank(full) == 0);
+
+    // slice_array_over_mode's empty-inner branch takes the same path
+    auto const sliced = zeros->slice_mode(1, 4, 8);
+    auto const& sl = sliced->get<ToTArray>();
+    CHECK(all_tiles_nonzero(sl));
+    CHECK(sequant::detail::tot_inner_rank(sl) == 0);
+
+    ToTArray src(world, full.trange());
+    for (auto it = src.begin(); it != src.end(); ++it)
+      if (src.is_local(it.index()))
+        *it = random_tensor_of_tensor<double>(it.make_range(), TA::Range{4});
+    world.gop.fence();
+    auto const blk = sequant::eval_result<ResultToT>(src)->slice_mode(1, 4, 8);
+    zeros->write_into_slice(*blk, 1, 4, 8);
+    CHECK(sequant::detail::tot_inner_rank(full) == 1);
+    CHECK(TA::norm2(full) == Catch::Approx(TA::norm2(blk->get<ToTArray>())));
+  }
+}
+
 TEST_CASE("batched-external-hoist-slice-on-use", "[eval][batched-external]") {
   // This test used to pin the `has_demoted_external`
   // demotion veto: in an external SCATTER over a mode e, a DESCENDANT
