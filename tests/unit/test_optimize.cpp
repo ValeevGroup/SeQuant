@@ -4144,8 +4144,8 @@ TEST_CASE("CSV protos of contracted composites stay open", "[optimize][csv]") {
   CHECK(open[A | B] == IndexSet{i1});
   // C D contracts i_1, but A B still carries it as a proto of a_1
   CHECK(open[C | D] == IndexSet{i1});
-  // an open composite already carries its protos: no duplicate plain i_1
-  CHECK(open[A] == IndexSet({a1, i2}));
+  // the protos of an open composite are open outer modes themselves
+  CHECK(open[A] == IndexSet({a1, i1, i2}));
   CHECK(open[A | B | C | D].empty());
 }
 
