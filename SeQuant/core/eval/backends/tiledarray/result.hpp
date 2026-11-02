@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <complex>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -1645,6 +1646,19 @@ class ResultTensorOfTensorTA final : public Result {
     return local_size;
   }
 };
+
+// The block-sparse real and complex results are instantiated once, in
+// SeQuant-eval-ta (result_inst_*.cpp, one class per TU): every virtual member
+// expands the TiledArray expressions for each pair of operand forms that
+// with_expr() hands out, which costs GBs of compiler memory per class.
+extern template class ResultTensorTA<
+    TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>>;
+extern template class ResultTensorTA<
+    TA::DistArray<TA::Tensor<std::complex<double>>, TA::SparsePolicy>>;
+extern template class ResultTensorOfTensorTA<
+    TA::DistArray<TA::Tensor<TA::Tensor<double>>, TA::SparsePolicy>>;
+extern template class ResultTensorOfTensorTA<TA::DistArray<
+    TA::Tensor<TA::Tensor<std::complex<double>>>, TA::SparsePolicy>>;
 
 /// \brief Restrict a TA::DistArray to a contiguous tile range of one mode.
 ///
