@@ -569,6 +569,41 @@ template <typename Scalar>
   return TA::TiledRange(dims.begin(), dims.end());
 }
 
+/// Hands \p f the factor of a product of two flat operands, \p l and \p r
+/// (results that may be scaled pending views), and their unscaled
+/// expressions for \p la and \p ra: `f(factor, le, re)`. The consumer
+/// applies the factor to its own result, so no operand's tiles are scaled:
+/// TiledArray folds a product's scalar into the contraction kernel, and a
+/// dot product scales the number it returns.
+template <typename L, typename R, typename F>
+decltype(auto) with_flat_product_operands(L const& l, std::string const& la,
+                                          R const& r, std::string const& ra,
+                                          F&& f) {
+  auto const factor = l.scale() * r.scale();
+  return l.with_unscaled_expr(la, [&](auto&& le) -> decltype(auto) {
+    return r.with_unscaled_expr(ra, [&](auto&& re) -> decltype(auto) {
+      return std::forward<F>(f)(factor, le, re);
+    });
+  });
+}
+
+/// Hands \p f the expressions of the two operands of a product in which
+/// either is nested: \p l's unscaled, \p r's scaled by both operands'
+/// factors, `f(le, re)`. A product-level scalar is not an option here: on a
+/// nested-tile product it trips a range-congruence assert in TiledArray's
+/// inner tile op, even with a factor of 1.
+template <typename L, typename R, typename F>
+decltype(auto) with_nested_product_operands(L const& l, std::string const& la,
+                                            R const& r, std::string const& ra,
+                                            F&& f) {
+  return l.with_unscaled_expr(la, [&](auto&& le) -> decltype(auto) {
+    return r.with_expr_scaled_by(ra, l.scale(),
+                                 [&](auto&& re) -> decltype(auto) {
+                                   return std::forward<F>(f)(le, re);
+                                 });
+  });
+}
+
 /// \return the TiledRange \p tr, as printed by TiledArray
 [[nodiscard]] inline std::string ta_trange_string(TA::TiledRange const& tr) {
   std::ostringstream os;
@@ -730,10 +765,11 @@ mode_batches_of_trange1(TA::TiledRange1 const& tr1,
 /// allocation and no pass over the data (TiledArray copies the tiles of a
 /// block of a MUTABLE array; with_expr() hands the parent over as a const
 /// array, whose preserve_lobound block is a view there):
-/// consumers that are TiledArray expressions -- the products, the dot product,
-/// sums, accumulation of the operand, the batch scatter -- fold it into their
-/// expression through with_expr(); the products hoist the factor out of the
-/// operands into the product's own scalar (with_unscaled_expr(), scale()); a
+/// consumers that are TiledArray expressions -- sums, accumulation of the
+/// operand, the batch scatter -- fold it into their expression through
+/// with_expr(), and the products and dot products through
+/// detail::with_flat_product_operands() or
+/// detail::with_nested_product_operands(), which also place the factors; a
 /// consumer that needs an array (TiledArray's einsum, clone, the symmetrizers,
 /// Result::get<ArrayT>()) materializes it once, into this result's own value,
 /// after which the parent is released.
@@ -1041,11 +1077,10 @@ class ResultTensorTA final : public Result {
       // DOT product; the operands' factors multiply the result
       SEQUANT_ASSERT(other.is<this_type>());
       auto const& o = other.as<this_type>();
-      numeric_type const d =
-          scale() * o.scale() * with_unscaled_expr(a.lannot, [&](auto&& le) {
-            return o.with_unscaled_expr(a.rannot, [&](auto&& re) {
-              return static_cast<numeric_type>(le.dot(re).get());
-            });
+      numeric_type const d = detail::with_flat_product_operands(
+          *this, a.lannot, o, a.rannot,
+          [](numeric_type factor, auto&& le, auto&& re) {
+            return factor * static_cast<numeric_type>(le.dot(re).get());
           });
       ::sequant::detail::wait_for_lazy_cleanup(view_base());
       ::sequant::detail::wait_for_lazy_cleanup(o.view_base());
@@ -1072,15 +1107,13 @@ class ResultTensorTA final : public Result {
     // contractions, Hadamard and general (fused + contracted + free) products
     // natively, which is where TiledArray's einsum routes them too -- so an
     // operand that is a pending view (block, permutation, conjugation) is
-    // taken as is: nothing is materialized. The operands' factors are hoisted
-    // into the product's scalar, which TiledArray folds into the kernel.
+    // taken as is: nothing is materialized.
     ArrayT result;
-    auto const factor = scale() * o.scale();
-    with_unscaled_expr(a.lannot, [&](auto&& le) {
-      o.with_unscaled_expr(a.rannot, [&](auto&& re) {
-        result(a.this_annot) = factor * (le * re);
-      });
-    });
+    detail::with_flat_product_operands(
+        *this, a.lannot, o, a.rannot,
+        [&](numeric_type factor, auto&& le, auto&& re) {
+          result(a.this_annot) = factor * (le * re);
+        });
     ::sequant::detail::wait_for_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
@@ -1573,11 +1606,10 @@ class ResultTensorOfTensorTA final : public Result {
       // DOT product; the operands' factors multiply the result
       SEQUANT_ASSERT(other.is<this_type>());
       auto const& o = other.as<this_type>();
-      numeric_type const d =
-          scale() * o.scale() * with_unscaled_expr(a.lannot, [&](auto&& le) {
-            return o.with_unscaled_expr(a.rannot, [&](auto&& re) {
-              return static_cast<numeric_type>(le.dot(re).get());
-            });
+      numeric_type const d = detail::with_flat_product_operands(
+          *this, a.lannot, o, a.rannot,
+          [](numeric_type factor, auto&& le, auto&& re) {
+            return factor * static_cast<numeric_type>(le.dot(re).get());
           });
       ::sequant::detail::wait_for_lazy_cleanup(view_base());
       ::sequant::detail::wait_for_lazy_cleanup(o.view_base());
@@ -1592,19 +1624,14 @@ class ResultTensorOfTensorTA final : public Result {
 
     // Every product is a TiledArray expression, so an operand that is a
     // pending view (a batch slice; for the flat operand also a permutation or
-    // a conjugation) is taken as is. A product-level scalar (ScalMultExpr)
-    // on a nested-tile product trips a range-congruence assert in
-    // TiledArray's inner tile op, unlike on the flat one, so both operands'
-    // factors go on the right operand.
+    // a conjugation) is taken as is.
     if (other.is<that_type>()) {
       // ToT * T -> ToT
       auto const& o = other.as<that_type>();
       ArrayT result;
-      with_unscaled_expr(a.lannot, [&](auto&& le) {
-        o.with_expr_scaled_by(a.rannot, scale(), [&](auto&& re) {
-          emit_product(result, le, re, a);
-        });
-      });
+      detail::with_nested_product_operands(
+          *this, a.lannot, o, a.rannot,
+          [&](auto&& le, auto&& re) { emit_product(result, le, re, a); });
       ::sequant::detail::wait_for_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
@@ -1613,11 +1640,10 @@ class ResultTensorOfTensorTA final : public Result {
       // ToT * ToT -> T: the inner tensors contracted away
       auto const& o = other.as<this_type>();
       compatible_regular_distarray_type result;
-      with_unscaled_expr(a.lannot, [&](auto&& le) {
-        o.with_expr_scaled_by(a.rannot, scale(), [&](auto&& re) {
-          result(a.this_annot) = le.dot_inner(re);
-        });
-      });
+      detail::with_nested_product_operands(
+          *this, a.lannot, o, a.rannot, [&](auto&& le, auto&& re) {
+            result(a.this_annot) = le.dot_inner(re);
+          });
       ::sequant::detail::wait_for_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
       return eval_result<that_type>(std::move(result));
@@ -1626,11 +1652,9 @@ class ResultTensorOfTensorTA final : public Result {
       // ToT * ToT -> ToT
       auto const& o = other.as<this_type>();
       ArrayT result;
-      with_unscaled_expr(a.lannot, [&](auto&& le) {
-        o.with_expr_scaled_by(a.rannot, scale(), [&](auto&& re) {
-          emit_product(result, le, re, a);
-        });
-      });
+      detail::with_nested_product_operands(
+          *this, a.lannot, o, a.rannot,
+          [&](auto&& le, auto&& re) { emit_product(result, le, re, a); });
       ::sequant::detail::wait_for_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
@@ -1990,21 +2014,16 @@ template <typename NumericT, typename PolicyT,
 
   // A flat operand may be a pending view (a batch slice, a permutation, a
   // conjugation, a scaling): with_expr() folds it into the expression, so it
-  // is not materialized here. The operands' factors are hoisted into the
-  // product's scalar for a flat product, and put on the right operand for a
-  // nested one (see ResultTensorTA::prod and ResultTensorOfTensorTA::prod).
+  // is not materialized here.
 
   // T * T -> T
   if (l_flat && r_flat) {
     FlatArray out;
-    auto const& l = left.as<FlatResult>();
-    auto const& r = right.as<FlatResult>();
-    auto const factor = l.scale() * r.scale();
-    l.with_unscaled_expr(a.lannot, [&](auto&& le) {
-      r.with_unscaled_expr(a.rannot, [&](auto&& re) {
-        out(a.this_annot) = (factor * (le * re)).set_shape(shape);
-      });
-    });
+    detail::with_flat_product_operands(
+        left.as<FlatResult>(), a.lannot, right.as<FlatResult>(), a.rannot,
+        [&](NumericT factor, auto&& le, auto&& re) {
+          out(a.this_annot) = (factor * (le * re)).set_shape(shape);
+        });
     ::sequant::detail::wait_for_lazy_cleanup(out);
     return eval_result<FlatResult>(std::move(out));
   }
@@ -2018,19 +2037,17 @@ template <typename NumericT, typename PolicyT,
       return nullptr;
     ToTArray out;
     if (l_flat) {
-      auto const& l = left.as<FlatResult>();
-      l.with_unscaled_expr(a.lannot, [&](auto&& le) {
-        right.as<ToTResult>().with_expr_scaled_by(
-            a.rannot, l.scale(),
-            [&](auto&& re) { out(a.this_annot) = (le * re).set_shape(shape); });
-      });
+      detail::with_nested_product_operands(
+          left.as<FlatResult>(), a.lannot, right.as<ToTResult>(), a.rannot,
+          [&](auto&& le, auto&& re) {
+            out(a.this_annot) = (le * re).set_shape(shape);
+          });
     } else {
-      auto const& l = left.as<ToTResult>();
-      l.with_unscaled_expr(a.lannot, [&](auto&& le) {
-        right.as<FlatResult>().with_expr_scaled_by(
-            a.rannot, l.scale(),
-            [&](auto&& re) { out(a.this_annot) = (le * re).set_shape(shape); });
-      });
+      detail::with_nested_product_operands(
+          left.as<ToTResult>(), a.lannot, right.as<FlatResult>(), a.rannot,
+          [&](auto&& le, auto&& re) {
+            out(a.this_annot) = (le * re).set_shape(shape);
+          });
     }
     ::sequant::detail::wait_for_lazy_cleanup(out);
     return eval_result<ToTResult>(std::move(out));
@@ -2041,13 +2058,11 @@ template <typename NumericT, typename PolicyT,
     if (de_nest) {
       // ToT * ToT -> flat T (inner contraction / denest)
       FlatArray out;
-      auto const& l = left.as<ToTResult>();
-      l.with_unscaled_expr(a.lannot, [&](auto&& le) {
-        right.as<ToTResult>().with_expr_scaled_by(
-            a.rannot, l.scale(), [&](auto&& re) {
-              out(a.this_annot) = le.dot_inner(re).set_shape(shape);
-            });
-      });
+      detail::with_nested_product_operands(
+          left.as<ToTResult>(), a.lannot, right.as<ToTResult>(), a.rannot,
+          [&](auto&& le, auto&& re) {
+            out(a.this_annot) = le.dot_inner(re).set_shape(shape);
+          });
       ::sequant::detail::wait_for_lazy_cleanup(out);
       return eval_result<FlatResult>(std::move(out));
     } else {
@@ -2061,12 +2076,11 @@ template <typename NumericT, typename PolicyT,
                                                   a.this_annot))
         return nullptr;
       ToTArray out;
-      auto const& l = left.as<ToTResult>();
-      l.with_unscaled_expr(a.lannot, [&](auto&& le) {
-        right.as<ToTResult>().with_expr_scaled_by(
-            a.rannot, l.scale(),
-            [&](auto&& re) { out(a.this_annot) = (le * re).set_shape(shape); });
-      });
+      detail::with_nested_product_operands(
+          left.as<ToTResult>(), a.lannot, right.as<ToTResult>(), a.rannot,
+          [&](auto&& le, auto&& re) {
+            out(a.this_annot) = (le * re).set_shape(shape);
+          });
       ::sequant::detail::wait_for_lazy_cleanup(out);
       return eval_result<ToTResult>(std::move(out));
     }
