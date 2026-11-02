@@ -373,14 +373,16 @@ class TensorNetworkV3 {
   /// by their Index's full label
   /// @sa Edge
   const auto &edges() const {
-    SEQUANT_ASSERT(have_edges_);
+    // canonicalization discards the edges; rebuild them on demand, as
+    // create_graph does
+    if (!have_edges_) const_cast<TensorNetworkV3 *>(this)->init_edges();
     return edges_;
   }
 
   /// @brief Returns a range of external indices, i.e. those indices that do not
   /// connect tensors
   const auto &ext_indices() const {
-    SEQUANT_ASSERT(have_edges_);
+    if (!have_edges_) const_cast<TensorNetworkV3 *>(this)->init_edges();
     return ext_indices_;
   }
 
