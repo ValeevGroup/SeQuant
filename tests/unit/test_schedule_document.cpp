@@ -1884,7 +1884,14 @@ TEST_CASE("record-dag-broadcast", "[schedule-document][broadcast]") {
   CHECK(n_spelled == 4);
   std::size_t n_operands = 0;
   for (auto const& id : ids)
-    if (id.ends_with("/0")) ++n_operands;
+    if (id.ends_with("/0")) {
+      ++n_operands;
+      // ... below a Broadcast, which takes one tree position as a leaf would
+      auto const owner = std::ranges::find(
+          dag.values, id.substr(0, id.size() - 2), &ValueRecord::id);
+      REQUIRE(owner != dag.values.end());
+      CHECK(rhs_of(*owner).starts_with("broadcast("));
+    }
   CHECK(n_operands == 2);
 
   auto const doc = doc_with(roots, dag);

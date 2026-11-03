@@ -152,7 +152,8 @@ struct ValueRecord {
   /// in, then a leaf's tensor label or the two operands as the value reads
   /// them, each a leaf's tensor label or an intermediate's name, joined by
   /// " + " for a Sum, " ^ " for a Power (operand ^ exponent), else " * "; an
-  /// Adjoint reads its one operand followed by "⁺"
+  /// Adjoint reads its one operand followed by "⁺", a Broadcast its one
+  /// operand as "broadcast(<operand>)"
   std::string expr;
   std::string hash, key;
   bool leaf = false;
