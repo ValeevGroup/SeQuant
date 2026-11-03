@@ -1005,15 +1005,11 @@ TEST_CASE("utilities", "[utilities]") {
                {L"R{a1;a2} = t{a1;i1} t{i1;a2}", ""},
                {L"R{a1,a2;i1,i2} = Â{i1,i2;a1,a2} t{a1,a2;i1,i2}", ""},
                {L"R{a2,a1;i1,i2} = Ŝ{i1,i2;a1,a2} t{a1,a2;i1,i2}", ""},
-               {L"R{a1} = Var",
-                "Bra indices of result are inconsistent with the rhs "
-                "expression"},
-               {L"R{;a1} = Var",
-                "Ket indices of result are inconsistent with the rhs "
-                "expression"},
-               {L"R{;;a1} = Var",
-                "Aux indices of result are inconsistent with the rhs "
-                "expression"},
+               {L"R{a1} = Var", "Result index a_1 does not appear in the rhs"},
+               {L"R{;a1} = Var", "Result index a_1 does not appear in the rhs"},
+               {L"R{;;a1} = Var", "Rhs does not supply result aux index a_1"},
+               {L"R{a1} = t{a2}",
+                "Rhs index a_2 is not an index of the result"},
                // Allow bra/ket inconsistencies in external indices
                {L"R{a2;a1} = t{a1;i1} t{i1;a2}", ""},
                // a Sum under a head may broadcast: each summand covers a
@@ -1046,9 +1042,26 @@ TEST_CASE("utilities", "[utilities]") {
                {L"R{i_1;;a_2} = f{i_1;;a_2} + g{i_1;}",
                 "Summand does not supply result aux index a_2"},
                {L"R{i_1,i_2;;a_2} = f{i_1;;a_2} + g{i_2;;a_2}", ""},
-               {L"R{i1} = g{i1;i2} h{i2;i1}",
-                "Bra indices of result are inconsistent with the rhs "
-                "expression"},
+               // ... as does a lone term or one of a uniformly indexed Sum
+               {L"R{i1} = g{i1;i2} h{i2;i1}", ""},
+               {L"R{a_1;i_1} = f{a_1;i_1} g{i_1;}", ""},
+               {L"R{a_1;i_1} = f{a_1;i_1} g{i_1;} + k{a_1;}", ""},
+               {L"R{a_1;i_1} = f{a_1;i_1} g{i_1;} + k{a_1;i_2} m{i_2;}", ""},
+               // a broadcast summand is broadcast as is, so a lone tensor in
+               // it cannot trace over an index ...
+               {L"R{i_1;a_1} = f{i_1;a_1} + h{i_2;i_2}",
+                "Summand traces over index i_2 and cannot be broadcast"},
+               {L"R{i_1;a_1} = f{i_1;a_1} + x h{i_2;i_2}^(-1)",
+                "Summand traces over index i_2 and cannot be broadcast"},
+               {L"R{i_1;a_1} = f{a_1;} + h{i_1,i_2;i_2}",
+                "Summand traces over index i_2 and cannot be broadcast"},
+               // ... nor depend on an index that is not the result's
+               {L"R{a_1<i_1>;a_2} = f{;a_2} + g{a_1<i_1>;}",
+                "Summand depends on protoindex i_1 and cannot be broadcast"},
+               // ... but a product is evaluated before it is broadcast
+               {L"R{i_1;a_1} = f{a_1;} + g{i_1;} h{i_2;i_2}", ""},
+               // a summand that is not broadcast may trace
+               {L"R{i_1;a_1} = f{i_1;a_1} + g{i_1;a_1} h{i_2;i_2}", ""},
            }) {
         CAPTURE(toUtf8(expr_str));
 
