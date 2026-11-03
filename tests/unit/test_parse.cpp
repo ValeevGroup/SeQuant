@@ -426,6 +426,25 @@ TEST_CASE("serialization", "[serialization]") {
                         io::serialization::SerializationError);
       REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"(D{i_1;a_1}^(2))^*"),
                         io::serialization::SerializationError);
+      // malformed input surfaces as a SerializationError, too
+      for (std::wstring_view bad :
+           {L"D{i_1;a_1}^(1/0)", L"x^(1/0)", L"1/0", L"1/0 t{i_1;a_1}",
+            L"D{i_1;a_1}^(1e30)", L"D{i_1;a_1}^(1/1e30)", L"inf", L"1/nan",
+            L"1e200/1e-200", L"2 inf t{i_1;a_1}"}) {
+        CAPTURE(toUtf8(bad));
+        REQUIRE_THROWS_AS(deserialize<ExprPtr>(bad),
+                          io::serialization::SerializationError);
+      }
+      REQUIRE_THROWS_AS(deserialize<ExprPtr>(std::string_view("t{i_1;\xff}")),
+                        io::serialization::SerializationError);
+      REQUIRE_THROWS_AS(toUtf16(std::string_view("\xc3")), Exception);
+      // the offset of the error is a position in the wide string
+      try {
+        (void)deserialize<ExprPtr>(std::string_view("α{i_1;\xff}"));
+        FAIL("expected a SerializationError");
+      } catch (const io::serialization::SerializationError& e) {
+        REQUIRE(e.offset == std::wstring_view(L"α{i_1;").size());
+      }
     }
 
     SECTION("Sum") {

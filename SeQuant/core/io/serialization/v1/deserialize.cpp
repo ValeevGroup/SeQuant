@@ -19,6 +19,8 @@
 #include <boost/spirit/home/x3/support/utility/error_reporting.hpp>
 #include <boost/variant.hpp>
 
+#include <utf8/core.h>
+
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -311,15 +313,29 @@ SEQUANT_DESERIALIZATION_SPECIALIZATION(ResultExpr, parse::resultExpr,
 SEQUANT_DESERIALIZATION_SPECIALIZATION(ExprPtr, parse::expr, ast::Sum,
                                        transform::ast_to_expr)
 
+namespace {
+/// @return @p input converted to a wide string
+/// @throw SerializationError if @p input is not valid UTF-8
+std::wstring utf8_input(std::string_view input) {
+  if (auto it = utf8::find_invalid(input.begin(), input.end());
+      it != input.end()) {
+    // offsets are positions in the wide string that is parsed
+    const auto offset = toUtf16(input.substr(0, it - input.begin())).size();
+    throw SerializationError(offset, 1, "Input is not valid UTF-8");
+  }
+  return toUtf16(input);
+}
+}  // namespace
+
 template <>
 ResultExpr from_string<ResultExpr>(std::string_view input,
                                    const DeserializationOptions &options) {
-  return v1::from_string<ResultExpr>(toUtf16(input), options);
+  return v1::from_string<ResultExpr>(utf8_input(input), options);
 }
 template <>
 ExprPtr from_string<ExprPtr>(std::string_view input,
                              const DeserializationOptions &options) {
-  return v1::from_string<ExprPtr>(toUtf16(input), options);
+  return v1::from_string<ExprPtr>(utf8_input(input), options);
 }
 
 }  // namespace sequant::io::serialization::v1

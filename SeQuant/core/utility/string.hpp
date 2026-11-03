@@ -66,6 +66,8 @@ concept basic_string_convertible =
     meta::is_basic_string_convertible_v<std::remove_cvref_t<T>>;
 
 /// Converts the given wide-string to a UTF-8 encoded narrow string
+/// @throw Exception if @p str is not valid UTF-16 (UTF-32 where wchar_t is
+///        32 bits wide)
 std::string toUtf8(std::wstring_view str);
 
 /// Pass-through (only converts to std::string)
@@ -79,6 +81,7 @@ inline std::string toUtf8(wchar_t c) {
 
 /// Converts the given UTF-8 encoded narrow-string to a wide-string, encoded
 /// in UTF-16 where wchar_t is 16 bits wide and in UTF-32 where it is 32 bits
+/// @throw Exception if @p str is not valid UTF-8
 std::wstring toUtf16(std::string_view str);
 
 /// Pass-through (only converts to std::wstring)
