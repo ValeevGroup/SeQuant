@@ -29,12 +29,11 @@ struct IrrepNodeTraits<FullBinaryNode<T>> {
       case EvalOp::Adjoint:
         return IrrepNodeKind::Adjoint;
       case EvalOp::Power:
-        // an element-wise power spans its operand's irreps: a Sum over the
-        // single child (the operand) yields exactly those. That holds only
-        // for a positive exponent; otherwise every symmetry-forbidden zero
-        // block becomes inf or 1 and the result spans all irreps, which is
-        // harmless for the totally symmetric denominators this is meant for
-        return IrrepNodeKind::Sum;
+        // a positive element-wise power spans its operand's irreps: a Sum
+        // over the single child (the operand) yields exactly those; any
+        // other maps the operand's zero blocks to inf or 1
+        return power_exponent(node) > 0 ? IrrepNodeKind::Sum
+                                        : IrrepNodeKind::Any;
       case EvalOp::Broadcast:
         return IrrepNodeKind::Broadcast;
     }

@@ -401,10 +401,14 @@ TEST_CASE("irreps", "[irreps]") {
 
     REQUIRE(irreps(L"t{a1;i1}") == Set{irrep("B1")});
     REQUIRE(irreps(L"t{a1;i1} v{i1;a2}") == Set{irrep("B3")});
-    // Element-wise power of a tensor spans the IRREPs of its base
+    // A positive element-wise power of a tensor spans the IRREPs of its base;
+    // a non-positive one maps the base's zero blocks to inf or 1, so spans all
     ExprPtr m = deserialize(L"m{a1;i1}");
-    REQUIRE(irreps_of(*pow(m, rational{-1}), ctx) == irreps_of(*m, ctx));
     REQUIRE(irreps_of(*m, ctx) == Set{irrep("B1"), irrep("B2")});
+    REQUIRE(irreps_of(*pow(m, rational{2}), ctx) == irreps_of(*m, ctx));
+    REQUIRE(irreps_of(*pow(m, rational{1, 2}), ctx) == irreps_of(*m, ctx));
+    REQUIRE(irreps_of(*pow(m, rational{-1}), ctx).is_any());
+    REQUIRE(irreps_of(*pow(m, rational{0}), ctx).is_any());
     REQUIRE(irreps(L"1/2 * t{a1;i1} v{i1;a2} f{a2;a3}") == Set{irrep("B3")});
     REQUIRE(irreps(L"t{a1;i1} + v{a1;i1}") == Set{irrep("B1"), irrep("B2")});
     REQUIRE(irreps(L"t{a1;i1} m{i1;a2}") == Set{irrep("A"), irrep("B3")});
@@ -424,15 +428,37 @@ TEST_CASE("irreps", "[irreps]") {
     REQUIRE(irreps(L"c^(2) * t{a1;i1}") == Set{irrep("B1")});
 
     // Equality of propagation on plain expressions and on evaluation trees
-    for (std::wstring_view spec : {L"t{a1;i1} v{i1;a2} f{a2;a3} m{a3;i2}",
-                                   L"t{a1;i1} v{i1;i2} + p{a1;a2} f{a2;i2}",
-                                   L"t{a1;i1} m{i1;i2} + v{a1;i3} f{i3;i2}",
-                                   // a broadcast summand
-                                   L"t{a1;i2} + m{a1;}"}) {
+    for (std::wstring_view spec :
+         {L"t{a1;i1} v{i1;a2} f{a2;a3} m{a3;i2}",
+          L"t{a1;i1} v{i1;i2} + p{a1;a2} f{a2;i2}",
+          L"t{a1;i1} m{i1;i2} + v{a1;i3} f{i3;i2}",
+          // a broadcast summand
+          L"t{a1;i2} + m{a1;}",
+          // element-wise powers
+          L"m{a1;i2}^(2) t{a1;i2}", L"m{a1;i2}^(-1) t{a1;i2}"}) {
       ResultExpr res(deserialize(L"R{a1;i2}")->as<Tensor>(), deserialize(spec));
       auto tree = binarize(res);
 
       REQUIRE(irreps_of(tree, ctx) == irreps_of(res, ctx));
+    }
+
+    // An element-wise power node spans every IRREP unless its exponent is
+    // positive; its operand keeps its own IRREPs
+    for (const auto &[spec, any] :
+         {std::pair{L"m{a1;i2}^(2) t{a1;i2}", false},
+          std::pair{L"m{a1;i2}^(-1) t{a1;i2}", true},
+          std::pair{L"m{a1;i2}^(0) t{a1;i2}", true}}) {
+      CAPTURE(sequant::toUtf8(spec));
+      ResultExpr res(deserialize(L"R{a1;i2}")->as<Tensor>(), deserialize(spec));
+      auto tree = binarize(res);
+      std::size_t n_power = 0;
+      irreps_of(tree, ctx, [&](const auto &node, const Set &set) {
+        if (node.leaf() || !node->is_elementwise_power()) return;
+        ++n_power;
+        REQUIRE(set.is_any() == any);
+        REQUIRE(irreps_of(node.left(), ctx) == Set{irrep("B1"), irrep("B2")});
+      });
+      REQUIRE(n_power == 1);
     }
 
     // A broadcast summand is constant along the modes it lacks, hence nonzero
