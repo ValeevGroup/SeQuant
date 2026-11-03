@@ -27,6 +27,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 #include "csv_size_fixtures.hpp"
+#include "tensor_power_fixtures.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -51,6 +52,7 @@
 namespace {
 
 using namespace sequant::eval::schedule;
+using sequant::tests::tensor_power::lax_braket_context;
 
 Document make_doc() {
   Document d;
@@ -506,6 +508,58 @@ TEST_CASE("record_term then rebuild_pinned_term reproduces the optimized tree",
   REQUIRE(*pinned2.expr == *optimized);
 }
 
+namespace {
+
+/// L·M·pow(D,-1), D totally symmetric, L and M antisymmetric; i_1 sits in two
+/// bra slots, so callers scope AssertStrictBraKetSymmetry::No
+sequant::ExprPtr power_term() {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  return antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+         antisymm(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
+         pow(power_base(), rational{-1});
+}
+
+/// a Sum of power_term() and a plain tensor product
+sequant::ExprPtr power_root() {
+  return sequant::ex<sequant::Sum>(sequant::ExprPtrList{
+      power_term(), pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_1,i_2}")});
+}
+
+}  // namespace
+
+TEST_CASE("record-term-tensor-power", "[schedule-document][tensor-power]") {
+  using namespace sequant::opt::schedule;
+  auto _ = sequant::set_scoped_default_context(lax_braket_context());
+  auto canon = canonical_term(power_term());
+  REQUIRE(canon->is<sequant::Product>());
+  REQUIRE(canonical_factors(canon).size() == 3);
+  auto [optimized, annotations] = pin_optimize(canon);
+  REQUIRE(annotations.size() == 2);
+
+  auto rec = record_term(canon, optimized, annotations);
+  REQUIRE(rec.factors.size() == 3);
+  REQUIRE(rec.nodes.size() == 2);
+  auto pinned = rebuild_pinned_term(rec, canon);
+  REQUIRE(*pinned.expr == *optimized);
+  REQUIRE(pinned.nodes.size() == annotations.size());
+  for (std::size_t k = 0; k < annotations.size(); ++k) {
+    REQUIRE(pinned.nodes[k].axes == annotations[k].axes);
+    REQUIRE(pinned.nodes[k].opened_here == annotations[k].opened_here);
+  }
+
+  // a lone power is a term too
+  auto lone = canonical_term(
+      sequant::pow(sequant::ex<sequant::Tensor>(L"D", sequant::bra{L"i_1"},
+                                                sequant::ket{L"a_1"}),
+                   sequant::rational{-1}));
+  REQUIRE(lone->is<sequant::TensorPower>());
+  auto lone_rec = record_term(lone, lone, {});
+  REQUIRE(lone_rec.tree.has_value());
+  REQUIRE(lone_rec.tree->leaf == std::optional<std::size_t>{0});
+  REQUIRE(*rebuild_pinned_term(lone_rec, lone).expr == *lone);
+}
+
 TEST_CASE("record-term", "[schedule-document]") {
   using namespace sequant::opt::schedule;
   using Catch::Matchers::ContainsSubstring;
@@ -784,10 +838,39 @@ TEST_CASE("record_root then pin reproduces the optimized Sum and annotations",
   REQUIRE_NOTHROW(session.finish());
 }
 
-TEST_CASE("a pin loaded from JSON reproduces the recorded document",
-          "[schedule-document]") {
+TEST_CASE("record-root-tensor-power", "[schedule-document][tensor-power]") {
   using namespace sequant::opt::schedule;
-  auto const sum = session_root();
+  auto _ = sequant::set_scoped_default_context(lax_braket_context());
+  auto const sum = power_root();
+  auto opts = session_opts();
+  auto rr = record_root("E", sum, opts);
+  REQUIRE(rr.record.terms.size() == 2);
+  for (auto const& t : rr.record.terms) REQUIRE(t.pinnable);
+  auto const& recorded_axes = (*opts.term_batch_axes)[rr.optimized.get()];
+
+  PinSession session(rr.record);
+  auto opts2 = opts;
+  opts2.pinned = &session;
+  opts2.term_batch_axes = std::make_shared<AxesMap>();
+  auto pinned = sequant::optimize_result(sum, opts2).expr;
+  REQUIRE(*pinned == *rr.optimized);
+  require_same_annotations((*opts2.term_batch_axes)[pinned.get()],
+                           recorded_axes);
+  REQUIRE_NOTHROW(session.finish());
+
+  sequant::BinarizationOptions bopts;
+  bopts.node_batch_axes = recorded_axes;
+  REQUIRE_NOTHROW(sequant::binarize(
+      sequant::ResultExpr{sequant::Variable{L"E"}, pinned}, bopts));
+}
+
+namespace {
+
+/// records \p sum under batched and unbatched objectives, writes the record
+/// to JSON, reads it back, pins from it and checks the pinned run reproduces
+/// the recorded document
+void require_json_pin_round_trip(sequant::ExprPtr const& sum) {
+  using namespace sequant::opt::schedule;
   for (auto const objective :
        {sequant::ObjectiveFunction::DenseTimeSpaceBatched,
         sequant::ObjectiveFunction::DenseFLOPs}) {
@@ -822,6 +905,18 @@ TEST_CASE("a pin loaded from JSON reproduces the recorded document",
     doc2.roots = {rr2.record};
     REQUIRE(compare(loaded, from_json(to_json(doc2))).empty());
   }
+}
+
+}  // namespace
+
+TEST_CASE("a pin loaded from JSON reproduces the recorded document",
+          "[schedule-document]") {
+  require_json_pin_round_trip(session_root());
+}
+
+TEST_CASE("json-pin-tensor-power", "[schedule-document][tensor-power]") {
+  auto _ = sequant::set_scoped_default_context(lax_braket_context());
+  require_json_pin_round_trip(power_root());
 }
 
 TEST_CASE("an axis with several proto indices survives JSON and pins",
@@ -1163,6 +1258,29 @@ TEST_CASE("fingerprint captures DAG-shaping inputs and nothing size-dependent",
   REQUIRE(planner.count("roofline.fast_mem_elems") == 1);
   REQUIRE(planner.count("roofline.block_tiles") == 1);
   REQUIRE(planner.count("roofline.block_prefactor") == 1);
+}
+
+TEST_CASE("fingerprint-tensor-power-base",
+          "[schedule-document][tensor-power]") {
+  using namespace sequant::opt::schedule;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  auto _ = sequant::set_scoped_default_context(lax_braket_context());
+  auto opts = session_opts();
+  opts.batch_policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"D";
+  };
+  auto optimized = sequant::optimize(canonical_term(power_term()), opts);
+  sequant::BinarizationOptions bopts;
+  if (auto it = opts.term_batch_axes->find(optimized.get());
+      it != opts.term_batch_axes->end())
+    bopts.node_batch_axes = it->second;
+  std::vector<sequant::eval::dryrun::EvalNodeDryRun> forest;
+  forest.push_back(sequant::binarize<EvalExprDryRun>(
+      sequant::ResultExpr{sequant::Variable{L"E"}, optimized}, bopts));
+  sequant::eval::schedule::Fingerprint fp;
+  REQUIRE_NOTHROW(fp = fingerprint_of(forest, {"E"}, opts, {L"a", L"i"}));
+  REQUIRE(fp.volatile_leaves == std::vector<std::string>{"D"});
+  REQUIRE(fp.batchable.size() == 2);
 }
 
 TEST_CASE("check_fingerprint names every differing field",
@@ -1540,6 +1658,199 @@ TEST_CASE("record_dag names an adjoint factor like a leaf, its operands below",
     if (id.starts_with(adj + "#") && (id.ends_with("/0") || id.ends_with("/1")))
       ++nsub;
   REQUIRE(nsub == 2);
+  // the adjoint value reads its one operand, marked "⁺"
+  std::size_t nadjoint = 0;
+  for (auto const& v : dag.values)
+    if (v.expr.ends_with("⁺") && v.expr.find(" * ") == std::string::npos)
+      ++nadjoint;
+  REQUIRE(nadjoint > 0);
+}
+
+TEST_CASE("record-dag-power-factor", "[schedule-document][tensor-power]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  auto _ = set_scoped_default_context(lax_braket_context());
+  // the twin replaces pow(D,-1) by a plain tensor of D's shape
+  auto const twin_expr =
+      antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+      antisymm(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
+      ex<Tensor>(L"N", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, symmetric());
+  auto const fx = dag_fixture({{"R1", power_term()}, {"R2", twin_expr}},
+                              occ_contracted_policy());
+  DagRecord dag;
+  REQUIRE_NOTHROW(
+      dag = record_dag(fx.rich, fx.legality, fx.ordered, fx.forest, fx.roots));
+  auto const& pw = fx.roots[0].terms.at(0).key;
+  auto const& twin = fx.roots[1].terms.at(0).key;
+
+  std::map<std::string, std::set<std::size_t>> ordinals;
+  std::set<std::string> ids;
+  for (auto const& v : dag.values) {
+    ids.insert(v.id);
+    for (auto const& o : v.occurrences) ordinals[o.term].insert(o.node);
+  }
+  REQUIRE(ordinals[pw] == ordinals[twin]);
+  REQUIRE(ordinals[pw] == std::set<std::size_t>{0, 1, 2, 3, 4});
+  std::size_t nsub = 0;
+  for (auto const& id : ids)
+    if (id.starts_with(pw + "#") && (id.ends_with("/0") || id.ends_with("/1")))
+      ++nsub;
+  REQUIRE(nsub == 2);
+  // the power is spelled as its operand raised to its exponent, and its id
+  // is the ordinal its sub-positions hang off
+  auto const power = std::ranges::find_if(dag.values, [](auto const& v) {
+    return v.expr.find(" ^ ") != std::string::npos;
+  });
+  REQUIRE(power != dag.values.end());
+  CHECK(rhs_of(*power).starts_with("D"));
+  CHECK(rhs_of(*power).ends_with(" ^ -1"));
+  CHECK(ids.count(power->id + "/0") == 1);
+  CHECK(ids.count(power->id + "/1") == 1);
+
+  // the dag section round-trips through JSON
+  auto const doc = doc_with(fx.roots, dag);
+  REQUIRE(compare(doc, from_json(to_json(doc))).empty());
+}
+
+TEST_CASE("record-dag-unary-inlined-operand", "[schedule-document][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  // pow(D,-1) inside ℓ raises the inlined broadcast D: a Sum subtree below
+  // the Power node
+  container::svector<ResultExpr> const sys{D_broadcast(), ell_definition(),
+                                           consumer_E()};
+  auto inlined = binarize<EvalExprDryRun>(sys);
+  std::vector<eval::dryrun::EvalNodeDryRun> forest{inlined.trees[2]};
+  stamp_occ_loop(forest[0]);
+  auto const policy = occ_contracted_policy();
+  eval::dryrun::SizeRegime const regime;
+  eval::dryrun::CostModel const cm{regime};
+  auto const rich =
+      eval::compute_dag_boulevard(forest, cm, policy.batch_target_size);
+  auto const legality = eval::analyze_legality(rich, forest, policy);
+  auto const ordered = eval::build_ordered_schedule(rich, legality, policy, {});
+  std::vector<RootRecord> const roots{
+      RootRecord{.label = "E", .terms = {TermRecord{.key = "E"}}}};
+
+  DagRecord dag;
+  REQUIRE_NOTHROW(dag = record_dag(rich, legality, ordered, forest, roots));
+  std::set<std::string> ids;
+  for (auto const& v : dag.values) REQUIRE(ids.insert(v.id).second);
+  REQUIRE(ids.size() == rich.cells.size());
+  // the power and its operand, the inlined D, keep their ids; D's own nodes
+  // hang below the operand
+  auto const power = std::ranges::find_if(dag.values, [](auto const& v) {
+    return v.expr.find(" ^ ") != std::string::npos;
+  });
+  REQUIRE(power != dag.values.end());
+  // (the exponent -1 is first met as a prefactor inside D, which names it)
+  REQUIRE(ids.count(power->id + "/0") == 1);
+  std::size_t nbelow = 0;
+  for (auto const& id : ids)
+    if (id.starts_with(power->id + "/0.")) ++nbelow;
+  REQUIRE(nbelow > 0);
+
+  auto const doc = doc_with(roots, dag);
+  REQUIRE(compare(doc, from_json(to_json(doc))).empty());
+}
+
+TEST_CASE("record-dag-broadcast", "[schedule-document][broadcast]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  // D = ε{;a_1} + ε{;a_2} − ε{i_1;} − ε{i_2;}: a Sum of four Broadcast nodes
+  std::vector<eval::dryrun::EvalNodeDryRun> forest{
+      binarize<EvalExprDryRun>(D_broadcast())};
+  std::size_t n_bcast = 0;
+  forest[0].visit([&](auto const& n) {
+    if (!n.leaf() && n->is_broadcast()) ++n_bcast;
+  });
+  REQUIRE(n_bcast == 4);
+  auto const policy = occ_contracted_policy();
+  eval::dryrun::SizeRegime const regime;
+  eval::dryrun::CostModel const cm{regime};
+  auto const rich =
+      eval::compute_dag_boulevard(forest, cm, policy.batch_target_size);
+  std::optional<eval::LegalitySchedule> legality;
+  REQUIRE_NOTHROW(
+      legality.emplace(eval::analyze_legality(rich, forest, policy)));
+  auto const ordered =
+      eval::build_ordered_schedule(rich, *legality, policy, {});
+  std::vector<RootRecord> const roots{
+      RootRecord{.label = "D", .terms = {TermRecord{.key = "D"}}}};
+
+  DagRecord dag;
+  REQUIRE_NOTHROW(dag = record_dag(rich, *legality, ordered, forest, roots));
+  std::set<std::string> ids;
+  for (auto const& v : dag.values) REQUIRE(ids.insert(v.id).second);
+  REQUIRE(ids.size() == rich.cells.size());
+  // the four Broadcast nodes are spelled as such; an operand first met below
+  // one hangs at its /0 (two distinct ones: ε and −1·ε)
+  std::size_t n_spelled = 0;
+  for (auto const& v : dag.values)
+    if (rhs_of(v).starts_with("broadcast(")) {
+      ++n_spelled;
+      CHECK(rhs_of(v).ends_with(")"));
+    }
+  CHECK(n_spelled == 4);
+  std::size_t n_operands = 0;
+  for (auto const& id : ids)
+    if (id.ends_with("/0")) ++n_operands;
+  CHECK(n_operands == 2);
+
+  auto const doc = doc_with(roots, dag);
+  REQUIRE(compare(doc, from_json(to_json(doc))).empty());
+}
+
+TEST_CASE("record-dag-inlined-head",
+          "[schedule-document][tensor-power][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  std::vector<RootRecord> const roots{
+      RootRecord{.label = "E", .terms = {TermRecord{.key = "E"}}}};
+  auto const policy = occ_contracted_policy();
+  auto const record = [&](EvalNodeDryRun node) {
+    stamp_occ_loop(node);
+    std::vector<EvalNodeDryRun> const forest{node};
+    eval::dryrun::SizeRegime const regime;
+    eval::dryrun::CostModel const cm{regime};
+    auto const rich =
+        eval::compute_dag_boulevard(forest, cm, policy.batch_target_size);
+    auto const legality = eval::analyze_legality(rich, forest, policy);
+    auto const ordered =
+        eval::build_ordered_schedule(rich, legality, policy, {});
+    DagRecord dag;
+    REQUIRE_NOTHROW(dag = record_dag(rich, legality, ordered, forest, roots));
+    REQUIRE(dag.values.size() == rich.cells.size());
+    return dag;
+  };
+
+  // E = L · ℓ with ℓ = M ⊙ pow(D,-1) inlined, and E = L · (M ⊙ pow(D,-1))
+  auto const sys = binarize<EvalExprDryRun>(
+      std::vector<ResultExpr>{ell_definition(), consumer_E()});
+  REQUIRE(sys.roots().size() == 1);
+  auto const dag = record(sys.roots()[0].get());
+  auto const direct = [&] {
+    auto _ = set_scoped_default_context(lax_braket_context());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    return record(binarize<EvalExprDryRun>(hadamard_power_term()));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }();
+
+  // the same values, named and spelled alike
+  REQUIRE(dag.values.size() == 7);
+  REQUIRE(dag.values.size() == direct.values.size());
+  for (std::size_t v = 0; v != dag.values.size(); ++v) {
+    CAPTURE(v);
+    CHECK(dag.values[v].id == direct.values[v].id);
+    CHECK(dag.values[v].expr == direct.values[v].expr);
+  }
+
+  auto const doc = doc_with(roots, dag);
+  REQUIRE(compare(doc, from_json(to_json(doc))).empty());
 }
 
 namespace {

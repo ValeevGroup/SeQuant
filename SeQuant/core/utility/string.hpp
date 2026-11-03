@@ -77,8 +77,8 @@ inline std::string toUtf8(wchar_t c) {
   return toUtf8(std::wstring_view(&c, 1));
 }
 
-/// Converts the given UTF-8 encoded narrow-string to a UTF-16 encoded
-/// wide-string
+/// Converts the given UTF-8 encoded narrow-string to a wide-string, encoded
+/// in UTF-16 where wchar_t is 16 bits wide and in UTF-32 where it is 32 bits
 std::wstring toUtf16(std::string_view str);
 
 /// Pass-through (only converts to std::wstring)

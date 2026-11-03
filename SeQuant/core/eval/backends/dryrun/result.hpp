@@ -226,6 +226,18 @@ inline void check_accumulate_ranges(
 /// mode_batches bodies are one-line forwards, not near-duplicated logic.
 ///
 struct DryRunOps {
+  /// Publish one op's realized-extent \p flops / \p exec: to the eval loop's
+  /// build tally (through last_op_flops/last_op_exec), to the eval trace, and
+  /// to the replay cost sink if one is attached to \p cm. Called only when
+  /// the eval trace is on.
+  static void record_op_cost(CostModel const& cm, double flops, double exec) {
+    sequant::eval::detail::last_op_flops() = flops;
+    sequant::eval::detail::last_op_exec() = exec;
+    write_log(Logger::instance(), "OpCost", std::format(" | {}", flops),
+              std::format(" | {}", exec), '\n');
+    cm.tally_op(flops, exec);
+  }
+
   [[nodiscard]] static ResultPtr sum(container::svector<Index> const&,
                                      ExtentOverrides const& ov,
                                      std::shared_ptr<CostModel const> const& cm,
@@ -311,7 +323,6 @@ struct DryRunOps {
       for (auto const& [lbl, w] : extents_by_label(other_ov, a.rannot))
         label_extents.emplace(lbl, w);
       double const flops = cm->flops(out, contracted, label_extents);
-      sequant::eval::detail::last_op_flops() = flops;
       // Roofline traffic == the op's compulsory single-pass data movement:
       // read both operands, write the result -- each at its realized (sliced)
       // extent. This is the same footprint the optimizer's DP charges (S[lp] +
@@ -329,24 +340,18 @@ struct DryRunOps {
       double const exec = cm->exec_cost(
           flops, cm->memsize(idx, ov), cm->memsize(indices_of(other), other_ov),
           cm->memsize(out, merged));
-      sequant::eval::detail::last_op_exec() = exec;
-      write_log(Logger::instance(), "OpCost", std::format(" | {}", flops),
-                std::format(" | {}", exec), '\n');
-      // Fold this op's sliced-extent cost into the replay cost sink, if one is
-      // attached (the replay's recompute-aware tally). merged/ov carry the
-      // runtime slicing, so a contraction re-executed once per occ block is
-      // charged once per block at its sliced size -- the same numbers already
-      // logged above, summed here. A no-op when no sink is attached.
-      cm->tally_op(flops, exec);
-      // last_op_flops (set above) is this build's actual realized-extent cost.
-      // The eval loop's build choke point reads it and records it against the
-      // node's identity, at the (value, slice) granularity, in the (root)
-      // cache's recompute tally -- so avoidable recompute is the actual FLOPs a
-      // slice was rebuilt beyond once, with no ill-defined "full extent"
-      // denominator (slicing is non-uniform). prod cannot form the node
-      // identity here (it has no node, and the include cycle
-      // dryrun/eval_expr.hpp -> cost_model_object.hpp keeps the node type out
-      // of the CostSink), so the rollup is done there. See
+      // merged/ov carry the runtime slicing, so a contraction re-executed once
+      // per occ block is charged once per block at its sliced size.
+      record_op_cost(*cm, flops, exec);
+      // last_op_flops (set by record_op_cost) is this build's actual
+      // realized-extent cost. The eval loop's build choke point reads it and
+      // records it against the node's identity, at the (value, slice)
+      // granularity, in the (root) cache's recompute tally -- so avoidable
+      // recompute is the actual FLOPs a slice was rebuilt beyond once, with no
+      // ill-defined "full extent" denominator (slicing is non-uniform). prod
+      // cannot form the node identity here (it has no node, and the include
+      // cycle dryrun/eval_expr.hpp -> cost_model_object.hpp keeps the node type
+      // out of the CostSink), so the rollup is done there. See
       // CacheManager::tally_build / recompute_tally().
     }
 
@@ -359,6 +364,56 @@ struct DryRunOps {
     return make_dryrun_result(
         container::svector<Index>(a.this_annot.begin(), a.this_annot.end()), cm,
         std::move(merged), std::move(merged_lob));
+  }
+
+  /// Element-wise power: the result has the operand's shape (and slicing).
+  /// Its cost, one operation per element, is recorded like a product's.
+  [[nodiscard]] static ResultPtr pow(container::svector<Index> const& idx,
+                                     ExtentOverrides const& ov,
+                                     std::shared_ptr<CostModel const> const& cm,
+                                     ExtentOverrides const& lob = {}) {
+    if (Logger::instance().eval.level > 0) {
+      double const flops = cm->flops(idx, {}, extents_by_label(ov, idx));
+      auto const bytes = cm->memsize(idx, ov);
+      record_op_cost(*cm, flops, cm->exec_cost(flops, bytes, 0, bytes));
+    }
+    return make_dryrun_result(idx, cm, ov, lob);
+  }
+
+  /// Broadcast: the result is shaped by the result annotation \p ann[1];
+  /// a mode of the operand annotation \p ann[0] keeps the operand's slicing
+  /// (\p ov, \p lob), every other mode takes that of its rank-1 range in
+  /// \p new_mode_ranges (in result mode order). Its cost, one write per
+  /// result element, is recorded like a product's.
+  [[nodiscard]] static ResultPtr broadcast(
+      container::svector<Index> const& idx, ExtentOverrides const& ov,
+      std::shared_ptr<CostModel const> const& cm,
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges,
+      ExtentOverrides const& lob = {}) {
+    auto const pre = std::any_cast<annot_t>(ann[0]);
+    auto const post = std::any_cast<annot_t>(ann[1]);
+    auto merged = remap_overrides_by_annot(ov, pre, post);
+    auto merged_lob = remap_overrides_by_annot(lob, pre, post);
+    std::size_t k = 0;
+    for (std::size_t p = 0; p < post.size(); ++p) {
+      if (find_position(pre, post[p])) continue;
+      SEQUANT_ASSERT(k < new_mode_ranges.size());
+      Result const& range = *new_mode_ranges[k++];
+      if (auto const w = overrides_of(range); w.count(0)) merged[p] = w.at(0);
+      if (auto const lo = lobounds_of(range); lo.count(0))
+        merged_lob[p] = lo.at(0);
+    }
+    SEQUANT_ASSERT(k == new_mode_ranges.size());
+    container::svector<Index> out(post.begin(), post.end());
+    if (Logger::instance().eval.level > 0) {
+      double const flops = cm->flops(out, {}, extents_by_label(merged, post));
+      record_op_cost(*cm, flops,
+                     cm->exec_cost(flops, cm->memsize(idx, ov), 0,
+                                   cm->memsize(out, merged)));
+    }
+    return make_dryrun_result(std::move(out), cm, std::move(merged),
+                              std::move(merged_lob));
   }
 
   [[nodiscard]] static ResultPtr permute(
@@ -636,6 +691,23 @@ class ResultDryRun final : public Result {
                                       lobounds_);
   }
 
+  [[nodiscard]] ResultPtr pow(rational const& /*exponent*/) const override {
+    return detail::DryRunOps::pow(indices_, overrides_, cm_, lobounds_);
+  }
+
+  [[nodiscard]] ResultPtr broadcast(
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    return detail::DryRunOps::broadcast(indices_, overrides_, cm_, ann,
+                                        new_mode_ranges, lobounds_);
+  }
+
+  [[nodiscard]] ResultPtr broadcast_scalar(
+      Result const& /*scalar*/, std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    return detail::DryRunOps::broadcast({}, {}, cm_, ann, new_mode_ranges);
+  }
+
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
     return detail::DryRunOps::slice_mode(indices_, overrides_, cm_, mode,
@@ -791,6 +863,23 @@ class ResultDryRunNested final : public Result {
       std::array<std::any, 2> const& ann) const override {
     return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
                                       lobounds_);
+  }
+
+  [[nodiscard]] ResultPtr pow(rational const& /*exponent*/) const override {
+    return detail::DryRunOps::pow(indices_, overrides_, cm_, lobounds_);
+  }
+
+  [[nodiscard]] ResultPtr broadcast(
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    return detail::DryRunOps::broadcast(indices_, overrides_, cm_, ann,
+                                        new_mode_ranges, lobounds_);
+  }
+
+  [[nodiscard]] ResultPtr broadcast_scalar(
+      Result const& /*scalar*/, std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    return detail::DryRunOps::broadcast({}, {}, cm_, ann, new_mode_ranges);
   }
 
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,

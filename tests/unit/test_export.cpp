@@ -848,6 +848,142 @@ TEST_CASE("export reuse-zero not applied to repeated leaf operand",
                        ContainsSubstring("] X:x["));
 }
 
+TEST_CASE("export-tensor-power-itf", "[export]") {
+  // ITF has no element-wise power, so the snapshot files carry no ITF section
+  // for a TensorPower; the refusal is asserted here instead
+  auto resetter = to_export_context();
+
+  ItfGenerator<ItfContext> generator;
+  ItfContext ctx;
+  configure_context_defaults(ctx);
+
+  REQUIRE_THROWS_WITH(
+      export_expression(
+          to_export_tree(deserialize<ResultExpr>(
+              L"I{i_1,i_2;a_1,a_2} = D{i_1,i_2;a_1,a_2}:S-S-S^(-1)")),
+          generator, ctx),
+      "ITF has no element-wise tensor power");
+}
+
+TEST_CASE("export-tensor-power-julia", "[export]") {
+  using Catch::Matchers::ContainsSubstring;
+
+  // ITensor and TensorKit have no element-wise power, so the snapshot files
+  // carry no section for them on a TensorPower; the refusal is asserted here
+  auto resetter = to_export_context();
+
+  const auto expr = GENERATE(
+      as<std::wstring>{}, L"I{i_1,i_2;a_1,a_2} = D{i_1,i_2;a_1,a_2}:S-S-S^(-1)",
+      L"R{i_1;a_1} = 2 D{i_1;a_1}:S-S-S^(-1)");
+  CAPTURE(toUtf8(expr));
+
+  SECTION("ITensor") {
+    JuliaITensorGenerator<> generator;
+    JuliaITensorGeneratorContext ctx;
+    configure_context_defaults(ctx);
+
+    REQUIRE_THROWS_WITH(
+        export_expression(to_export_tree(deserialize<ResultExpr>(expr)),
+                          generator, ctx),
+        "Julia (ITensor) cannot express an element-wise tensor power");
+    // nothing of the refused computation is emitted
+    CHECK_THAT(generator.get_generated_code(), !ContainsSubstring("+="));
+  }
+
+  SECTION("TensorKit") {
+    JuliaTensorKitGenerator<> generator;
+    JuliaTensorKitGeneratorContext ctx;
+    configure_context_defaults(ctx);
+
+    REQUIRE_THROWS_WITH(
+        export_expression(to_export_tree(deserialize<ResultExpr>(expr),
+                                         /*retain_braket=*/true),
+                          generator, ctx),
+        "Julia (TensorKit) cannot express an element-wise tensor power");
+    // nothing of the refused computation is emitted
+    CHECK_THAT(generator.get_generated_code(), !ContainsSubstring("+="));
+  }
+
+  SECTION("TensorOperations: power inside a contraction") {
+    JuliaTensorOperationsGenerator<> generator;
+    JuliaTensorOperationsGeneratorContext ctx;
+    configure_context_defaults(ctx);
+
+    const auto D = deserialize(L"D{i_1;a_1}:S-S-S");
+    const auto f = deserialize(L"f{i_1;a_1}");
+    const Tensor R = deserialize(L"R{i_1;a_1}")->as<Tensor>();
+    const auto prod = ex<Constant>(2) * ex<TensorPower>(D, rational{-1}) * f;
+    REQUIRE(prod->is<Product>());
+
+    REQUIRE_THROWS_WITH(
+        generator.compute(*prod, R, ctx),
+        "Julia TensorOperations: an element-wise power cannot be part of a "
+        "contraction");
+    CHECK(generator.get_generated_code().empty());
+  }
+}
+
+TEST_CASE("export-broadcast-sum", "[export]") {
+  using Catch::Matchers::ContainsSubstring;
+
+  // ITF, ITensor and TensorKit cannot broadcast a summand over the modes it
+  // lacks, so the snapshot files carry no section for them on a broadcast sum
+  auto resetter = to_export_context();
+
+  // ε{a_1;} rather than ε{;a_1}: TensorKit cannot load a tensor without bra
+  const auto expr =
+      GENERATE(as<std::wstring>{}, L"D{i_1;a_1} = ε{a_1;} - ε{i_1;}",
+               L"D{i_1;a_1} = ε{a_1;} - ε{i_1;} - E");
+  CAPTURE(toUtf8(expr));
+
+  SECTION("ITF") {
+    ItfGenerator<ItfContext> generator;
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+
+    REQUIRE_THROWS_WITH(
+        export_expression(to_export_tree(deserialize<ResultExpr>(expr)),
+                          generator, ctx),
+        "ITF cannot broadcast a summand");
+  }
+
+  SECTION("ITensor") {
+    JuliaITensorGenerator<> generator;
+    JuliaITensorGeneratorContext ctx;
+    configure_context_defaults(ctx);
+
+    REQUIRE_THROWS_WITH(
+        export_expression(to_export_tree(deserialize<ResultExpr>(expr)),
+                          generator, ctx),
+        "Julia (ITensor) cannot broadcast a summand");
+    CHECK_THAT(generator.get_generated_code(), !ContainsSubstring("+="));
+  }
+
+  SECTION("TensorKit") {
+    JuliaTensorKitGenerator<> generator;
+    JuliaTensorKitGeneratorContext ctx;
+    configure_context_defaults(ctx);
+
+    REQUIRE_THROWS_WITH(
+        export_expression(to_export_tree(deserialize<ResultExpr>(expr),
+                                         /*retain_braket=*/true),
+                          generator, ctx),
+        "Julia (TensorKit) cannot broadcast a summand");
+    CHECK_THAT(generator.get_generated_code(), !ContainsSubstring("+="));
+  }
+
+  SECTION("GenerationOptimizer forwards the broadcast") {
+    GenerationOptimizer<TextGenerator<>> generator{TextGenerator<>{}};
+    TextGeneratorContext ctx;
+
+    export_expression(to_export_tree(deserialize<ResultExpr>(expr)), generator,
+                      ctx);
+    CHECK_THAT(generator.get_generated_code(),
+               ContainsSubstring("+= ε[a_1] (broadcast over i_1)") &&
+                   ContainsSubstring("+= -1 ε[i_1] (broadcast over a_1)"));
+  }
+}
+
 TEST_CASE("ExportExpr", "[export]") {
   SECTION("id & equality") {
     Variable v(L"V");
@@ -872,6 +1008,19 @@ TEST_CASE("JuliaTensorOperationsGenerator", "[export]") {
     generator.load(Variable(L"y"), /*set_to_zero=*/true, ctx);
 
     REQUIRE(generator.get_generated_code() == "x = 0.0\ny = 0.0\n");
+  }
+
+  SECTION("represent element-wise power") {
+    auto resetter = to_export_context();
+    JuliaTensorOperationsGenerator<> generator;
+    JuliaTensorOperationsGeneratorContext ctx;
+    configure_context_defaults(ctx);
+
+    const auto D = deserialize(L"D{i_1;a_1}");
+    REQUIRE(generator.represent(TensorPower(D, rational{1, 2}), ctx) ==
+            "D_ov.^(1//2)");
+    REQUIRE(generator.represent(TensorPower(D, rational{-1}), ctx) ==
+            "D_ov.^(-1)");
   }
 }
 

@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <utility>
 
@@ -50,8 +51,36 @@ enum class EvalOp {
   ///        FullBinaryNode invariant — every non-leaf has both children —
   ///        is preserved). Evaluate dispatches on this op_type and only uses
   ///        the left operand; the right is ignored.
-  Adjoint
+  Adjoint,
+
+  ///
+  /// \brief Represents the element-wise rational power of one tensor-valued
+  ///        EvalExpr object (the evaluation of a TensorPower). Unary like
+  ///        Adjoint: the left child is the operand subtree and the right child
+  ///        is a Constant sentinel holding the rational exponent (see
+  ///        power_exponent()). The node's expression is a symmetry-free
+  ///        Tensor over the operand's slots; the result is
+  ///        operand^exponent, element by element.
+  Power,
+
+  ///
+  /// \brief Represents the expansion of one EvalExpr object (a summand of a
+  ///        broadcast Sum under a result head, see is_valid(const
+  ///        ResultExpr&)) over the head modes it lacks. Unary like Power: the
+  ///        left child is the operand subtree, a tensor or a scalar, and the
+  ///        right child is a Constant(1) sentinel. The node's expression is a
+  ///        symmetry-free Tensor over the head's slots and its canon indices
+  ///        are the head's indices in slot order; the result is constant
+  ///        along every mode the operand lacks and equals the operand along
+  ///        the others.
+  Broadcast
 };
+
+///
+/// \return True if \p op is unary, i.e. a node of this type evaluates its left
+///         child only and its right child is a sentinel leaf.
+///
+[[nodiscard]] bool is_unary(EvalOp op) noexcept;
 
 ///
 /// \brief The ResultType enum.
@@ -204,6 +233,16 @@ class EvalExpr {
   /// \return True if this expression is an adjoint (unary) node.
   ///
   [[nodiscard]] bool is_adjoint() const noexcept;
+
+  ///
+  /// \return True if this expression is an element-wise power (unary) node.
+  ///
+  [[nodiscard]] bool is_elementwise_power() const noexcept;
+
+  ///
+  /// \return True if this expression is a broadcast (unary) node.
+  ///
+  [[nodiscard]] bool is_broadcast() const noexcept;
 
   ///
   /// \brief Calls to<Tensor>() on ExprPtr held by this object.
@@ -399,6 +438,26 @@ class EvalExpr {
   void set_accumulate_in_place(bool v) noexcept { accumulate_in_place_ = v; }
 
   ///
+  /// \brief Whether this node is the root of an equation inlined by
+  /// binarize(std::span<const ResultExpr>, const BinarizationOptions&): its
+  /// payload is the (renamed) head of that equation, and a consumer's factor
+  /// collection treats it as one factor instead of descending into it, so the
+  /// head's layout and symmetry are what the consumer contracts with. Not part
+  /// of the hash. Default \c false, also for the root of a top-level tree,
+  /// except for an alias equation such as `E = ℓ` whose whole rhs is one
+  /// inlined definition: its root is that definition's root and keeps the
+  /// flag, harmlessly, since no product encloses it.
+  ///
+  [[nodiscard]] bool is_equation_boundary() const noexcept {
+    return equation_boundary_;
+  }
+
+  ///
+  /// \brief Sets the equation-boundary flag; see \c is_equation_boundary.
+  ///
+  void set_equation_boundary(bool v) noexcept { equation_boundary_ = v; }
+
+  ///
   /// \brief Emitted effective use count of this contraction node: the number of
   /// times its value is (re)referenced across the enclosing batch loops it does
   /// not carry. \c 1 (the default and the order-blind / off-path value) means
@@ -466,6 +525,9 @@ class EvalExpr {
 
   /// See \c accumulate_in_place.
   bool accumulate_in_place_ = false;
+
+  /// See \c is_equation_boundary.
+  bool equation_boundary_ = false;
 };
 
 struct EvalOpSetter {
@@ -572,6 +634,12 @@ concept leaf_node_evaluator =
 
 }  // namespace meta
 
+namespace detail {
+/// the definitions a system binarization inlines; see
+/// binarize(std::span<const ResultExpr>, const BinarizationOptions&)
+struct InlineContext;
+}  // namespace detail
+
 namespace impl {
 
 /// \param node_counter Running left-first-post-order count of contraction
@@ -580,9 +648,30 @@ namespace impl {
 ///        it can be checked against \c opts.node_batch_axes.size() by the
 ///        caller. Must be the same counter object across the entire call
 ///        tree of a single top-level invocation; do not reset per subtree.
+/// \param inline_ctx the definitions to inline into the leaves of the
+///        expression; null for none
 FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
                                   const BinarizationOptions& opts,
-                                  std::size_t& node_counter);
+                                  std::size_t& node_counter,
+                                  detail::InlineContext* inline_ctx = nullptr);
+
+/// The head-aware binarization behind binarize(ResultExpr const&, ...):
+/// binarizes the rhs with the head's indices uncontracted, wrapping each
+/// short summand of a broadcast Sum in an EvalOp::Broadcast node, and stamps
+/// the root with the head.
+/// \param node_counter see binarize(ExprPtr const&, ...) above
+/// \param inline_ctx see binarize(ExprPtr const&, ...) above
+FullBinaryNode<EvalExpr> binarize(ResultExpr const& res,
+                                  const BinarizationOptions& opts,
+                                  std::size_t& node_counter,
+                                  detail::InlineContext* inline_ctx = nullptr);
+
+/// The non-template part of
+/// binarize(std::span<const ResultExpr>, const BinarizationOptions&)
+/// \param[out] consumed see InlinedSystem::consumed
+container::svector<FullBinaryNode<EvalExpr>> binarize_system(
+    std::span<const ResultExpr> system, const BinarizationOptions& opts,
+    container::svector<bool>& consumed);
 }  // namespace impl
 
 ///
@@ -590,6 +679,19 @@ FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
 ///
 template <meta::eval_expr T>
 using EvalNode = FullBinaryNode<T>;
+
+namespace detail {
+/// \return \p tree with every payload converted to \c ExprT
+template <typename ExprT>
+  requires std::is_constructible_v<ExprT, EvalExpr>
+FullBinaryNode<ExprT> to_eval_node(FullBinaryNode<EvalExpr>&& tree) {
+  if constexpr (std::is_same_v<ExprT, EvalExpr>)
+    return std::move(tree);
+  else
+    return transform_node(std::move(tree),
+                          [](auto&& val) { return ExprT{val}; });
+}
+}  // namespace detail
 
 static_assert(meta::eval_node<EvalNode<EvalExpr>>);
 static_assert(!meta::can_evaluate<EvalNode<EvalExpr>>);
@@ -635,69 +737,101 @@ binarize(ExprPtr const& expr, IndexSet const& external = {},
   if (!opts.node_batch_axes.empty()) {
     SEQUANT_ASSERT(node_counter == opts.node_batch_axes.size());
   }
-  if constexpr (std::is_same_v<ExprT, EvalExpr>)
-    return tree;
-  else
-    return transform_node(std::move(tree),
-                          [](auto&& val) { return ExprT{val}; });
+  return detail::to_eval_node<ExprT>(std::move(tree));
 }
 
 /// Creates a binary tree for evaluation from a ResultExpr.
-/// External indices are deduced from @p res (its non-null slots).
+/// External indices are deduced from @p res (its non-null slots). Each
+/// summand of a broadcast Sum on the rhs (see is_valid(const ResultExpr&))
+/// that lacks some of the head's indices becomes an EvalOp::Broadcast node
+/// over the head's indices.
+/// @throw Exception if a summand of a Sum on the rhs lacks an aux index of
+///        the head
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
 FullBinaryNode<ExprT> binarize(ResultExpr const& res,
                                const BinarizationOptions& opts = {}) {
-  // collect result indices so they are not contracted in the expression tree
-  IndexSet uncontract;
-  for (auto&& ix : res.indices()) uncontract.emplace(ix);
-
-  // The recursive calls below dispatch to the (now deprecated)
-  // binarize(ExprPtr) overload — the head's bra/ket would be positional, but
-  // we overwrite it below with res.result_as_tensor() so the layout is
-  // caller-determined and the deprecation does not apply.
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  FullBinaryNode<ExprT> tree =
-      binarize<ExprT>(res.expression(), uncontract, opts);
-
-  const bool is_scalar =
-      res.bra().empty() && res.ket().empty() && res.aux().empty();
-
-  if (tree.size() < 2) {
-    // We want to have a result node with the result from the ResultExpr.
-    // In order for that to work, we need a dedicated result node in the first
-    // place. Hence, we adapt the represented expression for terminals to be
-    // that terminal multiplied by 1.
-    ExprT result = [&]() {
-      if (is_scalar) {
-        return *binarize<ExprT>(ex<Variable>(res.result_as_variable()));
-      }
-      return *binarize<ExprT>(ex<Tensor>(res.result_as_tensor()));
-    }();
-    EvalOpSetter{}.set(result, EvalOp::Product);
-
-    tree = FullBinaryNode<ExprT>(std::move(result), std::move(tree),
-                                 binarize<ExprT>(ex<Constant>(1)));
+  std::size_t node_counter = 0;
+  auto tree = impl::binarize(res, opts, node_counter);
+  // see binarize(ExprPtr const&, ...)
+  if (!opts.node_batch_axes.empty()) {
+    SEQUANT_ASSERT(node_counter == opts.node_batch_axes.size());
   }
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  SEQUANT_ASSERT(tree.size() > 1);
+  return detail::to_eval_node<ExprT>(std::move(tree));
+}
 
-  if (is_scalar) {
-    if (res.has_label()) {
-      tree->expr().template as<Variable>().set_label(res.label());
-    }
-  } else {
-    Tensor& tensor = tree->expr().template as<Tensor>();
+/// The evaluation trees of a system of ResultExprs, see
+/// binarize(std::span<const ResultExpr>, const BinarizationOptions&)
+template <typename ExprT = EvalExpr>
+struct InlinedSystem {
+  /// one tree per equation, in input order
+  container::svector<FullBinaryNode<ExprT>> trees;
+  /// true for an equation whose head another equation inlined
+  container::svector<bool> consumed;
 
-    tensor = res.result_as_tensor();
+  /// \return the trees of the equations no other equation inlined, in input
+  ///         order
+  auto roots() const {
+    container::svector<std::reference_wrapper<const FullBinaryNode<ExprT>>>
+        result;
+    for (std::size_t k = 0; k != trees.size(); ++k)
+      if (!consumed[k]) result.emplace_back(trees[k]);
+    return result;
   }
+};
 
-  return tree;
+/// Creates the evaluation trees of a system of equations, inlining each
+/// definition into its uses.
+///
+/// A Tensor leaf whose label, bra/ket/aux ranks and per-slot index spaces
+/// and proto-index counts match the head of an equation, or match it with bra
+/// and ket swapped if the head is bra-ket symmetric (BraKetSymmetry::Symm), and
+/// a Variable leaf whose label matches a scalar head, is replaced by that
+/// equation's tree, binarized as by binarize(ResultExpr const&) after renaming
+/// the head's indices to the leaf's and the other indices of its rhs to fresh
+/// ones. The subtree enters the consumer as one factor; its root carries the
+/// (renamed) head. Definitions inline recursively and may appear in any order.
+/// @param system the equations; every head must be labelled
+/// @param opts the options of every equation; \c opts.node_batch_axes must
+///        be empty: it annotates the nodes of a single term, so stamp the
+///        returned trees instead
+/// @throw Exception if \c opts.node_batch_axes is not empty, a head is
+///        unlabelled, two equations share a label and a shape (for a bra-ket
+///        symmetric head, also with bra and ket swapped), a matching
+///        leaf declares symmetries different from its head's, a conjugated
+///        Variable leaf names a scalar head, a scalar head is the base of a
+///        scalar Power, a leaf spells a conjugate-symmetric
+///        (BraKetSymmetry::Conjugate) head with bra and ket swapped, or a
+///        definition reaches its own head
+template <typename ExprT = EvalExpr>
+  requires std::is_constructible_v<ExprT, EvalExpr>
+InlinedSystem<ExprT> binarize(std::span<const ResultExpr> system,
+                              const BinarizationOptions& opts = {}) {
+  InlinedSystem<ExprT> result;
+  for (auto&& tree : impl::binarize_system(system, opts, result.consumed))
+    result.trees.emplace_back(detail::to_eval_node<ExprT>(std::move(tree)));
+  return result;
+}
+
+///
+/// \return The exponent of the element-wise power node \p node, read off its
+///         Constant sentinel right child.
+/// \pre \p node is an EvalOp::Power node
+///
+rational power_exponent(meta::eval_node auto const& node) {
+  SEQUANT_ASSERT(!node.leaf() && node->op_type() == EvalOp::Power);
+  auto const value = node.right()->as_constant().value();
+  SEQUANT_ASSERT(value.imag() == 0);
+  return value.real();
 }
 
 ///
 /// Converts an `EvalExpr` to `ExprPtr`, passing the expression of every
 /// terminal through @p leaf_map.
+///
+/// An inlined equation below @p node (see EvalExpr::is_equation_boundary) is a
+/// terminal: it contributes its head, not its rhs; @p node itself, boundary or
+/// not, is always expanded.
 ///
 /// @param leaf_map Callable mapping the (shared) expression of a terminal to
 /// the expression that shall represent it in the result. It must not mutate its
@@ -716,11 +850,21 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
   // structural plumbing for the IR, not part of the symbolic form.
   if (op == EvalOp::Adjoint) return leaf_map(evxpr.expr());
 
+  auto const child = [&leaf_map](auto const& c) {
+    return c->is_equation_boundary() ? leaf_map(c->expr())
+                                     : to_expr(c, leaf_map);
+  };
+
+  if (op == EvalOp::Power) return pow(child(node.left()), power_exponent(node));
+
+  // the broadcast is implied by the Sum under a head that holds the node
+  if (op == EvalOp::Broadcast) return child(node.left());
+
   if (op == EvalOp::Product) {
     auto prod = Product{};
 
-    ExprPtr lexpr = to_expr(node.left(), leaf_map);
-    ExprPtr rexpr = to_expr(node.right(), leaf_map);
+    ExprPtr lexpr = child(node.left());
+    ExprPtr rexpr = child(node.right());
 
     prod.append(1, lexpr, Product::Flatten::No);
     prod.append(1, rexpr, Product::Flatten::No);
@@ -737,17 +881,20 @@ ExprPtr to_expr(meta::eval_node auto const& node, LeafMap&& leaf_map) {
   } else {
     SEQUANT_ASSERT(op == EvalOp::Sum && "unsupported operation type");
     // Collect the operands of the entire chain of sums, since Sum flattens
-    // (and thereby copies) its summands on construction
+    // (and thereby copies) its summands on construction; an inlined equation
+    // ends the chain
     container::svector<ExprPtr> summands;
     auto collect = [&](const auto& current, const auto& self) -> void {
-      if (!current.leaf() && current->op_type() == EvalOp::Sum) {
+      if (!current.leaf() && current->op_type() == EvalOp::Sum &&
+          !current->is_equation_boundary()) {
         self(current.left(), self);
         self(current.right(), self);
       } else {
-        summands.push_back(to_expr(current, leaf_map));
+        summands.push_back(child(current));
       }
     };
-    collect(node, collect);
+    collect(node.left(), collect);
+    collect(node.right(), collect);
 
     return ex<Sum>(Sum(summands.begin(), summands.end()));
   }

@@ -12,6 +12,7 @@
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/expressions/tensor_power.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 
@@ -69,12 +70,33 @@ std::string format_power(
     bool double_slash,
     const std::function<std::string(std::string)> &wrap_conj);
 
+/// Formats an element-wise tensor power for export framework
+/// @param power the TensorPower to format
+/// @param base_str the base of @p power already rendered to a string
+/// @param pow_op the element-wise exponentiation operator of the target
+///        language
+/// @param double_slash see format_power_exponent
+/// @return the formatted power
+std::string format_tensor_power(const TensorPower &power, std::string base_str,
+                                std::string_view pow_op, bool double_slash);
+
+/// @return the tensor that the operand of a broadcast carries: @p operand
+/// itself, the base of a TensorPower, or the one such factor of a Product
+/// with scalars; nullptr if @p operand is a scalar
+/// @throw Exception if @p operand has more than one non-scalar factor or a
+///        non-scalar that is neither a Tensor nor a TensorPower
+const Tensor *broadcast_operand_tensor(const Expr &operand);
+
+/// @return whether @p operand_tensor (as from broadcast_operand_tensor) has
+/// the mode @p idx; false if it is null
+bool broadcast_carries(const Tensor *operand_tensor, const Index &idx);
+
 /// Renders @p expr in infix notation: sums as `a + b`, products as their
 /// scalar prefactor (if not 1) and factors joined by @p product_separator
 /// @param expr the expression to render
 /// @param product_separator the separator between the factors of a Product
-/// @param represent renders a Tensor, Variable, Constant or Power; invoked
-///        with the expression cast to its concrete type
+/// @param represent renders a Tensor, Variable, Constant, Power or
+///        TensorPower; invoked with the expression cast to its concrete type
 /// @param who names the caller in the exception message
 /// @throw Exception if @p expr contains any other type of expression
 template <typename Represent>
@@ -88,6 +110,8 @@ std::string stringify_expr(const Expr &expr, std::string_view product_separator,
     return represent(expr.as<Constant>());
   } else if (expr.is<Power>()) {
     return represent(expr.as<Power>());
+  } else if (expr.is<TensorPower>()) {
+    return represent(expr.as<TensorPower>());
   } else if (expr.is<Product>()) {
     const Product &product = expr.as<Product>();
     std::string repr;

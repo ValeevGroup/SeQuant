@@ -91,7 +91,9 @@ The optimizer records on each node the modes it slices and the loops it opens; t
 the node. Two occurrences can still be sliced differently in different equations, so the ordered scheduler also
 records each occurrence's *home*: the enclosing loops that slice its own result modes (``occurrence_home()``). Value
 identity tells apart occurrences with different homes. Forest descent instead uses the intersection over
-occurrences (``sliced_modes()``).
+occurrences (``sliced_modes()``), and its per-batch scratch shares a node only among occurrences that put the batch
+mode, the batched external modes and the axes of the enclosing loops at the same result positions: two equal nodes
+binding different physical indices to an enclosing loop's axis hold different slices.
 
 Placement, escapes, and pass splits
 ----------------------------------------

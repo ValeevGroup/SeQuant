@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
+#include "tensor_power_fixtures.hpp"
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
@@ -10,9 +12,12 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
+#include <array>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -21,6 +26,7 @@
 #include <string_view>
 
 #include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 
@@ -306,6 +312,84 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   }
 
+  SECTION("Power op") {
+    const TensorSymmetries dsym{.perm = Symmetry::Symm,
+                                .braket = BraKetSymmetry::Symm,
+                                .column = ColumnSymmetry::Symm};
+    auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, dsym);
+    auto p = pow(D, rational{-1});
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto tree = binarize(p);
+    auto base_tree = binarize(D);
+    auto p2_tree = binarize(pow(D, rational{-2}));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE_FALSE(tree.leaf());
+    REQUIRE(tree->op_type() == EvalOp::Power);
+    REQUIRE(tree->is_elementwise_power());
+    REQUIRE(tree->is_tensor());
+    REQUIRE(tree.left().leaf());
+    REQUIRE(tree.left()->is_tensor());
+    REQUIRE(tree.left()->as_tensor().label() == L"D");
+    REQUIRE(tree.right().leaf());
+    REQUIRE(tree.right()->is_constant());
+    REQUIRE(power_exponent(tree) == rational{-1});
+    CHECK(ranges::equal(tree->canon_indices(), tree.left()->canon_indices()));
+    CHECK(tree->hash_value() != base_tree->hash_value());
+    CHECK(tree->hash_value() != p2_tree->hash_value());
+    // round trip, modulo the block canonicalization of the D leaf (its Symm
+    // bra-ket symmetry lets it swap bra and ket)
+    CHECK(*to_expr(tree) == *pow(to_expr(base_tree), rational{-1}));
+
+    // power of an adjoint-marked base: Power over Adjoint over the bare leaf
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    Tensor t_adj = t;
+    t_adj.adjoint();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto pa = binarize(pow(ex<Tensor>(t_adj), rational{2}));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(pa->op_type() == EvalOp::Power);
+    REQUIRE(pa.left()->op_type() == EvalOp::Adjoint);
+    CHECK(*to_expr(pa) == *pow(ex<Tensor>(t_adj), rational{2}));
+
+    // a product containing a power binarizes; the power's slots are the base's
+    auto M = ex<Tensor>(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                        TensorSymmetries{.perm = Symmetry::Antisymm});
+    auto ell = ResultExpr(Tensor(L"ℓ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                                 TensorSymmetries{.perm = Symmetry::Antisymm}),
+                          M * p);
+    REQUIRE_NOTHROW(binarize(ell));
+    auto ell_tree = binarize(ell);
+    REQUIRE(ell_tree->op_type() == EvalOp::Product);
+    CHECK((ell_tree.left()->is_elementwise_power() ||
+           ell_tree.right()->is_elementwise_power()));
+
+    // the node phase is the base's canonicalization phase raised to the
+    // exponent
+    auto const asym = TensorSymmetries{.perm = Symmetry::Antisymm};
+    auto A = ex<Tensor>(L"D", bra{L"a_1", L"i_1"}, ket{L"i_2", L"a_2"}, asym);
+    auto A_sorted =
+        ex<Tensor>(L"D", bra{L"i_1", L"a_1"}, ket{L"i_2", L"a_2"}, asym);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto a2 = binarize(pow(A, rational{2}));
+    auto a2_sorted = binarize(pow(A_sorted, rational{2}));
+    auto am1 = binarize(pow(A, rational{-1}));
+    auto half = binarize(pow(D, rational{1, 2}));
+    auto third = binarize(pow(D, rational{1, 3}));
+    auto zeroth = binarize(pow(D, rational{0}));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(a2.left()->canon_phase() == -1);
+    CHECK(a2->canon_phase() == 1);
+    CHECK(am1->canon_phase() == -1);
+    CHECK(a2->hash_value() == a2_sorted->hash_value());
+    CHECK(a2_sorted->canon_phase() == 1);
+
+    // fractional exponents are told apart; a zero exponent is still a node
+    CHECK(half->hash_value() != third->hash_value());
+    REQUIRE(zeroth->op_type() == EvalOp::Power);
+    CHECK(power_exponent(zeroth) == rational{0});
+  }
+
   SECTION("external hyperindices") {
     // t{i1,i2;a1,a3} T2{a2,a3;i1,i2}: i1,i2 appear in bra of t and ket of
     // T2 (multiply-appearing), a3 also multiply-appearing
@@ -573,4 +657,829 @@ TEST_CASE("proto-index-liveness", "[eval]") {
   // i_1 is a slot index of the trailing t; i_2 is live only via proto tuples.
   CHECK(has_label(g_node->canon_indices(), L"i_1"));
   CHECK(has_label(g_node->canon_indices(), L"i_2"));
+}
+
+TEST_CASE("binarize-broadcast-sum", "[EvalExpr][broadcast]") {
+  using namespace sequant;
+  using Node = FullBinaryNode<EvalExpr>;
+
+  // the summands of the Sum chain at root, in order
+  auto summands_of = [](Node const& root) {
+    container::svector<Node const*> result;
+    Node const* n = &root;
+    while (!n->leaf() && (*n)->op_type() == EvalOp::Sum) {
+      result.push_back(&n->right());
+      n = &n->left();
+    }
+    result.push_back(n);
+    std::ranges::reverse(result);
+    return result;
+  };
+  auto indices_of = [](ResultExpr const& res) {
+    return res.indices() | ranges::to<EvalExpr::index_vector>;
+  };
+  // n is a Broadcast node over the head of res
+  auto broadcasts_over = [&indices_of](Node const& n, ResultExpr const& res) {
+    if (n.leaf() || !n->is_broadcast()) return false;
+    REQUIRE(n->op_type() == EvalOp::Broadcast);
+    REQUIRE(n.right()->is_constant());
+    REQUIRE(n->canon_indices() == indices_of(res));
+    auto const& t = n->as_tensor();
+    auto const head = res.result_as_tensor();
+    REQUIRE(t.symmetry() == Symmetry::Nonsymm);
+    REQUIRE(t.braket_symmetry() == BraKetSymmetry::Nonsymm);
+    return std::ranges::equal(t.bra(), head.bra()) &&
+           std::ranges::equal(t.ket(), head.ket()) &&
+           std::ranges::equal(t.aux(), head.aux());
+  };
+
+  const ResultExpr d4 = deserialize<ResultExpr>(
+      L"D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}");
+
+  SECTION("a Sum chain over Broadcast nodes of the summands") {
+    auto const tree = binarize(d4);
+    REQUIRE(tree->op_type() == EvalOp::Sum);
+    REQUIRE(tree->as_tensor() == d4.result_as_tensor());
+    auto const summands = summands_of(tree);
+    REQUIRE(summands.size() == 4);
+    auto const& eps = d4.expression()->as<Sum>().summands();
+    for (std::size_t s = 0; s != 4; ++s) {
+      CAPTURE(s);
+      Node const& b = *summands[s];
+      REQUIRE(broadcasts_over(b, d4));
+      Node const& operand = b.left();
+      if (s < 2) {
+        // ε{;a_k}
+        REQUIRE(operand.leaf());
+        REQUIRE(*operand->expr() == *eps[s]);
+      } else {
+        // −1·ε{i_k;}
+        REQUIRE(operand->op_type() == EvalOp::Product);
+        REQUIRE(operand.left().leaf());
+        REQUIRE(*operand.left()->expr() == *eps[s]->as<Product>().factor(0));
+        REQUIRE(operand.right()->is_constant());
+        REQUIRE(operand.right()->as_constant().value() == -1);
+      }
+      REQUIRE(b->canon_phase() == operand->canon_phase());
+    }
+  }
+
+  SECTION("to_expr spells the broadcast summands as written") {
+    auto const tree = binarize(d4);
+    REQUIRE(*to_expr(tree) == *d4.expression());
+  }
+
+  SECTION("bra-ket-swapped supply counts as present") {
+    const ResultExpr res =
+        deserialize<ResultExpr>(L"D{i_1;a_1} = ε{a_1;} - ε{i_1;}");
+    auto const summands_tree = binarize(res);
+    auto const summands = summands_of(summands_tree);
+    REQUIRE(summands.size() == 2);
+    for (Node const* b : summands) REQUIRE(broadcasts_over(*b, res));
+    // ε{a_1;} lacks i_1 only, ε{i_1;} lacks a_1 only
+    REQUIRE(summands[0]->left()->canon_indices() ==
+            EvalExpr::index_vector{Index{L"a_1"}});
+    REQUIRE(summands[1]->left()->canon_indices() ==
+            EvalExpr::index_vector{Index{L"i_1"}});
+  }
+
+  SECTION("scalar summands") {
+    const ResultExpr res =
+        deserialize<ResultExpr>(L"D{i_1;a_1} = ε{;a_1} - ε{i_1;} - E");
+    auto const summands_tree = binarize(res);
+    auto const summands = summands_of(summands_tree);
+    REQUIRE(summands.size() == 3);
+    Node const& e = *summands[2];
+    REQUIRE(broadcasts_over(e, res));
+    // −1·E, a scalar
+    REQUIRE(e.left()->is_scalar());
+    REQUIRE(e.left()->op_type() == EvalOp::Product);
+    REQUIRE(e.left().left()->is_variable());
+    REQUIRE(e.left().left()->as_variable() == Variable(L"E"));
+
+    // a Constant summand
+    const ResultExpr c = deserialize<ResultExpr>(L"R{a_1} = 2 + t{a_1}");
+    auto const csummands_tree = binarize(c);
+    auto const csummands = summands_of(csummands_tree);
+    REQUIRE(csummands.size() == 2);
+    auto const n_bcast = std::ranges::count_if(
+        csummands, [&](Node const* n) { return broadcasts_over(*n, c); });
+    REQUIRE(n_bcast == 1);
+  }
+
+  SECTION("a summand supplying every head index is not wrapped") {
+    const ResultExpr complete = deserialize<ResultExpr>(
+        L"R{i_1;a_1} = f{i_1;a_1} + g{i_1;i_2} t{i_2;a_1}");
+    auto const complete_tree = binarize(complete);
+    REQUIRE(std::ranges::none_of(summands_of(complete_tree), [](Node const* n) {
+      return !n->leaf() && (*n)->is_broadcast();
+    }));
+    // a head index used twice (a Hadamard product) is supplied
+    const ResultExpr hadamard = deserialize<ResultExpr>(
+        L"R{i_1;a_1} = f{i_1;a_1} + M{i_1;a_1} D{a_1;i_1}");
+    REQUIRE(is_valid(hadamard));
+    auto const hadamard_tree = binarize(hadamard);
+    REQUIRE(std::ranges::none_of(summands_of(hadamard_tree), [](Node const* n) {
+      return !n->leaf() && (*n)->is_broadcast();
+    }));
+  }
+
+  SECTION("a non-Sum rhs is not wrapped") {
+    const ResultExpr res =
+        deserialize<ResultExpr>(L"R{i_1;a_1} = 2 g{i_1;i_2} t{i_2;a_1}");
+    auto const tree = binarize(res);
+    REQUIRE(tree->op_type() == EvalOp::Product);
+    tree.visit(
+        [](Node const& n) { REQUIRE((n.leaf() || !n->is_broadcast())); });
+  }
+
+  SECTION("a non-Sum right-hand side cannot broadcast") {
+    for (std::wstring_view spec :
+         {L"D{i_1;a_1} = ε{;a_1}", L"D{i_1;a_1} = 2 ε{;a_1}", L"D{i_1;a_1} = E",
+          L"D{i_1;a_1} = ε{;a_1} ε{;a_1}"}) {
+      CAPTURE(toUtf8(spec));
+      const ResultExpr res = deserialize<ResultExpr>(spec);
+      REQUIRE_FALSE(is_valid(res));
+      REQUIRE_THROWS_WITH(
+          binarize(res),
+          Catch::Matchers::ContainsSubstring("lacks head indices i_1") &&
+              Catch::Matchers::ContainsSubstring(
+                  "broadcast is only defined for a Sum under a head"));
+    }
+  }
+
+  SECTION("a broadcast summand carrying a non-head index") {
+    const ResultExpr res =
+        deserialize<ResultExpr>(L"D{i_1;a_1} = ε{;a_1} + f{i_1,i_2;i_2}");
+    REQUIRE_THROWS_WITH(
+        binarize(res),
+        Catch::Matchers::ContainsSubstring("carries index i_2") &&
+            Catch::Matchers::ContainsSubstring(
+                "that is not an index of the result"));
+  }
+
+  SECTION("a nested Sum broadcasts at the top level only") {
+    const ResultExpr res = deserialize<ResultExpr>(
+        L"R{i_1;a_1} = (f{i_1;} + g{i_1;}) c + h{i_1;a_1}");
+    auto const summands_tree = binarize(res);
+    auto const summands = summands_of(summands_tree);
+    REQUIRE(summands.size() == 2);
+    REQUIRE(broadcasts_over(*summands[0], res));
+    REQUIRE(summands[0]->left()->canon_indices() ==
+            EvalExpr::index_vector{Index{L"i_1"}});
+    REQUIRE(summands[1]->leaf());
+  }
+
+  SECTION("a symmetrizer supplies its indices") {
+    // the binarized summand carries the symmetrizer's indices, so a Broadcast
+    // node would add no mode
+    auto const no_broadcast = [](Node const& root) {
+      bool found = false;
+      root.visit([&](Node const& n) {
+        if (!n.leaf() && n->is_broadcast()) found = true;
+      });
+      return !found;
+    };
+    const ResultExpr top = deserialize<ResultExpr>(
+        L"R{a1,a2;i1,i2} = Â{i1,i2;a1,a2} t{a1;i1} ε{a2;} + g{a1,a2;i1,i2}");
+    REQUIRE(no_broadcast(binarize(top)));
+    const ResultExpr nested = deserialize<ResultExpr>(
+        L"R{a1,a2;i1,i2} = c (Â{i1,i2;a1,a2} t{a1;i1} ε{a2;} + "
+        L"Â{i1,i2;a1,a2} t{a2;i1} ε{a1;}) + g{a1,a2;i1,i2}");
+    REQUIRE(no_broadcast(binarize(nested)));
+  }
+
+  SECTION("aux index cannot be broadcast") {
+    const ResultExpr res =
+        deserialize<ResultExpr>(L"R{i_1;;a_2} = f{i_1;;a_2} + g{i_1;}");
+    REQUIRE_FALSE(is_valid(res));
+    REQUIRE_THROWS_AS(binarize(res), Exception);
+
+    // a summand that carries the aux index may lack a bra/ket head index
+    const ResultExpr ok =
+        deserialize<ResultExpr>(L"R{i_1,i_2;;a_2} = f{i_1;;a_2} + g{i_2;;a_2}");
+    REQUIRE(is_valid(ok));
+    auto const summands_tree = binarize(ok);
+    auto const summands = summands_of(summands_tree);
+    REQUIRE(summands.size() == 2);
+    for (Node const* b : summands) REQUIRE(broadcasts_over(*b, ok));
+  }
+
+  SECTION("hash: the operand and its placement in the result") {
+    auto const tree = binarize(d4);
+    auto const summands = summands_of(tree);
+    // ε{;a_1} and ε{;a_2} are one value, broadcast to different modes
+    REQUIRE(summands[0]->left()->hash_value() ==
+            summands[1]->left()->hash_value());
+    REQUIRE((*summands[0])->hash_value() != (*summands[1])->hash_value());
+
+    // the same operand broadcast alike: one value
+    auto const first_bcast = [&summands_of](ResultExpr const& res) {
+      auto const tree = binarize(res);
+      return (*summands_of(tree).front())->hash_value();
+    };
+    auto const d = deserialize<ResultExpr>(L"D{i_1;a_1} = ε{;a_1} - ε{i_1;}");
+    auto const f =
+        deserialize<ResultExpr>(L"F{i_1;a_1} = ε{;a_1} + t{i_1;a_1}");
+    REQUIRE(first_bcast(d) == first_bcast(f));
+    // ... over a different set of modes: different values
+    auto const g =
+        deserialize<ResultExpr>(L"G{i_1,i_2;a_1} = ε{;a_1} + t{i_1,i_2;a_1}");
+    REQUIRE(first_bcast(d) != first_bcast(g));
+  }
+}
+
+TEST_CASE("binarize-system", "[EvalExpr][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using Catch::Matchers::ContainsSubstring;
+  using Node = FullBinaryNode<EvalExpr>;
+  using System = container::svector<ResultExpr>;
+  using Flags = container::svector<bool>;
+  auto _ = set_scoped_default_context(lax_braket_context());
+
+  // the nodes of the subtree at root satisfying pred, in pre-order
+  // (FullBinaryNode::visit walks a whole tree, not a subtree)
+  auto find_all = [](Node const& root, auto pred) {
+    container::svector<Node const*> result;
+    auto descend = [&](auto& self, Node const& n) -> void {
+      if (pred(n)) result.push_back(&n);
+      if (n.leaf()) return;
+      self(self, n.left());
+      self(self, n.right());
+    };
+    descend(descend, root);
+    return result;
+  };
+  auto find = [&find_all](Node const& root, auto pred) -> Node const* {
+    auto const all = find_all(root, pred);
+    return all.empty() ? nullptr : all.front();
+  };
+  auto labelled = [](std::wstring_view label, bool leaf) {
+    return [label, leaf](Node const& n) {
+      return n.leaf() == leaf && n->is_tensor() &&
+             n->as_tensor().label() == label;
+    };
+  };
+  auto variable = [](std::wstring_view label, bool leaf) {
+    return [label, leaf](Node const& n) {
+      return n.leaf() == leaf && n->expr()->is<Variable>() &&
+             n->expr()->as<Variable>().label() == label;
+    };
+  };
+  auto leaf_labels = [](Node const& root) {
+    std::multiset<std::string> result;
+    root.visit_leaf([&](Node const& n) { result.insert(n->label()); });
+    return result;
+  };
+  // x equals tensor y, or y with bra and ket swapped (a leaf of a bra-ket
+  // symmetric tensor may hold either)
+  auto same_tensor = [](ExprPtr const& x, ExprPtr const& y) {
+    auto const& t = y->as<Tensor>();
+    return *x == *y ||
+           *x == Tensor(t.label(), bra(t.ket()), ket(t.bra()), aux(t.aux()),
+                        TensorSymmetries{.perm = t.symmetry(),
+                                         .braket = t.braket_symmetry(),
+                                         .column = t.column_symmetry()});
+  };
+  // x is m ⊙ pow(d,-1)
+  auto is_hadamard_power = [&same_tensor](ExprPtr const& x, ExprPtr const& m,
+                                          ExprPtr const& d) {
+    if (!x->is<Product>() || x->as<Product>().factors().size() != 2)
+      return false;
+    auto const& f = x->as<Product>().factors();
+    return same_tensor(f[0], m) && f[1]->is<TensorPower>() &&
+           f[1]->as<TensorPower>().exponent() == rational{-1} &&
+           same_tensor(f[1]->as<TensorPower>().base(), d);
+  };
+  auto antisymm_ell = [](auto b, auto k) {
+    return ex<Tensor>(relabelled(ell_definition().result_as_tensor(),
+                                 std::move(b), std::move(k)));
+  };
+
+  SECTION("a definition becomes one factor of its consumer") {
+    System const sys{ell_definition(), consumer_E()};
+    auto const res = binarize(sys);
+    REQUIRE(res.trees.size() == 2);
+    REQUIRE(res.consumed == Flags{true, false});
+    REQUIRE(res.roots().size() == 1);
+    Node const& e = res.trees[1];
+    REQUIRE(&res.roots()[0].get() == &e);
+    REQUIRE(e->op_type() == EvalOp::Product);
+
+    Node const& ell = e.right();
+    REQUIRE_FALSE(ell.leaf());
+    REQUIRE(ell->as_tensor() == relabelled(ell_definition().result_as_tensor(),
+                                           bra{L"i_1", L"i_2"},
+                                           ket{L"a_1", L"a_2"}));
+    REQUIRE(find(ell, labelled(L"M", true)));
+    REQUIRE(find(ell, labelled(L"D", true)));
+    REQUIRE(
+        find(ell, [](Node const& n) { return n->op_type() == EvalOp::Power; }));
+
+    // the leaves and the Hadamard subtree of the Hadamard term; the root
+    // contracts L with the head ℓ instead of with M and pow(D,-1)
+    auto const ref = binarize(hadamard_power_term());
+    REQUIRE(ell->hash_value() == ref.right()->hash_value());
+    REQUIRE(leaf_labels(e) == leaf_labels(ref));
+    REQUIRE(ref.right()->as_tensor().label() != L"ℓ");
+
+    // the inlined root alone is an equation boundary
+    REQUIRE(ell->is_equation_boundary());
+    REQUIRE_FALSE(e->is_equation_boundary());
+    REQUIRE(find_all(ell.left(), [](Node const& n) {
+              return n->is_equation_boundary();
+            }).empty());
+    REQUIRE(find_all(ell.right(), [](Node const& n) {
+              return n->is_equation_boundary();
+            }).empty());
+  }
+
+  SECTION("definitions inline recursively, in any order") {
+    System const sys{D_broadcast(), ell_definition(), consumer_E()};
+    auto const fwd = binarize(sys);
+    REQUIRE(fwd.consumed == Flags{true, true, false});
+    Node const& e = fwd.trees[2];
+    REQUIRE_FALSE(find(e, labelled(L"D", true)));
+    Node const* d = find(e, labelled(L"D", false));
+    REQUIRE(d);
+    REQUIRE((*d)->op_type() == EvalOp::Sum);
+    REQUIRE((*d)->as_tensor() == power_base()->as<Tensor>());
+    REQUIRE(find_all(*d, [](Node const& n) {
+              return !n.leaf() && n->is_broadcast();
+            }).size() == 4);
+
+    // to_expr keeps the inlined equations below a node opaque
+    auto product_of = [](ExprPtr const& l, ExprPtr const& r) {
+      Product p;
+      p.append(1, l, Product::Flatten::No);
+      p.append(1, r, Product::Flatten::No);
+      return ex<Product>(std::move(p));
+    };
+    REQUIRE(*to_expr(e) ==
+            *product_of(contractor(), antisymm_ell(bra{L"i_1", L"i_2"},
+                                                   ket{L"a_1", L"a_2"})));
+    REQUIRE(is_hadamard_power(
+        to_expr(e.right()),
+        antisymm(L"M", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}),
+        power_base()));
+    Node const* power =
+        find(e, [](Node const& n) { return n->op_type() == EvalOp::Power; });
+    REQUIRE(power);
+    REQUIRE(*to_expr(*power) == *pow(power_base(), rational{-1}));
+    // a boundary node itself expands to its rhs
+    REQUIRE(to_expr(*d)->is<Sum>());
+
+    System const rsys{consumer_E(), ell_definition(), D_broadcast()};
+    auto const rev = binarize(rsys);
+    REQUIRE(rev.consumed == Flags{false, true, true});
+    for (std::size_t k = 0; k != 3; ++k) {
+      CAPTURE(k);
+      Node const& f = fwd.trees[k];
+      Node const& r = rev.trees[2 - k];
+      REQUIRE(f->hash_value() == r->hash_value());
+      REQUIRE(f.size() == r.size());
+      REQUIRE(leaf_labels(f) == leaf_labels(r));
+    }
+  }
+
+  SECTION("a leaf of another shape stays a leaf") {
+    auto const rank = ResultExpr(
+        Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Constant>(2) * ex<Tensor>(L"ℓ", bra{L"i_1"}, ket{L"a_1"}));
+    // spaces that match neither as written nor with bra and ket swapped
+    auto const spaces =
+        ResultExpr(Tensor(L"R", bra{L"i_1", L"a_2"}, ket{L"a_1", L"i_2"}),
+                   ex<Constant>(2) *
+                       antisymm_ell(bra{L"i_1", L"a_2"}, ket{L"a_1", L"i_2"}));
+    for (auto const& consumer : {rank, spaces}) {
+      System const sys{ell_definition(), consumer};
+      auto const res = binarize(sys);
+      REQUIRE(res.consumed == Flags{false, false});
+      REQUIRE(find(res.trees[1], labelled(L"ℓ", true)));
+      REQUIRE_FALSE(find(res.trees[1], labelled(L"ℓ", false)));
+    }
+  }
+
+  SECTION("a bra-ket-swapped use of a head") {
+    // E{i_2;i_3} = L{a_1,a_2;i_3,i_1} ℓ{a_1,a_2;i_2,i_1}, ℓ as canonicalize()
+    // spells it: bra and ket swapped, which names the bra-ket symmetric ℓ
+    auto const L = antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_3", L"i_1"});
+    auto const swapped = ResultExpr(
+        head(L"E"), L * antisymm_ell(bra{L"a_1", L"a_2"}, ket{L"i_2", L"i_1"}));
+    System const sys{ell_definition(), swapped};
+    auto const res = binarize(sys);
+    REQUIRE(res.consumed == Flags{true, false});
+    Node const* ell = find(res.trees[1], labelled(L"ℓ", false));
+    REQUIRE(ell);
+    // the head's bra takes the leaf's ket and vice versa
+    REQUIRE((*ell)->as_tensor() ==
+            relabelled(ell_definition().result_as_tensor(), bra{L"i_2", L"i_1"},
+                       ket{L"a_1", L"a_2"}));
+    Node const* m = find(*ell, labelled(L"M", true));
+    REQUIRE(m);
+    REQUIRE(same_tensor((*m)->expr(), antisymm(L"M", bra{L"i_2", L"i_1"},
+                                               ket{L"a_1", L"a_2"})));
+    // the same tree as the use spelled like the head
+    auto const plain = ResultExpr(
+        head(L"E"), L * antisymm_ell(bra{L"i_2", L"i_1"}, ket{L"a_1", L"a_2"}));
+    System const psys{ell_definition(), plain};
+    REQUIRE(binarize(psys).trees[1]->hash_value() ==
+            res.trees[1]->hash_value());
+
+    // the canonicalized consumer_E() inlines too
+    auto const canon = ResultExpr(
+        head(L"E"), canonicalize(consumer_E().expression()->clone()));
+    System const csys{ell_definition(), canon};
+    auto const cres = binarize(csys);
+    REQUIRE(cres.consumed == Flags{true, false});
+    REQUIRE(find(cres.trees[1], labelled(L"ℓ", false)));
+
+    // K{i_1;a_1} = t{i_1;a_1}, read as K{a_1;i_1}
+    auto k_system = [](BraKetSymmetry bk) {
+      TensorSymmetries const syms{.perm = Symmetry::Nonsymm, .braket = bk};
+      return System{
+          ResultExpr(Tensor(L"K", bra{L"i_1"}, ket{L"a_1"}, syms),
+                     ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"})),
+          ResultExpr(Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}),
+                     ex<Constant>(2) *
+                         ex<Tensor>(L"K", bra{L"a_1"}, ket{L"i_1"}, syms))};
+    };
+    // a conjugate-symmetric head read swapped is its conjugate
+    REQUIRE_THROWS_WITH(
+        binarize(k_system(BraKetSymmetry::Conjugate)),
+        ContainsSubstring("inline: bra-ket-swapped use of the "
+                          "conjugate-symmetric head K is not supported"));
+    // a head without bra-ket symmetry read swapped is another object
+    auto const nonsymm = binarize(k_system(BraKetSymmetry::Nonsymm));
+    REQUIRE(nonsymm.consumed == Flags{false, false});
+    REQUIRE(find(nonsymm.trees[1], labelled(L"K", true)));
+
+    // a head matching as written wins over one matching swapped: with the
+    // conjugate X{a_1;i_1} = s{a_1;i_1} defined next to X{i_1;a_1} =
+    // t{i_1;a_1}, X{a_1;i_1} reads the former, in either order
+    auto x_pair = [](BraKetSymmetry bk) {
+      TensorSymmetries const syms{.perm = Symmetry::Nonsymm, .braket = bk};
+      return std::array{ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}, syms),
+                                   ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"})),
+                        ResultExpr(Tensor(L"X", bra{L"a_1"}, ket{L"i_1"}, syms),
+                                   ex<Tensor>(L"s", bra{L"a_1"}, ket{L"i_1"}))};
+    };
+    TensorSymmetries const conj{.perm = Symmetry::Nonsymm,
+                                .braket = BraKetSymmetry::Conjugate};
+    auto const r = ResultExpr(
+        Tensor(L"R", bra{L"a_1"}, ket{L"i_1"}),
+        ex<Constant>(2) * ex<Tensor>(L"X", bra{L"a_1"}, ket{L"i_1"}, conj));
+    auto const [x, x_conj] = x_pair(BraKetSymmetry::Conjugate);
+    for (auto const& [sys, flags] :
+         {std::pair{System{x, x_conj, r}, Flags{false, true, false}},
+          std::pair{System{x_conj, x, r}, Flags{true, false, false}}}) {
+      std::optional<InlinedSystem<EvalExpr>> cres;
+      REQUIRE_NOTHROW(cres.emplace(binarize(sys)));
+      REQUIRE(cres->consumed == flags);
+      Node const* xn = find(cres->trees[2], labelled(L"X", false));
+      REQUIRE(xn);
+      REQUIRE((*xn)->as_tensor() == x_conj.result_as_tensor());
+      REQUIRE(find(*xn, labelled(L"s", true)));
+      REQUIRE_FALSE(find(*xn, labelled(L"t", true)));
+    }
+    // a bra-ket symmetric head and its swapped spelling are one tensor
+    auto const symm_pair = x_pair(BraKetSymmetry::Symm);
+    REQUIRE_THROWS_WITH(binarize(System{symm_pair[0], symm_pair[1]}),
+                        ContainsSubstring("inline: duplicate definition of X"));
+  }
+
+  SECTION("a matching leaf with other symmetries throws") {
+    auto const e =
+        ResultExpr(head(L"E"),
+                   contractor() * ex<Tensor>(L"ℓ", bra{L"i_1", L"i_2"},
+                                             ket{L"a_1", L"a_2"}, symmetric()));
+    System const sys{ell_definition(), e};
+    REQUIRE_THROWS_WITH(binarize(sys),
+                        ContainsSubstring("declares different symmetries"));
+  }
+
+  SECTION("definition dummies stay distinct from the consumer's indices") {
+    auto nonsymm = [](std::wstring_view label, auto b, auto k) {
+      return ex<Tensor>(label, std::move(b), std::move(k),
+                        TensorSymmetries{.perm = Symmetry::Nonsymm});
+    };
+    // λ{i_1,i_2;a_1,a_2} = M{i_1,i_2;a_3,a_2} X{a_3;a_1}
+    auto const lambda = ResultExpr(
+        nonsymm(L"λ", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"})->as<Tensor>(),
+        nonsymm(L"M", bra{L"i_1", L"i_2"}, ket{L"a_3", L"a_2"}) *
+            nonsymm(L"X", bra{L"a_3"}, ket{L"a_1"}));
+    // E{i_2;i_3} = L{a_3,a_4;i_1,i_3} λ{i_1,i_2;a_3,a_4}
+    auto const e = ResultExpr(
+        head(L"E"),
+        antisymm(L"L", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_3"}) *
+            ex<Tensor>(relabelled(lambda.result_as_tensor(),
+                                  bra{L"i_1", L"i_2"}, ket{L"a_3", L"a_4"})));
+    System const sys{lambda, e};
+    auto const res = binarize(sys);
+    REQUIRE(res.consumed == Flags{true, false});
+    Node const& root = res.trees[1];
+    Node const* l = find(root, labelled(L"λ", false));
+    REQUIRE(l);
+    Node const* m = find(*l, labelled(L"M", true));
+    Node const* x = find(*l, labelled(L"X", true));
+    REQUIRE(m);
+    REQUIRE(x);
+    Tensor const& mt = (*m)->as_tensor();
+    Tensor const& xt = (*x)->as_tensor();
+    REQUIRE(mt.bra()[0] == Index{L"i_1"});
+    REQUIRE(mt.bra()[1] == Index{L"i_2"});
+    REQUIRE(mt.ket()[1] == Index{L"a_4"});
+    REQUIRE(xt.ket()[0] == Index{L"a_3"});
+    // the dummy is contracted between M and X and is no other index of the
+    // system
+    Index const& dummy = xt.bra()[0];
+    REQUIRE(mt.ket()[0] == dummy);
+    for (auto label : {L"i_1", L"i_2", L"i_3", L"a_1", L"a_2", L"a_3", L"a_4"})
+      REQUIRE(dummy != Index{label});
+  }
+
+  SECTION("a proto-indexed dummy keeps its space and follows the head") {
+    Index const a2i1(L"a_2", {L"i_1"});
+    // X{i_1;a_1} = S{a_1;a_2<i_1>} t{i_1;a_2<i_1>}
+    auto const x = ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}),
+                              ex<Tensor>(L"S", bra{L"a_1"}, ket{a2i1}) *
+                                  ex<Tensor>(L"t", bra{L"i_1"}, ket{a2i1}));
+    // F{i_3;a_1} = 2 X{i_3;a_1}
+    auto const f = ResultExpr(
+        Tensor(L"F", bra{L"i_3"}, ket{L"a_1"}),
+        ex<Constant>(2) * ex<Tensor>(L"X", bra{L"i_3"}, ket{L"a_1"}));
+    System const sys{x, f};
+    auto const res = binarize(sys);
+    REQUIRE(res.consumed == Flags{true, false});
+    Node const* xn = find(res.trees[1], labelled(L"X", false));
+    REQUIRE(xn);
+    Node const* sn = find(*xn, labelled(L"S", true));
+    Node const* tn = find(*xn, labelled(L"t", true));
+    REQUIRE(sn);
+    REQUIRE(tn);
+    Index const& dummy = (*sn)->as_tensor().ket()[0];
+    REQUIRE((*tn)->as_tensor().ket()[0] == dummy);
+    REQUIRE((*tn)->as_tensor().bra()[0] == Index{L"i_3"});
+    REQUIRE(dummy.label() != a2i1.label());
+    REQUIRE(dummy.space() == a2i1.space());
+    REQUIRE(dummy.proto_indices().size() == 1);
+    REQUIRE(dummy.proto_indices()[0] == Index{L"i_3"});
+  }
+
+  SECTION("a proto-indexed slot matches only a proto-indexed slot") {
+    Index const a1i1(L"a_1", {L"i_1"});
+    Index const a3i2(L"a_3", {L"i_2"});
+    // X{i_1;a_1} = t{i_1;a_1}: a CSV use X{i_2;a_3<i_2>} is another tensor
+    auto const plain_x = ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}),
+                                    ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+    // X{i_1;a_1<i_1>} = t{i_1;a_1<i_1>}
+    auto const csv_x = ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{a1i1}),
+                                  ex<Tensor>(L"t", bra{L"i_1"}, ket{a1i1}));
+    // R{i_2;a_3<i_2>} = 2 X{i_2;a_3<i_2>}
+    auto const r =
+        ResultExpr(Tensor(L"R", bra{L"i_2"}, ket{a3i2}),
+                   ex<Constant>(2) * ex<Tensor>(L"X", bra{L"i_2"}, ket{a3i2}));
+    System const mismatch{plain_x, r};
+    auto const res = binarize(mismatch);
+    REQUIRE(res.consumed == Flags{false, false});
+    REQUIRE(find(res.trees[1], labelled(L"X", true)));
+
+    System const match{csv_x, r};
+    auto const mres = binarize(match);
+    REQUIRE(mres.consumed == Flags{true, false});
+    Node const* t = find(mres.trees[1], labelled(L"t", true));
+    REQUIRE(t);
+    REQUIRE((*t)->as_tensor().ket()[0] == a3i2);
+  }
+
+  SECTION("two uses of one definition share a hash") {
+    // G{i_2;i_3} = L{a_1,a_2;i_1,i_3} ℓ{i_1,i_2;a_1,a_2}
+    //            + K{a_1,a_2;i_1,i_2} ℓ{i_1,i_3;a_1,a_2}
+    auto const g = ResultExpr(
+        head(L"G"),
+        contractor() * antisymm_ell(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) +
+            antisymm(L"K", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+                antisymm_ell(bra{L"i_1", L"i_3"}, ket{L"a_1", L"a_2"}));
+    System const sys{ell_definition(), g};
+    auto const res = binarize(sys);
+    REQUIRE(res.consumed == Flags{true, false});
+    auto const uses = find_all(res.trees[1], labelled(L"ℓ", false));
+    REQUIRE(uses.size() == 2);
+    REQUIRE((*uses[0])->hash_value() == (*uses[1])->hash_value());
+    REQUIRE((*uses[0])->as_tensor().bra()[1] !=
+            (*uses[1])->as_tensor().bra()[1]);
+    // each use expands to the definition's rhs over its own indices
+    for (auto const* use : uses) {
+      Tensor const& head = (*use)->as_tensor();
+      REQUIRE(is_hadamard_power(
+          to_expr(*use), antisymm(L"M", bra(head.bra()), ket(head.ket())),
+          ex<Tensor>(L"D", bra(head.bra()), ket(head.ket()), symmetric())));
+    }
+  }
+
+  SECTION("a Sum chain keeps an inlined Sum opaque") {
+    auto t = [](std::wstring_view label) {
+      return ex<Tensor>(label, bra{L"i_1"}, ket{L"a_1"});
+    };
+    // X{i_1;a_1} = f{i_1;a_1} + g{i_1;a_1}
+    auto const x =
+        ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}), t(L"f") + t(L"g"));
+    // R{i_1;a_1} = X{i_1;a_1} + h{i_1;a_1} + k{i_1;a_1}, X at either end of
+    // the chain
+    for (bool x_first : {true, false}) {
+      auto const rhs = x_first
+                           ? ex<Sum>(ExprPtrList{t(L"X"), t(L"h"), t(L"k")})
+                           : ex<Sum>(ExprPtrList{t(L"h"), t(L"k"), t(L"X")});
+      auto const r = ResultExpr(Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}), rhs);
+      // the definition listed before and after its consumer
+      for (bool def_first : {true, false}) {
+        CAPTURE(x_first, def_first);
+        System const sys = def_first ? System{x, r} : System{r, x};
+        auto const res = binarize(sys);
+        REQUIRE(res.roots().size() == 1);
+        auto const expr = to_expr(res.roots()[0].get());
+        REQUIRE(expr->is<Sum>());
+        auto const& summands = expr->as<Sum>().summands();
+        REQUIRE(summands.size() == 3);
+        for (auto label : {L"X", L"h", L"k"})
+          REQUIRE(std::ranges::count_if(summands, [&](ExprPtr const& s) {
+                    return *s == *t(label);
+                  }) == 1);
+      }
+    }
+  }
+
+  SECTION("a cyclic definition throws") {
+    auto const x = ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}),
+                              ex<Tensor>(L"Y", bra{L"i_1"}, ket{L"a_1"}));
+    auto const y = ResultExpr(
+        Tensor(L"Y", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Constant>(2) * ex<Tensor>(L"X", bra{L"i_1"}, ket{L"a_1"}));
+    System const cycle{x, y};
+    REQUIRE_THROWS_WITH(binarize(cycle),
+                        ContainsSubstring("inline: cyclic definition of"));
+
+    auto const self = ResultExpr(
+        Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Tensor>(L"X", bra{L"i_1"}, ket{L"a_1"}) * ex<Variable>(L"c"));
+    System const selfref{self};
+    REQUIRE_THROWS_WITH(binarize(selfref),
+                        ContainsSubstring("inline: cyclic definition of"));
+  }
+
+  SECTION("scalar heads inline into Variable leaves") {
+    // E = L{a_1,a_2;i_1,i_2} ℓ{i_1,i_2;a_1,a_2}
+    auto const e =
+        ResultExpr(Variable(L"E"),
+                   antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+                       antisymm_ell(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}));
+    // F{i_1;a_1} = E t{i_1;a_1}
+    auto const f = ResultExpr(
+        Tensor(L"F", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Variable>(L"E") * ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+    System const sys{e, f};
+    auto const res = binarize(sys);
+    REQUIRE(res.consumed == Flags{true, false});
+    REQUIRE_FALSE(find(res.trees[1], variable(L"E", true)));
+    Node const* inlined = find(res.trees[1], variable(L"E", false));
+    REQUIRE(inlined);
+    REQUIRE((*inlined)->op_type() == EvalOp::Product);
+    REQUIRE(find(*inlined, labelled(L"L", true)));
+
+    auto const self =
+        ResultExpr(Variable(L"E"), ex<Constant>(2) * ex<Variable>(L"E"));
+    System const selfref{self};
+    REQUIRE_THROWS_WITH(binarize(selfref),
+                        ContainsSubstring("inline: cyclic definition of"));
+
+    // a conjugated use of a scalar head is not inlined silently
+    auto e_conj = ex<Variable>(L"E");
+    e_conj->as<Variable>().conjugate();
+    auto const fc =
+        ResultExpr(Tensor(L"F", bra{L"i_1"}, ket{L"a_1"}),
+                   e_conj * ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+    System const conj{e, fc};
+    REQUIRE_THROWS_WITH(
+        binarize(conj),
+        ContainsSubstring("inline: conjugated use of head E is not supported"));
+
+    // a scalar head inside a scalar power is neither a leaf nor inlined
+    auto const gp = ResultExpr(Tensor(L"G", bra{L"i_1"}, ket{L"a_1"}),
+                               ex<Power>(ex<Variable>(L"E"), 2) *
+                                   ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+    System const powered{e, gp};
+    REQUIRE_THROWS_WITH(binarize(powered),
+                        ContainsSubstring("inline: head E cannot be used "
+                                          "inside a scalar power"));
+
+    // c has no definition
+    auto const g = ResultExpr(
+        Tensor(L"G", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Variable>(L"c") * ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+    System const undefined{e, g};
+    auto const ures = binarize(undefined);
+    REQUIRE(ures.consumed == Flags{false, false});
+    REQUIRE(find(ures.trees[1], variable(L"c", true)));
+  }
+
+  SECTION("a scalar head feeds a tensor-tensor contraction") {
+    // E = L{a_1,a_2;i_1,i_2} ℓ{i_1,i_2;a_1,a_2}
+    auto const e =
+        ResultExpr(Variable(L"E"),
+                   antisymm(L"L", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) *
+                       antisymm_ell(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}));
+    // H{i_1;a_1} = E t{i_1;a_2} u{a_2;a_1}
+    auto const h = ResultExpr(Tensor(L"H", bra{L"i_1"}, ket{L"a_1"}),
+                              ex<Variable>(L"E") *
+                                  ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}) *
+                                  ex<Tensor>(L"u", bra{L"a_2"}, ket{L"a_1"}));
+    System const sys{e, h};
+    auto const res = binarize(sys);
+    REQUIRE(res.consumed == Flags{true, false});
+    Node const& root = res.trees[1];
+    REQUIRE(root->op_type() == EvalOp::Product);
+    REQUIRE(contracted_indices(root) == Index::index_vector{Index{L"a_2"}});
+    // the inlined E is a boundary in the operand that carries a_2
+    Node const* inlined = find(root, variable(L"E", false));
+    REQUIRE(inlined);
+    REQUIRE((*inlined)->is_equation_boundary());
+    REQUIRE((*inlined)->op_type() == EvalOp::Product);
+    Node const& operand =
+        find(root.left(), variable(L"E", false)) ? root.left() : root.right();
+    REQUIRE(find(operand, labelled(L"t", true)));
+  }
+
+  SECTION("a scalar Power in a definition is inlined") {
+    auto const c2 = ex<Power>(ex<Variable>(L"c"), 2);
+    // X{i_1;a_1} = c^2 t{i_1;a_1}
+    auto const x = ResultExpr(Tensor(L"X", bra{L"i_1"}, ket{L"a_1"}),
+                              c2 * ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+    // F{i_2;a_2} = 2 X{i_2;a_2}
+    auto const f = ResultExpr(
+        Tensor(L"F", bra{L"i_2"}, ket{L"a_2"}),
+        ex<Constant>(2) * ex<Tensor>(L"X", bra{L"i_2"}, ket{L"a_2"}));
+    // E = c^-1, G{i_1;a_1} = E t{i_1;a_1}
+    auto const e =
+        ResultExpr(Variable(L"E"), ex<Power>(ex<Variable>(L"c"), -1));
+    auto const g = ResultExpr(
+        Tensor(L"G", bra{L"i_1"}, ket{L"a_1"}),
+        ex<Variable>(L"E") * ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+    System const sys{x, f, e, g};
+    auto const res = binarize(sys);
+    REQUIRE(res.consumed == Flags{true, false, true, false});
+    Node const* xn = find(res.trees[1], labelled(L"X", false));
+    REQUIRE(xn);
+    Node const* t = find(*xn, labelled(L"t", true));
+    REQUIRE(t);
+    REQUIRE((*t)->as_tensor().bra()[0] == Index{L"i_2"});
+    REQUIRE((*t)->as_tensor().ket()[0] == Index{L"a_2"});
+    REQUIRE(find(*xn, [](Node const& n) { return n->is_power(); }));
+    Node const* en = find(res.trees[3], variable(L"E", false));
+    REQUIRE(en);
+    REQUIRE(find(*en, [](Node const& n) { return n->is_power(); }));
+  }
+
+  SECTION("batch-axis stamping is applied to the returned trees") {
+    System const sys{ell_definition(), consumer_E()};
+    // one annotation list cannot describe several equations
+    auto const opts = BinarizationOptions{
+        .node_batch_axes = {NodeBatchAnnotation{
+            .axes = {{batched_occ(), BatchModeType::Contracted}}}}};
+    REQUIRE_THROWS_WITH(
+        binarize(sys, opts),
+        ContainsSubstring("node_batch_axes cannot describe several equations"));
+
+    auto res = binarize(sys);
+    Node& e = res.trees[1];
+    stamp_occ_loop(e);
+    REQUIRE(e->node_slice_mask().size() == 1);
+    REQUIRE(e->batch_loops_opened_here().size() == 1);
+    REQUIRE(find_all(e.right(), [](Node const& n) {
+              return !n->node_slice_mask().empty();
+            }).empty());
+  }
+}
+
+TEST_CASE("binarize-system-strict-braket", "[EvalExpr][inline]") {
+  using namespace sequant;
+  using namespace sequant::tests::tensor_power;
+  using Node = FullBinaryNode<EvalExpr>;
+  // E's factors are L and the head ℓ, not the Hadamard chain L, M, pow(D,-1)
+  // the strict bra-ket rule rejects
+  container::svector<ResultExpr> const sys{ell_definition(), consumer_E()};
+  std::optional<InlinedSystem<EvalExpr>> strict;
+  REQUIRE_NOTHROW(strict.emplace(binarize(sys)));
+  REQUIRE_THROWS_AS(binarize(hadamard_power_term()), Exception);
+
+  auto lax = [&] {
+    auto _ = set_scoped_default_context(lax_braket_context());
+    return binarize(sys);
+  }();
+  Node const& e = strict->trees[1];
+  Node const& e_lax = lax.trees[1];
+  REQUIRE(e->hash_value() == e_lax->hash_value());
+  REQUIRE(e.size() == e_lax.size());
+  REQUIRE(e.right()->is_equation_boundary());
+  REQUIRE(e.right()->hash_value() == e_lax.right()->hash_value());
 }

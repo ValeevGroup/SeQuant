@@ -219,6 +219,20 @@ TEST_CASE("join_strings", "[utilities]") {
           }) == "1-2-3");
 }
 
+TEST_CASE("utf-conversion", "[utilities]") {
+  using namespace sequant;
+
+  // BMP and astral-plane (a surrogate pair in UTF-16) characters
+  for (const std::wstring& str : {std::wstring(L"t_1"), std::wstring(L"Âδγ"),
+                                  std::wstring(L"𝟙"), std::wstring(L"a𝟙b")}) {
+    const std::string utf8 = toUtf8(str);
+    REQUIRE(toUtf16(utf8) == str);
+    REQUIRE(toUtf8(toUtf16(utf8)) == utf8);
+  }
+  REQUIRE(toUtf8(std::wstring(L"𝟙")) == "\xF0\x9D\x9F\x99");
+  REQUIRE(toUtf16(std::string("\xF0\x9D\x9F\x99")) == L"𝟙");
+}
+
 TEST_CASE("pop_symmetrizer", "[utilities]") {
   using namespace sequant;
 
@@ -233,6 +247,14 @@ TEST_CASE("pop_symmetrizer", "[utilities]") {
   REQUIRE(has_tensor(expr, L"t"));
 
   REQUIRE_FALSE(pop_symmetrizer(expr).has_value());
+
+  // a TensorPower holds no symmetrizer
+  auto D = ex<Tensor>(L"D", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+  expr = ex<Tensor>(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                    ket{L"a_1", L"a_2"}, Symmetry::Antisymm) *
+         t * pow(D, rational{-1});
+  REQUIRE(pop_symmetrizer(expr).has_value());
+  REQUIRE(*expr == *(t * pow(D, rational{-1})));
 }
 
 TEST_CASE("push_symmetrizer", "[utilities]") {
@@ -942,7 +964,6 @@ TEST_CASE("utilities", "[utilities]") {
                {L"t{a1} t{a1} t{a1}", "Index a_1 appears more than 2 times"},
                {L"1 + t{a1} t{a1} t{a1}",
                 "Index a_1 appears more than 2 times"},
-               {L"1 + t{a1}", "Inconsistent external indices in sum"},
                // Allow bra/ket inconsistencies in external indices
                {L"t{;a1} + t{a1}", ""},
            }) {
@@ -971,6 +992,16 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE(actual_msg == msg);
         REQUIRE(actual == expected);
       }
+
+      // without a head, a Sum whose summands have different external indices
+      // is invalid even when it could broadcast under one (see ResultExpr)
+      for (const auto& expr_str :
+           {L"1 + t{a1}", L"ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}"}) {
+        CAPTURE(toUtf8(expr_str));
+        std::string msg;
+        REQUIRE_FALSE(is_valid(deserialize(expr_str), &msg));
+        REQUIRE(msg == "Inconsistent external indices in sum");
+      }
     }
     SECTION("ResultExpr") {
       for (const auto& [expr_str, msg] :
@@ -989,6 +1020,39 @@ TEST_CASE("utilities", "[utilities]") {
                 "expression"},
                // Allow bra/ket inconsistencies in external indices
                {L"R{a2;a1} = t{a1;i1} t{i1;a2}", ""},
+               // a Sum under a head may broadcast: each summand covers a
+               // subset of the result's indices, all of them together
+               {L"D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2} - ε{i_1;} - ε{i_2;}",
+                ""},
+               {L"D{i_1;a_1} = ε{;a_1} - ε{i_1;} - E", ""},
+               {L"R{a1} = 1 + t{a1}", ""},
+               // a Sum nested in a factor does not broadcast
+               {L"R{i_1;} = (f{i_1;} + g{i_1;}) c", ""},
+               // a summand's (anti)symmetrizer does not count
+               {L"R{a1,a2;i1,i2} = Â{i1,i2;a1,a2} t{a1,a2;i1,i2} + ε{a1;}", ""},
+               {L"R{a1,a2;i1,i2} = 1/2 (Â{i1,i2;a1,a2} t{a1,a2;i1,i2} + "
+                L"Â{i1,i2;a1,a2} u{a1,a2;i1,i2})",
+                ""},
+               {L"D{i_1;a_1} = ε{a_1;} - ε{i_1;}", ""},
+               {L"D{i_1;a_1} = ε{;a_1} + ε{;a_2}",
+                "Summand index a_2 is not an index of the result"},
+               {L"D{i_1,i_2;a_1,a_2} = ε{;a_1} + ε{;a_2}",
+                "Result index i_1 appears in no summand"},
+               {L"D{i_1;a_1} = ε{;a_1} - E",
+                "Result index i_1 appears in no summand"},
+               {L"R{} = 1 + t{a1}",
+                "Summand index a_1 is not an index of the result"},
+               // a result index is never contracted: a summand that uses it
+               // in several slots supplies it
+               {L"R{i1} = f{i1;} + g{i1;i2} h{i2;i1}", ""},
+               {L"R{i_1;a_1} = f{i_1;a_1} + M{i_1;a_1} D{a_1;i_1}", ""},
+               // aux modes cannot be broadcast over
+               {L"R{i_1;;a_2} = f{i_1;;a_2} + g{i_1;}",
+                "Summand does not supply result aux index a_2"},
+               {L"R{i_1,i_2;;a_2} = f{i_1;;a_2} + g{i_2;;a_2}", ""},
+               {L"R{i1} = g{i1;i2} h{i2;i1}",
+                "Bra indices of result are inconsistent with the rhs "
+                "expression"},
            }) {
         CAPTURE(toUtf8(expr_str));
 
