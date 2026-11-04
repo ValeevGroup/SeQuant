@@ -9,9 +9,11 @@
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/optimize/schedule_pin.hpp>
 #include <SeQuant/core/optimize/single_term.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
@@ -22,6 +24,7 @@
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <range/v3/algorithm/contains.hpp>
+#include <range/v3/algorithm/none_of.hpp>
 
 #include <algorithm>
 #include <bit>
@@ -502,6 +505,155 @@ TEST_CASE("optimize", "[optimize]") {
                                        L"X{;a4;x2} T{a2,a4;i1,i2} )) X{a3;;x2}")
                                        ->as<Product>();
       REQUIRE(single_term_opt(GT_abij_thc)->as<Product>() == GT_abij_thc_opt);
+    }
+
+    // THC-like products share result indices across factors: the grid indices
+    // a1/a2 and the Laplace index i1 below each occur on several tensors, so
+    // multiplicity alone would deduce them to be summed. Sized so that the
+    // Hadamard-factored tree is far cheaper than a per-grid-point one.
+    auto const thc_extents = [&] {
+      auto sized = std::make_shared<IndexBasisRegistry>(*reg);
+      sized->extent(L"a", 1000);  // grid
+      sized->extent(L"i", 100);   // Laplace weight
+      sized->extent(L"x", 10);    // contracted legs
+      return sized;
+    };
+    io::serialization::DeserializationOptions const nonsymm{
+        .def_perm_symm = Symmetry::Nonsymm,
+        .def_braket_symm = BraKetSymmetry::Nonsymm,
+        .def_col_symm = ColumnSymmetry::Nonsymm};
+    auto const E2_thc =
+        L"E2{;;a1,a2,i1} = t{;;x1,i1} X{;;a1,x1} X{;;a2,x1} t{;;x2,i1} "
+        L"X{;;a1,x2} X{;;a2,x2}";
+    auto const E2_thc_opt =
+        L"E2{;;a1,a2,i1} = ((t{;;x1,i1} X{;;a1,x1}) X{;;a2,x1}) "
+        L"((t{;;x2,i1} X{;;a1,x2}) X{;;a2,x2})";
+
+    SECTION("ResultExpr keeps its repeated result indices open") {
+      // the declaration must reach every statistics' context
+      auto const sized = get_default_context_snapshot().set(thc_extents());
+      auto resetter =
+          set_scoped_default_context(container::map<Statistics, Context>{
+              {Statistics::FermiDirac, sized}, {Statistics::Arbitrary, sized}});
+      auto E2 = deserialize<ResultExpr>(E2_thc, nonsymm);
+      optimize(E2);
+      auto const E2_opt = deserialize<ResultExpr>(E2_thc_opt, nonsymm);
+      REQUIRE(E2.expression()->as<Product>() ==
+              E2_opt.expression()->as<Product>());
+    }
+
+    SECTION("ResultExpr result indices survive schedule recording") {
+      auto resetter = set_scoped_default_context(
+          get_default_context_snapshot().set(thc_extents()));
+      // the extra summed virtual a3 would, if the result indices were deduced
+      // from multiplicity, be relabeled past a1/a2 when the recorded term is
+      // canonicalized
+      auto const src =
+          L"E2{;;a1,a2,i1} = t{;;x1,i1} X{;;a2,x1} X{;;a1,x1} t{;;x2,i1} "
+          L"X{;;a2,x2} X{;;a1,x2} Y{;;a3,x1} Y{;;a3,x2}";
+      // flops of evaluating the nested product of \p res with its result
+      // indices open: a node keeps an index open if the rest of the term or
+      // the result carries it, and costs the volume of all indices it touches
+      using Counts = container::map<Index, int, Index::FullLabelCompare>;
+      auto count_leaves = [](auto const& self, ExprPtr const& e,
+                             Counts& counts) -> void {
+        if (e->is<Tensor>())
+          for (auto const& idx : e->as<Tensor>().const_indices()) ++counts[idx];
+        else
+          for (auto const& f : e->as<Product>()) self(self, f, counts);
+      };
+      auto term_flops = [&](ResultExpr const& res) {
+        IndexSet const result_idxs(res.indices().begin(), res.indices().end());
+        Counts term_counts;
+        count_leaves(count_leaves, res.expression(), term_counts);
+        double flops = 0;
+        auto open = [&](auto const& self, ExprPtr const& e) -> IndexSet {
+          if (e->is<Tensor>()) {
+            auto const& t = e->as<Tensor>();
+            return IndexSet(t.const_indices().begin(), t.const_indices().end());
+          }
+          IndexSet touched;
+          for (auto const& f : e->as<Product>()) touched.merge(self(self, f));
+          double volume = 1;
+          for (auto const& idx : touched) volume *= idx.basis().extent();
+          flops += volume;
+          Counts inner;
+          count_leaves(count_leaves, e, inner);
+          IndexSet result;
+          for (auto const& idx : touched)
+            if (result_idxs.contains(idx) ||
+                inner.at(idx) < term_counts.at(idx))
+              result.insert(idx);
+          return result;
+        };
+        open(open, res.expression());
+        return flops;
+      };
+      // inferring the result indices from multiplicity sums them away
+      // mid-term, which looks cheap to the search but is not
+      auto deduced = deserialize<ResultExpr>(src, nonsymm);
+      deduced.expression() = optimize(deduced.expression());
+      auto plain = deserialize<ResultExpr>(src, nonsymm);
+      optimize(plain);
+      REQUIRE(term_flops(plain) < term_flops(deduced));
+      auto recorded = deserialize<ResultExpr>(src, nonsymm);
+      opt::schedule::RecordSession recording("E2");
+      OptimizeOptions opts;
+      opts.recording = &recording;
+      optimize(recorded, opts);
+      REQUIRE(term_flops(recorded) == term_flops(plain));
+      // the record names the result indices as the caller does: only the two
+      // Y factors carry a3
+      auto const record = recording.finish();
+      REQUIRE(record.terms.size() == 1);
+      auto const& factors = record.terms[0].factors;
+      REQUIRE(factors.size() == 8);
+      for (auto const& f : factors)
+        REQUIRE((f.find("a_3") != std::string::npos) == (f.rfind("Y", 0) == 0));
+    }
+
+    SECTION("result indices keep their proto indices under recording") {
+      auto resetter = set_scoped_default_context(
+          get_default_context_snapshot().set(thc_extents()));
+      // i7 and i3 occur only as proto indices; neither the result's a1<i7>
+      // nor a2<i7> may be relabeled when the recorded term is canonicalized
+      auto I = deserialize<ResultExpr>(
+          L"I{a1<i7>;a2<i7>} = f{a1<i7>;a3<i3>} t{a3<i3>;a4<i7>} "
+          L"g{a4<i7>;a2<i7>}",
+          nonsymm);
+      opt::schedule::RecordSession recording("I");
+      OptimizeOptions opts;
+      opts.recording = &recording;
+      opts.inner_pow = [](Index const&, std::size_t) { return 10.; };
+      optimize(I, opts);
+      IndexSet leaf_idxs;
+      auto collect = [&leaf_idxs](auto const& self, ExprPtr const& e) -> void {
+        if (e->is<Tensor>()) {
+          auto const& t = e->as<Tensor>();
+          leaf_idxs.insert(t.const_indices().begin(), t.const_indices().end());
+        } else
+          for (auto const& f : e->as<Product>()) self(self, f);
+      };
+      collect(collect, I.expression());
+      for (auto const& idx : I.indices()) REQUIRE(leaf_idxs.contains(idx));
+    }
+
+    SECTION("plain expression keeps the context's named indices open") {
+      auto resetter = set_scoped_default_context(
+          get_default_context_snapshot().set(thc_extents()));
+      auto E2 = deserialize<ResultExpr>(E2_thc, nonsymm);
+      auto const E2_opt = deserialize<ResultExpr>(E2_thc_opt, nonsymm);
+      // without the declaration the result indices are deduced to be summed
+      REQUIRE(optimize(E2.expression())->as<Product>() !=
+              E2_opt.expression()->as<Product>());
+      container::set<Index> named(E2.indices().begin(), E2.indices().end());
+      auto named_resetter =
+          set_scoped_modified_default_context([&named](Context& ctx) {
+            ctx.set(CanonicalizeOptions::default_options().copy_and_set(
+                std::optional{named}));
+          });
+      REQUIRE(optimize(E2.expression())->as<Product>() ==
+              E2_opt.expression()->as<Product>());
     }
 
     SECTION("OptimizeOptions: cost metric and reorder knobs") {

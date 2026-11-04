@@ -492,6 +492,18 @@ OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts) {
 }
 
 ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts) {
+  // The result indices are the named indices of every term: canonicalization
+  // must not relabel them and the contraction search must keep them open, even
+  // where one occurs on several factors (grid or Laplace indices shared by the
+  // factors of a THC-like product) and so looks summed by multiplicity.
+  container::set<Index> const named(expr.indices().begin(),
+                                    expr.indices().end());
+  // applied to the context of every statistics, so do not move from `named`
+  auto resetter = set_scoped_modified_default_context([&named](Context& ctx) {
+    ctx.set(ctx.canonicalization_options()
+                .value_or(CanonicalizeOptions{})
+                .copy_and_set(std::optional{named}));
+  });
   expr.expression() = optimize(expr.expression(), std::move(opts));
   return expr;
 }

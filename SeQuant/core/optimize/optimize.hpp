@@ -30,10 +30,22 @@ ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts = {});
 /// \return The optimized expression, wrapped in \ref OptimizeResult.
 OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts = {});
 
-/// \copydoc optimize(ExprPtr const&, OptimizeOptions)
+/// Optimize the expression of \p expr for lower evaluation cost.
+///
+/// The result indices of \p expr are its named indices (see
+/// CanonicalizeOptions::named_indices) while it is optimized: they are never
+/// relabeled and stay open in every term, even where one occurs on several
+/// factors (e.g. a grid or Laplace index shared by the factors of a THC-like
+/// product) and would otherwise be deduced to be summed over. This replaces
+/// the named indices of the default context for the duration of the call.
+/// Otherwise as optimize(ExprPtr const&, OptimizeOptions).
+///
+/// \param expr  Expression to be optimized, in place.
+/// \param opts  Optimization parameters; see \c OptimizeOptions.
+/// \return \p expr
 ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts = {});
 
-/// \copydoc optimize(ExprPtr const&, OptimizeOptions)
+/// \copydoc optimize(ResultExpr&, OptimizeOptions)
 [[nodiscard]] ResultExpr& optimize(ResultExpr&& expr,
                                    OptimizeOptions opts = {});
 
