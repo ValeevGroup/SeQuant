@@ -37,11 +37,6 @@ int main(int argc, char* argv[]) {
        .vacuum = Vacuum::SingleProduct,
        .spbasis = SPBasis::Spinor,
        .first_dummy_index_ordinal = 100,
-       // TODO remove when CanonicalizeOptions::method is reverted to
-       // Topological
-       .canonicalization_options =
-           CanonicalizeOptions::default_options().copy_and_set(
-               CanonicalizationMethod::Topological),
        .braket_typesetting = BraKetTypesetting::ContraSub,
        // to_latex() reference outputs predominantly assume the original
        // (naive) convention
@@ -50,8 +45,7 @@ int main(int argc, char* argv[]) {
        // tensors to particle (column) symmetry; bra-ket and permutational
        // symmetries stay at the safe Nonsymm/NonHermitian library defaults and
        // are specified explicitly where needed (e.g. Hermitian integrals)
-       .deserialization_column_symmetry = ColumnSymmetry::Symm,
-       .cardinal_tensor_labels = sequant::mbpt::cardinal_tensor_labels()});
+       .deserialization_column_symmetry = ColumnSymmetry::Symm});
   // uncomment to enable verbose output ...
   // Logger::set_instance(1);
   // ... or can instead selectively set/unset particular logging flags

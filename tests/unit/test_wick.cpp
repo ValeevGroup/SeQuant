@@ -843,7 +843,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       ExprPtr result;
       REQUIRE_NOTHROW(result = wick.compute());
       // std::wcout << "result = " << to_latex(result) << std::endl;
-      REQUIRE(to_latex(result) == L"{\\bar{g}^{{a_2}{i_1}}_{{a_3}{a_4}}}");
+      REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
       auto rapid = scoped_canonicalize_options(
           CanonicalizeOptions::default_options().copy_and_set(
               CanonicalizationMethod::Rapid));
@@ -2024,25 +2024,22 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
         //                  to_latex_align(result2, 0, 2), L"\n");
         REQUIRE(result2.as<Sum>().size() == 5);
-        // Sum-term ordering depends on the tensors' braket and column
-        // symmetries; the canonical sort key for these ã·v̄·w terms reflects the
-        // fixed (Context-independent) Tensor ctor defaults -- notably w, which
-        // carries no bra/ket and so is column-Nonsymm by default -- and shifted
-        // vs the previous (Context-Symm) ordering. The expression is
-        // mathematically unchanged (same five terms, reordered).
-        REQUIRE(
-            result2.to_latex() ==
-            L"{ \\bigl( - "
-            L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}{p_5}}_{{p_1}{p_2}{p_5}}}"
-            L"{\\bar{v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{p_5}]}} - "
-            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{e_1}{p_3}}_{{p_1}{p_2}}}{\\bar{v}^"
-            L"{{p_1}{p_2}}_{{e_1}{p_3}}}{w^{}_{}[{e_1}]}} + "
-            L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{v}^"
-            L"{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{e_1}]}} + "
-            L"{{\\tilde{a}^{{p_2}}_{{p_1}}}{\\bar{v}^{{e_1}{p_1}}_{{e_1}{p_2}}}"
-            L"{w^{}_{}[{e_1}]}} - "
-            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{p_2}{p_3}}_{{e_1}{p_1}}}{\\bar{v}^"
-            L"{{e_1}{p_1}}_{{p_2}{p_3}}}{w^{}_{}[{e_1}]}}\\bigr) }");
+        REQUIRE(result2.to_latex() ==
+                L"{ \\bigl("
+                L"{{{\\frac{1}{4}}}{\\bar{v}^{{p_3}{p_4}}_{{p_1}{p_2}}}{w^{}_{}"
+                L"[{e_1}]}"
+                L"{\\tilde{a}^{{p_1}{p_2}}_{{p_3}{p_4}}}} - "
+                L"{{{\\frac{1}{4}}}{\\bar{v}^{{p_3}{p_4}}_{{p_1}{p_2}}}{w^{}_{}"
+                L"[{p_5}]}"
+                L"{\\tilde{a}^{{p_1}{p_2}{p_5}}_{{p_3}{p_4}{p_5}}}} - "
+                L"{{{\\frac{1}{2}}}{\\bar{v}^{{e_1}{p_3}}_{{p_1}{p_2}}}{w^{}_{}"
+                L"[{e_1}]}"
+                L"{\\tilde{a}^{{p_1}{p_2}}_{{e_1}{p_3}}}} - "
+                L"{{{\\frac{1}{2}}}{\\bar{v}^{{p_2}{p_3}}_{{e_1}{p_1}}}{w^{}_{}"
+                L"[{e_1}]}"
+                L"{\\tilde{a}^{{e_1}{p_1}}_{{p_2}{p_3}}}} + "
+                L"{{\\bar{v}^{{e_1}{p_2}}_{{e_1}{p_1}}}{w^{}_{}[{e_1}]}"
+                L"{\\tilde{a}^{{p_1}}_{{p_2}}}}\\bigr) }");
       }
 
       // simplified example with "diagonal" operator from the paper, inspired by

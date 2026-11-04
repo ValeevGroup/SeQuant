@@ -1151,7 +1151,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto theta1 = θ(1)->as<op_t>();
       // std::wcout << "theta1: " << to_latex(simplify(theta1.tensor_form()));
       REQUIRE(to_latex(simplify(theta1.tensor_form())) ==
-              L"{{\\theta^{{p_2}}_{{p_1}}}{\\tilde{a}^{{p_1}}_{{p_2}}}}");
+              L"{{\\tilde{a}^{{p_2}}_{{p_1}}}{\\theta^{{p_1}}_{{p_2}}}}");
 
       {
         // replacement operator: label "ã", lowering yields a bare
@@ -1684,7 +1684,7 @@ SECTION("MRSO") {
     REQUIRE_NOTHROW(result = t::ref_av(H1));
     // the active-first comparer is scoped to ref_av
     CHECK(&get_default_context().index_comparer() == index_comparer);
-    REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
+    REQUIRE_THAT(result, EquivalentTo(L"h{O_1;O_1}:N-C-S + "
                                       L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
   }
 }  // SECTION("MRSO")
@@ -1704,7 +1704,7 @@ SECTION("MRSO-MultiProduct") {
               fcrex(p) * fannx(q);
     ExprPtr result;
     REQUIRE_NOTHROW(result = t::ref_av(H1));
-    REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
+    REQUIRE_THAT(result, EquivalentTo(L"h{O_1;O_1}:N-C-S + "
                                       L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
   }
 

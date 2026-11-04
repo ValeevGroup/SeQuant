@@ -104,8 +104,7 @@ int main(int argc, char* argv[]) {
   set_default_context({.index_basis_registry_shared_ptr = make_sr_spaces(),
                        .vacuum = Vacuum::SingleProduct,
                        .spbasis = SPBasis::Spinor,
-                       .first_dummy_index_ordinal = 100,
-                       .cardinal_tensor_labels = cardinal_tensor_labels()});
+                       .first_dummy_index_ordinal = 100});
   set_default_mbpt_context(
       {.csv = mbpt::CSV::No, .op_registry_ptr = make_legacy_registry()});
 
