@@ -25,6 +25,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
@@ -1371,7 +1372,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       const Expr *other_expr = static_cast<const Expr *>(other_tensor);
       return this->static_less_than(*other_expr);
     } else
-      return false;  // TODO do we compare typeid? labels? probably the latter
+      return cross_type_less(*this, other);
   }
 
  private:
@@ -1917,6 +1918,21 @@ inline Tensor *as_cnumber_tensor(AbstractTensor &t) {
 inline const Tensor *as_cnumber_tensor(const AbstractTensor &t) {
   return dynamic_cast<const Tensor *>(&t);
 }
+/// @brief canonicalizes an Expr that is a tensor leaf, as Tensor::canonicalize
+/// does
+///
+/// A leaf in which an index occurs more than once, protoindices included, is a
+/// tensor network and is canonicalized as one, with @p opts; any other is
+/// canonicalized in place by the default tensor canonicalizer, through the
+/// AbstractTensor interface of @p leaf .
+/// @param[in,out] leaf an Expr that is an AbstractTensor
+/// @param[in] opts the canonicalization options
+/// @param[in] assign assigns the canonical form computed as a tensor network,
+///            an object of the same type as @p leaf , to @p leaf
+/// @return the byproduct of canonicalization (e.g. a phase), or nullptr
+ExprPtr canonicalize_tensor_leaf(
+    Expr &leaf, CanonicalizeOptions opts,
+    const std::function<void(const AbstractTensor &)> &assign);
 
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
   // an overlap is Hermitian and particle (column) symmetric by definition;

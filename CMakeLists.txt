@@ -380,6 +380,8 @@ set(SeQuant_symb_src
         SeQuant/core/expressions/sum.hpp
         SeQuant/core/expressions/tensor.cpp
         SeQuant/core/expressions/tensor.hpp
+        SeQuant/core/expressions/tensor_power.cpp
+        SeQuant/core/expressions/tensor_power.hpp
         SeQuant/core/expressions/variable.cpp
         SeQuant/core/expressions/variable.hpp
         SeQuant/core/hash.cpp
@@ -535,12 +537,14 @@ set(SeQuant_eval_src
         SeQuant/core/eval/cell_table.hpp
         SeQuant/core/eval/cell_table_builder.hpp
         SeQuant/core/eval/dag_scope.hpp
+        SeQuant/core/eval/elementwise.hpp
         SeQuant/core/eval/eval.hpp
         SeQuant/core/eval/eval_expr.cpp
         SeQuant/core/eval/canon_transform.hpp
         SeQuant/core/eval/eval_expr.hpp
         SeQuant/core/eval/eval_node.hpp
         SeQuant/core/eval/eval_node_compare.hpp
+        SeQuant/core/eval/extent_array_ops.hpp
         SeQuant/core/eval/forest_combine.hpp
         SeQuant/core/eval/legality.hpp
         SeQuant/core/eval/lifetime_mask.hpp
@@ -609,15 +613,26 @@ set(SeQuant_export_src
         SeQuant/core/export/utils.cpp
 )
 
-# TiledArray backend sources
+# TiledArray backend sources; each explicit instantiation of a Result class
+# needs GBs of compiler memory, so they are kept out of unity batches
+set(SeQuant_eval_ta_inst_src
+        SeQuant/core/eval/backends/tiledarray/result_inst_d.cpp
+        SeQuant/core/eval/backends/tiledarray/result_inst_z.cpp
+        SeQuant/core/eval/backends/tiledarray/result_inst_tot_d.cpp
+        SeQuant/core/eval/backends/tiledarray/result_inst_tot_z.cpp
+)
+set_source_files_properties(${SeQuant_eval_ta_inst_src}
+        PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set(SeQuant_eval_ta_src
         SeQuant/core/eval/backends/tiledarray/eval_expr.hpp
         SeQuant/core/eval/backends/tiledarray/result.hpp
         SeQuant/core/eval/backends/tiledarray/result.cpp
+        ${SeQuant_eval_ta_inst_src}
 )
 
 # BTAS backend sources (header-only)
 set(SeQuant_eval_btas_src
+        SeQuant/core/eval/backends/btas/array_ops.hpp
         SeQuant/core/eval/backends/btas/eval_expr.hpp
         SeQuant/core/eval/backends/btas/result.hpp
 )
@@ -626,6 +641,7 @@ set(SeQuant_eval_btas_src
 set(SeQuant_eval_tapp_src
         SeQuant/core/eval/backends/tapp/tensor.hpp
         SeQuant/core/eval/backends/tapp/ops.hpp
+        SeQuant/core/eval/backends/tapp/array_ops.hpp
         SeQuant/core/eval/backends/tapp/eval_expr.hpp
         SeQuant/core/eval/backends/tapp/result.hpp
 )

@@ -110,6 +110,12 @@ IndexGroups<Container> get_unique_indices([[maybe_unused]] const Power& power) {
   return {};
 }
 
+/// The indices of a TensorPower are those of its base
+template <typename Container = std::vector<Index>>
+IndexGroups<Container> get_unique_indices(const TensorPower& power) {
+  return get_unique_indices<Container>(power.base());
+}
+
 /// @returns Lists of non-contracted indices arising when contracting the two
 /// given tensors in the order bra, ket, auxiliary
 template <typename Container = container::svector<Index>>
@@ -262,6 +268,8 @@ IndexGroups<Container> get_unique_indices(const Expr& expr) {
     // scalar-valued Re/Im wrapper (the conjugate-pair fold emits these):
     // every inner index is internal to the closed contraction
     return {};
+  } else if (expr.is<TensorPower>()) {
+    return get_unique_indices<Container>(expr.as<TensorPower>());
   } else {
     throw Exception(
         "Encountered unsupported expression type in get_unique_indices");
@@ -819,62 +827,60 @@ decltype(auto) as_view_of_index_groups(
          });
 }
 
-///
-/// @brief Computes index counts for all subsets of a given range of index
-/// groups.
-///
-/// This function generates a vector where each element corresponds to a subset
-/// of the input range `rng`. The subsets are indexed by a bitmask, where the
-/// $i$-th bit being set means the $i$-th element of `rng` is included in the
-/// subset. For each subset, it counts the occurrences of each `Index`.
-///
-/// @param rng A range of ranges of `Index`. The outer range represents a
-/// collection of index groups (e.g., indices of multiple tensors).
-/// @return A vector of maps, where `result[mask]` contains a map of
-/// `Index` to its count in the subset defined by `mask`.
-///
-auto subset_index_counts(meta::range_of<Index, 2> auto const& rng,
-                         container::vector<char> const* needed = nullptr) {
-  size_t const N = ranges::distance(rng);
-  SEQUANT_ASSERT(N <= 24 &&
-                 "subset_index_counts: N > 24 would require excessive memory");
-  container::vector<container::map<Index, size_t, Index::FullLabelCompare>>
-      result((size_t{1} << N));
-  for (size_t i = 1; i < result.size(); ++i) {
-    // When a `needed` mask is supplied, only these subsets' counts are ever
-    // consulted (see subset_target_indices); skip the rest (result[i] stays
-    // empty). Callers pass the pruning-derived mask to avoid the full 2^N work.
-    if (needed && !(*needed)[i]) continue;
-    for (auto&& ixs : bits::on_bits_index(i) | bits::sieve(rng)) {
-      for (auto&& ix : ixs)
-        if (auto [it, inserted] = result[i].try_emplace(ix, 1); !inserted)  //
-          ++(it->second);
-    }
+/// Adds to @p atoms the index atoms carried by @p slots: the slot indices and
+/// their protoindices. A protoindex is an outer mode of the tensor-of-tensor
+/// its composite lives in, so it is live even where it is never a slot.
+template <typename Set>
+void carried_atoms(Set& atoms, meta::range_of<Index> auto&& slots) {
+  for (auto&& ix : slots) {
+    atoms.emplace(ix);
+    for (auto&& p : ix.proto_indices()) atoms.emplace(p);
   }
+}
+
+///
+/// @brief The index atoms a part of a tensor network keeps open.
+///
+/// An atom is open in a part iff the part carries it and either the rest of
+/// the network carries it or it is external.
+///
+/// @param part The atoms carried by the part (see carried_atoms).
+/// @param rest The atoms carried by the rest of the network.
+/// @param external The external indices of the whole network.
+/// @return The open atoms of the part.
+///
+template <typename Set>
+Set open_atoms(Set const& part, Set const& rest, auto const& external) {
+  auto is_external = [&external](auto const& k) {
+    if constexpr (requires { external.contains(k); })
+      return external.contains(k);
+    else
+      return ranges::contains(external, k);
+  };
+  Set result;
+  for (auto&& k : part)
+    if (rest.contains(k) || is_external(k)) result.emplace(k);
   return result;
 }
 
 ///
-/// @brief Determines the target indices for all subsets of a given range of
+/// @brief Determines the open indices for all subsets of a given range of
 /// index groups.
 ///
-/// This function computes the set of "target" indices for each subset of `rng`.
-/// An index is considered a target for a subset if it appears exactly once
-/// within that subset (making it an open index for that subset) or if it is
-/// present in the provided `tixs` (target indices) and also appears in the
-/// subset. Additionally, indices that appear in the subset and also appear in
-/// the complementary subset (implied by `counts.at(counts.size() - i -
-/// 1).contains(k)`) are included, which effectively identifies contracted
-/// indices that need to be preserved as open indices if they are matched in the
-/// complement. An index carried only as a protoindex of a composite contracted
-/// in the subset stays open if the complement also carries it (as a slot or a
-/// proto) or it is a target, unless an open composite of the subset carries it.
+/// `result[mask]` is the set of atoms (see carried_atoms) that the subset of
+/// `rng` selected by `mask` keeps open (see open_atoms). The external indices
+/// are `tixs` plus the slot indices that occur once in `rng`, which are
+/// external even if undeclared; an index carried only as a protoindex cannot be
+/// inferred that way and must be in `tixs` to stay open where nothing else
+/// carries it. A singleton subset keeps all of its slots.
 ///
-/// @param rng A range of ranges of `Index`. The outer range represents a
-/// collection of index groups.
+/// @param rng A range of ranges of `Index`: the slots of each tensor. The
+/// $i$-th bit of a mask being set means the $i$-th group is in the subset.
 /// @param tixs A range of `Index` representing the global target indices (e.g.,
 /// indices of the result tensor).
-/// @return A vector of sets, where `result[mask]` contains the set of target
+/// @param connected Optional pruning mask: when non-null, only `result[i]` with
+/// `(*connected)[i]` set are computed, the rest are left empty.
+/// @return A vector of sets, where `result[mask]` contains the set of open
 /// `Index` objects for the subset defined by `mask`.
 ///
 auto subset_target_indices(meta::range_of<Index, 2> auto const& rng,
@@ -886,44 +892,26 @@ auto subset_target_indices(meta::range_of<Index, 2> auto const& rng,
       N <= 24 &&
       "subset_target_indices: N > 24 would require excessive memory");
   size_t const S = size_t{1} << N;
-  container::vector<IndexSet> result(S);
 
-  // Outer-product pruning: the caller only reads result[i] for connected
-  // subsets i, but computing result[i] consults counts[i] AND counts of the
-  // COMPLEMENT (S-1-i) -- the complement of a connected subset is usually
-  // disconnected -- so the index-count work is needed for the wider set
-  // `needed[i] = connected[i] || connected[complement(i)]`.
-  container::vector<char> needed_storage;
-  container::vector<char> const* needed = nullptr;
-  if (connected) {
-    needed_storage.assign(S, 0);
-    for (size_t i = 0; i < S; ++i)
-      needed_storage[i] = (*connected)[i] || (*connected)[S - 1 - i];
-    needed = &needed_storage;
-  }
-
-  for (size_t i = 0; i < N; ++i)
-    for (auto&& ix : ranges::at(rng, i)) result[(size_t{1} << i)].emplace(ix);
-
-  auto counts = subset_index_counts(rng, needed);
-
-  for (auto&& [k, v] : *counts.rbegin())
-    if (v == 1 || ranges::contains(tixs, k)) result.rbegin()->emplace(k);
-
-  // carriers[p] = tensors holding protoindex p as a proto or as a slot
+  // carriers[k]: the tensors carrying atom k, as a bitmask
   container::map<Index, size_t, Index::FullLabelCompare> carriers;
-  for (size_t t = 0; t < N; ++t)
-    for (auto&& ix : ranges::at(rng, t))
-      for (auto&& p : ix.proto_indices()) carriers[p] |= size_t{1} << t;
-  for (size_t t = 0; t < N; ++t)
-    for (auto&& ix : ranges::at(rng, t))
-      if (auto it = carriers.find(ix); it != carriers.end())
-        it->second |= size_t{1} << t;
+  container::map<Index, size_t, Index::FullLabelCompare> slot_counts;
+  for (size_t t = 0; t < N; ++t) {
+    IndexSet atoms;
+    carried_atoms(atoms, ranges::at(rng, t));
+    for (auto&& k : atoms) carriers[k] |= size_t{1} << t;
+    for (auto&& ix : ranges::at(rng, t)) ++slot_counts[ix];
+  }
+  IndexSet external(ranges::begin(tixs), ranges::end(tixs));
+  for (auto&& [ix, n] : slot_counts)
+    if (n == 1) external.emplace(ix);
 
-  for (size_t i = 0; i < result.size(); ++i) {
+  container::vector<IndexSet> result(S);
+  for (size_t i = 1; i < S; ++i) {
     if (connected && !(*connected)[i]) continue;  // pruned: result[i] unused
-    for (auto&& [k, v] : counts[i])
-      if (v == 1 || (v > 0 && counts.at(counts.size() - i - 1).contains(k)))
+    // the open_atoms rule, with the carriers as bitmasks
+    for (auto&& [k, m] : carriers)
+      if ((m & i) && ((m & (S - 1 - i)) || external.contains(k)))
         result[i].emplace(k);
     for (auto&& [k, m] : carriers)
       if ((m & i) && !result[i].contains(k) &&
@@ -933,6 +921,8 @@ auto subset_target_indices(meta::range_of<Index, 2> auto const& rng,
           }))
         result[i].emplace(k);
   }
+  for (size_t t = 0; t < N; ++t)
+    for (auto&& ix : ranges::at(rng, t)) result[size_t{1} << t].emplace(ix);
 
   return result;
 }
@@ -963,22 +953,11 @@ struct LTRUncontractedIndices {
 /// @brief Calculates index sets for a left-to-right contraction sequence.
 ///
 /// This function simulates a left-to-right contraction of a sequence of
-/// tensors. It determines which indices in the input tensors are relevant
-/// (participate in contraction or are external) and computes the index sets of
-/// the intermediate results.
-///
-/// @note
-/// - The 'uncontract' indices are only necessary to mark those indices that
-/// appear in
-///   more than one set from 'rng'.
-/// - Indices that appear exactly once in the sets from 'rng' are always
-/// uncontracted (or external).
-///   The term 'uncontract' implies some indices tend to 'contract-out' because
-///   they repeat, but we force them to survive.
-/// - Passing non-repeating indices in 'uncontract' does not change the behavior
-/// of the algorithm.
-///   Neither will passing indices that do not appear in any of the sets from
-///   'rng'.
+/// tensors. A factor keeps the atoms that another factor carries or that are
+/// in `uncontract`, and the intermediate after the first (i+1) factors keeps
+/// the atoms that the remaining factors carry or that are in `uncontract`
+/// (see open_atoms). Unlike subset_target_indices, nothing is inferred to be
+/// external: the callers declare the result's indices.
 ///
 /// @tparam T The type of the index.
 /// @tparam Set The type of the set container.
@@ -991,44 +970,27 @@ struct LTRUncontractedIndices {
 template <typename T, typename Set = std::set<T>>
 auto left_to_right_binarization_indices(meta::range_of<Set> auto const& rng,
                                         Set const& uncontract) {
-  using ranges::views::filter;
-  using CountMap = std::map<T, size_t, typename Set::key_compare>;
   LTRUncontractedIndices<T, Set> result;
-
-  std::vector<CountMap> counts;
-  for (auto acc = CountMap{}; auto&& ixs : rng) {
-    for (auto&& ix : ixs) {
-      auto [it, inserted] = acc.emplace(ix, 1);
-      if (!inserted) ++(it->second);
-    }
-    counts.push_back(acc);
+  size_t const n = ranges::distance(rng);
+  // prefix[i]: atoms of the first i+1 factors; suffix[i]: atoms of the rest
+  std::vector<Set> prefix(n), suffix(n);
+  for (size_t i = 0; i < n; ++i) {
+    if (i > 0) prefix[i] = prefix[i - 1];
+    auto const& ixs = ranges::at(rng, i);
+    prefix[i].insert(ixs.begin(), ixs.end());
   }
-
-  auto const& max_count = counts.back();
-
-  auto survives_in_children = [&max_count,
-                               &uncontract](auto const& ix) -> bool {
-    return max_count.at(ix) > 1 || uncontract.contains(ix);
-  };
-
-  for (auto&& ixs : rng)
-    result.children.emplace_back(ixs                             //
-                                 | filter(survives_in_children)  //
-                                 | ranges::to<Set>);
-
-  auto survives_in_imed = [&max_count, &uncontract](auto&& kv) -> bool {
-    auto&& [k, v] = kv;
-    auto mk = max_count.at(k);
-    return v < mk || uncontract.contains(k);
-  };
-
-  for (auto&& ixcs : counts) {
-    result.imed.emplace_back(ixcs                        //
-                             | filter(survives_in_imed)  //
-                             | std::views::elements<0>   //
-                             | ranges::to<Set>);
+  for (size_t i = n; i-- > 1;) {
+    suffix[i - 1] = suffix[i];
+    auto const& ixs = ranges::at(rng, i);
+    suffix[i - 1].insert(ixs.begin(), ixs.end());
   }
-
+  for (size_t i = 0; i < n; ++i) {
+    Set others = suffix[i];
+    if (i > 0) others.insert(prefix[i - 1].begin(), prefix[i - 1].end());
+    result.children.emplace_back(
+        open_atoms(ranges::at(rng, i), others, uncontract));
+    result.imed.emplace_back(open_atoms(prefix[i], suffix[i], uncontract));
+  }
   return result;
 }
 

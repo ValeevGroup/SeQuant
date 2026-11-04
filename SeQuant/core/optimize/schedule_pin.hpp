@@ -41,16 +41,17 @@ ExprPtr canonical_term(ExprPtr const& term);
 /// also depends on the active Context's canonicalization settings.
 std::string term_key(ExprPtr const& canonical);
 
-/// factors of a canonical Product in order (a lone Tensor is one factor; a
-/// Constant is none)
+/// factors of a canonical Product in order (a lone Tensor or TensorPower is one
+/// factor; a Constant is none)
 std::vector<ExprPtr> canonical_factors(ExprPtr const& canonical);
 
 /// Records the optimizer's output \p optimized for \p canonical (a nested
-/// Product over the same factor objects, or the lone Tensor/Constant itself)
+/// Product over the same factor objects, or the lone factor/Constant itself)
 /// and its annotations \p nodes (one per tensor x tensor node, left-first
 /// post-order, as consumed by \c binarize).
 /// \throws sequant::Exception if \p canonical is a mixed product (has a
-///         non-Tensor factor), or if \p optimized / \p nodes do not match it
+///         factor that is not a Tensor or TensorPower), or if \p optimized / \p
+///         nodes do not match it
 eval::schedule::TermRecord record_term(
     ExprPtr const& canonical, ExprPtr const& optimized,
     container::vector<NodeBatchAnnotation> const& nodes);

@@ -38,6 +38,45 @@ Beyond ``TextGenerator``, SeQuant ships several backends targeting real numerica
   `TensorOperations.jl <https://github.com/Jutho/TensorOperations.jl>`_,
   `ITensors.jl <https://itensor.github.io/ITensors.jl>`_, and `TensorKit.jl <https://jutho.github.io/TensorKit.jl>`_ packages.
 
+Element-wise tensor powers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+An evaluation tree may contain the element-wise power of a tensor (a :class:`sequant::TensorPower`, e.g. an orbital-energy
+denominator raised to ``-1``). The text, Python (NumPy and PyTorch ``einsum``) and Julia TensorOperations backends export it,
+spelling the exponent as follows; the operand is permuted to the result's index order where the two differ, and a scalar
+prefactor, if any, is written in front of the power:
+
+.. code-block:: text
+
+   Compute R[i_1, a_1] += 2 D[a_1, i_1]^(-1)                                  (text)
+   R_ov += 2 * np.einsum('ai->ia', D_vo, optimize=True)**(-1)                 (Python)
+   R_ov .+= 2 * permutedims(D_vo, (2, 1)) .^ (-1)                             (Julia TensorOperations)
+
+Julia spells a rational exponent as, e.g., ``(1//2)``. :class:`sequant::ItfGenerator` ("ITF has no element-wise tensor power"),
+:class:`sequant::JuliaITensorGenerator` and :class:`sequant::JuliaTensorKitGenerator` ("<format> cannot express an element-wise
+tensor power") have no way to express it and throw a :class:`sequant::Exception` instead. A custom backend opts in by overriding
+:func:`sequant::Generator::represent` for :class:`sequant::TensorPower`; the default throws.
+
+Broadcast sums
+~~~~~~~~~~~~~~~~~
+
+The evaluation tree of a broadcast sum under a ``ResultExpr`` head (see :doc:`expressions`) contains
+:cpp:enumerator:`sequant::EvalOp::Broadcast` nodes, each adding one summand to the result over the head modes it lacks. The text,
+Python (NumPy and PyTorch ``einsum``) and Julia TensorOperations backends export them; e.g., for
+``D{i_1;a_1} = ε{;a_1} - ε{i_1;}``:
+
+.. code-block:: text
+
+   Compute D[i_1, a_1] += ε[a_1] (broadcast over i_1)                         (text)
+   D_ov += np.einsum('a->a', ε_v, optimize=True)[None, :]                     (Python)
+   D_ov .+= reshape(ε_v, (1, nv))                                             (Julia TensorOperations)
+
+Python inserts ``None`` and Julia a dimension of ``1`` at each mode the summand lacks, after permuting the summand's modes to their
+order in the result. A scalar summand is added as is (``D_ov += -1 * E``), relying on the target language's broadcasting.
+:class:`sequant::ItfGenerator`, :class:`sequant::JuliaITensorGenerator` and :class:`sequant::JuliaTensorKitGenerator` throw a
+:class:`sequant::Exception` ("<format> cannot broadcast a summand"). A custom backend opts in by overriding
+:func:`sequant::Generator::broadcast_add`; the default throws.
+
 Each backend has its own ``Context`` type (e.g. ``ItfContext``) for backend-specific settings such as naming conventions; consult its
 reference documentation for details. Numerically *evaluating* an expression directly in-process, rather than generating source code
 for it, is a separate concern handled by :code:`SeQuant/core/eval` (see :doc:`evaluation` for its trace/profiling tooling).

@@ -9,6 +9,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -313,6 +314,61 @@ class Result {
   }
 
   ///
+  /// \brief Raise every element of this result to the power \p exponent.
+  ///
+  /// Used to evaluate the EvalOp::Power IR node. Returns a fresh result of the
+  /// same layout as this one (the node's canon indices are its operand's); this
+  /// result is not modified. An integer exponent is exact (repeated
+  /// multiplication, and the reciprocal for a negative exponent); any other
+  /// goes through \c std::pow on the element type with the exponent converted
+  /// to \c double (for complex elements, \c std::pow(std::complex, double)).
+  /// A zero element raised to a negative power yields `inf` per IEEE; it is
+  /// neither checked nor asserted. Not a pure virtual: only tensor-backed
+  /// results need it; the default throws.
+  ///
+  [[nodiscard]] virtual ResultPtr pow(rational const& /*exponent*/) const {
+    throw detail::unimplemented_method("pow");
+  }
+
+  ///
+  /// \brief Expand this result over the modes it lacks.
+  ///
+  /// Used to evaluate the EvalOp::Broadcast IR node. Returns a fresh result
+  /// over the modes of \p ann[1] that is constant along every mode absent
+  /// from \p ann[0] and equals this result along the others. \p ann is
+  /// [operand_annot, result_annot]; the result's modes are a superset of this
+  /// result's. \p new_mode_ranges holds one rank-1 result per mode of the
+  /// result that this result lacks (none if it lacks none), in the result's
+  /// mode order, built by BackendArrayOps::make_zeros (and restricted to the
+  /// current batch when a batch loop runs over that mode): the result's range
+  /// along that mode is that result's range. A mode this result carries keeps
+  /// this result's range. Not a pure virtual: only tensor-backed results need
+  /// it; the default throws. A ResultScalar forwards to broadcast_scalar() of
+  /// \p new_mode_ranges' first element.
+  ///
+  [[nodiscard]] virtual ResultPtr broadcast(
+      std::array<std::any, 2> const& /*ann*/,
+      container::svector<ResultPtr> const& /*new_mode_ranges*/) const {
+    throw detail::unimplemented_method("broadcast");
+  }
+
+  ///
+  /// \brief Expand the scalar \p scalar over every mode of \p ann[1].
+  ///
+  /// The broadcast() of a scalar operand (a ResultScalar), dispatched to the
+  /// backend's tensor type through the first of \p new_mode_ranges, which
+  /// hold one rank-1 result per mode of the result (see broadcast()). Returns
+  /// a fresh result every element of which is \p scalar's value; this result
+  /// is not modified. Not a pure virtual: only tensor-backed results need it;
+  /// the default throws.
+  ///
+  [[nodiscard]] virtual ResultPtr broadcast_scalar(
+      Result const& /*scalar*/, std::array<std::any, 2> const& /*ann*/,
+      container::svector<ResultPtr> const& /*new_mode_ranges*/) const {
+    throw detail::unimplemented_method("broadcast_scalar");
+  }
+
+  ///
   /// \brief Restrict this result to a contiguous *element* range of one mode.
   ///
   /// Keeps elements `[elem_lo, elem_hi)` of mode \p mode and all elements of
@@ -451,23 +507,24 @@ class Result {
     return *std::any_cast<const T>(&value_);
   }
 
-  /// @return whether this result is a pending view of another result's
-  ///         storage -- a batch slice, a relabeling, a conjugation, a scaling
-  ///         by a constant (a prefactor, a phase), a half-sign recorded
-  ///         instead of performed -- and so holds no tiles of its own:
-  ///         producing one allocates nothing, so a tracer charges it 0
-  ///         allocated bytes (size_in_bytes() reports the value's logical
-  ///         size) and must not count its buffer twice in a working set. A
-  ///         backend consumer that can take the transformation into its own
-  ///         expression does so instead of asking for the value; get<T>()
-  ///         applies the view (once) on first read.
+  /// \return true while this result stands for a transformation of another
+  ///         result's storage that has not been applied -- a batch slice, a
+  ///         mode permutation, a conjugation, a scaling by a constant -- and
+  ///         so shares that storage instead of holding its own: it costs no
+  ///         allocation, and a backend consumer that can take the
+  ///         transformation into its own expression does so instead of
+  ///         asking for the value. get<T>() applies it (once) on demand.
+  ///         Default: false (a value held).
   [[nodiscard]] virtual bool is_buffer_alias() const noexcept { return false; }
 
-  /// @return the size of the object in bytes. For a pending view (see
-  ///         is_buffer_alias()) this is the _logical_ size of the value it
-  ///         stands for, not a buffer of its own. Within SeQuant it feeds
-  ///         diagnostics (the eval trace, the peak monitor, the residency
-  ///         counts), not evaluation.
+  /// @return the bytes of storage this result keeps alive that no other
+  ///         result accounts for: for a result that holds its own value, the
+  ///         value's size. Storage shared between results (see
+  ///         is_buffer_alias()) is meant to be reported by exactly one of
+  ///         them; a backend that cannot tell which may approximate this, so
+  ///         a sum over results is exact only where results never share
+  ///         storage. Within SeQuant it feeds diagnostics (the eval trace,
+  ///         the peak monitor, the residency counts), not evaluation.
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
 
   /// @return the size of the object in bytes, measured even where
@@ -593,6 +650,14 @@ class ResultScalar final : public Result {
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const&) const override {
     throw detail::unimplemented_method("permute");
+  }
+
+  [[nodiscard]] ResultPtr broadcast(
+      std::array<std::any, 2> const& ann,
+      container::svector<ResultPtr> const& new_mode_ranges) const override {
+    SEQUANT_ASSERT(!new_mode_ranges.empty());
+    return new_mode_ranges.front()->broadcast_scalar(*this, ann,
+                                                     new_mode_ranges);
   }
 
   void add_inplace(Result const& other) override {

@@ -66,6 +66,10 @@ std::size_t VertexPainter::to_hash_value(const AbstractTensor &tensor) const {
   if (ct &&
       ct->conjugation_symmetry() != ct->even_parity_conjugation_symmetry())
     hash::combine(result, hash::value(ct->conjugation_symmetry()));
+  // a zero salt is not mixed in, so that undecorated tensors keep their shade
+  // (bliss orders vertices by color value)
+  if (const auto salt = tensor._color_salt(); salt != 0)
+    hash::combine(result, salt);
   return result;
 }
 

@@ -23,8 +23,20 @@ template <meta::eval_node Node>
 ExprPtr linearize_eval_node(Node const& node) {
   if (node.leaf()) return to_expr(node);
 
-  ExprPtr lres = linearize_eval_node(node.left());
-  ExprPtr rres = linearize_eval_node(node.right());
+  // A unary node (Adjoint, Power, Broadcast) round-trips through to_expr,
+  // which rebuilds its symbolic form (the marker-bearing tensor, the
+  // TensorPower) and ignores the sentinel right child. The Re/Im and
+  // KramersFlip wrappers are spelled from their linearized operand below.
+  if (auto const op = *node->op_type();
+      op == EvalOp::Adjoint || op == EvalOp::Power || op == EvalOp::Broadcast)
+    return to_expr(node);
+
+  // an inlined equation below node is a terminal, as in to_expr
+  auto const child = [](Node const& c) {
+    return c->is_equation_boundary() ? c->expr() : linearize_eval_node(c);
+  };
+  ExprPtr lres = child(node.left());
+  ExprPtr rres = child(node.right());
 
   SEQUANT_ASSERT(lres);
   SEQUANT_ASSERT(rres);
@@ -172,6 +184,16 @@ struct Memory {
                     : AsyCost::zero();
     };
 
+    // A unary node (Adjoint, Power) has a Constant sentinel right child (zero
+    // cost). But the backend materializes the permuted/conjugated or
+    // element-wise power result into a fresh array, so the operand (left) and
+    // the result (node) are both live at peak — two tensors' worth, not one.
+    if (!n.leaf() && is_unary(*n->op_type())) {
+      add_cost(n.left()->expr());
+      add_cost(n->expr());
+      return result;
+    }
+
     add_cost(n.left()->expr());
     add_cost(n.right()->expr());
     add_cost(n->expr());
@@ -189,9 +211,12 @@ struct Memory {
 struct FlopsWithSymm {
   [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
     auto cost = Flops{}(n);
-    if (n.leaf() || !(n->is_tensor()            //
-                      && n.left()->is_tensor()  //
-                      && n.right()->is_tensor()))
+    // A unary node (Adjoint, Power; right is a Constant sentinel) does no
+    // symmetry-driven reduction — return Flops's element-wise cost as-is.
+    if (n.leaf() || is_unary(*n->op_type()) ||
+        !(n->is_tensor()            //
+          && n.left()->is_tensor()  //
+          && n.right()->is_tensor()))
       return cost;
 
     // confirmed:

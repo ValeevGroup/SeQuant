@@ -73,16 +73,15 @@ struct TAEvalContext {
   /// \tparam PolicyT   The TA policy of the operand arrays (SparsePolicy for a
   ///                   shape to be meaningful).
   /// \tparam InnerTileT  The inner tile type of a nested (ToT) operand;
-  /// defaults
-  ///                   to the plain \c TA::Tensor<NumericT>. The CSV/PNO path
-  ///                   produces arena-pinned ToT operands
-  ///                   (\c TA::ArenaTensor<NumericT>), a distinct Result kind;
-  ///                   instantiate with that inner tile so the hook recognizes
-  ///                   (and shapes) CSV intermediates instead of declining
-  ///                   them.
+  ///                   defaults to the arena-pinned
+  ///                   \c TA::ArenaTensor<NumericT> of a CSV/PNO array. A
+  ///                   nested Result over another inner tile is a distinct
+  ///                   Result kind; instantiate with that inner tile so the
+  ///                   hook recognizes (and shapes) such operands instead of
+  ///                   declining them.
   /// \param ctx  The TAEvalContext whose result_shape_provider is captured.
   template <typename NumericT, typename PolicyT,
-            typename InnerTileT = TA::Tensor<NumericT>>
+            typename InnerTileT = TA::ArenaTensor<NumericT>>
   static CacheManager<FullBinaryNode<EvalExprTA>>::shaped_product_hook_type
   make_hook(TAEvalContext const& ctx) {
     // Capture the provider BY VALUE so the hook owns its copy and does not

@@ -171,21 +171,21 @@ void store_term_axes(OptimizeOptions const& opts, Expr const* optimized,
                   ": only tensor products can be pinned");
 }
 
-/// A term (Product, Tensor or Constant) under schedule pinning or recording
-/// (opts.pinned or opts.recording set): works on canonical_term(term), keyed by
-/// term_key. Pinned: the term is rebuilt from its record (the DP never runs);
-/// a miss leaves the canonical term unoptimized and is reported by
-/// PinSession::finish. Otherwise the DP runs on the canonical term, so the
-/// recorded labels are the output's labels. Recording adds record_term of the
-/// result.
+/// A term (Product, Tensor, TensorPower or Constant) under schedule pinning or
+/// recording (opts.pinned or opts.recording set): works on
+/// canonical_term(term), keyed by term_key. Pinned: the term is rebuilt from
+/// its record (the DP never runs); a miss leaves the canonical term unoptimized
+/// and is reported by PinSession::finish. Otherwise the DP runs on the
+/// canonical term, so the recorded labels are the output's labels. Recording
+/// adds record_term of the result.
 ExprPtr opt_scheduled_term(ExprPtr const& term, OptimizeOptions const& opts) {
   auto canon = opt::schedule::canonical_term(term);
   auto key = opt::schedule::term_key(canon);
-  bool pure = canon->is<Tensor>() || canon->is<Constant>();
+  bool pure = opt::is_tensor_factor(*canon) || canon->is<Constant>();
   if (canon->is<Product>()) {
     pure = true;
     for (auto const& f : canon->as<Product>().factors())
-      pure = pure && f->is<Tensor>();
+      pure = pure && opt::is_tensor_factor(*f);
   }
   if (!pure) {
     // not a tensor product (a Variable here; a mixed Product never reaches
@@ -223,7 +223,8 @@ ExprPtr opt_scheduled_term(ExprPtr const& term, OptimizeOptions const& opts) {
   return result;
 }
 
-/// Optimize a Product that contains only Tensor and scalar factors.
+/// Optimize a Product that contains only tensor (opt::is_tensor_factor) and
+/// scalar factors.
 ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   if (opts.pinned || opts.recording)
     return opt_scheduled_term(ex<Product>(prod), opts);
@@ -241,7 +242,7 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   return result;
 }
 
-/// Deliberately non-identifier label prefix used to stand in for non-Tensor,
+/// Deliberately non-identifier label prefix used to stand in for non-tensor,
 /// non-scalar factors during single-term optimization. Chosen so that no
 /// user-defined tensor label can collide with it.
 inline constexpr std::wstring_view placeholder_label_prefix = L"@__opt_";
@@ -299,6 +300,10 @@ std::size_t binarize_dp_node_count(ExprPtr const& e) {
 ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
                       bool reorder, bool parallel_outer);
 
+/// Optimize a Product that contains some non-tensor (opt::is_tensor_factor),
+/// non-scalar factors by substituting placeholder tensors with target indices,
+/// optimizing the resulting tensor-only product, then swapping the originals
+/// back in.
 ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
   // a pin cannot rebuild a mixed product; a recording lists it as not
   // pinnable and optimizes it as usual, with the placeholder product below
@@ -314,7 +319,7 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
 
   for (std::size_t i = 0; i < prod.size(); ++i) {
     auto&& f = prod.factor(i);
-    if (f->is<Tensor>() || f->is_scalar()) {
+    if (opt::is_tensor_factor(*f) || f->is_scalar()) {
       new_factors.emplace_back(f);
     } else {
       // A non-tensor factor (a Sum of products, e.g. the flavor bracket a
@@ -520,7 +525,7 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
                     : Product{};
     auto const& prod = has_wrapper ? prod_rewrapped : prod_in;
     bool pure = ranges::all_of(prod, [](auto&& x) {
-      return x->template is<Tensor>() || x->is_scalar();
+      return opt::is_tensor_factor(*x) || x->is_scalar();
     });
     auto result =
         pure ? opt_pure_product(prod, opts) : opt_mixed_product(prod, opts);
@@ -734,6 +739,10 @@ ResultExpr& optimize(ResultExpr& expr, bool reorder_sum) {
 
 ResultExpr& optimize(ResultExpr&& expr, bool reorder_sum) {
   return optimize(std::move(expr), compatibility_opts(reorder_sum));
+}
+
+bool opt::is_tensor_factor(Expr const& e) {
+  return e.is<Tensor>() || e.is<TensorPower>();
 }
 
 }  // namespace sequant

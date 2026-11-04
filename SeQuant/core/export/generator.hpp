@@ -7,6 +7,7 @@
 #include <SeQuant/core/expressions/power.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <sstream>
@@ -91,6 +92,17 @@ class Generator {
   virtual std::string represent(const Power &power,
                                 const Context &ctx) const = 0;
 
+  /// @returns A backend-specific string representation of the given
+  /// element-wise tensor power
+  /// @throw Exception unless overridden by a generator that supports it
+  virtual std::string represent(const TensorPower &power,
+                                const Context &ctx) const {
+    (void)power;
+    (void)ctx;
+    throw Exception(get_format_name() +
+                    " cannot represent an element-wise tensor power");
+  }
+
   /// Semantic callback for creating the given tensor. This is expected to make
   /// the created tensor available for further use.
   virtual void create(const Tensor &tensor, bool zero_init,
@@ -147,6 +159,21 @@ class Generator {
   /// The result is expected to be written into the provided Variable.
   virtual void compute(const Expr &expression, const Variable &result,
                        const Context &ctx) = 0;
+
+  /// Semantic callback for encoding the broadcast of @p operand over the modes
+  /// of @p result that it lacks, added to @p result.
+  /// @param operand a Tensor, or a scalar (Variable, Constant, Power),
+  ///        possibly times scalar factors; its modes are a subset of
+  ///        those of @p result, in any order
+  /// @param result the tensor to accumulate into
+  /// @throw Exception unless overridden by a generator that supports it
+  virtual void broadcast_add(const Expr &operand, const Tensor &result,
+                             const Context &ctx) {
+    (void)operand;
+    (void)result;
+    (void)ctx;
+    throw Exception(get_format_name() + " cannot broadcast a summand");
+  }
 
   /// Semantic callback for declaring the provided Index.
   virtual void declare(const Index &idx, const Context &ctx) = 0;

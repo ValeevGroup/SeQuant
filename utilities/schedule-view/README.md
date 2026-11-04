@@ -47,7 +47,7 @@ lists further knobs.)
   partial of a reduction over loop `i`, the same shape as the whole. A value's
   `expr` is its short name (`R12#3`: root label, node ordinal) in the form it
   is produced in, then what makes it: a leaf's tensor label (`R0#2 = C`) or
-  its two operands, each a leaf's tensor label or an intermediate's short name
+  its operands (an adjoint's one operand followed by `⁺`), each a leaf's tensor label or an intermediate's short name
   in the form the value reads it inside its own loops, sliced or partial
   there, bare when it reads the assembled whole
   (`R38#11[ΣΚ_1] = R13#10[Κ_1] * R13#11[Κ_1]`). The

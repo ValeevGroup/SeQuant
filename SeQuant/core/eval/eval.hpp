@@ -74,8 +74,9 @@ template <typename T, typename... Ts>
                     static_cast<bool>(a);
                     a->size_in_bytes();
                   }) {
-      // Smart-pointer-like operand: a null one counts as empty, so a caller
-      // can pass an unset ResultPtr without a guard of its own
+      // Smart-pointer-like operand: tolerate null so callers (e.g. a unary
+      // op's dispatcher, which leaves `right` unevaluated) can
+      // pass an empty ResultPtr without an external guard.
       return a ? a->size_in_bytes() : size_t{0};
     } else if constexpr (requires { a->size_in_bytes(); })
       return a->size_in_bytes();
@@ -164,6 +165,8 @@ enum struct EvalMode {
   KramersFlip,
   Symmetrize,
   Antisymmetrize,
+  ElementwisePower,
+  Broadcast,
   Unknown
 };
 
@@ -177,6 +180,9 @@ enum struct EvalMode {
   } else {
     return node->is_product()                       ? EvalMode::Product
            : node->is_sum()                         ? EvalMode::Sum
+           : node->op_type() == EvalOp::Adjoint     ? EvalMode::Permute
+           : node->op_type() == EvalOp::Power       ? EvalMode::ElementwisePower
+           : node->op_type() == EvalOp::Broadcast   ? EvalMode::Broadcast
            : node->op_type() == EvalOp::RealPart    ? EvalMode::RealPart
            : node->op_type() == EvalOp::ImagPart    ? EvalMode::ImagPart
            : node->op_type() == EvalOp::KramersFlip ? EvalMode::KramersFlip
@@ -185,21 +191,23 @@ enum struct EvalMode {
 }
 
 [[nodiscard]] constexpr auto to_string(EvalMode mode) noexcept {
-  return (mode == EvalMode::Constant)         ? "Constant"
-         : (mode == EvalMode::Variable)       ? "Variable"
-         : (mode == EvalMode::Power)          ? "Power"
-         : (mode == EvalMode::Tensor)         ? "Tensor"
-         : (mode == EvalMode::Permute)        ? "Permute"
-         : (mode == EvalMode::Product)        ? "Product"
-         : (mode == EvalMode::MultByPhase)    ? "MultByPhase"
-         : (mode == EvalMode::Sum)            ? "Sum"
-         : (mode == EvalMode::SumInplace)     ? "SumInplace"
-         : (mode == EvalMode::RealPart)       ? "RealPart"
-         : (mode == EvalMode::ImagPart)       ? "ImagPart"
-         : (mode == EvalMode::KramersFlip)    ? "KramersFlip"
-         : (mode == EvalMode::Symmetrize)     ? "Symmetrize"
-         : (mode == EvalMode::Antisymmetrize) ? "Antisymmetrize"
-                                              : "??";
+  return (mode == EvalMode::Constant)           ? "Constant"
+         : (mode == EvalMode::Variable)         ? "Variable"
+         : (mode == EvalMode::Power)            ? "Power"
+         : (mode == EvalMode::Tensor)           ? "Tensor"
+         : (mode == EvalMode::Permute)          ? "Permute"
+         : (mode == EvalMode::Product)          ? "Product"
+         : (mode == EvalMode::MultByPhase)      ? "MultByPhase"
+         : (mode == EvalMode::Sum)              ? "Sum"
+         : (mode == EvalMode::SumInplace)       ? "SumInplace"
+         : (mode == EvalMode::RealPart)         ? "RealPart"
+         : (mode == EvalMode::ImagPart)         ? "ImagPart"
+         : (mode == EvalMode::KramersFlip)      ? "KramersFlip"
+         : (mode == EvalMode::Symmetrize)       ? "Symmetrize"
+         : (mode == EvalMode::Antisymmetrize)   ? "Antisymmetrize"
+         : (mode == EvalMode::ElementwisePower) ? "ElementwisePower"
+         : (mode == EvalMode::Broadcast)        ? "Broadcast"
+                                                : "??";
 }
 
 enum struct CacheMode { Store, Access, Release };
@@ -615,20 +623,39 @@ template <typename Node>
 // apply_canon_transform, try_custom_eval, note_fresh_build) rather than this
 // stack machine.
 
+namespace detail {
+/// \return the element range of the enclosing batch loop of \p bctx over
+///         \p ix, the mode a batch loop slices wherever a node carries it;
+///         nullopt if no enclosing loop is over \p ix
+[[nodiscard]] inline std::optional<std::pair<std::size_t, std::size_t>>
+batch_range_of(container::svector<BatchContextEntry> const& bctx,
+               Index const& ix) {
+  for (auto const& e : bctx)
+    if (e.axis == ix) return e.range;
+  return std::nullopt;
+}
+}  // namespace detail
+
 /// \brief The single-op compute kernel.
 ///
 /// \details The raw op applied to already-evaluated operand results, dispatched
 /// by \p node's op type, with the contraction annotation computed from \p node.
 /// Value-in, value-out: it takes the operands' \c Result buffers and returns
 /// the op's raw result, touching no cache and no value identity. It is exactly
-/// the innermost `left->adjoint/sum/prod(...)` compute that both the
-/// tree-walking
-/// \c evaluate_impl and the value/occurrence-driven ordered executor perform,
-/// so both reach the op through this one function. Not handled here (all
-/// caller-side): a leaf (a \c leaf_evaluator fetch, not an op), the
-/// shaped-product hook (the caller calls this only when the hook declines), \c
-/// apply_phase + store, the in-place-Sum fast path, and all tally / trace /
-/// timing / \c last_op_flops sentinel.
+/// the innermost `left->adjoint/pow/broadcast/sum/prod(...)` compute that both
+/// the tree-walking \c evaluate_impl and the value/occurrence-driven ordered
+/// executor perform, so both reach the op through this one function. Not
+/// handled here (all caller-side): a leaf (a \c leaf_evaluator fetch, not an
+/// op), the shaped-product hook (the caller calls this only when the hook
+/// declines), \c apply_phase + store, the in-place-Sum fast path, and all tally
+/// / trace / timing / \c last_op_flops sentinel.
+///
+/// \param aops the backend array-ops, which shape the modes an
+///        EvalOp::Broadcast node adds to its operand
+/// \param bctx the enclosing batch loops: a mode a Broadcast node adds is
+///        restricted to the current batch of the loop over it
+/// \throw Exception if \p node is an EvalOp::Broadcast node and \p aops is
+///        null
 /// \brief Whether \p node is a unary IR op (EvalOp::RealPart / ImagPart /
 ///        KramersFlip): only its left operand is evaluated; the right child
 ///        is the Constant(1) sentinel kept to preserve FullBinaryNode's
@@ -638,17 +665,15 @@ template <meta::can_evaluate Node>
   return node->is_unary_op();
 }
 
-/// \param aops the backend array ops installed on the cache (may be null):
-///        an EvalOp::KramersFlip node is realized through
-///        \c BackendArrayOps::kramers_flip, the backend's ("user's") own
-///        operation on its arrays
 template <meta::can_evaluate Node>
-[[nodiscard]] ResultPtr apply_one_op(Node const& node, ResultPtr const& left,
-                                     ResultPtr const& right,
-                                     BackendArrayOps const* aops = nullptr) {
-  if (unary_op(node)) {
+[[nodiscard]] ResultPtr apply_one_op(
+    Node const& node, ResultPtr const& left, ResultPtr const& right,
+    BackendArrayOps const* aops,
+    container::svector<BatchContextEntry> const& bctx) {
+  if (node->is_unary_op()) {
     // Unary Re/Im/KramersFlip over the left operand; the right child is the
-    // Constant{1} sentinel that keeps FullBinaryNode's two-children invariant.
+    // Constant{1} sentinel that keeps FullBinaryNode's two-children invariant
+    // (never evaluated: a unary node's right is null here).
     switch (*node->op_type()) {
       case EvalOp::RealPart:
         return left->real_part();
@@ -665,6 +690,35 @@ template <meta::can_evaluate Node>
         SEQUANT_ABORT("apply_one_op: unhandled unary op");
     }
   }
+  if (node->op_type() == EvalOp::Broadcast) {
+    if (!aops)
+      throw Exception(
+          "evaluate: a Broadcast node needs BackendArrayOps "
+          "(CacheManager::set_array_ops) to shape its result");
+    // one rank-1 range per mode the operand lacks, in the node's mode order
+    auto const& operand_indices = node.left()->canon_indices();
+    container::svector<ResultPtr> new_mode_ranges;
+    for (Index const& ix : node->canon_indices()) {
+      if (std::ranges::find(operand_indices, ix) != operand_indices.end())
+        continue;
+      ResultPtr range = aops->make_zeros({ix});
+      if (auto const blk = detail::batch_range_of(bctx, ix))
+        range = range->slice_mode(0, blk->first, blk->second);
+      new_mode_ranges.push_back(std::move(range));
+    }
+    std::array<std::any, 2> const ann{node.left()->annot(), node->annot()};
+    return left->broadcast(ann, new_mode_ranges);
+  }
+  if (node->op_type() == EvalOp::Adjoint) {
+    // Unary: only the left operand; the right child is the Constant(1)
+    // sentinel.
+    // the adjoint is the conjugating bra-ket swap of the leaf transform model
+    std::array<std::any, 2> const adj_ann{node.left()->annot(), node->annot()};
+    return left->apply_transform(
+        CanonTransform{.conj = true, .braket_swap = true}, adj_ann);
+  }
+  // Unary as well: element-wise, in the operand's layout.
+  if (node->op_type() == EvalOp::Power) return left->pow(power_exponent(node));
   std::array<std::any, 3> const ann{node.left()->annot(), node.right()->annot(),
                                     node->annot()};
   if (node->op_type() == EvalOp::Sum) return left->sum(*right, ann);
@@ -735,6 +789,12 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
   auto const tr = nd->canon_transform();
   if (tr.trivial()) return res;
 
+  // The cache total is taken before the phase view exists: an entry that is
+  // itself a view memoizes its bytes on its first measurement, and reports
+  // none while another view shares its parent.
+  [[maybe_unused]] size_t cache_bytes = 0;
+  if constexpr (detail::trace(EvalTrace)) cache_bytes = log::bytes(cache).value;
+
   ResultPtr post;
   auto const _ph0 = std::chrono::steady_clock::now();
   auto time = detail::timed_eval_inplace([&]() {
@@ -745,15 +805,11 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
   eval::EvalImplTimeline::note_phase(_ph0);
 
   if constexpr (detail::trace(EvalTrace)) {
-    // An alias allocated nothing and shares the source's buffer: charge it
-    // 0 allocated bytes and count that one buffer once (mem_result stays the
-    // value's logical size). NB this covers the cache store path's round
-    // trip, where the node's transform is applied twice -- once into the
-    // canonical orientation to store, once back out -- and the second
-    // application composes to the identity: still an alias, still no copy.
+    // an alias allocated nothing and shares the source's buffer: charge it 0
+    // allocated bytes (mem_result stays the value's logical size)
     bool const lazy = post->is_buffer_alias();
-    size_t hwmark = log::bytes(cache, post).value;
-    if (!cache.alive(nd) && !lazy) hwmark += log::bytes(res).value;
+    size_t hwmark = cache_bytes + log::bytes(post).value;
+    if (!cache.alive(nd)) hwmark += log::bytes(res).value;
     hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
     auto stat = log::EvalStat{
         .mode = log::EvalMode::MultByPhase,
@@ -790,26 +846,70 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
 /// neither is the build event (\c note_fresh_build), which fires after the
 /// caller has decided what to do with the result.
 ///
+/// \param broadcast_ctx the batch context a Broadcast node's added modes are
+///        sliced by (see apply_one_op); null for \p cache's
 /// \return the op's raw result, in the node's own oriented layout.
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
           bool FHC>
-[[nodiscard]] ResultPtr apply_one_op_traced(Node const& node,
-                                            ResultPtr const& left,
-                                            ResultPtr const& right,
-                                            CacheManager<N, FHC>& cache) {
+[[nodiscard]] ResultPtr apply_one_op_traced(
+    Node const& node, ResultPtr const& left, ResultPtr const& right,
+    CacheManager<N, FHC>& cache,
+    container::svector<BatchContextEntry> const* broadcast_ctx = nullptr) {
   // The contraction annotation triple the shaped-product hook receives. A
-  // unary (Re/Im) node never reaches the hook, and its right child is the
-  // Constant{1} sentinel, so the triple is only built for a binary op.
+  // unary (Adjoint, Power) node never reaches the hook, and its right child is
+  // a Constant sentinel, so the triple is only built for a binary op.
   std::array<std::any, 3> const ann =
-      unary_op(node)
+      is_unary(*node->op_type())
           ? std::array<std::any, 3>{}
           : std::array<std::any, 3>{node.left()->annot(), node.right()->annot(),
                                     node->annot()};
   ResultPtr result;
   log::Duration time{};
+  // Record a build against node's identity (keyed by the exact cache
+  // identity: hash-bin + Bliss, so 64-bit hash collisions are not folded) in
+  // the (root) cache's recompute tally, if the op just costed itself: the
+  // DryRun backend stashes a product's or element-wise power's realized cost
+  // in last_op_flops. Deduped at the (value, slice) granularity using actual
+  // replay FLOPs: a value built over distinct slices is tiling (not
+  // recompute); the same value rebuilt at the same slice -- including a node
+  // invariant to an enclosing loop, rebuilt every block -- is recompute. The
+  // slice signature is the live batch context projected onto the modes node
+  // carries (find_leaf_carrying), so an invariant's projection is identical
+  // (empty for that loop) every block and its rebuilds fold. A no-op unless
+  // the dry-run replay enabled the tally on the root cache (the wet TA path
+  // leaves it disabled), so nothing is tallied off the costing path.
+  //
+  // The caller sets last_op_flops to the -1 sentinel before the op, so the
+  // tally fires only when the op actually computed fresh flops for this node:
+  // an op that costs nothing (a sum, an adjoint, DryRunOps::prod's
+  // scalar*tensor early return, any op of the wet TA backend) leaves it unset,
+  // and a stale value from a previous op must not be attributed here (it would
+  // fold garbage into the identity-keyed tally).
+  auto const run_and_tally = [&]() {
+    eval::detail::last_op_flops() = -1.0;
+    time = detail::timed_eval_inplace([&]() {
+      result =
+          apply_one_op(node, left, right, cache.array_ops(),
+                       broadcast_ctx ? *broadcast_ctx : cache.batch_context());
+    });
+    if (eval::detail::last_op_flops() >= 0.0) {
+      std::string slice_sig;
+      for (auto const& entry : cache.batch_context()) {
+        Index const& ix = entry.axis;
+        auto const& blk = entry.range;
+        if (find_leaf_carrying(node, ix).has_value()) {
+          slice_sig += toUtf8(ix.full_label());
+          slice_sig += ':';
+          slice_sig += std::to_string(blk.first);
+          slice_sig += ';';
+        }
+      }
+      cache.tally_build(node, slice_sig, eval::detail::last_op_flops(),
+                        eval::detail::last_op_exec());
+    }
+  };
   if (node->op_type() != EvalOp::Product) {
-    time = detail::timed_eval_inplace(
-        [&]() { result = apply_one_op(node, left, right, cache.array_ops()); });
+    run_and_tally();
   } else {
     // Consult the shaped-product hook (if set) before evaluating the
     // product. The hook receives the node (wrapped in a std::any as a
@@ -824,48 +924,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
         result = hook(std::any{std::cref(node)}, *left, *right, ann);
       });
     }
-    if (!result) {
-      // Sentinel so the recompute tally below fires only when a DryRun
-      // prod actually computed fresh flops for this node. DryRunOps::prod
-      // early-returns without setting last_op_flops for a scalar*tensor
-      // product (and it is never set at all by the wet TA backend); a
-      // stale value from a previous op must not be attributed here (it
-      // would fold garbage into the identity-keyed tally). prod sets
-      // last_op_flops >= 0 only on the real contraction path.
-      eval::detail::last_op_flops() = -1.0;
-      time = detail::timed_eval_inplace([&]() {
-        result = apply_one_op(node, left, right, cache.array_ops());
-      });
-      // Record this product build against node's identity (keyed by the
-      // exact cache identity: hash-bin + Bliss, so 64-bit hash collisions
-      // are not folded) in the (root) cache's recompute tally. Deduped at
-      // the (value, slice) granularity using actual replay FLOPs (DryRun
-      // prod just stashed this build's realized cost in last_op_flops): a
-      // value built over distinct slices is tiling (not recompute); the
-      // same value rebuilt at the same slice -- including a node
-      // invariant to an enclosing loop, rebuilt every block -- is
-      // recompute. The slice signature is the live batch context
-      // projected onto the modes node carries (find_leaf_carrying), so
-      // an invariant's projection is identical (empty for that loop)
-      // every block and its rebuilds fold. A no-op unless the dry-run
-      // replay enabled the tally on the root cache (the wet TA path
-      // leaves it disabled), so nothing is tallied off the costing path.
-      if (eval::detail::last_op_flops() >= 0.0) {
-        std::string slice_sig;
-        for (auto const& entry : cache.batch_context()) {
-          Index const& ix = entry.axis;
-          auto const& blk = entry.range;
-          if (find_leaf_carrying(node, ix).has_value()) {
-            slice_sig += toUtf8(ix.full_label());
-            slice_sig += ':';
-            slice_sig += std::to_string(blk.first);
-            slice_sig += ';';
-          }
-        }
-        cache.tally_build(node, slice_sig, eval::detail::last_op_flops(),
-                          eval::detail::last_op_exec());
-      }
-    }
+    if (!result) run_and_tally();
     // node-eval done: fence + accumulate the contraction's full cost.
     eval::EvalImplTimeline::note_prod(_tp0);
   }
@@ -1237,7 +1296,7 @@ ResultPtr evaluate_impl(Node const& node,         //
   // marks a Checked node that exists in the cache map but has not been stored
   // yet, so its computed result must be cached (this replaces the recursive
   // wrapper's `evaluate<..., Unchecked>` re-entry).
-  enum class Stage { Enter, NeedLeft, NeedRight };
+  enum class Stage { Enter, NeedLeft, NeedRight, NeedLeftUnary };
   struct Frame {
     // Non-owning pointer into the tree being evaluated (which outlives this
     // call): a Node member would deep-copy the whole subtree into every frame
@@ -1365,8 +1424,22 @@ ResultPtr evaluate_impl(Node const& node,         //
 
         // --- Internal node: request the left operand (always Checked). The
         //     stage must advance before the push (push may grow the deque). ---
-        f.stage = Stage::NeedLeft;
+        f.stage = is_unary(*f.nd()->op_type()) ? Stage::NeedLeftUnary
+                                               : Stage::NeedLeft;
         stk.push_back(Frame{.node_p = &f.nd().left(), .checked = true});
+        break;
+      }
+
+      case Stage::NeedLeftUnary: {
+        // Unary IR op (Adjoint, Power): only the left operand is evaluated;
+        // the right child is the Constant sentinel kept to preserve
+        // FullBinaryNode's invariant, and is intentionally never pushed (so
+        // f.right stays null).
+        f.left = std::move(ret);
+        SEQUANT_ASSERT(f.left);
+        ResultPtr result =
+            apply_one_op_traced<EvalTrace>(f.nd(), f.left, f.right, cache);
+        finalize(finish_phase_b(f, std::move(result)));
         break;
       }
 
@@ -2020,14 +2093,16 @@ struct BatchedScratch {
 /// recorded rather than hidden by the prune) and registers every internal
 /// subnode that repeats AND has a consistent slicing signature -- the position
 /// of the containing member's batch mode in the subnode's canon_indices(), or
-/// its absence -- across all occurrences. Signature consistency is what makes
-/// a scratch hit exact across members: canonical equality maps the index at
-/// canonical position p to the index at position p, so equal signatures plus
-/// equal realized element ranges (guaranteed by the caller's grouping) imply
-/// identical slices. Inconsistently-sliced subnodes are not registered and so
-/// are evaluated per occurrence, unshared. Count inexactness arising from the
-/// pruned walk is benign: an undercount makes evaluate() recompute a drained
-/// entry, an overcount keeps an entry until the per-batch reset().
+/// its absence, and likewise of each axis of the loops enclosing \p real
+/// (whose values are already sliced along them) -- across all occurrences.
+/// Signature consistency is what makes a scratch hit exact across members:
+/// canonical equality maps the index at canonical position p to the index at
+/// position p, so equal signatures plus equal realized element ranges
+/// (guaranteed by the caller's grouping) imply identical slices.
+/// Inconsistently-sliced subnodes are not registered and so are evaluated per
+/// occurrence, unshared. Count inexactness arising from the pruned walk is
+/// benign: an undercount makes evaluate() recompute a drained entry, an
+/// overcount keeps an entry until the per-batch reset().
 ///
 /// Subnodes whose signature is consistently 'absent' (no leaf below carries
 /// the mode -- the mode is contracted at the member's root, so a subtree
@@ -2068,6 +2143,15 @@ template <typename TreeNode, bool FHC, typename Members>
         ext_axes.push_back(ix);
   }
 
+  // The axes of the loops enclosing this scratch: \p real's values are
+  // already sliced along them. Two canonically-equal occurrences that bind
+  // an enclosing axis to different positions (or one binds it and the other
+  // does not) hold different slices of one canonical value, so they are not
+  // shared.
+  container::svector<Index> encl_axes;
+  for (auto const& e : real.batch_context())
+    encl_axes.push_back(e.exact_axis ? *e.exact_axis : e.axis);
+
   struct Meta {
     std::size_t count = 0;
     std::optional<std::size_t> sig;
@@ -2076,6 +2160,9 @@ template <typename TreeNode, bool FHC, typename Members>
     // is a function of the (canonical) node alone, so it is identical across
     // all occurrences of a canonically-equal node.
     container::svector<std::optional<std::size_t>> ext_sig;
+    // Positions of each enclosing axis (in encl_axes order); unlike ext_sig it
+    // may differ across occurrences, which then makes the node inconsistent.
+    container::svector<std::optional<std::size_t>> encl_sig;
     bool consistent = true;
   };
   std::unordered_map<TreeNode const*, Meta, Hasher, Comp> meta;
@@ -2094,8 +2181,8 @@ template <typename TreeNode, bool FHC, typename Members>
   // child before the left one keeps the pop order the recursion's pre-order, so
   // which occurrence is the `first` one (and so every recorded signature and
   // count) is unchanged.
-  auto visit = [&meta, &ext_sig_of](TreeNode const& root,
-                                    Index const& mode) -> void {
+  auto visit = [&meta, &ext_sig_of, &encl_axes](TreeNode const& root,
+                                                Index const& mode) -> void {
     std::vector<TreeNode const*> stack{&root};
     while (!stack.empty()) {
       TreeNode const& n = *stack.back();
@@ -2103,12 +2190,14 @@ template <typename TreeNode, bool FHC, typename Members>
       if (n.leaf()) continue;
       auto const sig = index_position(n, mode);
       auto const esig = ext_sig_of(n);
+      auto const csig = slicing_signature(n, encl_axes);
       auto const [it, first] = meta.try_emplace(&n);
       auto& e = it->second;
       if (first) {
         e.sig = sig;
         e.ext_sig = esig;
-      } else if (e.sig != sig || e.ext_sig != esig) {
+        e.encl_sig = csig;
+      } else if (e.sig != sig || e.ext_sig != esig || e.encl_sig != csig) {
         e.consistent = false;
       }
       ++e.count;
@@ -2124,8 +2213,9 @@ template <typename TreeNode, bool FHC, typename Members>
       // occurrence is evaluated per occurrence, not served from the scratch at
       // n. The External signature is invariant across occurrences (a function
       // of the canonical node), so folding it into the match only tightens the
-      // guard.
-      if (!first && e.sig == sig && e.ext_sig == esig) continue;
+      // guard; the enclosing-axis signature is matched like the batch mode's.
+      if (!first && e.sig == sig && e.ext_sig == esig && e.encl_sig == csig)
+        continue;
       stack.push_back(&n.right());
       stack.push_back(&n.left());
     }
@@ -2294,9 +2384,7 @@ template <Trace EvalTrace = Trace::Default, typename F,
       // re-picked? Mirrors slice_to_use exactly: an exact context axis slices
       // ix.
       auto already_sliced = [&](Index const& ix) {
-        for (auto const& e : ectx)
-          if (e.axis == ix) return true;
-        return false;
+        return detail::batch_range_of(ectx, ix).has_value();
       };
       for (Index const& ix : candidate_axes(n)) {
         if (already_sliced(ix)) continue;
