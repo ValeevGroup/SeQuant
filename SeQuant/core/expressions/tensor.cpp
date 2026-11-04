@@ -117,11 +117,12 @@ ExprPtr canonicalize_tensor_leaf(
     SEQUANT_ASSERT(typeid(canonical) == typeid(tensor));
     assign(canonical);
   } else {
-    const auto canonicalizer = ctx.tensor_canonicalizer_ptr(L"");
+    // the canonicalizer for the label, as for a tensor in a TensorNetwork
+    const auto canonicalizer = ctx.tensor_canonicalizer_ptr(tensor._label());
     if (!canonicalizer)
       throw Exception(
-          "canonicalize_tensor_leaf: the current context has no default "
-          "tensor canonicalizer");
+          "canonicalize_tensor_leaf: the current context has no tensor "
+          "canonicalizer for this label nor a default one");
     byproduct = canonicalizer->apply(tensor);
   }
   leaf.mark_canonical(opts, contexts_version);

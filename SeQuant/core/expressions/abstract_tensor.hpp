@@ -17,6 +17,7 @@
 
 #include <compare>
 #include <cstdlib>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -749,6 +750,23 @@ bool has_tensor(const ExprPtr& expr, std::wstring label);
 /// @param label Label of the tensor to remove
 /// @return ExprPtr with the tensor removed
 ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label);
+
+/// @brief canonicalizes an Expr that is a tensor leaf (e.g. a Tensor or a
+/// NormalOperator)
+///
+/// A leaf in which an index occurs more than once, protoindices included, is a
+/// tensor network and is canonicalized as one, with @p opts; any other is
+/// canonicalized in place by the tensor canonicalizer for its label (or the
+/// default one), through the
+/// AbstractTensor interface of @p leaf .
+/// @param[in,out] leaf an Expr that is an AbstractTensor
+/// @param[in] opts the canonicalization options
+/// @param[in] assign assigns the canonical form computed as a tensor network,
+///            an object of the same type as @p leaf , to @p leaf
+/// @return the byproduct of canonicalization (e.g. a phase), or nullptr
+ExprPtr canonicalize_tensor_leaf(
+    Expr& leaf, CanonicalizeOptions opts,
+    const std::function<void(const AbstractTensor&)>& assign);
 
 }  // namespace sequant
 
