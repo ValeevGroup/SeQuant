@@ -84,11 +84,20 @@ struct ProjectionOptions {
   std::function<IndexBasis::instance_type(ProjectionTerms cell)> cell_instance =
       {};
   std::wstring integral_label = L"g";
+  /// also move a virtual leg that is a residual external (the overlap then
+  /// carries the external): every leg of a selected integral lands on the
+  /// target pair, so a density-fitted `(vv|Κ)` factor of an own-pair
+  /// integral can fold into that pair's leaf; an approximation beyond the
+  /// CSV truncation itself, exact at complete pair spaces. Off by default.
+  bool move_externals = false;
 };
 
 /// In each R2 term (residual rank read off the `Ŝ`/`Â` symmetrizer; other
-/// terms are returned as is) every `integral_label` tensor of a selected cell
-/// gets each virtual leg `x` that is not a residual external replaced by a
+/// terms are returned as is; a term without a symmetrizer, a residual block
+/// whose `Â` the caller expanded or stripped as the Kramers-restricted trace
+/// does, takes its externals from its own external indices and its rank from
+/// the number of unoccupied ones) every `integral_label` tensor of a selected
+/// cell gets each virtual leg `x` that is not a residual external replaced by a
 /// fresh `x'` on the target pair and basis, times the overlap `s{x';x}`
 /// (`s{x;x'}` for a bra leg); a leg already there stays. An approximation,
 /// exact only at complete domains, and opt-in: with the default

@@ -739,6 +739,66 @@ TEST_CASE("csv-pno-projection-nested-sum-then-sibling", "[mbpt][csv]") {
   }
 }
 
+// A Kramers-restricted trace expands or strips the residual's Â, so its
+// blocks reach the projection without a symmetrizer: the externals are then
+// the block's own and the rank the number of unoccupied ones.
+TEST_CASE("csv-pno-projection-kramers-block", "[mbpt][csv]") {
+  using namespace sequant;
+  using namespace sequant::tests::csv;
+  using namespace sequant::tests::csv_rules;
+  using enum mbpt::ProjectionTerms;
+
+  ScopedCsvContext scoped;
+  const auto amplitude = [](ProjectionTerms terms, bool move_externals) {
+    return ProjectionOptions{.terms = terms,
+                             .basis = ProjectionBasis::Amplitude,
+                             .move_externals = move_externals};
+  };
+  // the "linear" fixture of csv-pno-projection-fixtures without its Ŝ
+  const std::wstring block =
+      L"-2 g{i_3,a_1<i_1,i_2>;a_3<i_2,i_3>,i_1}"
+      L" * t{a_3<i_2,i_3>,a_4<i_2,i_3>;i_2,i_3} * s{a_2<i_1,i_2>;a_4<i_2,i_3>}";
+
+  SECTION("the block's externals stand in for the symmetrizer's") {
+    const ExprPtr input = deserialize(block);
+    const auto out = project(input, amplitude(ExchangeLinear, false));
+    CHECK(terse(out) ==
+          L"-2 g{i_3,a_1<i_1,i_2>;a_100<i_1,i_3>,i_1}"
+          L" * s{a_100<i_1,i_3>;a_3<i_2,i_3>}"
+          L" * t{a_3<i_2,i_3>,a_4<i_2,i_3>;i_2,i_3}"
+          L" * s{a_2<i_1,i_2>;a_4<i_2,i_3>}");
+    CHECK(overlaps(out) == overlaps(input) + 1);
+  }
+
+  SECTION("an energy and a singles block stay untouched") {
+    for (std::wstring const& text :
+         {std::wstring(L"2 g{i_1,i_2;a_1<i_1>,a_2<i_2>} * t{a_1<i_1>;i_1}"
+                       L" * t{a_2<i_2>;i_2}"),
+          std::wstring(L"-2 g{i_2,i_3;a_2<i_2>,a_3<i_1>} * t{a_2<i_2>;i_2}"
+                       L" * t{a_3<i_1>;i_1} * t{a_4<i_3>;i_3}"
+                       L" * s{a_1<i_1>;a_4<i_3>}")}) {
+      CAPTURE(toUtf8(text));
+      const ExprPtr input = deserialize(text);
+      CHECK(project(input, amplitude(All, true)).get() == input.get());
+    }
+  }
+
+  SECTION("move_externals moves the external leg with its overlap") {
+    const ExprPtr input = deserialize(block);
+    const auto out = project(input, amplitude(ExchangeLinear, true));
+    CHECK(terse(out) ==
+          L"-2 g{i_3,a_100<i_1,i_3>;a_101<i_1,i_3>,i_1}"
+          L" * s{a_1<i_1,i_2>;a_100<i_1,i_3>}"
+          L" * s{a_101<i_1,i_3>;a_3<i_2,i_3>}"
+          L" * t{a_3<i_2,i_3>,a_4<i_2,i_3>;i_2,i_3}"
+          L" * s{a_2<i_1,i_2>;a_4<i_2,i_3>}");
+    CHECK(overlaps(out) == overlaps(input) + 2);
+    // idempotent
+    CHECK(mbpt::project_integral_domains(out, amplitude(ExchangeLinear, true))
+              .get() == out.get());
+  }
+}
+
 TEST_CASE("csv-pair-basis-fold", "[mbpt][csv]") {
   using namespace sequant;
   using mbpt::fold_pair_basis_integrals;
