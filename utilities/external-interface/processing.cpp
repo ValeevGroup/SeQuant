@@ -116,7 +116,7 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
 
   if (options.factorize_to_binary) {
     for (ResultExpr &current : processed) {
-      current.expression() = optimize(current.expression());
+      optimize(current);
     }
   }
 
