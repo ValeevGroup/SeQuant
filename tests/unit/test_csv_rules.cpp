@@ -797,6 +797,22 @@ TEST_CASE("csv-pno-projection-kramers-block", "[mbpt][csv]") {
     CHECK(mbpt::project_integral_domains(out, amplitude(ExchangeLinear, true))
               .get() == out.get());
   }
+
+  SECTION("leg_basis mints every moved leg in the caller's basis") {
+    const ExprPtr input = deserialize(block);
+    auto opts = amplitude(ExchangeLinear, true);
+    opts.leg_basis = IndexBasis{Index(L"a_1").space(), test_csv::pno_pert};
+    const auto out = project(input, opts);
+    std::size_t minted = 0;
+    for (AbstractTensor const* g : tensors_labelled(out, L"g"))
+      for (Index const& idx : g->_slots())
+        if (idx.ordinal() >= Index::min_tmp_index()) {
+          ++minted;
+          CHECK(idx.basis().basis_instance() == test_csv::pno_pert);
+        }
+    CHECK(minted == 2);
+    CHECK(overlaps(out) == overlaps(input) + 2);
+  }
 }
 
 TEST_CASE("csv-pair-basis-fold", "[mbpt][csv]") {

@@ -146,10 +146,13 @@ ExprPtr projection_move_legs(ExprPtr const& node, projection_scope& scope) {
     auto it = scope.moved.find(x);
     const bool reuse = it != scope.moved.end() && on_target(it->second) &&
                        !scope.moved_here.contains(x);
+    const IndexBasis minted_in =
+        opts.basis == ProjectionBasis::Amplitude && opts.leg_basis
+            ? *opts.leg_basis
+            : IndexBasis{x.space(), target_instance};
     const Index replacement =
         reuse ? it->second
-              : Index::make_tmp_index(default_registry_resolved(IndexBasis{
-                                          x.space(), target_instance}),
+              : Index::make_tmp_index(default_registry_resolved(minted_in),
                                       target_pair,
                                       own_pair || x.symmetric_proto_indices());
     if (it == scope.moved.end()) scope.moved.emplace(x, replacement);

@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 
 namespace sequant::mbpt {
@@ -90,6 +91,13 @@ struct ProjectionOptions {
   /// integral can fold into that pair's leaf; an approximation beyond the
   /// CSV truncation itself, exact at complete pair spaces. Off by default.
   bool move_externals = false;
+  /// under `Amplitude`, the basis every moved leg is minted in, instead of
+  /// the leg's own space and instance: a Kramers-restricted kit passes its
+  /// spin-free union expansion basis, so a flavoured leg moves into the
+  /// pair's whole PNS space (the pair vectors have support on both Kramers
+  /// flavours; the flavoured half alone is not a projector). Ignored under
+  /// `Integral`.
+  std::optional<IndexBasis> leg_basis = {};
 };
 
 /// In each R2 term (residual rank read off the `Ŝ`/`Â` symmetrizer; other
