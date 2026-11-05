@@ -284,7 +284,7 @@ which indices shall be batched - whether batching is actually realized (and how)
 canonicalize
 ^^^^^^^^^^^^
 
-Canonicalizes the input expressions.
+Canonicalizes the input expressions, with the indices of each result as the named indices.
 
 .. list-table::
    :header-rows: 1
@@ -909,8 +909,8 @@ sort
 
 Sorts the input expressions into lexicographic order: the summands of every sum are sorted, as are the factors of every
 product insofar as they commute. Unlike the order produced by :code:`canonicalize`, which is based on hash values, this
-order depends only on the expressions themselves (tensors with the cardinal tensor labels of the context come first) and
-is hence stable across changes of the hashing algorithm. The order of the expressions within an input is not changed.
+order depends only on the expressions themselves (tensors with the cardinal tensor labels of mbpt, see
+:func:`sequant::mbpt::cardinal_tensor_labels`, come first) and is hence stable across changes of the hashing algorithm. The order of the expressions within an input is not changed.
 
 .. list-table::
    :header-rows: 1

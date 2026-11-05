@@ -38,5 +38,36 @@ int main() {
   std::wcout << sum << std::endl;
   // end-snippet-2
 
+  // start-snippet-3
+  // the named (external) indices are never deduced silently: a ResultExpr
+  // carries them as the indices of its result ...
+  ResultExpr residual(Tensor(L"R", bra{L"a_1"}, ket{L"i_1"}),
+                      ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_2"}) *
+                              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_1"}) +
+                          ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_3"}) *
+                              ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_1"}));
+  simplify(residual);
+  // the two terms differ only in the dummy index, so they combine
+  SEQUANT_ASSERT(residual.expression().is<Product>());
+  // ... while for a plain ExprPtr the caller opts in to deducing them as the
+  // indices that occur once in each product (wrong for e.g. tensor
+  // hypercontraction, in which an external index may occur several times)
+  auto e = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_2"}) *
+           ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_1"});
+  simplify(e, deduce_named_indices);
+  // end-snippet-3
+
+  // start-snippet-4
+  // canonicalization produces one fixed form, meant to identify equivalent
+  // expressions; prettify() returns a copy in a form meant for reading,
+  // here with the tensors labeled t first
+  const auto pretty = prettify(
+      residual,
+      PrettifyOptions{
+          .presentation = {.cardinal_tensor_labels =
+                               container::vector<std::wstring>{L"t"}}});
+  std::wcout << to_latex(pretty) << std::endl;
+  // end-snippet-4
+
   return 0;
 }

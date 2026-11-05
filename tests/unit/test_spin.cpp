@@ -22,6 +22,7 @@
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/rdm.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 #include <SeQuant/domain/mbpt/spin.hpp>
 
@@ -2130,5 +2131,78 @@ TEST_CASE("spintrace-named-basis", "[spin][basis]") {
     CHECK_THROWS_WITH(make_spinbeta(m1_half),
                       Catch::Matchers::ContainsSubstring("μ̃↓"));
     CHECK_THROWS_AS(spintrace(term(m1_half)), Exception);
+  }
+}
+
+// the results of the library's transformations depend on the context only
+// through its formalism settings (registry, vacuum, SP basis): the printing
+// options and the deserialization defaults, which used to sit next to the
+// (now removed) canonicalization settings, do not affect them
+TEST_CASE("results independent of presentation settings", "[spin]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  using IdxGroupList = container::svector<container::svector<Index>>;
+
+  auto compute = [] {
+    std::vector<ExprPtr> results;
+    // closed- and open-shell spin tracing of a projected CCSD-like term
+    const auto projected =
+        ex<Constant>(rational{1, 4}) *
+        ex<Tensor>(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                   ket{L"a_1", L"a_2"}, Symmetry::Antisymm) *
+        ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
+                   Symmetry::Antisymm) *
+        ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_2"},
+                   Symmetry::Antisymm) *
+        ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_3", L"i_4"},
+                   Symmetry::Antisymm);
+    const IdxGroupList groups{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}};
+    results.push_back(closed_shell_spintrace(projected, groups));
+    for (auto&& r : open_shell_spintrace(projected, groups))
+      results.push_back(r);
+
+    // spin tracing and biorthogonal transformation of a result
+    const ResultExpr residual(
+        bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, aux{}, Symmetry::Antisymm,
+        BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm, L"R",
+        ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"a_3", L"a_4"},
+                   Symmetry::Antisymm) *
+                ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_2"},
+                           Symmetry::Antisymm) +
+            ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_3"}) *
+                ex<Tensor>(L"t", bra{L"a_3", L"a_2"}, ket{L"i_1", L"i_2"},
+                           Symmetry::Antisymm));
+    auto traced = closed_shell_spintrace(residual);
+    biorthogonal_transform(traced);
+    for (auto&& r : traced) results.push_back(r.expression());
+
+    // densities in terms of cumulants
+    const ResultExpr density(
+        bra{L"i_1"}, ket{L"i_2"}, aux{}, Symmetry::Nonsymm,
+        BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm, L"D",
+        density::make_cumulant(bra{Index(L"i_1"), Index(L"i_3")},
+                               ket{Index(L"i_2"), Index(L"i_4")}) *
+            ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_3"}));
+    results.push_back(
+        decompositions::cumulants_to_densities(density).expression());
+    return results;
+  };
+
+  const auto reference = compute();
+  auto scoped = set_scoped_modified_default_context([](Context& ctx) {
+    ctx.set(PrintOptions{
+        .braket_typesetting = BraKetTypesetting::KetSub,
+        .braket_slot_typesetting = BraKetSlotTypesetting::TensorPackage,
+        .ordering = LexicographicCompareOptions{
+            .cardinal_tensor_labels = {L"t", L"g", L"f"}}});
+    ctx.set(Symmetry::Antisymm)
+        .set(Hermiticity::Hermitian)
+        .set(ColumnSymmetry::Nonsymm);
+  });
+  const auto changed = compute();
+  REQUIRE(changed.size() == reference.size());
+  for (std::size_t k = 0; k != reference.size(); ++k) {
+    CAPTURE(k, serialize(reference[k]), serialize(changed[k]));
+    CHECK(*changed[k] == *reference[k]);
   }
 }
