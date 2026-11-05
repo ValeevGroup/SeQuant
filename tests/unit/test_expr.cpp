@@ -2192,7 +2192,8 @@ TEST_CASE("canonical_mark", "[elements]") {
         deduce_named_indices,
         opts.copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No)));
     // ... and the named indices it was recorded with
-    REQUIRE(!e->is_canonical(container::set<Index>{Index{L"i_1"}}, opts));
+    REQUIRE(!e->is_canonical(sequant::tests::explicit_named({Index{L"i_1"}}),
+                             opts));
     // ... and never for rapid canonicalization
     REQUIRE(!e->is_canonical(deduce_named_indices, rapid_opts));
     // only full canonicalization marks

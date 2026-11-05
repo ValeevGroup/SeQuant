@@ -14,6 +14,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <dtl/dtl.hpp>
@@ -164,6 +165,22 @@ std::size_t count_product_canonicalizations(
 /// once in it (as EvalExpr(Tensor, IndexSet) expects)
 inline IndexSet open_indices(const Tensor &t) {
   return TensorNetwork(ExprPtrList{t.clone()}).ext_indices();
+}
+
+/// @return @p expr as the expression of an unnamed result without symmetry
+/// whose indices are the indices of @p expr that occur once, i.e. with the
+/// deduced external indices of @p expr
+inline ResultExpr deduced_result(const ExprPtr &expr) {
+  const auto groups = get_unique_indices(expr);
+  return ResultExpr(bra(groups.bra), ket(groups.ket), aux(groups.aux),
+                    Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                    ColumnSymmetry::Nonsymm, std::nullopt, expr);
+}
+
+/// @return the explicit named indices @p indices (as the library derives them
+/// internally)
+inline NamedIndexSpec explicit_named(container::set<Index> indices) {
+  return detail::explicit_named_indices(std::move(indices));
 }
 
 /// @return a guard that scopes, for every Statistics, a copy of the default

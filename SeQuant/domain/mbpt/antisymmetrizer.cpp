@@ -9,6 +9,9 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/antisymmetrizer.hpp>
 
+// the library knows the named indices of the expressions it builds
+using sequant::detail::explicit_named_indices;
+
 namespace sequant::mbpt {
 
 antisymm_element::antisymm_element(ExprPtr ex_) {
@@ -102,7 +105,9 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
                                .braket = old_tensor.braket_symmetry(),
                                .column = old_tensor.column_symmetry()});
           new_product = new_tensor * new_product;
-          new_product->canonicalize(get_used_indices(new_product), canon_opts);
+          new_product->canonicalize(
+              explicit_named_indices(get_used_indices(new_product)),
+              canon_opts);
         }
 
         else if (it->get()->is<FNOperator>()) {
@@ -117,7 +122,9 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
           auto new_Nop = ex<FNOperator>(cre(new_crea), ann(new_anni));
           new_product = new_product * new_Nop;
           // std::wcout << "product:  " << to_latex(new_product) << std::endl;
-          new_product->canonicalize(get_used_indices(new_product), canon_opts);
+          new_product->canonicalize(
+              explicit_named_indices(get_used_indices(new_product)),
+              canon_opts);
         }
 
         else {
@@ -380,7 +387,8 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
     }
   }
   // the indices of the density are its external indices
-  simplify(expression, external_indices_of(original_upper, original_lower));
+  simplify(expression, explicit_named_indices(external_indices_of(
+                           original_upper, original_lower)));
   return expression;
 }
 
@@ -434,8 +442,8 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
       }
       return_val = (product * prefactor) + return_val;
     }
-    return_val->canonicalize(
-        external_indices_of(original_upper, original_lower));
+    return_val->canonicalize(explicit_named_indices(
+        external_indices_of(original_upper, original_lower)));
     return return_val;
   } else {
     throw Exception("non-singlet states not yet supported");

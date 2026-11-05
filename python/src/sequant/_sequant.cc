@@ -58,19 +58,12 @@ py::object factors(ExprPtr &expr) {
   return py::none();
 }
 
-ExprPtr &simplify(
-    ExprPtr &expr,
-    const std::optional<std::vector<std::wstring>> &external_indices,
-    bool deduce) {
-  return sequant::simplify(expr, named_index_spec(external_indices, deduce));
+ExprPtr &simplify(ExprPtr &expr, bool deduce) {
+  return sequant::simplify(expr, named_index_spec(deduce));
 }
 
-ExprPtr &canonicalize(
-    ExprPtr &expr,
-    const std::optional<std::vector<std::wstring>> &external_indices,
-    bool deduce) {
-  return sequant::canonicalize(expr,
-                               named_index_spec(external_indices, deduce));
+ExprPtr &canonicalize(ExprPtr &expr, bool deduce) {
+  return sequant::canonicalize(expr, named_index_spec(deduce));
 }
 
 py::object rational_to_fraction(const rational &r) {
@@ -185,15 +178,12 @@ PYBIND11_MODULE(_sequant, m) {
   py::class_<Sum, std::shared_ptr<Sum>, Expr>(m, "Sum");
 
   m.def("simplify", &sequant::python::simplify,
-        "simplifies expr; the external indices are given either explicitly by "
-        "their labels or, with deduce=True, deduced as the indices that occur "
-        "once in each product",
-        py::arg("expr"), py::kw_only(),
-        py::arg("external_indices") = py::none(), py::arg("deduce") = false);
+        "simplifies expr; deduce=True (required) deduces its external indices "
+        "as the indices that occur once in each product",
+        py::arg("expr"), py::kw_only(), py::arg("deduce"));
   m.def("canonicalize", &sequant::python::canonicalize,
-        "canonicalizes expr; see simplify for the external indices",
-        py::arg("expr"), py::kw_only(),
-        py::arg("external_indices") = py::none(), py::arg("deduce") = false);
+        "canonicalizes expr; see simplify for deduce", py::arg("expr"),
+        py::kw_only(), py::arg("deduce"));
 
   python::mbpt::__init__(m.def_submodule("mbpt"));
 }

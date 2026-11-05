@@ -345,7 +345,7 @@ TEST_CASE("mbpt multireference regressions", "[mbpt]") {
   SECTION("RDM replacement preserves external indices") {
     for (const bool named : {false, true}) {
       const auto spec = [named](container::set<Index> indices) {
-        return named ? NamedIndexSpec(std::move(indices))
+        return named ? sequant::tests::explicit_named(std::move(indices))
                      : NamedIndexSpec(deduce_named_indices);
       };
       CAPTURE(named);
@@ -358,12 +358,18 @@ TEST_CASE("mbpt multireference regressions", "[mbpt]") {
           tensor::ref_av(deserialize(L"x{u_1;u_2} * ã{u_2;u_1}"), spec({})),
           EquivalentTo(L"x{u_1;u_2} * γ{u_2;u_1}"));
     }
+    // the externals as the indices of a result
+    CHECK_THAT(tensor::ref_av(deserialize<ResultExpr>(
+                   L"R{u_1,u_3;u_2,u_4}:N-N-N = ã{u_1;u_2} * ã{u_3;u_4}")),
+               EquivalentTo(deserialize<ResultExpr>(
+                   L"R{u_1,u_3;u_2,u_4}:N-N-N = γ{u_1,u_3;u_2,u_4}:A-C-S + "
+                   L"s{u_1;u_4} * γ{u_3;u_2}")));
   }
 
   SECTION("external RDM indices beyond the active space are restricted") {
     for (const bool named : {false, true}) {
       const auto spec = [named](container::set<Index> indices) {
-        return named ? NamedIndexSpec(std::move(indices))
+        return named ? sequant::tests::explicit_named(std::move(indices))
                      : NamedIndexSpec(deduce_named_indices);
       };
       CAPTURE(named);
@@ -386,7 +392,8 @@ TEST_CASE("mbpt multireference regressions", "[mbpt]") {
 
   SECTION("named indices must include every external bra/ket index") {
     if (assert_behavior() != AssertBehavior::Abort) {
-      const NamedIndexSpec named = container::set<Index>{Index(L"I_1")};
+      const NamedIndexSpec named =
+          sequant::tests::explicit_named(container::set<Index>{Index(L"I_1")});
       CHECK_THROWS_MATCHES(
           tensor::ref_av(deserialize(L"ã{I_1;I_2}"), named), Exception,
           Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring(
@@ -1471,7 +1478,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       // Requiring every h to connect to each later t
       // removes this nonzero product.
       const auto expr = o::h(1) * o::t(1) * o::h(1) * o::t(1);
-      const auto unconstrained = o::vac_av(expr, {});
+      const auto unconstrained = o::vac_av(expr, deduce_named_indices);
       REQUIRE(unconstrained != ex<Constant>(0));
       CHECK_THAT(o::vac_av(expr, deduce_named_indices),
                  EquivalentTo(unconstrained));

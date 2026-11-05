@@ -179,13 +179,13 @@ struct RecordedRoot {
   ExprPtr optimized;
 };
 
-/// Runs \ref sequant::optimize_result on \p root_sum with a RecordSession
+/// Runs \ref sequant::optimize_result on \p root with a RecordSession
 /// labeled \p label set as \p opts.recording, and returns the record (terms in
 /// the order of the optimized Sum's summands) with the optimized expression.
-/// A root that is not a Sum is recorded as a single term. The Sum must be
-/// simplified: no two summands may have the same canonical key.
+/// A root whose expression is not a Sum is recorded as a single term. The Sum
+/// must be simplified: no two summands may have the same canonical key.
 /// \throws sequant::Exception listing the duplicate keys otherwise
-RecordedRoot record_root(std::string label, ExprPtr const& root_sum,
+RecordedRoot record_root(std::string label, ResultExpr const& root,
                          OptimizeOptions opts);
 
 namespace detail {

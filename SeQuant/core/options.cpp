@@ -55,6 +55,11 @@ bool operator==(const CanonicalizationPresentation& a,
                        });
 }
 
+NamedIndexSpec detail::explicit_named_indices(
+    container::set<Index> named_indices) {
+  return NamedIndexSpec(std::move(named_indices));
+}
+
 const container::set<Index>& NamedIndexSpec::indices() const {
   if (!named_indices_)
     throw Exception(

@@ -601,8 +601,9 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       auto t2 = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
       REQUIRE_THROWS_AS(canonicalize(f_diag * t2), Exception);
       {
-        const NamedIndexSpec named = container::set<Index>{
-            Index{L"i_1"}, Index{L"i_2"}, Index{L"a_1"}, Index{L"a_2"}};
+        const NamedIndexSpec named =
+            sequant::tests::explicit_named(container::set<Index>{
+                Index{L"i_1"}, Index{L"i_2"}, Index{L"a_1"}, Index{L"a_2"}});
         auto product = f_diag * t2;
         REQUIRE_NOTHROW(sequant::canonicalize(product, named));
         auto reordered = t2 * f_diag;
@@ -672,7 +673,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
         IndexList indices{L"i_17"};
         tn.canonicalize(mbpt::cardinal_tensor_labels(),
-                        container::set<Index>(indices.begin(), indices.end()),
+                        sequant::tests::explicit_named(container::set<Index>(
+                            indices.begin(), indices.end())),
                         {.method = CanonicalizationMethod::Complete});
 
         REQUIRE(size(tn.tensors()) == 2);

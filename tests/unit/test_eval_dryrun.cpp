@@ -557,7 +557,6 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
   OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
   opts.reorder = ReorderSum::Reorder;  // the production (clone-on-append) path
   opts.idx_to_extent = regime.idx_to_extent();
@@ -650,7 +649,6 @@ TEST_CASE("node-axes-match-binarize", "[optimize][batch][r1-offbyone]") {
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
   OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
   opts.reorder = ReorderSum::Reorder;
   opts.idx_to_extent = regime.idx_to_extent();
@@ -921,7 +919,6 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[dryrun-df]") {
     auto axes_map = std::make_shared<std::unordered_map<
         Expr const*, container::vector<NodeBatchAnnotation>>>();
     OptimizeOptions opts;
-    opts.external_indices = sequant::deduce_named_indices;
     // "flops" = DenseFLOPs: the classic min-flops contraction-order DP (flops
     // HAS optimal substructure there), i.e. the pre-peak-objective default.
     // It is the reference point for "what does a real min-time schedule cost".
@@ -2002,7 +1999,6 @@ TEST_CASE("giant-term-replay", "[dryrun-eval]") {
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
   OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
@@ -2308,7 +2304,6 @@ TEST_CASE("perf-first-no-4pao", "[dryrun-objective]") {
     auto axes_map = std::make_shared<std::unordered_map<
         Expr const*, container::vector<NodeBatchAnnotation>>>();
     OptimizeOptions opts;
-    opts.external_indices = sequant::deduce_named_indices;
     opts.objective_function = obj;
     opts.idx_to_extent = regime.idx_to_extent();
     opts.inner_pow = regime.inner_pow_fn();
@@ -2721,7 +2716,6 @@ TEST_CASE("external-occ-sizing", "[dryrun-occ-sizing]") {
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
   OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
@@ -3039,7 +3033,6 @@ TEST_CASE("c60-perf-first-audit", "[dryrun-c60-batchability-audit]") {
       auto axes_map = std::make_shared<std::unordered_map<
           Expr const*, container::vector<NodeBatchAnnotation>>>();
       OptimizeOptions opts;
-      opts.external_indices = sequant::deduce_named_indices;
       opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
       opts.idx_to_extent = regime.idx_to_extent();
       opts.inner_pow = regime.inner_pow_fn();
@@ -3279,7 +3272,6 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
   OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   // peak-first: forms the fully-sliceable 4-PAO node whose per-batch scratch
   // transient is the batched-inner peak we want the sink to capture.
   opts.objective_function = ObjectiveFunction::DenseSpaceTimeBatched;
@@ -3622,7 +3614,6 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   auto axes_map = std::make_shared<std::unordered_map<
       Expr const*, container::vector<NodeBatchAnnotation>>>();
   OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();

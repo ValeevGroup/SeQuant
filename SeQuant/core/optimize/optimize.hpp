@@ -30,6 +30,13 @@ ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts = {});
 /// \return The optimized expression, wrapped in \ref OptimizeResult.
 OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts = {});
 
+/// \copydoc optimize_result(ExprPtr const&, OptimizeOptions)
+/// \note schedule pinning and recording (OptimizeOptions::pinned,
+/// OptimizeOptions::recording) canonicalize the terms with the external
+/// indices of the result, so they require this overload
+OptimizeResult optimize_result(ResultExpr const& expr,
+                               OptimizeOptions opts = {});
+
 /// \copydoc optimize(ExprPtr const&, OptimizeOptions)
 ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts = {});
 
