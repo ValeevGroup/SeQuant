@@ -67,20 +67,30 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
 /// @note equivalent to vac_av if the reference state is the Wick vacuum,
 ///       i.e. if `get_default_context().index_basis_registry()->reference_occupied_space() == get_default_context().index_basis_registry()->vacuum_occupied_space()`
 /// @param[in] expr input expression
+/// @param[in] external_indices the external indices of the tensor form of
+///            @p expr ; Operators carry no indices, so this is empty (`{}`)
+///            unless @p expr has explicit tensors or operators with free
+///            indices (e.g. op::ã). The indices of a projector (A or S) need
+///            not be named: the projector carries them, and relabeling them
+///            together with the term leaves it unchanged
 /// @param[in] opts controls the behavior, @see EVOptions
 /// @note Connectivity constraints are empty by default.
 /// @pre When the reference differs from the Wick vacuum and the vacuum is not MultiProduct, opts.connect and
 ///      opts.do_not_connect must both be empty.
 // clang-format on
-ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts = {});
+ExprPtr ref_av(ExprPtr expr, const NamedIndexSpec& external_indices,
+               EVOptions<std::wstring> opts = {});
 
 /// @brief computes the vacuum expectation value
 /// @internal evaluates only full contractions in  WickTheorem
 /// @param[in] expr input expression
+/// @param[in] external_indices the external indices of the tensor form of
+///            @p expr , see ref_av()
 /// @param[in] opts controls the behavior, @see EVOptions
 /// @note Connectivity constraints are empty by default.
 /// @return the VEV
-ExprPtr vac_av(ExprPtr expr, EVOptions<std::wstring> opts = {});
+ExprPtr vac_av(ExprPtr expr, const NamedIndexSpec& external_indices,
+               EVOptions<std::wstring> opts = {});
 
 }  // namespace op
 }  // namespace sequant::mbpt

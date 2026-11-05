@@ -87,7 +87,9 @@ int main(int argc, char* argv[]) {
         runtime_assert(os_cc_st_r.at(2).at(0)->size() == 65)   // T2aa
         runtime_assert(os_cc_st_r.at(2).at(1)->size() == 122)  // T2ab
         runtime_assert(os_cc_st_r.at(3).at(2)->size() == 209)  // T3abb
-        runtime_assert(os_cc_st_r.at(3).at(3)->size() == 75)   // T3bbb
+        // T3bbb has as many terms as T3aaa: it equals the spin-flipped T3aaa
+        // up to terms that the antisymmetrizer annihilates
+        runtime_assert(os_cc_st_r.at(3).at(3)->size() == 59)  // T3bbb
   }
 
   return 0;

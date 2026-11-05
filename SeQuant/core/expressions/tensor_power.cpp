@@ -74,9 +74,10 @@ void TensorPower::adjoint() {
   reset_hash_value();
 }
 
-ExprPtr TensorPower::canonicalize(CanonicalizeOptions opts) {
+ExprPtr TensorPower::canonicalize(const NamedIndexSpec& named_indices,
+                                  CanonicalizeOptions opts) {
   return canonicalize_tensor_leaf(
-      *this, opts, [this](const AbstractTensor& canonical) {
+      *this, named_indices, opts, [this](const AbstractTensor& canonical) {
         *this = static_cast<const TensorPower&>(canonical);
       });
 }

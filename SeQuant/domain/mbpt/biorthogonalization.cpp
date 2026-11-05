@@ -521,13 +521,19 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   const auto perm_ranks =
       ranges::views::iota(std::size_t{0}, static_cast<std::size_t>(num_perms));
   for (std::size_t i = 0; i < result_exprs.size(); ++i) {
+    // the external indices are those of the result; the terms are not
+    // combined within its symmetry group here (the cost grows with the
+    // group), simplify(ResultExpr&) does that
+    const auto external_indices = named_indices(result_exprs.at(i));
+    auto simplify_for_result = [&external_indices](ExprPtr& e) {
+      simplify(e, external_indices);
+    };
     perm::Permutation reference = perm::unrank(ranks.at(i), n_particles);
     reference->invert();
 
     // Merge canonical terms before retaining the next permuted expression.
-    result_exprs.at(i).expression() = transform_sum_expr(
-        perm_ranks,
-        [&](std::size_t rank) {
+    result_exprs.at(i).expression() =
+        transform_sum_expr(perm_ranks, [&](std::size_t rank) {
           perm::Permutation perm = perm::unrank(rank, n_particles);
           perm->postMultiply(reference);
 
@@ -540,11 +546,10 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
           auto contribution =
               ex<Constant>(coeff) *
               create_expr_for(externals.at(i), perm, externals, original_exprs);
-          simplify(contribution);
+          simplify_for_result(contribution);
           return contribution;
-        },
-        {.canonicalize = false});
-    simplify(result_exprs.at(i).expression());
+        });
+    simplify_for_result(result_exprs.at(i).expression());
   }
 }
 
@@ -561,6 +566,8 @@ ExprPtr biorthogonal_transform_impl(const sequant::ExprPtr& expr,
             return get_bra_idx(pair);
           }) |
           ranges::to<container::svector<Index>>()),
+      // the result is particle-symmetric, so terms that differ by a
+      // permutation of its particles are combined
       aux(IndexList{}), Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
       ColumnSymmetry::Symm, {}, expr);
 
@@ -596,6 +603,7 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
 
   const auto ctx = get_default_context_snapshot();
   const auto& cardinal_tensor_labels = ctx.cardinal_tensor_labels();
+  const NamedIndexSpec external_indices = flatten_index_groups(ext_idxs);
   for (const auto& term : *expr) {
     if (!term->is<Product>()) continue;
 
@@ -603,7 +611,8 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
     auto scalar = product->scalar();
 
     sequant::TensorNetwork tn(*product);
-    auto hash = tn.canonicalize_slots(cardinal_tensor_labels).hash_value();
+    auto hash = tn.canonicalize_slots(cardinal_tensor_labels, external_indices)
+                    .hash_value();
 
     auto it = largest_coeff_terms.find(hash);
     if (it == largest_coeff_terms.end()) {
@@ -675,19 +684,24 @@ ExprPtr biorthogonal_transform_pre_nnsproject_impl(
   auto kixs = ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
   ExprPtr S_tensor = make_symmetrizer(bra(kixs), ket(bixs));
 
+  // the external indices; the projector carries the ones it has, see
+  // without_projector_indices
+  const auto external_indices = [&ext_idxs](const ExprPtr& e) {
+    return without_projector_indices(e, flatten_index_groups(ext_idxs));
+  };
   if (factor_out_nns_projector) {
     if (ext_idxs.size() > 1) {
       bt = S_tensor * bt;
     }
-    simplify(bt);
+    simplify(bt, external_indices(bt));
 
     bt = S_maps(bt);
-    canonicalize(bt);
+    canonicalize(bt, external_indices(bt));
     bt = WK_biorthogonalization_filter_impl(bt, ext_idxs);
   }
 
   bt = S_tensor * bt;
-  simplify(bt);
+  simplify(bt, external_indices(bt));
 
   return bt;
 }

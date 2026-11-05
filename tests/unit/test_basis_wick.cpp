@@ -45,7 +45,7 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
   // one product: Wick runs on the calling thread, so a throw reaches the test
   auto vac_av = [](ExprPtr const& product) {
     Index::reset_tmp_index();
-    return t::vac_av(product);
+    return t::vac_av(product, deduce_named_indices);
   };
 
   SECTION("K1: an integral leg meets a granted amplitude leg") {
@@ -156,7 +156,8 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
             t * make_kronecker(a1, q1) * ex<FNOperator>(cre{}, ann{q1}) *
                 ex<FNOperator>(cre{a2}, ann{}) * u}) {
         ExprPtr r;
-        REQUIRE_NOTHROW(r = FWickTheorem{expr->clone()}.compute());
+        REQUIRE_NOTHROW(
+            r = FWickTheorem(expr->clone(), deduce_named_indices).compute());
         REQUIRE(r->is<Product>());
         CHECK(tensors_labelled(r, reserved::kronecker_label()).empty());
         const auto metrics = tensors_labelled(r, reserved::overlap_label());
@@ -171,7 +172,9 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
                       ex<FNOperator>(cre{p2}, ann{i2});
     Index::reset_tmp_index();
     ExprPtr r;
-    REQUIRE_NOTHROW(r = FWickTheorem{expr}.full_contractions(true).compute());
+    REQUIRE_NOTHROW(r = FWickTheorem(expr, deduce_named_indices)
+                            .full_contractions(true)
+                            .compute());
     CHECK(tensors_labelled(r, reserved::kronecker_label()).empty());
     const auto metrics = tensors_labelled(r, reserved::overlap_label());
     REQUIRE(metrics.size() == 1);
@@ -232,7 +235,7 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
       auto legacy_ctx = set_scoped_default_mbpt_context(mbpt::Context(
           {.csv = CSV::Yes, .op_registry_ptr = make_legacy_registry()}));
       Index::reset_tmp_index();
-      CHECK(serialize(op::vac_av(op::H(1) * op::T(1))) ==
+      CHECK(serialize(op::vac_av(op::H(1) * op::T(1), deduce_named_indices)) ==
             L"f{i_1;a_1<i_1>}:A-C-S * t{a_1<i_1>;i_1}:A-N-S");
     }
   }
@@ -257,7 +260,7 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
   // indices repeated in the product are dummy, the others external
   auto reduce = [](ExprPtr expr) {
     Index::reset_tmp_index();
-    FWickTheorem(expr).reduce(expr);
+    FWickTheorem(expr, deduce_named_indices).reduce(expr);
     return expr;
   };
   auto g = [&](Index const& x, Index const& y) {
@@ -499,7 +502,7 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
                         ex<FNOperator>(cre{p1}, ann{}) *
                         ex<FNOperator>(cre{}, ann{p2});
       ExprPtr r;
-      REQUIRE_NOTHROW(r = FWickTheorem{expr}.compute());
+      REQUIRE_NOTHROW(r = FWickTheorem(expr, deduce_named_indices).compute());
       CHECK(!has_delta_across_instances(r));
       // the core term keeps one overlap between the two bases
       CHECK(standing_metrics(r) == (ket_instance == 1 ? 0 : 1));
@@ -513,7 +516,7 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
       const auto u2 = Index(L"u_2").replace_basis_instance(bra_instance);
       const auto expr =
           ex<FNOperator>(cre{}, ann{u2}) * ex<FNOperator>(cre{u1}, ann{});
-      FWickTheorem wick{expr};
+      FWickTheorem wick{expr, deduce_named_indices};
       wick.eta_as_delta_minus_gamma(true);
       ExprPtr r;
       REQUIRE_NOTHROW(r = wick.compute());
@@ -534,7 +537,7 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
     REQUIRE(u1.basis().metric() == IndexBasisMetric::General);
     const auto expr =
         ex<FNOperator>(cre{}, ann{u2}) * ex<FNOperator>(cre{u1}, ann{});
-    FWickTheorem wick{expr};
+    FWickTheorem wick{expr, deduce_named_indices};
     wick.eta_as_delta_minus_gamma(true);
     ExprPtr r;
     REQUIRE_NOTHROW(r = wick.compute());

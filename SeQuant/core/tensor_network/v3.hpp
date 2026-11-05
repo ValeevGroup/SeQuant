@@ -278,6 +278,8 @@ class TensorNetworkV3 {
 
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
+  /// @param named_indices the indices that cannot be renamed, i.e. whose labels
+  /// are meaningful; deduction selects the external indices (ext_indices())
   /// @param options see CanonicalizeOptions for the meaning of this
   /// parameter; the default is given by CanonicalizeOptions::default_options()
   /// @return byproduct of canonicalization (e.g. phase); if none, returns
@@ -285,9 +287,14 @@ class TensorNetworkV3 {
   /// to be zero by symmetry (see Graph::automorphism_phase()), in which case
   /// the tensors are left as they were
   ExprPtr canonicalize(
-      const container::vector<std::wstring> &cardinal_tensor_labels = {},
+      const container::vector<std::wstring> &cardinal_tensor_labels,
+      const NamedIndexSpec &named_indices,
       const CanonicalizeOptions &options =
           CanonicalizeOptions::default_options());
+
+  /// @return the named indices that @p spec specifies for this network:
+  /// ext_indices() if they are to be deduced
+  NamedIndexSet named_indices(const NamedIndexSpec &spec) const;
 
   /// metadata produced by canonicalize_slots()
   struct SlotCanonicalizationMetadata {
@@ -338,8 +345,7 @@ class TensorNetworkV3 {
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
   /// @param named_indices specifies the indices that cannot be renamed, i.e.
-  /// their labels are meaningful; default is nullptr, which results in external
-  /// indices treated as named indices
+  /// their labels are meaningful
   /// @param named_index_compare less-than comparison function for
   /// named indices, used for coarse-grained sorting of named indices,
   /// before sorting to canonical order; the default is to sort
@@ -351,8 +357,17 @@ class TensorNetworkV3 {
   /// leaves the canonicalization at the space-only named coloring.
   /// @return the computed canonicalization metadata
   SlotCanonicalizationMetadata canonicalize_slots(
-      const container::vector<std::wstring> &cardinal_tensor_labels = {},
-      const NamedIndexSet *named_indices = nullptr,
+      const container::vector<std::wstring> &cardinal_tensor_labels,
+      const NamedIndexSet &named_indices,
+      SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
+          default_idxptr_slottype_lesscompare{},
+      const tensor_network::NamedIndexColorMap *named_index_colors = nullptr);
+
+  /// like the other overload, with the named indices that @p named_indices
+  /// specifies (deduction selects ext_indices())
+  SlotCanonicalizationMetadata canonicalize_slots(
+      const container::vector<std::wstring> &cardinal_tensor_labels,
+      const NamedIndexSpec &named_indices,
       SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
           default_idxptr_slottype_lesscompare{},
       const tensor_network::NamedIndexColorMap *named_index_colors = nullptr);
@@ -389,12 +404,6 @@ class TensorNetworkV3 {
   /// options for generating Graph from an object of this type
   struct CreateGraphOptions {
     SEQUANT_DESIGNATED_INIT_ONLY;
-    /// pointer to the set of named indices (ordinarily,
-    /// this includes all external indices);
-    /// default is nullptr, which means use all external indices for
-    /// named indices
-    const NamedIndexSet *named_indices = nullptr;
-
     /// optional per-named-index loop-color map: when non-null, a named index
     /// found here has its DAG-scope loop-color folded into its vertex color so
     /// that same-space named indices bound to different loops become
@@ -477,7 +486,16 @@ class TensorNetworkV3 {
   ///     - for tensors with bra<->ket symmetry matching bra and ket slot
   ///     vertices have identical colors.
   // clang-format on
+  /// @param[in] named_indices the named indices (ordinarily, the external
+  /// indices)
   Graph create_graph(
+      const NamedIndexSet &named_indices,
+      const CreateGraphOptions &options = make_default_graph_options()) const;
+
+  /// like the other overload, with the named indices that @p named_indices
+  /// specifies (deduction selects ext_indices())
+  Graph create_graph(
+      const NamedIndexSpec &named_indices,
       const CreateGraphOptions &options = make_default_graph_options()) const;
   /// @param graph a graph produced by create_graph()
   /// @param aut_hook if nonempty, called with each automorphism generator of

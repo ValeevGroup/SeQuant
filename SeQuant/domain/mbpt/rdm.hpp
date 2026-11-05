@@ -30,8 +30,12 @@ ExprPtr cumulant3_to_density(ExprPtr ex_);
 
 /// replaces every cumulant κ_k in @p expr by its expansion in densities, then
 /// expands and simplifies
+/// @param expr the expression
+/// @param external_indices the external indices of @p expr , see
+///        NamedIndexSpec
 /// @note a κ is recognized by its label alone, whatever its symmetries
-ExprPtr cumulants_to_densities(ExprPtr expr);
+ExprPtr cumulants_to_densities(ExprPtr expr,
+                               const NamedIndexSpec& external_indices);
 
 ExprPtr one_body_sub(ExprPtr ex_);
 
@@ -54,7 +58,12 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast = false);
 //
 // fast implementation represent non-constant solution interms of like terms and
 // permutation operators.
-ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast = false);
+//
+// @param external_indices the external indices of @p input (needed by the fast
+// implementation of a Sum or Product input), see NamedIndexSpec
+ExprPtr three_body_substitution(ExprPtr& input,
+                                const NamedIndexSpec& external_indices,
+                                int rank, bool fast = false);
 
 }  // namespace decompositions
 }  // namespace mbpt

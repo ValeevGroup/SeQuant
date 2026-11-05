@@ -13,15 +13,21 @@
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/range/conversion.hpp>
 #include <range/v3/range/primitives.hpp>
 
 #include <algorithm>
 #include <iostream>
+#include <numeric>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <utility>
+#include <vector>
 
 namespace sequant {
 
@@ -113,12 +119,13 @@ ExprPtr lone_term(const ExprPtr& expr) {
 
 }  // namespace
 
-ExprPtr& canonicalize(ExprPtr& expr, const CanonicalizeOptions& opts) {
+ExprPtr& canonicalize(ExprPtr& expr, const NamedIndexSpec& named_indices,
+                      const CanonicalizeOptions& opts) {
   // the contexts are read at several points of this call and of the hooks
   const auto contexts_in_effect = pin_default_contexts();
-  if (expr->is_canonical(opts)) return expr;
+  if (expr->is_canonical(named_indices, opts)) return expr;
   const auto contexts_version = current_contexts_version();
-  const auto byproduct = expr->canonicalize(opts);
+  const auto byproduct = expr->canonicalize(named_indices, opts);
   if (byproduct) {
     if (!byproduct->is<Constant>())
       throw Exception(
@@ -130,33 +137,161 @@ ExprPtr& canonicalize(ExprPtr& expr, const CanonicalizeOptions& opts) {
   // form on its own may differ from its form as a summand or factor
   if (auto term = lone_term(expr)) {
     expr = std::move(term);
-    return canonicalize(expr, opts);
+    return canonicalize(expr, named_indices, opts);
   }
-  expr->mark_canonical(opts, contexts_version);
+  expr->mark_canonical(named_indices, opts, contexts_version);
   return expr;
 }
 
-ExprPtr& canonicalize(ExprPtr& expr) {
-  return canonicalize(expr, CanonicalizeOptions::default_options());
-}
-
-ExprPtr canonicalize(ExprPtr&& expr_rv, const CanonicalizeOptions& opts) {
-  canonicalize(expr_rv, opts);
+ExprPtr canonicalize(ExprPtr&& expr_rv, const NamedIndexSpec& named_indices,
+                     const CanonicalizeOptions& opts) {
+  canonicalize(expr_rv, named_indices, opts);
   return std::move(expr_rv);
 }
 
-ExprPtr canonicalize(ExprPtr&& expr_rv) {
-  canonicalize(expr_rv);
-  return std::move(expr_rv);
+NamedIndexSpec named_indices(const ResultExpr& expr) {
+  return NamedIndexSpec(expr.indices() | ranges::to<container::set<Index>>);
 }
 
-ResultExpr& canonicalize(ResultExpr& expr) {
-  expr.expression() = canonicalize(expr.expression());
+namespace {
 
+/// @return the permutations of the indices of @p result that its symmetries
+/// relate, as index replacement maps, each with its phase (identity
+/// included); only those that map every index to one of the same space, i.e.
+/// that relate elements of the block of the result, not elements of different
+/// blocks
+std::vector<std::pair<container::map<Index, Index>, int>> symmetry_group(
+    const ResultExpr& result) {
+  const container::svector<Index> bra(result.bra().begin(), result.bra().end());
+  const container::svector<Index> ket(result.ket().begin(), result.ket().end());
+  using Perm = std::vector<std::size_t>;
+  auto all_perms = [](std::size_t n) {
+    std::vector<Perm> perms;
+    Perm p(n);
+    std::iota(p.begin(), p.end(), 0);
+    do perms.push_back(p);
+    while (std::next_permutation(p.begin(), p.end()));
+    return perms;
+  };
+  auto parity = [](const Perm& p) {
+    int sign = 1;
+    for (std::size_t i = 0; i != p.size(); ++i)
+      for (std::size_t j = i + 1; j != p.size(); ++j)
+        if (p[i] > p[j]) sign = -sign;
+    return sign;
+  };
+  auto identity = [](std::size_t n) {
+    Perm p(n);
+    std::iota(p.begin(), p.end(), 0);
+    return p;
+  };
+
+  // pairs of permutations of the bra and of the ket slots, with phase
+  std::vector<std::tuple<Perm, Perm, int>> slot_perms;
+  if (result.symmetry() != Symmetry::Nonsymm) {
+    const int antisymm = result.symmetry() == Symmetry::Antisymm;
+    for (const auto& pb : all_perms(bra.size()))
+      for (const auto& pk : all_perms(ket.size()))
+        slot_perms.emplace_back(pb, pk, antisymm ? parity(pb) * parity(pk) : 1);
+  } else if (result.column_symmetry() == ColumnSymmetry::Symm &&
+             bra.size() == ket.size()) {
+    for (const auto& p : all_perms(bra.size()))
+      slot_perms.emplace_back(p, p, 1);
+  } else {
+    slot_perms.emplace_back(identity(bra.size()), identity(ket.size()), 1);
+  }
+
+  std::vector<std::pair<container::map<Index, Index>, int>> group;
+  const bool braket_swap = result.braket_symmetry() == BraKetSymmetry::Symm &&
+                           bra.size() == ket.size();
+  for (const auto& [pb, pk, sign] : slot_perms)
+    for (const bool swap : {false, true}) {
+      if (swap && !braket_swap) continue;
+      container::map<Index, Index> map;
+      for (std::size_t k = 0; k != bra.size(); ++k) {
+        const Index& target = swap ? ket[pk[k]] : bra[pb[k]];
+        if (bra[k].nonnull() && bra[k] != target) map.emplace(bra[k], target);
+      }
+      for (std::size_t k = 0; k != ket.size(); ++k) {
+        const Index& target = swap ? bra[pb[k]] : ket[pk[k]];
+        if (ket[k].nonnull() && ket[k] != target) map.emplace(ket[k], target);
+      }
+      if (ranges::all_of(map, [](const auto& source_target) {
+            return source_target.first.space() == source_target.second.space();
+          }))
+        group.emplace_back(std::move(map), sign);
+    }
+  return group;
+}
+
+/// @return @p term (a summand of the expression of a result) in the
+/// canonical form that is the same for all its images under @p group , the
+/// symmetry group of the result (see symmetry_group()), with the phase of the
+/// permutation absorbed: of the canonical forms of the images the one that is
+/// smallest by hash (then by its text) is chosen; the indices of @p result keep
+/// their labels
+ExprPtr canonicalize_term_for_result(
+    const ExprPtr& term,
+    const std::vector<std::pair<container::map<Index, Index>, int>>& group,
+    const NamedIndexSpec& named, const CanonicalizeOptions& opts) {
+  ExprPtr best;
+  std::optional<std::pair<std::size_t, std::wstring>> best_key;
+  for (const auto& [map, sign] : group) {
+    ExprPtr image =
+        map.empty() ? term->clone() : transform_expr(term, map, sign);
+    canonicalize(image, named, opts);
+    // the key ignores the scalar, so that images that differ only by it
+    // compare equal
+    ExprPtr unscaled = image;
+    if (image->is<Product>() && image->as<Product>().scalar() != 1) {
+      unscaled = image->clone();
+      unscaled->as<Product>().scale(1 / image->as<Product>().scalar());
+    }
+    std::pair<std::size_t, std::wstring> key{unscaled->hash_value(), {}};
+    if (best_key && key.first == best_key->first) {
+      key.second = unscaled->to_latex();
+      if (best_key->second.empty()) {
+        ExprPtr best_unscaled = best;
+        if (best->is<Product>() && best->as<Product>().scalar() != 1) {
+          best_unscaled = best->clone();
+          best_unscaled->as<Product>().scale(1 / best->as<Product>().scalar());
+        }
+        best_key->second = best_unscaled->to_latex();
+      }
+    }
+    if (!best_key || key < *best_key) {
+      best = std::move(image);
+      best_key = std::move(key);
+    }
+  }
+  return best;
+}
+
+}  // namespace
+
+ResultExpr& canonicalize(ResultExpr& expr, const CanonicalizeOptions& opts) {
+  const auto named = named_indices(expr);
+  const auto group = symmetry_group(expr);
+  if (group.size() > 1) {
+    // terms that differ by a permutation of the result indices within the
+    // symmetry group of the result are the same term
+    auto& rhs = expr.expression();
+    if (rhs->is<Sum>()) {
+      auto sum = std::make_shared<Sum>();
+      for (const auto& summand : rhs->as<Sum>())
+        sum->append(canonicalize_term_for_result(summand, group, named, opts));
+      rhs = sum;
+    } else if (!rhs->is<Constant>() && !rhs->is<Variable>()) {
+      rhs = canonicalize_term_for_result(rhs, group, named, opts);
+    }
+  }
+  canonicalize(expr.expression(), named, opts);
   return expr;
 }
 
-ResultExpr& canonicalize(ResultExpr&& expr) { return canonicalize(expr); }
+ResultExpr& canonicalize(ResultExpr&& expr, const CanonicalizeOptions& opts) {
+  return canonicalize(expr, opts);
+}
 
 struct ExpandVisitor {
   void operator()(ExprPtr& expr) {
@@ -652,7 +787,8 @@ ResultExpr& rapid_simplify(ResultExpr& expr) {
 
 ResultExpr& rapid_simplify(ResultExpr&& expr) { return rapid_simplify(expr); }
 
-ExprPtr& simplify(ExprPtr& expr, const CanonicalizeOptions& opts) {
+ExprPtr& simplify(ExprPtr& expr, const NamedIndexSpec& named_indices,
+                  const CanonicalizeOptions& opts) {
   if (!opts.is_internal_form())
     throw Exception(
         "simplify: presentation settings are not supported; canonicalize "
@@ -661,34 +797,35 @@ ExprPtr& simplify(ExprPtr& expr, const CanonicalizeOptions& opts) {
   const auto contexts_in_effect = pin_default_contexts();
   expand(expr);
   rapid_simplify(expr);
-  canonicalize(expr, opts);
+  canonicalize(expr, named_indices, opts);
   rapid_simplify(expr);
   return expr;
 }
 
-ExprPtr& simplify(ExprPtr& expr) {
-  return simplify(expr, CanonicalizeOptions::default_options());
-}
-
-ExprPtr simplify(ExprPtr&& expr_rv, const CanonicalizeOptions& opts) {
+ExprPtr simplify(ExprPtr&& expr_rv, const NamedIndexSpec& named_indices,
+                 const CanonicalizeOptions& opts) {
   auto expr = std::move(expr_rv);
-  simplify(expr, opts);
+  simplify(expr, named_indices, opts);
   return expr;
 }
 
-ExprPtr simplify(ExprPtr&& expr_rv) {
-  auto expr = std::move(expr_rv);
-  simplify(expr);
+ResultExpr& simplify(ResultExpr& expr, const CanonicalizeOptions& opts) {
+  if (!opts.is_internal_form())
+    throw Exception(
+        "simplify: presentation settings are not supported; canonicalize "
+        "explicitly to choose a presentation");
+  // every stage reads the contexts
+  const auto contexts_in_effect = pin_default_contexts();
+  expand(expr.expression());
+  rapid_simplify(expr.expression());
+  canonicalize(expr, opts);
+  rapid_simplify(expr.expression());
   return expr;
 }
 
-ResultExpr& simplify(ResultExpr& expr) {
-  expr.expression() = simplify(expr.expression());
-
-  return expr;
+ResultExpr& simplify(ResultExpr&& expr, const CanonicalizeOptions& opts) {
+  return simplify(expr, opts);
 }
-
-ResultExpr& simplify(ResultExpr&& expr) { return simplify(expr); }
 
 ExprPtr& non_canon_simplify(ExprPtr& expr) {
   expand(expr);

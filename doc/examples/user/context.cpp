@@ -104,14 +104,14 @@ int main() {
           L"A", std::make_shared<NullTensorCanonicalizer>());
     });
     auto product = make_product();
-    product->canonicalize();
+    product->canonicalize(deduce_named_indices);
     SEQUANT_ASSERT(product.as<Product>().scalar() == 1);
   }
 
   // outside of the scope the default canonicalizer reorders the indices of A,
   // picking up a sign
   auto product = make_product();
-  product->canonicalize();
+  product->canonicalize(deduce_named_indices);
   SEQUANT_ASSERT(product.as<Product>().scalar() == -1);
   // end-snippet-5
 

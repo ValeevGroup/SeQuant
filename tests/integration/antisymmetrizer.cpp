@@ -65,7 +65,8 @@ void try_main() {
 
   auto a3 = ex<FNOperator>(cre{Index(L"i_1"), Index(L"i_2"), Index(L"i_3")},
                            ann{Index(L"a_1"), Index(L"a_2"), Index(L"a_3")});
-  auto new_a3 = decompositions::three_body_substitution(a3, 2);
+  auto new_a3 =
+      decompositions::three_body_substitution(a3, deduce_named_indices, 2);
   std::wcout << "Now TESTING SPIN SUMMATION";
   // auto result = new_a3 - antisymm_test;
   // simplify(result);

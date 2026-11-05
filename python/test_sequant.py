@@ -33,8 +33,9 @@ class TestSequant(unittest.TestCase):
     from _sequant.mbpt import A,H,T,t,VacuumAverage,EVOptions
     opts = EVOptions()
     opts.connect = [("h", "t"), ("f", "t"), ("g", "t")]
-    ccd = VacuumAverage( A(-2) * H() * t(2) * t(2), opts );
-    ccsd = VacuumAverage( A(-2) * H() * T(2) * T(2), opts );
+    # the projector A carries the external indices
+    ccd = VacuumAverage( A(-2) * H() * t(2) * t(2), opts, external_indices=[] );
+    ccsd = VacuumAverage( A(-2) * H() * T(2) * T(2), opts, external_indices=[] );
     print (ccsd.latex)
 
     class String:

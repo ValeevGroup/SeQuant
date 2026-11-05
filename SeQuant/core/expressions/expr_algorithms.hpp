@@ -103,51 +103,6 @@ T& ExprPtr::as() {
   return as_shared_ptr()->as<T>();
 }
 
-/// Recursively canonicalizes an Expr and replaces it as needed
-/// @param[in,out] expr expression to be canonicalized; may be
-/// _replaced_ (i.e. `&expr` may be mutated by call); a Sum left with at most
-/// one summand, or a Product with one factor and a unit scalar, is replaced
-/// by that summand or factor (or 0), canonicalized on its own
-/// @note the canonicalization options are those of the default context
-/// @return \p expr to facilitate chaining
-ExprPtr& canonicalize(ExprPtr& expr);
-
-/// Recursively canonicalizes an Expr; like mutating canonicalize() but works
-/// for temporary expressions
-/// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
-/// @note the canonicalization options are those of the default context
-/// @return canonicalized form of \p expr_rv
-ExprPtr canonicalize(ExprPtr&& expr_rv);
-
-/// Recursively canonicalizes an Expr with the given options and replaces it as
-/// needed
-/// @param[in,out] expr expression to be canonicalized; may be
-/// _replaced_ (i.e. `&expr` may be mutated by call)
-/// @param[in] opts the canonicalization options
-/// @return \p expr to facilitate chaining
-ExprPtr& canonicalize(ExprPtr& expr, const CanonicalizeOptions& opts);
-
-/// Recursively canonicalizes an Expr with the given options; like mutating
-/// canonicalize() but works for temporary expressions
-/// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
-/// @param[in] opts the canonicalization options
-/// @return canonicalized form of \p expr_rv
-ExprPtr canonicalize(ExprPtr&& expr_rv, const CanonicalizeOptions& opts);
-
-/// Recursively canonicalizes an Expr and replaces it as needed
-/// @param[in,out] expr expression to be canonicalized; may be
-/// _replaced_ (i.e. `&expr` may be mutated by call)
-/// @note the canonicalization options are those of the default context
-/// @return \p expr to facilitate chaining
-ResultExpr& canonicalize(ResultExpr& expr);
-
-/// Recursively canonicalizes an Expr; like mutating canonicalize() but works
-/// for temporary expressions
-/// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
-/// @note the canonicalization options are those of the default context
-/// @return canonicalized form of \p expr_rv
-[[nodiscard]] ResultExpr& canonicalize(ResultExpr&& expr);
-
 /// Recursively expands products of sums
 /// @param[in,out] expr expression to be expanded
 /// @return \p expr to facilitate chaining
@@ -212,53 +167,92 @@ ResultExpr& rapid_simplify(ResultExpr& expr);
 /// @return \p expr to facilitate chaining
 [[nodiscard]] ResultExpr& rapid_simplify(ResultExpr&& expr);
 
+/// Recursively canonicalizes an Expr and replaces it as needed
+/// @param[in,out] expr expression to be canonicalized; may be
+/// _replaced_ (i.e. `&expr` may be mutated by call); a Sum left with at most
+/// one summand, or a Product with one factor and a unit scalar, is replaced
+/// by that summand or factor (or 0), canonicalized on its own
+/// @param[in] named_indices the indices whose labels are meaningful, i.e. that
+/// canonicalization must not rename (ordinarily the external indices of
+/// @p expr); see NamedIndexSpec
+/// @param[in] opts the canonicalization options
+/// @return \p expr to facilitate chaining
+ExprPtr& canonicalize(
+    ExprPtr& expr, const NamedIndexSpec& named_indices,
+    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
+
+/// Recursively canonicalizes an Expr; like mutating canonicalize() but works
+/// for temporary expressions
+/// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
+/// @param[in] named_indices the indices that canonicalization must not rename
+/// @param[in] opts the canonicalization options
+/// @return canonicalized form of \p expr_rv
+ExprPtr canonicalize(
+    ExprPtr&& expr_rv, const NamedIndexSpec& named_indices,
+    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
+
+/// @return the named indices of @p expr : the indices of its result
+NamedIndexSpec named_indices(const ResultExpr& expr);
+
+/// Recursively canonicalizes the expression of a ResultExpr, with the indices
+/// of the result as the named indices
+/// @param[in,out] expr expression to be canonicalized
+/// @param[in] opts the canonicalization options
+/// @return \p expr to facilitate chaining
+ResultExpr& canonicalize(
+    ResultExpr& expr,
+    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
+
+/// Recursively canonicalizes the expression of a ResultExpr; like mutating
+/// canonicalize() but works for temporary expressions
+/// @param[in] expr expression to be canonicalized
+/// @param[in] opts the canonicalization options
+/// @return \p expr
+[[nodiscard]] ResultExpr& canonicalize(
+    ResultExpr&& expr,
+    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
+
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify
 /// @param[in,out] expr expression to be simplified; may be
 /// _replaced_ (i.e. `&expr` may be mutated by call)
-/// @note the canonicalization options are those of the default context
-/// @sa rapid_simplify()
-/// @return \p expr to facilitate chaining
-ExprPtr& simplify(ExprPtr& expr);
-
-/// Simplifies an Expr by a combination of expansion, canonicalization, and
-/// rapid_simplify; like mutating simplify() but works for temporary expressions
-/// @param[in] expr_rv rvalue-ref-to-expression to be simplified
-/// @note the canonicalization options are those of the default context
-/// @return simplified form of \p expr_rv
-ExprPtr simplify(ExprPtr&& expr_rv);
-
-/// Simplifies an Expr by a combination of expansion, canonicalization with the
-/// given options, and rapid_simplify
-/// @param[in,out] expr expression to be simplified; may be
-/// _replaced_ (i.e. `&expr` may be mutated by call)
+/// @param[in] named_indices the indices that canonicalization must not rename
+/// (ordinarily the external indices of @p expr); see NamedIndexSpec
 /// @param[in] opts the canonicalization options; must produce the library's
 /// canonical form (`opts.is_internal_form()`)
-/// @return \p expr to facilitate chaining
-ExprPtr& simplify(ExprPtr& expr, const CanonicalizeOptions& opts);
-
-/// Simplifies an Expr like simplify(ExprPtr&, const CanonicalizeOptions&), but
-/// works for temporary expressions
-/// @param[in] expr_rv rvalue-ref-to-expression to be simplified
-/// @param[in] opts the canonicalization options
-/// @return simplified form of \p expr_rv
-ExprPtr simplify(ExprPtr&& expr_rv, const CanonicalizeOptions& opts);
-
-/// Simplifies an Expr by a combination of expansion, canonicalization, and
-/// rapid_simplify
-/// @param[in,out] expr expression to be simplified; may be
-/// _replaced_ (i.e. `&expr` may be mutated by call)
-/// @note the canonicalization options are those of the default context
 /// @sa rapid_simplify()
 /// @return \p expr to facilitate chaining
-ResultExpr& simplify(ResultExpr& expr);
+ExprPtr& simplify(
+    ExprPtr& expr, const NamedIndexSpec& named_indices,
+    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
 
-/// Simplifies an Expr by a combination of expansion, canonicalization, and
-/// rapid_simplify; like mutating simplify() but works for temporary expressions
+/// Simplifies an Expr like simplify(ExprPtr&, ...), but works for temporary
+/// expressions
 /// @param[in] expr_rv rvalue-ref-to-expression to be simplified
-/// @note the canonicalization options are those of the default context
+/// @param[in] named_indices the indices that canonicalization must not rename
+/// @param[in] opts the canonicalization options
 /// @return simplified form of \p expr_rv
-[[nodiscard]] ResultExpr& simplify(ResultExpr&& expr);
+ExprPtr simplify(
+    ExprPtr&& expr_rv, const NamedIndexSpec& named_indices,
+    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
+
+/// Simplifies the expression of a ResultExpr, with the indices of the result
+/// as the named indices
+/// @param[in,out] expr expression to be simplified
+/// @param[in] opts the canonicalization options
+/// @return \p expr to facilitate chaining
+ResultExpr& simplify(
+    ResultExpr& expr,
+    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
+
+/// Simplifies the expression of a ResultExpr; like mutating simplify() but
+/// works for temporary expressions
+/// @param[in] expr expression to be simplified
+/// @param[in] opts the canonicalization options
+/// @return \p expr
+[[nodiscard]] ResultExpr& simplify(
+    ResultExpr&& expr,
+    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
 
 /// Simplifies an Expr by a combination of expansion and
 /// rapid_simplify

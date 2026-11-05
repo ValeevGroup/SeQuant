@@ -148,8 +148,9 @@ void require_permutation(TreeShape const& tree, std::size_t n,
 
 }  // namespace
 
-ExprPtr canonical_term(ExprPtr const& term) {
-  return canonicalize(flatten(term->clone()));
+ExprPtr canonical_term(ExprPtr const& term,
+                       NamedIndexSpec const& external_indices) {
+  return canonicalize(flatten(term->clone()), external_indices);
 }
 
 std::string term_key(ExprPtr const& canonical) {

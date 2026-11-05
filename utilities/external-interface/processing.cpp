@@ -57,7 +57,8 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
 
   if (options.expand_symmetrizer) {
     spdlog::debug("Fully expanding all antisymmetrizers before spintracing...");
-    result.expression() = simplify(expand_A_op(result.expression()));
+    result.expression() =
+        simplify(expand_A_op(result.expression()), named_indices(result));
     spdlog::debug("Expanded expression:\n{}", result);
   }
 

@@ -30,9 +30,10 @@
 
 namespace sequant::opt::schedule {
 
-/// canonicalize(flatten(term->clone())); the object every other function here
-/// works on. \p term itself is not modified.
-ExprPtr canonical_term(ExprPtr const& term);
+/// canonicalize(flatten(term->clone()), external_indices); the object every
+/// other function here works on. \p term itself is not modified.
+ExprPtr canonical_term(ExprPtr const& term,
+                       NamedIndexSpec const& external_indices);
 
 /// toUtf8(v1::to_string(canonical)) -- the identity of a term in the document.
 /// Canonicalization renames the dummy (contracted) indices only: the external

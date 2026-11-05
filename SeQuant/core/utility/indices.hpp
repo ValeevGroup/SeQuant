@@ -680,6 +680,50 @@ template <typename T>
 concept IndexGroupContainer =
     std::ranges::range<T> && IndexGroup<std::ranges::range_value_t<T>>;
 
+/// @param expr an expression
+/// @param external_indices the external indices of @p expr
+/// @return @p external_indices without those that a projector (a tensor with
+/// the label of the antisymmetrizer or the symmetrizer) of @p expr carries:
+/// the projector absorbs any relabeling of its indices, so they need not be
+/// named, and naming them would keep terms that differ only by such a
+/// relabeling apart
+inline container::set<Index> without_projector_indices(
+    const ExprPtr& expr, container::set<Index> external_indices) {
+  if (!expr || external_indices.empty()) return external_indices;
+  expr->visit(
+      [&external_indices](const ExprPtr& e) {
+        if (!e->is<Tensor>()) return;
+        const auto& t = e->as<Tensor>();
+        if (t.label() != reserved::antisymm_label() &&
+            t.label() != reserved::symm_label())
+          return;
+        for (const Index& idx : t.const_indices()) external_indices.erase(idx);
+      },
+      /*atoms_only=*/true);
+  if (expr->is<Tensor>()) {
+    const auto& t = expr->as<Tensor>();
+    if (t.label() == reserved::antisymm_label() ||
+        t.label() == reserved::symm_label())
+      for (const Index& idx : t.const_indices()) external_indices.erase(idx);
+  }
+  return external_indices;
+}
+
+/// @param groups a range of groups of indices (Index or SlottedIndex objects)
+/// @return the set of all indices of @p groups
+template <std::ranges::range Groups>
+container::set<Index> flatten_index_groups(const Groups& groups) {
+  container::set<Index> result;
+  for (auto&& group : groups)
+    for (auto&& idx : group) {
+      if constexpr (std::is_convertible_v<decltype(idx), const Index&>)
+        result.insert(idx);
+      else
+        result.insert(idx.index());
+    }
+  return result;
+}
+
 /// @param group A group of indices with slot information
 /// @returns The bra index of the provided group
 ///

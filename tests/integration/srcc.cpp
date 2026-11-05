@@ -176,7 +176,8 @@ class compute_cceqvec {
         }
 
         // validate spin-free equations by spin-tracing spin-orbital equations
-        const auto should_be_zero = simplify(eqvec_sf_ref[R] - eqvec[R]);
+        const auto should_be_zero =
+            simplify(eqvec_sf_ref[R] - eqvec[R], deduce_named_indices);
         if (should_be_zero != ex<Constant>(0))
           std::wcout << "Spin-free equations do not match spin-traced "
                         "spin-orbital equations: N="
