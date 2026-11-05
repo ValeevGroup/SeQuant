@@ -10,7 +10,9 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <SeQuant/core/bliss.hpp>
@@ -1648,5 +1650,126 @@ TEST_CASE("tensor_power_canonicalization", "[algorithms]") {
     auto s = M * pow(D, rational{-1}) + Mp * pow(Dp, rational{-1});
     simplify(s, deduce_named_indices);
     CHECK(s->is_zero());
+  }
+}
+
+TEST_CASE("prettify", "[algorithms][canonicalize]") {
+  using namespace sequant;
+
+  auto labels_of = [](const ExprPtr& product) {
+    REQUIRE(product->is<Product>());
+    std::vector<std::wstring> labels;
+    for (const auto& factor : product->as<Product>().factors())
+      labels.emplace_back(factor->as<Tensor>().label());
+    return labels;
+  };
+  auto make = [] {
+    return ex<Tensor>(L"Z", bra{L"i_1"}, ket{L"a_1"}) *
+           ex<Tensor>(L"Y", bra{L"a_1"}, ket{L"i_1"});
+  };
+  const std::vector<std::wstring> y_first{L"Y", L"Z"};
+  const std::vector<std::wstring> z_first{L"Z", L"Y"};
+  const PrettifyOptions z_opts{
+      .presentation = {.cardinal_tensor_labels =
+                           container::vector<std::wstring>{L"Z"}}};
+
+  SECTION("sort only") {
+    const auto input = make();
+    const auto pretty = prettify(input, deduce_named_indices,
+                                 PrettifyOptions{.recanonicalize = false});
+    CHECK(labels_of(pretty) == y_first);
+    // the input is not modified
+    CHECK(labels_of(input) == z_first);
+    CHECK(labels_of(
+              prettify(input, deduce_named_indices,
+                       PrettifyOptions{.recanonicalize = false,
+                                       .presentation = z_opts.presentation})) ==
+          z_first);
+    // only sorted: the dummy indices keep their labels
+    const auto sum = deserialize(L"t{a_3;i_3} + f{a_7;i_7}");
+    CHECK(*prettify(sum, deduce_named_indices,
+                    PrettifyOptions{.recanonicalize = false}) ==
+          *deserialize(L"f{a_7;i_7} + t{a_3;i_3}"));
+  }
+
+  SECTION("full") {
+    // with the default options the order of the library's canonical form
+    CHECK(labels_of(prettify(make(), deduce_named_indices)) == y_first);
+    CHECK(labels_of(prettify(make(), deduce_named_indices, z_opts)) == z_first);
+    // an index comparer of the presentation settings
+    const auto default_cmp = TensorCanonicalizer::default_index_comparer();
+    const PrettifyOptions reversed{
+        .presentation = {
+            .index_comparer = std::make_shared<const tensor_index_comparer_t>(
+                [default_cmp](const Index& idx1, const Index& idx2) {
+                  return default_cmp(idx2, idx1);
+                })}};
+    const auto q = ex<Tensor>(L"Q", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                              Symmetry::Antisymm);
+    const auto pretty = prettify(q, deduce_named_indices, reversed);
+    CHECK(*pretty == *ex<Tensor>(L"Q", bra{L"i_2", L"i_1"}, ket{L"a_2", L"a_1"},
+                                 Symmetry::Antisymm));
+    CHECK_THAT(pretty, EquivalentTo(q));
+  }
+
+  SECTION("equivalence and idempotence") {
+    for (const auto* input :
+         {L"1/2 g{i_1,i_2;a_3,a_4}:A * t{a_3,a_4;i_1,i_2}:A + f{i_1;a_1} * "
+          L"t{a_1;i_1}",
+          L"R{i_3;a_3} * t{a_3;i_3} + 2 f{i_1;a_1} * t{a_1;i_1}"}) {
+      CAPTURE(toUtf8(input));
+      const auto expr = deserialize(input);
+      for (const auto& opts :
+           {PrettifyOptions{}, z_opts, mbpt::prettify_options()}) {
+        const auto pretty = prettify(expr, deduce_named_indices, opts);
+        CHECK_THAT(pretty, EquivalentTo(expr));
+        CHECK(prettify(pretty, deduce_named_indices, opts) == pretty);
+      }
+    }
+  }
+
+  SECTION("named indices and the result are preserved") {
+    const auto result = deserialize<ResultExpr>(
+        L"R{a_1;i_1} = f{a_2;i_1} * t{a_1;i_2} * X{i_2;a_2} + "
+        L"t{a_1;i_1} * f{i_2;a_2} * t{a_2;i_2}");
+    const auto pretty = prettify(result, mbpt::prettify_options());
+    CHECK(pretty.has_label());
+    CHECK(pretty.label() == result.label());
+    CHECK(pretty.bra() == result.bra());
+    CHECK(pretty.ket() == result.ket());
+    // the external indices keep their labels
+    auto unique_indices = [](const ExprPtr& expr) {
+      const auto groups = get_unique_indices(expr);
+      container::set<Index> result;
+      for (const auto* group : {&groups.bra, &groups.ket, &groups.aux})
+        result.insert(group->begin(), group->end());
+      return result;
+    };
+    CHECK(unique_indices(pretty.expression()) ==
+          unique_indices(result.expression()));
+    CHECK(unique_indices(pretty.expression()).size() == 2);
+    CHECK_THAT(pretty, EquivalentTo(result));
+  }
+
+  SECTION("the mbpt preset") {
+    // t precedes R among the mbpt labels, R precedes t lexicographically
+    const auto expr = ex<Tensor>(L"R", bra{L"i_1"}, ket{L"a_1"}) *
+                      ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"});
+    CHECK(labels_of(prettify(expr, deduce_named_indices)) ==
+          std::vector<std::wstring>{L"R", L"t"});
+    CHECK(labels_of(
+              prettify(expr, deduce_named_indices, mbpt::prettify_options())) ==
+          std::vector<std::wstring>{L"t", L"R"});
+  }
+
+  SECTION("the result is not canonical") {
+    auto expr = make();
+    canonicalize(expr, deduce_named_indices);
+    REQUIRE(expr->is_canonical(deduce_named_indices));
+    const auto pretty = prettify(expr, deduce_named_indices, z_opts);
+    CHECK(labels_of(pretty) == z_first);
+    CHECK(!pretty->is_canonical(deduce_named_indices));
+    // the input keeps its mark
+    CHECK(expr->is_canonical(deduce_named_indices));
   }
 }

@@ -370,6 +370,8 @@ set(SeQuant_symb_src
         SeQuant/core/expressions/lexicographic_order.hpp
         SeQuant/core/expressions/power.cpp
         SeQuant/core/expressions/power.hpp
+        SeQuant/core/expressions/prettify.cpp
+        SeQuant/core/expressions/prettify.hpp
         SeQuant/core/expressions/product.cpp
         SeQuant/core/expressions/product.hpp
         SeQuant/core/expressions/result_expr.cpp

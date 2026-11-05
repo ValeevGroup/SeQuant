@@ -75,6 +75,9 @@ inline void __init__(py::module m) {
       "sets the normalization convention of the process-wide default MBPT "
       "context; the change is not scoped and is seen by every thread");
 
+  m.def("cardinal_tensor_labels", &sequant::mbpt::cardinal_tensor_labels,
+        "the tensor labels in the conventional order of mbpt expressions; pass "
+        "to prettify");
   m.def("F", &sequant::mbpt::F);
   m.def("H", &sequant::mbpt::H,
         "H(k = 2) returns a Hamiltonian operator with up to k-body terms",

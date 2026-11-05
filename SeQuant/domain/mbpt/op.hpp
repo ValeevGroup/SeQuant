@@ -138,8 +138,13 @@ struct OpParams {
 };
 
 /// @return the tensor labels in the cardinal order, starting with the
-/// reserved labels that Context uses by default
+/// reserved labels that lead the library's canonical form (see
+/// default_cardinal_tensor_labels())
 std::vector<std::wstring> cardinal_tensor_labels();
+
+/// @return the options of prettify() that present mbpt expressions in the
+/// conventional order of their tensors (see cardinal_tensor_labels())
+PrettifyOptions prettify_options();
 
 //////////////////////////////
 
