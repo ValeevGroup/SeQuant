@@ -207,6 +207,12 @@ inline std::string form_label(std::string const& label,
 /// \param is_volatile the node-level volatility predicate the evaluation
 ///        runs with (see \c evaluate_ordered_schedule), which decides
 ///        persistence; empty means no leaf is volatile
+/// \param cm when non-null, every value record is priced by this cost model:
+///        \c modeled_footprint = \c detail::cell_footprint at \p block_of
+///        (the per-batch slab) and \c modeled_size = \c memsize over the
+///        carried modes; null leaves both 0
+/// \param block_of the block (sliced) extent of a batched mode, as the
+///        schedule was built with; empty means 1
 /// \throws sequant::Exception when the forest and \p roots disagree (tree or
 ///         summand count, a Sum spine node that is not an in-place Sum), or
 ///         when a value, block step or legality record cannot be resolved
@@ -216,7 +222,9 @@ DagRecord record_dag(
     OrderedSchedule const& ordered, R const& forest,
     std::vector<RootRecord> const& roots,
     std::function<bool(std::ranges::range_value_t<R> const&)> const&
-        is_volatile = {}) {
+        is_volatile = {},
+    dryrun::CostModel const* cm = nullptr,
+    std::function<std::size_t(Index const&)> const& block_of = {}) {
   // nodes are keyed by address across two passes over the forest
   static_assert(
       std::is_lvalue_reference_v<std::ranges::range_reference_t<R const>>,
@@ -629,6 +637,16 @@ DagRecord record_dag(
     rec.persistent = outermost[v].persistent;
     rec.first_use = c.first_use;
     rec.last_use = c.last_use;
+    if (cm) {
+      // the same two numbers the dry-run meter and the static peak sweep use:
+      // the home-relative slab (sliced modes at block extent) and the full
+      // value (every mode at the regime's extent)
+      std::function<std::size_t(Index const&)> const one =
+          [](Index const&) -> std::size_t { return 1; };
+      rec.modeled_footprint = ::sequant::eval::detail::cell_footprint(
+          c.carried, c.home_modes, *cm, block_of ? block_of : one);
+      rec.modeled_size = cm->memsize(c.carried);
+    }
     auto const lit = legality_of.find(value_key_of(c));
     if (lit == legality_of.end())
       throw Exception("record_dag: value " + rec.id +
