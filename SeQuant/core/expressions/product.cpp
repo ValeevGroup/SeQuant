@@ -121,28 +121,9 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
   if (!contains_nontensors) {  // tensor network canonization is a special case
                                // that's done in
                                // TensorNetwork
-    auto make_canonical_tn = [this, &opts](auto *tn_null_ptr) {
-      using TN = std::decay_t<std::remove_pointer_t<decltype(tn_null_ptr)>>;
-      ExprPtr canon_factor;
-      TN tn(this->factors_);
-      if constexpr (TN::version() == 3) {
-        canon_factor = tn.canonicalize(
-            get_default_context_snapshot().cardinal_tensor_labels(), opts);
-      } else {
-        using NamedIndexSet = tensor_network::NamedIndexSet;
-        std::shared_ptr<NamedIndexSet> named_indices =
-            !opts.named_indices
-                ? nullptr
-                : std::make_shared<NamedIndexSet>(opts.named_indices->begin(),
-                                                  opts.named_indices->end());
-        canon_factor = tn.canonicalize(
-            get_default_context_snapshot().cardinal_tensor_labels(),
-            opts.method == CanonicalizationMethod::Rapid, named_indices.get());
-      }
-      return std::pair{std::move(tn), canon_factor};
-    };
-    using TN = TensorNetwork;
-    auto [tn, canon_factor] = make_canonical_tn(static_cast<TN *>(nullptr));
+    TensorNetwork tn(this->factors_);
+    const ExprPtr canon_factor =
+        tn.canonicalize(detail::cardinal_tensor_labels(opts), opts);
 
     const auto &tensors = tn.tensors();
     using std::size;
@@ -166,8 +147,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
   } else {  // if contains non-tensors, do commutation-checking resort
 
     // comparer that respects cardinal tensor labels
-    const auto ctx = get_default_context_snapshot();
-    const auto &cardinal_tensor_labels = ctx.cardinal_tensor_labels();
+    const auto cardinal_tensor_labels = detail::cardinal_tensor_labels(opts);
     auto local_compare = [&cardinal_tensor_labels](const ExprPtr &first,
                                                    const ExprPtr &second) {
       if (first->is<Labeled>() && second->is<Labeled>()) {

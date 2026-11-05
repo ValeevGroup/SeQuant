@@ -307,8 +307,9 @@ auto fresh_anonymous_index_validator(
 
 }  // namespace
 
-ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
-                                            bool ignore_named_index_labels) {
+ExprPtr TensorNetworkV3::canonicalize_graph(
+    const NamedIndexSet &named_indices, bool ignore_named_index_labels,
+    std::shared_ptr<const tensor_index_comparer_t> label_less) {
   int parity = 1;
 
   if (Logger::instance().canonicalize) {
@@ -386,7 +387,8 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
   if (collect_automorphisms && !automorphisms.empty())
     labeling = order_named_indices_by_label(
         graph, std::move(labeling), std::move(automorphisms), named_indices,
-        get_default_context_snapshot().index_comparer());
+        label_less ? *label_less
+                   : *detail::index_comparer(CanonicalizeOptions{}));
   const unsigned int *canonize_perm = labeling.data();
 
   if (Logger::instance().canonicalize_dot) {
@@ -738,7 +740,8 @@ ExprPtr TensorNetworkV3::canonicalize(
     // indistinguishable tensors present in the expression. Their order and
     // indexing can only be determined via this rigorous canonization.
     byproduct = canonicalize_graph(
-        named_indices, static_cast<bool>(options.ignore_named_index_labels));
+        named_indices, static_cast<bool>(options.ignore_named_index_labels),
+        detail::index_comparer(options));
     if (byproduct && byproduct->as<Constant>().is_zero()) return byproduct;
   }
 
@@ -746,7 +749,7 @@ ExprPtr TensorNetworkV3::canonicalize(
       CanonicalizationMethod::Lexicographic) {
     // Ensure each individual tensor is written in the way that its tensor
     // block (== order of index spaces) is canonical
-    byproduct *= canonicalize_individual_tensor_blocks(named_indices);
+    byproduct *= canonicalize_individual_tensor_blocks(named_indices, options);
 
     CanonicalTensorCompare<decltype(cardinal_tensor_labels)> tensor_sorter(
         cardinal_tensor_labels, true);
@@ -830,7 +833,7 @@ ExprPtr TensorNetworkV3::canonicalize(
 
     apply_index_replacements(tensors_, idxrepl, true);
 
-    byproduct *= canonicalize_individual_tensors(named_indices);
+    byproduct *= canonicalize_individual_tensors(named_indices, options);
 
     // We assume that re-indexing did not change the canonical order of tensors
     SEQUANT_ASSERT(
@@ -1873,25 +1876,27 @@ size_t TensorNetworkV3::SlotCanonicalizationMetadata::hash_value() const {
 }
 
 ExprPtr TensorNetworkV3::canonicalize_individual_tensor_blocks(
-    const NamedIndexSet &named_indices) {
-  return do_individual_canonicalization(
-      TensorBlockCanonicalizer(named_indices));
+    const NamedIndexSet &named_indices, const CanonicalizeOptions &options) {
+  return do_individual_canonicalization(TensorBlockCanonicalizer(named_indices),
+                                        options);
 }
 
 ExprPtr TensorNetworkV3::canonicalize_individual_tensors(
-    const NamedIndexSet &named_indices) {
+    const NamedIndexSet &named_indices, const CanonicalizeOptions &options) {
   return do_individual_canonicalization(
-      DefaultTensorCanonicalizer(named_indices));
+      DefaultTensorCanonicalizer(named_indices, detail::index_comparer(options),
+                                 detail::index_pair_comparer(options)),
+      options);
 }
 
 ExprPtr TensorNetworkV3::do_individual_canonicalization(
-    const TensorCanonicalizer &canonicalizer) {
+    const TensorCanonicalizer &canonicalizer,
+    const CanonicalizeOptions &options) {
   ExprPtr byproduct = ex<Constant>(1);
 
-  const auto ctx = get_default_context_snapshot();
   for (auto &tensor : tensors_) {
     auto nondefault_canonizer_ptr =
-        ctx.nondefault_tensor_canonicalizer_ptr(tensor->_label());
+        detail::nondefault_tensor_canonicalizer(options, tensor->_label());
     const TensorCanonicalizer &tensor_canonizer =
         nondefault_canonizer_ptr ? *nondefault_canonizer_ptr : canonicalizer;
 

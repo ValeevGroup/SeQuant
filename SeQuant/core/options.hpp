@@ -5,11 +5,15 @@
 #ifndef SEQUANT_CORE_OPTIONS_HPP
 #define SEQUANT_CORE_OPTIONS_HPP
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor_canonicalizer_fwd.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
 
+#include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace sequant {
@@ -44,6 +48,37 @@ CanonicalizationMethod operator|(CanonicalizationMethod m1,
                                  CanonicalizationMethod m2);
 std::wstring to_wstring(CanonicalizationMethod m);
 
+/// @brief settings of a canonicalization that only affect how its result
+/// looks, i.e. which of the equivalent forms it picks; a member that is not
+/// set takes the library default
+struct CanonicalizationPresentation {
+  SEQUANT_DESIGNATED_INIT_ONLY;
+
+  /// the labels of the tensors to place first, in this order
+  std::optional<container::vector<std::wstring>> cardinal_tensor_labels =
+      std::nullopt;
+  /// orders the indices of a tensor
+  std::shared_ptr<const tensor_index_comparer_t> index_comparer = nullptr;
+  /// orders the index pairs of a tensor
+  std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer =
+      nullptr;
+  /// canonicalizers for the tensors with the given labels; the one for the
+  /// empty label, if any, replaces the default canonicalizer of the tensors
+  /// with any other label
+  container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
+      tensor_canonicalizers = {};
+
+  /// @return true if @p a and @p b agree in every member; comparers and
+  /// canonicalizers are compared by identity
+  friend bool operator==(const CanonicalizationPresentation& a,
+                         const CanonicalizationPresentation& b);
+};
+
+/// @return the cardinal tensor labels of the library's canonical form: the
+/// reserved labels of the antisymmetrizer, symmetrizer and transposition
+/// operators
+const container::vector<std::wstring>& default_cardinal_tensor_labels();
+
 /// @brief options that control behavior of `canonicalize()`
 struct CanonicalizeOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
@@ -71,26 +106,64 @@ struct CanonicalizeOptions {
   /// two named indices of the network. A Sum canonicalizes its summands with
   /// labels distinguished regardless.
   IgnoreNamedIndexLabel ignore_named_index_labels = IgnoreNamedIndexLabel::Yes;
+  /// presentation settings; null selects the library's canonical form, which
+  /// is the only one recorded by the canonical mark of an Expr
+  std::shared_ptr<const CanonicalizationPresentation> presentation = nullptr;
+
+  /// @return true if these options produce the library's canonical form, i.e.
+  /// have no presentation settings
+  bool is_internal_form() const { return presentation == nullptr; }
 
   static CanonicalizeOptions default_options();
   CanonicalizeOptions copy_and_set(CanonicalizationMethod) const;
   CanonicalizeOptions copy_and_set(std::optional<container::set<Index>>) const;
   CanonicalizeOptions copy_and_set(IgnoreNamedIndexLabel) const;
+  CanonicalizeOptions copy_and_set(
+      std::shared_ptr<const CanonicalizationPresentation>) const;
 
-  /// @return true if @p a and @p b agree in every member
+  /// @return true if @p a and @p b agree in every member; presentations are
+  /// compared by value
   friend bool operator==(const CanonicalizeOptions& a,
                          const CanonicalizeOptions& b) {
     // the bindings name every member (guard is the SEQUANT_DESIGNATED_INIT_ONLY
     // tag), so that a member added to CanonicalizeOptions fails to compile here
     // until it is compared
-    const auto& [guard_a, method_a, named_indices_a, ignore_labels_a] = a;
-    const auto& [guard_b, method_b, named_indices_b, ignore_labels_b] = b;
+    const auto& [guard_a, method_a, named_indices_a, ignore_labels_a,
+                 presentation_a] = a;
+    const auto& [guard_b, method_b, named_indices_b, ignore_labels_b,
+                 presentation_b] = b;
     (void)guard_a;
     (void)guard_b;
+    const bool same_presentation = presentation_a == presentation_b ||
+                                   (presentation_a && presentation_b &&
+                                    *presentation_a == *presentation_b);
     return method_a == method_b && named_indices_a == named_indices_b &&
-           ignore_labels_a == ignore_labels_b;
+           ignore_labels_a == ignore_labels_b && same_presentation;
   }
 };
+
+namespace detail {
+
+/// the presentation settings that a canonicalization with given options uses;
+/// each resolves a setting that @c opts.presentation does not set to the
+/// library default
+/// @{
+container::vector<std::wstring> cardinal_tensor_labels(
+    const CanonicalizeOptions& opts);
+std::shared_ptr<const tensor_index_comparer_t> index_comparer(
+    const CanonicalizeOptions& opts);
+std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer(
+    const CanonicalizeOptions& opts);
+/// @return the canonicalizer for exactly @p label , or null
+std::shared_ptr<TensorCanonicalizer> nondefault_tensor_canonicalizer(
+    const CanonicalizeOptions& opts, std::wstring_view label);
+/// @return the canonicalizer for @p label , else the one for the empty label,
+/// or null if neither is set
+std::shared_ptr<TensorCanonicalizer> tensor_canonicalizer(
+    const CanonicalizeOptions& opts, std::wstring_view label);
+/// @}
+
+}  // namespace detail
 
 }  // namespace sequant
 

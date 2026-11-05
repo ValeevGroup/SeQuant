@@ -105,26 +105,32 @@ ExprPtr canonicalize_tensor_leaf(
   if (leaf.is_canonical(opts)) return {};
   auto &tensor = leaf.as<AbstractTensor>();
   const auto contexts_version = current_contexts_version();
-  const auto ctx = get_default_context_snapshot();
   ExprPtr byproduct;
   if (has_repeated_index(tensor)) {
     // a repeated index is contracted, so this is a tensor network and is
     // canonicalized as one, like a Product of tensors
     TensorNetwork tn(static_cast<const Expr &>(leaf));
-    byproduct = tn.canonicalize(ctx.cardinal_tensor_labels(), opts);
+    byproduct = tn.canonicalize(detail::cardinal_tensor_labels(opts), opts);
     SEQUANT_ASSERT(tn.tensors().size() == 1);
     const AbstractTensor &canonical = *tn.tensors()[0];
     SEQUANT_ASSERT(typeid(canonical) == typeid(tensor));
     assign(canonical);
   } else {
-    // the canonicalizer for the label, as for a tensor in a TensorNetwork
-    const auto canonicalizer = ctx.tensor_canonicalizer_ptr(tensor._label());
-    if (!canonicalizer)
-      throw Exception(
-          "canonicalize_tensor_leaf: the current context has no tensor "
-          "canonicalizer for this label nor a default one");
-    byproduct = canonicalizer->apply(tensor);
+    // the canonicalizer for the label, as for a tensor in a TensorNetwork,
+    // else the default one with the comparers of opts
+    if (const auto canonicalizer =
+            detail::tensor_canonicalizer(opts, tensor._label()))
+      byproduct = canonicalizer->apply(tensor);
+    else
+      byproduct = DefaultTensorCanonicalizer(container::set<Index>{},
+                                             detail::index_comparer(opts),
+                                             detail::index_pair_comparer(opts))
+                      .apply(tensor);
   }
+  if (byproduct && !byproduct->is<Constant>())
+    throw Exception(
+        "canonicalize_tensor_leaf: the byproduct of a tensor canonicalizer "
+        "must be a Constant");
   leaf.mark_canonical(opts, contexts_version);
   return byproduct;
 }

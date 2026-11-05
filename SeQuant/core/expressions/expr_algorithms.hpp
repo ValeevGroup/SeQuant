@@ -119,6 +119,21 @@ ExprPtr& canonicalize(ExprPtr& expr);
 /// @return canonicalized form of \p expr_rv
 ExprPtr canonicalize(ExprPtr&& expr_rv);
 
+/// Recursively canonicalizes an Expr with the given options and replaces it as
+/// needed
+/// @param[in,out] expr expression to be canonicalized; may be
+/// _replaced_ (i.e. `&expr` may be mutated by call)
+/// @param[in] opts the canonicalization options
+/// @return \p expr to facilitate chaining
+ExprPtr& canonicalize(ExprPtr& expr, const CanonicalizeOptions& opts);
+
+/// Recursively canonicalizes an Expr with the given options; like mutating
+/// canonicalize() but works for temporary expressions
+/// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
+/// @param[in] opts the canonicalization options
+/// @return canonicalized form of \p expr_rv
+ExprPtr canonicalize(ExprPtr&& expr_rv, const CanonicalizeOptions& opts);
+
 /// Recursively canonicalizes an Expr and replaces it as needed
 /// @param[in,out] expr expression to be canonicalized; may be
 /// _replaced_ (i.e. `&expr` may be mutated by call)
@@ -212,6 +227,22 @@ ExprPtr& simplify(ExprPtr& expr);
 /// @note the canonicalization options are those of the default context
 /// @return simplified form of \p expr_rv
 ExprPtr simplify(ExprPtr&& expr_rv);
+
+/// Simplifies an Expr by a combination of expansion, canonicalization with the
+/// given options, and rapid_simplify
+/// @param[in,out] expr expression to be simplified; may be
+/// _replaced_ (i.e. `&expr` may be mutated by call)
+/// @param[in] opts the canonicalization options; must produce the library's
+/// canonical form (`opts.is_internal_form()`)
+/// @return \p expr to facilitate chaining
+ExprPtr& simplify(ExprPtr& expr, const CanonicalizeOptions& opts);
+
+/// Simplifies an Expr like simplify(ExprPtr&, const CanonicalizeOptions&), but
+/// works for temporary expressions
+/// @param[in] expr_rv rvalue-ref-to-expression to be simplified
+/// @param[in] opts the canonicalization options
+/// @return simplified form of \p expr_rv
+ExprPtr simplify(ExprPtr&& expr_rv, const CanonicalizeOptions& opts);
 
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify

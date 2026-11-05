@@ -792,6 +792,121 @@ TEST_CASE("context_tensor_canonicalizers", "[algorithms]") {
   }
 }
 
+TEST_CASE("explicit_presentation", "[algorithms][canonicalize]") {
+  using namespace sequant;
+
+  auto Q = [](std::initializer_list<std::wstring_view> b,
+              std::initializer_list<std::wstring_view> k) {
+    return ex<Tensor>(L"Q", bra(b), ket(k), Symmetry::Antisymm);
+  };
+  auto with = [](CanonicalizationPresentation presentation) {
+    return CanonicalizeOptions{
+        .presentation = std::make_shared<const CanonicalizationPresentation>(
+            std::move(presentation))};
+  };
+
+  SECTION("lone tensor uses the canonicalizer for its label") {
+    // per-label canonicalizer given in the options ...
+    auto q = Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"});
+    CHECK(q->as<Tensor>().canonicalize(with(
+              {.tensor_canonicalizers = {
+                   {L"Q", NullTensorCanonicalizer::instance()}}})) == nullptr);
+    CHECK(*q == *Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"}));
+    // ... or registered for its label in the context
+    {
+      auto scoped = set_scoped_default_context(
+          Context(get_default_context())
+              .set_tensor_canonicalizer(L"Q",
+                                        NullTensorCanonicalizer::instance()));
+      CHECK(q->as<Tensor>().canonicalize() == nullptr);
+      CHECK(*q == *Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"}));
+    }
+    // a Q-labeled tensor alone and in a product are canonicalized alike, so
+    // t and 2t combine
+    {
+      auto scoped = set_scoped_default_context(
+          Context(get_default_context())
+              .set_tensor_canonicalizer(L"Q",
+                                        NullTensorCanonicalizer::instance()));
+      auto sum = Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"}) +
+                 ex<Constant>(2) * Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"});
+      simplify(sum);
+      CHECK(sum->is<Product>());
+    }
+  }
+
+  SECTION("index comparer") {
+    const auto default_cmp = TensorCanonicalizer::default_index_comparer();
+    const auto reversed = std::make_shared<const tensor_index_comparer_t>(
+        [default_cmp](const Index& idx1, const Index& idx2) {
+          return default_cmp(idx2, idx1);
+        });
+    auto q = Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"});
+    q->as<Tensor>().canonicalize(with({.index_comparer = reversed}));
+    CHECK(*q == *Q({L"i_2", L"i_1"}, {L"a_2", L"a_1"}));
+    // without presentation settings the default order is restored
+    CHECK(q->as<Tensor>().canonicalize() == nullptr);
+    CHECK(*q == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+  }
+
+  SECTION("cardinal tensor labels") {
+    auto labels_of = [](const ExprPtr& product) {
+      REQUIRE(product->is<Product>());
+      std::vector<std::wstring> labels;
+      for (const auto& factor : product->as<Product>().factors())
+        labels.emplace_back(factor->as<Tensor>().label());
+      return labels;
+    };
+    auto make = [] {
+      return ex<Tensor>(L"Z", bra{L"i_1"}, ket{L"a_1"}) *
+             ex<Tensor>(L"Y", bra{L"a_1"}, ket{L"i_1"});
+    };
+    const std::vector<std::wstring> y_first{L"Y", L"Z"};
+    const std::vector<std::wstring> z_first{L"Z", L"Y"};
+
+    auto internal = make();
+    canonicalize(internal, CanonicalizeOptions{});
+    CHECK(labels_of(internal) == y_first);
+    CHECK(internal->is_canonical(CanonicalizeOptions{}));
+
+    const auto z_opts =
+        with({.cardinal_tensor_labels = container::vector<std::wstring>{L"Z"}});
+    // a form with presentation settings is not recorded as canonical ...
+    auto presented = make();
+    canonicalize(presented, z_opts);
+    CHECK(labels_of(presented) == z_first);
+    CHECK(!presented->is_canonical(z_opts));
+    CHECK(!presented->is_canonical(CanonicalizeOptions{}));
+    // ... and a canonical mark does not keep a presentation from being applied
+    auto clone = internal->clone();
+    canonicalize(clone, z_opts);
+    CHECK(labels_of(clone) == z_first);
+  }
+
+  SECTION("simplify accepts only the library's form") {
+    auto expr = Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"});
+    CHECK_THROWS_AS(
+        simplify(expr, with({.cardinal_tensor_labels =
+                                 container::vector<std::wstring>{L"Q"}})),
+        Exception);
+  }
+
+  SECTION("options compare presentations by value") {
+    const auto a =
+        with({.cardinal_tensor_labels = container::vector<std::wstring>{L"Z"}});
+    const auto b =
+        with({.cardinal_tensor_labels = container::vector<std::wstring>{L"Z"}});
+    const auto c =
+        with({.cardinal_tensor_labels = container::vector<std::wstring>{L"Y"}});
+    CHECK(a == b);
+    CHECK(!(a == c));
+    CHECK(!(a == CanonicalizeOptions{}));
+    CHECK(
+        a.copy_and_set(std::shared_ptr<const CanonicalizationPresentation>{}) ==
+        CanonicalizeOptions{});
+  }
+}
+
 TEST_CASE("canonicalization_zero_by_symmetry", "[algorithms][canonicalize]") {
   using namespace sequant;
 

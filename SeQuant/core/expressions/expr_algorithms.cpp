@@ -12,6 +12,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/primitives.hpp>
@@ -112,24 +113,36 @@ ExprPtr lone_term(const ExprPtr& expr) {
 
 }  // namespace
 
-ExprPtr& canonicalize(ExprPtr& expr) {
+ExprPtr& canonicalize(ExprPtr& expr, const CanonicalizeOptions& opts) {
   // the contexts are read at several points of this call and of the hooks
   const auto contexts_in_effect = pin_default_contexts();
-  const auto opts = CanonicalizeOptions::default_options();
   if (expr->is_canonical(opts)) return expr;
   const auto contexts_version = current_contexts_version();
   const auto byproduct = expr->canonicalize(opts);
-  if (byproduct && byproduct->is<Constant>()) {
+  if (byproduct) {
+    if (!byproduct->is<Constant>())
+      throw Exception(
+          "canonicalize: the byproduct of canonicalization must be a "
+          "Constant");
     expr = byproduct * expr;
   }
   // a Sum or Product left with a single term is that term, whose canonical
   // form on its own may differ from its form as a summand or factor
   if (auto term = lone_term(expr)) {
     expr = std::move(term);
-    return canonicalize(expr);
+    return canonicalize(expr, opts);
   }
   expr->mark_canonical(opts, contexts_version);
   return expr;
+}
+
+ExprPtr& canonicalize(ExprPtr& expr) {
+  return canonicalize(expr, CanonicalizeOptions::default_options());
+}
+
+ExprPtr canonicalize(ExprPtr&& expr_rv, const CanonicalizeOptions& opts) {
+  canonicalize(expr_rv, opts);
+  return std::move(expr_rv);
 }
 
 ExprPtr canonicalize(ExprPtr&& expr_rv) {
@@ -639,13 +652,27 @@ ResultExpr& rapid_simplify(ResultExpr& expr) {
 
 ResultExpr& rapid_simplify(ResultExpr&& expr) { return rapid_simplify(expr); }
 
-ExprPtr& simplify(ExprPtr& expr) {
+ExprPtr& simplify(ExprPtr& expr, const CanonicalizeOptions& opts) {
+  if (!opts.is_internal_form())
+    throw Exception(
+        "simplify: presentation settings are not supported; canonicalize "
+        "explicitly to choose a presentation");
   // every stage reads the contexts
   const auto contexts_in_effect = pin_default_contexts();
   expand(expr);
   rapid_simplify(expr);
-  canonicalize(expr);
+  canonicalize(expr, opts);
   rapid_simplify(expr);
+  return expr;
+}
+
+ExprPtr& simplify(ExprPtr& expr) {
+  return simplify(expr, CanonicalizeOptions::default_options());
+}
+
+ExprPtr simplify(ExprPtr&& expr_rv, const CanonicalizeOptions& opts) {
+  auto expr = std::move(expr_rv);
+  simplify(expr, opts);
   return expr;
 }
 

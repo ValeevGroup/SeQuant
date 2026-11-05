@@ -237,8 +237,13 @@ ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) const {
 
   canonicalize_braket(t);
 
-  const auto ctx = get_default_context_snapshot();
-  auto result = this->apply(t, ctx.index_comparer(), ctx.index_pair_comparer());
+  const auto index_comparer =
+      index_comparer_ ? index_comparer_
+                      : detail::index_comparer(CanonicalizeOptions{});
+  const auto index_pair_comparer =
+      index_pair_comparer_ ? index_pair_comparer_
+                           : detail::index_pair_comparer(CanonicalizeOptions{});
+  auto result = this->apply(t, *index_comparer, *index_pair_comparer);
 
   reset_tags(t);
 
