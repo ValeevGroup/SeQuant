@@ -65,8 +65,8 @@ class Context {
     SEQUANT_DESIGNATED_INIT_ONLY;
     /// whether to use cluster-specific virtuals
     CSV csv = Defaults::csv;
-    /// shared pointer to operator registry
-    std::shared_ptr<OpRegistry> op_registry_ptr = nullptr;
+    /// shared pointer to operator registry; the Context holds a copy of it
+    std::shared_ptr<const OpRegistry> op_registry_ptr = nullptr;
     /// optional operator registry, use if no shared pointer is provided
     std::optional<OpRegistry> op_registry = std::nullopt;
     /// normalization convention for tensor-form generation
@@ -92,28 +92,24 @@ class Context {
   /// @brief copy assignment
   Context& operator=(Context const& other) = default;
 
-  /// @brief clones this object and its OpRegistry
-  Context clone() const;
-
   /// @return the value of CSV in this context
   CSV csv() const;
 
   /// @return the normalization convention for tensor-form generation
   NormalizationConvention normalization_convention() const;
 
-  /// @return a constant pointer to the OpRegistry for this context
+  /// @return a constant pointer to the OpRegistry for this context, which is
+  /// immutable: it is shared only by copies of this context
   /// @note asserts that OpRegistry is not null
   std::shared_ptr<const OpRegistry> op_registry() const;
 
-  /// @return a pointer to the OpRegistry for this context
-  /// @note asserts that OpRegistry is not null
-  std::shared_ptr<OpRegistry> mutable_op_registry() const;
-
-  /// @brief sets the OpRegistry for this context
+  /// @brief sets the OpRegistry for this context to a copy of @p op_registry
   Context& set(const OpRegistry& op_registry);
 
-  /// @brief sets the OpRegistry for this context
-  Context& set(std::shared_ptr<OpRegistry> op_registry);
+  /// @brief sets the OpRegistry for this context to a copy of
+  /// `*op_registry` (or to null), so that changes made later through
+  /// @p op_registry do not affect this context
+  Context& set(std::shared_ptr<const OpRegistry> op_registry);
 
   /// @brief sets whether to use cluster-specific virtuals
   Context& set(CSV csv);
@@ -123,7 +119,7 @@ class Context {
 
  private:
   CSV csv_ = Defaults::csv;
-  std::shared_ptr<OpRegistry> op_registry_;
+  std::shared_ptr<const OpRegistry> op_registry_;
   NormalizationConvention normalization_convention_ =
       Defaults::normalization_convention;
 

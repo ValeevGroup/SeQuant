@@ -503,6 +503,17 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(cloned.contains(L"T"));
       REQUIRE(cloned.contains(L"L"));
       REQUIRE(cloned.ops().size() == registry.ops().size());
+
+      // copies are deep, too
+      OpRegistry copy(registry);
+      copy.add(L"R", OpClass::Ex);
+      copy.set_hermiticity(L"T", sequant::Hermiticity::Hermitian);
+      REQUIRE(!registry.contains(L"R"));
+      REQUIRE(registry.hermiticity(L"T") == sequant::Hermiticity::NonHermitian);
+      OpRegistry assigned;
+      assigned = registry;
+      assigned.remove(L"T");
+      REQUIRE(registry.contains(L"T"));
     }
 
     SECTION("purge-registry") {
@@ -559,7 +570,9 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
       REQUIRE(ctx.csv() == CSV::No);
       REQUIRE(ctx.op_registry() != nullptr);
-      REQUIRE(ctx.op_registry() == reg);
+      // the context holds a copy
+      REQUIRE(ctx.op_registry() != reg);
+      REQUIRE(*ctx.op_registry() == *reg);
     }
 
     SECTION("set-operator-registry") {
@@ -568,10 +581,11 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
       ctx.set(reg);
       REQUIRE(ctx.op_registry() != nullptr);
-      REQUIRE(ctx.op_registry() == reg);
+      REQUIRE(ctx.op_registry() != reg);
+      REQUIRE(*ctx.op_registry() == *reg);
     }
 
-    SECTION("clone-context") {
+    SECTION("registry-copied-on-set") {
       auto reg = std::make_shared<OpRegistry>();
       reg->add(L"T", OpClass::Ex);
 
@@ -579,13 +593,27 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
           {.csv = CSV::Yes,
            .op_registry_ptr = reg,
            .normalization_convention = NormalizationConvention::Symmetric});
-      auto cloned = ctx.clone();
+      Context set_ctx;
+      set_ctx.set(reg);
+      Context set_value_ctx;
+      set_value_ctx.set(*reg);
 
-      REQUIRE(cloned.csv() == ctx.csv());
-      REQUIRE(cloned.normalization_convention() ==
+      // later changes through the caller's handle do not reach the contexts
+      reg->add(L"L", OpClass::Deex);
+      for (const auto* c : {&ctx, &set_ctx, &set_value_ctx}) {
+        REQUIRE(c->op_registry()->contains(L"T"));
+        REQUIRE(!c->op_registry()->contains(L"L"));
+      }
+      // nor do changes of a copy of the context's registry
+      OpRegistry copy = *ctx.op_registry();
+      copy.add(L"R", OpClass::Ex);
+      REQUIRE(!ctx.op_registry()->contains(L"R"));
+      // copies of a context share its (immutable) registry
+      const Context ctx_copy(ctx);
+      REQUIRE(ctx_copy.op_registry() == ctx.op_registry());
+      REQUIRE(ctx_copy.csv() == ctx.csv());
+      REQUIRE(ctx_copy.normalization_convention() ==
               ctx.normalization_convention());
-      REQUIRE(cloned.op_registry() != ctx.op_registry());  // Different pointer
-      REQUIRE(cloned.op_registry()->contains(L"T"));
     }
 
     SECTION("context-equality") {
@@ -618,7 +646,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
         auto current_ctx = get_default_mbpt_context();
         REQUIRE(current_ctx.csv() == CSV::Yes);
-        REQUIRE(current_ctx.op_registry() == reg1);
+        REQUIRE(*current_ctx.op_registry() == *reg1);
         REQUIRE(current_ctx.op_registry()->contains(L"t"));
         REQUIRE(current_ctx.op_registry()->contains(L"λ"));
       }

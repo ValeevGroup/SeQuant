@@ -578,7 +578,9 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
                       WickTheorem<S> &stats_sink) {
   // the external indices of the input, as given to the theorem
   const NamedIndexSpec &external_indices = stats_sink.external_indices_spec_;
-  const auto &ctx = get_default_context(S);
+  // a snapshot, which (with its registry) stays valid for the whole
+  // computation, even if the default context is replaced meanwhile
+  const auto ctx = get_default_context_snapshot(S);
   SEQUANT_ASSERT(ctx.vacuum() == Vacuum::MultiProduct);
   const auto &ibr = *ctx.index_basis_registry();
 

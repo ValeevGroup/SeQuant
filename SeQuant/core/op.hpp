@@ -1047,7 +1047,7 @@ class NormalOperator : public Operator<S>,
   template <Statistics>
   friend class Operator;
   bool commutes_with_atom(const Expr &that) const override {
-    const auto &ibr = get_default_context(S).index_basis_registry();
+    const auto ibr = get_default_index_basis_registry(S);
 
     bool result = true;
     /// does not commute with Operator<S>

@@ -204,7 +204,9 @@ ExprPtr projection_rewrite(ExprPtr const& x, projection_scope& scope) {
 ExprPtr projection_term(ExprPtr const& term, ProjectionOptions const& opts) {
   projection_scope scope{.opts = opts};
   std::size_t rank = 0;
-  auto const& registry = *get_default_mbpt_context().op_registry();
+  // holds the registry for as long as it is used
+  auto const registry_ptr = get_default_mbpt_context().op_registry();
+  auto const& registry = *registry_ptr;
   term->visit(
       [&](ExprPtr const& x) {
         if (!x->is<AbstractTensor>()) return;

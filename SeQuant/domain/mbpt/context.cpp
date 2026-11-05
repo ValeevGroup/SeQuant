@@ -13,23 +13,23 @@ namespace sequant::mbpt {
 static std::recursive_mutex mbpt_ctx_mtx;  // used to protect the MBPT context
 #endif
 
+namespace {
+
+/// @return a copy of @p registry owned by the context, or null
+std::shared_ptr<const OpRegistry> own_copy(const OpRegistry* registry) {
+  return registry ? std::make_shared<const OpRegistry>(*registry) : nullptr;
+}
+
+}  // namespace
+
 Context::Context(Options options)
     : csv_(options.csv),
-      op_registry_(options.op_registry_ptr
-                       ? std::move(options.op_registry_ptr)
-                       : (options.op_registry
-                              ? std::make_shared<OpRegistry>(
-                                    std::move(options.op_registry.value()))
-                              : nullptr)),
+      op_registry_(
+          own_copy(options.op_registry_ptr
+                       ? options.op_registry_ptr.get()
+                       : (options.op_registry ? &options.op_registry.value()
+                                              : nullptr))),
       normalization_convention_(options.normalization_convention) {}
-
-Context Context::clone() const {
-  Context ctx(*this);
-  if (op_registry_) {
-    ctx.op_registry_ = std::make_shared<OpRegistry>(op_registry_->clone());
-  }
-  return ctx;
-}
 
 CSV Context::csv() const { return csv_; }
 
@@ -42,18 +42,13 @@ std::shared_ptr<const OpRegistry> Context::op_registry() const {
   return op_registry_;
 }
 
-std::shared_ptr<OpRegistry> Context::mutable_op_registry() const {
-  SEQUANT_ASSERT(op_registry_, "mbpt::Context has null OpRegistry");
-  return op_registry_;
-}
-
 Context& Context::set(const OpRegistry& op_registry) {
-  op_registry_ = std::make_shared<OpRegistry>(op_registry);
+  op_registry_ = own_copy(&op_registry);
   return *this;
 }
 
-Context& Context::set(std::shared_ptr<OpRegistry> op_registry) {
-  op_registry_ = std::move(op_registry);
+Context& Context::set(std::shared_ptr<const OpRegistry> op_registry) {
+  op_registry_ = own_copy(op_registry.get());
   return *this;
 }
 

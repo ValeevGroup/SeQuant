@@ -170,7 +170,7 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
   if (!csv_basis.has_basis_instance())
     return csv_transform_rec(expr, csv_basis, /*orthonormal=*/true,
                              coeff_tensor_label, tensor_labels);
-  const auto& registry = get_default_context().index_basis_registry();
+  const auto registry = get_default_index_basis_registry();
   if (!registry || !registry->basis_label(csv_basis))
     throw Exception(
         "csv_transform: the target basis instance " +
