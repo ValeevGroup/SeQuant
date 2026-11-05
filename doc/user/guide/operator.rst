@@ -247,10 +247,10 @@ compute the reference average.
 In this case partial contractions leave residual operators that become RDMs after Wick's theorem has run, and both
 overloads of ``ref_av`` require empty ``connect`` and ``do_not_connect`` lists: an RDM of rank above one contains both
 connected and disconnected contributions, so whether the operators feeding it are connected is not a property of a term.
-An RDM index is external if it belongs to the context's named indices (``CanonicalizeOptions::named_indices``) or,
-when no named indices are set, if it occurs in a single bra or ket slot of its term. An index in a single bra or ket
-slot cannot be summed over, so when named indices are set they must include every such index of a term that contains
-an RDM; ``ref_av`` fails otherwise. A dummy RDM index is summed over the active space and is relabeled into it; an
+An RDM index is external if it is among the external indices given to ``ref_av`` (by a :class:`sequant::ResultExpr`, or
+explicitly by the operator-level overloads) or, when the caller opts in to :data:`sequant::deduce_named_indices`, if it
+occurs in a single bra or ket slot of its term. An index in a single bra or ket slot cannot be summed over, so explicit
+external indices must include every such index of a term that contains an RDM; ``ref_av`` fails otherwise. A dummy RDM index is summed over the active space and is relabeled into it; an
 external one keeps its label, and if its space extends beyond the active space the RDM takes an active-space index tied
 to the external one by a Kronecker delta. The active-space index carries no basis instance or protoindices of the index
 it replaces. An RDM index whose space does not overlap the active space, one lying entirely in the vacuum-occupied

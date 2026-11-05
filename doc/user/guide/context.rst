@@ -15,7 +15,8 @@ vocabulary of index spaces in use, e.g. occupied/virtual), the ``Vacuum`` relati
 (``Vacuum::Physical`` — the true, particle-free vacuum —, ``Vacuum::SingleProduct`` — a single-determinant quasiparticle vacuum —, or
 ``Vacuum::MultiProduct`` — a general reference state, for which :class:`sequant::WickTheorem` applies the *extended* form of Wick's
 theorem, with density cumulants), and the ``SPBasis`` (spin-orbital vs. spin-free); whether a basis is orthonormal is a property
-of the basis (:func:`sequant::IndexBasis::metric`), not of the context. It also owns the :ref:`canonicalizer configuration <context-canonicalizer-configuration>`. It is
+of the basis (:func:`sequant::IndexBasis::metric`), not of the context. It holds no canonicalization settings (see
+:ref:`context-canonicalization`), but the :ref:`printing options <context-printing>`. It is
 accessed and replaced through :func:`sequant::get_default_context`, :func:`sequant::set_default_context`, and
 :func:`sequant::reset_default_context`.
 
@@ -39,35 +40,16 @@ and ``Vacuum::SingleProduct`` on a copy of the current default context, and inst
    :end-before: end-snippet-1
    :dedent: 2
 
-.. _context-canonicalizer-configuration:
+.. _context-canonicalization:
 
-Canonicalizer configuration
-------------------------------
+Canonicalization
+------------------
 
-The ``Context`` owns the settings that govern how individual tensors are canonicalized (see :doc:`canonicalization`):
-
-- the :class:`sequant::TensorCanonicalizer` objects, keyed by tensor label
-  (:func:`sequant::Context::set_tensor_canonicalizer`). When tensors are canonicalized as part of a product (a tensor network), a
-  tensor uses the canonicalizer registered for its own label, if any (:func:`sequant::Context::nondefault_tensor_canonicalizer_ptr`),
-  and otherwise the built-in one that sorts bra/ket indices according to the tensor's symmetry. The canonicalizer keyed by the empty
-  label (:func:`sequant::Context::tensor_canonicalizer_ptr`) is the one ``Tensor::canonicalize()`` (and ``TensorPower::canonicalize()``)
-  applies to a lone tensor in which no index occurs more than once (one with a repeated index, protoindices included, is a tensor
-  network and is canonicalized as one);
-- the comparers that order indices and pairs of indices (:func:`sequant::Context::set_index_comparer`,
-  :func:`sequant::Context::set_index_pair_comparer`);
-- the *cardinal* tensor labels, which are given lexicographic preference during canonicalization
-  (:func:`sequant::Context::set_cardinal_tensor_labels`).
-
-Canonicalization reads this configuration from the default context for ``Statistics::Arbitrary`` only: a canonicalized product
-mixes tensors that have no statistics with operators of either statistics, and must order all of them consistently. The configuration
-of a context installed for a specific statistics is currently ignored. Keep it identical to that of the ``Statistics::Arbitrary``
-context nonetheless (as :func:`sequant::set_scoped_modified_default_context` does), since a future version may consult the
-statistics-specific context first.
-
-These can be given up front through ``Context::Options`` or changed on an existing ``Context`` with the setters above; to change them
-for the duration of a scope, use a scoped context (see below) with a modified canonicalizer configuration. The example
-canonicalizes a product, since that is where a canonicalizer registered for a label is used (a sum canonicalizes each of its summands
-separately):
+The context does not configure canonicalization: the library always canonicalizes to one fixed form (see
+:ref:`canonicalization-internal-form`), which depends on the context only through the index basis registry and the single-particle
+basis. Which indices are named (external) is given to every call, by a :class:`sequant::ResultExpr` or by opting in to
+:data:`sequant::deduce_named_indices`, and other forms (custom tensor canonicalizers, index comparers, cardinal tensor labels) are
+requested explicitly, through presentation options or :func:`sequant::prettify` (see :ref:`canonicalization-presentation`):
 
 .. literalinclude:: /examples/user/context.cpp
    :language: cpp
@@ -75,33 +57,17 @@ separately):
    :end-before: end-snippet-5
    :dedent: 2
 
-The canonicalizer configuration is part of the ``Context`` value, so installing a new ``Context`` replaces it: one constructed from
-``Context::Options`` or ``Context{}``, or the one :func:`sequant::reset_default_context` restores, carries the default configuration.
-Set the canonicalizers and labels on the ``Context`` you install, or derive it from the current one
-(``Context(get_default_context())``). :func:`sequant::mbpt::load` does the latter: it sets only the index basis registry and the
-vacuum on a copy of the current default context, so the rest of the configuration is kept. It installs the copy process-wide, hence
-throws if the calling thread has a scoped context active, whose settings it would otherwise make permanent.
-:func:`sequant::Context::set_cardinal_tensor_labels` takes the complete list of cardinal labels: the defaults (the reserved labels
-for antisymmetrizers, symmetrizers and transpositions) are kept only if the list includes them, as the one returned by
-:func:`sequant::mbpt::cardinal_tensor_labels` does.
+.. _context-printing:
 
-.. _context-canonicalization-options:
+Printing
+----------
 
-Canonicalization options
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The ``Context`` also carries the :class:`sequant::CanonicalizeOptions` that :func:`sequant::canonicalize`,
-:func:`sequant::simplify` and everything built on them use (``Context::Options::canonicalization_options``,
-``Context::set(CanonicalizeOptions)``, :func:`sequant::Context::canonicalization_options`): the canonicalization method, which
-indices are *named* (external), and whether the labels of the named indices affect the result. Like the rest of the configuration
-they are read from the ``Statistics::Arbitrary`` context only, by canonicalization and by the theorem machinery alike, whatever the
-statistics of the expression. By default the named indices of an
-expression are deduced as those that occur once in it; naming them explicitly makes an index that occurs more than once external,
-which is what the theorem machinery relies on as well: the named indices of the context are the external indices of a
-:class:`sequant::WickTheorem`, the ones it does not sum over (an operator sequence given to it directly follows the same rule: an
-index that appears in it twice is summed over unless the context names it). When the context names indices it names *every*
-external index of the expressions canonicalized under it, since any other index is then a dummy. There are no per-call options;
-to canonicalize under other options, scope a context that carries them (see :ref:`below <context-scoped>`).
+The :class:`sequant::PrintOptions` of the context (``Context::Options::print_options``, ``Context::set(PrintOptions)``,
+:func:`sequant::Context::print_options`) control how ``to_latex()`` prints expressions: whether tensor indices of ket modes are
+typeset as superscript or subscript (``braket_typesetting``), whether they are typeset with the ``tensor`` LaTeX package
+(``braket_slot_typesetting``), and, optionally, an order in which the top-level printers (``io::latex::to_string``,
+:func:`sequant::to_latex_align`) print summands and commuting factors (``ordering``). The top-level printers also take
+``PrintOptions`` explicitly. These are presentation settings only: no library logic depends on them.
 
 The MBPT ``Context``
 ----------------------
@@ -117,6 +83,11 @@ separately from the core ``Context``, via :func:`sequant::mbpt::set_default_mbpt
    :start-after: start-snippet-2
    :end-before: end-snippet-2
    :dedent: 2
+
+The context holds its own copy of the registry, which copies of the context share and which cannot change: changes made
+later through the registry (or the ``std::shared_ptr``) given to it do not affect the context. Copies of an
+:class:`sequant::mbpt::OpRegistry` are deep. To change the registry of a context, copy it, modify the copy and set it on a copy of the
+context.
 
 Most MBPT functions assert that this has been configured; forgetting this step is a common source of "OpRegistry is null"-type errors
 when SeQuant code is first ported into a new program.
@@ -207,10 +178,9 @@ after those scopes end.
 
 Because it replaces the process-wide default, a call of :func:`sequant::set_default_context` on any thread invalidates the reference
 that :func:`sequant::get_default_context` returns on a thread without scoped contexts, and anything obtained from that reference by
-reference. Code that keeps the context beyond a brief read, as the canonicalizers do for the duration of a canonicalization, holds a
-copy made by :func:`sequant::get_default_context_snapshot` instead. The copy reflects every change of the process-wide default
-completed before the call and is cheap: it shares the index basis registry and the canonicalizer configuration with its source, and
-takes the lock that guards the process-wide default only if that changed since the previous snapshot on the same thread.
+reference. Code that keeps the context beyond a brief read, as the extended Wick's theorem does for the duration of its computation,
+holds a copy made by :func:`sequant::get_default_context_snapshot` instead. The copy reflects every change of the process-wide default
+completed before the call and is cheap: it shares the index basis registry with its source, and takes the lock that guards the process-wide default only if that changed since the previous snapshot on the same thread.
 :func:`sequant::get_default_index_basis_registry` reads only the index basis registry in the same way, without copying the context.
 
 Code that reads the contexts at several points of one operation, as :func:`sequant::canonicalize`, :func:`sequant::simplify` and
@@ -222,13 +192,11 @@ installs nothing.
 Detecting changes
 ----------------------
 
-Every ``Context`` has a version (:func:`sequant::Context::version`) that identifies its canonicalization configuration: the index
-space registry, the tensor canonicalizers and index comparers (compared as objects, not by behavior), the cardinal tensor labels, the
-canonicalization options and the single-particle basis (which determines the symmetry of normal operators). Two contexts share a
-version if and only if canonicalization sees the same configuration in both; a version is never reused for another configuration. The
-other settings (vacuum, first dummy index ordinal, typesetting, deserialization defaults) do not affect it.
+Every ``Context`` has a version (:func:`sequant::Context::version`) that identifies the configuration canonicalization depends on:
+the index basis registry (compared as an object) and the single-particle basis (which determines the symmetry of normal operators).
+Two contexts share a version if and only if they share both; a version is never reused for another configuration. The other settings
+(vacuum, first dummy index ordinal, printing options, deserialization defaults) do not affect it.
 :func:`sequant::current_context_version` returns the version of the context in effect on the calling thread, which lets code that
-caches canonicalization results tell whether they are still valid. Such a cache is keyed on the versions for all statistics, since
-canonicalization reads the single-particle basis from the context for the statistics of the normal operator at hand and the rest
-from the context for arbitrary statistics. The version does not track in-place mutation of a canonicalizer or comparer object that
-the context refers to.
+caches canonicalization results tell whether they are still valid. Such a cache is keyed on the versions for all statistics
+(:func:`sequant::current_contexts_version`), since canonicalization reads the single-particle basis from the context for the
+statistics of the normal operator at hand and the registry from the context for arbitrary statistics.
