@@ -115,8 +115,7 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
              ctx2.assert_strict_braket_symmetry() &&
          ctx1.spbasis() == ctx2.spbasis() &&
          ctx1.first_dummy_index_ordinal() == ctx2.first_dummy_index_ordinal() &&
-         ctx1.braket_typesetting() == ctx2.braket_typesetting() &&
-         ctx1.braket_slot_typesetting() == ctx2.braket_slot_typesetting() &&
+         ctx1.print_options() == ctx2.print_options() &&
          ctx1.deserialization_symmetry() == ctx2.deserialization_symmetry() &&
          ctx1.deserialization_hermiticity() ==
              ctx2.deserialization_hermiticity() &&
@@ -331,8 +330,7 @@ Context::Context(Options options)
       assert_strict_braket_symmetry_(options.assert_strict_braket_symmetry),
       spbasis_(options.spbasis),
       first_dummy_index_ordinal_(options.first_dummy_index_ordinal),
-      braket_typesetting_(options.braket_typesetting),
-      braket_slot_typesetting_(options.braket_slot_typesetting),
+      print_options_(std::move(options.print_options)),
       deserialization_symmetry_(options.deserialization_symmetry),
       deserialization_hermiticity_(options.deserialization_hermiticity),
       deserialization_column_symmetry_(
@@ -383,12 +381,14 @@ SPBasis Context::spbasis() const { return spbasis_; }
 std::size_t Context::first_dummy_index_ordinal() const {
   return first_dummy_index_ordinal_;
 }
+const PrintOptions& Context::print_options() const { return print_options_; }
+
 BraKetTypesetting Context::braket_typesetting() const {
-  return braket_typesetting_;
+  return print_options_.braket_typesetting;
 }
 
 BraKetSlotTypesetting Context::braket_slot_typesetting() const {
-  return braket_slot_typesetting_;
+  return print_options_.braket_slot_typesetting;
 }
 
 Symmetry Context::deserialization_symmetry() const {
@@ -439,13 +439,18 @@ Context& Context::set_first_dummy_index_ordinal(
   return *this;
 }
 
+Context& Context::set(PrintOptions print_options) {
+  print_options_ = std::move(print_options);
+  return *this;
+}
+
 Context& Context::set(BraKetTypesetting bkt) {
-  braket_typesetting_ = bkt;
+  print_options_.braket_typesetting = bkt;
   return *this;
 }
 
 Context& Context::set(BraKetSlotTypesetting bkst) {
-  braket_slot_typesetting_ = bkst;
+  print_options_.braket_slot_typesetting = bkst;
   return *this;
 }
 

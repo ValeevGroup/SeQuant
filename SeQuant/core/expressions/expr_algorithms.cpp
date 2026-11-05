@@ -33,7 +33,14 @@ namespace sequant {
 
 std::wstring to_latex_align(const ExprPtr& exprptr, size_t max_lines_per_align,
                             size_t max_terms_per_line) {
-  std::wstring result = io::latex::to_string(exprptr);
+  return to_latex_align(exprptr, get_default_context().print_options(),
+                        max_lines_per_align, max_terms_per_line);
+}
+
+std::wstring to_latex_align(const ExprPtr& exprptr, const PrintOptions& opts,
+                            size_t max_lines_per_align,
+                            size_t max_terms_per_line) {
+  std::wstring result = io::latex::to_string(exprptr, opts);
   if (exprptr->is<Sum>()) {
     result.erase(0, 7);  // remove leading  "{ \bigl"
     result.replace(result.size() - 8, 8,

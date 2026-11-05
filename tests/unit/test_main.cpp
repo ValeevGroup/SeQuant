@@ -37,10 +37,11 @@ int main(int argc, char* argv[]) {
        .vacuum = Vacuum::SingleProduct,
        .spbasis = SPBasis::Spinor,
        .first_dummy_index_ordinal = 100,
-       .braket_typesetting = BraKetTypesetting::ContraSub,
        // to_latex() reference outputs predominantly assume the original
        // (naive) convention
-       .braket_slot_typesetting = BraKetSlotTypesetting::Naive,
+       .print_options = {.braket_typesetting = BraKetTypesetting::ContraSub,
+                         .braket_slot_typesetting =
+                             BraKetSlotTypesetting::Naive},
        // mbpt works with particle-symmetric tensors, so default new/parsed
        // tensors to particle (column) symmetry; bra-ket and permutational
        // symmetries stay at the safe Nonsymm/NonHermitian library defaults and
