@@ -262,12 +262,17 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
 ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) const {
   canonicalize_braket(t);
 
-  const auto ctx = get_default_context_snapshot();
-  const auto& idxcmp = ctx.index_comparer();
-  const auto& paircmp = ctx.index_pair_comparer();
+  const auto index_comparer_ptr =
+      index_comparer_ ? index_comparer_
+                      : detail::index_comparer(CanonicalizeOptions{});
+  const auto index_pair_comparer_ptr =
+      index_pair_comparer_ ? index_pair_comparer_
+                           : detail::index_pair_comparer(CanonicalizeOptions{});
+  const auto& idxcmp = *index_comparer_ptr;
+  const auto& paircmp = *index_pair_comparer_ptr;
 
   // indices are ordered by space, then external indices go first, then the
-  // context's comparers order the rest; the default comparers start with the
+  // given comparers order the rest; the default comparers start with the
   // space comparison, so only their tie-break is left to do
   const bool default_idxcmp =
       idxcmp.target_type() == typeid(TensorIndexComparer);

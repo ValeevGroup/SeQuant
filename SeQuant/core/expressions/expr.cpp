@@ -130,10 +130,13 @@ const ExprPtr &Expr::back() const { return at(size() - 1); }
 namespace {
 
 /// only the topological stage followed by the lexicographic one produces a
-/// form that is the same for every spelling of an expression
+/// form that is the same for every spelling of an expression; only the
+/// library's form is recorded, so that a form produced with presentation
+/// settings is neither marked nor taken for canonical
 bool is_full(const CanonicalizeOptions &opts) {
   return (opts.method & CanonicalizationMethod::Complete) ==
-         CanonicalizationMethod::Complete;
+             CanonicalizationMethod::Complete &&
+         opts.is_internal_form();
 }
 
 /// @return the digest of everything other than the expression itself that

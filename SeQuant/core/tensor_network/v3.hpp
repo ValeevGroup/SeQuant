@@ -522,23 +522,31 @@ class TensorNetworkV3 {
   /// @note with @p ignore_named_index_labels the structure of the result does
   /// not depend on the labels of the named indices, but their placement does:
   /// named indices that an automorphism of the network can exchange are placed
-  /// in the order of the context's index comparer
+  /// in the order of @p label_less
+  /// @param label_less the order of index labels; null selects the default
   [[nodiscard]] ExprPtr canonicalize_graph(
-      const NamedIndexSet &named_indices,
-      bool ignore_named_index_labels = true);
+      const NamedIndexSet &named_indices, bool ignore_named_index_labels = true,
+      std::shared_ptr<const tensor_index_comparer_t> label_less = nullptr);
 
   /// Canonicalizes every individual tensor for itself, taking into account only
   /// tensor blocks
+  /// @param options supply the canonicalizers for particular tensor labels
   /// @returns The byproduct of the canonicalizations
   ExprPtr canonicalize_individual_tensor_blocks(
-      const NamedIndexSet &named_indices);
+      const NamedIndexSet &named_indices, const CanonicalizeOptions &options);
 
   /// Canonicalizes every individual tensor for itself
+  /// @param options supply the comparers and the canonicalizers for particular
+  /// tensor labels
   /// @returns The byproduct of the canonicalizations
-  ExprPtr canonicalize_individual_tensors(const NamedIndexSet &named_indices);
+  ExprPtr canonicalize_individual_tensors(const NamedIndexSet &named_indices,
+                                          const CanonicalizeOptions &options);
 
+  /// canonicalizes every tensor with the canonicalizer that @p options give
+  /// for its label, else with @p canonicalizer
   ExprPtr do_individual_canonicalization(
-      const TensorCanonicalizer &canonicalizer);
+      const TensorCanonicalizer &canonicalizer,
+      const CanonicalizeOptions &options);
 
   void add_expr(const Expr &expr) {
     ExprPtr clone = expr.clone();
