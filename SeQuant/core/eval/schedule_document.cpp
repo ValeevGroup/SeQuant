@@ -1,4 +1,5 @@
 #include <SeQuant/core/eval/schedule_document.hpp>
+#include <cstdio>
 
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
@@ -288,6 +289,7 @@ json to_j(RunRecord const& r) {
   j["builds"] = sizemap_j(r.builds);
   j["peak_bytes"] = r.peak_bytes;
   j["peak_live"] = strs_j(r.peak_live);
+  j["leaf_bytes"] = sizemap_j(r.leaf_bytes);
   j["planner"] = strmap_j(r.planner);
   return j;
 }
@@ -749,6 +751,7 @@ RunRecord run_r(json const& j) {
   r.builds = sizemap_r(j, "builds", w);
   r.peak_bytes = get_size_or(j, "peak_bytes", 0, w);
   if (j.contains("peak_live")) r.peak_live = get_strs(j, "peak_live", w);
+  if (j.contains("leaf_bytes")) r.leaf_bytes = sizemap_r(j, "leaf_bytes", w);
   r.planner = strmap_r(j, "planner", w);
   return r;
 }
@@ -1059,6 +1062,98 @@ std::string summary_line(Document const& d) {
   } else {
     os << " values=- blocks=- depth=-";
   }
+  return os.str();
+}
+
+namespace {
+std::string human_bytes(double b) {
+  char buf[64];
+  if (b < 1e6)
+    std::snprintf(buf, sizeof buf, "%.0f B", b);
+  else if (b < 1e9)
+    std::snprintf(buf, sizeof buf, "%.1f MB", b / 1e6);
+  else
+    std::snprintf(buf, sizeof buf, "%.2f GB", b / 1e9);
+  return buf;
+}
+}  // namespace
+
+std::string size_audit_table(Document const& doc) {
+  if (!doc.dag || !doc.run)
+    throw Exception(
+        "size_audit_table: the document needs dag and run sections");
+  auto const& values = doc.dag->values;
+  auto const& run = *doc.run;
+  struct Row {
+    std::string id, modes;
+    bool persistent;
+    std::size_t modeled_slab, modeled_full, realized_slab, realized_full,
+        builds;
+  };
+  std::vector<Row> rows;
+  rows.reserve(values.size());
+  auto const lookup = [](std::map<std::string, std::size_t> const& m,
+                         std::string const& k) -> std::size_t {
+    auto const it = m.find(k);
+    return it == m.end() ? 0 : it->second;
+  };
+  for (auto const& v : values) {
+    std::string modes;
+    for (auto const& m : v.result_modes)
+      modes += (modes.empty() ? "" : " ") + m;
+    // a leaf is fetched, not produced: its realized bytes live in leaf_bytes
+    std::size_t const leaf = lookup(run.leaf_bytes, v.id);
+    std::size_t const slab = leaf ? leaf : lookup(run.footprint, v.id);
+    std::size_t const full = leaf ? leaf : lookup(run.size, v.id);
+    rows.push_back({v.id, modes, v.persistent, v.modeled_footprint,
+                    v.modeled_size, slab, full, lookup(run.builds, v.id)});
+  }
+  std::stable_sort(rows.begin(), rows.end(), [](Row const& a, Row const& b) {
+    return a.realized_slab > b.realized_slab;
+  });
+  std::ostringstream os;
+  os << "size audit: " << rows.size() << " values (realized-descending)\n"
+     << "  realized slab | modeled slab | ratio | realized full | modeled full"
+        " | builds | P/V | value | modes\n";
+  for (auto const& r : rows) {
+    char ratio[32];
+    if (r.modeled_slab == 0)
+      std::snprintf(ratio, sizeof ratio, "n/a");
+    else
+      std::snprintf(ratio, sizeof ratio, "%.2f",
+                    double(r.realized_slab) / double(r.modeled_slab));
+    os << "  " << human_bytes(double(r.realized_slab)) << " | "
+       << human_bytes(double(r.modeled_slab)) << " | " << ratio << " | "
+       << human_bytes(double(r.realized_full)) << " | "
+       << human_bytes(double(r.modeled_full)) << " | " << r.builds << " | "
+       << (r.persistent ? 'P' : 'V') << " | " << r.id << " | " << r.modes
+       << "\n";
+  }
+  // modeled combined peak: the peak_profile_sweep recipe over the records
+  std::size_t npoints = 0;
+  for (auto const& v : values) npoints = std::max(npoints, v.last_use + 2);
+  std::vector<double> delta(npoints + 1, 0.0);
+  for (auto const& v : values) {
+    delta[v.first_use] += double(v.modeled_footprint);
+    delta[v.last_use + 1] -= double(v.modeled_footprint);
+  }
+  double runsum = 0, peak = 0;
+  std::size_t arg = 0;
+  for (std::size_t p = 0; p < npoints; ++p) {
+    runsum += delta[p];
+    if (runsum > peak) {
+      peak = runsum;
+      arg = p;
+    }
+  }
+  os << "  modeled peak " << human_bytes(peak) << " at static point " << arg
+     << "; realized peak " << human_bytes(double(run.peak_bytes)) << "\n"
+     << "  live at the modeled peak:";
+  for (auto const& v : values)
+    if (v.first_use <= arg && arg <= v.last_use) os << ' ' << v.id;
+  os << "\n  live at the realized peak:";
+  for (auto const& id : run.peak_live) os << ' ' << id;
+  os << "\n";
   return os.str();
 }
 
