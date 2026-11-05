@@ -5675,3 +5675,43 @@ TEST_CASE("ordered-multiroot-batched-power",
     CHECK(res[r]->size_in_bytes() == ref->size_in_bytes());
   }
 }
+
+TEST_CASE("record_dag prices values when given a cost model",
+          "[ordered-executor][schedule-document]") {
+  namespace sched = sequant::eval::schedule;
+  // one tree, one term: the root record's single term key names the term
+  std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b")};
+  sequant::BatchPolicy const policy;
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  std::function<std::size_t(Index const&)> const block_of =
+      [](Index const&) -> std::size_t { return 1; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+  std::vector<sched::RootRecord> roots(1);
+  roots[0].label = "R";
+  roots[0].terms.resize(1);
+  roots[0].terms[0].key = "2 a b";
+  // unpriced: every modeled field stays 0
+  auto const bare = sched::record_dag(rich, legality, ordered, forest, roots);
+  REQUIRE(bare.values.size() == rich.cells.size());
+  for (auto const& v : bare.values) {
+    CHECK(v.modeled_footprint == 0);
+    CHECK(v.modeled_size == 0);
+  }
+  // priced: each value carries what the model says for its own cell
+  auto const priced = sched::record_dag(rich, legality, ordered, forest, roots,
+                                        {}, &cm, block_of);
+  REQUIRE(priced.values.size() == rich.cells.size());
+  for (std::size_t v = 0; v < rich.cells.size(); ++v) {
+    auto const& c = rich.cells[v];
+    CHECK(priced.values[v].modeled_footprint ==
+          sequant::eval::detail::cell_footprint(c.carried, c.home_modes, cm,
+                                                block_of));
+    CHECK(priced.values[v].modeled_size ==
+          cm.memsize(sequant::container::svector<sequant::Index>(
+              c.carried.begin(), c.carried.end())));
+  }
+}
