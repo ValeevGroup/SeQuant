@@ -4,14 +4,12 @@
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
-#include <SeQuant/core/options.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
 
 #include <cstddef>
 #include <functional>
 #include <limits>
 #include <memory>
-#include <optional>
 #include <unordered_map>
 #include <utility>
 
@@ -370,17 +368,17 @@ struct OptimizeOptions {
   ///          says so. Use a fresh PinSession per run, and reset this pointer
   ///          (and \ref recording) to null when the same OptimizeOptions
   ///          object is reused for another call.
+  ///
+  /// \note requires the ResultExpr overloads of optimize() and
+  /// optimize_result(): the terms are canonicalized with the external indices
+  /// of the result
   opt::schedule::PinSession* pinned = nullptr;
 
   /// Optional schedule recording (see opt/schedule_pin.hpp). When non-null,
   /// each summand is optimized on its canonicalized clone and its record is
   /// added to the session, keyed by the optimized summand's pointer. Not owned.
+  /// \note requires the ResultExpr overloads, see \ref pinned
   opt::schedule::RecordSession* recording = nullptr;
-
-  /// The external indices of the optimized expression, with which the terms
-  /// are canonicalized under \ref pinned or \ref recording (required then;
-  /// optimize(ResultExpr&, ...) uses the indices of the result if unset).
-  std::optional<NamedIndexSpec> external_indices = std::nullopt;
 };
 
 }  // namespace sequant

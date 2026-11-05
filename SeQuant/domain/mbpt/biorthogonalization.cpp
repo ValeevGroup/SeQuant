@@ -28,6 +28,9 @@
 
 #include <algorithm>
 
+// the library knows the named indices of the expressions it builds
+using sequant::detail::explicit_named_indices;
+
 namespace sequant::mbpt {
 
 template <typename T>
@@ -603,7 +606,8 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
 
   const auto ctx = get_default_context_snapshot();
   const auto& cardinal_tensor_labels = ctx.cardinal_tensor_labels();
-  const NamedIndexSpec external_indices = flatten_index_groups(ext_idxs);
+  const NamedIndexSpec external_indices =
+      explicit_named_indices(flatten_index_groups(ext_idxs));
   for (const auto& term : *expr) {
     if (!term->is<Product>()) continue;
 
@@ -693,15 +697,15 @@ ExprPtr biorthogonal_transform_pre_nnsproject_impl(
     if (ext_idxs.size() > 1) {
       bt = S_tensor * bt;
     }
-    simplify(bt, external_indices(bt));
+    simplify(bt, explicit_named_indices(external_indices(bt)));
 
     bt = S_maps(bt);
-    canonicalize(bt, external_indices(bt));
+    canonicalize(bt, explicit_named_indices(external_indices(bt)));
     bt = WK_biorthogonalization_filter_impl(bt, ext_idxs);
   }
 
   bt = S_tensor * bt;
-  simplify(bt, external_indices(bt));
+  simplify(bt, explicit_named_indices(external_indices(bt)));
 
   return bt;
 }

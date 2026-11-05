@@ -7,6 +7,9 @@
 #include <cstddef>
 #include <vector>
 
+// the library knows the named indices of the expressions it builds
+using sequant::detail::explicit_named_indices;
+
 namespace sequant::mbpt::decompositions {
 
 namespace {
@@ -89,7 +92,7 @@ NamedIndexSpec pairing_indices(
     const std::pair<std::vector<Index>, std::vector<Index>>& pairing) {
   container::set<Index> result(pairing.first.begin(), pairing.first.end());
   result.insert(pairing.second.begin(), pairing.second.end());
-  return result;
+  return explicit_named_indices(std::move(result));
 }
 
 }  // namespace
@@ -477,6 +480,19 @@ ExprPtr three_body_substitution(ExprPtr& input,
     throw Exception("cannot handle this type");
   }
 
+  return input;
+}
+
+ResultExpr cumulants_to_densities(const ResultExpr& expr) {
+  ResultExpr result = expr.clone();
+  result.expression() =
+      cumulants_to_densities(expr.expression(), named_indices(expr));
+  return result;
+}
+
+ResultExpr& three_body_substitution(ResultExpr& input, int rank, bool fast) {
+  input.expression() = three_body_substitution(
+      input.expression(), named_indices(input), rank, fast);
   return input;
 }
 

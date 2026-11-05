@@ -345,9 +345,9 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       // named to keep it external
       const auto ops = {fann("i_1"), fcre("i_2"), fcre("i_3"),
                         fann("i_4"), fann("i_5"), fcre("i_1")};
-      const NamedIndexSpec named_indices_spec =
+      const NamedIndexSpec named_indices_spec = sequant::tests::explicit_named(
           container::set<Index>{Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"},
-                                Index{L"i_4"}, Index{L"i_5"}};
+                                Index{L"i_4"}, Index{L"i_5"}});
       REQUIRE_NOTHROW(FWickTheorem(ops, named_indices_spec));
       FWickTheorem w(ops, named_indices_spec);
       REQUIRE_NOTHROW(w.full_contractions(false).compute());
@@ -848,8 +848,9 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
            ex<FNOperator>(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"}))) *
           ex<FNOperator>(cre({L"a_2"}), ann({}));
       // the external indices are given explicitly
-      const NamedIndexSpec named_indices_spec = container::set<Index>{
-          Index(L"i_1"), Index(L"a_3"), Index(L"a_4"), Index(L"a_2")};
+      const NamedIndexSpec named_indices_spec =
+          sequant::tests::explicit_named(container::set<Index>{
+              Index(L"i_1"), Index(L"a_3"), Index(L"a_4"), Index(L"a_2")});
       auto wick = FWickTheorem(input, named_indices_spec);
       wick.use_topology(true);
       ExprPtr result;
@@ -1135,8 +1136,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
                 ex<FNOperator>(cre({L"i_1", L"i_2"}), ann({L"a_1", L"a_2"})) *
                 coeff(L"t", {L"a_3", L"a_4"}, {L"i_3", L"i_4"}) *
                 ex<FNOperator>(cre({L"a_3", L"a_4"}), ann({L"i_3", L"i_4"}));
-      const NamedIndexSpec named_indices_spec =
-          container::set<Index>{Index(L"i_1"), Index(L"a_3")};
+      const NamedIndexSpec named_indices_spec = sequant::tests::explicit_named(
+          container::set<Index>{Index(L"i_1"), Index(L"a_3")});
       for (const bool full : {true, false}) {
         INFO("full=" << full);
         std::array<ExprPtr, 2> result;
@@ -1181,8 +1182,9 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
             ex<FNOperator>(cre({L"i_3", L"i_4"}), ann({L"a_3", L"a_4"})) *
             ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, symm) *
             ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}));
-        const NamedIndexSpec named_indices_spec = container::set<Index>{
-            Index(L"i_3"), Index(L"i_4"), Index(L"a_3"), Index(L"a_4")};
+        const NamedIndexSpec named_indices_spec =
+            sequant::tests::explicit_named(container::set<Index>{
+                Index(L"i_3"), Index(L"i_4"), Index(L"a_3"), Index(L"a_4")});
         auto wick = FWickTheorem(input, named_indices_spec);
         wick.use_topology(topology);
         auto result = wick.compute();
@@ -1215,11 +1217,21 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     ExprPtr fixed;
     FWickTheorem wick{input->clone(), deduce_named_indices};
     {
-      const NamedIndexSpec named_indices_spec = container::set<Index>{p3};
+      const NamedIndexSpec named_indices_spec =
+          sequant::tests::explicit_named(container::set<Index>{p3});
       wick.set_external_indices(named_indices_spec);
       fixed = wick.compute();
       REQUIRE(get_used_indices_with_counts(fixed).contains(p3));
       REQUIRE_THAT(fixed, !EquivalentTo(summed, named_indices_spec));
+    }
+    // a result with p_3 among its indices names it, too
+    {
+      const ResultExpr with_result(
+          bra(IndexList{}), ket(IndexList{}), aux(IndexList{p3}),
+          Symmetry::Nonsymm, BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm,
+          std::nullopt, input->clone());
+      REQUIRE_THAT(FWickTheorem(with_result).compute(),
+                   EquivalentTo(fixed, sequant::tests::explicit_named({p3})));
     }
     // the external indices are those in effect at the call, not those of the
     // compute: summing over p_3 afterwards recovers the summed result
@@ -1259,8 +1271,9 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(!get_used_indices_with_counts(from_expr).contains(p2));
     REQUIRE_THAT(from_opseq, EquivalentTo(from_expr));
 
-    const NamedIndexSpec named_indices_spec = container::set<Index>{
-        Index{L"p_1"}, p2, Index{L"p_3"}, Index{L"p_4"}, Index{L"p_5"}};
+    const NamedIndexSpec named_indices_spec =
+        sequant::tests::explicit_named(container::set<Index>{
+            Index{L"p_1"}, p2, Index{L"p_3"}, Index{L"p_4"}, Index{L"p_5"}});
     auto named = FWickTheorem(opseq, named_indices_spec).compute();
     REQUIRE(get_used_indices_with_counts(named).contains(p2));
     REQUIRE_THAT(named, !EquivalentTo(from_expr, named_indices_spec));
@@ -1276,7 +1289,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
                  ex<FNOperator>(cre({L"p_3"}), ann({L"p_4"})) *
                  ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
     const NamedIndexSpec named_indices_spec =
-        container::set<Index>{Index{L"p_3"}};
+        sequant::tests::explicit_named(container::set<Index>{Index{L"p_3"}});
     FWickTheorem wick{input, named_indices_spec};
     wick.compute();
     auto make_term = [] {
@@ -1399,7 +1412,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
                       ex<FNOperator>(cre({}), ann({L"i_1"}));
     {
       const NamedIndexSpec named_indices_spec =
-          container::set<Index>{Index{L"i_1"}};
+          sequant::tests::explicit_named(container::set<Index>{Index{L"i_1"}});
       REQUIRE(FWickTheorem(occupation->clone(), named_indices_spec).compute() ==
               ex<Constant>(1));
     }
@@ -1519,7 +1532,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     const Index i1{L"i_1"}, i2{L"i_2"}, a1{L"a_1"}, a2{L"a_2"};
     {
       const NamedIndexSpec named_indices_spec =
-          container::set<Index>{i1, i2, a1, a2};
+          sequant::tests::explicit_named(container::set<Index>{i1, i2, a1, a2});
       auto norm = ex<FNOperator>(cre({i1, i2}), ann({a1, a2})) *
                   ex<FNOperator>(cre({a1, a2}), ann({i1, i2}));
       auto result = FWickTheorem(norm, named_indices_spec).compute();
@@ -1539,7 +1552,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     {
       const Index i3{L"i_3"};
       const NamedIndexSpec named_indices_spec =
-          container::set<Index>{i1, i2, i3};
+          sequant::tests::explicit_named(container::set<Index>{i1, i2, i3});
       auto chain = make_overlap(i1, i2) * make_overlap(i2, i3) *
                    make_overlap(i3, i1) * ex<Tensor>(L"f", bra{i1}, ket{i1});
       FWickTheorem(chain, named_indices_spec).reduce(chain);
@@ -1550,8 +1563,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     // between indices with different protoindices
     {
       const Index a1_i1{L"a_1", {i1}}, a2_i2{L"a_2", {i2}};
-      const NamedIndexSpec named_indices_spec =
-          container::set<Index>{i1, i2, a1_i1, a2_i2};
+      const NamedIndexSpec named_indices_spec = sequant::tests::explicit_named(
+          container::set<Index>{i1, i2, a1_i1, a2_i2});
       auto product = make_overlap(a1_i1, a2_i2) * make_overlap(a2_i2, a1_i1);
       FWickTheorem(product, named_indices_spec).reduce(product);
       REQUIRE(deltas(product).size() == 2);
@@ -1562,7 +1575,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     // δ is 0 or 1, so canonicalization may swap its slots whatever the field:
     // the orientation of a delta between named indices is canonical
     const Index i1{L"i_1"}, i2{L"i_2"};
-    const NamedIndexSpec named_indices_spec = container::set<Index>{i1, i2};
+    const NamedIndexSpec named_indices_spec =
+        sequant::tests::explicit_named(container::set<Index>{i1, i2});
     auto f = [&] { return ex<Tensor>(L"f", bra{i1}, ket{i2}); };
     auto difference =
         f() * make_kronecker(i2, i1) - f() * make_kronecker(i1, i2);
@@ -1671,7 +1685,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       // what used to be external indices now are dummy: every index is
       // a dummy
       {
-        const NamedIndexSpec named_indices_spec = container::set<Index>{};
+        const NamedIndexSpec named_indices_spec =
+            sequant::tests::explicit_named(container::set<Index>{});
         wick.set_external_indices(named_indices_spec);
         wick.reduce(wick_result_2);
       }
@@ -1712,7 +1727,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         // what used to be external indices now are dummy: every index is
         // a dummy
         {
-          const NamedIndexSpec named_indices_spec = container::set<Index>{};
+          const NamedIndexSpec named_indices_spec =
+              sequant::tests::explicit_named(container::set<Index>{});
           wick.set_external_indices(named_indices_spec);
           wick.reduce(wick_result_2);
         }
@@ -1763,7 +1779,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
           // what used to be external indices now are dummy: every index is
           // a dummy
           {
-            const NamedIndexSpec named_indices_spec = container::set<Index>{};
+            const NamedIndexSpec named_indices_spec =
+                sequant::tests::explicit_named(container::set<Index>{});
             wick.set_external_indices(named_indices_spec);
             wick.reduce(wick_result_2);
           }
@@ -1820,7 +1837,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       // what used to be external indices now are dummy: every index is
       // a dummy
       {
-        const NamedIndexSpec named_indices_spec = container::set<Index>{};
+        const NamedIndexSpec named_indices_spec =
+            sequant::tests::explicit_named(container::set<Index>{});
         wick.set_external_indices(named_indices_spec);
         wick.reduce(wick_result_2);
       }
@@ -1962,8 +1980,9 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         ExprPtr wresult;
         {
           const NamedIndexSpec named_indices_spec =
-              container::set<Index>{Index{L"p_1"}, Index{L"p_2"}, Index{L"p_3"},
-                                    Index{L"p_4"}, Index{L"p_5"}};
+              sequant::tests::explicit_named(container::set<Index>{
+                  Index{L"p_1"}, Index{L"p_2"}, Index{L"p_3"}, Index{L"p_4"},
+                  Index{L"p_5"}});
           REQUIRE_NOTHROW(w.full_contractions(false).compute());
           wresult = FWickTheorem(ops, named_indices_spec)
                         .full_contractions(false)
@@ -1982,7 +2001,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         {
           // what used to be external indices are now dummy indices: every
           // index is a dummy
-          const NamedIndexSpec named_indices_spec = container::set<Index>{};
+          const NamedIndexSpec named_indices_spec =
+              sequant::tests::explicit_named(container::set<Index>{});
           w.set_external_indices(named_indices_spec);
           w.reduce(result0);
           // std::wcout << "after reduce: op = " << to_latex_align(result0,
@@ -2003,7 +2023,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
                            .full_contractions(false)
                            .compute();
         {
-          const NamedIndexSpec named_indices_spec = container::set<Index>{};
+          const NamedIndexSpec named_indices_spec =
+              sequant::tests::explicit_named(container::set<Index>{});
           simplify(result1, named_indices_spec);
         }
         // sequant::wprintf(to_latex_align(Ld_H2_L), L" = \n",
@@ -2022,7 +2043,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
                            .full_contractions(false)
                            .compute();
         {
-          const NamedIndexSpec named_indices_spec = container::set<Index>{};
+          const NamedIndexSpec named_indices_spec =
+              sequant::tests::explicit_named(container::set<Index>{});
           simplify(result2, named_indices_spec);
         }
         // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
@@ -2101,7 +2123,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
             Context(get_default_context()).set(sr_reg));
         // the external indices; i_1 and i_2 occur twice
         const NamedIndexSpec named_indices_spec =
-            container::set<Index>{L"i_1", L"i_2", L"a_1", L"a_2"};
+            sequant::tests::explicit_named(
+                container::set<Index>{L"i_1", L"i_2", L"a_1", L"a_2"});
         auto expr = sequant::deserialize(
             L"1/8 t{i1,i2;a3,a4}:A-C-S * ã{a3,a4;i1,i2} * ã{;a1} * ã{a2} * "
             L"t{a5,a6;i3,i4}:A-C-S * ã{i3,i4;a5,a6}");
@@ -2143,7 +2166,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
             Context(get_default_context()).set(sr_reg));
         // the external indices; i_1 and i_2 occur twice
         const NamedIndexSpec named_indices_spec =
-            container::set<Index>{L"i_1", L"i_2", L"i_3", L"a_4", L"a_5"};
+            sequant::tests::explicit_named(
+                container::set<Index>{L"i_1", L"i_2", L"i_3", L"a_4", L"a_5"});
         auto expr = sequant::deserialize(
             L"1/216 t{i1,i2,i3;a1,a2,a3}:A-C-S * ã{a1,a2,a3;i1,i2,i3} * "
             L"ã{;a4} * ã{a5} * "

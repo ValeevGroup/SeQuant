@@ -393,6 +393,9 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 
 #include <SeQuant/domain/mbpt/op.ipp>
 
+// the library knows the named indices of the expressions it builds
+using sequant::detail::explicit_named_indices;
+
 namespace {
 /// @brief Make batching indices from a vector of IndexSpaces. IndexSpaces must
 /// be batching spaces. Indexing starts from 1 up to the size of \p spaces.
@@ -1490,6 +1493,22 @@ ExprPtr vac_av(ExprPtr expr, const NamedIndexSpec& external_indices,
   return expectation_value_impl(expr, external_indices, opts.connect,
                                 opts.do_not_connect, opts.use_topology,
                                 /* full_contractions*/ true);
+}
+
+ResultExpr ref_av(const ResultExpr& expr, EVOptions<int> opts) {
+  ResultExpr result = expr.clone();
+  result.expression() =
+      ref_av(expr.expression(), named_indices(expr), std::move(opts));
+  simplify(result);
+  return result;
+}
+
+ResultExpr vac_av(const ResultExpr& expr, EVOptions<int> opts) {
+  ResultExpr result = expr.clone();
+  result.expression() =
+      vac_av(expr.expression(), named_indices(expr), std::move(opts));
+  simplify(result);
+  return result;
 }
 
 }  // namespace tensor

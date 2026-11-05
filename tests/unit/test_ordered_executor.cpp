@@ -469,7 +469,6 @@ TEST_CASE("ordered-w20-aux-witness", "[ordered-executor-witness-water20]") {
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
@@ -1087,7 +1086,6 @@ TEST_CASE("ordered-w20-auxocc-dryrun", "[ordered][w20-auxocc-walk]") {
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   if (char const* ob = std::getenv("SEQUANT_UT_OBJECTIVE")) {
     std::string const o{ob};
@@ -1571,7 +1569,6 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
@@ -1931,7 +1928,6 @@ TEST_CASE("ordered-mirrored-strict-walk", "[ordered][cell_table]") {
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
@@ -2184,7 +2180,6 @@ TEST_CASE("mirrored-w20-mixed-pass-dump",
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   if (char const* ob = std::getenv("SEQUANT_UT_OBJECTIVE")) {
     std::string const o{ob};
@@ -2373,7 +2368,6 @@ TEST_CASE("ordered-cache-halt", "[ordered][cache-halt]") {
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
@@ -2716,7 +2710,6 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
@@ -2735,8 +2728,8 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
     if (!term) continue;
     sequant::opt::schedule::RecordedRoot recorded;
     try {
-      recorded = sequant::opt::schedule::record_root("R" + std::to_string(s),
-                                                     term, opts);
+      recorded = sequant::opt::schedule::record_root(
+          "R" + std::to_string(s), sequant::tests::deduced_result(term), opts);
     } catch (std::exception const&) {
       continue;
     }
@@ -3288,7 +3281,6 @@ TEST_CASE("meter-replay-equals-direct", "[ordered-executor][meter]") {
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
@@ -3495,7 +3487,6 @@ TEST_CASE("w20-peak-composition", "[w20-peak-composition]") {
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
@@ -4353,7 +4344,6 @@ TEST_CASE("ordered-assemble-dest-size", "[ordered][assemble-dest]") {
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
@@ -4671,7 +4661,6 @@ TEST_CASE("ordered-invariant-escape-once", "[ordered][block-skip]") {
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
@@ -4856,7 +4845,6 @@ TEST_CASE("ordered-pia-bound-reproduced", "[ordered][pia-rebind]") {
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
@@ -5192,7 +5180,6 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
         sequant::Expr const*,
         sequant::container::vector<sequant::NodeBatchAnnotation>>>();
     sequant::OptimizeOptions opts;
-    opts.external_indices = sequant::deduce_named_indices;
     opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
     opts.idx_to_extent = regime.idx_to_extent();
     opts.inner_pow = regime.inner_pow_fn();
@@ -5500,7 +5487,6 @@ TEST_CASE("ordered-lockstep-vs-whole-escape",
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.batch_policy = policy;

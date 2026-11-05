@@ -10,7 +10,6 @@
 #include <SeQuant/core/tensor_canonicalizer_fwd.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
 
-#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <string>
@@ -63,24 +62,28 @@ struct DeduceNamedIndices {
 /// requests the deduction of named indices, see DeduceNamedIndices
 inline constexpr DeduceNamedIndices deduce_named_indices{};
 
+class NamedIndexSpec;
+
+namespace detail {
+/// @return the specification of the explicit named indices @p named_indices
+/// @note for the library's own use: public functions take the named indices
+/// as the indices of a ResultExpr, which also gives their symmetries
+NamedIndexSpec explicit_named_indices(container::set<Index> named_indices);
+}  // namespace detail
+
 /// @brief specifies the named indices of a canonicalization, i.e. the indices
 /// whose labels are meaningful and must not change (ordinarily the external
 /// indices of an expression)
 ///
-/// Either an explicit set of indices or a request to deduce them
-/// (see DeduceNamedIndices). There is deliberately no default: every caller of
-/// a canonicalization states which indices are named. Note that `{}` is the
-/// empty set, i.e. no index is named.
+/// Either a request to deduce them (see DeduceNamedIndices), the only form a
+/// user constructs, or an explicit set of indices, which the library derives
+/// from a ResultExpr or from what it knows about an expression it builds
+/// (see detail::explicit_named_indices()). There is deliberately no default:
+/// every caller of a canonicalization states which indices are named.
 class NamedIndexSpec {
  public:
   /// requests deduction
   NamedIndexSpec(DeduceNamedIndices) {}
-  /// @param named_indices the named indices
-  NamedIndexSpec(container::set<Index> named_indices)
-      : named_indices_(std::move(named_indices)) {}
-  /// @param named_indices the named indices
-  NamedIndexSpec(std::initializer_list<Index> named_indices)
-      : named_indices_(container::set<Index>(named_indices)) {}
 
   /// @return true if the named indices are to be deduced
   bool deduce() const { return !named_indices_.has_value(); }
@@ -96,6 +99,11 @@ class NamedIndexSpec {
                          const NamedIndexSpec&) = default;
 
  private:
+  explicit NamedIndexSpec(container::set<Index> named_indices)
+      : named_indices_(std::move(named_indices)) {}
+  friend NamedIndexSpec detail::explicit_named_indices(
+      container::set<Index> named_indices);
+
   std::optional<container::set<Index>> named_indices_;
 };
 

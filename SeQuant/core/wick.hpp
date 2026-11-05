@@ -118,6 +118,11 @@ class WickTheorem {
       expr_input_ = std::move(expr_input);
   }
 
+  /// @param input the input expression and the result it computes, whose
+  /// indices are the external indices
+  explicit WickTheorem(const ResultExpr &input)
+      : WickTheorem(input.expression(), named_indices(input)) {}
+
   /// @param ops operator sequence
   /// @param external_indices the external indices, see
   /// WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&,

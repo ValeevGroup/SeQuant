@@ -7,6 +7,9 @@
 
 #include <range/v3/algorithm/any_of.hpp>
 
+// the library knows the named indices of the expressions it builds
+using sequant::detail::explicit_named_indices;
+
 namespace sequant::mbpt {
 
 namespace {
@@ -14,7 +17,7 @@ namespace {
 /// the external indices of the operator-level expressions of this file: none,
 /// since Operators carry no indices
 const NamedIndexSpec& operator_level_external_indices() {
-  static const NamedIndexSpec result{container::set<Index>{}};
+  static const NamedIndexSpec result = explicit_named_indices({});
   return result;
 }
 

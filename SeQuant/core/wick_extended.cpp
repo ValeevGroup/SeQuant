@@ -662,7 +662,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
     container::set<Index> op_indices;
     for (const auto &nop : *nopseq)
       for (const auto &op : nop) op_indices.insert(op.index());
-    WickTheorem<S> wick{nopseq, std::move(op_indices)};
+    WickTheorem<S> wick{nopseq, explicit_named_indices(std::move(op_indices))};
     wick.full_contractions(false).use_topology(opts.use_topology);
     // the engine rejects a pair contraction between an avoided pair as soon
     // as it is attempted; cumulant_expand still filters the rest (a cumulant
@@ -677,6 +677,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
         /*count_only=*/false, /*skip_input_canonicalization=*/false);
     stats_sink.stats() += wick.stats();
 
+    const auto fixed_named_indices = explicit_named_indices(fixed_indices);
     auto result = std::make_shared<Sum>();
     auto process = [&](const ExprPtr &t) {
       // the operator and coefficient indices are external to the reductions
@@ -686,13 +687,13 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
            split_mixed_spaces<S>(ex<Product>(ExprPtrList{prefactor, t}), ibr,
                                  opts.full_contractions)) {
         ExprPtr reduced = p;
-        WickTheorem<S> reducer{reduced, fixed_indices};
+        WickTheorem<S> reducer{reduced, fixed_named_indices};
         reducer.reduce(reduced);
         if (!reduced->is<Product>()) continue;  // vanished
         OpProvenance prov = provenance;
         extend_provenance(reduced->as<Product>(), prov);
         ExprPtr expanded =
-            cumulant_expand<S>(reduced, prov, opts, fixed_indices);
+            cumulant_expand<S>(reduced, prov, opts, fixed_named_indices);
         for (const auto &d : shared_deltas) expanded = expanded * d;
         expand(expanded);
         result->append(expanded);

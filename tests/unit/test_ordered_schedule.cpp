@@ -1078,7 +1078,6 @@ struct OrderedSchedFixture {
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
-  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();

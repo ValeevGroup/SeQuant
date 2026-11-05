@@ -582,6 +582,16 @@ ExprPtr ref_av(ExprPtr expr, const NamedIndexSpec& external_indices,
 /// @note Connectivity constraints are empty by default.
 ExprPtr vac_av(ExprPtr expr, const NamedIndexSpec& external_indices,
                EVOptions<int> opts = {});
+
+/// @brief computes the reference expectation value of the tensor-level
+/// expression of @p expr , whose result indices are the external indices
+/// @return @p expr with its expression replaced by the expectation value
+ResultExpr ref_av(const ResultExpr& expr, EVOptions<int> opts = {});
+
+/// @brief computes the vacuum expectation value of the tensor-level expression
+/// of @p expr , whose result indices are the external indices
+/// @return @p expr with its expression replaced by the expectation value
+ResultExpr vac_av(const ResultExpr& expr, EVOptions<int> opts = {});
 }  // namespace tensor
 
 /// @param base the comparer to defer to; null selects the default one

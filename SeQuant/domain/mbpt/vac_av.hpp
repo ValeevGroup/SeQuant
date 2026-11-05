@@ -92,6 +92,16 @@ ExprPtr ref_av(ExprPtr expr, const NamedIndexSpec& external_indices,
 ExprPtr vac_av(ExprPtr expr, const NamedIndexSpec& external_indices,
                EVOptions<std::wstring> opts = {});
 
+/// @brief computes the reference expectation value of the expression of
+/// @p expr , whose result indices are the external indices of its tensor form
+/// @return @p expr with its expression replaced by the expectation value
+ResultExpr ref_av(const ResultExpr& expr, EVOptions<std::wstring> opts = {});
+
+/// @brief computes the vacuum expectation value of the expression of @p expr ,
+/// whose result indices are the external indices of its tensor form
+/// @return @p expr with its expression replaced by the expectation value
+ResultExpr vac_av(const ResultExpr& expr, EVOptions<std::wstring> opts = {});
+
 }  // namespace op
 }  // namespace sequant::mbpt
 #endif  // SEQUANT_DOMAIN_MBPT_VAC_AV_HPP

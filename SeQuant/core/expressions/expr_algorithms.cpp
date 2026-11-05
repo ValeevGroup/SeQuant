@@ -150,7 +150,8 @@ ExprPtr canonicalize(ExprPtr&& expr_rv, const NamedIndexSpec& named_indices,
 }
 
 NamedIndexSpec named_indices(const ResultExpr& expr) {
-  return NamedIndexSpec(expr.indices() | ranges::to<container::set<Index>>);
+  return detail::explicit_named_indices(expr.indices() |
+                                        ranges::to<container::set<Index>>);
 }
 
 namespace {

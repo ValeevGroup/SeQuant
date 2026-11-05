@@ -334,6 +334,17 @@ class CC {
   /// MultiProduct
   /// @note Uses use_topology() and screen() from the CC instance to set other
   /// EVOptions
+  /// @param[in] expr input expression and the result it computes, whose
+  /// indices are the external indices
+  /// @param[in] connect see ref_av(const ExprPtr&, const NamedIndexSpec&,
+  /// const OpConnections<std::wstring>&)
+  ResultExpr ref_av(const ResultExpr& expr,
+                    const OpConnections<std::wstring>& connect) const {
+    return op::ref_av(expr, {.connect = connect,
+                             .screen = this->screen(),
+                             .use_topology = this->use_topology()});
+  }
+
   auto ref_av(const ExprPtr& expr, const NamedIndexSpec& external_indices,
               const OpConnections<std::wstring>& connect) const {
     return op::ref_av(expr, external_indices,

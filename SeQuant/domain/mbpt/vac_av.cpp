@@ -16,6 +16,9 @@
 
 #include <vector>
 
+// the library knows the named indices of the expressions it builds
+using sequant::detail::explicit_named_indices;
+
 namespace sequant {
 namespace mbpt {
 inline namespace op {
@@ -181,6 +184,22 @@ ExprPtr vac_av(ExprPtr expr, const NamedIndexSpec& external_indices,
                                 opts.do_not_connect, opts.use_topology,
                                 opts.screen, opts.skip_clone,
                                 /* full_contractions */ true);
+}
+
+ResultExpr ref_av(const ResultExpr& expr, EVOptions<std::wstring> opts) {
+  ResultExpr result = expr.clone();
+  result.expression() =
+      ref_av(expr.expression(), named_indices(expr), std::move(opts));
+  simplify(result);
+  return result;
+}
+
+ResultExpr vac_av(const ResultExpr& expr, EVOptions<std::wstring> opts) {
+  ResultExpr result = expr.clone();
+  result.expression() =
+      vac_av(expr.expression(), named_indices(expr), std::move(opts));
+  simplify(result);
+  return result;
 }
 
 }  // namespace op

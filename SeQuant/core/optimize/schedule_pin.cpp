@@ -495,12 +495,12 @@ eval::schedule::RootRecord RecordSession::finish() const {
   return checked_root(label_, std::move(terms));
 }
 
-RecordedRoot record_root(std::string label, ExprPtr const& root_sum,
+RecordedRoot record_root(std::string label, ResultExpr const& root,
                          OptimizeOptions opts) {
   RecordSession session(std::move(label));
   opts.recording = &session;
   RecordedRoot result;
-  result.optimized = optimize_result(root_sum, opts).expr;
+  result.optimized = optimize_result(root, opts).expr;
   std::vector<Expr const*> order;
   if (result.optimized->is<Sum>())
     for (auto const& s : result.optimized->as<Sum>().summands())

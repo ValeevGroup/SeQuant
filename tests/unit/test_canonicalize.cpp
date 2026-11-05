@@ -1132,18 +1132,20 @@ TEST_CASE("canonicalize_options_equality", "[algorithms]") {
 TEST_CASE("named_index_spec", "[algorithms]") {
   using namespace sequant;
   const NamedIndexSpec deduced = deduce_named_indices;
-  const NamedIndexSpec none = container::set<Index>{};
-  const NamedIndexSpec i1 = container::set<Index>{Index{L"i_1"}};
+  const auto none = sequant::tests::explicit_named({});
+  const auto i1 = sequant::tests::explicit_named({Index{L"i_1"}});
   REQUIRE(deduced.deduce());
   REQUIRE(deduced.indices_ptr() == nullptr);
   REQUIRE_THROWS_AS(deduced.indices(), Exception);
   REQUIRE(!none.deduce());
   REQUIRE(none.indices().empty());
-  // empty braces are the empty set, not a request to deduce
-  REQUIRE(NamedIndexSpec{} == none);
-  REQUIRE(i1 == NamedIndexSpec{Index{L"i_1"}});
+  REQUIRE(i1.indices() == container::set<Index>{Index{L"i_1"}});
   REQUIRE(!(deduced == none));
   REQUIRE(!(none == i1));
+  // the explicit named indices of a result are its indices
+  const auto result = deserialize<ResultExpr>(L"R{a_1;i_1} = t{a_1;i_1}");
+  REQUIRE(named_indices(result) ==
+          sequant::tests::explicit_named({Index{L"a_1"}, Index{L"i_1"}}));
 }
 
 // the hooks of a lone tensor with a repeated index (a tensor network) default
@@ -1155,7 +1157,8 @@ TEST_CASE("canonicalize_hook_defaults", "[algorithms]") {
   auto make_tensor = [] {
     return ex<Tensor>(L"t", bra{L"i_3"}, ket{L"i_3", L"a_5"});
   };
-  const NamedIndexSpec all_dummy = container::set<Index>{};
+  const NamedIndexSpec all_dummy =
+      sequant::tests::explicit_named(container::set<Index>{});
 
   SECTION("Tensor::canonicalize") {
     auto expected = make_tensor();
@@ -1193,7 +1196,7 @@ TEST_CASE("canonicalize_named_index_absent", "[algorithms]") {
                                            Index{L"p_4"}, Index{L"p_5"}};
   auto canonicalized = [&](container::set<Index> named_indices) {
     auto e = deserialize(input);
-    canonicalize(e, std::move(named_indices),
+    canonicalize(e, sequant::tests::explicit_named(std::move(named_indices)),
                  {.method = CanonicalizationMethod::Lexicographic});
     return e;
   };
@@ -1456,7 +1459,8 @@ TEST_CASE("canonicalize_canonical", "[algorithms]") {
   SECTION("different options invalidate") {
     auto e = make_sum();
     canonicalize(e, deduce_named_indices);
-    const NamedIndexSpec other = container::set<Index>{Index{L"i_1"}};
+    const NamedIndexSpec other =
+        sequant::tests::explicit_named(container::set<Index>{Index{L"i_1"}});
     REQUIRE(!e->is_canonical(other));
     REQUIRE(count_product_canonicalizations([&] { canonicalize(e, other); }) >
             0);
@@ -1473,6 +1477,58 @@ TEST_CASE("canonicalize_canonical", "[algorithms]") {
                   [&] { canonicalize(c, deduce_named_indices); }) == 0);
       REQUIRE(c == e);
     }
+  }
+}
+
+TEST_CASE("result_expr_canonicalization", "[algorithms][canonicalize]") {
+  using namespace sequant;
+  auto count = [](const ResultExpr& r) {
+    return r.expression()->is<Sum>() ? r.expression()->size() : 1;
+  };
+
+  SECTION("terms related by the result's symmetry are combined") {
+    // the second term is the first with the columns of the result swapped
+    auto r = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:N-N-S = X{a_1,a_2;i_1,i_2}:N-N-N + "
+        L"X{a_2,a_1;i_2,i_1}:N-N-N");
+    simplify(r);
+    CHECK(count(r) == 1);
+    // ... but not without that symmetry
+    auto nonsymm = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:N-N-N = X{a_1,a_2;i_1,i_2}:N-N-N + "
+        L"X{a_2,a_1;i_2,i_1}:N-N-N");
+    simplify(nonsymm);
+    CHECK(count(nonsymm) == 2);
+    // antisymmetry absorbs the phase
+    auto antisymm = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:A-N-S = X{a_1,a_2;i_1,i_2}:N-N-N - "
+        L"X{a_2,a_1;i_1,i_2}:N-N-N");
+    simplify(antisymm);
+    CHECK(count(antisymm) == 1);
+    CHECK(antisymm.expression()->is<Product>());
+    // the representative's sign depends on which permutation it is
+    CHECK(abs(antisymm.expression()->as<Product>().scalar()) == 2);
+  }
+
+  SECTION("only permutations within the block of the result") {
+    // swapping the columns would exchange a virtual and an occupied index,
+    // i.e. relate different blocks of R
+    auto r = deserialize<ResultExpr>(
+        L"R{a_1,i_3;i_1,i_2}:N-N-S = X{a_1,i_3;i_1,i_2}:N-N-N + "
+        L"X{i_3,a_1;i_2,i_1}:N-N-N");
+    simplify(r);
+    CHECK(count(r) == 2);
+  }
+
+  SECTION("external indices that occur more than once keep their labels") {
+    // an element-wise (Hadamard) product: the externals occur twice, which
+    // deduction would take for a contraction
+    const auto input = L"R{a_1;i_1} = X{a_1;i_1} * Y{a_1;i_1}";
+    auto r = deserialize<ResultExpr>(input);
+    REQUIRE_NOTHROW(simplify(r));
+    CHECK(r.expression() == deserialize(L"X{a_1;i_1} * Y{a_1;i_1}"));
+    auto deduced = deserialize<ResultExpr>(input).expression();
+    CHECK_THROWS_AS(simplify(deduced, deduce_named_indices), Exception);
   }
 }
 
@@ -1566,8 +1622,9 @@ TEST_CASE("tensor_power_canonicalization", "[algorithms]") {
                       TensorSymmetries{.perm = Symmetry::Antisymm});
   auto Mp = ex<Tensor>(L"M", bra{L"i_2", L"i_1"}, ket{L"a_1", L"a_2"},
                        TensorSymmetries{.perm = Symmetry::Antisymm});
-  const NamedIndexSpec named = container::set<Index>{
-      Index{L"i_1"}, Index{L"i_2"}, Index{L"a_1"}, Index{L"a_2"}};
+  const NamedIndexSpec named =
+      sequant::tests::explicit_named(container::set<Index>{
+          Index{L"i_1"}, Index{L"i_2"}, Index{L"a_1"}, Index{L"a_2"}});
 
   // every product below has its externals in two slots of the same kind, so
   // without named indices they are deduced as dummies and three covariant

@@ -457,7 +457,8 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
                      deduce_named_indices) != ex<Constant>(0));
 
     // H̄ must use explicit commutators, since ref_av takes no connectivity here
-    const auto expected = op::ref_av(lst(op::H(), op::T(1), 2), {});
+    const auto expected =
+        op::ref_av(lst(op::H(), op::T(1), 2), deduce_named_indices);
     REQUIRE(simplify(CC(1, {.hbar_comm_rank = 2}).energy() - expected,
                      deduce_named_indices) == ex<Constant>(0));
 

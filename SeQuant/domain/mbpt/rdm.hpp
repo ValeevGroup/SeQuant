@@ -37,6 +37,10 @@ ExprPtr cumulant3_to_density(ExprPtr ex_);
 ExprPtr cumulants_to_densities(ExprPtr expr,
                                const NamedIndexSpec& external_indices);
 
+/// like cumulants_to_densities(ExprPtr, const NamedIndexSpec&), with the
+/// indices of the result of @p expr as the external indices
+ResultExpr cumulants_to_densities(const ResultExpr& expr);
+
 ExprPtr one_body_sub(ExprPtr ex_);
 
 ExprPtr two_body_decomp(ExprPtr ex_, bool approx = false);
@@ -64,6 +68,11 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast = false);
 ExprPtr three_body_substitution(ExprPtr& input,
                                 const NamedIndexSpec& external_indices,
                                 int rank, bool fast = false);
+
+/// like three_body_substitution(ExprPtr&, const NamedIndexSpec&, int, bool),
+/// with the indices of the result of @p input as the external indices
+ResultExpr& three_body_substitution(ResultExpr& input, int rank,
+                                    bool fast = false);
 
 }  // namespace decompositions
 }  // namespace mbpt

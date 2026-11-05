@@ -739,8 +739,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
               ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({L"u_3", L"u_4"})) *
               coeff(L"t", {L"u_5", L"u_6"}, {L"u_7", L"u_8"}) *
               ex<FNOperator>(cre({L"u_5", L"u_6"}), ann({L"u_7", L"u_8"}));
-    const NamedIndexSpec named_indices_spec =
-        container::set<Index>{Index(L"u_1"), Index(L"u_5")};
+    const NamedIndexSpec named_indices_spec = sequant::tests::explicit_named(
+        container::set<Index>{Index(L"u_1"), Index(L"u_5")});
     for (const bool full : {true, false}) {
       INFO("full=" << full);
       std::array<ExprPtr, 2> result;

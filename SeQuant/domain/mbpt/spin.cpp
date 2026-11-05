@@ -53,6 +53,9 @@
 #include <unordered_map>
 #include <utility>
 
+// the library knows the named indices of the expressions it builds
+using sequant::detail::explicit_named_indices;
+
 namespace sequant::mbpt {
 
 namespace detail {
@@ -927,8 +930,8 @@ ExprPtr closed_shell_spintrace_impl(const ExprPtr& expression,
   expr = expand_antisymm(expr);
 
   // full simplify to combine terms before count_cycles
-  simplify(expr, without_projector_indices(
-                     expr, flatten_index_groups(ext_index_groups)));
+  simplify(expr, explicit_named_indices(without_projector_indices(
+                     expr, flatten_index_groups(ext_index_groups))));
 
   // Lambda for spin-tracing a product term
   // For closed-shell case, a spin-traced result is a product term scaled by
@@ -1098,13 +1101,13 @@ ExprPtr closed_shell_CC_spintrace_v1_impl(
   auto st_expr = options.naive_spintrace
                      ? spintrace(expr, ext_idxs)
                      : closed_shell_spintrace(expr, ext_idxs);
-  canonicalize(st_expr, external_indices(st_expr));
+  canonicalize(st_expr, explicit_named_indices(external_indices(st_expr)));
 
   if (!ext_idxs.empty()) {
     // Biorthogonal transformation without factoring out NNS projector
     st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs, false);
   }
-  simplify(st_expr, external_indices(st_expr));
+  simplify(st_expr, explicit_named_indices(external_indices(st_expr)));
 
   return st_expr;
 }
@@ -1128,20 +1131,21 @@ ExprPtr closed_shell_CC_spintrace_v2_impl(
                               ? spintrace(term, ext_idxs)
                               : closed_shell_spintrace(term, ext_idxs);
       const auto named = external_indices(contribution);
-      return canonicalize(std::move(contribution), named);
+      return canonicalize(std::move(contribution),
+                          explicit_named_indices(named));
     });
   } else {
     st_expr = options.naive_spintrace ? spintrace(expr, ext_idxs)
                                       : closed_shell_spintrace(expr, ext_idxs);
   }
-  canonicalize(st_expr, external_indices(st_expr));
+  canonicalize(st_expr, explicit_named_indices(external_indices(st_expr)));
 
   if (!ext_idxs.empty()) {
     // Biorthogonal transformation with factoring out NNS projector
     st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs);
   }
 
-  simplify(st_expr, external_indices(st_expr));
+  simplify(st_expr, explicit_named_indices(external_indices(st_expr)));
 
   return st_expr;
 }
@@ -1425,7 +1429,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
   auto expanded_expr = expand_A_op(expr);
   reset_tags(expanded_expr);
   expand(expanded_expr);
-  simplify(expanded_expr, ext_idxlist);
+  simplify(expanded_expr, explicit_named_indices(ext_idxlist));
 
   // Grand index list contains both internal and external indices; the
   // external ones are added explicitly, since an input that simplifies to
@@ -1599,7 +1603,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
       spin_case_ext_indices.insert(std::move(i));
     }
     reset_tags(expression);
-    canonicalize(expression, spin_case_ext_indices);
+    canonicalize(expression, explicit_named_indices(spin_case_ext_indices));
     rapid_simplify(expression);
   }
   return result;
@@ -1650,7 +1654,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
         expr.is<Sum>() ? expr->as<Sum>().summands() : Sum::summands_type{expr};
     auto result = ex<Sum>(terms | ranges::views::transform(trace_term));
     // a scalar: no external indices
-    simplify(result, {});
+    simplify(result, explicit_named_indices({}));
     return {result};
   }
 
@@ -1681,8 +1685,8 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
         // the external indices are those of the projector, which carries
         // them
         os_st.at(s) = A_vec.at(s) * os_st.at(s);
-        simplify(os_st.at(s), without_projector_indices(
-                                  os_st.at(s), get_used_indices(A_vec.at(s))));
+        simplify(os_st.at(s), explicit_named_indices(without_projector_indices(
+                                  os_st.at(s), get_used_indices(A_vec.at(s)))));
         os_st.at(s) = remove_tensor(os_st.at(s), reserved::antisymm_label());
       }
     }
@@ -1932,7 +1936,8 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
       }
       ext_idxlist.insert(std::move(idx));
     }
-  simplify(result, without_projector_indices(result, std::move(ext_idxlist)));
+  simplify(result, explicit_named_indices(without_projector_indices(
+                       result, std::move(ext_idxlist))));
 
   return result;
 }

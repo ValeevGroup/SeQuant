@@ -1528,7 +1528,8 @@ ExprPtr WickTheorem<S>::compute_contractions(
         if (use_topology_) {
           const auto external = external_indices();
           const auto partitions =
-              analyze_topology(expr_input_->as<Product>(), external);
+              analyze_topology(expr_input_->as<Product>(),
+                               detail::explicit_named_indices(external));
           // pruning by its topology would not preserve that the input is
           // zero by symmetry
           if (partitions.zero) return ex<Constant>(0);

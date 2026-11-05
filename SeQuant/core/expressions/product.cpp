@@ -92,7 +92,7 @@ ExprPtr Product::canonicalize_impl(const NamedIndexSpec &named_indices,
       for (auto &&idx : get_used_indices(factors_[g]))
         if (factor_indices.contains(idx)) result.insert(idx);
     }
-    return NamedIndexSpec(std::move(result));
+    return detail::explicit_named_indices(std::move(result));
   };
   for (std::size_t f = 0; f != factors_.size(); ++f) {
     auto &factor = factors_[f];

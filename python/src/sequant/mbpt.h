@@ -24,10 +24,7 @@ auto make_sr_op(F f) {
 
 using PyEVOptions = sequant::mbpt::EVOptions<std::string>;
 
-ExprPtr VacuumAverage(
-    const ExprPtr& e, const PyEVOptions& opts,
-    const std::optional<std::vector<std::wstring>>& external_indices,
-    bool deduce) {
+ExprPtr VacuumAverage(const ExprPtr& e, const PyEVOptions& opts, bool deduce) {
   // helper for converting connections lists
   auto convert = [](const sequant::mbpt::OpConnections<std::string>& pairs) {
     sequant::mbpt::OpConnections<std::wstring> result;
@@ -38,7 +35,7 @@ ExprPtr VacuumAverage(
     return result;
   };
   return sequant::mbpt::op::vac_av(
-      e, named_index_spec(external_indices, deduce),
+      e, named_index_spec(deduce),
       {.connect = convert(opts.connect),
        .do_not_connect = convert(opts.do_not_connect),
        .screen = opts.screen,
@@ -96,12 +93,11 @@ inline void __init__(py::module m) {
       .def_readwrite("skip_clone", &PyEVOptions::skip_clone);
 
   m.def("VacuumAverage", &VacuumAverage,
-        "vacuum expectation value of an operator-level expression; its "
-        "external indices are given either explicitly by their labels "
-        "(operators carry no indices, so usually none: external_indices=[]) "
-        "or, with deduce=True, deduced",
+        "vacuum expectation value of an operator-level expression; "
+        "deduce=True (required) deduces the external indices of its tensor "
+        "form",
         py::arg("expr"), py::arg("options") = PyEVOptions{}, py::kw_only(),
-        py::arg("external_indices") = py::none(), py::arg("deduce") = false);
+        py::arg("deduce"));
 }
 
 }  // namespace sequant::python::mbpt

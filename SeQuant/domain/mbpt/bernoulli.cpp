@@ -24,6 +24,9 @@
 #include <string_view>
 #include <utility>
 
+// the library knows the named indices of the expressions it builds
+using sequant::detail::explicit_named_indices;
+
 // Bernoulli expansion of the unitary-CC similarity-transformed Hamiltonian
 // H̄ = e^{−σ} H e^{σ}, σ = T − T† (anti-Hermitian). For UCC the plain BCH
 // series does not terminate, because σ mixes excitation and de-excitation.
@@ -120,7 +123,7 @@ namespace {
 /// file: none, since every index pairs a coefficient tensor with a normal
 /// operator
 const NamedIndexSpec& no_external_indices() {
-  static const NamedIndexSpec result{container::set<Index>{}};
+  static const NamedIndexSpec result = explicit_named_indices({});
   return result;
 }
 
