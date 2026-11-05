@@ -297,21 +297,31 @@ struct ClosedShellCCSpintraceOptions {
 /// performed numerically.
 /// @warning the antisymmetrizer is assumed to be at the front of each tensor
 /// network, hence must use "complete" canonicalization to produce the input expression.
-/// @param expr input expression
+/// @param expr input expression; its result indices are the external indices
 /// @param options optional parameter controlling the algorithm selection and
 ///                other traits; the default is to use
 ///                the V2 method
 // clang-format on
+ResultExpr closed_shell_CC_spintrace(
+    const ResultExpr& expr, ClosedShellCCSpintraceOptions options = {});
+
+/// @brief like closed_shell_CC_spintrace(const ResultExpr&, ...), with the
+/// external indices given by the projector (antisymmetrizer or symmetrizer)
+/// of @p expr , or none if it has no projector
+/// @note the projector does not determine the external indices of every
+/// expression (e.g. of some multireference ones), prefer the ResultExpr
+/// overload
+/// @todo deprecate once the CC drivers produce ResultExpr objects
 ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
                                   ClosedShellCCSpintraceOptions options = {});
 
-/// @sa closed_shell_CC_spintrace
+/// @sa closed_shell_CC_spintrace(ExprPtr const&, ...)
 ExprPtr closed_shell_CC_spintrace_v1(
     ExprPtr const& expr,
     ClosedShellCCSpintraceOptions options = {
         .method = BiorthogonalizationMethod::V1, .naive_spintrace = false});
 
-/// @sa closed_shell_CC_spintrace
+/// @sa closed_shell_CC_spintrace(ExprPtr const&, ...)
 ExprPtr closed_shell_CC_spintrace_v2(
     ExprPtr const& expr,
     ClosedShellCCSpintraceOptions options = {

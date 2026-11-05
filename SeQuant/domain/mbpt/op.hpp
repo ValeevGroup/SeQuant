@@ -564,19 +564,33 @@ struct EVOptions {
 namespace tensor {
 /// @brief computes the reference expectation value of a tensor-level expression
 /// @param expr input expression
+/// @param external_indices the external indices of @p expr (e.g. those of its
+///        projector), which survive the expectation value; see NamedIndexSpec
 /// @param opts defines the behavior, @see EVOptions
 /// @note Connectivity constraints are empty by default.
 /// @pre When the reference differs from the Wick vacuum and the vacuum is not
 ///      MultiProduct, opts.connect and opts.do_not_connect must both be empty.
-ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts = {});
+ExprPtr ref_av(ExprPtr expr, const NamedIndexSpec& external_indices,
+               EVOptions<int> opts = {});
 
 /// @brief computes the vacuum expectation value of a tensor-level expression,
 /// forces full contractions in WickTheorem
 /// @param expr input expression
+/// @param external_indices the external indices of @p expr ; see
+///        NamedIndexSpec
 /// @param opts defines the behavior, @see EVOptions
 /// @note Connectivity constraints are empty by default.
-ExprPtr vac_av(ExprPtr expr, EVOptions<int> opts = {});
+ExprPtr vac_av(ExprPtr expr, const NamedIndexSpec& external_indices,
+               EVOptions<int> opts = {});
 }  // namespace tensor
+
+/// @param base the comparer to defer to; null selects the default one
+/// @return an Index comparer that moves the active indices (those of the
+/// intersection of the particle and hole spaces of the registry of the
+/// default context) to the front and otherwise defers to @p base ; for use as
+/// the index comparer of a CanonicalizationPresentation
+std::shared_ptr<const tensor_index_comparer_t> active_first_index_comparer(
+    std::shared_ptr<const tensor_index_comparer_t> base = nullptr);
 }  // namespace op
 
 }  // namespace mbpt

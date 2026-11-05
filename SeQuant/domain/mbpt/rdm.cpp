@@ -81,7 +81,21 @@ ExprPtr cumulant3_to_density(ExprPtr ex_) {
   return cumulant_to_density(ex_);
 }
 
-ExprPtr cumulants_to_densities(ExprPtr expr) {
+namespace {
+
+/// @return the indices of an initial pairing, i.e. the external indices of
+/// the decomposition of the 3-body operator it belongs to
+NamedIndexSpec pairing_indices(
+    const std::pair<std::vector<Index>, std::vector<Index>>& pairing) {
+  container::set<Index> result(pairing.first.begin(), pairing.first.end());
+  result.insert(pairing.second.begin(), pairing.second.end());
+  return result;
+}
+
+}  // namespace
+
+ExprPtr cumulants_to_densities(ExprPtr expr,
+                               const NamedIndexSpec& external_indices) {
   auto replace = [](ExprPtr& e) {
     if (!e->is<Tensor>() ||
         e->as<Tensor>().label() != density::cumulant_label())
@@ -96,7 +110,7 @@ ExprPtr cumulants_to_densities(ExprPtr expr) {
   else
     expr->visit(replace, /*atoms_only=*/true);
   expand(expr);
-  simplify(expr);
+  simplify(expr, external_indices);
   [[maybe_unused]] auto no_cumulant = [&expr] {
     bool found = false;
     auto check = [&found](const ExprPtr& e) {
@@ -200,8 +214,10 @@ three_body_decomp(ExprPtr ex_, bool approx) {
     sum_of_terms.result = cumu3 + sum_of_terms.result;
   }
 
+  // the indices of ex_ are the external indices
+  const auto external_indices = pairing_indices({initial_lower, initial_upper});
   auto temp_result = sum_of_terms.result;
-  simplify(temp_result);
+  simplify(temp_result, external_indices);
   // std::wcout << "result before substitiutions: " <<
   // to_latex_align(temp_result) << std::endl;
 
@@ -217,7 +233,7 @@ three_body_decomp(ExprPtr ex_, bool approx) {
     } else {
     }
   }
-  simplify(temp_result);
+  simplify(temp_result, external_indices);
   for (auto&& product :
        temp_result->as<Sum>().summands()) {  // replace the one body terms with
     // the substituted expression
@@ -246,7 +262,7 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
     auto ex_pair = three_body_decomp(ex_);
     ex_ = ex_pair.first;
     initial_pairing = ex_pair.second;
-    simplify(ex_);
+    simplify(ex_, pairing_indices(initial_pairing));
     for (auto&& product : ex_->as<Sum>().summands()) {
       if (product->is<Product>()) {
         for (auto&& factor : product->as<Product>().factors()) {
@@ -270,7 +286,7 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
         }
       }
     }
-    simplify(ex_);
+    simplify(ex_, pairing_indices(initial_pairing));
 
   } else if (rank == 2) {
     if (fast) {
@@ -303,7 +319,7 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
     auto ex_pair = three_body_decomp(ex_, true);
     ex_ = ex_pair.first;
     initial_pairing = ex_pair.second;
-    simplify(ex_);
+    simplify(ex_, pairing_indices(initial_pairing));
     for (auto&& product : ex_->as<Sum>().summands()) {
       if (product->is<Product>()) {
         for (auto&& factor : product->as<Product>().factors()) {
@@ -326,14 +342,14 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
         }
       }
     }
-    simplify(ex_);
+    simplify(ex_, pairing_indices(initial_pairing));
     // std::wcout << " cumulant replacment: " << to_latex_align(_ex,20, 7) <<
     // std::endl;
   } else if (rank == 1) {
     auto ex_pair = three_body_decomp(ex_, true);
     ex_ = ex_pair.first;
     initial_pairing = ex_pair.second;
-    simplify(ex_);
+    simplify(ex_, pairing_indices(initial_pairing));
     for (auto&& product : ex_->as<Sum>().summands()) {
       if (product->is<Product>()) {
         for (auto&& factor : product->as<Product>().factors()) {
@@ -352,14 +368,16 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
         }
       }
     }
-    simplify(ex_);
+    simplify(ex_, pairing_indices(initial_pairing));
   } else {
     throw Exception("rank not supported!");
   }
   return {ex_, initial_pairing};
 }
 
-ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast) {
+ExprPtr three_body_substitution(ExprPtr& input,
+                                const NamedIndexSpec& external_indices,
+                                int rank, bool fast) {
   // just return back if the input is zero.
   if (input == ex<Constant>(0)) {
     return input;
@@ -380,7 +398,7 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast) {
           }
         }
       }
-      simplify(input);
+      simplify(input, external_indices);
       return input;
     } else if (input->is<Product>()) {
       for (auto&& factor : input->as<Product>().factors()) {
@@ -392,14 +410,14 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast) {
           factor = fac_pair.first;
         }
       }
-      simplify(input);
+      simplify(input, external_indices);
       return input;
     } else if (input->is<FNOperator>()) {
       auto fac_pair = decompositions::three_body_decomposition(
           input, rank,
           fast);  // decompose that term and replace the existing term.
       input = fac_pair.first;
-      simplify(input);
+      simplify(input, pairing_indices(fac_pair.second));
       return input;
     }
   }

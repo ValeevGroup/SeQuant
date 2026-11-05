@@ -339,10 +339,12 @@ class Product : public Expr {
   ConstExprIterator end_subexpr() const override;
 
   virtual ExprPtr canonicalize(
+      const NamedIndexSpec &named_indices,
       CanonicalizeOptions opt =
           CanonicalizeOptions::default_options()) override;
 
   virtual ExprPtr rapid_canonicalize(
+      const NamedIndexSpec &named_indices,
       CanonicalizeOptions opts =
           CanonicalizeOptions::default_options().copy_and_set(
               CanonicalizationMethod::Rapid)) override;
@@ -362,7 +364,8 @@ class Product : public Expr {
   /// identical to the hash of the factor itself.
   hash_type memoizing_hash() const override;
 
-  ExprPtr canonicalize_impl(CanonicalizeOptions);
+  ExprPtr canonicalize_impl(const NamedIndexSpec &named_indices,
+                            CanonicalizeOptions opts);
 
   bool static_equal(const Expr &that) const override;
 

@@ -722,16 +722,18 @@ TEST_CASE("op", "[elements]") {
     {
       auto ca = a->clone();
       auto cb = b->clone();
-      canonicalize(ca);
-      canonicalize(cb);
-      REQUIRE(simplify(ca + cb) == ex<Constant>(0));
+      canonicalize(ca, deduce_named_indices);
+      canonicalize(cb, deduce_named_indices);
+      REQUIRE(simplify(ca + cb, deduce_named_indices) == ex<Constant>(0));
       // the canonical forms differ only by the sign
-      REQUIRE(simplify(ca * ex<Constant>(-1) - cb) == ex<Constant>(0));
+      REQUIRE(simplify(ca * ex<Constant>(-1) - cb, deduce_named_indices) ==
+              ex<Constant>(0));
     }
     // lone summands, as Wick outputs them, cancel
-    REQUIRE(simplify(a->clone() + b->clone()) == ex<Constant>(0));
-    REQUIRE(simplify(a->clone() - b->clone() - ex<Constant>(2) * a->clone()) ==
+    REQUIRE(simplify(a->clone() + b->clone(), deduce_named_indices) ==
             ex<Constant>(0));
+    REQUIRE(simplify(a->clone() - b->clone() - ex<Constant>(2) * a->clone(),
+                     deduce_named_indices) == ex<Constant>(0));
   }
 
   SECTION("commutativity") {

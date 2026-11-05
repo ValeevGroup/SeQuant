@@ -185,7 +185,6 @@ template <typename Container, typename TraceFunction, typename... Args>
     ExprPtr expression = expr.expression().clone();
 
     expression *= ex<Constant>(currentSign);
-    expression = simplify(expression);
 
     ResultExpr result = [&]() {
       SEQUANT_ASSERT(expr.has_label());
@@ -201,6 +200,8 @@ template <typename Container, typename TraceFunction, typename... Args>
                           std::move(expression));
       }
     }();
+    // the result determines the external indices and their symmetries
+    simplify(result);
 
     result.expression() = tracer(
         result.expression(),
@@ -925,7 +926,9 @@ ExprPtr closed_shell_spintrace_impl(const ExprPtr& expression,
 
   expr = expand_antisymm(expr);
 
-  simplify(expr);  // full simplify to combine terms before count_cycles
+  // full simplify to combine terms before count_cycles
+  simplify(expr, without_projector_indices(
+                     expr, flatten_index_groups(ext_index_groups)));
 
   // Lambda for spin-tracing a product term
   // For closed-shell case, a spin-traced result is a product term scaled by
@@ -1069,76 +1072,120 @@ container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr,
       full_expansion);
 }
 
-ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
-                                     ClosedShellCCSpintraceOptions options) {
-  SEQUANT_ASSERT(options.method == BiorthogonalizationMethod::V1);
-  using ranges::views::transform;
+namespace {
 
-  auto const ext_idxs = external_indices(expr);
+using ExtIndexGroups = container::svector<container::svector<SlottedIndex>>;
+
+/// @return the external index groups of @p expr as given by its projector (A
+/// or S), or none if it has no projector
+ExtIndexGroups projector_index_groups(const ExprPtr& expr) {
+  if (has_tensor(expr, reserved::antisymm_label()) ||
+      has_tensor(expr, reserved::symm_label()))
+    return external_indices(expr);
+  return {};
+}
+
+ExprPtr closed_shell_CC_spintrace_v1_impl(
+    ExprPtr const& expr, const ExtIndexGroups& ext_idxs,
+    ClosedShellCCSpintraceOptions options) {
+  SEQUANT_ASSERT(options.method == BiorthogonalizationMethod::V1);
+  // a projector carries the external indices it has, see
+  // without_projector_indices
+  const auto external_indices = [&ext_idxs](const ExprPtr& e) {
+    return without_projector_indices(e, flatten_index_groups(ext_idxs));
+  };
+
   auto st_expr = options.naive_spintrace
                      ? spintrace(expr, ext_idxs)
                      : closed_shell_spintrace(expr, ext_idxs);
-  canonicalize(st_expr);
+  canonicalize(st_expr, external_indices(st_expr));
 
   if (!ext_idxs.empty()) {
     // Biorthogonal transformation without factoring out NNS projector
     st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs, false);
   }
-  simplify(st_expr);
+  simplify(st_expr, external_indices(st_expr));
 
   return st_expr;
 }
 
-ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
-                                     ClosedShellCCSpintraceOptions options) {
+ExprPtr closed_shell_CC_spintrace_v2_impl(
+    ExprPtr const& expr, const ExtIndexGroups& ext_idxs,
+    ClosedShellCCSpintraceOptions options) {
   SEQUANT_ASSERT(options.method == BiorthogonalizationMethod::V2);
-  using ranges::views::transform;
-  auto const ext_idxs = external_indices(expr);
+  // a projector carries the external indices it has, see
+  // without_projector_indices
+  const auto external_indices = [&ext_idxs](const ExprPtr& e) {
+    return without_projector_indices(e, flatten_index_groups(ext_idxs));
+  };
+
   ExprPtr st_expr;
   if (expr->is<Sum>()) {
     // Canonicalize and merge each traced contribution before retaining the
     // next one, so equivalent terms do not accumulate across input summands.
-    st_expr = transform_sum_expr(
-        *expr,
-        [&](const ExprPtr& term) {
-          auto contribution = options.naive_spintrace
-                                  ? spintrace(term, ext_idxs)
-                                  : closed_shell_spintrace(term, ext_idxs);
-          return canonicalize(std::move(contribution));
-        },
-        {.canonicalize = false});
+    st_expr = transform_sum_expr(*expr, [&](const ExprPtr& term) {
+      auto contribution = options.naive_spintrace
+                              ? spintrace(term, ext_idxs)
+                              : closed_shell_spintrace(term, ext_idxs);
+      const auto named = external_indices(contribution);
+      return canonicalize(std::move(contribution), named);
+    });
   } else {
     st_expr = options.naive_spintrace ? spintrace(expr, ext_idxs)
                                       : closed_shell_spintrace(expr, ext_idxs);
   }
-  canonicalize(st_expr);
+  canonicalize(st_expr, external_indices(st_expr));
 
   if (!ext_idxs.empty()) {
     // Biorthogonal transformation with factoring out NNS projector
     st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs);
   }
 
-  simplify(st_expr);
-  // std::wcout << "final eqs after symm: "
-  //            << sequant::to_latex_align(
-  //                   sequant::ex<sequant::Sum>(
-  //                       sequant::opt::reorder(st_expr->as<sequant::Sum>())),
-  //                   0, 4)
-  //            << std::endl;
+  simplify(st_expr, external_indices(st_expr));
 
   return st_expr;
 }
 
-ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
-                                  ClosedShellCCSpintraceOptions options) {
+ExprPtr closed_shell_CC_spintrace_impl(ExprPtr const& expr,
+                                       const ExtIndexGroups& ext_idxs,
+                                       ClosedShellCCSpintraceOptions options) {
   switch (options.method) {
     case BiorthogonalizationMethod::V1:
-      return closed_shell_CC_spintrace_v1(expr, options);
+      return closed_shell_CC_spintrace_v1_impl(expr, ext_idxs, options);
     case BiorthogonalizationMethod::V2:
-      return closed_shell_CC_spintrace_v2(expr, options);
+      return closed_shell_CC_spintrace_v2_impl(expr, ext_idxs, options);
   }
 
   SEQUANT_UNREACHABLE;
+}
+
+}  // namespace
+
+ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
+                                     ClosedShellCCSpintraceOptions options) {
+  return closed_shell_CC_spintrace_v1_impl(expr, projector_index_groups(expr),
+                                           options);
+}
+
+ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
+                                     ClosedShellCCSpintraceOptions options) {
+  return closed_shell_CC_spintrace_v2_impl(expr, projector_index_groups(expr),
+                                           options);
+}
+
+ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
+                                  ClosedShellCCSpintraceOptions options) {
+  return closed_shell_CC_spintrace_impl(expr, projector_index_groups(expr),
+                                        options);
+}
+
+ResultExpr closed_shell_CC_spintrace(const ResultExpr& expr,
+                                     ClosedShellCCSpintraceOptions options) {
+  ResultExpr result = expr.clone();
+  result.expression() = closed_shell_CC_spintrace_impl(
+      expr.expression(),
+      expr.index_particle_grouping<ExtIndexGroups::value_type>(), options);
+  return result;
 }
 
 Tensor swap_spin(const Tensor& t) {
@@ -1366,10 +1413,19 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
 
   // Expand 'A' operator and 'antisymm' tensors; the indices are collected
   // from the result, since simplify() renumbers the dummies
+  container::set<Index> ext_idxlist;
+  for (const auto& idxgrp : ext_index_groups) {
+    for (const Index& current : idxgrp) {
+      Index idx = current;
+      idx.reset_tag();
+      ext_idxlist.insert(std::move(idx));
+    }
+  }
+
   auto expanded_expr = expand_A_op(expr);
   reset_tags(expanded_expr);
   expand(expanded_expr);
-  simplify(expanded_expr);
+  simplify(expanded_expr, ext_idxlist);
 
   // Grand index list contains both internal and external indices; the
   // external ones are added explicitly, since an input that simplifies to
@@ -1379,14 +1435,6 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
                        SlotType::Bra | SlotType::Ket | SlotType::Proto>(
           expanded_expr);
 
-  container::set<Index> ext_idxlist;
-  for (const auto& idxgrp : ext_index_groups) {
-    for (const Index& current : idxgrp) {
-      Index idx = current;
-      idx.reset_tag();
-      ext_idxlist.insert(std::move(idx));
-    }
-  }
   grand_idxlist.insert(ext_idxlist.begin(), ext_idxlist.end());
 
   container::set<Index> int_idxlist;
@@ -1539,10 +1587,19 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
                    "Spin-specific case must return one expression.");
   }
 
-  // Canonicalize and simplify all expressions
-  for (auto& expression : result) {
+  // Canonicalize and simplify all expressions; the external indices of each
+  // are those of its spin case
+  SEQUANT_ASSERT(result.size() == e_rep.size());
+  for (std::size_t k = 0; k != result.size(); ++k) {
+    auto& expression = result[k];
+    container::set<Index> spin_case_ext_indices;
+    for (const auto& [idx, spin_idx] : e_rep[k]) {
+      Index i = spin_idx;
+      i.reset_tag();
+      spin_case_ext_indices.insert(std::move(i));
+    }
     reset_tags(expression);
-    canonicalize(expression);
+    canonicalize(expression, spin_case_ext_indices);
     rapid_simplify(expression);
   }
   return result;
@@ -1592,7 +1649,8 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
     const auto terms =
         expr.is<Sum>() ? expr->as<Sum>().summands() : Sum::summands_type{expr};
     auto result = ex<Sum>(terms | ranges::views::transform(trace_term));
-    simplify(result);
+    // a scalar: no external indices
+    simplify(result, {});
     return {result};
   }
 
@@ -1620,8 +1678,11 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
       os_st.at(s) =
           open_shell_spintrace(os_st.at(s), external_indices(A), s).at(0);
       if (i > 2) {
+        // the external indices are those of the projector, which carries
+        // them
         os_st.at(s) = A_vec.at(s) * os_st.at(s);
-        simplify(os_st.at(s));
+        simplify(os_st.at(s), without_projector_indices(
+                                  os_st.at(s), get_used_indices(A_vec.at(s))));
         os_st.at(s) = remove_tensor(os_st.at(s), reserved::antisymm_label());
       }
     }
@@ -1652,10 +1713,10 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
 
   if constexpr (check_ext_indices && assert_enabled()) {
     // Verify that the number of external indices matches the number of indices
-    // in ext_index_groups, UNLESS user overrode external definitions in default
-    // context
-    const auto& copts = get_default_context().canonicalization_options();
-    if (!copts.has_value() || !copts->named_indices) {
+    // in ext_index_groups; only a projector determines the external indices
+    // (they need not occur once, e.g. with quasi-diagonal tensors)
+    if (has_tensor(expression, reserved::antisymm_label()) ||
+        has_tensor(expression, reserved::symm_label())) {
       auto count_indices = [](const auto& range) {
         auto sizes = range | ranges::views::transform(
                                  [](const auto& list) { return list.size(); });
@@ -1857,7 +1918,21 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
 
   reset_tags(result);
 
-  simplify(result);
+  // the external indices, with their spin-specific images if the index spaces
+  // keep the spin
+  container::set<Index> ext_idxlist;
+  for (const auto& idxgrp : ext_index_groups)
+    for (const Index& current : idxgrp) {
+      Index idx = current;
+      idx.reset_tag();
+      if (!spinfree_index_spaces &&
+          mbpt::to_spin(idx.space().qns()) == mbpt::Spin::any) {
+        ext_idxlist.insert(make_spinalpha(idx));
+        ext_idxlist.insert(make_spinbeta(idx));
+      }
+      ext_idxlist.insert(std::move(idx));
+    }
+  simplify(result, without_projector_indices(result, std::move(ext_idxlist)));
 
   return result;
 }

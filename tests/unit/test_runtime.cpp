@@ -401,16 +401,15 @@ TEST_CASE("context", "[runtime]") {
     CHECK(Context{} == Context{});
     CHECK(Context{} != with_registry);
 
-    // the canonicalization options are compared in full, named indices
-    // included, as the version does
+    // the canonicalization options are compared in full, as the version does
     {
       Context plain(with_registry);
       plain.set(CanonicalizeOptions::default_options());
-      Context named(with_registry);
-      named.set(CanonicalizeOptions::default_options().copy_and_set(
-          std::optional<container::set<Index>>{container::set<Index>{}}));
-      CHECK(named != plain);
-      CHECK(named.version() != plain.version());
+      Context labeled(with_registry);
+      labeled.set(CanonicalizeOptions::default_options().copy_and_set(
+          CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+      CHECK(labeled != plain);
+      CHECK(labeled.version() != plain.version());
     }
     // the version of a configuration whose objects are gone is not reused,
     // even if a new object takes the address of a dead one: the registries
@@ -460,10 +459,6 @@ TEST_CASE("context", "[runtime]") {
     CHECK(changes([](Context& c) {
       c.set(CanonicalizeOptions::default_options().copy_and_set(
           CanonicalizeOptions::IgnoreNamedIndexLabel::No));
-    }));
-    CHECK(changes([](Context& c) {
-      c.set(c.canonicalization_options()->copy_and_set(
-          std::optional<container::set<Index>>{container::set<Index>{}}));
     }));
     {
       const auto before = ctx.version();
@@ -857,7 +852,7 @@ TEST_CASE("scoped_canonicalize_options", "[runtime]") {
   auto outer = set_scoped_default_context(container::map<Statistics, Context>{
       {Statistics::FermiDirac, fermi}, {Statistics::Arbitrary, arbitrary}});
   const auto opts = CanonicalizeOptions::default_options().copy_and_set(
-      container::set<Index>{Index{L"i_1"}});
+      CanonicalizeOptions::IgnoreNamedIndexLabel::No);
   REQUIRE(
       get_default_context(Statistics::FermiDirac).canonicalization_options() !=
       opts);

@@ -760,12 +760,13 @@ ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label);
 /// default one), through the
 /// AbstractTensor interface of @p leaf .
 /// @param[in,out] leaf an Expr that is an AbstractTensor
+/// @param[in] named_indices the indices that canonicalization must not rename
 /// @param[in] opts the canonicalization options
 /// @param[in] assign assigns the canonical form computed as a tensor network,
 ///            an object of the same type as @p leaf , to @p leaf
 /// @return the byproduct of canonicalization (e.g. a phase), or nullptr
 ExprPtr canonicalize_tensor_leaf(
-    Expr& leaf, CanonicalizeOptions opts,
+    Expr& leaf, const NamedIndexSpec& named_indices, CanonicalizeOptions opts,
     const std::function<void(const AbstractTensor&)>& assign);
 
 }  // namespace sequant

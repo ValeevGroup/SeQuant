@@ -59,12 +59,16 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
   SECTION("Constructors") {
     auto t1 = parse_tensor(L"t_{i1, i2}^{a1, a2}");
-    REQUIRE_NOTHROW(EvalExpr{t1});
-    REQUIRE(!EvalExpr{t1}.op_type());
+    REQUIRE_NOTHROW(EvalExpr(t1, sequant::tests::open_indices(t1)));
+    REQUIRE(!EvalExpr(t1, sequant::tests::open_indices(t1)).op_type());
 
     auto p1 = deserialize(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
-    REQUIRE(!EvalExpr{p1->at(0)->as<Tensor>()}.op_type());
-    REQUIRE(!EvalExpr{p1->at(1)->as<Tensor>()}.op_type());
+    REQUIRE(!EvalExpr(p1->at(0)->as<Tensor>(),
+                      sequant::tests::open_indices(p1->at(0)->as<Tensor>()))
+                 .op_type());
+    REQUIRE(!EvalExpr(p1->at(1)->as<Tensor>(),
+                      sequant::tests::open_indices(p1->at(1)->as<Tensor>()))
+                 .op_type());
 
     REQUIRE(!EvalExpr{Variable{L"λ"}}.op_type());
 
@@ -77,7 +81,10 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
   }
 
   SECTION("ResultType types") {
-    auto T = [](std::wstring_view xpr) { return EvalExpr{parse_tensor(xpr)}; };
+    auto T = [](std::wstring_view xpr) {
+      return EvalExpr(parse_tensor(xpr),
+                      sequant::tests::open_indices(parse_tensor(xpr)));
+    };
 
     auto C = [](std::wstring_view xpr) {
       return EvalExpr{parse_constant(xpr)};
@@ -442,8 +449,10 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     const auto& t2 = deserialize(str_t2);
 
-    const auto& x1 = EvalExpr{t1->as<Tensor>()};
-    const auto& x2 = EvalExpr{t2->as<Tensor>()};
+    const auto& x1 = EvalExpr(t1->as<Tensor>(),
+                              sequant::tests::open_indices(t1->as<Tensor>()));
+    const auto& x2 = EvalExpr(t2->as<Tensor>(),
+                              sequant::tests::open_indices(t2->as<Tensor>()));
 
     REQUIRE(*t1 == x1.expr()->as<Tensor>());
     REQUIRE(*t2 == x2.expr()->as<Tensor>());
@@ -469,8 +478,12 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto t4 = parse_tensor(L"g_{i3,i4}^{a3,a4}");
     const auto t5 = parse_tensor(L"I_{a1,a2,a3,a4}^{i1,i2,i3,i4}");
 
-    const auto& x45 = result_expr(EvalExpr{t4}, EvalExpr{t5}, EvalOp::Product);
-    const auto& x54 = result_expr(EvalExpr{t5}, EvalExpr{t4}, EvalOp::Product);
+    const auto& x45 = result_expr(
+        EvalExpr(t4, sequant::tests::open_indices(t4)),
+        EvalExpr(t5, sequant::tests::open_indices(t5)), EvalOp::Product);
+    const auto& x54 = result_expr(
+        EvalExpr(t5, sequant::tests::open_indices(t5)),
+        EvalExpr(t4, sequant::tests::open_indices(t4)), EvalOp::Product);
 
     REQUIRE(x45.to_latex() == deserialize(L"I_{a1,a2}^{i1,i2}")->to_latex());
     REQUIRE(x45.to_latex() == x54.to_latex());
@@ -484,8 +497,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto t3 = parse_tensor(L"t_{i1,i2}^{a1,a2}",
                                  {.def_perm_symm = Symmetry::Antisymm});
 
-    const auto& x1 = EvalExpr{t1};
-    const auto& x2 = EvalExpr{t2};
+    const auto& x1 = EvalExpr(t1, sequant::tests::open_indices(t1));
+    const auto& x2 = EvalExpr(t2, sequant::tests::open_indices(t2));
 
     const auto& x12 = result_expr(x1, x2, EvalOp::Product);
     const auto& x21 = result_expr(x2, x1, EvalOp::Product);
@@ -493,7 +506,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(x1.hash_value() == x2.hash_value());
     REQUIRE(x12.hash_value() == x21.hash_value());
 
-    const auto& x3 = EvalExpr{t3};
+    const auto& x3 = EvalExpr(t3, sequant::tests::open_indices(t3));
 
     REQUIRE_FALSE(x1.hash_value() == x3.hash_value());
     REQUIRE_FALSE(x12.hash_value() == x3.hash_value());
@@ -512,7 +525,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto t2 = parse_tensor(L"t_{a1,a2}^{i3,i4}",
                                  {.def_perm_symm = Symmetry::Antisymm});
 
-    const auto x12 = result_expr(EvalExpr{t1}, EvalExpr{t2}, EvalOp::Product);
+    const auto x12 = result_expr(EvalExpr(t1, sequant::tests::open_indices(t1)),
+                                 EvalExpr(t2, sequant::tests::open_indices(t2)),
+                                 EvalOp::Product);
 
     // todo:
     // REQUIRE(x12.expr()->as<Tensor>().symmetry() == Symmetry::Antisymm);
@@ -526,7 +541,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
         deserialize(L"t_{a1,a2}^{i3,i4}", {.def_perm_symm = Symmetry::Symm})
             ->as<Tensor>();
 
-    const auto x34 = result_expr(EvalExpr{t3}, EvalExpr{t4}, EvalOp::Product);
+    const auto x34 = result_expr(EvalExpr(t3, sequant::tests::open_indices(t3)),
+                                 EvalExpr(t4, sequant::tests::open_indices(t4)),
+                                 EvalOp::Product);
 
     // todo:
     // REQUIRE(x34.expr()->as<Tensor>().symmetry() == Symmetry::Symm);
@@ -540,7 +557,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
         deserialize(L"f_{i2}^{a2}", {.def_perm_symm = Symmetry::Nonsymm})
             ->as<Tensor>();
 
-    const auto& x56 = result_expr(EvalExpr{t5}, EvalExpr{t6}, EvalOp::Product);
+    const auto& x56 = result_expr(
+        EvalExpr(t5, sequant::tests::open_indices(t5)),
+        EvalExpr(t6, sequant::tests::open_indices(t6)), EvalOp::Product);
 
     // todo:
     // REQUIRE(x56.expr()->as<Tensor>().symmetry() == Symmetry::Antisymm);
@@ -552,7 +571,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto t8 =
         parse_tensor(L"t_{a3}^{i2}", {.def_perm_symm = Symmetry::Antisymm});
 
-    const auto x78 = result_expr(EvalExpr{t7}, EvalExpr{t8}, EvalOp::Product);
+    const auto x78 = result_expr(EvalExpr(t7, sequant::tests::open_indices(t7)),
+                                 EvalExpr(t8, sequant::tests::open_indices(t8)),
+                                 EvalOp::Product);
     REQUIRE(x78.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
 
     // whole bra <-> ket contraction between symmetric and antisymmetric tensors
@@ -562,19 +583,22 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     auto const t10 =
         deserialize(L"t_{a3,a4}^{i1,i2}", {.def_perm_symm = Symmetry::Symm})
             ->as<Tensor>();
-    auto const x910 = result_expr(EvalExpr{t9}, EvalExpr{t10}, EvalOp::Product);
+    auto const x910 = result_expr(
+        EvalExpr(t9, sequant::tests::open_indices(t9)),
+        EvalExpr(t10, sequant::tests::open_indices(t10)), EvalOp::Product);
     // todo:
     // REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::Symm);
     REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
   }
 
   SECTION("Debug") {
-    auto t1 = EvalExpr{deserialize(L"O{a_1<i_1,i_2>;a_1<i_3,i_2>}",
-                                   {.def_perm_symm = Symmetry::Nonsymm})
-                           ->as<Tensor>()};
-    auto t2 = EvalExpr{deserialize(L"O{a_2<i_1,i_2>;a_2<i_3,i_2>}",
-                                   {.def_perm_symm = Symmetry::Nonsymm})
-                           ->as<Tensor>()};
+    auto make = [](std::wstring_view str) {
+      const auto tnsr =
+          deserialize(str, {.def_perm_symm = Symmetry::Nonsymm})->as<Tensor>();
+      return EvalExpr(tnsr, sequant::tests::open_indices(tnsr));
+    };
+    auto t1 = make(L"O{a_1<i_1,i_2>;a_1<i_3,i_2>}");
+    auto t2 = make(L"O{a_2<i_1,i_2>;a_2<i_3,i_2>}");
 
     REQUIRE_NOTHROW(result_expr(t1, t2, EvalOp::Product));
   }
@@ -584,7 +608,7 @@ TEST_CASE("eval_expr_node_slice_mask_typed", "[EvalExpr][batched-here]") {
   using namespace sequant;
   auto const tnsr =
       parse_tensor(L"g{i_1,a_1;i_2,a_2}", {.def_perm_symm = Symmetry::Nonsymm});
-  EvalExpr node{tnsr};
+  EvalExpr node{tnsr, sequant::tests::open_indices(tnsr)};
   container::svector<std::pair<Index, BatchModeType>> modes{
       {Index{L"a_1"}, BatchModeType::Contracted},
       {Index{L"i_1"}, BatchModeType::External}};
@@ -1089,7 +1113,8 @@ TEST_CASE("binarize-system", "[EvalExpr][inline]") {
 
     // the canonicalized consumer_E() inlines too
     auto const canon = ResultExpr(
-        head(L"E"), canonicalize(consumer_E().expression()->clone()));
+        head(L"E"),
+        canonicalize(consumer_E().expression()->clone(), deduce_named_indices));
     System const csys{ell_definition(), canon};
     auto const cres = binarize(csys);
     REQUIRE(cres.consumed == Flags{true, false});

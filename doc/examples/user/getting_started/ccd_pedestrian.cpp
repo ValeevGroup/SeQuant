@@ -30,7 +30,7 @@ int main() {
 
   // start-snippet-3
   auto commutator = [](auto op1, auto op2) {
-    return simplify(op1 * op2 - op2 * op1);
+    return simplify(op1 * op2 - op2 * op1, deduce_named_indices);
   };
 
   auto c_ht = commutator(H, t2);

@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
@@ -86,7 +88,8 @@ void stamp_con_pair(EvalNode<EvalExpr>& n, Index i, Index j) {
 EvalExpr eval_tensor(std::string_view tensor) {
   auto expr = sequant::deserialize<ExprPtr>(std::string(tensor));
   REQUIRE(static_cast<bool>(expr));
-  return EvalExpr{expr->as<sequant::Tensor>()};
+  return EvalExpr(expr->as<sequant::Tensor>(),
+                  sequant::tests::open_indices(expr->as<sequant::Tensor>()));
 }
 
 // A leaf eval node carrying the given tensor's slots.

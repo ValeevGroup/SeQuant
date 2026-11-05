@@ -79,13 +79,13 @@ class WickTheorem {
 
  public:
   /// @param input normal operator sequence
-  /// @note the external (nonsummed) indices are the named indices of the
-  /// CanonicalizeOptions of the context (for arbitrary statistics, as read by
-  /// canonicalization) in effect at each use, if it has them (name every index
-  /// that must survive, any other is a dummy), else the indices that appear
-  /// once in the input; see external_indices()
-  explicit WickTheorem(
-      const std::shared_ptr<NormalOperatorSequence<S>> &input) {
+  /// @param external_indices the external (nonsummed) indices: every index
+  /// that must survive (any other is a dummy, even if it appears once), or
+  /// deduce_named_indices to deduce them as the indices that appear once in
+  /// the input; see external_indices()
+  WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>> &input,
+              NamedIndexSpec external_indices)
+      : external_indices_spec_(std::move(external_indices)) {
     init_input(input);
     SEQUANT_ASSERT(input_->size() <= max_input_size);
     if constexpr (statistics == Statistics::BoseEinstein) {
@@ -96,28 +96,36 @@ class WickTheorem {
   }
 
   /// @param input normal operator sequence
-  /// @note see WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&)
-  /// for which indices are external
-  explicit WickTheorem(NormalOperatorSequence<S> input)
+  /// @param external_indices the external indices, see
+  /// WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&,
+  /// NamedIndexSpec)
+  WickTheorem(NormalOperatorSequence<S> input, NamedIndexSpec external_indices)
       : WickTheorem(
-            std::make_shared<NormalOperatorSequence<S>>(std::move(input))) {}
+            std::make_shared<NormalOperatorSequence<S>>(std::move(input)),
+            std::move(external_indices)) {}
 
   /// @param expr_input input expression
-  /// @note see WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&)
-  /// for which indices are external
-  explicit WickTheorem(ExprPtr expr_input) {
+  /// @param external_indices the external indices, see
+  /// WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&,
+  /// NamedIndexSpec)
+  WickTheorem(ExprPtr expr_input, NamedIndexSpec external_indices)
+      : external_indices_spec_(std::move(external_indices)) {
     if (expr_input->is<NormalOperatorSequence<S>>()) {
       *this = WickTheorem(
-          expr_input.template as_shared_ptr<NormalOperatorSequence<S>>());
+          expr_input.template as_shared_ptr<NormalOperatorSequence<S>>(),
+          external_indices_spec_);
     } else
       expr_input_ = std::move(expr_input);
   }
 
   /// @param ops operator sequence
-  /// @note see WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&)
-  /// for which indices are external
-  explicit WickTheorem(const std::initializer_list<Op<S>> &ops)
-      : WickTheorem(NormalOperatorSequence<S>{ops}) {}
+  /// @param external_indices the external indices, see
+  /// WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&,
+  /// NamedIndexSpec)
+  WickTheorem(const std::initializer_list<Op<S>> &ops,
+              NamedIndexSpec external_indices)
+      : WickTheorem(NormalOperatorSequence<S>{ops},
+                    std::move(external_indices)) {}
 
   /// constructs WickTheorem from @p other with expression input set to
   /// @p expr_input
@@ -130,6 +138,16 @@ class WickTheorem {
     // are the same, but which of its dummies are noncovariant is not
     input_index_counts_.reset();
     reset_stats();
+  }
+
+  /// @param external_indices the external indices for the subsequent calls of
+  /// compute() and reduce(), see
+  /// WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&,
+  /// NamedIndexSpec)
+  /// @return reference to @c *this , for daisy-chaining
+  WickTheorem &set_external_indices(NamedIndexSpec external_indices) {
+    external_indices_spec_ = std::move(external_indices);
+    return *this;
   }
 
   /// Controls whether next call to compute() will full contractions only or all
@@ -521,17 +539,24 @@ class WickTheorem {
   /// and Op objects of @p product, deduced from the automorphisms of its
   /// tensor network; an Op partition only holds Op objects of the bra or the
   /// ket of one (anti)symmetric NormalOperator
-  /// @param declared_external_indices if non-null, the external indices of
-  /// the product, which no automorphism may permute even if contracted; if
-  /// null they are deduced as the indices that appear once
+  /// @param external_indices the external indices of the product, which no
+  /// automorphism may permute even if contracted; deduction selects the
+  /// indices that appear once in its tensors
   static TopologicalPartitions analyze_topology(
-      const Product &product,
-      const container::set<Index> *declared_external_indices = nullptr);
+      const Product &product, const NamedIndexSpec &external_indices);
 
   // the extended theorem runs the standard one on its operators
   friend ExprPtr detail::extended_wick<S>(ExprPtr,
                                           const detail::ExtendedWickOptions &,
                                           WickTheorem &);
+
+  /// the external indices as given at construction, see external_indices()
+  NamedIndexSpec external_indices_spec_;
+
+  /// @return the options of the canonicalizations of the operators produced
+  /// by contraction: those would undo what NormalOperator<S>::normalize did,
+  /// so normal operators are not canonicalized
+  static CanonicalizeOptions nop_preserving_canonicalize_options();
 
   // the index counts of the input, see extract_indices(); the input, not a
   // result, since the kronecker deltas of a result double every external
@@ -686,10 +711,10 @@ class WickTheorem {
   /// without a Product summand
   void extract_indices() const;
 
-  /// @return the external indices: the named indices of the context's
-  /// CanonicalizeOptions if it has them, else the indices of the input that
-  /// appear once in a nonproto slot or are pure protoindices
-  /// @pre the context names indices or extract_indices() has been called
+  /// @return the external indices: those given at construction, or, if they
+  /// are to be deduced, the indices of the input that appear once in a
+  /// nonproto slot or are pure protoindices
+  /// @pre external indices were given or extract_indices() has been called
   container::set<Index> external_indices() const;
 
   /// @return the noncovariant indices of the input with respect to
@@ -1298,7 +1323,8 @@ class WickTheorem {
         if (phase != 1) summand *= ex<Constant>(phase);
         if (prefactor_) {
           summand *= prefactor_;
-          auto bp = summand->canonicalize();
+          auto bp = summand->canonicalize(
+              external_indices_spec_, nop_preserving_canonicalize_options());
           summand *= bp;
         }
         if (!summand.template is<Product>()) {
@@ -1648,7 +1674,9 @@ class WickTheorem {
                             std::move(scalar_prefactor));
                         this->reduce(prefactor, state.external_indices,
                                      state.noncovariant_indices, state.ctx);
-                        auto bp = prefactor->canonicalize();
+                        auto bp = prefactor->canonicalize(
+                            this->external_indices_spec_,
+                            nop_preserving_canonicalize_options());
                         prefactor *= bp;
 
                         result.second->lock();
@@ -1687,7 +1715,9 @@ class WickTheorem {
                         if (state.sp_initial_size > 0) {
                           this->reduce(summand, state.external_indices,
                                        state.noncovariant_indices, state.ctx);
-                          auto bp = summand->canonicalize();
+                          auto bp = summand->canonicalize(
+                              this->external_indices_spec_,
+                              nop_preserving_canonicalize_options());
                           summand *= bp;
                         }
                         if (!summand.template is<Product>()) {

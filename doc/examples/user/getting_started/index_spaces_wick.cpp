@@ -16,9 +16,10 @@ int main() {
   auto ap3 = fannx(L"p_3"), ap4 = fannx(L"p_4");
 
   std::wcout << to_latex(ap3 * cp1 * ap4 * cp2) << " = "
-             << to_latex(FWickTheorem{ap3 * cp1 * ap4 * cp2}
-                             .full_contractions(false)
-                             .compute())
+             << to_latex(
+                    FWickTheorem(ap3 * cp1 * ap4 * cp2, deduce_named_indices)
+                        .full_contractions(false)
+                        .compute())
              << std::endl;
 
   return 0;

@@ -9,6 +9,17 @@
 
 namespace sequant::mbpt {
 
+namespace {
+
+/// the external indices of the operator-level expressions of this file: none,
+/// since Operators carry no indices
+const NamedIndexSpec& operator_level_external_indices() {
+  static const NamedIndexSpec result{container::set<Index>{}};
+  return result;
+}
+
+}  // namespace
+
 ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, LSTOptions options) {
   if (commutator_rank == 0) return A;  // nothing to do here
 
@@ -43,7 +54,7 @@ ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, LSTOptions options) {
       }
 
       op_Sk = ex<Constant>(rational{1, k}) * op_Sk_comm_w_S;
-      simplify(op_Sk);
+      simplify(op_Sk, operator_level_external_indices());
       result += op_Sk;
     }
     return result;
@@ -63,15 +74,18 @@ ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, LSTOptions options) {
           return factor.template is<Sum>();
         })) {
       A = sequant::expand(A);
-      simplify(A);
+      simplify(A, operator_level_external_indices());
       return lst(A, B, commutator_rank, opt_with_skip_clone);
     } else {
       return transform(A);
     }
   } else if (A.is<Sum>()) {
-    auto result = sequant::transform_sum_expr(*A, [=](const auto& term) {
-      return lst(term, B, commutator_rank, opt_with_skip_clone);
-    });
+    auto result = sequant::transform_sum_expr(
+        *A,
+        [=](const auto& term) {
+          return lst(term, B, commutator_rank, opt_with_skip_clone);
+        },
+        {.canonicalize = operator_level_external_indices()});
     return result;
   } else if (A.is<Constant>() || A.is<Variable>())
     return A;
@@ -102,7 +116,7 @@ ExprPtr screen_vac_av(ExprPtr expr, bool skip_clone) {
           return factor.template is<Sum>();
         })) {
       expr = sequant::expand(expr);
-      simplify(expr);
+      simplify(expr, operator_level_external_indices());
       return screen_vac_av(expr, /*skip_clone*/ true);
     } else {
       return screen(expr);
@@ -110,9 +124,12 @@ ExprPtr screen_vac_av(ExprPtr expr, bool skip_clone) {
   } else if (expr.is<Variable>() || expr.is<Constant>()) {
     return expr;
   } else if (expr.is<Sum>()) {
-    auto result = sequant::transform_sum_expr(*expr, [=](const auto& term) {
-      return screen_vac_av(term, /*skip_clone*/ true);
-    });
+    auto result = sequant::transform_sum_expr(
+        *expr,
+        [=](const auto& term) {
+          return screen_vac_av(term, /*skip_clone*/ true);
+        },
+        {.canonicalize = operator_level_external_indices()});
     return result;
   } else
     throw Exception("mbpt::screen_terms(expr): Unsupported expression type");

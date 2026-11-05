@@ -172,8 +172,21 @@ void store_term_axes(OptimizeOptions const& opts, Expr const* optimized,
 /// and is reported by PinSession::finish. Otherwise the DP runs on the
 /// canonical term, so the recorded labels are the output's labels. Recording
 /// adds record_term of the result.
+/// \return the external indices with which a pinned or recorded term is
+///         canonicalized
+/// \throw Exception if \p opts does not give them
+NamedIndexSpec const& schedule_external_indices(OptimizeOptions const& opts) {
+  if (!opts.external_indices)
+    throw Exception(
+        "optimize: schedule pinning and recording canonicalize the terms, "
+        "which "
+        "requires OptimizeOptions::external_indices (or a ResultExpr)");
+  return *opts.external_indices;
+}
+
 ExprPtr opt_scheduled_term(ExprPtr const& term, OptimizeOptions const& opts) {
-  auto canon = opt::schedule::canonical_term(term);
+  auto canon =
+      opt::schedule::canonical_term(term, schedule_external_indices(opts));
   auto key = opt::schedule::term_key(canon);
   bool pure = opt::is_tensor_factor(*canon) || canon->is<Constant>();
   if (canon->is<Product>()) {
@@ -250,8 +263,8 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
   // pinnable and optimizes it as usual, with the placeholder product below
   // kept out of the record (it is not a term of the root)
   if (opts.pinned)
-    throw_not_pinnable(opt::schedule::term_key(
-        opt::schedule::canonical_term(ex<Product>(prod))));
+    throw_not_pinnable(opt::schedule::term_key(opt::schedule::canonical_term(
+        ex<Product>(prod), schedule_external_indices(opts))));
   OptimizeOptions inner = opts;
   inner.recording = nullptr;
   container::svector<ExprPtr> non_tensors(prod.size());
@@ -295,9 +308,10 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
 
   result->visit(replacer, /* atoms_only = */ true);
   if (opts.recording)
-    opts.recording->add(result.get(),
-                        opt::schedule::record_unpinnable_term(
-                            opt::schedule::canonical_term(ex<Product>(prod))));
+    opts.recording->add(
+        result.get(),
+        opt::schedule::record_unpinnable_term(opt::schedule::canonical_term(
+            ex<Product>(prod), schedule_external_indices(opts))));
   return result;
 }
 
@@ -492,6 +506,7 @@ OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts) {
 }
 
 ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts) {
+  if (!opts.external_indices) opts.external_indices = named_indices(expr);
   expr.expression() = optimize(expr.expression(), std::move(opts));
   return expr;
 }

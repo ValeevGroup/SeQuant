@@ -6,6 +6,7 @@
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -1252,49 +1253,9 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 
 namespace tensor {
 
-namespace {
-
-/// @return the Index comparer that moves active indices to the front and
-/// otherwise defers to @p base ; one object per @p base , so that the
-/// scopes of successive calls have the same canonicalization configuration,
-/// hence the same Context::version()
-std::shared_ptr<const tensor_index_comparer_t> active_first_index_comparer(
-    std::shared_ptr<const tensor_index_comparer_t> base) {
-  static std::mutex mtx;
-  // a comparer holds its base alive, so the key cannot come to denote another
-  static container::map<const tensor_index_comparer_t*,
-                        std::shared_ptr<const tensor_index_comparer_t>>
-      comparers;
-  std::scoped_lock lock(mtx);
-  auto& result = comparers[base.get()];
-  if (!result)
-    result = std::make_shared<const tensor_index_comparer_t>(
-        [base](const Index& idx1, const Index& idx2) -> bool {
-          // the registry of the context in effect, i.e. of the scope that
-          // installs this comparer
-          const auto ibr = get_default_context().index_basis_registry();
-          auto active_space = ibr->intersection(ibr->particle_space(Spin::any),
-                                                ibr->hole_space(Spin::any));
-          const auto idx1_active = idx1.space().type() == active_space.type();
-          const auto idx2_active = idx2.space().type() == active_space.type();
-          if (idx1_active) {
-            if (idx2_active)
-              return (*base)(idx1, idx2);
-            else
-              return true;
-          } else {
-            if (idx2_active)
-              return false;
-            else
-              return (*base)(idx1, idx2);
-          }
-        });
-  return result;
-}
-
-}  // namespace
-
-ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
+ExprPtr expectation_value_impl(ExprPtr expr,
+                               const NamedIndexSpec& external_indices,
+                               OpConnections<int> connect,
                                OpConnections<int> avoid, bool use_top,
                                bool full_contractions) {
   // Pull scalar factors  out of a Product before WickTheorem sees it.
@@ -1309,12 +1270,12 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
     }
   }
 
-  simplify(expr);
+  simplify(expr, external_indices);
 
-  auto restore_scalars = [&scalar_factors](ExprPtr& r) {
+  auto restore_scalars = [&scalar_factors, &external_indices](ExprPtr& r) {
     if (!scalar_factors.empty()) {
       ranges::for_each(scalar_factors, [&r](const auto& s) { r = r * s; });
-      simplify(r);
+      simplify(r, external_indices);
     }
   };
 
@@ -1338,7 +1299,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
         "subset of the reference orbital set.");
   }
 
-  FWickTheorem wick{expr};
+  FWickTheorem wick{expr, external_indices};
   wick.use_topology(use_top).set_nop_connections(connect);
   if (!avoid.empty()) wick.set_nop_avoided_connections(avoid);
   wick.full_contractions(full_contractions);
@@ -1346,7 +1307,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
                              /* skip_input_canonicalization? true since already
                                 did simplification above */
                              true);
-  simplify(result);
+  simplify(result, external_indices);
 
   if (Logger::instance().wick_stats) {
     std::wcout << "WickTheorem stats: # of contractions attempted = "
@@ -1392,8 +1353,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
     expand(result);
     // flatten(result);  // TODO where is flatten?
     auto project_rdm_indices_to_target = [&](ExprPtr& exptr) {
-      const auto named_indices =
-          CanonicalizeOptions::default_options().named_indices;
+      const auto* named_indices = external_indices.indices_ptr();
       auto impl_for_single_tn = [&](const ExprPtr& term) {
         auto product_ptr =
             term.is<Product>()
@@ -1430,16 +1390,16 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
         if (rdm_index_in_bra.empty()) return product_ptr;
 
         // compute RDM->target replacement rules. An RDM index is external if
-        // it is named in the context or, without named indices, occurs in a
-        // single bra or ket slot of the term. A dummy index is summed over the
-        // target space, so it is replaced by a target-space index. An external
-        // index keeps its label: the RDM vanishes outside the target space, so
-        // if the index's space extends beyond it the RDM gets a target-space
-        // index instead and a Kronecker delta ties the two (bra/ket placement
-        // as in WickTheorem's contractions)
+        // it is among the external indices or, if they are deduced, occurs in
+        // a single bra or ket slot of the term. A dummy index is summed over
+        // the target space, so it is replaced by a target-space index. An
+        // external index keeps its label: the RDM vanishes outside the target
+        // space, so if the index's space extends beyond it the RDM gets a
+        // target-space index instead and a Kronecker delta ties the two
+        // (bra/ket placement as in WickTheorem's contractions)
         const auto index_counts = get_used_indices_with_counts(product_ptr);
         // an index in a single bra or ket slot cannot be summed over, so the
-        // named indices must include it; aux slots carry no such constraint
+        // external indices must include it; aux slots carry no such constraint
         auto in_single_braket_slot = [](const IndexSlotCounters& counts) {
           return counts.bra + counts.ket == 1;
         };
@@ -1449,7 +1409,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
               enforce_failed(
                   "ref_av: index " + toUtf8(idx.full_label()) +
                   " occurs in a single bra or ket slot of a term, so it is "
-                  "external, but it is not among the context's named indices");
+                  "external, but it is not among the given external indices");
           }
         }
         auto is_external = [&](const Index& idx) {
@@ -1509,38 +1469,47 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
     // rename dummy indices that might have been generated by
     // project_rdm_indices_to_target
     // + may combine terms
-
-    // within this scope tensor canonicalizers use a custom comparer that moves
-    // active indices to the front; the external-vs-internal trait still takes
-    // precedence
-    {
-      auto scoped_ctx =
-          set_scoped_modified_default_context([](sequant::Context& ctx) {
-            ctx.set_index_comparer(
-                active_first_index_comparer(ctx.index_comparer_ptr()));
-          });
-      simplify(result);
-    }
+    simplify(result, external_indices);
 
     restore_scalars(result);
     return result;
   }
 }
 
-ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts) {
+ExprPtr ref_av(ExprPtr expr, const NamedIndexSpec& external_indices,
+               EVOptions<int> opts) {
   const bool full_contractions = detail::ref_av_full_contractions();
   detail::validate_ref_av_connections(opts, full_contractions);
-  return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
-                                opts.use_topology, full_contractions);
+  return expectation_value_impl(expr, external_indices, opts.connect,
+                                opts.do_not_connect, opts.use_topology,
+                                full_contractions);
 }
 
-ExprPtr vac_av(ExprPtr expr, EVOptions<int> opts) {
-  return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
-                                opts.use_topology,
+ExprPtr vac_av(ExprPtr expr, const NamedIndexSpec& external_indices,
+               EVOptions<int> opts) {
+  return expectation_value_impl(expr, external_indices, opts.connect,
+                                opts.do_not_connect, opts.use_topology,
                                 /* full_contractions*/ true);
 }
 
 }  // namespace tensor
 }  // namespace op
+
+std::shared_ptr<const tensor_index_comparer_t> active_first_index_comparer(
+    std::shared_ptr<const tensor_index_comparer_t> base) {
+  if (!base)
+    base = std::make_shared<const tensor_index_comparer_t>(
+        TensorCanonicalizer::default_index_comparer());
+  return std::make_shared<const tensor_index_comparer_t>(
+      [base](const Index& idx1, const Index& idx2) -> bool {
+        const auto ibr = get_default_context().index_basis_registry();
+        auto active_space = ibr->intersection(ibr->particle_space(Spin::any),
+                                              ibr->hole_space(Spin::any));
+        const auto idx1_active = idx1.space().type() == active_space.type();
+        const auto idx2_active = idx2.space().type() == active_space.type();
+        if (idx1_active != idx2_active) return idx1_active;
+        return (*base)(idx1, idx2);
+      });
+}
 
 }  // namespace sequant::mbpt

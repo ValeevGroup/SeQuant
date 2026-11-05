@@ -105,7 +105,8 @@ static void random_tensor_network(benchmark::State& state) {
     // Need to clone in order to avoid mutating original expression
     TensorNetwork tn(prod->clone()->as<Product>().factors());
 
-    ExprPtr expr = tn.canonicalize(cardinal_tensor_labels);
+    ExprPtr expr =
+        tn.canonicalize(cardinal_tensor_labels, deduce_named_indices);
 
     // Prevent the compiler from optimizing the canonicalization away
     benchmark::DoNotOptimize(expr);

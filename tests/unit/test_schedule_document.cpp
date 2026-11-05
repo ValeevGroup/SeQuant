@@ -526,6 +526,7 @@ pin_optimize(sequant::ExprPtr const& canon) {
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
+  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = pin_extent;
   opts.batch_policy = policy;
@@ -545,21 +546,25 @@ TEST_CASE("term key is stable under relabeling and factor order",
   auto a = pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_3,i_4}");
   auto b = pin_parse(L"t{a_3,a_4;i_3,i_4} * g{i_1,i_2;a_3,a_4}");
   auto const a_text = sequant::serialize(a);
-  REQUIRE(term_key(canonical_term(a)) == term_key(canonical_term(b)));
+  REQUIRE(term_key(canonical_term(a, sequant::deduce_named_indices)) ==
+          term_key(canonical_term(b, sequant::deduce_named_indices)));
   // canonical_term works on a clone
   REQUIRE(sequant::serialize(a) == a_text);
   // different externals order
   auto c = pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_4,i_3}");
-  REQUIRE(term_key(canonical_term(a)) != term_key(canonical_term(c)));
+  REQUIRE(term_key(canonical_term(a, sequant::deduce_named_indices)) !=
+          term_key(canonical_term(c, sequant::deduce_named_indices)));
   // factors of a canonical Product in order
-  REQUIRE(canonical_factors(canonical_term(a)).size() == 2);
+  REQUIRE(canonical_factors(canonical_term(a, sequant::deduce_named_indices))
+              .size() == 2);
 }
 
 TEST_CASE("record_term then rebuild_pinned_term reproduces the optimized tree",
           "[schedule-document]") {
   using namespace sequant::opt::schedule;
-  auto canon = canonical_term(
-      pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
+  auto canon =
+      canonical_term(pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"),
+                     sequant::deduce_named_indices);
   auto [optimized, annotations] = pin_optimize(canon);
   REQUIRE(annotations.size() == 2);
   // the policy forces slicing somewhere: the record carries real annotations
@@ -585,8 +590,9 @@ TEST_CASE("record_term then rebuild_pinned_term reproduces the optimized tree",
   }
 
   // a record survives re-canonicalizing a relabeled copy of the term
-  auto canon2 = canonical_term(
-      pin_parse(L"t{a_4;i_4} * g{i_1,i_2;a_3,a_4} * t{a_3;i_3}"));
+  auto canon2 =
+      canonical_term(pin_parse(L"t{a_4;i_4} * g{i_1,i_2;a_3,a_4} * t{a_3;i_3}"),
+                     sequant::deduce_named_indices);
   REQUIRE(term_key(canon2) == rec.key);
   auto pinned2 = rebuild_pinned_term(rec, canon2);
   REQUIRE(*pinned2.expr == *optimized);
@@ -615,7 +621,7 @@ sequant::ExprPtr power_root() {
 TEST_CASE("record-term-tensor-power", "[schedule-document][tensor-power]") {
   using namespace sequant::opt::schedule;
   auto _ = sequant::set_scoped_default_context(lax_braket_context());
-  auto canon = canonical_term(power_term());
+  auto canon = canonical_term(power_term(), sequant::deduce_named_indices);
   REQUIRE(canon->is<sequant::Product>());
   REQUIRE(canonical_factors(canon).size() == 3);
   auto [optimized, annotations] = pin_optimize(canon);
@@ -636,7 +642,8 @@ TEST_CASE("record-term-tensor-power", "[schedule-document][tensor-power]") {
   auto lone = canonical_term(
       sequant::pow(sequant::ex<sequant::Tensor>(L"D", sequant::bra{L"i_1"},
                                                 sequant::ket{L"a_1"}),
-                   sequant::rational{-1}));
+                   sequant::rational{-1}),
+      sequant::deduce_named_indices);
   REQUIRE(lone->is<sequant::TensorPower>());
   auto lone_rec = record_term(lone, lone, {});
   REQUIRE(lone_rec.tree.has_value());
@@ -649,7 +656,8 @@ TEST_CASE("record-term", "[schedule-document]") {
   using Catch::Matchers::ContainsSubstring;
 
   SECTION("lone tensor") {
-    auto canon = canonical_term(pin_parse(L"t{a_1;i_1}"));
+    auto canon =
+        canonical_term(pin_parse(L"t{a_1;i_1}"), sequant::deduce_named_indices);
     REQUIRE(canonical_factors(canon).size() == 1);
     auto [optimized, annotations] = pin_optimize(canon);
     auto rec = record_term(canon, optimized, annotations);
@@ -665,7 +673,8 @@ TEST_CASE("record-term", "[schedule-document]") {
 
   SECTION("scalar") {
     auto canon =
-        canonical_term(sequant::ex<sequant::Constant>(sequant::rational{1, 2}));
+        canonical_term(sequant::ex<sequant::Constant>(sequant::rational{1, 2}),
+                       sequant::deduce_named_indices);
     REQUIRE(canonical_factors(canon).empty());
     auto rec = record_term(canon, canon, {});
     REQUIRE(!rec.tree.has_value());
@@ -674,14 +683,16 @@ TEST_CASE("record-term", "[schedule-document]") {
     auto pinned = rebuild_pinned_term(rec, canon);
     REQUIRE(*pinned.expr == *canon);
     // a negative scalar round-trips too
-    auto neg = canonical_term(
-        sequant::ex<sequant::Constant>(sequant::rational{-3, 4}));
+    auto neg =
+        canonical_term(sequant::ex<sequant::Constant>(sequant::rational{-3, 4}),
+                       sequant::deduce_named_indices);
     REQUIRE(*rebuild_pinned_term(record_term(neg, neg, {}), neg).expr == *neg);
   }
 
   SECTION("identical factors and a fractional scalar") {
     auto canon = canonical_term(
-        pin_parse(L"1/2 * t{a_1;i_1} * t{a_2;i_2} * f{i_1,i_2;a_1,a_2}"));
+        pin_parse(L"1/2 * t{a_1;i_1} * t{a_2;i_2} * f{i_1,i_2;a_1,a_2}"),
+        sequant::deduce_named_indices);
     REQUIRE(canonical_factors(canon).size() == 3);
     auto [optimized, annotations] = pin_optimize(canon);
     auto rec = record_term(canon, optimized, annotations);
@@ -696,7 +707,8 @@ TEST_CASE("record-term", "[schedule-document]") {
 
   SECTION("mixed product") {
     auto canon =
-        canonical_term(pin_parse(L"t{a_1;i_1} * (f{i_1;a_1} + g{i_1;a_1})"));
+        canonical_term(pin_parse(L"t{a_1;i_1} * (f{i_1;a_1} + g{i_1;a_1})"),
+                       sequant::deduce_named_indices);
     REQUIRE(canon->is<sequant::Product>());
     REQUIRE_THROWS_WITH(record_term(canon, canon, {}),
                         ContainsSubstring("only tensor products"));
@@ -713,8 +725,10 @@ TEST_CASE("rebuild_pinned_term rejects foreign factors and unknown axis labels",
   using namespace sequant::opt::schedule;
   using Catch::Matchers::ContainsSubstring;
   auto canon_a =
-      canonical_term(pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_3,i_4}"));
-  auto canon_b = canonical_term(pin_parse(L"f{i_1;a_1} * t{a_1;i_2}"));
+      canonical_term(pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_3,i_4}"),
+                     sequant::deduce_named_indices);
+  auto canon_b = canonical_term(pin_parse(L"f{i_1;a_1} * t{a_1;i_2}"),
+                                sequant::deduce_named_indices);
   auto [optimized, annotations] = pin_optimize(canon_a);
   auto rec = record_term(canon_a, optimized, annotations);
   REQUIRE(rec.nodes.size() == 1);
@@ -734,7 +748,8 @@ TEST_CASE("record-term-inner-annotations", "[schedule-document]") {
   // i_2 is contracted between X and Y only: the (X Y) subtree is fully
   // contracted unless binarize is told i_2 is external; the optimizer still
   // emits one annotation per inner node
-  auto canon = canonical_term(pin_parse(L"X{;;i_2} * Y{;;i_2} * Z{a_1;i_1}"));
+  auto canon = canonical_term(pin_parse(L"X{;;i_2} * Y{;;i_2} * Z{a_1;i_1}"),
+                              sequant::deduce_named_indices);
   REQUIRE(canonical_factors(canon).size() == 3);
   auto [optimized, annotations] = pin_optimize(canon);
   REQUIRE(annotations.size() == 2);
@@ -750,12 +765,14 @@ TEST_CASE("record-term-inner-annotations", "[schedule-document]") {
 TEST_CASE("record_term accepts an empty annotation vector",
           "[schedule-document]") {
   using namespace sequant::opt::schedule;
-  auto canon = canonical_term(
-      pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
+  auto canon =
+      canonical_term(pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"),
+                     sequant::deduce_named_indices);
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
+  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseFLOPs;
   opts.idx_to_extent = pin_extent;
   opts.term_batch_axes = axes_map;
@@ -782,8 +799,9 @@ TEST_CASE(
   SECTION("a Variable factor") {
     auto canon =
         canonical_term(sequant::ex<sequant::Product>(sequant::ExprPtrList{
-            sequant::ex<sequant::Variable>(L"x"), pin_parse(L"f{i_1;a_1}"),
-            pin_parse(L"t{a_1;i_2}")}));
+                           sequant::ex<sequant::Variable>(L"x"),
+                           pin_parse(L"f{i_1;a_1}"), pin_parse(L"t{a_1;i_2}")}),
+                       sequant::deduce_named_indices);
     REQUIRE(canon->is<sequant::Product>());
     REQUIRE_THROWS_WITH(record_term(canon, canon, {}),
                         ContainsSubstring("only tensor products"));
@@ -794,8 +812,9 @@ TEST_CASE(
                         ContainsSubstring("only tensor products"));
   }
 
-  auto canon = canonical_term(
-      pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"));
+  auto canon =
+      canonical_term(pin_parse(L"g{i_1,i_2;a_1,a_2} * t{a_1;i_3} * t{a_2;i_4}"),
+                     sequant::deduce_named_indices);
   auto [optimized, annotations] = pin_optimize(canon);
   auto rec = record_term(canon, optimized, annotations);
   REQUIRE(rec.nodes.size() == 2);
@@ -857,6 +876,7 @@ sequant::OptimizeOptions session_opts() {
   };
   policy.peak_threshold = 1e5;
   sequant::OptimizeOptions opts;
+  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = pin_extent;
   opts.batch_policy = policy;
@@ -1007,7 +1027,8 @@ TEST_CASE("an axis with several proto indices survives JSON and pins",
           "[schedule-document]") {
   using namespace sequant::opt::schedule;
   auto canon = canonical_term(
-      pin_parse(L"g{i_1,i_2;a_1<i_1,i_2>} * t{a_1<i_1,i_2>;i_1}"));
+      pin_parse(L"g{i_1,i_2;a_1<i_1,i_2>} * t{a_1<i_1,i_2>;i_1}"),
+      sequant::deduce_named_indices);
   REQUIRE(canonical_factors(canon).size() == 2);
   auto [optimized, annotations] = pin_optimize(canon);
   // annotate the single contraction node with the PNO index
@@ -1136,8 +1157,9 @@ TEST_CASE("pinning is strict", "[schedule-document]") {
     auto const loaded = from_json(to_json(doc));
     REQUIRE(compare(doc, loaded).empty());
     REQUIRE_THROWS_WITH(
-        rebuild_pinned_term(
-            *unpinnable, canonical_term(mixed->as<sequant::Sum>().summand(0))),
+        rebuild_pinned_term(*unpinnable,
+                            canonical_term(mixed->as<sequant::Sum>().summand(0),
+                                           sequant::deduce_named_indices)),
         ContainsSubstring("not pinnable"));
     PinSession session2(loaded.roots[0]);
     auto opts4 = opts;
@@ -1185,7 +1207,8 @@ TEST_CASE("per-summand pinning through one session", "[schedule-document]") {
   std::vector<sequant::ExprPtr> by_position(rr.record.terms.size());
   for (auto const& s : sum->as<sequant::Sum>().summands()) {
     auto optimized = sequant::optimize_result(s, opts2).expr;
-    auto const pos = session.document_position(term_key(canonical_term(s)));
+    auto const pos = session.document_position(
+        term_key(canonical_term(s, sequant::deduce_named_indices)));
     REQUIRE(pos.has_value());
     REQUIRE(!by_position[*pos]);
     by_position[*pos] = optimized;
@@ -1221,7 +1244,8 @@ TEST_CASE("per-summand pinning through one session", "[schedule-document]") {
   REQUIRE(per_summand.terms.size() == 4);
   for (std::size_t k = 0; k < 4; ++k)
     REQUIRE(per_summand.terms[k].key ==
-            term_key(canonical_term(sum->as<sequant::Sum>().summand(k))));
+            term_key(canonical_term(sum->as<sequant::Sum>().summand(k),
+                                    sequant::deduce_named_indices)));
 }
 
 TEST_CASE("pinned order is the document order, not the clustered order",
@@ -1238,7 +1262,8 @@ TEST_CASE("pinned order is the document order, not the clustered order",
   REQUIRE(rr.record.terms.size() == 4);
   std::vector<std::string> input_keys;
   for (auto const& s : sum->as<sequant::Sum>().summands())
-    input_keys.push_back(term_key(canonical_term(s)));
+    input_keys.push_back(
+        term_key(canonical_term(s, sequant::deduce_named_indices)));
   // reorder did change the order
   REQUIRE(record_keys(rr.record) != input_keys);
 
@@ -1282,7 +1307,8 @@ std::vector<sequant::eval::dryrun::EvalNodeDryRun> fingerprint_forest(
   std::vector<sequant::eval::dryrun::EvalNodeDryRun> forest;
   for (auto s : {L"g{i_1,i_2;a_3,a_4} * t{a_3;i_3} * t{a_4;i_4}",
                  L"f{i_1;a_3} * t{a_3,a_4;i_3,i_4} * f{i_2;a_4}"}) {
-    auto canon = sequant::opt::schedule::canonical_term(pin_parse(s));
+    auto canon = sequant::opt::schedule::canonical_term(
+        pin_parse(s), sequant::deduce_named_indices);
     auto optimized = sequant::optimize(canon, opts);
     sequant::BinarizationOptions bopts;
     if (auto it = opts.term_batch_axes->find(optimized.get());
@@ -1353,7 +1379,8 @@ TEST_CASE("fingerprint-tensor-power-base",
   opts.batch_policy.is_volatile_leaf = [](sequant::Tensor const& t) {
     return t.label() == L"D";
   };
-  auto optimized = sequant::optimize(canonical_term(power_term()), opts);
+  auto optimized = sequant::optimize(
+      canonical_term(power_term(), sequant::deduce_named_indices), opts);
   sequant::BinarizationOptions bopts;
   if (auto it = opts.term_batch_axes->find(optimized.get());
       it != opts.term_batch_axes->end())
@@ -1421,6 +1448,7 @@ DagFixture dag_fixture(
   using sequant::eval::dryrun::EvalExprDryRun;
   DagFixture fx;
   sequant::OptimizeOptions opts;
+  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = pin_extent;
   opts.batch_policy = policy;
@@ -2053,7 +2081,8 @@ TEST_CASE("write the viewer example document", "[.write-example]") {
   doc.producer_version = "example";
   doc.producer_date = "2026-10-19";
 
-  sequant::OptimizeOptions opts;  // as dag_fixture() set it up
+  sequant::OptimizeOptions opts;
+  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = pin_extent;
   opts.batch_policy = external_occ_policy();
@@ -2194,6 +2223,7 @@ Document build_document(sequant::ExprPtr const& sum,
   policy.peak_threshold = 1e11;
 
   sequant::OptimizeOptions opts;
+  opts.external_indices = sequant::deduce_named_indices;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();

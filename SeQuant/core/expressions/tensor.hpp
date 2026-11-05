@@ -912,7 +912,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// included, is a tensor network and is canonicalized as one, with the
   /// given options; any other is canonicalized by the default tensor
   /// canonicalizer
-  ExprPtr canonicalize(CanonicalizeOptions opts =
+  ExprPtr canonicalize(const NamedIndexSpec &named_indices,
+                       CanonicalizeOptions opts =
                            CanonicalizeOptions::default_options()) override;
 
   /// @brief adjoint of a Tensor swaps its bra and ket

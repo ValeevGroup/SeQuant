@@ -10,6 +10,7 @@
 #include <SeQuant/core/tensor_canonicalizer_fwd.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
 
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <string>
@@ -47,6 +48,56 @@ CanonicalizationMethod operator&(CanonicalizationMethod m1,
 CanonicalizationMethod operator|(CanonicalizationMethod m1,
                                  CanonicalizationMethod m2);
 std::wstring to_wstring(CanonicalizationMethod m);
+
+/// tag that requests the named indices of an expression to be deduced as the
+/// indices that occur once in each of its products
+/// @warning deduction is a heuristic that fails for expressions in which an
+/// external index occurs more than once (e.g. in tensor hypercontraction or
+/// with quasi-diagonal tensors); the library itself never deduces
+struct DeduceNamedIndices {
+  explicit constexpr DeduceNamedIndices() = default;
+  friend constexpr bool operator==(DeduceNamedIndices,
+                                   DeduceNamedIndices) = default;
+};
+
+/// requests the deduction of named indices, see DeduceNamedIndices
+inline constexpr DeduceNamedIndices deduce_named_indices{};
+
+/// @brief specifies the named indices of a canonicalization, i.e. the indices
+/// whose labels are meaningful and must not change (ordinarily the external
+/// indices of an expression)
+///
+/// Either an explicit set of indices or a request to deduce them
+/// (see DeduceNamedIndices). There is deliberately no default: every caller of
+/// a canonicalization states which indices are named. Note that `{}` is the
+/// empty set, i.e. no index is named.
+class NamedIndexSpec {
+ public:
+  /// requests deduction
+  NamedIndexSpec(DeduceNamedIndices) {}
+  /// @param named_indices the named indices
+  NamedIndexSpec(container::set<Index> named_indices)
+      : named_indices_(std::move(named_indices)) {}
+  /// @param named_indices the named indices
+  NamedIndexSpec(std::initializer_list<Index> named_indices)
+      : named_indices_(container::set<Index>(named_indices)) {}
+
+  /// @return true if the named indices are to be deduced
+  bool deduce() const { return !named_indices_.has_value(); }
+  /// @return the named indices
+  /// @pre `!deduce()`
+  const container::set<Index>& indices() const;
+  /// @return pointer to the named indices, or null if they are to be deduced
+  const container::set<Index>* indices_ptr() const {
+    return named_indices_ ? &*named_indices_ : nullptr;
+  }
+
+  friend bool operator==(const NamedIndexSpec&,
+                         const NamedIndexSpec&) = default;
+
+ private:
+  std::optional<container::set<Index>> named_indices_;
+};
 
 /// @brief settings of a canonicalization that only affect how its result
 /// looks, i.e. which of the equivalent forms it picks; a member that is not
@@ -94,10 +145,6 @@ struct CanonicalizeOptions {
   /// is fixed
   /// @endinternal
   CanonicalizationMethod method = CanonicalizationMethod::Complete;
-  /// specifies named indices; by default all indices that appear only once are
-  /// deduced to be named, but this may be misleading if e.g. single
-  /// summed-over dummy index appears in an expression
-  std::optional<container::set<Index>> named_indices = std::nullopt;
   /// whether the graph-based canonicalization ignores the labels of named
   /// indices, so that the structure of the result does not depend on them;
   /// named indices that an automorphism of the network can exchange are then
@@ -116,7 +163,6 @@ struct CanonicalizeOptions {
 
   static CanonicalizeOptions default_options();
   CanonicalizeOptions copy_and_set(CanonicalizationMethod) const;
-  CanonicalizeOptions copy_and_set(std::optional<container::set<Index>>) const;
   CanonicalizeOptions copy_and_set(IgnoreNamedIndexLabel) const;
   CanonicalizeOptions copy_and_set(
       std::shared_ptr<const CanonicalizationPresentation>) const;
@@ -128,17 +174,15 @@ struct CanonicalizeOptions {
     // the bindings name every member (guard is the SEQUANT_DESIGNATED_INIT_ONLY
     // tag), so that a member added to CanonicalizeOptions fails to compile here
     // until it is compared
-    const auto& [guard_a, method_a, named_indices_a, ignore_labels_a,
-                 presentation_a] = a;
-    const auto& [guard_b, method_b, named_indices_b, ignore_labels_b,
-                 presentation_b] = b;
+    const auto& [guard_a, method_a, ignore_labels_a, presentation_a] = a;
+    const auto& [guard_b, method_b, ignore_labels_b, presentation_b] = b;
     (void)guard_a;
     (void)guard_b;
     const bool same_presentation = presentation_a == presentation_b ||
                                    (presentation_a && presentation_b &&
                                     *presentation_a == *presentation_b);
-    return method_a == method_b && named_indices_a == named_indices_b &&
-           ignore_labels_a == ignore_labels_b && same_presentation;
+    return method_a == method_b && ignore_labels_a == ignore_labels_b &&
+           same_presentation;
   }
 };
 

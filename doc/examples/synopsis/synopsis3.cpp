@@ -15,10 +15,11 @@ int main() {
   auto cp1 = fcrex(L"p_1"), cp2 = fcrex(L"p_2");
   auto ap3 = fannx(L"p_3"), ap4 = fannx(L"p_4");
 
-  std::wcout
-      << ap3 * cp1 * ap4 * cp2 << " = "
-      << FWickTheorem{ap3 * cp1 * ap4 * cp2}.full_contractions(false).compute()
-      << std::endl;
+  std::wcout << ap3 * cp1 * ap4 * cp2 << " = "
+             << FWickTheorem(ap3 * cp1 * ap4 * cp2, deduce_named_indices)
+                    .full_contractions(false)
+                    .compute()
+             << std::endl;
 
   return 0;
 }

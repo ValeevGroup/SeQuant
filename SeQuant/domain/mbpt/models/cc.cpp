@@ -155,11 +155,12 @@ ExprPtr CC::energy(std::optional<size_t> comm_rank) const {
   // ref_av directly. No connectivity or screening.
   if (opts_.hbar_expansion == HbarExpansion::Bernoulli) {
     const auto erank = comm_rank.value_or(opts_.hbar_comm_rank.value());
-    return op::tensor::ref_av(this->hbar(erank));
+    // a scalar: no external indices
+    return op::tensor::ref_av(this->hbar(erank), {});
   }
   // <0|H̄|0>: reference expectation value of H̄ at the requested commutator
   // truncation. No projector ⇒ this is the energy.
-  return this->ref_av(this->hbar(comm_rank), hbar_connections());
+  return this->ref_av(this->hbar(comm_rank), {}, hbar_connections());
 }
 
 std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
@@ -174,7 +175,8 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
     for (std::int64_t p = pmax; p >= static_cast<std::int64_t>(pmin); --p) {
       const auto projected =
           (p != 0) ? op::tensor::P(nₚ(p), nₕ(p), L"t") * hbar : hbar;
-      result.at(p) = op::tensor::ref_av(projected);
+      // the projector carries the external indices
+      result.at(p) = op::tensor::ref_av(projected, {});
     }
     return result;
   }
@@ -208,9 +210,10 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
     }
 
     // 2.b project onto <p| (i.e., multiply by P(p) if p>0) and compute VEV
+    // the projector carries the external indices
     result.at(p) = this->ref_av(
         p != 0 ? amplitude_projector(nₚ(p), L"t") * hbar_for_vev : hbar_for_vev,
-        connectivity);
+        {}, connectivity);
   }
 
   return result;
@@ -226,7 +229,8 @@ std::vector<ExprPtr> CC::λ() const {
   auto hbar = this->hbar(commutator_rank -
                          1);  // -1 because of the connection with the projector
 
-  auto lhbar = simplify((1 + Λ(N, skip_singles())) * hbar);
+  // operator-level expressions carry no indices
+  auto lhbar = simplify((1 + Λ(N, skip_singles())) * hbar, {});
 
   const auto op_connect = concat(default_op_connections(), {{L"h", asymm},
                                                             {L"f", asymm},
@@ -244,7 +248,8 @@ std::vector<ExprPtr> CC::λ() const {
     const auto hbar_λ = mbpt::lst(H(), adjoint(Λ(N, skip_singles())),
                                   commutator_rank, lst_options());
     result.at(0) = this->ref_av(
-        hbar_λ, {{L"h", L"λ⁺"}, {L"f", L"λ⁺"}, {L"f̃", L"λ⁺"}, {L"g", L"λ⁺"}});
+        hbar_λ, {},
+        {{L"h", L"λ⁺"}, {L"f", L"λ⁺"}, {L"f̃", L"λ⁺"}, {L"g", L"λ⁺"}});
   }
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
@@ -270,8 +275,9 @@ std::vector<ExprPtr> CC::λ() const {
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
     // compute VEV
+    // the projector carries the external indices
     result.at(p) = this->ref_av(
-        lhbar_for_vev * amplitude_projector(nₚ(-p), L"λ"), op_connect);
+        lhbar_for_vev * amplitude_projector(nₚ(-p), L"λ"), {}, op_connect);
   }
   return result;
 }
@@ -305,11 +311,18 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
 
   // 3. reference expectation value with the ansatz's left wavefunction:
   // γ = <0|(1+Λ) e^{-σ} ã e^{σ}|0>; the unitary ansatz drops Λ.
-  auto expr = unitary() ? bar : simplify((1 + Λ(N, skip_singles())) * bar);
+  auto expr = unitary() ? bar : simplify((1 + Λ(N, skip_singles())) * bar, {});
   const auto connect =
       unitary() ? mbpt::OpConnections<std::wstring>{}
                 : mbpt::OpConnections<std::wstring>{{L"ã", L"t"}, {L"t", L"ã"}};
-  auto gamma = this->ref_av(expr, connect);
+  // the free indices of γ are those of ã, see op::ã
+  container::set<Index> external_indices;
+  {
+    const auto space = get_complete_space(Spin::any);
+    for (std::size_t i = 1; i <= 2 * rank; ++i)
+      external_indices.emplace(space, i);
+  }
+  auto gamma = this->ref_av(expr, external_indices, connect);
 
   return gamma;
 }
@@ -359,7 +372,7 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   }
 
   // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
-  const auto expr = simplify(h1_bar + hbar_pert);
+  const auto expr = simplify(h1_bar + hbar_pert, {});
 
   // connectivity: empty for unitary ansatz, build otherwise
   OpConnections<std::wstring> op_connect;
@@ -376,9 +389,9 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   for (auto p = N; p >= 1; --p) {
     const auto freq_term = L"ω" * amplitude_projector(nₚ(p), t_pert) *
                            op::tʼ(p, {.order = order, .nbatch = nbatch});
-    result.at(p) =
-        this->ref_av(amplitude_projector(nₚ(p), t_pert) * expr, op_connect) -
-        this->ref_av(freq_term, {});
+    result.at(p) = this->ref_av(amplitude_projector(nₚ(p), t_pert) * expr, {},
+                                op_connect) -
+                   this->ref_av(freq_term, {}, {});
   }
   return result;
 }
@@ -416,8 +429,10 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
       this->hbar(3) * Tʼ(N, {.order = order, .nbatch = nbatch});
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
-  const auto expr = simplify((1 + Λ(N, skip_singles())) * (h1_bar + hbar_pert) +
-                             Λʼ(N, {.order = order, .nbatch = nbatch}) * hbar);
+  const auto expr =
+      simplify((1 + Λ(N, skip_singles())) * (h1_bar + hbar_pert) +
+                   Λʼ(N, {.order = order, .nbatch = nbatch}) * hbar,
+               {});
 
   // connectivity:
   // t and t1 with {h,f,g}
@@ -443,9 +458,9 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
     const auto freq_term = L"ω" *
                            op::λʼ(p, {.order = order, .nbatch = nbatch}) *
                            amplitude_projector(nₚ(-p), λ_pert);
-    result.at(p) =
-        this->ref_av(expr * amplitude_projector(nₚ(-p), λ_pert), op_connect) +
-        this->ref_av(freq_term, {});
+    result.at(p) = this->ref_av(expr * amplitude_projector(nₚ(-p), λ_pert), {},
+                                op_connect) +
+                   this->ref_av(freq_term, {}, {});
   }
   return result;
 }
@@ -516,7 +531,8 @@ std::vector<ExprPtr> CC::eom_r_ucc(
     return tensor_level ? op::tensor::r(nₚ(p), nₕ(h)) : op::r(nₚ(p), nₕ(h));
   };
   auto vev = [tensor_level, this](const ExprPtr& e) {
-    return tensor_level ? op::tensor::ref_av(e) : this->ref_av(e, {});
+    // the projector carries the external indices
+    return tensor_level ? op::tensor::ref_av(e, {}) : this->ref_av(e, {}, {});
   };
 
   std::vector<ExprPtr> result(min(np, nh) + 1);
@@ -536,7 +552,7 @@ std::vector<ExprPtr> CC::eom_r_ucc(
       // block's external ones.
       if (i == j) acc->append(ex<Constant>(-1) * vev(bra * ket * hbar_ij));
     }
-    result.at(static_cast<size_t>(min(bp, bh))) = simplify(ExprPtr{acc});
+    result.at(static_cast<size_t>(min(bp, bh))) = simplify(ExprPtr{acc}, {});
   }
   return result;
 }
@@ -565,7 +581,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
   std::vector<ExprPtr> result(min(np, nh) + 1);
   for (const auto& [rp, rh] : eom_manifolds(np, nh))
     result.at(min(rp, rh)) =
-        ref_av(P(nₚ(rp), nₕ(rh), L"R") * hbar_R, op_connect);
+        ref_av(P(nₚ(rp), nₕ(rh), L"R") * hbar_R, {}, op_connect);
 
   return result;
 }
@@ -601,7 +617,7 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
   // right project with |rp,rh> (i.e., multiply P(-rp, -rh)) and compute VEV
   for (const auto& [rp, rh] : eom_manifolds(np, nh))
     result.at(min(rp, rh)) =
-        this->ref_av(L_hbar * P(nₚ(-rp), nₕ(-rh), L"L"), op_connect);
+        this->ref_av(L_hbar * P(nₚ(-rp), nₕ(-rh), L"L"), {}, op_connect);
 
   return result;
 }

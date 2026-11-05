@@ -4,12 +4,14 @@
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
+#include <SeQuant/core/options.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
 
 #include <cstddef>
 #include <functional>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <utility>
 
@@ -374,6 +376,11 @@ struct OptimizeOptions {
   /// each summand is optimized on its canonicalized clone and its record is
   /// added to the session, keyed by the optimized summand's pointer. Not owned.
   opt::schedule::RecordSession* recording = nullptr;
+
+  /// The external indices of the optimized expression, with which the terms
+  /// are canonicalized under \ref pinned or \ref recording (required then;
+  /// optimize(ResultExpr&, ...) uses the indices of the result if unset).
+  std::optional<NamedIndexSpec> external_indices = std::nullopt;
 };
 
 }  // namespace sequant

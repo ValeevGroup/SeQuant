@@ -337,8 +337,8 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
 
   // make the graph
   Graph graph = create_graph(
-      {.named_indices = &named_indices,
-       .distinct_named_indices = !ignore_named_index_labels,
+      named_indices,
+      {.distinct_named_indices = !ignore_named_index_labels,
        .make_labels = Logger::instance().canonicalize_input_graph ||
                       Logger::instance().canonicalize_dot,
        .make_texlabels = Logger::instance().canonicalize_input_graph ||
@@ -693,8 +693,15 @@ TensorNetworkV3 &TensorNetworkV3::operator=(
   return *this;
 }
 
+TensorNetworkV3::NamedIndexSet TensorNetworkV3::named_indices(
+    const NamedIndexSpec &spec) const {
+  if (spec.deduce()) return this->ext_indices();
+  return NamedIndexSet(spec.indices().begin(), spec.indices().end());
+}
+
 ExprPtr TensorNetworkV3::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels,
+    const NamedIndexSpec &named_indices_spec,
     const CanonicalizeOptions &options) {
   if (Logger::instance().canonicalize) {
     std::wostringstream oss;
@@ -715,15 +722,7 @@ ExprPtr TensorNetworkV3::canonicalize(
     init_edges();
   }
 
-  // initialize named_indices by default to all external indices
-  using NamedIndexSet = tensor_network::NamedIndexSet;
-  std::shared_ptr<NamedIndexSet> named_indices_sptr;
-  if (options.named_indices) {
-    named_indices_sptr = std::make_shared<NamedIndexSet>(
-        options.named_indices->begin(), options.named_indices->end());
-  }
-  const auto &named_indices =
-      !options.named_indices ? this->ext_indices() : *named_indices_sptr;
+  const auto named_indices = this->named_indices(named_indices_spec);
 
   if (Logger::instance().canonicalize) {
     std::wostringstream oss;
@@ -855,7 +854,7 @@ ExprPtr TensorNetworkV3::canonicalize(
 TensorNetworkV3::SlotCanonicalizationMetadata
 TensorNetworkV3::canonicalize_slots(
     const container::vector<std::wstring> &cardinal_tensor_labels,
-    const NamedIndexSet *named_indices_ptr,
+    const NamedIndexSet &named_indices,
     TensorNetworkV3::SlotCanonicalizationMetadata::named_index_compare_t
         named_index_compare,
     const tensor_network::NamedIndexColorMap *named_index_colors) {
@@ -887,9 +886,6 @@ TensorNetworkV3::canonicalize_slots(
     init_edges();
   }
 
-  // initialize named_indices by default to all external indices
-  const auto &named_indices =
-      named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
   metadata.named_indices = named_indices;
 
   // helper to filter named ("external" in traditional use case) / anonymous
@@ -902,8 +898,8 @@ TensorNetworkV3::canonicalize_slots(
   // only slots (hence, attr) of named indices define their color, so
   // distinct_named_indices = false
   Graph graph = create_graph(
-      {.named_indices = &named_indices,
-       .named_index_colors = named_index_colors,
+      named_indices,
+      {.named_index_colors = named_index_colors,
        .distinct_named_indices = false,
        .make_labels = Logger::instance().canonicalize_input_graph ||
                       Logger::instance().canonicalize_dot,
@@ -1096,14 +1092,30 @@ TensorNetworkV3::canonicalize_slots(
   return metadata;
 }
 
+TensorNetworkV3::SlotCanonicalizationMetadata
+TensorNetworkV3::canonicalize_slots(
+    const container::vector<std::wstring> &cardinal_tensor_labels,
+    const NamedIndexSpec &named_indices,
+    TensorNetworkV3::SlotCanonicalizationMetadata::named_index_compare_t
+        named_index_compare,
+    const tensor_network::NamedIndexColorMap *named_index_colors) {
+  if (!have_edges_) init_edges();
+  return canonicalize_slots(cardinal_tensor_labels,
+                            this->named_indices(named_indices),
+                            std::move(named_index_compare), named_index_colors);
+}
+
 TensorNetworkV3::Graph TensorNetworkV3::create_graph(
+    const NamedIndexSpec &named_indices,
     const CreateGraphOptions &options) const {
   if (!have_edges_) const_cast<TensorNetworkV3 *>(this)->init_edges();
+  return create_graph(this->named_indices(named_indices), options);
+}
 
-  // initialize named_indices by default to all external indices
-  const NamedIndexSet &named_indices = options.named_indices == nullptr
-                                           ? this->ext_indices()
-                                           : *(options.named_indices);
+TensorNetworkV3::Graph TensorNetworkV3::create_graph(
+    const NamedIndexSet &named_indices,
+    const CreateGraphOptions &options) const {
+  if (!have_edges_) const_cast<TensorNetworkV3 *>(this)->init_edges();
 
   VertexPainter colorizer(named_indices, options.distinct_named_indices,
                           options.named_index_colors);

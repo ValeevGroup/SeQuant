@@ -6,6 +6,7 @@
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #include <range/v3/algorithm/equal.hpp>
 
@@ -54,6 +55,13 @@ bool operator==(const CanonicalizationPresentation& a,
                        });
 }
 
+const container::set<Index>& NamedIndexSpec::indices() const {
+  if (!named_indices_)
+    throw Exception(
+        "NamedIndexSpec::indices: the named indices are to be deduced");
+  return *named_indices_;
+}
+
 const container::vector<std::wstring>& default_cardinal_tensor_labels() {
   static const container::vector<std::wstring> result{
       reserved::antisymm_label(), reserved::symm_label(),
@@ -70,13 +78,6 @@ CanonicalizeOptions CanonicalizeOptions::copy_and_set(
     CanonicalizationMethod arg) const {
   auto result = *this;
   result.method = arg;
-  return result;
-}
-
-CanonicalizeOptions CanonicalizeOptions::copy_and_set(
-    std::optional<container::set<Index>> arg) const {
-  auto result = *this;
-  result.named_indices = std::move(arg);
   return result;
 }
 

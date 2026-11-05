@@ -109,7 +109,8 @@ TEST_CASE("pao-named-basis", "[mbpt][csv][basis][valgrind_skip]") {
     for (std::wstring text :
          {L"C{μ̃_1;a_1<i_1,i_2;0>}:N-C-S", L"C{μ̃_1;a_1<i_1>}:N-C-S"}) {
       const ExprPtr expr = deserialize<ExprPtr>(text);
-      const EvalExpr node(expr->as<Tensor>());
+      const EvalExpr node(expr->as<Tensor>(),
+                          sequant::tests::open_indices(expr->as<Tensor>()));
       const auto slots = node.canon_indices();
       // the PAO leg is one slot, keyed as the named basis; the CSV leg and
       // its protos are the others

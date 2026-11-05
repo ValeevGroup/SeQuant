@@ -20,8 +20,8 @@ int main() {
   // ... but canonicalize() puts both into the same normal form, using the
   // tensor network machinery (which relies on the bundled bliss graph
   // automorphism library) to consistently relabel dummy indices
-  term_a->canonicalize();
-  term_b->canonicalize();
+  term_a->canonicalize(deduce_named_indices);
+  term_b->canonicalize(deduce_named_indices);
   SEQUANT_ASSERT(term_a == term_b);
   // end-snippet-1
 
@@ -32,7 +32,7 @@ int main() {
                  ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}) +
              ex<Tensor>(L"g", bra{L"i_2", L"i_1"}, ket{L"a_2", L"a_1"}) *
                  ex<Tensor>(L"t", bra{L"a_2", L"a_1"}, ket{L"i_2", L"i_1"});
-  simplify(sum);
+  simplify(sum, deduce_named_indices);
 
   SEQUANT_ASSERT(sum.is<Product>());
   std::wcout << sum << std::endl;

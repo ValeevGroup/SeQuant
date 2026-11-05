@@ -38,7 +38,7 @@ static void bench_canonicalize(benchmark::State &state) {
   ExprPtr input = get_expression(state.range(0));
 
   for (auto _ : state) {
-    ExprPtr canonicalized = canonicalize(input->clone());
+    ExprPtr canonicalized = canonicalize(input->clone(), deduce_named_indices);
 
     // Prevent canonicalization from being optimized away by the compiler
     benchmark::DoNotOptimize(canonicalized);

@@ -35,7 +35,7 @@ static void simplify(benchmark::State &state) {
     if constexpr (rapid_only) {
       rapid_simplify(expression);
     } else {
-      simplify(expression);
+      simplify(expression, deduce_named_indices);
     }
 
     // Prevent simplification from being optimized away by the compiler

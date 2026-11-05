@@ -51,7 +51,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       for (const auto& op : nop) prov.emplace(op.index(), ord);
       ++ord;
     }
-    FWickTheorem wick{std::make_shared<FNOperatorSeq>(nopseq)};
+    FWickTheorem wick{std::make_shared<FNOperatorSeq>(nopseq),
+                      deduce_named_indices};
     wick.full_contractions(false);
     return FWickTheorem::access_by<WickExtendedAccessor>{}.compute_contractions(
         wick);
@@ -60,7 +61,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   // WickTheorem under the MultiProduct vacuum, configured by @p opts
   auto wick_mp = [](const ExprPtr& in,
                     const detail::ExtendedWickOptions& opts = {}) {
-    FWickTheorem wick{in};
+    FWickTheorem wick{in, deduce_named_indices};
     wick.full_contractions(opts.full_contractions)
         .max_cumulant_rank(opts.max_cumulant_rank)
         .eta_as_delta_minus_gamma(opts.eta_as_delta_minus_gamma)
@@ -74,8 +75,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
                      FNOperator(cre({}), ann({L"u_4"}))};
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
-    auto result =
-        detail::cumulant_expand<Statistics::FermiDirac>(wick_out, prov, {});
+    auto result = detail::cumulant_expand<Statistics::FermiDirac>(
+        wick_out, prov, {}, deduce_named_indices);
     REQUIRE_THAT(result, EquivalentTo(L"κ{u_4,u_3;u_1,u_2}"));
   }
 
@@ -84,8 +85,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
                      FNOperator(cre({L"u_3"}), ann({L"u_4"}))};
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
-    auto result =
-        detail::cumulant_expand<Statistics::FermiDirac>(wick_out, prov, {});
+    auto result = detail::cumulant_expand<Statistics::FermiDirac>(
+        wick_out, prov, {}, deduce_named_indices);
     REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1} * η{u_2;u_3} "
                                       L"+ κ{u_2,u_4;u_1,u_3}"));
   }
@@ -96,19 +97,22 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
     auto result = detail::cumulant_expand<Statistics::FermiDirac>(
-        wick_out, prov, {.max_cumulant_rank = 1});
+        wick_out, prov, {.max_cumulant_rank = 1}, deduce_named_indices);
     REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1} * η{u_2;u_3}"));
     auto result0 = detail::cumulant_expand<Statistics::FermiDirac>(
-        wick_out, prov, {.max_cumulant_rank = 0});
-    REQUIRE(simplify(result - result0) == ex<Constant>(0));
+        wick_out, prov, {.max_cumulant_rank = 0}, deduce_named_indices);
+    REQUIRE(simplify(result - result0, deduce_named_indices) ==
+            ex<Constant>(0));
   }
 
   SECTION("cumulant_expand: input shapes") {
     // a c-number passes through unchanged
     REQUIRE(detail::cumulant_expand<Statistics::FermiDirac>(
-                ex<Constant>(3), {}, {}) == ex<Constant>(3));
+                ex<Constant>(3), {}, {}, deduce_named_indices) ==
+            ex<Constant>(3));
     REQUIRE(detail::cumulant_expand<Statistics::FermiDirac>(
-                ex<Constant>(0), {}, {}) == ex<Constant>(0));
+                ex<Constant>(0), {}, {}, deduce_named_indices) ==
+            ex<Constant>(0));
     // a bare NormalOperator is expanded like a Product holding it
     const auto nop =
         ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({L"u_3", L"u_4"}));
@@ -116,11 +120,12 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
                                     {Index(L"u_3"), 0},
                                     {Index(L"u_2"), 1},
                                     {Index(L"u_4"), 1}};
-    const auto bare =
-        detail::cumulant_expand<Statistics::FermiDirac>(nop, prov, {});
+    const auto bare = detail::cumulant_expand<Statistics::FermiDirac>(
+        nop, prov, {}, deduce_named_indices);
     REQUIRE(bare != ex<Constant>(0));
-    REQUIRE(bare == detail::cumulant_expand<Statistics::FermiDirac>(
-                        ex<Product>(ExprPtrList{nop}), prov, {}));
+    REQUIRE(bare ==
+            detail::cumulant_expand<Statistics::FermiDirac>(
+                ex<Product>(ExprPtrList{nop}), prov, {}, deduce_named_indices));
     REQUIRE_THAT(bare, EquivalentTo(L"κ{u_3,u_4;u_1,u_2}"));
   }
 
@@ -129,8 +134,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
                      FNOperator(cre({}), ann({L"u_3"}))};
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
-    auto result =
-        detail::cumulant_expand<Statistics::FermiDirac>(wick_out, prov, {});
+    auto result = detail::cumulant_expand<Statistics::FermiDirac>(
+        wick_out, prov, {}, deduce_named_indices);
     REQUIRE(result == ex<Constant>(0));
   }
 
@@ -141,8 +146,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
                      FNOperator(cre({L"u_5"}), ann({L"u_6"}))};
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
-    auto result =
-        detail::cumulant_expand<Statistics::FermiDirac>(wick_out, prov, {});
+    auto result = detail::cumulant_expand<Statistics::FermiDirac>(
+        wick_out, prov, {}, deduce_named_indices);
     REQUIRE(result->is<Sum>());
     std::size_t nkappa2 = 0, nkappa3 = 0;
     for (const auto& term : *result) {
@@ -171,11 +176,11 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
                      FNOperator(cre({L"u_4"}), ann({L"u_5", L"u_6"}))};
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
-    auto full =
-        detail::cumulant_expand<Statistics::FermiDirac>(wick_out, prov, {});
+    auto full = detail::cumulant_expand<Statistics::FermiDirac>(
+        wick_out, prov, {}, deduce_named_indices);
     auto trunc = detail::cumulant_expand<Statistics::FermiDirac>(
-        wick_out, prov, {.max_cumulant_rank = 2});
-    auto diff = simplify(full - trunc);
+        wick_out, prov, {.max_cumulant_rank = 2}, deduce_named_indices);
+    auto diff = simplify(full - trunc, deduce_named_indices);
     // exactly the κ3 term
     REQUIRE_THAT(diff, EquivalentTo(L"-κ{u_5,u_6,u_3;u_1,u_2,u_4}"));
   }
@@ -186,7 +191,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
     auto result = detail::cumulant_expand<Statistics::FermiDirac>(
-        wick_out, prov, {.full_contractions = false});
+        wick_out, prov, {.full_contractions = false}, deduce_named_indices);
     // Eq. (ext. Wick, 1-body×1-body): the Wick output's 4 terms plus κ2;
     // nothing else, because a block needs ≥2 ops from ≥2 nops and the only
     // such balanced set is all four legs
@@ -209,10 +214,11 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     detail::OpProvenance prov;
     auto wick_out = wick_partial(in, prov);
     REQUIRE(detail::cumulant_expand<Statistics::FermiDirac>(
-                wick_out, prov, {}) == ex<Constant>(0));
+                wick_out, prov, {}, deduce_named_indices) == ex<Constant>(0));
     auto partial = detail::cumulant_expand<Statistics::FermiDirac>(
-        wick_out, prov, {.full_contractions = false});
-    REQUIRE(simplify(partial - wick_out) == ex<Constant>(0));
+        wick_out, prov, {.full_contractions = false}, deduce_named_indices);
+    REQUIRE(simplify(partial - wick_out, deduce_named_indices) ==
+            ex<Constant>(0));
   }
 
   SECTION("WickTheorem: the operators must use the MultiProduct vacuum") {
@@ -221,20 +227,25 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     for (const auto vacuum : {Vacuum::Physical, Vacuum::SingleProduct}) {
       auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"}), vacuum) *
                 ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}), vacuum);
-      REQUIRE_THROWS_AS(FWickTheorem{in}.compute(), Exception);
-      REQUIRE_THROWS_AS(FWickTheorem{in}.full_contractions(false).compute(),
+      REQUIRE_THROWS_AS(FWickTheorem(in, deduce_named_indices).compute(),
+                        Exception);
+      REQUIRE_THROWS_AS(FWickTheorem(in, deduce_named_indices)
+                            .full_contractions(false)
+                            .compute(),
                         Exception);
     }
     // the elementary-operator spelling of the parser is Physical
-    REQUIRE_THROWS_AS(
-        FWickTheorem{deserialize(L"a{u_1;u_2} a{u_3;u_4}")}.compute(),
-        Exception);
+    REQUIRE_THROWS_AS(FWickTheorem(deserialize(L"a{u_1;u_2} a{u_3;u_4}"),
+                                   deduce_named_indices)
+                          .compute(),
+                      Exception);
   }
 
   SECTION("WickTheorem: bosons are not supported") {
     auto in = ex<BNOperator>(cre({L"u_1"}), ann({L"u_2"}), Vacuum::Physical) *
               ex<BNOperator>(cre({L"u_3"}), ann({L"u_4"}), Vacuum::Physical);
-    REQUIRE_THROWS_MATCHES(BWickTheorem{in}.compute(), Exception,
+    REQUIRE_THROWS_MATCHES(BWickTheorem(in, deduce_named_indices).compute(),
+                           Exception,
                            Catch::Matchers::MessageMatches(
                                Catch::Matchers::ContainsSubstring("bosons")));
   }
@@ -243,7 +254,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
     REQUIRE_THROWS_MATCHES(
-        FWickTheorem{in}.compute(/*count_only=*/true), Exception,
+        FWickTheorem(in, deduce_named_indices).compute(/*count_only=*/true),
+        Exception,
         Catch::Matchers::MessageMatches(
             Catch::Matchers::ContainsSubstring("count_only")));
   }
@@ -255,7 +267,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
     REQUIRE_THROWS_MATCHES(
-        FWickTheorem{in}.compute(), Exception,
+        FWickTheorem(in, deduce_named_indices).compute(), Exception,
         Catch::Matchers::MessageMatches(
             Catch::Matchers::ContainsSubstring("spin-free")));
   }
@@ -341,14 +353,16 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE_NOTHROW(gamma_result =
                         wick_mp(density::make_rdm(p1, p2) * h(p2, p1) * ops));
     const auto gamma_coeff = h(O1, O1) + h(u6, u5) * density::make_rdm(u5, u6);
-    REQUIRE(simplify(gamma_result - gamma_coeff * ops_av) == ex<Constant>(0));
+    REQUIRE(simplify(gamma_result - gamma_coeff * ops_av,
+                     deduce_named_indices) == ex<Constant>(0));
     ExprPtr eta_result;
     REQUIRE_NOTHROW(
         eta_result = wick_mp(density::make_hole_rdm(p1, p2) * h(p2, p1) * ops));
     // the virtual space {a,g} is not registered, so its δ splits over a and g
     const auto eta_coeff =
         h(a1, a1) + h(g1, g1) + h(u6, u5) * density::make_hole_rdm(u5, u6);
-    REQUIRE(simplify(eta_result - eta_coeff * ops_av) == ex<Constant>(0));
+    REQUIRE(simplify(eta_result - eta_coeff * ops_av, deduce_named_indices) ==
+            ex<Constant>(0));
   }
 
   SECTION("WickTheorem: a split density keeps the bases of its indices") {
@@ -425,8 +439,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     auto in = h(p1, p2) * ex<FNOperator>(cre({p1}), ann({})) *
               ex<FNOperator>(cre({}), ann({p2}));
     auto result = wick_mp(in);
-    REQUIRE(simplify(result - h(O1, O1) -
-                     h(u2, u1) * density::make_rdm(u1, u2)) == ex<Constant>(0));
+    REQUIRE(simplify(result - h(O1, O1) - h(u2, u1) * density::make_rdm(u1, u2),
+                     deduce_named_indices) == ex<Constant>(0));
     // ... also for a δ that η = δ - γ introduces
     auto in2 = h(u3, u2) * ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
                ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
@@ -455,7 +469,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
             }
           },
           /*atoms_only=*/true);
-      return simplify(expr);
+      return simplify(expr, deduce_named_indices);
     };
     // the shared indices are annihilators, then creators, of the later
     // operator: ⟨{a_u1 a_u2}{a†_u2 a†_u1}⟩ is ⟨{a_u1 a_u2}{a†_u3 a†_u4}⟩ with
@@ -477,7 +491,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         INFO("input: " << toUtf8(to_latex(shared)) << "\nfull=" << full
                        << "\nresult: " << toUtf8(to_latex(result))
                        << "\nexpected: " << toUtf8(to_latex(expected)));
-        REQUIRE(simplify(result - expected) == ex<Constant>(0));
+        REQUIRE(simplify(result - expected, deduce_named_indices) ==
+                ex<Constant>(0));
         bool has_kappa = false;
         result->visit(
             [&](const ExprPtr& e) {
@@ -514,8 +529,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     for (const bool full : {true, false}) {
       const detail::ExtendedWickOptions opts{.full_contractions = full};
       auto lhs = wick_mp(tensors * ops, opts);
-      auto rhs = simplify(tensors * wick_mp(ops, opts));
-      REQUIRE(simplify(lhs - rhs) == ex<Constant>(0));
+      auto rhs = simplify(tensors * wick_mp(ops, opts), deduce_named_indices);
+      REQUIRE(simplify(lhs - rhs, deduce_named_indices) == ex<Constant>(0));
     }
   }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
@@ -530,7 +545,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     auto result = wick_mp(in, {.full_contractions = false});
     // result contains `term` exactly once, with its sign
     auto contains = [&](std::wstring_view term) {
-      return simplify(result - deserialize(term))->size() == result->size() - 1;
+      return simplify(result - deserialize(term), deduce_named_indices)
+                 ->size() == result->size() - 1;
     };
     // a_p2·a†_u3 contracted (adjacent, so +), p_1 of the surviving
     // {a†_p1 a_u4} projected onto active and onto virtual a
@@ -560,7 +576,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         get_default_context().index_basis_registry()->retrieve_space(L"u");
     for (int i = 0; i != 1000; ++i) Index::make_tmp_index(u);
     const auto second = wick_mp(in, {.full_contractions = false});
-    REQUIRE(simplify(first - second) == ex<Constant>(0));
+    REQUIRE(simplify(first - second, deduce_named_indices) == ex<Constant>(0));
   }
 
   SECTION("WickTheorem: connectivity") {
@@ -652,7 +668,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       auto without_h = wick_mp(ops, opts);
       REQUIRE(without_h->size() > 0);
       auto lhs = wick_mp(h * ops, opts);
-      REQUIRE(simplify(lhs - simplify(h * without_h)) == ex<Constant>(0));
+      REQUIRE(simplify(lhs - simplify(h * without_h, deduce_named_indices),
+                       deduce_named_indices) == ex<Constant>(0));
     }
   }
 
@@ -694,7 +711,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       const detail::ExtendedWickOptions opts{.full_contractions = full};
       auto renamed = wick_mp(h(p1) * pops, opts);
       auto result = wick_mp(make_kronecker(p1, p7) * h(p7) * pops, opts);
-      REQUIRE(simplify(result - renamed) == ex<Constant>(0));
+      REQUIRE(simplify(result - renamed, deduce_named_indices) ==
+              ex<Constant>(0));
     }
     // a δ between external indices multiplies the result
     const auto ext = make_kronecker(Index(L"p_8"), Index(L"p_9"));
@@ -705,7 +723,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
           .nop_connections = {{0, 2}}}}) {
       auto without = wick_mp(ops(u5), opts);
       auto result = wick_mp(ext * ops(u5), opts);
-      REQUIRE(simplify(result - simplify(ext * without)) == ex<Constant>(0));
+      REQUIRE(simplify(result - simplify(ext * without, deduce_named_indices),
+                       deduce_named_indices) == ex<Constant>(0));
     }
   }
 
@@ -720,18 +739,18 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
               ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({L"u_3", L"u_4"})) *
               coeff(L"t", {L"u_5", L"u_6"}, {L"u_7", L"u_8"}) *
               ex<FNOperator>(cre({L"u_5", L"u_6"}), ann({L"u_7", L"u_8"}));
-    auto scope = scoped_canonicalize_options(
-        CanonicalizeOptions::default_options().copy_and_set(
-            container::set<Index>{Index(L"u_1"), Index(L"u_5")}));
+    const NamedIndexSpec named_indices_spec =
+        container::set<Index>{Index(L"u_1"), Index(L"u_5")};
     for (const bool full : {true, false}) {
       INFO("full=" << full);
       std::array<ExprPtr, 2> result;
       for (const bool top : {false, true}) {
-        FWickTheorem wick{in->clone()};
+        FWickTheorem wick{in->clone(), named_indices_spec};
         result[top] = wick.full_contractions(full).use_topology(top).compute();
       }
       REQUIRE(get_used_indices_with_counts(result[1]).contains(Index(L"u_1")));
-      REQUIRE(simplify(result[1] - result[0]) == ex<Constant>(0));
+      REQUIRE(simplify(result[1] - result[0], named_indices_spec) ==
+              ex<Constant>(0));
     }
   }
 
@@ -741,7 +760,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     auto run = [](const ExprPtr& in, bool full, bool top,
                   const container::svector<std::pair<std::size_t, std::size_t>>&
                       connections = {}) {
-      FWickTheorem wick{in};
+      FWickTheorem wick{in, deduce_named_indices};
       wick.full_contractions(full).use_topology(top).set_nop_connections(
           connections);
       auto result = wick.compute();
@@ -761,7 +780,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       INFO("full=" << full);
       const auto [on, attempted_on] = run(g_op * t_op, full, true);
       const auto [off, attempted_off] = run(g_op * t_op, full, false);
-      REQUIRE(simplify(on - off) == ex<Constant>(0));
+      REQUIRE(simplify(on - off, deduce_named_indices) == ex<Constant>(0));
       REQUIRE(attempted_on > 0);
       REQUIRE(attempted_on < attempted_off);
     }
@@ -772,7 +791,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       ExprPtr on, off;
       REQUIRE_NOTHROW(on = run(c_g_t, true, true).first);
       off = run(c_g_t, true, false).first;
-      REQUIRE(simplify(on - off) == ex<Constant>(0));
+      REQUIRE(simplify(on - off, deduce_named_indices) == ex<Constant>(0));
     }
 
     // operators 1 and 2 are equivalent, but only 1 must connect to 0
@@ -786,7 +805,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       INFO("full=" << full);
       const auto [on, attempted_on] = run(three, full, true, {{0, 1}});
       const auto [off, attempted_off] = run(three, full, false, {{0, 1}});
-      REQUIRE(simplify(on - off) == ex<Constant>(0));
+      REQUIRE(simplify(on - off, deduce_named_indices) == ex<Constant>(0));
       REQUIRE(attempted_on < attempted_off);
     }
 
@@ -820,8 +839,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
               ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({}));
     for (const bool full : {true, false}) {
       INFO("full=" << full);
-      REQUIRE(simplify(run(xx, full, true).first -
-                       run(xx, full, false).first) == ex<Constant>(0));
+      REQUIRE(simplify(run(xx, full, true).first - run(xx, full, false).first,
+                       deduce_named_indices) == ex<Constant>(0));
     }
   }
 
@@ -836,7 +855,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     auto run = [](const ExprPtr& in,
                   const container::svector<std::pair<std::size_t, std::size_t>>&
                       avoided) {
-      FWickTheorem wick{in};
+      FWickTheorem wick{in, deduce_named_indices};
       wick.full_contractions(false).set_nop_avoided_connections(avoided);
       auto result = wick.compute();
       return std::pair{result, wick.stats().num_attempted_contractions.load()};
@@ -869,7 +888,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       if (!e02) expected->append(term);
     }
     REQUIRE(expected->size() > 0);
-    REQUIRE(simplify(avoided - ExprPtr(expected)) == ex<Constant>(0));
+    REQUIRE(simplify(avoided - ExprPtr(expected), deduce_named_indices) ==
+            ex<Constant>(0));
   }
 
   SECTION("WickTheorem: connection ordinals must name input operators") {
@@ -883,8 +903,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
                    ex<Tensor>(L"h", bra{L"u_5"}, ket{L"u_6"}, Symmetry::Nonsymm,
                               BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
     const detail::ExtendedWickOptions connected{.nop_connections = {{0, 1}}};
-    REQUIRE(simplify(wick_mp(in + c, connected) - wick_mp(in, connected) - c) ==
-            ex<Constant>(0));
+    REQUIRE(simplify(wick_mp(in + c, connected) - wick_mp(in, connected) - c,
+                     deduce_named_indices) == ex<Constant>(0));
   }
 
   SECTION("WickTheorem: Sum input") {
@@ -986,11 +1006,11 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         {
           auto r =
               set_scoped_default_context(with_vacuum(Vacuum::SingleProduct));
-          FWickTheorem wick{make_input(k)};
+          FWickTheorem wick{make_input(k), deduce_named_indices};
           sp = wick.full_contractions(full).compute();
         }
-        mp = simplify(mp);
-        sp = simplify(sp);
+        mp = simplify(mp, deduce_named_indices);
+        sp = simplify(sp, deduce_named_indices);
         // no active space: no γ, η or κ
         mp->visit(
             [&](const ExprPtr& e) {
@@ -1028,7 +1048,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
                 }
               },
               /*atoms_only=*/true);
-        REQUIRE(simplify(mp - sp) == ex<Constant>(0));
+        REQUIRE(simplify(mp - sp, deduce_named_indices) == ex<Constant>(0));
       }
     }
   }
@@ -1086,7 +1106,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       INFO("lhs: " << toUtf8(to_latex(lhs))
                    << "\nrhs: " << toUtf8(to_latex(rhs)));
       REQUIRE(lhs->size() == nterms);
-      REQUIRE(simplify(lhs - rhs) == ex<Constant>(0));
+      REQUIRE(simplify(lhs - rhs, deduce_named_indices) == ex<Constant>(0));
     }
     // the three all-active strings have both a κ2 and a κ3
     container::set<std::size_t> kappa_ranks;

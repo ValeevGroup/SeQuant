@@ -587,7 +587,7 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
                           Symmetry::Nonsymm, Hermiticity::Hermitian,
                           ColumnSymmetry::Symm);
       ExprPtr diff = a - b;
-      simplify(diff);
+      simplify(diff, deduce_named_indices);
       return diff;
     };
 

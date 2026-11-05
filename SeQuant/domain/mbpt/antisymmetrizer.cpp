@@ -5,6 +5,7 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/density.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/antisymmetrizer.hpp>
 
@@ -69,9 +70,9 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
         return value;
       };
 
-  // each index occurs once, so canonicalize treats all of them as named;
-  // ordering by their labels makes equal products canonicalize identically,
-  // so that summand_exists finds the repeats
+  // each index occurs once and is named; ordering by their labels makes equal
+  // products canonicalize identically, so that summand_exists finds the
+  // repeats
   const auto canon_opts = CanonicalizeOptions::default_options().copy_and_set(
       CanonicalizeOptions::IgnoreNamedIndexLabel::No);
   for (int i = 0; i < unique_bras_list.size(); i++) {
@@ -101,7 +102,7 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
                                .braket = old_tensor.braket_symmetry(),
                                .column = old_tensor.column_symmetry()});
           new_product = new_tensor * new_product;
-          new_product->canonicalize(canon_opts);
+          new_product->canonicalize(get_used_indices(new_product), canon_opts);
         }
 
         else if (it->get()->is<FNOperator>()) {
@@ -116,7 +117,7 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
           auto new_Nop = ex<FNOperator>(cre(new_crea), ann(new_anni));
           new_product = new_product * new_Nop;
           // std::wcout << "product:  " << to_latex(new_product) << std::endl;
-          new_product->canonicalize(canon_opts);
+          new_product->canonicalize(get_used_indices(new_product), canon_opts);
         }
 
         else {
@@ -204,6 +205,18 @@ antisymmetrize::antisymmetrize(ExprPtr s) {
     result = s;
   }
 }
+
+namespace {
+
+/// @return the union of @p upper and @p lower
+container::set<Index> external_indices_of(const std::vector<Index>& upper,
+                                          const std::vector<Index>& lower) {
+  container::set<Index> result(upper.begin(), upper.end());
+  result.insert(lower.begin(), lower.end());
+  return result;
+}
+
+}  // namespace
 
 namespace antisymm {
 
@@ -366,7 +379,8 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
       }
     }
   }
-  simplify(expression);
+  // the indices of the density are its external indices
+  simplify(expression, external_indices_of(original_upper, original_lower));
   return expression;
 }
 
@@ -420,7 +434,8 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
       }
       return_val = (product * prefactor) + return_val;
     }
-    return_val->canonicalize();
+    return_val->canonicalize(
+        external_indices_of(original_upper, original_lower));
     return return_val;
   } else {
     throw Exception("non-singlet states not yet supported");

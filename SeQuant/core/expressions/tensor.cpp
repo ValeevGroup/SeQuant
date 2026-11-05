@@ -100,9 +100,9 @@ bool has_repeated_index(const AbstractTensor &t) {
 }  // namespace
 
 ExprPtr canonicalize_tensor_leaf(
-    Expr &leaf, CanonicalizeOptions opts,
+    Expr &leaf, const NamedIndexSpec &named_indices, CanonicalizeOptions opts,
     const std::function<void(const AbstractTensor &)> &assign) {
-  if (leaf.is_canonical(opts)) return {};
+  if (leaf.is_canonical(named_indices, opts)) return {};
   auto &tensor = leaf.as<AbstractTensor>();
   const auto contexts_version = current_contexts_version();
   ExprPtr byproduct;
@@ -110,7 +110,8 @@ ExprPtr canonicalize_tensor_leaf(
     // a repeated index is contracted, so this is a tensor network and is
     // canonicalized as one, like a Product of tensors
     TensorNetwork tn(static_cast<const Expr &>(leaf));
-    byproduct = tn.canonicalize(detail::cardinal_tensor_labels(opts), opts);
+    byproduct = tn.canonicalize(detail::cardinal_tensor_labels(opts),
+                                named_indices, opts);
     SEQUANT_ASSERT(tn.tensors().size() == 1);
     const AbstractTensor &canonical = *tn.tensors()[0];
     SEQUANT_ASSERT(typeid(canonical) == typeid(tensor));
@@ -131,13 +132,14 @@ ExprPtr canonicalize_tensor_leaf(
     throw Exception(
         "canonicalize_tensor_leaf: the byproduct of a tensor canonicalizer "
         "must be a Constant");
-  leaf.mark_canonical(opts, contexts_version);
+  leaf.mark_canonical(named_indices, opts, contexts_version);
   return byproduct;
 }
 
-ExprPtr Tensor::canonicalize(CanonicalizeOptions opts) {
+ExprPtr Tensor::canonicalize(const NamedIndexSpec &named_indices,
+                             CanonicalizeOptions opts) {
   return canonicalize_tensor_leaf(
-      *this, opts, [this](const AbstractTensor &canonical) {
+      *this, named_indices, opts, [this](const AbstractTensor &canonical) {
         *this = static_cast<const Tensor &>(canonical);
       });
 }

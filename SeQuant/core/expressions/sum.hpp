@@ -186,12 +186,15 @@ class Sum : public Expr {
 
   /// @param multipass if true, will do a multipass canonicalization, with extra
   /// cleanup pass after the deep canonization pass
-  ExprPtr canonicalize_impl(bool multipass, CanonicalizeOptions opt);
+  ExprPtr canonicalize_impl(bool multipass, const NamedIndexSpec &named_indices,
+                            CanonicalizeOptions opt);
 
-  ExprPtr canonicalize(CanonicalizeOptions opt =
+  ExprPtr canonicalize(const NamedIndexSpec &named_indices,
+                       CanonicalizeOptions opt =
                            CanonicalizeOptions::default_options()) override;
 
   ExprPtr rapid_canonicalize(
+      const NamedIndexSpec &named_indices,
       CanonicalizeOptions opts =
           CanonicalizeOptions::default_options().copy_and_set(
               CanonicalizationMethod::Rapid)) override;
@@ -237,7 +240,8 @@ class HashingAccumulator {
 
 struct TransformSumExprOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
-  bool canonicalize = true;
+  /// if set, each mapped element is canonicalized with these named indices
+  std::optional<NamedIndexSpec> canonicalize = std::nullopt;
   bool flatten = true;
 };
 
@@ -258,7 +262,7 @@ ExprPtr transform_sum_expr(SizedRange &&rng, const UnaryMapOp &map,
     auto task_result = map(input);
     if (task_result) {
       if (canonicalize) {
-        auto bp = task_result->canonicalize();
+        auto bp = task_result->canonicalize(*canonicalize);
         if (bp) {
           task_result = bp * task_result;
         }
@@ -269,7 +273,7 @@ ExprPtr transform_sum_expr(SizedRange &&rng, const UnaryMapOp &map,
     }
   };
   sequant::for_each(std::forward<SizedRange>(rng), task);
-  return result_acc.make_expr(options.canonicalize);
+  return result_acc.make_expr(options.canonicalize.has_value());
 }
 
 }  // namespace sequant

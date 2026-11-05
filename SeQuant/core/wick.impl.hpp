@@ -916,9 +916,21 @@ void WickTheorem<S>::extract_indices() const {
 }
 
 template <Statistics S>
+CanonicalizeOptions WickTheorem<S>::nop_preserving_canonicalize_options() {
+  static const auto presentation = [] {
+    CanonicalizationPresentation result;
+    for (const auto &label : NormalOperator<S>::labels())
+      result.tensor_canonicalizers.emplace(std::wstring(label),
+                                           NullTensorCanonicalizer::instance());
+    return std::make_shared<const CanonicalizationPresentation>(
+        std::move(result));
+  }();
+  return CanonicalizeOptions::default_options().copy_and_set(presentation);
+}
+
+template <Statistics S>
 container::set<Index> WickTheorem<S>::external_indices() const {
-  const auto &copts = get_default_context().canonicalization_options();
-  if (copts && copts->named_indices) return *copts->named_indices;
+  if (!external_indices_spec_.deduce()) return external_indices_spec_.indices();
   SEQUANT_ASSERT(input_index_counts_);
   return *input_index_counts_ | ranges::views::filter([](const auto &v) {
     return v.second.nonproto() <= 1;
@@ -942,8 +954,7 @@ container::set<Index> WickTheorem<S>::noncovariant_indices(
 
 template <Statistics S>
 typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
-    const Product &product,
-    const container::set<Index> *declared_external_indices) {
+    const Product &product, const NamedIndexSpec &external_indices) {
   NormalOperatorSequence<S> nopseq;
   for (const auto &factor : product)
     if (factor->template is<NormalOperator<S>>())
@@ -962,17 +973,10 @@ typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
           return factor->is<AbstractTensor>();
         }) |
         ranges::to<container::svector<ExprPtr>>);
-  // the declared external indices are the named indices of the graph (a
-  // declared one that appears twice is not a dummy); without a declaration
-  // the network deduces them
-  TN::NamedIndexSet declared_external;
-  if (declared_external_indices)
-    declared_external.insert(declared_external_indices->begin(),
-                             declared_external_indices->end());
-  auto g = tn.create_graph({.named_indices = declared_external_indices
-                                                 ? &declared_external
-                                                 : nullptr,
-                            .distinct_named_indices = true});
+  // the external indices are the named indices of the graph (an external
+  // index that appears twice is not a dummy)
+  const auto declared_external = tn.named_indices(external_indices);
+  auto g = tn.create_graph(declared_external, {.distinct_named_indices = true});
   const auto &graph = g.bliss_graph;
   const auto &vlabels = g.vertex_labels;
   const auto &vcolors = g.vertex_colors;
@@ -1434,32 +1438,6 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
 template <Statistics S>
 ExprPtr WickTheorem<S>::compute_contractions(
     const bool count_only, const bool skip_input_canonicalization) {
-  // canonicalization of the operators produced by WickTheorem would undo
-  // what NormalOperator<S>::normalize did, so the returned object scopes a
-  // context in which they are not canonicalized; it installs nothing if the
-  // current context already does that, as in the per-summand WickTheorems,
-  // whose parallel workers see the scope of the top-level one
-  auto disable_nop_canonicalization = []() {
-    const auto nop_labels = NormalOperator<S>::labels();
-    SEQUANT_ASSERT(nop_labels.size() == 2);
-    // the canonicalizers are looked up in the context for arbitrary statistics
-    const auto current_ctx = get_default_context_snapshot();
-    if (ranges::all_of(nop_labels, [&current_ctx](const auto &label) {
-          return std::dynamic_pointer_cast<NullTensorCanonicalizer>(
-                     current_ctx.nondefault_tensor_canonicalizer_ptr(label)) !=
-                 nullptr;
-        }))
-      return detail::ImplicitContextResetter<
-          container::map<Statistics, Context>>{};
-    // the shared instance, so that the scopes of successive calls have the
-    // same canonicalization configuration, hence the same Context::version()
-    return set_scoped_modified_default_context([&nop_labels](Context &ctx) {
-      for (const auto &label : nop_labels)
-        ctx.set_tensor_canonicalizer(label,
-                                     NullTensorCanonicalizer::instance());
-    });
-  };
-
   // have an Expr as input? Apply recursively ...
   if (expr_input_) {
     /// expand, then apply recursively to products
@@ -1476,16 +1454,11 @@ ExprPtr WickTheorem<S>::compute_contractions(
         // initial full canonicalization; it replaces a Sum of at most one
         // summand by that summand, or by 0 if every summand canonicalized to
         // zero
-        canonicalize(expr_input_);
+        canonicalize(expr_input_, external_indices_spec_);
         if (expr_input_->is<Constant>()) return expr_input_;
         if (!expr_input_->is<Sum>())
           expr_input_ = ex<Sum>(ExprPtrList{expr_input_});
       }
-
-      // NOW disable canonicalization of normal operators
-      // N.B. even if skipped initial input canonicalization need to disable
-      // subsequent nop canonicalization
-      const auto nop_canonicalization_disabled = disable_nop_canonicalization();
 
       // parallelize over summands
       HashingAccumulator result_acc;
@@ -1520,15 +1493,10 @@ ExprPtr WickTheorem<S>::compute_contractions(
       if (!skip_input_canonicalization) {  // canonicalize, unless told to skip
         // canonicalization replaces a Product of one factor with a unit
         // scalar by that factor
-        canonicalize(expr_input_);
+        canonicalize(expr_input_, external_indices_spec_);
         if (!expr_input_->is<Product>())
           expr_input_ = ex<Product>(1, ExprPtrList{expr_input_});
       }
-      // NOW disable canonicalization of normal operators
-      // N.B. even if skipped initial input canonicalization need to disable
-      // subsequent nop canonicalization
-      const auto nop_canonicalization_disabled = disable_nop_canonicalization();
-
       // the input was expanded and may have been canonicalized, so counts
       // taken by an earlier reduce() describe an input that is gone; counted
       // from the product, since input_ holds the operator sequence that an
@@ -1560,7 +1528,7 @@ ExprPtr WickTheorem<S>::compute_contractions(
         if (use_topology_) {
           const auto external = external_indices();
           const auto partitions =
-              analyze_topology(expr_input_->as<Product>(), &external);
+              analyze_topology(expr_input_->as<Product>(), external);
           // pruning by its topology would not preserve that the input is
           // zero by symmetry
           if (partitions.zero) return ex<Constant>(0);

@@ -183,7 +183,9 @@ void Sum::adjoint() {
   *this = Sum(ranges::begin(adj_summands), ranges::end(adj_summands));
 }
 
-ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
+ExprPtr Sum::canonicalize_impl(bool multipass,
+                               const NamedIndexSpec &named_indices,
+                               CanonicalizeOptions opts) {
   if (Logger::instance().canonicalize)
     std::wcout << "Sum::canonicalize_impl: input = "
                << to_latex_align(shared_from_this()) << std::endl;
@@ -207,14 +209,15 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     // using for_each and direct access to summands
     // N.B. summands already in the canonical form that the full pass of
     // multipass canonicalization produces are left alone by every pass
-    sequant::for_each(summands_, [&opts_copy, &rapid, &multipass,
-                                  &full_opts](ExprPtr &summand) {
+    sequant::for_each(summands_, [&opts_copy, &rapid, &multipass, &full_opts,
+                                  &named_indices](ExprPtr &summand) {
       ExprPtr bp;
       if (rapid) {
-        if (multipass && summand->is_canonical(full_opts)) return;
-        bp = summand->rapid_canonicalize(opts_copy);
+        if (multipass && summand->is_canonical(named_indices, full_opts))
+          return;
+        bp = summand->rapid_canonicalize(named_indices, opts_copy);
       } else {
-        bp = summand->canonicalize(opts_copy);
+        bp = summand->canonicalize(named_indices, opts_copy);
       }
       if (bp) {
         SEQUANT_ASSERT(bp->template is<Constant>());
@@ -335,16 +338,18 @@ Expr::hash_type Sum::memoizing_hash() const {
   return *hash_value_;
 }
 
-ExprPtr Sum::canonicalize(CanonicalizeOptions opt) {
-  if (is_canonical(opt)) return {};
+ExprPtr Sum::canonicalize(const NamedIndexSpec &named_indices,
+                          CanonicalizeOptions opt) {
+  if (is_canonical(named_indices, opt)) return {};
   const auto contexts_version = current_contexts_version();
-  auto byproduct = canonicalize_impl(true, opt);
-  mark_canonical(opt, contexts_version);
+  auto byproduct = canonicalize_impl(true, named_indices, opt);
+  mark_canonical(named_indices, opt, contexts_version);
   return byproduct;
 }
-ExprPtr Sum::rapid_canonicalize(CanonicalizeOptions opts) {
+ExprPtr Sum::rapid_canonicalize(const NamedIndexSpec &named_indices,
+                                CanonicalizeOptions opts) {
   SEQUANT_ASSERT(opts.method == CanonicalizationMethod::Rapid);
-  return canonicalize_impl(false, opts);
+  return canonicalize_impl(false, named_indices, opts);
 }
 
 bool Sum::static_equal(const Expr &that) const {

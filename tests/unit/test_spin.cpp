@@ -68,12 +68,12 @@ TEST_CASE("spin", "[spin]") {
     REQUIRE_NOTHROW(spintrace(expr));
     {  // assume spin-free spaces
       auto expr_st = spintrace(expr);
-      simplify(expr_st);
+      simplify(expr_st, deduce_named_indices);
       REQUIRE_THAT(expr_st, EquivalentTo("2 t{i1;a1<i1>} F{a1<i1>;i1}"));
     }
     {  // assume spin-dependent spaces
       auto expr_st = spintrace(expr, {}, /* assume_spin_free_spaces */ false);
-      simplify(expr_st);
+      simplify(expr_st, deduce_named_indices);
       REQUIRE_THAT(expr_st, EquivalentTo("t{i↓1;a↓1<i↓1>} F{a↓1<i↓1>;i↓1} + "
                                          "t{i↑1;a↑1<i↑1>} F{a↑1<i↑1>;i↑1}"));
     }
@@ -319,7 +319,7 @@ TEST_CASE("spin", "[spin]") {
         ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}, particle_symmetric) *
         ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}, particle_symmetric);
     auto result = spintrace(expr);
-    canonicalize(result);
+    canonicalize(result, deduce_named_indices);
     REQUIRE_THAT(result, EquivalentTo("2 f{i1;a1} t{a1;i1}"));
   }
 
@@ -333,7 +333,7 @@ TEST_CASE("spin", "[spin]") {
           ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}, particle_symmetric) *
           ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_2"}, particle_symmetric);
       auto result = spintrace(expr);
-      canonicalize(result);
+      canonicalize(result, deduce_named_indices);
       REQUIRE_THAT(result,
                    EquivalentTo("- g{i1,i2;a1,a2} t{a1;i2} t{a2;i1} "
                                 "+ 2 g{i1,i2;a1,a2} t{a1;i1} t{a2;i2}"));
@@ -343,7 +343,7 @@ TEST_CASE("spin", "[spin]") {
   SECTION("Scaled Product with variable") {
     ExprPtr expr = deserialize(L"1/2 Var g{i1,i2;a1,a2}:A t{a1;i1} t{a2;i2}");
     auto result = spintrace(expr);
-    canonicalize(result);
+    canonicalize(result, deduce_named_indices);
     REQUIRE_THAT(
         result,
         EquivalentTo(
@@ -383,7 +383,7 @@ TEST_CASE("spin", "[spin]") {
     auto result = ex<Constant>(rational{1, 2}) * spintrace(expr);
     expand(result);
     rapid_simplify(result);
-    canonicalize(result);
+    canonicalize(result, deduce_named_indices);
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 5);
     REQUIRE_THAT(result, EquivalentTo("-1/2 g{i1,i2;a1,a2} t{a1,a2;i2,i1} "
@@ -586,7 +586,7 @@ SECTION("Expand Symmetrizer") {
     auto result = S_maps(input);
     REQUIRE(result->is<Sum>());
     REQUIRE(result->size() == 6);
-    result->canonicalize();
+    result->canonicalize(deduce_named_indices);
     rapid_simplify(result);
     REQUIRE_THAT(
         result,
@@ -742,7 +742,7 @@ SECTION("Symmetrize expression") {
         ex<Tensor>(Tensor{reserved::symm_label(), bra(std::move(kixs)),
                           ket(std::move(bixs)), particle_symmetric}) *
         input;
-    simplify(result);
+    simplify(result, deduce_named_indices);
     REQUIRE(result->is<Sum>() == false);
     REQUIRE_THAT(result,
                  EquivalentTo("4 Ŝ{i1,i2;a1,a2} g{i3,i4;a3,a4}:S "
@@ -933,7 +933,7 @@ SECTION("Closed-shell spintrace CCSD") {
                   spintrace(input, IdxGroupList{{L"i_1", L"a_1"}});
     expand(result);
     rapid_simplify(result);
-    canonicalize(result);
+    canonicalize(result, deduce_named_indices);
     REQUIRE_THAT(result, EquivalentTo("f{a1;i1}"));
   }
 
@@ -1217,7 +1217,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
         input,
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}},
         true);
-    simplify(result_1);
+    simplify(result_1, deduce_named_indices);
     REQUIRE(result_1->size() == 18);  // 18 raw terms
     REQUIRE_THAT(
         result_1,
@@ -1248,9 +1248,9 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     auto result_2 = closed_shell_spintrace(
         input,
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
-    simplify(result_2);
+    simplify(result_2, deduce_named_indices);
     result_2 = S_maps(result_2);
-    simplify(result_2);
+    simplify(result_2, deduce_named_indices);
 
     REQUIRE(result_2->size() == 18);  // 18 raw terms
     REQUIRE_THAT(
@@ -1355,7 +1355,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
         input,
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     REQUIRE(result->size() == 6);
-    simplify(result);
+    simplify(result, deduce_named_indices);
     REQUIRE(result->size() == 6);
   }
 
@@ -1388,7 +1388,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
         input,
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     REQUIRE(result->size() == 12);
-    simplify(result);
+    simplify(result, deduce_named_indices);
     REQUIRE(result->size() == 12);
   }
 }
@@ -1504,7 +1504,7 @@ SECTION("Relation in spin P operators") {
   expand(p6_input);
   auto p6_result = expand_P_op(p6_input);
   reset_tags(p6_result);
-  simplify(p6_result);
+  simplify(p6_result, deduce_named_indices);
 
   auto A_12 = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"},
                          ket{L"a_1", L"a_2"}, Symmetry::Antisymm);
@@ -1515,27 +1515,27 @@ SECTION("Relation in spin P operators") {
 
   p6_result = A_12 * p6_result;
   expand(p6_result);
-  canonicalize(p6_result);
+  canonicalize(p6_result, deduce_named_indices);
   p6_result = expand_A_op(p6_result);
   reset_tags(p6_result);
-  simplify(p6_result);
+  simplify(p6_result, deduce_named_indices);
 
   auto p7_input = p_abb * input;
   expand(p7_input);
   auto p7_result = expand_P_op(p7_input);
   reset_tags(p7_result);
-  simplify(p7_result);
+  simplify(p7_result, deduce_named_indices);
 
   p7_result = A_23 * p7_result;
   expand(p7_result);
   p7_result = expand_A_op(p7_result);
   reset_tags(p7_result);
-  simplify(p7_result);
+  simplify(p7_result, deduce_named_indices);
 
   auto expanded_A = A3 * input;
   expanded_A = expand_A_op(expanded_A);
   reset_tags(expanded_A);
-  simplify(expanded_A);
+  simplify(expanded_A, deduce_named_indices);
   REQUIRE(p6_result == p7_result);
   REQUIRE(p6_result == expanded_A);
 }
@@ -1620,7 +1620,7 @@ SECTION("Open-shell spin-tracing") {
                                 particle_symmetric));
     auto f = ex<Tensor>(Tensor(L"f", bra{a1A}, ket{a2A}, particle_symmetric));
     auto ft3 = f * t3;
-    ft3->canonicalize();
+    ft3->canonicalize(deduce_named_indices);
     REQUIRE_THAT(ft3, EquivalentTo("f{a↑1;a↑2} t{a↑3,a↑2,a↓2;i↑1,i↑3,i↓2}"));
   }
 
@@ -1648,7 +1648,7 @@ SECTION("Open-shell spin-tracing") {
             input, IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}));
     REQUIRE(result.size() == 3);
     for (auto& r : result) {
-      simplify(r);
+      simplify(r, deduce_named_indices);
       CHECK(r->is_zero());
     }
   }
@@ -1765,7 +1765,7 @@ SECTION("Open-shell spin-tracing") {
     expand(result2);
     result2 = expand_A_op(result2);
     reset_tags(result2);
-    canonicalize(result2);
+    canonicalize(result2, deduce_named_indices);
     rapid_simplify(result2);
     REQUIRE(result2->size() == 27);
 
@@ -1775,7 +1775,7 @@ SECTION("Open-shell spin-tracing") {
     expand(result3);
     result3 = expand_A_op(result3);
     reset_tags(result3);
-    canonicalize(result3);
+    canonicalize(result3, deduce_named_indices);
     rapid_simplify(result3);
     REQUIRE(result3->size() == 27);
   }
@@ -1814,7 +1814,7 @@ SECTION("Open-shell spin-tracing") {
     expand(result_aab);
     result_aab = expand_A_op(result_aab);
     reset_tags(result_aab);
-    canonicalize(result_aab);
+    canonicalize(result_aab, deduce_named_indices);
     rapid_simplify(result_aab);
     REQUIRE(result_aab->size() == 18);
 

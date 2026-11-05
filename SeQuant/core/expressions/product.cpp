@@ -12,6 +12,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/typedefs.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/equal.hpp>
@@ -74,21 +75,36 @@ bool Product::is_commutative() const {
   return result;
 }
 
-ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
+ExprPtr Product::canonicalize_impl(const NamedIndexSpec &named_indices,
+                                   CanonicalizeOptions opts) {
   reset_canonical_mark();
 
   // recursively canonicalize non-tensor subfactors (tensors will be
   // canonicalized as part of the TN built of all tensor factors of this) ...
-  ranges::for_each(factors_, [this, opts](auto &factor) {
-    if (factor.template is<AbstractTensor>()) {
-      return;
+  // an index that a subfactor shares with another factor is a dummy of this
+  // product, but external to the subfactor, so it is named in the subfactor
+  auto subfactor_named_indices = [this, &named_indices](std::size_t f) {
+    if (named_indices.deduce()) return named_indices;
+    auto result = named_indices.indices();
+    const auto factor_indices = get_used_indices(factors_[f]);
+    for (std::size_t g = 0; g != factors_.size(); ++g) {
+      if (g == f) continue;
+      for (auto &&idx : get_used_indices(factors_[g]))
+        if (factor_indices.contains(idx)) result.insert(idx);
     }
-    auto bp = factor->canonicalize(opts);
+    return NamedIndexSpec(std::move(result));
+  };
+  for (std::size_t f = 0; f != factors_.size(); ++f) {
+    auto &factor = factors_[f];
+    if (factor.template is<AbstractTensor>()) {
+      continue;
+    }
+    auto bp = factor->canonicalize(subfactor_named_indices(f), opts);
     if (bp) {
       SEQUANT_ASSERT(bp->template is<Constant>());
       this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
     }
-  });
+  }
 
   if (Logger::instance().canonicalize) {
     std::wcout << "Product canonicalization(" << to_wstring(opts.method)
@@ -122,8 +138,8 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
                                // that's done in
                                // TensorNetwork
     TensorNetwork tn(this->factors_);
-    const ExprPtr canon_factor =
-        tn.canonicalize(detail::cardinal_tensor_labels(opts), opts);
+    const ExprPtr canon_factor = tn.canonicalize(
+        detail::cardinal_tensor_labels(opts), named_indices, opts);
 
     const auto &tensors = tn.tensors();
     using std::size;
@@ -222,17 +238,19 @@ void Product::adjoint() {
       Product(adj_scalar, ranges::begin(adj_factors), ranges::end(adj_factors));
 }
 
-ExprPtr Product::canonicalize(CanonicalizeOptions opt) {
-  if (this->is_canonical(opt)) return {};
+ExprPtr Product::canonicalize(const NamedIndexSpec &named_indices,
+                              CanonicalizeOptions opt) {
+  if (this->is_canonical(named_indices, opt)) return {};
   const auto contexts_version = current_contexts_version();
-  auto byproduct = this->canonicalize_impl(opt);
-  this->mark_canonical(opt, contexts_version);
+  auto byproduct = this->canonicalize_impl(named_indices, opt);
+  this->mark_canonical(named_indices, opt, contexts_version);
   return byproduct;
 }
 
-ExprPtr Product::rapid_canonicalize(CanonicalizeOptions opt) {
+ExprPtr Product::rapid_canonicalize(const NamedIndexSpec &named_indices,
+                                    CanonicalizeOptions opt) {
   SEQUANT_ASSERT(opt.method == CanonicalizationMethod::Rapid);
-  return this->canonicalize_impl(opt);
+  return this->canonicalize_impl(named_indices, opt);
 }
 
 bool Product::static_commutativity() const { return false; }

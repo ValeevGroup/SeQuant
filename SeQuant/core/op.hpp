@@ -930,10 +930,11 @@ class NormalOperator : public Operator<S>,
 
   /// canonicalizes this as a tensor leaf, i.e. like a Tensor
   /// @sa canonicalize_tensor_leaf
-  ExprPtr canonicalize(CanonicalizeOptions opts =
+  ExprPtr canonicalize(const NamedIndexSpec &named_indices,
+                       CanonicalizeOptions opts =
                            CanonicalizeOptions::default_options()) override {
     return canonicalize_tensor_leaf(
-        *this, opts, [this](const AbstractTensor &canonical) {
+        *this, named_indices, opts, [this](const AbstractTensor &canonical) {
           *this = static_cast<const NormalOperator &>(canonical);
         });
   }
