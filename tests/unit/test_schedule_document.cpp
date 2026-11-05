@@ -340,6 +340,34 @@ TEST_CASE("schedule document round-trips the dag and run sections",
   REQUIRE(summary_line(d2) == "roots=1 terms=1 values=2 blocks=2 depth=0");
 }
 
+TEST_CASE("schedule document round-trips modeled sizes and the realized peak",
+          "[schedule-document]") {
+  auto d = make_dag_doc();
+  d.dag->values[0].modeled_footprint = 4096;
+  d.dag->values[0].modeled_size = 65536;
+  d.run->peak_bytes = 123456;
+  d.run->peak_live = {"v0", "v1"};
+  auto const back = from_json(to_json(d));
+  REQUIRE(compare(d, back).empty());
+  CHECK(back.dag->values[0].modeled_footprint == 4096);
+  CHECK(back.dag->values[0].modeled_size == 65536);
+  CHECK(back.dag->values[1].modeled_footprint == 0);  // absent => 0
+  CHECK(back.run->peak_bytes == 123456);
+  REQUIRE(back.run->peak_live.size() == 2);
+  CHECK(back.run->peak_live[1] == "v1");
+  // a document written before these fields existed still reads
+  auto old = to_json(d);
+  auto const strip = [&old](std::string const& key) {
+    auto const p = old.find("\"" + key + "\"");
+    REQUIRE(p != std::string::npos);
+    auto const comma = old.find('\n', p);
+    old.erase(p, comma - p + 1);
+  };
+  strip("peak_bytes");
+  auto const older = from_json(old);
+  CHECK(older.run->peak_bytes == 0);
+}
+
 TEST_CASE("run section round-trips alone and JSON is made script-safe",
           "[schedule-document]") {
   using Catch::Matchers::ContainsSubstring;

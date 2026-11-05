@@ -200,6 +200,8 @@ json to_j(ValueRecord const& v) {
   j["persistent"] = v.persistent;
   j["first_use"] = v.first_use;
   j["last_use"] = v.last_use;
+  j["modeled_footprint"] = v.modeled_footprint;
+  j["modeled_size"] = v.modeled_size;
   j["build_site"] = strs_j(v.build_site);
   j["home_floor"] = strs_j(v.home_floor);
   j["forced_split_axes"] = strs_j(v.forced_split_axes);
@@ -284,6 +286,8 @@ json to_j(RunRecord const& r) {
   j["footprint"] = sizemap_j(r.footprint);
   j["size"] = sizemap_j(r.size);
   j["builds"] = sizemap_j(r.builds);
+  j["peak_bytes"] = r.peak_bytes;
+  j["peak_live"] = strs_j(r.peak_live);
   j["planner"] = strmap_j(r.planner);
   return j;
 }
@@ -332,6 +336,15 @@ std::size_t as_size(json const& v, std::string const& what,
 
 std::size_t get_size(json const& j, char const* key, std::string const& where) {
   return as_size(need(j, key, where), std::string("'") + key + "'", where);
+}
+
+/// \p key's size when present, else \p dflt: for fields added after documents
+/// without them were written
+std::size_t get_size_or(json const& j, char const* key, std::size_t dflt,
+                        std::string const& where) {
+  auto const it = j.find(key);
+  if (it == j.end()) return dflt;
+  return as_size(*it, std::string("'") + key + "'", where);
 }
 
 int get_int(json const& j, char const* key, std::string const& where) {
@@ -643,6 +656,8 @@ ValueRecord value_r(json const& j) {
   v.persistent = get_bool(j, "persistent", w);
   v.first_use = get_size(j, "first_use", w);
   v.last_use = get_size(j, "last_use", w);
+  v.modeled_footprint = get_size_or(j, "modeled_footprint", 0, w);
+  v.modeled_size = get_size_or(j, "modeled_size", 0, w);
   v.build_site = get_strs(j, "build_site", w);
   v.home_floor = get_strs(j, "home_floor", w);
   v.forced_split_axes = get_strs(j, "forced_split_axes", w);
@@ -732,6 +747,8 @@ RunRecord run_r(json const& j) {
   // absent in run files written before the key
   if (j.contains("size")) r.size = sizemap_r(j, "size", w);
   r.builds = sizemap_r(j, "builds", w);
+  r.peak_bytes = get_size_or(j, "peak_bytes", 0, w);
+  if (j.contains("peak_live")) r.peak_live = get_strs(j, "peak_live", w);
   r.planner = strmap_r(j, "planner", w);
   return r;
 }
