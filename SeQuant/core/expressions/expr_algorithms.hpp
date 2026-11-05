@@ -8,6 +8,7 @@
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/io/print_options.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/access.hpp>
@@ -22,7 +23,18 @@ namespace sequant {
 /// @param max_lines_per_align the maximum number of lines in the align before
 /// starting new align block (if zero, will produce single align block)
 /// @param max_terms_per_line the maximum number of terms per line
+/// @note uses the PrintOptions of the default context
 std::wstring to_latex_align(const ExprPtr& exprptr,
+                            size_t max_lines_per_align = 0,
+                            size_t max_terms_per_line = 1);
+
+/// splits long outer sum into a multiline align
+/// @param exprptr the expression to be converted to a string
+/// @param opts the PrintOptions
+/// @param max_lines_per_align the maximum number of lines in the align before
+/// starting new align block (if zero, will produce single align block)
+/// @param max_terms_per_line the maximum number of terms per line
+std::wstring to_latex_align(const ExprPtr& exprptr, const PrintOptions& opts,
                             size_t max_lines_per_align = 0,
                             size_t max_terms_per_line = 1);
 

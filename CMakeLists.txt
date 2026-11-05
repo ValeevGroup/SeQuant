@@ -400,6 +400,7 @@ set(SeQuant_symb_src
         SeQuant/core/io/shorthands.hpp
         SeQuant/core/io/latex/latex.cpp
         SeQuant/core/io/latex/latex.hpp
+        SeQuant/core/io/print_options.hpp
         SeQuant/core/logger.hpp
         SeQuant/core/math.hpp
         SeQuant/core/meta.hpp

@@ -38,7 +38,8 @@ TEST_CASE("abstract_tensor", "[elements]") {
     Tensor t("x", bra{}, ket{}, aux{});
     REQUIRE_NOTHROW(t.to_latex());
     auto _ = set_scoped_default_context(
-        {.braket_slot_typesetting = BraKetSlotTypesetting::TensorPackage});
+        {.print_options = {.braket_slot_typesetting =
+                               BraKetSlotTypesetting::TensorPackage}});
     REQUIRE_NOTHROW(t.to_latex());
   }
 

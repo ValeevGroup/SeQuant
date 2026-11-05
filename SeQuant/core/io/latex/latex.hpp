@@ -22,12 +22,18 @@ class ExprPtr;
 class Power;
 class TensorPower;
 class ResultExpr;
+struct PrintOptions;
 }  // namespace sequant
 
 namespace sequant::io::latex {
 
+/// prints @p expr with the PrintOptions of the default context
 /// @returns an empty string if @p expr is null.
 std::wstring to_string(const ExprPtr& expr);
+
+/// prints @p expr with the given PrintOptions
+/// @returns an empty string if @p expr is null.
+std::wstring to_string(const ExprPtr& expr, const PrintOptions& opts);
 
 template <typename T>
 concept has_to_latex_member = requires(const T& t) { t.to_latex(); };
@@ -113,7 +119,11 @@ std::wstring to_string(const Power& power);
 
 std::wstring to_string(const TensorPower& power);
 
+/// prints @p expr with the PrintOptions of the default context
 std::wstring to_string(const ResultExpr& expr);
+
+/// prints @p expr with the given PrintOptions
+std::wstring to_string(const ResultExpr& expr, const PrintOptions& opts);
 
 namespace detail {
 

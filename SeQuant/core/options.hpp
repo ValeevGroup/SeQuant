@@ -138,6 +138,23 @@ struct CanonicalizationPresentation {
 /// operators
 const container::vector<std::wstring>& default_cardinal_tensor_labels();
 
+/// State shared by a (recursive) lexicographic comparison of expressions
+/// @sa Expr::lexicographic_compare
+struct LexicographicCompareOptions {
+  /// tensor labels that precede all others, in this order; the default is
+  /// that of the library's canonical form
+  /// @sa default_cardinal_tensor_labels()
+  container::vector<std::wstring> cardinal_tensor_labels =
+      default_cardinal_tensor_labels();
+
+  /// @return position of (the non-adjoint form of) @p label among
+  /// cardinal_tensor_labels, or `cardinal_tensor_labels.size()` if it is not a
+  /// cardinal label
+  std::size_t cardinal_position(std::wstring_view label) const;
+
+  bool operator==(const LexicographicCompareOptions&) const = default;
+};
+
 /// @brief options that control behavior of `canonicalize()`
 struct CanonicalizeOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;

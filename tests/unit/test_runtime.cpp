@@ -281,6 +281,9 @@ TEST_CASE("context", "[runtime]") {
     CHECK(!changes([](Context& c) { c.set_first_dummy_index_ordinal(200); }));
     CHECK(!changes([](Context& c) { c.set(BraKetTypesetting::KetSub); }));
     CHECK(!changes([](Context& c) { c.set(BraKetSlotTypesetting::Naive); }));
+    CHECK(!changes([](Context& c) {
+      c.set(PrintOptions{.ordering = LexicographicCompareOptions{}});
+    }));
     CHECK(!changes([](Context& c) { c.set(Symmetry::Symm); }));
     CHECK(!changes([](Context& c) { c.set(Hermiticity::Hermitian); }));
     CHECK(!changes([](Context& c) { c.set(ColumnSymmetry::Symm); }));
