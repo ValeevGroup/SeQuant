@@ -66,6 +66,14 @@ std::vector<std::wstring> cardinal_tensor_labels() {
           L"E"};
 }
 
+PrettifyOptions prettify_options() {
+  const auto labels = cardinal_tensor_labels();
+  return PrettifyOptions{
+      .presentation = {
+          .cardinal_tensor_labels =
+              container::vector<std::wstring>(labels.begin(), labels.end())}};
+}
+
 namespace {
 
 /// Builds the quantum numbers of an operator with up to @p particle_rank
