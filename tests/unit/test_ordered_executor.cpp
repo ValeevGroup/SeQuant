@@ -5715,3 +5715,39 @@ TEST_CASE("record_dag prices values when given a cost model",
               c.carried.begin(), c.carried.end())));
   }
 }
+
+TEST_CASE("ordered run record tracks the realized peak and its live set",
+          "[ordered-executor][schedule-document]") {
+  namespace sched = sequant::eval::schedule;
+  std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b - c"),
+                                 scalar_tree(L"a * a + 3 * b - 2 * c")};
+  ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
+  sequant::BatchPolicy const policy;
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  auto const block_of = [](Index const&) -> std::size_t { return 1; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+  auto cache = sequant::CacheManager<ScalarNode>::empty();
+  std::function<std::size_t(Index const&)> const target =
+      [](Index const&) -> std::size_t { return 1; };
+  sched::RunRecord run;
+  std::function<std::string(std::size_t)> const id_of = [](std::size_t v) {
+    return "v" + std::to_string(v);
+  };
+  (void)sequant::eval::evaluate_ordered_multiroot(
+      forest, ordered, rich,
+      sequant::container::svector<std::string>(forest.size()), yield, cache,
+      target, sequant::make_no_scope_guard{}, {}, &run, id_of);
+  // every production of a scalar leaves sizeof(double) bytes
+  REQUIRE(!run.footprint.empty());
+  for (auto const& [id, bytes] : run.footprint) CHECK(bytes == sizeof(double));
+  // the peak is at least one scalar and at most all values at once
+  CHECK(run.peak_bytes >= sizeof(double));
+  CHECK(run.peak_bytes <= sizeof(double) * rich.cells.size());
+  REQUIRE(!run.peak_live.empty());
+  CHECK(run.peak_live.size() * sizeof(double) == run.peak_bytes);
+  for (auto const& id : run.peak_live) CHECK(run.footprint.count(id) == 1);
+}
