@@ -545,8 +545,8 @@ template <typename ValueMap, typename Rich>
 ///   registry's own \c set charges \c size_in_bytes, 0 untraced, so the
 ///   peak is tracked exactly when a run is recorded);
 /// - \c peak_live: the value ids alive when that high-water was last raised.
-/// A leaf's first fetch counts as one build of the leaf's value and is
-/// measured like a production (CellReadResolver::on_leaf_recorded).
+/// A leaf's fetch is measured like a production but recorded apart, in
+/// \c leaf_bytes (CellReadResolver::on_leaf_recorded): it is not a build.
 /// \c extents, \c batch_targets and \c planner are the caller's.
 ///
 /// \p value_id_of maps an engine value id (an index into \c rich.cells) to
@@ -589,6 +589,18 @@ struct OrderedRunRecorder {
     std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
     std::size_t const bytes = r->measured_size_in_bytes();
     run.size[id] = bytes;
+    return bytes;
+  }
+
+  /// A leaf's result as the resolver fetched it: measured like a production
+  /// but kept apart (RunRecord::leaf_bytes), since a fetch is not a build.
+  /// \return the bytes measured for \p r (0 for a null result)
+  std::size_t leaf(std::size_t vid, ResultPtr const& r) {
+    if (!r) return 0;
+    std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
+    std::size_t const bytes = r->measured_size_in_bytes();
+    auto& f = run.leaf_bytes[id];
+    f = std::max(f, bytes);
     return bytes;
   }
 
@@ -1386,7 +1398,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   if (recorder)
     resolver.on_leaf_recorded = [&registry, &recorder](std::size_t vid,
                                                        CellId leaf) {
-      registry.recharge(leaf, recorder->built(vid, registry.peek(leaf)));
+      registry.recharge(leaf, recorder->leaf(vid, registry.peek(leaf)));
     };
   struct CellReadResolverGuard {
     CacheManager<N, FHC>& c;

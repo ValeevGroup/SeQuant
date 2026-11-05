@@ -5749,5 +5749,13 @@ TEST_CASE("ordered run record tracks the realized peak and its live set",
   CHECK(run.peak_bytes <= sizeof(double) * rich.cells.size());
   REQUIRE(!run.peak_live.empty());
   CHECK(run.peak_live.size() * sizeof(double) == run.peak_bytes);
-  for (auto const& id : run.peak_live) CHECK(run.footprint.count(id) == 1);
+  // every live value is either a recorded production or a fetched leaf
+  for (auto const& id : run.peak_live)
+    CHECK(run.footprint.count(id) + run.leaf_bytes.count(id) == 1);
+  // the leaves a, b, c were fetched and measured, never built
+  REQUIRE(!run.leaf_bytes.empty());
+  for (auto const& [id, bytes] : run.leaf_bytes) {
+    CHECK(bytes == sizeof(double));
+    CHECK(run.builds.count(id) == 0);
+  }
 }

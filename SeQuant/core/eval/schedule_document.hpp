@@ -226,6 +226,10 @@ struct RunRecord {
   std::size_t peak_bytes = 0;
   /// value ids alive in the registry when peak_bytes was reached
   std::vector<std::string> peak_live;
+  /// value id -> bytes of a leaf as the executor fetched it (the largest
+  /// form, when it was fetched more than once); leaves are not productions,
+  /// so they appear here and never in builds / footprint / size
+  std::map<std::string, std::size_t> leaf_bytes;
   /// optimizer settings excluded from the fingerprint
   std::map<std::string, std::string> planner;
 };
@@ -270,6 +274,18 @@ std::vector<Difference> compare(Document const& a, Document const& b);
 /// "-" when the document has no `dag` section. depth = the deepest nesting of
 /// the block tree (number of ancestors of a block), not BlockRecord::depth
 std::string summary_line(Document const&);
+
+/// The size audit: one row per dag value, ranked by realized bytes
+/// (RunRecord::footprint), with the modeled slab (ValueRecord::
+/// modeled_footprint), the modeled full size, the realized full size, the
+/// build count and the realized/modeled slab ratio; then the modeled
+/// combined peak (an interval sweep of modeled_footprint over
+/// [first_use, last_use]) with its live value ids, and the realized peak
+/// (RunRecord::peak_bytes) with its live ids. Rows for values the run never
+/// produced print 0 realized. Byte columns print as "<n> B" below 1e6 and in
+/// MB/GB above; the ratio with two decimals.
+/// \throws Exception when the document has no dag or run section
+std::string size_audit_table(Document const& doc);
 
 }  // namespace sequant::eval::schedule
 
