@@ -41,13 +41,11 @@ SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
 namespace {
 
-auto scoped_min_sr_context(CanonicalizeOptions canonicalization_options =
-                               CanonicalizeOptions::default_options()) {
+auto scoped_min_sr_context() {
   return set_scoped_default_context(
       Context({.index_basis_registry_shared_ptr = mbpt::make_min_sr_spaces(),
                .vacuum = Vacuum::SingleProduct,
-               .spbasis = SPBasis::Spinor,
-               .canonicalization_options = canonicalization_options}));
+               .spbasis = SPBasis::Spinor}));
 }
 
 // μ̃ = {a, INT32_MAX} registered by name: the PAO basis of ibr-spec.md §3.3
@@ -320,9 +318,7 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
 
 TEST_CASE("index-basis-canonicalization", "[algorithms][canonicalize][basis]") {
   SECTION("CCSD R1 term with a standing overlap") {
-    auto ctx = scoped_min_sr_context(
-        CanonicalizeOptions::default_options().copy_and_set(
-            CanonicalizationMethod::Complete));
+    auto ctx = scoped_min_sr_context();
     const auto& ibr = get_default_context().index_basis_registry();
     const IndexSpace occ = ibr->retrieve_space(L"i");
     const IndexSpace uocc = ibr->retrieve_space(L"a");

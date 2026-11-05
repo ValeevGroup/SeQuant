@@ -76,7 +76,7 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
   // each index occurs once and is named; ordering by their labels makes equal
   // products canonicalize identically, so that summand_exists finds the
   // repeats
-  const auto canon_opts = CanonicalizeOptions::default_options().copy_and_set(
+  const auto canon_opts = CanonicalizeOptions{}.copy_and_set(
       CanonicalizeOptions::IgnoreNamedIndexLabel::No);
   for (int i = 0; i < unique_bras_list.size(); i++) {
     for (int j = 0; j < unique_kets_list.size(); j++) {  // product level

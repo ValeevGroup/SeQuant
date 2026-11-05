@@ -47,8 +47,6 @@ namespace sequant {
 /// - `first_dummy_index_ordinal`: during its operation SeQuant will generate
 ///    temporary indices with orbitals greater or equal to this; to avoid
 ///    duplicates user Index objects should have ordinals smaller than this
-/// - `canonicalization_options`: if set, this specifies the default options to
-///    use for canonicalization of expressions.
 /// - `braket_typesetting`: whether `to_latex()` typesets tensor indices of ket
 ///    (covariant, primal) modes as superscript (`BraKetTypesetting::KetSuper`,
 ///    default)
@@ -59,26 +57,12 @@ namespace sequant {
 ///   `tensor` LaTeX package (`BraKetSlotTypesetting::TensorPackage`, default)
 ///   or native typesetting (`BraKetSlotTypesetting::Naive`); the former is
 ///   preferred for alignment of superscript with subscript slots.
-/// - `tensor_canonicalizers`: the TensorCanonicalizer objects applied to
-///   tensors, keyed by tensor label; the one keyed by the empty label applies
-///   to tensors without a label-specific canonicalizer. The canonicalizer
-///   objects are shared by copies of the context and must not be mutated.
-///   The empty label maps to a DefaultTensorCanonicalizer unless a map given
-///   to the constructor sets it; unset_tensor_canonicalizer() can remove it.
-/// - `index_comparer`, `index_pair_comparer`: the objects that order Index
-///   objects (and pairs thereof) during tensor canonicalization; default to
-///   TensorCanonicalizer::default_index_comparer() and
-///   TensorCanonicalizer::default_index_pair_comparer().
-/// - `cardinal_tensor_labels`: Tensor labels with lexicographic preference
-///   (in order); default to `{reserved::antisymm_label(),
-///   reserved::symm_label(), reserved::transposition_label()}`.
 ///
-/// @note canonicalization reads `tensor_canonicalizers`, `index_comparer`,
-///   `index_pair_comparer` and `cardinal_tensor_labels` only from the default
-///   context for Statistics::Arbitrary; in a context installed for another
-///   Statistics they are currently ignored, but keep them identical to those
-///   of the Statistics::Arbitrary context, since a future version may consult
-///   the statistics-specific context first
+/// @note the context holds no canonicalization settings: canonicalization
+///   produces the library's canonical form, which depends on the context only
+///   through the index basis registry (the order of index spaces) and the SP
+///   basis (the symmetry of NormalOperator); other forms are requested
+///   explicitly (see CanonicalizationPresentation)
 // clang-format off
 class Context {
  public:
@@ -118,8 +102,6 @@ class Context {
       SPBasis spbasis = Defaults::spbasis;
       /// the first dummy index ordinal
       std::size_t first_dummy_index_ordinal = Defaults::first_dummy_index_ordinal;
-      /// the default canonicalization options
-      std::optional<CanonicalizeOptions> canonicalization_options = std::nullopt;
       /// the BraKetTypesetting object
       BraKetTypesetting braket_typesetting = Defaults::braket_typesetting;
       /// the BraKetSlotTypesetting object
@@ -135,14 +117,6 @@ class Context {
       /// deserialized tensors
       ColumnSymmetry deserialization_column_symmetry =
         Defaults::deserialization_column_symmetry;
-      /// label -> TensorCanonicalizer map, without null entries; the empty label maps to a DefaultTensorCanonicalizer unless given
-      std::optional<container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>> tensor_canonicalizers = std::nullopt;
-      /// the Index comparer used by tensor canonicalizers; if not set, TensorCanonicalizer::default_index_comparer()
-      std::optional<tensor_index_comparer_t> index_comparer = std::nullopt;
-      /// the Index pair comparer used by tensor canonicalizers; if not set, TensorCanonicalizer::default_index_pair_comparer()
-      std::optional<tensor_index_pair_comparer_t> index_pair_comparer = std::nullopt;
-      /// the cardinal Tensor labels; if not set, the reserved labels
-      std::optional<container::vector<std::wstring>> cardinal_tensor_labels = std::nullopt;
   };
   static Options make_default_options() { return {}; }
 
@@ -170,21 +144,16 @@ class Context {
   Context& operator=(const Context& ctx) = default;
 
   // no move operations, so that an rvalue is copied: a copy is cheap (it
-  // shares the registry and the canonicalizer configuration), and a moved-from
-  // Context would lack them
+  // shares the registry), and a moved-from Context would lack it
 
-  /// @return the version of this context's canonicalization configuration: a
-  /// nonzero number that two contexts share if and only if canonicalization
-  /// sees the same configuration in both, i.e. they have the same index space
-  /// registry, tensor canonicalizers and index comparers (the same objects),
-  /// cardinal tensor labels, canonicalization options and SP basis (which
-  /// determines the symmetry of NormalOperator); a number is never reused for
-  /// another configuration
+  /// @return the version of what canonicalization reads from this context: a
+  /// nonzero number that two contexts share if and only if they have the same
+  /// index basis registry (the same object) and SP basis (which determines the
+  /// symmetry of NormalOperator); a number is never reused for another
+  /// configuration
   /// @note the other settings (vacuum, first dummy index ordinal,
   /// typesetting, deserialization defaults, strict bra-ket checks) do not
   /// affect the version
-  /// @note the version does not track in-place mutation of a
-  /// TensorCanonicalizer or comparer object that this context refers to
   std::uint64_t version() const;
 
   /// \return Vacuum of this context
@@ -214,8 +183,6 @@ class Context {
   /// \return first ordinal of the dummy indices generated by calls to
   /// Index::next_tmp_index when this context is active
   std::size_t first_dummy_index_ordinal() const;
-  /// \return canonicalization options to use by default, if nonnull
-  std::optional<CanonicalizeOptions> canonicalization_options() const;
   /// \return BraKetTypesetting of this context; if this returns
   /// BraKetTypesetting::ContraSub covariant (ket, creation) and contravariant
   /// (bra, annihilation) indices are typeset in superscript and subscript
@@ -234,40 +201,6 @@ class Context {
   /// \return the default ColumnSymmetry (particle-permutation symmetry) for
   /// deserialized tensors; programmatic Tensor construction is unaffected by it
   ColumnSymmetry deserialization_column_symmetry() const;
-  /// @param label a Tensor label
-  /// @return the TensorCanonicalizer for @p label if any, else the one for
-  /// the empty label; null if neither exists
-  std::shared_ptr<TensorCanonicalizer> tensor_canonicalizer_ptr(
-      std::wstring_view label) const;
-  /// @param label a Tensor label
-  /// @return the TensorCanonicalizer for exactly @p label, or null
-  /// @sa tensor_canonicalizer_ptr
-  std::shared_ptr<TensorCanonicalizer> nondefault_tensor_canonicalizer_ptr(
-      std::wstring_view label) const;
-  /// @param label a Tensor label
-  /// @return the TensorCanonicalizer that `tensor_canonicalizer_ptr(label)`
-  /// points to
-  /// @throw Exception if `tensor_canonicalizer_ptr(label)` is null
-  /// @warning the reference is valid only while the map entry that holds it
-  /// exists in this context; use tensor_canonicalizer_ptr() if this context
-  /// may change
-  const TensorCanonicalizer& tensor_canonicalizer(
-      std::wstring_view label) const;
-  /// \return the object used by tensor canonicalizers to compare Index objects
-  const tensor_index_comparer_t& index_comparer() const;
-  /// \return the object used by tensor canonicalizers to compare pairs of
-  /// Index objects
-  const tensor_index_pair_comparer_t& index_pair_comparer() const;
-  /// \return the shared object that index_comparer() refers to; passing it to
-  /// set_index_comparer() keeps the context equal to its unmodified copies
-  std::shared_ptr<const tensor_index_comparer_t> index_comparer_ptr() const;
-  /// \return the shared object that index_pair_comparer() refers to; passing
-  /// it to set_index_pair_comparer() keeps the context equal to its
-  /// unmodified copies
-  std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer_ptr()
-      const;
-  /// \return Tensor labels with lexicographic preference (in order)
-  const container::vector<std::wstring>& cardinal_tensor_labels() const;
 
   /// Sets the Vacuum for this context, convenient for chaining
   /// \param vacuum Vacuum
@@ -303,9 +236,6 @@ class Context {
   /// chaining \param first_dummy_index_ordinal the first dummy index ordinal
   /// \return ref to `*this`, for chaining
   Context& set_first_dummy_index_ordinal(std::size_t first_dummy_index_ordinal);
-  /// Specifies the canonicalization options
-  /// \return ref to `*this`, for chaining
-  Context& set(CanonicalizeOptions copt);
   /// Sets the BraKetTypesetting for this context, convenient for chaining
   /// \param braket_typeset BraKetTypesetting
   /// \return ref to `*this`, for chaining
@@ -324,81 +254,10 @@ class Context {
   /// Sets the default ColumnSymmetry for deserialized tensors
   /// \return ref to `*this`, for chaining
   Context& set(ColumnSymmetry column_symmetry);
-  /// Sets the TensorCanonicalizer for Tensor objects labeled @p label ,
-  /// replacing the existing one, if any; the empty label applies to Tensor
-  /// objects without a label-specific canonicalizer
-  /// \param canonicalizer a nonnull TensorCanonicalizer
-  /// \throw Exception if @p canonicalizer is null
-  /// \return ref to `*this`, for chaining
-  /// \warning version() identifies the canonicalizer by the object the
-  /// shared_ptr owns, so a shared_ptr that does not own its object (e.g. one
-  /// with a no-op deleter) makes the version change when the shared_ptr, not
-  /// the object, dies
-  Context& set_tensor_canonicalizer(
-      std::wstring_view label, std::shared_ptr<TensorCanonicalizer> canonicalizer);
-  /// Removes the TensorCanonicalizer for @p label , if any
-  /// \return ref to `*this`, for chaining
-  Context& unset_tensor_canonicalizer(std::wstring_view label);
-  /// Sets the Index comparer used by tensor canonicalizers
-  /// \param comparer a nonempty Index comparer
-  /// \return ref to `*this`, for chaining
-  Context& set_index_comparer(tensor_index_comparer_t comparer);
-  /// Sets the Index comparer used by tensor canonicalizers to a shared object
-  /// \param comparer a nonnull pointer to a nonempty Index comparer, e.g.
-  /// one obtained from index_comparer_ptr()
-  /// \return ref to `*this`, for chaining
-  /// \warning see the warning of set_tensor_canonicalizer() about a
-  /// shared_ptr that does not own its object
-  Context& set_index_comparer(
-      std::shared_ptr<const tensor_index_comparer_t> comparer);
-  /// Sets the Index pair comparer used by tensor canonicalizers
-  /// \param comparer a nonempty Index pair comparer
-  /// \return ref to `*this`, for chaining
-  Context& set_index_pair_comparer(tensor_index_pair_comparer_t comparer);
-  /// Sets the Index pair comparer used by tensor canonicalizers to a shared
-  /// object
-  /// \param comparer a nonnull pointer to a nonempty Index pair comparer,
-  /// e.g. one obtained from index_pair_comparer_ptr()
-  /// \return ref to `*this`, for chaining
-  /// \warning see the warning of set_tensor_canonicalizer() about a
-  /// shared_ptr that does not own its object
-  Context& set_index_pair_comparer(
-      std::shared_ptr<const tensor_index_pair_comparer_t> comparer);
-  /// Sets the cardinal Tensor labels
-  /// \param labels the complete list of cardinal labels, without duplicates;
-  /// the default labels (reserved::antisymm_label(), reserved::symm_label(),
-  /// reserved::transposition_label()) are not prepended, so include them where
-  /// they should keep their precedence (mbpt::cardinal_tensor_labels() returns
-  /// such a complete list)
-  /// \return ref to `*this`, for chaining
-  Context& set_cardinal_tensor_labels(container::vector<std::wstring> labels);
 
  private:
-  /// the settings that control canonicalization (which also reads the index
-  /// space registry and the SP basis, settings not specific to it); these, the
-  /// registry and the SP basis define version(), so a setting that
-  /// canonicalization comes to read belongs here, and in the key of the
-  /// version table (CanonicalizationKey in context.cpp) that mirrors this;
-  /// comparers are held by shared_ptr so that equality can be decided by
-  /// identity
-  struct CanonicalizationConfig {
-    container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
-        tensor_canonicalizers;
-    std::shared_ptr<const tensor_index_comparer_t> index_comparer;
-    std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer;
-    container::vector<std::wstring> cardinal_labels;
-    std::optional<CanonicalizeOptions> options;
-
-    /// canonicalizers and comparers compare by identity, labels and options
-    /// by value
-    bool operator==(const CanonicalizationConfig&) const = default;
-  };
-
   friend bool operator==(const Context& ctx1, const Context& ctx2);
 
-  /// replaces the canonicalization configuration by a copy owned by this
-  /// @return the copy, for the caller to modify
-  CanonicalizationConfig& mutable_canonicalization_config();
 
   /// marks the cached version stale, to be recomputed by the next version()
   void invalidate_version();
@@ -432,21 +291,15 @@ class Context {
       Defaults::deserialization_hermiticity;
   ColumnSymmetry deserialization_column_symmetry_ =
       Defaults::deserialization_column_symmetry;
-  /// shared by copies of this context, hence never mutated in place
-  std::shared_ptr<const CanonicalizationConfig> canonicalization_config_;
 };
 
 /// Context object equality comparison
 /// \param ctx1
 /// \param ctx2
 /// \return true if \p ctx1 and \p ctx2 are equal
-/// \note index basis registries and cardinal tensor labels are compared by
-/// value (contexts without a registry are equal in that respect), the
-/// registries including the dimensions and fields of their spaces;
-/// tensor canonicalizers and index comparers by identity, hence
-/// a comparer replaced by a behaviourally identical one compares unequal
-/// (re-install a comparer through its shared pointer, e.g.
-/// Context::index_comparer_ptr(), to keep contexts equal)
+/// \note index basis registries are compared by value (contexts without a
+/// registry are equal in that respect), including the dimensions and fields of
+/// their spaces
 /// \note the versions of the contexts are ignored, and equal contexts may
 /// have different ones: Context::version() compares index basis registries as
 /// objects, not by value

@@ -145,9 +145,6 @@ inline sequant::Context csv_cc_context(
   return Context({.index_basis_registry_shared_ptr = std::move(ibr),
                   .vacuum = Vacuum::SingleProduct,
                   .spbasis = SPBasis::Spinor,
-                  .canonicalization_options =
-                      CanonicalizeOptions::default_options().copy_and_set(
-                          CanonicalizationMethod::Complete),
                   .deserialization_column_symmetry = ColumnSymmetry::Symm});
 }
 

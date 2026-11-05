@@ -604,8 +604,7 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
   // hash filtering logic for R > 2
   container::map<std::size_t, container::vector<ExprPtr>> largest_coeff_terms;
 
-  const auto ctx = get_default_context_snapshot();
-  const auto& cardinal_tensor_labels = ctx.cardinal_tensor_labels();
+  const auto& cardinal_tensor_labels = default_cardinal_tensor_labels();
   const NamedIndexSpec external_indices =
       explicit_named_indices(flatten_index_groups(ext_idxs));
   for (const auto& term : *expr) {

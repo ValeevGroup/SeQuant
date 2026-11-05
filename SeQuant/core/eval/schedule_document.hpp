@@ -97,16 +97,11 @@ struct RootRecord {
   std::vector<TermRecord> terms;
 };
 
-/// the Context settings a term key depends on (see opt::schedule::term_key)
+/// the Context settings a term key depends on (see opt::schedule::term_key);
+/// the canonical form itself is the library's and depends on no setting
 struct ContextRecord {
   std::string vacuum, spbasis;
   bool strict_braket_symmetry = false;
-  std::vector<std::string> cardinal_tensor_labels;
-  /// CanonicalizeOptions::method, as to_wstring spells it, and
-  /// CanonicalizeOptions::ignore_named_index_labels, of the Context's
-  /// canonicalization options (the defaults when it sets none)
-  std::string canonicalization_method;
-  bool ignore_named_index_labels = false;
 };
 
 struct Fingerprint {

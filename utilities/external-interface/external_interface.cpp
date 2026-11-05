@@ -1,6 +1,7 @@
 #include "executor.hpp"
 #include "json_include.hpp"
 #include "processing.hpp"
+#include "sort_step.hpp"
 #include "template_expansion.hpp"
 #include "utils.hpp"
 
@@ -196,7 +197,7 @@ ExportNode<> prepareForExport(ResultExpr &result,
                               const ExportOptions &opts) {
   // use an order that does not depend on the hashing algorithm, to make the
   // generated code reproducible
-  sort_expr(result);
+  sort_expr(result, export_order());
 
   ExportNode<> tree = to_export_tree(result);
 
@@ -691,13 +692,6 @@ int main(int argc, char **argv) {
   set_locale();
   Context ctx({.index_basis_registry = IndexBasisRegistry(),
                .vacuum = Vacuum::SingleProduct});
-  // TODO: This only hides a bug/issue in the processing code where SeQuant
-  // assumes that it is okay to freely rename external indices while
-  // canonicalizing an expression. However, this breaks down as soon as those
-  // indices are tracked externally (e.g. ResultExpr) as those won't get updated
-  // to use the new names.
-  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
-  ctx.set_cardinal_tensor_labels(mbpt::cardinal_tensor_labels());
   set_default_context(ctx);
 
   CLI::App app(

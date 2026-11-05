@@ -925,7 +925,7 @@ CanonicalizeOptions WickTheorem<S>::nop_preserving_canonicalize_options() {
     return std::make_shared<const CanonicalizationPresentation>(
         std::move(result));
   }();
-  return CanonicalizeOptions::default_options().copy_and_set(presentation);
+  return CanonicalizeOptions{}.copy_and_set(presentation);
 }
 
 template <Statistics S>

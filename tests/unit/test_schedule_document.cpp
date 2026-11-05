@@ -1377,7 +1377,8 @@ TEST_CASE("fingerprint captures DAG-shaping inputs and nothing size-dependent",
   REQUIRE(fp.batchable.size() == 2);  // exactly the bases present
   REQUIRE(fp.context.strict_braket_symmetry ==
           sequant::get_default_context().assert_strict_braket_symmetry());
-  REQUIRE(!fp.context.canonicalization_method.empty());
+  REQUIRE(!fp.context.vacuum.empty());
+  REQUIRE(!fp.context.spbasis.empty());
 
   auto opts2 = opts;
   opts2.idx_to_extent = [](sequant::Index const&) -> std::size_t { return 3; };
@@ -1440,15 +1441,14 @@ TEST_CASE("check_fingerprint names every differing field",
   b.persistent_only = !a.persistent_only;
   b.mode_order = {"i"};
   b.batchable["a"] = {false, true};
-  b.context.canonicalization_method = "other";
-  b.context.ignore_named_index_labels = !a.context.ignore_named_index_labels;
-  REQUIRE_THROWS_WITH(
-      check_fingerprint(a, b),
-      ContainsSubstring("fingerprint.persistent_only") &&
-          ContainsSubstring("fingerprint.mode_order") &&
-          ContainsSubstring("fingerprint.batchable.a") &&
-          ContainsSubstring("fingerprint.context.canonicalization_method") &&
-          ContainsSubstring("fingerprint.context.ignore_named_index_labels"));
+  b.context.vacuum = "other";
+  b.context.spbasis = "other";
+  REQUIRE_THROWS_WITH(check_fingerprint(a, b),
+                      ContainsSubstring("fingerprint.persistent_only") &&
+                          ContainsSubstring("fingerprint.mode_order") &&
+                          ContainsSubstring("fingerprint.batchable.a") &&
+                          ContainsSubstring("fingerprint.context.vacuum") &&
+                          ContainsSubstring("fingerprint.context.spbasis"));
 
   // a different Context makes the live fingerprint differ
   auto ctx = sequant::get_default_context_snapshot();

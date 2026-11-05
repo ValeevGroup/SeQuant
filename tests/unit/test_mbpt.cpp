@@ -1172,10 +1172,6 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
     }  // SECTION("lst")
 
     SECTION("predefined") {
-      // P.S. ref outputs produced with complete canonicalization
-      auto ctx = get_default_context();
-      ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
-      auto _ = set_scoped_default_context(ctx);
       using namespace sequant::mbpt;
 
       auto theta1 = θ(1)->as<op_t>();
@@ -1727,10 +1723,7 @@ SECTION("MRSO") {
                          BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
               fcrex(p) * fannx(q);
     ExprPtr result;
-    const auto* index_comparer = &get_default_context().index_comparer();
     REQUIRE_NOTHROW(result = t::ref_av(H1, deduce_named_indices));
-    // the active-first comparer is scoped to ref_av
-    CHECK(&get_default_context().index_comparer() == index_comparer);
     REQUIRE_THAT(result, EquivalentTo(L"h{O_1;O_1}:N-C-S + "
                                       L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
   }
@@ -2636,13 +2629,8 @@ SECTION("rdm-decomposition symmetries") {
   REQUIRE(kappa2->as<Tensor>().ket()[0] == Index(L"i_1"));
   REQUIRE(kappa2->as<Tensor>().ket()[1] == Index(L"i_2"));
   REQUIRE(*deserialize(L"κ{i_3,i_4;i_1,i_2}") == *kappa2);
-  // antisymmetrize() generates each distinct pairing once, also under the
-  // topological canonicalization that the test suite defaults to
+  // antisymmetrize() generates each distinct pairing once
   {
-    auto ctx = get_default_context();
-    ctx.set(CanonicalizeOptions::default_options().copy_and_set(
-        CanonicalizationMethod::Topological));
-    auto topological = set_scoped_default_context(ctx);
     const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3"), i4(L"i_4");
     const auto kappa = density::make_cumulant(bra{i1, i3}, ket{i2, i4});
     const auto expected =

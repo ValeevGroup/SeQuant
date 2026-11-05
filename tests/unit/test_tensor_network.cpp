@@ -1070,16 +1070,20 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         return ex<Tensor>(L"Q", bra(b), ket(k), Symmetry::Antisymm);
       };
       // canonical form of Q{i_2,i_1;a_1,a_2} and the phase relating the two
-      auto canonicalized = [&Q] {
-        TN tn({Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"})});
-        const auto byproduct = tn.canonicalize(
-            mbpt::cardinal_tensor_labels(), deduce_named_indices,
-            {.method = CanonicalizationMethod::Complete});
-        const int phase =
-            byproduct ? byproduct->as<Constant>().value<int>() : 1;
-        return std::make_pair(
-            std::dynamic_pointer_cast<Expr>(tn.tensors().at(0)), phase);
-      };
+      auto canonicalized =
+          [&Q](
+              std::shared_ptr<const CanonicalizationPresentation> presentation =
+                  nullptr) {
+            TN tn({Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"})});
+            const auto byproduct = tn.canonicalize(
+                mbpt::cardinal_tensor_labels(), deduce_named_indices,
+                {.method = CanonicalizationMethod::Complete,
+                 .presentation = std::move(presentation)});
+            const int phase =
+                byproduct ? byproduct->as<Constant>().value<int>() : 1;
+            return std::make_pair(
+                std::dynamic_pointer_cast<Expr>(tn.tensors().at(0)), phase);
+          };
 
       // the default canonicalizer sorts the bra and the ket of Q
       {
@@ -1088,9 +1092,9 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         REQUIRE(phase == -1);
       }
 
-      // one registered for label Q is used instead; with one that leaves Q as
-      // is the graph-based pass alone determines the slot order, which places
-      // the named indices in label order
+      // one given for label Q (in the presentation options) is used instead;
+      // with one that leaves Q as is the graph-based pass alone determines the
+      // slot order, which places the named indices in label order
       {
         // a canonicalizer registered for label Q, which leaves Q as is and
         // counts its uses
@@ -1102,10 +1106,10 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
           }
         };
         const auto counting = std::make_shared<CountingCanonicalizer>();
-        auto scoped = set_scoped_default_context(
-            Context(get_default_context())
-                .set_tensor_canonicalizer(L"Q", counting));
-        const auto [tensor, phase] = canonicalized();
+        const auto [tensor, phase] =
+            canonicalized(std::make_shared<CanonicalizationPresentation>(
+                CanonicalizationPresentation{
+                    .tensor_canonicalizers = {{L"Q", counting}}}));
         REQUIRE(*counting->calls > 0);
         REQUIRE(*tensor == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
         REQUIRE(phase == -1);

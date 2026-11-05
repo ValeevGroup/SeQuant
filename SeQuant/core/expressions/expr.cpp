@@ -32,13 +32,6 @@
 
 namespace sequant {
 
-LexicographicCompareOptions
-LexicographicCompareOptions::from_default_context() {
-  return LexicographicCompareOptions{
-      .cardinal_tensor_labels =
-          get_default_context_snapshot().cardinal_tensor_labels()};
-}
-
 std::size_t LexicographicCompareOptions::cardinal_position(
     std::wstring_view label) const {
   label = strip_adjoint_label(label);
@@ -56,8 +49,7 @@ std::weak_ordering Expr::lexicographic_compare(
 }
 
 std::weak_ordering Expr::lexicographic_compare(const Expr &that) const {
-  return lexicographic_compare(
-      that, LexicographicCompareOptions::from_default_context());
+  return lexicographic_compare(that, LexicographicCompareOptions{});
 }
 
 ExprIterator Expr::begin() { return begin_subexpr(); }

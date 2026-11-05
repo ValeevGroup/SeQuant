@@ -169,7 +169,6 @@ struct CanonicalizeOptions {
   /// have no presentation settings
   bool is_internal_form() const { return presentation == nullptr; }
 
-  static CanonicalizeOptions default_options();
   CanonicalizeOptions copy_and_set(CanonicalizationMethod) const;
   CanonicalizeOptions copy_and_set(IgnoreNamedIndexLabel) const;
   CanonicalizeOptions copy_and_set(

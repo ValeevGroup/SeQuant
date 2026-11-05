@@ -177,9 +177,8 @@ ResultExpr& rapid_simplify(ResultExpr& expr);
 /// @p expr); see NamedIndexSpec
 /// @param[in] opts the canonicalization options
 /// @return \p expr to facilitate chaining
-ExprPtr& canonicalize(
-    ExprPtr& expr, const NamedIndexSpec& named_indices,
-    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
+ExprPtr& canonicalize(ExprPtr& expr, const NamedIndexSpec& named_indices,
+                      const CanonicalizeOptions& opts = CanonicalizeOptions{});
 
 /// Recursively canonicalizes an Expr; like mutating canonicalize() but works
 /// for temporary expressions
@@ -187,9 +186,8 @@ ExprPtr& canonicalize(
 /// @param[in] named_indices the indices that canonicalization must not rename
 /// @param[in] opts the canonicalization options
 /// @return canonicalized form of \p expr_rv
-ExprPtr canonicalize(
-    ExprPtr&& expr_rv, const NamedIndexSpec& named_indices,
-    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
+ExprPtr canonicalize(ExprPtr&& expr_rv, const NamedIndexSpec& named_indices,
+                     const CanonicalizeOptions& opts = CanonicalizeOptions{});
 
 /// @return the named indices of @p expr : the indices of its result
 NamedIndexSpec named_indices(const ResultExpr& expr);
@@ -200,8 +198,7 @@ NamedIndexSpec named_indices(const ResultExpr& expr);
 /// @param[in] opts the canonicalization options
 /// @return \p expr to facilitate chaining
 ResultExpr& canonicalize(
-    ResultExpr& expr,
-    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
+    ResultExpr& expr, const CanonicalizeOptions& opts = CanonicalizeOptions{});
 
 /// Recursively canonicalizes the expression of a ResultExpr; like mutating
 /// canonicalize() but works for temporary expressions
@@ -209,8 +206,7 @@ ResultExpr& canonicalize(
 /// @param[in] opts the canonicalization options
 /// @return \p expr
 [[nodiscard]] ResultExpr& canonicalize(
-    ResultExpr&& expr,
-    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
+    ResultExpr&& expr, const CanonicalizeOptions& opts = CanonicalizeOptions{});
 
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify
@@ -222,9 +218,8 @@ ResultExpr& canonicalize(
 /// canonical form (`opts.is_internal_form()`)
 /// @sa rapid_simplify()
 /// @return \p expr to facilitate chaining
-ExprPtr& simplify(
-    ExprPtr& expr, const NamedIndexSpec& named_indices,
-    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
+ExprPtr& simplify(ExprPtr& expr, const NamedIndexSpec& named_indices,
+                  const CanonicalizeOptions& opts = CanonicalizeOptions{});
 
 /// Simplifies an Expr like simplify(ExprPtr&, ...), but works for temporary
 /// expressions
@@ -232,18 +227,16 @@ ExprPtr& simplify(
 /// @param[in] named_indices the indices that canonicalization must not rename
 /// @param[in] opts the canonicalization options
 /// @return simplified form of \p expr_rv
-ExprPtr simplify(
-    ExprPtr&& expr_rv, const NamedIndexSpec& named_indices,
-    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
+ExprPtr simplify(ExprPtr&& expr_rv, const NamedIndexSpec& named_indices,
+                 const CanonicalizeOptions& opts = CanonicalizeOptions{});
 
 /// Simplifies the expression of a ResultExpr, with the indices of the result
 /// as the named indices
 /// @param[in,out] expr expression to be simplified
 /// @param[in] opts the canonicalization options
 /// @return \p expr to facilitate chaining
-ResultExpr& simplify(
-    ResultExpr& expr,
-    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
+ResultExpr& simplify(ResultExpr& expr,
+                     const CanonicalizeOptions& opts = CanonicalizeOptions{});
 
 /// Simplifies the expression of a ResultExpr; like mutating simplify() but
 /// works for temporary expressions
@@ -251,8 +244,7 @@ ResultExpr& simplify(
 /// @param[in] opts the canonicalization options
 /// @return \p expr
 [[nodiscard]] ResultExpr& simplify(
-    ResultExpr&& expr,
-    const CanonicalizeOptions& opts = CanonicalizeOptions::default_options());
+    ResultExpr&& expr, const CanonicalizeOptions& opts = CanonicalizeOptions{});
 
 /// Simplifies an Expr by a combination of expansion and
 /// rapid_simplify

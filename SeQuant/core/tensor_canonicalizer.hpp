@@ -21,8 +21,9 @@
 namespace sequant {
 
 /// @brief Base class for Tensor canonicalizers
-/// To make custom canonicalizer make a derived class and install an instance
-/// of that class in a Context (see Context::set_tensor_canonicalizer())
+/// To make a custom canonicalizer make a derived class and pass an instance of
+/// that class explicitly, via
+/// CanonicalizationPresentation::tensor_canonicalizers
 class TensorCanonicalizer {
  public:
   using index_comparer_t = tensor_index_comparer_t;

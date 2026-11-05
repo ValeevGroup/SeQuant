@@ -54,10 +54,6 @@ TEST_CASE("spin", "[spin]") {
   using IdxGroupList = container::svector<container::svector<Index>>;
 
   // P.S. ref outputs produced with complete canonicalization
-  auto ctx = get_default_context();
-  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
-  auto _ = set_scoped_default_context(ctx);
-
   SECTION("protoindices supported") {
     auto ibr = get_default_context().index_basis_registry();
     Index i1(L"i_1");
