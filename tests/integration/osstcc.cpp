@@ -33,10 +33,7 @@ int main(int argc, char* argv[]) {
 
   sequant::set_default_context(
       {.index_basis_registry_shared_ptr = mbpt::make_min_sr_spaces(),
-       .vacuum = Vacuum::SingleProduct,
-       .canonicalization_options =
-           CanonicalizeOptions::default_options().copy_and_set(
-               CanonicalizationMethod::Complete)});
+       .vacuum = Vacuum::SingleProduct});
   mbpt::set_default_mbpt_context(
       {.op_registry_ptr = mbpt::make_minimal_registry()});
 

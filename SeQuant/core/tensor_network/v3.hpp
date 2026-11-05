@@ -281,7 +281,7 @@ class TensorNetworkV3 {
   /// @param named_indices the indices that cannot be renamed, i.e. whose labels
   /// are meaningful; deduction selects the external indices (ext_indices())
   /// @param options see CanonicalizeOptions for the meaning of this
-  /// parameter; the default is given by CanonicalizeOptions::default_options()
+  /// parameter; the default is given by CanonicalizeOptions{}
   /// @return byproduct of canonicalization (e.g. phase); if none, returns
   /// nullptr; Constant 0 if topological canonicalization finds the network
   /// to be zero by symmetry (see Graph::automorphism_phase()), in which case
@@ -289,8 +289,7 @@ class TensorNetworkV3 {
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels,
       const NamedIndexSpec &named_indices,
-      const CanonicalizeOptions &options =
-          CanonicalizeOptions::default_options());
+      const CanonicalizeOptions &options = CanonicalizeOptions{});
 
   /// @return the named indices that @p spec specifies for this network:
   /// ext_indices() if they are to be deduced

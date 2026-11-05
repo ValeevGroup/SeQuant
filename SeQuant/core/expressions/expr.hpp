@@ -142,13 +142,11 @@ constexpr std::string type_name_of() {
 /// State shared by a (recursive) lexicographic comparison of expressions
 /// @sa Expr::lexicographic_compare
 struct LexicographicCompareOptions {
-  /// tensor labels that precede all others, in this order
-  /// @sa Context::cardinal_tensor_labels
-  container::vector<std::wstring> cardinal_tensor_labels;
-
-  /// @return the options that use the cardinal tensor labels of the default
-  /// context
-  static LexicographicCompareOptions from_default_context();
+  /// tensor labels that precede all others, in this order; the default is
+  /// that of the library's canonical form
+  /// @sa default_cardinal_tensor_labels()
+  container::vector<std::wstring> cardinal_tensor_labels =
+      default_cardinal_tensor_labels();
 
   /// @return position of (the non-adjoint form of) @p label among
   /// cardinal_tensor_labels, or `cardinal_tensor_labels.size()` if it is not a
@@ -252,7 +250,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// generated
   virtual ExprPtr canonicalize(
       const NamedIndexSpec &named_indices,
-      CanonicalizeOptions opts = CanonicalizeOptions::default_options()) {
+      CanonicalizeOptions opts = CanonicalizeOptions{}) {
     (void)named_indices;
     (void)opts;
     return {};  // by default do nothing and return nullptr
@@ -268,8 +266,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   virtual ExprPtr rapid_canonicalize(
       const NamedIndexSpec &named_indices,
       CanonicalizeOptions opts =
-          CanonicalizeOptions::default_options().copy_and_set(
-              CanonicalizationMethod::Rapid)) {
+          CanonicalizeOptions{}.copy_and_set(CanonicalizationMethod::Rapid)) {
     return this->canonicalize(named_indices,
                               opts.copy_and_set(CanonicalizationMethod::Rapid));
   }
@@ -283,9 +280,9 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// @note always false if @p opts does not request Complete canonicalization,
   /// the only method whose result is the same for every spelling of an
   /// expression, or has presentation settings
-  bool is_canonical(const NamedIndexSpec &named_indices,
-                    const CanonicalizeOptions &opts =
-                        CanonicalizeOptions::default_options()) const;
+  bool is_canonical(
+      const NamedIndexSpec &named_indices,
+      const CanonicalizeOptions &opts = CanonicalizeOptions{}) const;
 
   /// records that this, with its subexpressions as they are now, is the full
   /// canonical form for @p named_indices and @p opts, so that
@@ -464,7 +461,8 @@ class Expr : public std::enable_shared_from_this<Expr> {
       const Expr &that, const LexicographicCompareOptions &opts) const;
 
   /// Same as lexicographic_compare(that, opts) with
-  /// `opts = LexicographicCompareOptions::from_default_context()`
+  /// the default `opts` (the cardinal tensor labels of the library's canonical
+  /// form)
   /// @note prefer the overload taking options (or LexicographicExprCompare)
   /// when performing many comparisons to avoid repeatedly querying the context
   std::weak_ordering lexicographic_compare(const Expr &that) const;

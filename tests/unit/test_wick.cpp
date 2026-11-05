@@ -858,8 +858,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       // std::wcout << "result = " << to_latex(result) << std::endl;
       REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
       const auto canon_opts =
-          CanonicalizeOptions::default_options().copy_and_set(
-              CanonicalizationMethod::Rapid);
+          CanonicalizeOptions{}.copy_and_set(CanonicalizationMethod::Rapid);
       canonicalize(result, named_indices_spec, canon_opts);
       REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
     }
@@ -1692,9 +1691,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       }
       rapid_simplify(wick_result_2);
       {
-        const auto canon_opts =
-            CanonicalizeOptions::default_options().copy_and_set(
-                CanonicalizationMethod::Complete);
+        const auto canon_opts = CanonicalizeOptions{}.copy_and_set(
+            CanonicalizationMethod::Complete);
         canonicalize(wick_result_2, deduce_named_indices, canon_opts);
       }
       rapid_simplify(wick_result_2);
@@ -1786,9 +1784,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
           }
           rapid_simplify(wick_result_2);
           {
-            const auto canon_opts =
-                CanonicalizeOptions::default_options().copy_and_set(
-                    CanonicalizationMethod::Complete);
+            const auto canon_opts = CanonicalizeOptions{}.copy_and_set(
+                CanonicalizationMethod::Complete);
             canonicalize(wick_result_2, deduce_named_indices, canon_opts);
           }
           rapid_simplify(wick_result_2);
@@ -2262,43 +2259,22 @@ TEST_CASE("wick_nop_canonicalization", "[algorithms][wick]") {
   // regression test for #651: per-summand WickTheorems run concurrently and
   // must neither enable nor disable normal operator canonicalization for each
   // other, so every term equals that of the summand computed on its own
+  // (the normal operator canonicalizers are now part of the options each
+  // canonicalization receives, so there is no shared state left to race on)
   SECTION("per-summand computations") {
-    // Wick spells a partial contraction as the delta followed by the
-    // surviving normal operator; with the operator labels cardinal before the
-    // delta, the lexicographic step of a complete canonicalization reorders
-    // every such term, whatever the labels hash to (the graph step alone
-    // orders by canonical vertex order, which depends on the label hashes)
-    auto cardinal = set_scoped_modified_default_context([](Context& ctx) {
-      container::vector<std::wstring> labels{reserved::antisymm_label(),
-                                             reserved::symm_label(),
-                                             reserved::transposition_label()};
-      for (const auto& label : FNOperator::labels()) labels.push_back(label);
-      labels.push_back(reserved::kronecker_label());
-      ctx.set_cardinal_tensor_labels(std::move(labels));
-      ctx.set(CanonicalizeOptions::default_options().copy_and_set(
-          CanonicalizationMethod::Complete));
-    });
     const auto input = make_input();
     std::vector<std::wstring> expected;
-    // terms that canonicalization of their normal operators would change
-    int reorderable_terms = 0;
     for (auto&& summand : *input) {
       const auto summand_result =
           FWickTheorem(summand->clone(), deduce_named_indices)
               .full_contractions(false)
               .compute(false, /* skip_input_canonicalization */ true);
       REQUIRE(summand_result->is<Sum>());
-      for (auto&& term : *summand_result) {
-        auto canonical_term = term->clone();
-        canonicalize(canonical_term, deduce_named_indices);
-        if (canonical_term->to_latex() != term->to_latex()) ++reorderable_terms;
-      }
       const auto summand_terms = terms(summand_result);
       expected.insert(expected.end(), summand_terms.begin(),
                       summand_terms.end());
     }
     std::sort(expected.begin(), expected.end());
-    REQUIRE(reorderable_terms > 0);
 
     for (int rep = 0; rep != 4; ++rep) {
       CHECK(terms(FWickTheorem(input->clone(), deduce_named_indices)
@@ -2315,48 +2291,10 @@ TEST_CASE("wick_nop_canonicalization", "[algorithms][wick]") {
                       .compute()) == expected);
     }
   }
-
-  SECTION("user canonicalizer of a normal operator label survives") {
-    const auto& label = FNOperator::labels()[1];
-    const auto custom = std::make_shared<DefaultTensorCanonicalizer>();
-    auto scoped = set_scoped_default_context(
-        Context(get_default_context()).set_tensor_canonicalizer(label, custom));
-    FWickTheorem(make_input(), deduce_named_indices)
-        .full_contractions(false)
-        .compute();
-    CHECK(get_default_context().nondefault_tensor_canonicalizer_ptr(label) ==
-          custom);
-    CHECK(!get_default_context().nondefault_tensor_canonicalizer_ptr(
-        FNOperator::labels()[0]));
-  }
-
-  // #651 as reported: the canonicalizer is registered process-wide
-  SECTION("process-wide canonicalizer of a normal operator label survives") {
-    const auto& label = FNOperator::labels()[1];
-    const auto custom = std::make_shared<DefaultTensorCanonicalizer>();
-    const auto initial_ctx = get_default_context();
-    auto restore = sequant::detail::make_scope_exit(
-        [&initial_ctx] { set_default_context(initial_ctx); });
-    set_default_context(
-        Context(initial_ctx).set_tensor_canonicalizer(label, custom));
-    FWickTheorem(make_input(), deduce_named_indices)
-        .full_contractions(false)
-        .compute();
-    CHECK(get_default_context().nondefault_tensor_canonicalizer_ptr(label) ==
-          custom);
-    CHECK(!get_default_context().nondefault_tensor_canonicalizer_ptr(
-        FNOperator::labels()[0]));
-  }
 }
 
 TEST_CASE("wick_input_canonicalization", "[algorithms][wick][valgrind_skip]") {
   using namespace sequant;
-
-  // only Complete canonicalization marks its result
-  auto complete_ctx = get_default_context();
-  complete_ctx.set(
-      CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
-  auto complete_resetter = set_scoped_default_context(complete_ctx);
 
   Index::reset_tmp_index();
 
@@ -2406,7 +2344,7 @@ TEST_CASE("wick_input_canonicalization", "[algorithms][wick][valgrind_skip]") {
     canonicalize(canonical_input, deduce_named_indices);
     REQUIRE(canonical_input->is_canonical(deduce_named_indices));
     // its summands are left in the canonical form that summands of a Sum get
-    const auto opts = CanonicalizeOptions::default_options();
+    const auto opts = CanonicalizeOptions{};
     const auto summand_opts =
         opts.copy_and_set(opts.method | CanonicalizationMethod::Topological)
             .copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No);

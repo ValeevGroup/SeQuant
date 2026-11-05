@@ -1029,8 +1029,8 @@ TEST_CASE("expr", "[elements]") {
     {  // Product::deep_copy keeps the canonical mark
       ExprPtr e = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
                   ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
-      const auto opts = CanonicalizeOptions::default_options().copy_and_set(
-          CanonicalizationMethod::Complete);
+      const auto opts =
+          CanonicalizeOptions{}.copy_and_set(CanonicalizationMethod::Complete);
       e->mark_canonical(deduce_named_indices, opts);
       REQUIRE(e->is_canonical(deduce_named_indices, opts));
       REQUIRE(e->as<Product>().deep_copy().is_canonical(deduce_named_indices,
@@ -2164,8 +2164,8 @@ TEST_CASE("expr_type_id", "[elements]") {
 TEST_CASE("canonical_mark", "[elements]") {
   using namespace sequant;
 
-  const auto opts = CanonicalizeOptions::default_options().copy_and_set(
-      CanonicalizationMethod::Complete);
+  const auto opts =
+      CanonicalizeOptions{}.copy_and_set(CanonicalizationMethod::Complete);
   const auto rapid_opts = opts.copy_and_set(CanonicalizationMethod::Rapid);
 
   auto make_product = [] {

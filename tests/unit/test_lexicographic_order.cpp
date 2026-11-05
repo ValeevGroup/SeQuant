@@ -62,14 +62,19 @@ TEST_CASE("lexicographic_order", "[elements]") {
           std::weak_ordering::less);
     CHECK(compare(parse(L"g{i1;a1}"), parse(L"g{i1;a1}")) ==
           std::weak_ordering::equivalent);
-    // the default options use the cardinal labels of the default context
+    // the default options use the library's default cardinal labels
+    CHECK(LexicographicCompareOptions{}.cardinal_tensor_labels ==
+          default_cardinal_tensor_labels());
+    // which can be overridden explicitly
     {
-      auto ctx = get_default_context();
-      ctx.set_cardinal_tensor_labels({L"g"});
-      auto resetter = set_scoped_default_context(ctx);
-      CHECK(parse(L"g{i1;a1}")->lexicographic_compare(*parse(L"f{i1;a1}")) ==
+      const LexicographicCompareOptions opts{.cardinal_tensor_labels = {L"g"}};
+      CHECK(parse(L"g{i1;a1}")
+                ->lexicographic_compare(*parse(L"f{i1;a1}"), opts) ==
             std::weak_ordering::less);
-      CHECK(LexicographicExprCompare{}(parse(L"g{i1;a1}"), parse(L"f{i1;a1}")));
+      CHECK(LexicographicExprCompare{opts}(parse(L"g{i1;a1}"),
+                                           parse(L"f{i1;a1}")));
+      CHECK(
+          !LexicographicExprCompare{}(parse(L"g{i1;a1}"), parse(L"f{i1;a1}")));
     }
   }
 

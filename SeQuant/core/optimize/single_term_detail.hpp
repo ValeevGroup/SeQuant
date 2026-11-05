@@ -622,8 +622,7 @@ inline SubnetMetadata build_subnet_metadata(
                            SubNetHash, SubNetEqual>
       meta_to_id;
 
-  const auto ctx = get_default_context_snapshot();
-  const auto& cardinal_tensor_labels = ctx.cardinal_tensor_labels();
+  const auto& cardinal_tensor_labels = default_cardinal_tensor_labels();
   for (size_t n = 0; n < results.size(); ++n) {
     if (std::popcount(n) < 2) continue;
     if (!connected[n]) continue;  // outer-product subset, never an intermediate

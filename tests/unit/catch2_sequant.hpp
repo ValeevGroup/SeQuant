@@ -183,14 +183,6 @@ inline NamedIndexSpec explicit_named(container::set<Index> indices) {
   return detail::explicit_named_indices(std::move(indices));
 }
 
-/// @return a guard that scopes, for every Statistics, a copy of the default
-/// context in effect for it whose canonicalization options are @p opts
-[[nodiscard]] inline auto scoped_canonicalize_options(
-    CanonicalizeOptions opts) {
-  return set_scoped_modified_default_context(
-      [&opts](Context &ctx) { ctx.set(opts); });
-}
-
 }  // namespace sequant::tests
 
 namespace Catch {
@@ -482,13 +474,13 @@ struct EquivalentToMatcher : ExpressionMatcher<EquivalentToMatcher> {
                              const sequant::NamedIndexSpec &named_indices) {
     sequant::simplify(
         expr, named_indices,
-        sequant::CanonicalizeOptions::default_options().copy_and_set(
+        sequant::CanonicalizeOptions{}.copy_and_set(
             sequant::CanonicalizeOptions::IgnoreNamedIndexLabel::No));
   }
 
   static void pre_comparison(sequant::ResultExpr &expr) {
     sequant::simplify(
-        expr, sequant::CanonicalizeOptions::default_options().copy_and_set(
+        expr, sequant::CanonicalizeOptions{}.copy_and_set(
                   sequant::CanonicalizeOptions::IgnoreNamedIndexLabel::No));
   }
 

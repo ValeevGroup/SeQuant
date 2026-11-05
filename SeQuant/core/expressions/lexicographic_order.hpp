@@ -23,9 +23,8 @@ namespace sequant {
 /// are captured on construction
 class LexicographicExprCompare {
  public:
-  /// uses LexicographicCompareOptions::from_default_context()
-  LexicographicExprCompare()
-      : opts_(LexicographicCompareOptions::from_default_context()) {}
+  /// uses the default LexicographicCompareOptions
+  LexicographicExprCompare() = default;
 
   explicit LexicographicExprCompare(LexicographicCompareOptions opts)
       : opts_(std::move(opts)) {}

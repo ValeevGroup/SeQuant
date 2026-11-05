@@ -189,15 +189,14 @@ class Sum : public Expr {
   ExprPtr canonicalize_impl(bool multipass, const NamedIndexSpec &named_indices,
                             CanonicalizeOptions opt);
 
-  ExprPtr canonicalize(const NamedIndexSpec &named_indices,
-                       CanonicalizeOptions opt =
-                           CanonicalizeOptions::default_options()) override;
+  ExprPtr canonicalize(
+      const NamedIndexSpec &named_indices,
+      CanonicalizeOptions opt = CanonicalizeOptions{}) override;
 
   ExprPtr rapid_canonicalize(
       const NamedIndexSpec &named_indices,
-      CanonicalizeOptions opts =
-          CanonicalizeOptions::default_options().copy_and_set(
-              CanonicalizationMethod::Rapid)) override;
+      CanonicalizeOptions opts = CanonicalizeOptions{}.copy_and_set(
+          CanonicalizationMethod::Rapid)) override;
 
   bool static_equal(const Expr &that) const override;
 

@@ -2,7 +2,6 @@
 // Created by Eduard Valeyev on 8/25/25.
 //
 
-#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -74,11 +73,6 @@ const container::vector<std::wstring>& default_cardinal_tensor_labels() {
   return result;
 }
 
-CanonicalizeOptions CanonicalizeOptions::default_options() {
-  return sequant::get_default_context().canonicalization_options().value_or(
-      CanonicalizeOptions{});
-}
-
 CanonicalizeOptions CanonicalizeOptions::copy_and_set(
     CanonicalizationMethod arg) const {
   auto result = *this;
@@ -102,22 +96,16 @@ CanonicalizeOptions CanonicalizeOptions::copy_and_set(
 
 namespace detail {
 
-// TODO: options without presentation settings still take them from the
-// default context, until the context no longer holds them
-
 container::vector<std::wstring> cardinal_tensor_labels(
     const CanonicalizeOptions& opts) {
-  if (!opts.presentation)
-    return get_default_context_snapshot().cardinal_tensor_labels();
+  if (!opts.presentation) return default_cardinal_tensor_labels();
   return opts.presentation->cardinal_tensor_labels.value_or(
       default_cardinal_tensor_labels());
 }
 
 std::shared_ptr<const tensor_index_comparer_t> index_comparer(
     const CanonicalizeOptions& opts) {
-  if (!opts.presentation)
-    return get_default_context_snapshot().index_comparer_ptr();
-  if (opts.presentation->index_comparer)
+  if (opts.presentation && opts.presentation->index_comparer)
     return opts.presentation->index_comparer;
   static const auto default_comparer =
       std::make_shared<const tensor_index_comparer_t>(
@@ -127,9 +115,7 @@ std::shared_ptr<const tensor_index_comparer_t> index_comparer(
 
 std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer(
     const CanonicalizeOptions& opts) {
-  if (!opts.presentation)
-    return get_default_context_snapshot().index_pair_comparer_ptr();
-  if (opts.presentation->index_pair_comparer)
+  if (opts.presentation && opts.presentation->index_pair_comparer)
     return opts.presentation->index_pair_comparer;
   static const auto default_comparer =
       std::make_shared<const tensor_index_pair_comparer_t>(
@@ -139,9 +125,7 @@ std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer(
 
 std::shared_ptr<TensorCanonicalizer> nondefault_tensor_canonicalizer(
     const CanonicalizeOptions& opts, std::wstring_view label) {
-  if (!opts.presentation)
-    return get_default_context_snapshot().nondefault_tensor_canonicalizer_ptr(
-        label);
+  if (!opts.presentation) return nullptr;
   const auto& map = opts.presentation->tensor_canonicalizers;
   auto it = map.find(std::wstring{label});
   return it != map.end() ? it->second : nullptr;

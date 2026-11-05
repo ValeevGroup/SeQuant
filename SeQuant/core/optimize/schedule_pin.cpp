@@ -584,18 +584,12 @@ eval::schedule::Fingerprint make_fingerprint(
   fp.reorder = reorder_name(opts.reorder);
   fp.cse["subnet"] = opts.CSE.subnet ? "true" : "false";
   for (auto const& m : mode_order) fp.mode_order.push_back(toUtf8(m));
-  auto const& ctx = get_default_context();
+  // a snapshot, which the setting of another default context cannot change
+  // while it is read
+  auto const ctx = get_default_context_snapshot();
   fp.context.vacuum = vacuum_name(ctx.vacuum());
   fp.context.spbasis = spbasis_name(ctx.spbasis());
   fp.context.strict_braket_symmetry = ctx.assert_strict_braket_symmetry();
-  for (auto const& l : ctx.cardinal_tensor_labels())
-    fp.context.cardinal_tensor_labels.push_back(toUtf8(l));
-  auto const copts = ctx.canonicalization_options().value_or(
-      CanonicalizeOptions::default_options());
-  fp.context.canonicalization_method = toUtf8(to_wstring(copts.method));
-  fp.context.ignore_named_index_labels =
-      copts.ignore_named_index_labels ==
-      CanonicalizeOptions::IgnoreNamedIndexLabel::Yes;
   return fp;
 }
 
@@ -672,12 +666,6 @@ void check_fingerprint(eval::schedule::Fingerprint const& loaded,
   diff(d, "context.spbasis", a.spbasis, b.spbasis);
   diff(d, "context.strict_braket_symmetry", a.strict_braket_symmetry,
        b.strict_braket_symmetry);
-  diff(d, "context.cardinal_tensor_labels", a.cardinal_tensor_labels,
-       b.cardinal_tensor_labels);
-  diff(d, "context.canonicalization_method", a.canonicalization_method,
-       b.canonicalization_method);
-  diff(d, "context.ignore_named_index_labels", a.ignore_named_index_labels,
-       b.ignore_named_index_labels);
   if (d.empty()) return;
   std::string msg = "schedule fingerprint mismatch:";
   for (auto const& line : d) msg += "\n" + line;
