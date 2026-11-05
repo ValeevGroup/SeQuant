@@ -22,9 +22,7 @@ void OpRegistry::validate_op(const std::wstring& op) const {
 }
 
 OpRegistry& OpRegistry::operator=(const OpRegistry& other) {
-  ops_ = other.ops_;
-  herm_overrides_ = other.herm_overrides_;
-  basis_grants_ = other.basis_grants_;
+  if (this != &other) *this = OpRegistry(other);
   return *this;
 }
 
@@ -129,15 +127,7 @@ Hermiticity OpRegistry::hermiticity(const std::wstring& op) const {
   return default_hermiticity(this->to_class(op));
 }
 
-OpRegistry OpRegistry::clone() const {
-  OpRegistry result(*this);
-  result.ops_ = std::make_shared<container::map<std::wstring, OpClass>>(*ops_);
-  result.herm_overrides_ =
-      std::make_shared<container::map<std::wstring, Hermiticity>>(
-          *herm_overrides_);
-  result.basis_grants_ = std::make_shared<BasisGrants>(*basis_grants_);
-  return result;
-}
+OpRegistry OpRegistry::clone() const { return OpRegistry(*this); }
 
 bool is_amplitude_tensor(const AbstractTensor& t, const OpRegistry& reg) {
   const auto label = reg.resolve(strip_adjoint_label(t._label()));
