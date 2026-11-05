@@ -161,6 +161,13 @@ struct ValueRecord {
   int home_depth = 0;
   bool persistent = false;
   std::size_t first_use = 0, last_use = 0;
+  /// bytes the cost model prices the value at, home-relative (a per-batch
+  /// slab inside a loop; see peak_profile's cell_footprint); 0 when the
+  /// recorder had no cost model
+  std::size_t modeled_footprint = 0;
+  /// bytes of the complete value under the same model (every mode at full
+  /// extent); 0 when unpriced
+  std::size_t modeled_size = 0;
   std::vector<std::string> build_site, home_floor, forced_split_axes;
   std::vector<PerAxisRecord> per_axis;
   std::vector<OccurrenceRecord> occurrences;
@@ -213,6 +220,12 @@ struct RunRecord {
   /// produced per batch, else what its production left
   std::map<std::string, std::size_t> size;
   std::map<std::string, std::size_t> builds;  // value id -> build count
+  /// realized co-resident high-water of the cell registry over the recorded
+  /// run (bytes, summed over ranks the way measured_size_in_bytes sums), 0
+  /// when not tracked
+  std::size_t peak_bytes = 0;
+  /// value ids alive in the registry when peak_bytes was reached
+  std::vector<std::string> peak_live;
   /// optimizer settings excluded from the fingerprint
   std::map<std::string, std::string> planner;
 };
