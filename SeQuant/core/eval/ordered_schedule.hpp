@@ -924,13 +924,12 @@ inline ForkedSubchain fork_subchain(
 ///       value_id \c v directly reads (raw, unfiltered -- irrelevant/
 ///       external entries are dropped by the topo-sort itself, since they
 ///       simply never match a local \c produced set).
-///     - a nested child block's \c produced = that block's own top-level
-///       \c outputs value_id's (what it makes visible to its own parent's
-///       siblings -- its internal \c BuildStep's and any further-nested
-///       child's content are never directly readable from outside it: by
-///       construction, a value crossing a block boundary as an operand
-///       must first have been resolved out of that axis, which is exactly
-///       the escape/\c outputs case). Its \c requires_ is the full,
+///     - a nested child block's \c produced = everything produced anywhere
+///       in its subtree, recursively (\c produced_all): its own \c outputs
+///       and those of blocks nested in it, since a value invariant on a
+///       level escapes the deeper block and skips that level's \c outputs,
+///       and a sibling that reads it must still follow the block. Its
+///       \c requires_ is the full,
 ///       recursively bubbled external need of its whole subtree (built
 ///       bottom-up alongside the block itself: \c requires_all(level) =
 ///       (this level's own direct needs union its child's already-bubbled
@@ -2003,7 +2002,11 @@ namespace detail {
             auto const& blk = std::get<ScopeBlock>(s.value);
             container::svector<std::size_t> rec;
             collect_rec(blk, rec);
-            for (auto const& o : blk.outputs) m.produced.push_back(o.first);
+            // Recursive produced, as for a pass block below: an output of a
+            // deeper block that skips this block's level (the value is
+            // invariant on it) is still made here, and a sibling build that
+            // reads it must follow this block.
+            m.produced = rec;
             m.requires_ = external_needs(rec);
             m.tie_key = min_first_use(rec);
           }

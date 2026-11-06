@@ -2470,3 +2470,107 @@ TEST_CASE("assembled-reader-bumped", "[ordered-schedule][per-nest-split]") {
                       }) == 1);
   orderedsched_validated_table(rich, sched);
 }
+
+namespace {
+
+struct OrderedSchedSkipLevelFixture {
+  sequant::eval::RichSchedule rich;
+  sequant::eval::LegalitySchedule legality;
+};
+
+// One nest of three loops (slot 0 > 1 > 2). U (value 0) is loop-local on
+// slots 0 and 2 and invariant on slot 1, so its assembly over slot 2 is an
+// output of the slot-2 block only; W (1), built at slot 0's level, reads it.
+// Q (3) reduces P (2) over slots 1 and 2, which holds the slot-1 block back
+// until P is built, and Z (5), carried on slot 1 and read by Z2 (6), gives
+// the nest a second pass. Values 4 and 7 are the root results.
+OrderedSchedSkipLevelFixture orderedsched_skip_level_fixture() {
+  using sequant::eval::LoopRole;
+  using sequant::eval::OccurrenceRole;
+  sequant::Index const i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
+
+  OrderedSchedSkipLevelFixture fx;
+  auto& rich = fx.rich;
+  rich.cells.push_back(
+      orderedsched_nest_cell(0, 9420, {i1, i3}, {0, 2}, {{100, 200}}));  // U
+  rich.cells.push_back(
+      orderedsched_nest_cell(1, 9421, {i1}, {0}, {{200, 500}}));  // W
+  rich.cells.push_back(
+      orderedsched_nest_cell(2, 9422, {i1}, {0}, {{300, 400}}));  // P
+  {
+    auto q = orderedsched_nest_cell(3, 9423, {i1}, {0}, {{400, 500}});  // Q
+    for (auto& occ : q.occurrences) occ.reduced_slot = {{i2, 1}, {i3, 2}};
+    rich.cells.push_back(std::move(q));
+  }
+  rich.cells.push_back(orderedsched_nest_cell(4, 9424, {}, {}, {{500, 500}}));
+  rich.cells.push_back(
+      orderedsched_nest_cell(5, 9425, {i1, i2}, {0, 1}, {{600, 700}}));  // Z
+  rich.cells.push_back(
+      orderedsched_nest_cell(6, 9426, {i1}, {0}, {{700, 800}}));  // Z2
+  rich.cells.push_back(orderedsched_nest_cell(7, 9427, {}, {}, {{800, 800}}));
+  for (auto& vc : rich.cells)
+    if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
+  orderedsched_record_loop_kinds(rich);
+
+  auto const add = [&](std::size_t hash,
+                       std::vector<sequant::eval::AxisClass> axes) {
+    sequant::eval::CellLegality cl;
+    cl.hash = hash;
+    for (auto& ac : axes) {
+      if (ac.role == LoopRole::LoopCarried)
+        cl.forced_split_axes.push_back(ac.axis);
+      cl.per_axis.push_back(std::move(ac));
+    }
+    fx.legality.cells.push_back(std::move(cl));
+  };
+  add(9420, {{i1, LoopRole::LoopLocal},
+             {i3, LoopRole::LoopLocal, {{100, OccurrenceRole::Assembled}}}});
+  add(9421, {{i1, LoopRole::LoopLocal, {{200, OccurrenceRole::Assembled}}}});
+  add(9422, {{i1, LoopRole::LoopLocal}});
+  add(9423, {{i1, LoopRole::LoopLocal, {{400, OccurrenceRole::Assembled}}},
+             {i2, LoopRole::Reduction},
+             {i3, LoopRole::Reduction}});
+  add(9424, {});
+  add(9425, {{i1, LoopRole::LoopLocal}, {i2, LoopRole::LoopCarried}});
+  add(9426, {{i1, LoopRole::LoopLocal, {{700, OccurrenceRole::Assembled}}}});
+  add(9427, {});
+  return fx;
+}
+
+}  // namespace
+
+// A nest forked per pass orders each pass block's steps on what its child
+// blocks make, at any depth (see the fixture): W must follow the slot-1
+// block, which holds the block that assembles U.
+TEST_CASE("per-nest-fork-orders-on-deeper-outputs",
+          "[ordered-schedule][per-nest-split]") {
+  auto const fx = orderedsched_skip_level_fixture();
+  auto const& rich = fx.rich;
+  auto const& legality = fx.legality;
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    return ix.basis().base_key() == L"i";
+  };
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+  REQUIRE(well_formed(sched));
+
+  auto const roots = orderedsched_root_blocks(sched);
+  REQUIRE(roots.size() == 2);
+  // In the first pass block, W's build follows the slot-1 block.
+  std::optional<std::size_t> w_at, inner_at;
+  for (std::size_t k = 0; k < roots[0]->steps.size(); ++k) {
+    auto const& st = roots[0]->steps[k].value;
+    if (auto const* b = std::get_if<sequant::eval::BuildStep>(&st)) {
+      if (b->value_id == 1) w_at = k;
+    } else {
+      inner_at = k;
+    }
+  }
+  REQUIRE(w_at.has_value());
+  REQUIRE(inner_at.has_value());
+  CHECK(*inner_at < *w_at);
+
+  orderedsched_validated_table(rich, sched);
+}
