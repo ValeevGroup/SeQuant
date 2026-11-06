@@ -229,6 +229,9 @@ container::svector<std::size_t> sort_via_ordinals(Sequence &seq,
     std::sort(begin(input_ordinals), end(input_ordinals), less_than);
   }
 
+  // N.B. the permutation below clobbers input_ordinals
+  const auto sorted_ordinals = input_ordinals;
+
   // Bring elements in container into the order given by indices
   // (the association is container[k] = container[indices[k]])
   // -> implementation from https://stackoverflow.com/a/838789
@@ -253,7 +256,7 @@ container::svector<std::size_t> sort_via_ordinals(Sequence &seq,
     std::swap(input_ordinals[i], input_ordinals[k]);
   }
 
-  return input_ordinals;
+  return sorted_ordinals;
 }
 
 }  // namespace sequant

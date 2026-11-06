@@ -89,7 +89,9 @@ class VertexPainter {
   /// (see VertexPainter::to_hash_value(const AbstractTensor&)) and sets
   /// it as the shade to all subsequent color computation.
   /// Use this before coloring other vertices of this the tensor.
-  Color apply_shade(const AbstractTensor &t);
+  /// @param extra_salt if nonzero, mixed into the hash, e.g. to tell apart
+  /// tensors at structurally different places of a nested product
+  Color apply_shade(const AbstractTensor &t, std::size_t extra_salt = 0);
 
   void reset_shade();
 

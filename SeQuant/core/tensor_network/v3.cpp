@@ -685,6 +685,7 @@ TensorNetworkV3::TensorNetworkV3(const TensorNetworkV3 &other) {
     tensors_.emplace_back(t->_clone_shared());
   }
   tensor_input_ordinals_ = other.tensor_input_ordinals_;
+  tensor_salts_ = other.tensor_salts_;
 }
 
 TensorNetworkV3 &TensorNetworkV3::operator=(
@@ -840,8 +841,11 @@ ExprPtr TensorNetworkV3::canonicalize(
     // However, in order to produce the most aesthetically pleasing result, we
     // now reorder tensors based on the regular AbstractTensor::operator<, which
     // takes the explicit index labelling of tensors into account.
+    // N.B. the input ordinals are permuted along (bubble sort is stable)
     tensor_sorter.set_blocks_only(false);
-    std::stable_sort(tensors_.begin(), tensors_.end(), tensor_sorter);
+    auto sorted_tensors_with_ordinals = zip(tensors_, tensor_input_ordinals_);
+    bubble_sort(begin(sorted_tensors_with_ordinals),
+                end(sorted_tensors_with_ordinals), tensor_sorter);
   }  // lexicographic canonicalization
 
   if (byproduct) {
@@ -1217,9 +1221,11 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     if (options.make_texlabels)
       make_texlabel(L"$" + io::latex::utf_to_string(tlabel) + L"$");
     graph.vertex_types.emplace_back(VertexType::TensorCore);
-    const auto tensor_color =
-        colorizer.apply_shade(tensor);  // subsequent vertices will be shaded by
-                                        // the color of this tensor
+    // subsequent vertices will be shaded by the color of this tensor
+    const auto tensor_color = colorizer.apply_shade(
+        tensor, tensor_salts_.empty()
+                    ? 0
+                    : tensor_salts_.at(tensor_input_ordinals_.at(tensor_idx)));
     graph.vertex_colors.emplace_back(tensor_color);
 
     const std::size_t tensor_vertex = nvertex;
