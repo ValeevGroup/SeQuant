@@ -130,8 +130,11 @@ bool has_symmetrizer(const ExprPtr &expression);
 
 /// Generates the expression that symmetrizes the given result over all
 /// cyclic permutations of its bra-ket index pairs, based on the tensor named
-/// @p precursor_name (with the same symmetries as @p result). Auxiliary
-/// indices are not symmetrized.
+/// @p precursor_name . The precursor is the not yet symmetrized result, so it
+/// is declared without particle or column symmetry (its bra-ket symmetry is
+/// that of @p result ); declaring the symmetries of @p result would make the
+/// symmetrization vanish under canonicalization. Auxiliary indices are not
+/// symmetrized.
 ///
 /// @param result The result to symmetrize
 /// @param precursor_name The name of the not yet symmetrized tensor
