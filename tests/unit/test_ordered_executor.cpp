@@ -1451,18 +1451,10 @@ TEST_CASE("ordered-w20-auxocc-dryrun", "[ordered][w20-auxocc-walk]") {
       return it != vmap.end() &&
              sequant::subtree_any(*it->second, is_volatile_node);
     };
-    // The static gate must validate the same lives
-    // the executor enforces at runtime -- real per-loop-instance batch
-    // counts, not the constant-1 stub (which under-counts a value read from
-    // outside n*m nested real batches, exactly the gap that made
-    // CellRegistry::read throw "read past its life" before ordered_executor
-    // wired the real function into run_ordered_schedule_pre_results).
-    in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
-        ordered, target, &aops);
     in.operands_of = orderedexec_per_leg_operands(rich, vmap);
     auto const table = sequant::eval::build_cell_table(in);
-    auto const violations = sequant::eval::validate_cell_table(
-        table, ordered.root, in.n_batches_of);
+    auto const violations =
+        sequant::eval::validate_cell_table(table, ordered.root);
     // The report goes to stderr as well as to Catch2. MEASURED (Catch2 v3.9.1,
     // this build, console/compact reporters and --verbosity high): an
     // UNSCOPED_INFO emitted immediately before a failing REQUIRE in this
@@ -1521,8 +1513,8 @@ TEST_CASE("ordered-w20-auxocc-dryrun", "[ordered][w20-auxocc-walk]") {
 // [w20-auxocc-walk] fixture. This checks structure only (one Build per
 // BuildStep, one Assemble per block output entry, at least one Leaf, every
 // Assemble strictly enclosing its source, every Build cell's sliced entries
-// naming an enclosing loop instance of its own scope) -- reads and lives are
-// checked separately.
+// naming an enclosing loop instance of its own scope) -- reads are checked
+// separately.
 // ===========================================================================
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
@@ -1614,10 +1606,6 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   REQUIRE(sequant::eval::well_formed(ordered));
   auto const sma = sequant::eval::compute_sliced_mode_assignment(ordered, rich);
   auto const vmap = sequant::eval::build_value_node_map(forest);
-  // Real per-loop batch counts for n_batches_of (see
-  // the walk-gate case's own note); aops is otherwise unused in this
-  // static-only fixture.
-  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
 
   sequant::eval::CellTableInputs in;
   in.ordered = &ordered;
@@ -1637,8 +1625,6 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
                     n->as_tensor().label() == L"t";
            });
   };
-  in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
-      ordered, policy.batch_target_size, &aops);
   in.operands_of = orderedexec_per_leg_operands(rich, vmap);
   auto const table = sequant::eval::build_cell_table(in);
 
@@ -1857,7 +1843,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   // Validate the derived table once; reuse the same violations both for the
   // life-rule count and the final full-table check.
   auto const violations =
-      sequant::eval::validate_cell_table(table, ordered.root, in.n_batches_of);
+      sequant::eval::validate_cell_table(table, ordered.root);
   std::size_t life_violations = 0;
   for (auto const& v : violations)
     if (v.rule == "life") ++life_violations;
@@ -2000,13 +1986,11 @@ TEST_CASE("ordered-mirrored-strict-walk", "[ordered][cell_table]") {
                     n->as_tensor().label() == L"t";
            });
   };
-  in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
-      ordered, policy.batch_target_size, &aops);
   in.operands_of = orderedexec_per_leg_operands(rich, vmap);
   auto const table = sequant::eval::build_cell_table(in);
 
   auto const violations2 =
-      sequant::eval::validate_cell_table(table, ordered.root, in.n_batches_of);
+      sequant::eval::validate_cell_table(table, ordered.root);
   for (auto const& v : violations2)
     UNSCOPED_INFO("[" << v.rule << "] " << v.what);
   for (auto const& [cid, pos] : table.unresolved)
@@ -2574,15 +2558,13 @@ TEST_CASE("ordered-cache-halt", "[ordered][cache-halt]") {
     CHECK(b2 == b1);
   }
 
-  // Skipped consumers spend the reads they will not perform (CellRegistry::
-  // forgo, called at every skip site -- see ordered_forgo_reads): so when the
-  // walk is over, the ONLY things the registry is still holding are the cells
-  // that are held ON PURPOSE -- the persistent ones (they survive into the
-  // next evaluation) and the forest roots (just handed to the caller as
-  // pre_results, read by nobody in the table). Anything else would be a
-  // non-persistent intermediate whose declared life never ran out: it would
-  // pin its memory for the rest of the evaluation and keep looking shared to
-  // every later reader, which is what disables in-place accumulation.
+  // Every cell is let go where the schedule places its last reader, whether
+  // or not that reader ran (see ReleasePlan): so when the walk is over, the
+  // ONLY things the registry is still holding are the cells that are held ON
+  // PURPOSE -- the persistent ones (they survive into the next evaluation)
+  // and the forest roots (just handed to the caller as pre_results).
+  // Anything else would be a non-persistent intermediate that pins its
+  // memory for the rest of the evaluation.
   {
     auto const res = sequant::eval::detail::ordered_last_registry_residency();
     INFO("registry residency after iteration 2: live="
@@ -4222,7 +4204,6 @@ TEST_CASE("ordered-leaf-first-touch-read", "[ordered][cell_registry]") {
     sequant::eval::TableCell leaf;
     leaf.value_id = 0;
     leaf.production.kind = sequant::eval::ProductionKind::Leaf;
-    leaf.life = 1;
     table.cells.push_back(leaf);
     sequant::eval::TableCell build;
     build.value_id = 1;
@@ -4426,13 +4407,9 @@ TEST_CASE("ordered-assemble-dest-size", "[ordered][assemble-dest]") {
     return it != vmap.end() &&
            sequant::subtree_any(*it->second, is_volatile_node);
   };
-  in.n_batches_of =
-      sequant::eval::detail::ordered_n_batches_by_loop(ordered, target, &aops);
   in.operands_of = orderedexec_per_leg_operands(rich, vmap);
   auto const table = sequant::eval::build_cell_table(in);
-  REQUIRE(
-      sequant::eval::validate_cell_table(table, ordered.root, in.n_batches_of)
-          .empty());
+  REQUIRE(sequant::eval::validate_cell_table(table, ordered.root).empty());
 
   // (1) The two-level shape is present: a Scatter Assemble at the ROOT scope
   // whose per-batch source is itself a partial (reduced on an inner loop, or
@@ -4748,8 +4725,6 @@ TEST_CASE("ordered-invariant-escape-once", "[ordered][block-skip]") {
       return it != vmap.end() &&
              sequant::subtree_any(*it->second, is_volatile_node);
     };
-    in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
-        ordered, target, &aops);
     in.operands_of = orderedexec_per_leg_operands(rich, vmap);
     auto const table = sequant::eval::build_cell_table(in);
     std::size_t n_invariant_escapes = 0;
@@ -4927,7 +4902,7 @@ TEST_CASE("ordered-pia-bound-reproduced", "[ordered][pia-rebind]") {
     return it != vmap.end() &&
            sequant::subtree_any(*it->second, is_volatile_node);
   };
-  in.n_batches_of =
+  auto const n_batches_of =
       sequant::eval::detail::ordered_n_batches_by_loop(ordered, target, &aops);
   in.operands_of = orderedexec_per_leg_operands(rich, vmap);
   auto const table = sequant::eval::build_cell_table(in);
@@ -4945,7 +4920,7 @@ TEST_CASE("ordered-pia-bound-reproduced", "[ordered][pia-rebind]") {
   // The loop it is bound to is a real, MULTI-batch loop of this schedule --
   // otherwise "once per batch of the enclosing loop" and "once" coincide and
   // the assertion below would be vacuous.
-  std::size_t const n_bound_batches = in.n_batches_of(bound_key);
+  std::size_t const n_bound_batches = n_batches_of(bound_key);
   INFO("produce_if_absent cell#"
        << *bound_pia << " (value " << pia.value_id << ", scope depth "
        << pia.scope.path.size() << ") is bound to a loop of " << n_bound_batches
@@ -5008,7 +4983,6 @@ TEST_CASE("ordered-pia-unbound-seed", "[ordered][pia-rebind]") {
   bound.scope.path = {{outer, 0}, {inner, 0}};
   bound.sliced = {{0, outer}};
   bound.produce_if_absent = true;
-  bound.life = 1;
   t.cells.push_back(bound);
   // cell 1: same home, bound to nothing at all.
   TableCell unbound;
@@ -5016,7 +4990,6 @@ TEST_CASE("ordered-pia-unbound-seed", "[ordered][pia-rebind]") {
   unbound.production.kind = ProductionKind::Build;
   unbound.scope.path = {{outer, 0}, {inner, 0}};
   unbound.produce_if_absent = true;
-  unbound.life = 1;
   t.cells.push_back(unbound);
 
   CellRegistry reg(t);
@@ -5106,6 +5079,39 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     CHECK(counts.probes == 0);
     CHECK(counts.builds == n_build_steps);
     CHECK(counts.assembles == 0);  // no batch loop => no Assemble step
+  }
+
+  SECTION("a result that another result reads, over repeated evaluations") {
+    // The first root is an operand of the second. The caller reads both, so
+    // the first is neither released after its reader nor left unproduced on
+    // a later evaluation, when the second -- held from the first evaluation
+    // -- no longer needs it.
+    std::vector<ScalarNode> forest{scalar_tree(L"a * b"),
+                                   scalar_tree(L"(a * b) * c")};
+    ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
+
+    sequant::BatchPolicy const policy;
+    SizeRegime const regime;
+    CostModel const cm{regime};
+    auto const block_of = [](Index const&) -> std::size_t { return 1; };
+    RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+    auto const legality = analyze_legality(rich, forest, policy);
+    OrderedSchedule const ordered =
+        build_ordered_schedule(rich, legality, policy, {});
+
+    auto cache = sequant::CacheManager<ScalarNode>::empty();
+    std::function<std::size_t(Index const&)> const target =
+        [](Index const&) -> std::size_t { return 1; };
+    for (int evaluation = 0; evaluation < 3; ++evaluation) {
+      INFO("evaluation " << evaluation);
+      ResultPtr const got = evaluate_ordered_schedule(forest, ordered, rich,
+                                                      ScalarEvalExpr::annot_t{},
+                                                      yield, cache, target);
+      REQUIRE(got);
+      // the roots are summed: a*b + (a*b)*c
+      CHECK(got->as<ResultScalar<double>>().value() ==
+            Catch::Approx(-7.0 - 50.75));
+    }
   }
 
   SECTION("batched water-20 residual: assembles fire, still zero probes") {
@@ -5248,13 +5254,11 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
       return it != vmap.end() &&
              sequant::subtree_any(*it->second, is_volatile_node);
     };
-    in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
+    auto const n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
         ordered, target, &aops);
     in.operands_of = orderedexec_per_leg_operands(rich, vmap);
     auto const table = sequant::eval::build_cell_table(in);
-    REQUIRE(
-        sequant::eval::validate_cell_table(table, ordered.root, in.n_batches_of)
-            .empty());
+    REQUIRE(sequant::eval::validate_cell_table(table, ordered.root).empty());
 
     // EVERY build the executor performs is the production of a Build cell of
     // this table -- an "implicit" build (an Assemble step producing its own
@@ -5278,7 +5282,7 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
       std::size_t reps = 1;
       for (auto const& [key, lat] : c.scope.path) {
         (void)lat;
-        reps *= std::max<std::size_t>(1, in.n_batches_of(key));
+        reps *= std::max<std::size_t>(1, n_batches_of(key));
       }
       max_builds += reps;
     }
@@ -5299,7 +5303,7 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
       for (auto const& [key, lat] :
            table.cells[c.production.source].scope.path) {
         (void)lat;
-        reps *= std::max<std::size_t>(1, in.n_batches_of(key));
+        reps *= std::max<std::size_t>(1, n_batches_of(key));
       }
       max_assembles += reps;
     }
@@ -5334,6 +5338,17 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     CHECK(again.builds == counts.builds);
     CHECK(again.assembles == counts.assembles);
     CHECK(again.probes == 0);
+
+    // Every cell is let go once the step holding its last reader is done,
+    // including the cells read from inside batch loops, where no single read
+    // is the last. On this cold run nothing is left in the registry but what
+    // is held on purpose: the persistent cells and the forest's results.
+    auto const res = sequant::eval::detail::ordered_last_registry_residency();
+    INFO("registry residency: live=" << res.live
+                                     << " persistent=" << res.persistent
+                                     << " roots=" << res.roots);
+    CHECK(res.live > 0);
+    CHECK(res.live == res.persistent + res.roots);
   }
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)

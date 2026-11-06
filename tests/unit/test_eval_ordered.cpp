@@ -424,15 +424,15 @@ TEST_CASE("table-reads-in-place-eligibility", "[eval][ordered]") {
   // read through the registry instead of access_at, so chain_holds_shared()
   // now reports EVERY table-homed value as permanently shared, which is
   // exactly why this test no longer asserts on it). operand_drained()
-  // instead re-derives eligibility from the registry's own life/value state
+  // instead re-derives eligibility from what the registry still holds
   // (CellRegistry::drained), which the registry keeps honest on every
   // read -- see cell_registry.hpp.
   //
   // The same fixture as the in-place hazard case above: A = a*b is CSE'd
   // across the two roots, so the ordered executor homes it multi-use, and one
   // leaf is declared VOLATILE so A's table cell is non-persistent and
-  // therefore has a finite, spendable life (a cell the table marks persistent
-  // is never exhausted, so operand_drained() never reports it drained). That
+  // therefore given to its last reader (a cell the table marks persistent
+  // is never given away, so operand_drained() never reports it drained). That
   // makes the flip directly observable through the custom-evaluator hook:
   //   * WHILE the table still has reads of A pending, operand_drained(A) is
   //     false -- the guard correctly refuses to let (A + c) accumulate into
@@ -450,7 +450,7 @@ TEST_CASE("table-reads-in-place-eligibility", "[eval][ordered]") {
   // node's own children are read, so the state a hook observes always
   // reflects reads that happened STRICTLY BEFORE that node -- root2's own
   // trailing "e * f" term is visited only after "(a*b)*d" has fully
-  // finished, i.e. after A's exhausting read). "e"/"f" are otherwise inert
+  // finished, i.e. after A's last read). "e"/"f" are otherwise inert
   // (unrelated to A, added only to create that observation point).
   ScalarNode const root1 = scalar_tree(L"((a * b) + c) * (a * b)");
   ScalarNode const root2 = scalar_tree(L"(a * b) * d + (e * f)");
@@ -463,9 +463,9 @@ TEST_CASE("table-reads-in-place-eligibility", "[eval][ordered]") {
                                    {L"f", 0.5}}};
 
   // Leaf "a" is VOLATILE, so every value carrying it -- A included -- is a
-  // non-persistent cell with a finite, spendable life, exactly as an
+  // non-persistent cell its last reader takes over, exactly as an
   // amplitude-carrying intermediate is in the application. A cell the table
-  // marks persistent is never exhausted, so operand_drained() never reports
+  // marks persistent is never given away, so operand_drained() never reports
   // it drained.
   std::function<bool(ScalarNode const&)> const is_volatile =
       [](ScalarNode const& n) {

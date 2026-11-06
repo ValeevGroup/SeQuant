@@ -8684,7 +8684,6 @@ TEST_CASE("ta_lazy_view_cell_bytes_balance", "[eval][ta][lazy]") {
   sequant::eval::TableCell cell;
   cell.value_id = 0;
   cell.production.kind = sequant::eval::ProductionKind::Build;
-  cell.life = 2;
   t.cells.push_back(cell);
   sequant::eval::CellRegistry reg(t, {});
 
@@ -8697,9 +8696,7 @@ TEST_CASE("ta_lazy_view_cell_bytes_balance", "[eval][ta][lazy]") {
   CHECK(r->get<TA::TSpArrayD>().trange().dim(0).extent() == 2);
   CHECK_FALSE(r->is_buffer_alias());
   CHECK(r->size_in_bytes() > 0);
-  bool exhausted = false;
-  CHECK(reg.read(0, &exhausted) == r);
-  CHECK(exhausted);
+  CHECK(reg.take(0) == r);
   CHECK(reg.live_bytes() == 0);
   logger.eval.level = prev_level;
 }

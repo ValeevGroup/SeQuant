@@ -442,16 +442,15 @@ DagRecord record_dag(
   // ---- 5. persistence: the engine's flag, read off the cell table the
   // ordered executor builds from this schedule, on the value's outermost
   // cell (the fewest enclosing loop instances; an Assemble before a Build at
-  // the same depth): the complete form the rest of the DAG consumes. The flag
-  // needs no lives, so the batch count is a constant.
+  // the same depth): the complete form the rest of the DAG consumes.
   auto const resolve = [&](std::size_t vid) -> Node const& {
     return *at_point[rich.cells.at(vid).occurrences.front().point];
   };
   SlicedModeAssignment const sliced_modes =
       compute_sliced_mode_assignment(ordered, rich);
-  CellTableInputs table_inputs = sequant::eval::detail::make_cell_table_inputs(
-      ordered, rich, sliced_modes, resolve, is_volatile);
-  table_inputs.n_batches_of = [](LoopKey const&) { return std::size_t{1}; };
+  CellTableInputs const table_inputs =
+      sequant::eval::detail::make_cell_table_inputs(ordered, rich, sliced_modes,
+                                                    resolve, is_volatile);
   CellTable const table = build_cell_table(table_inputs);
   struct Outermost {
     std::size_t depth = 0;
