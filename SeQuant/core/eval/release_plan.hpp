@@ -43,6 +43,10 @@ struct ReleasePlan {
   /// Per cell: for an \c Assemble, whether its read of \c Production::source
   /// is the last use of that source.
   container::vector<char> last_assemble;
+  /// Per cell: whether it is read from outside the table once the walk is
+  /// over (\c build_release_plan's \p keep): never released, and never dead
+  /// work, whatever becomes of its readers in the table.
+  container::vector<char> kept;
 
   /// \return the cells released after position \p pos of \p block, or null
   [[nodiscard]] container::svector<CellId> const* released_after(
@@ -135,9 +139,10 @@ namespace detail {
     if (table.cells[a].production.kind == ProductionKind::Assemble &&
         table.cells[a].production.source < n)
       assembles_of[table.cells[a].production.source].push_back(a);
-  container::vector<char> kept(n, 0);
+  plan.kept.assign(n, 0);
   for (CellId c : keep)
-    if (c < n) kept[c] = 1;
+    if (c < n) plan.kept[c] = 1;
+  container::vector<char> const& kept = plan.kept;
 
   for (CellId s = 0; s < n; ++s) {
     TableCell const& cell = table.cells[s];

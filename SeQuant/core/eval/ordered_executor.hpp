@@ -136,11 +136,12 @@ ordered_n_batches_by_loop(
 ///     Assemble that closes it is dead as soon as that Assemble is -- even
 ///     though the assembled form of the same value is still read elsewhere.
 ///
-/// A cell with no consumer at all is never skipped by rule 2 -- the closure
-/// below only ever adds a cell all of whose consumers are skipped, and a cell
-/// with no consumer has none to skip. Those cells are the schedule's own
-/// results (validator rule 4 admits a zero-read cell only at the root scope),
-/// and rule 1 does reach them: a non-volatile forest root -- a constant term,
+/// The schedule's own results (\p kept: the cells the caller reads once the
+/// walk is over) are never skipped by rule 2, whether nothing in the table
+/// reads them or another result does: the caller is a reader no skip can
+/// remove. Neither is any other cell with no consumer at all -- the closure
+/// below only ever adds a cell all of whose consumers are skipped. Rule 1
+/// does reach the results: a non-volatile forest root -- a constant term,
 /// held by the persistent store from the previous evaluation -- is skipped
 /// exactly as any other held persistent cell is, which is the whole point of
 /// cache-halt. What the caller then receives for such a root is a private
@@ -152,9 +153,11 @@ ordered_n_batches_by_loop(
 /// down. This is the table-side statement of what forest descent does by
 /// halting its descent at a cache hit.
 [[nodiscard]] inline container::vector<char> ordered_skip_closure(
-    CellTable const& table, container::vector<char> seed) {
+    CellTable const& table, container::vector<char> seed,
+    container::vector<char> const& kept) {
   std::size_t const n = table.cells.size();
   SEQUANT_ASSERT(seed.size() == n);
+  SEQUANT_ASSERT(kept.size() == n);
   container::vector<container::svector<CellId>> consumers(n);
   for (Read const& r : table.reads)
     if (r.source < n) consumers[r.source].push_back(r.consumer);
@@ -166,7 +169,7 @@ ordered_n_batches_by_loop(
   for (bool changed = true; changed;) {
     changed = false;
     for (CellId c = 0; c < n; ++c) {
-      if (seed[c] || consumers[c].empty()) continue;
+      if (seed[c] || kept[c] || consumers[c].empty()) continue;
       bool all = true;
       for (CellId x : consumers[c])
         if (!seed[x]) {
@@ -185,11 +188,12 @@ ordered_n_batches_by_loop(
 /// \overload The call-wide skip set: seeded by rule 1 (persistent and already
 /// held after \c CellRegistry::seed_persistent) and closed under rule 2.
 [[nodiscard]] inline container::vector<char> ordered_cache_halt_skip(
-    CellTable const& table, CellRegistry const& registry) {
+    CellTable const& table, CellRegistry const& registry,
+    container::vector<char> const& kept) {
   container::vector<char> seed(table.cells.size(), 0);
   for (CellId c = 0; c < table.cells.size(); ++c)
     if (table.cells[c].persistent && registry.peek(c)) seed[c] = 1;
-  return ordered_skip_closure(table, std::move(seed));
+  return ordered_skip_closure(table, std::move(seed), kept);
 }
 
 /// Releases, when it goes out of scope, the cells the release plan lets go
@@ -736,8 +740,8 @@ void run_ordered_contracted_block(
       local_skip_storage[c] = 1;
     }
     if (seeded) {
-      local_skip_storage =
-          ordered_skip_closure(*table, std::move(local_skip_storage));
+      local_skip_storage = ordered_skip_closure(
+          *table, std::move(local_skip_storage), release_plan.kept);
       skip_p = &local_skip_storage;
     }
   }
@@ -1418,7 +1422,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // and neither is any cell whose every consumer is itself skipped.
   container::vector<char> const skip = [&]() {
     PhaseTimer::Scope _pt("B.sched_setup");
-    return ordered_cache_halt_skip(cell_table, registry);
+    return ordered_cache_halt_skip(cell_table, registry, release_plan.kept);
   }();
   if (detail::dump_enabled("SEQUANT_UT_BLOCK_DIAG")) {
     std::size_t n_skip = 0;
@@ -1562,7 +1566,8 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
                       " not found in the schedule's value map");
     std::size_t const vid = vid_it->second;
     // The combine below reads the forest root's cell, which the release plan
-    // keeps for it whatever else in the table reads that cell. The cell
+    // keeps for it whatever else in the table reads that cell, and which the
+    // cache-halt set never counts as dead work. The cell
     // is the root's Build cell at the root scope, or, for a root produced
     // inside a batch loop and escaped out of it, the Assemble cell the
     // block's close produced at the same root scope.

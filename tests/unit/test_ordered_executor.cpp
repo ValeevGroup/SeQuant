@@ -5081,6 +5081,39 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     CHECK(counts.assembles == 0);  // no batch loop => no Assemble step
   }
 
+  SECTION("a result that another result reads, over repeated evaluations") {
+    // The first root is an operand of the second. The caller reads both, so
+    // the first is neither released after its reader nor left unproduced on
+    // a later evaluation, when the second -- held from the first evaluation
+    // -- no longer needs it.
+    std::vector<ScalarNode> forest{scalar_tree(L"a * b"),
+                                   scalar_tree(L"(a * b) * c")};
+    ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
+
+    sequant::BatchPolicy const policy;
+    SizeRegime const regime;
+    CostModel const cm{regime};
+    auto const block_of = [](Index const&) -> std::size_t { return 1; };
+    RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+    auto const legality = analyze_legality(rich, forest, policy);
+    OrderedSchedule const ordered =
+        build_ordered_schedule(rich, legality, policy, {});
+
+    auto cache = sequant::CacheManager<ScalarNode>::empty();
+    std::function<std::size_t(Index const&)> const target =
+        [](Index const&) -> std::size_t { return 1; };
+    for (int evaluation = 0; evaluation < 3; ++evaluation) {
+      INFO("evaluation " << evaluation);
+      ResultPtr const got = evaluate_ordered_schedule(forest, ordered, rich,
+                                                      ScalarEvalExpr::annot_t{},
+                                                      yield, cache, target);
+      REQUIRE(got);
+      // the roots are summed: a*b + (a*b)*c
+      CHECK(got->as<ResultScalar<double>>().value() ==
+            Catch::Approx(-7.0 - 50.75));
+    }
+  }
+
   SECTION("batched water-20 residual: assembles fire, still zero probes") {
     using sequant::eval::dryrun::EvalExprDryRun;
     using sequant::eval::dryrun::EvalNodeDryRun;
