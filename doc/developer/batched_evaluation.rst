@@ -61,7 +61,7 @@ Evaluating a forest under ``BatchScheduler::ordered`` proceeds through four stag
    values are separated into ordered sub-passes within the same loop nest rather than left to race.
 3. **The cell table** (``cell_table.hpp``, ``cell_table_builder.hpp``). Rather than let the executor *infer* what to read from where
    while it runs, the schedule is first lowered into an explicit table: one entry per distinct value-form actually resident at some
-   scope, and one entry per read of it, naming exactly which scope produces it, how long it lives, and who consumes it. A validator
+   scope, and one entry per read of it, naming exactly which scope produces it and who consumes it. A validator
    checks this table for internal consistency before any tensor operation runs, so a scheduling bug is caught as a fast, deterministic
    failure rather than a wrong number arrived at after an expensive run.
 4. **The executor** (``ordered_executor.hpp``). Walks the cell table exactly as written: every operand of every operation is resolved
@@ -141,24 +141,31 @@ is still a partial sum, and how it is produced (leaf, build, or sum/scatter asse
 whose residency encloses it.
 
 Each operand occurrence is a separate ``Read``, so a consumer using one value twice reads it twice. A read names its
-source cell and how to slice it. A cell's lifetime is the number of reads it will serve, each weighted by how many times
-the loops enclosing the consumer but not the source replay it; the executor frees the cell when the count reaches zero.
-A cell invariant on an enclosing loop is built on the first batch and reused until a loop it depends on advances. Only
-unbound, non-volatile values at the persistent-to-volatile frontier persist across evaluations.
+source cell and how to slice it. A cell invariant on an enclosing loop is built on the first batch and reused until a
+loop it depends on advances. Only unbound, non-volatile values at the persistent-to-volatile frontier persist across
+evaluations.
+
+How long a cell lives is not counted; it is read off the schedule (``ReleasePlan``, ``release_plan.hpp``). A cell
+lives for one epoch, from its production until the loop that re-produces it advances. Within an epoch that loop's
+block runs its steps and then its outputs once, and every read of the cell happens at one of those positions, directly
+or somewhere inside the nested block that is the step there. The cell is released when the last position holding a
+read of it is done, whether that step ran, was skipped, or replayed its reads once per batch of loops nested in it.
+The schedule's results are kept for the caller.
 
 ``validate_cell_table`` checks the table for consistency before any tensor operation runs: every read has a visible
-source of the right form, assemblies close the right partial or scattered form, lifetimes match the weighted reads,
-and no value is built twice at one scope. It does not check array ranges; the dry-run backend does.
+source of the right form, assemblies close the right partial or scattered form, no cell resident inside a loop goes
+unread, and no value is built twice at one scope. It does not check array ranges; the dry-run backend does.
 
 Executing the table
 -----------------------
 
-The executor resolves each declared read against the cell registry, spends one unit of the source's lifetime, and
-applies the read's slices; the last non-persistent read moves the value out, which makes in-place accumulation safe.
-Each batch clears the cells bound to that loop, executes the block's steps, and folds outputs into their assembly
-cells (summing partials, or scattering blocks into the destination). When the loop closes, the assembled cell becomes
-visible to the next link of its escape chain. Persistent cells are published to the cache's ``PersistentValueStore``
-and restored from it on later evaluations, in which case their productions are skipped.
+The executor resolves each declared read against the cell registry and applies the read's slices. A read the release
+plan marks as the last use of a non-persistent cell, made once per epoch of that cell, takes the value over, which
+makes in-place accumulation safe. Each batch clears the cells bound to that loop, executes the block's steps, and
+folds outputs into their assembly cells (summing partials, or scattering blocks into the destination); after each step
+and each output it releases the cells whose last reader that position holds. When the loop closes, the assembled
+cell becomes visible to the next link of its escape chain. Persistent cells are published to the cache's
+``PersistentValueStore`` and restored from it on later evaluations, in which case their productions are skipped.
 
 A correctness caveat for sparse backends
 ---------------------------------------------

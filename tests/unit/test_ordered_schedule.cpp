@@ -22,6 +22,7 @@
 #include <SeQuant/core/eval/ordered_executor.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
+#include <SeQuant/core/eval/release_plan.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -526,17 +527,13 @@ TEST_CASE("boulevard-reduction-loop-identity",
     return sequant::container::svector<Index>{};
   };
   in.volatile_of = [](std::size_t) { return false; };
-  in.n_batches_of = [](sequant::eval::LoopKey const&) -> std::size_t {
-    return 2;
-  };
   in.operands_of = [&](std::size_t vid) {
     auto const it = g.depends_on.find(vid);
     return it == g.depends_on.end() ? sequant::container::svector<std::size_t>{}
                                     : it->second;
   };
   auto const table = sequant::eval::build_cell_table(in);
-  auto const violations =
-      sequant::eval::validate_cell_table(table, sched.root, in.n_batches_of);
+  auto const violations = sequant::eval::validate_cell_table(table, sched.root);
   CHECK(violations.empty());
 
   bool a_sliced = false, b_sliced = false;
@@ -1555,9 +1552,7 @@ std::vector<sequant::eval::ScopeBlock const*> orderedsched_root_blocks(
 // callbacks (no EvalExpr node map exists for a hand-built schedule):
 // sliced_modes_of and volatile_of read the fixture's own occurrence
 // records / the fixture's own knowledge (nothing here is marked volatile),
-// operands_of is the dependency graph already recovered from rich, and
-// n_batches_of is a constant stand-in (2 per loop instance; its value plays
-// no role in the well-formedness rules checked here).
+// and operands_of is the dependency graph already recovered from rich.
 sequant::eval::CellTable orderedsched_validated_table(
     sequant::eval::RichSchedule const& rich,
     sequant::eval::OrderedSchedule const& sched) {
@@ -1571,17 +1566,13 @@ sequant::eval::CellTable orderedsched_validated_table(
     return rich.cells[vid].occurrences.front().home;
   };
   in.volatile_of = [](std::size_t) { return false; };
-  in.n_batches_of = [](sequant::eval::LoopKey const&) -> std::size_t {
-    return 2;
-  };
   in.operands_of = [&](std::size_t vid) {
     auto const it = g.depends_on.find(vid);
     return it == g.depends_on.end() ? sequant::container::svector<std::size_t>{}
                                     : it->second;
   };
   auto const table = sequant::eval::build_cell_table(in);
-  auto const violations =
-      sequant::eval::validate_cell_table(table, sched.root, in.n_batches_of);
+  auto const violations = sequant::eval::validate_cell_table(table, sched.root);
   for (auto const& v : violations)
     UNSCOPED_INFO("[" << v.rule << "] " << v.what);
   for (auto const& [cid, pos] : table.unresolved)
@@ -2965,4 +2956,209 @@ TEST_CASE("per-nest-mutual-dependence-of-two-nests",
   CHECK(roots[0]->latitude_ordinal < roots[2]->latitude_ordinal);
 
   orderedsched_validated_table(rich, sched);
+}
+
+// A cell is let go where the schedule places its last reader, however often
+// that reader's loops replay the read. X is built at root and read there by
+// W, and inside 63 nested two-batch loops by A and B: 2^63 + 2^63 + 1 reads
+// in all, a count that wraps to 1. X must outlive the nest.
+TEST_CASE("release-plan-deep-nest", "[ordered-schedule][release-plan]") {
+  using sequant::eval::CellId;
+  using sequant::eval::LoopRole;
+  using sequant::eval::ProductionKind;
+  using sequant::eval::ScopeBlock;
+  int const depth = 63;
+  std::vector<sequant::Index> ix;
+  std::vector<int> slots;
+  for (int k = 0; k < depth; ++k) {
+    ix.push_back(sequant::Index{L"i_" + std::to_wstring(k + 1)});
+    slots.push_back(k);
+  }
+  sequant::eval::RichSchedule rich;
+  rich.cells.push_back(orderedsched_nest_cell(
+      0, 9500, {}, {}, {{10, 100}, {11, 200}, {12, 500}}));  // X
+  rich.cells.push_back(
+      orderedsched_nest_cell(1, 9501, ix, slots, {{100, 300}}));  // A
+  rich.cells.push_back(
+      orderedsched_nest_cell(2, 9502, ix, slots, {{200, 400}}));  // B
+  for (std::size_t id : {3u, 4u}) {                               // TA, TB
+    auto t =
+        orderedsched_nest_cell(id, 9500 + id, {}, {}, {{id * 100, id * 100}});
+    for (auto& occ : t.occurrences)
+      for (int k = 0; k < depth; ++k) occ.reduced_slot.push_back({ix[k], k});
+    rich.cells.push_back(std::move(t));
+  }
+  rich.cells.push_back(
+      orderedsched_nest_cell(5, 9505, {}, {}, {{500, 500}}));  // W
+  for (auto& vc : rich.cells)
+    if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
+  orderedsched_record_loop_kinds(rich);
+  sequant::eval::LegalitySchedule legality;
+  legality.cells.push_back(
+      orderedsched_nest_legality(9500, {}, LoopRole::LoopLocal));
+  legality.cells.push_back(
+      orderedsched_nest_legality(9501, ix, LoopRole::LoopLocal));
+  legality.cells.push_back(
+      orderedsched_nest_legality(9502, ix, LoopRole::LoopLocal));
+  legality.cells.push_back(
+      orderedsched_nest_legality(9503, ix, LoopRole::Reduction));
+  legality.cells.push_back(
+      orderedsched_nest_legality(9504, ix, LoopRole::Reduction));
+  legality.cells.push_back(
+      orderedsched_nest_legality(9505, {}, LoopRole::LoopLocal));
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](sequant::Index const& i) {
+    return i.basis().base_key() == L"i";
+  };
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+  auto const table = orderedsched_validated_table(rich, sched);
+  auto const plan = sequant::eval::build_release_plan(table, sched.root);
+
+  // The root timeline: X, the nest, W, in some valid order.
+  std::optional<std::size_t> x_at, nest_at, w_at;
+  for (std::size_t k = 0; k < sched.root.steps.size(); ++k) {
+    auto const& st = sched.root.steps[k].value;
+    if (auto const* b = std::get_if<sequant::eval::BuildStep>(&st)) {
+      if (b->value_id == 0) x_at = k;
+      if (b->value_id == 5) w_at = k;
+    } else {
+      nest_at = k;
+    }
+  }
+  REQUIRE((x_at && nest_at && w_at));
+  auto const cell_of = [&](std::size_t vid, ProductionKind kind,
+                           std::size_t scope_depth) {
+    std::optional<CellId> found;
+    for (CellId c = 0; c < table.cells.size(); ++c)
+      if (table.cells[c].value_id == vid &&
+          table.cells[c].production.kind == kind &&
+          table.cells[c].scope.path.size() == scope_depth) {
+        REQUIRE_FALSE(found.has_value());
+        found = c;
+      }
+    REQUIRE(found.has_value());
+    return *found;
+  };
+  auto const released_at = [&](ScopeBlock const& block, CellId c) {
+    std::vector<std::size_t> at;
+    for (std::size_t pos = 0; pos < block.steps.size() + block.outputs.size();
+         ++pos)
+      if (auto const* cells = plan.released_after(block, pos))
+        if (std::find(cells->begin(), cells->end(), c) != cells->end())
+          at.push_back(pos);
+    return at;
+  };
+
+  // X: released once, after the later of the nest and W.
+  CellId const x = cell_of(0, ProductionKind::Build, 0);
+  CHECK(released_at(sched.root, x) ==
+        std::vector<std::size_t>{std::max(*nest_at, *w_at)});
+  // The reads of X inside the nest replay per batch: no one takes X there.
+  // W reads it once; it takes X exactly when it is the last to read it.
+  CellId const w = cell_of(5, ProductionKind::Build, 0);
+  for (std::size_t r = 0; r < table.reads.size(); ++r) {
+    if (table.reads[r].source != x) continue;
+    bool const by_w = table.reads[r].consumer == w;
+    CHECK(static_cast<bool>(plan.last_read[r]) == (by_w && *w_at > *nest_at));
+  }
+  // The results have no reader in the table and are never released.
+  CHECK(released_at(sched.root, w).empty());
+  CHECK(
+      released_at(sched.root, cell_of(3, ProductionKind::Assemble, 0)).empty());
+
+  // The innermost block: A is built per batch and read once, by TA's own
+  // per-batch build at the block's close, which takes it.
+  ScopeBlock const* inner =
+      &std::get<ScopeBlock>(sched.root.steps[*nest_at].value);
+  for (bool deeper = true; deeper;) {
+    deeper = false;
+    for (auto const& st : inner->steps)
+      if (auto const* child = std::get_if<ScopeBlock>(&st.value)) {
+        inner = child;
+        deeper = true;
+        break;
+      }
+  }
+  CellId const a = cell_of(1, ProductionKind::Build, depth);
+  CellId const ta = cell_of(3, ProductionKind::Build, depth);
+  std::optional<std::size_t> ta_out;
+  for (std::size_t k = 0; k < inner->outputs.size(); ++k)
+    if (inner->outputs[k].first == 3) ta_out = inner->steps.size() + k;
+  REQUIRE(ta_out.has_value());
+  CHECK(released_at(*inner, a) == std::vector<std::size_t>{*ta_out});
+  std::size_t taken = 0;
+  for (std::size_t r = 0; r < table.reads.size(); ++r)
+    if (table.reads[r].source == a) {
+      CHECK(table.reads[r].consumer == ta);
+      taken += plan.last_read[r] ? 1 : 0;
+    }
+  CHECK(taken == 1);
+  // TA's per-batch partial has one reader, the Assemble that sums it.
+  CHECK(released_at(*inner, ta) == std::vector<std::size_t>{*ta_out});
+  CHECK(plan.last_assemble[cell_of(3, ProductionKind::Assemble, depth - 1)]);
+
+  // A cell the caller asks to keep is not released.
+  auto const kept = sequant::eval::build_release_plan(table, sched.root, {x});
+  bool x_released = false;
+  for (std::size_t pos = 0; pos < sched.root.steps.size(); ++pos)
+    if (auto const* cells = kept.released_after(sched.root, pos))
+      x_released |= std::find(cells->begin(), cells->end(), x) != cells->end();
+  CHECK_FALSE(x_released);
+}
+
+// A cell's epoch is that of the loop that re-produces it, which need not be
+// the innermost loop around it. In the skip-level fixture U's assembly over
+// slot 2 sits inside the slot-1 loop, on which U is invariant: it is made on
+// the first slot-1 batch and reused on the rest, so it is let go by the
+// slot-0 block, after the step holding its last reader, W -- not by the
+// slot-1 block, once per batch.
+TEST_CASE("release-plan-epoch-of-invariant-cell",
+          "[ordered-schedule][release-plan]") {
+  using sequant::eval::CellId;
+  using sequant::eval::ProductionKind;
+  using sequant::eval::ScopeBlock;
+  auto const fx = orderedsched_skip_level_fixture();
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    return ix.basis().base_key() == L"i";
+  };
+  auto const sched = sequant::eval::build_ordered_schedule(fx.rich, fx.legality,
+                                                           policy, {L"i"});
+  auto const table = orderedsched_validated_table(fx.rich, sched);
+  auto const plan = sequant::eval::build_release_plan(table, sched.root);
+
+  // U's assembled form: an Assemble two loops deep, invariant on the inner.
+  std::optional<CellId> u;
+  for (CellId c = 0; c < table.cells.size(); ++c)
+    if (table.cells[c].value_id == 0 &&
+        table.cells[c].production.kind == ProductionKind::Assemble &&
+        table.cells[c].scope.path.size() == 2)
+      u = c;
+  REQUIRE(u.has_value());
+  CHECK(table.cells[*u].produce_if_absent);
+  CHECK(sequant::eval::detail::epoch_depth(table.cells[*u]) == 1);
+
+  auto const roots = orderedsched_root_blocks(sched);
+  REQUIRE(roots.size() == 2);
+  ScopeBlock const& outer = *roots[0];  // slot 0, first pass
+  std::optional<std::size_t> w_at;
+  ScopeBlock const* slot1 = nullptr;
+  for (std::size_t k = 0; k < outer.steps.size(); ++k) {
+    auto const& st = outer.steps[k].value;
+    if (auto const* b = std::get_if<sequant::eval::BuildStep>(&st)) {
+      if (b->value_id == 1) w_at = k;
+    } else {
+      slot1 = &std::get<ScopeBlock>(st);
+    }
+  }
+  REQUIRE((w_at && slot1));
+  auto const* at_w = plan.released_after(outer, *w_at);
+  REQUIRE(at_w != nullptr);
+  CHECK(std::find(at_w->begin(), at_w->end(), *u) != at_w->end());
+  for (std::size_t pos = 0; pos < slot1->steps.size() + slot1->outputs.size();
+       ++pos)
+    if (auto const* cells = plan.released_after(*slot1, pos))
+      CHECK(std::find(cells->begin(), cells->end(), *u) == cells->end());
 }

@@ -876,8 +876,8 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
 /// caller must have established that it is an evaluation-local buffer nobody
 /// else will read -- that provenance gate stays at the call site, since the
 /// two callers answer it differently (\c evaluate_impl from the scope
-/// chain's \c chain_holds_shared, the ordered executor from the cell table's
-/// own remaining life via \c CellReadResolver::operand_drained).
+/// chain's \c chain_holds_shared, the ordered executor from the cell
+/// registry via \c CellReadResolver::operand_drained).
 ///
 /// \return the (mutated) accumulator, in the node's own oriented layout.
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
@@ -1290,13 +1290,13 @@ ResultPtr evaluate_impl(Node const& node,         //
         //    CacheManager::chain_holds_shared's own doc comment.
         //  - Explicit value cells: when a CellReadResolver is
         //    wired (the ordered executor's table-driven path), the same
-        //    provenance question is answered from the table's own life
+        //    provenance question is answered from the cell registry
         //    instead -- eval::CellReadResolver::operand_drained(hash) is
-        //    true iff the left operand's most recent table read spent its
-        //    source's last life (a private/transient value, never a table
-        //    read at all, is reported drained too: nothing else could be
-        //    sharing it, exactly as chain_holds_shared() reports "not held"
-        //    for the same case) -- see that method's own doc comment. The
+        //    true iff the left operand's most recent table read was the last
+        //    use of its source and took it over (a private/transient value,
+        //    never a table read at all, is reported drained too: nothing else
+        //    could be sharing it, exactly as chain_holds_shared() reports "not
+        //    held" for the same case) -- see that method's own doc comment. The
         //    forest path (no resolver wired) keeps chain_holds_shared.
         // A marked Sum whose left child is a leaf (the common case for the
         // innermost Sum of a chain, whose left is the chain seed), or whose

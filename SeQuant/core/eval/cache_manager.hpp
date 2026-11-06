@@ -1698,12 +1698,7 @@ class CacheManager {
 ///
 /// \param min_repeats Minimum number of repeats for a node to be cached. By
 ///                    default (1) everything is cached, so use-count tracking
-///                    is exact.
-///                    The table-driven ordered executor derives every life
-///                    from the cell table's exact per-cell read count, and a
-///                    use-count-tracking cache that silently declines
-///                    single-use nodes makes that count wrong; with 1 the
-///                    cache and the table agree by construction. Pass 2 to
+///                    is exact. Pass 2 to
 ///                    cache only nodes reached more than once, which caches
 ///                    less and leaves the use counts approximate.
 ///
@@ -1778,12 +1773,7 @@ struct zero_footprint {
 /// \param is_volatile `bool(TreeNode const&)`: true if the node is
 ///        intrinsically volatile. Only its value on leaves matters in practice
 ///        (volatility propagates up), but it is consulted on every node.
-/// \param min_repeats minimum NP repeats to cache (default 1).
-///                    The table-driven ordered executor derives every life
-///                    from the cell table's exact per-cell read count, and a
-///                    use-count-tracking cache that silently declines
-///                    single-use nodes makes that count wrong; with 1 the
-///                    cache and the table agree by construction. Pass 2 to
+/// \param min_repeats minimum NP repeats to cache (default 1). Pass 2 to
 ///                    cache only nodes reached more than once, which caches
 ///                    less and leaves the use counts approximate.
 ///                    Cost note: 1 registers every internal node, and a cached
