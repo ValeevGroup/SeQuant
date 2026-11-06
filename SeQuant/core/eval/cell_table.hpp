@@ -455,16 +455,7 @@ template <typename Candidates>
         out.push_back({"chain", detail::cell_str(table, id) +
                                     " scatters nothing: empty scatter map"});
     } else if (!s.scope.path.empty()) {
-      // The instance a Sum closes is the loop just below the Assemble's own
-      // scope along the source's path (the block that emitted the escape),
-      // not the source's innermost scope loop: loops of other terms may be
-      // interposed below it (the fused chain nests a term under loops it
-      // does not open). The source must be a partial over the closed
-      // instance, and must be bound to none of the deeper interposed loops
-      // -- it is then complete once per batch of the closed instance,
-      // produced in the first iteration of each interposed loop and
-      // resident across the rest (residency_scope + produce_if_absent), so
-      // the closing Sum reads one complete partial per batch.
+      // A Sum's source must be a partial over the instance it closes.
       std::size_t const at = c.scope.path.size();
       // (A source not nested below the Assemble is the link-direction
       // violation reported above; nothing to add here.)
@@ -477,14 +468,24 @@ template <typename Candidates>
           out.push_back({"chain", detail::cell_str(table, id) +
                                       " sums a source whose partial_over "
                                       "lacks the closing instance"});
-        for (std::size_t j = at + 1; j < s.scope.path.size(); ++j)
-          for (LoopKey const& b : detail::bound_instances(s))
-            if (detail::same_key(b, s.scope.path[j].first))
-              out.push_back({"chain", detail::cell_str(table, id) +
-                                          " sums a source still bound to an "
-                                          "instance inside the one it closes"});
       }
     }
+    // The instance an Assemble closes is the loop just below its own scope
+    // along the source's path (the block that emitted the escape), not the
+    // source's innermost scope loop: loops of other terms may be interposed
+    // below it (the fused chain nests a term under loops it does not open).
+    // The source must be bound to none of those deeper interposed loops -- it
+    // is then complete once per batch of the closed instance, produced in the
+    // first iteration of each interposed loop and resident across the rest
+    // (residency_scope + produce_if_absent), so the Assemble reads one
+    // complete partial per batch. A source still bound further in would hand
+    // it only that inner loop's current batch.
+    for (std::size_t j = c.scope.path.size() + 1; j < s.scope.path.size(); ++j)
+      for (LoopKey const& b : detail::bound_instances(s))
+        if (detail::same_key(b, s.scope.path[j].first))
+          out.push_back({"chain", detail::cell_str(table, id) +
+                                      " assembles a source still bound to an "
+                                      "instance inside the one it closes"});
   }
 
   // (3b) chain: a partial sum is consumed only by the Assemble that closes it

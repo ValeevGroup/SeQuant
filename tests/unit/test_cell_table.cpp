@@ -633,6 +633,24 @@ TEST_CASE("validator-scatter-empty-map", "[cell_table]") {
   }
 }
 
+// A scatter over a loop assembles one partial per batch of that loop, so the
+// partial must be complete within the batch: a source still sliced by a loop
+// nested inside the one being scattered over holds only that inner loop's
+// current batch when the outer batch closes.
+TEST_CASE("validator-scatter-source-bound-inside", "[cell_table]") {
+  using namespace sequant::eval;
+  auto t = make_two_level_table();
+  // move the per-batch source one loop further in, sliced by that loop too
+  t.cells[1].scope.path.push_back({LoopKey{2, 0}, 0});
+  t.cells[1].sliced.push_back({1, LoopKey{2, 0}});
+  auto const v = validate_cell_table(t, empty_root());
+  for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+  std::size_t n_chain = 0;
+  for (auto const& x : v)
+    if (x.rule == "chain") ++n_chain;
+  CHECK(n_chain == 1);
+}
+
 TEST_CASE("validator-unread-cell", "[cell_table]") {
   using namespace sequant::eval;
   {
