@@ -3,11 +3,12 @@
 #include "processing_step_factory.hpp"
 
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/domain/mbpt/op.hpp>
 
+#include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 
 #include <iterator>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,12 +16,6 @@
 namespace sequant::util::extint {
 
 SEQUANT_EXTINT_REGISTER_STEP_TYPE(SortStep);
-
-LexicographicExprCompare export_order() {
-  auto labels = mbpt::cardinal_tensor_labels();
-  return LexicographicExprCompare(LexicographicCompareOptions{
-      .cardinal_tensor_labels = {labels.begin(), labels.end()}});
-}
 
 std::string SortStep::kind() const { return "sort"; }
 
@@ -35,7 +30,13 @@ void SortStep::set_options(const nlohmann::json &) {
 std::size_t SortStep::process(std::string_view id_prefix, std::size_t id_start,
                               ExecutionContext &ctx,
                               WorkingCopy<ExpressionData> &input) {
-  const LexicographicExprCompare cmp = export_order();
+  static std::once_flag deprecation_warning;
+  std::call_once(deprecation_warning, [this]() {
+    spdlog::warn("The '{}' step is deprecated; use the 'prettify' step instead",
+                 kind());
+  });
+
+  const LexicographicExprCompare cmp;
 
   for (ResultExpr &expr : input.data.expressions) {
     sort_expr(expr, cmp);

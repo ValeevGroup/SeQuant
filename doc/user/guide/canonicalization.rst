@@ -77,6 +77,13 @@ The same holds for :class:`sequant::WickTheorem` and ``vac_av``/``ref_av``, and 
    :end-before: end-snippet-3
    :dedent: 2
 
+Nested products
+-----------------
+
+A product whose factors are tensors and (recursively) products of tensors, such as a product parenthesized for evaluation by
+``optimize()``, is canonicalized as one tensor network of all its tensors: the dummy indices are named consistently across the
+nested products, and the parenthesization is preserved; only the factors at each level are reordered.
+
 .. _canonicalization-presentation:
 
 Presentation
@@ -87,7 +94,12 @@ The canonical form is meant to identify equivalent expressions, not to be read. 
 - :func:`sequant::prettify` returns a copy of an expression in a form meant for reading: optionally canonicalized with the given
   presentation settings (:class:`sequant::CanonicalizationPresentation`: tensor canonicalizers per label, index comparers and
   cardinal tensor labels), then sorted lexicographically, which, unlike canonicalization, does not depend on the hashing algorithm.
-  Named indices are never renamed. :func:`sequant::mbpt::prettify_options` presents mbpt expressions in their conventional order;
+  Named indices are never renamed, and the structure of the expression is preserved: products keep their parenthesization
+  (e.g. the order of evaluation chosen by ``optimize()``), and sums are neither flattened nor are their summands combined.
+  For a :class:`sequant::ResultExpr`, the terms of a sum that a symmetrizer of the result multiplies are presented alike if
+  they are related by the symmetry of the result.
+  :func:`sequant::mbpt::prettify_options` is a preset that presents mbpt expressions in their conventional order (the cardinal
+  tensor labels of mbpt); ``prettify`` itself is part of the core library;
 - the same presentation settings can be passed to ``canonicalize()`` and the ``Expr::canonicalize()`` members
   (``CanonicalizeOptions::presentation``). The result is not marked as canonical, and ``simplify()``, whose result must be the
   canonical form, rejects them;

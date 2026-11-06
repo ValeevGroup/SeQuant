@@ -5,9 +5,11 @@
 #ifndef SEQUANT_EXPRESSIONS_ALGORITHMS_HPP
 #define SEQUANT_EXPRESSIONS_ALGORITHMS_HPP
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/print_options.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -15,6 +17,8 @@
 #include <range/v3/view/transform.hpp>
 
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace sequant {
 
@@ -203,6 +207,17 @@ ExprPtr canonicalize(ExprPtr&& expr_rv, const NamedIndexSpec& named_indices,
 
 /// @return the named indices of @p expr : the indices of its result
 NamedIndexSpec named_indices(const ResultExpr& expr);
+
+namespace detail {
+
+/// @return the permutations of the indices of @p result that its symmetries
+/// relate, as index replacement maps, each with its phase (the identity, with
+/// an empty map, first); only those that map every index to one of the same
+/// space, i.e. that relate elements of the block of the result
+std::vector<std::pair<container::map<Index, Index>, int>> result_symmetry_group(
+    const ResultExpr& result);
+
+}  // namespace detail
 
 /// Recursively canonicalizes the expression of a ResultExpr, with the indices
 /// of the result as the named indices

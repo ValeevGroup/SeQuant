@@ -5,7 +5,6 @@
 #include "processing_data.hpp"
 #include "processing_step.hpp"
 
-#include <SeQuant/core/expressions/lexicographic_order.hpp>
 #include <SeQuant/core/space.hpp>
 
 #include <nlohmann/json_fwd.hpp>
@@ -15,11 +14,9 @@
 
 namespace sequant::util::extint {
 
-/// @return the order in which expressions are exported: lexicographic, which
-/// does not depend on the hashing algorithm (so that the generated code is
-/// reproducible), with the cardinal tensor labels of mbpt
-LexicographicExprCompare export_order();
-
+/// sorts the expressions lexicographically
+/// @deprecated use the prettify step (PrettifyStep), which also brings the
+/// expressions into a readable form
 class SortStep : public OneByOneProcessingStep<ExpressionData, true,
                                                InputAccess::WorkingCopy> {
  public:

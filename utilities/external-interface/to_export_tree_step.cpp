@@ -55,7 +55,11 @@ std::size_t ToExportTreeStep::process(std::string_view id_prefix,
 
       symmetrized_result = current.result_as_tensor();
 
+      // the not yet symmetrized result has none of the symmetries that the
+      // symmetrization brings about (cf. result_symmetrization())
       current.set_label(std::wstring(current.label()) + L"u");
+      current.set_symmetry(Symmetry::Nonsymm);
+      current.set_column_symmetry(ColumnSymmetry::Nonsymm);
 
       return to_export_tree(current);
     }();

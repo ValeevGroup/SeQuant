@@ -161,15 +161,8 @@ NamedIndexSpec named_indices(const ResultExpr& expr) {
                                         ranges::to<container::set<Index>>);
 }
 
-namespace {
-
-/// @return the permutations of the indices of @p result that its symmetries
-/// relate, as index replacement maps, each with its phase (identity
-/// included); only those that map every index to one of the same space, i.e.
-/// that relate elements of the block of the result, not elements of different
-/// blocks
-std::vector<std::pair<container::map<Index, Index>, int>> symmetry_group(
-    const ResultExpr& result) {
+std::vector<std::pair<container::map<Index, Index>, int>>
+detail::result_symmetry_group(const ResultExpr& result) {
   const container::svector<Index> bra(result.bra().begin(), result.bra().end());
   const container::svector<Index> ket(result.ket().begin(), result.ket().end());
   using Perm = std::vector<std::size_t>;
@@ -232,12 +225,14 @@ std::vector<std::pair<container::map<Index, Index>, int>> symmetry_group(
   return group;
 }
 
+namespace {
+
 /// @return @p term (a summand of the expression of a result) in the
 /// canonical form that is the same for all its images under @p group , the
-/// symmetry group of the result (see symmetry_group()), with the phase of the
-/// permutation absorbed: of the canonical forms of the images the one that is
-/// smallest by hash (then by its text) is chosen; the indices of @p result keep
-/// their labels
+/// symmetry group of the result (see detail::result_symmetry_group()), with the
+/// phase of the permutation absorbed: of the canonical forms of the images the
+/// one that is smallest by hash (then by its text) is chosen; the indices of @p
+/// result keep their labels
 ExprPtr canonicalize_term_for_result(
     const ExprPtr& term,
     const std::vector<std::pair<container::map<Index, Index>, int>>& group,
@@ -279,7 +274,7 @@ ExprPtr canonicalize_term_for_result(
 
 ResultExpr& canonicalize(ResultExpr& expr, const CanonicalizeOptions& opts) {
   const auto named = named_indices(expr);
-  const auto group = symmetry_group(expr);
+  const auto group = detail::result_symmetry_group(expr);
   if (group.size() > 1) {
     // terms that differ by a permutation of the result indices within the
     // symmetry group of the result are the same term
