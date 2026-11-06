@@ -29,6 +29,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <utility>
 
 namespace sequant {
@@ -1862,6 +1863,38 @@ class ResultTensorTA final : public Result {
   }
 };
 
+namespace detail {
+/// \return the bytes this rank's tiles of the nested array \p arr hold,
+///         counting each inner cell's storage once however many cells view it
+///
+/// A pair-mirrored leaf stores its K <= L tiles and gives each L > K tile
+/// cells that are shallow views of its partner's cells (a diagonal tile's
+/// i > j cells view its (j, i) cells). TA::size_of prices a view by its volume
+/// once per tile it appears in, so it overstates such an array by the
+/// mirrored share; this walk takes TA::size_of's count of each tile and gives
+/// back the storage of every cell whose buffer an earlier cell already
+/// brought in (the view object itself stays counted). Storage no cell of the
+/// array references any more (a mirrored diagonal tile keeps its partner's
+/// slab alive, i > j cells included) is not seen and not counted.
+template <typename ArrayT>
+std::size_t nested_bytes_held(ArrayT const& arr) {
+  using tile_type = typename ArrayT::value_type;
+  constexpr auto S = TA::MemorySpace::Host;
+  std::size_t bytes = TA::size_of<S>(arr.shape());
+  std::unordered_set<void const*> seen;
+  for (auto const& tile_ref : arr) {
+    tile_type const& tile = tile_ref.get();
+    bytes += TA::size_of<S>(tile);
+    for (auto const& cell : tile) {
+      if (cell.empty()) continue;
+      if (!seen.insert(static_cast<void const*>(cell.data())).second)
+        bytes -= TA::size_of<S>(cell) - sizeof(cell);
+    }
+  }
+  return bytes;
+}
+}  // namespace detail
+
 template <typename ArrayT,
           typename = std::enable_if_t<
               TA::detail::is_tensor_of_tensor_v<typename ArrayT::value_type>>>
@@ -2597,10 +2630,12 @@ class ResultTensorOfTensorTA final : public Result {
     return measured_size_in_bytes();
   }
 
-  /// the logical size of the value (see ResultTensorTA)
+  /// the logical size of the value (see ResultTensorTA), with each inner
+  /// cell's storage counted once however many cells view it
+  /// (detail::nested_bytes_held)
   [[nodiscard]] std::size_t measured_size_in_bytes() const final {
     auto const& v = view_base();
-    auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
+    auto local_size = detail::nested_bytes_held(v);
     v.world().gop.sum(local_size);
     if (has_value() || view_.blk_lo.empty()) return local_size;
     auto const full = v.trange().elements_range().volume();
