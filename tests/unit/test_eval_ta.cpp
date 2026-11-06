@@ -1,6 +1,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
@@ -4251,8 +4252,16 @@ TEST_CASE("ordered-vs-forest-reset", "[eval][ordered-executor]") {
 // volatile, recomputed with the new 't'); root F2 = S*(p*q) has no 't'
 // (persistent). If ordered disagrees with forest descent on iteration 2, the
 // batched path leaks stale 't'-dependent state across reset.
+//
+// It runs once per cache reuse threshold (min_repeats): 1 registers every
+// eligible internal node in the cache's node-keyed map, 2 only the repeated
+// ones plus the persistent frontier, and 1000000 the frontier alone. The
+// ordered executor takes values, lives and persistence from its cell table
+// and the persistent store, not from that map, so its result must not depend
+// on the threshold -- which is what lets MPQC hand it the same
+// eval:cache:min_repeats (default 2) as forest descent.
 TEST_CASE("ordered-vs-forest-reset-batched",
-          "[eval][ordered-executor][ordered-crossiter-bug]") {
+          "[eval][ordered-executor][ordered-crossiter-bug][cache_manager]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -4317,9 +4326,27 @@ TEST_CASE("ordered-vs-forest-reset-batched",
 
   std::function<std::size_t(sequant::Index const&)> const target_batch =
       [](sequant::Index const&) -> std::size_t { return 4; };
-  auto cache = sequant::cache_manager(forest, is_vol_leaf);
+  auto const min_repeats =
+      GENERATE(std::size_t{1}, std::size_t{2}, std::size_t{1000000});
+  INFO("min_repeats = " << min_repeats);
+  auto cache = sequant::cache_manager(forest, is_vol_leaf, min_repeats);
   auto aops = yield_.array_ops();
   cache.set_array_ops(&aops);
+
+  // The threshold really changes what the map holds. At 1 it registers the two
+  // roots; S, t*q and p*q carry the batched x_1 and are refused run-scope
+  // residence whatever the threshold. Above 1 nothing qualifies, so the map is
+  // empty and the ordered executor must manage on its cell table and
+  // persistent store alone.
+  auto const n_keys = [](auto const& c) {
+    std::size_t n = 0;
+    c.for_each_key([&n](node_t const&) { ++n; });
+    return n;
+  };
+  auto const n_keys_at_1 =
+      n_keys(sequant::cache_manager(forest, is_vol_leaf, std::size_t{1}));
+  REQUIRE(n_keys_at_1 > 0);
+  if (min_repeats > 1) CHECK(n_keys(cache) < n_keys_at_1);
 
   auto const ref1 = evaluate(forest, target, yield_)->get<TArrayD>();
   auto const got1 =
