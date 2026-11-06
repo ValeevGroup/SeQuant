@@ -37,9 +37,11 @@
 #include <ranges>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace sequant::eval {
@@ -659,6 +661,18 @@ struct BatchContextEntry {
 /// This class implements a cache manager useful for the cases when the number
 /// of times the cached objects will be accessed is known.
 ///
+/// \note The cache does not own the nodes its entries are keyed by (see \c
+///       eval::CachedValue): a key points at a node of the forest the cache
+///       was built over. That forest must outlive the cache and keep its
+///       nodes in place -- do not reallocate the vector holding its roots,
+///       or move a \c container::svector that stores them inline, while the
+///       cache is in use. Nothing checks this at run time; breaking it is
+///       undefined behavior, and can serve a value cached for a different
+///       node. \c cache_manager() holds a forest passed to it as a temporary;
+///       \c ensure_hoist_slot() and a by-value constructor argument are held
+///       too (see \c hold()). A copy of a cache shares its keys and what it
+///       holds.
+///
 /// \tparam TreeNode The evaluation tree node type used as the cache key.
 /// \tparam force_hash_collisions If true, forces all hash values to 0 (for
 ///         testing collision safety).
@@ -937,6 +951,12 @@ class CacheManager {
 
   std::unordered_map<cache_key_type, entry, hasher_type, comparator_type>
       cache_map_;
+
+  /// What the keys of cache_map_ point into, where this cache owns it: a
+  /// forest handed to cache_manager() as a temporary, and the copies hoist
+  /// slots key (ensure_hoist_slot). Shared, so a copy of this cache keeps
+  /// them alive too.
+  std::vector<std::shared_ptr<void const>> held_;
 
   /// Diagnostic: per-distinct-value build tally (see BuildTally), keyed by the
   /// same node identity as cache_map_. Populated by tally_build() from the eval
@@ -1263,8 +1283,16 @@ class CacheManager {
   /// effective_count is 1, which as a life would drain the entry on first use;
   /// reset() is the correct lifetime boundary for a hoisted invariant.
   void ensure_hoist_slot(key_type const& key) {
+    if (cache_map_.find(key) != cache_map_.end()) return;
+    // The batched evaluator may hoist a node of a tree that does not outlive
+    // this cache, and the key does not own its node, so the slot keys a copy
+    // the cache holds. A hoisted invariant is a bounded subtree, so the copy
+    // is cheap.
+    auto copy = std::make_shared<TreeNode const>(key);
     cache_map_.try_emplace(
-        key, entry{std::numeric_limits<size_t>::max(), /*persistent=*/false});
+        cache_key_type{*copy},
+        entry{std::numeric_limits<size_t>::max(), /*persistent=*/false});
+    held_.push_back(std::move(copy));
   }
 
   /// Default persistence classifier: every entry is non-persistent (NP).
@@ -1273,19 +1301,52 @@ class CacheManager {
   };
 
   /// \param decaying iterable of (node, use-count) pairs to register for
-  ///        caching.
+  ///        caching. The keys are not owned by the map (see \c
+  ///        eval::CachedValue): given as node pointers, as \c cache_manager()
+  ///        does, every node must outlive this cache and stay at its address;
+  ///        given by value, the cache holds \p decaying itself and keys into
+  ///        that.
   /// \param is_persistent predicate classifying each node as persistent (P,
   ///        never released on access, survives reset()) or non-persistent (NP,
   ///        released after its last use and by reset()). Defaults to all-NP.
+  ///        Consulted during construction only.
   /// \note P nodes should be registered with whatever use-count is convenient
   ///       (it is not consulted for P entries) and may have a count of 1 even
   ///       though NP caching only registers nodes repeated min_repeats times.
   template <typename Iterable, typename PersistencePred = all_non_persistent>
     requires(!std::same_as<std::remove_cvref_t<Iterable>, CacheManager>)
   explicit CacheManager(Iterable&& decaying,
-                        PersistencePred is_persistent = {}) noexcept {
-    for (auto&& [k, c] : decaying)
-      cache_map_.try_emplace(k, entry{c, is_persistent(k)});
+                        PersistencePred is_persistent = {}) {
+    using Key = std::remove_cvref_t<
+        std::tuple_element_t<0, std::ranges::range_value_t<Iterable>>>;
+    auto const register_all = [&](auto const& pairs) {
+      for (auto&& [k, c] : pairs) {
+        TreeNode const* n;
+        if constexpr (std::is_convertible_v<Key, TreeNode const*>)
+          n = k;
+        else
+          n = &k;
+        cache_map_.try_emplace(cache_key_type{*n}, entry{c, is_persistent(*n)});
+      }
+    };
+    if constexpr (std::is_convertible_v<Key, TreeNode const*>) {
+      register_all(decaying);
+    } else {
+      static_assert(std::same_as<Key, TreeNode>,
+                    "CacheManager: register (node, count) or (node pointer, "
+                    "count) pairs");
+      auto held = std::make_shared<std::remove_cvref_t<Iterable> const>(
+          std::forward<Iterable>(decaying));
+      register_all(*held);
+      held_.push_back(std::move(held));
+    }
+  }
+
+  /// Keeps @p owner alive for as long as this cache (or the cache it is
+  /// moved into) exists. \c cache_manager() hands it the forest it was given
+  /// as a temporary, whose nodes the keys point into.
+  void hold(std::shared_ptr<void const> owner) {
+    if (owner) held_.push_back(std::move(owner));
   }
 
   ///
@@ -1378,10 +1439,8 @@ class CacheManager {
   /// Routes to the scope-chain root so every build -- from any per-batch
   /// scratch -- accumulates in one map keyed by node identity (see
   /// recompute_tally_). Called only in the dry-run costing replay.
-  /// @param key the node whose build is tallied. A node (not a \c
-  /// cache_key_type): converting at the call boundary would copy the node --
-  /// deep-copying its whole subtree -- on every build, including on the wet
-  /// path where the tally is disabled.
+  /// @param key the node whose build is tallied; any node structurally equal
+  /// to a tallied one folds into its record.
   void tally_build(key_type const& key, std::string const& slice_sig,
                    double flops, double exec) noexcept {
     if (parent_) {
@@ -1510,10 +1569,8 @@ class CacheManager {
   /// miss returns {nullptr, 0}. The hop distance surfaces the value's lifetime
   /// scope so the caller (Enter-stage slice-on-use) can slice it to exactly the
   /// batch loops the fetch crossed.
-  /// @param key the node to look up. Taken as a node (not a \c cache_key_type)
-  /// on purpose: the map is probed heterogeneously, so a lookup never
-  /// materializes a \c CachedValue -- which would copy the node, i.e.
-  /// deep-copy its whole subtree (see \c CachedValueHasher).
+  /// @param key the node to look up: any node structurally equal to a keyed
+  /// one (the map is probed heterogeneously, see \c CachedValueHasher).
   [[nodiscard]] AccessResult access_at(key_type const& key) noexcept {
     if (auto found =
             eval::LookupMeter::timed([&] { return cache_map_.find(key); });
@@ -1593,7 +1650,7 @@ class CacheManager {
   void for_each_key(F&& fn) const {
     // The map key is a CachedValue; callers enumerate nodes (key_type), so hand
     // them the node.
-    for (auto const& [k, v] : cache_map_) fn(k.node);
+    for (auto const& [k, v] : cache_map_) fn(*k);
   }
 
   /// if the key exists in the database, return the current lifetime count of
@@ -1678,9 +1735,7 @@ class CacheManager {
   /// Get an empty cache manager.
   ///
   static CacheManager empty() noexcept {
-    using map_type =
-        std::unordered_map<TreeNode, size_t, hasher_type, comparator_type>;
-    return CacheManager{map_type{}};
+    return CacheManager{std::vector<std::pair<TreeNode const*, size_t>>{}};
   }
 
   // for unit testing
@@ -1700,17 +1755,25 @@ class CacheManager {
 ///                    default (1) everything is cached, so use-count tracking
 ///                    is exact. Pass 2 to
 ///                    cache only nodes reached more than once, which caches
-///                    less and leaves the use counts approximate.
+///                    less and leaves the use counts approximate. Either way
+///                    registration costs O(1) per cached node: the cache keys
+///                    on the nodes' addresses and copies none of them.
 ///
-/// \return A cache manager.
+/// \return A cache manager. Its keys point into \p nodes, which must outlive
+///         it with its nodes in place (see \c CacheManager); the overload
+///         below takes a temporary forest and has the cache hold it.
 ///
 /// \see CacheManager
 ///
 template <bool force_hash_collisions = false>
 auto cache_manager(meta::eval_node_range auto const& nodes,
-                   size_t min_repeats = 1) noexcept {
+                   size_t min_repeats = 1) {
   using TreeNode =
       std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>>;
+  static_assert(
+      std::is_reference_v<std::ranges::range_reference_t<decltype(nodes)>>,
+      "cache_manager(): the node range must yield references to nodes (the "
+      "cache keys on their addresses)");
   using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
@@ -1730,13 +1793,27 @@ auto cache_manager(meta::eval_node_range auto const& nodes,
     tree.visit_internal(imed_visitor);
   });
 
-  // Copy repeated entries (node by value)
-  std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
+  // Register the repeated entries by address: no node is copied.
+  std::vector<std::pair<TreeNode const*, size_t>> filtered;
   for (auto&& [ptr, count] : imed_counts) {
-    if (count >= min_repeats) filtered.emplace(*ptr, count);
+    if (count >= min_repeats) filtered.emplace_back(ptr, count);
   }
 
   return CacheManager<TreeNode, force_hash_collisions>{std::move(filtered)};
+}
+
+/// \overload A forest passed as a temporary -- a container such as
+/// `std::vector{node}`, or a view, which may own its nodes too (e.g.
+/// `views::single(node)`) -- is moved into a holder the cache keeps, and the
+/// cache is built over that. Holding a view that merely refers to nodes
+/// elsewhere is harmless.
+template <bool force_hash_collisions = false, typename Nodes>
+  requires(meta::eval_node_range<Nodes> && !std::is_lvalue_reference_v<Nodes>)
+auto cache_manager(Nodes&& nodes, size_t min_repeats = 1) {
+  auto const forest = std::make_shared<Nodes const>(std::move(nodes));
+  auto cache = cache_manager<force_hash_collisions>(*forest, min_repeats);
+  cache.hold(forest);
+  return cache;
 }
 
 ///
@@ -1835,23 +1912,20 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
-  // The DAG walk below keys on non-owning pointers into \p nodes, not on
-  // TreeNode by value: copying a TreeNode deep-copies its whole subtree
-  // (binary_node.hpp), so a by-value walk map costs the sum of all subtree
-  // sizes -- quadratic in the number of terms on the left-leaning Sum-tree
-  // binarize now builds for a whole equation (one spine node per summand; a UCC
-  // BCH energy expansion has thousands of them). Only the nodes actually cached
-  // are copied, at the end of this function. \p nodes must therefore be a range
-  // of references to nodes that outlive this call (asserted below) -- the same
-  // contract the min_repeats-only overload's pointer-keyed scan already relies
-  // on. Hasher/Comp are heterogeneous (eval_node_compare.hpp): a pointer key
-  // still hashes and compares by node content, so structurally equal nodes
-  // dedup exactly as they did with by-value keys.
+  // The DAG walk below keys on non-owning pointers into \p nodes, and so does
+  // the cache it returns: copying a TreeNode deep-copies its whole subtree
+  // (binary_node.hpp), which on the left-leaning Sum-tree of a whole equation
+  // (one spine node per summand) costs O(terms^2). \p nodes must therefore be
+  // a range of references to nodes that outlive the cache (asserted below;
+  // the overload after this one holds a temporary forest). Hasher/Comp are
+  // heterogeneous (eval_node_compare.hpp): a pointer key still hashes and
+  // compares by node content, so structurally equal nodes dedup exactly as they
+  // did with by-value keys.
   static_assert(
       std::is_reference_v<
           std::ranges::range_reference_t<std::remove_cvref_t<decltype(nodes)>>>,
       "cache_manager(): the node range must yield references to "
-      "nodes that outlive the call (the DAG walk keys on their "
+      "nodes that outlive the cache (the cache keys on their "
       "addresses)");
   using NodePtr = TreeNode const*;
   std::unordered_map<NodePtr, size_t, Hasher, Comp> counts;     // internal uses
@@ -1952,8 +2026,8 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // Only the selected nodes are copied by value here -- into the cache map and,
   // for the frontier, into the owning set the returned is_persistent closes
   // over. A node that is not cached never pays a (deep) copy.
-  std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
-  std::unordered_set<TreeNode, Hasher, Comp> persistent_nodes;
+  std::vector<std::pair<TreeNode const*, size_t>> filtered;
+  std::unordered_set<TreeNode const*> persistent_nodes;
   for (auto&& [np, c] : counts) {
     TreeNode const& n = *np;
     bool const is_p = persistent.contains(np);
@@ -1969,16 +2043,38 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
       // is_persistent consistent with what is cached.
       continue;
     }
-    filtered.emplace(n, c);
-    if (is_p) persistent_nodes.insert(n);
+    filtered.emplace_back(np, c);
+    if (is_p) persistent_nodes.insert(np);
   }
 
-  auto is_persistent = [persistent =
-                            std::move(persistent_nodes)](TreeNode const& n) {
-    return persistent.contains(n);
+  // Consulted by the CacheManager constructor alone: the pointer set is
+  // dropped once the entries carry their persistence flags.
+  auto is_persistent = [&persistent_nodes](TreeNode const& n) {
+    return persistent_nodes.contains(&n);
   };
-  return CacheManager<TreeNode, force_hash_collisions>{
-      std::move(filtered), std::move(is_persistent)};
+  return CacheManager<TreeNode, force_hash_collisions>{std::move(filtered),
+                                                       is_persistent};
+}
+
+/// \overload A forest passed as a temporary is moved into a holder the cache
+/// keeps, and the cache is built over that (see the min_repeats-only
+/// overload).
+template <bool force_hash_collisions = false, typename Nodes,
+          typename FootprintOf = zero_footprint>
+  requires(meta::eval_node_range<Nodes> && !std::is_lvalue_reference_v<Nodes>)
+auto cache_manager(Nodes&& nodes, auto&& is_volatile, size_t min_repeats = 1,
+                   FootprintOf footprint_of = {}, double max_footprint = 0.)
+  requires requires(std::ranges::range_value_t<Nodes> const& n) {
+    { is_volatile(n) } -> std::convertible_to<bool>;
+    { footprint_of(n) } -> std::convertible_to<double>;
+  }
+{
+  auto const forest = std::make_shared<Nodes const>(std::move(nodes));
+  auto cache = cache_manager<force_hash_collisions>(
+      *forest, std::forward<decltype(is_volatile)>(is_volatile), min_repeats,
+      std::move(footprint_of), max_footprint);
+  cache.hold(forest);
+  return cache;
 }
 
 ///

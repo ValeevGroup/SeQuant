@@ -6,9 +6,12 @@
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <range/v3/view/zip.hpp>
 #include <string>
+#include <unordered_set>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -822,4 +825,150 @@ TEST_CASE("persistent-store-reset", "[cache_manager][persistent_store]") {
   CHECK_FALSE(store.holds(42));
   cache.clear_persistent_values();
   CHECK(store.size() == 0);
+}
+
+// The cache's keys point into the forest it was built over: no node is
+// copied, so registering every internal node of a many-term Sum-tree
+// (min_repeats = 1) costs O(1) per node rather than one subtree copy each,
+// which made it O(terms^2). A forest handed over as a temporary is held by
+// the cache instead.
+TEST_CASE("cache_manager keys alias the forest", "[cache_manager]") {
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::ResultScalar<int>>(x);
+  };
+  // R = sum_k T_k{a1;i1} g{i1;a1}: a left-leaning Sum-tree whose spine has one
+  // node per term, each subtree larger than the last
+  auto const many_terms = [] {
+    std::wstring s = L"R = ";
+    for (int k = 0; k < 64; ++k) {
+      if (k) s += L" + ";
+      s += L"T";
+      s += wchar_t(L'a' + k / 26);
+      s += wchar_t(L'a' + k % 26);
+      s += L"{a1;i1} g{i1;a1}";
+    }
+    return s;
+  }();
+
+  std::vector<node_type> const forest{make_node(many_terms)};
+  std::unordered_set<node_type const*> internal;
+  forest.front().visit_internal([&internal](node_type const& n) {
+    internal.insert(&n);
+    return true;
+  });
+  REQUIRE(internal.size() > 64);
+
+  auto const require_aliases = [&](manager_type const& man) {
+    std::size_t n_keys = 0;
+    man.for_each_key([&](node_type const& k) {
+      ++n_keys;
+      REQUIRE(internal.contains(&k));
+    });
+    REQUIRE(n_keys == internal.size());
+  };
+
+  SECTION("min_repeats builder") {
+    require_aliases(sequant::cache_manager(forest, 1));
+  }
+
+  SECTION("persistence-aware builder") {
+    require_aliases(sequant::cache_manager(
+        forest, [](node_type const&) { return false; }, 1));
+  }
+
+  SECTION("a temporary forest is held by the cache") {
+    auto man = sequant::cache_manager(
+        std::vector<node_type>{make_node(many_terms)}, 1);
+    // the keys belong to the cache's copy of the forest, not to `forest`
+    man.for_each_key(
+        [&](node_type const& k) { REQUIRE_FALSE(internal.contains(&k)); });
+    // and stay valid: probe with structurally equal nodes of another tree.
+    // The root is used once, so its entry lives for exactly one read: the
+    // read store_and_access performs.
+    auto const& root = forest.front();
+    REQUIRE(man.exists(root));
+    REQUIRE(man.life(root) == 1);
+    REQUIRE(man.store_and_access(root, eval_result(7))->get<int>() == 7);
+    REQUIRE_FALSE(man.alive(root));
+  }
+
+  SECTION("the persistence-aware builder holds a temporary forest too") {
+    auto man = sequant::cache_manager(
+        std::vector<node_type>{make_node(many_terms)},
+        [](node_type const&) { return false; }, 1);
+    std::size_t n_keys = 0;
+    man.for_each_key([&](node_type const& k) {
+      ++n_keys;
+      REQUIRE_FALSE(internal.contains(&k));
+    });
+    REQUIRE(n_keys == internal.size());
+    REQUIRE(man.exists(forest.front()));
+  }
+
+  SECTION("a hoist slot holds its own copy of the node") {
+    auto man = manager_type::empty();
+    {
+      auto const transient = make_node(L"R{a1;i1} = f{a1;i2} t{i2;i1}");
+      man.ensure_hoist_slot(transient);
+    }
+    auto const probe = make_node(L"R{a1;i1} = f{a1;i2} t{i2;i1}");
+    REQUIRE(man.exists(probe));
+    (void)man.store_and_access(probe, eval_result(3));
+    REQUIRE(man.access(probe)->get<int>() == 3);
+  }
+}
+
+namespace {
+/// A mirror of an eval tree whose leaf() counts how many nodes
+/// TreeNodeEqualityComparator visits.
+struct CountingNode {
+  node_type const* real;
+  std::unique_ptr<CountingNode> l, r;
+  static inline std::size_t visits = 0;
+
+  explicit CountingNode(node_type const& n) : real(&n) {
+    if (!n.leaf()) {
+      l = std::make_unique<CountingNode>(n.left());
+      r = std::make_unique<CountingNode>(n.right());
+    }
+  }
+  bool leaf() const {
+    ++visits;
+    return real->leaf();
+  }
+  std::size_t size() const { return real->size(); }
+  CountingNode const& left() const { return *l; }
+  CountingNode const& right() const { return *r; }
+  auto operator->() const { return real->operator->(); }
+  decltype(auto) operator*() const { return **real; }
+};
+}  // namespace
+
+// The cache keys on the forest's own nodes, so a lookup with a forest node
+// compares that node with itself. The comparator answers that without walking
+// the subtree; walking it made the lookups of an equation's Sum-spine
+// O(terms^2).
+TEST_CASE("node comparator: a node equals itself without a walk",
+          "[cache_manager]") {
+  std::wstring s = L"R = ";
+  for (int k = 0; k < 32; ++k) {
+    if (k) s += L" + ";
+    s += L"T";
+    s += wchar_t(L'a' + k / 26);
+    s += wchar_t(L'a' + k % 26);
+    s += L"{a1;i1} g{i1;a1}";
+  }
+  auto const tree = make_node(s);
+  CountingNode const a{tree}, b{tree};
+  sequant::TreeNodeEqualityComparator<CountingNode> const eq;
+
+  // two distinct, structurally equal trees: the comparator walks the spine
+  CountingNode::visits = 0;
+  REQUIRE(eq(a, b));
+  REQUIRE(CountingNode::visits >= 32);
+
+  // the same node on both sides: no walk
+  CountingNode::visits = 0;
+  REQUIRE(eq(a, a));
+  REQUIRE(CountingNode::visits == 0);
 }
