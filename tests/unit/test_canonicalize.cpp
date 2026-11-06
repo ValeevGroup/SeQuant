@@ -9,6 +9,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -1400,38 +1401,82 @@ TEST_CASE("result_expr_canonicalization", "[algorithms][canonicalize]") {
     return r.expression()->is<Sum>() ? r.expression()->size() : 1;
   };
 
+  // the inner sum of S * (sum)
+  auto inner = [](const ResultExpr& r) -> ExprPtr {
+    REQUIRE(r.expression()->is<Product>());
+    for (const auto& factor : r.expression()->as<Product>().factors())
+      if (!factor->is<Tensor>() ||
+          (factor->as<Tensor>().label() != reserved::symm_label() &&
+           factor->as<Tensor>().label() != reserved::antisymm_label()))
+        return factor;
+    return nullptr;
+  };
+  auto size = [](const ExprPtr& e) { return e->is<Sum>() ? e->size() : 1; };
+
   SECTION("terms related by the result's symmetry are combined") {
-    // the second term is the first with the columns of the result swapped
+    // under the symmetrizer of the result, the second term is the first with
+    // the columns of the result swapped
+    auto r = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:N-N-S = Ŝ{i_1,i_2;a_1,a_2}:N-N-S * "
+        L"(X{a_1,a_2;i_1,i_2}:N-N-N + X{a_2,a_1;i_2,i_1}:N-N-N)");
+    canonicalize(r);
+    CHECK(size(inner(r)) == 1);
+    // ... and so is a term that the symmetrizer multiplies on its own
+    auto lone = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:N-N-S = Ŝ{i_1,i_2;a_1,a_2}:N-N-S * "
+        L"X{a_1,a_2;i_1,i_2}:N-N-N + Ŝ{i_1,i_2;a_1,a_2}:N-N-S * "
+        L"X{a_2,a_1;i_2,i_1}:N-N-N");
+    simplify(lone);
+    CHECK(count(lone) == 1);
+    // ... but not without that symmetry
+    auto nonsymm = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:N-N-N = Ŝ{i_1,i_2;a_1,a_2}:N-N-S * "
+        L"(X{a_1,a_2;i_1,i_2}:N-N-N + X{a_2,a_1;i_2,i_1}:N-N-N)");
+    canonicalize(nonsymm);
+    CHECK(size(inner(nonsymm)) == 2);
+    // antisymmetry absorbs the phase
+    auto antisymm = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:A-N-S = Â{i_1,i_2;a_1,a_2}:A-N-S * "
+        L"(X{a_1,a_2;i_1,i_2}:N-N-N - X{a_2,a_1;i_1,i_2}:N-N-N)");
+    canonicalize(antisymm);
+    const auto antisymm_inner = inner(antisymm);
+    CHECK(size(antisymm_inner) == 1);
+    const auto representative = antisymm_inner->is<Sum>()
+                                    ? antisymm_inner->as<Sum>().summand(0)
+                                    : antisymm_inner;
+    REQUIRE(representative->is<Product>());
+    // the representative's sign depends on which permutation it is
+    CHECK(abs(representative->as<Product>().scalar()) == 2);
+    // the phase of a term that includes the antisymmetrizer comes from
+    // permuting the antisymmetrizer: A X - A X' = A X + A X = 2 A X , X' being
+    // X with the virtual indices swapped
+    auto antisymm_lone = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:A-N-S = Â{i_1,i_2;a_1,a_2}:A-N-S * "
+        L"X{a_1,a_2;i_1,i_2}:N-N-N - Â{i_1,i_2;a_1,a_2}:A-N-S * "
+        L"X{a_2,a_1;i_1,i_2}:N-N-N");
+    simplify(antisymm_lone);
+    REQUIRE(antisymm_lone.expression()->is<Product>());
+    CHECK(abs(antisymm_lone.expression()->as<Product>().scalar()) == 2);
+  }
+
+  SECTION("terms are not combined without a symmetrizer") {
+    // that the result has the symmetry does not make its terms have it: the
+    // sum of the two is symmetric, either one alone is not
     auto r = deserialize<ResultExpr>(
         L"R{a_1,a_2;i_1,i_2}:N-N-S = X{a_1,a_2;i_1,i_2}:N-N-N + "
         L"X{a_2,a_1;i_2,i_1}:N-N-N");
     simplify(r);
-    CHECK(count(r) == 1);
-    // ... but not without that symmetry
-    auto nonsymm = deserialize<ResultExpr>(
-        L"R{a_1,a_2;i_1,i_2}:N-N-N = X{a_1,a_2;i_1,i_2}:N-N-N + "
-        L"X{a_2,a_1;i_2,i_1}:N-N-N");
-    simplify(nonsymm);
-    CHECK(count(nonsymm) == 2);
-    // antisymmetry absorbs the phase
-    auto antisymm = deserialize<ResultExpr>(
-        L"R{a_1,a_2;i_1,i_2}:A-N-S = X{a_1,a_2;i_1,i_2}:N-N-N - "
-        L"X{a_2,a_1;i_1,i_2}:N-N-N");
-    simplify(antisymm);
-    CHECK(count(antisymm) == 1);
-    CHECK(antisymm.expression()->is<Product>());
-    // the representative's sign depends on which permutation it is
-    CHECK(abs(antisymm.expression()->as<Product>().scalar()) == 2);
+    CHECK(count(r) == 2);
   }
 
   SECTION("only permutations within the block of the result") {
     // swapping the columns would exchange a virtual and an occupied index,
     // i.e. relate different blocks of R
     auto r = deserialize<ResultExpr>(
-        L"R{a_1,i_3;i_1,i_2}:N-N-S = X{a_1,i_3;i_1,i_2}:N-N-N + "
-        L"X{i_3,a_1;i_2,i_1}:N-N-N");
-    simplify(r);
-    CHECK(count(r) == 2);
+        L"R{a_1,i_3;i_1,i_2}:N-N-S = Ŝ{i_1,i_2;a_1,i_3}:N-N-S * "
+        L"(X{a_1,i_3;i_1,i_2}:N-N-N + X{i_3,a_1;i_2,i_1}:N-N-N)");
+    canonicalize(r);
+    CHECK(size(inner(r)) == 2);
   }
 
   SECTION("external indices that occur more than once keep their labels") {
