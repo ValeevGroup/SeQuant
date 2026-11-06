@@ -397,6 +397,28 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
   namespace o = sequant::mbpt::op;
   using TN = TensorNetworkV3;
 
+  SECTION("input ordinals") {
+    // the ordinals map each tensor of the canonicalized network to its input,
+    // for every method; the labels are distinct, so they identify the inputs
+    const auto input = deserialize(
+        L"t{a_1,a_2;i_1,i_2}:A * g{i_1,i_2;a_3,a_4}:A * f{a_3;a_1} * "
+        L"Z{a_4;a_2} * Y{i_3;i_4}");
+    for (const auto method : {CanonicalizationMethod::Topological,
+                              CanonicalizationMethod::Lexicographic,
+                              CanonicalizationMethod::Complete}) {
+      CAPTURE(toUtf8(to_wstring(method)));
+      TN tn(input->as<Product>().factors());
+      tn.canonicalize(default_cardinal_tensor_labels(), deduce_named_indices,
+                      CanonicalizeOptions{.method = method});
+      const auto& tensors = tn.tensors();
+      const auto& ordinals = tn.tensor_input_ordinals();
+      REQUIRE(ordinals.size() == tensors.size());
+      for (std::size_t t = 0; t != tensors.size(); ++t)
+        CHECK(tensors[t]->_label() ==
+              input->as<Product>().factor(ordinals[t])->as<Tensor>().label());
+    }
+  }
+
   SECTION("Edges") {
     using Vertex = TN::Vertex;
     using Edge = TN::Edge;

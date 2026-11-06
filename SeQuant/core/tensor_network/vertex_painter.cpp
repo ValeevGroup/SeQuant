@@ -79,10 +79,12 @@ VertexPainter::Color VertexPainter::operator()(const ColumnGroup &group) {
 
 void VertexPainter::apply_shade(std::size_t shade) { salt_ = shade; }
 
-VertexPainter::Color VertexPainter::apply_shade(const AbstractTensor &t) {
-  const auto hash = to_hash_value(t);
+VertexPainter::Color VertexPainter::apply_shade(const AbstractTensor &t,
+                                                std::size_t extra_salt) {
+  auto hash = to_hash_value(t);
+  if (extra_salt != 0) hash::combine(hash, extra_salt);
   Color color = to_color(hash);
-  salt_ = to_hash_value(t);
+  salt_ = hash;
   return ensure_uniqueness(color, t);
 }
 

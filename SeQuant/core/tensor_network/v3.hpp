@@ -274,6 +274,17 @@ class TensorNetworkV3 {
 
   const auto &tensor_input_ordinals() const { return tensor_input_ordinals_; }
 
+  /// sets values that distinguish tensors beyond their own attributes: tensors
+  /// with different salts are told apart by canonicalization, e.g. tensors at
+  /// structurally different places of a nested product
+  /// @param salts the salt of each tensor, in input order; 0 means no salt
+  /// @pre `salts.size() == tensors().size()` , and canonicalize() has not been
+  /// called yet
+  void set_tensor_salts(container::svector<std::size_t> salts) {
+    SEQUANT_ASSERT(salts.size() == tensors_.size());
+    tensor_salts_ = std::move(salts);
+  }
+
   using NamedIndexSet = container::set<Index, Index::FullLabelCompare>;
 
   /// @param cardinal_tensor_labels move all tensors with these labels to the
@@ -512,6 +523,8 @@ class TensorNetworkV3 {
   container::svector<AbstractTensorPtr> tensors_;
   /// input ordinals of tensors in tensors_
   container::svector<std::size_t> tensor_input_ordinals_;
+  /// see set_tensor_salts(); indexed by input ordinal, empty if none
+  container::svector<std::size_t> tensor_salts_;
 
   container::vector<Edge> edges_;
   bool have_edges_ = false;
