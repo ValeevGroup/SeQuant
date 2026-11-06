@@ -26,6 +26,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <unordered_set>
 #include <utility>
 
 namespace sequant {
@@ -1483,6 +1484,38 @@ class ResultTensorTA final : public Result {
   }
 };
 
+namespace detail {
+/// \return the bytes this rank's tiles of the nested array \p arr hold,
+///         counting each inner cell's storage once however many cells view it
+///
+/// A pair-mirrored leaf stores its K <= L tiles and gives each L > K tile
+/// cells that are shallow views of its partner's cells (a diagonal tile's
+/// i > j cells view its (j, i) cells). TA::size_of prices a view by its volume
+/// once per tile it appears in, so it overstates such an array by the
+/// mirrored share; this walk takes TA::size_of's count of each tile and gives
+/// back the storage of every cell whose buffer an earlier cell already
+/// brought in (the view object itself stays counted). Storage no cell of the
+/// array references any more (a mirrored diagonal tile keeps its partner's
+/// slab alive, i > j cells included) is not seen and not counted.
+template <typename ArrayT>
+std::size_t nested_bytes_held(ArrayT const& arr) {
+  using tile_type = typename ArrayT::value_type;
+  constexpr auto S = TA::MemorySpace::Host;
+  std::size_t bytes = TA::size_of<S>(arr.shape());
+  std::unordered_set<void const*> seen;
+  for (auto const& tile_ref : arr) {
+    tile_type const& tile = tile_ref.get();
+    bytes += TA::size_of<S>(tile);
+    for (auto const& cell : tile) {
+      if (cell.empty()) continue;
+      if (!seen.insert(static_cast<void const*>(cell.data())).second)
+        bytes -= TA::size_of<S>(cell) - sizeof(cell);
+    }
+  }
+  return bytes;
+}
+}  // namespace detail
+
 template <typename ArrayT,
           typename = std::enable_if_t<
               TA::detail::is_tensor_of_tensor_v<typename ArrayT::value_type>>>
@@ -2012,9 +2045,10 @@ class ResultTensorOfTensorTA final : public Result {
     // one collective for both the bytes and the sole-holder test: whether a
     // rank still holds another handle to the parent (a deferred deleter, a
     // task in flight) can differ between ranks, and the bytes are counted
-    // only if no rank does
+    // only if no rank does; each inner cell's storage is counted once however
+    // many cells view it (detail::nested_bytes_held)
     std::array<std::size_t, 2> buf{
-        TA::size_of<TA::MemorySpace::Host>(v),
+        detail::nested_bytes_held(v),
         (has_value() || parent_.is_unique()) ? std::size_t{0} : 1};
     v.world().gop.sum(buf.data(), 2);
     return buf[1] ? 0 : buf[0];

@@ -49,6 +49,7 @@
 #include <range/v3/view/transform.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <complex>
 #include <cstdlib>
@@ -851,6 +852,66 @@ TEST_CASE("tot_elementwise_pow", "[eval][tot]") {
                         sequant::Exception);
     }
   }
+}
+
+TEST_CASE("measured size counts a shared nested cell once", "[eval][tot]") {
+  // A pair-mirrored leaf stores its K <= L tiles and gives each L > K tile
+  // cells that are shallow views of its partner's cells (MPQC's
+  // mirror_pair_tiles), so the array holds the upper tiles' bytes only.
+  // TA::size_of counts a shared cell once per tile it appears in; the
+  // measurement must count the storage once.
+  using ToTArray = TA::DistArray<tot_tile_t<double>, TA::SparsePolicy>;
+  auto& world = TA::get_default_world();
+  if (world.size() != 1) return;  // a mirror tile must be local to its partner
+  TA::TiledRange const tr{{0, 2, 4}, {0, 2, 4}};
+  auto const& tiles = tr.tiles_range();
+  auto const inner = [](std::size_t) { return TA::Range{3}; };
+  auto const fill = [](std::size_t o, std::size_t k) {
+    return 1.0 + static_cast<double>(o) + static_cast<double>(k);
+  };
+  auto const owning = [&](std::size_t ord) {
+    return make_tot_tile<double>(tr.make_tile_range(ord), inner, fill);
+  };
+  auto build = [&](bool mirrored) {
+    ToTArray arr(world, tr);
+    auto const upper = owning(tiles.ordinal({0, 1}));
+    arr.set(tiles.ordinal({0, 0}), owning(tiles.ordinal({0, 0})));
+    arr.set(tiles.ordinal({1, 1}), owning(tiles.ordinal({1, 1})));
+    arr.set(tiles.ordinal({0, 1}), upper);
+    auto const lower_ord = tiles.ordinal({1, 0});
+    if (!mirrored) {
+      arr.set(lower_ord, owning(lower_ord));
+    } else {
+      // null cells, each rebound to the transposed cell of the partner
+      tot_tile_t<double> lower(tr.make_tile_range(lower_ord));
+      for (auto const& e : lower.range()) {
+        std::array<std::size_t, 2> const m{static_cast<std::size_t>(e[1]),
+                                           static_cast<std::size_t>(e[0])};
+        lower(e) = upper(m);
+      }
+      arr.set(lower_ord, std::move(lower));
+    }
+    world.gop.fence();
+    return arr;
+  };
+  auto const ta_bytes = [](ToTArray const& arr) {
+    return TA::size_of<TA::MemorySpace::Host>(arr);
+  };
+  auto const measured = [](ToTArray const& arr) {
+    return sequant::eval_result<sequant::ResultTensorOfTensorTA<ToTArray>>(arr)
+        ->measured_size_in_bytes();
+  };
+  // no sharing: the measurement is TA's count
+  auto const plain = build(false);
+  REQUIRE(measured(plain) == ta_bytes(plain));
+  // the four cells of the lower tile view the upper tile's cells: TA counts
+  // their storage twice, the measurement once
+  auto const mirrored = build(true);
+  REQUIRE(ta_bytes(mirrored) - measured(mirrored) ==
+          4 * tot_inner_t<double>::cell_size(3));
+  // and the mirrored array holds less than the plain one by the same amount
+  REQUIRE(measured(plain) - measured(mirrored) ==
+          4 * tot_inner_t<double>::cell_size(3));
 }
 
 TEST_CASE("measured-size-trace-gate", "[eval]") {
