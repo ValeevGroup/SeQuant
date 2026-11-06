@@ -844,69 +844,36 @@ pass_step_cycle_edges(
     first = last;
   }
 
-  // At root: the strongly connected sets of steps (Tarjan, iteratively).
+  // At root: the strongly connected sets of steps.
   std::size_t const nodes = root_needs.size();
   std::size_t const unseen = std::numeric_limits<std::size_t>::max();
-  container::vector<std::size_t> index(nodes, unseen), low(nodes, 0),
-      set_of(nodes, unseen), set_size;
-  container::vector<char> on_stack(nodes, 0);
-  container::vector<std::size_t> stack;
-  container::vector<std::pair<std::size_t, std::size_t>> walk;  // node, next
-  std::size_t counter = 0;
-  auto const enter = [&](std::size_t x) {
-    index[x] = low[x] = counter++;
-    stack.push_back(x);
-    on_stack[x] = 1;
-    walk.push_back({x, 0});
-  };
-  for (std::size_t start = 0; start < nodes; ++start) {
-    if (index[start] != unseen || root_needs[start].empty()) continue;
-    enter(start);
-    while (!walk.empty()) {
-      std::size_t const x = walk.back().first;
-      if (walk.back().second < root_needs[x].size()) {
-        std::size_t const y = root_needs[x][walk.back().second++];
-        if (index[y] == unseen)
-          enter(y);
-        else if (on_stack[y])
-          low[x] = std::min(low[x], index[y]);
-        continue;
-      }
-      walk.pop_back();
-      if (!walk.empty())
-        low[walk.back().first] = std::min(low[walk.back().first], low[x]);
-      if (low[x] != index[x]) continue;
-      std::size_t size = 0;
-      for (std::size_t y = unseen; y != x; ++size) {
-        y = stack.back();
-        stack.pop_back();
-        on_stack[y] = 0;
-        set_of[y] = set_size.size();
-      }
-      set_size.push_back(size);
-    }
-  }
+  auto const set_of = strongly_connected_components_indexed(
+      nodes, [&](std::size_t x) -> container::svector<std::size_t> const& {
+        return root_needs[x];
+      });
+  std::size_t n_sets = 0;
+  for (std::size_t c : set_of) n_sets = std::max(n_sets, c + 1);
+  container::vector<std::size_t> set_size(n_sets, 0);
+  for (std::size_t c : set_of) ++set_size[c];
   // The block of each set that gives up its edges into the set: the one with
   // the fewest such edges, so that the fewest readers move; among equals the
   // first in (nest, pass) order.
   container::vector<std::size_t> edges_into_set(nodes, 0);
   for_each_pass_edge([&](std::size_t v, std::size_t o) {
     std::size_t const x = node_of[v], y = node_of[o];
-    if (x != y && set_of[x] != unseen && set_of[x] == set_of[y])
-      ++edges_into_set[x];
+    if (x != y && set_of[x] == set_of[y]) ++edges_into_set[x];
   });
   container::vector<std::size_t> yields(set_size.size(), unseen);
   for (auto const& [key, node] : block_node) {
     (void)key;
     std::size_t const c = set_of[node];
-    if (c == unseen || set_size[c] <= 1) continue;
+    if (set_size[c] <= 1) continue;
     if (yields[c] == unseen || edges_into_set[node] < edges_into_set[yields[c]])
       yields[c] = node;
   }
   for_each_pass_edge([&](std::size_t v, std::size_t o) {
     std::size_t const x = node_of[v], y = node_of[o];
-    if (x != y && set_of[x] != unseen && set_of[x] == set_of[y] &&
-        yields[set_of[x]] == x)
+    if (x != y && set_of[x] == set_of[y] && yields[set_of[x]] == x)
       out.push_back({v, o});
   });
   return out;
