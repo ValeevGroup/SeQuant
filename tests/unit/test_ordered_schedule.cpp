@@ -1563,7 +1563,9 @@ sequant::eval::CellTable orderedsched_validated_table(
   in.rich = &rich;
   in.sliced = &sma;
   in.sliced_modes_of = [&](std::size_t vid) {
-    return rich.cells[vid].occurrences.front().home;
+    auto const& home = rich.cells[vid].occurrences.front().home;
+    return sequant::container::svector<sequant::Index>(home.begin(),
+                                                       home.end());
   };
   in.volatile_of = [](std::size_t) { return false; };
   in.operands_of = [&](std::size_t vid) {

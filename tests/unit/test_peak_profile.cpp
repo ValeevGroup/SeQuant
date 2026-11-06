@@ -222,7 +222,8 @@ TEST_CASE("footprint-no-divergent-double", "[peak_profile]") {
   };
   svector<Index> const home_modes{p};
 
-  auto const shared = cell_footprint(carried, home_modes, cm, block_of, {});
+  auto const shared =
+      cell_footprint(carried, home_modes, cm, block_of, svector<Index>{});
   CHECK(shared == 160);  // one sliced copy: block(p)=2 * full(q)=10 * 8
   // A divergent mode that IS sliced (in the home) no longer doubles.
   CHECK(cell_footprint(carried, home_modes, cm, block_of, svector<Index>{p}) ==

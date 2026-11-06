@@ -516,9 +516,9 @@ TEST_CASE("ordered-w20-aux-witness", "[ordered-executor-witness-water20]") {
   auto const is_K = [](sequant::Index const& ix) {
     return ix.basis().base_key() == L"Κ";
   };
-  auto const carries_type =
-      [&](sequant::container::svector<sequant::Index> const& v,
-          auto const& pred) { return std::any_of(v.begin(), v.end(), pred); };
+  auto const carries_type = [&](auto const& v, auto const& pred) {
+    return std::any_of(v.begin(), v.end(), pred);
+  };
   auto const vmap = sequant::eval::build_value_node_map(forest);
 
   std::optional<std::size_t> mu_mu_hash;
@@ -2892,8 +2892,7 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   std::unordered_map<std::size_t, std::size_t> hash_to_cell;
   for (std::size_t i = 0; i < rich.cells.size(); ++i)
     hash_to_cell.emplace(rich.cells[i].hash, i);
-  auto const space_sig =
-      [](sequant::container::svector<sequant::Index> const& v) -> std::wstring {
+  auto const space_sig = [](auto const& v) -> std::wstring {
     std::wstring s;
     for (std::size_t i = 0; i < v.size(); ++i) {
       if (i) s += L",";
@@ -3529,8 +3528,7 @@ TEST_CASE("w20-peak-composition", "[w20-peak-composition]") {
   auto const is_K = [](sequant::Index const& ix) {
     return ix.basis().base_key() == L"Κ";
   };
-  auto const space_sig =
-      [](sequant::container::svector<sequant::Index> const& v) -> std::wstring {
+  auto const space_sig = [](auto const& v) -> std::wstring {
     std::wstring s;
     for (std::size_t i = 0; i < v.size(); ++i) {
       if (i) s += L",";
