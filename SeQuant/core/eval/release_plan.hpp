@@ -5,6 +5,7 @@
 #include <SeQuant/core/eval/cell_table.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <cstddef>
 #include <map>
@@ -29,9 +30,11 @@ namespace sequant::eval {
 /// skipped, or replays its reads once per batch of loops nested in it, is
 /// done all the same.
 struct ReleasePlan {
-  /// Per block of the schedule (the root block included), per position of
-  /// its timeline (steps, then outputs): the cells released once that
-  /// position is done.
+  /// Per block of the schedule tree the plan was built on (the root block
+  /// included, every block with an entry), per position of its timeline
+  /// (steps, then outputs): the cells released once that position is done.
+  /// Keyed by the block objects themselves: the plan serves one walk of that
+  /// tree and is not for a copy of it.
   std::unordered_map<ScopeBlock const*,
                      container::vector<container::svector<CellId>>>
       after;
@@ -49,9 +52,13 @@ struct ReleasePlan {
   container::vector<char> kept;
 
   /// \return the cells released after position \p pos of \p block, or null
+  /// when there are none. \p block must be a block of the tree the plan was
+  /// built on (asserted), and \p pos a position of its timeline.
   [[nodiscard]] container::svector<CellId> const* released_after(
       ScopeBlock const& block, std::size_t pos) const {
     auto const it = after.find(&block);
+    SEQUANT_ASSERT(it != after.end() &&
+                   "ReleasePlan: a block of another schedule tree");
     if (it == after.end() || pos >= it->second.size() ||
         it->second[pos].empty())
       return nullptr;
@@ -94,6 +101,14 @@ namespace detail {
   ReleasePlan plan;
   plan.last_read.assign(table.reads.size(), 0);
   plan.last_assemble.assign(n, 0);
+  // Every block of the tree has an entry, so a block without one is not of
+  // this tree (see released_after).
+  auto const enter = [&](auto const& self, ScopeBlock const& b) -> void {
+    plan.after[&b].resize(b.steps.size() + b.outputs.size());
+    for (Step const& s : b.steps)
+      if (auto const* c = std::get_if<ScopeBlock>(&s.value)) self(self, *c);
+  };
+  enter(enter, root);
 
   // Per block: where its nested blocks, its builds and its outputs sit in its
   // timeline.
@@ -226,10 +241,7 @@ namespace detail {
            /*assemble=*/true, a);
     }
 
-    auto& slots = plan.after[block];
-    if (slots.empty())
-      slots.resize(block->steps.size() + block->outputs.size());
-    slots[last.pos].push_back(s);
+    plan.after.at(block)[last.pos].push_back(s);
     if (last.replayed) continue;
     // An output reads its source after its own operands.
     if (last.assemble)

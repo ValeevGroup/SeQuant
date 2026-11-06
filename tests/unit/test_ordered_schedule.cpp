@@ -3161,4 +3161,11 @@ TEST_CASE("release-plan-epoch-of-invariant-cell",
        ++pos)
     if (auto const* cells = plan.released_after(*slot1, pos))
       CHECK(std::find(cells->begin(), cells->end(), *u) == cells->end());
+
+  // The plan is bound to the tree it was built on: a block of another tree
+  // (a copy of this one, say) is refused, not answered with "nothing".
+  if constexpr (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
+    ScopeBlock const copy = outer;
+    CHECK_THROWS(plan.released_after(copy, *w_at));
+  }
 }
