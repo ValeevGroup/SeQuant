@@ -365,6 +365,29 @@ class Product : public Expr {
   ExprPtr canonicalize_impl(const NamedIndexSpec &named_indices,
                             CanonicalizeOptions opts);
 
+  /// collects the tensor factors of this and of its nested products
+  /// (recursively), in order
+  /// @param[out] leaves the tensor factors
+  /// @return true if this is a tree of products of tensors and scalars,
+  /// with at least one nested product
+  bool collect_nested_tensor_leaves(container::svector<ExprPtr *> &leaves);
+
+  /// canonicalizes a tree of products of tensors (see
+  /// collect_nested_tensor_leaves()) as a single tensor network of its tensor
+  /// factors @p leaves ; the parenthesization is preserved
+  void canonicalize_nested(const container::svector<ExprPtr *> &leaves,
+                           const NamedIndexSpec &named_indices,
+                           const CanonicalizeOptions &opts);
+
+  /// moves the scalar factors to the front and sorts the other factors,
+  /// respecting their commutativity
+  /// @param cardinal_tensor_labels the labels of the tensors that go first,
+  /// in this order
+  /// @param recursive whether to sort the factors of the nested products, too
+  void sort_factors(
+      const container::vector<std::wstring> &cardinal_tensor_labels,
+      bool recursive);
+
   bool static_equal(const Expr &that) const override;
 
   /// orders by factors (lexicographically), then by scalar (by real part, then

@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -78,6 +79,16 @@ bool Product::is_commutative() const {
 ExprPtr Product::canonicalize_impl(const NamedIndexSpec &named_indices,
                                    CanonicalizeOptions opts) {
   reset_canonical_mark();
+
+  // a tree of products of tensors, e.g. a product parenthesized for
+  // evaluation, is one tensor network: its tensors are canonicalized together,
+  // so that the dummy indices of the nested products are named consistently,
+  // and its parenthesization is preserved
+  if (container::svector<ExprPtr *> leaves;
+      collect_nested_tensor_leaves(leaves)) {
+    canonicalize_nested(leaves, named_indices, opts);
+    return {};
+  }
 
   // recursively canonicalize non-tensor subfactors (tensors will be
   // canonicalized as part of the TN built of all tensor factors of this) ...
@@ -161,59 +172,7 @@ ExprPtr Product::canonicalize_impl(const NamedIndexSpec &named_indices,
     }
     this->reset_hash_value();
   } else {  // if contains non-tensors, do commutation-checking resort
-
-    // comparer that respects cardinal tensor labels
-    const auto cardinal_tensor_labels = detail::cardinal_tensor_labels(opts);
-    auto local_compare = [&cardinal_tensor_labels](const ExprPtr &first,
-                                                   const ExprPtr &second) {
-      if (first->is<Labeled>() && second->is<Labeled>()) {
-        const auto first_label = first->as<Labeled>().label();
-        const auto second_label = second->as<Labeled>().label();
-        if (first_label == second_label) return *first < *second;
-        const auto first_is_cardinal_it = ranges::find_if(
-            cardinal_tensor_labels,
-            [&first_label](const std::wstring &l) { return l == first_label; });
-        const auto first_is_cardinal =
-            first_is_cardinal_it != ranges::end(cardinal_tensor_labels);
-        const auto second_is_cardinal_it = ranges::find_if(
-            cardinal_tensor_labels, [&second_label](const std::wstring &l) {
-              return l == second_label;
-            });
-        const auto second_is_cardinal =
-            second_is_cardinal_it != ranges::end(cardinal_tensor_labels);
-        if (first_is_cardinal && second_is_cardinal)
-          return first_is_cardinal_it < second_is_cardinal_it;
-        else if (first_is_cardinal && !second_is_cardinal)
-          return true;
-        else if (!first_is_cardinal && second_is_cardinal)
-          return false;
-        else {
-          SEQUANT_ASSERT(!first_is_cardinal && !second_is_cardinal);
-          return *first < *second;
-        }
-      } else
-        return *first < *second;
-    };
-
-    // ... then resort, respecting commutativity
-    using std::begin;
-    using std::end;
-    if (static_commutativity()) {
-      if (is_commutative()) {
-        std::stable_sort(begin(factors_), end(factors_), local_compare);
-      }
-    } else {
-      // must do bubble sort if not commuting to avoid swapping elements across
-      // a noncommuting element
-      bubble_sort(
-          begin(factors_), end(factors_),
-          [&local_compare](const ExprPtr &first, const ExprPtr &second) {
-            bool result = (first->commutes_with(*second))
-                              ? local_compare(first, second)
-                              : false;
-            return result;
-          });
-    }
+    sort_factors(detail::cardinal_tensor_labels(opts), /* recursive = */ false);
   }
   // reinsert scalar factors at the front
   factors_.insert(factors_.begin(), scalars.begin(), scalars.end());
@@ -225,6 +184,205 @@ ExprPtr Product::canonicalize_impl(const NamedIndexSpec &named_indices,
                << ") result: " << to_latex() << std::endl;
 
   return {};  // side effects are absorbed into the scalar_
+}
+
+namespace {
+
+/// @return a key of @p tensor that does not depend on its indices
+std::size_t nested_leaf_key(const AbstractTensor &tensor) {
+  auto key = hash::value(tensor._label());
+  hash::combine(key, tensor._bra_rank());
+  hash::combine(key, tensor._ket_rank());
+  hash::combine(key, tensor._aux_rank());
+  hash::combine(key, static_cast<int>(tensor._symmetry()));
+  hash::combine(key, static_cast<int>(tensor._braket_symmetry()));
+  hash::combine(key, static_cast<int>(tensor._column_symmetry()));
+  return key;
+}
+
+/// @return a key of the nested product @p product (see
+/// Product::collect_nested_tensor_leaves()) that depends neither on the
+/// indices nor on the order of its factors
+std::size_t nested_product_key(const Product &product) {
+  container::svector<std::size_t> keys;
+  for (const auto &factor : product.factors()) {
+    if (factor.is<AbstractTensor>())
+      keys.push_back(nested_leaf_key(factor.as<AbstractTensor>()));
+    else if (factor.is<Product>())
+      keys.push_back(nested_product_key(factor.as<Product>()));
+  }
+  std::ranges::sort(keys);
+  return hash::range(keys.begin(), keys.end());
+}
+
+/// appends to @p salts the salt of each tensor factor of @p product and of
+/// its nested products, in the order of Product::collect_nested_tensor_leaves()
+/// : the keys (see nested_product_key()) of the nested products that contain
+/// it, so that tensors at structurally different places are told apart; the
+/// tensors of the outermost product get no salt
+/// @param path the salt of the tensor factors of @p product
+void collect_nested_tensor_salts(const Product &product,
+                                 const std::optional<std::size_t> &path,
+                                 container::svector<std::size_t> &salts) {
+  for (const auto &factor : product.factors()) {
+    if (factor.is<AbstractTensor>()) {
+      salts.push_back(path.value_or(0));
+    } else if (factor.is<Product>()) {
+      auto subpath = path.value_or(0);
+      hash::combine(subpath, nested_product_key(factor.as<Product>()));
+      collect_nested_tensor_salts(factor.as<Product>(), subpath, salts);
+    }
+  }
+}
+
+}  // namespace
+
+bool Product::collect_nested_tensor_leaves(
+    container::svector<ExprPtr *> &leaves) {
+  // N.B. mutable iteration resets the memoized hash of each product visited
+  auto collect = [&leaves](auto &self, Product &product, bool &nested) -> bool {
+    for (auto &factor : product) {
+      if (factor.is<AbstractTensor>()) {
+        leaves.push_back(&factor);
+      } else if (factor.is<Product>()) {
+        nested = true;
+        if (!self(self, factor.as<Product>(), nested)) return false;
+      } else if (!factor->is_scalar()) {
+        return false;
+      }
+    }
+    return true;
+  };
+  bool nested = false;
+  return collect(collect, *this, nested) && nested;
+}
+
+void Product::canonicalize_nested(const container::svector<ExprPtr *> &leaves,
+                                  const NamedIndexSpec &named_indices,
+                                  const CanonicalizeOptions &opts) {
+  if (Logger::instance().canonicalize) {
+    std::wcout << "Product canonicalization(" << to_wstring(opts.method)
+               << ") of nested products, input: " << to_latex() << std::endl;
+  }
+
+  const auto cardinal_tensor_labels = detail::cardinal_tensor_labels(opts);
+  TensorNetwork tn(leaves | ranges::views::transform([](const ExprPtr *leaf) {
+                     return *leaf;
+                   }) |
+                   ranges::to<container::svector<ExprPtr>>);
+  // the parenthesization breaks symmetries of the network: tensors at
+  // structurally different places are told apart, so that the result does not
+  // depend on the input
+  {
+    container::svector<std::size_t> salts;
+    collect_nested_tensor_salts(*this, std::nullopt, salts);
+    tn.set_tensor_salts(std::move(salts));
+  }
+  const ExprPtr byproduct =
+      tn.canonicalize(cardinal_tensor_labels, named_indices, opts);
+  if (byproduct) {
+    const auto &factor = byproduct->as<Constant>();
+    scalar_ *= factor.value();
+    if (factor.is_zero()) {
+      // see the tensor network branch of canonicalize_impl()
+      factors_.clear();
+      reset_hash_value();
+      return;
+    }
+  }
+
+  // put each canonicalized tensor where its input was: the tensor network
+  // reorders its tensors, but the parenthesization must be kept
+  const auto &tensors = tn.tensors();
+  const auto &input_ordinals = tn.tensor_input_ordinals();
+  SEQUANT_ASSERT(tensors.size() == leaves.size());
+  for (std::size_t t = 0; t != tensors.size(); ++t) {
+    auto exprptr = std::dynamic_pointer_cast<Expr>(tensors[t]);
+    SEQUANT_ASSERT(exprptr);
+    *leaves.at(input_ordinals.at(t)) = std::move(exprptr);
+  }
+
+  sort_factors(cardinal_tensor_labels, /* recursive = */ true);
+
+  if (Logger::instance().canonicalize)
+    std::wcout << "Product canonicalization(" << to_wstring(opts.method)
+               << ") of nested products, result: " << to_latex() << std::endl;
+}
+
+void Product::sort_factors(
+    const container::vector<std::wstring> &cardinal_tensor_labels,
+    bool recursive) {
+  if (recursive) {
+    for (auto &factor : factors_) {
+      if (factor.is<Product>())
+        factor.as<Product>().sort_factors(cardinal_tensor_labels, true);
+    }
+  }
+
+  // scalars commute, so they go to the front, in order
+  auto is_scalar = [](const auto &factor) { return factor->is_scalar(); };
+  auto scalars =
+      factors_ | ranges::views::filter(is_scalar) | ranges::to_vector;
+  ranges::sort(scalars, [](const auto &first, const auto &second) {
+    return *first < *second;
+  });
+  factors_ = factors_ | ranges::views::filter([&is_scalar](const auto &factor) {
+               return !is_scalar(factor);
+             }) |
+             ranges::to<decltype(factors_)>;
+
+  // comparer that respects cardinal tensor labels
+  auto local_compare = [&cardinal_tensor_labels](const ExprPtr &first,
+                                                 const ExprPtr &second) {
+    if (first->is<Labeled>() && second->is<Labeled>()) {
+      const auto first_label = first->as<Labeled>().label();
+      const auto second_label = second->as<Labeled>().label();
+      if (first_label == second_label) return *first < *second;
+      const auto first_is_cardinal_it = ranges::find_if(
+          cardinal_tensor_labels,
+          [&first_label](const std::wstring &l) { return l == first_label; });
+      const auto first_is_cardinal =
+          first_is_cardinal_it != ranges::end(cardinal_tensor_labels);
+      const auto second_is_cardinal_it = ranges::find_if(
+          cardinal_tensor_labels,
+          [&second_label](const std::wstring &l) { return l == second_label; });
+      const auto second_is_cardinal =
+          second_is_cardinal_it != ranges::end(cardinal_tensor_labels);
+      if (first_is_cardinal && second_is_cardinal)
+        return first_is_cardinal_it < second_is_cardinal_it;
+      else if (first_is_cardinal && !second_is_cardinal)
+        return true;
+      else if (!first_is_cardinal && second_is_cardinal)
+        return false;
+      else {
+        SEQUANT_ASSERT(!first_is_cardinal && !second_is_cardinal);
+        return *first < *second;
+      }
+    } else
+      return *first < *second;
+  };
+
+  // ... then resort, respecting commutativity
+  using std::begin;
+  using std::end;
+  if (static_commutativity()) {
+    if (is_commutative()) {
+      std::stable_sort(begin(factors_), end(factors_), local_compare);
+    }
+  } else {
+    // must do bubble sort if not commuting to avoid swapping elements across
+    // a noncommuting element
+    bubble_sort(begin(factors_), end(factors_),
+                [&local_compare](const ExprPtr &first, const ExprPtr &second) {
+                  bool result = (first->commutes_with(*second))
+                                    ? local_compare(first, second)
+                                    : false;
+                  return result;
+                });
+  }
+
+  factors_.insert(factors_.begin(), scalars.begin(), scalars.end());
+  reset_hash_value();
 }
 
 void Product::adjoint() {

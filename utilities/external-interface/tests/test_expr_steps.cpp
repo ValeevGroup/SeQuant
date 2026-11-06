@@ -5,6 +5,7 @@
 #include "filter_step.hpp"
 #include "optimization_step.hpp"
 #include "output_step.hpp"
+#include "prettify_step.hpp"
 #include "projection_step.hpp"
 #include "simplify_step.hpp"
 #include "sort_step.hpp"
@@ -59,6 +60,54 @@ TEST_CASE("simplify step", "[extint]") {
   SECTION("rejects options") {
     SimplifyStep step;
     REQUIRE_THROWS_AS(step.set_options(json::object()), Exception);
+  }
+}
+
+TEST_CASE("prettify step", "[extint]") {
+  ExecutionContext ctx;
+
+  SECTION("uses the conventions of mbpt") {
+    // t precedes R among the cardinal tensor labels of mbpt
+    seed_expr(ctx, {L"E = R{i1;a1}:N-N-N t{a1;i1}:N-N-N"});
+    PrettifyStep step;
+    REQUIRE(step.run("s", ctx, {"in.0"}) == 1);
+    const auto &out =
+        convert_data<ExpressionData>(ctx.get_data("s.0").front().data.get());
+    REQUIRE(out.expressions.size() == 1);
+    REQUIRE(out.expressions.front() ==
+            deserialize<ResultExpr>(L"E = t{a1;i1}:N-N-N R{i1;a1}:N-N-N"));
+  }
+
+  SECTION("recanonicalizes unless told not to") {
+    seed_expr(ctx, {L"E = f{i3;a3}:N-N-N t{a3;i3}:N-N-N"});
+    {
+      PrettifyStep step;
+      REQUIRE(step.run("s", ctx, {"in.0"}) == 1);
+      const auto &out =
+          convert_data<ExpressionData>(ctx.get_data("s.0").front().data.get());
+      const auto &in =
+          convert_data<ExpressionData>(ctx.get_data("in.0").front().data.get());
+      // the dummy indices are renamed
+      REQUIRE(out.expressions.front() != in.expressions.front());
+    }
+    {
+      PrettifyStep step;
+      step.set_options(json{{"recanonicalize", false}});
+      REQUIRE(step.run("t", ctx, {"in.0"}) == 1);
+      const auto &out =
+          convert_data<ExpressionData>(ctx.get_data("t.0").front().data.get());
+      const auto &in =
+          convert_data<ExpressionData>(ctx.get_data("in.0").front().data.get());
+      REQUIRE(out.expressions == in.expressions);
+    }
+  }
+
+  SECTION("option validation") {
+    PrettifyStep step;
+    REQUIRE_THROWS_AS(step.set_options(json::array()), Exception);
+    REQUIRE_THROWS_AS(step.set_options(json{{"recanonicalize", "yes"}}),
+                      Exception);
+    REQUIRE_THROWS_AS(step.set_options(json{{"unknown", true}}), Exception);
   }
 }
 

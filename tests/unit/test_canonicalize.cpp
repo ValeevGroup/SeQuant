@@ -26,6 +26,7 @@
 
 #include "data/sf_r2_direct_real_inc.hpp"
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -1653,6 +1654,77 @@ TEST_CASE("tensor_power_canonicalization", "[algorithms]") {
   }
 }
 
+TEST_CASE("nested products", "[algorithms][canonicalize]") {
+  using namespace sequant;
+
+  // g (t (f t)): a product parenthesized for evaluation
+  auto make = [](const wchar_t* a, const wchar_t* b, const wchar_t* i) {
+    auto inner = ex<Product>(ExprPtrList{ex<Tensor>(L"f", bra{i}, ket{b}),
+                                         ex<Tensor>(L"t", bra{b}, ket{L"i_1"})},
+                             Product::Flatten::No);
+    auto middle =
+        ex<Product>(ExprPtrList{ex<Tensor>(L"t", bra{a}, ket{i}), inner},
+                    Product::Flatten::No);
+    return ex<Product>(
+        ExprPtrList{ex<Tensor>(L"g", bra{L"i_2"}, ket{a}), middle},
+        Product::Flatten::No);
+  };
+  auto depth = [](const ExprPtr& expr) {
+    std::size_t result = 0;
+    for (const ExprPtr* current = &expr;;) {
+      const auto& factors = (*current)->as<Product>().factors();
+      const auto it = std::ranges::find_if(
+          factors, [](const ExprPtr& factor) { return factor->is<Product>(); });
+      if (it == factors.end()) return result;
+      ++result;
+      current = &*it;
+    }
+  };
+
+  const auto input = make(L"a_3", L"a_4", L"i_3");
+  auto expr = input->clone();
+  canonicalize(expr, deduce_named_indices);
+  // the parenthesization is preserved
+  CHECK(depth(expr) == 2);
+  // the dummy indices of the nested products are named consistently: flat,
+  // it is the same tensor network
+  CHECK_THAT(flatten(expr->clone()), EquivalentTo(flatten(input->clone())));
+  // the canonical form does not depend on the dummy labels
+  auto other = make(L"a_9", L"a_8", L"i_7");
+  canonicalize(other, deduce_named_indices);
+  CHECK(*other == *expr);
+  // and is marked as such
+  CHECK(expr->is_canonical(deduce_named_indices));
+  const auto copy = expr->clone();
+  canonicalize(expr, deduce_named_indices);
+  CHECK(*expr == *copy);
+
+  SECTION("a symmetry of the network that the parenthesization breaks") {
+    // X X T2 is symmetric under exchanging the X (T2 being column-symmetric),
+    // X (X T2) is not: the two spellings are the same tree, which must not
+    // depend on which X the canonicalization of the network puts first
+    auto make_tree = [](const wchar_t* outer, const wchar_t* inner) {
+      auto t2 = ex<Tensor>(L"T2", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                           Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                           ColumnSymmetry::Symm);
+      auto x = [](const wchar_t* n) {
+        return ex<Tensor>(L"X", bra{std::wstring(L"i_") + n},
+                          ket{std::wstring(L"a_") + n});
+      };
+      return ex<Product>(
+          ExprPtrList{x(outer), ex<Product>(ExprPtrList{x(inner), t2},
+                                            Product::Flatten::No)},
+          Product::Flatten::No);
+    };
+    auto first = make_tree(L"1", L"2");
+    auto second = make_tree(L"2", L"1");
+    canonicalize(first, deduce_named_indices);
+    canonicalize(second, deduce_named_indices);
+    CHECK(*first == *second);
+    CHECK(depth(first) == 1);
+  }
+}
+
 TEST_CASE("prettify", "[algorithms][canonicalize]") {
   using namespace sequant;
 
@@ -1760,6 +1832,91 @@ TEST_CASE("prettify", "[algorithms][canonicalize]") {
     CHECK(labels_of(
               prettify(expr, deduce_named_indices, mbpt::prettify_options())) ==
           std::vector<std::wstring>{L"t", L"R"});
+  }
+
+  SECTION("the parenthesization is preserved") {
+    // (f t) (f t), the subproducts having distinct dummy indices that
+    // canonicalizing each subproduct on its own would name alike
+    auto make_nested = [](const wchar_t* a, const wchar_t* b,
+                          const wchar_t* i) {
+      auto left =
+          ex<Product>(ExprPtrList{ex<Tensor>(L"f", bra{i}, ket{a}),
+                                  ex<Tensor>(L"t", bra{a}, ket{L"i_1"})},
+                      Product::Flatten::No);
+      auto right =
+          ex<Product>(ExprPtrList{ex<Tensor>(L"f", bra{L"i_4"}, ket{b}),
+                                  ex<Tensor>(L"t", bra{b}, ket{i})},
+                      Product::Flatten::No);
+      return ex<Product>(ExprPtrList{left, right}, Product::Flatten::No);
+    };
+    auto is_nested = [](const ExprPtr& expr) {
+      REQUIRE(expr->is<Product>());
+      REQUIRE(expr->as<Product>().factors().size() == 2);
+      for (const auto& factor : expr->as<Product>().factors()) {
+        REQUIRE(factor->is<Product>());
+        REQUIRE(factor->as<Product>().factors().size() == 2);
+      }
+      return true;
+    };
+    const auto input = make_nested(L"a_3", L"a_4", L"i_3");
+    for (const auto& opts : {PrettifyOptions{}, mbpt::prettify_options()}) {
+      const auto pretty = prettify(input, deduce_named_indices, opts);
+      CHECK(is_nested(pretty));
+      // flat, it is the same tensor network
+      CHECK_THAT(flatten(pretty->clone()),
+                 EquivalentTo(flatten(input->clone())));
+      CHECK(*prettify(pretty, deduce_named_indices, opts) == *pretty);
+      // the dummy labels do not matter
+      CHECK(*prettify(make_nested(L"a_7", L"a_5", L"i_9"), deduce_named_indices,
+                      opts) == *pretty);
+    }
+
+    // a product with a sum as a factor is only sorted
+    const auto with_sum =
+        ex<Product>(ExprPtrList{ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_1"}),
+                                ex<Tensor>(L"g", bra{L"i_1"}, ket{L"a_3"}) +
+                                    ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_3"})},
+                    Product::Flatten::No);
+    const auto pretty = prettify(with_sum, deduce_named_indices);
+    REQUIRE(pretty->is<Product>());
+    REQUIRE(pretty->as<Product>().factors().size() == 2);
+    const auto& factors = pretty->as<Product>().factors();
+    const auto sum_it = std::ranges::find_if(
+        factors, [](const ExprPtr& factor) { return factor->is<Sum>(); });
+    REQUIRE(sum_it != factors.end());
+    // the summands are sorted, the dummy indices keep their labels
+    CHECK(**sum_it == *(ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_3"}) +
+                        ex<Tensor>(L"g", bra{L"i_1"}, ket{L"a_3"})));
+  }
+
+  SECTION("terms related by the symmetry of the result") {
+    // the two terms are images of each other under the permutation of the
+    // columns of the result; but a term is not replaced by its image unless it
+    // is under a symmetrizer: that the result has the symmetry does not make
+    // its terms have it
+    const auto first = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:N-C-S = X{a_1;i_1} * Y{a_2;i_2}");
+    const auto second = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:N-C-S = X{a_2;i_2} * Y{a_1;i_1}");
+    for (const auto& opts : {PrettifyOptions{}, mbpt::prettify_options()}) {
+      CHECK(*prettify(first, opts).expression() == *first.expression());
+      CHECK(*prettify(second, opts).expression() == *second.expression());
+    }
+    // under a symmetrizer each summand is presented by its own image
+    const auto symmetrized = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:N-C-S = Ŝ{i_1,i_2;a_1,a_2}:N-N-S * "
+        L"(X{a_1;i_1} * Y{a_2;i_2} + Z{a_1;i_1} * W{a_2;i_2})");
+    const auto symmetrized_image = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:N-C-S = Ŝ{i_1,i_2;a_1,a_2}:N-N-S * "
+        L"(X{a_1;i_1} * Y{a_2;i_2} + Z{a_2;i_2} * W{a_1;i_1})");
+    REQUIRE(symmetrized.expression()->is<Product>());
+    for (const auto& opts : {PrettifyOptions{}, mbpt::prettify_options()}) {
+      const auto pretty = prettify(symmetrized, opts);
+      CHECK(*pretty.expression() ==
+            *prettify(symmetrized_image, opts).expression());
+      // the structure is kept
+      CHECK(pretty.expression()->is<Product>());
+    }
   }
 
   SECTION("the result is not canonical") {

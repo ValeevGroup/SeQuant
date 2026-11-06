@@ -32,6 +32,14 @@ struct PrettifyOptions {
 /// the presentation settings, then ordered lexicographically (see sort_expr()
 /// and LexicographicExprCompare), which, unlike canonicalization, does not
 /// depend on the hashing algorithm. The named indices are never renamed.
+///
+/// The structure of the expression is preserved: the parenthesization of
+/// products (e.g. the order of evaluation chosen by optimize()) is kept,
+/// sums are not flattened and their summands are not combined. Only the
+/// summands that are tensors or (possibly nested) products of tensors are
+/// recanonicalized, the dummy indices of a nested product being named
+/// consistently across it; the other summands (e.g. products with a sum as
+/// a factor) are only sorted.
 /// @note the result is meant for presentation only, i.e. it is not
 /// canonical in the sense of Expr::is_canonical(); pass it to
 /// canonicalize()/simplify() before relying on its form
@@ -46,6 +54,13 @@ struct PrettifyOptions {
 
 /// @brief Brings a ResultExpr into a form meant for reading, with the indices
 /// of its result as the named indices
+///
+/// If recanonicalizing, each summand of a sum that a (anti)symmetrizer of the
+/// result multiplies (S * (X_1 + X_2 + ...)) is presented by its image, under
+/// the permutations of the result indices within the symmetry group of the
+/// result, that comes first in the order of @p opts ; the images X and P(X)
+/// are interchangeable there, as S * X = S * P(X) (up to the phase of P).
+/// Other terms are not replaced by images.
 /// @sa prettify(const ExprPtr&, const NamedIndexSpec&, const PrettifyOptions&)
 /// @param expr the expression to prettify; it is not modified
 /// @param opts the options

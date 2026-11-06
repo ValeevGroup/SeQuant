@@ -1,7 +1,6 @@
 #include "executor.hpp"
 #include "json_include.hpp"
 #include "processing.hpp"
-#include "sort_step.hpp"
 #include "template_expansion.hpp"
 #include "utils.hpp"
 
@@ -195,9 +194,10 @@ ExportNode<> prepareForExport(ResultExpr &result,
                               const ItfGenerator<ItfExportContext> &generator,
                               ItfExportContext &ctx,
                               const ExportOptions &opts) {
-  // use an order that does not depend on the hashing algorithm, to make the
-  // generated code reproducible
-  sort_expr(result, export_order());
+  // the library's canonical form is not meant to be read, and its order
+  // depends on the hashing algorithm: export a prettified form, to make the
+  // generated code readable and reproducible
+  result = prettify(result, mbpt::prettify_options());
 
   ExportNode<> tree = to_export_tree(result);
 
@@ -419,6 +419,11 @@ void generateITF(const json &blocks, std::string_view out_file,
             return false;
           }();
 
+          // prettify while the symmetrizer is present: the terms that it
+          // multiplies may be presented by images under the symmetry of the
+          // result (see prettify())
+          current = prettify(current, mbpt::prettify_options());
+
           if (has_symmetrizer(current.expression())) {
             std::optional<ExprPtr> symmetrizer =
                 pop_tensor(current.expression(), reserved::symm_label());
@@ -430,7 +435,11 @@ void generateITF(const json &blocks, std::string_view out_file,
                                 current.column_symmetry());
             tensorsToSymmetrize.insert(resultTensor);
 
+            // the not yet symmetrized result has none of the symmetries
+            // that the symmetrization brings about
             current.set_label(current.label() + L"u");
+            current.set_symmetry(Symmetry::Nonsymm);
+            current.set_column_symmetry(ColumnSymmetry::Nonsymm);
 
             spdlog::debug("After popping S tensor:\n{}", current);
 

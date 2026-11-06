@@ -25,6 +25,7 @@ add_library(external_interface-obj OBJECT
     index_batching_step.cpp
     optimization_step.cpp
     output_step.cpp
+    prettify_step.cpp
     processing_data.cpp
     processing_step.cpp
     processing_step_factory.cpp

@@ -839,6 +839,43 @@ Outputs expressions in the chosen markup style. Mainly intended for debugging pu
      - No
 
 
+.. _external_interface_v2_prettify:
+
+prettify
+^^^^^^^^
+
+Brings the input expressions into a form meant for reading (see :func:`sequant::prettify`), using the conventions of
+mbpt (see :func:`sequant::mbpt::prettify_options`): the expressions are canonicalized with the cardinal tensor labels of
+mbpt, which renames their dummy indices, and are then sorted into lexicographic order, which, unlike the order produced
+by :code:`canonicalize`, depends only on the expressions themselves and is hence stable across changes of the hashing
+algorithm. Terms that a symmetrizer multiplies are presented alike if they are related by the symmetry of their
+result. The structure of the expressions is
+preserved; in particular, the parenthesization chosen by :code:`optimize` is kept, so this step is meant to be applied
+right before the expressions are turned into an export tree. The order of the expressions within an input is not
+changed.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Input
+     - Output
+   * - Expression
+     - Expression
+
+
+.. list-table:: Options
+   :header-rows: 1
+
+   * - Option
+     - Description
+     - Default
+     - Required
+   * - :code:`recanonicalize`
+     - Whether to canonicalize the expressions before sorting them. If :code:`false`, they are only sorted.
+     - :code:`true`
+     - No
+
+
 project
 ^^^^^^^
 
@@ -907,10 +944,14 @@ This step does not accept any options.
 sort
 ^^^^
 
+.. deprecated::
+   Use :ref:`prettify <external_interface_v2_prettify>` instead, which also renames the dummy indices into a readable
+   form.
+
 Sorts the input expressions into lexicographic order: the summands of every sum are sorted, as are the factors of every
 product insofar as they commute. Unlike the order produced by :code:`canonicalize`, which is based on hash values, this
-order depends only on the expressions themselves (tensors with the cardinal tensor labels of mbpt, see
-:func:`sequant::mbpt::cardinal_tensor_labels`, come first) and is hence stable across changes of the hashing algorithm. The order of the expressions within an input is not changed.
+order depends only on the expressions themselves and is hence stable across changes of the hashing algorithm. The order
+of the expressions within an input is not changed.
 
 .. list-table::
    :header-rows: 1

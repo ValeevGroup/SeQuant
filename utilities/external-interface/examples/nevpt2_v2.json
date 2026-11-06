@@ -42,14 +42,14 @@
 					}
 				},
 				{
-					"id": "sorted",
-					"kind": "sort",
+					"id": "pretty",
+					"kind": "prettify",
 					"inputs": "opt"
 				},
 				{
 					"id": "tree",
 					"kind": "to_export_tree",
-					"inputs": "sorted"
+					"inputs": "pretty"
 				}
 			]
 		}
