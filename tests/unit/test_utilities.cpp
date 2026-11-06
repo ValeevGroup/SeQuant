@@ -305,6 +305,22 @@ TEST_CASE("result_symmetrization", "[utilities]") {
   REQUIRE(result_symmetrization(result, L"Ru") == expected);
   REQUIRE(result_symmetrization(ResultExpr(result, ex<Constant>(0)), L"Ru") ==
           expected);
+
+  SECTION("the precursor has no particle or column symmetry") {
+    Tensor symm_result(L"R", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                       Symmetry::Nonsymm, BraKetSymmetry::Symm,
+                       ColumnSymmetry::Symm);
+    auto symmetrization = result_symmetrization(symm_result, L"Ru");
+    for (const auto& term : *symmetrization) {
+      const auto& precursor = term->as<Product>().factor(0)->as<Tensor>();
+      CHECK(precursor.symmetry() == Symmetry::Nonsymm);
+      CHECK(precursor.braket_symmetry() == BraKetSymmetry::Symm);
+      CHECK(precursor.column_symmetry() == ColumnSymmetry::Nonsymm);
+    }
+    // so canonicalization does not undo the symmetrization
+    simplify(symmetrization, deduce_named_indices);
+    CHECK(symmetrization->size() == 2);
+  }
 }
 
 TEST_CASE("ExpressionFilter", "[utilities]") {
