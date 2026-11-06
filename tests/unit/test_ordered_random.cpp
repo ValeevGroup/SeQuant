@@ -36,7 +36,10 @@
 #include <utility>
 #include <vector>
 
-namespace {
+// Everything sits in a named namespace: a using-directive at file scope
+// (even inside an unnamed namespace) leaks into the files concatenated after
+// this one in a unity build.
+namespace ordered_random_test {
 
 using sequant::Index;
 using sequant::ResultPtr;
@@ -612,8 +615,6 @@ constexpr std::size_t n_graphs_per_mode = 1500;
 #endif
 constexpr int modes[] = {0, 1, 4 | 8, 16 | 32, 64, 4 | 64};
 
-}  // namespace
-
 TEST_CASE("random schedules: every block level is orderable",
           "[ordered-schedule][random]") {
   auto const policy = random_policy();
@@ -686,3 +687,5 @@ TEST_CASE("random schedules: the release plan never releases early",
   }
   CHECK(simulated > 0);
 }
+
+}  // namespace ordered_random_test
