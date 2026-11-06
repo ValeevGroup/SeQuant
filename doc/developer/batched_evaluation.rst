@@ -117,9 +117,19 @@ the value is invariant.
 
 A consumer requiring a completed loop-carried value, or a completed reduction while it is inside that reduction's
 loop, or a loop-local value assembled over a loop instance while it is itself produced inside that instance, moves to
-a later pass. A nest containing multiple passes becomes ordered sibling blocks, run in pass order; a later pass reads
-the earlier pass's assembled value. Values needed across a split are materialized, not recomputed.
-Unsupported cases raise ``sequant::Exception``.
+a later pass.
+
+Passes must also leave every block level orderable. The steps of a level are its builds and the blocks nested in it
+(at root: the root builds and each nest's pass blocks), and a block stands for everything produced inside it, so the
+steps of one pass can need each other in a cycle although no value does: a build that reads what the inner block
+completes while a reader of that build sits inside the block, or two nests whose blocks each read a completed value of
+the other. The pass levels are refined until no such cycle is left: each round finds the cycles among the steps of one
+pass and moves the consumers on them to a later pass than the operands they read there.
+
+A nest containing multiple passes becomes ordered sibling blocks, run in pass order; a later pass reads the earlier
+pass's assembled value. The nest's inner levels are ordered once, with all passes present, and then forked per pass,
+so only dependencies between two steps of one pass order them. Values needed across a split are materialized, not
+recomputed. Unsupported cases raise ``sequant::Exception``.
 
 .. _batched-evaluation-cell-table:
 

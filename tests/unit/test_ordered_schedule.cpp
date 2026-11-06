@@ -2471,6 +2471,325 @@ TEST_CASE("assembled-reader-bumped", "[ordered-schedule][per-nest-split]") {
   orderedsched_validated_table(rich, sched);
 }
 
+// X is produced below O in one nest (its reduction closes at chain depth 2),
+// O is built at depth 0 and reads X, and R, built at depth 1, reads O. O can
+// only be built once the sub-chain below it has closed, and R is produced
+// inside that sub-chain, so R takes a later pass and O is pinned; T, the
+// root result, follows R. Every value is LoopLocal as far as the legality
+// roles go, so no other bumping rule is in play.
+TEST_CASE("levels-subchain-awaited-build", "[ordered-schedule][levels]") {
+  using sequant::eval::LoopRole;
+  using Site = sequant::eval::detail::ForcedSplitSite;
+  sequant::eval::RichSchedule rich;
+  rich.cells.push_back(orderedsched_levels_cell(0, 1000, {{0, 10}}));   // X
+  rich.cells.push_back(orderedsched_levels_cell(1, 1001, {{10, 20}}));  // O
+  rich.cells.push_back(orderedsched_levels_cell(2, 1002, {{20, 30}}));  // R
+  rich.cells.push_back(orderedsched_levels_cell(3, 1003, {{30, 30}}));  // T
+  sequant::eval::LegalitySchedule legality;
+  for (std::size_t h : {1000u, 1001u, 1002u, 1003u})
+    legality.cells.push_back(
+        orderedsched_levels_legality(h, LoopRole::LoopLocal));
+  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
+  auto const levels = [&](std::vector<std::optional<Site>> const& sites) {
+    return sequant::eval::detail::forced_split_levels(
+        rich, legality, g, orderedsched_never_inside, orderedsched_never_inside,
+        [&](std::size_t vid) { return sites.at(vid); });
+  };
+  std::optional<Site> const x{Site{7, std::nullopt, 2}};
+  std::optional<Site> const r{Site{7, 1, 1}};
+  std::optional<Site> const root{};
+
+  {  // O built above R, X produced below O: R is bumped
+    auto const lv = levels({x, Site{7, 0, 0}, r, root});
+    CHECK(lv.pass(0) == 0);
+    CHECK(lv.pass(1) == 0);
+    CHECK(lv.pass(2) == 1);
+    CHECK(lv.pass(3) == 1);
+    CHECK(lv.pinned.count(1) == 1);
+    for (auto const& [v, ops] : g.depends_on)
+      for (std::size_t o : ops) CHECK(lv.pass(o) <= lv.pass(v));
+  }
+  {  // O built at root, above the whole nest: the same
+    auto const lv = levels({x, root, r, root});
+    CHECK(lv.pass(1) == 0);
+    CHECK(lv.pass(2) == 1);
+    CHECK(lv.pinned.count(1) == 1);
+  }
+  {  // O built in another nest: the same
+    auto const lv = levels({x, Site{8, 5, 5}, r, root});
+    CHECK(lv.pass(2) == 1);
+  }
+  {  // X produced no deeper than O: one block order serves both
+    auto const lv = levels({Site{7, std::nullopt, 0}, Site{7, 0, 0}, r, root});
+    CHECK(lv.max_pass == 0);
+  }
+  {  // O built at or below R: R is not in a sub-chain O waits on
+    auto const lv = levels({x, Site{7, 1, 1}, r, root});
+    CHECK(lv.max_pass == 0);
+  }
+  {  // O leaves its loop by an escape: the reduction and assembly rules' case
+    auto const lv = levels({x, Site{7, std::nullopt, 0}, r, root});
+    CHECK(lv.max_pass == 0);
+  }
+  {  // no site information: the rule is off
+    auto const lv = sequant::eval::detail::forced_split_levels(
+        rich, legality, g, orderedsched_never_inside,
+        orderedsched_never_inside);
+    CHECK(lv.max_pass == 0);
+  }
+}
+
+// The same shape through the builder. One nest of four loops over one space
+// (slots 0 > 1 > 2 > 3 in the chain); every value is loop-local on slot 0,
+// the enclosing loop. X is also loop-local on slot 1 and reduced over slot 3;
+// O is loop-local on slot 1 and reads X; R is loop-local on slots 1 and 2 and
+// reads O; T reduces R over all three. At slot 1's level O needs the inner
+// block (X's reduction closes there) and the inner block needs O (R is built
+// there): one pass has no order for the two. With R in a later pass the nest
+// runs twice -- X and O first, then R and T. Slot 1 is an inner level of the
+// nest, so it is sorted with both passes present and forked afterwards, and
+// that sort must not order O against the block holding its later-pass
+// reader.
+TEST_CASE("per-nest-subchain-awaited-build",
+          "[ordered-schedule][per-nest-split]") {
+  using sequant::eval::LoopRole;
+  using sequant::eval::OutputKind;
+  sequant::Index const i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"}, i4{L"i_4"};
+
+  sequant::eval::RichSchedule rich;
+  {
+    auto x = orderedsched_nest_cell(0, 9400, {i1, i2}, {0, 1}, {{100, 200}});
+    for (auto& occ : x.occurrences) occ.reduced_slot = {{i4, 3}};
+    rich.cells.push_back(std::move(x));
+  }
+  rich.cells.push_back(
+      orderedsched_nest_cell(1, 9401, {i1, i2}, {0, 1}, {{200, 300}}));
+  rich.cells.push_back(
+      orderedsched_nest_cell(2, 9402, {i1, i2, i3}, {0, 1, 2}, {{300, 400}}));
+  {
+    auto t = orderedsched_nest_cell(3, 9403, {}, {}, {{400, 400}});
+    for (auto& occ : t.occurrences)
+      occ.reduced_slot = {{i1, 0}, {i2, 1}, {i3, 2}};
+    rich.cells.push_back(std::move(t));
+  }
+  for (auto& vc : rich.cells)
+    if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
+  orderedsched_record_loop_kinds(rich);
+
+  sequant::eval::LegalitySchedule legality;
+  {
+    sequant::eval::CellLegality cl;  // X
+    cl.hash = 9400;
+    cl.per_axis.push_back({i1, LoopRole::LoopLocal});
+    cl.per_axis.push_back({i2, LoopRole::LoopLocal});
+    cl.per_axis.push_back({i4, LoopRole::Reduction});
+    legality.cells.push_back(cl);
+  }
+  legality.cells.push_back(
+      orderedsched_nest_legality(9401, {i1, i2}, LoopRole::LoopLocal));
+  legality.cells.push_back(
+      orderedsched_nest_legality(9402, {i1, i2, i3}, LoopRole::LoopLocal));
+  legality.cells.push_back(
+      orderedsched_nest_legality(9403, {i1, i2, i3}, LoopRole::Reduction));
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    return ix.basis().base_key() == L"i";
+  };
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+  REQUIRE(well_formed(sched));
+
+  // One nest (slot 0 outermost), run twice.
+  auto const roots = orderedsched_root_blocks(sched);
+  REQUIRE(roots.size() == 2);
+  std::vector<int> lats;
+  for (auto const* b : roots) {
+    CHECK(b->level.loop_slot == 0);
+    lats.push_back(b->latitude_ordinal);
+  }
+  CHECK(lats == std::vector<int>{0, 1});
+  std::vector<std::pair<std::size_t, std::optional<OutputKind>>> p[2];
+  for (int k = 0; k < 2; ++k) orderedsched_collect_productions(*roots[k], p[k]);
+  auto const has = [](auto const& v, std::size_t id,
+                      std::optional<OutputKind> kind) {
+    return std::any_of(v.begin(), v.end(), [&](auto const& e) {
+      return e.first == id && e.second == kind;
+    });
+  };
+  // pass 0: X's reduction, and O built per batch and scattered out for R
+  CHECK(has(p[0], 0, OutputKind::AccumulateSum));
+  CHECK(has(p[0], 1, std::nullopt));
+  CHECK(has(p[0], 1, OutputKind::AccumulateScatter));
+  CHECK_FALSE(has(p[0], 2, std::nullopt));
+  // pass 1: R, and T's reductions
+  CHECK(has(p[1], 2, std::nullopt));
+  CHECK(has(p[1], 3, OutputKind::AccumulateSum));
+  CHECK_FALSE(has(p[1], 1, std::nullopt));
+  CHECK_FALSE(has(p[1], 0, OutputKind::AccumulateSum));
+
+  orderedsched_validated_table(rich, sched);
+}
+
+// Only steps of one pass are ordered against each other. X is produced below
+// O1 (its reduction closes at chain depth 3), O1 is built at depth 0 and reads
+// X, and O2 (depth 1) reads O1, so O2 takes a later pass and O1 is pinned. O3
+// (depth 2) reads O2, which depends on X only through O1: X and O1 belong to
+// the earlier pass, whose blocks have closed, so in its own pass O2 needs
+// nothing of the block that holds O3, and O3 shares that pass. As in the test
+// above, the sites alone say where a value is produced; the legality roles
+// only select which other rule, if any, bumps the first edge.
+TEST_CASE("levels-steps-ordered-within-one-pass",
+          "[ordered-schedule][levels]") {
+  using sequant::eval::LoopRole;
+  using Site = sequant::eval::detail::ForcedSplitSite;
+  sequant::eval::RichSchedule rich;
+  rich.cells.push_back(orderedsched_levels_cell(0, 1000, {{0, 10}}));   // X
+  rich.cells.push_back(orderedsched_levels_cell(1, 1001, {{10, 20}}));  // O1
+  rich.cells.push_back(orderedsched_levels_cell(2, 1002, {{20, 30}}));  // O2
+  rich.cells.push_back(orderedsched_levels_cell(3, 1003, {{30, 40}}));  // O3
+  rich.cells.push_back(orderedsched_levels_cell(4, 1004, {{40, 40}}));  // T
+  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
+  std::vector<std::optional<Site>> const sites{Site{7, std::nullopt, 3},
+                                               Site{7, 0, 0}, Site{7, 1, 1},
+                                               Site{7, 2, 2}, std::nullopt};
+  auto const site_of = [&](std::size_t vid) { return sites.at(vid); };
+
+  SECTION("the first edge is bumped to break a cycle of steps") {
+    sequant::eval::LegalitySchedule legality;
+    for (std::size_t h : {1000u, 1001u, 1002u, 1003u, 1004u})
+      legality.cells.push_back(
+          orderedsched_levels_legality(h, LoopRole::LoopLocal));
+    auto const lv = sequant::eval::detail::forced_split_levels(
+        rich, legality, g, orderedsched_never_inside, orderedsched_never_inside,
+        site_of);
+    CHECK(lv.pass(0) == 0);
+    CHECK(lv.pass(1) == 0);
+    CHECK(lv.pass(2) == 1);
+    CHECK(lv.pass(3) == 1);
+    CHECK(lv.pass(4) == 1);
+    CHECK(lv.pinned.count(1) == 1);
+    CHECK(lv.pinned.count(2) == 0);
+  }
+  SECTION("the first edge bumps by another rule") {
+    // X is loop-carried, so O1 is bumped past it; O2, below O1, is not
+    // bumped again for the X that O1 read.
+    sequant::eval::LegalitySchedule legality;
+    legality.cells.push_back(
+        orderedsched_levels_legality(1000, LoopRole::LoopCarried));
+    for (std::size_t h : {1001u, 1002u, 1003u, 1004u})
+      legality.cells.push_back(
+          orderedsched_levels_legality(h, LoopRole::LoopLocal));
+    auto const lv = sequant::eval::detail::forced_split_levels(
+        rich, legality, g, orderedsched_never_inside, orderedsched_never_inside,
+        site_of);
+    CHECK(lv.pass(0) == 0);
+    CHECK(lv.pass(1) == 1);
+    CHECK(lv.pass(2) == 1);
+    CHECK(lv.pass(3) == 1);
+    CHECK(lv.max_pass == 1);
+  }
+  SECTION("a source in another nest whose awaited pass has closed") {
+    // O1 is built in another nest and reads the loop-carried X of nest 7, so
+    // it sits in the second pass. O2, in nest 7, reads O1 in that pass: nest
+    // 7's second block needs the other nest's block, which needs only nest
+    // 7's first block. No two steps of one pass need each other, so nothing
+    // moves.
+    sequant::eval::LegalitySchedule legality;
+    legality.cells.push_back(
+        orderedsched_levels_legality(1000, LoopRole::LoopCarried));
+    for (std::size_t h : {1001u, 1002u, 1003u, 1004u})
+      legality.cells.push_back(
+          orderedsched_levels_legality(h, LoopRole::LoopLocal));
+    std::vector<std::optional<Site>> const other{Site{7, std::nullopt, 3},
+                                                 Site{8, 0, 0}, Site{7, 1, 1},
+                                                 Site{7, 2, 2}, std::nullopt};
+    auto const lv = sequant::eval::detail::forced_split_levels(
+        rich, legality, g, orderedsched_never_inside, orderedsched_never_inside,
+        [&](std::size_t vid) { return other.at(vid); });
+    CHECK(lv.pass(1) == 1);
+    CHECK(lv.pass(2) == 1);
+    CHECK(lv.pass(3) == 1);
+    CHECK(lv.max_pass == 1);
+  }
+}
+
+// The second shape through the builder. One nest of two loops (slot 0 > 1).
+// X is loop-local on slot 0 and carried on slot 1; O, loop-local on slot 0,
+// reads X complete and so takes the second pass; R, loop-local on both, reads
+// O; T reduces R. O reads nothing of its own pass from the slot-1 block, so R
+// is built in O's pass, per batch of slot 0, and O is not materialized: the
+// nest runs twice, not three times.
+TEST_CASE("per-nest-carried-source-then-subchain-reader",
+          "[ordered-schedule][per-nest-split]") {
+  using sequant::eval::LoopRole;
+  using sequant::eval::OutputKind;
+  sequant::Index const i1{L"i_1"}, i2{L"i_2"};
+
+  sequant::eval::RichSchedule rich;
+  rich.cells.push_back(
+      orderedsched_nest_cell(0, 9410, {i1, i2}, {0, 1}, {{100, 200}}));  // X
+  rich.cells.push_back(
+      orderedsched_nest_cell(1, 9411, {i1}, {0}, {{200, 300}}));  // O
+  rich.cells.push_back(
+      orderedsched_nest_cell(2, 9412, {i1, i2}, {0, 1}, {{300, 400}}));  // R
+  {
+    auto t = orderedsched_nest_cell(3, 9413, {}, {}, {{400, 400}});
+    for (auto& occ : t.occurrences) occ.reduced_slot = {{i1, 0}, {i2, 1}};
+    rich.cells.push_back(std::move(t));
+  }
+  for (auto& vc : rich.cells)
+    if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
+  orderedsched_record_loop_kinds(rich);
+
+  sequant::eval::LegalitySchedule legality;
+  {
+    sequant::eval::CellLegality cl;  // X
+    cl.hash = 9410;
+    cl.per_axis.push_back({i1, LoopRole::LoopLocal});
+    cl.per_axis.push_back({i2, LoopRole::LoopCarried});
+    cl.forced_split_axes.push_back(i2);
+    legality.cells.push_back(cl);
+  }
+  legality.cells.push_back(
+      orderedsched_nest_legality(9411, {i1}, LoopRole::LoopLocal));
+  legality.cells.push_back(
+      orderedsched_nest_legality(9412, {i1, i2}, LoopRole::LoopLocal));
+  legality.cells.push_back(
+      orderedsched_nest_legality(9413, {i1, i2}, LoopRole::Reduction));
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    return ix.basis().base_key() == L"i";
+  };
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+  REQUIRE(well_formed(sched));
+
+  auto const roots = orderedsched_root_blocks(sched);
+  REQUIRE(roots.size() == 2);
+  CHECK(roots[0]->latitude_ordinal == 0);
+  CHECK(roots[1]->latitude_ordinal == 1);
+  std::vector<std::pair<std::size_t, std::optional<OutputKind>>> p[2];
+  for (int k = 0; k < 2; ++k) orderedsched_collect_productions(*roots[k], p[k]);
+  auto const has = [](auto const& v, std::size_t id,
+                      std::optional<OutputKind> kind) {
+    return std::any_of(v.begin(), v.end(), [&](auto const& e) {
+      return e.first == id && e.second == kind;
+    });
+  };
+  // pass 0: X, scattered out in full
+  CHECK(has(p[0], 0, OutputKind::AccumulateScatter));
+  CHECK_FALSE(has(p[0], 1, std::nullopt));
+  // pass 1: O and R built per batch, O never assembled; T's reductions
+  CHECK(has(p[1], 1, std::nullopt));
+  CHECK_FALSE(has(p[1], 1, OutputKind::AccumulateScatter));
+  CHECK(has(p[1], 2, std::nullopt));
+  CHECK(has(p[1], 3, OutputKind::AccumulateSum));
+
+  orderedsched_validated_table(rich, sched);
+}
+
 namespace {
 
 struct OrderedSchedSkipLevelFixture {
@@ -2571,6 +2890,79 @@ TEST_CASE("per-nest-fork-orders-on-deeper-outputs",
   REQUIRE(w_at.has_value());
   REQUIRE(inner_at.has_value());
   CHECK(*inner_at < *w_at);
+
+  orderedsched_validated_table(rich, sched);
+}
+
+// Two nests whose blocks would need each other in one pass. Nests N (slot 0)
+// and M (slot 1) share no value. X is reduced over N and read by Y, which is
+// loop-local in M; O is reduced over M and read by V, which is loop-local in
+// N; TY and TV reduce Y and V. No value depends on its own nest through
+// another, yet one block per nest cannot be ordered: N's needs O of M's and
+// M's needs X of N's. One of the nests runs twice instead.
+TEST_CASE("per-nest-mutual-dependence-of-two-nests",
+          "[ordered-schedule][per-nest-split]") {
+  using sequant::eval::LoopRole;
+  using sequant::eval::OutputKind;
+  sequant::Index const i1{L"i_1"}, i2{L"i_2"};
+
+  sequant::eval::RichSchedule rich;
+  {
+    auto x = orderedsched_nest_cell(0, 9430, {}, {}, {{10, 30}});  // X
+    for (auto& occ : x.occurrences) occ.reduced_slot = {{i1, 0}};
+    rich.cells.push_back(std::move(x));
+  }
+  {
+    auto o = orderedsched_nest_cell(1, 9431, {}, {}, {{20, 40}});  // O
+    for (auto& occ : o.occurrences) occ.reduced_slot = {{i2, 1}};
+    rich.cells.push_back(std::move(o));
+  }
+  rich.cells.push_back(
+      orderedsched_nest_cell(2, 9432, {i2}, {1}, {{30, 50}}));  // Y
+  rich.cells.push_back(
+      orderedsched_nest_cell(3, 9433, {i1}, {0}, {{40, 60}}));  // V
+  {
+    auto t = orderedsched_nest_cell(4, 9434, {}, {}, {{50, 50}});  // TY
+    for (auto& occ : t.occurrences) occ.reduced_slot = {{i2, 1}};
+    rich.cells.push_back(std::move(t));
+  }
+  {
+    auto t = orderedsched_nest_cell(5, 9435, {}, {}, {{60, 60}});  // TV
+    for (auto& occ : t.occurrences) occ.reduced_slot = {{i1, 0}};
+    rich.cells.push_back(std::move(t));
+  }
+  for (auto& vc : rich.cells)
+    if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
+  orderedsched_record_loop_kinds(rich);
+
+  sequant::eval::LegalitySchedule legality;
+  legality.cells.push_back(
+      orderedsched_nest_legality(9430, {i1}, LoopRole::Reduction));
+  legality.cells.push_back(
+      orderedsched_nest_legality(9431, {i2}, LoopRole::Reduction));
+  legality.cells.push_back(
+      orderedsched_nest_legality(9432, {i2}, LoopRole::LoopLocal));
+  legality.cells.push_back(
+      orderedsched_nest_legality(9433, {i1}, LoopRole::LoopLocal));
+  legality.cells.push_back(
+      orderedsched_nest_legality(9434, {i2}, LoopRole::Reduction));
+  legality.cells.push_back(
+      orderedsched_nest_legality(9435, {i1}, LoopRole::Reduction));
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    return ix.basis().base_key() == L"i";
+  };
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+  REQUIRE(well_formed(sched));
+
+  // Three root blocks; the nest that runs twice brackets the other.
+  auto const roots = orderedsched_root_blocks(sched);
+  REQUIRE(roots.size() == 3);
+  CHECK(roots[0]->level.loop_slot == roots[2]->level.loop_slot);
+  CHECK(roots[0]->level.loop_slot != roots[1]->level.loop_slot);
+  CHECK(roots[0]->latitude_ordinal < roots[2]->latitude_ordinal);
 
   orderedsched_validated_table(rich, sched);
 }

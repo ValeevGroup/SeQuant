@@ -449,10 +449,13 @@ struct OrderedScheduleStepMeta {
 /// directions by construction, and \c tie_key serves only to break ties among
 /// steps with no dependency relation to each other at all.
 ///
-/// \c SEQUANT_ASSERT's that every item is placed exactly once (a cycle in
-/// this local edge set would be a bug -- these edges are a sub-relation of
-/// the whole-forest DAG's edges, restricted to one block's own siblings, so
-/// they inherit its acyclicity), then re-derives the local edges a second
+/// Throws when the local edge set has a cycle, naming one. The value
+/// dependency DAG is acyclic, but a step here can be a whole nested block,
+/// and folding many values into one step does not preserve that: a build
+/// that needs a value the inner block completes, with a reader of its own
+/// inside that same block, is a two-step cycle. The pass levels (\c
+/// forced_split_levels) are what keep such a pair out of one pass, so a
+/// cycle here means they failed to. Then re-derives the local edges a second
 /// time against the final order and \c SEQUANT_ASSERT's every one is
 /// actually satisfied (a loud tripwire against any violation of this
 /// invariant rather than a silent mis-order).
@@ -494,15 +497,68 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
           return meta[a].tie_key < meta[b].tie_key;
         });
   } catch (Exception const& e) {
-    // No cycle expected: see the function doc comment. Re-thrown with a
-    // more specific message, and still a throw rather than an assert, so
-    // this stays loud in a build with asserts disabled.
+    // See the function doc comment. Re-thrown with a more specific message,
+    // and still a throw rather than an assert, so this stays loud in a build
+    // with asserts disabled.
     std::size_t total_edges = 0;
     for (std::size_t i = 0; i < m; ++i) total_edges += prerequisites[i].size();
+    // Name one cycle. Peel every step whose prerequisites are all peeled
+    // (Kahn); each step left has a prerequisite that is also left, so walking
+    // prerequisites among them from any one of them must revisit a step.
+    container::vector<char> left(m, 1);
+    for (bool peeled = true; peeled;) {
+      peeled = false;
+      for (std::size_t i = 0; i < m; ++i) {
+        if (!left[i]) continue;
+        if (std::none_of(prerequisites[i].begin(), prerequisites[i].end(),
+                         [&](std::size_t q) { return left[q] != 0; })) {
+          left[i] = 0;
+          peeled = true;
+        }
+      }
+    }
+    auto const describe = [&](std::size_t i) -> std::string {
+      if (auto const* b = std::get_if<BuildStep>(&items[i].value))
+        return "build v" + std::to_string(b->value_id);
+      auto const& blk = std::get<ScopeBlock>(items[i].value);
+      return "block(" + toUtf8(blk.axis.label()) + " depth " +
+             std::to_string(blk.level.depth) + " slot " +
+             std::to_string(blk.level.loop_slot) + " pass " +
+             std::to_string(blk.latitude_ordinal) + ", produces " +
+             std::to_string(meta[i].produced.size()) + " values)";
+    };
+    std::string cycle;
+    auto const start = std::find(left.begin(), left.end(), char{1});
+    if (start != left.end()) {
+      container::vector<std::size_t> walk;
+      container::vector<std::size_t> seen_at(m, m);
+      std::size_t i = static_cast<std::size_t>(start - left.begin());
+      while (seen_at[i] == m) {
+        seen_at[i] = walk.size();
+        walk.push_back(i);
+        i = *std::find_if(prerequisites[i].begin(), prerequisites[i].end(),
+                          [&](std::size_t q) { return left[q] != 0; });
+      }
+      // walk[seen_at[i]..] is the cycle; each step needs the next one.
+      for (std::size_t k = seen_at[i]; k < walk.size(); ++k) {
+        std::size_t const a = walk[k];
+        std::size_t const b = k + 1 < walk.size() ? walk[k + 1] : i;
+        cycle += describe(a) + " needs";
+        std::size_t shown = 0;
+        for (std::size_t vid : meta[a].requires_) {
+          auto const it = produced_by.find(vid);
+          if (it == produced_by.end() || it->second != b) continue;
+          if (shown++ < 4) cycle += " v" + std::to_string(vid);
+        }
+        if (shown > 4) cycle += " (+" + std::to_string(shown - 4) + " more)";
+        cycle += " of " + describe(b) + "; ";
+      }
+    }
     throw Exception("ordered_schedule_topo_sort_steps for " +
                     std::to_string(m) + " sibling steps (" +
                     std::to_string(total_edges) +
-                    " prerequisite edges): " + e.what());
+                    " prerequisite edges): " + e.what() +
+                    (cycle.empty() ? std::string{} : "; one cycle: " + cycle));
   }
 
   // Post-sort validation (loud tripwire, see the function doc comment):
@@ -571,8 +627,9 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 /// an integer pass such that a value that needs another value's completed
 /// form sits in a later pass than that other value.
 ///
-/// Two kinds of dependency edge bump the reader's pass, both keyed on the
-/// operand (the "source") rather than the axis basis key:
+/// Three kinds of dependency edge bump the reader's pass because it needs
+/// the completed operand (the "source"), keyed on the source rather than the
+/// axis basis key:
 ///   - the source is \c LoopCarried on some axis (any basis key): its
 ///     full array exists only after its own loop closes, so every direct
 ///     reader is bumped;
@@ -596,7 +653,20 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 ///     instance, decided by \p inside_assembled the same way. A reader
 ///     above the instance, at root, or in another nest reads the scattered
 ///     form after the block closes and needs no bump (pinned by the
-///     "assembled reader produced inside the nest above the instance" test).
+///     "assembled reader produced inside the nest above the instance" test);
+///
+/// A fourth kind of bumping edge keeps every pass orderable. The schedule
+/// realizes a nest as a chain of blocks, one block per pass at root, and
+/// orders the steps of each block level by their dependencies: inside a
+/// block, its builds and the one block nested in it; at root, the root builds
+/// and every nest's pass blocks. A block stands for everything produced in
+/// it, so the steps of one level can need each other in a cycle although no
+/// value does: a build that reads what the inner block completes, with a
+/// reader of its own inside that block; two nests' blocks, each reading a
+/// completed value of the other. \c pass_step_cycle_edges finds such cycles
+/// among the steps of one pass (\p site_of says which step a value belongs
+/// to at each level) and the levels are recomputed with the readers it names
+/// bumped past their operands, until no cycle is left.
 ///
 /// Forward sweep (operands before consumers):
 ///   level(v) = max over direct operands o of (bump(o, v) ? pass(o) + 1
@@ -617,8 +687,7 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 struct ForcedSplitLevels {
   std::unordered_set<std::size_t> carried;  //!< LoopCarried (any basis key) ids
   std::unordered_set<std::size_t>
-      pinned;  //!< sources of a bumping edge (carried values, and Reduction
-               //!< sources with at least one in-loop reader): the reverse lift
+      pinned;  //!< sources of a bumping edge of any kind: the reverse lift
                //!< skips every id in this set.
   std::unordered_map<std::size_t, int>
       pass_of;  //!< value id -> pass, for every value \c
@@ -633,19 +702,235 @@ struct ForcedSplitLevels {
   }
 };
 
+/// Where a value is produced in the loop chain, for \c forced_split_levels.
+struct ForcedSplitSite {
+  std::size_t nest;  //!< the co-occurrence cluster of its loops
+  /// the chain depth at which the value is a step of its block: its
+  /// \c BuildStep, for a value loop-local on a loop of the nest (built there,
+  /// or kept as a build when it is materialized); nullopt for a value that
+  /// only leaves loops by escapes (it is made at a block's close, after the
+  /// block's steps, and is not ordered among them)
+  std::optional<std::size_t> build;
+  std::size_t production;  //!< the deepest chain depth of any of its loops
+};
+
+/// The dependency edges (reader, operand) on cycles among the steps of one
+/// pass, for \c forced_split_levels to bump; empty when every block level of
+/// every pass can be ordered.
+///
+/// The steps are those \c build_ordered_schedule orders. At root: each root
+/// value, and one block per nest and pass holding every value \p site places
+/// in that nest. Inside a nest, at each chain depth: the values built there
+/// (\c ForcedSplitSite::build) and one block holding everything produced
+/// deeper. An edge between two values of one pass is an edge between the two
+/// steps they belong to at the level where those differ; values of different
+/// passes are never ordered against each other (an operand of an earlier pass
+/// is read from that pass's block, which has closed). A read of a leaf orders
+/// nothing: leaves are fetched, not produced by a step.
+///
+/// Every cycle runs through a block, since the values themselves form a DAG.
+/// Inside a nest the level has one block, and the edges returned are those by
+/// which the block needs a build that needs the block back, directly or
+/// through other builds of the level: bumping those readers leaves the build
+/// and what it waits on in the earlier pass. At root, one block of each
+/// strongly connected set of steps gives up its edges into the set; which
+/// block does is a choice -- any of them breaks the cycles through it -- and
+/// it falls on the block with the fewest such edges.
+inline container::vector<std::pair<std::size_t, std::size_t>>
+pass_step_cycle_edges(
+    RichSchedule const& rich, OrderedScheduleDepGraph const& g,
+    container::vector<std::optional<ForcedSplitSite>> const& site,
+    ForcedSplitLevels const& levels) {
+  std::size_t const n = rich.cells.size();
+  container::vector<std::pair<std::size_t, std::size_t>> out;
+
+  // Root steps: a root value is its own node, a (nest, pass) block is a node
+  // past the values.
+  std::map<std::pair<std::size_t, int>, std::size_t> block_node;
+  container::vector<std::size_t> node_of(n);
+  for (std::size_t v = 0; v < n; ++v)
+    node_of[v] = site[v]
+                     ? block_node
+                           .emplace(std::pair{site[v]->nest, levels.pass(v)},
+                                    n + block_node.size())
+                           .first->second
+                     : v;
+  container::vector<container::svector<std::size_t>> root_needs(
+      n + block_node.size());
+
+  // Steps of one level of one nest in one pass.
+  enum class Kind { BlockNeedsBuild, BuildNeedsBlock, BuildNeedsBuild };
+  struct LevelEdge {
+    std::size_t nest, depth;
+    int pass;
+    Kind kind;
+    std::size_t reader, operand;
+  };
+  container::vector<LevelEdge> level_edges;
+
+  // The edges between values of one pass, each visited with \p f(v, o).
+  auto const for_each_pass_edge = [&](auto&& f) {
+    for (std::size_t v = 0; v < n; ++v) {
+      auto const it = g.depends_on.find(v);
+      if (it == g.depends_on.end()) continue;
+      for (std::size_t o : it->second)
+        if (!rich.cells[o].is_leaf && levels.pass(o) == levels.pass(v)) f(v, o);
+    }
+  };
+
+  for_each_pass_edge([&](std::size_t v, std::size_t o) {
+    if (node_of[v] != node_of[o]) {
+      root_needs[node_of[v]].push_back(node_of[o]);
+      return;
+    }
+    if (!site[v]) return;  // v == o cannot be: the values form a DAG
+    ForcedSplitSite const& sv = *site[v];
+    ForcedSplitSite const& so = *site[o];
+    int const pass = levels.pass(v);
+    if (sv.production > so.production) {
+      if (so.build)
+        level_edges.push_back(
+            {sv.nest, *so.build, pass, Kind::BlockNeedsBuild, v, o});
+    } else if (sv.production < so.production) {
+      if (sv.build)
+        level_edges.push_back(
+            {sv.nest, *sv.build, pass, Kind::BuildNeedsBlock, v, o});
+    } else if (sv.build && so.build) {
+      level_edges.push_back(
+          {sv.nest, *sv.build, pass, Kind::BuildNeedsBuild, v, o});
+    }
+  });
+
+  // Inside the nests: per level, the builds that need the block, directly or
+  // through other builds of the level, and the readers in the block of any
+  // of them.
+  std::sort(level_edges.begin(), level_edges.end(),
+            [](LevelEdge const& a, LevelEdge const& b) {
+              return std::tie(a.nest, a.depth, a.pass) <
+                     std::tie(b.nest, b.depth, b.pass);
+            });
+  for (auto first = level_edges.begin(); first != level_edges.end();) {
+    auto const last =
+        std::find_if(first, level_edges.end(), [&](LevelEdge const& e) {
+          return std::tie(e.nest, e.depth, e.pass) !=
+                 std::tie(first->nest, first->depth, first->pass);
+        });
+    std::unordered_set<std::size_t> waits;  // builds that need the block
+    std::unordered_map<std::size_t, container::svector<std::size_t>> readers;
+    container::svector<std::size_t> todo;
+    bool block_needs_a_build = false;
+    for (auto e = first; e != last; ++e) {
+      if (e->kind == Kind::BuildNeedsBlock) {
+        if (waits.insert(e->reader).second) todo.push_back(e->reader);
+      } else if (e->kind == Kind::BuildNeedsBuild) {
+        readers[e->operand].push_back(e->reader);
+      } else {
+        block_needs_a_build = true;
+      }
+    }
+    if (block_needs_a_build && !waits.empty()) {
+      while (!todo.empty()) {
+        std::size_t const b = todo.back();
+        todo.pop_back();
+        auto const it = readers.find(b);
+        if (it == readers.end()) continue;
+        for (std::size_t r : it->second)
+          if (waits.insert(r).second) todo.push_back(r);
+      }
+      for (auto e = first; e != last; ++e)
+        if (e->kind == Kind::BlockNeedsBuild && waits.count(e->operand))
+          out.push_back({e->reader, e->operand});
+    }
+    first = last;
+  }
+
+  // At root: the strongly connected sets of steps (Tarjan, iteratively).
+  std::size_t const nodes = root_needs.size();
+  std::size_t const unseen = std::numeric_limits<std::size_t>::max();
+  container::vector<std::size_t> index(nodes, unseen), low(nodes, 0),
+      set_of(nodes, unseen), set_size;
+  container::vector<char> on_stack(nodes, 0);
+  container::vector<std::size_t> stack;
+  container::vector<std::pair<std::size_t, std::size_t>> walk;  // node, next
+  std::size_t counter = 0;
+  auto const enter = [&](std::size_t x) {
+    index[x] = low[x] = counter++;
+    stack.push_back(x);
+    on_stack[x] = 1;
+    walk.push_back({x, 0});
+  };
+  for (std::size_t start = 0; start < nodes; ++start) {
+    if (index[start] != unseen || root_needs[start].empty()) continue;
+    enter(start);
+    while (!walk.empty()) {
+      std::size_t const x = walk.back().first;
+      if (walk.back().second < root_needs[x].size()) {
+        std::size_t const y = root_needs[x][walk.back().second++];
+        if (index[y] == unseen)
+          enter(y);
+        else if (on_stack[y])
+          low[x] = std::min(low[x], index[y]);
+        continue;
+      }
+      walk.pop_back();
+      if (!walk.empty())
+        low[walk.back().first] = std::min(low[walk.back().first], low[x]);
+      if (low[x] != index[x]) continue;
+      std::size_t size = 0;
+      for (std::size_t y = unseen; y != x; ++size) {
+        y = stack.back();
+        stack.pop_back();
+        on_stack[y] = 0;
+        set_of[y] = set_size.size();
+      }
+      set_size.push_back(size);
+    }
+  }
+  // The block of each set that gives up its edges into the set: the one with
+  // the fewest such edges, so that the fewest readers move; among equals the
+  // first in (nest, pass) order.
+  container::vector<std::size_t> edges_into_set(nodes, 0);
+  for_each_pass_edge([&](std::size_t v, std::size_t o) {
+    std::size_t const x = node_of[v], y = node_of[o];
+    if (x != y && set_of[x] != unseen && set_of[x] == set_of[y])
+      ++edges_into_set[x];
+  });
+  container::vector<std::size_t> yields(set_size.size(), unseen);
+  for (auto const& [key, node] : block_node) {
+    (void)key;
+    std::size_t const c = set_of[node];
+    if (c == unseen || set_size[c] <= 1) continue;
+    if (yields[c] == unseen || edges_into_set[node] < edges_into_set[yields[c]])
+      yields[c] = node;
+  }
+  for_each_pass_edge([&](std::size_t v, std::size_t o) {
+    std::size_t const x = node_of[v], y = node_of[o];
+    if (x != y && set_of[x] != unseen && set_of[x] == set_of[y] &&
+        yields[set_of[x]] == x)
+      out.push_back({v, o});
+  });
+  return out;
+}
+
 /// Assigns every value of \p rich its pass level (see \c ForcedSplitLevels),
 /// reading the carried/reduction roles from \p legality, the dependency edges
 /// from \p g, and deciding with \p inside whether a reader is produced inside
 /// a source's own reduced loop instance and with \p inside_assembled whether
 /// it is produced inside a loop-local instance it reads the source assembled
 /// over.
+///
+/// \p site_of locates a value in the loop chain (\c ForcedSplitSite), nullopt
+/// for a value produced at root. Empty (the default) leaves the passes
+/// unchecked for cycles among their steps.
 inline ForcedSplitLevels forced_split_levels(
     RichSchedule const& rich, LegalitySchedule const& legality,
     OrderedScheduleDepGraph const& g,
     std::function<bool(std::size_t /*reader_vid*/,
                        std::size_t /*source_vid*/)> const& inside,
     std::function<bool(std::size_t /*reader_vid*/,
-                       std::size_t /*source_vid*/)> const& inside_assembled) {
+                       std::size_t /*source_vid*/)> const& inside_assembled,
+    std::function<std::optional<ForcedSplitSite>(std::size_t /*vid*/)> const&
+        site_of = {}) {
   ForcedSplitLevels r;
   std::unordered_set<std::size_t> reduction_sources;
   for (CellLegality const& cl : legality.cells) {
@@ -716,36 +1001,69 @@ inline ForcedSplitLevels forced_split_levels(
                    "cycle");
   }
 
-  std::unordered_map<std::size_t, int> base;
-  base.reserve(n);
-  for (std::size_t v : topo) {
-    int lv = 0;
-    auto const it = g.depends_on.find(v);
-    if (it != g.depends_on.end())
-      for (std::size_t o : it->second) {
-        bool const carried_read =
-            r.carried.count(o) != 0 ||
-            (outside.count({v, o}) != 0 && inside_assembled(v, o));
-        bool const bump =
-            carried_read || (reduction_sources.count(o) != 0 && inside(v, o));
-        if (bump) r.pinned.insert(o);
-        if (bump && detail::dump_enabled("SEQUANT_DUMP_SCHEDULE"))
-          detail::dump_level_bump(v, o, carried_read, base.at(o) + 1);
-        lv = std::max(lv, bump ? base.at(o) + 1 : base.at(o));
-      }
-    base[v] = lv;
-  }
+  container::vector<std::optional<ForcedSplitSite>> site(n);
+  if (site_of)
+    for (std::size_t v = 0; v < n; ++v) site[v] = site_of(v);
 
-  r.pass_of = base;
-  for (auto it = topo.rbegin(); it != topo.rend(); ++it) {
-    std::size_t const v = *it;
-    if (r.pinned.count(v)) continue;
-    auto const cit = g.consumers_of.find(v);
-    if (cit == g.consumers_of.end() || cit->second.empty()) continue;
-    int mn = std::numeric_limits<int>::max();
-    for (std::size_t u : cit->second) mn = std::min(mn, r.pass_of.at(u));
-    r.pass_of[v] = std::max(base.at(v), mn);
+  // Readers bumped past an operand to keep the steps of every pass orderable
+  // (see pass_step_cycle_edges): found on the passes of one round, applied in
+  // the next. An edge once bumped separates two passes and is never found
+  // again, so the rounds end.
+  std::set<std::pair<std::size_t, std::size_t>>
+      order_bumps;  // (reader, source)
+  // The bumping edges of the last round, for the dump.
+  container::vector<std::tuple<std::size_t, std::size_t, wchar_t const*, int>>
+      bumped;
+  for (;;) {
+    r.pinned = r.carried;
+    bumped.clear();
+    std::unordered_map<std::size_t, int> base;
+    base.reserve(n);
+    for (std::size_t v : topo) {
+      int lv = 0;
+      auto const it = g.depends_on.find(v);
+      if (it != g.depends_on.end())
+        for (std::size_t o : it->second) {
+          bool const carried_read =
+              r.carried.count(o) != 0 ||
+              (outside.count({v, o}) != 0 && inside_assembled(v, o));
+          bool const inside_reduction =
+              reduction_sources.count(o) != 0 && inside(v, o);
+          bool const bump = carried_read || inside_reduction ||
+                            order_bumps.count({v, o}) != 0;
+          if (bump) {
+            r.pinned.insert(o);
+            bumped.push_back({v, o,
+                              carried_read       ? L"carried"
+                              : inside_reduction ? L"reduction read inside"
+                                                 : L"step order",
+                              base.at(o) + 1});
+          }
+          lv = std::max(lv, bump ? base.at(o) + 1 : base.at(o));
+        }
+      base[v] = lv;
+    }
+
+    r.pass_of = base;
+    for (auto it = topo.rbegin(); it != topo.rend(); ++it) {
+      std::size_t const v = *it;
+      if (r.pinned.count(v)) continue;
+      auto const cit = g.consumers_of.find(v);
+      if (cit == g.consumers_of.end() || cit->second.empty()) continue;
+      int mn = std::numeric_limits<int>::max();
+      for (std::size_t u : cit->second) mn = std::min(mn, r.pass_of.at(u));
+      r.pass_of[v] = std::max(base.at(v), mn);
+    }
+
+    if (!site_of) break;
+    std::size_t const before = order_bumps.size();
+    for (auto const& e : pass_step_cycle_edges(rich, g, site, r))
+      order_bumps.insert(e);
+    if (order_bumps.size() == before) break;
   }
+  if (detail::dump_enabled("SEQUANT_DUMP_SCHEDULE"))
+    for (auto const& [v, o, why, pass] : bumped)
+      detail::dump_level_bump(v, o, why, pass);
   for (auto const& [v, p] : r.pass_of) r.max_pass = std::max(r.max_pass, p);
   return r;
 }
@@ -1402,8 +1720,27 @@ namespace detail {
                          });
     });
   };
-  detail::ForcedSplitLevels const levels =
-      detail::forced_split_levels(rich, legality, g, inside, inside_assembled);
+  // Where a value sits in the loop chain: the nest of its production depth
+  // and, for one that is loop-local on a loop of the nest, the depth of its
+  // BuildStep. A value with a role escape as well has a BuildStep only when
+  // it is materialized, at its production depth; counting it as a step when
+  // it is not adds no cycle to a schedule that can be built, since a reader
+  // inside its escaped instance is already in a later pass. None for a value
+  // with no batched mode (a root build) or no legality cell.
+  auto const site_of =
+      [&](std::size_t vid) -> std::optional<detail::ForcedSplitSite> {
+    auto const it2 = cl_by_vid.find(vid);
+    if (it2 == cl_by_vid.end()) return std::nullopt;
+    CellLegality const& c2 = *it2->second;
+    auto const pd = production_depth(c2);
+    if (!pd) return std::nullopt;
+    return detail::ForcedSplitSite{
+        .nest = type_cluster[*pd],
+        .build = local_home_depth(c2) ? pd : std::nullopt,
+        .production = *pd};
+  };
+  detail::ForcedSplitLevels const levels = detail::forced_split_levels(
+      rich, legality, g, inside, inside_assembled, site_of);
   auto const pass_of = [&](std::size_t vid) -> int { return levels.pass(vid); };
 
   // Dump-only diagnostic (SEQUANT_DUMP_SCHEDULE) for the outside-nest
@@ -1831,20 +2168,37 @@ namespace detail {
     for (std::size_t v : ids) k = std::min(k, rich.cells[v].first_use);
     return k == std::numeric_limits<std::size_t>::max() ? std::size_t{0} : k;
   };
+  // The operands of \p v that order it among the steps of one block level.
+  // With \p same_pass_only, only those of v's own pass: the inner levels of a
+  // nest holding several passes are sorted once, all passes together, and
+  // forked per pass afterwards (fork_subchain keeps each pass's steps in the
+  // sorted order), so only an edge between two steps of one pass ever orders
+  // two steps that end up in the same block. An operand of an earlier pass is
+  // read from that pass's own block, which precedes this one whole; kept as an
+  // edge here, it can tie a build of the earlier pass and the inner block
+  // holding its later-pass reader into a cycle neither pass has.
+  auto const ordering_needs =
+      [&](std::size_t v,
+          bool same_pass_only) -> container::svector<std::size_t> {
+    container::svector<std::size_t> needs;
+    for (std::size_t o : requires_of(v))
+      if (!same_pass_only || pass_of(o) == pass_of(v)) needs.push_back(o);
+    return needs;
+  };
   auto const make_block =
       [&](Index const& axis, int latitude_ordinal, std::size_t depth,
           int loop_slot, container::svector<std::size_t> const& build_ids,
           container::svector<std::pair<std::size_t, OutputKind>> const& outputs,
           container::vector<Step>&& child_steps,
-          container::vector<detail::OrderedScheduleStepMeta>&& child_metas)
-      -> ScopeBlock {
+          container::vector<detail::OrderedScheduleStepMeta>&& child_metas,
+          bool same_pass_only) -> ScopeBlock {
     container::vector<Step> items;
     container::vector<detail::OrderedScheduleStepMeta> meta;
     for (std::size_t v : build_ids) {
       items.push_back(Step{BuildStep{v}});
       detail::OrderedScheduleStepMeta m;
       m.produced.push_back(v);
-      m.requires_.assign(requires_of(v).begin(), requires_of(v).end());
+      m.requires_ = ordering_needs(v, same_pass_only);
       m.tie_key = rich.cells[v].first_use;
       meta.push_back(std::move(m));
     }
@@ -1946,8 +2300,18 @@ namespace detail {
     container::svector<std::size_t> produced_all = own_produced;
     union_into(produced_all, child_produced_all);
 
+    // An inner level of a nest holding several passes: see ordering_needs.
+    // (Such a nest's outermost level forks per pass below and recomputes each
+    // pass block's needs from its own content, so the filtered sets never
+    // reach the root.)
+    std::size_t const nest = type_cluster[d];
+    bool const outermost = d == cluster_min.at(nest);
+    std::set<int> const& passes = nest_passes[nest];
+    bool const same_pass_only = passes.size() > 1 && !outermost;
+
     container::svector<std::size_t> requires_all;
-    for (std::size_t v : own_produced) union_into(requires_all, requires_of(v));
+    for (std::size_t v : own_produced)
+      union_into(requires_all, ordering_needs(v, same_pass_only));
     union_into(requires_all, child_requires_all);
     requires_all.erase(std::remove_if(requires_all.begin(), requires_all.end(),
                                       [&](std::size_t v) {
@@ -1961,9 +2325,6 @@ namespace detail {
     container::vector<Step> next_steps;
     container::vector<detail::OrderedScheduleStepMeta> next_metas;
 
-    std::size_t const nest = type_cluster[d];
-    bool const outermost = d == cluster_min.at(nest);
-    std::set<int> const& passes = nest_passes[nest];
     if (outermost && passes.size() > 1) {
       // Several passes at this nest's outermost depth (per-nest forced split):
       // one block per pass, ascending, each holding the builds and outputs of
@@ -2033,7 +2394,8 @@ namespace detail {
             }
             next_steps.push_back(Step{make_block(
                 types[d], latitude_ordinal, d + 1, type_slot[d], builds, outs,
-                std::move(child_steps), std::move(child_metas))});
+                std::move(child_steps), std::move(child_metas),
+                /*same_pass_only=*/false)});
             detail::OrderedScheduleStepMeta m;
             // Recursive produced (not just this pass's own outputs): a pass
             // block is now always a root-level sibling of every other nest
@@ -2067,7 +2429,7 @@ namespace detail {
       ScopeBlock block = make_block(
           types[d], outermost && !passes.empty() ? *passes.begin() : 0, d + 1,
           type_slot[d], bucket.build_ids, bucket.outputs,
-          std::move(pending_steps), std::move(pending_metas));
+          std::move(pending_steps), std::move(pending_metas), same_pass_only);
       next_steps.push_back(Step{std::move(block)});
       detail::OrderedScheduleStepMeta m;
       // Recursive produced (not just this block's own outputs): a nest
