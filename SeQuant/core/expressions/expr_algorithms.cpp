@@ -12,6 +12,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -227,12 +228,13 @@ detail::result_symmetry_group(const ResultExpr& result) {
 
 namespace {
 
-/// @return @p term (a summand of the expression of a result) in the
+/// @return @p term (a part of the expression of a result that a symmetrizer
+/// of the result multiplies, see detail::for_each_symmetrized_term()) in the
 /// canonical form that is the same for all its images under @p group , the
 /// symmetry group of the result (see detail::result_symmetry_group()), with the
-/// phase of the permutation absorbed: of the canonical forms of the images the
-/// one that is smallest by hash (then by its text) is chosen; the indices of @p
-/// result keep their labels
+/// phase of the permutation absorbed: of the canonical forms of the images
+/// the one that is smallest by hash (then by its text) is chosen; the indices
+/// of @p result keep their labels
 ExprPtr canonicalize_term_for_result(
     const ExprPtr& term,
     const std::vector<std::pair<container::map<Index, Index>, int>>& group,
@@ -272,20 +274,81 @@ ExprPtr canonicalize_term_for_result(
 
 }  // namespace
 
+bool detail::for_each_symmetrized_term(
+    ExprPtr& term, const ResultExpr& result,
+    const std::function<void(ExprPtr& part)>& f) {
+  if (!term.is<Product>()) return false;
+  const auto result_indices =
+      result.indices() | ranges::to<container::set<Index>>;
+  auto is_symmetrizer = [&result_indices](const ExprPtr& factor) {
+    if (!factor.is<Tensor>()) return false;
+    const auto& tensor = factor.as<Tensor>();
+    return (tensor.label() == reserved::symm_label() ||
+            tensor.label() == reserved::antisymm_label()) &&
+           ranges::all_of(tensor.const_indices(), [&](const Index& idx) {
+             return result_indices.contains(idx);
+           });
+  };
+  std::size_t nsymmetrizers = 0, nsums = 0;
+  const auto& product = term.as<Product>();
+  for (const auto& factor : product.factors()) {
+    if (is_symmetrizer(factor))
+      ++nsymmetrizers;
+    else if (factor.is<Sum>())
+      ++nsums;
+  }
+  if (nsymmetrizers == 0) return false;
+  if (nsums == 1 && nsymmetrizers + 1 == product.factors().size()) {
+    // N.B. mutable iteration resets the memoized hashes
+    for (auto& factor : *term) {
+      if (!factor.is<Sum>()) continue;
+      for (auto& summand : *factor) f(summand);
+    }
+    return true;
+  }
+  // S * X : f is applied to X, the symmetrizers being kept as they are
+  auto rest = std::make_shared<Product>();
+  rest->scale(product.scalar());
+  auto result_term = std::make_shared<Product>();
+  for (const auto& factor : product.factors()) {
+    if (is_symmetrizer(factor))
+      result_term->append(1, factor, Product::Flatten::No);
+    else
+      rest->append(1, factor, Product::Flatten::No);
+  }
+  ExprPtr part = rest;
+  f(part);
+  if (part->is_zero()) {
+    term = ex<Constant>(0);
+    return true;
+  }
+  if (part.is<Product>()) {
+    result_term->scale(part.as<Product>().scalar());
+    for (const auto& factor : part.as<Product>().factors())
+      result_term->append(1, factor, Product::Flatten::No);
+  } else {
+    result_term->append(1, part, Product::Flatten::No);
+  }
+  term = result_term;
+  return true;
+}
+
 ResultExpr& canonicalize(ResultExpr& expr, const CanonicalizeOptions& opts) {
   const auto named = named_indices(expr);
   const auto group = detail::result_symmetry_group(expr);
   if (group.size() > 1) {
     // terms that differ by a permutation of the result indices within the
-    // symmetry group of the result are the same term
+    // symmetry group of the result are the same term if a symmetrizer of the
+    // result multiplies them (see detail::for_each_symmetrized_term())
+    auto present = [&](ExprPtr& term) {
+      term = canonicalize_term_for_result(term, group, named, opts);
+    };
     auto& rhs = expr.expression();
     if (rhs->is<Sum>()) {
-      auto sum = std::make_shared<Sum>();
-      for (const auto& summand : rhs->as<Sum>())
-        sum->append(canonicalize_term_for_result(summand, group, named, opts));
-      rhs = sum;
-    } else if (!rhs->is<Constant>() && !rhs->is<Variable>()) {
-      rhs = canonicalize_term_for_result(rhs, group, named, opts);
+      for (auto& summand : *rhs)
+        detail::for_each_symmetrized_term(summand, expr, present);
+    } else {
+      detail::for_each_symmetrized_term(rhs, expr, present);
     }
   }
   canonicalize(expr.expression(), named, opts);

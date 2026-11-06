@@ -63,7 +63,8 @@ indices are named is therefore always specified explicitly; there is no default:
 
 - a :class:`sequant::ResultExpr` carries them as the indices of its result, and ``canonicalize(ResultExpr&)`` /
   ``simplify(ResultExpr&)`` use them. These overloads also merge terms that differ only by a permutation of the result indices
-  that the result's symmetry allows;
+  that the result's symmetry allows, provided an explicit (anti)symmetrizer of the result (``Ŝ``/``Â``) multiplies them: that
+  the result has a symmetry does not make its terms have it (e.g. :math:`R = X + P(X)` is symmetric, :math:`2X` is not);
 - for a plain ``ExprPtr`` the caller passes :data:`sequant::deduce_named_indices`, opting in to deducing the named indices as
   the indices that occur once in each product. This is wrong for theories in which an external index can occur several times
   (e.g. tensor hypercontraction), which is why it is never done implicitly. The library itself never deduces named indices.

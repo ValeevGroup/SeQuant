@@ -16,6 +16,7 @@
 #include <range/v3/range/access.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -217,10 +218,34 @@ namespace detail {
 std::vector<std::pair<container::map<Index, Index>, int>> result_symmetry_group(
     const ResultExpr& result);
 
+/// Applies @p f to the parts of @p term that may be replaced by their images
+/// under the symmetry group of @p result (see result_symmetry_group()): those
+/// that an explicit (anti)symmetrizer of the result multiplies, as S * X =
+/// S * P(X) (up to the phase of P). That the result has a symmetry does not
+/// make its terms have it, so nothing else may be replaced.
+/// - S * (X_1 + X_2 + ...), S being one or more (anti)symmetrizers of the
+///   result: @p f is applied to each X_k ;
+/// - any other product S * X with (anti)symmetrizers S of the result as
+///   factors: @p f is applied to X, the product of the other factors (with
+///   the scalar), and @p term is reassembled.
+///
+/// The (anti)symmetrizers themselves are never passed to @p f : the image of
+/// X is sign(P) P(X), and S is not permuted.
+///
+/// An (anti)symmetrizer of the result is a tensor labeled
+/// reserved::symm_label() or reserved::antisymm_label() whose indices are
+/// indices of @p result .
+/// @return true if @p f was applied
+bool for_each_symmetrized_term(ExprPtr& term, const ResultExpr& result,
+                               const std::function<void(ExprPtr& part)>& f);
+
 }  // namespace detail
 
 /// Recursively canonicalizes the expression of a ResultExpr, with the indices
-/// of the result as the named indices
+/// of the result as the named indices; terms that an explicit
+/// (anti)symmetrizer of the result multiplies and that differ by a permutation
+/// of the result indices within the symmetry group of the result are brought
+/// into the same form (see detail::for_each_symmetrized_term())
 /// @param[in,out] expr expression to be canonicalized
 /// @param[in] opts the canonicalization options
 /// @return \p expr to facilitate chaining

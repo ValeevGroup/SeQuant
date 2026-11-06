@@ -6,14 +6,10 @@
 #include <SeQuant/core/expressions/lexicographic_order.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
-#include <SeQuant/core/expressions/tensor.hpp>
-#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 
 #include <memory>
-
-#include <range/v3/algorithm/all_of.hpp>
 
 namespace sequant {
 
@@ -118,7 +114,8 @@ void prettify_in_place(ExprPtr& expr, const NamedIndexSpec& named_indices,
 }
 
 /// @return the prettified image of @p term under the permutation of the
-/// result indices of @p group that is first in the order of @p opts
+/// result indices of @p group that is first in the order of @p opts , with the
+/// phase of the permutation
 ExprPtr prettify_term_for_result(
     const ExprPtr& term,
     const std::vector<std::pair<container::map<Index, Index>, int>>& group,
@@ -157,46 +154,17 @@ ResultExpr prettify(const ResultExpr& expr, const PrettifyOptions& opts) {
     return result;
   }
 
+  // the parts of the terms that a symmetrizer of the result multiplies are
+  // presented by their images that come first (see
+  // detail::for_each_symmetrized_term()); the other terms are not replaced by
+  // images
   // N.B. the summands are replaced in place, so that nested sums stay nested
   auto present = [&](ExprPtr& term) {
-    // a (anti)symmetrizer of the result times a sum, S * (X_1 + X_2 + ...):
-    // S * X = S * P(X) (up to the phase of P) for every P of the group, so
-    // each X_k is presented by its image that comes first
-    if (term.is<Product>()) {
-      const auto& product = term.as<Product>();
-      ExprPtr const* sum = nullptr;
-      bool symmetrizer = false, other = false;
-      for (const auto& factor : product.factors()) {
-        if (factor.is<Sum>() && !sum) {
-          sum = &factor;
-        } else if (factor.is<Tensor>() &&
-                   (factor.as<Tensor>().label() == reserved::symm_label() ||
-                    factor.as<Tensor>().label() ==
-                        reserved::antisymm_label()) &&
-                   ranges::all_of(factor.as<Tensor>().const_indices(),
-                                  [&](const Index& idx) {
-                                    return named.indices().contains(idx);
-                                  })) {
-          symmetrizer = true;
-        } else {
-          other = true;
-        }
-      }
-      if (sum && symmetrizer && !other) {
-        term = term->clone();
-        // N.B. mutable iteration resets the memoized hashes
-        for (auto& factor : *term) {
-          if (!factor.is<Sum>()) continue;
-          for (auto& summand : *factor)
-            summand = prettify_term_for_result(summand, group, named, opts);
-        }
-        return;
-      }
-    }
-    // N.B. a term that is not under a symmetrizer is not replaced by an
-    // image: that the result has the symmetry does not make its terms have
-    // it, and t + u = P(t) + u does not hold in general
-    term = prettify(term, named, opts);
+    const bool symmetrized =
+        detail::for_each_symmetrized_term(term, expr, [&](ExprPtr& part) {
+          part = prettify_term_for_result(part, group, named, opts);
+        });
+    if (!symmetrized) term = prettify(term, named, opts);
   };
   ExprPtr prettified = rhs->clone();
   if (prettified.is<Sum>()) {
