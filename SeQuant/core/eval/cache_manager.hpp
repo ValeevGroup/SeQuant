@@ -661,6 +661,18 @@ struct BatchContextEntry {
 /// This class implements a cache manager useful for the cases when the number
 /// of times the cached objects will be accessed is known.
 ///
+/// \note The cache does not own the nodes its entries are keyed by (see \c
+///       eval::CachedValue): a key points at a node of the forest the cache
+///       was built over. That forest must outlive the cache and keep its
+///       nodes in place -- do not reallocate the vector holding its roots,
+///       or move a \c container::svector that stores them inline, while the
+///       cache is in use. Nothing checks this at run time; breaking it is
+///       undefined behavior, and can serve a value cached for a different
+///       node. \c cache_manager() holds a forest passed to it as a temporary;
+///       \c ensure_hoist_slot() and a by-value constructor argument are held
+///       too (see \c hold()). A copy of a cache shares its keys and what it
+///       holds.
+///
 /// \tparam TreeNode The evaluation tree node type used as the cache key.
 /// \tparam force_hash_collisions If true, forces all hash values to 0 (for
 ///         testing collision safety).
@@ -1734,61 +1746,34 @@ class CacheManager {
 
 };  // CacheManager
 
-namespace detail {
-
-/// \brief The forest a \c cache_manager() overload builds over, kept alive
-///        for the cache when the caller handed it over as a temporary.
 ///
-/// The cache's keys point into the forest (see \c eval::CachedValue). An
-/// lvalue range belongs to the caller, who keeps the nodes it yields alive and
-/// in place for the cache's lifetime. A temporary range -- a container such as
-/// `std::vector{node}`, or a view, which may own its nodes too (e.g.
-/// `views::single(node)`) -- is moved into a shared holder the cache keeps,
-/// and the cache is built over that; holding a view that merely refers to
-/// nodes elsewhere is harmless. An \c std::initializer_list, whose array dies
-/// with the full-expression, is copied into a vector instead.
-/// \param nodes the forest, as passed to \c cache_manager()
-/// \param build `build(forest)` makes the cache over a forest that outlives it
-/// \return the cache \p build made, holding the forest where it owns it
-template <typename Nodes, typename Build>
-auto build_over_held_forest(Nodes&& nodes, Build&& build) {
-  using R = std::remove_cvref_t<Nodes>;
+/// \brief Make a cache manager from an iterable of evaluable nodes.
+///
+/// \param nodes An iterable of eval nodes.
+///
+/// \param min_repeats Minimum number of repeats for a node to be cached. By
+///                    default (1) everything is cached, so use-count tracking
+///                    is exact. Pass 2 to
+///                    cache only nodes reached more than once, which caches
+///                    less and leaves the use counts approximate. Either way
+///                    registration costs O(1) per cached node: the cache keys
+///                    on the nodes' addresses and copies none of them.
+///
+/// \return A cache manager. Its keys point into \p nodes, which must outlive
+///         it with its nodes in place (see \c CacheManager); the overload
+///         below takes a temporary forest and has the cache hold it.
+///
+/// \see CacheManager
+///
+template <bool force_hash_collisions = false>
+auto cache_manager(meta::eval_node_range auto const& nodes,
+                   size_t min_repeats = 1) {
+  using TreeNode =
+      std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>>;
   static_assert(
-      std::is_reference_v<std::ranges::range_reference_t<R const>>,
+      std::is_reference_v<std::ranges::range_reference_t<decltype(nodes)>>,
       "cache_manager(): the node range must yield references to nodes (the "
       "cache keys on their addresses)");
-  if constexpr (std::is_lvalue_reference_v<Nodes>) {
-    return build(std::as_const(nodes));
-  } else {
-    using TreeNode = std::ranges::range_value_t<R>;
-    std::shared_ptr<void const> holder;
-    auto const* forest = [&] {
-      if constexpr (requires { typename R::value_type; } &&
-                    std::same_as<R, std::initializer_list<TreeNode>>) {
-        auto v = std::make_shared<std::vector<TreeNode> const>(nodes.begin(),
-                                                               nodes.end());
-        holder = v;
-        return v.get();
-      } else {
-        auto v = std::make_shared<R const>(std::move(nodes));
-        holder = v;
-        return v.get();
-      }
-    }();
-    auto cache = build(*forest);
-    cache.hold(std::move(holder));
-    return cache;
-  }
-}
-
-}  // namespace detail
-
-namespace detail {
-/// The body of \c cache_manager(nodes, min_repeats), over a forest that
-/// outlives the cache.
-template <bool force_hash_collisions, typename Nodes>
-auto cache_manager_min_repeats(Nodes const& nodes, size_t min_repeats) {
-  using TreeNode = std::ranges::range_value_t<Nodes>;
   using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
@@ -1816,47 +1801,101 @@ auto cache_manager_min_repeats(Nodes const& nodes, size_t min_repeats) {
 
   return CacheManager<TreeNode, force_hash_collisions>{std::move(filtered)};
 }
-}  // namespace detail
 
-///
-/// \brief Make a cache manager from an iterable of evaluable nodes.
-///
-/// \param nodes An iterable of eval nodes.
-///
-/// \param min_repeats Minimum number of repeats for a node to be cached. By
-///                    default (1) everything is cached, so use-count tracking
-///                    is exact. Pass 2 to cache only nodes reached more than
-///                    once, which caches less and leaves the use counts
-///                    approximate. Either way registration costs O(1) per
-///                    cached node: the cache keys on the nodes' addresses and
-///                    copies none of them.
-///
-/// \return A cache manager. Its keys point into \p nodes: an lvalue range or
-///         a view must outlive the cache with its nodes in place (no
-///         reallocation of a vector holding the roots); a temporary
-///         container is moved into the cache and kept alive by it.
-///
-/// \see CacheManager
-///
+/// \overload A forest passed as a temporary -- a container such as
+/// `std::vector{node}`, or a view, which may own its nodes too (e.g.
+/// `views::single(node)`) -- is moved into a holder the cache keeps, and the
+/// cache is built over that. Holding a view that merely refers to nodes
+/// elsewhere is harmless.
 template <bool force_hash_collisions = false, typename Nodes>
-  requires meta::eval_node_range<std::remove_cvref_t<Nodes>>
+  requires(meta::eval_node_range<Nodes> && !std::is_lvalue_reference_v<Nodes>)
 auto cache_manager(Nodes&& nodes, size_t min_repeats = 1) {
-  return detail::build_over_held_forest(
-      std::forward<Nodes>(nodes), [min_repeats](auto const& forest) {
-        return detail::cache_manager_min_repeats<force_hash_collisions>(
-            forest, min_repeats);
-      });
+  auto const forest = std::make_shared<Nodes const>(std::move(nodes));
+  auto cache = cache_manager<force_hash_collisions>(*forest, min_repeats);
+  cache.hold(forest);
+  return cache;
 }
 
-namespace detail {
-/// The body of \c cache_manager(nodes, is_volatile, ...), over a forest that
-/// outlives the cache.
-template <bool force_hash_collisions, typename Nodes, typename IsVolatile,
-          typename FootprintOf>
-auto cache_manager_persistent(Nodes const& nodes, IsVolatile const& is_volatile,
-                              size_t min_repeats,
-                              FootprintOf const& footprint_of,
-                              double max_footprint) {
+///
+/// \brief Make a cache manager that distinguishes persistent (P) from
+///        non-persistent (NP) intermediates, deriving persistence from a
+///        solver-supplied volatility predicate and the evaluation DAG.
+///
+/// A node is *volatile* (V) if its value changes between evaluations (e.g. it
+/// depends on the amplitudes being solved). \p is_volatile flags intrinsically
+/// volatile nodes (typically the amplitude leaves); volatility is then
+/// propagated up the DAG (a node is V iff it is intrinsically volatile or any
+/// child is V). Persistence is derived from volatility and the consumer
+/// (parent) relationship:
+///
+///   - V node                       -> NP (released after last use)
+///   - NV node with >=1 V consumer   -> P  (the NV/V frontier: constant data
+///                                          feeding per-iteration work; kept
+///                                          across evaluations)
+///   - NV node with no V consumer    -> NP (only feeds other NV nodes, so it is
+///                                          absorbed into them and not needed
+///                                          across evaluations)
+///
+/// Only *internal* (non-leaf) nodes are cached: NP nodes that repeat at least
+/// \p min_repeats times (the usual CSE rule), plus *all* P nodes regardless of
+/// repeat count (a P node is reused across evaluations even if used once each).
+///
+/// Default footprint accessor for cache_manager: reports zero footprint for
+/// every node, so the footprint gate is inert (combined with max_footprint==0).
+struct zero_footprint {
+  double operator()(auto const&) const noexcept { return 0.; }
+};
+
+/// \param nodes the evaluation forest.
+/// \param is_volatile `bool(TreeNode const&)`: true if the node is
+///        intrinsically volatile. Only its value on leaves matters in practice
+///        (volatility propagates up), but it is consulted on every node.
+/// \param min_repeats minimum NP repeats to cache (default 1). Pass 2 to
+///                    cache only nodes reached more than once, which caches
+///                    less and leaves the use counts approximate.
+///                    Cost note: 1 registers every internal node, and a cached
+///                    node is held in the cache map by value (a deep copy of
+///                    its subtree). On the left-leaning Sum-tree binarize
+///                    builds for a whole equation the spine has one node per
+///                    summand, each with a strictly larger subtree, so
+///                    registering all of them costs O(terms^2) nodes -- fine
+///                    for a residual (tens of terms), fatal for a UCC BCH
+///                    energy (thousands). A forest-descent caller that does not
+///                    need the ordered executor's exact use counts should pass
+///                    2 there.
+/// \param footprint_of `double(TreeNode const&)`: the materialized storage
+///        footprint of a node's result (e.g. its element count or byte size).
+///        Consulted only when \p max_footprint > 0.
+/// \param max_footprint footprint gate: any node whose \p footprint_of exceeds
+///        this is NOT cached (neither as an NP repeat nor as a P frontier
+///        node), so it is recomputed by each consumer instead of being
+///        materialized whole and held. This bounds the peak/sustained footprint
+///        of huge intermediates that carry a free large-space index (e.g. a
+///        half-transformed DF integral with a free projected-AO index), at the
+///        cost of recomputation. 0 (default) disables the gate.
+///
+/// A node is also refused run-scope residence when it is batch-variant: its
+/// cross-occurrence lifetime mask is non-empty (\c !EvalExpr::mask_all_full();
+/// this builder itself calls \c stamp_lifetime_masks over \p nodes before the
+/// DAG walk below, so the mask is always current here regardless of caller --
+/// see \c lifetime_mask.hpp). Such a node is sliced by some enclosing External
+/// batch mode in every occurrence, so its value differs per batch of that mode
+/// -- caching it whole at run scope would serve a wrong-batch value to a deeper
+/// consumer on cache fall-through (the F1 hazard). Only an all-full node (empty
+/// mask, including every node on the off path) is admitted.
+/// \see CacheManager, cache_manager
+template <bool force_hash_collisions = false,
+          typename FootprintOf = zero_footprint>
+auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
+                   size_t min_repeats = 1, FootprintOf footprint_of = {},
+                   double max_footprint = 0.)
+  requires requires(
+      std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>> const&
+          n) {
+    { is_volatile(n) } -> std::convertible_to<bool>;
+    { footprint_of(n) } -> std::convertible_to<double>;
+  }
+{
   // Stamp the cross-occurrence lifetime mask on this same forest before the
   // DAG walk / veto below reads it (the batch-variant veto reads
   // EvalExpr::mask_all_full()). Doing this here -- rather than leaving it to
@@ -1868,7 +1907,8 @@ auto cache_manager_persistent(Nodes const& nodes, IsVolatile const& is_volatile,
   // this never changes behavior on the off path.
   eval::stamp_lifetime_masks(nodes);
 
-  using TreeNode = std::ranges::range_value_t<Nodes>;
+  using TreeNode =
+      std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>>;
   using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
@@ -1877,15 +1917,15 @@ auto cache_manager_persistent(Nodes const& nodes, IsVolatile const& is_volatile,
   // (binary_node.hpp), which on the left-leaning Sum-tree of a whole equation
   // (one spine node per summand) costs O(terms^2). \p nodes must therefore be
   // a range of references to nodes that outlive the cache (asserted below;
-  // cache_manager() holds a temporary forest for it). Hasher/Comp are
+  // the overload after this one holds a temporary forest). Hasher/Comp are
   // heterogeneous (eval_node_compare.hpp): a pointer key still hashes and
-  // compares by node content, so structurally equal nodes dedup exactly as
-  // they did with by-value keys.
+  // compares by node content, so structurally equal nodes dedup exactly as they
+  // did with by-value keys.
   static_assert(
       std::is_reference_v<
           std::ranges::range_reference_t<std::remove_cvref_t<decltype(nodes)>>>,
       "cache_manager(): the node range must yield references to "
-      "nodes that outlive the call (the DAG walk keys on their "
+      "nodes that outlive the cache (the cache keys on their "
       "addresses)");
   using NodePtr = TreeNode const*;
   std::unordered_map<NodePtr, size_t, Hasher, Comp> counts;     // internal uses
@@ -1983,8 +2023,9 @@ auto cache_manager_persistent(Nodes const& nodes, IsVolatile const& is_volatile,
   // stamp_lifetime_masks External stamps): every mask is empty (all-full,
   // \c EvalExpr::sliced_modes_ default-constructed), so the veto never fires
   // and every candidate is admitted.
-  // The selected nodes are registered by address: none is copied, so
-  // registration is O(1) per cached node at any min_repeats.
+  // Only the selected nodes are copied by value here -- into the cache map and,
+  // for the frontier, into the owning set the returned is_persistent closes
+  // over. A node that is not cached never pays a (deep) copy.
   std::vector<std::pair<TreeNode const*, size_t>> filtered;
   std::unordered_set<TreeNode const*> persistent_nodes;
   for (auto&& [np, c] : counts) {
@@ -2014,89 +2055,26 @@ auto cache_manager_persistent(Nodes const& nodes, IsVolatile const& is_volatile,
   return CacheManager<TreeNode, force_hash_collisions>{std::move(filtered),
                                                        is_persistent};
 }
-}  // namespace detail
 
-///
-/// \brief Make a cache manager that distinguishes persistent (P) from
-///        non-persistent (NP) intermediates, deriving persistence from a
-///        solver-supplied volatility predicate and the evaluation DAG.
-///
-/// A node is *volatile* (V) if its value changes between evaluations (e.g. it
-/// depends on the amplitudes being solved). \p is_volatile flags intrinsically
-/// volatile nodes (typically the amplitude leaves); volatility is then
-/// propagated up the DAG (a node is V iff it is intrinsically volatile or any
-/// child is V). Persistence is derived from volatility and the consumer
-/// (parent) relationship:
-///
-///   - V node                       -> NP (released after last use)
-///   - NV node with >=1 V consumer   -> P  (the NV/V frontier: constant data
-///                                          feeding per-iteration work; kept
-///                                          across evaluations)
-///   - NV node with no V consumer    -> NP (only feeds other NV nodes, so it is
-///                                          absorbed into them and not needed
-///                                          across evaluations)
-///
-/// Only *internal* (non-leaf) nodes are cached: NP nodes that repeat at least
-/// \p min_repeats times (the usual CSE rule), plus *all* P nodes regardless of
-/// repeat count (a P node is reused across evaluations even if used once each).
-///
-/// Default footprint accessor for cache_manager: reports zero footprint for
-/// every node, so the footprint gate is inert (combined with max_footprint==0).
-struct zero_footprint {
-  double operator()(auto const&) const noexcept { return 0.; }
-};
-
-/// \param nodes the evaluation forest.
-/// \param is_volatile `bool(TreeNode const&)`: true if the node is
-///        intrinsically volatile. Only its value on leaves matters in practice
-///        (volatility propagates up), but it is consulted on every node.
-/// \param min_repeats minimum NP repeats to cache (default 1). Pass 2 to
-///                    cache only nodes reached more than once, which caches
-///                    less and leaves the use counts approximate. The
-///                    table-driven ordered executor takes values and lives
-///                    from its own cell table, not from this map, so either
-///                    is valid there. Registration costs O(1) per cached node
-///                    (the cache keys on node addresses), so 1 is affordable
-///                    even on the left-leaning Sum-tree of a many-term
-///                    equation.
-/// \param footprint_of `double(TreeNode const&)`: the materialized storage
-///        footprint of a node's result (e.g. its element count or byte size).
-///        Consulted only when \p max_footprint > 0.
-/// \param max_footprint footprint gate: any node whose \p footprint_of exceeds
-///        this is NOT cached (neither as an NP repeat nor as a P frontier
-///        node), so it is recomputed by each consumer instead of being
-///        materialized whole and held. This bounds the peak/sustained footprint
-///        of huge intermediates that carry a free large-space index (e.g. a
-///        half-transformed DF integral with a free projected-AO index), at the
-///        cost of recomputation. 0 (default) disables the gate.
-///
-/// A node is also refused run-scope residence when it is batch-variant: its
-/// cross-occurrence lifetime mask is non-empty (\c !EvalExpr::mask_all_full();
-/// this builder itself calls \c stamp_lifetime_masks over \p nodes before the
-/// DAG walk below, so the mask is always current here regardless of caller --
-/// see \c lifetime_mask.hpp). Such a node is sliced by some enclosing External
-/// batch mode in every occurrence, so its value differs per batch of that mode
-/// -- caching it whole at run scope would serve a wrong-batch value to a deeper
-/// consumer on cache fall-through (the F1 hazard). Only an all-full node (empty
-/// mask, including every node on the off path) is admitted.
-/// \see CacheManager, cache_manager
+/// \overload A forest passed as a temporary is moved into a holder the cache
+/// keeps, and the cache is built over that (see the min_repeats-only
+/// overload).
 template <bool force_hash_collisions = false, typename Nodes,
-          typename IsVolatile, typename FootprintOf = zero_footprint>
-  requires meta::eval_node_range<std::remove_cvref_t<Nodes>> &&
-           requires(
-               std::ranges::range_value_t<std::remove_cvref_t<Nodes>> const& n,
-               IsVolatile& v, FootprintOf& f) {
-             { v(n) } -> std::convertible_to<bool>;
-             { f(n) } -> std::convertible_to<double>;
-           }
-auto cache_manager(Nodes&& nodes, IsVolatile&& is_volatile,
-                   size_t min_repeats = 1, FootprintOf footprint_of = {},
-                   double max_footprint = 0.) {
-  return detail::build_over_held_forest(
-      std::forward<Nodes>(nodes), [&](auto const& forest) {
-        return detail::cache_manager_persistent<force_hash_collisions>(
-            forest, is_volatile, min_repeats, footprint_of, max_footprint);
-      });
+          typename FootprintOf = zero_footprint>
+  requires(meta::eval_node_range<Nodes> && !std::is_lvalue_reference_v<Nodes>)
+auto cache_manager(Nodes&& nodes, auto&& is_volatile, size_t min_repeats = 1,
+                   FootprintOf footprint_of = {}, double max_footprint = 0.)
+  requires requires(std::ranges::range_value_t<Nodes> const& n) {
+    { is_volatile(n) } -> std::convertible_to<bool>;
+    { footprint_of(n) } -> std::convertible_to<double>;
+  }
+{
+  auto const forest = std::make_shared<Nodes const>(std::move(nodes));
+  auto cache = cache_manager<force_hash_collisions>(
+      *forest, std::forward<decltype(is_volatile)>(is_volatile), min_repeats,
+      std::move(footprint_of), max_footprint);
+  cache.hold(forest);
+  return cache;
 }
 
 ///

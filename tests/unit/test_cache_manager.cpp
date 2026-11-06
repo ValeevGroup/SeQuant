@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <range/v3/view/zip.hpp>
 #include <string>
@@ -891,6 +892,19 @@ TEST_CASE("cache_manager keys alias the forest", "[cache_manager]") {
     REQUIRE_FALSE(man.alive(root));
   }
 
+  SECTION("the persistence-aware builder holds a temporary forest too") {
+    auto man = sequant::cache_manager(
+        std::vector<node_type>{make_node(many_terms)},
+        [](node_type const&) { return false; }, 1);
+    std::size_t n_keys = 0;
+    man.for_each_key([&](node_type const& k) {
+      ++n_keys;
+      REQUIRE_FALSE(internal.contains(&k));
+    });
+    REQUIRE(n_keys == internal.size());
+    REQUIRE(man.exists(forest.front()));
+  }
+
   SECTION("a hoist slot holds its own copy of the node") {
     auto man = manager_type::empty();
     {
@@ -902,4 +916,59 @@ TEST_CASE("cache_manager keys alias the forest", "[cache_manager]") {
     (void)man.store_and_access(probe, eval_result(3));
     REQUIRE(man.access(probe)->get<int>() == 3);
   }
+}
+
+namespace {
+/// A mirror of an eval tree whose leaf() counts how many nodes
+/// TreeNodeEqualityComparator visits.
+struct CountingNode {
+  node_type const* real;
+  std::unique_ptr<CountingNode> l, r;
+  static inline std::size_t visits = 0;
+
+  explicit CountingNode(node_type const& n) : real(&n) {
+    if (!n.leaf()) {
+      l = std::make_unique<CountingNode>(n.left());
+      r = std::make_unique<CountingNode>(n.right());
+    }
+  }
+  bool leaf() const {
+    ++visits;
+    return real->leaf();
+  }
+  std::size_t size() const { return real->size(); }
+  CountingNode const& left() const { return *l; }
+  CountingNode const& right() const { return *r; }
+  auto operator->() const { return real->operator->(); }
+  decltype(auto) operator*() const { return **real; }
+};
+}  // namespace
+
+// The cache keys on the forest's own nodes, so a lookup with a forest node
+// compares that node with itself. The comparator answers that without walking
+// the subtree; walking it made the lookups of an equation's Sum-spine
+// O(terms^2).
+TEST_CASE("node comparator: a node equals itself without a walk",
+          "[cache_manager]") {
+  std::wstring s = L"R = ";
+  for (int k = 0; k < 32; ++k) {
+    if (k) s += L" + ";
+    s += L"T";
+    s += wchar_t(L'a' + k / 26);
+    s += wchar_t(L'a' + k % 26);
+    s += L"{a1;i1} g{i1;a1}";
+  }
+  auto const tree = make_node(s);
+  CountingNode const a{tree}, b{tree};
+  sequant::TreeNodeEqualityComparator<CountingNode> const eq;
+
+  // two distinct, structurally equal trees: the comparator walks the spine
+  CountingNode::visits = 0;
+  REQUIRE(eq(a, b));
+  REQUIRE(CountingNode::visits >= 32);
+
+  // the same node on both sides: no walk
+  CountingNode::visits = 0;
+  REQUIRE(eq(a, a));
+  REQUIRE(CountingNode::visits == 0);
 }
