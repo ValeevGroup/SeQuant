@@ -857,9 +857,11 @@ struct Differ {
 
   void value(std::string const& path, ValueRecord const& a,
              ValueRecord const& b) {
-    // all fields except hash, key, first_use, last_use
+    // all fields except hash, key, first_use, last_use and the modeled
+    // sizes, which depend on the cost model the document was priced with
     auto ja = to_j(a), jb = to_j(b);
-    for (auto const* k : {"hash", "key", "first_use", "last_use"}) {
+    for (auto const* k : {"hash", "key", "first_use", "last_use",
+                          "modeled_footprint", "modeled_size"}) {
       ja.erase(k);
       jb.erase(k);
     }

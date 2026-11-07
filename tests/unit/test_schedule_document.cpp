@@ -352,6 +352,12 @@ TEST_CASE("schedule document round-trips modeled sizes and leaf bytes",
   CHECK(back.dag->values[0].modeled_footprint == 4096);
   CHECK(back.dag->values[0].modeled_size == 65536);
   CHECK(back.dag->values[1].modeled_footprint == 0);  // absent => 0
+  // the modeled sizes depend on the cost model, not on the schedule: two
+  // documents of one plan priced differently are structurally the same
+  auto repriced = d;
+  repriced.dag->values[0].modeled_footprint = 1;
+  repriced.dag->values[1].modeled_size = 2;
+  CHECK(compare(d, repriced).empty());
   // a document written before these fields existed still reads (an empty
   // leaf_bytes prints on one line, so a line strip removes the whole key)
   d.run->leaf_bytes.clear();

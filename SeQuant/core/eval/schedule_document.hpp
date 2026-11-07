@@ -264,7 +264,8 @@ struct Difference {
 };
 
 /// structural comparison; ignores `run`, `producer_*` and, on DAG values,
-/// `hash`, `key`, `first_use`, `last_use`
+/// `hash`, `key`, `first_use`, `last_use`, `modeled_footprint`,
+/// `modeled_size`
 std::vector<Difference> compare(Document const& a, Document const& b);
 
 /// "roots=<n> terms=<n> values=<n> blocks=<n> depth=<n>"; the last three are
