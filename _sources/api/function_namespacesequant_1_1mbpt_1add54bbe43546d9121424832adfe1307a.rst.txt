@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1add54bbe43546d9121424832adfe1307a:
+
+Function sequant::mbpt::ms_conserving_columns
+=============================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::ms_conserving_columns(const AbstractTensor&)
+   :project: SeQuant

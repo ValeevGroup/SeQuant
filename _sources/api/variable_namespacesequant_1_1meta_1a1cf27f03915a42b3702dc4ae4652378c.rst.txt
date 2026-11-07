@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1meta_1a1cf27f03915a42b3702dc4ae4652378c:
+
+Variable sequant::meta::is_wstring_or_view_v
+============================================
+
+- Defined in :ref:`file_SeQuant_core_utility_string.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::meta::is_wstring_or_view_v
+   :project: SeQuant

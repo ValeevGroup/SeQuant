@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a7e0cb3ec850fce02151f9cc95d42ceeb:
+
+Template Function sequant::eval::detail::cell_footprint
+=======================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_peak_profile.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::cell_footprint(container::svector_base<Index> const&, container::svector_base<Index> const&, dryrun::CostModel const&, BlockOfFn const&, container::svector_base<Index> const&)
+   :project: SeQuant

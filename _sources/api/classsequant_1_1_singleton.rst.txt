@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_singleton:
+
+Template Class Singleton
+========================
+
+- Defined in :ref:`file_SeQuant_core_utility_singleton.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Singleton
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

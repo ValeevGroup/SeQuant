@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_lexicographic_expr_compare:
+
+Class LexicographicExprCompare
+==============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_lexicographic_order.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::LexicographicExprCompare
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

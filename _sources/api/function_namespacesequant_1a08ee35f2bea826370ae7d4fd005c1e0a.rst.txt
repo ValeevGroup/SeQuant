@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a08ee35f2bea826370ae7d4fd005c1e0a:
+
+Function sequant::includes(const IndexBasis&, const IndexBasis&)
+================================================================
+
+- Defined in :ref:`file_SeQuant_core_basis.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::includes(const IndexBasis&, const IndexBasis&)
+   :project: SeQuant

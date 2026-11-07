@@ -1,0 +1,39 @@
+
+.. _namespace_sequant__point_groups:
+
+Namespace sequant::point_groups
+===============================
+
+
+Abelian point groups using Molpro's IRREP ordering. 
+
+
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_c1`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_c2`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_c2h`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_c2v`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_ci`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_cs`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_d2`
+
+- :ref:`exhale_struct_structsequant_1_1point__groups_1_1_d2h`

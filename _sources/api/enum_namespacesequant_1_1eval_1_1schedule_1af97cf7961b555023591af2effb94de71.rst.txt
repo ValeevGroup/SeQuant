@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1eval_1_1schedule_1af97cf7961b555023591af2effb94de71:
+
+Enum ModeKind
+=============
+
+- Defined in :ref:`file_SeQuant_core_eval_schedule_document.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::eval::schedule::ModeKind
+   :project: SeQuant

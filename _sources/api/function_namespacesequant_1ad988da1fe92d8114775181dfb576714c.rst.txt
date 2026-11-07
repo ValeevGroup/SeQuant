@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ad988da1fe92d8114775181dfb576714c:
+
+Function sequant::binarize(Power const&)
+========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::binarize(Power const&)
+   :project: SeQuant

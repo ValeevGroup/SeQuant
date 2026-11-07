@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1detail_1_1_export_irrep_data_holder:
+
+Class ExportIrrepDataHolder
+===========================
+
+- Defined in :ref:`file_SeQuant_core_export_context.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::detail::ExportIrrepDataHolder
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

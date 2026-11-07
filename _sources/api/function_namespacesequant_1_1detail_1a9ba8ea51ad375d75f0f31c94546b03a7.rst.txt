@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a9ba8ea51ad375d75f0f31c94546b03a7:
+
+Function sequant::detail::block_tag
+===================================
+
+- Defined in :ref:`file_SeQuant_core_export_utils.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::block_tag(std::string, const Index&)
+   :project: SeQuant

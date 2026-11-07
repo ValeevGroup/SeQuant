@@ -1,0 +1,37 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_rules_thc.hpp:
+
+Program Listing for File thc.hpp
+================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_rules_thc.hpp>` (``SeQuant/domain/mbpt/rules/thc.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Oliver Backhouse on 22/11/2025.
+   //
+   
+   #ifndef SEQUANT_DOMAIN_MBPT_RULES_THC_HPP
+   #define SEQUANT_DOMAIN_MBPT_RULES_THC_HPP
+   
+   #include <SeQuant/core/expr_fwd.hpp>
+   #include <SeQuant/core/space.hpp>
+   
+   #include <string_view>
+   
+   namespace sequant::mbpt {
+   
+   // clang-format off
+   // clang-format on
+   [[nodiscard]] ExprPtr tensor_hypercontract(ExprPtr const& expr,
+                                              IndexSpace aux_space,
+                                              std::wstring_view tensor_label,
+                                              std::wstring_view outer_factor_label,
+                                              std::wstring_view core_tensor_label);
+   
+   }  // namespace sequant::mbpt
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_RULES_THC_HPP

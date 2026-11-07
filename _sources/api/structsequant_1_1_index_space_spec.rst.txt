@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_index_space_spec:
+
+Struct IndexSpaceSpec
+=====================
+
+- Defined in :ref:`file_SeQuant_core_index_basis_registry.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::IndexSpaceSpec
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

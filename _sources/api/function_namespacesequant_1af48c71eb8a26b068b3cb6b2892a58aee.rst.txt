@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1af48c71eb8a26b068b3cb6b2892a58aee:
+
+Template Function sequant::lexicographic_compare(const Op<S>&, const Op<S>&)
+============================================================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::lexicographic_compare(const Op<S>&, const Op<S>&)
+   :project: SeQuant

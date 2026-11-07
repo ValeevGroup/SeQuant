@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1transform_1a3ef5cbd54489b2fce07bc058703df3c4:
+
+Template Function sequant::io::serialization::v1::transform::ast_to_expr(const io::serialization::v1::ast::NullaryValue&, const PositionCache&, const Iterator&, DefaultSymmetries)
+===================================================================================================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_ast_conversions.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::transform::ast_to_expr(const io::serialization::v1::ast::NullaryValue&, const PositionCache&, const Iterator&, DefaultSymmetries)
+   :project: SeQuant

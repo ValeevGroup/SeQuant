@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1opt_1_1schedule_1_1_pin_session:
+
+Class PinSession
+================
+
+- Defined in :ref:`file_SeQuant_core_optimize_schedule_pin.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::opt::schedule::PinSession
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

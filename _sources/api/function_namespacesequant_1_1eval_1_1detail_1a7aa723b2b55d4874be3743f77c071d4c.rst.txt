@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a7aa723b2b55d4874be3743f77c071d4c:
+
+Function sequant::eval::detail::ordered_schedule_block_well_formed
+==================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::ordered_schedule_block_well_formed(ScopeBlock const&, std::size_t)
+   :project: SeQuant

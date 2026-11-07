@@ -1,0 +1,94 @@
+
+.. _file_SeQuant_core_irreps_config.cpp:
+
+File config.cpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_irreps>` (``SeQuant/core/irreps``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/irreps/config.cpp``)
+-----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_irreps_config.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/io/serialization/serialization.hpp`` (:ref:`file_SeQuant_core_io_serialization_serialization.hpp`)
+
+- ``SeQuant/core/irreps/config.hpp`` (:ref:`file_SeQuant_core_irreps_config.hpp`)
+
+- ``SeQuant/core/irreps/propagation.hpp`` (:ref:`file_SeQuant_core_irreps_propagation.hpp`)
+
+- ``SeQuant/core/irreps/table_algebra.hpp`` (:ref:`file_SeQuant_core_irreps_table_algebra.hpp`)
+
+- ``SeQuant/core/irreps/z2_algebra.hpp`` (:ref:`file_SeQuant_core_irreps_z2_algebra.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``SeQuant/core/utility/expr_filter.hpp`` (:ref:`file_SeQuant_core_utility_expr_filter.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``boost/algorithm/string/trim.hpp``
+
+- ``cctype``
+
+- ``memory`` (:ref:`file_SeQuant_core_memory_layout.hpp`)
+
+- ``optional``
+
+- ``regex``
+
+- ``set`` (:ref:`file_SeQuant_core_bitset.hpp`)
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+- ``vector``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1ac92a68fcfc4a54375834115f8a43cae4`
+
+- :ref:`exhale_function_namespacesequant_1ae47c9b6ebe22ad7c73d5e720f89fa106`
+

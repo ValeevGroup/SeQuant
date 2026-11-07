@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1reserved_1a398f4e6cbb7a43c666fbfbe2f23307e2:
+
+Function sequant::reserved::spinfree_rdm_label
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_reserved.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::reserved::spinfree_rdm_label()
+   :project: SeQuant

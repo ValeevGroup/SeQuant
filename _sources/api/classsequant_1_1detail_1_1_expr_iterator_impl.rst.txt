@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1detail_1_1_expr_iterator_impl:
+
+Template Class ExprIteratorImpl
+===============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr_iterator.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::detail::ExprIteratorImpl
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

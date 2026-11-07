@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1ac21e0aa4937a2f27d3c8ffe56e5a84d9:
+
+Template Function sequant::detail::block_value
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_wick_extended.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::block_value(const NormalOperator<S>&)
+   :project: SeQuant

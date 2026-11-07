@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1af1cf4c9f4987853c2c1e429df5941ef6:
+
+Typedef sequant::EvalSequence
+=============================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::EvalSequence
+   :project: SeQuant

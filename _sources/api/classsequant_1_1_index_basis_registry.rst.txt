@@ -1,0 +1,29 @@
+.. _exhale_class_classsequant_1_1_index_basis_registry:
+
+Class IndexBasisRegistry
+========================
+
+- Defined in :ref:`file_SeQuant_core_index_basis_registry.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_class_classsequant_1_1_index_basis_registry_1_1_spaces_view`
+- :ref:`exhale_class_classsequant_1_1_index_basis_registry_1_1_spaces_view_1_1iterator`
+- :ref:`exhale_struct_structsequant_1_1_index_basis_registry_1_1not__a__space`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::IndexBasisRegistry
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

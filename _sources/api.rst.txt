@@ -1,0 +1,6 @@
+API Reference
+=============
+
+The complete API reference is available through the generated index.
+
+See the :ref:`genindex` for a complete index of all classes, functions, and namespaces.

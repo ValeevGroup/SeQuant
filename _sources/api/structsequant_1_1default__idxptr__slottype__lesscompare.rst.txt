@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1default__idxptr__slottype__lesscompare:
+
+Struct default_idxptr_slottype_lesscompare
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_canonicals.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::default_idxptr_slottype_lesscompare
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1mbpt_1ab65f8609749940f971cca279096ab938:
+
+Enum ProjectionDomain
+=====================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_rules_pno.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::mbpt::ProjectionDomain
+   :project: SeQuant

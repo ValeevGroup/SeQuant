@@ -1,0 +1,70 @@
+
+.. _file_SeQuant_core_irreps_config.hpp:
+
+File config.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_irreps>` (``SeQuant/core/irreps``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/irreps/config.hpp``)
+-----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_irreps_config.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/irreps/any.hpp`` (:ref:`file_SeQuant_core_irreps_any.hpp`)
+
+- ``optional``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_irreps_config.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_irrep_context_spec`
+
+- :ref:`exhale_struct_structsequant_1_1_irrep_context_spec_1_1_table`
+

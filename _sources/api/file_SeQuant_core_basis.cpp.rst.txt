@@ -1,0 +1,60 @@
+
+.. _file_SeQuant_core_basis.cpp:
+
+File basis.cpp
+==============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/basis.cpp``)
+---------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_basis.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/basis.hpp`` (:ref:`file_SeQuant_core_basis.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a2242e1e789f91059b843cf8a7525e421`
+
+- :ref:`exhale_function_namespacesequant_1a08ee35f2bea826370ae7d4fd005c1e0a`
+
+- :ref:`exhale_function_namespacesequant_1a610fbc20fa9218653eddd85eafe88ca7`
+

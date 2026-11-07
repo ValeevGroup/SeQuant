@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1ae94ed0ee16d5b0b46adfbcd722a27e8b:
+
+Template Function sequant::opt::eliminate_common_subexpressions_batched
+=======================================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::eliminate_common_subexpressions_batched(VectorLike&, std::span<const std::optional<std::vector<Index>>>, const Transformer&, CSEOptions<std::ranges::range_value_t<VectorLike>>)
+   :project: SeQuant

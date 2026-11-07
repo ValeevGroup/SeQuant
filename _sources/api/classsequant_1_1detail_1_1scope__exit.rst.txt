@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1detail_1_1scope__exit:
+
+Template Class scope_exit
+=========================
+
+- Defined in :ref:`file_SeQuant_core_utility_scope.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::detail::scope_exit
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

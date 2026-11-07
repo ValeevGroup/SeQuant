@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1schedule_1aaadd96902d4e7579ed4cf7e86211461b:
+
+Function sequant::opt::schedule::record_root
+============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_schedule_pin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::schedule::record_root(std::string, ExprPtr const&, OptimizeOptions)
+   :project: SeQuant

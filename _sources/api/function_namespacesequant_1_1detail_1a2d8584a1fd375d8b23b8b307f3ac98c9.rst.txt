@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a2d8584a1fd375d8b23b8b307f3ac98c9:
+
+Template Function sequant::detail::compute_node_irreps
+======================================================
+
+- Defined in :ref:`file_SeQuant_core_export_export.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::compute_node_irreps(const ExportNode<T>&, const ExportContext&)
+   :project: SeQuant

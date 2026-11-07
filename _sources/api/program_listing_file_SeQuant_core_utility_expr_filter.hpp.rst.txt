@@ -1,0 +1,67 @@
+
+.. _program_listing_file_SeQuant_core_utility_expr_filter.hpp:
+
+Program Listing for File expr_filter.hpp
+========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_utility_expr_filter.hpp>` (``SeQuant/core/utility/expr_filter.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_UTILITY_EXPRFILTER_HPP
+   #define SEQUANT_CORE_UTILITY_EXPRFILTER_HPP
+   
+   #include <SeQuant/core/expr_fwd.hpp>
+   #include <SeQuant/core/utility/expr_matcher.hpp>
+   
+   #include <memory>
+   #include <regex>
+   #include <vector>
+   
+   namespace sequant {
+   
+   class ExpressionFilter {
+    public:
+     struct Rule {
+       bool negate = false;
+   
+       virtual ~Rule() = default;
+   
+       virtual bool matches(const Expr &expr) const = 0;
+     };
+   
+     ExpressionFilter() = default;
+   
+     bool matches(const Expr &) const;
+   
+     void set_require_all(bool require);
+     void add_rule(std::unique_ptr<Rule> rule);
+   
+    private:
+     bool require_all_ = true;
+     std::vector<std::unique_ptr<Rule>> rules_;
+   };
+   
+   struct ContainsRule : ExpressionFilter::Rule {
+     explicit ContainsRule(ExprMatcher matcher);
+   
+     bool matches(const Expr &expr) const override;
+   
+     ExprMatcher matcher_;
+   };
+   
+   struct LabelRule : ExpressionFilter::Rule {
+     explicit LabelRule(std::vector<std::wregex> patterns);
+   
+     bool matches(const Expr &expr) const override;
+   
+     std::vector<std::wregex> patterns_;
+   };
+   
+   ExprPtr prune_to_matches(const Expr &expr, const ExpressionFilter &filter);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_UTILITY_EXPRFILTER_HPP

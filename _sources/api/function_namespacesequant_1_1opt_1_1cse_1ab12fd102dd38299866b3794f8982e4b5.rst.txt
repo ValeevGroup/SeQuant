@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1cse_1ab12fd102dd38299866b3794f8982e4b5:
+
+Template Function sequant::opt::cse::count_tensors_if_persistent
+================================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::cse::count_tensors_if_persistent(const TreeNode&, const std::function<bool(const TreeNode&)>&, std::size_t&)
+   :project: SeQuant

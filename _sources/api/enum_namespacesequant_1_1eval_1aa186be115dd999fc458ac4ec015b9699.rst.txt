@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1eval_1aa186be115dd999fc458ac4ec015b9699:
+
+Enum AssembleKind
+=================
+
+- Defined in :ref:`file_SeQuant_core_eval_cell_table.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::eval::AssembleKind
+   :project: SeQuant

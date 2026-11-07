@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a294f5a2826cdd95b97eb65b06d0d9274:
+
+Template Function sequant::detail::broadcast_operand_modes
+==========================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_elementwise.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::broadcast_operand_modes(Labels const&, Labels const&)
+   :project: SeQuant

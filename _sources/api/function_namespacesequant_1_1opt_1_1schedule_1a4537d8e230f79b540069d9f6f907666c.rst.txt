@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1schedule_1a4537d8e230f79b540069d9f6f907666c:
+
+Template Function sequant::opt::schedule::fingerprint_of
+========================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_schedule_pin.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::schedule::fingerprint_of(R const&, std::vector<std::string>, OptimizeOptions const&, std::vector<std::wstring> const&)
+   :project: SeQuant

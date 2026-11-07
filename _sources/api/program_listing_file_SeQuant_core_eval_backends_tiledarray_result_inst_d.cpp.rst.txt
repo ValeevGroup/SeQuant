@@ -1,0 +1,26 @@
+
+.. _program_listing_file_SeQuant_core_eval_backends_tiledarray_result_inst_d.cpp:
+
+Program Listing for File result_inst_d.cpp
+==========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_backends_tiledarray_result_inst_d.cpp>` (``SeQuant/core/eval/backends/tiledarray/result_inst_d.cpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #include <SeQuant/core/eval/backends/tiledarray/result.hpp>
+   
+   #ifdef SEQUANT_HAS_TILEDARRAY
+   
+   #include <tiledarray.h>
+   
+   namespace sequant {
+   
+   template class ResultTensorTA<
+       TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>>;
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_HAS_TILEDARRAY

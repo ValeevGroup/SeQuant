@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1detail_1_1deprecated__member__probe:
+
+Struct deprecated_member_probe
+==============================
+
+- Defined in :ref:`file_SeQuant_core_utility_deprecated_member.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::deprecated_member_probe
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

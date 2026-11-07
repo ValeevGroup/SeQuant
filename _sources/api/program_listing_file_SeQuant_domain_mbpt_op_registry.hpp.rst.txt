@@ -1,0 +1,154 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_op_registry.hpp:
+
+Program Listing for File op_registry.hpp
+========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_op_registry.hpp>` (``SeQuant/domain/mbpt/op_registry.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Ajay Melekamburath on 12/14/25.
+   //
+   
+   #ifndef SEQUANT_DOMAIN_MBPT_OP_REGISTRY_HPP
+   #define SEQUANT_DOMAIN_MBPT_OP_REGISTRY_HPP
+   
+   #include <SeQuant/core/basis.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/expressions/abstract_tensor.hpp>
+   #include <SeQuant/core/expressions/tensor.hpp>
+   #include <SeQuant/core/reserved.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <range/v3/view/map.hpp>
+   
+   #include <memory>
+   #include <optional>
+   #include <string>
+   #include <string_view>
+   
+   namespace sequant::mbpt {
+   
+   namespace detail {
+   inline constexpr std::wstring_view pert_superscripts = L"⁰¹²³⁴⁵⁶⁷⁸⁹";
+   
+   inline std::wstring decorate_with_pert_order(std::wstring_view base_label,
+                                                int pert_order = 0) {
+     if (pert_order == 0) return std::wstring(base_label);
+     SEQUANT_ASSERT(
+         pert_order >= 0 && pert_order <= 9,
+         "decorate_with_pert_order: perturbation order out of range [0,9]");
+   
+     std::wstring result(base_label);
+     result += detail::pert_superscripts[pert_order];
+     return result;
+   }
+   
+   inline std::wstring_view strip_pert_order(std::wstring_view label) {
+     if (!label.empty() &&
+         pert_superscripts.find(label.back()) != std::wstring_view::npos)
+       label.remove_suffix(1);
+     return label;
+   }
+   }  // namespace detail
+   
+   enum class OpClass { Ex, Deex, Gen };
+   
+   inline Hermiticity default_hermiticity(OpClass cls) {
+     return cls == OpClass::Gen ? Hermiticity::Hermitian
+                                : Hermiticity::NonHermitian;
+   }
+   
+   class OpRegistry {
+    public:
+     OpRegistry()
+         : ops_(std::make_shared<container::map<std::wstring, OpClass>>()),
+           herm_overrides_(
+               std::make_shared<container::map<std::wstring, Hermiticity>>()),
+           basis_grants_(std::make_shared<BasisGrants>()) {}
+   
+     OpRegistry(std::shared_ptr<container::map<std::wstring, OpClass>> ops)
+         : ops_(std::move(ops)),
+           herm_overrides_(
+               std::make_shared<container::map<std::wstring, Hermiticity>>()),
+           basis_grants_(std::make_shared<BasisGrants>()) {}
+   
+     OpRegistry(const OpRegistry& other)
+         : ops_(other.ops_),
+           herm_overrides_(other.herm_overrides_),
+           basis_grants_(other.basis_grants_) {}
+   
+     OpRegistry(OpRegistry&& other) noexcept
+         : ops_(std::move(other.ops_)),
+           herm_overrides_(std::move(other.herm_overrides_)),
+           basis_grants_(std::move(other.basis_grants_)) {}
+   
+     OpRegistry& operator=(const OpRegistry& other);
+   
+     OpRegistry& operator=(OpRegistry&& other) noexcept;
+   
+     [[nodiscard]] decltype(auto) begin() const { return ops_->cbegin(); }
+   
+     [[nodiscard]] decltype(auto) end() const { return ops_->cend(); }
+   
+     OpRegistry clone() const;
+   
+     OpRegistry& add(const std::wstring& op, OpClass action);
+   
+     OpRegistry& add(const std::wstring& op, OpClass action,
+                     Hermiticity hermiticity);
+   
+     OpRegistry& set_hermiticity(const std::wstring& op, Hermiticity hermiticity);
+   
+     OpRegistry& grant_basis(const std::wstring& op, const IndexSpace& leg_space,
+                             IndexBasis::instance_type instance);
+   
+     [[nodiscard]] std::optional<std::wstring> resolve(std::wstring_view op) const;
+   
+     [[nodiscard]] bool has_basis_grants(const std::wstring& op) const;
+   
+     [[nodiscard]] IndexBasis::optional_instance basis_grant(
+         const std::wstring& op, const IndexSpace& leg_space) const;
+   
+     OpRegistry& remove(const std::wstring& op);
+   
+     bool contains(const std::wstring& op) const;
+   
+     [[nodiscard]] OpClass to_class(const std::wstring& op) const;
+   
+     [[nodiscard]] Hermiticity hermiticity(const std::wstring& op) const;
+   
+     [[nodiscard]] auto ops() const { return ranges::views::keys(*ops_); }
+   
+     void purge() {
+       ops_->clear();
+       herm_overrides_->clear();
+       basis_grants_->clear();
+     }
+   
+    private:
+     std::shared_ptr<container::map<std::wstring, OpClass>> ops_;
+     std::shared_ptr<container::map<std::wstring, Hermiticity>> herm_overrides_;
+     using BasisGrants =
+         container::map<std::wstring,
+                        container::map<IndexSpace, IndexBasis::instance_type>>;
+     std::shared_ptr<BasisGrants> basis_grants_;
+   
+     void validate_op(const std::wstring& op) const;
+   
+     friend bool operator==(const OpRegistry& reg1, const OpRegistry& reg2) {
+       return *reg1.ops_ == *reg2.ops_ &&
+              *reg1.herm_overrides_ == *reg2.herm_overrides_ &&
+              *reg1.basis_grants_ == *reg2.basis_grants_;
+     }
+   };  // class OpRegistry
+   
+   bool is_amplitude_tensor(const AbstractTensor& t, const OpRegistry& reg);
+   
+   }  // namespace sequant::mbpt
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_OP_REGISTRY_HPP

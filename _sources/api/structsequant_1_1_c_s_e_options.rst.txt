@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_c_s_e_options:
+
+Struct CSEOptions
+=================
+
+- Defined in :ref:`file_SeQuant_core_optimize_options.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::CSEOptions
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

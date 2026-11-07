@@ -1,0 +1,87 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_rules_pno.hpp:
+
+Program Listing for File pno.hpp
+================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_rules_pno.hpp>` (``SeQuant/domain/mbpt/rules/pno.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Integral projection (PNO domain projection and integral-basis stamps): a
+   // post-Wick rewrite of R2 terms; run after spintrace, before density fitting.
+   // Riplinger & Neese, JCP 138, 034106 (2013); Jiang et al., JCP 161, 082502.
+   //
+   
+   #ifndef SEQUANT_DOMAIN_MBPT_RULES_PNO_HPP
+   #define SEQUANT_DOMAIN_MBPT_RULES_PNO_HPP
+   
+   #include <SeQuant/core/basis.hpp>
+   #include <SeQuant/core/expr.hpp>
+   
+   #include <cstdint>
+   #include <functional>
+   #include <string>
+   
+   namespace sequant::mbpt {
+   
+   [[nodiscard]] bool is_occupied(Index const& idx);
+   
+   [[nodiscard]] bool is_ovov_integral(AbstractTensor const& tnsr);
+   
+   [[nodiscard]] bool is_oovv_integral(AbstractTensor const& tnsr);
+   
+   enum class ProjectionTerms : std::uint32_t {
+     None = 0u,
+     ExchangeLinear = 1u << 0,
+     ExchangeNonlinear = 1u << 1,
+     CoulombLinear = 1u << 2,
+     CoulombNonlinear = 1u << 3,
+   
+     Exchange = ExchangeLinear | ExchangeNonlinear,
+     Coulomb = CoulombLinear | CoulombNonlinear,
+     Linear = ExchangeLinear | CoulombLinear,
+     Nonlinear = ExchangeNonlinear | CoulombNonlinear,
+     All = Exchange | Coulomb
+   };
+   
+   [[nodiscard]] constexpr ProjectionTerms operator|(ProjectionTerms a,
+                                                     ProjectionTerms b) noexcept {
+     return static_cast<ProjectionTerms>(static_cast<std::uint32_t>(a) |
+                                         static_cast<std::uint32_t>(b));
+   }
+   [[nodiscard]] constexpr ProjectionTerms operator&(ProjectionTerms a,
+                                                     ProjectionTerms b) noexcept {
+     return static_cast<ProjectionTerms>(static_cast<std::uint32_t>(a) &
+                                         static_cast<std::uint32_t>(b));
+   }
+   [[nodiscard]] constexpr bool any(ProjectionTerms a) noexcept {
+     return static_cast<std::uint32_t>(a) != 0u;
+   }
+   [[nodiscard]] constexpr bool contains(ProjectionTerms set,
+                                         ProjectionTerms sub) noexcept {
+     return (set & sub) == sub;
+   }
+   
+   enum class ProjectionDomain { PartnerPair, OwnPair };
+   
+   enum class ProjectionBasis { Amplitude, Integral };
+   
+   struct ProjectionOptions {
+     ProjectionTerms terms = ProjectionTerms::None;
+     ProjectionDomain domain = ProjectionDomain::OwnPair;
+     ProjectionBasis basis = ProjectionBasis::Integral;
+     std::function<IndexBasis::instance_type(ProjectionTerms cell)> cell_instance =
+         {};
+     std::wstring integral_label = L"g";
+   };
+   
+   [[nodiscard]] ExprPtr project_integral_domains(ExprPtr const& expr,
+                                                  ProjectionOptions const& opts);
+   
+   }  // namespace sequant::mbpt
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_RULES_PNO_HPP

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a76d1a90ee96f755c667560053228832b:
+
+Function sequant::push_symmetrizer
+==================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::push_symmetrizer(ResultExpr&, std::optional<ExprPtr>)
+   :project: SeQuant

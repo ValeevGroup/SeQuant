@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a54d970db0c9613c312bb7b2335c0fa1e:
+
+Function sequant::flatten(ResultExpr&&)
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr_algorithms.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::flatten(ResultExpr&&)
+   :project: SeQuant

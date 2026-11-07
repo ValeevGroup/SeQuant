@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a3bdcbffd2dafd3c987ba3578d2392d01:
+
+Function sequant::cross_type_less
+=================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_abstract_tensor.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::cross_type_less(const AbstractTensor&, const AbstractTensor&)
+   :project: SeQuant

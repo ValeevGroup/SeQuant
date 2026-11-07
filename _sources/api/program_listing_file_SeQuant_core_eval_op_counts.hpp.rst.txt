@@ -1,0 +1,57 @@
+
+.. _program_listing_file_SeQuant_core_eval_op_counts.hpp:
+
+Program Listing for File op_counts.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_op_counts.hpp>` (``SeQuant/core/eval/op_counts.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Op-count and cost probes read by the evaluation tests and the dry-run cost
+   // model: thread-local diagnostic counters stashed by the dry-run ops and by the
+   // ordered executor.
+   //
+   
+   #ifndef SEQUANT_CORE_EVAL_OP_COUNTS_HPP
+   #define SEQUANT_CORE_EVAL_OP_COUNTS_HPP
+   
+   #include <cstddef>
+   
+   namespace sequant::eval {
+   
+   namespace detail {
+   
+   inline double& last_op_flops() noexcept {
+     static thread_local double f = 0.0;
+     return f;
+   }
+   
+   inline double& last_op_exec() noexcept {
+     static thread_local double f = 0.0;
+     return f;
+   }
+   
+   struct OrderedOpCounts {
+     std::size_t builds = 0;
+     std::size_t assembles = 0;
+     std::size_t probes = 0;
+   };
+   
+   inline OrderedOpCounts& ordered_op_counts_slot() noexcept {
+     static thread_local OrderedOpCounts c;
+     return c;
+   }
+   
+   [[nodiscard]] inline OrderedOpCounts ordered_op_counts() noexcept {
+     return ordered_op_counts_slot();
+   }
+   
+   }  // namespace detail
+   
+   }  // namespace sequant::eval
+   
+   #endif  // SEQUANT_CORE_EVAL_OP_COUNTS_HPP

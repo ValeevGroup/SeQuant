@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1accept__any__index:
+
+Struct accept_any_index
+=======================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::accept_any_index
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

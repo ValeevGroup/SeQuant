@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1a1645ff4c19b997cdc448cbd2616cd38b:
+
+Function sequant::eval::compute_sliced_mode_assignment
+======================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::compute_sliced_mode_assignment(OrderedSchedule const&, RichSchedule const&)
+   :project: SeQuant

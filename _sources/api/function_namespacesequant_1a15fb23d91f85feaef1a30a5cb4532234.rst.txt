@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a15fb23d91f85feaef1a30a5cb4532234:
+
+Function sequant::toplevel_diff(const Product&, const Product&)
+===============================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::toplevel_diff(const Product&, const Product&)
+   :project: SeQuant

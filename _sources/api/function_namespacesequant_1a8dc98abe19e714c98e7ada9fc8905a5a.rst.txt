@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a8dc98abe19e714c98e7ada9fc8905a5a:
+
+Function sequant::strip_adjoint_label
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::strip_adjoint_label(std::wstring_view)
+   :project: SeQuant

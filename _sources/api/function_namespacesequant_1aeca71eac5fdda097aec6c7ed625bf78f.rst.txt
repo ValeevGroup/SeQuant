@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aeca71eac5fdda097aec6c7ed625bf78f:
+
+Template Function sequant::stamp_occurrence_homes
+=================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_lifetime_mask.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::stamp_occurrence_homes(R const&)
+   :project: SeQuant

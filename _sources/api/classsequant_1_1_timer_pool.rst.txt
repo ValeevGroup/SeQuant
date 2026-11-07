@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_timer_pool:
+
+Template Class TimerPool
+========================
+
+- Defined in :ref:`file_SeQuant_core_utility_timer.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::TimerPool
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

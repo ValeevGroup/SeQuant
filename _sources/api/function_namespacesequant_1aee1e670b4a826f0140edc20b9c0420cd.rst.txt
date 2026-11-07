@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aee1e670b4a826f0140edc20b9c0420cd:
+
+Template Function sequant::sort_then_replace_by_ordinals
+========================================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_utils.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::sort_then_replace_by_ordinals(IntegerSequence&)
+   :project: SeQuant

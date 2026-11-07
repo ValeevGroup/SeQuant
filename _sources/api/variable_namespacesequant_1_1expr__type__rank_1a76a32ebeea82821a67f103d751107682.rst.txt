@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1expr__type__rank_1a76a32ebeea82821a67f103d751107682:
+
+Variable sequant::expr_type_rank::foperator
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::expr_type_rank::foperator
+   :project: SeQuant

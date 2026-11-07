@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aaf9990928f2f8503e60a10bdd753a34e:
+
+Function sequant::expr_type_id_less
+===================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_abstract_tensor.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::expr_type_id_less(const AbstractTensor&, const AbstractTensor&)
+   :project: SeQuant

@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1_num_py_einsum_generator_context:
+
+Class NumPyEinsumGeneratorContext
+=================================
+
+- Defined in :ref:`file_SeQuant_core_export_python_einsum.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::PythonEinsumGeneratorContext`` (:ref:`exhale_class_classsequant_1_1_python_einsum_generator_context`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::NumPyEinsumGeneratorContext
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

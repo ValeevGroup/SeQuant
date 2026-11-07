@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1eval_1_1schedule_1_1_per_axis_record:
+
+Struct PerAxisRecord
+====================
+
+- Defined in :ref:`file_SeQuant_core_eval_schedule_document.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::eval::schedule::PerAxisRecord
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

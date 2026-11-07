@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a60c24d6c01aa66e50eadfbab6136b782:
+
+Function sequant::eval::detail::collect_production_ids
+======================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::collect_production_ids(ScopeBlock const&, container::vector<std::size_t>&)
+   :project: SeQuant

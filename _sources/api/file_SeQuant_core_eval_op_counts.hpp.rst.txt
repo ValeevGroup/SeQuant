@@ -1,0 +1,81 @@
+
+.. _file_SeQuant_core_eval_op_counts.hpp:
+
+File op_counts.hpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/op_counts.hpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_op_counts.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``cstddef``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_backends_dryrun_cost_model_object.hpp`
+
+- :ref:`file_SeQuant_core_eval_backends_dryrun_result.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval.hpp`
+
+- :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__eval`
+
+- :ref:`namespace_sequant__eval__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1detail_1_1_ordered_op_counts`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a02837a144ef0cf49159d15881e76529d`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a2289bd77bbb0d7abdce8f0360458ee8e`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a0f6d6212808b15e4ad4574fbedd4f092`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a3bfd3fd62951dd34caf4c267fee29151`
+

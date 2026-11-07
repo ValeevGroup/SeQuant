@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1impl_1ad5a76d065c8a2256ed835e589eed14ef:
+
+Function sequant::impl::binarize_system
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::impl::binarize_system(std::span<const ResultExpr>, const BinarizationOptions&, container::svector<bool>&)
+   :project: SeQuant

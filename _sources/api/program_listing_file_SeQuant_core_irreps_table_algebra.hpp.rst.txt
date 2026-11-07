@@ -1,0 +1,51 @@
+
+.. _program_listing_file_SeQuant_core_irreps_table_algebra.hpp:
+
+Program Listing for File table_algebra.hpp
+==========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_irreps_table_algebra.hpp>` (``SeQuant/core/irreps/table_algebra.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_IRREPS_TABLE_ALGEBRA_HPP
+   #define SEQUANT_CORE_IRREPS_TABLE_ALGEBRA_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/irreps/algebra.hpp>
+   
+   #include <string>
+   #include <utility>
+   
+   namespace sequant {
+   
+   class TableAlgebra {
+    public:
+     using irrep_type = std::string;
+     using table_type =
+         container::map<std::pair<irrep_type, irrep_type>, IrrepSet<irrep_type>>;
+     using conjugation_map = container::map<irrep_type, irrep_type>;
+   
+     TableAlgebra(irrep_type totally_symmetric, table_type table,
+                  conjugation_map conjugates = {});
+   
+     const irrep_type &totally_symmetric() const;
+   
+     IrrepSet<irrep_type> product(const irrep_type &lhs,
+                                  const irrep_type &rhs) const;
+   
+     irrep_type conjugate(const irrep_type &irrep) const;
+   
+    private:
+     irrep_type m_totallySymmetric;
+     table_type m_table;
+     conjugation_map m_conjugates;
+   };
+   
+   static_assert(IrrepAlgebra<TableAlgebra>);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_IRREPS_TABLE_ALGEBRA_HPP

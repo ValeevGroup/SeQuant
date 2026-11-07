@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a449f2c0e39c397d7f36548352b1a75a8:
+
+Function sequant::mode_to_level_from_signature
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_slicing_signature.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mode_to_level_from_signature(std::size_t, container::svector<std::optional<std::size_t>> const&, container::svector<DagScopeLevel> const&)
+   :project: SeQuant

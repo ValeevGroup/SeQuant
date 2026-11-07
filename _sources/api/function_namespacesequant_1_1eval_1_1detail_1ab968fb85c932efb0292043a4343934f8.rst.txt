@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1ab968fb85c932efb0292043a4343934f8:
+
+Function sequant::eval::detail::ordered_schedule_dep_graph
+==========================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::ordered_schedule_dep_graph(RichSchedule const&)
+   :project: SeQuant

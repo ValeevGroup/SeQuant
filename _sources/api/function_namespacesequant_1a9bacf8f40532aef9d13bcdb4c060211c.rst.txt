@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9bacf8f40532aef9d13bcdb4c060211c:
+
+Template Function sequant::visit_leaf_expr
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_export_export.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::visit_leaf_expr(const Expr&, TensorFn&&, VariableFn&&)
+   :project: SeQuant

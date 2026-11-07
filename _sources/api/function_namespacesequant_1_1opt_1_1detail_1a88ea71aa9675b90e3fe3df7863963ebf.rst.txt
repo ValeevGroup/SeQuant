@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a88ea71aa9675b90e3fe3df7863963ebf:
+
+Template Function sequant::opt::detail::pareto_insert_ceiling
+=============================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_cost_model.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::pareto_insert_ceiling(container::vector<FP>&, FP, bool)
+   :project: SeQuant

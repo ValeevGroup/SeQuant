@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1detail_1a13d425682a024eae8a411b93c7099afb:
+
+Function sequant::io::detail::invalid_expression_format_specifier
+=================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_format.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::detail::invalid_expression_format_specifier()
+   :project: SeQuant

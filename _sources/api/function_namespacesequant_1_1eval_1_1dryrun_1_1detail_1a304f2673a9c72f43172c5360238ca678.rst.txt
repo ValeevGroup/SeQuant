@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1a304f2673a9c72f43172c5360238ca678:
+
+Function sequant::eval::dryrun::detail::merge_overrides
+=======================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_result.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::dryrun::detail::merge_overrides(ExtentOverrides const&, ExtentOverrides const&)
+   :project: SeQuant

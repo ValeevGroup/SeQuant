@@ -1,0 +1,27 @@
+.. _exhale_class_classsequant_1_1_generator:
+
+Template Class Generator
+========================
+
+- Defined in :ref:`file_SeQuant_core_export_generator.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Derived Types
+*************
+
+- ``public sequant::PythonEinsumGeneratorBase< NumPyEinsumGeneratorContext >`` (:ref:`exhale_class_classsequant_1_1_python_einsum_generator_base`)
+- ``public sequant::PythonEinsumGeneratorBase< PyTorchEinsumGeneratorContext >`` (:ref:`exhale_class_classsequant_1_1_python_einsum_generator_base`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Generator
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

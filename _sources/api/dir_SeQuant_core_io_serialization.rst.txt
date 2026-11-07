@@ -1,0 +1,27 @@
+.. _dir_SeQuant_core_io_serialization:
+
+
+Directory serialization
+=======================
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_io>` (``SeQuant/core/io``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/core/io/serialization``
+
+Subdirectories
+--------------
+
+- :ref:`dir_SeQuant_core_io_serialization_v1`
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_core_io_serialization_serialization.cpp`
+- :ref:`file_SeQuant_core_io_serialization_serialization.hpp`
+
+

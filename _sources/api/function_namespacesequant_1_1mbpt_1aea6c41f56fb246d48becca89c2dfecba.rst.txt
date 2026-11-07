@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1aea6c41f56fb246d48becca89c2dfecba:
+
+Function sequant::mbpt::resultexpr_spintrace_delegate
+=====================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::resultexpr_spintrace_delegate(const ExprPtr&, const container::svector<container::svector<SlottedIndex>>&, bool)
+   :project: SeQuant

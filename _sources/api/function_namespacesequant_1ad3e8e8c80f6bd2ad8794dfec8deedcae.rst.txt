@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ad3e8e8c80f6bd2ad8794dfec8deedcae:
+
+Function sequant::make_symmetrizer()
+====================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::make_symmetrizer()
+   :project: SeQuant

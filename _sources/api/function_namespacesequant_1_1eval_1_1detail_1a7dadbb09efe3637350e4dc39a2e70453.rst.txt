@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a7dadbb09efe3637350e4dc39a2e70453:
+
+Function sequant::eval::detail::pass_step_cycle_edges
+=====================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::pass_step_cycle_edges(RichSchedule const&, OrderedScheduleDepGraph const&, container::vector<std::optional<ForcedSplitSite>> const&, ForcedSplitLevels const&)
+   :project: SeQuant

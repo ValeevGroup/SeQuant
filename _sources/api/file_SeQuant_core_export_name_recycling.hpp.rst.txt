@@ -1,0 +1,97 @@
+
+.. _file_SeQuant_core_export_name_recycling.hpp:
+
+File name_recycling.hpp
+=======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/name_recycling.hpp``)
+-------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_name_recycling.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/export/context.hpp`` (:ref:`file_SeQuant_core_export_context.hpp`)
+
+- ``SeQuant/core/export/export.hpp`` (:ref:`file_SeQuant_core_export_export.hpp`)
+
+- ``SeQuant/core/export/export_node.hpp`` (:ref:`file_SeQuant_core_export_export_node.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/irreps/any.hpp`` (:ref:`file_SeQuant_core_irreps_any.hpp`)
+
+- ``SeQuant/core/irreps/eval_tree.hpp`` (:ref:`file_SeQuant_core_irreps_eval_tree.hpp`)
+
+- ``SeQuant/core/optimize/name_recycling.hpp`` (:ref:`file_SeQuant_core_optimize_name_recycling.hpp`)
+
+- ``SeQuant/core/utility/tensor.hpp`` (:ref:`file_SeQuant_core_utility_tensor.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``cstddef``
+
+- ``functional``
+
+- ``map`` (:ref:`file_SeQuant_core_eval_value_node_map.hpp`)
+
+- ``ranges`` (:ref:`file_SeQuant_core_ranges.hpp`)
+
+- ``span``
+
+- ``unordered_map``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+- ``vector``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1detail_1_1_scanned_irrep_context`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a752de8a3cd32b9f13d255bfe144d6187`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a9055b0364cde59fbbfe630aba81bf2d8`
+
+- :ref:`exhale_function_namespacesequant_1a7b839a0448f2397491df6a2fc889f6ae`
+

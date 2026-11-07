@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1a7f9e0d222f10553619026f98dc4dd46c:
+
+Function sequant::eval::dryrun::detail::indices_of
+==================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_result.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::dryrun::detail::indices_of(Result const&)
+   :project: SeQuant

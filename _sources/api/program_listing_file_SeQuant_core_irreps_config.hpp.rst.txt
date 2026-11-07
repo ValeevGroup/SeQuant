@@ -1,0 +1,51 @@
+
+.. _program_listing_file_SeQuant_core_irreps_config.hpp:
+
+Program Listing for File config.hpp
+===================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_irreps_config.hpp>` (``SeQuant/core/irreps/config.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_IRREPS_CONFIG_HPP
+   #define SEQUANT_CORE_IRREPS_CONFIG_HPP
+   
+   #include <SeQuant/core/irreps/any.hpp>
+   
+   #include <optional>
+   #include <string>
+   #include <string_view>
+   #include <utility>
+   #include <vector>
+   
+   namespace sequant {
+   
+   struct IrrepContextSpec {
+     using IrrepNames = std::vector<std::string>;
+   
+     struct Table {
+       std::string totally_symmetric;
+       std::vector<std::pair<std::string, IrrepNames>> products;
+       std::vector<std::pair<std::string, std::string>> conjugates;
+     };
+   
+     std::string group;
+     std::optional<Table> table;
+     std::optional<std::vector<std::string>> symbols;
+     std::optional<std::vector<std::string>> relations;
+     std::vector<std::pair<std::string, IrrepNames>> tensors;
+     std::vector<std::pair<std::string, IrrepNames>> variables;
+     IrrepNames default_irreps = {"*"};
+     bool error_on_unspecified = false;
+   };
+   
+   AnyIrrepContext make_irrep_context(const IrrepContextSpec &spec);
+   
+   std::string normalize_irrep_spec(std::string_view spec);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_IRREPS_CONFIG_HPP

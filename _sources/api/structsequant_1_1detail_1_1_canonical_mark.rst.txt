@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1detail_1_1_canonical_mark:
+
+Struct CanonicalMark
+====================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::CanonicalMark
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:
