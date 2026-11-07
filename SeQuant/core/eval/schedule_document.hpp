@@ -214,14 +214,17 @@ struct RunRecord {
   std::map<std::string, std::size_t> extents, batch_targets;  // by space
   std::map<std::size_t, std::size_t> n_batches;  // block id -> count
   /// value id -> bytes (largest result a production left in its cell: a
-  /// per-batch slice or partial inside a loop block)
+  /// per-batch slice or partial inside a loop block; a persistent value
+  /// seeded from the previous run and not re-produced is measured at
+  /// seeding, as the whole value it then holds)
   std::map<std::string, std::size_t> footprint;
   /// value id -> bytes of the complete value: the assembled result of a value
   /// produced per batch, else what its production left
   std::map<std::string, std::size_t> size;
   std::map<std::string, std::size_t> builds;  // value id -> build count
-  /// value id -> bytes of a leaf as the executor fetched it (the largest
-  /// form, when it was fetched more than once); leaves are not productions,
+  /// value id -> bytes of a leaf as the executor fetched it or, persistent,
+  /// seeded it (the largest form, when more than once); leaves are not
+  /// productions,
   /// so they appear here and never in builds / footprint / size
   std::map<std::string, std::size_t> leaf_bytes;
   /// optimizer settings excluded from the fingerprint

@@ -542,6 +542,9 @@ template <typename ValueMap, typename Rich>
 ///   once an Assemble step closes, else what the production left.
 /// A leaf's fetch is measured like a production but recorded apart, in
 /// \c leaf_bytes (CellReadResolver::on_leaf_recorded): it is not a build.
+/// A persistent value seeded from the previous run is measured at seeding,
+/// into \c footprint and \c size (\c seeded) or, for a leaf, \c leaf_bytes,
+/// and not counted as a build.
 /// The record carries no peak of its own: the realized peak is the same
 /// liveness sweep the modeled one is (schedule::size_audit_table), priced
 /// with these measured sizes.
@@ -592,6 +595,19 @@ struct OrderedRunRecorder {
     std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
     auto& f = run.leaf_bytes[id];
     f = std::max(f, r->measured_size_in_bytes());
+  }
+
+  /// A persistent non-leaf value \p r seeded into its cell from the previous
+  /// run: measured into footprint and size like a production of it, but not
+  /// a build (a production of it later in this run re-measures it). For a
+  /// value assembled per batch this is the whole value, not a partial.
+  void seeded(std::size_t vid, ResultPtr const& r) {
+    if (!r) return;
+    std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
+    std::size_t const bytes = r->measured_size_in_bytes();
+    auto& f = run.footprint[id];
+    f = std::max(f, bytes);
+    if (!run.size.count(id)) run.size[id] = bytes;
   }
 };
 
@@ -1340,6 +1356,20 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           offenders);
   }
   registry.seed_persistent();
+  // A persistent value seeded from the previous run is live in this one
+  // without a production of its own; measure it like one (see
+  // OrderedRunRecorder::seeded; a seeded leaf is a leaf, see leaf) so the
+  // record prices every value the run holds, not only those it builds. Cell
+  // order on every rank: the measurement is collective on the TiledArray
+  // backend.
+  if (recorder)
+    registry.for_each_live([&](CellId c, ResultPtr const& r) {
+      TableCell const& cell = cell_table.cells[c];
+      if (cell.production.kind == ProductionKind::Leaf)
+        recorder->leaf(cell.value_id, r);
+      else
+        recorder->seeded(cell.value_id, r);
+    });
   // value id -> value_id: the resolver's operand lookup (the evaluator hands
   // it value_key_of(operand node), see eval.hpp's fetch/record_leaf/
   // operand_drained sites).
