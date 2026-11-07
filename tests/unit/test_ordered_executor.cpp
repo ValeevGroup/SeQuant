@@ -2832,7 +2832,7 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
         forest, std::move(labels), opts, mode_order);
     doc->roots = roots;
     doc->dag = sched::record_dag(rich, legality, *ordered_opt, forest, roots,
-                                 is_volatile_node);
+                                 is_volatile_node, cm.get(), block_of);
     value_id_of = [&doc](std::size_t vid) {
       return doc->dag->values.at(vid).id;
     };
