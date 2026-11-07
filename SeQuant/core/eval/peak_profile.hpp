@@ -148,37 +148,58 @@ struct Schedule {
 };
 
 ///
-/// \brief The result of the interval-event sweep over a \c Schedule: the peak
-/// live footprint, the (lowest) point achieving it, and which cells are live
+/// \brief The result of the interval-event sweep over liveness intervals (a
+/// \c Schedule's cells, or any \c LiveInterval list): the peak live
+/// footprint, the (lowest) point achieving it, and which intervals are live
 /// there.
 ///
 struct PeakProfile {
   double peak_bytes = 0;
   std::size_t binding_point = 0;
   container::svector<std::size_t>
-      live_at_binding;  //!< indices into \c Schedule::cells live at \c
-                        //!< binding_point
+      live_at_binding;  //!< indices into the swept intervals (\c
+                        //!< Schedule::cells for \c peak_profile_sweep) live
+                        //!< at \c binding_point
 };
 
 ///
-/// \brief Sweep the per-cell liveness intervals of \p s to find the peak live
-/// footprint, the lowest static point achieving it, and the set of cells live
-/// there.
+/// \brief One liveness interval for \c interval_peak_sweep: \c footprint is
+/// live at every static point of the inclusive range [first_use, last_use].
 ///
-/// \details A textbook +delta/-delta interval-event sweep: each cell deposits
-/// +footprint at \c first_use and -footprint just past \c last_use, then a
-/// single left-to-right prefix scan tracks the running live total. The strict
-/// `>` comparison keeps the first (lowest) point among equal-height maxima.
+struct LiveInterval {
+  std::size_t first_use, last_use;
+  double footprint;
+};
+
 ///
-inline PeakProfile peak_profile_sweep(Schedule const& s) {
-  container::svector<double> delta(s.num_points + 1, 0.0);
-  for (auto const& c : s.cells) {
-    delta[c.first_use] += double(c.footprint);
-    delta[c.last_use + 1] -= double(c.footprint);
+/// \brief Sweep \p intervals to find the peak live footprint, the lowest
+/// static point achieving it, and the set of intervals live there.
+///
+/// \details A textbook +delta/-delta interval-event sweep: each interval
+/// deposits +footprint at \c first_use and -footprint just past \c last_use,
+/// then a single left-to-right prefix scan tracks the running live total. The
+/// strict `>` comparison keeps the first (lowest) point among equal-height
+/// maxima.
+/// \throws Exception for an interval with first_use > last_use
+///
+inline PeakProfile interval_peak_sweep(
+    container::svector<LiveInterval> const& intervals) {
+  std::size_t num_points = 0;
+  for (auto const& iv : intervals) {
+    if (iv.first_use > iv.last_use)
+      throw Exception("interval_peak_sweep: interval [" +
+                      std::to_string(iv.first_use) + ", " +
+                      std::to_string(iv.last_use) + "] is empty");
+    num_points = std::max(num_points, iv.last_use + 1);
+  }
+  container::svector<double> delta(num_points + 1, 0.0);
+  for (auto const& iv : intervals) {
+    delta[iv.first_use] += iv.footprint;
+    delta[iv.last_use + 1] -= iv.footprint;
   }
   double run = 0, peak = 0;
   std::size_t arg = 0;
-  for (std::size_t p = 0; p < s.num_points; ++p) {
+  for (std::size_t p = 0; p < num_points; ++p) {
     run += delta[p];
     if (run > peak) {
       peak = run;
@@ -188,10 +209,23 @@ inline PeakProfile peak_profile_sweep(Schedule const& s) {
   PeakProfile out;
   out.peak_bytes = peak;
   out.binding_point = arg;
-  for (std::size_t i = 0; i < s.cells.size(); ++i)
-    if (s.cells[i].first_use <= arg && arg <= s.cells[i].last_use)
+  for (std::size_t i = 0; i < intervals.size(); ++i)
+    if (intervals[i].first_use <= arg && arg <= intervals[i].last_use)
       out.live_at_binding.push_back(i);
   return out;
+}
+
+///
+/// \brief Sweep the per-cell liveness intervals of \p s (see
+/// \c interval_peak_sweep) to find the peak live footprint, the lowest static
+/// point achieving it, and the set of cells live there.
+///
+inline PeakProfile peak_profile_sweep(Schedule const& s) {
+  container::svector<LiveInterval> intervals;
+  intervals.reserve(s.cells.size());
+  for (auto const& c : s.cells)
+    intervals.push_back({c.first_use, c.last_use, double(c.footprint)});
+  return interval_peak_sweep(intervals);
 }
 
 ///
