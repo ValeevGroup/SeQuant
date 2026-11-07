@@ -5716,46 +5716,65 @@ TEST_CASE("record_dag prices values when given a cost model",
   }
 }
 
-TEST_CASE("ordered run record tracks the realized peak and its live set",
+TEST_CASE("size audit sweeps the realized peak over the run's measured sizes",
           "[ordered-executor][schedule-document]") {
   namespace sched = sequant::eval::schedule;
-  std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b - c"),
-                                 scalar_tree(L"a * a + 3 * b - 2 * c")};
-  ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
+  // 2 * a * b: a, b, their product, the constant and the scaled product; a
+  // production's operands are live through its own point, so three scalars
+  // are co-resident at the product (a, b, a*b) and again at the scaling
+  // (a*b, 2, 2*a*b)
+  std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b")};
+  ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}}};
   sequant::BatchPolicy const policy;
   SizeRegime const regime;
   CostModel const cm{regime};
-  auto const block_of = [](Index const&) -> std::size_t { return 1; };
+  std::function<std::size_t(Index const&)> const block_of =
+      [](Index const&) -> std::size_t { return 1; };
   RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
   auto const legality = analyze_legality(rich, forest, policy);
   OrderedSchedule const ordered =
       build_ordered_schedule(rich, legality, policy, {});
+  sched::Document doc;
+  doc.roots.resize(1);
+  doc.roots[0].label = "R";
+  doc.roots[0].terms.resize(1);
+  doc.roots[0].terms[0].key = "2 a b";
+  doc.dag = sched::record_dag(rich, legality, ordered, forest, doc.roots, {},
+                              &cm, block_of);
+  REQUIRE(doc.dag->values.size() == 5);
   auto cache = sequant::CacheManager<ScalarNode>::empty();
-  std::function<std::size_t(Index const&)> const target =
-      [](Index const&) -> std::size_t { return 1; };
   sched::RunRecord run;
-  std::function<std::string(std::size_t)> const id_of = [](std::size_t v) {
-    return "v" + std::to_string(v);
+  std::function<std::string(std::size_t)> const id_of = [&doc](std::size_t v) {
+    return doc.dag->values.at(v).id;
   };
   (void)sequant::eval::evaluate_ordered_multiroot(
       forest, ordered, rich,
       sequant::container::svector<std::string>(forest.size()), yield, cache,
-      target, sequant::make_no_scope_guard{}, {}, &run, id_of);
-  // every production of a scalar leaves sizeof(double) bytes
-  REQUIRE(!run.footprint.empty());
+      block_of, sequant::make_no_scope_guard{}, {}, &run, id_of);
+  // every production of a scalar leaves sizeof(double) bytes; the leaves a,
+  // b and 2 were fetched and measured, never built
+  REQUIRE(run.footprint.size() == 2);
   for (auto const& [id, bytes] : run.footprint) CHECK(bytes == sizeof(double));
-  // the peak is at least one scalar and at most all values at once
-  CHECK(run.peak_bytes >= sizeof(double));
-  CHECK(run.peak_bytes <= sizeof(double) * rich.cells.size());
-  REQUIRE(!run.peak_live.empty());
-  CHECK(run.peak_live.size() * sizeof(double) == run.peak_bytes);
-  // every live value is either a recorded production or a fetched leaf
-  for (auto const& id : run.peak_live)
-    CHECK(run.footprint.count(id) + run.leaf_bytes.count(id) == 1);
-  // the leaves a, b, c were fetched and measured, never built
-  REQUIRE(!run.leaf_bytes.empty());
+  REQUIRE(run.leaf_bytes.size() == 3);
   for (auto const& [id, bytes] : run.leaf_bytes) {
     CHECK(bytes == sizeof(double));
     CHECK(run.builds.count(id) == 0);
   }
+  doc.run = std::move(run);
+  std::string const table = sched::size_audit_table(doc);
+  // three scalars at the product's point, which is the lower of the two
+  // equal maxima; the realized peak is what the executor measured swept
+  // over the dag's liveness, not what the cell registry happened to hold
+  // (it gives a taken operand away before the production that reads it is
+  // stored)
+  std::string const live_at_peak = [&] {
+    std::string s;
+    for (std::size_t v = 0; v < 3; ++v) s += ' ' + doc.dag->values[v].id;
+    return s;
+  }();
+  CAPTURE(table);
+  CHECK(table.find("realized peak 24 B at static point 2") !=
+        std::string::npos);
+  CHECK(table.find("live at the realized peak:" + live_at_peak + "\n") !=
+        std::string::npos);
 }

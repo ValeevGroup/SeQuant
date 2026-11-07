@@ -1,6 +1,7 @@
 #include <SeQuant/core/eval/schedule_document.hpp>
-#include <cstdio>
 
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -11,6 +12,7 @@
 #include <algorithm>
 #include <charconv>
 #include <cstdint>
+#include <cstdio>
 #include <initializer_list>
 #include <istream>
 #include <iterator>
@@ -287,8 +289,6 @@ json to_j(RunRecord const& r) {
   j["footprint"] = sizemap_j(r.footprint);
   j["size"] = sizemap_j(r.size);
   j["builds"] = sizemap_j(r.builds);
-  j["peak_bytes"] = r.peak_bytes;
-  j["peak_live"] = strs_j(r.peak_live);
   j["leaf_bytes"] = sizemap_j(r.leaf_bytes);
   j["planner"] = strmap_j(r.planner);
   return j;
@@ -749,8 +749,6 @@ RunRecord run_r(json const& j) {
   // absent in run files written before the key
   if (j.contains("size")) r.size = sizemap_r(j, "size", w);
   r.builds = sizemap_r(j, "builds", w);
-  r.peak_bytes = get_size_or(j, "peak_bytes", 0, w);
-  if (j.contains("peak_live")) r.peak_live = get_strs(j, "peak_live", w);
   if (j.contains("leaf_bytes")) r.leaf_bytes = sizemap_r(j, "leaf_bytes", w);
   r.planner = strmap_r(j, "planner", w);
   return r;
@@ -1097,6 +1095,11 @@ std::string size_audit_table(Document const& doc) {
     auto const it = m.find(k);
     return it == m.end() ? 0 : it->second;
   };
+  // the realized and the modeled slab of every value over its liveness
+  // interval: the two peaks below are one sweep each over these
+  container::svector<LiveInterval> realized, modeled;
+  realized.reserve(values.size());
+  modeled.reserve(values.size());
   for (auto const& v : values) {
     std::string modes;
     for (auto const& m : v.result_modes)
@@ -1107,6 +1110,8 @@ std::string size_audit_table(Document const& doc) {
     std::size_t const full = leaf ? leaf : lookup(run.size, v.id);
     rows.push_back({v.id, modes, v.persistent, v.modeled_footprint,
                     v.modeled_size, slab, full, lookup(run.builds, v.id)});
+    realized.push_back({v.first_use, v.last_use, double(slab)});
+    modeled.push_back({v.first_use, v.last_use, double(v.modeled_footprint)});
   }
   std::stable_sort(rows.begin(), rows.end(), [](Row const& a, Row const& b) {
     return a.realized_slab > b.realized_slab;
@@ -1129,31 +1134,17 @@ std::string size_audit_table(Document const& doc) {
        << (r.persistent ? 'P' : 'V') << " | " << r.id << " | " << r.modes
        << "\n";
   }
-  // modeled combined peak: the peak_profile_sweep recipe over the records
-  std::size_t npoints = 0;
-  for (auto const& v : values) npoints = std::max(npoints, v.last_use + 2);
-  std::vector<double> delta(npoints + 1, 0.0);
-  for (auto const& v : values) {
-    delta[v.first_use] += double(v.modeled_footprint);
-    delta[v.last_use + 1] -= double(v.modeled_footprint);
-  }
-  double runsum = 0, peak = 0;
-  std::size_t arg = 0;
-  for (std::size_t p = 0; p < npoints; ++p) {
-    runsum += delta[p];
-    if (runsum > peak) {
-      peak = runsum;
-      arg = p;
-    }
-  }
-  os << "  modeled peak " << human_bytes(peak) << " at static point " << arg
-     << "; realized peak " << human_bytes(double(run.peak_bytes)) << "\n"
-     << "  live at the modeled peak:";
-  for (auto const& v : values)
-    if (v.first_use <= arg && arg <= v.last_use) os << ' ' << v.id;
-  os << "\n  live at the realized peak:";
-  for (auto const& id : run.peak_live) os << ' ' << id;
-  os << "\n";
+  auto const print_peak = [&](char const* which,
+                              container::svector<LiveInterval> const& iv) {
+    PeakProfile const p = interval_peak_sweep(iv);
+    os << "  " << which << " peak " << human_bytes(p.peak_bytes)
+       << " at static point " << p.binding_point << "\n  live at the " << which
+       << " peak:";
+    for (std::size_t const i : p.live_at_binding) os << ' ' << values[i].id;
+    os << "\n";
+  };
+  print_peak("modeled", modeled);
+  print_peak("realized", realized);
   return os.str();
 }
 

@@ -11,7 +11,6 @@
 
 #include <functional>
 #include <optional>
-#include <set>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -249,31 +248,6 @@ class CellRegistry {
   /// when stored. A value that grows while held (a pending view that
   /// materializes) is counted at its stored size.
   [[nodiscard]] std::size_t live_bytes() const { return live_bytes_; }
-
-  /// Re-charges cell \p c's held value at \p bytes (what a measurement of it
-  /// found) instead of what \c set charged: the ordered run recorder
-  /// measures each production once (Result::measured_size_in_bytes, a
-  /// collective on the TiledArray backend) and hands the number here, so
-  /// live_bytes() is meaningful on an untraced build whenever a run is
-  /// being recorded. A no-op for a cell holding no value.
-  void recharge(CellId c, std::size_t bytes) {
-    Slot& s = slot(c);
-    if (!s.value) return;
-    discharge(s);
-    s.charged_bytes = bytes;
-    account(static_cast<std::ptrdiff_t>(bytes));
-  }
-
-  /// value ids (TableCell::value_id) of every slot currently holding a value,
-  /// each id once, in increasing cell order
-  [[nodiscard]] container::svector<std::size_t> live_value_ids() const {
-    container::svector<std::size_t> out;
-    std::set<std::size_t> seen;
-    for (CellId c = 0; c < slots_.size(); ++c)
-      if (slots_[c].value && seen.insert(table_->cells[c].value_id).second)
-        out.push_back(table_->cells[c].value_id);
-    return out;
-  }
 
   /// Invokes \p f(CellId, ResultPtr const&) for every slot currently holding
   /// a value -- the registry-side source \c on_peak_liveset walks once

@@ -539,14 +539,12 @@ template <typename ValueMap, typename Rich>
 ///   For a value assembled from per-batch partials (an Assemble step), this
 ///   is the largest per-batch partial, not the assembled size;
 /// - \c size: per value, the complete value's bytes: the assembled result
-///   once an Assemble step closes, else what the production left;
-/// - \c peak_bytes: the registry's live-bytes high-water with every
-///   production charged at its measured size (CellRegistry::recharge; the
-///   registry's own \c set charges \c size_in_bytes, 0 untraced, so the
-///   peak is tracked exactly when a run is recorded);
-/// - \c peak_live: the value ids alive when that high-water was last raised.
+///   once an Assemble step closes, else what the production left.
 /// A leaf's fetch is measured like a production but recorded apart, in
 /// \c leaf_bytes (CellReadResolver::on_leaf_recorded): it is not a build.
+/// The record carries no peak of its own: the realized peak is the same
+/// liveness sweep the modeled one is (schedule::size_audit_table), priced
+/// with these measured sizes.
 /// \c extents, \c batch_targets and \c planner are the caller's.
 ///
 /// \p value_id_of maps an engine value id (an index into \c rich.cells) to
@@ -569,47 +567,32 @@ struct OrderedRunRecorder {
   }
 
   /// One executed production of value \p vid, which left \p r in its cell.
-  /// \return the bytes measured for \p r (0 for a null result)
-  std::size_t built(std::size_t vid, ResultPtr const& r) {
+  void built(std::size_t vid, ResultPtr const& r) {
     std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
     ++run.builds[id];
-    if (!r) return 0;
+    if (!r) return;
     std::size_t const bytes = r->measured_size_in_bytes();
     auto& f = run.footprint[id];
     f = std::max(f, bytes);
     // the complete value, until an Assemble step closes over it
     if (!run.size.count(id)) run.size[id] = bytes;
-    return bytes;
   }
 
   /// The Assemble step of value \p vid closed, leaving \p r in its cell.
-  /// \return the bytes measured for \p r (0 for a null result)
-  std::size_t assembled(std::size_t vid, ResultPtr const& r) {
-    if (!r) return 0;
+  void assembled(std::size_t vid, ResultPtr const& r) {
+    if (!r) return;
     std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
-    std::size_t const bytes = r->measured_size_in_bytes();
-    run.size[id] = bytes;
-    return bytes;
+    run.size[id] = r->measured_size_in_bytes();
   }
 
   /// A leaf's result as the resolver fetched it: measured like a production
   /// but kept apart (RunRecord::leaf_bytes), since a fetch is not a build.
-  /// \return the bytes measured for \p r (0 for a null result)
-  std::size_t leaf(std::size_t vid, ResultPtr const& r) {
-    if (!r) return 0;
+  void leaf(std::size_t vid, ResultPtr const& r) {
+    if (!r) return;
     std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
-    std::size_t const bytes = r->measured_size_in_bytes();
     auto& f = run.leaf_bytes[id];
-    f = std::max(f, bytes);
-    return bytes;
+    f = std::max(f, r->measured_size_in_bytes());
   }
-
-  /// Realized high-water of the registry's live bytes (every production
-  /// charged at its measured size through CellRegistry::recharge) and the
-  /// value ids alive when it was last raised; folded into \c run
-  /// (peak_bytes, peak_live) at the end of the run.
-  std::size_t peak_bytes = 0;
-  container::svector<std::size_t> peak_live;
 };
 
 ///
@@ -941,9 +924,7 @@ void run_ordered_contracted_block(
                       compute_cell<EvalTrace>(build_node, *build_cell, resolver,
                                               leaf_evaluator, bs_cache, ctx)));
         if (recorder)
-          registry.recharge(
-              *build_cell,
-              recorder->built(build->value_id, registry.peek(*build_cell)));
+          recorder->built(build->value_id, registry.peek(*build_cell));
         // Diagnostic (SEQUANT_DUMP_ROOT_NORMS): root-scope builds by value
         // hash, for cross-schedule comparison of term values.
         if (static bool const dump_build_norms =
@@ -1011,8 +992,7 @@ void run_ordered_contracted_block(
                      canonical(part_node, compute_cell<EvalTrace>(
                                               part_node, src, resolver,
                                               leaf_evaluator, bs_cache, ctx)));
-        if (recorder)
-          registry.recharge(src, recorder->built(vid, registry.peek(src)));
+        if (recorder) recorder->built(vid, registry.peek(src));
       }
       // The read the Assemble declares of its source. When the schedule has
       // no later use of the source in this batch, the Assemble takes the
@@ -1103,9 +1083,7 @@ void run_ordered_contracted_block(
           "the Assemble step of value " +
           std::to_string(vid) + " (cell#" + std::to_string(out_cells[k]) + ")");
     registry.set(out_cells[k], std::move(out));
-    if (recorder)
-      registry.recharge(out_cells[k],
-                        recorder->assembled(vid, registry.peek(out_cells[k])));
+    if (recorder) recorder->assembled(vid, registry.peek(out_cells[k]));
     if constexpr (::sequant::detail::trace(EvalTrace))
       log::cache(resolve(vid), parent_cache,
                  log::label(resolve(vid), parent_cache.batch_context()) +
@@ -1329,22 +1307,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // fill-once check (\c CellRegistry::set), not just \c CacheManager's --
   // deterministic regardless of when in the process this call happens.
   registry_hooks.strict_fill_once = cache.strict_fill_once();
-  // Realized peak (run record only): every production is re-charged at the
-  // recorder's measured bytes, so the registry's live total is the realized
-  // co-resident footprint of the table's values; track its high-water and
-  // the value ids alive when it was last raised. The registry is built after
-  // its hooks, so the hook reaches it through a slot filled right after.
-  CellRegistry* registry_for_peak = nullptr;
-  if (recorder)
-    registry_hooks.on_bytes_changed = [&recorder,
-                                       &registry_for_peak](std::size_t live) {
-      if (live > recorder->peak_bytes && registry_for_peak) {
-        recorder->peak_bytes = live;
-        recorder->peak_live = registry_for_peak->live_value_ids();
-      }
-    };
   CellRegistry registry(cell_table, std::move(registry_hooks));
-  registry_for_peak = &registry;
   // Invariant: at most one persistent cell per value. The persistent store is
   // keyed by the value's canonical hash, so two persistent cells of one value
   // (a persistent Build inside a nest and a persistent Assemble at root, say)
@@ -1393,12 +1356,12 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
         if (it == cell_vid_of_key.end()) return std::nullopt;
         return it->second;
       });
-  // Leaves are stored by the resolver on first touch; record and re-charge
-  // them like any other production (see OrderedRunRecorder::built).
+  // Leaves are stored by the resolver on first touch; measure them like any
+  // other production (see OrderedRunRecorder::leaf).
   if (recorder)
     resolver.on_leaf_recorded = [&registry, &recorder](std::size_t vid,
                                                        CellId leaf) {
-      registry.recharge(leaf, recorder->leaf(vid, registry.peek(leaf)));
+      recorder->leaf(vid, registry.peek(leaf));
     };
   struct CellReadResolverGuard {
     CacheManager<N, FHC>& c;
@@ -1544,9 +1507,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
         // the combine below instead of a crash in the phase conversion.
         registry.set(*root_cell,
                      (!r || ph == 1) ? std::move(r) : r->mult_by_phase(ph));
-        if (recorder)
-          registry.recharge(*root_cell,
-                            recorder->built(vid, registry.peek(*root_cell)));
+        if (recorder) recorder->built(vid, registry.peek(*root_cell));
         // Diagnostic (SEQUANT_DUMP_ROOT_NORMS): root-scope builds by value
         // hash, for cross-schedule comparison of term values.
         if (static bool const dump_build_norms =
@@ -1577,15 +1538,6 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // check, which checks no duplicate production but not completeness (see
   // ordered_schedule.hpp well_formed's \note). A gap here means the executor
   // skipped a scheduled value: a silent under-execution to refuse, not ignore.
-  if (recorder) {
-    recorder->run.peak_bytes = recorder->peak_bytes;
-    recorder->run.peak_live.clear();
-    for (std::size_t const vid : recorder->peak_live)
-      recorder->run.peak_live.push_back(recorder->value_id_of
-                                            ? recorder->value_id_of(vid)
-                                            : std::to_string(vid));
-  }
-
   {
     container::vector<std::size_t> production_ids;
     collect_production_ids(ordered.root, production_ids);
