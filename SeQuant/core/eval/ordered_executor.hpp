@@ -540,6 +540,14 @@ template <typename ValueMap, typename Rich>
 ///   is the largest per-batch partial, not the assembled size;
 /// - \c size: per value, the complete value's bytes: the assembled result
 ///   once an Assemble step closes, else what the production left.
+/// A leaf's fetch is measured like a production but recorded apart, in
+/// \c leaf_bytes (CellReadResolver::on_leaf_recorded): it is not a build.
+/// A persistent value seeded from the previous run is measured at seeding,
+/// into \c footprint and \c size (\c seeded) or, for a leaf, \c leaf_bytes,
+/// and not counted as a build.
+/// The record carries no peak of its own: the realized peak is the same
+/// liveness sweep the modeled one is (schedule::size_audit_table), priced
+/// with these measured sizes.
 /// \c extents, \c batch_targets and \c planner are the caller's.
 ///
 /// \p value_id_of maps an engine value id (an index into \c rich.cells) to
@@ -578,6 +586,28 @@ struct OrderedRunRecorder {
     if (!r) return;
     std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
     run.size[id] = r->measured_size_in_bytes();
+  }
+
+  /// A leaf's result as the resolver fetched it: measured like a production
+  /// but kept apart (RunRecord::leaf_bytes), since a fetch is not a build.
+  void leaf(std::size_t vid, ResultPtr const& r) {
+    if (!r) return;
+    std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
+    auto& f = run.leaf_bytes[id];
+    f = std::max(f, r->measured_size_in_bytes());
+  }
+
+  /// A persistent non-leaf value \p r seeded into its cell from the previous
+  /// run: measured into footprint and size like a production of it, but not
+  /// a build (a production of it later in this run re-measures it). For a
+  /// value assembled per batch this is the whole value, not a partial.
+  void seeded(std::size_t vid, ResultPtr const& r) {
+    if (!r) return;
+    std::string const id = value_id_of ? value_id_of(vid) : std::to_string(vid);
+    std::size_t const bytes = r->measured_size_in_bytes();
+    auto& f = run.footprint[id];
+    f = std::max(f, bytes);
+    if (!run.size.count(id)) run.size[id] = bytes;
   }
 };
 
@@ -1326,6 +1356,20 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           offenders);
   }
   registry.seed_persistent();
+  // A persistent value seeded from the previous run is live in this one
+  // without a production of its own; measure it like one (see
+  // OrderedRunRecorder::seeded; a seeded leaf is a leaf, see leaf) so the
+  // record prices every value the run holds, not only those it builds. Cell
+  // order on every rank: the measurement is collective on the TiledArray
+  // backend.
+  if (recorder)
+    registry.for_each_live([&](CellId c, ResultPtr const& r) {
+      TableCell const& cell = cell_table.cells[c];
+      if (cell.production.kind == ProductionKind::Leaf)
+        recorder->leaf(cell.value_id, r);
+      else
+        recorder->seeded(cell.value_id, r);
+    });
   // value id -> value_id: the resolver's operand lookup (the evaluator hands
   // it value_key_of(operand node), see eval.hpp's fetch/record_leaf/
   // operand_drained sites).
@@ -1342,6 +1386,13 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
         if (it == cell_vid_of_key.end()) return std::nullopt;
         return it->second;
       });
+  // Leaves are stored by the resolver on first touch; measure them like any
+  // other production (see OrderedRunRecorder::leaf).
+  if (recorder)
+    resolver.on_leaf_recorded = [&registry, &recorder](std::size_t vid,
+                                                       CellId leaf) {
+      recorder->leaf(vid, registry.peek(leaf));
+    };
   struct CellReadResolverGuard {
     CacheManager<N, FHC>& c;
     CellReadResolver* prev;

@@ -514,8 +514,17 @@ class CellReadResolver {
   /// not a value of the table or names no Leaf cell.
   void record_leaf(std::size_t hash, ResultPtr r) {
     if (auto vid = vid_of_hash_(hash))
-      if (auto leaf = reg_->leaf_cell(*vid)) reg_->set(*leaf, std::move(r));
+      if (auto leaf = reg_->leaf_cell(*vid)) {
+        reg_->set(*leaf, std::move(r));
+        if (on_leaf_recorded) on_leaf_recorded(*vid, *leaf);
+      }
   }
+
+  /// Optional: invoked right after \c record_leaf stored a leaf's result,
+  /// with the leaf's value id and cell, so a run recorder can measure the
+  /// leaf like any other production (leaves are the largest values of a
+  /// CSV residual's table). Empty by default.
+  std::function<void(std::size_t vid, CellId leaf)> on_leaf_recorded;
 
   /// Whether \p operand_node_hash's operand is currently safe for
   /// in-place accumulation -- the registry-derived counterpart of the

@@ -340,6 +340,90 @@ TEST_CASE("schedule document round-trips the dag and run sections",
   REQUIRE(summary_line(d2) == "roots=1 terms=1 values=2 blocks=2 depth=0");
 }
 
+TEST_CASE("schedule document round-trips modeled sizes and leaf bytes",
+          "[schedule-document]") {
+  auto d = make_dag_doc();
+  d.dag->values[0].modeled_footprint = 4096;
+  d.dag->values[0].modeled_size = 65536;
+  d.run->leaf_bytes = {{"v1", 777}};
+  auto const back = from_json(to_json(d));
+  REQUIRE(compare(d, back).empty());
+  CHECK(back.run->leaf_bytes.at("v1") == 777);
+  CHECK(back.dag->values[0].modeled_footprint == 4096);
+  CHECK(back.dag->values[0].modeled_size == 65536);
+  CHECK(back.dag->values[1].modeled_footprint == 0);  // absent => 0
+  // the modeled sizes depend on the cost model, not on the schedule: two
+  // documents of one plan priced differently are structurally the same
+  auto repriced = d;
+  repriced.dag->values[0].modeled_footprint = 1;
+  repriced.dag->values[1].modeled_size = 2;
+  CHECK(compare(d, repriced).empty());
+  // a document written before these fields existed still reads (an empty
+  // leaf_bytes prints on one line, so a line strip removes the whole key)
+  d.run->leaf_bytes.clear();
+  auto old = to_json(d);
+  auto const strip = [&old](std::string const& key) {
+    auto const p = old.find("\"" + key + "\"");
+    REQUIRE(p != std::string::npos);
+    auto const comma = old.find('\n', p);
+    old.erase(p, comma - p + 1);
+  };
+  strip("modeled_footprint");
+  strip("leaf_bytes");
+  auto const older = from_json(old);
+  CHECK(older.dag->values[0].modeled_footprint == 0);
+  CHECK(older.run->leaf_bytes.empty());
+  // a run section written with the peak keys of an earlier draft still reads
+  old.insert(old.find("\"builds\""),
+             "\"peak_bytes\": 5, \"peak_live\": [\"v0\"],\n");
+  CHECK_NOTHROW(from_json(old));
+}
+
+TEST_CASE("size audit table ranks values and sweeps both peaks",
+          "[schedule-document]") {
+  auto d = make_dag_doc();  // two values v0 and v1
+  d.dag->values[0].modeled_footprint = 100;
+  d.dag->values[0].modeled_size = 100;
+  d.dag->values[1].modeled_footprint = 50;
+  d.dag->values[1].modeled_size = 200;
+  d.dag->values[0].first_use = 0;
+  d.dag->values[0].last_use = 2;
+  d.dag->values[1].first_use = 1;
+  d.dag->values[1].last_use = 1;
+  d.run->footprint = {{"v0", 100}, {"v1", 25}};
+  d.run->size = {{"v0", 100}, {"v1", 100}};
+  d.run->builds = {{"v0", 1}, {"v1", 4}};
+  std::string const t = size_audit_table(d);
+  // one row per value, realized-descending: v0 (100) before v1 (25)
+  auto const r0 = t.find("| v0 |"), r1 = t.find("| v1 |");
+  REQUIRE(r0 != std::string::npos);
+  REQUIRE(r1 != std::string::npos);
+  CHECK(r0 < r1);
+  // the ratio column: realized / modeled slab
+  CHECK(t.find("0.50") != std::string::npos);  // v1: 25 / 50
+  // both peaks are the sweep over [first_use, last_use], the modeled one of
+  // the modeled slabs (100 + 50 at point 1), the realized one of the
+  // realized slabs (100 + 25 at point 1)
+  CHECK(t.find("modeled peak 150 B at static point 1") != std::string::npos);
+  CHECK(t.find("realized peak 125 B at static point 1") != std::string::npos);
+  CHECK(t.find("live at the modeled peak: v0 v1") != std::string::npos);
+  CHECK(t.find("live at the realized peak: v0 v1") != std::string::npos);
+  // a leaf's realized slab is its fetched size, and a value the run never
+  // produced weighs nothing: v1 as a leaf of 60 bytes moves the realized peak
+  // to point 1 with 100 + 60, while dropping v0's record makes v1 alone the
+  // realized peak
+  d.run->leaf_bytes = {{"v1", 60}};
+  CHECK(size_audit_table(d).find("realized peak 160 B at static point 1") !=
+        std::string::npos);
+  d.run->footprint.erase("v0");
+  CHECK(size_audit_table(d).find("realized peak 60 B at static point 1") !=
+        std::string::npos);
+  // no dag or run section: refused
+  auto bare = d;
+  bare.run.reset();
+  CHECK_THROWS_AS(size_audit_table(bare), sequant::Exception);
+}
+
 TEST_CASE("run section round-trips alone and JSON is made script-safe",
           "[schedule-document]") {
   using Catch::Matchers::ContainsSubstring;

@@ -2832,7 +2832,7 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
         forest, std::move(labels), opts, mode_order);
     doc->roots = roots;
     doc->dag = sched::record_dag(rich, legality, *ordered_opt, forest, roots,
-                                 is_volatile_node);
+                                 is_volatile_node, cm.get(), block_of);
     value_id_of = [&doc](std::size_t vid) {
       return doc->dag->values.at(vid).id;
     };
@@ -5674,4 +5674,219 @@ TEST_CASE("ordered-multiroot-batched-power",
     REQUIRE(ref->size_in_bytes() == 10 * 10 * 8);  // E{i_3;i_2}
     CHECK(res[r]->size_in_bytes() == ref->size_in_bytes());
   }
+}
+
+TEST_CASE("record_dag prices values when given a cost model",
+          "[ordered-executor][schedule-document]") {
+  namespace sched = sequant::eval::schedule;
+  // one tree, one term: the root record's single term key names the term
+  std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b")};
+  sequant::BatchPolicy const policy;
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  std::function<std::size_t(Index const&)> const block_of =
+      [](Index const&) -> std::size_t { return 1; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+  std::vector<sched::RootRecord> roots(1);
+  roots[0].label = "R";
+  roots[0].terms.resize(1);
+  roots[0].terms[0].key = "2 a b";
+  // unpriced: every modeled field stays 0
+  auto const bare = sched::record_dag(rich, legality, ordered, forest, roots);
+  REQUIRE(bare.values.size() == rich.cells.size());
+  for (auto const& v : bare.values) {
+    CHECK(v.modeled_footprint == 0);
+    CHECK(v.modeled_size == 0);
+  }
+  // priced: each value carries what the model says for its own cell
+  auto const priced = sched::record_dag(rich, legality, ordered, forest, roots,
+                                        {}, &cm, block_of);
+  REQUIRE(priced.values.size() == rich.cells.size());
+  for (std::size_t v = 0; v < rich.cells.size(); ++v) {
+    auto const& c = rich.cells[v];
+    CHECK(priced.values[v].modeled_footprint ==
+          sequant::eval::detail::cell_footprint(c.carried, c.home_modes, cm,
+                                                block_of));
+    CHECK(priced.values[v].modeled_size ==
+          cm.memsize(sequant::container::svector<sequant::Index>(
+              c.carried.begin(), c.carried.end())));
+  }
+}
+
+TEST_CASE("size audit sweeps the realized peak over the run's measured sizes",
+          "[ordered-executor][schedule-document]") {
+  namespace sched = sequant::eval::schedule;
+  // 2 * a * b: a, b, their product, the constant and the scaled product; a
+  // production's operands are live through its own point, so three scalars
+  // are co-resident at the product (a, b, a*b) and again at the scaling
+  // (a*b, 2, 2*a*b)
+  std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b")};
+  ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}}};
+  sequant::BatchPolicy const policy;
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  std::function<std::size_t(Index const&)> const block_of =
+      [](Index const&) -> std::size_t { return 1; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+  sched::Document doc;
+  doc.roots.resize(1);
+  doc.roots[0].label = "R";
+  doc.roots[0].terms.resize(1);
+  doc.roots[0].terms[0].key = "2 a b";
+  doc.dag = sched::record_dag(rich, legality, ordered, forest, doc.roots, {},
+                              &cm, block_of);
+  REQUIRE(doc.dag->values.size() == 5);
+  auto cache = sequant::CacheManager<ScalarNode>::empty();
+  sched::RunRecord run;
+  std::function<std::string(std::size_t)> const id_of = [&doc](std::size_t v) {
+    return doc.dag->values.at(v).id;
+  };
+  (void)sequant::eval::evaluate_ordered_multiroot(
+      forest, ordered, rich,
+      sequant::container::svector<std::string>(forest.size()), yield, cache,
+      block_of, sequant::make_no_scope_guard{}, {}, &run, id_of);
+  // every production of a scalar leaves sizeof(double) bytes; the leaves a,
+  // b and 2 were fetched and measured, never built
+  REQUIRE(run.footprint.size() == 2);
+  for (auto const& [id, bytes] : run.footprint) CHECK(bytes == sizeof(double));
+  REQUIRE(run.leaf_bytes.size() == 3);
+  for (auto const& [id, bytes] : run.leaf_bytes) {
+    CHECK(bytes == sizeof(double));
+    CHECK(run.builds.count(id) == 0);
+  }
+  doc.run = std::move(run);
+  std::string const table = sched::size_audit_table(doc);
+  // three scalars at the product's point, which is the lower of the two
+  // equal maxima; the realized peak is what the executor measured swept
+  // over the dag's liveness, not what the cell registry happened to hold
+  // (it gives a taken operand away before the production that reads it is
+  // stored)
+  std::string const live_at_peak = [&] {
+    std::string s;
+    for (std::size_t v = 0; v < 3; ++v) s += ' ' + doc.dag->values[v].id;
+    return s;
+  }();
+  CAPTURE(table);
+  CHECK(table.find("realized peak 24 B at static point 2") !=
+        std::string::npos);
+  CHECK(table.find("live at the realized peak:" + live_at_peak + "\n") !=
+        std::string::npos);
+}
+
+TEST_CASE("run record measures persistent values seeded from the previous run",
+          "[ordered-executor][schedule-document]") {
+  namespace sched = sequant::eval::schedule;
+  // no leaf is volatile, so the root is persistent: the second evaluation on
+  // the same cache seeds it from the store and builds nothing (every other
+  // value's only consumer is skipped), yet the record must still price it
+  std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b")};
+  ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}}};
+  sequant::BatchPolicy const policy;
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  std::function<std::size_t(Index const&)> const block_of =
+      [](Index const&) -> std::size_t { return 1; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+  std::vector<sched::RootRecord> roots(1);
+  roots[0].label = "R";
+  roots[0].terms.resize(1);
+  roots[0].terms[0].key = "2 a b";
+  auto const dag = sched::record_dag(rich, legality, ordered, forest, roots);
+  auto cache = sequant::CacheManager<ScalarNode>::empty();
+  std::function<std::string(std::size_t)> const id_of = [&dag](std::size_t v) {
+    return dag.values.at(v).id;
+  };
+  auto const evaluate = [&](sched::RunRecord& run) {
+    return sequant::eval::evaluate_ordered_multiroot(
+        forest, ordered, rich,
+        sequant::container::svector<std::string>(forest.size()), yield, cache,
+        block_of, sequant::make_no_scope_guard{}, {}, &run, id_of);
+  };
+  sched::RunRecord first, second;
+  auto const r1 = evaluate(first);
+  auto const r2 = evaluate(second);
+  REQUIRE(r1.size() == 1);
+  REQUIRE(r2.size() == 1);
+  CHECK(r1[0]->get<double>() == r2[0]->get<double>());
+  REQUIRE(!first.builds.empty());
+  CHECK(second.builds.empty());
+  CHECK(second.leaf_bytes.empty());
+  std::size_t persistent = 0;
+  for (auto const& v : dag.values) {
+    if (v.persistent) {
+      ++persistent;
+      // seeded: held at the bytes the first run measured, not built
+      REQUIRE(second.footprint.count(v.id) == 1);
+      CHECK(second.footprint.at(v.id) == first.footprint.at(v.id));
+      CHECK(second.size.at(v.id) == first.size.at(v.id));
+    } else {
+      CHECK(second.footprint.count(v.id) == 0);
+    }
+  }
+  CHECK(persistent == 1);
+}
+
+TEST_CASE("run record records a seeded persistent leaf as a leaf",
+          "[ordered-executor][schedule-document]") {
+  namespace sched = sequant::eval::schedule;
+  // a * b with b volatile: a is a non-volatile leaf whose only consumer is
+  // volatile, so its leaf cell stays persistent and the second evaluation
+  // seeds it instead of fetching it; it is still a leaf, so its bytes go to
+  // leaf_bytes, never to footprint
+  std::vector<ScalarNode> forest{scalar_tree(L"a * b")};
+  ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}}};
+  std::function<bool(ScalarNode const&)> const is_volatile =
+      [](ScalarNode const& n) -> bool {
+    return n.leaf() && n->expr()->is<sequant::Variable>() &&
+           n->expr()->as<sequant::Variable>().label() == L"b";
+  };
+  sequant::BatchPolicy const policy;
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  std::function<std::size_t(Index const&)> const block_of =
+      [](Index const&) -> std::size_t { return 1; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+  std::vector<sched::RootRecord> roots(1);
+  roots[0].label = "R";
+  roots[0].terms.resize(1);
+  roots[0].terms[0].key = "a b";
+  auto const dag =
+      sched::record_dag(rich, legality, ordered, forest, roots, is_volatile);
+  auto cache = sequant::CacheManager<ScalarNode>::empty();
+  std::function<std::string(std::size_t)> const id_of = [&dag](std::size_t v) {
+    return dag.values.at(v).id;
+  };
+  auto const evaluate = [&](sched::RunRecord& run) {
+    return sequant::eval::evaluate_ordered_multiroot(
+        forest, ordered, rich,
+        sequant::container::svector<std::string>(forest.size()), yield, cache,
+        block_of, sequant::make_no_scope_guard{}, is_volatile, &run, id_of);
+  };
+  sched::RunRecord first, second;
+  (void)evaluate(first);
+  (void)evaluate(second);
+  std::string a_id, b_id;
+  for (auto const& v : dag.values)
+    if (v.leaf) (v.persistent ? a_id : b_id) = v.id;
+  REQUIRE(!a_id.empty());
+  REQUIRE(!b_id.empty());
+  CHECK(first.leaf_bytes.at(a_id) == sizeof(double));
+  CHECK(second.leaf_bytes.at(a_id) == sizeof(double));
+  CHECK(second.leaf_bytes.at(b_id) == sizeof(double));
+  CHECK(second.footprint.count(a_id) == 0);
+  CHECK(second.size.count(a_id) == 0);
+  // the product is volatile: built again, not seeded
+  CHECK(second.builds.size() == 1);
 }

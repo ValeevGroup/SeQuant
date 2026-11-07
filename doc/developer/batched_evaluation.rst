@@ -209,9 +209,13 @@ labels: a root must be spelled with the same external labels on every run that p
 binarized forest a document was recorded for, and ``check_fingerprint``, run after binarization and before the DAG
 stages, throws when a loaded document's fingerprint no longer matches the live forest's. ``eval::schedule::record_dag`` (``SeQuant/core/eval/schedule_dag_record.hpp``) builds the ``dag``
 section from a rich schedule, its legality and the volatility predicate the evaluation runs with (a value's
-``persistent`` is the cell table's own flag). The ordered entry points in ``ordered_executor.hpp`` take an optional
-``RunRecord*`` out-parameter that is filled with the ``run`` section. The ``sequant-schedule`` command-line tool validates,
-diffs and renders documents.
+``persistent`` is the cell table's own flag); given a cost model it also prices every value (its home-relative slab and
+its full size). The ordered entry points in ``ordered_executor.hpp`` take an optional ``RunRecord*`` out-parameter that
+is filled with the ``run`` section: per value, the bytes the backend measured for what each production, leaf fetch or
+seeding left in the value's cell. ``size_audit_table`` sets the two side by side, per value and as a peak: both peaks are
+the same liveness sweep over the ``dag`` section, one priced by the model and one by the run, so a mis-sized value or a
+peak the model misses shows up as a ratio rather than as a number without a reference. The ``sequant-schedule``
+command-line tool validates, diffs and renders documents.
 
 Current scope
 ----------------
