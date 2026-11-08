@@ -188,7 +188,11 @@ Dry runs and diagnostics
 The sizing backend in ``SeQuant/core/eval/backends/dryrun/`` stores descriptors instead of tensors and checks
 shared-label ranges on every operation. :func:`sequant::eval::dryrun::meter` drives the same ``evaluate`` entry point
 as a real run and reports the realized peak and work, checking the runtime's scheduling and accounting rather than
-the optimizer's per-product estimate. It assumes real double-precision data.
+the optimizer's per-product estimate. It assumes real double-precision data. Every slice, permutation and phase change
+it makes is priced as a copy, also where a backend (TiledArray, for one) keeps a lazy view that holds no memory of its
+own, so for batched schedules the metered peak is a conservative estimate of what such a backend keeps resident. It is
+not a bound on process memory either way: transients inside a production and the backend's own temporaries are not
+modeled.
 
 ``SeQuant/core/eval/ordered_dump.hpp`` provides environment-gated dumps of each pipeline stage;
 :doc:`/user/guide/evaluation` explains how to read evaluation traces.
