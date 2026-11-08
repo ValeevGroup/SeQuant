@@ -1506,6 +1506,32 @@ TEST_CASE("utilities", "[utilities]") {
     }
   }
 
+  SECTION("strongly_connected_components_indexed") {
+    // 0 -> 1 -> 2 -> 0 is one component; 3 depends on 1 and on 4; 4 -> 5
+    // -> 4 is another; 6 depends on nothing.
+    std::vector<std::vector<std::size_t>> const deps{{1}, {2}, {0}, {1, 4},
+                                                     {5}, {4}, {}};
+    auto const get_deps = [&](std::size_t i) -> const auto& {
+      return deps.at(i);
+    };
+    auto const c = strongly_connected_components_indexed(deps.size(), get_deps);
+    REQUIRE(c.size() == deps.size());
+    CHECK(c[0] == c[1]);
+    CHECK(c[1] == c[2]);
+    CHECK(c[4] == c[5]);
+    CHECK(c[0] != c[4]);
+    CHECK(c[3] != c[0]);
+    CHECK(c[3] != c[4]);
+    CHECK(c[6] != c[3]);
+    // a component completes after the components it depends on
+    CHECK(c[3] > c[0]);
+    CHECK(c[3] > c[4]);
+    std::size_t n_components = 0;
+    for (std::size_t x : c) n_components = std::max(n_components, x + 1);
+    CHECK(n_components == 4);
+    CHECK(strongly_connected_components_indexed(0, get_deps).empty());
+  }
+
   SECTION("topological_order_indexed") {
     std::vector<std::pair<std::vector<std::vector<std::size_t>>,
                           std::vector<std::size_t>>>

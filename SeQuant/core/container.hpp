@@ -26,6 +26,10 @@ template <typename T>
 using vector = std::vector<T>;
 template <typename T, std::size_t N = 8>
 using svector = boost::container::small_vector<T, N>;
+/// Any \c svector<T, N>, whatever its inline capacity N: a parameter of this
+/// type accepts every \c svector of \c T by reference.
+template <typename T>
+using svector_base = boost::container::small_vector_base<T>;
 
 template <typename Key, typename Compare = std::less<Key>>
 using set = boost::container::flat_set<Key, Compare>;

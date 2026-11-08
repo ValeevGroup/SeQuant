@@ -214,20 +214,17 @@ struct RunRecord {
   std::map<std::string, std::size_t> extents, batch_targets;  // by space
   std::map<std::size_t, std::size_t> n_batches;  // block id -> count
   /// value id -> bytes (largest result a production left in its cell: a
-  /// per-batch slice or partial inside a loop block)
+  /// per-batch slice or partial inside a loop block; a persistent value
+  /// seeded from the previous run and not re-produced is measured at
+  /// seeding, as the whole value it then holds)
   std::map<std::string, std::size_t> footprint;
   /// value id -> bytes of the complete value: the assembled result of a value
   /// produced per batch, else what its production left
   std::map<std::string, std::size_t> size;
   std::map<std::string, std::size_t> builds;  // value id -> build count
-  /// realized co-resident high-water of the cell registry over the recorded
-  /// run (bytes, summed over ranks the way measured_size_in_bytes sums), 0
-  /// when not tracked
-  std::size_t peak_bytes = 0;
-  /// value ids alive in the registry when peak_bytes was reached
-  std::vector<std::string> peak_live;
-  /// value id -> bytes of a leaf as the executor fetched it (the largest
-  /// form, when it was fetched more than once); leaves are not productions,
+  /// value id -> bytes of a leaf as the executor fetched it or, persistent,
+  /// seeded it (the largest form, when more than once); leaves are not
+  /// productions,
   /// so they appear here and never in builds / footprint / size
   std::map<std::string, std::size_t> leaf_bytes;
   /// optimizer settings excluded from the fingerprint
@@ -267,7 +264,8 @@ struct Difference {
 };
 
 /// structural comparison; ignores `run`, `producer_*` and, on DAG values,
-/// `hash`, `key`, `first_use`, `last_use`
+/// `hash`, `key`, `first_use`, `last_use`, `modeled_footprint`,
+/// `modeled_size`
 std::vector<Difference> compare(Document const& a, Document const& b);
 
 /// "roots=<n> terms=<n> values=<n> blocks=<n> depth=<n>"; the last three are
@@ -275,15 +273,20 @@ std::vector<Difference> compare(Document const& a, Document const& b);
 /// the block tree (number of ancestors of a block), not BlockRecord::depth
 std::string summary_line(Document const&);
 
-/// The size audit: one row per dag value, ranked by realized bytes
-/// (RunRecord::footprint), with the modeled slab (ValueRecord::
-/// modeled_footprint), the modeled full size, the realized full size, the
-/// build count and the realized/modeled slab ratio; then the modeled
-/// combined peak (an interval sweep of modeled_footprint over
-/// [first_use, last_use]) with its live value ids, and the realized peak
-/// (RunRecord::peak_bytes) with its live ids. Rows for values the run never
-/// produced print 0 realized. Byte columns print as "<n> B" below 1e6 and in
-/// MB/GB above; the ratio with two decimals.
+/// The size audit: one row per dag value, ranked by its realized slab
+/// (RunRecord::leaf_bytes for a leaf, else RunRecord::footprint), with the
+/// modeled slab (ValueRecord::modeled_footprint), the modeled full size, the
+/// realized full size, the build count and the realized/modeled slab ratio;
+/// then the modeled and the realized combined peak, each with its static
+/// point and its live value ids. Both peaks are the same interval sweep over
+/// the dag's [first_use, last_use] liveness (eval::interval_peak_sweep), the
+/// modeled one of modeled_footprint, the realized one of the realized slab:
+/// structural liveness priced with the sizes the run measured, so the two are
+/// comparable term for term. Neither sees memory outside the table's values
+/// (an operand's buffer a backend task still reads, a transient inside a
+/// production tree, a backend's own temporaries). Rows for values the run
+/// never produced print 0 realized. Byte columns print as "<n> B" below 1e6
+/// and in MB/GB above; the ratio with two decimals.
 /// \throws Exception when the document has no dag or run section
 std::string size_audit_table(Document const& doc);
 

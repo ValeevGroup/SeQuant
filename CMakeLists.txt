@@ -555,6 +555,7 @@ set(SeQuant_eval_src
         SeQuant/core/eval/ordered_schedule.hpp
         SeQuant/core/eval/peak_monitor.hpp
         SeQuant/core/eval/peak_profile.hpp
+        SeQuant/core/eval/release_plan.hpp
         SeQuant/core/eval/result.cpp
         SeQuant/core/eval/result.hpp
         SeQuant/core/eval/schedule_dag_record.hpp

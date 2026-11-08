@@ -2,6 +2,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
@@ -4715,8 +4716,16 @@ TEST_CASE("ordered-vs-forest-reset", "[eval][ordered-executor]") {
 // volatile, recomputed with the new 't'); root F2 = S*(p*q) has no 't'
 // (persistent). If ordered disagrees with forest descent on iteration 2, the
 // batched path leaks stale 't'-dependent state across reset.
+//
+// It runs once per cache reuse threshold (min_repeats): 1 registers every
+// eligible internal node in the cache's node-keyed map, 2 only the repeated
+// ones plus the persistent frontier, and 1000000 the frontier alone. The
+// ordered executor takes values, lives and persistence from its cell table
+// and the persistent store, not from that map, so its result must not depend
+// on the threshold -- which is what lets MPQC hand it the same
+// eval:cache:min_repeats (default 2) as forest descent.
 TEST_CASE("ordered-vs-forest-reset-batched",
-          "[eval][ordered-executor][ordered-crossiter-bug]") {
+          "[eval][ordered-executor][ordered-crossiter-bug][cache_manager]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -4781,9 +4790,27 @@ TEST_CASE("ordered-vs-forest-reset-batched",
 
   std::function<std::size_t(sequant::Index const&)> const target_batch =
       [](sequant::Index const&) -> std::size_t { return 4; };
-  auto cache = sequant::cache_manager(forest, is_vol_leaf);
+  auto const min_repeats =
+      GENERATE(std::size_t{1}, std::size_t{2}, std::size_t{1000000});
+  INFO("min_repeats = " << min_repeats);
+  auto cache = sequant::cache_manager(forest, is_vol_leaf, min_repeats);
   auto aops = yield_.array_ops();
   cache.set_array_ops(&aops);
+
+  // The threshold really changes what the map holds. At 1 it registers the two
+  // roots; S, t*q and p*q carry the batched x_1 and are refused run-scope
+  // residence whatever the threshold. Above 1 nothing qualifies, so the map is
+  // empty and the ordered executor must manage on its cell table and
+  // persistent store alone.
+  auto const n_keys = [](auto const& c) {
+    std::size_t n = 0;
+    c.for_each_key([&n](node_t const&) { ++n; });
+    return n;
+  };
+  auto const n_keys_at_1 =
+      n_keys(sequant::cache_manager(forest, is_vol_leaf, std::size_t{1}));
+  REQUIRE(n_keys_at_1 > 0);
+  if (min_repeats > 1) CHECK(n_keys(cache) < n_keys_at_1);
 
   auto const ref1 = evaluate(forest, target, yield_)->get<TArrayD>();
   auto const got1 =
@@ -8264,10 +8291,11 @@ TEST_CASE("eval_trace_charges_a_lazy_view_zero_bytes", "[eval][view][trace]") {
   INFO("trace line: " << line);
   // alloc=0B -- the view allocated nothing ...
   REQUIRE(line.find("alloc=0B") != std::string::npos);
-  // ... while result= carries the value's logical size (non-zero)
+  // ... and result= measures it at 0 while its parent is still held (the
+  // storage is counted once, on the holder; see measured_size_in_bytes)
   auto const rpos = line.find("result=");
   REQUIRE(rpos != std::string::npos);
-  REQUIRE(line.compare(rpos, 9, "result=0B") != 0);
+  REQUIRE(line.compare(rpos, 9, "result=0B") == 0);
 }
 
 TEST_CASE("result_apply_transform_ta", "[eval][conj-transform]") {
@@ -8962,8 +8990,9 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     auto s = rA->slice_mode(1, 2, 6);
     REQUIRE(s->is_buffer_alias());
     REQUIRE(s->size_in_bytes() == 0);  // untraced: nothing is measured
-    // the measured size is the logical size of the slice it stands for
-    REQUIRE(s->measured_size_in_bytes() > 0);
+    // measured 0 while the parent is held: the storage is counted once, on
+    // the holder (see measured_size_in_bytes)
+    REQUIRE(s->measured_size_in_bytes() == 0);
     auto const exp = eager_block(A, "a,b,c", {0, 1, 0}, {3, 3, 2});
     // the layout it reports is the slice's, without materializing
     std::ostringstream os;
@@ -9407,8 +9436,9 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     auto c = eval_result<ResultScalar<double>>(2.5);
     auto scaled = rA->prod(*c, annot3("a,b,c", "", "a,b,c"), DeNest::False);
     REQUIRE(scaled->is_buffer_alias());
-    // a view measures the logical size of the value it stands for
-    REQUIRE(scaled->measured_size_in_bytes() == rA->measured_size_in_bytes());
+    // a view of a held parent measures 0: its storage is counted on the holder
+    REQUIRE(scaled->measured_size_in_bytes() == 0);
+    REQUIRE(rA->measured_size_in_bytes() > 0);
     REQUIRE(scaled->as<ResultD>().logical_trange() == trA);
     // the scalar on the left (ResultScalar::prod forwards to the tensor)
     auto scaledL = c->prod(*rA, annot3("", "a,b,c", "a,b,c"), DeNest::False);
@@ -9466,9 +9496,10 @@ TEST_CASE("ta_lazy_views", "[eval][ta][lazy]") {
     auto sole = eval_result<ResultD>(TA::clone(A))->mult_by_phase(-1);
     REQUIRE(sole->is_buffer_alias());
     REQUIRE(sole->measured_size_in_bytes() == bytes);
-    // and so does a view of a parent held elsewhere: the logical size (the
-    // tracer charges the view no allocation through is_buffer_alias())
-    REQUIRE(rA->mult_by_phase(-1)->measured_size_in_bytes() == bytes);
+    // while a view of a parent held elsewhere measures 0: the storage is
+    // counted once, on the holder (the tracer charges the view no allocation
+    // through is_buffer_alias() either way)
+    REQUIRE(rA->mult_by_phase(-1)->measured_size_in_bytes() == 0);
   }
 
   SECTION("the consumers of a scaled view fold the factor in") {
@@ -9907,7 +9938,7 @@ TEST_CASE("ta_lazy_views_nested", "[eval][ta][lazy]") {
     auto sole = eval_result<ResultToT>(TA::clone(L))->mult_by_phase(-1);
     REQUIRE(sole->is_buffer_alias());
     REQUIRE(sole->measured_size_in_bytes() == bytes);
-    REQUIRE(rL->mult_by_phase(-1)->measured_size_in_bytes() == bytes);
+    REQUIRE(rL->mult_by_phase(-1)->measured_size_in_bytes() == 0);
   }
 
   SECTION("the norm and the tile diff of a nested view read it in place") {
@@ -10132,7 +10163,6 @@ TEST_CASE("ta_lazy_view_cell_bytes_balance", "[eval][ta][lazy]") {
   sequant::eval::TableCell cell;
   cell.value_id = 0;
   cell.production.kind = sequant::eval::ProductionKind::Build;
-  cell.life = 2;
   t.cells.push_back(cell);
   sequant::eval::CellRegistry reg(t, {});
 
@@ -10145,9 +10175,7 @@ TEST_CASE("ta_lazy_view_cell_bytes_balance", "[eval][ta][lazy]") {
   CHECK(r->get<TA::TSpArrayD>().trange().dim(0).extent() == 2);
   CHECK_FALSE(r->is_buffer_alias());
   CHECK(r->size_in_bytes() > 0);
-  bool exhausted = false;
-  CHECK(reg.read(0, &exhausted) == r);
-  CHECK(exhausted);
+  CHECK(reg.take(0) == r);
   CHECK(reg.live_bytes() == 0);
   logger.eval.level = prev_level;
 }

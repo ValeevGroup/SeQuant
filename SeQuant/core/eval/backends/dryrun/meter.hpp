@@ -71,8 +71,11 @@ struct CacheConfig {
 /// \param cfg   footprint/repeat/volatility/batchability configuration.
 /// \param regime the size regime supplying extents and CSV moment tables.
 /// \return a \c CacheManager over \c EvalNodeDryRun.
+/// \note The cache's keys point into \p nodes, so an lvalue forest must
+///       outlive it; a temporary one is held by the cache (\c
+///       sequant::cache_manager()).
 template <typename NodeRange>
-auto build_dryrun_cache(NodeRange const& nodes, CacheConfig const& cfg,
+auto build_dryrun_cache(NodeRange&& nodes, CacheConfig const& cfg,
                         SizeRegime const& regime) {
   auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
                                                        regime.inner_pow_fn());
@@ -99,7 +102,8 @@ auto build_dryrun_cache(NodeRange const& nodes, CacheConfig const& cfg,
   // Note: the gated sequant::cache_manager() overload below stamps the
   // cross-occurrence lifetime mask on `nodes` itself before its DAG walk /
   // veto (cache_manager.hpp), so this call site does not need to do so.
-  return sequant::cache_manager(nodes, std::move(is_volatile), cfg.min_repeats,
+  return sequant::cache_manager(std::forward<NodeRange>(nodes),
+                                std::move(is_volatile), cfg.min_repeats,
                                 std::move(footprint_of), cfg.max_footprint);
 }
 

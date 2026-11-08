@@ -168,6 +168,12 @@ struct TreeNodeEqualityComparator {
     const TreeNode *lhsp = &lhs_in;
     const TreeNode *rhsp = &rhs_in;
     while (true) {
+      // A node is its own equal. The cache keys on the forest's own nodes
+      // (eval::CachedValue), so a probe with a forest node meets itself here;
+      // without this exit, matching a Sum-spine node would walk its whole
+      // subtree, making the lookups of an equation's spine O(terms^2).
+      if (lhsp == rhsp) return true;
+
       const TreeNode &lhs = *lhsp;
       const TreeNode &rhs = *rhsp;
 

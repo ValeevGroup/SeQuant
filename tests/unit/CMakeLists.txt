@@ -211,6 +211,7 @@ set(eval_dryrun_test_sources
     "test_eval_ordered.cpp"
     "test_legality.cpp"
     "test_ordered_executor.cpp"
+    "test_ordered_random.cpp"
     "test_ordered_schedule.cpp"
     "test_peak_profile.cpp"
     "test_schedule_document.cpp"

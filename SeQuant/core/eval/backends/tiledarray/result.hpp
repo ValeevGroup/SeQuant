@@ -902,7 +902,7 @@ ArrayT signed_copy(ArrayT const& arr, typename ArrayT::numeric_type factor,
   auto& world = arr.world();
   auto const& tr = arr.trange();
   auto const& tiles = tr.tiles_range();
-  for (auto const m : modes) SEQUANT_ASSERT(m < tr.rank());
+  for ([[maybe_unused]] auto const m : modes) SEQUANT_ASSERT(m < tr.rank());
   ArrayT dst(world, tr, arr.shape(), arr.pmap());
   for (auto it = dst.pmap()->begin(); it != dst.pmap()->end(); ++it) {
     auto const ord = *it;
@@ -1846,20 +1846,21 @@ class ResultTensorTA final : public Result {
     return measured_size_in_bytes();
   }
 
-  /// the logical size of the value: the held array's, or the parent's scaled
-  /// to the block a pending view cuts (exact without a block; a dense
-  /// estimate of the block otherwise). A tracer charges a view 0 allocated
-  /// bytes through is_buffer_alias(); this is what it stands for.
+  /// the bytes the value holds: the held array's, or the parent's when this
+  /// pending view is its sole holder (0 while any rank holds another handle to
+  /// the parent: the storage is counted once, on the holder). A tracer charges
+  /// a view 0 allocated bytes through is_buffer_alias().
   [[nodiscard]] std::size_t measured_size_in_bytes() const final {
     auto const& v = view_base();
-    auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
-    v.world().gop.sum(local_size);
-    if (has_value() || view_.blk_lo.empty()) return local_size;
-    auto const full = v.trange().elements_range().volume();
-    if (full == 0) return 0;
-    return static_cast<std::size_t>(
-        static_cast<double>(local_size) *
-        (static_cast<double>(logical_volume()) / static_cast<double>(full)));
+    // one collective for both the bytes and the sole-holder test: whether a
+    // rank still holds another handle to the parent (a deferred deleter, a
+    // task in flight) can differ between ranks, and the bytes are counted
+    // only if no rank does
+    std::array<std::size_t, 2> buf{
+        TA::size_of<TA::MemorySpace::Host>(v),
+        (has_value() || parent_.is_unique()) ? std::size_t{0} : 1};
+    v.world().gop.sum(buf.data(), 2);
+    return buf[1] ? 0 : buf[0];
   }
 };
 
@@ -2635,14 +2636,16 @@ class ResultTensorOfTensorTA final : public Result {
   /// (detail::nested_bytes_held)
   [[nodiscard]] std::size_t measured_size_in_bytes() const final {
     auto const& v = view_base();
-    auto local_size = detail::nested_bytes_held(v);
-    v.world().gop.sum(local_size);
-    if (has_value() || view_.blk_lo.empty()) return local_size;
-    auto const full = v.trange().elements_range().volume();
-    if (full == 0) return 0;
-    return static_cast<std::size_t>(
-        static_cast<double>(local_size) *
-        (static_cast<double>(logical_volume()) / static_cast<double>(full)));
+    // one collective for both the bytes and the sole-holder test: whether a
+    // rank still holds another handle to the parent (a deferred deleter, a
+    // task in flight) can differ between ranks, and the bytes are counted
+    // only if no rank does; each inner cell's storage is counted once however
+    // many cells view it (detail::nested_bytes_held)
+    std::array<std::size_t, 2> buf{
+        detail::nested_bytes_held(v),
+        (has_value() || parent_.is_unique()) ? std::size_t{0} : 1};
+    v.world().gop.sum(buf.data(), 2);
+    return buf[1] ? 0 : buf[0];
   }
 };
 

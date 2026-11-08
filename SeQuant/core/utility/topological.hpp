@@ -8,7 +8,9 @@
 #include <range/v3/view/enumerate.hpp>
 
 #include <algorithm>
+#include <limits>
 #include <ranges>
+#include <utility>
 #include <vector>
 
 namespace sequant {
@@ -85,6 +87,68 @@ std::vector<std::size_t> topological_order_indexed(
   }
 
   return order;
+}
+
+/// @brief Partitions the indices in [0, n) into the strongly connected
+/// components of their dependency graph: two indices share a component iff
+/// each depends on the other, directly or through other indices. An index
+/// with no cycle through it is a component of its own.
+///
+/// @param n The number of elements
+/// @param get_dependencies A function that, given an index in [0, n), yields
+/// a range of indices in [0, n) that it depends on
+/// @returns per index, the id of its component, in [0, number of components);
+/// components are numbered in the order they complete, so an index depends
+/// (transitively) only on indices in components with ids at most its own
+template <typename IndexDepFunc>
+  requires dependency_query<IndexDepFunc, std::size_t>
+std::vector<std::size_t> strongly_connected_components_indexed(
+    std::size_t n, const IndexDepFunc &get_dependencies) {
+  // Tarjan's algorithm, iteratively (the graphs this serves can be deep).
+  constexpr std::size_t unseen = std::numeric_limits<std::size_t>::max();
+  std::vector<std::size_t> component(n, unseen);
+  container::svector<std::size_t> index(n, unseen), low(n, 0), stack;
+  container::svector<char> on_stack(n, 0);
+  // the walk: each entry is a node and how many of its dependencies have
+  // been visited
+  container::svector<std::pair<std::size_t, std::size_t>> walk;
+  std::size_t counter = 0, n_components = 0;
+  auto const enter = [&](std::size_t x) {
+    index[x] = low[x] = counter++;
+    stack.push_back(x);
+    on_stack[x] = 1;
+    walk.push_back({x, 0});
+  };
+  for (std::size_t start = 0; start < n; ++start) {
+    if (index[start] != unseen) continue;
+    enter(start);
+    while (!walk.empty()) {
+      std::size_t const x = walk.back().first;
+      auto const deps = get_dependencies(x);
+      auto const n_deps = static_cast<std::size_t>(std::ranges::size(deps));
+      if (walk.back().second < n_deps) {
+        std::size_t const y =
+            *std::ranges::next(std::ranges::begin(deps), walk.back().second++);
+        if (index[y] == unseen)
+          enter(y);
+        else if (on_stack[y])
+          low[x] = std::min(low[x], index[y]);
+        continue;
+      }
+      walk.pop_back();
+      if (!walk.empty())
+        low[walk.back().first] = std::min(low[walk.back().first], low[x]);
+      if (low[x] != index[x]) continue;
+      for (std::size_t y = unseen; y != x;) {
+        y = stack.back();
+        stack.pop_back();
+        on_stack[y] = 0;
+        component[y] = n_components;
+      }
+      ++n_components;
+    }
+  }
+  return component;
 }
 
 /// @brief Determines the topological ordering (in the computer-science sense)
