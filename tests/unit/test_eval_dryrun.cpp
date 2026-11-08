@@ -1453,6 +1453,29 @@ TEST_CASE("dryrun flat result slice_mode shrinks the sliced mode",
   CHECK(sliced->size_in_bytes() == full / 4);
 }
 
+// A value shared by several occurrences keeps the labels of the one that
+// produced it; permute/adjoint must carry its slices to the positions the
+// engine's annotations name, not look them up by the stored labels.
+TEST_CASE("dryrun permute and adjoint move slices by annotation",
+          "[dryrun-result]") {
+  using sequant::eval::dryrun::detail::lobounds_of;
+  using sequant::eval::dryrun::detail::overrides_of;
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  // stored as (a_3,i_3), read here as (a_2,i_2), sliced on a_2 to [4,8)
+  ResultDryRun const t{{Index{L"a_3"}, Index{L"i_3"}}, cm};
+  auto const sliced = static_cast<Result const&>(t).slice_mode(0, 4, 8);
+  container::svector<Index> const pre{Index{L"a_2"}, Index{L"i_2"}};
+  container::svector<Index> const post{Index{L"i_2"}, Index{L"a_2"}};
+  std::array<std::any, 2> const ann{pre, post};
+  for (auto const& out : {sliced->permute(ann), sliced->adjoint(ann)}) {
+    REQUIRE(out);
+    CHECK(overrides_of(*out) == ExtentOverrides{{1, 4}});
+    CHECK(lobounds_of(*out) == ExtentOverrides{{1, 4}});
+    CHECK(out->size_in_bytes() == sliced->size_in_bytes());
+  }
+}
+
 TEST_CASE("dryrun axis_batches tiles the axis space extent",
           "[dryrun-result]") {
   auto r = backend_test_regime();
