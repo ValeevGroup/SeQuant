@@ -417,17 +417,18 @@ struct DryRunOps {
   }
 
   [[nodiscard]] static ResultPtr permute(
-      container::svector<Index> const& idx, ExtentOverrides const& ov,
-      std::shared_ptr<CostModel const> const& cm,
+      ExtentOverrides const& ov, std::shared_ptr<CostModel const> const& cm,
       std::array<std::any, 2> const& ann, ExtentOverrides const& lob = {}) {
+    auto const pre = std::any_cast<annot_t>(ann[0]);
     auto const post = std::any_cast<annot_t>(ann[1]);
     // Reordering modes moves each mode's position, so the positional overrides
-    // must move with them: `ov` is positional against `idx` (the pre-permute
-    // canon order); project it onto `post` by label.
+    // must move with them: project them from `pre` onto `post` by label. The
+    // value's own index list cannot stand in for `pre`: a CSE-shared value
+    // keeps the labels of whichever occurrence produced it.
     return make_dryrun_result(
         container::svector<Index>(post.begin(), post.end()), cm,
-        remap_overrides_by_annot(ov, idx, post),
-        remap_overrides_by_annot(lob, idx, post));
+        remap_overrides_by_annot(ov, pre, post),
+        remap_overrides_by_annot(lob, pre, post));
   }
 
   [[nodiscard]] static ResultPtr slice_mode(
@@ -681,14 +682,12 @@ class ResultDryRun final : public Result {
 
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
-                                      lobounds_);
+    return detail::DryRunOps::permute(overrides_, cm_, ann, lobounds_);
   }
 
   [[nodiscard]] ResultPtr adjoint(
       std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
-                                      lobounds_);
+    return detail::DryRunOps::permute(overrides_, cm_, ann, lobounds_);
   }
 
   [[nodiscard]] ResultPtr pow(rational const& /*exponent*/) const override {
@@ -855,14 +854,12 @@ class ResultDryRunNested final : public Result {
 
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
-                                      lobounds_);
+    return detail::DryRunOps::permute(overrides_, cm_, ann, lobounds_);
   }
 
   [[nodiscard]] ResultPtr adjoint(
       std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
-                                      lobounds_);
+    return detail::DryRunOps::permute(overrides_, cm_, ann, lobounds_);
   }
 
   [[nodiscard]] ResultPtr pow(rational const& /*exponent*/) const override {

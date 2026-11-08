@@ -4806,3 +4806,72 @@ TEST_CASE("meter-nested-loops-distinct-slices", "[meter][broadcast][inline]") {
                         cm->memsize(container::svector<Index>{Index{L"i_3"}}));
   }
 }
+
+// An adjoint leaf (t⁺) binarizes to an Adjoint node over the bare t leaf. A
+// batched ordered schedule that slices the product's operands must slice the
+// adjoint operand too, exactly as the wet executor does (issue #780).
+TEST_CASE("meter-ordered-batched-adjoint-leaf", "[meter][batch]") {
+  using namespace sequant;
+  namespace dr = sequant::eval::dryrun;
+
+  auto ctx = get_default_context_snapshot();
+  auto ibr = mbpt::make_sr_spaces();
+  ibr->extent(L"i", 8).extent(L"a", 16);
+  ctx.set(Vacuum::SingleProduct).set(SPBasis::Spinor).set(ibr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const is_a = [](Index const& ix) {
+    return ix.basis().base_key() == L"a";
+  };
+  dr::SizeRegime regime;
+  regime.space_extent = {{L"i", 8}, {L"a", 16}};
+  regime.space_slice_extents[L"a"] =
+      dr::batch_slice_extents_from_tiles({4, 4, 4, 4}, 4);
+
+  // `leaf` is t⁺, whose bare operand t is the same value as the t{a_3;i_3}
+  // leaf, or the plain leaf u in its place as a control.
+  auto run = [&](std::wstring_view leaf, BatchScheduler scheduler) {
+    auto const res = deserialize<ResultExpr>(
+        L"R{a_1;i_1}:A-N-S = R{a_1;i_2}:A-N-S * g{i_3,a_2;i_1,a_3}:A-S-S * "
+        L"t{a_3;i_3}:A-N-S * " +
+        std::wstring(leaf) + L"{i_2;a_2}:A-N-S");
+    BatchPolicy policy;
+    policy.is_batchable_contracted_index = is_a;
+    policy.batch_target_size = [is_a](Index const& ix) {
+      return is_a(ix) ? std::size_t{4} : std::size_t{0};
+    };
+    policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"R"; };
+    // below this term's unbatched peak (133120 B), so a node is sliced
+    policy.peak_threshold = 100000;
+    policy.scheduler = scheduler;
+
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = [](Index const& ix) { return ix.basis().extent(); };
+    opts.batch_policy = policy;
+    opts.term_batch_axes = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<NodeBatchAnnotation>>>();
+    auto rhs = optimize_result(res.expression(), opts).expr;
+    BinarizationOptions bopts;
+    if (auto it = opts.term_batch_axes->find(rhs.get());
+        it != opts.term_batch_axes->end())
+      bopts.node_batch_axes = it->second;
+    REQUIRE_FALSE(bopts.node_batch_axes.empty());
+    std::vector<dr::EvalNodeDryRun> const forest{binarize<dr::EvalExprDryRun>(
+        ResultExpr{res.result_as_tensor(), std::move(rhs)}, bopts)};
+    return dr::meter(forest, policy, regime, {});
+  };
+
+  for (auto const scheduler :
+       {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+    CAPTURE(static_cast<int>(scheduler));
+    dr::MeterReport adj, ctl;
+    REQUIRE_NOTHROW(adj = run(L"t⁺", scheduler));
+    REQUIRE_NOTHROW(ctl = run(L"u", scheduler));
+    // the adjoint is metered like a plain leaf of the same shape: same
+    // schedule, same work (only the leaf footprint differs, t being shared)
+    CHECK(adj.builds_total == ctl.builds_total);
+    CHECK(adj.flops_persistent + adj.flops_volatile ==
+          Catch::Approx(ctl.flops_persistent + ctl.flops_volatile));
+  }
+}
