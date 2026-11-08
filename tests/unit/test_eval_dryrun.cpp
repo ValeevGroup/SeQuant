@@ -1681,16 +1681,26 @@ TEST_CASE("write-into-slice-is-positional",
                               lo + 5);
     CHECK(dest_w.size_in_bytes() == cm->memsize(idx));
   }
-  SECTION("a block of the wrong width is refused") {
-    ResultDryRun dest{idx, cm, {{1, 0}}};
-    CHECK_THROWS_AS(static_cast<Result&>(dest).write_into_slice(
-                        *stored_r.slice_mode(1, 0, 4), 1, 0, 5),
-                    sequant::Exception);
+  // the width mismatch trips a SEQUANT_ASSERT ahead of the throw
+  if (assert_behavior() != AssertBehavior::Abort) {
+    SECTION("a block of the wrong width is refused") {
+      ResultDryRun dest{idx, cm, {{1, 0}}};
+      CHECK_THROWS_AS(static_cast<Result&>(dest).write_into_slice(
+                          *stored_r.slice_mode(1, 0, 4), 1, 0, 5),
+                      sequant::Exception);
+    }
   }
-  SECTION("a block of another enclosing batch is refused") {
-    auto const dest = stored_r.slice_mode(0, 0, 3);
-    auto const blk = stored_r.slice_mode(0, 3, 6)->slice_mode(1, 0, 5);
-    CHECK_THROWS_AS(dest->write_into_slice(*blk, 1, 0, 5), sequant::Exception);
+  SECTION("the enclosing batch is compared by position") {
+    // whole on the scattered mode, so only the enclosing i batch can differ
+    auto const dest = [&] {
+      return static_cast<Result const&>(ResultDryRun{idx, cm})
+          .slice_mode(0, 0, 3);
+    };
+    CHECK_THROWS_AS(
+        dest()->write_into_slice(*stored_r.slice_mode(0, 3, 6), 1, 0, 20),
+        sequant::Exception);
+    CHECK_NOTHROW(
+        dest()->write_into_slice(*stored_r.slice_mode(0, 0, 3), 1, 0, 20));
   }
 }
 
