@@ -1453,6 +1453,29 @@ TEST_CASE("dryrun flat result slice_mode shrinks the sliced mode",
   CHECK(sliced->size_in_bytes() == full / 4);
 }
 
+// A value shared by several occurrences keeps the labels of the one that
+// produced it; permute/adjoint must carry its slices to the positions the
+// engine's annotations name, not look them up by the stored labels.
+TEST_CASE("dryrun permute and adjoint move slices by annotation",
+          "[dryrun-result]") {
+  using sequant::eval::dryrun::detail::lobounds_of;
+  using sequant::eval::dryrun::detail::overrides_of;
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  // stored as (a_3,i_3), read here as (a_2,i_2), sliced on a_2 to [4,8)
+  ResultDryRun const t{{Index{L"a_3"}, Index{L"i_3"}}, cm};
+  auto const sliced = static_cast<Result const&>(t).slice_mode(0, 4, 8);
+  container::svector<Index> const pre{Index{L"a_2"}, Index{L"i_2"}};
+  container::svector<Index> const post{Index{L"i_2"}, Index{L"a_2"}};
+  std::array<std::any, 2> const ann{pre, post};
+  for (auto const& out : {sliced->permute(ann), sliced->adjoint(ann)}) {
+    REQUIRE(out);
+    CHECK(overrides_of(*out) == ExtentOverrides{{1, 4}});
+    CHECK(lobounds_of(*out) == ExtentOverrides{{1, 4}});
+    CHECK(out->size_in_bytes() == sliced->size_in_bytes());
+  }
+}
+
 TEST_CASE("dryrun axis_batches tiles the axis space extent",
           "[dryrun-result]") {
   auto r = backend_test_regime();
@@ -1636,6 +1659,48 @@ TEST_CASE("write-into-slice-refuses-mismatched-modes",
   SECTION("destination sliced to the same batch") {
     auto dest = tmpl_r.slice_mode(0, 0, 3);
     CHECK_NOTHROW(dest->write_into_slice(*blk, 1, 0, 5));
+  }
+}
+
+// The block is the destination value's own per-batch form, so the scatter is
+// positional; a block that carries another occurrence's labels (a shared
+// value passed through by a pow or scalar product) must still assemble.
+TEST_CASE("write-into-slice-is-positional",
+          "[dryrun-result][write-into-slice]") {
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  ResultDryRun const stored{{Index{L"i_3"}, Index{L"a_3"}}, cm};
+  Result const& stored_r = stored;
+  container::svector<Index> const idx{Index{L"i_1"}, Index{L"a_1"}};
+
+  SECTION("blocks tile the scattered mode") {
+    ResultDryRun dest{idx, cm, {{1, 0}}};  // mode 1 unfilled
+    Result& dest_w = dest;
+    for (std::size_t lo = 0; lo != 20; lo += 5)
+      dest_w.write_into_slice(*stored_r.slice_mode(1, lo, lo + 5), 1, lo,
+                              lo + 5);
+    CHECK(dest_w.size_in_bytes() == cm->memsize(idx));
+  }
+  // the width mismatch trips a SEQUANT_ASSERT ahead of the throw
+  if (assert_behavior() != AssertBehavior::Abort) {
+    SECTION("a block of the wrong width is refused") {
+      ResultDryRun dest{idx, cm, {{1, 0}}};
+      CHECK_THROWS_AS(static_cast<Result&>(dest).write_into_slice(
+                          *stored_r.slice_mode(1, 0, 4), 1, 0, 5),
+                      sequant::Exception);
+    }
+  }
+  SECTION("the enclosing batch is compared by position") {
+    // whole on the scattered mode, so only the enclosing i batch can differ
+    auto const dest = [&] {
+      return static_cast<Result const&>(ResultDryRun{idx, cm})
+          .slice_mode(0, 0, 3);
+    };
+    CHECK_THROWS_AS(
+        dest()->write_into_slice(*stored_r.slice_mode(0, 3, 6), 1, 0, 20),
+        sequant::Exception);
+    CHECK_NOTHROW(
+        dest()->write_into_slice(*stored_r.slice_mode(0, 0, 3), 1, 0, 20));
   }
 }
 
@@ -4804,5 +4869,74 @@ TEST_CASE("meter-nested-loops-distinct-slices", "[meter][broadcast][inline]") {
         {{i1, BatchModeType::Contracted}, {a1, BatchModeType::Contracted}});
     require_batched_run({root}, nested_contracted_policy(), regime,
                         cm->memsize(container::svector<Index>{Index{L"i_3"}}));
+  }
+}
+
+// An adjoint leaf (t⁺) binarizes to an Adjoint node over the bare t leaf. A
+// batched ordered schedule that slices the product's operands must slice the
+// adjoint operand too, exactly as the wet executor does (issue #780).
+TEST_CASE("meter-ordered-batched-adjoint-leaf", "[meter][batch]") {
+  using namespace sequant;
+  namespace dr = sequant::eval::dryrun;
+
+  auto ctx = get_default_context_snapshot();
+  auto ibr = mbpt::make_sr_spaces();
+  ibr->extent(L"i", 8).extent(L"a", 16);
+  ctx.set(Vacuum::SingleProduct).set(SPBasis::Spinor).set(ibr);
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const is_a = [](Index const& ix) {
+    return ix.basis().base_key() == L"a";
+  };
+  dr::SizeRegime regime;
+  regime.space_extent = {{L"i", 8}, {L"a", 16}};
+  regime.space_slice_extents[L"a"] =
+      dr::batch_slice_extents_from_tiles({4, 4, 4, 4}, 4);
+
+  // `leaf` is t⁺, whose bare operand t is the same value as the t{a_3;i_3}
+  // leaf, or the plain leaf u in its place as a control.
+  auto run = [&](std::wstring_view leaf, BatchScheduler scheduler) {
+    auto const res = deserialize<ResultExpr>(
+        L"R{a_1;i_1}:A-N-S = R{a_1;i_2}:A-N-S * g{i_3,a_2;i_1,a_3}:A-S-S * "
+        L"t{a_3;i_3}:A-N-S * " +
+        std::wstring(leaf) + L"{i_2;a_2}:A-N-S");
+    BatchPolicy policy;
+    policy.is_batchable_contracted_index = is_a;
+    policy.batch_target_size = [is_a](Index const& ix) {
+      return is_a(ix) ? std::size_t{4} : std::size_t{0};
+    };
+    policy.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"R"; };
+    // below this term's unbatched peak (133120 B), so a node is sliced
+    policy.peak_threshold = 100000;
+    policy.scheduler = scheduler;
+
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
+    opts.idx_to_extent = [](Index const& ix) { return ix.basis().extent(); };
+    opts.batch_policy = policy;
+    opts.term_batch_axes = std::make_shared<std::unordered_map<
+        Expr const*, container::vector<NodeBatchAnnotation>>>();
+    auto rhs = optimize_result(res.expression(), opts).expr;
+    BinarizationOptions bopts;
+    if (auto it = opts.term_batch_axes->find(rhs.get());
+        it != opts.term_batch_axes->end())
+      bopts.node_batch_axes = it->second;
+    REQUIRE_FALSE(bopts.node_batch_axes.empty());
+    std::vector<dr::EvalNodeDryRun> const forest{binarize<dr::EvalExprDryRun>(
+        ResultExpr{res.result_as_tensor(), std::move(rhs)}, bopts)};
+    return dr::meter(forest, policy, regime, {});
+  };
+
+  for (auto const scheduler :
+       {BatchScheduler::ordered, BatchScheduler::forest_descent}) {
+    CAPTURE(static_cast<int>(scheduler));
+    dr::MeterReport adj, ctl;
+    REQUIRE_NOTHROW(adj = run(L"t⁺", scheduler));
+    REQUIRE_NOTHROW(ctl = run(L"u", scheduler));
+    // the adjoint is metered like a plain leaf of the same shape: same
+    // schedule, same work (only the leaf footprint differs, t being shared)
+    CHECK(adj.builds_total == ctl.builds_total);
+    CHECK(adj.flops_persistent + adj.flops_volatile ==
+          Catch::Approx(ctl.flops_persistent + ctl.flops_volatile));
   }
 }

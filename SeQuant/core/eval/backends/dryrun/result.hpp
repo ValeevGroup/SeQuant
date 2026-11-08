@@ -417,17 +417,18 @@ struct DryRunOps {
   }
 
   [[nodiscard]] static ResultPtr permute(
-      container::svector<Index> const& idx, ExtentOverrides const& ov,
-      std::shared_ptr<CostModel const> const& cm,
+      ExtentOverrides const& ov, std::shared_ptr<CostModel const> const& cm,
       std::array<std::any, 2> const& ann, ExtentOverrides const& lob = {}) {
+    auto const pre = std::any_cast<annot_t>(ann[0]);
     auto const post = std::any_cast<annot_t>(ann[1]);
     // Reordering modes moves each mode's position, so the positional overrides
-    // must move with them: `ov` is positional against `idx` (the pre-permute
-    // canon order); project it onto `post` by label.
+    // must move with them: project them from `pre` onto `post` by label. The
+    // value's own index list cannot stand in for `pre`: a CSE-shared value
+    // keeps the labels of whichever occurrence produced it.
     return make_dryrun_result(
         container::svector<Index>(post.begin(), post.end()), cm,
-        remap_overrides_by_annot(ov, idx, post),
-        remap_overrides_by_annot(lob, idx, post));
+        remap_overrides_by_annot(ov, pre, post),
+        remap_overrides_by_annot(lob, pre, post));
   }
 
   [[nodiscard]] static ResultPtr slice_mode(
@@ -458,17 +459,18 @@ struct DryRunOps {
     SEQUANT_ASSERT(mode < idx.size());
     SEQUANT_ASSERT(block_lo < block_hi);
     Index const& mix = idx[mode];
-    // Tile/width consistency: the block's own modelled extent on the shared
-    // mode index must equal the slice width it is being written into. The
-    // block's overrides are positional against its own index list, so locate
-    // the shared index there (its mode need not equal the dest's `mode`).
+    // The block is a per-batch form of this same value, so its modes are this
+    // result's modes position for position (as the TA backend requires). Its
+    // labels may be another occurrence's -- a shared value passed through by
+    // pow or a scalar product keeps the producer's -- so they are never
+    // matched against \p idx.
     auto const bov = overrides_of(block);
     auto const bidx = indices_of(block);
+    SEQUANT_ASSERT(bidx.size() == idx.size());
+    // Tile/width consistency: the block's modelled extent on `mode` must equal
+    // the slice width it is being written into.
     std::size_t const block_extent = [&] {
-      if (auto const bpos = find_position(bidx, mix)) {
-        if (auto ov_it = bov.find(*bpos); ov_it != bov.end())
-          return ov_it->second;
-      }
+      if (auto ov_it = bov.find(mode); ov_it != bov.end()) return ov_it->second;
       return cm->regime().extent(mix);
     }();
     if (block_extent != block_hi - block_lo) {
@@ -493,15 +495,12 @@ struct DryRunOps {
     // The block's absolute position on this mode (if it is a slice) must be
     // the destination slice it is written into.
     auto const blob = lobounds_of(block);
-    auto const bpos = find_position(bidx, mix);
-    if (bpos) {
-      if (auto lit = blob.find(*bpos);
-          lit != blob.end() && lit->second != block_lo)
-        throw Exception(std::format(
-            "[dryrun] write_into_slice: block lobound {} on mode {} ({}) != "
-            "destination slice lobound {}",
-            lit->second, mode, toUtf8(mix.full_label()), block_lo));
-    }
+    if (auto lit = blob.find(mode);
+        lit != blob.end() && lit->second != block_lo)
+      throw Exception(std::format(
+          "[dryrun] write_into_slice: block lobound {} on mode {} ({}) != "
+          "destination slice lobound {}",
+          lit->second, mode, toUtf8(mix.full_label()), block_lo));
     // Every other mode the block shares with the destination must realize the
     // destination's range there (e.g. the same enclosing batch): the scatter
     // places the block along `mode` only. Compare the block with the
@@ -511,11 +510,12 @@ struct DryRunOps {
       auto view_ov = ov;
       auto view_lob = lob;
       view_ov[mode] = block_extent;
-      if (bpos && blob.count(*bpos))
+      if (blob.count(mode))
         view_lob[mode] = block_lo;
       else
         view_lob.erase(mode);
-      check_shared_ranges("write_into_slice", idx, view_ov, view_lob, bidx, bov,
+      // both sides spelled by `idx`: a positional comparison
+      check_shared_ranges("write_into_slice", idx, view_ov, view_lob, idx, bov,
                           blob, cm);
     }
     // Merge the block's range into the assembled coverage, requiring
@@ -681,14 +681,12 @@ class ResultDryRun final : public Result {
 
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
-                                      lobounds_);
+    return detail::DryRunOps::permute(overrides_, cm_, ann, lobounds_);
   }
 
   [[nodiscard]] ResultPtr adjoint(
       std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
-                                      lobounds_);
+    return detail::DryRunOps::permute(overrides_, cm_, ann, lobounds_);
   }
 
   [[nodiscard]] ResultPtr pow(rational const& /*exponent*/) const override {
@@ -855,14 +853,12 @@ class ResultDryRunNested final : public Result {
 
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
-                                      lobounds_);
+    return detail::DryRunOps::permute(overrides_, cm_, ann, lobounds_);
   }
 
   [[nodiscard]] ResultPtr adjoint(
       std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
-                                      lobounds_);
+    return detail::DryRunOps::permute(overrides_, cm_, ann, lobounds_);
   }
 
   [[nodiscard]] ResultPtr pow(rational const& /*exponent*/) const override {
