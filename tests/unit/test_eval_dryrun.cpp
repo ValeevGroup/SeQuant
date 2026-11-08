@@ -1662,6 +1662,38 @@ TEST_CASE("write-into-slice-refuses-mismatched-modes",
   }
 }
 
+// The block is the destination value's own per-batch form, so the scatter is
+// positional; a block that carries another occurrence's labels (a shared
+// value passed through by a pow or scalar product) must still assemble.
+TEST_CASE("write-into-slice-is-positional",
+          "[dryrun-result][write-into-slice]") {
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  ResultDryRun const stored{{Index{L"i_3"}, Index{L"a_3"}}, cm};
+  Result const& stored_r = stored;
+  container::svector<Index> const idx{Index{L"i_1"}, Index{L"a_1"}};
+
+  SECTION("blocks tile the scattered mode") {
+    ResultDryRun dest{idx, cm, {{1, 0}}};  // mode 1 unfilled
+    Result& dest_w = dest;
+    for (std::size_t lo = 0; lo != 20; lo += 5)
+      dest_w.write_into_slice(*stored_r.slice_mode(1, lo, lo + 5), 1, lo,
+                              lo + 5);
+    CHECK(dest_w.size_in_bytes() == cm->memsize(idx));
+  }
+  SECTION("a block of the wrong width is refused") {
+    ResultDryRun dest{idx, cm, {{1, 0}}};
+    CHECK_THROWS_AS(static_cast<Result&>(dest).write_into_slice(
+                        *stored_r.slice_mode(1, 0, 4), 1, 0, 5),
+                    sequant::Exception);
+  }
+  SECTION("a block of another enclosing batch is refused") {
+    auto const dest = stored_r.slice_mode(0, 0, 3);
+    auto const blk = stored_r.slice_mode(0, 3, 6)->slice_mode(1, 0, 5);
+    CHECK_THROWS_AS(dest->write_into_slice(*blk, 1, 0, 5), sequant::Exception);
+  }
+}
+
 TEST_CASE("nested-moment-aware-extent", "[dryrun-nested]") {
   auto r = backend_test_regime();
   // Non-trivial second moment: <#PNO^2> != <#PNO>^2 (dispersion inflates it).
