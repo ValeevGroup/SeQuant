@@ -847,6 +847,14 @@ SECTION("Swap bra kets") {
 }
 
 SECTION("Closed-shell spintrace CCD") {
+  // without a projector, the ExprPtr overloads cannot tell external indices
+  // from dummies: an expression with external indices is rejected
+  {
+    const auto residual = deserialize(L"1/2 g{i_1,i_3;a_1,a_3} t{a_3;i_3}",
+                                      {.def_perm_symm = Symmetry::Antisymm});
+    REQUIRE_THROWS_AS(closed_shell_CC_spintrace_v1(residual), Exception);
+    REQUIRE_THROWS_AS(closed_shell_CC_spintrace_v2(residual), Exception);
+  }
   // Energy expression
   {
     {  // standard = v1 , expression can be parsed directly without requiring

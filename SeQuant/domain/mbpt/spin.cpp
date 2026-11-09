@@ -1081,10 +1081,20 @@ using ExtIndexGroups = container::svector<container::svector<SlottedIndex>>;
 
 /// @return the external index groups of @p expr as given by its projector (A
 /// or S), or none if it has no projector
+/// @throw Exception if @p expr has no projector but has external indices:
+/// they cannot be told from dummies without deducing them, which the library
+/// does not do (the ResultExpr overload names them)
 ExtIndexGroups projector_index_groups(const ExprPtr& expr) {
   if (has_tensor(expr, reserved::antisymm_label()) ||
       has_tensor(expr, reserved::symm_label()))
     return external_indices(expr);
+  // N.B. the indices that occur once only serve to detect the misuse here;
+  // they are not used as the external indices
+  if (!external_indices(expr).empty())
+    throw Exception(
+        "closed_shell_CC_spintrace: an expression without a projector (A or "
+        "S) must have no external indices; use the ResultExpr overload, whose "
+        "result names them");
   return {};
 }
 

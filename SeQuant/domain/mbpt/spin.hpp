@@ -308,6 +308,7 @@ ResultExpr closed_shell_CC_spintrace(
 /// @brief like closed_shell_CC_spintrace(const ResultExpr&, ...), with the
 /// external indices given by the projector (antisymmetrizer or symmetrizer)
 /// of @p expr , or none if it has no projector
+/// @throw Exception if @p expr has no projector but has external indices
 /// @note the projector does not determine the external indices of every
 /// expression (e.g. of some multireference ones), prefer the ResultExpr
 /// overload
