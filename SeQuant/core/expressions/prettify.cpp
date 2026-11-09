@@ -113,19 +113,20 @@ void prettify_in_place(ExprPtr& expr, const NamedIndexSpec& named_indices,
   sort_expr(*expr, ordering(opts));
 }
 
-/// @return the prettified image of @p term under the permutation of the
-/// result indices of @p group that is first in the order of @p opts , with the
-/// phase of the permutation
-ExprPtr prettify_term_for_result(
-    const ExprPtr& term,
-    const std::vector<std::pair<container::map<Index, Index>, int>>& group,
-    const NamedIndexSpec& named_indices, const PrettifyOptions& opts) {
+/// @return the prettified image of @p term under the permutation of @p group
+/// (see detail::symmetrizer_group()) that is first in the order of @p opts ,
+/// with the phase of the permutation
+ExprPtr prettify_term_for_result(const ExprPtr& term,
+                                 const detail::IndexPermutationGroup& group,
+                                 const NamedIndexSpec& named_indices,
+                                 const PrettifyOptions& opts) {
   const auto cmp = ordering(opts);
   ExprPtr best;
   for (const auto& [map, sign] : group) {
     ExprPtr image =
         map.empty() ? term->clone() : transform_expr(term, map, sign);
     prettify_in_place(image, named_indices, opts);
+    if (image->is_zero()) return ex<Constant>(0);
     if (!best || cmp(image, best)) best = std::move(image);
   }
   return best;
@@ -143,13 +144,12 @@ ExprPtr prettify(const ExprPtr& expr, const NamedIndexSpec& named_indices,
 
 ResultExpr prettify(const ResultExpr& expr, const PrettifyOptions& opts) {
   const auto named = named_indices(expr);
-  const auto group = detail::result_symmetry_group(expr);
   const auto& rhs = expr.expression();
 
   // shares the expression with expr until it is replaced by the prettified
   // copy
   ResultExpr result = expr;
-  if (!rhs || group.size() == 1 || !opts.recanonicalize) {
+  if (!rhs || !opts.recanonicalize) {
     result.expression() = prettify(rhs, named, opts);
     return result;
   }
@@ -160,11 +160,15 @@ ResultExpr prettify(const ResultExpr& expr, const PrettifyOptions& opts) {
   // images
   // N.B. the summands are replaced in place, so that nested sums stay nested
   auto present = [&](ExprPtr& term) {
-    const bool symmetrized =
-        detail::for_each_symmetrized_term(term, expr, [&](ExprPtr& part) {
+    bool replaced = false;
+    detail::for_each_symmetrized_term(
+        term, expr,
+        [&](ExprPtr& part, const detail::IndexPermutationGroup& group) {
+          if (group.size() == 1) return;
           part = prettify_term_for_result(part, group, named, opts);
+          replaced = true;
         });
-    if (!symmetrized) term = prettify(term, named, opts);
+    if (!replaced) term = prettify(term, named, opts);
   };
   ExprPtr prettified = rhs->clone();
   if (prettified.is<Sum>()) {

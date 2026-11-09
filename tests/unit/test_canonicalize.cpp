@@ -1428,12 +1428,13 @@ TEST_CASE("result_expr_canonicalization", "[algorithms][canonicalize]") {
         L"X{a_2,a_1;i_2,i_1}:N-N-N");
     simplify(lone);
     CHECK(count(lone) == 1);
-    // ... but not without that symmetry
+    // ... whatever symmetry the result is declared with: it is the
+    // symmetrizer that relates the terms
     auto nonsymm = deserialize<ResultExpr>(
         L"R{a_1,a_2;i_1,i_2}:N-N-N = Ŝ{i_1,i_2;a_1,a_2}:N-N-S * "
         L"(X{a_1,a_2;i_1,i_2}:N-N-N + X{a_2,a_1;i_2,i_1}:N-N-N)");
     canonicalize(nonsymm);
-    CHECK(size(inner(nonsymm)) == 2);
+    CHECK(size(inner(nonsymm)) == 1);
     // antisymmetry absorbs the phase
     auto antisymm = deserialize<ResultExpr>(
         L"R{a_1,a_2;i_1,i_2}:A-N-S = Â{i_1,i_2;a_1,a_2}:A-N-S * "
@@ -1457,6 +1458,49 @@ TEST_CASE("result_expr_canonicalization", "[algorithms][canonicalize]") {
     simplify(antisymm_lone);
     REQUIRE(antisymm_lone.expression()->is<Product>());
     CHECK(abs(antisymm_lone.expression()->as<Product>().scalar()) == 2);
+  }
+
+  SECTION("only the permutations that the symmetrizer absorbs") {
+    // Ŝ permutes the columns, not the bra alone, even if the result is
+    // declared (anti)symmetric
+    for (const auto* lhs :
+         {L"R{a_1,a_2;i_1,i_2}:S-N-S", L"R{a_1,a_2;i_1,i_2}:A-N-S"}) {
+      auto r = deserialize<ResultExpr>(
+          std::wstring(lhs) +
+          L" = Ŝ{i_1,i_2;a_1,a_2}:N-N-S * "
+          L"(X{a_1,a_2;i_1,i_2}:N-N-N + X{a_2,a_1;i_1,i_2}:N-N-N)");
+      canonicalize(r);
+      CHECK(size(inner(r)) == 2);
+    }
+    // Â permutes within the bra and within the ket, it does not swap them,
+    // even if the result is declared bra-ket symmetric
+    auto braket = deserialize<ResultExpr>(
+        L"R{i_1,i_2;i_3,i_4}:A-S-S = Â{i_1,i_2;i_3,i_4}:A-N-S * "
+        L"(X{i_1,i_2;i_3,i_4}:N-N-N + X{i_3,i_4;i_1,i_2}:N-N-N)");
+    canonicalize(braket);
+    CHECK(size(inner(braket)) == 2);
+    // a symmetrizer of some of the result indices absorbs only their
+    // permutations: Â{i_1;a_1} absorbs none
+    auto partial = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:A-N-S = Â{i_1;a_1}:A-N-S * "
+        L"(X{a_1,a_2;i_1,i_2}:N-N-N - X{a_2,a_1;i_1,i_2}:N-N-N)");
+    canonicalize(partial);
+    CHECK(size(inner(partial)) == 2);
+  }
+
+  SECTION("a term that vanishes by symmetry") {
+    // Y is symmetric in i_3,i_4 and t antisymmetric: the term is zero, and so
+    // is each of its images
+    auto r = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:A-N-S = Â{i_1,i_2;a_1,a_2}:A-N-S * "
+        L"Y{i_1,i_2;i_3,i_4}:S-N-S * t{i_3,i_4;a_1,a_2}:A-N-S");
+    REQUIRE_NOTHROW(canonicalize(r));
+    CHECK(r.expression()->is_zero());
+    auto p = deserialize<ResultExpr>(
+        L"R{a_1,a_2;i_1,i_2}:A-N-S = Â{i_1,i_2;a_1,a_2}:A-N-S * "
+        L"Y{i_1,i_2;i_3,i_4}:S-N-S * t{i_3,i_4;a_1,a_2}:A-N-S");
+    REQUIRE_NOTHROW(p = prettify(p));
+    CHECK(p.expression()->is_zero());
   }
 
   SECTION("terms are not combined without a symmetrizer") {

@@ -62,9 +62,11 @@ Canonicalization renames dummy indices, but must never rename the *named* (exter
 indices are named is therefore always specified explicitly; there is no default:
 
 - a :class:`sequant::ResultExpr` carries them as the indices of its result, and ``canonicalize(ResultExpr&)`` /
-  ``simplify(ResultExpr&)`` use them. These overloads also merge terms that differ only by a permutation of the result indices
-  that the result's symmetry allows, provided an explicit (anti)symmetrizer of the result (``Ŝ``/``Â``) multiplies them: that
-  the result has a symmetry does not make its terms have it (e.g. :math:`R = X + P(X)` is symmetric, :math:`2X` is not);
+  ``simplify(ResultExpr&)`` use them. These overloads also merge terms that an explicit (anti)symmetrizer of the result
+  (``Ŝ``/``Â``) multiplies and that differ only by a permutation of its indices that it absorbs (for ``Â`` permutations of
+  its bra and of its ket indices, with their parities as phase; for ``Ŝ`` permutations of its columns). The declared symmetry
+  of the result is not used for this: that the result has a symmetry does not make its terms have it (e.g.
+  :math:`R = X + P(X)` is symmetric, :math:`2X` is not);
 - for a plain ``ExprPtr`` the caller passes :data:`sequant::deduce_named_indices`, opting in to deducing the named indices as
   the indices that occur once in each product. This is wrong for theories in which an external index can occur several times
   (e.g. tensor hypercontraction), which is why it is never done implicitly. The library itself never deduces named indices.
@@ -98,7 +100,7 @@ The canonical form is meant to identify equivalent expressions, not to be read. 
   Named indices are never renamed, and the structure of the expression is preserved: products keep their parenthesization
   (e.g. the order of evaluation chosen by ``optimize()``), and sums are neither flattened nor are their summands combined.
   For a :class:`sequant::ResultExpr`, the terms of a sum that a symmetrizer of the result multiplies are presented alike if
-  they are related by the symmetry of the result.
+  they are related by a permutation that the symmetrizer absorbs.
   :func:`sequant::mbpt::prettify_options` is a preset that presents mbpt expressions in their conventional order (the cardinal
   tensor labels of mbpt); ``prettify`` itself is part of the core library;
 - the same presentation settings can be passed to ``canonicalize()`` and the ``Expr::canonicalize()`` members
