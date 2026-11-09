@@ -590,6 +590,7 @@ eval::schedule::Fingerprint make_fingerprint(
   fp.context.vacuum = vacuum_name(ctx.vacuum());
   fp.context.spbasis = spbasis_name(ctx.spbasis());
   fp.context.strict_braket_symmetry = ctx.assert_strict_braket_symmetry();
+  fp.context.canonical_form = canonical_form_version;
   return fp;
 }
 
@@ -606,6 +607,7 @@ std::string join(std::vector<std::string> const& v) {
 std::string str(std::string const& s) { return s; }
 std::string str(bool b) { return b ? "true" : "false"; }
 std::string str(double d) { return std::to_string(d); }
+std::string str(int i) { return std::to_string(i); }
 std::string str(std::vector<std::string> const& v) { return join(v); }
 std::string str(std::pair<bool, bool> const& p) {
   return "(" + str(p.first) + "," + str(p.second) + ")";
@@ -666,6 +668,7 @@ void check_fingerprint(eval::schedule::Fingerprint const& loaded,
   diff(d, "context.spbasis", a.spbasis, b.spbasis);
   diff(d, "context.strict_braket_symmetry", a.strict_braket_symmetry,
        b.strict_braket_symmetry);
+  diff(d, "context.canonical_form", a.canonical_form, b.canonical_form);
   if (d.empty()) return;
   std::string msg = "schedule fingerprint mismatch:";
   for (auto const& line : d) msg += "\n" + line;

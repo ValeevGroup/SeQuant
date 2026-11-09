@@ -155,6 +155,12 @@ struct LexicographicCompareOptions {
   bool operator==(const LexicographicCompareOptions&) const = default;
 };
 
+/// version of the canonical form that canonicalize() produces with the
+/// default (internal-form) options; it is increased whenever that form
+/// changes, so that records keyed by canonical forms (e.g. schedule documents,
+/// see eval::schedule::ContextRecord) can detect that they are stale
+inline constexpr int canonical_form_version = 1;
+
 /// @brief options that control behavior of `canonicalize()`
 struct CanonicalizeOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;

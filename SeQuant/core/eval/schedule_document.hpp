@@ -97,11 +97,15 @@ struct RootRecord {
   std::vector<TermRecord> terms;
 };
 
-/// the Context settings a term key depends on (see opt::schedule::term_key);
-/// the canonical form itself is the library's and depends on no setting
+/// the Context settings a term key depends on (see opt::schedule::term_key),
+/// and the version of the library's canonical form (see
+/// canonical_form_version), which depends on no setting
 struct ContextRecord {
   std::string vacuum, spbasis;
   bool strict_braket_symmetry = false;
+  /// canonical_form_version of the producer; 0 for documents written before
+  /// it was recorded
+  int canonical_form = 0;
 };
 
 struct Fingerprint {

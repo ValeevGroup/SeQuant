@@ -122,6 +122,7 @@ json to_j(ContextRecord const& c) {
   j["vacuum"] = c.vacuum;
   j["spbasis"] = c.spbasis;
   j["strict_braket_symmetry"] = c.strict_braket_symmetry;
+  j["canonical_form"] = c.canonical_form;
   return j;
 }
 
@@ -583,6 +584,12 @@ ContextRecord context_r(json const& j, std::string const& where) {
   c.vacuum = get_str(j, "vacuum", where);
   c.spbasis = get_str(j, "spbasis", where);
   c.strict_braket_symmetry = get_bool(j, "strict_braket_symmetry", where);
+  // absent in documents written before the canonical form was versioned
+  if (auto const it = j.find("canonical_form"); it != j.end()) {
+    if (!it->is_number_integer())
+      fail(where + ".canonical_form", "expected an integer");
+    c.canonical_form = it->get<int>();
+  }
   return c;
 }
 

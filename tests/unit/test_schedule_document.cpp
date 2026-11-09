@@ -151,6 +151,39 @@ TEST_CASE("schedule document rejects bad shapes", "[schedule-document]") {
   REQUIRE_THROWS_WITH(
       from_json(mutate(d, "sequant.schedule/1", "sequant.schedule/0")),
       ContainsSubstring("format"));
+
+  // (e) the version of the canonical form is an integer
+  REQUIRE_THROWS_WITH(from_json(mutate(d, "\"canonical_form\": 0",
+                                       "\"canonical_form\": \"1\"")),
+                      ContainsSubstring("canonical_form"));
+}
+
+TEST_CASE("schedule document records the version of the canonical form",
+          "[schedule-document]") {
+  using Catch::Matchers::ContainsSubstring;
+  auto d = make_doc();
+  d.fingerprint.context.canonical_form = 7;
+  REQUIRE(from_json(to_json(d)).fingerprint.context.canonical_form == 7);
+
+  // a document written before the version was recorded reads as version 0,
+  // which the fingerprint check reports as a mismatch
+  auto old_text = to_json(d);
+  {
+    // the key is the last of its object: drop it with the preceding comma
+    auto const key = old_text.find("\"canonical_form\": 7");
+    REQUIRE(key != std::string::npos);
+    auto const comma = old_text.rfind(',', key);
+    old_text.erase(comma,
+                   key + std::string("\"canonical_form\": 7").size() - comma);
+  }
+  REQUIRE(old_text.find("canonical_form") == std::string::npos);
+  auto const old = from_json(old_text);
+  REQUIRE(old.fingerprint.context.canonical_form == 0);
+  auto live = old.fingerprint;
+  live.context.canonical_form = sequant::canonical_form_version;
+  REQUIRE_THROWS_WITH(
+      sequant::opt::schedule::check_fingerprint(old.fingerprint, live),
+      ContainsSubstring("fingerprint.context.canonical_form"));
 }
 
 TEST_CASE("schedule document reader caps the nesting depth",
@@ -1379,6 +1412,7 @@ TEST_CASE("fingerprint captures DAG-shaping inputs and nothing size-dependent",
           sequant::get_default_context().assert_strict_braket_symmetry());
   REQUIRE(!fp.context.vacuum.empty());
   REQUIRE(!fp.context.spbasis.empty());
+  REQUIRE(fp.context.canonical_form == sequant::canonical_form_version);
 
   auto opts2 = opts;
   opts2.idx_to_extent = [](sequant::Index const&) -> std::size_t { return 3; };
