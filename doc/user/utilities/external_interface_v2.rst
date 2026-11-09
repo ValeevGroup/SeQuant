@@ -484,7 +484,8 @@ given, they are merged and jointly ordered before being exported together.
        A later intermediate takes over the name of an earlier one if the earlier one's last use precedes its definition, both are batched over the
        same indices, both span the same IRREPs (if :code:`irreps` is given) and their shapes are compatible. Either a boolean or an object with the
        property :code:`shape`, which is :code:`multiset` (default; same index spaces up to permutation, the indices of the later intermediate are
-       rearranged accordingly) or :code:`block` (same index spaces in the same order).
+       rearranged accordingly) or :code:`block` (same index spaces in the same order). Independent of this option, if :code:`irreps` is given,
+       an intermediate whose name is used for different IRREPs in different groups is renamed such that every name spans a single set of IRREPs.
      - false
      - No
    * - :code:`meta`
