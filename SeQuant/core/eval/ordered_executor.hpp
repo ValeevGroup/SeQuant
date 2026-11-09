@@ -1427,12 +1427,15 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     std::function<std::size_t()> prev_residency;
     std::function<void(std::function<void(std::size_t, std::size_t)>)>
         prev_liveset;
+    std::function<bool(ResultPtr const&)> prev_holds;
     ~ExternalMeteringGuard() {
       c.set_external_residency(std::move(prev_residency));
       c.set_external_liveset(std::move(prev_liveset));
+      c.set_external_holds(std::move(prev_holds));
     }
   } const external_metering_guard{cache, cache.external_residency_hook(),
-                                  cache.external_liveset()};
+                                  cache.external_liveset(),
+                                  cache.external_holds_hook()};
   cache.set_external_residency([&registry, &cache]() -> std::size_t {
     std::size_t bytes = 0;
     registry.for_each_live([&](CellId, ResultPtr const& v) {
@@ -1451,6 +1454,17 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           if (!cache.chain_holds(v)) emit(cell_hash(c), v->size_in_bytes());
         });
       });
+  // The pointer-identity side of the same store: an operand an op reads
+  // whole from the registry IS a buffer the residency hook above counts, so
+  // the per-op working-set sample must not add it again as an operand
+  // (CacheManager::resident). A sliced / permuted / drained read is a
+  // distinct, or no longer held, buffer and is still added.
+  cache.set_external_holds([&registry](ResultPtr const& value) -> bool {
+    bool held = false;
+    registry.for_each_live(
+        [&](CellId, ResultPtr const& v) { held = held || v == value; });
+    return held;
+  });
 
   // Where the schedule lets each cell go, and which read of a cell is its
   // last (see ReleasePlan). The schedule's results are kept: the caller reads

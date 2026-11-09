@@ -563,12 +563,18 @@ TEST_CASE("table-reads-in-place-eligibility", "[eval][ordered]") {
 
 TEST_CASE("meter-counts-table-values-once", "[eval][ordered][meter]") {
   // The per-op working-set sample (CacheManager::note_working_set) must cover
-  // every value alive at that instant, at EVERY scope -- the outermost one
-  // included. Under the table-driven executor the values live in the cell
-  // registry, which the meter reaches through the cache's external-residency
-  // hook. An op evaluated against the root cache (no parent) never walked the
-  // chain, so the registry's bytes were left out of its sample. The fixture
-  // is unbatched, so every op runs at the outermost scope.
+  // every value alive at that instant, and count each exactly once, at EVERY
+  // scope -- the outermost one included. Under the table-driven executor the
+  // values live in the cell registry, which the meter reaches through the
+  // cache's external-residency hook. Two ways to get that wrong:
+  //   * under-count: an op evaluated against the root cache (no parent) never
+  //     walked the chain, so the registry's bytes were left out of its sample;
+  //   * double-count: an operand read whole from the registry is the very
+  //     buffer the registry's residency already counts, and must not be added
+  //     again as an operand.
+  // The fixture is unbatched, so every op runs at the outermost scope and
+  // every operand is a whole read of a registry-held value: a sample is then
+  // the live set plus exactly the op's own (not yet stored) result.
   ScalarNode const root1 = scalar_tree(L"((a * b) + c) * (a * b)");
   ScalarNode const root2 = scalar_tree(L"(a * b) * d + (e * f)");
   ScalarLeafEvaluator const yield{{{L"a", 2.0},
@@ -638,17 +644,47 @@ TEST_CASE("meter-counts-table-values-once", "[eval][ordered][meter]") {
 
   CHECK(got->as<ResultScalar<double>>().value() == Catch::Approx(-11.25));
 
+  // Every value here is one scalar of the same size.
+  std::size_t const one = got->size_in_bytes();
+  REQUIRE(one > 0);
   REQUIRE(!samples.empty());
-  bool some_live = false;
+
+  auto const vmap = sequant::eval::build_value_node_map(roots);
+  std::size_t n_checked = 0, n_with_live_operand = 0;
   for (auto const& s : samples) {
     std::size_t live_bytes = 0;
     for (auto const& e : s.live) live_bytes += e.bytes;
-    some_live = some_live || live_bytes > 0;
+    auto const is_live = [&](std::size_t hash) {
+      return std::any_of(s.live.begin(), s.live.end(),
+                         [&](auto const& e) { return e.hash == hash; });
+    };
     CAPTURE(s.total, live_bytes, s.op_hash);
     // never under-count a value known to be alive, at any scope
     CHECK(s.total >= live_bytes);
+
+    // ... and count nothing twice. For a product the sample is exactly the
+    // live set, plus the op's own not-yet-stored result, plus each operand
+    // the registry no longer holds (its last read moved the buffer out). (A
+    // sum is left out of the exact check: it may accumulate in place, where
+    // the result is one of the operands' buffers rather than a new one.)
+    auto const it = vmap.find(s.op_hash);
+    if (it == vmap.end() || it->second->leaf()) continue;
+    auto const& node = *it->second;
+    if (!node->is_product()) continue;
+    std::size_t const lh = node.left()->hash_value(),
+                      rh = node.right()->hash_value();
+    if (lh == rh) continue;
+    bool const l_live = is_live(lh), r_live = is_live(rh);
+    if (l_live || r_live) ++n_with_live_operand;
+    std::size_t const expected =
+        live_bytes + one + (l_live ? 0 : one) + (r_live ? 0 : one);
+    CHECK(s.total == expected);
+    ++n_checked;
   }
-  CHECK(some_live);
+  // the fixture must exercise what it claims to: ops whose operands are
+  // still held by the registry when the sample is taken
+  CHECK(n_checked > 0);
+  CHECK(n_with_live_operand > 0);
 }
 
 TEST_CASE("chain-holds-shared-persistent", "[eval][ordered]") {

@@ -1070,6 +1070,15 @@ class CacheManager {
   std::function<void(std::function<void(std::size_t hash, std::size_t bytes)>)>
       external_liveset_{};
 
+  /// Optional pointer-identity test against the externally held values \c
+  /// external_residency_ counts: true iff that store physically holds the
+  /// given buffer. The counterpart of \c chain_holds() for storage outside
+  /// this hierarchy's own \c cache_map_ entries; \c resident() consults both,
+  /// so an operand read whole from the external store is recognized as
+  /// already counted. Looked up along the parent chain the same way. Empty
+  /// (default) => nothing is held externally.
+  std::function<bool(ResultPtr const&)> external_holds_{};
+
   /// Per-instance cache-fill-once strictness (see entry::store), consulted
   /// instead of reading \c eval::strict_fill_once() directly. Defaults to
   /// that same env gate (\c SEQUANT_UT_STRICT_FILL_ONCE), so behavior is
@@ -1268,6 +1277,28 @@ class CacheManager {
         std::function<void(std::size_t hash, std::size_t bytes)>)> const
         empty{};
     return parent_ ? parent_->external_liveset() : empty;
+  }
+
+  /// Sets the external pointer-identity test (see \c external_holds_). Pass
+  /// an empty \c std::function to detach. Installed on the chain-root handle
+  /// only, and asserted so, for the same reason \c set_external_residency is:
+  /// it must describe the same store that hook counts.
+  void set_external_holds(std::function<bool(ResultPtr const&)> f) noexcept {
+    SEQUANT_ASSERT(parent_ == nullptr &&
+                   "CacheManager::set_external_holds: the external holds hook "
+                   "must be installed on the chain-root handle");
+    external_holds_ = std::move(f);
+  }
+
+  /// \return the local external pointer-identity test if set, else the one
+  ///         inherited from \c parent_; an empty \c std::function if none is
+  ///         wired anywhere along the chain. Looked up like \c
+  ///         external_residency_hook().
+  [[nodiscard]] std::function<bool(ResultPtr const&)> const&
+  external_holds_hook() const noexcept {
+    if (external_holds_) return external_holds_;
+    static std::function<bool(ResultPtr const&)> const empty{};
+    return parent_ ? parent_->external_holds_hook() : empty;
   }
 
   /// Ensure a scope-hoist slot exists for @p key so a loop-invariant
@@ -1527,6 +1558,22 @@ class CacheManager {
     for (auto const& [k, e] : cache_map_)
       if (e.holds(value)) return true;
     return parent_ ? parent_->chain_holds(value) : false;
+  }
+
+  /// \return true iff @p value's bytes are already part of the residency a
+  ///         working-set sample counts at this scope: some alive entry on the
+  ///         scope chain holds it (\c chain_holds()), or the external store
+  ///         does (\c external_holds_hook() -- the ordered executor's \c
+  ///         CellRegistry). Read-only. The per-op peak trace uses this, not
+  ///         \c chain_holds() alone, to decide whether an operand's bytes
+  ///         must be added: an operand read whole from the external store is
+  ///         the very buffer \c outer_residency() / \c chain_residency()
+  ///         already count.
+  [[nodiscard]] bool resident(ResultPtr const& value) const noexcept {
+    if (!value) return false;
+    if (chain_holds(value)) return true;
+    auto const& ext = external_holds_hook();
+    return ext && ext(value);
   }
 
   /// \return true iff some alive entry on this cache or any ancestor along the

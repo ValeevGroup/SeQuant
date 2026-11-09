@@ -242,16 +242,17 @@ enum struct TermMode { Begin, End };
 /// set
 ///
 ///   bytes(cache) + bytes(result) + bytes of each operand not aliased
-///                                  to a cache entry
+///                                  to an already-counted buffer
 ///
-/// (aliasing is decided at each call site by CacheManager::chain_holds --
-/// pointer identity against every alive entry on the scope chain -- so an
-/// operand read full from a cache at any scope is counted once via the cache
-/// residency, while a sliced/permuted/phase-shifted read is a distinct buffer
-/// and is added). bytes(cache) here is this cache's own residency;
-/// everything else resident at this scope -- the ancestors' entries and the
-/// externally held values (the ordered executor's cell registry) -- is added
-/// separately as CacheManager::outer_residency(), at the outermost scope too.
+/// (aliasing is decided at each call site by CacheManager::resident --
+/// pointer identity against every alive entry on the scope chain and against
+/// the externally held values, i.e. the ordered executor's cell registry --
+/// so an operand read full from a cache at any scope, or from the registry,
+/// is counted once via the residency, while a sliced/permuted/phase-shifted
+/// read is a distinct buffer and is added). bytes(cache) here is this cache's
+/// own residency; everything else resident at this scope -- the ancestors'
+/// entries and the externally held values -- is added separately as
+/// CacheManager::outer_residency(), at the outermost scope too.
 /// It is reported as a running max so it is
 /// monotonically non-decreasing within one evaluation — the peak memory the
 /// engine reaches — rather than the instantaneous per-op working set, which
@@ -722,7 +723,8 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
 
   if constexpr (detail::trace(EvalTrace)) {
     size_t hwmark = cache_bytes + log::bytes(post).value;
-    if (!cache.alive(nd)) hwmark += log::bytes(res).value;
+    if (!cache.alive(nd) && !cache.resident(res))
+      hwmark += log::bytes(res).value;
     hwmark += cache.outer_residency();
     auto stat = log::EvalStat{
         .mode = log::EvalMode::MultByPhase,
@@ -843,15 +845,15 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
   SEQUANT_ASSERT(result);
 
   if constexpr (detail::trace(EvalTrace)) {
-    // Skip an operand's bytes only when it aliases a cache buffer that is
-    // already counted (locally in bytes(cache,...) or up-chain in
-    // chain_residency()). chain_holds() tests pointer identity against
-    // every alive entry on the scope chain: a cached child fetched full
-    // aliases and is skipped; an apply_phase / sliced / permuted child is
-    // a distinct buffer and is added.
+    // Skip an operand's bytes only when it aliases a buffer that is already
+    // counted (locally in bytes(cache,...), or in outer_residency(): up-chain
+    // or in the cell registry). resident() tests pointer identity against
+    // every alive entry on the scope chain and the externally held values: a
+    // child fetched full aliases and is skipped; an apply_phase / sliced /
+    // permuted child is a distinct buffer and is added.
     size_t hwmark = log::bytes(cache, result).value;
-    if (!cache.chain_holds(left)) hwmark += log::bytes(left).value;
-    if (right && !cache.chain_holds(right)) hwmark += log::bytes(right).value;
+    if (!cache.resident(left)) hwmark += log::bytes(left).value;
+    if (right && !cache.resident(right)) hwmark += log::bytes(right).value;
     hwmark += cache.outer_residency();
     log::eval(log::EvalStat{.mode = log::eval_mode(node),
                             .time = time,
@@ -921,7 +923,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
       // much smaller, single-term) right addend, logged separately
       // from the SumInplace event below.
       size_t hwmark = log::bytes(cache, right_aligned).value;
-      if (!cache.chain_holds(right)) hwmark += log::bytes(right).value;
+      if (!cache.resident(right)) hwmark += log::bytes(right).value;
       hwmark += cache.outer_residency();
       log::eval(log::EvalStat{.mode = log::EvalMode::Permute,
                               .time = perm_time,
@@ -954,7 +956,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
     // mem_right are left unset, matching the "SumInplace | --- |
     // 0B" row of the EvalStat doc table above.
     size_t hwmark = log::bytes(cache, result).value;
-    if (!cache.chain_holds(right_aligned))
+    if (!cache.resident(right_aligned))
       hwmark += log::bytes(right_aligned).value;
     hwmark += cache.outer_residency();
     log::eval(log::EvalStat{.mode = log::EvalMode::SumInplace,
@@ -1393,13 +1395,13 @@ ResultPtr evaluate(Node const& node,           //
     if (perm) {
       // result.pre aliases a cache buffer only when the inner evaluate returned
       // it unchanged (node cached at some scope, no mult_by_phase result);
-      // chain_holds() tests that by pointer identity across the scope chain. A
+      // resident() tests that by pointer identity across the scope chain and
+      // the externally held values. A
       // permuted/phase-shifted pre is a distinct result and is added, with
       // the bytes the backend reports for it (none for a pending view that
       // shares its parent's tiles).
       size_t hwmark = log::bytes(cache, result.post).value;
-      if (!cache.chain_holds(result.pre))
-        hwmark += log::bytes(result.pre).value;
+      if (!cache.resident(result.pre)) hwmark += log::bytes(result.pre).value;
       hwmark += cache.outer_residency();
       auto stat = log::EvalStat{
           .mode = log::EvalMode::Permute,
@@ -1459,9 +1461,9 @@ ResultPtr evaluate(Nodes const& nodes,  //
       // bytes only when pre aliases a chain-resident cache buffer (fetched
       // full). pre comes back from the permute-wrapping evaluate, so a
       // permuted/phase-shifted read is a distinct buffer with its own pointer
-      // and is added; chain_holds() decides by pointer identity.
+      // and is added; resident() decides by pointer identity.
       size_t hwmark = log::bytes(cache, result).value;
-      if (!cache.chain_holds(pre)) hwmark += log::bytes(pre).value;
+      if (!cache.resident(pre)) hwmark += log::bytes(pre).value;
       hwmark += cache.outer_residency();
       auto stat = log::EvalStat{
           .mode = log::EvalMode::SumInplace,
