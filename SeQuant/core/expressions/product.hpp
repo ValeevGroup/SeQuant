@@ -388,6 +388,13 @@ class Product : public Expr {
       const container::vector<std::wstring> &cardinal_tensor_labels,
       bool recursive);
 
+  /// sorts the factors, which are not scalars, respecting their
+  /// commutativity
+  /// @param cardinal_tensor_labels the labels of the tensors that go first,
+  /// in this order
+  void sort_nonscalar_factors(
+      const container::vector<std::wstring> &cardinal_tensor_labels);
+
   bool static_equal(const Expr &that) const override;
 
   /// orders by factors (lexicographically), then by scalar (by real part, then

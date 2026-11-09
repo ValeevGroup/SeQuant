@@ -11,6 +11,8 @@
 
 #include <memory>
 
+#include <range/v3/algorithm/none_of.hpp>
+
 namespace sequant {
 
 namespace {
@@ -44,14 +46,20 @@ void recanonicalize_sum_factors(Product& product,
   // N.B. mutable iteration resets the memoized hash of the product
   container::svector<ExprPtr*> factors;
   for (auto& factor : product) factors.push_back(&factor);
+  if (ranges::none_of(factors, [](const ExprPtr* f) { return f->is<Sum>(); }))
+    return;
+  // N.B. the indices of each factor are collected once
+  container::svector<container::set<Index>> factor_indices;
+  for (const auto* factor : factors)
+    factor_indices.push_back(get_used_indices(*factor));
   for (std::size_t f = 0; f != factors.size(); ++f) {
     if (!factors[f]->is<Sum>()) continue;
-    const auto sum_indices = get_used_indices(*factors[f]);
+    const auto& sum_indices = factor_indices[f];
     container::set<Index> sum_named = named;
     bool other_dummies = false;
     for (std::size_t g = 0; g != factors.size() && !other_dummies; ++g) {
       if (g == f) continue;
-      for (auto&& idx : get_used_indices(*factors[g])) {
+      for (auto&& idx : factor_indices[g]) {
         if (sum_indices.contains(idx))
           sum_named.insert(idx);
         else if (!named.contains(idx)) {

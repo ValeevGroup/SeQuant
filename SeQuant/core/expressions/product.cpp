@@ -94,14 +94,20 @@ ExprPtr Product::canonicalize_impl(const NamedIndexSpec &named_indices,
   // canonicalized as part of the TN built of all tensor factors of this) ...
   // an index that a subfactor shares with another factor is a dummy of this
   // product, but external to the subfactor, so it is named in the subfactor
-  auto subfactor_named_indices = [this, &named_indices](std::size_t f) {
+  // N.B. the indices of each factor are collected once, and only if a
+  // non-tensor factor needs them
+  container::svector<container::set<Index>> factor_indices;
+  auto subfactor_named_indices = [this, &named_indices,
+                                  &factor_indices](std::size_t f) {
     if (named_indices.deduce()) return named_indices;
+    if (factor_indices.empty())
+      for (const auto &factor : factors_)
+        factor_indices.push_back(get_used_indices(factor));
     auto result = named_indices.indices();
-    const auto factor_indices = get_used_indices(factors_[f]);
     for (std::size_t g = 0; g != factors_.size(); ++g) {
       if (g == f) continue;
-      for (auto &&idx : get_used_indices(factors_[g]))
-        if (factor_indices.contains(idx)) result.insert(idx);
+      for (auto &&idx : factor_indices[g])
+        if (factor_indices[f].contains(idx)) result.insert(idx);
     }
     return detail::explicit_named_indices(std::move(result));
   };
@@ -172,7 +178,8 @@ ExprPtr Product::canonicalize_impl(const NamedIndexSpec &named_indices,
     }
     this->reset_hash_value();
   } else {  // if contains non-tensors, do commutation-checking resort
-    sort_factors(detail::cardinal_tensor_labels(opts), /* recursive = */ false);
+    // the scalars were pulled out above
+    sort_nonscalar_factors(detail::cardinal_tensor_labels(opts));
   }
   // reinsert scalar factors at the front
   factors_.insert(factors_.begin(), scalars.begin(), scalars.end());
@@ -331,6 +338,14 @@ void Product::sort_factors(
              }) |
              ranges::to<decltype(factors_)>;
 
+  sort_nonscalar_factors(cardinal_tensor_labels);
+
+  factors_.insert(factors_.begin(), scalars.begin(), scalars.end());
+  reset_hash_value();
+}
+
+void Product::sort_nonscalar_factors(
+    const container::vector<std::wstring> &cardinal_tensor_labels) {
   // comparer that respects cardinal tensor labels
   auto local_compare = [&cardinal_tensor_labels](const ExprPtr &first,
                                                  const ExprPtr &second) {
@@ -380,8 +395,6 @@ void Product::sort_factors(
                   return result;
                 });
   }
-
-  factors_.insert(factors_.begin(), scalars.begin(), scalars.end());
   reset_hash_value();
 }
 
