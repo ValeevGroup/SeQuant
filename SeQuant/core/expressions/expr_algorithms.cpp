@@ -15,6 +15,7 @@
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/all_of.hpp>
@@ -220,19 +221,241 @@ detail::IndexPermutationGroup detail::symmetrizer_group(
   return group;
 }
 
+detail::IndexPermutationGroup detail::symmetrizers_group(
+    const container::svector<Tensor>& symmetrizers) {
+  IndexPermutationGroup group{{{}, 1}};
+  for (const auto& symmetrizer : symmetrizers) {
+    IndexPermutationGroup product_group;
+    for (const auto& [map1, sign1] : group)
+      for (const auto& [map2, sign2] : symmetrizer_group(symmetrizer)) {
+        auto map = map1;
+        map.insert(map2.begin(), map2.end());
+        product_group.emplace_back(std::move(map), sign1 * sign2);
+      }
+    group = std::move(product_group);
+  }
+  return group;
+}
+
 namespace {
+
+/// @return whether @p expr is a tensor, or a (nested) product of tensors and
+/// scalars
+bool is_tensor_tree(const ExprPtr& expr) {
+  if (expr.is<Tensor>()) return true;
+  if (!expr.is<Product>()) return false;
+  return ranges::all_of(expr.as<Product>().factors(), [](const ExprPtr& f) {
+    return f->is<Constant>() || is_tensor_tree(f);
+  });
+}
+
+/// @return the slot permutation q, if any, such that @p source [q[k]] has
+/// the space of @p target [k] for every k; among the matching slots of
+/// equal space the order is kept
+std::optional<std::vector<std::size_t>> match_spaces(
+    const container::svector<std::pair<Index, Index>>& target,
+    const container::svector<std::pair<Index, Index>>& source) {
+  if (target.size() != source.size()) return std::nullopt;
+  std::vector<std::size_t> q(target.size());
+  std::vector<bool> used(source.size(), false);
+  for (std::size_t k = 0; k != target.size(); ++k) {
+    bool found = false;
+    for (std::size_t j = 0; j != source.size() && !found; ++j) {
+      if (used[j] || source[j].first.space() != target[k].first.space() ||
+          source[j].second.space() != target[k].second.space())
+        continue;
+      q[k] = j;
+      used[j] = found = true;
+    }
+    if (!found) return std::nullopt;
+  }
+  return q;
+}
+
+int parity(const std::vector<std::size_t>& p) {
+  int sign = 1;
+  for (std::size_t i = 0; i != p.size(); ++i)
+    for (std::size_t j = i + 1; j != p.size(); ++j)
+      if (p[i] > p[j]) sign = -sign;
+  return sign;
+}
+
+/// Canonicalizes S * @p part , S being @p symmetrizer , in a single pass: the
+/// indices of S are not named, so the canonicalization can permute them as
+/// the symmetry of S allows, i.e. by the permutations that S absorbs (see
+/// detail::symmetrizer_group()), and the result, which is the same for all
+/// images of @p part , is the representative of their orbit. The indices of
+/// S are then renamed back: S has its original slots, and the image of
+/// @p part is renamed accordingly, with the phase of the permutation of S's
+/// slots.
+/// @return the representative of @p part , or nullopt if @p part or
+/// @p symmetrizer is not of the supported form (a tensor tree; no aux, null
+/// or protoindexed symmetrizer indices)
+std::optional<ExprPtr> canonicalize_term_in_one_pass(
+    const ExprPtr& part, const Tensor& symmetrizer,
+    const container::set<Index>& named, const CanonicalizeOptions& opts) {
+  if (!symmetrizer.aux().empty() || !is_tensor_tree(part)) return std::nullopt;
+  for (const auto& idx : symmetrizer.const_indices())
+    if (!idx.nonnull() || idx.has_proto_indices()) return std::nullopt;
+  // with its indices not named, S is contracted with @p part : an index of
+  // S must occur in @p part in a slot of the other kind (S bra with a ket
+  // slot and vice versa), else the network is not a valid contraction,
+  // unless the tensor of that slot has bra-ket symmetry. N.B. this does not
+  // depend on which image of @p part is given (the permutations of S keep
+  // the kind of the slots of every index, and only tensors with bra-ket
+  // symmetry may have their slots exchanged by canonicalization), so that all
+  // images take the same path
+  {
+    const auto s_bra = symmetrizer.bra() | ranges::to<container::set<Index>>;
+    const auto s_ket = symmetrizer.ket() | ranges::to<container::set<Index>>;
+    bool valid = true;
+    auto check = [&](const ExprPtr& expr, auto&& self) -> void {
+      if (!valid) return;
+      if (expr.is<Tensor>()) {
+        const auto& t = expr.as<Tensor>();
+        for (const auto& idx : t.aux())
+          if (s_bra.contains(idx) || s_ket.contains(idx)) valid = false;
+        if (t.braket_symmetry() != BraKetSymmetry::Nonsymm) return;
+        for (const auto& idx : t.bra())
+          if (s_bra.contains(idx)) valid = false;
+        for (const auto& idx : t.ket())
+          if (s_ket.contains(idx)) valid = false;
+      } else if (expr.is<Product>()) {
+        for (const auto& factor : expr.as<Product>().factors())
+          self(factor, self);
+      }
+    };
+    check(part, check);
+    if (!valid) return std::nullopt;
+  }
+
+  // the symmetrizer under a label that no other tensor has, so that it can be
+  // found after the canonicalization; its symmetries are those of S
+  static const std::wstring private_label = L"⟨symmetrizer⟩";
+  auto indices = [](const auto& range) {
+    return range | ranges::to<container::svector<Index>>;
+  };
+  ExprPtr product = ex<Product>();
+  product->as<Product>().append(
+      1,
+      ex<Tensor>(private_label, bra(indices(symmetrizer.bra())),
+                 ket(indices(symmetrizer.ket())),
+                 TensorSymmetries{.perm = symmetrizer.symmetry(),
+                                  .braket = symmetrizer.braket_symmetry(),
+                                  .column = symmetrizer.column_symmetry()}),
+      Product::Flatten::No);
+  if (part.is<Product>()) {
+    product->as<Product>().scale(part.as<Product>().scalar());
+    for (const auto& factor : part.as<Product>().factors())
+      product->as<Product>().append(1, factor, Product::Flatten::No);
+  } else {
+    product->as<Product>().append(1, part, Product::Flatten::No);
+  }
+
+  container::set<Index> named_rest = named;
+  for (const auto& idx : symmetrizer.const_indices()) named_rest.erase(idx);
+  canonicalize(product, detail::explicit_named_indices(std::move(named_rest)),
+               opts);
+  if (product->is_zero()) return ex<Constant>(0);
+  if (!product.is<Product>()) return std::nullopt;
+
+  // the canonicalized symmetrizer S' and the other factors
+  const Tensor* canonical = nullptr;
+  auto rest = std::make_shared<Product>();
+  rest->scale(product.as<Product>().scalar());
+  for (const auto& factor : product.as<Product>().factors()) {
+    if (factor.is<Tensor>() && factor.as<Tensor>().label() == private_label) {
+      if (canonical) return std::nullopt;
+      canonical = &factor.as<Tensor>();
+    } else {
+      rest->append(1, factor, Product::Flatten::No);
+    }
+  }
+  if (!canonical) return std::nullopt;
+
+  // reorder the slots of S' so that each holds an index of the space of the
+  // same slot of S: S' = sign * S'' ; Â: bra and ket independently, with
+  // parity; Ŝ: columns
+  container::map<Index, Index> rename;
+  int sign = 1;
+  auto slots = [](const auto& range) {
+    container::svector<std::pair<Index, Index>> result;
+    for (const auto& idx : range) result.emplace_back(idx, idx);
+    return result;
+  };
+  if (symmetrizer.symmetry() != Symmetry::Nonsymm) {
+    for (const bool is_bra : {true, false}) {
+      const auto target =
+          is_bra ? slots(symmetrizer.bra()) : slots(symmetrizer.ket());
+      const auto source =
+          is_bra ? slots(canonical->bra()) : slots(canonical->ket());
+      const auto q = match_spaces(target, source);
+      if (!q) return std::nullopt;
+      if (symmetrizer.symmetry() == Symmetry::Antisymm) sign *= parity(*q);
+      for (std::size_t k = 0; k != q->size(); ++k)
+        rename.emplace(source[(*q)[k]].first, target[k].first);
+    }
+  } else {
+    if (symmetrizer.bra_rank() != symmetrizer.ket_rank()) return std::nullopt;
+    container::svector<std::pair<Index, Index>> target, source;
+    for (std::size_t k = 0; k != symmetrizer.bra_rank(); ++k) {
+      target.emplace_back(symmetrizer.bra()[k], symmetrizer.ket()[k]);
+      source.emplace_back(canonical->bra()[k], canonical->ket()[k]);
+    }
+    const bool columns = symmetrizer.column_symmetry() == ColumnSymmetry::Symm;
+    const auto q = columns ? match_spaces(target, source)
+                           : std::optional<std::vector<std::size_t>>{};
+    if (!q) {
+      // no symmetry to reorder by: the slots must match as they are
+      if (columns) return std::nullopt;
+      for (std::size_t k = 0; k != target.size(); ++k) {
+        if (source[k].first.space() != target[k].first.space() ||
+            source[k].second.space() != target[k].second.space())
+          return std::nullopt;
+        rename.emplace(source[k].first, target[k].first);
+        rename.emplace(source[k].second, target[k].second);
+      }
+    } else {
+      for (std::size_t k = 0; k != q->size(); ++k) {
+        rename.emplace(source[(*q)[k]].first, target[k].first);
+        rename.emplace(source[(*q)[k]].second, target[k].second);
+      }
+    }
+  }
+
+  // the dummies of the other factors that have the labels the indices of S
+  // are given back are renamed out of the way
+  container::set<std::wstring> taken;
+  for (const auto& idx : get_used_indices(product)) taken.emplace(idx.label());
+  for (const auto& idx : symmetrizer.const_indices())
+    taken.emplace(idx.label());
+  IndexFactory fresh([&taken](const Index& idx) {
+    return !taken.contains(std::wstring(idx.label()));
+  });
+  container::set<std::wstring> target_labels;
+  for (const auto& idx : symmetrizer.const_indices())
+    target_labels.emplace(idx.label());
+  for (const auto& idx : get_used_indices(ExprPtr(rest)))
+    if (!rename.contains(idx) &&
+        target_labels.contains(std::wstring(idx.label())))
+      rename.emplace(idx, fresh.make(idx));
+
+  return transform_expr(ExprPtr(rest), rename, sign);
+}
 
 /// @return the canonical form of @p term (a part of the expression of a
 /// result that a symmetrizer multiplies, see
 /// detail::for_each_symmetrized_term()) that is the same for all its images
-/// under @p group , the group of the symmetrizer (see
-/// detail::symmetrizer_group()), with the phase of the permutation absorbed:
+/// under @p group , the group of the symmetrizers (see
+/// detail::symmetrizers_group()), with the phase of the permutation absorbed:
 /// of the canonical forms of the images the one that is smallest by hash
 /// (then by its text) is chosen; the indices of the result keep their labels
-ExprPtr canonicalize_term_for_result(const ExprPtr& term,
-                                     const detail::IndexPermutationGroup& group,
-                                     const NamedIndexSpec& named,
-                                     const CanonicalizeOptions& opts) {
+/// @note this costs a canonicalization per element of @p group ; it is the
+/// fallback of canonicalize_term_in_one_pass()
+ExprPtr canonicalize_term_by_search(const ExprPtr& term,
+                                    const detail::IndexPermutationGroup& group,
+                                    const NamedIndexSpec& named,
+                                    const CanonicalizeOptions& opts) {
   // the key ignores the scalar, so that images that differ only by it
   // compare equal
   auto unscaled = [](const ExprPtr& image) {
@@ -269,8 +492,8 @@ ExprPtr canonicalize_term_for_result(const ExprPtr& term,
 
 bool detail::for_each_symmetrized_term(
     ExprPtr& term, const ResultExpr& result,
-    const std::function<void(ExprPtr& part,
-                             const IndexPermutationGroup& group)>& f) {
+    const std::function<void(
+        ExprPtr& part, const container::svector<Tensor>& symmetrizers)>& f) {
   if (!term.is<Product>()) return false;
   const auto result_indices =
       result.indices() | ranges::to<container::set<Index>>;
@@ -285,36 +508,25 @@ bool detail::for_each_symmetrized_term(
   };
   std::size_t nsums = 0;
   const auto& product = term.as<Product>();
-  // the group of the symmetrizers: the product of their groups, which act on
-  // disjoint sets of indices
-  IndexPermutationGroup group{{{}, 1}};
+  container::svector<Tensor> symmetrizers;
   container::set<Index> symmetrized_indices;
-  std::size_t nsymmetrizers = 0;
   for (const auto& factor : product.factors()) {
     if (is_symmetrizer(factor)) {
-      ++nsymmetrizers;
       for (const auto& idx : factor.as<Tensor>().const_indices()) {
         // the symmetrizers do not commute if they share indices
         if (!symmetrized_indices.insert(idx).second) return false;
       }
-      IndexPermutationGroup product_group;
-      for (const auto& [map1, sign1] : group)
-        for (const auto& [map2, sign2] :
-             symmetrizer_group(factor.as<Tensor>())) {
-          auto map = map1;
-          map.insert(map2.begin(), map2.end());
-          product_group.emplace_back(std::move(map), sign1 * sign2);
-        }
-      group = std::move(product_group);
+      symmetrizers.push_back(factor.as<Tensor>());
     } else if (factor.is<Sum>())
       ++nsums;
   }
+  const auto nsymmetrizers = symmetrizers.size();
   if (nsymmetrizers == 0) return false;
   if (nsums == 1 && nsymmetrizers + 1 == product.factors().size()) {
     // N.B. mutable iteration resets the memoized hashes
     for (auto& factor : *term) {
       if (!factor.is<Sum>()) continue;
-      for (auto& summand : *factor) f(summand, group);
+      for (auto& summand : *factor) f(summand, symmetrizers);
     }
     return true;
   }
@@ -329,7 +541,7 @@ bool detail::for_each_symmetrized_term(
       rest->append(1, factor, Product::Flatten::No);
   }
   ExprPtr part = rest;
-  f(part, group);
+  f(part, symmetrizers);
   if (part->is_zero()) {
     term = ex<Constant>(0);
     return true;
@@ -349,10 +561,20 @@ ResultExpr& canonicalize(ResultExpr& expr, const CanonicalizeOptions& opts) {
   const auto named = named_indices(expr);
   // terms that differ by a permutation of the indices of a symmetrizer that
   // multiplies them are the same term (see detail::for_each_symmetrized_term())
+  const auto result_indices =
+      expr.indices() | ranges::to<container::set<Index>>;
   auto present = [&](ExprPtr& term,
-                     const detail::IndexPermutationGroup& group) {
-    if (group.size() > 1)
-      term = canonicalize_term_for_result(term, group, named, opts);
+                     const container::svector<Tensor>& symmetrizers) {
+    const auto group = detail::symmetrizers_group(symmetrizers);
+    if (group.size() == 1) return;
+    if (symmetrizers.size() == 1) {
+      if (auto representative = canonicalize_term_in_one_pass(
+              term, symmetrizers.front(), result_indices, opts)) {
+        term = std::move(*representative);
+        return;
+      }
+    }
+    term = canonicalize_term_by_search(term, group, named, opts);
   };
   auto& rhs = expr.expression();
   if (!rhs) return expr;

@@ -171,7 +171,8 @@ ResultExpr prettify(const ResultExpr& expr, const PrettifyOptions& opts) {
     bool replaced = false;
     detail::for_each_symmetrized_term(
         term, expr,
-        [&](ExprPtr& part, const detail::IndexPermutationGroup& group) {
+        [&](ExprPtr& part, const container::svector<Tensor>& symmetrizers) {
+          const auto group = detail::symmetrizers_group(symmetrizers);
           if (group.size() == 1) return;
           part = prettify_term_for_result(part, group, named, opts);
           replaced = true;

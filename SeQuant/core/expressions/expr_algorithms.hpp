@@ -226,9 +226,15 @@ using IndexPermutationGroup =
 /// to one of the same space, i.e. that relate elements of the same block
 IndexPermutationGroup symmetrizer_group(const Tensor& symmetrizer);
 
+/// @return the product of the groups of @p symmetrizers (see
+/// symmetrizer_group()), which act on disjoint sets of indices
+IndexPermutationGroup symmetrizers_group(
+    const container::svector<Tensor>& symmetrizers);
+
 /// Applies @p f to the parts of @p term that may be replaced by their images
 /// under the group of the (anti)symmetrizers of @p result that multiply them
-/// (see symmetrizer_group()), as S * X = sign(P) S * P(X). The group is that
+/// (see symmetrizers_group()), as S * X = sign(P) S * P(X); @p f receives
+/// the part and the (anti)symmetrizers. The group is that
 /// of the symmetrizers that are present, not that of the declared symmetry of
 /// @p result : that the result has a symmetry does not make its terms have
 /// it, so nothing else may be replaced.
@@ -249,8 +255,8 @@ IndexPermutationGroup symmetrizer_group(const Tensor& symmetrizer);
 /// @return true if @p f was applied
 bool for_each_symmetrized_term(
     ExprPtr& term, const ResultExpr& result,
-    const std::function<void(ExprPtr& part,
-                             const IndexPermutationGroup& group)>& f);
+    const std::function<void(
+        ExprPtr& part, const container::svector<Tensor>& symmetrizers)>& f);
 
 }  // namespace detail
 

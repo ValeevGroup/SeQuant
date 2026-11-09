@@ -11,6 +11,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -1486,6 +1487,60 @@ TEST_CASE("result_expr_canonicalization", "[algorithms][canonicalize]") {
         L"(X{a_1,a_2;i_1,i_2}:N-N-N - X{a_2,a_1;i_1,i_2}:N-N-N)");
     canonicalize(partial);
     CHECK(size(inner(partial)) == 2);
+  }
+
+  SECTION("all images have the same representative") {
+    // each image P(X) of X (with the phase of P) under the group of the
+    // symmetrizer canonicalizes to the same term; the dummies of X have the
+    // labels of result indices, which the canonicalization moves out of the
+    // way
+    struct Case {
+      std::wstring lhs, symmetrizer, x;
+    };
+    const std::vector<Case> cases = {
+        {L"R{a_1,a_2,a_3;i_1,i_2,i_3}:A-N-S",
+         L"Â{i_1,i_2,i_3;a_1,a_2,a_3}:A-N-S",
+         L"g{i_4,a_3;a_4,i_3}:A-N-S * t{a_1,a_2,a_4;i_1,i_2,i_4}:A-N-S"},
+        {L"R{a_1,a_2,a_3;i_1,i_2,i_3}:N-N-S",
+         L"Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-N-S",
+         L"g{i_4,a_3;a_4,i_3}:N-N-S * t{a_1,a_2,a_4;i_4,i_2,i_1}:N-N-S"},
+        // mixed spaces: only the permutations within a space
+        {L"R{a_1,x_1;i_1,i_2}:A-N-S", L"Â{i_1,i_2;a_1,x_1}:A-N-S",
+         L"f{x_1;i_3}:N-N-N * t{a_1,i_3;i_1,i_2}:N-N-N"},
+    };
+    for (const auto& c : cases) {
+      const auto make = [&](const ExprPtr& x) {
+        auto r = deserialize<ResultExpr>(c.lhs + L" = 1");
+        r.expression() = deserialize(c.symmetrizer) * x;
+        return r;
+      };
+      const auto x = deserialize(c.x);
+      std::optional<std::wstring> representative;
+      const auto symmetrizer = deserialize(c.symmetrizer);
+      for (const auto& [map, sign] :
+           detail::symmetrizer_group(symmetrizer.as<Tensor>())) {
+        auto r = make(transform_expr(x, map, sign));
+        canonicalize(r);
+        const auto text = serialize(r);
+        if (!representative) representative = text;
+        CHECK(text == *representative);
+      }
+      // ... which is one of the images of the term
+      auto r = make(x);
+      canonicalize(r);
+      const auto named = named_indices(r);
+      auto plain = [&named](ExprPtr e) {
+        canonicalize(e, named);
+        return serialize(e);
+      };
+      const auto canonical = plain(r.expression());
+      bool is_image = false;
+      for (const auto& [map, sign] :
+           detail::symmetrizer_group(symmetrizer.as<Tensor>()))
+        is_image |= plain(deserialize(c.symmetrizer) *
+                          transform_expr(x, map, sign)) == canonical;
+      CHECK(is_image);
+    }
   }
 
   SECTION("a term that vanishes by symmetry") {
