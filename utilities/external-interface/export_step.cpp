@@ -403,15 +403,20 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
     std::vector<ExpressionGroup<>> groups =
         prepare_expressions(exctx, inputs, genctx, always_create_ids);
 
-    if (recycle_intermediates_.has_value()) {
+    if (recycle_intermediates_.has_value() || irrep_context_.has_value()) {
       // Entries flagged to overwrite their previous result (CSE
       // intermediates) are the ones whose names may be recycled
       auto overwrites = [&always_create_ids](const ExportNode<> &tree) {
         return always_create_ids.contains(tree->id());
       };
 
-      recycle_intermediate_names(groups, genctx, overwrites,
-                                 recycle_intermediates_.value());
+      // Without recycling, names are only changed such that no name is used
+      // for different IRREPs in different groups
+      recycle_intermediate_names(
+          groups, genctx, overwrites,
+          recycle_intermediates_.value_or(opt::ShapeCompatibility::ExactBlock),
+          opt::IntermediateNamePool::default_label_generator(),
+          !recycle_intermediates_.has_value());
 
       for (const ExpressionGroup<> &group : groups) {
         // Renamed results need the same zero strategy as the one set for

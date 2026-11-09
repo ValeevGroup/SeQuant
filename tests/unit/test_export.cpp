@@ -12,6 +12,7 @@
 #include <SeQuant/core/export/julia_itensor.hpp>
 #include <SeQuant/core/export/julia_tensor_kit.hpp>
 #include <SeQuant/core/export/julia_tensor_operations.hpp>
+#include <SeQuant/core/export/name_recycling.hpp>
 #include <SeQuant/core/export/python_einsum.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
@@ -1333,6 +1334,79 @@ TEST_CASE("export-irrep-name", "[export][irreps]") {
   // f is totally symmetric and therefore not annotated
   CHECK_THAT(code, ContainsSubstring("f:cc[kl], f:cc\n"));
   CHECK_THAT(code, !ContainsSubstring("f:cc //"));
+}
+
+TEST_CASE("export-name-recycling-irreps", "[export][irreps]") {
+  using point_groups::D2;
+  using Irrep = Z2Irrep<D2>;
+  auto resetter = to_export_context();
+
+  // X1 is defined in both groups, with the IRREP of its first factor
+  auto setup = [](std::wstring first, std::wstring second) {
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ctx.set_irrep_context(IrrepContext<Z2Algebra<D2>>(
+        resolve_by_label<Irrep>({{L"t", {make_irrep<D2>("B1")}},
+                                 {L"v", {make_irrep<D2>("B2")}},
+                                 {L"f", {make_irrep<D2>("A")}},
+                                 {L"g", {make_irrep<D2>("A")}}})));
+    auto groups = parse_expression_spec(
+        "section G1:\nX1{a1;i1} = " + toUtf8(first) +
+            "{a1;i2} f{i2;i1}\nR1{a1;i1} = X1{a1;i2} g{i2;i1}\n"
+            "section G2:\nX1{a1;i1} = " +
+            toUtf8(second) +
+            "{a1;i2} f{i2;i1}\nR2{a1;i1} = X1{a1;i2} g{i2;i1}\n",
+        false);
+    return std::make_pair(std::move(ctx), std::move(groups));
+  };
+  auto overwrites = [](const ExportNode<> &tree) {
+    return tree->is_tensor() && tree->as_tensor().label().starts_with(L"X");
+  };
+  auto label_of = [](const ExpressionGroup<> &group, std::size_t pos) {
+    return std::wstring((*std::next(group.begin(), pos))->as_tensor().label());
+  };
+  auto uses_label = [](const ExpressionGroup<> &group, std::size_t pos,
+                       const std::wstring &label) {
+    return to_expr(*std::next(group.begin(), pos))->to_latex().find(label) !=
+           std::wstring::npos;
+  };
+
+  const bool conflicts_only = GENERATE(false, true);
+  CAPTURE(conflicts_only);
+  const auto compat = opt::ShapeCompatibility::ExactBlock;
+  const auto labels = opt::IntermediateNamePool::default_label_generator();
+
+  SECTION("different IRREPs") {
+    auto [ctx, groups] = setup(L"t", L"v");
+    recycle_intermediate_names(groups, ctx, overwrites, compat, labels,
+                               conflicts_only);
+    CHECK(label_of(groups[0], 0) != label_of(groups[1], 0));
+    // Uses follow the definition
+    CHECK(uses_label(groups[0], 1, label_of(groups[0], 0)));
+    CHECK(uses_label(groups[1], 1, label_of(groups[1], 0)));
+  }
+
+  SECTION("redefinition with conflicting and matching IRREPs") {
+    auto [ctx, groups] = setup(L"t", L"v");
+    // Redefine X1 in the second group with the IRREPs it has in the first
+    groups[1].add(to_export_tree(
+        deserialize<ResultExpr>("X1{a1;i1} = t{a1;i2} f{i2;i1}")));
+    groups[1].add(to_export_tree(
+        deserialize<ResultExpr>("R3{a1;i1} = X1{a1;i2} g{i2;i1}")));
+    recycle_intermediate_names(groups, ctx, overwrites, compat, labels,
+                               conflicts_only);
+    // Only the definition with the other IRREPs must not share the name
+    CHECK(label_of(groups[1], 0) != label_of(groups[0], 0));
+    CHECK(uses_label(groups[1], 1, label_of(groups[1], 0)));
+    CHECK(uses_label(groups[1], 3, label_of(groups[1], 2)));
+  }
+
+  SECTION("same IRREPs") {
+    auto [ctx, groups] = setup(L"t", L"t");
+    recycle_intermediate_names(groups, ctx, overwrites, compat, labels,
+                               conflicts_only);
+    CHECK(label_of(groups[0], 0) == label_of(groups[1], 0));
+  }
 }
 
 TEST_CASE("export-irreps", "[export][irreps]") {
