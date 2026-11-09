@@ -248,8 +248,10 @@ enum struct TermMode { Begin, End };
 /// pointer identity against every alive entry on the scope chain -- so an
 /// operand read full from a cache at any scope is counted once via the cache
 /// residency, while a sliced/permuted/phase-shifted read is a distinct buffer
-/// and is added). bytes(cache) here is this cache's own residency; the
-/// ancestors' residency is added separately as CacheManager::chain_residency().
+/// and is added). bytes(cache) here is this cache's own residency;
+/// everything else resident at this scope -- the ancestors' entries and the
+/// externally held values (the ordered executor's cell registry) -- is added
+/// separately as CacheManager::outer_residency(), at the outermost scope too.
 /// It is reported as a running max so it is
 /// monotonically non-decreasing within one evaluation — the peak memory the
 /// engine reaches — rather than the instantaneous per-op working set, which
@@ -721,7 +723,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
   if constexpr (detail::trace(EvalTrace)) {
     size_t hwmark = cache_bytes + log::bytes(post).value;
     if (!cache.alive(nd)) hwmark += log::bytes(res).value;
-    hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+    hwmark += cache.outer_residency();
     auto stat = log::EvalStat{
         .mode = log::EvalMode::MultByPhase,
         .time = time,
@@ -850,7 +852,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
     size_t hwmark = log::bytes(cache, result).value;
     if (!cache.chain_holds(left)) hwmark += log::bytes(left).value;
     if (right && !cache.chain_holds(right)) hwmark += log::bytes(right).value;
-    hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+    hwmark += cache.outer_residency();
     log::eval(log::EvalStat{.mode = log::eval_mode(node),
                             .time = time,
                             .mem_result = log::bytes(result),
@@ -920,7 +922,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
       // from the SumInplace event below.
       size_t hwmark = log::bytes(cache, right_aligned).value;
       if (!cache.chain_holds(right)) hwmark += log::bytes(right).value;
-      hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+      hwmark += cache.outer_residency();
       log::eval(log::EvalStat{.mode = log::EvalMode::Permute,
                               .time = perm_time,
                               .mem_result = log::bytes(right_aligned),
@@ -954,7 +956,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
     size_t hwmark = log::bytes(cache, result).value;
     if (!cache.chain_holds(right_aligned))
       hwmark += log::bytes(right_aligned).value;
-    hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+    hwmark += cache.outer_residency();
     log::eval(log::EvalStat{.mode = log::EvalMode::SumInplace,
                             .time = time,
                             .mem_result = log::bytes(result),
@@ -994,7 +996,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
   if (!intercepted) return nullptr;
   if constexpr (detail::trace(EvalTrace)) {
     size_t hwmark = log::bytes(cache, intercepted).value;
-    hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+    hwmark += cache.outer_residency();
     log::eval(log::EvalStat{.mode = log::eval_mode(node),
                             .time = time,
                             .mem_result = log::bytes(intercepted),
@@ -1030,7 +1032,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename F,
       detail::timed_eval_inplace([&]() { result = leaf_evaluator(node); });
   if constexpr (detail::trace(EvalTrace)) {
     size_t hwmark = log::bytes(cache, result).value;
-    hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+    hwmark += cache.outer_residency();
     log::eval(log::EvalStat{.mode = log::eval_mode(node),
                             .time = time,
                             .mem_result = log::bytes(result),
@@ -1398,7 +1400,7 @@ ResultPtr evaluate(Node const& node,           //
       size_t hwmark = log::bytes(cache, result.post).value;
       if (!cache.chain_holds(result.pre))
         hwmark += log::bytes(result.pre).value;
-      hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+      hwmark += cache.outer_residency();
       auto stat = log::EvalStat{
           .mode = log::EvalMode::Permute,
           .time = time,
@@ -1460,7 +1462,7 @@ ResultPtr evaluate(Nodes const& nodes,  //
       // and is added; chain_holds() decides by pointer identity.
       size_t hwmark = log::bytes(cache, result).value;
       if (!cache.chain_holds(pre)) hwmark += log::bytes(pre).value;
-      hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+      hwmark += cache.outer_residency();
       auto stat = log::EvalStat{
           .mode = log::EvalMode::SumInplace,
           .time = time,

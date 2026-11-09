@@ -88,7 +88,7 @@ template <Trace EvalTrace, meta::can_evaluate node_t, typename N, bool FHC>
       if (perm) {
         size_t hwmark = log::bytes(cache, post).value;
         if (!cache.chain_holds(pre)) hwmark += log::bytes(pre).value;
-        hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+        hwmark += cache.outer_residency();
         auto const stat = log::EvalStat{
             .mode = log::EvalMode::Permute,
             .time = permute_time,
@@ -114,7 +114,7 @@ template <Trace EvalTrace, meta::can_evaluate node_t, typename N, bool FHC>
     if constexpr (sequant::detail::trace(EvalTrace)) {
       size_t hwmark = log::bytes(cache, result).value;
       if (!cache.chain_holds(post)) hwmark += log::bytes(post).value;
-      hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
+      hwmark += cache.outer_residency();
       auto const stat = log::EvalStat{
           .mode = log::EvalMode::SumInplace,
           .time = sum_time,

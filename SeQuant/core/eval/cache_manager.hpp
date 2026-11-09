@@ -1496,6 +1496,23 @@ class CacheManager {
     return current_residency() + (ext ? ext() : 0);
   }
 
+  /// The residency visible at this scope that is NOT this cache's own
+  /// entries: every ancestor's \c current_residency() plus the external
+  /// residency hook's bytes, i.e. \c chain_residency() less \c
+  /// current_residency(). This is what a per-op working-set sample adds on
+  /// top of this cache's own bytes (\c log::bytes(cache, ...)).
+  ///
+  /// \note On a chain-root cache (\c parent_ == nullptr) this is the external
+  /// residency alone -- not zero. An op evaluated against the root cache sees
+  /// the externally held values (the ordered executor's \c CellRegistry) just
+  /// as an op in a nested scope does; asking only the parent for its \c
+  /// chain_residency() silently dropped them at the outermost scope.
+  [[nodiscard]] size_t outer_residency() const noexcept {
+    if (parent_) return parent_->chain_residency();
+    auto const& ext = external_residency_hook();
+    return ext ? ext() : 0;
+  }
+
   /// \return true iff some alive entry on this cache or any ancestor along the
   ///         scope chain physically holds @p value (pointer identity).
   ///         Read-only: unlike access_at() it decays no lifetime. The peak
