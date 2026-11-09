@@ -163,6 +163,27 @@ NamedIndexSpec named_indices(const ResultExpr& expr) {
                                         ranges::to<container::set<Index>>);
 }
 
+namespace {
+
+/// @return the parity of the permutation @p p
+int parity(const std::vector<std::size_t>& p) {
+  int sign = 1;
+  for (std::size_t i = 0; i != p.size(); ++i)
+    for (std::size_t j = i + 1; j != p.size(); ++j)
+      if (p[i] > p[j]) sign = -sign;
+  return sign;
+}
+
+}  // namespace
+
+bool detail::is_tensor_tree(const ExprPtr& expr) {
+  if (expr.is<AbstractTensor>()) return true;
+  if (!expr.is<Product>()) return false;
+  return ranges::all_of(expr.as<Product>().factors(), [](const ExprPtr& f) {
+    return f->is_scalar() || is_tensor_tree(f);
+  });
+}
+
 detail::IndexPermutationGroup detail::symmetrizer_group(
     const Tensor& symmetrizer) {
   const bool antisymm = symmetrizer.label() == reserved::antisymm_label();
@@ -177,13 +198,6 @@ detail::IndexPermutationGroup detail::symmetrizer_group(
     do perms.push_back(p);
     while (std::next_permutation(p.begin(), p.end()));
     return perms;
-  };
-  auto parity = [](const Perm& p) {
-    int sign = 1;
-    for (std::size_t i = 0; i != p.size(); ++i)
-      for (std::size_t j = i + 1; j != p.size(); ++j)
-        if (p[i] > p[j]) sign = -sign;
-    return sign;
   };
 
   // pairs of permutations of the bra and of the ket slots, with phase:
@@ -239,16 +253,6 @@ detail::IndexPermutationGroup detail::symmetrizers_group(
 
 namespace {
 
-/// @return whether @p expr is a tensor, or a (nested) product of tensors and
-/// scalars
-bool is_tensor_tree(const ExprPtr& expr) {
-  if (expr.is<Tensor>()) return true;
-  if (!expr.is<Product>()) return false;
-  return ranges::all_of(expr.as<Product>().factors(), [](const ExprPtr& f) {
-    return f->is<Constant>() || is_tensor_tree(f);
-  });
-}
-
 /// @return the slot permutation q, if any, such that @p source [q[k]] has
 /// the space of @p target [k] for every k; among the matching slots of
 /// equal space the order is kept
@@ -272,14 +276,6 @@ std::optional<std::vector<std::size_t>> match_spaces(
   return q;
 }
 
-int parity(const std::vector<std::size_t>& p) {
-  int sign = 1;
-  for (std::size_t i = 0; i != p.size(); ++i)
-    for (std::size_t j = i + 1; j != p.size(); ++j)
-      if (p[i] > p[j]) sign = -sign;
-  return sign;
-}
-
 /// Canonicalizes S * @p part , S being @p symmetrizer , in a single pass: the
 /// indices of S are not named, so the canonicalization can permute them as
 /// the symmetry of S allows, i.e. by the permutations that S absorbs (see
@@ -294,7 +290,8 @@ int parity(const std::vector<std::size_t>& p) {
 std::optional<ExprPtr> canonicalize_term_in_one_pass(
     const ExprPtr& part, const Tensor& symmetrizer,
     const container::set<Index>& named, const CanonicalizeOptions& opts) {
-  if (!symmetrizer.aux().empty() || !is_tensor_tree(part)) return std::nullopt;
+  if (!symmetrizer.aux().empty() || !detail::is_tensor_tree(part))
+    return std::nullopt;
   for (const auto& idx : symmetrizer.const_indices())
     if (!idx.nonnull() || idx.has_proto_indices()) return std::nullopt;
   // with its indices not named, S is contracted with @p part : an index of
@@ -311,14 +308,14 @@ std::optional<ExprPtr> canonicalize_term_in_one_pass(
     bool valid = true;
     auto check = [&](const ExprPtr& expr, auto&& self) -> void {
       if (!valid) return;
-      if (expr.is<Tensor>()) {
-        const auto& t = expr.as<Tensor>();
-        for (const auto& idx : t.aux())
+      if (expr.is<AbstractTensor>()) {
+        const auto& t = expr.as<AbstractTensor>();
+        for (const auto& idx : t._aux())
           if (s_bra.contains(idx) || s_ket.contains(idx)) valid = false;
-        if (t.braket_symmetry() != BraKetSymmetry::Nonsymm) return;
-        for (const auto& idx : t.bra())
+        if (t._braket_symmetry() != BraKetSymmetry::Nonsymm) return;
+        for (const auto& idx : t._bra())
           if (s_bra.contains(idx)) valid = false;
-        for (const auto& idx : t.ket())
+        for (const auto& idx : t._ket())
           if (s_ket.contains(idx)) valid = false;
       } else if (expr.is<Product>()) {
         for (const auto& factor : expr.as<Product>().factors())
@@ -457,14 +454,21 @@ ExprPtr canonicalize_term_by_search(const ExprPtr& term,
                                     const NamedIndexSpec& named,
                                     const CanonicalizeOptions& opts) {
   // the key ignores the scalar, so that images that differ only by it
-  // compare equal
-  auto unscaled = [](const ExprPtr& image) {
-    if (!image->is<Product>() || image->as<Product>().scalar() == 1)
-      return image;
+  // compare equal; N.B. a lone factor is compared as a product, since an
+  // image with a scalar is a product of it
+  auto unscaled = [](const ExprPtr& image) -> ExprPtr {
+    if (!image->is<Product>())
+      return ex<Product>(1, ExprPtrList{image}, Product::Flatten::No);
+    if (image->as<Product>().scalar() == 1) return image;
     ExprPtr result = image->clone();
     result->as<Product>().scale(1 / image->as<Product>().scalar());
     return result;
   };
+  // the images seen, by their unscaled form, with their scalars: two images
+  // of equal form but different scalar mean S * X = c S * Y = c' S * Y with
+  // c != c' , i.e. S * X = 0
+  container::map<std::pair<std::size_t, std::wstring>, Constant::scalar_type>
+      seen;
   ExprPtr best;
   std::optional<std::pair<std::size_t, std::wstring>> best_key;
   for (const auto& [map, sign] : group) {
@@ -474,12 +478,17 @@ ExprPtr canonicalize_term_by_search(const ExprPtr& term,
     // an image that vanishes (e.g. by the symmetry of its tensors) is the
     // image of a term that vanishes
     if (image->is_zero()) return ex<Constant>(0);
-    std::pair<std::size_t, std::wstring> key{unscaled(image)->hash_value(), {}};
-    if (best_key && key.first == best_key->first) {
-      key.second = unscaled(image)->to_latex();
-      if (best_key->second.empty())
-        best_key->second = unscaled(best)->to_latex();
+    const auto form = unscaled(image);
+    std::pair<std::size_t, std::wstring> key{form->hash_value(),
+                                             form->to_latex()};
+    const Constant::scalar_type scalar = image->is<Product>()
+                                             ? image->as<Product>().scalar()
+                                             : Constant::scalar_type{1};
+    if (const auto it = seen.find(key); it != seen.end()) {
+      if (it->second != scalar) return ex<Constant>(0);
+      continue;
     }
+    seen.emplace(key, scalar);
     if (!best_key || key < *best_key) {
       best = std::move(image);
       best_key = std::move(key);

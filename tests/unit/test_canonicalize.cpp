@@ -1543,6 +1543,17 @@ TEST_CASE("result_expr_canonicalization", "[algorithms][canonicalize]") {
     }
   }
 
+  SECTION("a term that the symmetrizer annihilates") {
+    // X is symmetric in i_1,i_2, which Â antisymmetrizes: Â * X = 0, though
+    // no image of X vanishes on its own; X has the indices of Â's bra in its
+    // bra, so the images are searched (no single-pass canonicalization)
+    auto r = deserialize<ResultExpr>(
+        L"R{i_1,i_2;a_1,a_2}:A-N-S = Â{i_1,i_2;a_1,a_2}:A-N-S * "
+        L"X{i_1,i_2;a_1,a_2}:S-N-S");
+    canonicalize(r);
+    CHECK(r.expression()->is_zero());
+  }
+
   SECTION("a term that vanishes by symmetry") {
     // Y is symmetric in i_3,i_4 and t antisymmetric: the term is zero, and so
     // is each of its images
