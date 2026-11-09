@@ -46,6 +46,29 @@
 
 namespace sequant::eval {
 
+/// \brief A store of values held outside a \c CacheManager hierarchy's own
+///        entries that the peak metering must still see -- in practice the
+///        ordered executor's \c CellRegistry.
+///
+/// One object describes the store from all three angles the metering needs,
+/// so they cannot disagree: how many bytes it holds, which values those are,
+/// and whether it holds a given buffer. A hierarchy is told about the store
+/// with \c CacheManager::set_external_store on its chain-root cache.
+struct ExternalStore {
+  /// \return the bytes the store holds that no scope cache already counts.
+  std::function<std::size_t()> bytes;
+
+  /// Calls \c emit(hash, bytes) once per value \c bytes() counts.
+  std::function<void(
+      std::function<void(std::size_t hash, std::size_t bytes)> const& emit)>
+      for_each;
+
+  /// \return whether the store physically holds \p value (pointer identity),
+  ///         i.e. whether \p value's bytes are among those \c bytes() counts
+  ///         (or a scope cache's).
+  std::function<bool(ResultPtr const& value)> holds;
+};
+
 // Forward declaration only: CellReadResolver (cell_registry.hpp) is a plain,
 // non-template type, so CacheManager only needs a non-owning pointer to it;
 // cell_registry.hpp includes this header, not the reverse.
@@ -1052,32 +1075,13 @@ class CacheManager {
   /// pointee must outlive this cache.
   eval::PeakMonitor* peak_monitor_ = nullptr;
 
-  /// Explicit value cells: optional source of bytes held outside
-  /// this cache hierarchy's own \c cache_map_ entries that must still count
-  /// toward \c chain_residency() -- the ordered executor's \c CellRegistry,
-  /// once storage moves onto the table (see \c set_external_residency).
-  /// Looked up along the parent chain like \c array_ops_ (only the root
-  /// cache is wired in practice); empty (default) => \c chain_residency()
-  /// counts this hierarchy's own entries alone.
-  std::function<std::size_t()> external_residency_{};
-
-  /// Optional source of an external alive-entry enumeration (hash,
-  /// bytes) to fold into \c note_working_set()'s diagnostic liveset capture
-  /// alongside this hierarchy's own \c cache_map_ entries -- the counterpart
-  /// of \c external_residency_ for \c PeakMonitor::on_peak_liveset. Looked
-  /// up along the parent chain the same way. Empty (default) => the liveset
-  /// capture is unchanged (this hierarchy's own entries only).
-  std::function<void(std::function<void(std::size_t hash, std::size_t bytes)>)>
-      external_liveset_{};
-
-  /// Optional pointer-identity test against the externally held values \c
-  /// external_residency_ counts: true iff that store physically holds the
-  /// given buffer. The counterpart of \c chain_holds() for storage outside
-  /// this hierarchy's own \c cache_map_ entries; \c resident() consults both,
-  /// so an operand read whole from the external store is recognized as
-  /// already counted. Looked up along the parent chain the same way. Empty
-  /// (default) => nothing is held externally.
-  std::function<bool(ResultPtr const&)> external_holds_{};
+  /// Non-owning: the store of values held outside this hierarchy's own \c
+  /// cache_map_ entries that the peak metering must still count (see \c
+  /// eval::ExternalStore) -- the ordered executor's \c CellRegistry. Looked
+  /// up along the parent chain like \c array_ops_ (only the root cache is
+  /// wired in practice). Null (default) => the metering sees this hierarchy's
+  /// own entries alone. The pointee must outlive its installation.
+  eval::ExternalStore const* external_store_ = nullptr;
 
   /// Per-instance cache-fill-once strictness (see entry::store), consulted
   /// instead of reading \c eval::strict_fill_once() directly. Defaults to
@@ -1217,88 +1221,40 @@ class CacheManager {
                                : nullptr;
   }
 
-  /// Sets the external residency source (see \c external_residency_). Pass
-  /// an empty \c std::function to detach.
+  /// Sets the external store (see \c external_store_). Pass \c nullptr to
+  /// detach.
   ///
   /// Installed on the chain-root handle only, and asserted so: \c
-  /// chain_residency() folds the hook in exactly where its parent walk bottoms
-  /// out (\c parent_ == nullptr), and the lookup that finds it walks upward,
-  /// so a hook installed on a child would never be folded in at all -- its
-  /// bytes would silently vanish from every residency and peak figure.
-  void set_external_residency(std::function<std::size_t()> f) noexcept {
+  /// chain_residency() folds the store in exactly where its parent walk
+  /// bottoms out (\c parent_ == nullptr), and the lookup that finds it walks
+  /// upward, so a store installed on a child would never be folded in at all
+  /// -- its bytes would silently vanish from every residency and peak figure.
+  void set_external_store(eval::ExternalStore const* store) noexcept {
     SEQUANT_ASSERT(parent_ == nullptr &&
-                   "CacheManager::set_external_residency: the external "
-                   "residency hook must be installed on the chain-root handle "
-                   "(chain_residency() folds it in only there)");
-    external_residency_ = std::move(f);
+                   "CacheManager::set_external_store: the external store must "
+                   "be installed on the chain-root handle (chain_residency() "
+                   "folds it in only there)");
+    external_store_ = store;
   }
 
-  /// \return the raw external-residency hook visible from this cache (local
-  ///         if set, else \c parent_'s, like \c array_ops() / \c
-  ///         cell_read_resolver()) -- an empty \c std::function if none is
-  ///         wired anywhere along the chain. \c chain_residency() invokes
-  ///         this only where its own recursion bottoms out (\c parent_ ==
-  ///         nullptr), so whichever single frame the hook resolves to is
-  ///         folded in exactly once per \c chain_residency() call regardless
-  ///         of which scope in the chain that call started from. Also lets a
-  ///         caller (e.g. an RAII install guard) save the hook currently in
-  ///         effect before overriding it locally and restore exactly that
-  ///         afterward, the same way \c CellReadResolverGuard saves/restores
-  ///         \c cell_read_resolver().
-  [[nodiscard]] std::function<std::size_t()> const& external_residency_hook()
-      const noexcept {
-    if (external_residency_) return external_residency_;
-    static std::function<std::size_t()> const empty{};
-    return parent_ ? parent_->external_residency_hook() : empty;
+  /// \return the external store visible from this cache (local if set, else
+  ///         \c parent_'s, like \c array_ops() / \c cell_read_resolver());
+  ///         \c nullptr if none is wired anywhere along the chain. Whichever
+  ///         single frame it resolves to is folded in exactly once per \c
+  ///         chain_residency() call regardless of which scope in the chain
+  ///         that call started from. Also lets a caller (e.g. an RAII install
+  ///         guard) save the store currently in effect before overriding it
+  ///         and restore exactly that afterward.
+  [[nodiscard]] eval::ExternalStore const* external_store() const noexcept {
+    return external_store_ ? external_store_
+           : parent_       ? parent_->external_store()
+                           : nullptr;
   }
 
-  /// Sets the external liveset source (see \c external_liveset_). Pass an
-  /// empty \c std::function to detach. Installed on the chain-root handle
-  /// only, and asserted so, for the same reason \c set_external_residency is.
-  void set_external_liveset(
-      std::function<
-          void(std::function<void(std::size_t hash, std::size_t bytes)>)>
-          f) noexcept {
-    SEQUANT_ASSERT(parent_ == nullptr &&
-                   "CacheManager::set_external_liveset: the external liveset "
-                   "hook must be installed on the chain-root handle");
-    external_liveset_ = std::move(f);
-  }
-
-  /// \return the local external-liveset source if set, else the one
-  ///         inherited from \c parent_; an empty \c std::function if none is
-  ///         wired anywhere along the chain. Looked up like \c
-  ///         external_residency() / \c array_ops().
-  [[nodiscard]] std::function<
-      void(std::function<void(std::size_t hash, std::size_t bytes)>)> const&
-  external_liveset() const noexcept {
-    if (external_liveset_) return external_liveset_;
-    static std::function<void(
-        std::function<void(std::size_t hash, std::size_t bytes)>)> const
-        empty{};
-    return parent_ ? parent_->external_liveset() : empty;
-  }
-
-  /// Sets the external pointer-identity test (see \c external_holds_). Pass
-  /// an empty \c std::function to detach. Installed on the chain-root handle
-  /// only, and asserted so, for the same reason \c set_external_residency is:
-  /// it must describe the same store that hook counts.
-  void set_external_holds(std::function<bool(ResultPtr const&)> f) noexcept {
-    SEQUANT_ASSERT(parent_ == nullptr &&
-                   "CacheManager::set_external_holds: the external holds hook "
-                   "must be installed on the chain-root handle");
-    external_holds_ = std::move(f);
-  }
-
-  /// \return the local external pointer-identity test if set, else the one
-  ///         inherited from \c parent_; an empty \c std::function if none is
-  ///         wired anywhere along the chain. Looked up like \c
-  ///         external_residency_hook().
-  [[nodiscard]] std::function<bool(ResultPtr const&)> const&
-  external_holds_hook() const noexcept {
-    if (external_holds_) return external_holds_;
-    static std::function<bool(ResultPtr const&)> const empty{};
-    return parent_ ? parent_->external_holds_hook() : empty;
+  /// \return the bytes the external store holds (0 if none is wired).
+  [[nodiscard]] std::size_t external_residency() const noexcept {
+    auto const* const store = external_store();
+    return store && store->bytes ? store->bytes() : 0;
   }
 
   /// Ensure a scope-hoist slot exists for @p key so a loop-invariant
@@ -1412,12 +1368,12 @@ class CacheManager {
         for (CacheManager const* c = this; c; c = c->parent_)
           for (auto const& [k, e] : c->cache_map_)
             if (e.alive()) live.push_back({k->hash_value(), e.size_in_bytes()});
-        // Fold in the external liveset (the ordered executor's
-        // CellRegistry, once wired via set_external_liveset) alongside this
-        // hierarchy's own cache_map_ entries, exactly as external_residency()
-        // folds into chain_residency() above.
-        if (auto const& ext = external_liveset())
-          ext([&live](std::size_t hash, std::size_t bytes) {
+        // Fold in the external store's values (the ordered executor's
+        // CellRegistry) alongside this hierarchy's own cache_map_ entries,
+        // exactly as external_residency() folds into chain_residency().
+        if (auto const* const store = external_store();
+            store && store->for_each)
+          store->for_each([&live](std::size_t hash, std::size_t bytes) {
             live.push_back({hash, bytes});
           });
         m->on_peak_liveset(current_bytes, live);
@@ -1514,22 +1470,20 @@ class CacheManager {
   }
   /// current_residency() of this cache plus every ancestor along the scope
   /// chain (parent_), plus -- exactly where the chain walk bottoms out
-  /// (parent_ == nullptr) -- the external residency hook's bytes: the total
-  /// live residency visible at this scope at one instant, table-owned
-  /// storage (the \c CellRegistry, once wired via \c
-  /// set_external_residency) included. Adding it only at the walk's base,
-  /// rather than at every recursive level, is what keeps a single external
-  /// total from being folded in once per scope on the chain -- see \c
-  /// external_residency_hook()'s own doc comment.
+  /// (parent_ == nullptr) -- the external store's bytes: the total live
+  /// residency visible at this scope at one instant, table-owned storage
+  /// (the \c CellRegistry, once wired via \c set_external_store) included.
+  /// Adding it only at the walk's base, rather than at every recursive
+  /// level, is what keeps a single external total from being folded in once
+  /// per scope on the chain -- see \c external_store()'s own doc comment.
   [[nodiscard]] size_t chain_residency() const noexcept {
     if (parent_) return current_residency() + parent_->chain_residency();
-    auto const& ext = external_residency_hook();
-    return current_residency() + (ext ? ext() : 0);
+    return current_residency() + external_residency();
   }
 
   /// The residency visible at this scope that is NOT this cache's own
   /// entries: every ancestor's \c current_residency() plus the external
-  /// residency hook's bytes, i.e. \c chain_residency() less \c
+  /// store's bytes, i.e. \c chain_residency() less \c
   /// current_residency(). This is what a per-op working-set sample adds on
   /// top of this cache's own bytes (\c log::bytes(cache, ...)).
   ///
@@ -1539,9 +1493,7 @@ class CacheManager {
   /// as an op in a nested scope does; asking only the parent for its \c
   /// chain_residency() silently dropped them at the outermost scope.
   [[nodiscard]] size_t outer_residency() const noexcept {
-    if (parent_) return parent_->chain_residency();
-    auto const& ext = external_residency_hook();
-    return ext ? ext() : 0;
+    return parent_ ? parent_->chain_residency() : external_residency();
   }
 
   /// \return true iff some alive entry on this cache or any ancestor along the
@@ -1563,8 +1515,8 @@ class CacheManager {
   /// \return true iff @p value's bytes are already part of the residency a
   ///         working-set sample counts at this scope: some alive entry on the
   ///         scope chain holds it (\c chain_holds()), or the external store
-  ///         does (\c external_holds_hook() -- the ordered executor's \c
-  ///         CellRegistry). Read-only. The per-op peak trace uses this, not
+  ///         does (\c eval::ExternalStore::holds -- the ordered executor's
+  ///         \c CellRegistry). Read-only. The per-op peak trace uses this, not
   ///         \c chain_holds() alone, to decide whether an operand's bytes
   ///         must be added: an operand read whole from the external store is
   ///         the very buffer \c outer_residency() / \c chain_residency()
@@ -1572,8 +1524,8 @@ class CacheManager {
   [[nodiscard]] bool resident(ResultPtr const& value) const noexcept {
     if (!value) return false;
     if (chain_holds(value)) return true;
-    auto const& ext = external_holds_hook();
-    return ext && ext(value);
+    auto const* const store = external_store();
+    return store && store->holds && store->holds(value);
   }
 
   /// \return true iff some alive entry on this cache or any ancestor along the
