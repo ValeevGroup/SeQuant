@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <any>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -94,6 +95,59 @@ template <typename N, bool F, typename... Ts>
                                  Ts const&... args) {
   if (!printing()) return Bytes{0};
   return Bytes{cache.size_in_bytes() + (size_t{0} + ... + bytes(args).value)};
+}
+
+/// The live working set of one op, in bytes: what a per-op trace event
+/// passes to \c CacheManager::note_working_set. It is
+///
+///   own_bytes + cache.outer_residency() + bytes of each buffer that is not
+///                                         already counted
+///
+/// where \p own_bytes is the evaluating cache's own residency, \c
+/// outer_residency() is everything else resident at that scope (the
+/// ancestors' entries and the externally held values, i.e. the ordered
+/// executor's cell registry -- at the outermost scope too), and the buffers
+/// are the op's result and operands. A buffer is skipped when it is null,
+/// when \c CacheManager::resident() finds it -- by pointer identity -- among
+/// the values the residency already counts (an operand read whole from a
+/// cache at any scope, or from the registry), or when it is the same object
+/// as an earlier buffer in the list (an in-place result, a value used as
+/// both operands). A sliced / permuted / phase-shifted read is a distinct
+/// buffer and is added.
+///
+/// Every sampling site goes through here so the three terms are assembled
+/// the same way everywhere. Like the cache-aware \c bytes(), it
+/// short-circuits to 0 -- walking no cache and no registry -- when no trace
+/// line will be printed.
+template <typename N, bool F>
+[[nodiscard]] inline size_t working_set_given(CacheManager<N, F> const& cache,
+                                              size_t own_bytes,
+                                              ResultPtr const& a,
+                                              ResultPtr const& b = {},
+                                              ResultPtr const& c = {}) {
+  if (!printing()) return 0;
+  std::array<ResultPtr const*, 3> const buffers{&a, &b, &c};
+  size_t total = own_bytes + cache.outer_residency();
+  for (std::size_t i = 0; i < buffers.size(); ++i) {
+    ResultPtr const& buf = *buffers[i];
+    if (!buf || cache.resident(buf)) continue;
+    bool repeated = false;
+    for (std::size_t j = 0; j < i; ++j)
+      repeated = repeated || *buffers[j] == buf;
+    if (!repeated) total += buf->size_in_bytes();
+  }
+  return total;
+}
+
+/// \c working_set_given() with the evaluating cache's own residency measured
+/// now.
+template <typename N, bool F>
+[[nodiscard]] inline size_t working_set(CacheManager<N, F> const& cache,
+                                        ResultPtr const& a,
+                                        ResultPtr const& b = {},
+                                        ResultPtr const& c = {}) {
+  if (!printing()) return 0;
+  return working_set_given(cache, cache.size_in_bytes(), a, b, c);
 }
 
 [[nodiscard]] inline auto to_string(Bytes bs) noexcept {
@@ -241,18 +295,12 @@ enum struct TermMode { Begin, End };
 /// over all ops since the cache was last reset, of the per-op live working
 /// set
 ///
-///   bytes(cache) + bytes(result) + bytes of each operand not aliased
-///                                  to an already-counted buffer
+///   bytes(cache) + outer residency + bytes of the result and of each
+///                                    operand not already counted
 ///
-/// (aliasing is decided at each call site by CacheManager::resident --
-/// pointer identity against every alive entry on the scope chain and against
-/// the externally held values, i.e. the ordered executor's cell registry --
-/// so an operand read full from a cache at any scope, or from the registry,
-/// is counted once via the residency, while a sliced/permuted/phase-shifted
-/// read is a distinct buffer and is added). bytes(cache) here is this cache's
-/// own residency; everything else resident at this scope -- the ancestors'
-/// entries and the externally held values -- is added separately as
-/// CacheManager::outer_residency(), at the outermost scope too.
+/// assembled by log::working_set() (see there for what "already counted"
+/// means: an operand read full from a cache at any scope, or from the
+/// ordered executor's cell registry, is counted once via the residency).
 /// It is reported as a running max so it is
 /// monotonically non-decreasing within one evaluation — the peak memory the
 /// engine reaches — rather than the instantaneous per-op working set, which
@@ -722,10 +770,10 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
   eval::EvalImplTimeline::note_phase(_ph0);
 
   if constexpr (detail::trace(EvalTrace)) {
-    size_t hwmark = cache_bytes + log::bytes(post).value;
-    if (!cache.alive(nd) && !cache.resident(res))
-      hwmark += log::bytes(res).value;
-    hwmark += cache.outer_residency();
+    // res is counted unless this cache holds the node's value (it is then
+    // part of cache_bytes) or it is otherwise resident.
+    size_t const hwmark = log::working_set_given(
+        cache, cache_bytes, post, cache.alive(nd) ? ResultPtr{} : res);
     auto stat = log::EvalStat{
         .mode = log::EvalMode::MultByPhase,
         .time = time,
@@ -845,16 +893,10 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
   SEQUANT_ASSERT(result);
 
   if constexpr (detail::trace(EvalTrace)) {
-    // Skip an operand's bytes only when it aliases a buffer that is already
-    // counted (locally in bytes(cache,...), or in outer_residency(): up-chain
-    // or in the cell registry). resident() tests pointer identity against
-    // every alive entry on the scope chain and the externally held values: a
-    // child fetched full aliases and is skipped; an apply_phase / sliced /
-    // permuted child is a distinct buffer and is added.
-    size_t hwmark = log::bytes(cache, result).value;
-    if (!cache.resident(left)) hwmark += log::bytes(left).value;
-    if (right && !cache.resident(right)) hwmark += log::bytes(right).value;
-    hwmark += cache.outer_residency();
+    // A child fetched full aliases an already-counted buffer and is
+    // skipped; an apply_phase / sliced / permuted child is a distinct buffer
+    // and is added (see log::working_set).
+    size_t const hwmark = log::working_set(cache, result, left, right);
     log::eval(log::EvalStat{.mode = log::eval_mode(node),
                             .time = time,
                             .mem_result = log::bytes(result),
@@ -922,9 +964,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
       // event above: a genuine fresh allocation for the (typically
       // much smaller, single-term) right addend, logged separately
       // from the SumInplace event below.
-      size_t hwmark = log::bytes(cache, right_aligned).value;
-      if (!cache.resident(right)) hwmark += log::bytes(right).value;
-      hwmark += cache.outer_residency();
+      size_t const hwmark = log::working_set(cache, right_aligned, right);
       log::eval(log::EvalStat{.mode = log::EvalMode::Permute,
                               .time = perm_time,
                               .mem_result = log::bytes(right_aligned),
@@ -955,10 +995,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
     // logged above as its own Permute event) -- and mem_left/
     // mem_right are left unset, matching the "SumInplace | --- |
     // 0B" row of the EvalStat doc table above.
-    size_t hwmark = log::bytes(cache, result).value;
-    if (!cache.resident(right_aligned))
-      hwmark += log::bytes(right_aligned).value;
-    hwmark += cache.outer_residency();
+    size_t const hwmark = log::working_set(cache, result, right_aligned);
     log::eval(log::EvalStat{.mode = log::EvalMode::SumInplace,
                             .time = time,
                             .mem_result = log::bytes(result),
@@ -997,8 +1034,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
       [&]() { intercepted = custom_eval(node, cache); });
   if (!intercepted) return nullptr;
   if constexpr (detail::trace(EvalTrace)) {
-    size_t hwmark = log::bytes(cache, intercepted).value;
-    hwmark += cache.outer_residency();
+    size_t const hwmark = log::working_set(cache, intercepted);
     log::eval(log::EvalStat{.mode = log::eval_mode(node),
                             .time = time,
                             .mem_result = log::bytes(intercepted),
@@ -1033,8 +1069,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename F,
   auto time =
       detail::timed_eval_inplace([&]() { result = leaf_evaluator(node); });
   if constexpr (detail::trace(EvalTrace)) {
-    size_t hwmark = log::bytes(cache, result).value;
-    hwmark += cache.outer_residency();
+    size_t const hwmark = log::working_set(cache, result);
     log::eval(log::EvalStat{.mode = log::eval_mode(node),
                             .time = time,
                             .mem_result = log::bytes(result),
@@ -1393,16 +1428,12 @@ ResultPtr evaluate(Node const& node,           //
   // logging
   if constexpr (detail::trace(EvalTrace)) {
     if (perm) {
-      // result.pre aliases a cache buffer only when the inner evaluate returned
-      // it unchanged (node cached at some scope, no mult_by_phase result);
-      // resident() tests that by pointer identity across the scope chain and
-      // the externally held values. A
-      // permuted/phase-shifted pre is a distinct result and is added, with
-      // the bytes the backend reports for it (none for a pending view that
-      // shares its parent's tiles).
-      size_t hwmark = log::bytes(cache, result.post).value;
-      if (!cache.resident(result.pre)) hwmark += log::bytes(result.pre).value;
-      hwmark += cache.outer_residency();
+      // result.pre aliases an already-counted buffer only when the inner
+      // evaluate returned it unchanged (node resident at some scope, no
+      // mult_by_phase result). A permuted/phase-shifted pre is a distinct
+      // result and is added, with the bytes the backend reports for it (none
+      // for a pending view that shares its parent's tiles).
+      size_t const hwmark = log::working_set(cache, result.post, result.pre);
       auto stat = log::EvalStat{
           .mode = log::EvalMode::Permute,
           .time = time,
@@ -1457,14 +1488,12 @@ ResultPtr evaluate(Nodes const& nodes,  //
     // logging
     if constexpr (detail::trace(EvalTrace)) {
       // SumInplace allocates nothing: it writes into the accumulator. hwmark
-      // counts the cache plus both operands live at this moment; skip pre's
-      // bytes only when pre aliases a chain-resident cache buffer (fetched
-      // full). pre comes back from the permute-wrapping evaluate, so a
-      // permuted/phase-shifted read is a distinct buffer with its own pointer
-      // and is added; resident() decides by pointer identity.
-      size_t hwmark = log::bytes(cache, result).value;
-      if (!cache.resident(pre)) hwmark += log::bytes(pre).value;
-      hwmark += cache.outer_residency();
+      // counts the cache plus both operands live at this moment; pre's
+      // bytes are skipped only when pre aliases an already-counted buffer
+      // (fetched full). pre comes back from the permute-wrapping evaluate, so
+      // a permuted/phase-shifted read is a distinct buffer with its own
+      // pointer and is added.
+      size_t const hwmark = log::working_set(cache, result, pre);
       auto stat = log::EvalStat{
           .mode = log::EvalMode::SumInplace,
           .time = time,
