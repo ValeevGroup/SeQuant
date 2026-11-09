@@ -13,6 +13,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/hugenholtz.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -829,9 +830,9 @@ class NormalOperator : public Operator<S>,
   }
 
   std::wstring to_latex() const override {
-    const auto &ctx = get_default_context();
-    const auto bkt = ctx.braket_typesetting();
-    const auto bkst = ctx.braket_slot_typesetting();
+    const auto &print_opts = io::latex::detail::active_print_options();
+    const auto bkt = print_opts.braket_typesetting;
+    const auto bkst = print_opts.braket_slot_typesetting;
 
     std::wstring core_label;
     if (vacuum() == Vacuum::Physical) {

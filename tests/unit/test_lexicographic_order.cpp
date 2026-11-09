@@ -8,12 +8,14 @@
 #include <SeQuant/core/op.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <compare>
 #include <cstddef>
 #include <memory>
 #include <numeric>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -359,6 +361,21 @@ TEST_CASE("print_options", "[io]") {
     CHECK(explicit_latex != io::latex::to_string(t));
     // the same as with the typesetting of the context, which is not changed
     CHECK(get_default_context().print_options() == ctx_opts);
+    CHECK(io::latex::detail::active_print_options() == ctx_opts);
+    // printing with explicit options on one thread does not change how
+    // another thread prints (the default context is not modified meanwhile)
+    {
+      const auto default_latex = io::latex::to_string(t);
+      std::atomic<bool> done = false;
+      std::thread printer([&] {
+        for (int k = 0; k != 2000; ++k) io::latex::to_string(t, ketsub);
+        done = true;
+      });
+      bool all_default = true;
+      while (!done) all_default &= io::latex::to_string(t) == default_latex;
+      printer.join();
+      CHECK(all_default);
+    }
     auto scoped = set_scoped_modified_default_context(
         [&ketsub](Context& ctx) { ctx.set(ketsub); });
     CHECK(io::latex::to_string(t) == explicit_latex);

@@ -25,21 +25,28 @@ namespace sequant::io::latex {
 
 namespace {
 
-/// @return the result of @p print , called with the typesetting of @p opts
-/// in effect
+/// the PrintOptions of the to_string() call that is printing on this thread
+thread_local const PrintOptions* active_options = nullptr;
+
+/// @return the result of @p print , called with @p opts in effect on the
+/// calling thread (see detail::active_print_options())
 template <typename Print>
 std::wstring with_typesetting(const PrintOptions& opts, Print&& print) {
-  const auto& current = get_default_context().print_options();
-  if (current.braket_typesetting == opts.braket_typesetting &&
-      current.braket_slot_typesetting == opts.braket_slot_typesetting)
-    return print();
-  auto scope = set_scoped_modified_default_context([&opts](Context& ctx) {
-    ctx.set(opts.braket_typesetting).set(opts.braket_slot_typesetting);
-  });
+  const PrintOptions* const previous = active_options;
+  active_options = &opts;
+  struct Restore {
+    const PrintOptions* previous;
+    ~Restore() { active_options = previous; }
+  } restore{previous};
   return print();
 }
 
 }  // namespace
+
+const PrintOptions& detail::active_print_options() {
+  return active_options ? *active_options
+                        : get_default_context().print_options();
+}
 
 std::wstring to_string(const ExprPtr& expr) {
   return to_string(expr, get_default_context().print_options());

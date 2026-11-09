@@ -27,6 +27,18 @@ struct PrintOptions;
 
 namespace sequant::io::latex {
 
+namespace detail {
+
+/// @return the PrintOptions in effect on the calling thread: those given to
+/// the to_string() call that is printing on this thread, else those of the
+/// default context
+/// @note the to_latex() members read the typesetting from here, so that
+/// printing with explicit PrintOptions never modifies the (process-wide)
+/// default context
+const PrintOptions& active_print_options();
+
+}  // namespace detail
+
 /// prints @p expr with the PrintOptions of the default context
 /// @returns an empty string if @p expr is null.
 std::wstring to_string(const ExprPtr& expr);

@@ -845,9 +845,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   }
 
   std::wstring to_latex() const override {
-    auto &ctx = get_default_context();
-    const auto bkt = ctx.braket_typesetting();
-    const auto bkst = ctx.braket_slot_typesetting();
+    const auto &print_opts = io::latex::detail::active_print_options();
+    const auto bkt = print_opts.braket_typesetting;
+    const auto bkst = print_opts.braket_slot_typesetting;
 
     // either rank > 1 or sum of bra and ket ranks > 1
     // and label is not antisymmetrizer label, since it is already implied
