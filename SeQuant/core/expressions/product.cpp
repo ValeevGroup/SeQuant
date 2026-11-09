@@ -117,6 +117,8 @@ ExprPtr Product::canonicalize_impl(const NamedIndexSpec &named_indices,
       continue;
     }
     auto bp = factor->canonicalize(subfactor_named_indices(f), opts);
+    // the canonicalization may have renamed the dummies of the factor
+    if (!factor_indices.empty()) factor_indices[f] = get_used_indices(factor);
     if (bp) {
       SEQUANT_ASSERT(bp->template is<Constant>());
       this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
