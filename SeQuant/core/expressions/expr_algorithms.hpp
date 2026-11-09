@@ -211,18 +211,27 @@ NamedIndexSpec named_indices(const ResultExpr& expr);
 
 namespace detail {
 
-/// @return the permutations of the indices of @p result that its symmetries
-/// relate, as index replacement maps, each with its phase (the identity, with
-/// an empty map, first); only those that map every index to one of the same
-/// space, i.e. that relate elements of the block of the result
-std::vector<std::pair<container::map<Index, Index>, int>> result_symmetry_group(
-    const ResultExpr& result);
+/// permutations of indices, as index replacement maps, each with its phase
+using IndexPermutationGroup =
+    std::vector<std::pair<container::map<Index, Index>, int>>;
+
+/// @param symmetrizer an antisymmetrizer (labeled reserved::antisymm_label())
+/// or a symmetrizer (labeled reserved::symm_label())
+/// @return the permutations of the indices of @p symmetrizer that it absorbs,
+/// i.e. the P for which S * X = sign(P) S * P(X) (the identity, with an empty
+/// map, first): for Â the permutations of its bra and of its ket indices, the
+/// phase being the product of their parities (see mbpt::A_maps()); for Ŝ the
+/// permutations of its columns (the bra and the ket permuted together), with
+/// phase 1 (see mbpt::S_replacement_maps()); only those that map every index
+/// to one of the same space, i.e. that relate elements of the same block
+IndexPermutationGroup symmetrizer_group(const Tensor& symmetrizer);
 
 /// Applies @p f to the parts of @p term that may be replaced by their images
-/// under the symmetry group of @p result (see result_symmetry_group()): those
-/// that an explicit (anti)symmetrizer of the result multiplies, as S * X =
-/// S * P(X) (up to the phase of P). That the result has a symmetry does not
-/// make its terms have it, so nothing else may be replaced.
+/// under the group of the (anti)symmetrizers of @p result that multiply them
+/// (see symmetrizer_group()), as S * X = sign(P) S * P(X). The group is that
+/// of the symmetrizers that are present, not that of the declared symmetry of
+/// @p result : that the result has a symmetry does not make its terms have
+/// it, so nothing else may be replaced.
 /// - S * (X_1 + X_2 + ...), S being one or more (anti)symmetrizers of the
 ///   result: @p f is applied to each X_k ;
 /// - any other product S * X with (anti)symmetrizers S of the result as
@@ -230,22 +239,26 @@ std::vector<std::pair<container::map<Index, Index>, int>> result_symmetry_group(
 ///   the scalar), and @p term is reassembled.
 ///
 /// The (anti)symmetrizers themselves are never passed to @p f : the image of
-/// X is sign(P) P(X), and S is not permuted.
+/// X is sign(P) P(X), and S is not permuted. Several (anti)symmetrizers are
+/// only handled if their index sets are disjoint; their group is then the
+/// product of their groups.
 ///
 /// An (anti)symmetrizer of the result is a tensor labeled
 /// reserved::symm_label() or reserved::antisymm_label() whose indices are
 /// indices of @p result .
 /// @return true if @p f was applied
-bool for_each_symmetrized_term(ExprPtr& term, const ResultExpr& result,
-                               const std::function<void(ExprPtr& part)>& f);
+bool for_each_symmetrized_term(
+    ExprPtr& term, const ResultExpr& result,
+    const std::function<void(ExprPtr& part,
+                             const IndexPermutationGroup& group)>& f);
 
 }  // namespace detail
 
 /// Recursively canonicalizes the expression of a ResultExpr, with the indices
 /// of the result as the named indices; terms that an explicit
 /// (anti)symmetrizer of the result multiplies and that differ by a permutation
-/// of the result indices within the symmetry group of the result are brought
-/// into the same form (see detail::for_each_symmetrized_term())
+/// of its indices that it absorbs are brought into the same form (see
+/// detail::for_each_symmetrized_term())
 /// @param[in,out] expr expression to be canonicalized
 /// @param[in] opts the canonicalization options
 /// @return \p expr to facilitate chaining

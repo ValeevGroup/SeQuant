@@ -56,11 +56,11 @@ struct PrettifyOptions {
 /// of its result as the named indices
 ///
 /// If recanonicalizing, each summand of a sum that a (anti)symmetrizer of the
-/// result multiplies (S * (X_1 + X_2 + ...)) is presented by its image, under
-/// the permutations of the result indices within the symmetry group of the
-/// result, that comes first in the order of @p opts ; the images X and P(X)
-/// are interchangeable there, as S * X = S * P(X) (up to the phase of P).
-/// Other terms are not replaced by images.
+/// result multiplies (S * (X_1 + X_2 + ...)), and the factor X of any other
+/// product S * X, is presented by its image, under the permutations that S
+/// absorbs (see detail::symmetrizer_group()), that comes first in the order of
+/// @p opts ; the images X and P(X) are interchangeable there, as
+/// S * X = sign(P) S * P(X). Other terms are not replaced by images.
 /// @sa prettify(const ExprPtr&, const NamedIndexSpec&, const PrettifyOptions&)
 /// @param expr the expression to prettify; it is not modified
 /// @param opts the options

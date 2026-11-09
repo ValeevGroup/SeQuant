@@ -162,10 +162,12 @@ NamedIndexSpec named_indices(const ResultExpr& expr) {
                                         ranges::to<container::set<Index>>);
 }
 
-std::vector<std::pair<container::map<Index, Index>, int>>
-detail::result_symmetry_group(const ResultExpr& result) {
-  const container::svector<Index> bra(result.bra().begin(), result.bra().end());
-  const container::svector<Index> ket(result.ket().begin(), result.ket().end());
+detail::IndexPermutationGroup detail::symmetrizer_group(
+    const Tensor& symmetrizer) {
+  const bool antisymm = symmetrizer.label() == reserved::antisymm_label();
+  SEQUANT_ASSERT(antisymm || symmetrizer.label() == reserved::symm_label());
+  const auto& bra = symmetrizer.bra();
+  const auto& ket = symmetrizer.ket();
   using Perm = std::vector<std::size_t>;
   auto all_perms = [](std::size_t n) {
     std::vector<Perm> perms;
@@ -182,87 +184,78 @@ detail::result_symmetry_group(const ResultExpr& result) {
         if (p[i] > p[j]) sign = -sign;
     return sign;
   };
-  auto identity = [](std::size_t n) {
-    Perm p(n);
-    std::iota(p.begin(), p.end(), 0);
-    return p;
-  };
 
-  // pairs of permutations of the bra and of the ket slots, with phase
+  // pairs of permutations of the bra and of the ket slots, with phase:
+  // Â (see mbpt::A_maps()) permutes the bra and the ket independently, with
+  // the parities of the permutations as phase; Ŝ (see
+  // mbpt::S_replacement_maps()) permutes the columns, i.e. the bra and the ket
+  // together, without phase
   std::vector<std::tuple<Perm, Perm, int>> slot_perms;
-  if (result.symmetry() != Symmetry::Nonsymm) {
-    const int antisymm = result.symmetry() == Symmetry::Antisymm;
+  if (antisymm) {
     for (const auto& pb : all_perms(bra.size()))
       for (const auto& pk : all_perms(ket.size()))
-        slot_perms.emplace_back(pb, pk, antisymm ? parity(pb) * parity(pk) : 1);
-  } else if (result.column_symmetry() == ColumnSymmetry::Symm &&
-             bra.size() == ket.size()) {
+        slot_perms.emplace_back(pb, pk, parity(pb) * parity(pk));
+  } else {
+    if (bra.size() != ket.size()) return {{{}, 1}};
     for (const auto& p : all_perms(bra.size()))
       slot_perms.emplace_back(p, p, 1);
-  } else {
-    slot_perms.emplace_back(identity(bra.size()), identity(ket.size()), 1);
   }
 
-  std::vector<std::pair<container::map<Index, Index>, int>> group;
-  const bool braket_swap = result.braket_symmetry() == BraKetSymmetry::Symm &&
-                           bra.size() == ket.size();
-  for (const auto& [pb, pk, sign] : slot_perms)
-    for (const bool swap : {false, true}) {
-      if (swap && !braket_swap) continue;
-      container::map<Index, Index> map;
-      for (std::size_t k = 0; k != bra.size(); ++k) {
-        const Index& target = swap ? ket[pk[k]] : bra[pb[k]];
-        if (bra[k].nonnull() && bra[k] != target) map.emplace(bra[k], target);
-      }
-      for (std::size_t k = 0; k != ket.size(); ++k) {
-        const Index& target = swap ? bra[pb[k]] : ket[pk[k]];
-        if (ket[k].nonnull() && ket[k] != target) map.emplace(ket[k], target);
-      }
-      if (ranges::all_of(map, [](const auto& source_target) {
-            return source_target.first.space() == source_target.second.space();
-          }))
-        group.emplace_back(std::move(map), sign);
-    }
+  IndexPermutationGroup group;
+  for (const auto& [pb, pk, sign] : slot_perms) {
+    container::map<Index, Index> map;
+    for (std::size_t k = 0; k != bra.size(); ++k)
+      if (bra[k].nonnull() && bra[k] != bra[pb[k]])
+        map.emplace(bra[k], bra[pb[k]]);
+    for (std::size_t k = 0; k != ket.size(); ++k)
+      if (ket[k].nonnull() && ket[k] != ket[pk[k]])
+        map.emplace(ket[k], ket[pk[k]]);
+    // only the permutations that keep the space of every index: they relate
+    // elements of the same block
+    if (ranges::all_of(map, [](const auto& source_target) {
+          return source_target.first.space() == source_target.second.space();
+        }))
+      group.emplace_back(std::move(map), sign);
+  }
   return group;
 }
 
 namespace {
 
-/// @return @p term (a part of the expression of a result that a symmetrizer
-/// of the result multiplies, see detail::for_each_symmetrized_term()) in the
-/// canonical form that is the same for all its images under @p group , the
-/// symmetry group of the result (see detail::result_symmetry_group()), with the
-/// phase of the permutation absorbed: of the canonical forms of the images
-/// the one that is smallest by hash (then by its text) is chosen; the indices
-/// of @p result keep their labels
-ExprPtr canonicalize_term_for_result(
-    const ExprPtr& term,
-    const std::vector<std::pair<container::map<Index, Index>, int>>& group,
-    const NamedIndexSpec& named, const CanonicalizeOptions& opts) {
+/// @return the canonical form of @p term (a part of the expression of a
+/// result that a symmetrizer multiplies, see
+/// detail::for_each_symmetrized_term()) that is the same for all its images
+/// under @p group , the group of the symmetrizer (see
+/// detail::symmetrizer_group()), with the phase of the permutation absorbed:
+/// of the canonical forms of the images the one that is smallest by hash
+/// (then by its text) is chosen; the indices of the result keep their labels
+ExprPtr canonicalize_term_for_result(const ExprPtr& term,
+                                     const detail::IndexPermutationGroup& group,
+                                     const NamedIndexSpec& named,
+                                     const CanonicalizeOptions& opts) {
+  // the key ignores the scalar, so that images that differ only by it
+  // compare equal
+  auto unscaled = [](const ExprPtr& image) {
+    if (!image->is<Product>() || image->as<Product>().scalar() == 1)
+      return image;
+    ExprPtr result = image->clone();
+    result->as<Product>().scale(1 / image->as<Product>().scalar());
+    return result;
+  };
   ExprPtr best;
   std::optional<std::pair<std::size_t, std::wstring>> best_key;
   for (const auto& [map, sign] : group) {
     ExprPtr image =
         map.empty() ? term->clone() : transform_expr(term, map, sign);
     canonicalize(image, named, opts);
-    // the key ignores the scalar, so that images that differ only by it
-    // compare equal
-    ExprPtr unscaled = image;
-    if (image->is<Product>() && image->as<Product>().scalar() != 1) {
-      unscaled = image->clone();
-      unscaled->as<Product>().scale(1 / image->as<Product>().scalar());
-    }
-    std::pair<std::size_t, std::wstring> key{unscaled->hash_value(), {}};
+    // an image that vanishes (e.g. by the symmetry of its tensors) is the
+    // image of a term that vanishes
+    if (image->is_zero()) return ex<Constant>(0);
+    std::pair<std::size_t, std::wstring> key{unscaled(image)->hash_value(), {}};
     if (best_key && key.first == best_key->first) {
-      key.second = unscaled->to_latex();
-      if (best_key->second.empty()) {
-        ExprPtr best_unscaled = best;
-        if (best->is<Product>() && best->as<Product>().scalar() != 1) {
-          best_unscaled = best->clone();
-          best_unscaled->as<Product>().scale(1 / best->as<Product>().scalar());
-        }
-        best_key->second = best_unscaled->to_latex();
-      }
+      key.second = unscaled(image)->to_latex();
+      if (best_key->second.empty())
+        best_key->second = unscaled(best)->to_latex();
     }
     if (!best_key || key < *best_key) {
       best = std::move(image);
@@ -276,7 +269,8 @@ ExprPtr canonicalize_term_for_result(
 
 bool detail::for_each_symmetrized_term(
     ExprPtr& term, const ResultExpr& result,
-    const std::function<void(ExprPtr& part)>& f) {
+    const std::function<void(ExprPtr& part,
+                             const IndexPermutationGroup& group)>& f) {
   if (!term.is<Product>()) return false;
   const auto result_indices =
       result.indices() | ranges::to<container::set<Index>>;
@@ -289,12 +283,30 @@ bool detail::for_each_symmetrized_term(
              return result_indices.contains(idx);
            });
   };
-  std::size_t nsymmetrizers = 0, nsums = 0;
+  std::size_t nsums = 0;
   const auto& product = term.as<Product>();
+  // the group of the symmetrizers: the product of their groups, which act on
+  // disjoint sets of indices
+  IndexPermutationGroup group{{{}, 1}};
+  container::set<Index> symmetrized_indices;
+  std::size_t nsymmetrizers = 0;
   for (const auto& factor : product.factors()) {
-    if (is_symmetrizer(factor))
+    if (is_symmetrizer(factor)) {
       ++nsymmetrizers;
-    else if (factor.is<Sum>())
+      for (const auto& idx : factor.as<Tensor>().const_indices()) {
+        // the symmetrizers do not commute if they share indices
+        if (!symmetrized_indices.insert(idx).second) return false;
+      }
+      IndexPermutationGroup product_group;
+      for (const auto& [map1, sign1] : group)
+        for (const auto& [map2, sign2] :
+             symmetrizer_group(factor.as<Tensor>())) {
+          auto map = map1;
+          map.insert(map2.begin(), map2.end());
+          product_group.emplace_back(std::move(map), sign1 * sign2);
+        }
+      group = std::move(product_group);
+    } else if (factor.is<Sum>())
       ++nsums;
   }
   if (nsymmetrizers == 0) return false;
@@ -302,7 +314,7 @@ bool detail::for_each_symmetrized_term(
     // N.B. mutable iteration resets the memoized hashes
     for (auto& factor : *term) {
       if (!factor.is<Sum>()) continue;
-      for (auto& summand : *factor) f(summand);
+      for (auto& summand : *factor) f(summand, group);
     }
     return true;
   }
@@ -317,7 +329,7 @@ bool detail::for_each_symmetrized_term(
       rest->append(1, factor, Product::Flatten::No);
   }
   ExprPtr part = rest;
-  f(part);
+  f(part, group);
   if (part->is_zero()) {
     term = ex<Constant>(0);
     return true;
@@ -335,23 +347,22 @@ bool detail::for_each_symmetrized_term(
 
 ResultExpr& canonicalize(ResultExpr& expr, const CanonicalizeOptions& opts) {
   const auto named = named_indices(expr);
-  const auto group = detail::result_symmetry_group(expr);
-  if (group.size() > 1) {
-    // terms that differ by a permutation of the result indices within the
-    // symmetry group of the result are the same term if a symmetrizer of the
-    // result multiplies them (see detail::for_each_symmetrized_term())
-    auto present = [&](ExprPtr& term) {
+  // terms that differ by a permutation of the indices of a symmetrizer that
+  // multiplies them are the same term (see detail::for_each_symmetrized_term())
+  auto present = [&](ExprPtr& term,
+                     const detail::IndexPermutationGroup& group) {
+    if (group.size() > 1)
       term = canonicalize_term_for_result(term, group, named, opts);
-    };
-    auto& rhs = expr.expression();
-    if (rhs->is<Sum>()) {
-      for (auto& summand : *rhs)
-        detail::for_each_symmetrized_term(summand, expr, present);
-    } else {
-      detail::for_each_symmetrized_term(rhs, expr, present);
-    }
+  };
+  auto& rhs = expr.expression();
+  if (!rhs) return expr;
+  if (rhs->is<Sum>()) {
+    for (auto& summand : *rhs)
+      detail::for_each_symmetrized_term(summand, expr, present);
+  } else {
+    detail::for_each_symmetrized_term(rhs, expr, present);
   }
-  canonicalize(expr.expression(), named, opts);
+  canonicalize(rhs, named, opts);
   return expr;
 }
 
