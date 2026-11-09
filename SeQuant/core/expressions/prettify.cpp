@@ -17,19 +17,6 @@ namespace sequant {
 
 namespace {
 
-/// @return true if @p expr is a tensor, or a product of tensors, scalars and
-/// (recursively) nested such products; only these are canonicalized by
-/// prettify(), because their canonicalization preserves the parenthesization
-bool is_tensor_tree(const ExprPtr& expr) {
-  if (expr.is<AbstractTensor>()) return true;
-  if (!expr.is<Product>()) return false;
-  for (const auto& factor : expr.as<Product>().factors()) {
-    if (factor->is_scalar()) continue;
-    if (!is_tensor_tree(factor)) return false;
-  }
-  return true;
-}
-
 void recanonicalize(ExprPtr& expr, const NamedIndexSpec& named_indices,
                     const CanonicalizeOptions& opts);
 
@@ -74,8 +61,9 @@ void recanonicalize_sum_factors(Product& product,
   }
 }
 
-/// canonicalizes the tensor trees (see is_tensor_tree()) of @p expr , which
-/// are the summands of the (nested) sums of @p expr or @p expr itself, and
+/// canonicalizes the tensor trees (see detail::is_tensor_tree(); their
+/// canonicalization preserves the parenthesization) of @p expr , which are the
+/// summands of the (nested) sums of @p expr or @p expr itself, and
 /// the summands of the sums that are factors of its products (see
 /// recanonicalize_sum_factors()), with @p opts
 /// @note sums are neither flattened nor are their summands combined, i.e.
@@ -85,7 +73,7 @@ void recanonicalize(ExprPtr& expr, const NamedIndexSpec& named_indices,
   if (expr.is<Sum>()) {
     // N.B. mutable iteration resets the memoized hash of the sum
     for (auto& summand : *expr) recanonicalize(summand, named_indices, opts);
-  } else if (is_tensor_tree(expr)) {
+  } else if (detail::is_tensor_tree(expr)) {
     canonicalize(expr, named_indices, opts);
   } else if (expr.is<Product>()) {
     recanonicalize_sum_factors(expr.as<Product>(), named_indices, opts);

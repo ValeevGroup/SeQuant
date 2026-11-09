@@ -211,6 +211,10 @@ NamedIndexSpec named_indices(const ResultExpr& expr);
 
 namespace detail {
 
+/// @return whether @p expr is a tensor (any AbstractTensor), or a (nested)
+/// product whose factors are scalars (see Expr::is_scalar()) and tensor trees
+bool is_tensor_tree(const ExprPtr& expr);
+
 /// permutations of indices, as index replacement maps, each with its phase
 using IndexPermutationGroup =
     std::vector<std::pair<container::map<Index, Index>, int>>;
