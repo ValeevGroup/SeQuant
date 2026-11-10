@@ -1939,6 +1939,55 @@ TEST_CASE("nested products", "[algorithms][canonicalize]") {
   }
 }
 
+TEST_CASE("canonicalize_product_with_sum_factors", "[algorithms]") {
+  using namespace sequant;
+
+  // @return the largest number of occurrences of an index in a term of the
+  // expansion of @p expr
+  auto max_index_occurrences = [](const ExprPtr& expr) {
+    auto expanded = expr->clone();
+    expand(expanded);
+    std::size_t result = 0;
+    auto count = [&result](const ExprPtr& term) {
+      container::map<Index, std::size_t> counts;
+      term->visit(
+          [&counts](const ExprPtr& x) {
+            if (x->is<Tensor>())
+              for (const auto& idx : x->as<Tensor>().const_indices())
+                ++counts[idx];
+          },
+          true);
+      for (const auto& [idx, n] : counts) result = std::max(result, n);
+    };
+    if (expanded->is<Sum>())
+      for (const auto& summand : *expanded) count(summand);
+    else
+      count(expanded);
+    return result;
+  };
+
+  // the dummy indices of a sum must not be renamed to the indices of the
+  // other factors, which would contract them with the other factors
+  for (const auto input : {
+           L"A{i1} * (B{i1;i3} C{i3} + F{i1;i3} G{i3}) * D{i2} E{i2}",
+           L"(B{i1;i3} C{i3} + F{i1;i3} G{i3}) * D{i2} E{i2;i1}",
+           L"(B{i1;i3} C{i3} + F{i1;i3} G{i3}) * "
+           L"(P{i1;i4} Q{i4} + R{i1;i4} S{i4})",
+       }) {
+    CAPTURE(toUtf8(input));
+    for (const bool deduce : {false, true}) {
+      CAPTURE(deduce);
+      auto expr = deserialize(input);
+      REQUIRE(max_index_occurrences(expr) == 2);
+      if (deduce)
+        canonicalize(expr, deduce_named_indices);
+      else
+        canonicalize(expr, explicit_named({}));
+      CHECK(max_index_occurrences(expr) == 2);
+    }
+  }
+}
+
 TEST_CASE("prettify", "[algorithms][canonicalize]") {
   using namespace sequant;
 

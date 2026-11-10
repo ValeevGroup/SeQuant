@@ -93,22 +93,43 @@ ExprPtr Product::canonicalize_impl(const NamedIndexSpec &named_indices,
   // recursively canonicalize non-tensor subfactors (tensors will be
   // canonicalized as part of the TN built of all tensor factors of this) ...
   // an index that a subfactor shares with another factor is a dummy of this
-  // product, but external to the subfactor, so it is named in the subfactor
-  // N.B. the indices of each factor are collected once, and only if a
-  // non-tensor factor needs them
+  // product, but external to the subfactor, so it is named in the subfactor;
+  // the other indices of the other factors are named, too: they do not occur
+  // in the subfactor, but naming them keeps its dummies from being renamed to
+  // them (which would contract them with the other factors)
+  // N.B. the indices of each factor are collected once
   container::svector<container::set<Index>> factor_indices;
   auto subfactor_named_indices = [this, &named_indices,
                                   &factor_indices](std::size_t f) {
-    if (named_indices.deduce()) return named_indices;
     if (factor_indices.empty())
       for (const auto &factor : factors_)
         factor_indices.push_back(get_used_indices(factor));
-    auto result = named_indices.indices();
+    container::set<Index> others;
     for (std::size_t g = 0; g != factors_.size(); ++g) {
       if (g == f) continue;
-      for (auto &&idx : factor_indices[g])
-        if (factor_indices[f].contains(idx)) result.insert(idx);
+      others.insert(factor_indices[g].begin(), factor_indices[g].end());
     }
+    container::set<Index> result;
+    if (named_indices.deduce()) {
+      // only sums and products have dummies that could clash; if the other
+      // factors only have indices of the subfactor, they cannot clash with
+      // them: keep deducing
+      if (!factors_[f].is<Sum>() && !factors_[f].is<Product>())
+        return named_indices;
+      if (std::ranges::all_of(others, [&](const Index &idx) {
+            return factor_indices[f].contains(idx);
+          }))
+        return named_indices;
+      // else name the indices that occur once in the subfactor, i.e. those
+      // that the deduction would name
+      const auto unique = get_unique_indices(factors_[f]);
+      result.insert(unique.bra.begin(), unique.bra.end());
+      result.insert(unique.ket.begin(), unique.ket.end());
+      result.insert(unique.aux.begin(), unique.aux.end());
+    } else {
+      result = named_indices.indices();
+    }
+    result.insert(others.begin(), others.end());
     return detail::explicit_named_indices(std::move(result));
   };
   for (std::size_t f = 0; f != factors_.size(); ++f) {
