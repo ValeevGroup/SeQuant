@@ -28,7 +28,7 @@ class IndexBatchingStep
  protected:
   std::size_t process(std::string_view id_prefix, std::size_t id_start,
                       ExecutionContext &ctx,
-                      WorkingCopy<ExportTreeData> input) override;
+                      WorkingCopy<ExportTreeData> &input) override;
 
   bool alias_unchanged_inputs() const override;
 

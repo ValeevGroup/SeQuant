@@ -39,7 +39,7 @@ class ClearingStep final
  protected:
   std::size_t process(std::string_view id_prefix, std::size_t id_start,
                       ExecutionContext &ctx,
-                      WorkingCopy<ExpressionData> input) override {
+                      WorkingCopy<ExpressionData> &input) override {
     last_was_copy = input.is_copy();
 
     if (report_unchanged_) {
@@ -115,12 +115,14 @@ TEST_CASE("OneByOneProcessingStep working copies", "[extint]") {
     REQUIRE(ctx.has_data("out.energy"));
   }
 
-  SECTION("a consumed input can't be reported as unchanged") {
+  SECTION("a consumed input reported as unchanged takes its place") {
     ctx.set_needed_later_predicate([](std::string_view) { return false; });
 
     ClearingStep step(/* report_unchanged = */ true);
-    REQUIRE_THROWS_WITH(step.run("out", ctx, {"in.0"}),
-                        Catch::Matchers::ContainsSubstring("consumed"));
+    REQUIRE(step.run("out", ctx, {"in.0"}) == 1);
+    REQUIRE_THROWS_AS(ctx.get_data("in.0"), Exception);
+    REQUIRE(n_expressions(ctx, "out.0") == 1);
+    REQUIRE(ctx.has_data("out.energy"));
   }
 
   SECTION("errors name the input") {

@@ -50,7 +50,7 @@ void ProjectionStep::set_options(const nlohmann::json &options) {
 
 std::size_t ProjectionStep::process(std::string_view id_prefix,
                                     std::size_t id_start, ExecutionContext &ctx,
-                                    WorkingCopy<ExpressionData> input) {
+                                    WorkingCopy<ExpressionData> &input) {
   container::svector<ResultExpr> transformed;
 
   transformed.insert(transformed.end(),

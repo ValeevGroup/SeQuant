@@ -24,7 +24,7 @@ class ProjectionStep : public OneByOneProcessingStep<ExpressionData, true,
  protected:
   std::size_t process(std::string_view id_prefix, std::size_t id_start,
                       ExecutionContext &ctx,
-                      WorkingCopy<ExpressionData> input) override;
+                      WorkingCopy<ExpressionData> &input) override;
 };
 
 }  // namespace sequant::util::extint

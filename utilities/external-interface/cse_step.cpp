@@ -437,7 +437,7 @@ std::size_t CSEStep::run(std::string_view step_id, ExecutionContext &ctx,
 
 std::size_t CSEStep::process(std::string_view id_prefix, std::size_t id_start,
                              ExecutionContext &ctx,
-                             WorkingCopy<ExportTreeData> input) {
+                             WorkingCopy<ExportTreeData> &input) {
   std::vector<ExportNode<>> expressions;
   std::vector<std::size_t> root_ids;
   expressions.reserve(input.data.entries.size());
@@ -454,15 +454,9 @@ std::size_t CSEStep::process(std::string_view id_prefix, std::size_t id_start,
     return 1;
   }
 
-  if (input.is_copy()) {
-    return 0;
-  }
-
-  // The input has been consumed, so it needs to be passed on
   restore_trees(input.data, expressions, root_ids);
-  ctx.set_data(id_prefix, id_start, std::move(input.data));
 
-  return 1;
+  return 0;
 }
 
 bool CSEStep::alias_unchanged_inputs() const { return true; }

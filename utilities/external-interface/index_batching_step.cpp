@@ -67,7 +67,7 @@ void IndexBatchingStep::set_options(const nlohmann::json &options) {
 std::size_t IndexBatchingStep::process(std::string_view id_prefix,
                                        std::size_t id_start,
                                        ExecutionContext &ctx,
-                                       WorkingCopy<ExportTreeData> input) {
+                                       WorkingCopy<ExportTreeData> &input) {
   std::vector<std::vector<Index>> batch_indices(input.data.entries.size());
 
   bool batched_some = false;
@@ -109,14 +109,7 @@ std::size_t IndexBatchingStep::process(std::string_view id_prefix,
   }
 
   if (!batched_some) {
-    if (input.is_copy()) {
-      return 0;
-    }
-
-    // The input has been consumed, so it needs to be passed on
-    ctx.set_data(id_prefix, id_start, std::move(input.data));
-
-    return 1;
+    return 0;
   }
 
   for (std::size_t i = 0; i < input.data.entries.size(); ++i) {

@@ -31,7 +31,7 @@ class SubstituteStep : public OneByOneProcessingStep<ExpressionData, false,
  protected:
   std::size_t process(std::string_view id_prefix, std::size_t id_start,
                       ExecutionContext &ctx,
-                      WorkingCopy<ExpressionData> input) override;
+                      WorkingCopy<ExpressionData> &input) override;
 
   // Inputs left unchanged by the substitutions are dropped
   bool needs_original_input() const override;

@@ -59,7 +59,10 @@ enum class InputAccess {
   ReadOnly,
   /// An owned copy of the input that the step may modify at will. See
   /// ExecutionContext::working_copy for when the input is moved out of the
-  /// context instead of being copied.
+  /// context instead of being copied. A step that finds the input to be
+  /// unchanged (and has alias_unchanged_inputs()) may leave the data in the
+  /// working copy and return 0 outputs: it is then either aliased or, if the
+  /// input has been consumed, published in its place.
   WorkingCopy,
 };
 
@@ -77,7 +80,7 @@ class OBOProcessFunctionMember<DataType, InputAccess::WorkingCopy> {
  protected:
   virtual std::size_t process(std::string_view id_prefix, std::size_t id_start,
                               ExecutionContext &ctx,
-                              WorkingCopy<DataType> input) = 0;
+                              WorkingCopy<DataType> &input) = 0;
 };
 
 template <>
@@ -235,8 +238,8 @@ class OneByOneProcessingStep
     };
 
     std::size_t new_outputs;
-    // Whether the input is still around to be aliased
-    bool input_available = true;
+    // Only set in WorkingCopy mode
+    std::optional<WorkingCopy<DataType>> working;
 
     if constexpr (access == InputAccess::ReadOnly) {
       const DataType &data = convert_data<DataType>(input.data.get());
@@ -245,23 +248,27 @@ class OneByOneProcessingStep
           [&]() { return this->process(step_id, id_start, ctx, data); });
     } else {
       new_outputs = guarded([&]() {
-        WorkingCopy<DataType> working =
-            ctx.working_copy<DataType>(input, needs_original_input());
-        input_available = working.is_copy();
+        working = ctx.working_copy<DataType>(input, needs_original_input());
 
-        return this->process(step_id, id_start, ctx, std::move(working));
+        return this->process(step_id, id_start, ctx, *working);
       });
     }
 
     bool alias_source = false;
     if (inherit_aliases && new_outputs == 0 && alias_unchanged_inputs()) {
-      if (!input_available) {
-        throw Exception(kind() +
-                        " reported its input as unchanged but has consumed it");
+      if constexpr (access == InputAccess::WorkingCopy) {
+        if (!working->is_copy()) {
+          // The original is gone, so the (unchanged) working copy takes its
+          // place
+          ctx.set_data(step_id, id_start, std::move(working->data));
+          new_outputs = 1;
+        }
       }
 
-      new_outputs = 1;
-      alias_source = true;
+      if (new_outputs == 0) {
+        new_outputs = 1;
+        alias_source = true;
+      }
     }
 
     if (inherit_aliases && new_outputs > 0) {

@@ -361,7 +361,7 @@ std::size_t OptimizationStep::run(std::string_view step_id,
 std::size_t OptimizationStep::process(std::string_view id_prefix,
                                       std::size_t id_start,
                                       ExecutionContext &ctx,
-                                      WorkingCopy<ExpressionData> input) {
+                                      WorkingCopy<ExpressionData> &input) {
   SEQUANT_ASSERT(!replay_.has_value());
 
   for (ResultExpr &expr : input.data.expressions) {

@@ -31,7 +31,7 @@ void ToExportTreeStep::set_options(const nlohmann::json &) {
 std::size_t ToExportTreeStep::process(std::string_view id_prefix,
                                       std::size_t id_start,
                                       ExecutionContext &ctx,
-                                      WorkingCopy<ExpressionData> input) {
+                                      WorkingCopy<ExpressionData> &input) {
   ExportTreeData output;
 
   for (ResultExpr &current : input.data.expressions) {
