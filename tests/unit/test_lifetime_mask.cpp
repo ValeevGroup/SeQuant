@@ -40,7 +40,7 @@ EvalNode<EvalExpr> head(std::string_view product) {
   return node;
 }
 
-std::set<Index> as_set(sequant::container::svector<Index> const& v) {
+std::set<Index> as_set(sequant::container::svector_base<Index> const& v) {
   return std::set<Index>(v.begin(), v.end());
 }
 

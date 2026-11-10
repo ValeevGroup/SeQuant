@@ -224,7 +224,7 @@ void stamp_lifetime_masks(R const& forest) {
 /// developer guide, \c
 /// doc/developer/batched_evaluation.rst, "Loop identity and value identity".
 template <meta::eval_node Node>
-container::svector<Index> const& home_scope(Node const& n) noexcept {
+container::svector_base<Index> const& home_scope(Node const& n) noexcept {
   return n->occurrence_home();
 }
 

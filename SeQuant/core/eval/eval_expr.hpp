@@ -322,7 +322,7 @@ class EvalExpr {
   /// optimizer). The runtime batched evaluator slices exactly these indices
   /// at this node.
   ///
-  [[nodiscard]] container::svector<std::pair<Index, BatchModeType>> const&
+  [[nodiscard]] container::svector_base<std::pair<Index, BatchModeType>> const&
   node_slice_mask() const noexcept {
     return node_slice_mask_;
   }
@@ -347,7 +347,7 @@ class EvalExpr {
   /// \c peak_profile's \c OccurrenceRec::ectx) does not multi-count one loop as
   /// one-per-carrying-node.
   ///
-  [[nodiscard]] container::svector<std::pair<Index, BatchModeType>> const&
+  [[nodiscard]] container::svector_base<std::pair<Index, BatchModeType>> const&
   batch_loops_opened_here() const noexcept {
     return batch_loops_opened_here_;
   }
@@ -368,7 +368,8 @@ class EvalExpr {
   /// contributes its proto indices. Set by \c stamp_lifetime_masks; empty by
   /// default (off path).
   ///
-  [[nodiscard]] container::svector<Index> const& sliced_modes() const noexcept {
+  [[nodiscard]] container::svector_base<Index> const& sliced_modes()
+      const noexcept {
     return sliced_modes_;
   }
 
@@ -396,7 +397,7 @@ class EvalExpr {
   /// sliced_modes), which folds occurrences by node identity and by label and
   /// serves the forest-descent path's residency. Empty = whole.
   ///
-  [[nodiscard]] container::svector<Index> const& occurrence_home()
+  [[nodiscard]] container::svector_base<Index> const& occurrence_home()
       const noexcept {
     return occurrence_home_;
   }
@@ -506,15 +507,15 @@ class EvalExpr {
   std::shared_ptr<bliss::Graph> connectivity_;
 
   /// See \c node_slice_mask.
-  container::svector<std::pair<Index, BatchModeType>> node_slice_mask_{};
+  container::svector<std::pair<Index, BatchModeType>, 2> node_slice_mask_{};
 
   /// See \c batch_loops_opened_here.
-  container::svector<std::pair<Index, BatchModeType>>
+  container::svector<std::pair<Index, BatchModeType>, 2>
       batch_loops_opened_here_{};
 
   /// See \c sliced_modes.
-  container::svector<Index> sliced_modes_{};
-  container::svector<Index> occurrence_home_{};
+  container::svector<Index, 2> sliced_modes_{};
+  container::svector<Index, 2> occurrence_home_{};
   std::size_t value_key_ = 0;
 
   /// See \c batch_order_aware.
