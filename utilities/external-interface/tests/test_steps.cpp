@@ -45,6 +45,23 @@ TEST_CASE("canonicalize step", "[extint]") {
     REQUIRE(ctx.has_data("canon.energy"));
   }
 
+  SECTION("unchanged input is aliased if it is needed later") {
+    ctx.set_needed_later_predicate([](std::string_view) { return true; });
+    CanonicalizeStep step;
+    REQUIRE(step.run("canon", ctx, {"in.0"}) == 1);
+    REQUIRE(ctx.ids_are_equivalent("canon.0", "in.0"));
+    REQUIRE_NOTHROW(ctx.get_data("in.0"));
+  }
+
+  SECTION("input is consumed if it is not needed later") {
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    CanonicalizeStep step;
+    REQUIRE(step.run("canon", ctx, {"in.0"}) == 1);
+    REQUIRE_FALSE(ctx.ids_are_equivalent("canon.0", "in.0"));
+    REQUIRE_THROWS_AS(ctx.get_data("in.0"), Exception);
+    REQUIRE_NOTHROW(ctx.get_data("canon.0"));
+  }
+
   SECTION("rejects options") {
     CanonicalizeStep step;
     REQUIRE_THROWS_AS(step.set_options(json::object()), Exception);
