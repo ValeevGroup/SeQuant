@@ -67,13 +67,14 @@ void IndexBatchingStep::set_options(const nlohmann::json &options) {
 std::size_t IndexBatchingStep::process(std::string_view id_prefix,
                                        std::size_t id_start,
                                        ExecutionContext &ctx,
-                                       const ExportTreeData &input) {
-  ExportTreeData output;
+                                       WorkingCopy<ExportTreeData> input) {
+  std::vector<std::vector<Index>> batch_indices(input.data.entries.size());
 
   bool batched_some = false;
-  for (const ExportTreeData::Entry &current : input.entries) {
+  for (std::size_t i = 0; i < input.data.entries.size(); ++i) {
+    const ExportTreeData::Entry &current = input.data.entries[i];
+
     if (!current.tree->is_tensor()) {
-      output.entries.emplace_back(current);
       continue;
     }
 
@@ -104,15 +105,27 @@ std::size_t IndexBatchingStep::process(std::string_view id_prefix,
 
     batched_some |= !indices.empty();
 
-    output.entries.emplace_back(current);
-    output.entries.back().batch_indices = std::move(indices);
+    batch_indices[i] = std::move(indices);
   }
 
   if (!batched_some) {
-    return 0;
+    if (input.is_copy()) {
+      return 0;
+    }
+
+    // The input has been consumed, so it needs to be passed on
+    ctx.set_data(id_prefix, id_start, std::move(input.data));
+
+    return 1;
   }
 
-  ctx.set_data(id_prefix, id_start, std::move(output));
+  for (std::size_t i = 0; i < input.data.entries.size(); ++i) {
+    if (input.data.entries[i].tree->is_tensor()) {
+      input.data.entries[i].batch_indices = std::move(batch_indices[i]);
+    }
+  }
+
+  ctx.set_data(id_prefix, id_start, std::move(input.data));
 
   return 1;
 }

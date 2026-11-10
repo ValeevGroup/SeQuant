@@ -215,6 +215,51 @@ TEST_CASE("batch_indices step", "[extint]") {
     REQUIRE(step.run("b", ctx, {"in.0"}) == 1);
     REQUIRE(ctx.has_data("b.0"));
   }
+
+  SECTION("input handling") {
+    const std::wstring_view definition =
+        L"R2{a1,a2;i1,i2} = + g{a1,a2;i1,i2}:A-H-S";
+
+    ExecutionContext ctx;
+    ctx.set_data("in", 0,
+                 ProcessingData{test_support::tree_data({definition})});
+    auto batch_indices = [](ExecutionContext &c, std::string_view id) {
+      return convert_data<ExportTreeData>(c.get_data(id).front().data.get())
+          .entries.front()
+          .batch_indices;
+    };
+
+    SECTION("input needed later is left unbatched") {
+      ctx.set_needed_later_predicate([](std::string_view) { return true; });
+      IndexBatchingStep step;
+      REQUIRE(step.run("b", ctx, {"in.0"}) == 1);
+      REQUIRE(batch_indices(ctx, "in.0").empty());
+      REQUIRE(batch_indices(ctx, "b.0").size() == 2);
+    }
+
+    SECTION("input not needed later is consumed") {
+      ctx.set_needed_later_predicate([](std::string_view) { return false; });
+      IndexBatchingStep step;
+      REQUIRE(step.run("b", ctx, {"in.0"}) == 1);
+      REQUIRE_THROWS_AS(ctx.get_data("in.0"), Exception);
+      REQUIRE(batch_indices(ctx, "b.0").size() == 2);
+    }
+
+    SECTION("nothing to batch") {
+      IndexBatchingStep step;
+      step.set_options(json{{"min_unbatched", 4}});
+
+      ctx.set_needed_later_predicate([](std::string_view) { return true; });
+      REQUIRE(step.run("b", ctx, {"in.0"}) == 1);
+      REQUIRE(ctx.ids_are_equivalent("b.0", "in.0"));
+
+      // A consumed input has to be passed on instead
+      ctx.set_needed_later_predicate([](std::string_view) { return false; });
+      REQUIRE(step.run("c", ctx, {"in.0"}) == 1);
+      REQUIRE_FALSE(ctx.ids_are_equivalent("c.0", "in.0"));
+      REQUIRE(batch_indices(ctx, "c.0").empty());
+    }
+  }
 }
 
 TEST_CASE("export step", "[extint]") {
