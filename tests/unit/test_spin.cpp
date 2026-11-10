@@ -2261,7 +2261,7 @@ TEST_CASE("results independent of presentation settings", "[spin]") {
   };
 
   const auto reference = compute();
-  auto scoped = set_scoped_modified_default_context([](Context& ctx) {
+  auto scoped = set_scoped_modified_default_context([](sequant::Context& ctx) {
     ctx.set(PrintOptions{
         .braket_typesetting = BraKetTypesetting::KetSub,
         .braket_slot_typesetting = BraKetSlotTypesetting::TensorPackage,
