@@ -307,7 +307,7 @@ void Product::canonicalize_nested(const container::svector<ExprPtr *> &leaves,
                << ") of nested products, input: " << to_latex() << std::endl;
   }
 
-  const auto cardinal_tensor_labels = detail::cardinal_tensor_labels(opts);
+  const auto &cardinal_tensor_labels = detail::cardinal_tensor_labels(opts);
   TensorNetwork tn(leaves | ranges::views::transform([](const ExprPtr *leaf) {
                      return *leaf;
                    }) |

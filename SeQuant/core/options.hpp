@@ -222,7 +222,7 @@ namespace detail {
 /// each resolves a setting that @c opts.presentation does not set to the
 /// library default
 /// @{
-container::vector<std::wstring> cardinal_tensor_labels(
+const container::vector<std::wstring>& cardinal_tensor_labels(
     const CanonicalizeOptions& opts);
 std::shared_ptr<const tensor_index_comparer_t> index_comparer(
     const CanonicalizeOptions& opts);
