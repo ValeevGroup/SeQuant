@@ -40,6 +40,22 @@ TEST_CASE("simplify step", "[extint]") {
         convert_data<ExpressionData>(ctx.get_data("s.0").front().data.get()));
   }
 
+  SECTION("input is consumed if it is not needed later") {
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    SimplifyStep step;
+    REQUIRE(step.run("s", ctx, {"in.0"}) == 1);
+    REQUIRE_THROWS_AS(ctx.get_data("in.0"), Exception);
+    REQUIRE_NOTHROW(ctx.get_data("s.0"));
+  }
+
+  SECTION("input is left intact if it is needed later") {
+    ctx.set_needed_later_predicate([](std::string_view) { return true; });
+    SimplifyStep step;
+    REQUIRE(step.run("s", ctx, {"in.0"}) == 1);
+    REQUIRE_NOTHROW(ctx.get_data("in.0"));
+    REQUIRE_NOTHROW(ctx.get_data("s.0"));
+  }
+
   SECTION("rejects options") {
     SimplifyStep step;
     REQUIRE_THROWS_AS(step.set_options(json::object()), Exception);
