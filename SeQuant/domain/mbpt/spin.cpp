@@ -1199,6 +1199,9 @@ ResultExpr closed_shell_CC_spintrace(const ResultExpr& expr,
   result.expression() = closed_shell_CC_spintrace_impl(
       expr.expression(),
       expr.index_particle_grouping<ExtIndexGroups::value_type>(), options);
+  // the spin-traced result does not have the permutational symmetry of the
+  // spin-orbital one (cf. the other spintrace overloads)
+  result.set_symmetry(Symmetry::Nonsymm);
   return result;
 }
 

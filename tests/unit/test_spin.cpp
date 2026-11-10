@@ -22,6 +22,7 @@
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/rdm.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -2277,4 +2278,19 @@ TEST_CASE("results independent of presentation settings", "[spin]") {
     CAPTURE(k, serialize(reference[k]), serialize(changed[k]));
     CHECK(*changed[k] == *reference[k]);
   }
+}
+
+TEST_CASE("closed-shell spintrace of a result", "[spin]") {
+  using namespace sequant;
+  // the spin-traced residual does not have the permutational symmetry of the
+  // spin-orbital one
+  const auto r = mbpt::CC{2}.t();
+  const ResultExpr residual(Tensor(L"R", bra{L"a_1", L"a_2"},
+                                   ket{L"i_1", L"i_2"}, Symmetry::Antisymm),
+                            r.at(2));
+  const auto traced = mbpt::closed_shell_CC_spintrace(residual);
+  CHECK(traced.symmetry() == Symmetry::Nonsymm);
+  CHECK(traced.bra() == residual.bra());
+  CHECK(traced.ket() == residual.ket());
+  CHECK(*traced.expression() == *mbpt::closed_shell_CC_spintrace(r.at(2)));
 }
