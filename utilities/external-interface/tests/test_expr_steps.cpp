@@ -75,6 +75,31 @@ TEST_CASE("sort step", "[extint]") {
     REQUIRE(out.expressions == in.expressions);
   }
 
+  SECTION("input is consumed if it is not needed later") {
+    seed_expr(ctx, {L"R1{a1;i1} = + g{a1;i1}:A-H-S + f{a1;i1}:A-H-S"});
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    SortStep step;
+    REQUIRE(step.run("s", ctx, {"in.0"}) == 1);
+    REQUIRE_THROWS_AS(ctx.get_data("in.0"), Exception);
+    const auto &out =
+        convert_data<ExpressionData>(ctx.get_data("s.0").front().data.get());
+    REQUIRE(out.expressions.front() ==
+            deserialize<ResultExpr>(
+                L"R1{a1;i1} = + f{a1;i1}:A-H-S + g{a1;i1}:A-H-S"));
+  }
+
+  SECTION("input is left intact if it is needed later") {
+    seed_expr(ctx, {L"R1{a1;i1} = + g{a1;i1}:A-H-S + f{a1;i1}:A-H-S"});
+    ctx.set_needed_later_predicate([](std::string_view) { return true; });
+    SortStep step;
+    REQUIRE(step.run("s", ctx, {"in.0"}) == 1);
+    const auto &in =
+        convert_data<ExpressionData>(ctx.get_data("in.0").front().data.get());
+    REQUIRE(in.expressions.front() ==
+            deserialize<ResultExpr>(
+                L"R1{a1;i1} = + g{a1;i1}:A-H-S + f{a1;i1}:A-H-S"));
+  }
+
   SECTION("rejects options") {
     SortStep step;
     REQUIRE_THROWS_AS(step.set_options(json::object()), Exception);

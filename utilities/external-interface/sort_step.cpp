@@ -27,29 +27,20 @@ void SortStep::set_options(const nlohmann::json &) {
 
 std::size_t SortStep::process(std::string_view id_prefix, std::size_t id_start,
                               ExecutionContext &ctx,
-                              const ExpressionData &data) {
+                              WorkingCopy<ExpressionData> input) {
   const LexicographicExprCompare cmp;
 
-  std::vector<ResultExpr> outputs;
-
-  for (const ResultExpr &expr : data.expressions) {
-    ResultExpr clone = expr.clone();
-    sort_expr(clone, cmp);
-
-    outputs.emplace_back(std::move(clone));
+  for (ResultExpr &expr : input.data.expressions) {
+    sort_expr(expr, cmp);
   }
 
-  if (outputs != data.expressions) {
-    ExpressionData data_obj;
-    data_obj.expressions.insert(data_obj.expressions.end(),
-                                std::make_move_iterator(outputs.begin()),
-                                std::make_move_iterator(outputs.end()));
-    ctx.set_data(id_prefix, id_start, std::move(data_obj));
-
-    return 1;
+  if (input.unchanged()) {
+    return 0;
   }
 
-  return 0;
+  ctx.set_data(id_prefix, id_start, std::move(input.data));
+
+  return 1;
 }
 
 bool SortStep::alias_unchanged_inputs() const { return true; }
