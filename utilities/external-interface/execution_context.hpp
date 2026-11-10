@@ -11,14 +11,36 @@
 #include <cstddef>
 #include <deque>
 #include <functional>
+#include <limits>
 #include <map>
 #include <optional>
 #include <ranges>
 #include <string>
+#include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace sequant::util::extint {
+
+/// A data object that a step is free to modify, obtained from
+/// ExecutionContext::working_copy
+template <typename DataT>
+struct WorkingCopy {
+  DataT data;
+  /// The data object @c data was copied from, which remains untouched in the
+  /// ExecutionContext. If this is null, @c data has been moved out of the
+  /// context instead and the original no longer exists.
+  const DataT *original = nullptr;
+
+  [[nodiscard]] bool is_copy() const { return original != nullptr; }
+
+  /// @returns Whether the original exists and compares equal to @c data. Hence,
+  /// this is always false for a working copy that was moved out of the context.
+  [[nodiscard]] bool unchanged() const {
+    return original != nullptr && data == *original;
+  }
+};
 
 class ExecutionContext {
  public:
@@ -31,6 +53,8 @@ class ExecutionContext {
     /// List of IDs that are associated with a group of data objects which the
     /// present one is a part of
     std::vector<std::string_view> associated_group_ids = {};
+    /// Position of the data object in the context's store
+    std::size_t index = std::numeric_limits<std::size_t>::max();
 
     operator DataT &() { return data.get(); }
     operator std::add_const_t<DataT> &() const { return data.get(); }
@@ -143,6 +167,45 @@ class ExecutionContext {
   std::vector<Data<const ProcessingData>> get_data(std::string_view id) const;
   std::vector<Data<ProcessingData>> get_data(std::string_view id);
 
+  /// Installs a predicate that tells whether the data registered under a given
+  /// ID is still needed once the currently running step has finished. This
+  /// allows steps to find out whether they may consume their inputs (see
+  /// working_copy).
+  void set_needed_later_predicate(std::function<bool(std::string_view)> pred);
+
+  /// Removes the predicate installed via set_needed_later_predicate
+  void clear_needed_later_predicate();
+
+  /// @returns Whether @p data may still be accessed after the currently running
+  /// step. This is the case if the predicate set via
+  /// set_needed_later_predicate holds for any of the IDs associated with the
+  /// data. Without a predicate (e.g. when a step is run outside of an
+  /// Executor), the data is conservatively assumed to be needed.
+  template <typename DataT>
+  bool is_needed_later(const Data<DataT> &data) const {
+    return is_needed_later(data.index);
+  }
+
+  /// Provides the calling step with its own copy of @p data that it can modify
+  /// at will. If the data is not needed later (see is_needed_later), it is
+  /// moved out of the context instead of being copied. In this case, the data
+  /// is no longer available from the context afterwards, so that any further
+  /// attempt to retrieve it (e.g. by a second request for a working copy)
+  /// throws.
+  /// @tparam T The type of data that @p data is expected to hold
+  template <typename T>
+  WorkingCopy<T> working_copy(const Data<ProcessingData> &data) {
+    T &payload = convert_data<T>(live_data(data.index));
+
+    if (is_needed_later(data.index)) {
+      return {.data = clone(std::as_const(payload)), .original = &payload};
+    }
+
+    WorkingCopy<T> working{.data = std::move(payload)};
+    data_.at(data.index).reset();
+    return working;
+  }
+
   /// Frees all data objects for which @p is_needed returns false for every ID
   /// associated with them. The IDs themselves remain registered (keeping
   /// alias and group bookkeeping intact) but retrieving the released data via
@@ -175,6 +238,13 @@ class ExecutionContext {
   std::map<std::string, std::vector<std::size_t>, std::less<>>
       id_to_data_indices_;
   std::map<std::size_t, std::deque<std::string>> data_idx_to_ids_;
+  std::function<bool(std::string_view)> needed_later_;
+
+  bool is_needed_later(std::size_t index) const;
+
+  /// @returns The data at the given position, throwing if it is no longer
+  /// available
+  ProcessingData &live_data(std::size_t index);
 
   template <typename Indices>
   void set_id_idx_assoc(std::string id, Indices &&indices) {

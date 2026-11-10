@@ -8,10 +8,12 @@
 #include <algorithm>
 #include <cctype>
 #include <limits>
+#include <optional>
 #include <ranges>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace sequant::util::extint {
@@ -65,7 +67,7 @@ get_data_impl(DataVec &&data, ID2DataIdxMap &&id2dataidx,
                       "determined to reference it");
     }
 
-    ExecutionContext::Data<RefT> ret_data{.data = *slot};
+    ExecutionContext::Data<RefT> ret_data{.data = *slot, .index = idx};
 
     for (std::string_view alias : dataidx2id.at(idx)) {
 #if defined(__cpp_lib_associative_heterogeneous_insertion) && \
@@ -119,6 +121,36 @@ std::vector<ExecutionContext::Data<ProcessingData>> ExecutionContext::get_data(
     std::string_view id) {
   return get_data_impl(data_, id_to_data_indices_, data_idx_to_ids_,
                        get_data_indices(std::ranges::single_view(id)), id);
+}
+
+void ExecutionContext::set_needed_later_predicate(
+    std::function<bool(std::string_view)> pred) {
+  needed_later_ = std::move(pred);
+}
+
+void ExecutionContext::clear_needed_later_predicate() { needed_later_ = {}; }
+
+bool ExecutionContext::is_needed_later(std::size_t index) const {
+  if (!needed_later_) {
+    return true;
+  }
+
+  return std::ranges::any_of(
+      data_idx_to_ids_.at(index),
+      [this](std::string_view id) { return needed_later_(id); });
+}
+
+ProcessingData &ExecutionContext::live_data(std::size_t index) {
+  SEQUANT_ASSERT(index < data_.size());
+
+  std::optional<ProcessingData> &slot = data_[index];
+  if (!slot.has_value()) {
+    throw Exception("Data for ID '" + data_idx_to_ids_.at(index).front() +
+                    "' is no longer available (it has either been released or "
+                    "already consumed as a working copy)");
+  }
+
+  return *slot;
 }
 
 bool ExecutionContext::is_valid_id(std::string_view id, bool allow_selectors) {

@@ -2,11 +2,18 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "executor.hpp"
+#include "processing_step.hpp"
+#include "processing_step_factory.hpp"
 #include "test_extint.hpp"
 
 #include <SeQuant/core/utility/exception.hpp>
 
 #include <nlohmann/json.hpp>
+
+#include <memory>
+#include <string>
+#include <string_view>
+#include <vector>
 
 using namespace sequant;
 using namespace sequant::util::extint;
@@ -197,5 +204,59 @@ TEST_CASE("Executor releases data only after its last use", "[extint]") {
     REQUIRE_THROWS_WITH(exec.execute(steps),
                         Catch::Matchers::ContainsSubstring(
                             "Invalid reference in step 'v' (validate)"));
+  }
+}
+
+namespace {
+// Records for every run of a "probe" step whether the data of its input is
+// needed later
+std::vector<bool> probe_results;
+
+struct Probe final : ProcessingStep {
+  std::string kind() const override { return "probe"; }
+  bool accepts_options() const override { return false; }
+  bool requires_options() const override { return false; }
+  void set_options(const json &) override {}
+
+  std::size_t run(std::string_view, ExecutionContext &ctx,
+                  const std::vector<std::string_view> &inputs) override {
+    for (const auto &current : ctx.get_data(inputs.front())) {
+      probe_results.push_back(ctx.is_needed_later(current));
+    }
+    return 0;
+  }
+};
+
+const bool probe_registered = ProcessingStepFactory::instance().register_class(
+    "probe", []() { return std::make_unique<Probe>(); });
+}  // namespace
+
+TEST_CASE("Executor tells steps whether their inputs are needed later",
+          "[extint]") {
+  test_support::ScopedStreamSilencer silence;
+  REQUIRE(probe_registered);
+  probe_results.clear();
+
+  Executor exec;
+
+  SECTION("later reference") {
+    exec.execute(json::array({read_step(),
+                              {{"kind", "probe"}, {"inputs", "in"}},
+                              {{"kind", "validate"}, {"inputs", "in"}}}));
+    REQUIRE(probe_results == std::vector<bool>{true});
+  }
+
+  SECTION("no later reference") {
+    exec.execute(
+        json::array({read_step(), {{"kind", "probe"}, {"inputs", "in"}}}));
+    REQUIRE(probe_results == std::vector<bool>{false});
+  }
+
+  SECTION("data is needed through a later reference to an alias") {
+    exec.execute(json::array({read_step(),
+                              {{"id", "p"}, {"kind", "sort"}, {"inputs", "in"}},
+                              {{"kind", "probe"}, {"inputs", "p"}},
+                              {{"kind", "validate"}, {"inputs", "p"}}}));
+    REQUIRE(probe_results == std::vector<bool>{true});
   }
 }
