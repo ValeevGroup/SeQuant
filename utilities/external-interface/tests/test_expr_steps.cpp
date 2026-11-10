@@ -346,6 +346,17 @@ TEST_CASE("optimize step", "[extint]") {
     REQUIRE(ctx.has_data("opt.volatile"));
   }
 
+  SECTION("replay errors name the failing input") {
+    ExecutionContext ctx;
+    ctx.set_data("tree", 0,
+                 ProcessingData{test_support::tree_data(
+                     {L"R1{a1;i1} = + f{a1;i1}:A-H-S"})});
+    OptimizationStep step;
+    step.set_options(json{{"replay", {{"volatile", "T.*"}}}});
+    REQUIRE_THROWS_WITH(step.run("opt", ctx, {"tree.0"}),
+                        Catch::Matchers::ContainsSubstring("tree.0"));
+  }
+
   SECTION("replay consumes inputs that are not needed later") {
     ExecutionContext ctx;
     seed_expr(ctx, {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});

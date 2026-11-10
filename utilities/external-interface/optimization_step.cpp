@@ -236,13 +236,21 @@ std::size_t OptimizationStep::run(std::string_view step_id,
   for (std::string_view input : inputs) {
     for (const ExecutionContext::Data<ProcessingData> &current :
          ctx.get_data(input)) {
-      WorkingCopy<ExpressionData> working =
-          ctx.working_copy<ExpressionData>(current);
+      SEQUANT_ASSERT(!current.associated_ids.empty());
 
-      for (ResultExpr &expr : working.data.expressions) {
-        symmetrizers.push_back(optimize_unsymmetrized(expr, options_));
-        trees.push_back(to_tree(expr));
-        tree_to_input.push_back(input_data.size());
+      try {
+        WorkingCopy<ExpressionData> working =
+            ctx.working_copy<ExpressionData>(current);
+
+        for (ResultExpr &expr : working.data.expressions) {
+          symmetrizers.push_back(optimize_unsymmetrized(expr, options_));
+          trees.push_back(to_tree(expr));
+          tree_to_input.push_back(input_data.size());
+        }
+      } catch (const std::exception &e) {
+        throw Exception("Error in " + kind() + " on input " +
+                        std::string(current.associated_ids.front()) + ": " +
+                        e.what());
       }
 
       input_data.push_back(current);
