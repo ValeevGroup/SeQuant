@@ -495,7 +495,7 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
 
     // TODO: handle index batching
 
-    export_groups(groups, generator, genctx);
+    export_groups(std::move(groups), generator, genctx);
 
     return generator.get_generated_code();
   };
