@@ -10,6 +10,7 @@
 #include <limits>
 #include <optional>
 #include <ranges>
+#include <set>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -46,12 +47,34 @@ std::size_t ExecutionContext::dataset_size(std::string_view id) const {
   return get_data_indices(std::ranges::single_view(id)).size();
 }
 
+/// @returns The exception to throw when the data at @p idx is requested but
+/// was either released or consumed already
+Exception unavailable_data_error(const std::set<std::size_t> &consumed,
+                                 std::string_view requested_id,
+                                 std::string_view first_id, std::size_t idx) {
+  const std::string description = "Data for ID '" + std::string(requested_id) +
+                                  "' (aka '" + std::string(first_id) + "') ";
+
+  if (consumed.contains(idx)) {
+    return Exception(
+        description +
+        "has already been consumed by a step that took ownership of it. A step "
+        "that requests the same data more than once (e.g. through overlapping "
+        "or aliased inputs) can only do so while the data is still needed by "
+        "a later step");
+  }
+
+  return Exception(description +
+                   "has already been released as no later step was "
+                   "determined to reference it");
+}
+
 template <std::ranges::random_access_range DataVec,
           std::ranges::range ID2DataIdxMap, std::ranges::range DataIdx2IDMap>
 std::vector<
     ExecutionContext::Data<meta::mimic_constness_t<DataVec, ProcessingData>>>
 get_data_impl(DataVec &&data, ID2DataIdxMap &&id2dataidx,
-              DataIdx2IDMap &&dataidx2id,
+              DataIdx2IDMap &&dataidx2id, const std::set<std::size_t> &consumed,
               const std::vector<std::size_t> &indices,
               std::string_view requested_id) {
   using RefT = meta::mimic_constness_t<DataVec, ProcessingData>;
@@ -61,10 +84,8 @@ get_data_impl(DataVec &&data, ID2DataIdxMap &&id2dataidx,
   for (std::size_t idx : indices) {
     auto &slot = data.at(idx);
     if (!slot.has_value()) {
-      throw Exception("Data for ID '" + std::string(requested_id) + "' (aka '" +
-                      dataidx2id.at(idx).front() +
-                      "') has already been released as no later step was "
-                      "determined to reference it");
+      throw unavailable_data_error(consumed, requested_id,
+                                   dataidx2id.at(idx).front(), idx);
     }
 
     ExecutionContext::Data<RefT> ret_data{.data = *slot, .index = idx};
@@ -113,13 +134,13 @@ get_data_impl(DataVec &&data, ID2DataIdxMap &&id2dataidx,
 
 std::vector<ExecutionContext::Data<const ProcessingData>>
 ExecutionContext::get_data(std::string_view id) const {
-  return get_data_impl(data_, id_to_data_indices_, data_idx_to_ids_,
+  return get_data_impl(data_, id_to_data_indices_, data_idx_to_ids_, consumed_,
                        get_data_indices(std::ranges::single_view(id)), id);
 }
 
 std::vector<ExecutionContext::Data<ProcessingData>> ExecutionContext::get_data(
     std::string_view id) {
-  return get_data_impl(data_, id_to_data_indices_, data_idx_to_ids_,
+  return get_data_impl(data_, id_to_data_indices_, data_idx_to_ids_, consumed_,
                        get_data_indices(std::ranges::single_view(id)), id);
 }
 
@@ -146,12 +167,16 @@ ProcessingData &ExecutionContext::live_data(std::size_t index) {
 
   std::optional<ProcessingData> &slot = data_[index];
   if (!slot.has_value()) {
-    throw Exception("Data for ID '" + data_idx_to_ids_.at(index).front() +
-                    "' is no longer available (it has either been released or "
-                    "already consumed as a working copy)");
+    const std::string &id = data_idx_to_ids_.at(index).front();
+    throw unavailable_data_error(consumed_, id, id, index);
   }
 
   return *slot;
+}
+
+void ExecutionContext::consume(std::size_t index) {
+  data_.at(index).reset();
+  consumed_.insert(index);
 }
 
 bool ExecutionContext::is_valid_id(std::string_view id, bool allow_selectors) {

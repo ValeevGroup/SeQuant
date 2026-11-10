@@ -225,9 +225,12 @@ TEST_CASE("ExecutionContext working copies", "[extint]") {
 
     // IDs stay known, but the data is gone
     REQUIRE(ctx.has_data("input.0"));
-    REQUIRE_THROWS_AS(ctx.get_data("input.0"), Exception);
-    REQUIRE_THROWS_WITH(ctx.working_copy<ExpressionData>(handle),
-                        Catch::Matchers::ContainsSubstring("already consumed"));
+    REQUIRE_THROWS_WITH(
+        ctx.get_data("input.0"),
+        Catch::Matchers::ContainsSubstring("has already been consumed"));
+    REQUIRE_THROWS_WITH(
+        ctx.working_copy<ExpressionData>(handle),
+        Catch::Matchers::ContainsSubstring("has already been consumed"));
   }
 
   SECTION("the original can be kept on request") {

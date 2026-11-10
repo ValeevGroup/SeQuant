@@ -15,6 +15,7 @@
 #include <map>
 #include <optional>
 #include <ranges>
+#include <set>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -205,7 +206,7 @@ class ExecutionContext {
     }
 
     WorkingCopy<T> working{.data = std::move(payload)};
-    data_.at(data.index).reset();
+    consume(data.index);
     return working;
   }
 
@@ -242,12 +243,17 @@ class ExecutionContext {
       id_to_data_indices_;
   std::map<std::size_t, std::deque<std::string>> data_idx_to_ids_;
   std::function<bool(std::string_view)> needed_later_;
+  /// Positions of the data objects that were moved out by working_copy
+  std::set<std::size_t> consumed_;
 
   bool is_needed_later(std::size_t index) const;
 
   /// @returns The data at the given position, throwing if it is no longer
   /// available
   ProcessingData &live_data(std::size_t index);
+
+  /// Frees the data at the given position, recording that it was consumed
+  void consume(std::size_t index);
 
   template <typename Indices>
   void set_id_idx_assoc(std::string id, Indices &&indices) {
