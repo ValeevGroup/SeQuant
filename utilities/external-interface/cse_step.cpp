@@ -95,13 +95,22 @@ void CSEStep::set_options(const nlohmann::json &options) {
   }
 }
 
+namespace {
+std::vector<std::size_t> root_ids_of(const std::vector<ExportNode<>> &trees) {
+  std::vector<std::size_t> ids;
+  ids.reserve(trees.size());
+  std::ranges::transform(trees, std::back_inserter(ids),
+                         [](const ExportNode<> &tree) { return tree->id(); });
+  return ids;
+}
+}  // namespace
+
 template <std::ranges::random_access_range ExprRange,
           std::ranges::random_access_range InputRange,
           std::ranges::random_access_range Expr2Inp>
-std::optional<ExportTreeData> perform_cse(ExprRange &&exprs,
-                                          InputRange &&inputs,
-                                          Expr2Inp &&expr_to_input,
-                                          std::size_t min_usage) {
+std::optional<ExportTreeData> perform_cse(
+    ExprRange &&exprs, InputRange &&inputs, Expr2Inp &&expr_to_input,
+    const std::vector<std::size_t> &root_ids, std::size_t min_usage) {
   if (std::ranges::empty(exprs)) {
     return {};
   }
@@ -188,7 +197,7 @@ std::optional<ExportTreeData> perform_cse(ExprRange &&exprs,
         dependencies = assoc_entry.dependencies;
         // Rewriting a root (e.g. replacing it by a CSE) creates a new node.
         // Restore the original ID, as other entries may depend on it.
-        exprs[i]->set_id(assoc_entry.tree->id());
+        exprs[i]->set_id(root_ids.at(expr_idx));
         ++entry_offset;
       } else if (!cse_positions.empty()) {
         cse_positions.pop_back();
@@ -273,7 +282,7 @@ std::optional<ExportTreeData> perform_merged_cse(
   SEQUANT_ASSERT(expressions.size() == expr_to_input.size());
 
   return perform_cse(expressions, inputs | std::views::transform(&to_tree_data),
-                     expr_to_input, min_usage);
+                     expr_to_input, root_ids_of(expressions), min_usage);
 }
 
 std::size_t CSEStep::run(std::string_view step_id, ExecutionContext &ctx,
@@ -402,9 +411,11 @@ std::size_t CSEStep::process(std::string_view id_prefix, std::size_t id_start,
   std::ranges::transform(input.entries, std::back_inserter(expressions),
                          &ExportTreeData::Entry::tree);
 
-  std::optional<ExportTreeData> result =
-      perform_cse(expressions, std::ranges::subrange(&input, &input + 1),
-                  ranges::views::repeat_n(0, input.entries.size()), min_usage_);
+  const std::vector<std::size_t> root_ids = root_ids_of(expressions);
+
+  std::optional<ExportTreeData> result = perform_cse(
+      expressions, std::ranges::subrange(&input, &input + 1),
+      ranges::views::repeat_n(0, input.entries.size()), root_ids, min_usage_);
 
   if (!result.has_value()) {
     return 0;
