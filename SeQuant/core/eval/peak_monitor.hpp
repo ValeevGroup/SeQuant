@@ -53,6 +53,17 @@ struct PeakMonitor {
                      std::vector<PeakLiveEntry> const&)>
       on_peak_liveset{};
 
+  /// Diagnostic (analysis-only): optional callback fired -- by \c
+  /// CacheManager::note_working_set -- on EVERY sample, whether or not it
+  /// advances the mark, carrying the sample's total bytes, the hash of the op
+  /// being evaluated (0 if none) and the full alive-entry set (chain-wide) at
+  /// that instant. Empty (default) => no per-sample enumeration. Used to
+  /// check a sample against the values alive when it was taken, and to replay
+  /// a run's memory profile offline.
+  std::function<void(std::size_t total_bytes, std::size_t op_hash,
+                     std::vector<PeakLiveEntry> const&)>
+      on_sample{};
+
   /// Observe one candidate high-water sample. Advances \c hwmark_bytes (and
   /// fires \c on_peak) only if \p bytes exceeds the current mark; a sample at
   /// or below the mark is a no-op.

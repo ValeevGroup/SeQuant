@@ -604,22 +604,15 @@ TEST_CASE("meter-counts-table-values-once", "[eval][ordered][meter]") {
 
   auto cache = sequant::CacheManager<ScalarNode>::empty();
 
-  // Capture EVERY sample: the liveset hook only fires on a high-water
-  // advance, so on_peak (fired right after, by observe()) rewinds the mark.
   struct Sample {
     std::size_t total, op_hash;
     std::vector<sequant::eval::PeakLiveEntry> live;
   };
   std::vector<Sample> samples;
-  std::vector<sequant::eval::PeakLiveEntry> pending_live;
   sequant::eval::PeakMonitor mon;
-  mon.on_peak_liveset =
-      [&](std::size_t, std::vector<sequant::eval::PeakLiveEntry> const& live) {
-        pending_live = live;
-      };
-  mon.on_peak = [&](sequant::eval::PeakEvent const& e) {
-    samples.push_back({e.bytes, e.op_hash, pending_live});
-    mon.hwmark_bytes = 0;
+  mon.on_sample = [&](std::size_t total, std::size_t op_hash,
+                      std::vector<sequant::eval::PeakLiveEntry> const& live) {
+    samples.push_back({total, op_hash, live});
   };
   cache.set_peak_monitor(&mon);
 
@@ -662,23 +655,28 @@ TEST_CASE("meter-counts-table-values-once", "[eval][ordered][meter]") {
     // never under-count a value known to be alive, at any scope
     CHECK(s.total >= live_bytes);
 
-    // ... and count nothing twice. For a product the sample is exactly the
-    // live set, plus the op's own not-yet-stored result, plus each operand
-    // the registry no longer holds (its last read moved the buffer out). (A
-    // sum is left out of the exact check: it may accumulate in place, where
-    // the result is one of the operands' buffers rather than a new one.)
+    // ... and count nothing twice. Beyond the live set a sample holds only
+    // buffers the registry does not: each operand whose last read moved its
+    // buffer out of the registry, and the op's not-yet-stored result.
     auto const it = vmap.find(s.op_hash);
     if (it == vmap.end() || it->second->leaf()) continue;
     auto const& node = *it->second;
-    if (!node->is_product()) continue;
     std::size_t const lh = node.left()->hash_value(),
                       rh = node.right()->hash_value();
     if (lh == rh) continue;
     bool const l_live = is_live(lh), r_live = is_live(rh);
     if (l_live || r_live) ++n_with_live_operand;
-    std::size_t const expected =
-        live_bytes + one + (l_live ? 0 : one) + (r_live ? 0 : one);
-    CHECK(s.total == expected);
+    std::size_t const operands =
+        live_bytes + (l_live ? 0 : one) + (r_live ? 0 : one);
+    if (node->is_product()) {
+      CHECK(s.total == operands + one);  // a product's result is a new buffer
+    } else {
+      // a sum's result is a new buffer too, unless it accumulated in place
+      // into an operand the registry had already let go of
+      bool const fresh = s.total == operands + one;
+      bool const in_place = (!l_live || !r_live) && s.total == operands;
+      CHECK((fresh || in_place));
+    }
     ++n_checked;
   }
   // the fixture must exercise what it claims to: ops whose operands are

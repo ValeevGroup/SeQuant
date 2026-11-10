@@ -3355,6 +3355,18 @@ TEST_CASE("meter-replay-equals-direct", "[ordered-executor][meter]") {
   direct_cache.set_recompute_tally_enabled(true);
   sequant::eval::PeakMonitor direct_mon;
   direct_cache.set_peak_monitor(&direct_mon);
+  // This schedule is batched, so most samples are taken inside a batch loop
+  // and the rest at the outermost scope: neither kind may leave out a value
+  // that is alive when it is taken.
+  std::size_t n_samples = 0, n_below_live = 0;
+  direct_mon.on_sample =
+      [&](std::size_t total, std::size_t,
+          std::vector<sequant::eval::PeakLiveEntry> const& live) {
+        std::size_t live_bytes = 0;
+        for (auto const& e : live) live_bytes += e.bytes;
+        ++n_samples;
+        if (total < live_bytes) ++n_below_live;
+      };
   ResultPtr direct_result;
   try {
     direct_result =
@@ -3398,6 +3410,8 @@ TEST_CASE("meter-replay-equals-direct", "[ordered-executor][meter]") {
   CAPTURE(direct_mon.hwmark_bytes, meter_report.peak_bytes);
 
   CHECK(direct_mon.hwmark_bytes > 0);
+  CHECK(n_samples > 0);
+  CHECK(n_below_live == 0);
   CHECK(meter_report.peak_bytes > 0.0);
   CHECK(meter_report.scheduler == sequant::BatchScheduler::ordered);
 

@@ -1360,10 +1360,13 @@ class CacheManager {
     working_set_hwmark_ = std::max(working_set_hwmark_, current_bytes);
     if (auto* m = peak_monitor()) {
       // Diagnostic (analysis-only): if a live-set capture hook is installed,
-      // enumerate the chain's alive entries before observe() advances the mark,
-      // on each real high-water advance. Gated on on_peak_liveset being set, so
-      // the default path enumerates nothing.
-      if (m->on_peak_liveset && current_bytes > m->hwmark_bytes) {
+      // enumerate the chain's alive entries before observe() advances the mark
+      // -- on every sample for on_sample, on each real high-water advance for
+      // on_peak_liveset. Gated on a hook being set, so the default path
+      // enumerates nothing.
+      bool const advances =
+          m->on_peak_liveset && current_bytes > m->hwmark_bytes;
+      if (m->on_sample || advances) {
         std::vector<eval::PeakLiveEntry> live;
         for (CacheManager const* c = this; c; c = c->parent_)
           for (auto const& [k, e] : c->cache_map_)
@@ -1376,7 +1379,8 @@ class CacheManager {
           store->for_each([&live](std::size_t hash, std::size_t bytes) {
             live.push_back({hash, bytes});
           });
-        m->on_peak_liveset(current_bytes, live);
+        if (m->on_sample) m->on_sample(current_bytes, op_hash, live);
+        if (advances) m->on_peak_liveset(current_bytes, live);
       }
       m->observe(current_bytes, op_hash);
     }
