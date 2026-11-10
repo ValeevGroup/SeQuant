@@ -1400,15 +1400,17 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   } const cell_read_resolver_guard{cache, cache.cell_read_resolver()};
   cache.set_cell_read_resolver(&resolver);
 
-  // Explicit value cells: the registry's bytes feed the peak
-  // metering the same way the scope caches' own cache_map_ entries
-  // do -- CacheManager::chain_residency() folds in whatever
-  // set_external_residency installs, and note_working_set()'s diagnostic
-  // liveset capture folds in whatever set_external_liveset installs. Both
-  // are looked up by resolve()'s own value_id -> hash convention (cell.
-  // value_id indexes rich.cells, exactly as every other value_id in this
-  // function does), so a live cell's reported hash matches the hash every
-  // other liveset/coloring probe in this file already keys by.
+  // Explicit value cells: the registry is the hierarchy's external store
+  // (eval::ExternalStore), so its bytes feed the peak metering the same way
+  // the scope caches' own cache_map_ entries do -- chain_residency() and
+  // outer_residency() count them, note_working_set()'s liveset capture lists
+  // them, and resident() recognizes an operand read whole from the registry
+  // as already counted (a sliced / permuted / drained read is a distinct, or
+  // no longer held, buffer and is still added as an operand). Values are
+  // reported under resolve()'s own value_id -> hash convention (cell.value_id
+  // indexes rich.cells, exactly as every other value_id in this function
+  // does), so a live cell's hash matches the hash every other
+  // liveset/coloring probe in this file already keys by.
   //
   // Double-counting guard: the table-driven path stores nothing in a scope
   // cache, but a caller's own cache handle may hold a buffer this registry
@@ -1419,38 +1421,36 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // scope-cache entry anywhere on the chain holds that same buffer by pointer
   // identity (cache.chain_holds, read-only -- unlike chain_holds_shared it
   // decays no lifetime and does not care whether that entry is shared).
+  // Under the cell-read resolver the executor never stores into a scope
+  // cache itself, so on a run this executor drives alone that test never
+  // fires and every live cell is counted.
   auto const cell_hash = [&](CellId c) -> std::size_t {
     return rich.cells[cell_table.cells[c].value_id].hash;
   };
-  struct ExternalMeteringGuard {
-    CacheManager<N, FHC>& c;
-    std::function<std::size_t()> prev_residency;
-    std::function<void(std::function<void(std::size_t, std::size_t)>)>
-        prev_liveset;
-    ~ExternalMeteringGuard() {
-      c.set_external_residency(std::move(prev_residency));
-      c.set_external_liveset(std::move(prev_liveset));
-    }
-  } const external_metering_guard{cache, cache.external_residency_hook(),
-                                  cache.external_liveset()};
-  cache.set_external_residency([&registry, &cache]() -> std::size_t {
-    std::size_t bytes = 0;
-    registry.for_each_live([&](CellId, ResultPtr const& v) {
-      // chain_holds protects only buffers a caller put in its own scope cache
-      // before this run: under the cell-read resolver the executor never
-      // stores into a scope cache itself, so on a run this executor drives
-      // alone this test never fires and every live cell is counted here.
-      if (!cache.chain_holds(v)) bytes += v->size_in_bytes();
-    });
-    return bytes;
-  });
-  cache.set_external_liveset(
-      [&registry, &cache,
-       cell_hash](std::function<void(std::size_t, std::size_t)> emit) {
-        registry.for_each_live([&](CellId c, ResultPtr const& v) {
-          if (!cache.chain_holds(v)) emit(cell_hash(c), v->size_in_bytes());
+  ExternalStore const registry_store{
+      .bytes = [&registry, &cache]() -> std::size_t {
+        std::size_t bytes = 0;
+        registry.for_each_live([&](CellId, ResultPtr const& v) {
+          if (!cache.chain_holds(v)) bytes += v->size_in_bytes();
         });
-      });
+        return bytes;
+      },
+      .for_each =
+          [&registry, &cache, cell_hash](
+              std::function<void(std::size_t, std::size_t)> const& emit) {
+            registry.for_each_live([&](CellId c, ResultPtr const& v) {
+              if (!cache.chain_holds(v)) emit(cell_hash(c), v->size_in_bytes());
+            });
+          },
+      .holds = [&registry](ResultPtr const& value) -> bool {
+        return registry.holds(value);
+      }};
+  struct ExternalStoreGuard {
+    CacheManager<N, FHC>& c;
+    ExternalStore const* prev;
+    ~ExternalStoreGuard() { c.set_external_store(prev); }
+  } const external_store_guard{cache, cache.external_store()};
+  cache.set_external_store(&registry_store);
 
   // Where the schedule lets each cell go, and which read of a cell is its
   // last (see ReleasePlan). The schedule's results are kept: the caller reads

@@ -3383,8 +3383,8 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
 
 // Regression guard: a metered replay's peak_bytes must be the
 // TRUE co-resident sum across the cache scope chain, not
-// max(scratch_hwmark, outer_hwmark). eval.hpp's 7 note_working_set() call
-// sites now add cache.parent()->chain_residency() (CacheManager) to
+// max(scratch_hwmark, outer_hwmark). eval.hpp's note_working_set() call
+// sites add CacheManager::outer_residency() (through log::working_set) to
 // the per-op hwmark, so a scratch cache chained (CacheManager::set_parent)
 // to an outer cache holding a PERSISTENT, ALIVE cross-term entry folds that
 // outer residency into its own working_set_hwmark(). Before this fix, a

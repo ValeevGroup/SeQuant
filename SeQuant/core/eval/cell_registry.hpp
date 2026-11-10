@@ -9,6 +9,7 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <algorithm>
 #include <functional>
 #include <optional>
 #include <stdexcept>
@@ -256,6 +257,14 @@ class CellRegistry {
   void for_each_live(F&& f) const {
     for (CellId c = 0; c < slots_.size(); ++c)
       if (slots_[c].value) f(c, slots_[c].value);
+  }
+
+  /// \return whether some slot currently holds \p value (pointer identity).
+  /// Read-only: spends no life.
+  [[nodiscard]] bool holds(ResultPtr const& value) const {
+    if (!value) return false;
+    return std::any_of(slots_.begin(), slots_.end(),
+                       [&](Slot const& s) { return s.value == value; });
   }
 
   /// \return whether cell \p c is a non-persistent cell holding no value:

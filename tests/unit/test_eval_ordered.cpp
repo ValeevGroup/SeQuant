@@ -561,6 +561,130 @@ TEST_CASE("table-reads-in-place-eligibility", "[eval][ordered]") {
   CHECK(drained_observations.back());
 }
 
+TEST_CASE("meter-counts-table-values-once", "[eval][ordered][meter]") {
+  // The per-op working-set sample (CacheManager::note_working_set) must cover
+  // every value alive at that instant, and count each exactly once, at EVERY
+  // scope -- the outermost one included. Under the table-driven executor the
+  // values live in the cell registry, which the meter reaches through the
+  // cache's external-residency hook. Two ways to get that wrong:
+  //   * under-count: an op evaluated against the root cache (no parent) never
+  //     walked the chain, so the registry's bytes were left out of its sample;
+  //   * double-count: an operand read whole from the registry is the very
+  //     buffer the registry's residency already counts, and must not be added
+  //     again as an operand.
+  // The fixture is unbatched, so every op runs at the outermost scope and
+  // every operand is a whole read of a registry-held value: a sample is then
+  // the live set plus exactly the op's own (not yet stored) result.
+  ScalarNode const root1 = scalar_tree(L"((a * b) + c) * (a * b)");
+  ScalarNode const root2 = scalar_tree(L"(a * b) * d + (e * f)");
+  ScalarLeafEvaluator const yield{{{L"a", 2.0},
+                                   {L"b", -3.5},
+                                   {L"c", 7.25},
+                                   {L"d", 1.5},
+                                   {L"e", 2.0},
+                                   {L"f", 0.5}}};
+  std::function<bool(ScalarNode const&)> const is_volatile =
+      [](ScalarNode const& n) {
+        return n.leaf() && n->expr()->is<Variable>() &&
+               n->expr()->as<Variable>().label() == L"a";
+      };
+
+  sequant::BatchPolicy const policy;
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 1; };
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const&) -> std::size_t { return 1; };
+
+  svector<ScalarNode> const roots{root1, root2};
+  RichSchedule const rich = compute_dag_boulevard(roots, cm, block_of);
+  auto const legality = analyze_legality(rich, roots, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+
+  auto cache = sequant::CacheManager<ScalarNode>::empty();
+
+  struct Sample {
+    std::size_t total, op_hash;
+    std::vector<sequant::eval::PeakLiveEntry> live;
+  };
+  std::vector<Sample> samples;
+  sequant::eval::PeakMonitor mon;
+  mon.on_sample = [&](std::size_t total, std::size_t op_hash,
+                      std::vector<sequant::eval::PeakLiveEntry> const& live) {
+    samples.push_back({total, op_hash, live});
+  };
+  cache.set_peak_monitor(&mon);
+
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  std::ostringstream trace_os;
+  logger.eval.level = 1;  // arms the per-op working-set fold
+  logger.eval.stream = &trace_os;
+  ResultPtr got;
+  try {
+    got = evaluate_ordered_schedule<sequant::Trace::On>(
+        roots, ordered, rich, ScalarEvalExpr::annot_t{}, yield, cache, target,
+        sequant::make_no_scope_guard{}, is_volatile);
+  } catch (...) {
+    logger.eval.level = prev_level;
+    logger.eval.stream = prev_stream;
+    throw;
+  }
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  CHECK(got->as<ResultScalar<double>>().value() == Catch::Approx(-11.25));
+
+  // Every value here is one scalar of the same size.
+  std::size_t const one = got->size_in_bytes();
+  REQUIRE(one > 0);
+  REQUIRE(!samples.empty());
+
+  auto const vmap = sequant::eval::build_value_node_map(roots);
+  std::size_t n_checked = 0, n_with_live_operand = 0;
+  for (auto const& s : samples) {
+    std::size_t live_bytes = 0;
+    for (auto const& e : s.live) live_bytes += e.bytes;
+    auto const is_live = [&](std::size_t hash) {
+      return std::any_of(s.live.begin(), s.live.end(),
+                         [&](auto const& e) { return e.hash == hash; });
+    };
+    CAPTURE(s.total, live_bytes, s.op_hash);
+    // never under-count a value known to be alive, at any scope
+    CHECK(s.total >= live_bytes);
+
+    // ... and count nothing twice. Beyond the live set a sample holds only
+    // buffers the registry does not: each operand whose last read moved its
+    // buffer out of the registry, and the op's not-yet-stored result.
+    auto const it = vmap.find(s.op_hash);
+    if (it == vmap.end() || it->second->leaf()) continue;
+    auto const& node = *it->second;
+    std::size_t const lh = node.left()->hash_value(),
+                      rh = node.right()->hash_value();
+    if (lh == rh) continue;
+    bool const l_live = is_live(lh), r_live = is_live(rh);
+    if (l_live || r_live) ++n_with_live_operand;
+    std::size_t const operands =
+        live_bytes + (l_live ? 0 : one) + (r_live ? 0 : one);
+    if (node->is_product()) {
+      CHECK(s.total == operands + one);  // a product's result is a new buffer
+    } else {
+      // a sum's result is a new buffer too, unless it accumulated in place
+      // into an operand the registry had already let go of
+      bool const fresh = s.total == operands + one;
+      bool const in_place = (!l_live || !r_live) && s.total == operands;
+      CHECK((fresh || in_place));
+    }
+    ++n_checked;
+  }
+  // the fixture must exercise what it claims to: ops whose operands are
+  // still held by the registry when the sample is taken
+  CHECK(n_checked > 0);
+  CHECK(n_with_live_operand > 0);
+}
+
 TEST_CASE("chain-holds-shared-persistent", "[eval][ordered]") {
   // Direct coverage of the runtime in-place safety gate. A PERSISTENT cache
   // entry (registered via the CacheManager(Iterable&&, PersistencePred) ctor
