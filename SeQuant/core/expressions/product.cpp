@@ -212,6 +212,8 @@ std::size_t nested_leaf_key(const AbstractTensor &tensor) {
 /// @return a key of the nested product @p product (see
 /// Product::collect_nested_tensor_leaves()) that depends neither on the
 /// indices nor on the order of its factors
+/// @note the scalar and the scalar factors (e.g. Variable objects) are part of
+/// the key: nested products that differ only by them are not interchangeable
 std::size_t nested_product_key(const Product &product) {
   container::svector<std::size_t> keys;
   for (const auto &factor : product.factors()) {
@@ -219,9 +221,13 @@ std::size_t nested_product_key(const Product &product) {
       keys.push_back(nested_leaf_key(factor.as<AbstractTensor>()));
     else if (factor.is<Product>())
       keys.push_back(nested_product_key(factor.as<Product>()));
+    else
+      keys.push_back(factor->hash_value());
   }
   std::ranges::sort(keys);
-  return hash::range(keys.begin(), keys.end());
+  auto key = hash::range(keys.begin(), keys.end());
+  hash::combine(key, Constant(product.scalar()).hash_value());
+  return key;
 }
 
 /// collects the groups of the tensors of @p product (see
