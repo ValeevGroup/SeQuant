@@ -96,11 +96,11 @@ CanonicalizeOptions CanonicalizeOptions::copy_and_set(
 
 namespace detail {
 
-container::vector<std::wstring> cardinal_tensor_labels(
+const container::vector<std::wstring>& cardinal_tensor_labels(
     const CanonicalizeOptions& opts) {
-  if (!opts.presentation) return default_cardinal_tensor_labels();
-  return opts.presentation->cardinal_tensor_labels.value_or(
-      default_cardinal_tensor_labels());
+  if (opts.presentation && opts.presentation->cardinal_tensor_labels)
+    return *opts.presentation->cardinal_tensor_labels;
+  return default_cardinal_tensor_labels();
 }
 
 std::shared_ptr<const tensor_index_comparer_t> index_comparer(
