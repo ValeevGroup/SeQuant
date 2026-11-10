@@ -10,6 +10,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <iterator>
 #include <string>
 #include <string_view>
 
@@ -49,11 +50,12 @@ void ProjectionStep::set_options(const nlohmann::json &options) {
 
 std::size_t ProjectionStep::process(std::string_view id_prefix,
                                     std::size_t id_start, ExecutionContext &ctx,
-                                    const ExpressionData &data) {
+                                    WorkingCopy<ExpressionData> input) {
   container::svector<ResultExpr> transformed;
 
-  transformed.insert(transformed.end(), data.expressions.begin(),
-                     data.expressions.end());
+  transformed.insert(transformed.end(),
+                     std::make_move_iterator(input.data.expressions.begin()),
+                     std::make_move_iterator(input.data.expressions.end()));
 
   container::svector<std::optional<ExprPtr>> symmetrizers;
   symmetrizers.reserve(transformed.size());
