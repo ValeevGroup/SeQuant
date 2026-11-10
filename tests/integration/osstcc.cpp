@@ -60,9 +60,21 @@ int main(int argc, char* argv[]) {
   //
   std::cout << "\nOpen-shell coupled cluster: nterms per spin blocks: "
             << std::endl;
+  // the residual R{a_1..a_i;i_1..i_i} names the external indices
+  auto residual = [](std::size_t rank, ExprPtr expr) {
+    container::svector<Index> b, k;
+    for (std::size_t n = 1; n <= rank; ++n) {
+      b.emplace_back(L"a_" + std::to_wstring(n));
+      k.emplace_back(L"i_" + std::to_wstring(n));
+    }
+    return ResultExpr(
+        Tensor(L"R", bra(std::move(b)), ket(std::move(k)), Symmetry::Antisymm),
+        std::move(expr));
+  };
   std::vector<std::vector<ExprPtr>> os_cc_st_r(cc_r.size());
   for (auto i = 1; i < cc_r.size(); ++i) {
-    os_cc_st_r[i] = mbpt::open_shell_CC_spintrace(cc_r[i]);
+    for (auto& spin_case : mbpt::open_shell_CC_spintrace(residual(i, cc_r[i])))
+      os_cc_st_r[i].push_back(spin_case.expression());
     std::cout << "CCK-" << NMAX << " R[" << i << "]  ";
     for (auto const& x : os_cc_st_r[i]) std::cout << x->size() << "  ";
     std::cout << std::endl;

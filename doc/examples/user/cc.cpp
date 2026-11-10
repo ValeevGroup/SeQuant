@@ -89,9 +89,12 @@ int main() {
   auto t2_cs = closed_shell_CC_spintrace(t2_eq);
   std::wcout << "Closed-shell spin-traced CCSD-R2: " << to_latex(t2_cs) << "\n";
 
-  // Convert to the open-shell spin-traced form
-  auto t2_os = open_shell_CC_spintrace(
-      t2_eq);  // vector of expressions: {ɑɑ, ɑβ, ββ} blocks
+  // Convert to the open-shell spin-traced form; the result names the external
+  // indices, and each spin block is returned with spin-labeled result indices
+  const ResultExpr r2(Tensor(L"R", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                             Symmetry::Antisymm),
+                      t2_eq);
+  auto t2_os = open_shell_CC_spintrace(r2);  // {ɑɑ, ɑβ, ββ} blocks
   std::wcout << "Open-shell spin-traced CCSD-R2:\n";
   for (const auto& eq : t2_os) {
     std::wcout << to_latex(eq) << "\n";
