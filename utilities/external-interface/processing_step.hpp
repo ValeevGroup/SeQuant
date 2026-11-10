@@ -53,17 +53,35 @@ class ProcessingStep {
                           const std::vector<std::string_view> &inputs = {}) = 0;
 };
 
+/// How a OneByOneProcessingStep receives each of its inputs
+enum class InputAccess {
+  /// Read-only access to the input as stored in the context
+  ReadOnly,
+  /// An owned copy of the input that the step may modify at will. See
+  /// ExecutionContext::working_copy for when the input is moved out of the
+  /// context instead of being copied.
+  WorkingCopy,
+};
+
 namespace detail {
 
-template <typename DataType>
+template <typename DataType, InputAccess access>
 class OBOProcessFunctionMember {
  protected:
   virtual std::size_t process(std::string_view id_prefix, std::size_t id_start,
                               ExecutionContext &ctx, const DataType &data) = 0;
 };
 
+template <typename DataType>
+class OBOProcessFunctionMember<DataType, InputAccess::WorkingCopy> {
+ protected:
+  virtual std::size_t process(std::string_view id_prefix, std::size_t id_start,
+                              ExecutionContext &ctx,
+                              WorkingCopy<DataType> input) = 0;
+};
+
 template <>
-class OBOProcessFunctionMember<void> {
+class OBOProcessFunctionMember<void, InputAccess::ReadOnly> {
  protected:
   virtual std::size_t process(std::string_view id_prefix, std::size_t id_start,
                               ExecutionContext &ctx) = 0;
@@ -137,10 +155,18 @@ class AliasPropagator {
 ///   'input.bla', we want the associated outputs to be aliased to
 ///   'output.bla' to allow easy referencing in the driver. This applies to
 ///   individual as well as group aliases.
-template <typename DataType, bool inherit_aliases = true>
+/// 3) Hand each input to the step either read-only or, for steps that modify
+///    their input, as a working copy (see InputAccess). Whether such a copy has
+///    to be made or the input can be consumed instead is decided by the
+///    ExecutionContext.
+template <typename DataType, bool inherit_aliases = true,
+          InputAccess access = InputAccess::ReadOnly>
 class OneByOneProcessingStep
     : public ProcessingStep,
-      public detail::OBOProcessFunctionMember<DataType> {
+      public detail::OBOProcessFunctionMember<DataType, access> {
+  static_assert(!std::same_as<DataType, void> ||
+                access == InputAccess::ReadOnly);
+
  public:
   bool requires_inputs() const override {
     return !std::same_as<DataType, void>;
@@ -166,32 +192,8 @@ class OneByOneProcessingStep
       for (std::string_view current_input : inputs) {
         for (const ExecutionContext::Data<ProcessingData> &current :
              ctx.get_data(current_input)) {
-          const DataType &data = convert_data<DataType>(current.data.get());
-
-          SEQUANT_ASSERT(!current.associated_ids.empty());
-
-          std::size_t new_outputs;
-          try {
-            new_outputs = this->process(step_id, total_outputs, ctx, data);
-          } catch (const std::exception &e) {
-            throw Exception("Error in " + kind() + " on input " +
-                            std::string(current.associated_ids.front()) + ": " +
-                            e.what());
-          }
-
-          bool alias_source = false;
-          if (inherit_aliases && new_outputs == 0 && alias_unchanged_inputs()) {
-            new_outputs = 1;
-            alias_source = true;
-          }
-
-          if (inherit_aliases && new_outputs > 0) {
-            propagator.record(current.associated_ids,
-                              current.associated_group_ids, total_outputs,
-                              new_outputs, alias_source);
-          }
-
-          total_outputs += new_outputs;
+          total_outputs +=
+              process_input(step_id, ctx, current, total_outputs, propagator);
         }
       }
 
@@ -205,6 +207,70 @@ class OneByOneProcessingStep
 
  protected:
   virtual bool alias_unchanged_inputs() const { return false; }
+
+  /// Whether, in InputAccess::WorkingCopy mode, the original of the input must
+  /// remain available while the step is processing it (e.g. to compare the
+  /// result against it)
+  virtual bool needs_original_input() const { return false; }
+
+  /// Processes a single input and records the aliases of the produced outputs
+  /// @param id_start The ID counter of the first output of this input
+  /// @returns The number of outputs
+  std::size_t process_input(std::string_view step_id, ExecutionContext &ctx,
+                            const ExecutionContext::Data<ProcessingData> &input,
+                            std::size_t id_start,
+                            detail::AliasPropagator &propagator)
+    requires(!std::same_as<DataType, void>)
+  {
+    SEQUANT_ASSERT(!input.associated_ids.empty());
+
+    auto guarded = [&](auto &&process) -> std::size_t {
+      try {
+        return process();
+      } catch (const std::exception &e) {
+        throw Exception("Error in " + kind() + " on input " +
+                        std::string(input.associated_ids.front()) + ": " +
+                        e.what());
+      }
+    };
+
+    std::size_t new_outputs;
+    // Whether the input is still around to be aliased
+    bool input_available = true;
+
+    if constexpr (access == InputAccess::ReadOnly) {
+      const DataType &data = convert_data<DataType>(input.data.get());
+
+      new_outputs = guarded(
+          [&]() { return this->process(step_id, id_start, ctx, data); });
+    } else {
+      new_outputs = guarded([&]() {
+        WorkingCopy<DataType> working =
+            ctx.working_copy<DataType>(input, needs_original_input());
+        input_available = working.is_copy();
+
+        return this->process(step_id, id_start, ctx, std::move(working));
+      });
+    }
+
+    bool alias_source = false;
+    if (inherit_aliases && new_outputs == 0 && alias_unchanged_inputs()) {
+      if (!input_available) {
+        throw Exception(kind() +
+                        " reported its input as unchanged but has consumed it");
+      }
+
+      new_outputs = 1;
+      alias_source = true;
+    }
+
+    if (inherit_aliases && new_outputs > 0) {
+      propagator.record(input.associated_ids, input.associated_group_ids,
+                        id_start, new_outputs, alias_source);
+    }
+
+    return new_outputs;
+  }
 };
 
 }  // namespace sequant::util::extint
