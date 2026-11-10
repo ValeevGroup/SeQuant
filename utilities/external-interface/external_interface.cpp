@@ -577,7 +577,7 @@ void generateITF(const json &blocks, std::string_view out_file,
                         current_block.at("name").get<std::string>());
   }
 
-  export_groups(groups, generator, context);
+  export_groups(std::move(groups), generator, context);
   std::string itfCode = generator.get_generated_code();
 
   std::ofstream output(out_file.data());

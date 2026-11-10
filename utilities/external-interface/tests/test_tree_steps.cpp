@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <ranges>
 #include <sstream>
 #include <string>
@@ -193,6 +194,119 @@ TEST_CASE("cse step", "[extint]") {
   }
 }
 
+TEST_CASE("cse step input handling", "[extint]") {
+  const std::wstring_view contraction =
+      L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S";
+  const std::wstring_view other_contraction =
+      L"R2{a1;i1} = + g{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S";
+  using Predicate = std::function<bool(std::string_view)>;
+  const Predicate consumed = [](std::string_view) { return false; };
+  const Predicate needed = [](std::string_view) { return true; };
+  auto tree_of = [](ExecutionContext &ctx, std::string_view id) {
+    return convert_data<ExportTreeData>(ctx.get_data(id).front().data.get());
+  };
+
+  SECTION("single input") {
+    SECTION("without common subexpressions") {
+      const ExportTreeData original = test_support::tree_data({contraction});
+      ExecutionContext ctx;
+      ctx.set_data("in", 0, ProcessingData{original});
+      CSEStep step;
+
+      SECTION("is aliased if it is needed later") {
+        ctx.set_needed_later_predicate(needed);
+        REQUIRE(step.run("cse", ctx, {"in.0"}) == 1);
+        REQUIRE(ctx.ids_are_equivalent("cse.0", "in.0"));
+      }
+
+      SECTION("is passed on unchanged if it has been consumed") {
+        ctx.set_needed_later_predicate(consumed);
+        REQUIRE(step.run("cse", ctx, {"in.0"}) == 1);
+        REQUIRE_FALSE(ctx.ids_are_equivalent("cse.0", "in.0"));
+        REQUIRE_THROWS_AS(ctx.get_data("in.0"), Exception);
+        REQUIRE(tree_of(ctx, "cse.0") == original);
+      }
+    }
+
+    SECTION("with common subexpressions") {
+      // Two identical contractions guarantee that CSE fires
+      ExportTreeData data = test_support::tree_data(
+          {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S",
+           L"R2{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+      const std::vector<std::size_t> ids = {data.entries[0].tree->id(),
+                                            data.entries[1].tree->id()};
+
+      for (const Predicate &pred : {needed, consumed}) {
+        ExecutionContext ctx;
+        ctx.set_data("in", 0, ProcessingData{data});
+        ctx.set_needed_later_predicate(pred);
+
+        CSEStep step;
+        REQUIRE(step.run("cse", ctx, {"in.0"}) == 1);
+
+        const ExportTreeData result = tree_of(ctx, "cse.0");
+        REQUIRE(result.entries.size() > 2);
+        for (std::size_t id : ids) {
+          REQUIRE(std::ranges::any_of(result.entries, [id](const auto &entry) {
+            return entry.tree->id() == id;
+          }));
+        }
+      }
+    }
+  }
+
+  SECTION("merged inputs") {
+    ExecutionContext ctx;
+    const ExportTreeData first = test_support::tree_data({contraction});
+    const ExportTreeData second = test_support::tree_data({other_contraction});
+    ctx.set_data("in", 0, ProcessingData{first});
+    ctx.set_data("in", 1, ProcessingData{second});
+
+    CSEStep step;
+    step.set_options(json{{"merge_inputs", true}});
+
+    SECTION("without common subexpressions") {
+      SECTION("are aliased if they are needed later") {
+        ctx.set_needed_later_predicate(needed);
+        REQUIRE(step.run("cse", ctx, {"in.0", "in.1"}) == 1);
+        REQUIRE(ctx.ids_are_equivalent("cse.0", std::vector{"in.0", "in.1"}));
+      }
+
+      SECTION("are passed on unchanged if they have been consumed") {
+        ctx.set_needed_later_predicate(consumed);
+        REQUIRE(step.run("cse", ctx, {"in.0", "in.1"}) == 1);
+        REQUIRE_THROWS_AS(ctx.get_data("in.0"), Exception);
+        REQUIRE_THROWS_AS(ctx.get_data("in.1"), Exception);
+
+        REQUIRE(ctx.dataset_size("cse.0") == 2);
+        auto passed_on = ctx.get_data("cse.0");
+        REQUIRE(convert_data<ExportTreeData>(passed_on[0].data.get()) == first);
+        REQUIRE(convert_data<ExportTreeData>(passed_on[1].data.get()) ==
+                second);
+      }
+    }
+
+    SECTION("with common subexpressions") {
+      ExecutionContext other;
+      other.set_data("in", 0,
+                     ProcessingData{test_support::tree_data({contraction})});
+      other.set_data("in", 1,
+                     ProcessingData{test_support::tree_data({contraction})});
+
+      for (const Predicate &pred : {needed, consumed}) {
+        ExecutionContext current = other;
+        current.set_needed_later_predicate(pred);
+
+        CSEStep merging;
+        merging.set_options(json{{"merge_inputs", true}});
+        REQUIRE(merging.run("cse", current, {"in.0", "in.1"}) == 1);
+        REQUIRE(current.dataset_size("cse.0") == 1);
+        REQUIRE(tree_of(current, "cse.0").entries.size() > 2);
+      }
+    }
+  }
+}
+
 TEST_CASE("batch_indices step", "[extint]") {
   SECTION("option validation") {
     IndexBatchingStep step;
@@ -214,6 +328,51 @@ TEST_CASE("batch_indices step", "[extint]") {
         step;  // min_unbatched defaults to 2, result has 2 indices
     REQUIRE(step.run("b", ctx, {"in.0"}) == 1);
     REQUIRE(ctx.has_data("b.0"));
+  }
+
+  SECTION("input handling") {
+    const std::wstring_view definition =
+        L"R2{a1,a2;i1,i2} = + g{a1,a2;i1,i2}:A-H-S";
+
+    ExecutionContext ctx;
+    ctx.set_data("in", 0,
+                 ProcessingData{test_support::tree_data({definition})});
+    auto batch_indices = [](ExecutionContext &c, std::string_view id) {
+      return convert_data<ExportTreeData>(c.get_data(id).front().data.get())
+          .entries.front()
+          .batch_indices;
+    };
+
+    SECTION("input needed later is left unbatched") {
+      ctx.set_needed_later_predicate([](std::string_view) { return true; });
+      IndexBatchingStep step;
+      REQUIRE(step.run("b", ctx, {"in.0"}) == 1);
+      REQUIRE(batch_indices(ctx, "in.0").empty());
+      REQUIRE(batch_indices(ctx, "b.0").size() == 2);
+    }
+
+    SECTION("input not needed later is consumed") {
+      ctx.set_needed_later_predicate([](std::string_view) { return false; });
+      IndexBatchingStep step;
+      REQUIRE(step.run("b", ctx, {"in.0"}) == 1);
+      REQUIRE_THROWS_AS(ctx.get_data("in.0"), Exception);
+      REQUIRE(batch_indices(ctx, "b.0").size() == 2);
+    }
+
+    SECTION("nothing to batch") {
+      IndexBatchingStep step;
+      step.set_options(json{{"min_unbatched", 4}});
+
+      ctx.set_needed_later_predicate([](std::string_view) { return true; });
+      REQUIRE(step.run("b", ctx, {"in.0"}) == 1);
+      REQUIRE(ctx.ids_are_equivalent("b.0", "in.0"));
+
+      // A consumed input has to be passed on instead
+      ctx.set_needed_later_predicate([](std::string_view) { return false; });
+      REQUIRE(step.run("c", ctx, {"in.0"}) == 1);
+      REQUIRE_FALSE(ctx.ids_are_equivalent("c.0", "in.0"));
+      REQUIRE(batch_indices(ctx, "c.0").empty());
+    }
   }
 }
 
@@ -876,4 +1035,38 @@ TEST_CASE("export step", "[extint]") {
     CHECK(recycled.find("CSE1") != std::string::npos);
     CHECK(recycled.find("CSE2") == std::string::npos);
   }
+}
+
+TEST_CASE("export step input consumption", "[extint]") {
+  ExecutionContext ctx;
+  ctx.set_data("a", 0,
+               ProcessingData{test_support::tree_data(
+                   {L"R1{a1;i1} = + f{a1;a2}:N-N-N t{a2;i1}:N-N-N"})});
+
+  const std::filesystem::path out =
+      std::filesystem::temp_directory_path() / "extint_consumption.itfaa";
+
+  ExportStep step;
+  step.set_options(json{{"language", "itf"},
+                        {"output", out.string()},
+                        {"meta",
+                         {{"index_spaces",
+                           {{"i", {{"name", "Closed"}, {"tag", "c"}}},
+                            {"a", {{"name", "External"}, {"tag", "e"}}}}}}}});
+
+  test_support::ScopedStreamSilencer silencer;
+
+  SECTION("inputs needed later are left intact") {
+    ctx.set_needed_later_predicate([](std::string_view) { return true; });
+    step.run("exp", ctx, {"a.0"});
+    REQUIRE_NOTHROW(ctx.get_data("a.0"));
+  }
+
+  SECTION("inputs not needed later are consumed") {
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    step.run("exp", ctx, {"a.0"});
+    REQUIRE_THROWS_AS(ctx.get_data("a.0"), Exception);
+  }
+
+  std::filesystem::remove(out);
 }

@@ -94,32 +94,31 @@ void SubstituteStep::set_options(const nlohmann::json &options) {
 
 std::size_t SubstituteStep::process(std::string_view id_prefix,
                                     std::size_t id_start, ExecutionContext &ctx,
-                                    const ExpressionData &data) {
-  ExpressionData output;
-  for (const ResultExpr &expr : data.expressions) {
-    output.expressions.emplace_back(expr.clone());
-
+                                    WorkingCopy<ExpressionData> &input) {
+  for (ResultExpr &expr : input.data.expressions) {
     for (const auto &[target, with] : substitutions_) {
       const ExprMatcher matcher(*target,
                                 ExprMatcherOptions{.tensor_cmp = tensor_mode_,
                                                    .cross_comparisons = true});
-      replace(output.expressions.back(), matcher, *with);
+      replace(expr, matcher, *with);
 
-      auto it = result_labels_.find(toUtf8(output.expressions.back().label()));
+      auto it = result_labels_.find(toUtf8(expr.label()));
       if (it != result_labels_.end()) {
-        output.expressions.back().set_label(toUtf16(it->second));
+        expr.set_label(toUtf16(it->second));
       }
     }
   }
 
-  if (output.expressions == data.expressions) {
+  if (input.unchanged()) {
     // Nothing changed
     return 0;
   }
 
-  ctx.set_data(id_prefix, id_start, std::move(output));
+  ctx.set_data(id_prefix, id_start, std::move(input.data));
 
   return 1;
 }
+
+bool SubstituteStep::needs_original_input() const { return true; }
 
 }  // namespace sequant::util::extint

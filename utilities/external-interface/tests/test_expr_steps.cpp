@@ -40,6 +40,22 @@ TEST_CASE("simplify step", "[extint]") {
         convert_data<ExpressionData>(ctx.get_data("s.0").front().data.get()));
   }
 
+  SECTION("input is consumed if it is not needed later") {
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    SimplifyStep step;
+    REQUIRE(step.run("s", ctx, {"in.0"}) == 1);
+    REQUIRE_THROWS_AS(ctx.get_data("in.0"), Exception);
+    REQUIRE_NOTHROW(ctx.get_data("s.0"));
+  }
+
+  SECTION("input is left intact if it is needed later") {
+    ctx.set_needed_later_predicate([](std::string_view) { return true; });
+    SimplifyStep step;
+    REQUIRE(step.run("s", ctx, {"in.0"}) == 1);
+    REQUIRE_NOTHROW(ctx.get_data("in.0"));
+    REQUIRE_NOTHROW(ctx.get_data("s.0"));
+  }
+
   SECTION("rejects options") {
     SimplifyStep step;
     REQUIRE_THROWS_AS(step.set_options(json::object()), Exception);
@@ -73,6 +89,31 @@ TEST_CASE("sort step", "[extint]") {
     const auto &in =
         convert_data<ExpressionData>(ctx.get_data("in.0").front().data.get());
     REQUIRE(out.expressions == in.expressions);
+  }
+
+  SECTION("input is consumed if it is not needed later") {
+    seed_expr(ctx, {L"R1{a1;i1} = + g{a1;i1}:A-H-S + f{a1;i1}:A-H-S"});
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    SortStep step;
+    REQUIRE(step.run("s", ctx, {"in.0"}) == 1);
+    REQUIRE_THROWS_AS(ctx.get_data("in.0"), Exception);
+    const auto &out =
+        convert_data<ExpressionData>(ctx.get_data("s.0").front().data.get());
+    REQUIRE(out.expressions.front() ==
+            deserialize<ResultExpr>(
+                L"R1{a1;i1} = + f{a1;i1}:A-H-S + g{a1;i1}:A-H-S"));
+  }
+
+  SECTION("input is left intact if it is needed later") {
+    seed_expr(ctx, {L"R1{a1;i1} = + g{a1;i1}:A-H-S + f{a1;i1}:A-H-S"});
+    ctx.set_needed_later_predicate([](std::string_view) { return true; });
+    SortStep step;
+    REQUIRE(step.run("s", ctx, {"in.0"}) == 1);
+    const auto &in =
+        convert_data<ExpressionData>(ctx.get_data("in.0").front().data.get());
+    REQUIRE(in.expressions.front() ==
+            deserialize<ResultExpr>(
+                L"R1{a1;i1} = + g{a1;i1}:A-H-S + f{a1;i1}:A-H-S"));
   }
 
   SECTION("rejects options") {
@@ -112,6 +153,26 @@ TEST_CASE("substitute step", "[extint]") {
     step.set_options(json{{"substitutions", {{"q{a1;i1}", "X{a1;i1}"}}}});
     REQUIRE(step.run("sub", ctx, {"in.0"}) == 0);
     REQUIRE_FALSE(ctx.has_data("sub.0"));
+  }
+
+  SECTION("an unchanged input is dropped even if it is not needed later") {
+    ExecutionContext ctx;
+    seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    SubstituteStep step;
+    step.set_options(json{{"substitutions", {{"q{a1;i1}", "X{a1;i1}"}}}});
+    REQUIRE(step.run("sub", ctx, {"in.0"}) == 0);
+    REQUIRE_FALSE(ctx.has_data("sub.0"));
+  }
+
+  SECTION("a changed input is consumed if it is not needed later") {
+    ExecutionContext ctx;
+    seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    SubstituteStep step;
+    step.set_options(json{{"substitutions", {{"f{a1;i1}", "X{a1;i1}"}}}});
+    REQUIRE(step.run("sub", ctx, {"in.0"}) == 1);
+    REQUIRE_NOTHROW(ctx.get_data("sub.0"));
   }
 
   SECTION("result_relabeling renames the result") {
@@ -251,6 +312,30 @@ TEST_CASE("optimize step", "[extint]") {
         convert_data<ExpressionData>(ctx.get_data("opt.0").front().data.get()));
   }
 
+  SECTION("input handling") {
+    const std::wstring_view definition =
+        L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S";
+
+    ExecutionContext copied;
+    seed_expr(copied, {definition});
+    copied.set_needed_later_predicate([](std::string_view) { return true; });
+    ExecutionContext moved;
+    seed_expr(moved, {definition});
+    moved.set_needed_later_predicate([](std::string_view) { return false; });
+
+    OptimizationStep step;
+    REQUIRE(step.run("opt", copied, {"in.0"}) == 1);
+    OptimizationStep other_step;
+    REQUIRE(other_step.run("opt", moved, {"in.0"}) == 1);
+
+    REQUIRE_NOTHROW(copied.get_data("in.0"));
+    REQUIRE_THROWS_AS(moved.get_data("in.0"), Exception);
+    REQUIRE(convert_data<ExpressionData>(
+                copied.get_data("opt.0").front().data.get()) ==
+            convert_data<ExpressionData>(
+                moved.get_data("opt.0").front().data.get()));
+  }
+
   SECTION("replay splits each input into persistent and volatile parts") {
     ExecutionContext ctx;
     seed_expr(ctx, {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
@@ -259,5 +344,33 @@ TEST_CASE("optimize step", "[extint]") {
     REQUIRE(step.run("opt", ctx, {"in.0"}) == 2);
     REQUIRE(ctx.has_data("opt.persistent"));
     REQUIRE(ctx.has_data("opt.volatile"));
+  }
+
+  SECTION("replay errors name the failing input") {
+    ExecutionContext ctx;
+    ctx.set_data("tree", 0,
+                 ProcessingData{test_support::tree_data(
+                     {L"R1{a1;i1} = + f{a1;i1}:A-H-S"})});
+    OptimizationStep step;
+    step.set_options(json{{"replay", {{"volatile", "T.*"}}}});
+    REQUIRE_THROWS_WITH(step.run("opt", ctx, {"tree.0"}),
+                        Catch::Matchers::ContainsSubstring("tree.0"));
+  }
+
+  SECTION("replay consumes inputs that are not needed later") {
+    ExecutionContext ctx;
+    seed_expr(ctx, {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+    ctx.add_data_alias("in.0", "in.energy");
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    OptimizationStep step;
+    step.set_options(json{{"replay", {{"volatile", "T.*"}}}});
+    REQUIRE(step.run("opt", ctx, {"in.0"}) == 2);
+    REQUIRE_THROWS_AS(ctx.get_data("in.0"), Exception);
+    REQUIRE(ctx.has_data("opt.persistent"));
+    REQUIRE(ctx.has_data("opt.volatile"));
+    // The aliases of the consumed input are carried over
+    REQUIRE(ctx.has_data("opt.energy"));
+    REQUIRE(ctx.has_data("opt.energy.persistent"));
+    REQUIRE(ctx.has_data("opt.energy.volatile"));
   }
 }
