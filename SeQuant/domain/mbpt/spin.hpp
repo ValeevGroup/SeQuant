@@ -400,6 +400,21 @@ std::vector<ExprPtr> open_shell_spintrace(
 // clang-format on
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 
+/// @brief like open_shell_CC_spintrace(const ExprPtr&), with the external
+/// indices given by the result of @p expr
+/// @details A result with indices must have the leading antisymmetrizer of its
+/// expression carry exactly its indices; a scalar result (e.g. a CC energy)
+/// must have none.
+/// @param expr the input result
+/// @return the result of each spin case, ordered as by
+/// open_shell_CC_spintrace(const ExprPtr&): spin case `s` labels the result
+/// indices of the last `s` columns of the antisymmetrizer spin-down and the
+/// others spin-up. The results have no permutational symmetry, since the
+/// antisymmetrizer is removed from their expressions.
+/// @throw Exception if @p expr has aux indices, or if its antisymmetrizer
+/// does not match its indices
+std::vector<ResultExpr> open_shell_CC_spintrace(const ResultExpr& expr);
+
 /// @brief Transforms an expression from spin orbital to spin-free (spatial)
 /// orbital form
 /// @details Given an expression, this function extracts all indices and adds a

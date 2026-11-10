@@ -1642,16 +1642,25 @@ std::vector<ExprPtr> open_shell_spintrace(
   return open_shell_spintrace_impl(expr, ext_index_groups, target_spin_case);
 }
 
-std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
-  SEQUANT_ASSERT(expr->is<Sum>() || expr->is<Product>());
-  // Pop the antisymmetrizer A off a copy of the leading term to detect and
-  // retrieve it. Energy-like expressions (e.g. CC energy) have none.
-  // The input is assumed homogeneous: either every term carries a leading
-  // antisymmetrizer (residual) or none does (energy), so inspecting the
-  // leading term alone suffices to classify the whole expression.
+namespace {
+
+/// @return the antisymmetrizer of the leading term of @p expr , if any
+/// @note the input is assumed homogeneous: either every term carries a leading
+/// antisymmetrizer (residual) or none does (energy), so inspecting the
+/// leading term alone suffices to classify the whole expression
+std::optional<Tensor> leading_antisymmetrizer(const ExprPtr& expr) {
   ExprPtr leading_term =
       (expr->is<Sum>() ? expr->as<Sum>().summand(0) : expr).clone();
   const auto A_opt = pop_tensor(leading_term, reserved::antisymm_label());
+  if (!A_opt) return std::nullopt;
+  return A_opt.value()->as<Tensor>();
+}
+
+/// open_shell_CC_spintrace of @p expr whose terms carry the antisymmetrizer
+/// @p A_opt , or no antisymmetrizer if it is null
+std::vector<ExprPtr> open_shell_CC_spintrace_impl(
+    const ExprPtr& expr, const std::optional<Tensor>& A_opt) {
+  SEQUANT_ASSERT(expr->is<Sum>() || expr->is<Product>());
 
   // Expressions without a leading antisymmetrizer (e.g. CC energy) collapse
   // to a single expression. They are spin-traced directly, but term-by-term.
@@ -1668,7 +1677,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
     return {result};
   }
 
-  const Tensor& A = A_opt.value()->as<Tensor>();
+  const Tensor& A = A_opt.value();
   size_t const i = A.rank();
   auto P_vec = open_shell_P_op_vector(A);
   auto A_vec = open_shell_A_op(A);
@@ -1715,6 +1724,90 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   }
 
   return expr_vec;
+}
+
+}  // namespace
+
+std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
+  return open_shell_CC_spintrace_impl(expr, leading_antisymmetrizer(expr));
+}
+
+std::vector<ResultExpr> open_shell_CC_spintrace(const ResultExpr& expr) {
+  if (!expr.aux().empty())
+    throw Exception(
+        "open_shell_CC_spintrace: results with aux indices are not "
+        "supported");
+
+  const ExprPtr& rhs = expr.expression();
+  const bool scalar_result = expr.bra().empty() && expr.ket().empty();
+  const auto A_opt = (rhs->is<Sum>() || rhs->is<Product>())
+                         ? leading_antisymmetrizer(rhs)
+                         : std::nullopt;
+
+  // a scalar result (e.g. CC energy) has no external indices, hence no
+  // antisymmetrizer; a residual is spin-traced by its antisymmetrizer, which
+  // must carry exactly the result's indices
+  if (scalar_result) {
+    if (A_opt)
+      throw Exception(
+          "open_shell_CC_spintrace: the expression of a scalar result must "
+          "not contain an antisymmetrizer");
+    if (!rhs->is<Sum>() && !rhs->is<Product>()) return {expr.clone()};
+    ResultExpr result = expr.clone();
+    result.expression() = open_shell_CC_spintrace_impl(rhs, std::nullopt).at(0);
+    return {std::move(result)};
+  }
+
+  if (!A_opt)
+    throw Exception(
+        "open_shell_CC_spintrace: the expression of a result with indices "
+        "must carry a leading antisymmetrizer");
+  const Tensor& A = A_opt.value();
+  {
+    container::set<Index> result_indices(expr.bra().begin(), expr.bra().end());
+    result_indices.insert(expr.ket().begin(), expr.ket().end());
+    container::set<Index> A_indices;
+    for (const Index& idx : A.const_braket_indices()) A_indices.insert(idx);
+    if (expr.bra().size() != A.rank() || expr.ket().size() != A.rank() ||
+        result_indices != A_indices)
+      throw Exception(
+          "open_shell_CC_spintrace: the antisymmetrizer must carry exactly "
+          "the result's indices");
+  }
+
+  auto traced = open_shell_CC_spintrace_impl(rhs, A_opt);
+
+  // spin case s makes the last s columns of A spin-down (beta) and the others
+  // spin-up (alpha), see open_shell_spintrace
+  const auto columns = external_indices(A);
+  SEQUANT_ASSERT(traced.size() == columns.size() + 1);
+  std::vector<ResultExpr> results;
+  results.reserve(traced.size());
+  for (std::size_t s = 0; s != traced.size(); ++s) {
+    container::map<Index, Index> spin_case;
+    for (std::size_t j = 0; j != columns.size(); ++j) {
+      const bool beta = j >= columns.size() - s;
+      for (const auto& slotted : columns[j]) {
+        const Index& idx = slotted.index();
+        spin_case.emplace(idx, beta ? make_spinbeta(idx) : make_spinalpha(idx));
+      }
+    }
+    auto spin_cased = [&spin_case](const auto& indices) {
+      container::svector<Index> result;
+      for (const Index& idx : indices) result.push_back(spin_case.at(idx));
+      return result;
+    };
+    // the antisymmetrizer is removed from the expression, hence the result
+    // has no permutational symmetry
+    results.emplace_back(
+        bra(spin_cased(expr.bra())), ket(spin_cased(expr.ket())),
+        aux(expr.aux()), Symmetry::Nonsymm, expr.braket_symmetry(),
+        ColumnSymmetry::Nonsymm,
+        expr.has_label() ? std::optional<std::wstring>{expr.label()}
+                         : std::nullopt,
+        std::move(traced[s]));
+  }
+  return results;
 }
 
 template <bool check_ext_indices, detail::index_group_range IdxGroups>

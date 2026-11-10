@@ -36,6 +36,7 @@
 #include <type_traits>
 #include <vector>
 
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/view/interface.hpp>
 #include <range/v3/view/transform.hpp>
@@ -1874,6 +1875,69 @@ SECTION("Open-shell CC spintrace energy") {
                      L"+ 1/4 g{i↓1,i↓2;a↓1,a↓2}:A t{a↓1,a↓2;i↓1,i↓2}:A "
                      L"+ g{i↑1,i↓2;a↑1,a↓2} t{a↑1,a↓2;i↑1,i↓2}"));
   }
+}
+
+SECTION("Open-shell CC spintrace ResultExpr") {
+  // the energy: a scalar result, traced like the plain expression
+  {
+    const auto input = deserialize(
+        L"f{i_1;a_1} t{a_1;i_1} "
+        L"+ 1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+        {.def_perm_symm = Symmetry::Antisymm});
+    const auto result =
+        open_shell_CC_spintrace(ResultExpr(Variable(L"E"), input));
+    REQUIRE(result.size() == 1);
+    REQUIRE(result[0].has_label());
+    REQUIRE(result[0].label() == L"E");
+    REQUIRE(result[0].bra().empty());
+    REQUIRE(result[0].ket().empty());
+    REQUIRE_THAT(
+        result[0].expression(),
+        EquivalentTo(open_shell_CC_spintrace(input).at(0), explicit_named({})));
+  }
+
+  // a residual: the result indices are spin-cased like the columns of the
+  // antisymmetrizer
+  const auto A = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"},
+                            ket{L"a_1", L"a_2"}, Symmetry::Antisymm);
+  const auto residual =
+      A * ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                     Symmetry::Antisymm) +
+      A * ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_3"}) *
+          ex<Tensor>(L"t", bra{L"a_3", L"a_2"}, ket{L"i_1", L"i_2"},
+                     Symmetry::Antisymm);
+  const Tensor R(L"R", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                 Symmetry::Antisymm);
+  const auto result = open_shell_CC_spintrace(ResultExpr(R, residual));
+  const auto reference = open_shell_CC_spintrace(residual);
+  REQUIRE(result.size() == 3);
+  REQUIRE(reference.size() == 3);
+  const std::vector<std::wstring> expected_heads = {
+      L"R{a↑1,a↑2;i↑1,i↑2}", L"R{a↑1,a↓2;i↑1,i↓2}", L"R{a↓1,a↓2;i↓1,i↓2}"};
+  for (std::size_t s = 0; s != result.size(); ++s) {
+    REQUIRE(result[s].label() == L"R");
+    REQUIRE(result[s].symmetry() == Symmetry::Nonsymm);
+    REQUIRE(result[s].column_symmetry() == ColumnSymmetry::Nonsymm);
+    const auto expected_head = deserialize(expected_heads[s]);
+    const Tensor& expected = expected_head->as<Tensor>();
+    REQUIRE(ranges::equal(result[s].bra(), expected.bra()));
+    REQUIRE(ranges::equal(result[s].ket(), expected.ket()));
+    REQUIRE(*result[s].expression() == *reference[s]);
+  }
+
+  // a scalar result must not carry an antisymmetrizer, and a result with
+  // indices must carry one with exactly its indices
+  REQUIRE_THROWS_AS(
+      open_shell_CC_spintrace(ResultExpr(Variable(L"E"), residual)), Exception);
+  REQUIRE_THROWS_AS(open_shell_CC_spintrace(ResultExpr(
+                        R, ex<Tensor>(L"g", bra{L"a_1", L"a_2"},
+                                      ket{L"i_1", L"i_2"}, Symmetry::Antisymm) *
+                               ex<Constant>(1))),
+                    Exception);
+  const Tensor R_other(L"R", bra{L"a_1", L"a_3"}, ket{L"i_1", L"i_2"},
+                       Symmetry::Antisymm);
+  REQUIRE_THROWS_AS(open_shell_CC_spintrace(ResultExpr(R_other, residual)),
+                    Exception);
 }
 
 SECTION("ResultExpr") {

@@ -44,7 +44,9 @@ Specialized variants exist for the more demanding cases that arise in practice:
   representation typically wanted for closed-shell coupled-cluster equations (see :doc:`cc`); it also factors out and re-applies
   the necessary (anti)symmetrizers.
 - :func:`sequant::mbpt::open_shell_spintrace` and :func:`sequant::mbpt::open_shell_CC_spintrace` produce, instead of a single spin-free
-  result, one expression per distinct spin case, appropriate for an unrestricted (open-shell) reference.
+  result, one expression per distinct spin case, appropriate for an unrestricted (open-shell) reference. Given a
+  ``ResultExpr``, ``open_shell_CC_spintrace`` returns one ``ResultExpr`` per spin case whose result indices carry that
+  case's spin labels.
 
 All of these expect their input to already be in a specific normal form (a leading antisymmetrizer, produced by "complete"
 canonicalization — see :doc:`canonicalization`, unless the expression doesn't have any external indices (e.g. energy expressions)); consult their
