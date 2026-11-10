@@ -141,7 +141,8 @@ bool ExecutionContext::is_needed_later(std::size_t index) const {
 }
 
 ProcessingData &ExecutionContext::live_data(std::size_t index) {
-  SEQUANT_ASSERT(index < data_.size());
+  SEQUANT_ENFORCE(index < data_.size(),
+                  "Data was not obtained from this context");
 
   std::optional<ProcessingData> &slot = data_[index];
   if (!slot.has_value()) {
