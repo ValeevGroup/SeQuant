@@ -37,7 +37,11 @@ enum class VertexType {
   /// permutation of columns) there is one per column, all with the same color
   /// - for an asymmetric case there is also one per column, all with different
   /// colors
-  TensorBraKet
+  TensorBraKet,
+  /// represents a group of tensors (e.g. a nested product); connects to the
+  /// TensorCore vertices of its tensors and to the vertex of its enclosing
+  /// group, if any (see TensorNetworkV3::set_tensor_groups())
+  TensorGroup
 };
 
 }  // namespace sequant

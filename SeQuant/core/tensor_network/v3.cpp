@@ -270,7 +270,8 @@ std::size_t TensorNetworkV3::Graph::vertex_to_index_idx(
 std::optional<std::size_t> TensorNetworkV3::Graph::vertex_to_tensor_idx(
     std::size_t vertex) const {
   const auto vertex_type = vertex_types[vertex];
-  if (vertex_type == VertexType::Index || vertex_type == VertexType::SPBundle)
+  if (vertex_type == VertexType::Index || vertex_type == VertexType::SPBundle ||
+      vertex_type == VertexType::TensorGroup)
     return std::nullopt;
 
   std::size_t tensor_idx = 0;
@@ -505,6 +506,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
       case VertexType::TensorAux:
       case VertexType::TensorAuxBundle:
       case VertexType::IndexBundle:
+      case VertexType::TensorGroup:
         break;
     }
   }
@@ -685,7 +687,8 @@ TensorNetworkV3::TensorNetworkV3(const TensorNetworkV3 &other) {
     tensors_.emplace_back(t->_clone_shared());
   }
   tensor_input_ordinals_ = other.tensor_input_ordinals_;
-  tensor_salts_ = other.tensor_salts_;
+  tensor_groups_ = other.tensor_groups_;
+  tensor_group_of_ = other.tensor_group_of_;
 }
 
 TensorNetworkV3 &TensorNetworkV3::operator=(
@@ -743,6 +746,35 @@ ExprPtr TensorNetworkV3::canonicalize(
         named_indices, static_cast<bool>(options.ignore_named_index_labels),
         detail::index_comparer(options));
     if (byproduct && byproduct->as<Constant>().is_zero()) return byproduct;
+
+    // the graph does not fix how a tensor with bra-ket symmetry is oriented
+    // (its bra and ket bundles are exchanged by an automorphism), and the
+    // lexicographic pass below names the dummies in the order of the slots;
+    // the resulting network is the same either way, but the tensors it maps
+    // the input tensors to are not, which matters when the tensors are grouped
+    // (see set_tensor_groups()): such tensors are oriented by the labels of
+    // their indices, which the graph canonicalization has fixed
+    if (!tensor_groups_.empty()) {
+      bool swapped = false;
+      for (auto &tensor : tensors_) {
+        if (braket_symmetry(*tensor) != BraKetSymmetry::Symm ||
+            bra_rank(*tensor) != ket_rank(*tensor))
+          continue;
+        const auto bra = tensor->_bra() | ranges::to<container::svector<Index>>;
+        const auto ket = tensor->_ket() | ranges::to<container::svector<Index>>;
+        if (std::lexicographical_compare(ket.begin(), ket.end(), bra.begin(),
+                                         bra.end(),
+                                         Index::FullLabelCompare{})) {
+          tensor->_swap_bra_ket();
+          swapped = true;
+        }
+      }
+      if (swapped) {
+        edges_.clear();
+        have_edges_ = false;
+        init_edges();
+      }
+    }
   }
 
   if ((options.method & CanonicalizationMethod::Lexicographic) ==
@@ -1222,10 +1254,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       make_texlabel(L"$" + io::latex::utf_to_string(tlabel) + L"$");
     graph.vertex_types.emplace_back(VertexType::TensorCore);
     // subsequent vertices will be shaded by the color of this tensor
-    const auto tensor_color = colorizer.apply_shade(
-        tensor, tensor_salts_.empty()
-                    ? 0
-                    : tensor_salts_.at(tensor_input_ordinals_.at(tensor_idx)));
+    const auto tensor_color = colorizer.apply_shade(tensor);
     graph.vertex_colors.emplace_back(tensor_color);
 
     const std::size_t tensor_vertex = nvertex;
@@ -1622,6 +1651,28 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     }
   }
 
+  // the groups of tensors (see set_tensor_groups()), after all other
+  // vertices, so that the ordinals of the others are as without groups
+  if (!tensor_groups_.empty()) {
+    colorizer.reset_shade();
+    const std::size_t first_group_vertex = nvertex;
+    for (const auto &group : tensor_groups_) {
+      if (options.make_labels) make_label(L"group");
+      if (options.make_xlabels) make_xlabel();
+      if (options.make_texlabels) make_texlabel(L"");
+      graph.vertex_types.emplace_back(VertexType::TensorGroup);
+      graph.vertex_colors.emplace_back(colorizer(TensorGroupKey(group.key)));
+      ++nvertex;
+    }
+    for (std::size_t g = 0; g != tensor_groups_.size(); ++g)
+      if (const auto parent = tensor_groups_[g].parent)
+        edges.emplace_back(first_group_vertex + g,
+                           first_group_vertex + *parent);
+    for (std::size_t t = 0; t != tensors_.size(); ++t)
+      if (const auto group = tensor_group_of_.at(tensor_input_ordinals_.at(t)))
+        edges.emplace_back(tensor_vertices[t], first_group_vertex + *group);
+  }
+
   SEQUANT_ASSERT(!options.make_labels || nvertex == graph.vertex_labels.size());
   SEQUANT_ASSERT(!options.make_texlabels ||
                  nvertex == graph.vertex_texlabels.size());
@@ -1650,6 +1701,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       case VertexType::TensorAux:
       case VertexType::TensorAuxBundle:
       case VertexType::IndexBundle:
+      case VertexType::TensorGroup:
         graph.vertex_fixed_for_phase[v] = true;
         break;
       default:

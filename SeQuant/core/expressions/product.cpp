@@ -224,22 +224,28 @@ std::size_t nested_product_key(const Product &product) {
   return hash::range(keys.begin(), keys.end());
 }
 
-/// appends to @p salts the salt of each tensor factor of @p product and of
-/// its nested products, in the order of Product::collect_nested_tensor_leaves()
-/// : the keys (see nested_product_key()) of the nested products that contain
-/// it, so that tensors at structurally different places are told apart; the
-/// tensors of the outermost product get no salt
-/// @param path the salt of the tensor factors of @p product
-void collect_nested_tensor_salts(const Product &product,
-                                 const std::optional<std::size_t> &path,
-                                 container::svector<std::size_t> &salts) {
+/// collects the groups of the tensors of @p product (see
+/// TensorNetworkV3::set_tensor_groups()): each nested product is a group, keyed
+/// by its structure (see nested_product_key()), within the group of the
+/// product that contains it; the tensors of the outermost product are in no
+/// group
+/// @param group the group of the tensor factors of @p product
+/// @param groups the groups, to which those of the nested products are
+/// appended
+/// @param tensor_groups the group of each tensor, appended in the order of
+/// Product::collect_nested_tensor_leaves()
+void collect_nested_tensor_groups(
+    const Product &product, const std::optional<std::size_t> &group,
+    container::svector<TensorNetwork::TensorGroup> &groups,
+    container::svector<std::optional<std::size_t>> &tensor_groups) {
   for (const auto &factor : product.factors()) {
     if (factor.is<AbstractTensor>()) {
-      salts.push_back(path.value_or(0));
+      tensor_groups.push_back(group);
     } else if (factor.is<Product>()) {
-      auto subpath = path.value_or(0);
-      hash::combine(subpath, nested_product_key(factor.as<Product>()));
-      collect_nested_tensor_salts(factor.as<Product>(), subpath, salts);
+      groups.push_back(
+          {.key = nested_product_key(factor.as<Product>()), .parent = group});
+      collect_nested_tensor_groups(factor.as<Product>(), groups.size() - 1,
+                                   groups, tensor_groups);
     }
   }
 }
@@ -279,13 +285,14 @@ void Product::canonicalize_nested(const container::svector<ExprPtr *> &leaves,
                      return *leaf;
                    }) |
                    ranges::to<container::svector<ExprPtr>>);
-  // the parenthesization breaks symmetries of the network: tensors at
-  // structurally different places are told apart, so that the result does not
-  // depend on the input
+  // the parenthesization breaks symmetries of the network: only the
+  // relabelings that keep the tensors of each nested product together are
+  // considered, so that the result does not depend on the input
   {
-    container::svector<std::size_t> salts;
-    collect_nested_tensor_salts(*this, std::nullopt, salts);
-    tn.set_tensor_salts(std::move(salts));
+    container::svector<TensorNetwork::TensorGroup> groups;
+    container::svector<std::optional<std::size_t>> tensor_groups;
+    collect_nested_tensor_groups(*this, std::nullopt, groups, tensor_groups);
+    tn.set_tensor_groups(std::move(groups), std::move(tensor_groups));
   }
   const ExprPtr byproduct =
       tn.canonicalize(cardinal_tensor_labels, named_indices, opts);

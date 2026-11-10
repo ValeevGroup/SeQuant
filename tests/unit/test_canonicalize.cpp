@@ -1878,6 +1878,37 @@ TEST_CASE("nested products", "[algorithms][canonicalize]") {
     CHECK(*first == *second);
     CHECK(depth(first) == 1);
   }
+
+  SECTION("structurally equal nested products are kept apart") {
+    // a ring A B A B of bra-ket symmetric tensors, grouped into two
+    // structurally equal products; grouping each A with the B that follows it
+    // or with the B that precedes it is the same (by the reflection of the
+    // ring), and so is every spelling: all canonicalize to the same tree
+    auto t = [](const wchar_t* label, int b, int k) {
+      return ex<Tensor>(label, bra{L"i_" + std::to_wstring(b)},
+                        ket{L"i_" + std::to_wstring(k)}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Symm, ColumnSymmetry::Nonsymm);
+    };
+    auto pair = [](ExprPtr x, ExprPtr y) {
+      return ex<Product>(ExprPtrList{std::move(x), std::move(y)},
+                         Product::Flatten::No);
+    };
+    std::optional<ExprPtr> reference;
+    for (const bool follows : {true, false})
+      for (const bool swap_groups : {false, true})
+        for (const int shift : {0, 4}) {
+          // the ring i_1 - A - i_2 - B - i_3 - A - i_4 - B - i_1 , relabeled
+          auto i = [shift](int k) { return k + shift; };
+          auto a1 = t(L"A", i(1), i(2)), b1 = t(L"B", i(2), i(3)),
+               a2 = t(L"A", i(3), i(4)), b2 = t(L"B", i(4), i(1));
+          auto g1 = follows ? pair(a1, b1) : pair(a1, b2);
+          auto g2 = follows ? pair(a2, b2) : pair(a2, b1);
+          ExprPtr tree = swap_groups ? pair(g2, g1) : pair(g1, g2);
+          canonicalize(tree, deduce_named_indices);
+          if (!reference) reference = tree;
+          CHECK(*tree == **reference);
+        }
+  }
 }
 
 TEST_CASE("prettify", "[algorithms][canonicalize]") {
