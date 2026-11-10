@@ -155,6 +155,26 @@ TEST_CASE("substitute step", "[extint]") {
     REQUIRE_FALSE(ctx.has_data("sub.0"));
   }
 
+  SECTION("an unchanged input is dropped even if it is not needed later") {
+    ExecutionContext ctx;
+    seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    SubstituteStep step;
+    step.set_options(json{{"substitutions", {{"q{a1;i1}", "X{a1;i1}"}}}});
+    REQUIRE(step.run("sub", ctx, {"in.0"}) == 0);
+    REQUIRE_FALSE(ctx.has_data("sub.0"));
+  }
+
+  SECTION("a changed input is consumed if it is not needed later") {
+    ExecutionContext ctx;
+    seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    SubstituteStep step;
+    step.set_options(json{{"substitutions", {{"f{a1;i1}", "X{a1;i1}"}}}});
+    REQUIRE(step.run("sub", ctx, {"in.0"}) == 1);
+    REQUIRE_NOTHROW(ctx.get_data("sub.0"));
+  }
+
   SECTION("result_relabeling renames the result") {
     ExecutionContext ctx;
     seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});
