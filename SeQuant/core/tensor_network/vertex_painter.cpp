@@ -77,14 +77,18 @@ VertexPainter::Color VertexPainter::operator()(const ColumnGroup &group) {
   return ensure_uniqueness(color, group);
 }
 
+VertexPainter::Color VertexPainter::operator()(const TensorGroupKey &group) {
+  Color color = to_color({group.key, 0x7e9501});
+
+  return ensure_uniqueness(color, group);
+}
+
 void VertexPainter::apply_shade(std::size_t shade) { salt_ = shade; }
 
-VertexPainter::Color VertexPainter::apply_shade(const AbstractTensor &t,
-                                                std::size_t extra_salt) {
-  auto hash = to_hash_value(t);
-  if (extra_salt != 0) hash::combine(hash, extra_salt);
+VertexPainter::Color VertexPainter::apply_shade(const AbstractTensor &t) {
+  const auto hash = to_hash_value(t);
   Color color = to_color(hash);
-  salt_ = hash;
+  salt_ = to_hash_value(t);
   return ensure_uniqueness(color, t);
 }
 
@@ -191,6 +195,12 @@ bool VertexPainter::may_have_same_color(const VertexData &data,
                                         const AuxGroup &group) {
   return std::holds_alternative<AuxGroup>(data) &&
          std::get<AuxGroup>(data).id == group.id;
+}
+
+bool VertexPainter::may_have_same_color(const VertexData &data,
+                                        const TensorGroupKey &group) {
+  return std::holds_alternative<TensorGroupKey>(data) &&
+         std::get<TensorGroupKey>(data).key == group.key;
 }
 
 bool VertexPainter::may_have_same_color(const VertexData &data,

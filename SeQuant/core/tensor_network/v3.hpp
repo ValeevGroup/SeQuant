@@ -274,15 +274,31 @@ class TensorNetworkV3 {
 
   const auto &tensor_input_ordinals() const { return tensor_input_ordinals_; }
 
-  /// sets values that distinguish tensors beyond their own attributes: tensors
-  /// with different salts are told apart by canonicalization, e.g. tensors at
-  /// structurally different places of a nested product
-  /// @param salts the salt of each tensor, in input order; 0 means no salt
-  /// @pre `salts.size() == tensors().size()` , and canonicalize() has not been
-  /// called yet
-  void set_tensor_salts(container::svector<std::size_t> salts) {
-    SEQUANT_ASSERT(salts.size() == tensors_.size());
-    tensor_salts_ = std::move(salts);
+  /// a group of tensors, e.g. the tensors of a nested product
+  struct TensorGroup {
+    /// groups with different keys are told apart; groups with equal keys
+    /// (and equal contents) are interchangeable
+    std::size_t key;
+    /// the enclosing group, if any, as an index into the groups
+    std::optional<std::size_t> parent;
+  };
+
+  /// sets the groups of the tensors, which canonicalization keeps together:
+  /// only relabelings that map each group onto a group of the same key are
+  /// considered, e.g. those that respect the parenthesization of a nested
+  /// product (each group is a vertex of the graph, connected to the tensors
+  /// in it and to its enclosing group)
+  /// @param groups the groups; a parent precedes its children
+  /// @param tensor_groups the innermost group of each tensor, in input
+  /// order; nullopt for a tensor in no group
+  /// @pre `tensor_groups.size() == tensors().size()` , and canonicalize() has
+  /// not been called yet
+  void set_tensor_groups(
+      container::svector<TensorGroup> groups,
+      container::svector<std::optional<std::size_t>> tensor_groups) {
+    SEQUANT_ASSERT(tensor_groups.size() == tensors_.size());
+    tensor_groups_ = std::move(groups);
+    tensor_group_of_ = std::move(tensor_groups);
   }
 
   using NamedIndexSet = container::set<Index, Index::FullLabelCompare>;
@@ -523,8 +539,10 @@ class TensorNetworkV3 {
   container::svector<AbstractTensorPtr> tensors_;
   /// input ordinals of tensors in tensors_
   container::svector<std::size_t> tensor_input_ordinals_;
-  /// see set_tensor_salts(); indexed by input ordinal, empty if none
-  container::svector<std::size_t> tensor_salts_;
+  /// see set_tensor_groups()
+  container::svector<TensorGroup> tensor_groups_;
+  /// see set_tensor_groups(); indexed by input ordinal, empty if no groups
+  container::svector<std::optional<std::size_t>> tensor_group_of_;
 
   container::vector<Edge> edges_;
   bool have_edges_ = false;
