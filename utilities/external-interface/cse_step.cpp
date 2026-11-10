@@ -16,6 +16,7 @@
 #include <functional>
 #include <optional>
 #include <ranges>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -29,6 +30,23 @@ std::string CSEStep::kind() const { return "cse"; }
 bool CSEStep::accepts_options() const { return true; }
 
 bool CSEStep::requires_options() const { return false; }
+
+namespace {
+
+bool is_valid_id(const nlohmann::json &id) {
+  return id.is_string() && !id.get<std::string>().empty();
+}
+
+bool is_valid_merge_group(const nlohmann::json &group) {
+  return is_valid_id(group) || (group.is_array() && !group.empty() &&
+                                std::ranges::all_of(group, is_valid_id));
+}
+
+std::string describe_merge_group(const std::vector<std::string> &ids) {
+  return ids.front() + (ids.size() > 1 ? ", ..." : "");
+}
+
+}  // namespace
 
 void CSEStep::set_options(const nlohmann::json &options) {
   if (!options.is_object()) {
@@ -50,13 +68,26 @@ void CSEStep::set_options(const nlohmann::json &options) {
       if (value.is_boolean()) {
         merge_all_ = value.get<bool>();
       } else if (value.is_array() &&
-                 std::ranges::all_of(value, [](const nlohmann::json &id) {
-                   return id.is_string() && !id.get<std::string>().empty();
-                 })) {
-        merge_groups_ = value.get<std::vector<std::string>>();
+                 std::ranges::all_of(value, is_valid_merge_group)) {
+        for (const nlohmann::json &group : value) {
+          merge_groups_.push_back(group.is_string()
+                                      ? std::vector{group.get<std::string>()}
+                                      : group.get<std::vector<std::string>>());
+        }
+
+        std::set<std::string_view> seen;
+        for (const std::vector<std::string> &ids : merge_groups_) {
+          for (const std::string &id : ids) {
+            if (!seen.insert(id).second) {
+              throw Exception("ID '" + id + "' in option '" + key + "' for " +
+                              kind() + " is listed more than once");
+            }
+          }
+        }
       } else {
         throw Exception("Value for option '" + key + "' for " + kind() +
-                        " has to be a boolean or an array of non-empty IDs");
+                        " has to be a boolean or an array of non-empty IDs or "
+                        "non-empty arrays of non-empty IDs");
       }
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
@@ -272,19 +303,22 @@ std::size_t CSEStep::run(std::string_view step_id, ExecutionContext &ctx,
     } else {
       for (std::string_view id : ranges::views::concat(
                datasets[i].associated_ids, datasets[i].associated_group_ids)) {
-        auto it =
-            std::ranges::find(merge_groups_, detail::strip_step_prefix(id));
+        const std::string_view stripped = detail::strip_step_prefix(id);
+        auto it = std::ranges::find_if(
+            merge_groups_, [stripped](const std::vector<std::string> &ids) {
+              return std::ranges::find(ids, stripped) != ids.end();
+            });
         if (it == merge_groups_.end()) {
           continue;
         }
 
         std::size_t group = it - merge_groups_.begin();
         if (group_of[i] != ungrouped && group_of[i] != group) {
-          throw Exception("Input '" +
-                          std::string(datasets[i].associated_ids.front()) +
-                          "' matches multiple merge_inputs groups of " +
-                          kind() + ": '" + merge_groups_[group_of[i]] +
-                          "' and '" + merge_groups_[group] + "'");
+          throw Exception(
+              "Input '" + std::string(datasets[i].associated_ids.front()) +
+              "' matches multiple merge_inputs groups of " + kind() + ": '" +
+              describe_merge_group(merge_groups_[group_of[i]]) + "' and '" +
+              describe_merge_group(merge_groups_[group]) + "'");
         }
         group_of[i] = group;
       }
@@ -342,13 +376,14 @@ std::size_t CSEStep::run(std::string_view step_id, ExecutionContext &ctx,
     }
 
     if (!merge_all_) {
-      const std::string group_alias =
-          std::string(step_id) + "." + merge_groups_[group];
-      if (ctx.has_data(group_alias)) {
-        throw Exception("Duplicate group ID name '" + merge_groups_[group] +
-                        "' leading to ambiguity for '" + group_alias + "'");
+      for (const std::string &group_id : merge_groups_[group]) {
+        const std::string group_alias = std::string(step_id) + "." + group_id;
+        if (ctx.has_data(group_alias)) {
+          throw Exception("Duplicate group ID name '" + group_id +
+                          "' leading to ambiguity for '" + group_alias + "'");
+        }
+        ctx.add_data_alias(output_id, group_alias);
       }
-      ctx.add_data_alias(output_id, group_alias);
     }
 
     ++total_outputs;
