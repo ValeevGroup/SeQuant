@@ -193,11 +193,14 @@ class ExecutionContext {
   /// attempt to retrieve it (e.g. by a second request for a working copy)
   /// throws.
   /// @tparam T The type of data that @p data is expected to hold
+  /// @param keep_original If true, the data is always copied, so that the
+  /// original remains available for the step to compare against
   template <typename T>
-  WorkingCopy<T> working_copy(const Data<ProcessingData> &data) {
+  WorkingCopy<T> working_copy(const Data<ProcessingData> &data,
+                              bool keep_original = false) {
     T &payload = convert_data<T>(live_data(data.index));
 
-    if (is_needed_later(data.index)) {
+    if (keep_original || is_needed_later(data.index)) {
       return {.data = clone(std::as_const(payload)), .original = &payload};
     }
 

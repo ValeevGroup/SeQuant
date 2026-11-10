@@ -230,6 +230,16 @@ TEST_CASE("ExecutionContext working copies", "[extint]") {
                         Catch::Matchers::ContainsSubstring("already consumed"));
   }
 
+  SECTION("the original can be kept on request") {
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+
+    WorkingCopy<ExpressionData> working =
+        ctx.working_copy<ExpressionData>(datum(), /* keep_original = */ true);
+    REQUIRE(working.is_copy());
+    REQUIRE(working.unchanged());
+    REQUIRE_NOTHROW(ctx.get_data("input.0"));
+  }
+
   SECTION("any needed ID keeps the data") {
     ctx.set_needed_later_predicate(
         [](std::string_view id) { return id == "alias"; });
