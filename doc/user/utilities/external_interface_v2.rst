@@ -459,8 +459,9 @@ given, they are merged and jointly ordered before being exported together.
      - true
      - No
    * - :code:`grouping`
-     - Object mapping a group name to an input id/alias. All entries belonging to that id/alias are exported as part of the named group. Any entry not
-       matched by any of these rules is put into an implicit group named :code:`Default`.
+     - Object mapping a group name to an input id/alias, or to an array of them. All entries belonging to any of these ids/aliases are exported as part
+       of the named group. An id/alias must not be associated with more than one group. Any entry not matched by any of these rules is put into an
+       implicit group named :code:`Default`.
      - :code:`{}`
      - No
    * - :code:`relative_order`

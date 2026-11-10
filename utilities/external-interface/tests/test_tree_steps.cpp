@@ -206,6 +206,72 @@ TEST_CASE("export step", "[extint]") {
         Exception);
   }
 
+  SECTION("grouping option validation") {
+    auto with_grouping = [](json grouping) {
+      return json{{"language", "itf"},
+                  {"output", "out.itfaa"},
+                  {"grouping", std::move(grouping)}};
+    };
+
+    REQUIRE_NOTHROW(ExportStep{}.set_options(
+        with_grouping({{"A", "x"}, {"B", json::array({"y", "z"})}})));
+    REQUIRE_THROWS_WITH(
+        ExportStep{}.set_options(with_grouping({{"A", 5}})),
+        Catch::Matchers::ContainsSubstring("string or an array of strings"));
+    REQUIRE_THROWS_WITH(
+        ExportStep{}.set_options(with_grouping({{"A", json::array({"x", 5})}})),
+        Catch::Matchers::ContainsSubstring("string or an array of strings"));
+    REQUIRE_THROWS_WITH(
+        ExportStep{}.set_options(with_grouping({{"A", json::array()}})),
+        Catch::Matchers::ContainsSubstring("at least one ID"));
+    REQUIRE_THROWS_WITH(ExportStep{}.set_options(with_grouping(
+                            {{"A", "x"}, {"B", json::array({"y", "x"})}})),
+                        Catch::Matchers::ContainsSubstring("multiple groups"));
+  }
+
+  SECTION("grouping with multiple IDs per group") {
+    ExecutionContext ctx;
+    ctx.set_data("a", 0,
+                 ProcessingData{test_support::tree_data(
+                     {L"R1{a1;i1} = + f{a1;a2}:N-N-N t{a2;i1}:N-N-N"})});
+    ctx.add_data_alias("a.0", "a.first");
+    ctx.set_data("b", 0,
+                 ProcessingData{test_support::tree_data(
+                     {L"R2{a1;i1} = + g{a1;a2}:N-N-N t{a2;i1}:N-N-N"})});
+    ctx.add_data_alias("b.0", "b.second");
+
+    const std::filesystem::path out =
+        std::filesystem::temp_directory_path() / "extint_multi_id_group.itfaa";
+
+    ExportStep step;
+    step.set_options(
+        json{{"language", "itf"},
+             {"output", out.string()},
+             {"grouping", {{"Both", json::array({"first", "second"})}}},
+             {"meta",
+              {{"index_spaces",
+                {{"i", {{"name", "Closed"}, {"tag", "c"}}},
+                 {"a", {{"name", "External"}, {"tag", "e"}}}}}}}});
+    {
+      test_support::ScopedStreamSilencer silencer;
+      step.run("exp", ctx, {"a.first", "b.second"});
+    }
+
+    std::ifstream stream(out);
+    REQUIRE(stream.good());
+    std::stringstream buffer;
+    buffer << stream.rdbuf();
+    stream.close();
+    std::filesystem::remove(out);
+
+    const std::string itf = buffer.str();
+    CAPTURE(itf);
+    CHECK(itf.find("code(\"Both\")") != std::string::npos);
+    CHECK(itf.find("code(\"Default\")") == std::string::npos);
+    CHECK(itf.find("code(\"Both\")", itf.find("code(\"Both\")") + 1) ==
+          std::string::npos);
+  }
+
   SECTION("irreps option validation") {
     auto with_irreps = [](json irreps) {
       return json{{"language", "itf"},

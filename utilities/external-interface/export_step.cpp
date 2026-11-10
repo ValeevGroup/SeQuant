@@ -245,12 +245,33 @@ void ExportStep::set_options(const nlohmann::json &options) {
       }
 
       for (const auto &[name, ids] : value.items()) {
-        if (!ids.is_string()) {
-          throw Exception("Expected IDs for group '" + name +
-                          "' to be given as a string");
-        }
+        auto add_id = [&, &name = name](const nlohmann::json &id) {
+          if (!id.is_string()) {
+            throw Exception("Expected IDs for group '" + name +
+                            "' to be given as a string or an array of "
+                            "strings");
+          }
 
-        group_assoc_.emplace(ids.get<std::string>(), name);
+          auto [it, inserted] =
+              group_assoc_.emplace(id.get<std::string>(), name);
+          if (!inserted && it->second != name) {
+            throw Exception("ID '" + it->first +
+                            "' is associated with multiple groups: '" +
+                            it->second + "' and '" + name + "'");
+          }
+        };
+
+        if (ids.is_array()) {
+          if (ids.empty()) {
+            throw Exception("Expected at least one ID for group '" + name +
+                            "'");
+          }
+          for (const nlohmann::json &id : ids) {
+            add_id(id);
+          }
+        } else {
+          add_id(ids);
+        }
       }
     } else if (key == "irreps") {
       irrep_context_ = parse_irreps(value);
