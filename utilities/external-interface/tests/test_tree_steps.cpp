@@ -36,7 +36,17 @@ TEST_CASE("cse step", "[extint]") {
         step.set_options(json{{"merge_inputs", json::array({1})}}), Exception);
     REQUIRE_THROWS_AS(
         step.set_options(json{{"merge_inputs", json::array({""})}}), Exception);
+    REQUIRE_THROWS_AS(
+        step.set_options(json{{"merge_inputs", json::array({json::array()})}}),
+        Exception);
+    REQUIRE_THROWS_AS(
+        step.set_options(json{
+            {"merge_inputs",
+             json::array({json::array({"a", "b"}), json::array({"b", "c"})})}}),
+        Exception);
     REQUIRE_NOTHROW(step.set_options(json{{"merge_inputs", true}}));
+    REQUIRE_NOTHROW(step.set_options(json{
+        {"merge_inputs", json::array({"ecc", json::array({"res", "heff"})})}}));
     REQUIRE_NOTHROW(
         step.set_options(json{{"merge_inputs", json::array({"ecc", "res"})}}));
     REQUIRE_THROWS_AS(step.set_options(json{{"unknown", true}}), Exception);
@@ -117,6 +127,25 @@ TEST_CASE("cse step", "[extint]") {
       REQUIRE_THROWS_AS(overlap.run("cse2", ctx, {"in.0", "in.1", "in.2"}),
                         Exception);
     }
+  }
+
+  SECTION("merge_inputs with an array of IDs merges them jointly") {
+    const std::wstring expr =
+        L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S";
+    ExecutionContext ctx;
+    for (std::size_t i = 0; i < 3; ++i) {
+      ctx.set_data("in", i, ProcessingData{test_support::tree_data({expr})});
+    }
+    ctx.add_data_alias("in.0", "in.x");
+    ctx.add_data_alias("in.1", "in.y");
+
+    CSEStep step;
+    step.set_options(
+        json{{"merge_inputs", json::array({json::array({"x", "y"})})}});
+    REQUIRE(step.run("cse", ctx, {"in.0", "in.1", "in.2"}) == 2);
+    REQUIRE(ctx.dataset_size("cse.x") == 1);
+    REQUIRE(ctx.dataset_size("cse.y") == 1);
+    REQUIRE(ctx.dataset_size("cse[0-1]") == 2);
   }
 
   SECTION("dependencies on the original results survive CSE") {
@@ -204,6 +233,72 @@ TEST_CASE("export step", "[extint]") {
         ExportStep{}.set_options(json{
             {"language", "itf"}, {"output", "out.itfaa"}, {"unknown", true}}),
         Exception);
+  }
+
+  SECTION("grouping option validation") {
+    auto with_grouping = [](json grouping) {
+      return json{{"language", "itf"},
+                  {"output", "out.itfaa"},
+                  {"grouping", std::move(grouping)}};
+    };
+
+    REQUIRE_NOTHROW(ExportStep{}.set_options(
+        with_grouping({{"A", "x"}, {"B", json::array({"y", "z"})}})));
+    REQUIRE_THROWS_WITH(
+        ExportStep{}.set_options(with_grouping({{"A", 5}})),
+        Catch::Matchers::ContainsSubstring("string or an array of strings"));
+    REQUIRE_THROWS_WITH(
+        ExportStep{}.set_options(with_grouping({{"A", json::array({"x", 5})}})),
+        Catch::Matchers::ContainsSubstring("string or an array of strings"));
+    REQUIRE_THROWS_WITH(
+        ExportStep{}.set_options(with_grouping({{"A", json::array()}})),
+        Catch::Matchers::ContainsSubstring("at least one ID"));
+    REQUIRE_THROWS_WITH(ExportStep{}.set_options(with_grouping(
+                            {{"A", "x"}, {"B", json::array({"y", "x"})}})),
+                        Catch::Matchers::ContainsSubstring("multiple groups"));
+  }
+
+  SECTION("grouping with multiple IDs per group") {
+    ExecutionContext ctx;
+    ctx.set_data("a", 0,
+                 ProcessingData{test_support::tree_data(
+                     {L"R1{a1;i1} = + f{a1;a2}:N-N-N t{a2;i1}:N-N-N"})});
+    ctx.add_data_alias("a.0", "a.first");
+    ctx.set_data("b", 0,
+                 ProcessingData{test_support::tree_data(
+                     {L"R2{a1;i1} = + g{a1;a2}:N-N-N t{a2;i1}:N-N-N"})});
+    ctx.add_data_alias("b.0", "b.second");
+
+    const std::filesystem::path out =
+        std::filesystem::temp_directory_path() / "extint_multi_id_group.itfaa";
+
+    ExportStep step;
+    step.set_options(
+        json{{"language", "itf"},
+             {"output", out.string()},
+             {"grouping", {{"Both", json::array({"first", "second"})}}},
+             {"meta",
+              {{"index_spaces",
+                {{"i", {{"name", "Closed"}, {"tag", "c"}}},
+                 {"a", {{"name", "External"}, {"tag", "e"}}}}}}}});
+    {
+      test_support::ScopedStreamSilencer silencer;
+      step.run("exp", ctx, {"a.first", "b.second"});
+    }
+
+    std::ifstream stream(out);
+    REQUIRE(stream.good());
+    std::stringstream buffer;
+    buffer << stream.rdbuf();
+    stream.close();
+    std::filesystem::remove(out);
+
+    const std::string itf = buffer.str();
+    CAPTURE(itf);
+    CHECK(itf.find("code(\"Both\")") != std::string::npos);
+    CHECK(itf.find("code(\"Default\")") == std::string::npos);
+    CHECK(itf.find("code(\"Both\")", itf.find("code(\"Both\")") + 1) ==
+          std::string::npos);
   }
 
   SECTION("irreps option validation") {

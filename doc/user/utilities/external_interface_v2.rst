@@ -330,8 +330,10 @@ step rather than after it (see the note under :code:`dependencies`).
      - Whether multiple inputs shall be merged together in order to undergo combined rather than individual CSE.
        Instead of a boolean, an array of input IDs/aliases can be given, in which case merging happens only within the
        inputs matching each listed ID (matched like the groups of the :code:`grouping` option of the export step). Each
-       listed ID yields one output, aliased to :code:`<step>.<ID>`. Inputs matching none of the IDs undergo individual
-       CSE; inputs matching more than one ID are an error.
+       listed ID yields one output, aliased to :code:`<step>.<ID>`. An entry of the array may itself be an array of IDs, in
+       which case all inputs matching any of them are merged into one output, aliased to :code:`<step>.<ID>` for each of
+       these IDs. Inputs matching none of the entries undergo individual CSE; inputs matching more than one entry are an
+       error.
      - false
      - No
 
@@ -459,8 +461,9 @@ given, they are merged and jointly ordered before being exported together.
      - true
      - No
    * - :code:`grouping`
-     - Object mapping a group name to an input id/alias. All entries belonging to that id/alias are exported as part of the named group. Any entry not
-       matched by any of these rules is put into an implicit group named :code:`Default`.
+     - Object mapping a group name to an input id/alias, or to an array of them. All entries belonging to any of these ids/aliases are exported as part
+       of the named group. An id/alias must not be associated with more than one group. Any entry not matched by any of these rules is put into an
+       implicit group named :code:`Default`.
      - :code:`{}`
      - No
    * - :code:`relative_order`
