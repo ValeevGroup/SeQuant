@@ -7122,9 +7122,9 @@ void copy_batch_annotations(
     sequant::FullBinaryNode<sequant::EvalExprTA>& to) {
   const auto& mask = from->node_slice_mask();
   const_cast<sequant::EvalExprTA&>(*to).set_node_slice_mask(
-      sequant::container::svector<std::pair<sequant::Index,
-                                            sequant::BatchModeType>>(
-          mask.begin(), mask.end()));
+      sequant::container::svector<
+          std::pair<sequant::Index, sequant::BatchModeType>>(mask.begin(),
+                                                             mask.end()));
   const auto& sliced = from->sliced_modes();
   const_cast<sequant::EvalExprTA&>(*to).set_sliced_modes(
       sequant::container::svector<sequant::Index>(sliced.begin(),

@@ -125,8 +125,8 @@ bool ItfContext::rewrite(Tensor &tensor) const {
     // SeQuant, so we have to use this hacky approach in order to make use of
     // it.
 
-    container::svector<Index> bra = tensor.bra();
-    container::svector<Index> ket = tensor.ket();
+    container::svector<Index> bra(tensor.bra().begin(), tensor.bra().end());
+    container::svector<Index> ket(tensor.ket().begin(), tensor.ket().end());
 
     for (std::size_t i = 0; i < 2; ++i) {
       if (needs_swap(bra.at(i).basis(), ket.at(i).basis())) {
