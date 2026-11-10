@@ -16,22 +16,16 @@
 //      the scratch-folded batched peak via the metered dry-run replay
 //      (dryrun::meter).
 
-// Flip Trace::Default -> Trace::On for this ENTIRE translation unit (must
-// precede every SeQuant/core/eval/eval.hpp inclusion, directly or
-// transitively -- header include guards mean the Trace enum's Default member
-// is fixed, for this whole TU, by whether this macro is defined before the
-// header's FIRST inclusion). This is load-bearing for the [dryrun-eval]
-// replay below: make_batched_custom_evaluator's inner per-batch/per-member
-// replay calls `evaluate(*mem, le_g, bs.cache)` WITHOUT an explicit `<Trace::
-// ...>` argument, so those nested calls (and their note_working_set() calls,
-// which are gated at COMPILE TIME on the EvalTrace template argument, not
-// just Logger's runtime level) only fire if Trace::Default resolves to On.
-// Without this, working_set_hwmark() would reflect only the outermost
-// custom-evaluator interception and stay blind to everything the batched
-// replay does inside it -- exactly the visibility the replay witness needs.
-// mpqc's own C60 trace (614336.log, cited throughout this file) was captured
-// the same way (SEQUANT_EVAL_TRACE defined in that build).
-#define SEQUANT_EVAL_TRACE 1
+// Every evaluate()/make_evaluator()/make_batched_custom_evaluator() call in
+// this file passes Trace::On explicitly. This is load-bearing for the
+// [dryrun-eval] replay below: the batched evaluator's nested
+// per-batch/per-member re-entries (and their note_working_set() calls) are
+// gated at COMPILE TIME on the EvalTrace template argument, not just on
+// Logger's runtime level. Without it, working_set_hwmark() would reflect only
+// the outermost custom-evaluator interception and stay blind to everything the
+// batched replay does inside it. (Do NOT instead #define SEQUANT_EVAL_TRACE
+// here: that flips Trace::Default for this TU only, which is an ODR violation
+// against the other TUs linked into the same test executable.)
 
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
@@ -1853,7 +1847,7 @@ TEST_CASE("external-scatter-replay", "[dryrun-extmode][eval]") {
 
   // Reference: plain unbatched evaluation (node_slice_mask are ignored without
   // a custom evaluator).
-  auto const ref = evaluate(node, yield);
+  auto const ref = evaluate<Trace::On>(node, yield);
   REQUIRE(ref);
   auto const ref_bytes = ref->size_in_bytes();
   REQUIRE(ref_bytes > 0);
@@ -1868,7 +1862,7 @@ TEST_CASE("external-scatter-replay", "[dryrun-extmode][eval]") {
   auto cache = sequant::CacheManager<node_t>::empty();
   auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   cache.set_array_ops(&aops);
-  cache.set_custom_evaluator(make_batched_custom_evaluator(
+  cache.set_custom_evaluator(make_batched_custom_evaluator<Trace::On>(
       yield, [](Index const&) -> std::size_t { return 4; }, accept_occ, spy,
       never_volatile{}));
 
@@ -1876,7 +1870,7 @@ TEST_CASE("external-scatter-replay", "[dryrun-extmode][eval]") {
   bool threw = false;
   std::string what;
   try {
-    result = evaluate(node, yield, cache);
+    result = evaluate<Trace::On>(node, yield, cache);
   } catch (std::exception const& e) {
     threw = true;
     what = e.what();
@@ -2060,7 +2054,7 @@ TEST_CASE("giant-term-replay", "[dryrun-eval]") {
   auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   cache.set_array_ops(&aops);
   cache.set_custom_evaluator(
-      sequant::make_evaluator(policy, DryRunLeafEvaluator{cm}));
+      sequant::make_evaluator<Trace::On>(policy, DryRunLeafEvaluator{cm}));
 
   // Enable eval tracing (redirected to a private ostringstream, not stdout)
   // so working_set_hwmark() actually accumulates: the engine's per-op hwmark
@@ -3297,7 +3291,7 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   cache.set_array_ops(&aops);
   std::atomic<double> peak{0.0};
-  cache.set_custom_evaluator(sequant::make_evaluator(
+  cache.set_custom_evaluator(sequant::make_evaluator<Trace::On>(
       policy, DryRunLeafEvaluator{cm}, sequant::make_no_scope_guard{}, &peak));
 
   std::ostringstream trace_os;
@@ -3487,11 +3481,13 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][peak]") {
   auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   scratch_isolated.set_array_ops(&aops);
   scratch_isolated.set_custom_evaluator(
-      make_batched_custom_evaluator(yield, target_batch_size, accept_occ,
-                                    make_no_scope_guard{}, never_volatile{}));
+      make_batched_custom_evaluator<Trace::On>(
+          yield, target_batch_size, accept_occ, make_no_scope_guard{},
+          never_volatile{}));
   ResultPtr result_isolated;
   try {
-    result_isolated = sequant::evaluate(node, yield, scratch_isolated);
+    result_isolated =
+        sequant::evaluate<Trace::On>(node, yield, scratch_isolated);
   } catch (std::exception const&) {
   }
   size_t const hwmark_isolated = scratch_isolated.working_set_hwmark();
@@ -3503,12 +3499,12 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][peak]") {
   auto scratch_chained = sequant::CacheManager<node_t>::empty();
   scratch_chained.set_parent(&outer);
   scratch_chained.set_array_ops(&aops);
-  scratch_chained.set_custom_evaluator(
-      make_batched_custom_evaluator(yield, target_batch_size, accept_occ,
-                                    make_no_scope_guard{}, never_volatile{}));
+  scratch_chained.set_custom_evaluator(make_batched_custom_evaluator<Trace::On>(
+      yield, target_batch_size, accept_occ, make_no_scope_guard{},
+      never_volatile{}));
   ResultPtr result_chained;
   try {
-    result_chained = sequant::evaluate(node, yield, scratch_chained);
+    result_chained = sequant::evaluate<Trace::On>(node, yield, scratch_chained);
   } catch (std::exception const&) {
   }
   size_t const hwmark_chained = scratch_chained.working_set_hwmark();
@@ -3716,9 +3712,9 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   task_cache.set_array_ops(&aops);
   task_cache.set_custom_evaluator(
-      sequant::make_evaluator(policy, DryRunLeafEvaluator{cm}));
-  REQUIRE_NOTHROW(
-      (void)sequant::evaluate(node, DryRunLeafEvaluator{cm}, task_cache));
+      sequant::make_evaluator<Trace::On>(policy, DryRunLeafEvaluator{cm}));
+  REQUIRE_NOTHROW((void)sequant::evaluate<Trace::On>(
+      node, DryRunLeafEvaluator{cm}, task_cache));
   CHECK_FALSE(task_cache.exists(giant_node));  // still not registered => never
                                                // resident
   CHECK_FALSE(task_cache.alive(giant_node));
@@ -4206,16 +4202,16 @@ TEST_CASE("forest-descent-nested-external-scatter", "[batch][forest_descent]") {
   // The batched forest-descent result has the unbatched result's size.
   auto cm = std::make_shared<CostModel const>(regime);
   DryRunLeafEvaluator yield{cm};
-  auto const ref = sequant::evaluate(node, yield);
+  auto const ref = sequant::evaluate<Trace::On>(node, yield);
   REQUIRE(ref);
 
   auto cache = sequant::CacheManager<EvalNodeDryRun>::empty();
   auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
   cache.set_array_ops(&aops);
-  cache.set_custom_evaluator(
-      sequant::make_evaluator(policy, yield, sequant::make_no_scope_guard{}));
+  cache.set_custom_evaluator(sequant::make_evaluator<Trace::On>(
+      policy, yield, sequant::make_no_scope_guard{}));
   sequant::ResultPtr result;
-  REQUIRE_NOTHROW(result = sequant::evaluate(node, yield, cache));
+  REQUIRE_NOTHROW(result = sequant::evaluate<Trace::On>(node, yield, cache));
   REQUIRE(result);
   CHECK(result->size_in_bytes() == ref->size_in_bytes());
 }
@@ -4253,7 +4249,7 @@ TEST_CASE("meter-elementwise-power", "[meter]") {
     auto node = binarize<EvalExprDryRun>(pow(D, rational{-1}));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(node->op_type() == EvalOp::Power);
-    auto const res = evaluate(node, DryRunLeafEvaluator{cm});
+    auto const res = evaluate<Trace::On>(node, DryRunLeafEvaluator{cm});
     REQUIRE(res);
     auto const operand = DryRunLeafEvaluator{cm}(node.left());
     CHECK(res->size_in_bytes() == operand->size_in_bytes());
@@ -4308,7 +4304,7 @@ TEST_CASE("dryrun-broadcast-sum", "[dryrun][broadcast]") {
   SECTION("tree evaluator") {
     auto cache = CacheManager<EvalNodeDryRun>::empty();
     cache.set_array_ops(&aops);
-    auto const got = evaluate(node, yield, cache);
+    auto const got = evaluate<Trace::On>(node, yield, cache);
     REQUIRE(got);
     CHECK(got->size_in_bytes() == head_bytes);
   }
@@ -4316,7 +4312,7 @@ TEST_CASE("dryrun-broadcast-sum", "[dryrun][broadcast]") {
   SECTION("a Broadcast node is sized from the array-ops") {
     auto cache = CacheManager<EvalNodeDryRun>::empty();
     cache.set_array_ops(&aops);
-    auto const got = evaluate(node.left(), yield, cache);
+    auto const got = evaluate<Trace::On>(node.left(), yield, cache);
     REQUIRE(got);
     CHECK(got->size_in_bytes() == head_bytes);
   }
@@ -4330,14 +4326,14 @@ TEST_CASE("dryrun-broadcast-sum", "[dryrun][broadcast]") {
     REQUIRE(snode.right().left()->is_scalar());
     auto cache = CacheManager<EvalNodeDryRun>::empty();
     cache.set_array_ops(&aops);
-    auto const got = evaluate(snode, yield, cache);
+    auto const got = evaluate<Trace::On>(snode, yield, cache);
     REQUIRE(got);
     CHECK(got->size_in_bytes() == head_bytes);
   }
 
   SECTION("a Broadcast node needs array-ops") {
     REQUIRE_THROWS_WITH(
-        evaluate(node, yield),
+        evaluate<Trace::On>(node, yield),
         Catch::Matchers::ContainsSubstring("needs BackendArrayOps"));
   }
 
@@ -4347,7 +4343,8 @@ TEST_CASE("dryrun-broadcast-sum", "[dryrun][broadcast]") {
     policy.scheduler = BatchScheduler::ordered;
     auto cache = CacheManager<EvalNodeDryRun>::empty();
     cache.set_array_ops(&aops);
-    auto const got = evaluate(forest, policy, std::wstring{}, yield, cache);
+    auto const got =
+        evaluate<Trace::On>(forest, policy, std::wstring{}, yield, cache);
     REQUIRE(got);
     CHECK(got->size_in_bytes() == head_bytes);
   }
@@ -4393,7 +4390,7 @@ TEST_CASE("meter-batch-through-power", "[meter][tensor-power]") {
   auto const ref_flops = ref.flops_persistent + ref.flops_volatile;
   auto const cm = std::make_shared<CostModel const>(regime);
   auto const ref_bytes =
-      evaluate(plain, DryRunLeafEvaluator{cm})->size_in_bytes();
+      evaluate<Trace::On>(plain, DryRunLeafEvaluator{cm})->size_in_bytes();
   REQUIRE(ref_bytes == 10 * 10 * 8);
 
   std::vector<EvalNodeDryRun> const forest{batched};
@@ -4440,8 +4437,9 @@ TEST_CASE("meter-batch-through-power", "[meter][tensor-power]") {
     cache.set_array_ops(&aops);
     if (scheduler == BatchScheduler::forest_descent)
       cache.set_custom_evaluator(
-          make_evaluator(policy, yield, make_no_scope_guard{}));
-    auto const res = evaluate(forest, policy, std::wstring{}, yield, cache);
+          make_evaluator<Trace::On>(policy, yield, make_no_scope_guard{}));
+    auto const res =
+        evaluate<Trace::On>(forest, policy, std::wstring{}, yield, cache);
     REQUIRE(res);
     CHECK(res->size_in_bytes() == ref_bytes);
   }
@@ -4590,10 +4588,10 @@ TEST_CASE("meter-batch-through-inlined-head", "[meter][tensor-power][inline]") {
       cache.set_array_ops(&aops);
       if (scheduler == BatchScheduler::forest_descent)
         cache.set_custom_evaluator(
-            make_evaluator(policy, yield, make_no_scope_guard{}));
+            make_evaluator<Trace::On>(policy, yield, make_no_scope_guard{}));
       ResultPtr res;
-      REQUIRE_NOTHROW(res = evaluate(Forest{batched}, policy, std::wstring{},
-                                     yield, cache));
+      REQUIRE_NOTHROW(res = evaluate<Trace::On>(Forest{batched}, policy,
+                                                std::wstring{}, yield, cache));
       REQUIRE(res);
       CHECK(res->size_in_bytes() == x_bytes);
     }
@@ -4623,8 +4621,8 @@ TEST_CASE("dryrun-inlined-scalar-head", "[dryrun][inline]") {
   REQUIRE(sys.roots().size() == 1);
   auto const cm = std::make_shared<CostModel const>(backend_test_regime());
   ResultPtr res;
-  REQUIRE_NOTHROW(res =
-                      evaluate(sys.roots()[0].get(), DryRunLeafEvaluator{cm}));
+  REQUIRE_NOTHROW(
+      res = evaluate<Trace::On>(sys.roots()[0].get(), DryRunLeafEvaluator{cm}));
   REQUIRE(res);
   CHECK(res->size_in_bytes() ==
         cm->memsize(container::svector<Index>{Index{L"i_1"}, Index{L"a_1"}}));
@@ -4737,9 +4735,9 @@ TEST_CASE("meter-broadcast-sliced-per-consumer", "[meter][broadcast][inline]") {
     cache.set_array_ops(&aops);
     if (scheduler == BatchScheduler::forest_descent)
       cache.set_custom_evaluator(
-          make_evaluator(policy, yield, make_no_scope_guard{}));
-    REQUIRE_NOTHROW(
-        evaluate(Forest{a, b}, policy, std::wstring{}, yield, cache));
+          make_evaluator<Trace::On>(policy, yield, make_no_scope_guard{}));
+    REQUIRE_NOTHROW(evaluate<Trace::On>(Forest{a, b}, policy, std::wstring{},
+                                        yield, cache));
   }
 }
 
@@ -4770,10 +4768,10 @@ void require_batched_run(
     cache.set_array_ops(&aops);
     if (scheduler == BatchScheduler::forest_descent)
       cache.set_custom_evaluator(
-          make_evaluator(policy, yield, make_no_scope_guard{}));
+          make_evaluator<Trace::On>(policy, yield, make_no_scope_guard{}));
     ResultPtr res;
-    REQUIRE_NOTHROW(res =
-                        evaluate(forest, policy, std::wstring{}, yield, cache));
+    REQUIRE_NOTHROW(res = evaluate<Trace::On>(forest, policy, std::wstring{},
+                                              yield, cache));
     REQUIRE(res);
     CHECK(res->size_in_bytes() == result_bytes);
   }
