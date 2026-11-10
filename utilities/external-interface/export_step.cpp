@@ -726,10 +726,6 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
     }
   }
 
-  auto tree_data = data | std::views::transform([](const CtxData &dat) {
-                     return convert_data<ExportTreeData>(dat.data.get());
-                   });
-
   std::map<std::size_t, const CtxData *> producers;
   for (const CtxData &current : data) {
     for (const auto &entry :
@@ -786,8 +782,6 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
   std::vector<ExpressionGroup<>> groups;
   std::vector<std::vector<std::pair<Tensor, Tensor>>> required_symmetrizations;
   for (std::size_t idx : access_order) {
-    const ExportTreeData &current_data = tree_data[idx];
-
     std::string name = [&]() -> std::string {
       for (std::string_view current :
            ranges::views::concat(data.at(idx).associated_ids,
@@ -816,9 +810,11 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
     std::vector<std::pair<Tensor, Tensor>> &symms =
         required_symmetrizations.at(std::ranges::distance(groups.begin(), it));
 
-    for (const ExportTreeData::Entry &current : current_data.entries) {
-      group.add(current.tree);
+    // All inputs have been inspected by now, so they can be consumed
+    WorkingCopy<ExportTreeData> working =
+        exctx.working_copy<ExportTreeData>(data.at(idx));
 
+    for (ExportTreeData::Entry &current : working.data.entries) {
       if (current.overwrite_previous.has_value()) {
         // Never ZeroOnReuse: the summands of a sum all accumulate into the same
         // result, so zeroing on every reappearance would discard what the
@@ -862,6 +858,8 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
                              current.symm_contribution_target.value());
         }
       }
+
+      group.add(std::move(current.tree));
     }
   }
 

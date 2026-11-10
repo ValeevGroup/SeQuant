@@ -877,3 +877,37 @@ TEST_CASE("export step", "[extint]") {
     CHECK(recycled.find("CSE2") == std::string::npos);
   }
 }
+
+TEST_CASE("export step input consumption", "[extint]") {
+  ExecutionContext ctx;
+  ctx.set_data("a", 0,
+               ProcessingData{test_support::tree_data(
+                   {L"R1{a1;i1} = + f{a1;a2}:N-N-N t{a2;i1}:N-N-N"})});
+
+  const std::filesystem::path out =
+      std::filesystem::temp_directory_path() / "extint_consumption.itfaa";
+
+  ExportStep step;
+  step.set_options(json{{"language", "itf"},
+                        {"output", out.string()},
+                        {"meta",
+                         {{"index_spaces",
+                           {{"i", {{"name", "Closed"}, {"tag", "c"}}},
+                            {"a", {{"name", "External"}, {"tag", "e"}}}}}}}});
+
+  test_support::ScopedStreamSilencer silencer;
+
+  SECTION("inputs needed later are left intact") {
+    ctx.set_needed_later_predicate([](std::string_view) { return true; });
+    step.run("exp", ctx, {"a.0"});
+    REQUIRE_NOTHROW(ctx.get_data("a.0"));
+  }
+
+  SECTION("inputs not needed later are consumed") {
+    ctx.set_needed_later_predicate([](std::string_view) { return false; });
+    step.run("exp", ctx, {"a.0"});
+    REQUIRE_THROWS_AS(ctx.get_data("a.0"), Exception);
+  }
+
+  std::filesystem::remove(out);
+}
