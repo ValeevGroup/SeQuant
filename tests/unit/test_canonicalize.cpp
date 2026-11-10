@@ -1909,6 +1909,34 @@ TEST_CASE("nested products", "[algorithms][canonicalize]") {
           CHECK(*tree == **reference);
         }
   }
+
+  SECTION("nested products that differ by their scalar are kept apart") {
+    // (c1 A B) (c2 A B) on the ring i_1 - A - i_2 - B - i_3 - A - i_4 - B -
+    // i_1 : the two groups are exchanged by relabeling the ring, so the
+    // spelling with the scalars swapped is the same tree
+    auto t = [](const wchar_t* label, int b, int k) {
+      return ex<Tensor>(label, bra{L"i_" + std::to_wstring(b)},
+                        ket{L"i_" + std::to_wstring(k)}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    };
+    auto group = [&t](int first, int second, int third, ExprPtr scalar) {
+      return ex<Product>(ExprPtrList{std::move(scalar), t(L"A", first, second),
+                                     t(L"B", second, third)},
+                         Product::Flatten::No);
+    };
+    for (const auto& scalar : {ex<Constant>(2), ex<Variable>(L"x")}) {
+      auto first = ex<Product>(
+          ExprPtrList{group(1, 2, 3, scalar), group(3, 4, 1, ex<Constant>(1))},
+          Product::Flatten::No);
+      auto second = ex<Product>(
+          ExprPtrList{group(1, 2, 3, ex<Constant>(1)), group(3, 4, 1, scalar)},
+          Product::Flatten::No);
+      canonicalize(first, deduce_named_indices);
+      canonicalize(second, deduce_named_indices);
+      CHECK(*first == *second);
+      CHECK(depth(first) == 1);
+    }
+  }
 }
 
 TEST_CASE("prettify", "[algorithms][canonicalize]") {
