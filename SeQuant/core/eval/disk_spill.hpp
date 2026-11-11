@@ -2,6 +2,7 @@
 #define SEQUANT_CORE_EVAL_DISK_SPILL_HPP
 
 #include <cstddef>
+#include <unordered_map>
 
 namespace sequant::eval {
 
@@ -44,7 +45,20 @@ struct DiskSpill {
   /// a slice needs.
   std::size_t n_reads = 0;
   std::size_t bytes_read = 0;
+  /// Values assembled on disk block by block (see \c measured_bytes ).
+  std::size_t n_assembled_on_disk = 0;
   /// @}
+
+  /// The measured size of each value stored in a qualifying cell, by the
+  /// value's hash; kept across evaluations. A value assembled from the
+  /// batches of a loop does not exist, and so has no size, until it is
+  /// complete: where the backend can assemble on disk
+  /// (\c BackendArrayOps::make_zeros_on_disk ), the executor does so for a
+  /// value this map shows was at least \c min_bytes the last time it was
+  /// stored. The first evaluation of a schedule therefore assembles such a
+  /// value in memory and moves it to disk when complete; later ones never
+  /// hold it whole in memory.
+  std::unordered_map<std::size_t, std::size_t> measured_bytes;
 };
 
 }  // namespace sequant::eval

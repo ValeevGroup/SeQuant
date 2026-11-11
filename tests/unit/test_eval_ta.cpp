@@ -4545,6 +4545,103 @@ TEST_CASE("ordered-disk-spill-ta", "[eval][ordered-executor][disk]") {
   CHECK(io[1] > 0);  // tiles read
 }
 
+// A value assembled by scattering the batches of a loop into disjoint blocks,
+// and read after the loop, is assembled on disk block by block once its size
+// is known from an earlier evaluation (DiskSpill::measured_bytes): it is
+// never whole in memory.
+TEST_CASE("ordered-disk-scatter-ta", "[eval][ordered-executor][disk]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::OutputKind;
+  using sequant::eval::RichSchedule;
+  using sequant::eval::ScopeBlock;
+  using TArrayD = TA::TSpArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, 8, 6, 12};
+  yield_.set_max_tile(4);
+  auto const occ =
+      sequant::get_default_context().index_basis_registry()->retrieve_space(
+          L"i");
+
+  // S = g*h carries i_1 and is built inside a loop over i_1 (opened at S);
+  // the root reads S whole, after the loop. g is volatile, so S is rebuilt
+  // by every evaluation rather than carried over from the previous one.
+  auto const t = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{a_2;i_1} * h{a_3;a_2}) * q{i_1;a_5}");
+  std::string const target = "a_3,a_5";
+  std::vector<node_t> forest{eval_node(t)};
+  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
+
+  sequant::Index const i1{L"i_1"};
+  auto& S = const_cast<node_t&>(forest.front().left());
+  REQUIRE(!S.leaf());
+  S->set_node_slice_mask({{i1, sequant::BatchModeType::External}});
+  S->set_batch_loops_opened_here({{i1, sequant::BatchModeType::External}});
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.is_batchable_external_index = [occ](sequant::Index const& ix) {
+    return ix.space() == occ;
+  };
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {L"i"});
+  ScopeBlock const* i_block = nullptr;
+  for (auto const& step : ordered.root.steps)
+    if (auto const* b = std::get_if<ScopeBlock>(&step.value)) i_block = b;
+  REQUIRE(i_block != nullptr);
+  REQUIRE(i_block->outputs.size() == 1);
+  REQUIRE(i_block->outputs.front().second == OutputKind::AccumulateScatter);
+
+  std::function<bool(node_t const&)> const is_vol = [](node_t const& n) {
+    return n.leaf() && n->is_tensor() && n->as_tensor().label() == L"g";
+  };
+  auto cache = sequant::CacheManager<node_t>::empty();
+  auto aops = yield_.array_ops();
+  REQUIRE(static_cast<bool>(aops.make_zeros_on_disk));
+  cache.set_array_ops(&aops);
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [](sequant::Index const&) -> std::size_t { return 4; };
+  sequant::eval::DiskSpill spill;
+  spill.min_bytes = 1;
+  cache.set_disk_spill(&spill);
+
+  auto const rel_error = [&](TArrayD const& got) {
+    TArrayD d;
+    d(target) = got(target) - ref(target);
+    return TA::norm2(d) / TA::norm2(ref);
+  };
+  for (int iteration = 0; iteration < 3; ++iteration) {
+    INFO("iteration " << iteration);
+    auto const got =
+        evaluate_ordered_schedule(forest, ordered, rich, target, yield_, cache,
+                                  target_batch, {}, is_vol)
+            ->get<TArrayD>();
+    CHECK(rel_error(got) < 1e-12);
+    // the first evaluation learns the value's size while assembling it in
+    // memory; later ones assemble it on disk
+    if (iteration == 0)
+      CHECK(spill.n_assembled_on_disk == 0);
+    else
+      CHECK(spill.n_assembled_on_disk == static_cast<std::size_t>(iteration));
+    cache.reset();
+  }
+  CHECK(spill.n_writes > 0);
+  CHECK(spill.n_reads > 0);
+}
+
 TEST_CASE("ordered-vs-forest-reset-batched",
           "[eval][ordered-executor][ordered-crossiter-bug][cache_manager]") {
   using sequant::evaluate;

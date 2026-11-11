@@ -1034,7 +1034,16 @@ void run_ordered_contracted_block(
           // loop instance the cell itself is sliced by (its enclosing loops --
           // the instance being assembled is in the scatter map, not here). No
           // inference from the escaped axis's position on the node.
-          dest[k] = aops->make_zeros(resolve(vid)->canon_indices());
+          // A value that is to be kept on disk is assembled there, block by
+          // block, where the backend can: it is then never whole in memory.
+          if (aops->make_zeros_on_disk &&
+              registry.assemble_on_disk(out_cells[k]))
+            dest[k] = aops->make_zeros_on_disk(resolve(vid)->canon_indices());
+          if (dest[k]) {
+            if (auto* const spill = parent_cache.disk_spill())
+              ++spill->n_assembled_on_disk;
+          } else
+            dest[k] = aops->make_zeros(resolve(vid)->canon_indices());
           for (auto const& [pos, key] : a.sliced) {
             auto const range = ordered_range_of(ctx, key);
             if (!range)
@@ -1343,17 +1352,33 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
            (v->is_on_disk() || v->size_in_bytes() >= disk_spill->min_bytes);
   };
   if (disk_spill) {
+    // A value assembled by scattering is assembled on disk if it was large
+    // enough the last time it was stored (see DiskSpill::measured_bytes).
+    registry_hooks.assemble_on_disk = [disk_spill, &disk_eligible, &rich,
+                                       &cell_table](CellId c) {
+      if (!disk_eligible[c]) return false;
+      auto const it = disk_spill->measured_bytes.find(
+          rich.cells[cell_table.cells[c].value_id].hash);
+      return it != disk_spill->measured_bytes.end() &&
+             it->second >= disk_spill->min_bytes;
+    };
     // A value that qualifies is stored in its on-disk form, if its backend
     // has one (Result::on_disk); otherwise it stays in memory and is only
     // charged as on disk.
     // The size that decides is the measured one: size_in_bytes() may be
     // switched off (0) while no trace is printed, and what goes to disk must
     // not depend on tracing.
-    registry_hooks.stored_form = [disk_spill, &disk_eligible](CellId c,
-                                                              ResultPtr v) {
-      if (!v || !disk_eligible[c] || v->is_on_disk() ||
-          v->measured_size_in_bytes() < disk_spill->min_bytes)
-        return v;
+    registry_hooks.stored_form = [disk_spill, &disk_eligible, &rich,
+                                  &cell_table](CellId c, ResultPtr v) {
+      if (!v || !disk_eligible[c]) return v;
+      // remember the size for the evaluations to come (an on-disk form
+      // measures what it holds on disk)
+      std::size_t const bytes =
+          v->is_on_disk() ? v->size_in_bytes() : v->measured_size_in_bytes();
+      disk_spill
+          ->measured_bytes[rich.cells[cell_table.cells[c].value_id].hash] =
+          bytes;
+      if (v->is_on_disk() || bytes < disk_spill->min_bytes) return v;
       ResultPtr disk = v->on_disk();
       return disk ? disk : v;
     };

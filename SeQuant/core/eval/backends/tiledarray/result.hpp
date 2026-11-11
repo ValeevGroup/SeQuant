@@ -2105,14 +2105,35 @@ class ResultOnDiskTA final : public Result {
 
   /// \param arr the value, on disk
   /// \param annot an annotation of \p arr 's modes (nested for a tensor of
-  ///        tensors), used for every expression on it
+  ///        tensors), used for every expression on it. May be empty for an
+  ///        array that holds no tiles yet (see \c zero ): it is then taken
+  ///        from the first block written.
   ResultOnDiskTA(disk_array_type arr, std::string annot)
       : Result{std::move(arr)}, annot_(std::move(annot)) {}
+
+  /// The zero value over \p trange , on disk: an array that holds no tiles,
+  /// to be assembled by \c write_into_slice . Sparse policy only (a dense
+  /// array cannot be without tiles): null otherwise.
+  [[nodiscard]] static ResultPtr zero(TA::World& world,
+                                      TA::TiledRange const& trange) {
+    if constexpr (std::is_same_v<typename ArrayT::policy_type,
+                                 TA::SparsePolicy>) {
+      TA::Tensor<float> norms(trange.tiles_range(), 0.0f);
+      TA::SparseShape<float> shape(norms, trange, /* do_not_scale = */ true);
+      return eval_result<ResultOnDiskTA>(disk_array_type(world, trange, shape),
+                                         std::string{});
+    } else {
+      return nullptr;
+    }
+  }
 
   [[nodiscard]] bool is_on_disk() const noexcept override { return true; }
 
   [[nodiscard]] ResultPtr in_memory() const override {
     auto const& d = get<disk_array_type>();
+    if (annot_.empty())  // nothing was ever written: the value is zero
+      return eval_result<InMemoryResult>(
+          detail::make_zero_array<ArrayT>(d.world(), d.trange()));
     ArrayT out;
     out(annot_) = d(annot_);
     ::sequant::detail::wait_for_lazy_cleanup(out);
@@ -2125,6 +2146,10 @@ class ResultOnDiskTA final : public Result {
                                      std::size_t elem_hi) const override {
     auto const& d = get<disk_array_type>();
     auto const [lo, hi] = block_of(d, mode, elem_lo, elem_hi);
+    if (annot_.empty())  // nothing was ever written: slice the zero value
+      return eval_result<InMemoryResult>(
+                 detail::make_zero_array<ArrayT>(d.world(), d.trange()))
+          ->slice_mode(mode, elem_lo, elem_hi);
     ArrayT out;
     out(annot_) = d(annot_).block(lo, hi, TA::preserve_lobound);
     ::sequant::detail::wait_for_lazy_cleanup(out);
@@ -2142,8 +2167,17 @@ class ResultOnDiskTA final : public Result {
     auto const& b = block.as<InMemoryResult>();
     // an all-empty nested block stands for zero and has no inner rank to
     // annotate: writing it would change nothing
-    if constexpr (requires { b.inner_rank(); })
-      if (b.inner_rank() == 0) return;
+    std::size_t inner = 0;
+    if constexpr (requires { b.inner_rank(); }) {
+      inner = b.inner_rank();
+      if (inner == 0) return;
+    }
+    if (annot_.empty())
+      annot_ = inner ? TA::detail::dummy_annotation(
+                           static_cast<unsigned int>(d.trange().rank()),
+                           static_cast<unsigned int>(inner))
+                     : TA::detail::dummy_annotation(
+                           static_cast<unsigned int>(d.trange().rank()));
     b.with_expr(annot_, [&](auto&& be) {
       d(annot_).block(lo, hi, TA::preserve_lobound) = be;
     });

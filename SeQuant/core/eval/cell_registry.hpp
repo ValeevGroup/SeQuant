@@ -55,6 +55,10 @@ struct CellRegistryHooks {
   /// returns is stored in its place. Lets the owner store a value in another
   /// form (on disk, see \c Result::on_disk ). May be empty.
   std::function<ResultPtr(CellId, ResultPtr)> stored_form;
+  /// Whether the value of a cell that is assembled from the batches of a
+  /// loop should be assembled in its on-disk form from the start (see
+  /// \c BackendArrayOps::make_zeros_on_disk ). Empty means never.
+  std::function<bool(CellId)> assemble_on_disk;
   /// Accounting: invoked after a value is stored in a cell (\c set ), with
   /// the cell and the value. May be empty.
   std::function<void(CellId, ResultPtr const&)> on_set;
@@ -167,6 +171,13 @@ class CellRegistry {
     if (cell.persistent && hooks_.persistent && hooks_.hash_of)
       hooks_.persistent->put(hooks_.hash_of(cell.value_id), s.value);
     if (hooks_.on_set) hooks_.on_set(c, s.value);
+  }
+
+  /// \return whether the value of cell \p c , about to be assembled from the
+  ///         batches of a loop, should be assembled on disk (see
+  ///         \c CellRegistryHooks::assemble_on_disk )
+  [[nodiscard]] bool assemble_on_disk(CellId c) const {
+    return hooks_.assemble_on_disk && hooks_.assemble_on_disk(c);
   }
 
   /// Reports an operand read served from cell \p c to the accounting hook
