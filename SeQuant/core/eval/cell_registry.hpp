@@ -51,6 +51,10 @@ struct CellRegistryHooks {
   /// Must not throw: it is also called while cells are released, which
   /// happens during stack unwinding too.
   std::function<void(std::size_t live_bytes)> on_bytes_changed;
+  /// Invoked with a value about to be stored in a cell (\c set ); what it
+  /// returns is stored in its place. Lets the owner store a value in another
+  /// form (on disk, see \c Result::on_disk ). May be empty.
+  std::function<ResultPtr(CellId, ResultPtr)> stored_form;
   /// Accounting: invoked after a value is stored in a cell (\c set ), with
   /// the cell and the value. May be empty.
   std::function<void(CellId, ResultPtr const&)> on_set;
@@ -156,7 +160,8 @@ class CellRegistry {
                      "CellRegistry::set: fill-once violated");
     }
     discharge(s);
-    s.value = std::move(v);
+    s.value =
+        hooks_.stored_form ? hooks_.stored_form(c, std::move(v)) : std::move(v);
     s.filled_since_clear = true;
     charge(s);
     if (cell.persistent && hooks_.persistent && hooks_.hash_of)
@@ -529,6 +534,9 @@ class CellReadResolver {
                         " to a loop instance not in the batch context");
       v = v->slice_mode(pos, range->first, range->second);
     }
+    // a value kept on disk is used from memory: a read that slices it has
+    // loaded just the slice, any other loads it whole
+    if (v->is_on_disk()) v = v->in_memory();
     ++served_;
     return v;
   }

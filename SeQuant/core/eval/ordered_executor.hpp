@@ -1340,9 +1340,17 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   auto const on_disk = [disk_spill, &disk_eligible](CellId c,
                                                     ResultPtr const& v) {
     return disk_spill && v && disk_eligible[c] &&
-           v->size_in_bytes() >= disk_spill->min_bytes;
+           (v->is_on_disk() || v->size_in_bytes() >= disk_spill->min_bytes);
   };
   if (disk_spill) {
+    // A value that qualifies is stored in its on-disk form, if its backend
+    // has one (Result::on_disk); otherwise it stays in memory and is only
+    // charged as on disk.
+    registry_hooks.stored_form = [on_disk](CellId c, ResultPtr v) {
+      if (!on_disk(c, v) || v->is_on_disk()) return v;
+      ResultPtr disk = v->on_disk();
+      return disk ? disk : v;
+    };
     registry_hooks.on_set = [disk_spill, on_disk](CellId c,
                                                   ResultPtr const& v) {
       if (!on_disk(c, v)) return;

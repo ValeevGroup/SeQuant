@@ -830,6 +830,150 @@ TEST_CASE("disk-spill-metering", "[eval][ordered][meter][disk]") {
   }
 }
 
+namespace {
+
+/// A scalar result that can be put "on disk": the on-disk form refuses every
+/// operation, so a test using it fails unless whoever reads it brings it back
+/// to memory first. Counts the moves.
+class DiskableScalar final : public sequant::Result {
+ public:
+  static inline std::size_t n_to_disk = 0, n_to_memory = 0;
+
+  explicit DiskableScalar(double v, bool on_disk = false) noexcept
+      : Result{v}, on_disk_(on_disk) {}
+
+  [[nodiscard]] double value() const {
+    if (on_disk_) throw std::logic_error("DiskableScalar: used while on disk");
+    return get<double>();
+  }
+
+  [[nodiscard]] ResultPtr on_disk() const override {
+    ++n_to_disk;
+    return sequant::eval_result<DiskableScalar>(get<double>(), true);
+  }
+  [[nodiscard]] bool is_on_disk() const noexcept override { return on_disk_; }
+  [[nodiscard]] ResultPtr in_memory() const override {
+    if (!on_disk_) throw std::logic_error("DiskableScalar: not on disk");
+    ++n_to_memory;
+    return sequant::eval_result<DiskableScalar>(get<double>(), false);
+  }
+
+  [[nodiscard]] ResultPtr sum(Result const& other,
+                              std::array<std::any, 3> const&) const override {
+    return sequant::eval_result<DiskableScalar>(
+        value() + other.as<DiskableScalar>().value());
+  }
+  [[nodiscard]] ResultPtr prod(Result const& other,
+                               std::array<std::any, 3> const&,
+                               sequant::DeNest) const override {
+    return sequant::eval_result<DiskableScalar>(
+        value() * other.as<DiskableScalar>().value());
+  }
+  [[nodiscard]] ResultPtr permute(
+      std::array<std::any, 2> const&) const override {
+    throw std::logic_error("DiskableScalar: permute");
+  }
+  void add_inplace(Result const& other) override {
+    if (on_disk_) throw std::logic_error("DiskableScalar: add on disk");
+    get<double>() += other.as<DiskableScalar>().value();
+  }
+  [[nodiscard]] ResultPtr symmetrize() const override {
+    throw std::logic_error("DiskableScalar: symmetrize");
+  }
+  [[nodiscard]] ResultPtr antisymmetrize(std::size_t) const override {
+    throw std::logic_error("DiskableScalar: antisymmetrize");
+  }
+  [[nodiscard]] ResultPtr mult_by_phase(std::int8_t f) const override {
+    return sequant::eval_result<DiskableScalar>(value() * double(f));
+  }
+  [[nodiscard]] ResultPtr clone() const override {
+    return sequant::eval_result<DiskableScalar>(get<double>(), on_disk_);
+  }
+  [[nodiscard]] std::size_t size_in_bytes() const override {
+    return sizeof(double);
+  }
+
+ private:
+  [[nodiscard]] id_t type_id() const noexcept override {
+    return id_for_type<DiskableScalar>();
+  }
+  bool on_disk_;
+};
+
+}  // namespace
+
+TEST_CASE("disk-spill-moves-values", "[eval][ordered][disk]") {
+  // With a DiskSpill wired, the executor asks a value that qualifies to move
+  // to its on-disk form when it is stored (Result::on_disk), keeps that form,
+  // and brings the value back to memory for each operation that reads it
+  // (Result::in_memory). DiskableScalar's on-disk form refuses arithmetic,
+  // so a correct result means every read was materialized first.
+  ScalarNode const root1 = scalar_tree(L"((a * b) + c) * (a * b)");
+  ScalarNode const root2 = scalar_tree(L"(a * b) * d + (e * f)");
+  std::map<std::wstring, double> const values{{L"a", 2.0},  {L"b", -3.5},
+                                              {L"c", 7.25}, {L"d", 1.5},
+                                              {L"e", 2.0},  {L"f", 0.5}};
+  auto const yield = [&values](ScalarNode const& leaf) -> ResultPtr {
+    ExprPtr const& xpr = leaf->expr();
+    if (xpr->is<Constant>())
+      return sequant::eval_result<DiskableScalar>(
+          xpr->as<Constant>().value<double>());
+    return sequant::eval_result<DiskableScalar>(
+        values.at(std::wstring(xpr->as<Variable>().label())));
+  };
+  std::function<bool(ScalarNode const&)> const is_volatile =
+      [](ScalarNode const& n) {
+        return n.leaf() && n->expr()->is<Variable>() &&
+               n->expr()->as<Variable>().label() == L"a";
+      };
+  sequant::BatchPolicy const policy;
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 1; };
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const&) -> std::size_t { return 1; };
+  svector<ScalarNode> const roots{root1, root2};
+  RichSchedule const rich = compute_dag_boulevard(roots, cm, block_of);
+  auto const legality = analyze_legality(rich, roots, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+
+  auto const run = [&](sequant::eval::DiskSpill* spill) {
+    DiskableScalar::n_to_disk = DiskableScalar::n_to_memory = 0;
+    auto cache = sequant::CacheManager<ScalarNode>::empty();
+    cache.set_disk_spill(spill);
+    ResultPtr const got = evaluate_ordered_schedule(
+        roots, ordered, rich, ScalarEvalExpr::annot_t{}, yield, cache, target,
+        sequant::make_no_scope_guard{}, is_volatile);
+    // the results of the evaluation are handed back in memory
+    CHECK(!got->is_on_disk());
+    return got->as<DiskableScalar>().value();
+  };
+
+  SECTION("off: nothing moves") {
+    CHECK(run(nullptr) == Catch::Approx(-11.25));
+    CHECK(DiskableScalar::n_to_disk == 0);
+    CHECK(DiskableScalar::n_to_memory == 0);
+  }
+  SECTION("threshold above every value: nothing moves") {
+    sequant::eval::DiskSpill spill;
+    spill.min_bytes = 1 << 20;
+    CHECK(run(&spill) == Catch::Approx(-11.25));
+    CHECK(DiskableScalar::n_to_disk == 0);
+    CHECK(DiskableScalar::n_to_memory == 0);
+  }
+  SECTION("on: stored on disk, read back for every use") {
+    sequant::eval::DiskSpill spill;
+    spill.min_bytes = 1;
+    CHECK(run(&spill) == Catch::Approx(-11.25));
+    CHECK(DiskableScalar::n_to_disk > 0);
+    // one move to disk per store of a qualifying value, one load per read
+    CHECK(DiskableScalar::n_to_disk == spill.n_writes);
+    CHECK(DiskableScalar::n_to_memory == spill.n_reads);
+    CHECK(spill.n_reads >= 3);  // a*b alone is read three times
+  }
+}
+
 TEST_CASE("chain-holds-shared-persistent", "[eval][ordered]") {
   // Direct coverage of the runtime in-place safety gate. A PERSISTENT cache
   // entry (registered via the CacheManager(Iterable&&, PersistencePred) ctor
