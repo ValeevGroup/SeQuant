@@ -81,8 +81,7 @@ Index Index::replace_basis_instance(
   Index result(*this);
   result.basis_ =
       default_registry_resolved(IndexBasis(space(), basis_instance));
-  result.label_.reset();
-  result.full_label_.reset();
+  result.labels_.reset();
   return result;
 }
 
@@ -92,8 +91,7 @@ void Index::rebase(IndexSpace space) {
   if (space != basis_.space())
     basis_ = default_registry_resolved(
         IndexBasis(std::move(space), basis_.basis_instance()));
-  label_.reset();
-  full_label_.reset();
+  labels_.reset();
 }
 
 }  // namespace sequant

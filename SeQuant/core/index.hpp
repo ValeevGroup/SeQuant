@@ -163,14 +163,11 @@ class Index : public Taggable {
         ordinal_(std::move(idx.ordinal_)),
         proto_indices_(std::move(idx.proto_indices_)),
         symmetric_proto_indices_(idx.symmetric_proto_indices_),
-        label_(std::move(idx.label_)),
-        full_label_(std::move(idx.full_label_)) {
+        labels_(std::move(idx.labels_)) {
     idx.symmetric_proto_indices_ = true;
     // moving std::optional surprisingly leaves a nonnull std::optional in its
     // wake
     idx.ordinal_ = std::nullopt;
-    idx.label_ = std::nullopt;
-    idx.full_label_ = std::nullopt;
   }
 
   /// copy assignment
@@ -182,8 +179,7 @@ class Index : public Taggable {
     proto_indices_ = idx.proto_indices_;
     symmetric_proto_indices_ = idx.symmetric_proto_indices_;
     // memoized data that is not copied must be reset or it might be wrong
-    label_.reset();
-    full_label_.reset();
+    labels_.reset();
     return *this;
   }
 
@@ -196,15 +192,12 @@ class Index : public Taggable {
     ordinal_ = std::move(idx.ordinal_);
     proto_indices_ = std::move(idx.proto_indices_);
     symmetric_proto_indices_ = idx.symmetric_proto_indices_;
-    label_ = std::move(idx.label_);
-    full_label_ = std::move(idx.full_label_);
+    labels_ = std::move(idx.labels_);
 
     idx.symmetric_proto_indices_ = true;
     // moving std::optional surprisingly leaves a nonnull std::optional in its
     // wake
     idx.ordinal_ = std::nullopt;
-    idx.label_ = std::nullopt;
-    idx.full_label_ = std::nullopt;
     return *this;
   }
 
@@ -342,7 +335,7 @@ class Index : public Taggable {
               to_ordinal(label), {}) {
     check_nonreserved();
     if constexpr (std::is_same_v<String, std::wstring>) {
-      label_ = std::move(label);
+      label_cache().label = std::move(label);
     }
   }
 
@@ -371,7 +364,7 @@ class Index : public Taggable {
       basis_ = index.basis_;
       ordinal_ = index.ordinal_;
       if constexpr (!std::is_reference_v<IndexOrIndexLabel>)
-        label_ = std::move(index_or_index_label);
+        label_cache().label = std::move(index_or_index_label);
     } else {
       basis_ = index_or_index_label.basis_;
       ordinal_ = index_or_index_label.ordinal_;
@@ -414,7 +407,7 @@ class Index : public Taggable {
       basis_ = index.basis_;
       ordinal_ = index.ordinal_;
       if constexpr (!std::is_reference_v<IndexOrIndexLabel>)
-        label_ = std::move(index_or_index_label);
+        label_cache().label = std::move(index_or_index_label);
     } else {
       basis_ = index_or_index_label.basis_;
       ordinal_ = index_or_index_label.ordinal_;
@@ -588,14 +581,15 @@ class Index : public Taggable {
   /// @warning this does not include the proto index labels, use
   /// Index::full_label() instead
   std::wstring_view label() const {
-    if (!label_) {
-      label_ = basis_.base_key();
+    auto &label = label_cache().label;
+    if (!label) {
+      label = basis_.base_key();
       if (ordinal_) {
-        *label_ += L'_';
-        *label_ += std::to_wstring(*ordinal_);
+        *label += L'_';
+        *label += std::to_wstring(*ordinal_);
       }
     }
-    return *label_;
+    return *label;
   }
 
   /// @return the ordinal
@@ -622,7 +616,7 @@ class Index : public Taggable {
   /// Index::label() instead if only want the label
   std::wstring_view full_label() const {
     if (!has_proto_indices() && !basis_.unnamed_instance()) return label();
-    if (full_label_) return *full_label_;
+    if (labels_ && labels_->full_label) return *labels_->full_label;
     std::wstring result(label());
     result += L"<";
     using namespace std::literals;
@@ -634,8 +628,9 @@ class Index : public Taggable {
         ranges::views::join(L", "sv) | ranges::to<std::wstring>();
     if (basis_.unnamed_instance()) result += basis_.instance_suffix();
     result += L">";
-    full_label_ = result;
-    return *full_label_;
+    auto &full_label = label_cache().full_label;
+    full_label = std::move(result);
+    return *full_label;
   }
 
   /// @brief makes a new label by appending a suffix to the label
@@ -888,10 +883,7 @@ class Index : public Taggable {
         }
       }
     }
-    if (mutated) {
-      label_.reset();
-      full_label_.reset();
-    }
+    if (mutated) labels_.reset();
     return mutated;
   }
 
@@ -960,8 +952,17 @@ class Index : public Taggable {
   index_vector proto_indices_{};
   bool symmetric_proto_indices_ = true;
 
-  mutable std::optional<std::wstring> label_;
-  mutable std::optional<std::wstring> full_label_;
+  /// memoized labels; allocated on first use
+  struct LabelCache {
+    std::optional<std::wstring> label;
+    std::optional<std::wstring> full_label;
+  };
+  mutable std::unique_ptr<LabelCache> labels_;
+
+  LabelCache &label_cache() const {
+    if (!labels_) labels_ = std::make_unique<LabelCache>();
+    return *labels_;
+  }
 
   /// sorts proto_indices_ if symmetric_proto_indices_
   inline void canonicalize_proto_indices() noexcept;
