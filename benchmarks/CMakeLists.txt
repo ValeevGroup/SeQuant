@@ -3,6 +3,7 @@ include(FindOrFetchGoogleBenchmark)
 add_executable(sequant_benchmarks
         "canonicalize.cpp"
         "coupled_cluster.cpp"
+        "hash.cpp"
         "inputs.cpp"
         "main.cpp"
         "simplify.cpp"
