@@ -5,11 +5,14 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/reverse.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/concat.hpp>
 #include <range/v3/view/drop.hpp>
 #include <range/v3/view/reverse.hpp>
 #include <range/v3/view/zip.hpp>
@@ -165,23 +168,10 @@ bool is_binary_contraction(Expr const& e) {
          is_plain_tensor_tree(e);
 }
 
-/// Calls \p f on each slot index of each tensor of the tensor tree \p e.
-template <typename F>
-void for_each_slot(Expr const& e, F&& f) {
-  if (e.is<Tensor>()) {
-    for (auto const& ix : e.as<Tensor>().const_braketaux_indices()) f(ix);
-    return;
-  }
-  for (auto const& x : e.as<Product>().factors()) for_each_slot(*x, f);
-}
-
 container::set<Index> free_indices(ExprPtr const& e) {
   auto const g = get_unique_indices(e);
-  container::set<Index> result;
-  result.insert(g.bra.begin(), g.bra.end());
-  result.insert(g.ket.begin(), g.ket.end());
-  result.insert(g.aux.begin(), g.aux.end());
-  return result;
+  return ranges::views::concat(g.bra, g.ket, g.aux) |
+         ranges::to<container::set<Index>>;
 }
 
 /// Key of the shared factor F of a top contraction F X: F's structure with
@@ -292,25 +282,6 @@ struct Member {
   std::size_t side;
 };
 
-/// \return a copy of the tensor tree \p e with its indices replaced per \p map
-ExprPtr renamed(ExprPtr const& e, container::map<Index, Index> const& map) {
-  if (e->is<Tensor>()) {
-    auto result = e->clone();
-    auto& t = result->as<Tensor>();
-    // transform_indices skips tagged indices and tags the ones it replaces
-    t.reset_tags();
-    t.transform_indices(map);
-    t.reset_tags();
-    return result;
-  }
-  auto const& p = e->as<Product>();
-  Product result;
-  result.scale(p.scalar());
-  for (auto const& f : p.factors())
-    result.append(1, renamed(f, map), Product::Flatten::No);
-  return ex<Product>(std::move(result));
-}
-
 Sum::summands_type fuse(Sum::summands_type const& summands,
                         container::set<Index> const& outer);
 
@@ -327,13 +298,12 @@ ExprPtr fuse_group(Sum::summands_type const& summands,
   // a renamed X must not reuse an index of the shared factor or of the
   // external ones for its own dummies
   container::set<Index> taken = free_indices(summands[pos0]);
-  for_each_slot(*shared, [&](Index const& ix) { taken.insert(ix); });
+  taken.merge(get_used_indices(shared));
   taken.insert(outer.begin(), outer.end());
   // fresh indices avoid every index of the group and of the enclosing
   // expression
   container::set<Index> used = outer;
-  for (auto const& m : group)
-    for_each_slot(*summands[m.pos], [&](Index const& ix) { used.insert(ix); });
+  for (auto const& m : group) used.merge(get_used_indices(summands[m.pos]));
   IndexFactory fresh([&used](Index const& ix) { return !used.contains(ix); },
                      1);
 
@@ -350,16 +320,16 @@ ExprPtr fuse_group(Sum::summands_type const& summands,
       for (std::size_t i = 0; i < order.size(); ++i)
         if (order[i] != order0[i]) map.emplace(order[i], order0[i]);
       auto const external = free_indices(summands[m.pos]);
-      for_each_slot(*x0, [&](Index const& ix) {
+      for (auto const& ix : get_used_indices(x0)) {
         if (mapped.contains(ix) || external.contains(ix) ||
             !taken.contains(ix) || map.contains(ix))
-          return;
+          continue;
         auto const f = fresh.make(ix);
         used.insert(f);
         map.emplace(ix, f);
-      });
+      }
     }
-    auto x = renamed(x0, map);
+    auto x = transform_expr(x0, map);
     if (p.scalar() != 1) {
       if (x->is<Product>())
         x->as<Product>().scale(p.scalar());
@@ -370,13 +340,11 @@ ExprPtr fuse_group(Sum::summands_type const& summands,
   }
 
   auto sum = ex<Sum>(fuse(xs, taken), Sum::move_only_tag{});
-  auto result = ex<Product>();
-  result->as<Product>().append(1, shared->clone(), Product::Flatten::No);
   if (side0 == 0)
-    result->as<Product>().append(1, sum, Product::Flatten::No);
-  else
-    result->as<Product>().prepend(1, sum, Product::Flatten::No);
-  return result;
+    return ex<Product>(1, ExprPtrList{shared->clone(), sum},
+                       Product::Flatten::No);
+  return ex<Product>(1, ExprPtrList{sum, shared->clone()},
+                     Product::Flatten::No);
 }
 
 Sum::summands_type fuse(Sum::summands_type const& summands,

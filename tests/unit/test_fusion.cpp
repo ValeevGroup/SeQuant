@@ -62,11 +62,7 @@ namespace {
 sequant::ExprPtr binary(sequant::rational scalar, sequant::ExprPtr const& lhs,
                         sequant::ExprPtr const& rhs) {
   using namespace sequant;
-  auto result = ex<Product>();
-  result->as<Product>().scale(scalar);
-  result->as<Product>().append(1, lhs, Product::Flatten::No);
-  result->as<Product>().append(1, rhs, Product::Flatten::No);
-  return result;
+  return ex<Product>(scalar, ExprPtrList{lhs, rhs}, Product::Flatten::No);
 }
 
 /// \return whether \p lhs and \p rhs are equal once expanded and simplified
