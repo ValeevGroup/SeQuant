@@ -798,6 +798,51 @@ TEST_CASE("csv-pno-projection-kramers-block", "[mbpt][csv]") {
               .get() == out.get());
   }
 
+  SECTION(
+      "leg_basis under the integral basis: the caller's space, the "
+      "cell's instance") {
+    // a Kramers-flavoured internal leg: the pair's integral basis is a set of
+    // whole Kramers doublets, a projector only over both flavours, so the leg
+    // must move into the spin-free space, stamped with its cell's instance
+    const std::wstring flavoured =
+        L"-2 g{i_3,a↑_1<i↑_1,i↑_2>;a↑_3<i↑_2,i_3>,i↑_1}"
+        L" * t{a↑_3<i↑_2,i_3>,a_4<i↑_2,i_3>;i↑_2,i_3}"
+        L" * s{a↑_2<i↑_1,i↑_2>;a_4<i↑_2,i_3>}";
+    const ExprPtr input = deserialize(flavoured);
+    const IndexSpace spin_free = Index(L"a_1").space();
+    const IndexSpace up = Index(L"a↑_1").space();
+    REQUIRE(spin_free != up);
+    auto minted_legs = [](ExprPtr const& out) {
+      std::vector<Index> legs;
+      for (AbstractTensor const* g : tensors_labelled(out, L"g"))
+        for (Index const& idx : g->_slots())
+          if (idx.ordinal() >= Index::min_tmp_index()) legs.push_back(idx);
+      return legs;
+    };
+    // without leg_basis the leg keeps its own (flavoured) space, as before
+    {
+      const auto out = project(input, own_pair(ExchangeLinear));
+      const auto legs = minted_legs(out);
+      REQUIRE(legs.size() == 1);
+      CHECK(legs[0].space() == up);
+      CHECK(legs[0].basis().basis_instance() == test_csv::exchange);
+    }
+    {
+      auto opts = own_pair(ExchangeLinear);
+      // only the space of leg_basis counts under Integral: the instance is
+      // the cell's
+      opts.leg_basis = IndexBasis{spin_free, test_csv::pno_pert};
+      const auto out = project(input, opts);
+      const auto legs = minted_legs(out);
+      REQUIRE(legs.size() == 1);
+      CHECK(legs[0].space() == spin_free);
+      CHECK(legs[0].basis().basis_instance() == test_csv::exchange);
+      CHECK(overlaps(out) == overlaps(input) + 1);
+      // already on target: a second pass moves nothing
+      CHECK(mbpt::project_integral_domains(out, opts).get() == out.get());
+    }
+  }
+
   SECTION("leg_basis mints every moved leg in the caller's basis") {
     const ExprPtr input = deserialize(block);
     auto opts = amplitude(ExchangeLinear, true);

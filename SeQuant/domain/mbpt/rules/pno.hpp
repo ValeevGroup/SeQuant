@@ -91,12 +91,13 @@ struct ProjectionOptions {
   /// integral can fold into that pair's leaf; an approximation beyond the
   /// CSV truncation itself, exact at complete pair spaces. Off by default.
   bool move_externals = false;
-  /// under `Amplitude`, the basis every moved leg is minted in, instead of
-  /// the leg's own space and instance: a Kramers-restricted kit passes its
-  /// spin-free union expansion basis, so a flavoured leg moves into the
-  /// pair's whole PNS space (the pair vectors have support on both Kramers
-  /// flavours; the flavoured half alone is not a projector). Ignored under
-  /// `Integral`.
+  /// the basis every moved leg is minted in, instead of the leg's own space
+  /// and instance: a Kramers-restricted kit passes its spin-free union
+  /// expansion basis, so a flavoured leg moves into the pair's whole space
+  /// (a pair basis is a set of whole Kramers doublets, with support on both
+  /// flavours; its flavoured half alone is not a projector). Under
+  /// `Amplitude` the leg takes this basis as given; under `Integral` it
+  /// takes this basis's space and the instance of its cell.
   std::optional<IndexBasis> leg_basis = {};
 };
 

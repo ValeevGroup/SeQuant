@@ -146,10 +146,13 @@ ExprPtr projection_move_legs(ExprPtr const& node, projection_scope& scope) {
     auto it = scope.moved.find(x);
     const bool reuse = it != scope.moved.end() && on_target(it->second) &&
                        !scope.moved_here.contains(x);
+    // the caller's leg basis: as given under `Amplitude`; under `Integral`
+    // only its space, the instance is the cell's
     const IndexBasis minted_in =
-        opts.basis == ProjectionBasis::Amplitude && opts.leg_basis
+        !opts.leg_basis ? IndexBasis{x.space(), target_instance}
+        : opts.basis == ProjectionBasis::Amplitude
             ? *opts.leg_basis
-            : IndexBasis{x.space(), target_instance};
+            : IndexBasis{opts.leg_basis->space(), target_instance};
     const Index replacement =
         reuse ? it->second
               : Index::make_tmp_index(default_registry_resolved(minted_in),
