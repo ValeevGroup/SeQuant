@@ -6,6 +6,7 @@ add_executable(sequant_benchmarks
         "hash.cpp"
         "inputs.cpp"
         "main.cpp"
+        "nevpt2.cpp"
         "simplify.cpp"
         "spintrace.cpp"
         "tensor_block_compare.cpp"
@@ -34,6 +35,12 @@ target_compile_definitions(sequant_benchmarks
 # ought to be local to the individual translation unit. Hence, we must not combine
 # all of them into a single translation unit.
 set_target_properties(sequant_benchmarks PROPERTIES UNITY_BUILD OFF)
+
+# MR benchmark inputs are read from the examples of the external interface
+target_compile_definitions(sequant_benchmarks
+    PRIVATE
+        SEQUANT_BENCH_NEVPT2_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../utilities/external-interface/examples/nevpt2"
+)
 
 target_link_libraries(sequant_benchmarks
         PRIVATE

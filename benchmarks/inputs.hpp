@@ -7,6 +7,9 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <memory>
+#include <string>
+#include <vector>
 
 // Generators for realistic, large benchmark inputs. Everything is derived
 // in-place so that no equation files need to be checked in. Results are
@@ -55,6 +58,32 @@ const ExprPtr& unsimplified_cc_residual(std::size_t cc_rank,
 /// @note The returned expression is shared; clone before mutating it
 const ExprPtr& spinfree_cc_residual(std::size_t cc_rank,
                                     std::size_t projection);
+
+/// Multireference (NEVPT2) residuals, read from the equation files that the
+/// external interface examples ship with. They use core (i), active (u) and
+/// external (a) orbitals, hence tensors have mixed index spaces in bra and ket
+/// and are projected with partial or no antisymmetrizers.
+/// @note Constructing an object makes the context that the residuals require
+/// the default context of the calling thread until destruction
+class Nevpt2 {
+ public:
+  Nevpt2();
+  ~Nevpt2();
+  Nevpt2(const Nevpt2&) = delete;
+  Nevpt2& operator=(const Nevpt2&) = delete;
+
+  /// @returns the number of residuals
+  static std::size_t size();
+  /// @returns the name of the equation file of the @p i-th residual
+  static const std::string& name(std::size_t i);
+
+  /// @returns the @p i-th residual
+  const ExprPtr& residual(std::size_t i) const;
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+};
 
 /// Registers one benchmark argument pair (cc_rank, projection) for every
 /// residual of CC models of rank 1 to max_cc_rank. For use with
