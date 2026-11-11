@@ -4,6 +4,7 @@ add_executable(sequant_benchmarks
         "biorthogonalization.cpp"
         "canonicalize.cpp"
         "coupled_cluster.cpp"
+        "density_fitting.cpp"
         "export.cpp"
         "hash.cpp"
         "inputs.cpp"
