@@ -622,7 +622,15 @@ class GenerationOptimizer final : public Generator<MainContext> {
   }
 
   void optimize_operation_cache(const MainContext &) {
-    std::size_t erased = 0;
+    // Original (i.e. pre-erasure) positions of all erased operations (sorted)
+    container::svector<std::size_t> erased;
+
+    // Translates an original position into its current one
+    auto current_position = [&erased](std::size_t pos) {
+      auto it = std::ranges::lower_bound(erased, pos);
+      SEQUANT_ASSERT(it == erased.end() || *it != pos);
+      return pos - static_cast<std::size_t>(it - erased.begin());
+    };
 
     // Process paired operations that **might** be removed, provided we can (and
     // want to) reorder other operations to retain a consistent stack.
@@ -632,14 +640,13 @@ class GenerationOptimizer final : public Generator<MainContext> {
     // DOI: 10.1016/j.entcs.2007.02.063
     // In particular, this would almost certainly require explicit tracking of
     // the memory stack during the individual operations.
-    for (auto [first_idx, second_idx] : m_paired) {
-      // Account for previously erased pairs (this simple method only works in
-      // combination with the assumptions under which we are currently doing
-      // erasures - see below)
-      SEQUANT_ASSERT(first_idx >= erased);
-      SEQUANT_ASSERT(second_idx >= erased);
-      first_idx -= erased;
-      second_idx -= erased;
+    for (const auto &[first_pos, second_pos] : m_paired) {
+      // Account for previously erased operations. Note that pairs may cross
+      // (a < b < c < d for the pairs (a, c) and (b, d)) such that an erased
+      // pair can have one endpoint before and one endpoint after a later pair's
+      // endpoint.
+      const std::size_t first_idx = current_position(first_pos);
+      const std::size_t second_idx = current_position(second_pos);
 
       SEQUANT_ASSERT(first_idx < m_cache.size());
       SEQUANT_ASSERT(second_idx < m_cache.size());
@@ -695,7 +702,8 @@ class GenerationOptimizer final : public Generator<MainContext> {
                   m_cache.at(first_alloc_idx));
         m_cache.erase(m_cache.begin() + second_idx);
         m_cache.erase(m_cache.begin() + first_idx);
-        erased += 2;
+        erased.insert(std::ranges::lower_bound(erased, first_pos), first_pos);
+        erased.insert(std::ranges::lower_bound(erased, second_pos), second_pos);
         continue;
       }
 

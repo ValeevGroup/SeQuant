@@ -985,6 +985,34 @@ TEST_CASE("export-broadcast-sum", "[export]") {
   }
 }
 
+TEST_CASE("generation_optimizer with crossing unload/load pairs", "[export]") {
+  // The second term loads its operands in the opposite order of the first one,
+  // so that the pairs (Unload v2, Load v2) and (Unload v3, Load v3) cross.
+  GenerationOptimizer<TextGenerator<TextGeneratorContext>> generator{
+      TextGenerator<TextGeneratorContext>{}};
+  TextGeneratorContext ctx;
+
+  export_expression(
+      to_export_tree(deserialize<ResultExpr>(L"v1 = v3 v2 + v2 v3")), generator,
+      ctx);
+
+  REQUIRE_THAT(generator.get_generated_code(),
+               DiffedStringEquals("Declare variable v1\n"
+                                  "Declare variable v2\n"
+                                  "Declare variable v3\n"
+                                  "\n"
+                                  "Create v1 and initialize to zero\n"
+                                  "Load v2\n"
+                                  "Load v3\n"
+                                  "Compute v1 += v3 v2\n"
+                                  "Unload v3\n"
+                                  "Load v3\n"
+                                  "Compute v1 += v2 v3\n"
+                                  "Unload v3\n"
+                                  "Unload v2\n"
+                                  "Persist v1\n"));
+}
+
 TEST_CASE("ExportExpr", "[export]") {
   SECTION("id & equality") {
     Variable v(L"V");
