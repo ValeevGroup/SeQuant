@@ -182,9 +182,9 @@ EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
                    std::shared_ptr<bliss::Graph> connectivity)
     : op_type_{op},
       result_type_{res},
+      canon_phase_{p},
       expr_{ex.clone()},
       canon_indices_{std::move(ixs)},
-      canon_phase_{p},
       hash_value_{h},
       connectivity_{std::move(connectivity)} {
   if (connectivity_ != nullptr) {

@@ -524,11 +524,17 @@ class EvalExpr {
 
   ResultType result_type_;
 
+  std::int8_t canon_phase_{1};
+
+  /// See \c accumulate_in_place.
+  bool accumulate_in_place_ = false;
+
+  /// See \c is_equation_boundary.
+  bool equation_boundary_ = false;
+
   ExprPtr expr_;
 
   index_vector canon_indices_;
-
-  std::int8_t canon_phase_{1};
 
   size_t hash_value_;
 
@@ -591,12 +597,6 @@ class EvalExpr {
   /// \c occurrence_home, \c value_key, \c batch_effective_count and
   /// \c batch_order_aware.
   BatchInfoPtr batch_;
-
-  /// See \c accumulate_in_place.
-  bool accumulate_in_place_ = false;
-
-  /// See \c is_equation_boundary.
-  bool equation_boundary_ = false;
 };
 
 struct EvalOpSetter {

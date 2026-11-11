@@ -387,14 +387,14 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
         aux_(make_indices<aux_container_type>(aux_indices)),
-        symmetry_(rsym.symmetry),
-        braket_symmetry_(rsym.braket_symmetry),
-        hermiticity_(rsym.hermiticity),
-        column_symmetry_(rsym.column_symmetry),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
-            ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
+            ket_, [](const Index &idx) { return static_cast<bool>(idx); })),
+        symmetry_(rsym.symmetry),
+        braket_symmetry_(rsym.braket_symmetry),
+        hermiticity_(rsym.hermiticity),
+        column_symmetry_(rsym.column_symmetry) {
     validate_indices();
     check_symmetries(rsym.column_symmetry_specified, rsym.symmetry_specified);
     canonicalize_slots();
@@ -410,14 +410,14 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         bra_(std::move(bra_indices)),
         ket_(std::move(ket_indices)),
         aux_(std::move(aux_indices)),
-        symmetry_(rsym.symmetry),
-        braket_symmetry_(rsym.braket_symmetry),
-        hermiticity_(rsym.hermiticity),
-        column_symmetry_(rsym.column_symmetry),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
-            ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
+            ket_, [](const Index &idx) { return static_cast<bool>(idx); })),
+        symmetry_(rsym.symmetry),
+        braket_symmetry_(rsym.braket_symmetry),
+        hermiticity_(rsym.hermiticity),
+        column_symmetry_(rsym.column_symmetry) {
     validate_indices();
     check_symmetries(rsym.column_symmetry_specified, rsym.symmetry_specified);
     canonicalize_slots();
@@ -971,6 +971,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   sequant::bra<index_container_type> bra_{};
   sequant::ket<index_container_type> ket_{};
   sequant::aux<aux_container_type> aux_{};
+  mutable std::optional<hash_type>
+      bra_hash_value_;  // memoized byproduct of memoizing_hash()
+  std::uint32_t bra_net_rank_;
+  std::uint32_t ket_net_rank_;
   Symmetry symmetry_ = Symmetry::Nonsymm;
   BraKetSymmetry braket_symmetry_ = BraKetSymmetry::Nonsymm;
   // field-agnostic abstract trait; braket_symmetry_ is its resolution against
@@ -984,10 +988,6 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   // distinct canonicalization behavior yet); revisit if that changes.
   Hermiticity hermiticity_ = Hermiticity::NonHermitian;
   ColumnSymmetry column_symmetry_ = ColumnSymmetry::Nonsymm;
-  mutable std::optional<hash_type>
-      bra_hash_value_;  // memoized byproduct of memoizing_hash()
-  std::size_t bra_net_rank_;
-  std::size_t ket_net_rank_;
 
   /// @param column_symmetry_specified whether the column symmetry was spelled
   ///        out by the caller rather than defaulted; a *specified* value that

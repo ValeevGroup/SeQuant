@@ -354,8 +354,8 @@ class Product : public Expr {
               CanonicalizationMethod::Rapid)) override;
 
  private:
-  scalar_type scalar_ = {1, 0};
   factors_type factors_{};
+  scalar_type scalar_ = {1, 0};
 
   /// @return true if commutativity is decidable statically
   /// @sa CProduct::static_commutativity() and NCProduct::static_commutativity()
