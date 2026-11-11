@@ -2677,9 +2677,18 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   ctx.set(ibr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
-  auto const body =
-      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                                "/data/csv_ccsd_doubles_residual_df.txt");
+  // SEQUANT_UT_DRYRUN_PROJECTION=K: the residual with the exchange (ov|ov)
+  // integrals projected onto their own pair's integral basis (instance 1),
+  // as MPQC's `projection: {terms: K}` produces it (project_integral_domains
+  // runs before density fitting, so the projected residual is a fixture of
+  // its own rather than a rewrite of the density-fitted one).
+  bool const proj_K =
+      std::getenv("SEQUANT_UT_DRYRUN_PROJECTION") &&
+      std::string(std::getenv("SEQUANT_UT_DRYRUN_PROJECTION")) == "K";
+  auto const body = orderedexec_witness_slurp(
+      std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+      (proj_K ? "/data/csv_ccsd_doubles_residual_df_projK.txt"
+              : "/data/csv_ccsd_doubles_residual_df.txt"));
   REQUIRE(!body.empty());
   std::string firstline = body;
   if (auto nl = firstline.find('\n'); nl != std::string::npos)
@@ -2698,8 +2707,36 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   // SYSTEM selection (SEQUANT_UT_DRYRUN_SYSTEM = water20 [default] | c60).
   std::string system = "water20";
   if (char const* s = std::getenv("SEQUANT_UT_DRYRUN_SYSTEM")) system = s;
-  auto const regime = orderedexec_witness_df_regime(
+  auto regime = orderedexec_witness_df_regime(
       system == "c60" ? kOrderedExecC60_pVDZF12 : kOrderedExecWater20_pVDZF12);
+  if (proj_K) {
+    // exchange-integral basis of C60/cc-pVDZ-F12 at tpno 1e-5 (the amplitude
+    // basis is at 1e-7): measured stored-cell power means M_1..M_4 and
+    // occupancies; higher moments are not measured and repeat M_4.
+    REQUIRE(system == "c60");
+    using sequant::tests::csv_sizes::occupancy_adjusted_moments;
+    sequant::eval::dryrun::MomentTable osv{1.0,
+                                           44.741666666666667,
+                                           45.142828887875424,
+                                           45.54206015634395,
+                                           45.933500413264127,
+                                           45.933500413264127,
+                                           45.933500413264127,
+                                           45.933500413264127,
+                                           45.933500413264127};
+    sequant::eval::dryrun::MomentTable pno{1.0,
+                                           15.654885057471265,
+                                           22.016236171798617,
+                                           26.916523552841184,
+                                           30.643083300960047,
+                                           30.643083300960047,
+                                           30.643083300960047,
+                                           30.643083300960047,
+                                           30.643083300960047};
+    auto& t = regime.csv_moment_by_instance[{L"a", 1}];
+    t.osv = occupancy_adjusted_moments(osv, 1.0);
+    t.pno = occupancy_adjusted_moments(pno, 0.725);
+  }
   // The dry-run cost model carries the SAME roofline parameters the optimizer
   // ran with (opts.roofline above), so the sink's `exec` is the realized
   // roofline cost of the schedule (max(flops, beta*Q) per executed op at its
@@ -2775,7 +2812,12 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
   opts.batch_policy = policy;
-  opts.volatile_weight = 20.0;
+  // SEQUANT_UT_DRYRUN_VW overrides the volatile weight (default 20); a huge
+  // value makes the optimizer keep amplitude-independent work out of the
+  // per-iteration part at any cost.
+  opts.volatile_weight = std::getenv("SEQUANT_UT_DRYRUN_VW")
+                             ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_VW"))
+                             : 20.0;
   opts.roofline.machine_balance = 200.0;
   opts.roofline.fast_mem_elems = 1000000.0;
   opts.term_batch_axes = axes_map;
@@ -2791,7 +2833,8 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
     try {
       recorded = sequant::opt::schedule::record_root("R" + std::to_string(s),
                                                      term, opts);
-    } catch (std::exception const&) {
+    } catch (std::exception const& e) {
+      WARN("term " << s << " dropped: " << e.what());
       continue;
     }
     auto const& optimized = recorded.optimized;
