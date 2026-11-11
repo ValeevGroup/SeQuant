@@ -49,6 +49,10 @@ list is API-reference material (see :class:`sequant::OptimizeOptions`), but a fe
   ``BatchPolicy::is_volatile_leaf``) count more than ones whose results can be cached.
 - The optional ``roofline`` parameters make the performance cost account for data movement as well as arithmetic;
   see :ref:`cost-model-roofline`.
+- ``fuse = FuseSum::Fuse`` (off by default) fuses summands whose last contraction shares a factor, up to a renaming of
+  its summed indices: :math:`A B_1 + A B_2 \to A (B_1 + B_2)`, saving all but one of those contractions. The result's
+  summands are then products of the shared factor and a sum. Not supported with schedule pinning or recording, or with
+  ``term_batch_axes``; summands with proto indices (e.g. PNO) are left as they are.
 - Common-subexpression elimination during the contraction search (``CSEOptions::subnet``) is supported only by
   ``DenseFLOPs``; leave it disabled for ``DenseTimeSpace`` and ``DenseTimeSpaceBatched``. Enabling it with either
   trips an assertion, and where assertions are compiled out (``SEQUANT_ASSERT_BEHAVIOR=IGNORE``) CSE is silently

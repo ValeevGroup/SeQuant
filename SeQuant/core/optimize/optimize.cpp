@@ -8,6 +8,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/optimize/cost_model.hpp>
+#include <SeQuant/core/optimize/fusion.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/schedule_pin.hpp>
 #include <SeQuant/core/optimize/single_term.hpp>
@@ -341,6 +342,27 @@ void relocate_records(
   session.relocate(moves);
 }
 
+/// Binarizes each summand of \p sum, for opt::reorder.
+container::vector<FullBinaryNode<EvalExpr>> binarize_summands(Sum const& sum) {
+  container::vector<FullBinaryNode<EvalExpr>> nodes;
+  nodes.reserve(sum.size());
+  // per-summand binarize for ordering only; positional head doesn't escape.
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  for (auto const& s : sum.summands()) nodes.push_back(binarize(s));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  return nodes;
+}
+
+/// Throws if \p opts asks for fusion together with an option it does not
+/// support.
+void check_fuse_options(OptimizeOptions const& opts) {
+  if (opts.fuse == FuseSum::Fuse &&
+      (opts.pinned || opts.recording || opts.term_batch_axes))
+    throw Exception(
+        "optimize: fusing summands is not supported with schedule pinning or "
+        "recording, or with term_batch_axes");
+}
+
 /// Recursive workhorse. \p parallel_outer controls whether the (single)
 /// outermost Sum's summands are processed in parallel; nested recursive
 /// calls always run sequentially to avoid `sequant::for_each` oversubscription.
@@ -408,6 +430,15 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
 
     Sum new_sum(std::move(new_smands), Sum::move_only_tag{});
 
+    // Fusion: reorder the per-term summands first (cheap on single terms; a
+    // fused summand nests many terms), then fuse; each fused summand takes
+    // the place of its group's first member.
+    if (opts.fuse == FuseSum::Fuse) {
+      if (reorder) new_sum = opt::reorder(new_sum, binarize_summands(new_sum));
+      return ex<Sum>(opt::fuse_top_factors(new_sum.summands()),
+                     Sum::move_only_tag{});
+    }
+
     // Re-key the per-summand batch annotations onto the final reassembled Sum.
     // opt_pure_product keyed each summand's node_batch_axes (one entry per
     // contraction node, left-first post-order) by that optimized summand's
@@ -456,12 +487,7 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     // Binarize once per optimized summand and hand the nodes to reorder()
     // so they aren't re-built inside clusters(). NOTE: this runs sequentially
     // by design -- see invariant (2) above.
-    container::vector<FullBinaryNode<EvalExpr>> nodes;
-    nodes.reserve(new_sum.size());
-    // per-summand binarize for ordering only; positional head doesn't escape.
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    for (auto const& s : new_sum.summands()) nodes.push_back(binarize(s));
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    auto const nodes = binarize_summands(new_sum);
     // Same (new_sum, nodes) opt::reorder consumes, so the flattened cluster
     // order equals the final summand order the reordered Sum emits.
     auto const order = opt::clusters(new_sum, nodes);
@@ -478,12 +504,14 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
 }  // namespace
 
 ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts) {
+  check_fuse_options(opts);
   if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
   return optimize_impl(expr, opts, opts.reorder == ReorderSum::Reorder,
                        /*parallel_outer=*/true);
 }
 
 OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts) {
+  check_fuse_options(opts);
   if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
   OptimizeResult res;
   res.expr = optimize_impl(expr, opts, opts.reorder == ReorderSum::Reorder,

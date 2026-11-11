@@ -100,6 +100,11 @@ enum class ObjectiveFunction {
 /// closer to each other.
 enum class ReorderSum { Reorder, NoReorder };
 
+/// Whether to fuse summands that share a factor in their top-level
+/// contraction, A B_1 + A B_2 -> A (B_1 + B_2); see \ref
+/// opt::fuse_top_factors.
+enum class FuseSum { Fuse, NoFuse };
+
 /// Common-subexpression-elimination (CSE) options for single-term
 /// optimization. `subnet` recognizes equivalent subnetworks while searching for
 /// an evaluation order, trading extra search time for potentially lower op
@@ -230,6 +235,12 @@ struct OptimizeOptions {
   /// Whether to reorder summands so terms with shared intermediates appear
   /// closer to each other.
   ReorderSum reorder = ReorderSum::Reorder;
+
+  /// Whether to fuse summands that share a factor in their top-level
+  /// contraction (see \ref opt::fuse_top_factors). Off by default. Not
+  /// supported with schedule pinning or recording, or with \ref
+  /// term_batch_axes.
+  FuseSum fuse = FuseSum::NoFuse;
 
   /// Common-subexpression-elimination options. All disabled by default;
   /// enabling can reduce op counts at the cost of additional optimization time.

@@ -542,6 +542,37 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(*optimize(sum) == *reorder);
     }
 
+    SECTION("FuseSum") {
+      // the first two terms share t_{a1,a2}^{i3,i4} in their top contraction
+      // (the ladder intermediates differ); the third shares nothing with them
+      auto const sum = parse_expr_antisymm(
+          L"1/4 g_{i3,i4}^{i1,i2} t_{a1,a2}^{i3,i4}"
+          L" + 1/8 g_{i3,i4}^{a3,a4} t_{a3,a4}^{i1,i2} t_{a1,a2}^{i3,i4}"
+          L" + f_{a1}^{a3} t_{a3,a2}^{i1,i2}");
+      REQUIRE(sum->is<Sum>());
+
+      // off by default: one summand per term
+      auto const plain = optimize(sum);
+      REQUIRE(plain->as<Sum>().size() == 3);
+
+      auto const fused = optimize(
+          sum, OptimizeOptions{.fuse = FuseSum::Fuse, .inner_pow = {}});
+      REQUIRE(fused->is<Sum>());
+      REQUIRE(fused->as<Sum>().size() == 2);
+      auto diff =
+          ex<Sum>(ExprPtrList{fused->clone(), ex<Constant>(-1) * sum->clone()});
+      expand(diff);
+      simplify(diff);
+      REQUIRE(diff->is<Constant>());
+      REQUIRE(diff->as<Constant>().is_zero());
+
+      // not combinable with per-summand batch annotations
+      OptimizeOptions with_axes{.fuse = FuseSum::Fuse, .inner_pow = {}};
+      with_axes.term_batch_axes = std::make_shared<std::unordered_map<
+          Expr const*, container::vector<NodeBatchAnnotation>>>();
+      REQUIRE_THROWS_AS(optimize(sum, with_axes), Exception);
+    }
+
     SECTION("Parallel optimization of summands matches sequential") {
       // exercise optimize_impl(..., parallel_outer=true): a multi-summand sum
       // optimized concurrently must yield the same result as single-threaded.
