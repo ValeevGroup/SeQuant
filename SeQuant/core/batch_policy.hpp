@@ -4,6 +4,7 @@
 #include <SeQuant/core/utility/aggregate.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <limits>
 
@@ -22,7 +23,7 @@ class Tensor;
 ///     (`sequant::eval::evaluate_ordered_schedule`), so a value shared across
 ///     trees is built once per home block and reused, rather than rebuilt
 ///     per tree.
-enum class BatchScheduler { forest_descent, ordered };
+enum class BatchScheduler : std::uint8_t { forest_descent, ordered };
 
 /// One batchability policy shared by the single-term optimizer and the runtime
 /// batched evaluator (make_evaluator). All predicates default empty.

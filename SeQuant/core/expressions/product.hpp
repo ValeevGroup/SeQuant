@@ -11,6 +11,7 @@
 
 #include <range/v3/view/filter.hpp>
 
+#include <cstdint>
 #include <string>
 #include <type_traits>
 
@@ -27,7 +28,12 @@ namespace sequant {
 /// commutative and noncommutative Product, respectively)
 class Product : public Expr {
  public:
-  enum class Flatten { Once, Recursively, Yes = Recursively, No };
+  enum class Flatten : std::uint8_t {
+    Once,
+    Recursively,
+    Yes = Recursively,
+    No
+  };
 
   using scalar_type = Constant::scalar_type;
   using factors_type = container::svector<ExprPtr, 2>;

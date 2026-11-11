@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iterator>
 #include <memory>
@@ -30,7 +31,7 @@ class Tensor;
 ///
 /// \brief defines types of binary
 ///        operations that can be performed on two EvalExpr objects.
-enum class EvalOp {
+enum class EvalOp : std::uint8_t {
 
   ///
   /// \brief Represents the sum of two EvalExpr objects. Such as a tensor plus
@@ -90,7 +91,7 @@ enum class EvalOp {
 /// \details Represents the type of the result of @c EvalOp on two EvalExpr
 ///          objects (or, single EvalExpr object if `this->is_primary()`).
 ///
-enum class ResultType { Tensor, Scalar };
+enum class ResultType : std::uint8_t { Tensor, Scalar };
 
 struct EvalOpSetter;
 

@@ -5,10 +5,11 @@
 #include <SeQuant/core/utility/aggregate.hpp>
 
 #include <compare>
+#include <cstdint>
 
 namespace sequant {
 
-enum class TensorComparison {
+enum class TensorComparison : std::uint8_t {
   /// Tensors are compared including their specific index names
   Identity,
   /// Tensor indices are only compared by their index space

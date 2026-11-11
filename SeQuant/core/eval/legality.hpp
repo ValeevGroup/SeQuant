@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
@@ -35,7 +36,7 @@ namespace sequant::eval {
 /// \brief The role a batch-loop axis plays at one value (\c analyze_legality
 /// fills \c CellLegality::per_axis with these).
 ///
-enum class LoopRole {
+enum class LoopRole : std::uint8_t {
   LoopLocal,      //!< a carried axis some occurrence reads in lockstep, inside
                   //!< the loop instance that slices it: the value is built
                   //!< per batch there (and also escapes assembled when
@@ -52,7 +53,7 @@ enum class LoopRole {
 /// \brief How one occurrence of a value reads one of the value's batched
 /// positions.
 ///
-enum class OccurrenceRole {
+enum class OccurrenceRole : std::uint8_t {
   Lockstep,   //!< the loop instance that slices the position encloses the
               //!< occurrence: the reader takes the current batch
   Assembled,  //!< it does not: the reader needs the value assembled over the

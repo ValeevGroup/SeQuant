@@ -70,11 +70,11 @@ enum class ProjectionTerms : std::uint32_t {
 
 /// where a moved leg lands: its partner's pair (a basis stamp) or the
 /// integral's own pair, its two distinct occupied indices (PNO)
-enum class ProjectionDomain { PartnerPair, OwnPair };
+enum class ProjectionDomain : std::uint8_t { PartnerPair, OwnPair };
 
 /// the basis instance a moved leg takes: its partner's (the amplitude family)
 /// or the one ProjectionOptions::cell_instance names for the integral's cell
-enum class ProjectionBasis { Amplitude, Integral };
+enum class ProjectionBasis : std::uint8_t { Amplitude, Integral };
 
 struct ProjectionOptions {
   ProjectionTerms terms = ProjectionTerms::None;

@@ -8,6 +8,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -15,7 +16,7 @@
 namespace sequant {
 
 /// canonicalization methods
-enum class CanonicalizationMethod {
+enum class CanonicalizationMethod : std::uint8_t {
   /// Enables use of expression topology in the canonicalization, may be
   /// expensive.
   /// @note Canonicalization of tensor networks must take into account the
