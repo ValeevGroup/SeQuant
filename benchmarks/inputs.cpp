@@ -3,6 +3,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
@@ -39,6 +40,24 @@ const ExprPtr& unsimplified_cc_residual(std::size_t cc_rank,
     expr = mbpt::expand_antisymm(expr);
 
     it = cache.emplace(key, std::move(expr)).first;
+  }
+
+  return it->second;
+}
+
+const ExprPtr& spinfree_cc_residual(std::size_t cc_rank,
+                                    std::size_t projection) {
+  static std::map<std::pair<std::size_t, std::size_t>, ExprPtr> cache;
+
+  const auto key = std::make_pair(cc_rank, projection);
+  auto it = cache.find(key);
+  if (it == cache.end()) {
+    const ExprPtr& residual = cc_residual(cc_rank, projection);
+    it = cache
+             .emplace(key,
+                      mbpt::closed_shell_spintrace(
+                          residual->clone(), external_indices(residual->at(0))))
+             .first;
   }
 
   return it->second;

@@ -50,6 +50,12 @@ const ExprPtr& cc_residual(std::size_t cc_rank, std::size_t projection);
 const ExprPtr& unsimplified_cc_residual(std::size_t cc_rank,
                                         std::size_t projection);
 
+/// @returns the spin-free residual obtained by closed-shell spintracing of
+/// cc_residual with its external indices
+/// @note The returned expression is shared; clone before mutating it
+const ExprPtr& spinfree_cc_residual(std::size_t cc_rank,
+                                    std::size_t projection);
+
 /// Registers one benchmark argument pair (cc_rank, projection) for every
 /// residual of CC models of rank 1 to max_cc_rank. For use with
 /// `benchmark::Benchmark::Apply`.
