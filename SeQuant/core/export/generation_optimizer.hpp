@@ -2,6 +2,7 @@
 #define SEQUANT_CORE_EXPORT_GENERATIONOPTIMIZER_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/export/forwarding_generator.hpp>
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -22,8 +23,12 @@ namespace sequant {
 /// actions before passing them along to the wrapped generator for actual code
 /// generation.
 template <typename MainGenerator, typename MainContext = MainGenerator::Context>
-class GenerationOptimizer final : public Generator<MainContext> {
+class GenerationOptimizer final
+    : public ForwardingGenerator<MainGenerator, MainContext> {
  private:
+  using Base = ForwardingGenerator<MainGenerator, MainContext>;
+  using Base::m_generator;
+
   using Object = std::variant<Tensor, Variable>;
 
   enum class OperationType {
@@ -370,8 +375,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
       ComputeOperation, BroadcastAddOperation>;
 
  public:
-  GenerationOptimizer(MainGenerator generator)
-      : m_generator(std::move(generator)) {}
+  GenerationOptimizer(MainGenerator generator) : Base(std::move(generator)) {}
 
   std::string get_format_name() const override {
     return m_generator.get_format_name() + " (optimized)";
@@ -483,41 +487,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
     m_generator.begin_expression(ctx);
   }
 
-  /////////////////////////////////////////////////////////
-  /////////// Pass-through implementations ////////////////
-  /////////////////////////////////////////////////////////
-
-  // clang-format off
-  bool supports_named_sections() const override { return m_generator.supports_named_sections(); }
-  bool requires_named_sections() const override { return m_generator.requires_named_sections(); }
-  bool supports_index_batching() const override { return m_generator.supports_index_batching(); }
-  DeclarationScope index_declaration_scope() const override { return m_generator.index_declaration_scope(); }
-  DeclarationScope variable_declaration_scope() const override { return m_generator.variable_declaration_scope(); }
-  DeclarationScope tensor_declaration_scope() const override { return m_generator.tensor_declaration_scope(); }
-  PrunableScalars prunable_scalars() const override { return m_generator.prunable_scalars(); }
-  std::string represent(const Index &idx, const MainContext &ctx) const override { return m_generator.represent(idx, ctx); }
-  std::string represent(const Tensor &tensor, const MainContext &ctx) const override { return m_generator.represent(tensor, ctx); }
-  std::string represent(const Variable &variable, const MainContext &ctx) const override { return m_generator.represent(variable, ctx); }
-  std::string represent(const Constant &constant, const MainContext &ctx) const override { return m_generator.represent(constant, ctx); }
-  std::string represent(const Power &power, const MainContext &ctx) const override { return m_generator.represent(power, ctx); }
-  std::string represent(const TensorPower &power, const MainContext &ctx) const override { return m_generator.represent(power, ctx); }
-  void declare(const Index &idx, const MainContext &ctx)  override { m_generator.declare(idx, ctx); }
-  void declare(const Variable &variable, UsageSet usage, const MainContext &ctx)  override { m_generator.declare(variable, usage, ctx); }
-  void declare(const Tensor &tensor, UsageSet usage, const MainContext &ctx)  override { m_generator.declare(tensor, usage, ctx); }
-  void all_indices_declared(std::size_t amount, const MainContext &ctx)  override { m_generator.all_indices_declared(amount, ctx); }
-  void all_variables_declared(std::size_t amount, const MainContext &ctx)  override { m_generator.all_variables_declared(amount, ctx); }
-  void all_tensors_declared(std::size_t amount, const MainContext &ctx)  override { m_generator.all_tensors_declared(amount, ctx); }
-  void begin_declarations(DeclarationScope scope, const MainContext &ctx) override { m_generator.begin_declarations(scope, ctx); }
-  void end_declarations(DeclarationScope scope, const MainContext &ctx) override { m_generator.end_declarations(scope, ctx); }
-  void insert_comment(const std::string &comment, const MainContext &ctx) override { m_generator.insert_comment(comment, ctx); }
-  void begin_named_section(std::string_view name, const MainContext &ctx) override { m_generator.begin_named_section(name, ctx); }
-  void end_named_section(std::string_view name, const MainContext &ctx) override { m_generator.end_named_section(name, ctx); }
-  void begin_export(const MainContext &ctx) override { m_generator.begin_export(ctx); }
-  std::string get_generated_code() const override { return m_generator.get_generated_code(); }
-  // clang-format on
-
  private:
-  MainGenerator m_generator;
   container::svector<Operation> m_queue;
   container::svector<Operation> m_cache;
   container::svector<std::pair<std::size_t, std::size_t>> m_paired;
