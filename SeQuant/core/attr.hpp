@@ -8,6 +8,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <cassert>
+#include <cstdint>
 #include <cstdlib>
 #include <ostream>
 #include <string>
@@ -40,20 +41,20 @@ enum class Field { Real, Complex };
 // clang-format off
 /// describes supported symmetries of tensorial objects with respect to permutations of columns (in tensor notation), i.e., pairs of {bra[i],ket[i]} slots
 // clang-format on
-enum class ColumnSymmetry { Symm, Nonsymm };
+enum class ColumnSymmetry : std::uint8_t { Symm, Nonsymm };
 
 // clang-format off
 /// describes supported symmetries of bra or ket of _particle-symmetric_ tensorial objects
 /// @note bra or ket can be symmetric or antisymmetric only if the tensor is particle-symmetric, otherwise it does not make sense to permute indices corresponding to distinguishable particles
 // clang-format on
-enum class Symmetry { Symm, Antisymm, Nonsymm };
+enum class Symmetry : std::uint8_t { Symm, Antisymm, Nonsymm };
 
 /// describes supported symmetries of tensorial objects w.r.t. bra-ket exchange,
 /// i.e., the swap of bra slot bundle with ket slot bundle
 ///
 /// @note Currently there is no support for swapping bra index with the ket
 ///       index for a single particle, only whole bra-ket swaps are considered.
-enum class BraKetSymmetry { Symm, Conjugate, Nonsymm };
+enum class BraKetSymmetry : std::uint8_t { Symm, Conjugate, Nonsymm };
 
 /// describes the abstract symmetry of a tensorial object under (Hermitian)
 /// adjoint, i.e. whether the abstract tensor equals (`Hermitian`), equals minus
@@ -69,7 +70,11 @@ enum class BraKetSymmetry { Symm, Conjugate, Nonsymm };
 /// @note `AntiHermitian` cannot yet be represented in #BraKetSymmetry (which
 ///       lacks the antisymmetric cases) and therefore currently derives to
 ///       `Nonsymm`; the trait is recorded for forward compatibility.
-enum class Hermiticity { Hermitian, AntiHermitian, NonHermitian };
+enum class Hermiticity : std::uint8_t {
+  Hermitian,
+  AntiHermitian,
+  NonHermitian
+};
 
 /// @return the bra<->ket exchange symmetry implied by a tensor's @p hermiticity
 ///         (a field-agnostic abstract trait) over the scalar @p field
