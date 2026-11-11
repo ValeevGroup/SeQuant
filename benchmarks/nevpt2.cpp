@@ -3,6 +3,7 @@
 #include <benchmark/benchmark.h>
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
 
 #include <cstddef>
 
@@ -36,4 +37,7 @@ BENCHMARK_CAPTURE(nevpt2, canonicalize, [](ExprPtr &expr) {
 })->Apply(nevpt2_args);
 BENCHMARK_CAPTURE(nevpt2, simplify, [](ExprPtr &expr) {
   simplify(expr);
+})->Apply(nevpt2_args);
+BENCHMARK_CAPTURE(nevpt2, optimize, [](ExprPtr &expr) {
+  expr = optimize(expr);
 })->Apply(nevpt2_args);
