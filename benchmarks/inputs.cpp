@@ -4,6 +4,7 @@
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
@@ -67,6 +68,34 @@ const ExprPtr& spinfree_cc_residual(std::size_t cc_rank,
              .emplace(key,
                       mbpt::closed_shell_spintrace(
                           residual->clone(), external_indices(residual->at(0))))
+             .first;
+  }
+
+  return it->second;
+}
+
+const ResultExpr& biorthogonal_cc_result(std::size_t cc_rank,
+                                         std::size_t projection) {
+  static std::map<std::pair<std::size_t, std::size_t>, ResultExpr> cache;
+
+  const auto key = std::make_pair(cc_rank, projection);
+  auto it = cache.find(key);
+  if (it == cache.end()) {
+    ExprPtr residual = spinfree_cc_residual(cc_rank, projection)->clone();
+    const auto external = external_indices(residual->at(0));
+    ExprPtr expression =
+        mbpt::biorthogonal_transform_pre_nnsproject(residual, external);
+
+    container::svector<Index> bra, ket;
+    for (const auto& group : external) {
+      for (const auto& idx : group) {
+        (idx.slot_type() == SlotType::Bra ? bra : ket).push_back(idx.index());
+      }
+    }
+    it = cache
+             .emplace(key, ResultExpr(Tensor(L"R", sequant::bra(std::move(bra)),
+                                             sequant::ket(std::move(ket))),
+                                      std::move(expression)))
              .first;
   }
 

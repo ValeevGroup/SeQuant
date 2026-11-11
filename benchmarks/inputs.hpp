@@ -2,6 +2,7 @@
 #define SEQUANT_BENCHMARKS_INPUTS_HPP
 
 #include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 
 #include <benchmark/benchmark.h>
 
@@ -52,6 +53,13 @@ const ExprPtr& cc_residual(std::size_t cc_rank, std::size_t projection);
 /// @note The returned expression is shared; clone before mutating it
 const ExprPtr& unsimplified_cc_residual(std::size_t cc_rank,
                                         std::size_t projection);
+
+/// @returns the biorthogonalized spin-free residual (NNS projector factored
+/// out) as a result with the external indices of the residual. This is the
+/// form that is optimized and exported in practice
+/// @note The returned result is shared; clone before mutating it
+const ResultExpr& biorthogonal_cc_result(std::size_t cc_rank,
+                                         std::size_t projection);
 
 /// @returns the spin-free residual obtained by closed-shell spintracing of
 /// cc_residual with its external indices

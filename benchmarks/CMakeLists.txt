@@ -8,6 +8,7 @@ add_executable(sequant_benchmarks
         "inputs.cpp"
         "main.cpp"
         "nevpt2.cpp"
+        "optimize.cpp"
         "simplify.cpp"
         "spintrace.cpp"
         "tensor_block_compare.cpp"
