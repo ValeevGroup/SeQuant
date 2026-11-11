@@ -25,6 +25,7 @@
 struct OptSpec {
   std::string objective = "dense_flops";
   bool reorder = true, cse_subnet = false;
+  bool fuse = false;  ///< fuse summands sharing a top-level factor
   std::string volatile_leaf = "R";
   double volatile_weight = 10.0, machine_balance = 0.0, fast_mem_elems = 0.0;
 };

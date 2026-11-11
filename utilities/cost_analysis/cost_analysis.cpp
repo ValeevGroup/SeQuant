@@ -73,6 +73,7 @@ Config load_config(const json& d) {
     c.optimize.objective = o.value("objective", std::string("dense_flops"));
     c.optimize.reorder = o.value("reorder", true);
     c.optimize.cse_subnet = o.value("cse_subnet", false);
+    c.optimize.fuse = o.value("fuse", false);
     c.optimize.volatile_leaf = o.value("volatile_leaf", std::string("R"));
     c.optimize.volatile_weight = o.value("volatile_weight", 10.0);
     // A volatile-contraction weight is conceptually a replay count, so it must
@@ -238,6 +239,7 @@ OptimizeOptions make_opts(const Config& cfg) {
   o.reorder =
       cfg.optimize.reorder ? ReorderSum::Reorder : ReorderSum::NoReorder;
   o.CSE.subnet = cfg.optimize.cse_subnet;
+  o.fuse = cfg.optimize.fuse ? FuseSum::Fuse : FuseSum::NoFuse;
   // volatile leaf (label match), MPQC-style volatile weighting.
   if (!cfg.optimize.volatile_leaf.empty()) {
     const std::wstring vl = toUtf16(cfg.optimize.volatile_leaf);
@@ -284,8 +286,8 @@ EquationResult process(const Config& cfg, const ExprPtr& rhs,
     });
   };
 
-  auto handle = [&](const ExprPtr& summand) {
-    ExprPtr os = optimize(summand, opts);
+  // one optimized summand -> one tree
+  auto add_tree = [&](const ExprPtr& os) {
     auto tree = binarize<EvalExpr>(ResultExpr{head, os});
     scan(tree);
     // Peak working set = heaviest single-contraction over the schedule; report
@@ -295,8 +297,20 @@ EquationResult process(const Config& cfg, const ExprPtr& rhs,
     res.total_flops = res.total_flops + asy_cost(tree);
     res.trees.push_back(std::move(tree));
   };
+  auto handle = [&](const ExprPtr& summand) {
+    add_tree(optimize(summand, opts));
+  };
 
-  if (input->is<Sum>()) {
+  if (input->is<Sum>() && opts.fuse == FuseSum::Fuse) {
+    // fusion works across summands, so optimize the whole sum; each fused
+    // summand is then one tree
+    res.n_terms = input->as<Sum>().size();
+    const auto os = optimize(input, opts);
+    if (os->is<Sum>())
+      for (const auto& s : os->as<Sum>().summands()) add_tree(s);
+    else
+      add_tree(os);
+  } else if (input->is<Sum>()) {
     const auto& sum = input->as<Sum>();
     res.n_terms = sum.size();
     for (std::size_t i = 0; i < sum.size(); ++i) handle(sum.summand(i));

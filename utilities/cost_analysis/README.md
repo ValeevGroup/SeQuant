@@ -39,6 +39,7 @@ prints the absolute path so the output is easy to locate.
 | `sizes` | `<label>` | approximate size per index space, e.g. `{"i": 10, "a": 38}` | — |
 | `optimize` | `objective` | `dense_flops` / `dense_size` / `dense_peak_size` | `dense_flops` |
 | | `volatile_leaf` | amplitude label being solved (e.g. `t`, `R`); empty disables volatile weighting | `R` |
+| | `fuse` | fuse summands that share a factor in their top-level contraction, `A B_1 + A B_2 -> A (B_1 + B_2)` (`sequant::FuseSum`); the whole sum is then optimized at once, so `reorder` also applies across summands | `false` |
 | | `reorder`, `cse_subnet`, `volatile_weight`, `machine_balance`, `fast_mem_elems` | forwarded to `sequant::OptimizeOptions`\* | see `OptSpec` |
 | `cache` | `enabled` | run the cache-reuse simulation | `true` |
 | | `min_repeats` | reuse threshold to cache an intermediate | `2` |
