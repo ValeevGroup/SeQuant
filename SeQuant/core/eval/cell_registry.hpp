@@ -51,6 +51,13 @@ struct CellRegistryHooks {
   /// Must not throw: it is also called while cells are released, which
   /// happens during stack unwinding too.
   std::function<void(std::size_t live_bytes)> on_bytes_changed;
+  /// Accounting: invoked after a value is stored in a cell (\c set ), with
+  /// the cell and the value. May be empty.
+  std::function<void(CellId, ResultPtr const&)> on_set;
+  /// Accounting: invoked when a consumer's operand read is served from a
+  /// cell (\c CellReadResolver::fetch ), with the cell and the whole value
+  /// it holds, before any slicing. May be empty.
+  std::function<void(CellId, ResultPtr const&)> on_read;
   /// Whether a fill-once violation throws (see \c CellRegistry::set). The
   /// default is the process-wide env gate \c eval::strict_fill_once(), which
   /// is latched on its first call anywhere in the process -- so a test that
@@ -154,6 +161,13 @@ class CellRegistry {
     charge(s);
     if (cell.persistent && hooks_.persistent && hooks_.hash_of)
       hooks_.persistent->put(hooks_.hash_of(cell.value_id), s.value);
+    if (hooks_.on_set) hooks_.on_set(c, s.value);
+  }
+
+  /// Reports an operand read served from cell \p c to the accounting hook
+  /// (\c CellRegistryHooks::on_read ); \p whole is the value the cell held.
+  void note_read(CellId c, ResultPtr const& whole) const {
+    if (hooks_.on_read) hooks_.on_read(c, whole);
   }
 
   /// The cell's current result, or null if unset; never throws.
@@ -502,6 +516,7 @@ class CellReadResolver {
     bool const last =
         last_reads_ && read_at < last_reads_->size() && (*last_reads_)[read_at];
     ResultPtr v = last ? reg_->take(r.source) : reg_->read(r.source);
+    reg_->note_read(r.source, v);
     for (auto const& [pos, key] : r.slice) {
       std::optional<std::pair<std::size_t, std::size_t>> range;
       for (auto const& e : ctx)

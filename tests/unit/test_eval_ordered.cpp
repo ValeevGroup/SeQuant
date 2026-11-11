@@ -39,6 +39,7 @@
 #include <cstdlib>
 #include <functional>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -683,6 +684,150 @@ TEST_CASE("meter-counts-table-values-once", "[eval][ordered][meter]") {
   // still held by the registry when the sample is taken
   CHECK(n_checked > 0);
   CHECK(n_with_live_operand > 0);
+}
+
+TEST_CASE("disk-spill-metering", "[eval][ordered][meter][disk]") {
+  // A value the schedule can keep on disk (eval::disk_eligible_cells) and
+  // that is at least DiskSpill::min_bytes is charged as on disk: it is not
+  // part of the live working set while it sits idle, and a read of it is
+  // charged to the operation that reads it.
+  //
+  // In this unbatched fixture every value is one scalar at the root scope.
+  // Eligible: the shared value a*b, the other intermediates, and the
+  // non-volatile leaves. Not eligible: the volatile leaf a, and the two
+  // forest roots (nothing reads them).
+  ScalarNode const root1 = scalar_tree(L"((a * b) + c) * (a * b)");
+  ScalarNode const root2 = scalar_tree(L"(a * b) * d + (e * f)");
+  ScalarNode const shared = scalar_tree(L"a * b");
+  ScalarLeafEvaluator const yield{{{L"a", 2.0},
+                                   {L"b", -3.5},
+                                   {L"c", 7.25},
+                                   {L"d", 1.5},
+                                   {L"e", 2.0},
+                                   {L"f", 0.5}}};
+  std::function<bool(ScalarNode const&)> const is_volatile =
+      [](ScalarNode const& n) {
+        return n.leaf() && n->expr()->is<Variable>() &&
+               n->expr()->as<Variable>().label() == L"a";
+      };
+  sequant::BatchPolicy const policy;
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 1; };
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const&) -> std::size_t { return 1; };
+  svector<ScalarNode> const roots{root1, root2};
+  RichSchedule const rich = compute_dag_boulevard(roots, cm, block_of);
+  auto const legality = analyze_legality(rich, roots, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+
+  struct Sample {
+    std::size_t total, op_hash;
+    std::vector<sequant::eval::PeakLiveEntry> live;
+  };
+  struct Run {
+    std::vector<Sample> samples;
+    double value = 0;
+    std::size_t one = 0;
+    std::size_t peak() const {
+      std::size_t p = 0;
+      for (auto const& s : samples) p = std::max(p, s.total);
+      return p;
+    }
+  };
+  auto const run = [&](sequant::eval::DiskSpill* spill) {
+    Run r;
+    auto cache = sequant::CacheManager<ScalarNode>::empty();
+    sequant::eval::PeakMonitor mon;
+    mon.on_sample = [&](std::size_t total, std::size_t op_hash,
+                        std::vector<sequant::eval::PeakLiveEntry> const& live) {
+      r.samples.push_back({total, op_hash, live});
+    };
+    cache.set_peak_monitor(&mon);
+    cache.set_disk_spill(spill);
+    auto& logger = sequant::Logger::instance();
+    auto const prev_level = logger.eval.level;
+    auto* const prev_stream = logger.eval.stream;
+    std::ostringstream trace_os;
+    logger.eval.level = 1;
+    logger.eval.stream = &trace_os;
+    ResultPtr got;
+    try {
+      got = evaluate_ordered_schedule<sequant::Trace::On>(
+          roots, ordered, rich, ScalarEvalExpr::annot_t{}, yield, cache, target,
+          sequant::make_no_scope_guard{}, is_volatile);
+    } catch (...) {
+      logger.eval.level = prev_level;
+      logger.eval.stream = prev_stream;
+      throw;
+    }
+    logger.eval.level = prev_level;
+    logger.eval.stream = prev_stream;
+    r.value = got->as<ResultScalar<double>>().value();
+    r.one = got->size_in_bytes();
+    return r;
+  };
+
+  Run const plain = run(nullptr);
+  REQUIRE(plain.value == Catch::Approx(-11.25));
+  REQUIRE(plain.one > 0);
+  REQUIRE(!plain.samples.empty());
+
+  SECTION("a threshold above every value changes nothing") {
+    sequant::eval::DiskSpill spill;
+    spill.min_bytes = std::size_t{1} << 30;
+    Run const r = run(&spill);
+    CHECK(r.value == Catch::Approx(-11.25));
+    REQUIRE(r.samples.size() == plain.samples.size());
+    for (std::size_t i = 0; i < r.samples.size(); ++i) {
+      CHECK(r.samples[i].total == plain.samples[i].total);
+      CHECK(r.samples[i].live.size() == plain.samples[i].live.size());
+    }
+    CHECK(spill.n_writes == 0);
+    CHECK(spill.n_reads == 0);
+    CHECK(spill.bytes_written == 0);
+    CHECK(spill.peak_bytes_on_disk == 0);
+  }
+
+  SECTION("eligible values are charged as on disk") {
+    sequant::eval::DiskSpill spill;
+    spill.min_bytes = 1;
+    Run const r = run(&spill);
+    // the result is the same: nothing is evaluated differently
+    CHECK(r.value == Catch::Approx(-11.25));
+    REQUIRE(r.samples.size() == plain.samples.size());
+
+    // the only values that may be live are the ones that cannot go to disk:
+    // the forest roots, and the volatile leaf wherever it is held
+    std::set<std::size_t> const may_be_live{root1->hash_value(),
+                                            root2->hash_value(),
+                                            scalar_tree(L"a")->hash_value()};
+    bool only_ineligible_live = true;
+    for (auto const& s : r.samples)
+      for (auto const& e : s.live)
+        only_ineligible_live =
+            only_ineligible_live && may_be_live.contains(e.hash);
+    CHECK(only_ineligible_live);
+
+    // every sample still covers what is live, and no sample grew
+    for (std::size_t i = 0; i < r.samples.size(); ++i) {
+      std::size_t live_bytes = 0;
+      for (auto const& e : r.samples[i].live) live_bytes += e.bytes;
+      CHECK(r.samples[i].total >= live_bytes);
+      CHECK(r.samples[i].total <= plain.samples[i].total);
+    }
+    CHECK(r.peak() < plain.peak());
+
+    // accounting: the shared value alone is written once and read three
+    // times; each write and each read is of one scalar
+    CHECK(spill.n_writes >= 4);  // a*b, (a*b)+c, (a*b)*d, e*f at the least
+    CHECK(spill.bytes_written == spill.n_writes * r.one);
+    CHECK(spill.n_reads >= 3);
+    CHECK(spill.bytes_read == spill.n_reads * r.one);
+    CHECK(spill.peak_bytes_on_disk >= r.one);
+    CHECK(spill.peak_bytes_on_disk <= spill.bytes_written);
+  }
 }
 
 TEST_CASE("chain-holds-shared-persistent", "[eval][ordered]") {

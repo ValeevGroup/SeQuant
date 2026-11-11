@@ -1323,6 +1323,39 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // fill-once check (\c CellRegistry::set), not just \c CacheManager's --
   // deterministic regardless of when in the process this call happens.
   registry_hooks.strict_fill_once = cache.strict_fill_once();
+
+  // Disk-spill bookkeeping (see eval::DiskSpill): which cells the schedule
+  // can keep on disk, and -- once a cell holds a value -- whether that value
+  // is charged as on disk. Off (no cell qualifies) unless the caller wired a
+  // DiskSpill onto the cache.
+  DiskSpill* const disk_spill = cache.disk_spill();
+  container::vector<char> const disk_eligible =
+      disk_spill ? disk_eligible_cells(cell_table,
+                                       [&](std::size_t vid) {
+                                         auto const& nd = resolve(vid);
+                                         return nd.leaf() && is_volatile &&
+                                                is_volatile(nd);
+                                       })
+                 : container::vector<char>(cell_table.cells.size(), 0);
+  auto const on_disk = [disk_spill, &disk_eligible](CellId c,
+                                                    ResultPtr const& v) {
+    return disk_spill && v && disk_eligible[c] &&
+           v->size_in_bytes() >= disk_spill->min_bytes;
+  };
+  if (disk_spill) {
+    registry_hooks.on_set = [disk_spill, on_disk](CellId c,
+                                                  ResultPtr const& v) {
+      if (!on_disk(c, v)) return;
+      ++disk_spill->n_writes;
+      disk_spill->bytes_written += v->size_in_bytes();
+    };
+    registry_hooks.on_read = [disk_spill, on_disk](CellId c,
+                                                   ResultPtr const& v) {
+      if (!on_disk(c, v)) return;
+      ++disk_spill->n_reads;
+      disk_spill->bytes_read += v->size_in_bytes();
+    };
+  }
   CellRegistry registry(cell_table, std::move(registry_hooks));
   // Invariant: at most one persistent cell per value. The persistent store is
   // keyed by the value's canonical hash, so two persistent cells of one value
@@ -1427,24 +1460,42 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   auto const cell_hash = [&](CellId c) -> std::size_t {
     return rich.cells[cell_table.cells[c].value_id].hash;
   };
+  // A cell charged as on disk (see on_disk above) is left out of all three:
+  // it is not resident, so a read of it is charged to its consumer as an
+  // operand like any other buffer the registry does not hold.
   ExternalStore const registry_store{
-      .bytes = [&registry, &cache]() -> std::size_t {
-        std::size_t bytes = 0;
-        registry.for_each_live([&](CellId, ResultPtr const& v) {
-          if (!cache.chain_holds(v)) bytes += v->size_in_bytes();
+      .bytes = [&registry, &cache, on_disk, disk_spill]() -> std::size_t {
+        std::size_t bytes = 0, disk_bytes = 0;
+        registry.for_each_live([&](CellId c, ResultPtr const& v) {
+          if (on_disk(c, v))
+            disk_bytes += v->size_in_bytes();
+          else if (!cache.chain_holds(v))
+            bytes += v->size_in_bytes();
         });
+        if (disk_spill) {
+          disk_spill->bytes_on_disk = disk_bytes;
+          disk_spill->peak_bytes_on_disk =
+              std::max(disk_spill->peak_bytes_on_disk, disk_bytes);
+        }
         return bytes;
       },
       .for_each =
-          [&registry, &cache, cell_hash](
-              std::function<void(std::size_t, std::size_t)> const& emit) {
+          [&registry, &cache, cell_hash,
+           on_disk](std::function<void(std::size_t, std::size_t)> const& emit) {
             registry.for_each_live([&](CellId c, ResultPtr const& v) {
-              if (!cache.chain_holds(v)) emit(cell_hash(c), v->size_in_bytes());
+              if (!on_disk(c, v) && !cache.chain_holds(v))
+                emit(cell_hash(c), v->size_in_bytes());
             });
           },
-      .holds = [&registry](ResultPtr const& value) -> bool {
-        return registry.holds(value);
-      }};
+      .holds =
+          [&registry, on_disk, disk_spill](ResultPtr const& value) {
+            if (!disk_spill) return registry.holds(value);
+            bool held = false;
+            registry.for_each_live([&](CellId c, ResultPtr const& v) {
+              held = held || (v == value && !on_disk(c, v));
+            });
+            return held;
+          }};
   struct ExternalStoreGuard {
     CacheManager<N, FHC>& c;
     ExternalStore const* prev;

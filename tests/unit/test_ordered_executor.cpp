@@ -1628,6 +1628,67 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   in.operands_of = orderedexec_per_leg_operands(rich, vmap);
   auto const table = sequant::eval::build_cell_table(in);
 
+  // Disk eligibility (eval::disk_eligible_cells) on a batched table: only a
+  // whole, complete cell at the root scope that others read qualifies, never
+  // one assembled by summation and never an amplitude.
+  {
+    auto const eligible =
+        sequant::eval::disk_eligible_cells(table, [&](std::size_t vid) {
+          auto it = vmap.find(rich.cells[vid].hash);
+          return it != vmap.end() && it->second->leaf() &&
+                 (*it->second)->is_tensor() &&
+                 (*it->second)->as_tensor().label() == L"t";
+        });
+    REQUIRE(eligible.size() == table.cells.size());
+    std::vector<char> read(table.cells.size(), 0);
+    for (auto const& r : table.reads)
+      if (r.source != r.consumer) read[r.source] = 1;
+    std::size_t n_eligible = 0, n_leaf = 0, n_scatter = 0, n_build = 0;
+    std::size_t n_sum_at_root = 0, n_in_loops = 0;
+    bool all_whole_at_root = true, none_summed = true, all_read = true,
+         no_amplitude = true;
+    for (std::size_t c = 0; c < table.cells.size(); ++c) {
+      auto const& cell = table.cells[c];
+      using PK = sequant::eval::ProductionKind;
+      bool const summed =
+          cell.production.kind == PK::Assemble &&
+          cell.production.assemble == sequant::eval::AssembleKind::Sum;
+      if (!cell.scope.path.empty()) ++n_in_loops;
+      if (summed && cell.scope.path.empty()) ++n_sum_at_root;
+      if (!eligible[c]) continue;
+      ++n_eligible;
+      all_whole_at_root = all_whole_at_root && cell.scope.path.empty() &&
+                          cell.sliced.empty() && cell.partial_over.empty();
+      none_summed = none_summed && !summed;
+      all_read = all_read && read[c];
+      if (cell.production.kind == PK::Leaf) {
+        ++n_leaf;
+        auto it = vmap.find(rich.cells[cell.value_id].hash);
+        no_amplitude =
+            no_amplitude && !(it != vmap.end() && (*it->second)->is_tensor() &&
+                              (*it->second)->as_tensor().label() == L"t");
+      } else if (cell.production.kind == PK::Assemble)
+        ++n_scatter;
+      else
+        ++n_build;
+    }
+    CHECK(all_whole_at_root);
+    CHECK(none_summed);
+    CHECK(all_read);
+    CHECK(no_amplitude);
+    CHECK(n_eligible > 0);
+    CHECK(n_leaf > 0);
+    // the table does have cells the rule must turn away
+    CHECK(n_in_loops > 0);
+    CHECK(n_eligible < table.cells.size());
+    INFO("eligible " << n_eligible << " of " << table.cells.size()
+                     << " cells: leaf " << n_leaf << ", built " << n_build
+                     << ", scatter-assembled " << n_scatter
+                     << "; sum-assembled at root (not eligible) "
+                     << n_sum_at_root);
+    CHECK(true);
+  }
+
   // one Build cell per BuildStep, plus one implicit Build cell per output
   // entry (b, ovid) whose value has no BuildStep of its own in b and no
   // direct child block of b that already lists ovid among its own outputs
@@ -2879,8 +2940,12 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
     double exec = 0;        // realized roofline cost (sink.exec)
     std::size_t n_ops = 0;  // executed product ops (per-batch, sink.n_ops)
     std::size_t peak = 0;
+    sequant::eval::DiskSpill disk{};  // this run's disk accounting
   };
   Row f1, f2, o1, o2;
+  // SEQUANT_UT_DRYRUN_DISK_MIN_GB=<x>: charge disk-eligible values of at
+  // least x GB as kept on disk (eval::DiskSpill), ordered runs only.
+  char const* const disk_min_gb = std::getenv("SEQUANT_UT_DRYRUN_DISK_MIN_GB");
 
   // Optional peak-liveset dump (SEQUANT_UT_PEAK_LIVESET) of the ordered COLD
   // run: what set of co-resident values realizes the peak, labeled by node-kind
@@ -2937,6 +3002,11 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
         };
     cache.set_peak_monitor(&mon);
     auto run = [&](Row& r, sequant::eval::schedule::RunRecord* record) {
+      if (disk_min_gb) {
+        r.disk.min_bytes =
+            static_cast<std::size_t>(std::atof(disk_min_gb) * 1e9);
+        cache.set_disk_spill(&r.disk);
+      }
       double const f0 = sink.flops.load();
       double const e0 = sink.exec.load();
       std::size_t const n0 = sink.n_ops.load();
@@ -3185,6 +3255,20 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   if (ordered_ok) {
     pr(L"ordered iter1 (cold)", o1);
     pr(L"ordered iter2 (warm)", o2);
+    if (disk_min_gb) {
+      auto const prd = [](wchar_t const* tag, Row const& r) {
+        std::wcerr << L"  " << tag << L"  [disk >= "
+                   << double(r.disk.min_bytes) / 1e9 << L" GB]  resident_peak="
+                   << double(r.peak) / 1e9 << L" GB  disk_peak="
+                   << double(r.disk.peak_bytes_on_disk) / 1e9
+                   << L" GB  written=" << double(r.disk.bytes_written) / 1e9
+                   << L" GB in " << r.disk.n_writes << L"  read<="
+                   << double(r.disk.bytes_read) / 1e9 << L" GB in "
+                   << r.disk.n_reads << L"\n";
+      };
+      prd(L"ordered iter1 (cold)", o1);
+      prd(L"ordered iter2 (warm)", o2);
+    }
   } else {
     std::wcerr << L"  ordered: SCHEDULE BUILD FAILED for this batch mode "
                   L"(pre-existing build_ordered_schedule assert) -- forest "
