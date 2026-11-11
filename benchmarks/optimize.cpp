@@ -12,19 +12,24 @@
 using namespace sequant;
 
 // Contraction-order optimization of biorthogonal spin-free CC residuals
-static void optimize_cc_result(benchmark::State &state) {
+static void optimize_cc_result(benchmark::State &state,
+                               ObjectiveFunction objective) {
   const ResultExpr &input =
       bench::biorthogonal_cc_result(state.range(0), state.range(1));
 
   for (auto _ : state) {
     ResultExpr result = input.clone();
-    optimize(result);
+    optimize(result, {.objective_function = objective});
 
     benchmark::DoNotOptimize(result);
   }
 }
 
-BENCHMARK(optimize_cc_result)->Apply(bench::cc_residual_args);
+BENCHMARK_CAPTURE(optimize_cc_result, flops, ObjectiveFunction::DenseFLOPs)
+    ->Apply(bench::cc_residual_args);
+BENCHMARK_CAPTURE(optimize_cc_result, time_space,
+                  ObjectiveFunction::DenseTimeSpace)
+    ->Apply(bench::cc_residual_args);
 
 // Common subexpression elimination across all residuals of a CC model
 static void cse_cc_residuals(benchmark::State &state) {
