@@ -57,6 +57,14 @@ std::string format_power_exponent(const Power::exponent_type &exponent,
 ///         value is a non-integer or negative real
 std::string format_power_base(const ExprPtr &base, std::string base_str);
 
+/// @return a short human-readable description of @p tensor (label and index
+/// spaces) for use in diagnostics
+std::string describe(const Tensor &tensor);
+
+/// @return a short human-readable description of @p variable for use in
+/// diagnostics
+std::string describe(const Variable &variable);
+
 /// Formats a Power for export framework
 /// @param power the Power to format
 /// @param base_str the base of @p power already rendered to a string

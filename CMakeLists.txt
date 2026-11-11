@@ -601,6 +601,8 @@ set(SeQuant_export_src
         SeQuant/core/export/name_recycling.hpp
         SeQuant/core/export/reordering_context.cpp
         SeQuant/core/export/reordering_context.hpp
+        SeQuant/core/export/stack_checker.cpp
+        SeQuant/core/export/stack_checker.hpp
         SeQuant/core/export/text_generator.hpp
         SeQuant/core/export/utils.hpp
         SeQuant/core/export/utils.cpp

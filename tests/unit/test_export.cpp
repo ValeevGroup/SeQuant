@@ -15,6 +15,7 @@
 #include <SeQuant/core/export/name_recycling.hpp>
 #include <SeQuant/core/export/python_einsum.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
+#include <SeQuant/core/export/stack_checker.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/index_basis_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -395,7 +396,7 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
         current.filename().string() + " - " + CurrentGen{}.get_format_name();
 
     SECTION(section_name) {
-      CurrentGen generator;
+      StackCheckingGenerator<CurrentGen> generator{CurrentGen{}};
       CurrentCtx context;
 
       configure_context_defaults(context);
@@ -621,8 +622,9 @@ TEST_CASE("export", "[export]") {
   }
 
   SECTION("generation_optimizer") {
-    TextGenerator<TextGeneratorContext> textgen;
-    GenerationOptimizer<TextGenerator<TextGeneratorContext>> generator(textgen);
+    StackCheckingGenerator<TextGenerator<TextGeneratorContext>> textgen{
+        TextGenerator<TextGeneratorContext>{}};
+    GenerationOptimizer<decltype(textgen)> generator(textgen);
     TextGeneratorContext ctx;
 
     Variable v1{L"v1"};
@@ -974,7 +976,8 @@ TEST_CASE("export-broadcast-sum", "[export]") {
   }
 
   SECTION("GenerationOptimizer forwards the broadcast") {
-    GenerationOptimizer<TextGenerator<>> generator{TextGenerator<>{}};
+    GenerationOptimizer<StackCheckingGenerator<TextGenerator<>>> generator{
+        StackCheckingGenerator<TextGenerator<>>{TextGenerator<>{}}};
     TextGeneratorContext ctx;
 
     export_expression(to_export_tree(deserialize<ResultExpr>(expr)), generator,
@@ -988,8 +991,10 @@ TEST_CASE("export-broadcast-sum", "[export]") {
 TEST_CASE("generation_optimizer with crossing unload/load pairs", "[export]") {
   // The second term loads its operands in the opposite order of the first one,
   // so that the pairs (Unload v2, Load v2) and (Unload v3, Load v3) cross.
-  GenerationOptimizer<TextGenerator<TextGeneratorContext>> generator{
-      TextGenerator<TextGeneratorContext>{}};
+  GenerationOptimizer<
+      StackCheckingGenerator<TextGenerator<TextGeneratorContext>>>
+      generator{StackCheckingGenerator<TextGenerator<TextGeneratorContext>>{
+          TextGenerator<TextGeneratorContext>{}}};
   TextGeneratorContext ctx;
 
   export_expression(
@@ -1011,6 +1016,47 @@ TEST_CASE("generation_optimizer with crossing unload/load pairs", "[export]") {
                                   "Unload v3\n"
                                   "Unload v2\n"
                                   "Persist v1\n"));
+}
+
+TEST_CASE("StackCheckingGenerator", "[export]") {
+  const Variable a{L"a"};
+  const Variable b{L"b"};
+  const Tensor t{L"t", bra{L"i_1"}, ket{L"a_1"}};
+
+  SECTION("stack-like order") {
+    MemoryStack stack;
+    stack.allocate(a);
+    stack.allocate(t);
+    stack.allocate(b);
+    REQUIRE_NOTHROW(stack.release(b, "unload"));
+    REQUIRE_NOTHROW(stack.release(t, "unload"));
+    // Allocating again changes the order
+    stack.allocate(b);
+    REQUIRE_NOTHROW(stack.release(b, "unload"));
+    REQUIRE_NOTHROW(stack.release(a, "persist"));
+    REQUIRE_NOTHROW(stack.require_empty());
+  }
+
+  SECTION("violations") {
+    MemoryStack stack;
+    REQUIRE_THROWS_AS(stack.release(a, "unload"), Exception);
+
+    stack.allocate(a);
+    stack.allocate(b);
+    REQUIRE_THROWS_AS(stack.release(a, "unload"), Exception);
+    REQUIRE_THROWS_AS(stack.release(t, "unload"), Exception);
+    REQUIRE_THROWS_AS(stack.require_empty(), Exception);
+  }
+
+  SECTION("generator") {
+    StackCheckingGenerator<TextGenerator<TextGeneratorContext>> generator{
+        TextGenerator<TextGeneratorContext>{}};
+    TextGeneratorContext ctx;
+
+    generator.load(a, false, ctx);
+    generator.load(b, false, ctx);
+    REQUIRE_THROWS_AS(generator.unload(a, ctx), Exception);
+  }
 }
 
 TEST_CASE("ExportExpr", "[export]") {

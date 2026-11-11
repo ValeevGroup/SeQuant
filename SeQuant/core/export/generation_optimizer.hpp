@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/forwarding_generator.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
@@ -161,14 +162,9 @@ class GenerationOptimizer final
       str += " ";
 
       if (std::holds_alternative<Tensor>(m_object)) {
-        const Tensor &tensor = std::get<Tensor>(m_object);
-        str += toUtf8(tensor.label());
-        str += ":";
-        for (const Index &idx : tensor.indices()) {
-          str += toUtf8(idx.space().reduce_key(idx.label()));
-        }
+        str += detail::describe(std::get<Tensor>(m_object));
       } else {
-        str += toUtf8(std::get<Variable>(m_object).label());
+        str += detail::describe(std::get<Variable>(m_object));
       }
 
       return str;
