@@ -230,6 +230,20 @@ std::size_t nested_leaf_key(const AbstractTensor &tensor) {
   return key;
 }
 
+/// @return a key of @p value that is the same on every platform
+/// @note unlike Constant::hash_value(), which hashes the limbs of the
+/// multiprecision numbers and thus depends on the platform's limb size, this
+/// hashes their decimal representation; the key determines the color of a
+/// tensor group and thereby the canonical form
+std::size_t portable_scalar_key(const Constant::scalar_type &value) {
+  std::size_t key = 0;
+  for (const auto &part : {value.real(), value.imag()}) {
+    hash::combine(key, numerator(part).str());
+    hash::combine(key, denominator(part).str());
+  }
+  return key;
+}
+
 /// @return a key of the nested product @p product (see
 /// Product::collect_nested_tensor_leaves()) that depends neither on the
 /// indices nor on the order of its factors
@@ -242,12 +256,14 @@ std::size_t nested_product_key(const Product &product) {
       keys.push_back(nested_leaf_key(factor.as<AbstractTensor>()));
     else if (factor.is<Product>())
       keys.push_back(nested_product_key(factor.as<Product>()));
+    else if (factor.is<Constant>())
+      keys.push_back(portable_scalar_key(factor.as<Constant>().value()));
     else
       keys.push_back(factor->hash_value());
   }
   std::ranges::sort(keys);
   auto key = hash::range(keys.begin(), keys.end());
-  hash::combine(key, Constant(product.scalar()).hash_value());
+  hash::combine(key, portable_scalar_key(product.scalar()));
   return key;
 }
 
