@@ -72,16 +72,19 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
       return ex<Product>(
           1,
           ExprPtrList{ex<Tensor>(coeff_tensor_label,                 //
-                                 bra({bra_idx}), ket({dummy_idx})),  //
+                                 bra({bra_idx}), ket({dummy_idx}),  //
+                                 Symmetry::Nonsymm, Hermiticity::Hermitian),
                       ex<Tensor>(coeff_tensor_label,                 //
-                                 bra({dummy_idx}), ket({ket_idx}))});
+                                 bra({dummy_idx}), ket({ket_idx}),  //
+                                 Symmetry::Nonsymm, Hermiticity::Hermitian)});
     } else if ((bra_has_proto_indices ? ket_idx : bra_idx).basis() ==
                csv_basis) {
       // the other leg is in the target basis
       return ex<Product>(
           1,
           ExprPtrList{ex<Tensor>(coeff_tensor_label,  //
-                                 bra({bra_idx}), ket({ket_idx}))});
+                                 bra({bra_idx}), ket({ket_idx}),  //
+                                 Symmetry::Nonsymm, Hermiticity::Hermitian)});
     }
   }
 
@@ -94,7 +97,8 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
       require_in_basis_space(idx);
       Index xidx = Index::make_tmp_index(csv_basis);
       result.append(
-          1, ex<Tensor>(coeff_tensor_label, bra({idx}), ket({xidx}), aux({})));
+          1, ex<Tensor>(coeff_tensor_label, bra({idx}), ket({xidx}), aux({}),
+                        Symmetry::Nonsymm, Hermiticity::Hermitian));
       rbra.emplace_back(std::move(xidx));
     } else
       rbra.emplace_back(idx);
@@ -106,7 +110,8 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
       require_in_basis_space(idx);
       Index xidx = Index::make_tmp_index(csv_basis);
       result.append(
-          1, ex<Tensor>(coeff_tensor_label, bra({xidx}), ket({idx}), aux({})));
+          1, ex<Tensor>(coeff_tensor_label, bra({xidx}), ket({idx}), aux({}),
+                        Symmetry::Nonsymm, Hermiticity::Hermitian));
       rket.emplace_back(std::move(xidx));
     } else
       rket.emplace_back(idx);
