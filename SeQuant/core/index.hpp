@@ -106,7 +106,8 @@ class Index : public Taggable {
       std::numeric_limits<ordinal_type>::max();
 
   static ordinal_type pack_ordinal(std::optional<ordinal_type> ordinal) {
-    SEQUANT_ASSERT(!ordinal || *ordinal != no_ordinal);
+    SEQUANT_ENFORCE(!ordinal || *ordinal != no_ordinal,
+                    "Index: ordinal collides with the reserved value");
     return ordinal ? *ordinal : no_ordinal;
   }
 
@@ -1045,7 +1046,7 @@ class Index : public Taggable {
 
   /// @param interned_basis a basis returned by intern()
   Index(const IndexBasis *interned_basis, std::optional<ordinal_type> ordinal,
-        IndexFactoryTag) noexcept
+        IndexFactoryTag)
       : basis_(interned_basis),
         ordinal_(pack_ordinal(ordinal)),
         proto_indices_() {}
