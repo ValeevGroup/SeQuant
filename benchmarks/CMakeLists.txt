@@ -3,6 +3,7 @@ include(FindOrFetchGoogleBenchmark)
 add_executable(sequant_benchmarks
         "canonicalize.cpp"
         "coupled_cluster.cpp"
+        "inputs.cpp"
         "main.cpp"
         "simplify.cpp"
         "spintrace.cpp"
@@ -24,6 +25,7 @@ set_target_properties(sequant_benchmarks PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_compile_definitions(sequant_benchmarks
     PRIVATE
         $<$<OR:$<CONFIG:Debug>,$<BOOL:${SEQUANT_QUICK_BENCHMARKS}>>:SEQUANT_BENCH_MAX_CC_RANK=3>
+        $<$<OR:$<CONFIG:Debug>,$<BOOL:${SEQUANT_QUICK_BENCHMARKS}>>:SEQUANT_BENCH_MAX_DOWNSTREAM_CC_RANK=2>
         $<$<OR:$<CONFIG:Debug>,$<BOOL:${SEQUANT_QUICK_BENCHMARKS}>>:SEQUANT_BENCH_MAX_WICK_INPUTS=2>
 )
 
