@@ -23,6 +23,7 @@
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -100,6 +101,17 @@ class Index : public Taggable {
   const static IndexSpace::Attr default_space_attr;
 
  private:
+  /// the value of ordinal_ for an Index without an ordinal
+  static constexpr ordinal_type no_ordinal =
+      std::numeric_limits<ordinal_type>::max();
+
+  static ordinal_type pack_ordinal(std::optional<ordinal_type> ordinal) {
+    SEQUANT_ASSERT(!ordinal || *ordinal != no_ordinal);
+    return ordinal ? *ordinal : no_ordinal;
+  }
+
+  bool has_ordinal() const noexcept { return ordinal_ != no_ordinal; }
+
   static auto &tmp_index_accessor() {
     // initialized so that the first call to next_tmp_index will return
     // min_tmp_index()
@@ -168,7 +180,7 @@ class Index : public Taggable {
     idx.symmetric_proto_indices_ = true;
     // moving std::optional surprisingly leaves a nonnull std::optional in its
     // wake
-    idx.ordinal_ = std::nullopt;
+    idx.ordinal_ = no_ordinal;
   }
 
   /// copy assignment
@@ -199,7 +211,7 @@ class Index : public Taggable {
     idx.symmetric_proto_indices_ = true;
     // moving std::optional surprisingly leaves a nonnull std::optional in its
     // wake
-    idx.ordinal_ = std::nullopt;
+    idx.ordinal_ = no_ordinal;
     return *this;
   }
 
@@ -216,7 +228,7 @@ class Index : public Taggable {
   /// @param basis the IndexBasis
   /// @param ord the index ordinal
   Index(const IndexBasis &basis, meta::integral auto ord)
-      : basis_(&intern(basis)), ordinal_(to_ordinal(ord)) {
+      : basis_(&intern(basis)), ordinal_(pack_ordinal(to_ordinal(ord))) {
     check_nonreserved();
   }
 
@@ -224,7 +236,7 @@ class Index : public Taggable {
   /// @param ord the index ordinal
   template <meta::integral I>
   Index(const IndexBasis &basis, std::optional<I> ord)
-      : basis_(&intern(basis)), ordinal_(ord) {
+      : basis_(&intern(basis)), ordinal_(pack_ordinal(ord)) {
     check_nonreserved();
   }
 
@@ -434,7 +446,7 @@ class Index : public Taggable {
       rebase(std::move(space));
     } else {
       basis_ = &intern(IndexBasis(std::move(space)));
-      ordinal_ = to_ordinal(index_or_index_label);
+      ordinal_ = pack_ordinal(to_ordinal(index_or_index_label));
       check_nonreserved();
     }
   }
@@ -586,16 +598,18 @@ class Index : public Taggable {
     auto &label = label_cache().label;
     if (!label) {
       label = basis_->base_key();
-      if (ordinal_) {
+      if (has_ordinal()) {
         *label += L'_';
-        *label += std::to_wstring(*ordinal_);
+        *label += std::to_wstring(ordinal_);
       }
     }
     return *label;
   }
 
   /// @return the ordinal
-  std::optional<ordinal_type> ordinal() const noexcept { return ordinal_; }
+  std::optional<ordinal_type> ordinal() const noexcept {
+    return has_ordinal() ? std::optional<ordinal_type>(ordinal_) : std::nullopt;
+  }
 
   /// @return A string label representable in ASCII encoding
   /// @warning not to be used with proto indices
@@ -760,7 +774,7 @@ class Index : public Taggable {
   Index drop_proto_indices() const noexcept {
     // the factory-tag constructor skips the reserved-ordinal check, which a
     // temporary index would trip
-    return Index(basis_, ordinal_, IndexFactoryTag{});
+    return Index(basis_, ordinal(), IndexFactoryTag{});
   }
 
   std::wstring to_latex() const noexcept;
@@ -947,7 +961,9 @@ class Index : public Taggable {
  private:
   /// points to an interned basis (see intern()), hence never null
   const IndexBasis *basis_ = &null_basis();
-  std::optional<ordinal_type> ordinal_;
+  /// stored unpacked, with no_ordinal for none, to leave room for the bool
+  /// below in what would be the padding of a std::optional
+  ordinal_type ordinal_ = no_ordinal;
   // an unordered set of unique indices on which this index depends on
   // whether proto_indices_ is symmetric w.r.t. permutations; if true,
   // proto_indices_ will be ordered
@@ -978,7 +994,7 @@ class Index : public Taggable {
   /// throws std::invalid_argument if the ordinal is among reserved for
   /// generated Index objects
   inline void check_nonreserved() const {
-    if (ordinal_ && *ordinal_ >= min_tmp_index()) {
+    if (has_ordinal() && ordinal_ >= min_tmp_index()) {
       throw Exception(
           "Index ctor: ordinal must be less than the value returned by "
           "min_tmp_index()");
@@ -1030,7 +1046,9 @@ class Index : public Taggable {
   /// @param interned_basis a basis returned by intern()
   Index(const IndexBasis *interned_basis, std::optional<ordinal_type> ordinal,
         IndexFactoryTag) noexcept
-      : basis_(interned_basis), ordinal_(ordinal), proto_indices_() {}
+      : basis_(interned_basis),
+        ordinal_(pack_ordinal(ordinal)),
+        proto_indices_() {}
 
   /// @return true if @c index1 is identical to @c index2 , i.e. they belong to
   /// the same space, they have the same label, the same proto-indices (if
@@ -1039,7 +1057,7 @@ class Index : public Taggable {
     return (i1.basis_ == i2.basis_ || i1.basis() == i2.basis()) &&
            (i1.space().attr() != default_space_attr ||
             i1.space().base_key() == i2.space().base_key()) &&
-           i1.ordinal() == i2.ordinal() &&
+           i1.ordinal_ == i2.ordinal_ &&
            i1.proto_indices() == i2.proto_indices();
   }
 
@@ -1064,7 +1082,7 @@ class Index : public Taggable {
       const auto cmp_space = i1.space() <=> i2.space();
       if (cmp_space != SO::equal) return cmp_space;
       if (i1.ordinal_ != i2.ordinal_) {
-        return i1.ordinal_ < i2.ordinal_ ? SO::less : SO::greater;
+        return i1.ordinal() < i2.ordinal() ? SO::less : SO::greater;
       } else if (i1.proto_indices() == i2.proto_indices())
         return i1.basis_ == i2.basis_ ? SO::equal : *i1.basis_ <=> *i2.basis_;
       else

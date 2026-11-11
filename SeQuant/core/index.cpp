@@ -30,10 +30,9 @@ std::wstring Index::to_latex() const noexcept {
     protos += L"}";
   }
   std::wstring sfx;
-  if (ordinal_)
-    sfx =
-        std::format(L"_{}", *ordinal_ < 10 ? std::to_wstring(*ordinal_)
-                                           : std::format(L"{{{}}}", *ordinal_));
+  if (has_ordinal())
+    sfx = std::format(L"_{}", ordinal_ < 10 ? std::to_wstring(ordinal_)
+                                            : std::format(L"{{{}}}", ordinal_));
   return std::format(L"{{{}{}{}}}",
                      io::latex::utf_to_string(basis_->base_key()), sfx, protos);
 }
