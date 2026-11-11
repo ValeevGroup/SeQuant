@@ -1346,8 +1346,14 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     // A value that qualifies is stored in its on-disk form, if its backend
     // has one (Result::on_disk); otherwise it stays in memory and is only
     // charged as on disk.
-    registry_hooks.stored_form = [on_disk](CellId c, ResultPtr v) {
-      if (!on_disk(c, v) || v->is_on_disk()) return v;
+    // The size that decides is the measured one: size_in_bytes() may be
+    // switched off (0) while no trace is printed, and what goes to disk must
+    // not depend on tracing.
+    registry_hooks.stored_form = [disk_spill, &disk_eligible](CellId c,
+                                                              ResultPtr v) {
+      if (!v || !disk_eligible[c] || v->is_on_disk() ||
+          v->measured_size_in_bytes() < disk_spill->min_bytes)
+        return v;
       ResultPtr disk = v->on_disk();
       return disk ? disk : v;
     };

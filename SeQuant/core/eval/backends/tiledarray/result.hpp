@@ -12,6 +12,7 @@
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 
+#include <TiledArray/disk/disk_array.h>
 #include <TiledArray/einsum/tiledarray.h>
 #include <tiledarray.h>
 
@@ -924,6 +925,10 @@ mode_batches_of_trange1(TA::TiledRange1 const& tr1,
   return batches;
 }
 
+/// \brief The on-disk form of a TiledArray result (see \c Result::on_disk ).
+template <typename InMemoryResult, typename ArrayT>
+class ResultOnDiskTA;
+
 ///
 /// \brief Result for a tensor value of TA::DistArray type.
 /// \tparam ArrayT TA::DistArray type. Tile type of ArrayT is regular tensor of
@@ -1135,6 +1140,17 @@ class ResultTensorTA final : public Result {
     ::sequant::detail::wait_for_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
+  }
+
+  /// This value on disk: written tile by tile from the expression of the
+  /// value (a pending view is applied on the way, not materialized first).
+  [[nodiscard]] ResultPtr on_disk() const override {
+    using disk_array_type = TA::DiskArray<typename ArrayT::value_type,
+                                          typename ArrayT::policy_type>;
+    auto const ann = dummy_annot();
+    disk_array_type d;
+    with_expr(ann, [&](auto&& e) { d(ann) = e; });
+    return eval_result<ResultOnDiskTA<this_type, ArrayT>>(std::move(d), ann);
   }
 
   /// A batch slice is a pending view: the tile block of logical \p mode that
@@ -1710,6 +1726,20 @@ class ResultTensorOfTensorTA final : public Result {
     return eval_result<this_type>(std::move(result));
   }
 
+  /// This value on disk (see ResultTensorTA::on_disk). An array whose inner
+  /// tiles are all empty has no inner rank to annotate with: it stays in
+  /// memory (null), where it costs nothing.
+  [[nodiscard]] ResultPtr on_disk() const override {
+    using disk_array_type = TA::DiskArray<typename ArrayT::value_type,
+                                          typename ArrayT::policy_type>;
+    auto const inner = inner_rank();
+    if (inner == 0) return nullptr;
+    auto const ann = dummy_annot(inner);
+    disk_array_type d;
+    with_expr(ann, [&](auto&& e) { d(ann) = e; });
+    return eval_result<ResultOnDiskTA<this_type, ArrayT>>(std::move(d), ann);
+  }
+
   /// A batch slice is a pending view: the tile block of outer \p mode that
   /// covers `[elem_lo, elem_hi)` (tile-aligned, see slice_bounds_to_tiles),
   /// intersected with the block this result already is. No tile is copied.
@@ -2052,6 +2082,136 @@ class ResultTensorOfTensorTA final : public Result {
         (has_value() || parent_.is_unique()) ? std::size_t{0} : 1};
     v.world().gop.sum(buf.data(), 2);
     return buf[1] ? 0 : buf[0];
+  }
+};
+
+/// \brief The on-disk form of a TiledArray result: the value held in a
+///        TA::DiskArray, whose tiles live in scratch files and are read when
+///        needed.
+///
+/// It is for storage (see \c Result::on_disk ): \c in_memory() loads the
+/// value, \c slice_mode() loads one tile block of it, and
+/// \c write_into_slice() writes a block of it; every other operation throws.
+/// A slice, like the whole value, comes back as an ordinary in-memory result.
+///
+/// \tparam InMemoryResult the in-memory result class of the value (\c
+///         ResultTensorTA or \c ResultTensorOfTensorTA )
+/// \tparam ArrayT that class's array type
+template <typename InMemoryResult, typename ArrayT>
+class ResultOnDiskTA final : public Result {
+ public:
+  using disk_array_type =
+      TA::DiskArray<typename ArrayT::value_type, typename ArrayT::policy_type>;
+
+  /// \param arr the value, on disk
+  /// \param annot an annotation of \p arr 's modes (nested for a tensor of
+  ///        tensors), used for every expression on it
+  ResultOnDiskTA(disk_array_type arr, std::string annot)
+      : Result{std::move(arr)}, annot_(std::move(annot)) {}
+
+  [[nodiscard]] bool is_on_disk() const noexcept override { return true; }
+
+  [[nodiscard]] ResultPtr in_memory() const override {
+    auto const& d = get<disk_array_type>();
+    ArrayT out;
+    out(annot_) = d(annot_);
+    ::sequant::detail::wait_for_lazy_cleanup(out);
+    return eval_result<InMemoryResult>(std::move(out));
+  }
+
+  /// Loads the tile block of \p mode covering elements
+  /// [\p elem_lo, \p elem_hi); only the block's tiles are read.
+  [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
+                                     std::size_t elem_hi) const override {
+    auto const& d = get<disk_array_type>();
+    auto const [lo, hi] = block_of(d, mode, elem_lo, elem_hi);
+    ArrayT out;
+    out(annot_) = d(annot_).block(lo, hi, TA::preserve_lobound);
+    ::sequant::detail::wait_for_lazy_cleanup(out);
+    return eval_result<InMemoryResult>(std::move(out));
+  }
+
+  /// Writes \p block , an in-memory result, to the tile block of \p mode
+  /// covering elements [\p block_lo, \p block_hi). The tiles of the block
+  /// are replaced; the rest of the value is not touched.
+  void write_into_slice(Result const& block, std::size_t mode,
+                        std::size_t block_lo, std::size_t block_hi) override {
+    SEQUANT_ASSERT(block.is<InMemoryResult>());
+    auto& d = get<disk_array_type>();
+    auto const [lo, hi] = block_of(d, mode, block_lo, block_hi);
+    auto const& b = block.as<InMemoryResult>();
+    // an all-empty nested block stands for zero and has no inner rank to
+    // annotate: writing it would change nothing
+    if constexpr (requires { b.inner_rank(); })
+      if (b.inner_rank() == 0) return;
+    b.with_expr(annot_, [&](auto&& be) {
+      d(annot_).block(lo, hi, TA::preserve_lobound) = be;
+    });
+    ::sequant::detail::wait_for_lazy_cleanup(d);
+  }
+
+  /// the bytes of the value on disk, summed over all processes (collective)
+  [[nodiscard]] std::size_t size_in_bytes() const override {
+    auto const& d = get<disk_array_type>();
+    std::size_t bytes = 0;
+    for (auto it = d.pmap()->begin(); it != d.pmap()->end(); ++it)
+      if (!d.is_zero(*it)) bytes += d.find_local(*it).get().serialized_size();
+    d.world().gop.sum(bytes);
+    return bytes;
+  }
+
+  /// A copy shares the value on disk, which is never modified in place.
+  [[nodiscard]] ResultPtr clone() const override {
+    return eval_result<ResultOnDiskTA>(get<disk_array_type>(), annot_);
+  }
+
+  [[nodiscard]] ResultPtr sum(Result const&,
+                              std::array<std::any, 3> const&) const override {
+    throw detail::unimplemented_method("sum (on-disk result)");
+  }
+  [[nodiscard]] ResultPtr prod(Result const&, std::array<std::any, 3> const&,
+                               DeNest) const override {
+    throw detail::unimplemented_method("prod (on-disk result)");
+  }
+  [[nodiscard]] ResultPtr permute(
+      std::array<std::any, 2> const&) const override {
+    throw detail::unimplemented_method("permute (on-disk result)");
+  }
+  void add_inplace(Result const&) override {
+    throw detail::unimplemented_method("add_inplace (on-disk result)");
+  }
+  [[nodiscard]] ResultPtr symmetrize() const override {
+    throw detail::unimplemented_method("symmetrize (on-disk result)");
+  }
+  [[nodiscard]] ResultPtr antisymmetrize(std::size_t) const override {
+    throw detail::unimplemented_method("antisymmetrize (on-disk result)");
+  }
+  [[nodiscard]] ResultPtr mult_by_phase(std::int8_t) const override {
+    throw detail::unimplemented_method("mult_by_phase (on-disk result)");
+  }
+
+ private:
+  std::string annot_;
+
+  [[nodiscard]] id_t type_id() const noexcept override {
+    return id_for_type<ResultOnDiskTA>();
+  }
+
+  /// the tile bounds of the block of \p mode covering elements [lo, hi)
+  static std::pair<container::svector<std::size_t>,
+                   container::svector<std::size_t>>
+  block_of(disk_array_type const& d, std::size_t mode, std::size_t elem_lo,
+           std::size_t elem_hi) {
+    auto const rank = d.trange().rank();
+    SEQUANT_ASSERT(mode < rank);
+    auto const [tile_lo, tile_hi] =
+        detail::slice_bounds_to_tiles(d.trange().dim(mode), elem_lo, elem_hi);
+    container::svector<std::size_t> lo(rank, 0), hi(rank);
+    for (std::size_t r = 0; r < rank; ++r)
+      hi[r] = d.trange().dim(r).tile_extent();
+    lo[mode] = tile_lo;
+    hi[mode] = tile_hi;
+    return {lo, hi};
   }
 };
 
