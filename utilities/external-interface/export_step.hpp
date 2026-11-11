@@ -54,6 +54,7 @@ class ExportStep : public ProcessingStep {
 
   std::string language_;
   bool optimize_ = true;
+  bool check_stack_order_ = false;
   std::filesystem::path filepath_;
   std::map<std::string, std::string, std::less<>> group_assoc_;
   meta_type meta_;

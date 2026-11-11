@@ -460,6 +460,11 @@ given, they are merged and jointly ordered before being exported together.
      - Whether to run a further optimization pass (eliminating redundant operations) over the intermediate representation before generating code.
      - true
      - No
+   * - :code:`check_stack_order`
+     - Whether to verify that the generated memory operations (create, load, unload, destroy, persist) obey a stack-like order, as required by the
+       target language (and throw an error if they do not). The check is applied to the final operations, after :code:`optimize`.
+     - false
+     - No
    * - :code:`grouping`
      - Object mapping a group name to an input id/alias, or to an array of them. All entries belonging to any of these ids/aliases are exported as part
        of the named group. An id/alias must not be associated with more than one group. Any entry not matched by any of these rules is put into an
