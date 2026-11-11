@@ -11,6 +11,7 @@ add_executable(sequant_benchmarks
         "main.cpp"
         "nevpt2.cpp"
         "optimize.cpp"
+        "rdm.cpp"
         "simplify.cpp"
         "spintrace.cpp"
         "tensor_block_compare.cpp"
