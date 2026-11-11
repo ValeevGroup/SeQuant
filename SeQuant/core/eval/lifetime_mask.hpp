@@ -179,7 +179,7 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
 /// Idempotent; a no-op on the off path: with no \c node_slice_mask() stamps
 /// every occurrence set is empty, so every meet is empty and every mask is
 /// all-full
-/// (\c EvalExpr::sliced_modes_ is default-empty), leaving runtime behavior
+/// (\c EvalExpr::sliced_modes() is default-empty), leaving runtime behavior
 /// unchanged.
 template <meta::eval_node_range R>
 void stamp_lifetime_masks(R const& forest) {

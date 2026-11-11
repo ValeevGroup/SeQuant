@@ -287,6 +287,11 @@ std::string EvalExpr::label() const noexcept {
 
 std::int8_t EvalExpr::canon_phase() const noexcept { return canon_phase_; }
 
+const EvalBatchInfo& EvalExpr::batch_info() const noexcept {
+  static const EvalBatchInfo defaults;
+  return batch_.get() ? *batch_.get() : defaults;
+}
+
 bool EvalExpr::has_connectivity_graph() const noexcept {
   return connectivity_ != nullptr;
 }

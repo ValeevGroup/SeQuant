@@ -16,9 +16,11 @@
 #include <algorithm>
 #include <cstddef>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <span>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 namespace sequant {
@@ -91,6 +93,24 @@ enum class EvalOp {
 enum class ResultType { Tensor, Scalar };
 
 struct EvalOpSetter;
+
+/// Per-node batching state of an EvalExpr. Almost all nodes carry none of
+/// it, hence EvalExpr stores it out of line and only on demand. The inline
+/// capacities cover the typical number of batched indices per node.
+struct EvalBatchInfo {
+  static constexpr std::size_t inline_capacity = 4;
+  using mode_vector =
+      container::svector<std::pair<Index, BatchModeType>, inline_capacity>;
+  using index_vector = container::svector<Index, inline_capacity>;
+
+  mode_vector node_slice_mask{};
+  mode_vector batch_loops_opened_here{};
+  index_vector sliced_modes{};
+  index_vector occurrence_home{};
+  std::size_t value_key = 0;
+  std::size_t batch_effective_count = 1;
+  bool batch_order_aware = false;
+};
 
 ///
 /// \brief The EvalExpr is a building block of binary trees used to evaluate
@@ -324,15 +344,15 @@ class EvalExpr {
   ///
   [[nodiscard]] container::svector_base<std::pair<Index, BatchModeType>> const&
   node_slice_mask() const noexcept {
-    return node_slice_mask_;
+    return batch_info().node_slice_mask;
   }
 
   ///
   /// \brief Sets the batch modes for this node; see \c node_slice_mask.
   ///
   void set_node_slice_mask(
-      container::svector<std::pair<Index, BatchModeType>> modes) noexcept {
-    node_slice_mask_ = std::move(modes);
+      container::svector<std::pair<Index, BatchModeType>> modes) {
+    assign_batch_field(&EvalBatchInfo::node_slice_mask, std::move(modes));
   }
 
   ///
@@ -349,7 +369,7 @@ class EvalExpr {
   ///
   [[nodiscard]] container::svector_base<std::pair<Index, BatchModeType>> const&
   batch_loops_opened_here() const noexcept {
-    return batch_loops_opened_here_;
+    return batch_info().batch_loops_opened_here;
   }
 
   ///
@@ -357,8 +377,9 @@ class EvalExpr {
   /// \c batch_loops_opened_here.
   ///
   void set_batch_loops_opened_here(
-      container::svector<std::pair<Index, BatchModeType>> modes) noexcept {
-    batch_loops_opened_here_ = std::move(modes);
+      container::svector<std::pair<Index, BatchModeType>> modes) {
+    assign_batch_field(&EvalBatchInfo::batch_loops_opened_here,
+                       std::move(modes));
   }
 
   ///
@@ -370,14 +391,14 @@ class EvalExpr {
   ///
   [[nodiscard]] container::svector_base<Index> const& sliced_modes()
       const noexcept {
-    return sliced_modes_;
+    return batch_info().sliced_modes;
   }
 
   ///
   /// \brief Sets the cross-occurrence sliced-mode mask; see \c sliced_modes.
   ///
-  void set_sliced_modes(container::svector<Index> m) noexcept {
-    sliced_modes_ = std::move(m);
+  void set_sliced_modes(container::svector<Index> m) {
+    assign_batch_field(&EvalBatchInfo::sliced_modes, std::move(m));
   }
 
   ///
@@ -385,7 +406,7 @@ class EvalExpr {
   /// block-agnostic). Equivalent to \c sliced_modes().empty().
   ///
   [[nodiscard]] bool mask_all_full() const noexcept {
-    return sliced_modes_.empty();
+    return sliced_modes().empty();
   }
 
   ///
@@ -399,12 +420,12 @@ class EvalExpr {
   ///
   [[nodiscard]] container::svector_base<Index> const& occurrence_home()
       const noexcept {
-    return occurrence_home_;
+    return batch_info().occurrence_home;
   }
 
   /// \brief Sets this occurrence's home; see \c occurrence_home.
-  void set_occurrence_home(container::svector<Index> m) noexcept {
-    occurrence_home_ = std::move(m);
+  void set_occurrence_home(container::svector<Index> m) {
+    assign_batch_field(&EvalBatchInfo::occurrence_home, std::move(m));
   }
 
   ///
@@ -414,10 +435,14 @@ class EvalExpr {
   /// are numbered; 0 = not stamped (\c value_key_of then falls back to the
   /// structural key).
   ///
-  [[nodiscard]] std::size_t value_key() const noexcept { return value_key_; }
+  [[nodiscard]] std::size_t value_key() const noexcept {
+    return batch_info().value_key;
+  }
 
   /// \brief Sets this occurrence's value key; see \c value_key.
-  void set_value_key(std::size_t k) noexcept { value_key_ = k; }
+  void set_value_key(std::size_t k) {
+    assign_batch_field(&EvalBatchInfo::value_key, k);
+  }
 
   ///
   /// \brief Whether this \c Sum node's result should be accumulated in place
@@ -466,7 +491,7 @@ class EvalExpr {
   /// \c NodeBatchAnnotation::effective_count.
   ///
   [[nodiscard]] std::size_t batch_effective_count() const noexcept {
-    return batch_effective_count_;
+    return batch_info().batch_effective_count;
   }
 
   ///
@@ -476,19 +501,21 @@ class EvalExpr {
   /// \c NodeBatchAnnotation::order_aware.
   ///
   [[nodiscard]] bool batch_order_aware() const noexcept {
-    return batch_order_aware_;
+    return batch_info().batch_order_aware;
   }
 
   ///
   /// \brief Sets the order-aware placement gate; see \c batch_order_aware.
   ///
-  void set_batch_order_aware(bool v) noexcept { batch_order_aware_ = v; }
+  void set_batch_order_aware(bool v) {
+    assign_batch_field(&EvalBatchInfo::batch_order_aware, v);
+  }
 
   ///
   /// \brief Sets the effective use count; see \c batch_effective_count.
   ///
-  void set_batch_effective_count(std::size_t count) noexcept {
-    batch_effective_count_ = count;
+  void set_batch_effective_count(std::size_t count) {
+    assign_batch_field(&EvalBatchInfo::batch_effective_count, count);
   }
 
  protected:
@@ -506,23 +533,63 @@ class EvalExpr {
 
   std::shared_ptr<bliss::Graph> connectivity_;
 
-  /// See \c node_slice_mask.
-  container::svector<std::pair<Index, BatchModeType>, 2> node_slice_mask_{};
+  /// Copyable owner of the lazily allocated EvalBatchInfo; null while all
+  /// batching state has its default value.
+  class BatchInfoPtr {
+   public:
+    BatchInfoPtr() = default;
+    BatchInfoPtr(const BatchInfoPtr& other)
+        : ptr_(other.ptr_ ? std::make_unique<EvalBatchInfo>(*other.ptr_)
+                          : nullptr) {}
+    BatchInfoPtr(BatchInfoPtr&&) noexcept = default;
+    BatchInfoPtr& operator=(const BatchInfoPtr& other) {
+      if (this != &other) {
+        ptr_ =
+            other.ptr_ ? std::make_unique<EvalBatchInfo>(*other.ptr_) : nullptr;
+      }
+      return *this;
+    }
+    BatchInfoPtr& operator=(BatchInfoPtr&&) noexcept = default;
 
-  /// See \c batch_loops_opened_here.
-  container::svector<std::pair<Index, BatchModeType>, 2>
-      batch_loops_opened_here_{};
+    const EvalBatchInfo* get() const noexcept { return ptr_.get(); }
+    EvalBatchInfo& get_or_create() {
+      if (!ptr_) ptr_ = std::make_unique<EvalBatchInfo>();
+      return *ptr_;
+    }
 
-  /// See \c sliced_modes.
-  container::svector<Index, 2> sliced_modes_{};
-  container::svector<Index, 2> occurrence_home_{};
-  std::size_t value_key_ = 0;
+   private:
+    std::unique_ptr<EvalBatchInfo> ptr_;
+  };
 
-  /// See \c batch_order_aware.
-  bool batch_order_aware_ = false;
+  /// @return the batching state, or its defaults if none was ever set
+  const EvalBatchInfo& batch_info() const noexcept;
 
-  /// See \c batch_effective_count.
-  std::size_t batch_effective_count_ = 1;
+  /// Moves the elements of @p values into the container @p field; the
+  /// batching state is allocated only if @p values is non-empty (the default
+  /// is empty).
+  template <typename Container, typename Values>
+    requires(!std::is_arithmetic_v<Container>)
+  void assign_batch_field(Container EvalBatchInfo::*field, Values&& values) {
+    if (values.empty() && !batch_.get()) return;
+    (batch_.get_or_create().*field)
+        .assign(std::make_move_iterator(values.begin()),
+                std::make_move_iterator(values.end()));
+  }
+
+  /// Sets the scalar @p field to @p value; the batching state is allocated only
+  /// if @p value differs from the default.
+  template <typename T>
+  void assign_batch_field(T EvalBatchInfo::*field, T value)
+    requires std::is_arithmetic_v<T>
+  {
+    if (!batch_.get() && value == batch_info().*field) return;
+    batch_.get_or_create().*field = value;
+  }
+
+  /// See \c node_slice_mask, \c batch_loops_opened_here, \c sliced_modes,
+  /// \c occurrence_home, \c value_key, \c batch_effective_count and
+  /// \c batch_order_aware.
+  BatchInfoPtr batch_;
 
   /// See \c accumulate_in_place.
   bool accumulate_in_place_ = false;
