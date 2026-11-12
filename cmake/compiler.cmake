@@ -32,6 +32,8 @@ function(target_set_compiler_flags TARGET)
         target_compile_options("${TARGET}" PRIVATE "/bigobj")
         # Make MSVC use and understand UTF-8 encoding in source files
         target_compile_options("${TARGET}" PUBLIC "/utf-8")
+        # Exported (dllexport/dllimport) classes may have members/bases of non-exported types (e.g. from the STL)
+        target_compile_options("${TARGET}" PUBLIC "/wd4251" "/wd4275")
 
         # Increase the available stack memory to what appears to be the default on Linux/macOS (8MB)
         target_link_options("${TARGET}" PRIVATE "/STACK:8388608")
