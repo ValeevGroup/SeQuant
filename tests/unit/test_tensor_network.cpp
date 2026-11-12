@@ -372,6 +372,7 @@ sequant::ExprPtr to_product(const Container& container) {
 }
 
 namespace sequant {
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
 class TensorNetworkV3Accessor {
  public:
   auto get_canonical_bliss_graph(
@@ -387,6 +388,7 @@ class TensorNetworkV3Accessor {
     return std::make_pair(std::move(graph.bliss_graph), graph.vertex_labels);
   }
 };
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 }  // namespace sequant
 
 TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
@@ -397,6 +399,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
   namespace o = sequant::mbpt::op;
   using TN = TensorNetworkV3;
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
   SECTION("Edges") {
     using Vertex = TN::Vertex;
     using Edge = TN::Edge;
@@ -474,6 +477,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       REQUIRE(e1 < e2);
     }
   }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
   SECTION("constructors") {
     {  // with Tensors
@@ -730,6 +734,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       }
     }
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
     SECTION("particle-1,2-symmetry") {
       const std::vector<std::pair<std::wstring, std::wstring>> pairs = {
           {L"Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_2}:N * "
@@ -784,6 +789,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         }
       }
     }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
     SECTION("miscellaneous") {
       const std::vector<std::pair<std::wstring, std::wstring>> inputs = {
@@ -886,6 +892,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
     }
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
     SECTION("Exhaustive SRCC example") {
       // Note: the exact canonical form written here is implementation-defined
       // and doesn't actually matter What does, is that all equivalent ways of
@@ -1018,6 +1025,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       // 4! (tensors) * 4! (internal indices) * 4! (external indices)
       REQUIRE(total_variations == 24 * 24 * 24);
     }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 #endif
 
     SECTION("idempotency") {

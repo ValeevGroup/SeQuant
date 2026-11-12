@@ -2601,7 +2601,8 @@ TEST_CASE("ordered-cache-halt", "[ordered][cache-halt]") {
 // schedule, and `run` is what the ordered COLD iteration measured. Render it
 // with `sequant-schedule view <path>`.
 // ===========================================================================
-TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
+TEST_CASE("dryrun-2iter-report", "[internal][dryrun-2iter-report]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -3195,6 +3196,7 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   CHECK(f2.builds <= f1.builds);
   if (ordered_ok) CHECK(o2.builds <= o1.builds);
 }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 #ifndef SEQUANT_SKIP_LONG_TESTS

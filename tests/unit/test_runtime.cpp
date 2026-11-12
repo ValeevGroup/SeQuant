@@ -880,7 +880,8 @@ TEST_CASE("scoped_canonicalize_options", "[runtime]") {
 // a pin scopes a copy of the contexts in effect, with their versions, that a
 // change of the process-wide contexts made meanwhile does not reach; under a
 // scoped context it installs nothing
-TEST_CASE("pin_default_contexts", "[runtime]") {
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
+TEST_CASE("pin_default_contexts", "[internal][runtime]") {
   using namespace sequant;
   using Contexts = container::map<Statistics, Context>;
   REQUIRE(detail::implicit_context_overlay<Contexts>() == nullptr);
@@ -906,3 +907,4 @@ TEST_CASE("pin_default_contexts", "[runtime]") {
   set_default_context(restored);
   CHECK(current_contexts_version() == version);
 }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS

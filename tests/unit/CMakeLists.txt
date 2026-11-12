@@ -27,8 +27,10 @@ set(symb_test_sources
     "test_tensor_network.cpp"
     "test_utilities.cpp"
     "test_wick.cpp"
-    "test_wick_extended.cpp"
 )
+if (NOT BUILD_SHARED_LIBS)  # tests non-exported internals (see SEQUANT_UNIT_TESTS_INTERNALS below)
+    list(APPEND symb_test_sources "test_wick_extended.cpp")
+endif()
 
 add_library(unit_tests-sequant-symb-obj OBJECT ${symb_test_sources})
 target_set_compiler_flags(unit_tests-sequant-symb-obj)
@@ -69,10 +71,12 @@ target_compile_definitions(unit_tests-sequant-eval-obj PRIVATE
 ##########################
 set(optimize_test_sources
     "test_extract_subtrees.cpp"
-    "test_fusion.cpp"
     "test_name_recycling.cpp"
     "test_optimize.cpp"
 )
+if (NOT BUILD_SHARED_LIBS)  # tests non-exported internals (see SEQUANT_UNIT_TESTS_INTERNALS below)
+    list(APPEND optimize_test_sources "test_fusion.cpp")
+endif()
 add_library(unit_tests-sequant-optimize-obj OBJECT ${optimize_test_sources})
 target_set_compiler_flags(unit_tests-sequant-optimize-obj)
 target_set_optimization_flags(unit_tests-sequant-optimize-obj)
@@ -212,9 +216,11 @@ set(eval_dryrun_test_sources
     "test_ordered_random.cpp"
     "test_ordered_schedule.cpp"
     "test_peak_profile.cpp"
-    "test_schedule_document.cpp"
     "test_slicing_signature.cpp"
 )
+if (NOT BUILD_SHARED_LIBS)  # tests non-exported internals (see SEQUANT_UNIT_TESTS_INTERNALS below)
+    list(APPEND eval_dryrun_test_sources "test_schedule_document.cpp")
+endif()
 add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})
 target_set_compiler_flags(unit_tests-sequant-eval-dryrun-obj)
 target_set_optimization_flags(unit_tests-sequant-eval-dryrun-obj)
@@ -256,6 +262,18 @@ foreach(_module IN ITEMS symb eval optimize export mbpt eval-dryrun eval-ta eval
             UNITY_BUILD_CODE_BEFORE_INCLUDE "#include <range/v3/all.hpp>")
     endif()
 endforeach()
+
+# SeQuant's libraries hide everything but their exported API (see SeQuant/api.hpp).
+# Hence, tests that use internal (non-exported) out-of-line functions can only be
+# built against static libraries; they are guarded by SEQUANT_UNIT_TESTS_INTERNALS
+# (and tagged [internal]).
+if (NOT BUILD_SHARED_LIBS)
+    foreach(_module IN ITEMS symb eval optimize export mbpt eval-dryrun eval-ta eval-btas eval-tapp)
+        if (TARGET unit_tests-sequant-${_module}-obj)
+            target_compile_definitions(unit_tests-sequant-${_module}-obj PRIVATE SEQUANT_UNIT_TESTS_INTERNALS)
+        endif()
+    endforeach()
+endif()
 
 ##########################
 # Single executable combining all OBJECT libraries

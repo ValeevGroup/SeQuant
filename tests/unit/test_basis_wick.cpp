@@ -435,7 +435,8 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
   }
 }
 
-TEST_CASE("basis-wick-bernoulli-commutator", "[algorithms][wick][basis]") {
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
+TEST_CASE("basis-wick-bernoulli-commutator", "[internal][algorithms][wick][basis]") {
   using namespace sequant;
   using namespace sequant::mbpt;
   using sequant::tests::csv::instance_histogram;
@@ -469,6 +470,7 @@ TEST_CASE("basis-wick-bernoulli-commutator", "[algorithms][wick][basis]") {
   REQUIRE(ab->is<Sum>());
   CHECK(ab->size() == 8);
 }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
 TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
   using namespace sequant;

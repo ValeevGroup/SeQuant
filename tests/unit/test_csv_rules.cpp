@@ -147,6 +147,7 @@ inline ExprPtr relabel_instances(
 
 /// checks that the terms of @p eq named by @p ordinals have the Mulliken class
 /// and order (linear: <= 1 in the amplitudes) that @p scope fixes
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
 inline void check_cell(ExprPtr const& eq, std::set<std::size_t> const& ordinals,
                        ProjectionTerms scope) {
   using enum ProjectionTerms;
@@ -165,6 +166,7 @@ inline void check_cell(ExprPtr const& eq, std::set<std::size_t> const& ordinals,
     if (mbpt::contains(Nonlinear, scope)) CHECK_FALSE(linear);
   }
 }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
 }  // namespace sequant::tests::csv_rules
 
@@ -201,7 +203,8 @@ TEST_CASE("csv-a-metric-between-two-amplitude-bases-stands",
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
-TEST_CASE("csv-shape-predicates", "[mbpt][csv]") {
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
+TEST_CASE("csv-shape-predicates", "[internal][mbpt][csv]") {
   using namespace sequant;
   using namespace sequant::tests::csv;
 
@@ -228,9 +231,11 @@ TEST_CASE("csv-shape-predicates", "[mbpt][csv]") {
     CHECK(mbpt::is_oovv_integral(owner->as<Tensor>()) == oovv);
   }
 }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
 TEST_CASE("csv-projection-partner-pair-integral-basis",
-          "[mbpt][csv][valgrind_skip]") {
+          "[internal][mbpt][csv][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::tests::csv;
   using namespace sequant::tests::csv_rules;
@@ -296,6 +301,7 @@ TEST_CASE("csv-projection-partner-pair-integral-basis",
                          sequant::Exception,
                          message_contains("PartnerPair with"));
 }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
 TEST_CASE("csv-pno-projection-fixtures", "[mbpt][csv]") {
   using namespace sequant;
@@ -534,7 +540,9 @@ TEST_CASE("csv-pno-projection-ccsd", "[mbpt][csv][valgrind_skip]") {
       for (auto const& term : *out) CHECK(minted_bra_legs(term) == 0);
       CHECK(mbpt::project_integral_domains(out, opts).get() == out.get());
     }
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
     check_cell(st[2], kept[scope], scope);
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
   }
 
   // the partition: each pair is disjoint and unites to the third
@@ -555,8 +563,9 @@ TEST_CASE("csv-pno-projection-ccsd", "[mbpt][csv][valgrind_skip]") {
   }
 }
 
+#ifdef SEQUANT_UNIT_TESTS_INTERNALS  // uses non-exported internals
 TEST_CASE("csv-pno-mixed-class-and-opaque-ordinals",
-          "[mbpt][csv][valgrind_skip]") {
+          "[internal][mbpt][csv][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::tests::csv;
   using namespace sequant::tests::csv_rules;
@@ -614,6 +623,7 @@ TEST_CASE("csv-pno-mixed-class-and-opaque-ordinals",
   // nothing selected: the map is never asked
   CHECK(mbpt::project_integral_domains(r2, {}).get() == r2.get());
 }
+#endif  // SEQUANT_UNIT_TESTS_INTERNALS
 
 TEST_CASE("csv-pno-amplitude-basis-follows-the-partner",
           "[mbpt][csv][valgrind_skip]") {
