@@ -661,7 +661,7 @@ class ResultDryRun final : public Result {
  private:
   struct Payload {};
 
-  [[nodiscard]] id_t type_id() const noexcept override {
+  [[nodiscard]] id_t type_id() const override {
     return id_for_type<ResultDryRun>();
   }
 
@@ -833,7 +833,7 @@ class ResultDryRunNested final : public Result {
  private:
   struct Payload {};
 
-  [[nodiscard]] id_t type_id() const noexcept override {
+  [[nodiscard]] id_t type_id() const override {
     return id_for_type<ResultDryRunNested>();
   }
 

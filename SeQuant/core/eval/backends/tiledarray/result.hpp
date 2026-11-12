@@ -1039,7 +1039,7 @@ class ResultTensorTA final : public Result {
   mutable ArrayT parent_;
   view_type view_;
 
-  [[nodiscard]] id_t type_id() const noexcept override {
+  [[nodiscard]] id_t type_id() const override {
     return id_for_type<this_type>();
   }
 
@@ -1614,7 +1614,7 @@ class ResultTensorOfTensorTA final : public Result {
   mutable ArrayT parent_;
   view_type view_;
 
-  [[nodiscard]] id_t type_id() const noexcept override {
+  [[nodiscard]] id_t type_id() const override {
     return id_for_type<this_type>();
   }
 

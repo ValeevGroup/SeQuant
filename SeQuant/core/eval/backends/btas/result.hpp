@@ -349,7 +349,7 @@ class ResultTensorBTAS final : public Result {
   using annot_t = container::svector<long>;
   using annot_wrap = Annot<annot_t>;
 
-  [[nodiscard]] id_t type_id() const noexcept override {
+  [[nodiscard]] id_t type_id() const override {
     return id_for_type<ResultTensorBTAS<T>>();
   }
 
