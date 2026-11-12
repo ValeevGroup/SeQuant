@@ -103,13 +103,19 @@ function(sequant_set_visibility _target _module)
             CXX_VISIBILITY_PRESET hidden
             VISIBILITY_INLINES_HIDDEN ON
             DEFINE_SYMBOL SEQUANT_BUILDING_${_module_uc})
+    # sanitizer runtimes are not linked into shared libraries, which hence have undefined symbols
+    set(_flags "${CMAKE_CXX_FLAGS} ${CMAKE_SHARED_LINKER_FLAGS}")
+    foreach(_config IN LISTS CMAKE_BUILD_TYPE CMAKE_CONFIGURATION_TYPES)
+        string(TOUPPER "${_config}" _config_uc)
+        string(APPEND _flags " ${CMAKE_CXX_FLAGS_${_config_uc}} ${CMAKE_SHARED_LINKER_FLAGS_${_config_uc}}")
+    endforeach()
     get_target_property(_type ${_target} TYPE)
     if (_type STREQUAL "STATIC_LIBRARY")
         # DEFINE_SYMBOL only applies to shared libraries
         target_compile_definitions(${_target} PRIVATE SEQUANT_BUILDING_${_module_uc})
     elseif (_type STREQUAL "SHARED_LIBRARY" AND NOT APPLE AND NOT WIN32
             AND CMAKE_CXX_COMPILER_ID MATCHES "^(GNU|Clang)$"
-            AND NOT CMAKE_CXX_FLAGS MATCHES "-fsanitize")
+            AND NOT _flags MATCHES "-fsanitize")
         # every symbol a SeQuant library needs must be resolved by its link interface
         target_link_options(${_target} PRIVATE "LINKER:--no-undefined")
     endif()
