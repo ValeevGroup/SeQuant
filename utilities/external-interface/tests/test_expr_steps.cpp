@@ -314,6 +314,53 @@ TEST_CASE("filter step", "[extint]") {
     REQUIRE(step.run("flt", ctx, {"in.0"}) == 2);
   }
 
+  SECTION("index count rules") {
+    // f{a1;i1} has 2 indices, T2 has 4
+    auto run = [](const json &rule) {
+      ExecutionContext ctx;
+      seed_expr(ctx, {L"R1{a1;i1} = + f{i2;a2}:A-H-S T2{a1,a2;i1,i2}:A-H-S"});
+      FilterStep step;
+      step.set_options(
+          json{{"keep_empty", false},
+               {"groups", {{"g", {{"rules", json::array({rule})}}}}}});
+      return step.run("flt", ctx, {"in.0"});
+    };
+
+    REQUIRE(run({{"type", "index_count"}, {"count", 4}}) == 1);
+    REQUIRE(run({{"type", "index_count"}, {"count", 3}}) == 0);
+    REQUIRE(run({{"type", "index_count"}, {"count", 3}, {"negate", true}}) ==
+            1);
+    REQUIRE(run({{"type", "index_spaces"}, {"spaces", {{"i", 2}, {"a", 2}}}}) ==
+            1);
+    REQUIRE(run({{"type", "index_spaces"}, {"spaces", {{"i", 3}}}}) == 0);
+    // bounds and label restriction apply to a single tensor
+    REQUIRE(run({{"type", "index_spaces"},
+                 {"spaces", {{"a", {{"min", 2}}}}}}) == 1);
+    REQUIRE(run({{"type", "index_spaces"},
+                 {"spaces", {{"a", {{"min", 3}}}}}}) == 0);
+    REQUIRE(run({{"type", "index_spaces"},
+                 {"spaces", {{"a", {{"max", 1}}}}},
+                 {"label", "f"}}) == 1);
+    REQUIRE(run({{"type", "index_spaces"},
+                 {"spaces", {{"a", {{"min", 2}}}}},
+                 {"label", "f"}}) == 0);
+    REQUIRE(run({{"type", "index_spaces"},
+                 {"spaces", {{"a", {{"min", 2}}}}},
+                 {"label", "T2"}}) == 1);
+    REQUIRE_THROWS_AS(
+        run({{"type", "index_spaces"}, {"spaces", {{"a", {{"foo", 1}}}}}}),
+        Exception);
+    REQUIRE_THROWS_AS(
+        run({{"type", "index_count"}, {"count", 2}, {"label", "f"}}),
+        Exception);
+    REQUIRE_THROWS_AS(run({{"type", "index_spaces"},
+                           {"spaces", {{"a", {{"min", 3}, {"max", 1}}}}}}),
+                      Exception);
+    REQUIRE_THROWS_AS(run({{"type", "index_count"}, {"count", -1}}), Exception);
+    REQUIRE_THROWS_AS(
+        run({{"type", "index_spaces"}, {"spaces", json::object()}}), Exception);
+  }
+
   SECTION("keep_empty=false drops empty groups") {
     ExecutionContext ctx;
     seed_expr(ctx, {L"R1{a1;i1} = + f{a1;i1}:A-H-S"});

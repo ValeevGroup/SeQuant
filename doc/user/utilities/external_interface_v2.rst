@@ -648,8 +648,9 @@ Each entry of :code:`rules` is an object with the following properties:
      - Default
      - Required
    * - :code:`type`
-     - Kind of rule. Currently, the only supported value is :code:`contains`, which matches if the term (or any of its subexpressions) contains a
-       match for :code:`expr` or :code:`label`.
+     - Kind of rule. :code:`contains` matches if the term (or any of its subexpressions) contains a match for :code:`expr` or :code:`label`.
+       :code:`index_spaces` matches if the term contains a tensor whose number of indices in each of the spaces listed in
+       :code:`spaces` meets the given count/bounds. :code:`index_count` matches if the term contains a tensor with exactly :code:`count` indices in total.
      - -
      - Yes
    * - :code:`negate`
@@ -670,8 +671,20 @@ Each entry of :code:`rules` is an object with the following properties:
      - One (String) or several (Array of Strings) full-match regular expressions that are matched (recursively) against the labels of subexpressions
        within the term being tested. A match against any of the given patterns counts as a match for this rule. Mutually exclusive with :code:`expr`.
        Be aware that in order to enter a backslash into the regular expression, you have to escape it in a JSON string as :code:`\\`.
+       Together with :code:`index_spaces`, the patterns instead restrict which tensors are considered, i.e. the same tensor has to satisfy both the label
+       and the index counts.
      - -
-     - One of :code:`expr`/:code:`label`
+     - One of :code:`expr`/:code:`label` for :code:`contains`
+   * - :code:`spaces`
+     - Only used by :code:`index_spaces`. Object mapping index space labels to the number of indices a tensor must have in that space, e.g.
+       :code:`{"u": 2, "a": 1}` (exact counts) or :code:`{"u": {"min": 3}}` (:code:`min` and/or :code:`max` bounds). Spaces are matched exactly (indices in other spaces, including related ones, are not counted), and indices in spaces that are not
+       listed are not constrained.
+     - -
+     - For :code:`index_spaces`
+   * - :code:`count`
+     - Only used by :code:`index_count`. Total number of (non-null) indices (bra, ket and auxiliary) a tensor must have.
+     - -
+     - For :code:`index_count`
 
 
 optimize
@@ -998,6 +1011,10 @@ on the result of the previous one.
        this map, it is renamed to the associated value.
      - :code:`{}`
      - No
+   * - :code:`keep_unchanged`
+     - Whether an input that none of the substitutions changed is still emitted (as is), so that there is exactly one output per input, in input order.
+     - false
+     - No
 
 .. note::
    Unlike most other steps, :code:`substitute` does not propagate the named aliases of its inputs onto its outputs - downstream steps need to reference
@@ -1011,10 +1028,6 @@ to_export_tree
 
 Converts the given expressions into a tree data structure suitable for exports.
 
-   * - :code:`keep_unchanged`
-     - Whether an input that none of the substitutions changed is still emitted (as is), so that there is exactly one output per input, in input order.
-     - false
-     - No
 .. list-table::
    :header-rows: 1
 
