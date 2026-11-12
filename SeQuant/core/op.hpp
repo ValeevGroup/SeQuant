@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CORE_OP_H
 #define SEQUANT_CORE_OP_H
 
+#include <SeQuant/api.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
@@ -533,6 +534,12 @@ class Operator
   void reserve(std::size_t n) { elements_.reserve(n); }
 
   Operator() = default;
+  // declared explicitly: MSVC does not export implicitly declared move
+  // operations of a dllexport'ed explicit instantiation
+  Operator(const Operator &) = default;
+  Operator(Operator &&) = default;
+  Operator &operator=(const Operator &) = default;
+  Operator &operator=(Operator &&) = default;
   explicit Operator(std::initializer_list<Op<S>> ops) : elements_(ops) {}
   explicit Operator(base_type &&ops) : elements_(std::move(ops)) {}
   template <typename I>
@@ -1068,7 +1075,9 @@ class NormalOperator : public Operator<S>,
   }
 
   // these implement the AbstractTensor interface
-  NormalOperator *_clone() const override final {
+  // not covariant: MSVC rejects the return-adjusting thunk of a covariant
+  // override in an exported explicit instantiation (C2908)
+  AbstractTensor *_clone() const override final {
     return new NormalOperator(*this);
   }
   std::shared_ptr<AbstractTensor> _clone_shared() const override final {
@@ -1196,12 +1205,16 @@ class NormalOperator : public Operator<S>,
   }
 };
 
-template <>
-const container::svector<std::wstring> &
-NormalOperator<Statistics::BoseEinstein>::labels();
-template <>
-const container::svector<std::wstring> &
-NormalOperator<Statistics::FermiDirac>::labels();
+// public API types: instantiated (and exported) by SeQuant-symb; the
+// declarations precede any implicit instantiation
+extern template class SEQUANT_SYMB_TEMPLATE_DECL_API
+    Operator<Statistics::FermiDirac>;
+extern template class SEQUANT_SYMB_TEMPLATE_DECL_API
+    Operator<Statistics::BoseEinstein>;
+extern template class SEQUANT_SYMB_TEMPLATE_DECL_API
+    NormalOperator<Statistics::FermiDirac>;
+extern template class SEQUANT_SYMB_TEMPLATE_DECL_API
+    NormalOperator<Statistics::BoseEinstein>;
 
 static_assert(
     is_tensor<NormalOperator<Statistics::FermiDirac>>,
@@ -1272,6 +1285,11 @@ class NormalOperatorSequence
 
   /// constructs an empty sequence
   NormalOperatorSequence() { check_vacuum(); }
+  // declared explicitly, see Operator
+  NormalOperatorSequence(const NormalOperatorSequence &) = default;
+  NormalOperatorSequence(NormalOperatorSequence &&) = default;
+  NormalOperatorSequence &operator=(const NormalOperatorSequence &) = default;
+  NormalOperatorSequence &operator=(NormalOperatorSequence &&) = default;
 
   /// constructs from a parameter pack
   template <typename... NOps,
@@ -1419,6 +1437,11 @@ class NormalOperatorSequence
         });
   }
 };
+
+extern template class SEQUANT_SYMB_TEMPLATE_DECL_API
+    NormalOperatorSequence<Statistics::FermiDirac>;
+extern template class SEQUANT_SYMB_TEMPLATE_DECL_API
+    NormalOperatorSequence<Statistics::BoseEinstein>;
 
 using BOperator = Operator<Statistics::BoseEinstein>;
 using BNOperator = NormalOperator<Statistics::BoseEinstein>;
