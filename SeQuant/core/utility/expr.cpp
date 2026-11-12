@@ -940,15 +940,20 @@ ExprPtr &replace(ExprPtr &expr, const ExprMatcher &target,
 
 ResultExpr &replace(ResultExpr &expr, const ExprMatcher &target,
                     const Expr &replacement) {
+  const IndexGroups<> externals_before = get_unique_indices(expr.expression());
+
   replace(expr.expression(), target, replacement);
 
   // We have to check whether the external indices have been modified by the
-  // replacement and if they did, adapt the indices in the result
+  // replacement and if they did, adapt the indices in the result. The
+  // comparison is against the externals before the replacement (instead of
+  // the result's indices) since the result need not coincide with what
+  // get_unique_indices deduces (e.g. in the presence of antisymmetrizers).
   IndexGroups<> externals = get_unique_indices(expr.expression());
 
-  if (!std::ranges::equal(externals.bra, expr.bra()) ||
-      !std::ranges::equal(externals.ket, expr.ket()) ||
-      !std::ranges::equal(externals.aux, expr.aux())) {
+  if (!std::ranges::equal(externals.bra, externals_before.bra) ||
+      !std::ranges::equal(externals.ket, externals_before.ket) ||
+      !std::ranges::equal(externals.aux, externals_before.aux)) {
     // Externals have changed -> update result
     // TODO: Is retaining result symmetry a reasonable thing to do? Generally
     // speaking, replacements could also change the result symmetry so in

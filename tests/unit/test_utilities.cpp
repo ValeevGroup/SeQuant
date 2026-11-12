@@ -6,6 +6,7 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/reserved.hpp>
@@ -948,6 +949,25 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE_THAT(input2, EquivalentTo(expected_str));
       }
     }
+  }
+
+  SECTION("replace keeps result indices if externals are unaffected") {
+    ResultExpr input = deserialize<ResultExpr>(
+        L"R{a1,p3;p1,p2} = Â{p1,p2;} Y{p3,p4;p1,p2} T{a1;p4}");
+    const ExprPtr target = deserialize(L"T{a1;p4}");
+    const ExprPtr replacement = deserialize(L"S{a1;p4}");
+
+    replace(
+        input,
+        ExprMatcher(*target,
+                    ExprMatcherOptions{.tensor_cmp = TensorComparison::Block}),
+        *replacement);
+
+    const ResultExpr expected = deserialize<ResultExpr>(
+        L"R{a1,p3;p1,p2} = Â{p1,p2;} Y{p3,p4;p1,p2} S{a1;p4}");
+    REQUIRE(std::ranges::equal(input.bra(), expected.bra()));
+    REQUIRE(std::ranges::equal(input.ket(), expected.ket()));
+    REQUIRE(std::ranges::equal(input.aux(), expected.aux()));
   }
 
   SECTION("is_valid") {
