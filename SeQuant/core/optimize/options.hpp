@@ -214,6 +214,8 @@ struct CostParams {
   /// Holding operands outside their consumer's loop, and the memory space of
   /// the large ones; threaded from BatchPolicy::hold. Batched objectives only.
   HoldPolicy hold = {};
+  /// Threaded from BatchPolicy::infeasible_peak_slack.
+  double infeasible_peak_slack = std::numeric_limits<double>::infinity();
 };
 
 /// A type-erased provider mapping an Index to its extent. Used by the public

@@ -25,6 +25,7 @@
 #include <range/v3/algorithm/contains.hpp>
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <functional>
@@ -3000,6 +3001,70 @@ TEST_CASE("the DP holds a persistent operand outside its consumer's loop",
   // evaluation: 55620 + 20 * 10 * 900
   CHECK(on_priced.n_root_scope == 0u);
   CHECK(on_priced.cost == Catch::Approx(235620.0));
+}
+
+// BatchPolicy::infeasible_peak_slack: a term none of whose schedules fits the
+// budget takes, by default, its cheapest schedule whatever the peak; with a
+// finite slack, the cheapest among those close to its smallest peak.
+TEST_CASE("an over-budget term stays near its smallest peak when asked to",
+          "[optimize][batch][threshold]") {
+  using namespace sequant;
+  namespace o = sequant::opt::detail;
+  auto ctx_copy = get_default_context_snapshot();
+  {
+    IndexBasisRegistry reg = *ctx_copy.index_basis_registry();
+    reg.add(L"F", IndexSpace::Type{0b10000}, {.dimension = 100});
+    reg.extent(L"a", 3ul);
+    ctx_copy.set(std::move(reg));
+  }
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx_copy));
+  auto idxsz = [](Index const& ix) { return ix.basis().extent(); };
+  auto is_F = [](Index const& ix) { return ix.basis().base_key() == L"F"; };
+  auto batch_fn = [](Index const&) -> std::size_t { return 1; };
+  // F is summed between g*h and t; slicing it costs a rebuild of g*h per
+  // evaluation, so the unsliced schedule is the cheaper one
+  std::vector<ExprPtr> ts;
+  for (auto s : {L"g{F1;a1}", L"h{a1;a2}", L"t{a2;F1}"})
+    ts.push_back(deserialize(s, {.def_perm_symm = Symmetry::Nonsymm}));
+  TensorNetwork net{ts};
+  container::svector<Index> targets;
+
+  auto run = [&](double slack) {
+    o::PeakBatchedModel model{idxsz, batch_fn, {}};
+    model.is_batchable_contracted_index = is_F;
+    model.charge_batch_recompute = true;
+    model.perf_first = true;
+    model.is_volatile_leaf = [](Tensor const& t) { return t.label() == L"t"; };
+    model.volatile_weight = 20.0;
+    model.peak_threshold = 1.0;  // nothing fits
+    model.infeasible_peak_slack = slack;
+    auto ctx = model.build_context(net, targets);
+    auto st = o::solve_single_term(model, net, targets, ctx);
+    auto const& rootf = st[(std::size_t{1} << ctx.nt) - 1][0];
+    double min_peak = std::numeric_limits<double>::max(),
+           min_flops = std::numeric_limits<double>::max();
+    for (auto const& pt : rootf) {
+      min_peak = std::min(min_peak, pt.peak);
+      min_flops = std::min(min_flops, pt.flops);
+    }
+    auto const& chosen = rootf[model.select_root(ctx, st)];
+    return std::array<double, 4>{chosen.peak, chosen.flops, min_peak,
+                                 min_flops};
+  };
+
+  auto const [peak_any, flops_any, min_peak, min_flops] =
+      run(std::numeric_limits<double>::infinity());
+  // the frontier trades peak for cost, or the test says nothing
+  REQUIRE(peak_any > 1.25 * min_peak);
+  // default: the cheapest schedule, whatever its peak
+  CHECK(flops_any == min_flops);
+
+  auto const [peak_near, flops_near, mp, mf] = run(0.25);
+  CHECK(mp == min_peak);
+  CHECK(peak_near <= 1.25 * min_peak);
+  CHECK(flops_near > min_flops);
+  // no slack at all: the smallest peak
+  CHECK(run(0.0)[0] == min_peak);
 }
 
 // The held operand's stamp reaches the evaluation tree, and its home is

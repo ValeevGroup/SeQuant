@@ -2813,6 +2813,9 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   // SEQUANT_UT_DRYRUN_DISK_MIN_GB (default 1) lives on disk, free to hold,
   // with SEQUANT_UT_DRYRUN_DISK_READ / _WRITE the cost of moving one element
   // (FLOP-equivalents, default 0).
+  // SEQUANT_UT_DRYRUN_INFEASIBLE_SLACK=<x>: BatchPolicy::infeasible_peak_slack
+  if (char const* sl = std::getenv("SEQUANT_UT_DRYRUN_INFEASIBLE_SLACK"))
+    policy.infeasible_peak_slack = std::atof(sl);
   if (std::getenv("SEQUANT_UT_DRYRUN_HOLD")) {
     auto const env_d = [](char const* k, double dflt) {
       return std::getenv(k) ? std::atof(std::getenv(k)) : dflt;
@@ -2852,11 +2855,16 @@ TEST_CASE("dryrun-2iter-report", "[dryrun-2iter-report]") {
   std::vector<Node> forest;
   // one root per tree: summand s is root "R<s>" with a single term
   std::vector<sequant::eval::schedule::RootRecord> roots;
-  // SEQUANT_UT_DRYRUN_TERM=<k>: only summand k
+  // SEQUANT_UT_DRYRUN_TERM=<k>[,<k>...]: only those summands
   char const* const only_term = std::getenv("SEQUANT_UT_DRYRUN_TERM");
   for (std::size_t s = 0; s < nterms; ++s) {
-    if (only_term && s != static_cast<std::size_t>(std::atoll(only_term)))
-      continue;
+    if (only_term) {  // one summand, or a comma-separated list of them
+      bool listed = false;
+      std::stringstream list{std::string(only_term)};
+      for (std::string k; std::getline(list, k, ',');)
+        if (s == static_cast<std::size_t>(std::atoll(k.c_str()))) listed = true;
+      if (!listed) continue;
+    }
     sequant::ExprPtr const term =
         orderedexec_witness_flatten_product(summands[s]);
     if (!term) continue;

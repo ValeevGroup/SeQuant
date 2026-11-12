@@ -112,6 +112,7 @@ ExprPtr single_term_dp(Product const& prod, OptimizeOptions const& opts,
   cost.roofline = opts.roofline;
   cost.accumulation_factor = opts.batch_policy.accumulation_factor;
   cost.hold = opts.batch_policy.hold;
+  cost.infeasible_peak_slack = opts.batch_policy.infeasible_peak_slack;
   cost.peak_threshold = opts.batch_policy.peak_threshold;
   cost.prune_outer_products = opts.prune_outer_products;
   cost.batch_spectator_indices = opts.batch_policy.batch_spectator_indices;

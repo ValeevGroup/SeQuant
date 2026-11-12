@@ -711,6 +711,12 @@ struct PeakBatchedModel {
   /// Off (default) leaves the search exactly as it was.
   HoldPolicy hold = {};
 
+  /// Perf-first selection for a term none of whose schedules fits \ref
+  /// peak_threshold: the schedule taken is the cheapest among those whose
+  /// peak exceeds the smallest achievable one by at most this fraction.
+  /// See BatchPolicy::infeasible_peak_slack; +infinity takes the cheapest.
+  double infeasible_peak_slack = std::numeric_limits<double>::infinity();
+
   /// \return true iff a whole value of \p elems elements lives in the slow
   ///         space of \ref hold
   bool in_slow_space(double elems) const {
@@ -1559,22 +1565,27 @@ struct PeakBatchedModel {
           pbest = i;
       bool const fit = pbest >= 0;  // a schedule met the ceiling
       if (!fit) {
-        // Nothing fits the budget: best-effort min flops, ties by min peak (the
-        // most-sliced realization). Not min nsl -- the nsl "don't slice below
-        // the ceiling" tiebreak in `better` applies only among feasible points;
-        // for an over-budget term it must be inverted, or the least-sliced
-        // (max-peak) schedule is chosen and blows the budget by the most (a
-        // giant unbatched integral -> OOM, e.g. the water-20 2.6 TB composite).
-        // For an over-budget term the fallback is min flops, then min peak:
-        // a min-peak fallback would take the most-sliced, flops-catastrophic
-        // factorizations.
+        // Nothing fits the budget. The overage is then kept close to the
+        // unavoidable one: among the points whose peak is within
+        // infeasible_peak_slack of the smallest peak on the frontier, min
+        // flops, ties by min peak. Not min peak alone: that is the
+        // most-sliced, flops-catastrophic factorization. And not min flops
+        // alone: the frontier's cheapest point is the unbatched schedule,
+        // whose peak can exceed the smallest one by orders of magnitude for a
+        // marginal saving (a giant unbatched integral -> OOM, e.g. the
+        // water-20 2.6 TB composite), so a budget set just below a term's
+        // smallest peak would switch its batching off altogether.
+        double min_peak = std::numeric_limits<double>::max();
+        for (auto const& pt : rootf) min_peak = std::min(min_peak, pt.peak);
+        double const limit = min_peak * (1.0 + infeasible_peak_slack);
         auto const better_peak = [&](int i, int j) {
           return rootf[i].flops < rootf[j].flops ||
                  (rootf[i].flops == rootf[j].flops &&
                   rootf[i].peak < rootf[j].peak);
         };
         for (int i = 0; i < static_cast<int>(rootf.size()); ++i)
-          if (pbest < 0 || better_peak(i, pbest)) pbest = i;
+          if (rootf[i].peak <= limit && (pbest < 0 || better_peak(i, pbest)))
+            pbest = i;
       }
       return pbest;
     }

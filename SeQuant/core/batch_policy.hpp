@@ -167,6 +167,15 @@ struct BatchPolicy {
   /// the user guide, \c doc/user/guide/batching.rst,
   /// "Deciding what to batch".
   double peak_threshold = std::numeric_limits<double>::infinity();
+
+  /// What the time-first objective does with a term none of whose schedules
+  /// fits \c peak_threshold: it takes the cheapest schedule among those whose
+  /// modeled peak exceeds the term's smallest achievable one by at most this
+  /// fraction. +infinity (default): the cheapest schedule whatever its peak,
+  /// which is the unbatched one -- a budget just below a term's smallest
+  /// peak then switches that term's batching off. A small value (e.g. 0.25)
+  /// keeps the overage close to the unavoidable one.
+  double infeasible_peak_slack = std::numeric_limits<double>::infinity();
 };
 
 }  // namespace sequant
