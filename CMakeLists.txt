@@ -93,6 +93,28 @@ include(CMakePackageConfigHelpers)
 
 include(compiler)
 
+# Helper: hides all symbols of SeQuant library target ${_target} by default; only declarations
+#         annotated with SEQUANT_<MODULE>_API / SEQUANT_<MODULE>_INTERNAL_API (see SeQuant/api.hpp.in)
+#         are visible. SEQUANT_BUILDING_<MODULE> is defined while compiling the library's sources.
+function(sequant_set_visibility _target _module)
+    string(TOUPPER "${_module}" _module_uc)
+    string(REPLACE "-" "_" _module_uc "${_module_uc}")
+    set_target_properties(${_target} PROPERTIES
+            CXX_VISIBILITY_PRESET hidden
+            VISIBILITY_INLINES_HIDDEN ON
+            DEFINE_SYMBOL SEQUANT_BUILDING_${_module_uc})
+    get_target_property(_type ${_target} TYPE)
+    if (_type STREQUAL "STATIC_LIBRARY")
+        # DEFINE_SYMBOL only applies to shared libraries
+        target_compile_definitions(${_target} PRIVATE SEQUANT_BUILDING_${_module_uc})
+    elseif (_type STREQUAL "SHARED_LIBRARY" AND NOT APPLE AND NOT WIN32
+            AND CMAKE_CXX_COMPILER_ID MATCHES "^(GNU|Clang)$"
+            AND NOT CMAKE_CXX_FLAGS MATCHES "-fsanitize")
+        # every symbol a SeQuant library needs must be resolved by its link interface
+        target_link_options(${_target} PRIVATE "LINKER:--no-undefined")
+    endif()
+endfunction()
+
 # Helper: creates SeQuant-${module} target, sets EXPORT_NAME, creates SeQuant::${module} alias,
 #         and applies warning flags (for non-INTERFACE targets)
 macro(sequant_add_library _module)
@@ -104,6 +126,7 @@ macro(sequant_add_library _module)
     if (NOT _type STREQUAL "INTERFACE_LIBRARY")
         target_set_compiler_flags(SeQuant-${_module})
         target_set_optimization_flags(SeQuant-${_module})
+        sequant_set_visibility(SeQuant-${_module} ${_module})
     endif()
 endmacro()
 
@@ -236,6 +259,11 @@ if (PROJECT_IS_TOP_LEVEL AND NOT DEFINED CMAKE_POSITION_INDEPENDENT_CODE)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
+# with DLLs, executables (e.g. tests) only find SeQuant's DLLs if they are in the same directory
+if (PROJECT_IS_TOP_LEVEL AND WIN32 AND BUILD_SHARED_LIBS AND NOT DEFINED CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+endif()
+
 # std::thread requires (on some platforms?) thread support which is not
 # provided automatically
 find_package(Threads REQUIRED)
@@ -301,7 +329,9 @@ include(FindOrFetchEigen)
 include(FindOrFetchJSON)
 
 # embedded bliss-0.73
-add_library(SeQuant-bliss
+# always static (and hidden): every SeQuant library/executable gets its own private copy;
+# bliss has no global mutable state and its RTTI is not used across libraries
+add_library(SeQuant-bliss STATIC
         SeQuant/external/bliss/defs.cc
         SeQuant/external/bliss/defs.hh
         SeQuant/external/bliss/graph.cc
@@ -320,7 +350,10 @@ add_library(SeQuant-bliss
         SeQuant/external/bliss/bliss_C.h
         )
 set_target_properties(SeQuant-bliss PROPERTIES EXPORT_NAME bliss)
-set_target_properties(SeQuant-bliss PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+set_target_properties(SeQuant-bliss PROPERTIES CXX_SCAN_FOR_MODULES OFF
+        POSITION_INDEPENDENT_CODE ON
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON)
 add_library(SeQuant::bliss ALIAS SeQuant-bliss)
 target_set_optimization_flags(SeQuant-bliss)
 target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3 Boost::headers)
@@ -772,7 +805,8 @@ target_compile_features(SeQuant-symb INTERFACE "cxx_std_20")
 # SeQuant-eval: backend-agnostic evaluation framework
 ##########################
 sequant_add_library(eval ${SeQuant_eval_src})
-target_link_libraries(SeQuant-eval PUBLIC SeQuant-symb PRIVATE SeQuant-bliss)
+# bliss is public: eval_node_compare.hpp calls bliss::Graph::cmp inline
+target_link_libraries(SeQuant-eval PUBLIC SeQuant-symb SeQuant-bliss)
 # nlohmann/json is header-only and used only in schedule_document.cpp: take its
 # include dirs without linking, so it does not leak into the exported target
 target_include_directories(SeQuant-eval SYSTEM PRIVATE
@@ -799,6 +833,7 @@ if (SEQUANT_HAS_TILEDARRAY)
     target_compile_definitions(SeQuant-eval-ta PUBLIC SEQUANT_HAS_TILEDARRAY=1)
     target_set_compiler_flags(SeQuant-eval-ta)
     target_set_optimization_flags(SeQuant-eval-ta)
+    sequant_set_visibility(SeQuant-eval-ta eval-ta)
 endif()
 
 ##########################
